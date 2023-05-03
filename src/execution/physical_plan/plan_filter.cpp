@@ -16,19 +16,19 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalFilter &op
 	if (!op.expressions.empty()) {
 		D_ASSERT(plan->types.size() > 0);
 		// create a filter if there is anything to filter
-		auto filter = make_unique<PhysicalFilter>(plan->types, move(op.expressions), op.estimated_cardinality);
-		filter->children.push_back(move(plan));
-		plan = move(filter);
+		auto filter = make_uniq<PhysicalFilter>(plan->types, std::move(op.expressions), op.estimated_cardinality);
+		filter->children.push_back(std::move(plan));
+		plan = std::move(filter);
 	}
 	if (!op.projection_map.empty()) {
 		// there is a projection map, generate a physical projection
 		vector<unique_ptr<Expression>> select_list;
 		for (idx_t i = 0; i < op.projection_map.size(); i++) {
-			select_list.push_back(make_unique<BoundReferenceExpression>(op.types[i], op.projection_map[i]));
+			select_list.push_back(make_uniq<BoundReferenceExpression>(op.types[i], op.projection_map[i]));
 		}
-		auto proj = make_unique<PhysicalProjection>(op.types, move(select_list), op.estimated_cardinality);
-		proj->children.push_back(move(plan));
-		plan = move(proj);
+		auto proj = make_uniq<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
+		proj->children.push_back(std::move(plan));
+		plan = std::move(proj);
 	}
 	return plan;
 }

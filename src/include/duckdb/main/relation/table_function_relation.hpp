@@ -15,10 +15,11 @@ namespace duckdb {
 class TableFunctionRelation : public Relation {
 public:
 	TableFunctionRelation(const std::shared_ptr<ClientContext> &context, string name, vector<Value> parameters,
-	                      named_parameter_map_t named_parameters, shared_ptr<Relation> input_relation_p = nullptr);
+	                      named_parameter_map_t named_parameters, shared_ptr<Relation> input_relation_p = nullptr,
+	                      bool auto_init = true);
 
 	TableFunctionRelation(const std::shared_ptr<ClientContext> &context, string name, vector<Value> parameters,
-	                      shared_ptr<Relation> input_relation_p = nullptr);
+	                      shared_ptr<Relation> input_relation_p = nullptr, bool auto_init = true);
 
 	string name;
 	vector<Value> parameters;
@@ -33,6 +34,14 @@ public:
 	const vector<ColumnDefinition> &Columns() override;
 	string ToString(idx_t depth) override;
 	string GetAlias() override;
+	void AddNamedParameter(const string &name, Value argument);
+
+private:
+	void InitializeColumns();
+
+private:
+	//! Whether or not to auto initialize the columns on construction
+	bool auto_initialize;
 };
 
 } // namespace duckdb

@@ -27,8 +27,10 @@ SELECT * FROM null_byte WHERE v=concat('goo', chr(0), 42)
 goo\042
 
 # null byte in index
-statement ok
+statement error
 CREATE INDEX i_index ON null_byte(v)
+----
+Not implemented Error: Indexes cannot contain BLOBs that contain null-terminated bytes.
 
 query I
 SELECT * FROM null_byte WHERE v=concat('goo', chr(0), 42)

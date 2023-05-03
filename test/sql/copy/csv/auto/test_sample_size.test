@@ -11,7 +11,7 @@ CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/i
 query IIII
 SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1
 ----
-INTEGER	VARCHAR	DATE	VARCHAR
+BIGINT	VARCHAR	DATE	VARCHAR
 
 statement ok
 DROP TABLE test
@@ -23,7 +23,7 @@ CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/i
 query IIII
 SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1
 ----
-INTEGER	DOUBLE	DATE	VARCHAR
+BIGINT	DOUBLE	DATE	VARCHAR
 
 statement ok
 DROP TABLE test
@@ -40,7 +40,7 @@ SELECT TestInteger, TestDouble, TestDate, TestText FROM test WHERE TestDouble is
 query TTTT
 SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1;
 ----
-INTEGER	DOUBLE	DATE	VARCHAR
+BIGINT	DOUBLE	DATE	VARCHAR
 
 statement ok
 drop table test;
@@ -57,7 +57,7 @@ SELECT TestInteger, TestDouble, TestDate, TestText FROM test WHERE TestDouble is
 query TTTT
 SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1;
 ----
-INTEGER	DOUBLE	DATE	VARCHAR
+BIGINT	DOUBLE	DATE	VARCHAR
 
 statement ok
 drop table test;
@@ -74,7 +74,7 @@ SELECT TestInteger, TestDouble, TestDate, TestText FROM test WHERE TestDouble is
 query TTTT
 SELECT typeof(TestInteger), typeof(TestDouble), typeof(TestDate), typeof(TestText) FROM test LIMIT 1;
 ----
-INTEGER	DOUBLE	DATE	VARCHAR
+BIGINT	DOUBLE	DATE	VARCHAR
 
 statement ok
 drop table test;

@@ -28,6 +28,8 @@ static DefaultType internal_types[] = {{"int", LogicalTypeId::INTEGER},
                                        {"blob", LogicalTypeId::BLOB},
                                        {"varbinary", LogicalTypeId::BLOB},
                                        {"binary", LogicalTypeId::BLOB},
+                                       {"bit", LogicalTypeId::BIT},
+                                       {"bitstring", LogicalTypeId::BIT},
                                        {"int8", LogicalTypeId::BIGINT},
                                        {"bigint", LogicalTypeId::BIGINT},
                                        {"int64", LogicalTypeId::BIGINT},
@@ -78,7 +80,7 @@ static DefaultType internal_types[] = {{"int", LogicalTypeId::INTEGER},
                                        {"union", LogicalTypeId::UNION},
                                        {"timestamptz", LogicalTypeId::TIMESTAMP_TZ},
                                        {"timetz", LogicalTypeId::TIME_TZ},
-                                       {"json", LogicalTypeId::JSON},
+                                       {"enum", LogicalTypeId::ENUM},
                                        {"null", LogicalTypeId::SQLNULL},
                                        {nullptr, LogicalTypeId::INVALID}};
 
@@ -92,12 +94,12 @@ LogicalTypeId DefaultTypeGenerator::GetDefaultType(const string &name) {
 	return LogicalTypeId::INVALID;
 }
 
-DefaultTypeGenerator::DefaultTypeGenerator(Catalog &catalog, SchemaCatalogEntry *schema)
+DefaultTypeGenerator::DefaultTypeGenerator(Catalog &catalog, SchemaCatalogEntry &schema)
     : DefaultGenerator(catalog), schema(schema) {
 }
 
 unique_ptr<CatalogEntry> DefaultTypeGenerator::CreateDefaultEntry(ClientContext &context, const string &entry_name) {
-	if (schema->name != DEFAULT_SCHEMA) {
+	if (schema.name != DEFAULT_SCHEMA) {
 		return nullptr;
 	}
 	auto type_id = GetDefaultType(entry_name);
@@ -109,12 +111,12 @@ unique_ptr<CatalogEntry> DefaultTypeGenerator::CreateDefaultEntry(ClientContext 
 	info.type = LogicalType(type_id);
 	info.internal = true;
 	info.temporary = true;
-	return make_unique_base<CatalogEntry, TypeCatalogEntry>(&catalog, schema, &info);
+	return make_uniq_base<CatalogEntry, TypeCatalogEntry>(catalog, schema, info);
 }
 
 vector<string> DefaultTypeGenerator::GetDefaultEntries() {
 	vector<string> result;
-	if (schema->name != DEFAULT_SCHEMA) {
+	if (schema.name != DEFAULT_SCHEMA) {
 		return result;
 	}
 	for (idx_t index = 0; internal_types[index].name != nullptr; index++) {

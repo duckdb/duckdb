@@ -1,0 +1,109 @@
+# name: test/sql/function/string/test_starts_with_function.test
+# description: starts_with function test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# starts_with of various lengths
+query IIIIIIIIII
+SELECT STARTS_WITH('hello world', 'h'),
+       STARTS_WITH('hello world', 'he'),
+       STARTS_WITH('hello world', 'hel'),
+       STARTS_WITH('hello world', 'hell'),
+       STARTS_WITH('hello world', 'hello'),
+       STARTS_WITH('hello world', 'hello '),
+       STARTS_WITH('hello world', 'hello w'),
+       STARTS_WITH('hello world', 'hello wo'),
+       STARTS_WITH('hello world', 'hello wor'),
+       STARTS_WITH('hello world', 'hello worl')
+----
+1	1	1	1	1	1	1	1	1	1
+
+query IIIIIIIIII
+SELECT STARTS_WITH('hello world', 'a'),
+       STARTS_WITH('hello world', 'ha'),
+       STARTS_WITH('hello world', 'hea'),
+       STARTS_WITH('hello world', 'hela'),
+       STARTS_WITH('hello world', 'hella'),
+       STARTS_WITH('hello world', 'helloa'),
+       STARTS_WITH('hello world', 'hello a'),
+       STARTS_WITH('hello world', 'hello wa'),
+       STARTS_WITH('hello world', 'hello woa'),
+       STARTS_WITH('hello world', 'hello wora')
+----
+0	0	0	0	0	0	0	0	0	0
+
+# empty starts_with
+query III
+select starts_with('hello', ''), starts_with('', ''), starts_with(NULL, '')
+----
+1	1	NULL
+
+statement ok
+CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);
+
+statement ok
+INSERT INTO strings VALUES ('hello', 1, 2), ('world', 2, 3), ('h', 1, 1), (NULL, 2, 2)
+
+# Test first letter
+query T
+SELECT starts_with(s,'h') FROM strings
+----
+1
+0
+1
+NULL
+
+# Test multiple letters
+query T
+SELECT starts_with(s,'he') FROM strings
+----
+1
+0
+0
+NULL
+
+# Test no match
+query T
+SELECT starts_with(s,'he-man') FROM strings
+----
+0
+0
+0
+NULL
+
+# Test NULL constant in different places
+query T
+SELECT starts_with(NULL,'h') FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT starts_with(s,NULL) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT starts_with(NULL,NULL) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+# Test empty pattern
+query T
+SELECT starts_with(s,'') FROM strings
+----
+1
+1
+1
+NULL
+

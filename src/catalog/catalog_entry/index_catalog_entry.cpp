@@ -1,39 +1,32 @@
 #include "duckdb/catalog/catalog_entry/index_catalog_entry.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/storage/index.hpp"
 
 namespace duckdb {
 
-IndexCatalogEntry::IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info)
-    : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info->index_name), index(nullptr), sql(info->sql) {
+IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info)
+    : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info.index_name), index(nullptr), sql(info.sql) {
+	this->temporary = info.temporary;
 }
 
-IndexCatalogEntry::~IndexCatalogEntry() {
-	// remove the associated index from the info
-	if (!info || !index) {
-		return;
-	}
-	info->indexes.RemoveIndex(index);
-}
-
-string IndexCatalogEntry::ToSQL() {
+string IndexCatalogEntry::ToSQL() const {
 	if (sql.empty()) {
-		throw InternalException("Cannot convert INDEX to SQL because it was not created with a SQL statement");
+		return sql;
 	}
 	if (sql[sql.size() - 1] != ';') {
-		sql += ";";
+		return sql + ";";
 	}
 	return sql;
 }
 
-void IndexCatalogEntry::Serialize(duckdb::MetaBlockWriter &serializer) {
-	// Here we serialize the index metadata in the following order:
-	// schema name, table name, index name, sql, index type, index constraint type, expression list.
-	// column_ids, unbound_expression
+void IndexCatalogEntry::Serialize(Serializer &serializer) const {
+	// here we serialize the index metadata in the following order:
+	// schema name, table name, index name, sql, index type, index constraint type, expression list, parsed expressions,
+	// column IDs
+
 	FieldWriter writer(serializer);
-	writer.WriteString(info->schema);
-	writer.WriteString(info->table);
+	writer.WriteString(GetSchemaName());
+	writer.WriteString(GetTableName());
 	writer.WriteString(name);
 	writer.WriteString(sql);
 	writer.WriteField(index->type);
@@ -45,16 +38,16 @@ void IndexCatalogEntry::Serialize(duckdb::MetaBlockWriter &serializer) {
 }
 
 unique_ptr<CreateIndexInfo> IndexCatalogEntry::Deserialize(Deserializer &source, ClientContext &context) {
-	// Here we deserialize the index metadata in the following order:
-	// root block, root offset, schema name, table name, index name, sql, index type, index constraint type, expression
-	// list.
+	// here we deserialize the index metadata in the following order:
+	// schema name, table schema name, table name, index name, sql, index type, index constraint type, expression list,
+	// parsed expression list, column IDs
 
-	auto create_index_info = make_unique<CreateIndexInfo>();
+	auto create_index_info = make_uniq<CreateIndexInfo>();
 
 	FieldReader reader(source);
 
 	create_index_info->schema = reader.ReadRequired<string>();
-	create_index_info->table = make_unique<BaseTableRef>();
+	create_index_info->table = make_uniq<BaseTableRef>();
 	create_index_info->table->schema_name = create_index_info->schema;
 	create_index_info->table->table_name = reader.ReadRequired<string>();
 	create_index_info->index_name = reader.ReadRequired<string>();

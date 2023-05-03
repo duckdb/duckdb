@@ -16,9 +16,12 @@ namespace duckdb {
 //! PhysicalAlter represents an ALTER TABLE command
 class PhysicalAlter : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::ALTER;
+
+public:
 	explicit PhysicalAlter(unique_ptr<AlterInfo> info, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::ALTER, {LogicalType::BOOLEAN}, estimated_cardinality),
-	      info(move(info)) {
+	      info(std::move(info)) {
 	}
 
 	unique_ptr<AlterInfo> info;
@@ -28,6 +31,10 @@ public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
+
+	bool IsSource() const override {
+		return true;
+	}
 };
 
 } // namespace duckdb

@@ -1,0 +1,12 @@
+# name: test/fuzzer/pedro/statistics_propagation_set_op.test
+# description: Issue #4978 (32): Statistics propagation error
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT 1 FROM (SELECT 1) t0(c0) WHERE ((VALUES(1), (c0) LIMIT 1) INTERSECT (SELECT 1));
+----
+1
+

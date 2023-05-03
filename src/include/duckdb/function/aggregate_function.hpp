@@ -17,8 +17,9 @@
 
 namespace duckdb {
 
-//! This allows us to use the & operator to check if the type is contained in the set
 enum class AggregateType : uint8_t { NON_DISTINCT = 1, DISTINCT = 2 };
+//! Whether or not the input order influences the result of the aggregate
+enum class AggregateOrderDependent : uint8_t { ORDER_DEPENDENT = 1, NOT_ORDER_DEPENDENT = 2 };
 
 class BoundAggregateExpression;
 
@@ -27,6 +28,17 @@ struct AggregateInputData {
 	    : bind_data(bind_data_p), allocator(allocator_p) {};
 	FunctionData *bind_data;
 	Allocator &allocator;
+};
+
+struct AggregateStatisticsInput {
+	AggregateStatisticsInput(FunctionData *bind_data_p, vector<BaseStatistics> &child_stats_p,
+	                         NodeStatistics *node_stats_p)
+	    : bind_data(bind_data_p), child_stats(child_stats_p), node_stats(node_stats_p) {
+	}
+
+	FunctionData *bind_data;
+	vector<BaseStatistics> &child_stats;
+	NodeStatistics *node_stats;
 };
 
 //! The type used for sizing hashed aggregate function states
@@ -43,14 +55,12 @@ typedef void (*aggregate_finalize_t)(Vector &state, AggregateInputData &aggr_inp
                                      idx_t offset);
 //! The type used for propagating statistics in aggregate functions (optional)
 typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr,
-                                                             FunctionData *bind_data,
-                                                             vector<unique_ptr<BaseStatistics>> &child_stats,
-                                                             NodeStatistics *node_stats);
+                                                             AggregateStatisticsInput &input);
 //! Binds the scalar function and creates the function data
 typedef unique_ptr<FunctionData> (*bind_aggregate_function_t)(ClientContext &context, AggregateFunction &function,
                                                               vector<unique_ptr<Expression>> &arguments);
 //! The type used for the aggregate destructor method. NOTE: this method is used in destructors and MAY NOT throw.
-typedef void (*aggregate_destructor_t)(Vector &state, idx_t count);
+typedef void (*aggregate_destructor_t)(Vector &state, AggregateInputData &aggr_input_data, idx_t count);
 
 //! The type used for updating simple (non-grouped) aggregate functions
 typedef void (*aggregate_simple_update_t)(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
@@ -83,7 +93,7 @@ public:
 	                         LogicalType(LogicalTypeId::INVALID), null_handling),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
 	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize) {
+	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
 	}
 
 	DUCKDB_API
@@ -98,7 +108,7 @@ public:
 	                         LogicalType(LogicalTypeId::INVALID)),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
 	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize) {
+	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
 	}
 
 	DUCKDB_API AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -151,6 +161,8 @@ public:
 
 	aggregate_serialize_t serialize;
 	aggregate_deserialize_t deserialize;
+	//! Whether or not the aggregate is order dependent
+	AggregateOrderDependent order_dependent;
 
 	DUCKDB_API bool operator==(const AggregateFunction &rhs) const {
 		return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update &&
@@ -273,8 +285,8 @@ public:
 	}
 
 	template <class STATE, class OP>
-	static void StateDestroy(Vector &states, idx_t count) {
-		AggregateExecutor::Destroy<STATE, OP>(states, count);
+	static void StateDestroy(Vector &states, AggregateInputData &aggr_input_data, idx_t count) {
+		AggregateExecutor::Destroy<STATE, OP>(states, aggr_input_data, count);
 	}
 };
 

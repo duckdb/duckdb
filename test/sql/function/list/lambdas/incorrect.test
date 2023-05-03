@@ -107,3 +107,43 @@ SELECT cos(x -> x + 1)
 
 statement error
 SELECT cos([1], x -> x + 1)
+
+# don't allow lambdas in check constraints
+# FIXME: support lambdas in CHECK constraints
+
+statement error
+create table lambda_check (i BIGINT[],
+    CHECK (list_filter(i, x -> x % 2 = 0) == []));
+----
+Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
+
+statement error
+create table lambda_check (i BIGINT[],
+    CHECK (list_transform(i, x -> x % 2) == []));
+----
+Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
+
+statement error
+create table lambda_check (i BIGINT[],
+    CHECK ([x + 1 for x in i if i > 0] == []));
+----
+Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
+
+statement error
+create table lambda_check (
+	i BIGINT[],
+	j BIGINT[],
+	CHECK ((list_apply(i, x -> list_count(list_filter(j, y -> y%2=0)) + x)) == []));
+----
+Not implemented Error: Lambda functions are currently not supported in CHECK constraints.
+
+# don't allow lambdas in check constraints
+# FIXME: allow lambdas in generated columns
+
+statement error
+CREATE TABLE unit2(
+	price INTEGER[],
+	total_price INTEGER GENERATED ALWAYS AS (list_transform(price, x -> x + 1)) VIRTUAL
+);
+----
+Not implemented Error: Lambda functions are currently not supported in generated columns.

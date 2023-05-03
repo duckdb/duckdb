@@ -1,0 +1,36 @@
+# name: test/fuzzer/pedro/qualify_binder_error.test
+# description: Qualify clause binder error
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT c0, count(c0) over () AS count_window FROM (SELECT 1) t0(c0) GROUP BY c0 QUALIFY count_window;
+----
+1	1
+
+query I
+SELECT * FROM (SELECT 1) t0(c0) GROUP BY c0 QUALIFY count(c0) OVER ();
+----
+1
+
+statement error
+SELECT * FROM (SELECT 1) t0(c0) GROUP BY ALL QUALIFY count(c0) OVER ();
+----
+Combining QUALIFY with GROUP BY ALL is not supported yet
+
+statement error
+SELECT 1 FROM (SELECT 2) t0(c0) QUALIFY (c0, dense_rank() OVER(), mode(0));
+----
+Cannot mix aggregates with non-aggregated columns
+
+query I
+SELECT 1 FROM (SELECT 2) t0(c0) QUALIFY (count(sum(42)) OVER());
+----
+1
+
+query I
+SELECT 1 FROM (SELECT 2) t0(c0) QUALIFY (count(sum(c0)) OVER());
+----
+1

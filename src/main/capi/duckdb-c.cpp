@@ -9,7 +9,7 @@ duckdb_state duckdb_open_ext(const char *path, duckdb_database *out, duckdb_conf
 	auto wrapper = new DatabaseData();
 	try {
 		auto db_config = (DBConfig *)config;
-		wrapper->database = duckdb::make_unique<DuckDB>(path, db_config);
+		wrapper->database = duckdb::make_uniq<DuckDB>(path, db_config);
 	} catch (std::exception &ex) {
 		if (error) {
 			*error = strdup(ex.what());
@@ -65,7 +65,7 @@ void duckdb_disconnect(duckdb_connection *connection) {
 duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckdb_result *out) {
 	Connection *conn = (Connection *)connection;
 	auto result = conn->Query(query);
-	return duckdb_translate_result(move(result), out);
+	return duckdb_translate_result(std::move(result), out);
 }
 
 const char *duckdb_library_version() {

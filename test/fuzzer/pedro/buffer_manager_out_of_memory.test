@@ -1,0 +1,26 @@
+# name: test/fuzzer/pedro/buffer_manager_out_of_memory.test
+# description: Issue #5984 (32): Buffer manager out-of-memory issue
+# group: [pedro]
+
+statement ok
+PRAGMA MEMORY_LIMIT='10MB';
+
+statement ok
+SET threads=8;
+
+statement ok
+SELECT ((SELECT 1) EXCEPT (SELECT ('\xF1\x85\x96\xBA'::BLOB)::VARCHAR GROUP BY 1 ORDER BY 1));
+
+statement ok
+PRAGMA MEMORY_LIMIT='2MB';
+
+statement error
+SELECT t0.*, min(1 ORDER BY *) FROM (VALUES ('1')) t0(c0) GROUP BY ALL;
+----
+STAR
+
+statement ok
+SELECT t0.*, min(1 ORDER BY COLUMNS(*)) FROM (VALUES ('1')) t0(c0) GROUP BY ALL;
+
+statement ok
+SELECT t0.*, min(1 ORDER BY ALL) FROM (VALUES ('1')) t0(c0) GROUP BY ALL;

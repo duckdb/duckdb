@@ -19,7 +19,7 @@ struct CreateTypeInfo : public CreateInfo {
 	CreateTypeInfo() : CreateInfo(CatalogType::TYPE_ENTRY) {
 	}
 	CreateTypeInfo(string name_p, LogicalType type_p)
-	    : CreateInfo(CatalogType::TYPE_ENTRY), name(move(name_p)), type(move(type_p)) {
+	    : CreateInfo(CatalogType::TYPE_ENTRY), name(std::move(name_p)), type(std::move(type_p)) {
 	}
 
 	//! Name of the Type
@@ -31,14 +31,14 @@ struct CreateTypeInfo : public CreateInfo {
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {
-		auto result = make_unique<CreateTypeInfo>();
+		auto result = make_uniq<CreateTypeInfo>();
 		CopyProperties(*result);
 		result->name = name;
 		result->type = type;
 		if (query) {
 			result->query = query->Copy();
 		}
-		return move(result);
+		return std::move(result);
 	}
 
 protected:

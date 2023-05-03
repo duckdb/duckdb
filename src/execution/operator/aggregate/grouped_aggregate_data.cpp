@@ -13,7 +13,7 @@ const vector<vector<idx_t>> &GroupedAggregateData::GetGroupingFunctions() const 
 void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> groups,
                                              vector<unique_ptr<Expression>> expressions,
                                              vector<vector<idx_t>> grouping_functions) {
-	InitializeGroupbyGroups(move(groups));
+	InitializeGroupbyGroups(std::move(groups));
 	vector<LogicalType> payload_types_filters;
 
 	SetGroupingFunctions(grouping_functions);
@@ -22,7 +22,7 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 	for (auto &expr : expressions) {
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 		D_ASSERT(expr->IsAggregate());
-		auto &aggr = (BoundAggregateExpression &)*expr;
+		auto &aggr = expr->Cast<BoundAggregateExpression>();
 		bindings.push_back(&aggr);
 
 		aggregate_return_types.push_back(aggr.return_type);
@@ -36,7 +36,7 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 		if (!aggr.function.combine) {
 			throw InternalException("Aggregate function %s is missing a combine method", aggr.function.name);
 		}
-		aggregates.push_back(move(expr));
+		aggregates.push_back(std::move(expr));
 	}
 	for (const auto &pay_filters : payload_types_filters) {
 		payload_types.push_back(pay_filters);
@@ -45,7 +45,7 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 
 void GroupedAggregateData::InitializeDistinct(const unique_ptr<Expression> &aggregate,
                                               const vector<unique_ptr<Expression>> *groups_p) {
-	auto &aggr = (BoundAggregateExpression &)*aggregate;
+	auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 	D_ASSERT(aggr.IsDistinct());
 
 	// Add the (empty in ungrouped case) groups of the aggregates
@@ -83,13 +83,13 @@ void GroupedAggregateData::InitializeGroupbyGroups(vector<unique_ptr<Expression>
 	for (auto &expr : groups) {
 		group_types.push_back(expr->return_type);
 	}
-	this->groups = move(groups);
+	this->groups = std::move(groups);
 }
 
 void GroupedAggregateData::SetGroupingFunctions(vector<vector<idx_t>> &functions) {
 	grouping_functions.reserve(functions.size());
 	for (idx_t i = 0; i < functions.size(); i++) {
-		grouping_functions.push_back(move(functions[i]));
+		grouping_functions.push_back(std::move(functions[i]));
 	}
 }
 

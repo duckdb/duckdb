@@ -8,6 +8,7 @@ generic_reset:
 				{
 					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_RESET;
+					n->scope = VAR_SET_SCOPE_GLOBAL;
 					n->name = $1;
 					$$ = n;
 				}
@@ -15,6 +16,7 @@ generic_reset:
 				{
 					PGVariableSetStmt *n = makeNode(PGVariableSetStmt);
 					n->kind = VAR_RESET_ALL;
+					n->scope = VAR_SET_SCOPE_GLOBAL;
 					$$ = n;
 				}
 		;

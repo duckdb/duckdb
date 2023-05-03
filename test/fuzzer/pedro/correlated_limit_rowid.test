@@ -1,0 +1,14 @@
+# name: test/fuzzer/pedro/correlated_limit_rowid.test
+# description: Issue #4580: heap-buffer-overflow when creating index on table with generated columns
+# group: [pedro]
+
+statement ok
+CREATE TABLE t0 (c0 INT);
+
+statement ok
+CREATE TABLE t1 (c0 INT);
+
+statement error
+SELECT (SELECT 1 LIMIT t1.rowid) FROM t1 NATURAL JOIN t0;
+----
+Correlated

@@ -21,17 +21,24 @@ struct ExportedTableData {
 	//! Name of the schema
 	string schema_name;
 
+	//! Name of the database
+	string database_name;
+
 	//! Path to be exported
 	string file_path;
 };
 
 struct ExportedTableInfo {
-	TableCatalogEntry *entry;
+	ExportedTableInfo(TableCatalogEntry &entry, ExportedTableData table_data)
+	    : entry(entry), table_data(std::move(table_data)) {
+	}
+
+	TableCatalogEntry &entry;
 	ExportedTableData table_data;
 };
 
 struct BoundExportData : public ParseInfo {
-	std::vector<ExportedTableInfo> data;
+	vector<ExportedTableInfo> data;
 };
 
 } // namespace duckdb

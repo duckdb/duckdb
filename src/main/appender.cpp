@@ -1,24 +1,27 @@
 #include "duckdb/main/appender.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/main/connection.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
+#include "duckdb/common/operator/string_cast.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/operator/string_cast.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
 
-BaseAppender::BaseAppender(Allocator &allocator) : allocator(allocator), column(0) {
+BaseAppender::BaseAppender(Allocator &allocator, AppenderType type_p)
+    : allocator(allocator), column(0), appender_type(type_p) {
 }
 
-BaseAppender::BaseAppender(Allocator &allocator_p, vector<LogicalType> types_p)
-    : allocator(allocator_p), types(move(types_p)), collection(make_unique<ColumnDataCollection>(allocator, types)),
-      column(0) {
+BaseAppender::BaseAppender(Allocator &allocator_p, vector<LogicalType> types_p, AppenderType type_p)
+    : allocator(allocator_p), types(std::move(types_p)), collection(make_uniq<ColumnDataCollection>(allocator, types)),
+      column(0), appender_type(type_p) {
 	InitializeChunk();
 }
 
@@ -38,7 +41,8 @@ void BaseAppender::Destructor() {
 }
 
 InternalAppender::InternalAppender(ClientContext &context_p, TableCatalogEntry &table_p)
-    : BaseAppender(Allocator::DefaultAllocator(), table_p.GetTypes()), context(context_p), table(table_p) {
+    : BaseAppender(Allocator::DefaultAllocator(), table_p.GetTypes(), AppenderType::PHYSICAL), context(context_p),
+      table(table_p) {
 }
 
 InternalAppender::~InternalAppender() {
@@ -46,7 +50,7 @@ InternalAppender::~InternalAppender() {
 }
 
 Appender::Appender(Connection &con, const string &schema_name, const string &table_name)
-    : BaseAppender(Allocator::DefaultAllocator()), context(con.context) {
+    : BaseAppender(Allocator::DefaultAllocator(), AppenderType::LOGICAL), context(con.context) {
 	description = con.TableInfo(schema_name, table_name);
 	if (!description) {
 		// table could not be found
@@ -56,7 +60,7 @@ Appender::Appender(Connection &con, const string &schema_name, const string &tab
 		types.push_back(column.Type());
 	}
 	InitializeChunk();
-	collection = make_unique<ColumnDataCollection>(allocator, types);
+	collection = make_uniq<ColumnDataCollection>(allocator, types);
 }
 
 Appender::Appender(Connection &con, const string &table_name) : Appender(con, DEFAULT_SCHEMA, table_name) {
@@ -88,6 +92,27 @@ void BaseAppender::EndRow() {
 template <class SRC, class DST>
 void BaseAppender::AppendValueInternal(Vector &col, SRC input) {
 	FlatVector::GetData<DST>(col)[chunk.size()] = Cast::Operation<SRC, DST>(input);
+}
+
+template <class SRC, class DST>
+void BaseAppender::AppendDecimalValueInternal(Vector &col, SRC input) {
+	switch (appender_type) {
+	case AppenderType::LOGICAL: {
+		auto &type = col.GetType();
+		D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
+		auto width = DecimalType::GetWidth(type);
+		auto scale = DecimalType::GetScale(type);
+		TryCastToDecimal::Operation<SRC, DST>(input, FlatVector::GetData<DST>(col)[chunk.size()], nullptr, width,
+		                                      scale);
+		return;
+	}
+	case AppenderType::PHYSICAL: {
+		AppendValueInternal<SRC, DST>(col, input);
+		return;
+	}
+	default:
+		throw InternalException("Type not implemented for AppenderType");
+	}
 }
 
 template <class T>
@@ -135,18 +160,20 @@ void BaseAppender::AppendValueInternal(T input) {
 		break;
 	case LogicalTypeId::DECIMAL:
 		switch (col.GetType().InternalType()) {
-		case PhysicalType::INT8:
-			AppendValueInternal<T, int8_t>(col, input);
-			break;
 		case PhysicalType::INT16:
-			AppendValueInternal<T, int16_t>(col, input);
+			AppendDecimalValueInternal<T, int16_t>(col, input);
 			break;
 		case PhysicalType::INT32:
-			AppendValueInternal<T, int32_t>(col, input);
+			AppendDecimalValueInternal<T, int32_t>(col, input);
+			break;
+		case PhysicalType::INT64:
+			AppendDecimalValueInternal<T, int64_t>(col, input);
+			break;
+		case PhysicalType::INT128:
+			AppendDecimalValueInternal<T, hugeint_t>(col, input);
 			break;
 		default:
-			AppendValueInternal<T, int64_t>(col, input);
-			break;
+			throw InternalException("Internal type not recognized for Decimal");
 		}
 		break;
 	case LogicalTypeId::DATE:
@@ -331,7 +358,7 @@ void Appender::FlushInternal(ColumnDataCollection &collection) {
 }
 
 void InternalAppender::FlushInternal(ColumnDataCollection &collection) {
-	table.storage->LocalAppend(table, context, collection);
+	table.GetStorage().LocalAppend(table, context, collection);
 }
 
 void BaseAppender::Close() {

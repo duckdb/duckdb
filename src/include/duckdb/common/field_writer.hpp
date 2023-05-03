@@ -25,7 +25,7 @@ struct IndexWriteOperation {
 
 class FieldWriter {
 public:
-	DUCKDB_API FieldWriter(Serializer &serializer);
+	DUCKDB_API explicit FieldWriter(Serializer &serializer);
 	DUCKDB_API ~FieldWriter();
 
 public:
@@ -128,11 +128,11 @@ public:
 		return *buffer;
 	}
 
-private:
 	void AddField() {
 		field_count++;
 	}
 
+private:
 	template <class T>
 	void Write(const T &element) {
 		WriteData((const_data_ptr_t)&element, sizeof(T));
@@ -152,7 +152,7 @@ DUCKDB_API void FieldWriter::Write(const string &val);
 
 class FieldDeserializer : public Deserializer {
 public:
-	FieldDeserializer(Deserializer &root);
+	explicit FieldDeserializer(Deserializer &root);
 
 public:
 	void ReadData(data_ptr_t buffer, idx_t read_size) override;
@@ -161,6 +161,14 @@ public:
 	idx_t RemainingData();
 	Deserializer &GetRoot() {
 		return root;
+	}
+
+	ClientContext &GetContext() override {
+		return root.GetContext();
+	}
+
+	optional_ptr<Catalog> GetCatalog() override {
+		return root.GetCatalog();
 	}
 
 private:
@@ -177,7 +185,7 @@ struct IndexReadOperation {
 
 class FieldReader {
 public:
-	DUCKDB_API FieldReader(Deserializer &source);
+	DUCKDB_API explicit FieldReader(Deserializer &source);
 	DUCKDB_API ~FieldReader();
 
 public:
@@ -201,6 +209,21 @@ public:
 		// field is there, read the actual value
 		AddField();
 		return source.Read<T>();
+	}
+
+	template <class T, class CONTAINER_TYPE = vector<T>>
+	bool ReadList(CONTAINER_TYPE &result) {
+		if (field_count >= max_field_count) {
+			// field is not there, return false and leave the result empty
+			return false;
+		}
+		AddField();
+		auto result_count = source.Read<uint32_t>();
+		result.reserve(result_count);
+		for (idx_t i = 0; i < result_count; i++) {
+			result.push_back(source.Read<T>());
+		}
+		return true;
 	}
 
 	template <class T, class CONTAINER_TYPE = vector<T>>
@@ -256,7 +279,7 @@ public:
 	}
 
 	template <class T, typename... ARGS>
-	unique_ptr<T> ReadOptional(unique_ptr<T> default_value, ARGS &&...args) {
+	unique_ptr<T> ReadOptional(unique_ptr<T> default_value, ARGS &&... args) {
 		if (field_count >= max_field_count) {
 			// field is not there, read the default value
 			return default_value;
@@ -278,7 +301,7 @@ public:
 	}
 
 	template <class T, class RETURN_TYPE = unique_ptr<T>, typename... ARGS>
-	RETURN_TYPE ReadSerializable(RETURN_TYPE default_value, ARGS &&...args) {
+	RETURN_TYPE ReadSerializable(RETURN_TYPE default_value, ARGS &&... args) {
 		if (field_count >= max_field_count) {
 			// field is not there, read the default value
 			return default_value;
@@ -300,7 +323,7 @@ public:
 	}
 
 	template <class T, class RETURN_TYPE = unique_ptr<T>, typename... ARGS>
-	RETURN_TYPE ReadRequiredSerializable(ARGS &&...args) {
+	RETURN_TYPE ReadRequiredSerializable(ARGS &&... args) {
 		if (field_count >= max_field_count) {
 			// field is not there, throw an exception
 			throw SerializationException("Attempting to read mandatory field, but field is missing");
@@ -311,7 +334,7 @@ public:
 	}
 
 	template <class T, class RETURN_TYPE = unique_ptr<T>, typename... ARGS>
-	vector<RETURN_TYPE> ReadRequiredSerializableList(ARGS &&...args) {
+	vector<RETURN_TYPE> ReadRequiredSerializableList(ARGS &&... args) {
 		if (field_count >= max_field_count) {
 			// field is not there, throw an exception
 			throw SerializationException("Attempting to read mandatory field, but field is missing");

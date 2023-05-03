@@ -76,6 +76,6 @@ test_that("huge-cardinality factors do not cause strange crashes, issue 3639", {
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
   set.seed(123)
-  df <- data.frame(col1 = factor(sample(5000, 10^6, replace=TRUE)))
+  df <- data.frame(col1 = factor(sample(5000, 10^6, replace = TRUE)))
   duckdb_register(con, "df", df)
 })

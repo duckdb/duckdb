@@ -9,16 +9,16 @@
 #pragma once
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/optimizer/estimated_properties.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
+#include "duckdb/optimizer/join_order/estimated_properties.hpp"
+#include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
-#include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/plan_serialization.hpp"
 
-#include <functional>
 #include <algorithm>
+#include <functional>
 
 namespace duckdb {
 
@@ -83,8 +83,28 @@ public:
 		return true;
 	}
 
+	//! Returns the set of table indexes of this operator
+	virtual vector<idx_t> GetTableIndex() const;
+
 protected:
 	//! Resolve types for this specific operator
 	virtual void ResolveTypes() = 0;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (TARGET::TYPE != LogicalOperatorType::LOGICAL_INVALID && type != TARGET::TYPE) {
+			throw InternalException("Failed to cast logical operator to type - logical operator type mismatch");
+		}
+		return (TARGET &)*this;
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (TARGET::TYPE != LogicalOperatorType::LOGICAL_INVALID && type != TARGET::TYPE) {
+			throw InternalException("Failed to cast logical operator to type - logical operator type mismatch");
+		}
+		return (const TARGET &)*this;
+	}
 };
 } // namespace duckdb

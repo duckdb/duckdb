@@ -9,13 +9,12 @@
 #pragma once
 
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
-#include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/segment_tree.hpp"
+#include "duckdb/storage/table/column_segment_tree.hpp"
 #include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
@@ -25,12 +24,13 @@ class DatabaseInstance;
 class RowGroup;
 class RowGroupWriter;
 class TableDataWriter;
+class TableStorageInfo;
 struct TransactionData;
 
 struct DataTableInfo;
 
 struct ColumnCheckpointInfo {
-	ColumnCheckpointInfo(CompressionType compression_type_p) : compression_type(compression_type_p) {};
+	explicit ColumnCheckpointInfo(CompressionType compression_type_p) : compression_type(compression_type_p) {};
 	CompressionType compression_type;
 };
 
@@ -43,14 +43,16 @@ public:
 	ColumnData(ColumnData &other, idx_t start, ColumnData *parent);
 	virtual ~ColumnData();
 
+	//! The start row
+	const idx_t start;
+	//! The count of the column data
+	idx_t count;
 	//! The block manager
 	BlockManager &block_manager;
 	//! Table info for the column
 	DataTableInfo &info;
 	//! The column index of the column, either within the parent table or within the parent
 	idx_t column_index;
-	//! The start row
-	idx_t start;
 	//! The type of the column
 	LogicalType type;
 	//! The parent column (if any)
@@ -59,6 +61,9 @@ public:
 public:
 	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;
 
+	BlockManager &GetBlockManager() {
+		return block_manager;
+	}
 	DatabaseInstance &GetDatabase() const;
 	DataTableInfo &GetTableInfo() const;
 	virtual idx_t GetMaxEntry();
@@ -92,6 +97,8 @@ public:
 	virtual void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
 	virtual void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count);
+	//! Append a vector of type [type] to the end of the column
+	void Append(ColumnAppendState &state, Vector &vector, idx_t count);
 	virtual void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count);
 	//! Revert a set of appends to the ColumnData
 	virtual void RevertAppend(row_t start_row);
@@ -123,8 +130,10 @@ public:
 	                                          idx_t start_row, Deserializer &source, const LogicalType &type,
 	                                          ColumnData *parent);
 
-	virtual void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result);
+	virtual void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result);
 	virtual void Verify(RowGroup &parent);
+
+	bool CheckZonemap(TableFilter &filter);
 
 	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                           idx_t start_row, const LogicalType &type, ColumnData *parent = nullptr);
@@ -133,6 +142,10 @@ public:
 	                                                 idx_t column_index, idx_t start_row, const LogicalType &type,
 	                                                 ColumnData *parent = nullptr);
 	static unique_ptr<ColumnData> CreateColumnUnique(ColumnData &other, idx_t start_row, ColumnData *parent = nullptr);
+
+	void MergeStatistics(const BaseStatistics &other);
+	void MergeIntoStatistics(BaseStatistics &other);
+	unique_ptr<BaseStatistics> GetStatistics();
 
 protected:
 	//! Append a transient segment
@@ -147,13 +160,15 @@ protected:
 
 protected:
 	//! The segments holding the data of this column segment
-	SegmentTree data;
+	ColumnSegmentTree data;
 	//! The lock for the updates
 	mutex update_lock;
 	//! The updates for this column segment
 	unique_ptr<UpdateSegment> updates;
 	//! The internal version of the column data
 	idx_t version;
+	//! The stats of the root segment
+	unique_ptr<SegmentStatistics> stats;
 };
 
 } // namespace duckdb

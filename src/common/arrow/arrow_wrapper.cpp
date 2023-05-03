@@ -141,7 +141,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 }
 
 void ResultArrowArrayStreamWrapper::MyStreamRelease(struct ArrowArrayStream *stream) {
-	if (!stream->release) {
+	if (!stream || !stream->release) {
 		return;
 	}
 	stream->release = nullptr;
@@ -158,7 +158,7 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 }
 
 ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p, idx_t batch_size_p)
-    : result(move(result_p)) {
+    : result(std::move(result_p)) {
 	//! We first initialize the private data of the stream
 	stream.private_data = this;
 	//! Ceil Approx_Batch_Size/STANDARD_VECTOR_SIZE
@@ -187,6 +187,15 @@ bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray 
                               PreservedError &error) {
 	count = 0;
 	ArrowAppender appender(result->types, chunk_size);
+	auto &current_chunk = result->current_chunk;
+	if (current_chunk.Valid()) {
+		// We start by scanning the non-finished current chunk
+		idx_t cur_consumption = current_chunk.RemainingSize() > chunk_size ? chunk_size : current_chunk.RemainingSize();
+		count += cur_consumption;
+		appender.Append(*current_chunk.data_chunk, current_chunk.position, current_chunk.position + cur_consumption,
+		                current_chunk.data_chunk->size());
+		current_chunk.position += cur_consumption;
+	}
 	while (count < chunk_size) {
 		unique_ptr<DataChunk> data_chunk;
 		if (!TryFetchNext(*result, data_chunk, error)) {
@@ -198,8 +207,17 @@ bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray 
 		if (!data_chunk || data_chunk->size() == 0) {
 			break;
 		}
-		count += data_chunk->size();
-		appender.Append(*data_chunk);
+		if (count + data_chunk->size() > chunk_size) {
+			// We have to split the chunk between this and the next batch
+			idx_t available_space = chunk_size - count;
+			appender.Append(*data_chunk, 0, available_space, data_chunk->size());
+			count += available_space;
+			current_chunk.data_chunk = std::move(data_chunk);
+			current_chunk.position = available_space;
+		} else {
+			count += data_chunk->size();
+			appender.Append(*data_chunk, 0, data_chunk->size(), data_chunk->size());
+		}
 	}
 	if (count > 0) {
 		*out = appender.Finalize();

@@ -3,7 +3,7 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/sort.hpp"
-#include "duckdb/common/types/row_data_collection.hpp"
+#include "duckdb/common/types/row/row_data_collection.hpp"
 
 #include <numeric>
 
@@ -11,7 +11,7 @@ namespace duckdb {
 
 SortedData::SortedData(SortedDataType type, const RowLayout &layout, BufferManager &buffer_manager,
                        GlobalSortState &state)
-    : type(type), layout(layout), swizzled(false), buffer_manager(buffer_manager), state(state) {
+    : type(type), layout(layout), swizzled(state.external), buffer_manager(buffer_manager), state(state) {
 }
 
 idx_t SortedData::Count() {
@@ -27,16 +27,16 @@ idx_t SortedData::Count() {
 void SortedData::CreateBlock() {
 	auto capacity =
 	    MaxValue(((idx_t)Storage::BLOCK_SIZE + layout.GetRowWidth() - 1) / layout.GetRowWidth(), state.block_capacity);
-	data_blocks.push_back(make_unique<RowDataBlock>(buffer_manager, capacity, layout.GetRowWidth()));
+	data_blocks.push_back(make_uniq<RowDataBlock>(buffer_manager, capacity, layout.GetRowWidth()));
 	if (!layout.AllConstant() && state.external) {
-		heap_blocks.push_back(make_unique<RowDataBlock>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1));
+		heap_blocks.push_back(make_uniq<RowDataBlock>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1));
 		D_ASSERT(data_blocks.size() == heap_blocks.size());
 	}
 }
 
 unique_ptr<SortedData> SortedData::CreateSlice(idx_t start_block_index, idx_t end_block_index, idx_t end_entry_index) {
 	// Add the corresponding blocks to the result
-	auto result = make_unique<SortedData>(type, layout, buffer_manager, state);
+	auto result = make_uniq<SortedData>(type, layout, buffer_manager, state);
 	for (idx_t i = start_block_index; i <= end_block_index; i++) {
 		result->data_blocks.push_back(data_blocks[i]->Copy());
 		if (!layout.AllConstant() && state.external) {
@@ -70,18 +70,18 @@ void SortedData::Unswizzle() {
 		auto data_handle_p = buffer_manager.Pin(data_block->block);
 		auto heap_handle_p = buffer_manager.Pin(heap_block->block);
 		RowOperations::UnswizzlePointers(layout, data_handle_p.Ptr(), heap_handle_p.Ptr(), data_block->count);
-		data_block->block->SetSwizzling("SortedData::Unswizzle");
-		state.heap_blocks.push_back(move(heap_block));
-		state.pinned_blocks.push_back(move(heap_handle_p));
+		state.heap_blocks.push_back(std::move(heap_block));
+		state.pinned_blocks.push_back(std::move(heap_handle_p));
 	}
+	swizzled = false;
 	heap_blocks.clear();
 }
 
 SortedBlock::SortedBlock(BufferManager &buffer_manager, GlobalSortState &state)
     : buffer_manager(buffer_manager), state(state), sort_layout(state.sort_layout),
       payload_layout(state.payload_layout) {
-	blob_sorting_data = make_unique<SortedData>(SortedDataType::BLOB, sort_layout.blob_layout, buffer_manager, state);
-	payload_data = make_unique<SortedData>(SortedDataType::PAYLOAD, payload_layout, buffer_manager, state);
+	blob_sorting_data = make_uniq<SortedData>(SortedDataType::BLOB, sort_layout.blob_layout, buffer_manager, state);
+	payload_data = make_uniq<SortedData>(SortedDataType::PAYLOAD, payload_layout, buffer_manager, state);
 }
 
 idx_t SortedBlock::Count() const {
@@ -105,29 +105,29 @@ void SortedBlock::InitializeWrite() {
 void SortedBlock::CreateBlock() {
 	auto capacity = MaxValue(((idx_t)Storage::BLOCK_SIZE + sort_layout.entry_size - 1) / sort_layout.entry_size,
 	                         state.block_capacity);
-	radix_sorting_data.push_back(make_unique<RowDataBlock>(buffer_manager, capacity, sort_layout.entry_size));
+	radix_sorting_data.push_back(make_uniq<RowDataBlock>(buffer_manager, capacity, sort_layout.entry_size));
 }
 
 void SortedBlock::AppendSortedBlocks(vector<unique_ptr<SortedBlock>> &sorted_blocks) {
 	D_ASSERT(Count() == 0);
 	for (auto &sb : sorted_blocks) {
 		for (auto &radix_block : sb->radix_sorting_data) {
-			radix_sorting_data.push_back(move(radix_block));
+			radix_sorting_data.push_back(std::move(radix_block));
 		}
 		if (!sort_layout.all_constant) {
 			for (auto &blob_block : sb->blob_sorting_data->data_blocks) {
-				blob_sorting_data->data_blocks.push_back(move(blob_block));
+				blob_sorting_data->data_blocks.push_back(std::move(blob_block));
 			}
 			for (auto &heap_block : sb->blob_sorting_data->heap_blocks) {
-				blob_sorting_data->heap_blocks.push_back(move(heap_block));
+				blob_sorting_data->heap_blocks.push_back(std::move(heap_block));
 			}
 		}
 		for (auto &payload_data_block : sb->payload_data->data_blocks) {
-			payload_data->data_blocks.push_back(move(payload_data_block));
+			payload_data->data_blocks.push_back(std::move(payload_data_block));
 		}
 		if (!payload_data->layout.AllConstant()) {
 			for (auto &payload_heap_block : sb->payload_data->heap_blocks) {
-				payload_data->heap_blocks.push_back(move(payload_heap_block));
+				payload_data->heap_blocks.push_back(std::move(payload_heap_block));
 			}
 		}
 	}
@@ -161,7 +161,7 @@ unique_ptr<SortedBlock> SortedBlock::CreateSlice(const idx_t start, const idx_t 
 	idx_t end_entry_index;
 	GlobalToLocalIndex(end, end_block_index, end_entry_index);
 	// Add the corresponding blocks to the result
-	auto result = make_unique<SortedBlock>(buffer_manager, state);
+	auto result = make_uniq<SortedBlock>(buffer_manager, state);
 	for (idx_t i = start_block_index; i <= end_block_index; i++) {
 		result->radix_sorting_data.push_back(radix_sorting_data[i]->Copy());
 	}
@@ -289,19 +289,19 @@ PayloadScanner::PayloadScanner(SortedData &sorted_data, GlobalSortState &global_
 	auto &layout = sorted_data.layout;
 
 	// Create collections to put the data into so we can use RowDataCollectionScanner
-	rows = make_unique<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
+	rows = make_uniq<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
 	rows->count = count;
 
-	heap = make_unique<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
+	heap = make_uniq<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
 	if (!sorted_data.layout.AllConstant()) {
 		heap->count = count;
 	}
 
 	if (flush_p) {
 		// If we are flushing, we can just move the data
-		rows->blocks = move(sorted_data.data_blocks);
+		rows->blocks = std::move(sorted_data.data_blocks);
 		if (!layout.AllConstant()) {
-			heap->blocks = move(sorted_data.heap_blocks);
+			heap->blocks = std::move(sorted_data.heap_blocks);
 		}
 	} else {
 		// Not flushing, create references to the blocks
@@ -315,30 +315,38 @@ PayloadScanner::PayloadScanner(SortedData &sorted_data, GlobalSortState &global_
 		}
 	}
 
-	scanner = make_unique<RowDataCollectionScanner>(*rows, *heap, layout, global_sort_state.external, flush_p);
+	scanner = make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, global_sort_state.external, flush_p);
 }
 
 PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, bool flush_p)
     : PayloadScanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state, flush_p) {
 }
 
-PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_idx) {
+PayloadScanner::PayloadScanner(GlobalSortState &global_sort_state, idx_t block_idx, bool flush_p) {
 	auto &sorted_data = *global_sort_state.sorted_blocks[0]->payload_data;
 	auto count = sorted_data.data_blocks[block_idx]->count;
 	auto &layout = sorted_data.layout;
 
 	// Create collections to put the data into so we can use RowDataCollectionScanner
-	rows = make_unique<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
-	rows->blocks.emplace_back(sorted_data.data_blocks[block_idx]->Copy());
+	rows = make_uniq<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
+	if (flush_p) {
+		rows->blocks.emplace_back(std::move(sorted_data.data_blocks[block_idx]));
+	} else {
+		rows->blocks.emplace_back(sorted_data.data_blocks[block_idx]->Copy());
+	}
 	rows->count = count;
 
-	heap = make_unique<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
+	heap = make_uniq<RowDataCollection>(global_sort_state.buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
 	if (!sorted_data.layout.AllConstant() && sorted_data.swizzled) {
-		heap->blocks.emplace_back(sorted_data.heap_blocks[block_idx]->Copy());
+		if (flush_p) {
+			heap->blocks.emplace_back(std::move(sorted_data.heap_blocks[block_idx]));
+		} else {
+			heap->blocks.emplace_back(sorted_data.heap_blocks[block_idx]->Copy());
+		}
 		heap->count = count;
 	}
 
-	scanner = make_unique<RowDataCollectionScanner>(*rows, *heap, layout, global_sort_state.external, false);
+	scanner = make_uniq<RowDataCollectionScanner>(*rows, *heap, layout, global_sort_state.external, flush_p);
 }
 
 void PayloadScanner::Scan(DataChunk &chunk) {
@@ -358,11 +366,16 @@ int SBIterator::ComparisonValue(ExpressionType comparison) {
 	}
 }
 
+static idx_t GetBlockCountWithEmptyCheck(const GlobalSortState &gss) {
+	D_ASSERT(!gss.sorted_blocks.empty());
+	return gss.sorted_blocks[0]->radix_sorting_data.size();
+}
+
 SBIterator::SBIterator(GlobalSortState &gss, ExpressionType comparison, idx_t entry_idx_p)
-    : sort_layout(gss.sort_layout), block_count(gss.sorted_blocks[0]->radix_sorting_data.size()),
-      block_capacity(gss.block_capacity), cmp_size(sort_layout.comparison_size), entry_size(sort_layout.entry_size),
-      all_constant(sort_layout.all_constant), external(gss.external), cmp(ComparisonValue(comparison)),
-      scan(gss.buffer_manager, gss), block_ptr(nullptr), entry_ptr(nullptr) {
+    : sort_layout(gss.sort_layout), block_count(GetBlockCountWithEmptyCheck(gss)), block_capacity(gss.block_capacity),
+      cmp_size(sort_layout.comparison_size), entry_size(sort_layout.entry_size), all_constant(sort_layout.all_constant),
+      external(gss.external), cmp(ComparisonValue(comparison)), scan(gss.buffer_manager, gss), block_ptr(nullptr),
+      entry_ptr(nullptr) {
 
 	scan.sb = gss.sorted_blocks[0].get();
 	scan.block_idx = block_count;

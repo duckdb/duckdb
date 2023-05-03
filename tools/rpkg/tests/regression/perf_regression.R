@@ -14,8 +14,10 @@ versions <- list(
   release = list(repo = "duckdb/duckdb", ref = "v0.3.1")
 )
 
-versions <- Map(`[[<-`, versions, "lib",
-                dir_create(temp_lib_dir, names(versions)))
+versions <- Map(
+  `[[<-`, versions, "lib",
+  dir_create(temp_lib_dir, names(versions))
+)
 
 install_all(versions, update_deps = TRUE)
 

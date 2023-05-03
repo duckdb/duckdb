@@ -12,7 +12,7 @@
 using namespace duckdb;
 
 [[cpp11::register]] void rapi_register_df(duckdb::conn_eptr_t conn, std::string name, cpp11::data_frame value,
-                                          bool integer64, bool overwrite) {
+                                          bool integer64, bool overwrite, bool experimental) {
 	if (!conn || !conn.get() || !conn->conn) {
 		cpp11::stop("rapi_register_df: Invalid connection");
 	}
@@ -25,6 +25,8 @@ using namespace duckdb;
 	try {
 		named_parameter_map_t parameter_map;
 		parameter_map["integer64"] = Value::BOOLEAN(integer64);
+		parameter_map["experimental"] = Value::BOOLEAN(experimental);
+
 		conn->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)value.data())}, parameter_map)
 		    ->CreateView(name, overwrite, true);
 		static_cast<cpp11::sexp>(conn).attr("_registered_df_" + name) = value;
@@ -50,11 +52,10 @@ public:
 	    : arrow_scannable(arrow_scannable_p), export_fun(export_fun_p), config(config) {};
 
 	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory_p, ArrowStreamParameters &parameters) {
-		RProtector r;
-		auto res = make_unique<ArrowArrayStreamWrapper>();
+		auto res = make_uniq<ArrowArrayStreamWrapper>();
 		auto factory = (RArrowTabularStreamFactory *)factory_p;
-		auto stream_ptr_sexp =
-		    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&res->arrow_array_stream))));
+		cpp11::sexp stream_ptr_sexp =
+		    Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&res->arrow_array_stream)));
 
 		cpp11::function export_fun = VECTOR_ELT(factory->export_fun, 0);
 
@@ -64,12 +65,11 @@ public:
 		if (column_list.empty()) {
 			export_fun(factory->arrow_scannable, stream_ptr_sexp);
 		} else {
-			auto projection_sexp = r.Protect(StringsToSexp(column_list));
-			SEXP filters_sexp = r.Protect(Rf_ScalarLogical(true));
+			cpp11::sexp projection_sexp = StringsToSexp(column_list);
+			cpp11::sexp filters_sexp = Rf_ScalarLogical(true);
 			if (filters && !filters->filters.empty()) {
 				auto timezone_config = factory->config.ExtractTimezone();
-				filters_sexp =
-				    r.Protect(TransformFilter(*filters, projection_map, factory->export_fun, timezone_config));
+				filters_sexp = TransformFilter(*filters, projection_map, factory->export_fun, timezone_config);
 			}
 			export_fun(factory->arrow_scannable, stream_ptr_sexp, projection_sexp, filters_sexp);
 		}
@@ -78,11 +78,10 @@ public:
 
 	static void GetSchema(uintptr_t factory_p, ArrowSchemaWrapper &schema) {
 
-		RProtector r;
-		auto res = make_unique<ArrowArrayStreamWrapper>();
+		auto res = make_uniq<ArrowArrayStreamWrapper>();
 		auto factory = (RArrowTabularStreamFactory *)factory_p;
-		auto schema_ptr_sexp =
-		    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&schema.arrow_schema))));
+		cpp11::sexp schema_ptr_sexp =
+		    Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&schema.arrow_schema)));
 
 		cpp11::function export_fun = VECTOR_ELT(factory->export_fun, 4);
 
@@ -96,15 +95,14 @@ public:
 private:
 	static SEXP TransformFilterExpression(TableFilter &filter, const string &column_name, SEXP functions,
 	                                      string &timezone_config) {
-		RProtector r;
-		auto column_name_sexp = r.Protect(Rf_mkString(column_name.c_str()));
-		auto column_name_expr = r.Protect(CreateFieldRef(functions, column_name_sexp));
+		cpp11::sexp column_name_sexp = Rf_mkString(column_name.c_str());
+		cpp11::sexp column_name_expr = CreateFieldRef(functions, column_name_sexp);
 
 		switch (filter.filter_type) {
 		case TableFilterType::CONSTANT_COMPARISON: {
 			auto constant_filter = (ConstantFilter &)filter;
-			auto constant_sexp = r.Protect(RApiTypes::ValueToSexp(constant_filter.constant, timezone_config));
-			auto constant_expr = r.Protect(CreateScalar(functions, constant_sexp));
+			cpp11::sexp constant_sexp = RApiTypes::ValueToSexp(constant_filter.constant, timezone_config);
+			cpp11::sexp constant_expr = CreateScalar(functions, constant_sexp);
 			switch (constant_filter.comparison_type) {
 			case ExpressionType::COMPARE_EQUAL: {
 				return CreateExpression(functions, "equal", column_name_expr, constant_expr);
@@ -133,7 +131,7 @@ private:
 			return CreateExpression(functions, "is_null", column_name_expr);
 		}
 		case TableFilterType::IS_NOT_NULL: {
-			auto is_null_expr = r.Protect(CreateExpression(functions, "is_null", column_name_expr));
+			cpp11::sexp is_null_expr = CreateExpression(functions, "is_null", column_name_expr);
 			return CreateExpression(functions, "invert", is_null_expr);
 		}
 		case TableFilterType::CONJUNCTION_AND: {
@@ -154,29 +152,25 @@ private:
 	}
 
 	static SEXP TransformChildFilters(SEXP functions, const string &column_name, const string op,
-	                                  vector<unique_ptr<TableFilter>> &filters, string &timezone_config) {
+	                                  vector<duckdb::unique_ptr<TableFilter>> &filters, string &timezone_config) {
 		auto fit = filters.begin();
-		RProtector r;
-		auto conjunction_sexp = r.Protect(TransformFilterExpression(**fit, column_name, functions, timezone_config));
+		cpp11::sexp conjunction_sexp = TransformFilterExpression(**fit, column_name, functions, timezone_config);
 		fit++;
 		for (; fit != filters.end(); ++fit) {
-			SEXP rhs = r.Protect(TransformFilterExpression(**fit, column_name, functions, timezone_config));
-			conjunction_sexp = r.Protect(CreateExpression(functions, op, conjunction_sexp, rhs));
+			cpp11::sexp rhs = TransformFilterExpression(**fit, column_name, functions, timezone_config);
+			conjunction_sexp = CreateExpression(functions, op, conjunction_sexp, rhs);
 		}
 		return conjunction_sexp;
 	}
 
 	static SEXP TransformFilter(TableFilterSet &filter_collection, std::unordered_map<idx_t, string> &columns,
 	                            SEXP functions, string &timezone_config) {
-		RProtector r;
-
 		auto fit = filter_collection.filters.begin();
-		SEXP res = r.Protect(TransformFilterExpression(*fit->second, columns[fit->first], functions, timezone_config));
+		cpp11::sexp res = TransformFilterExpression(*fit->second, columns[fit->first], functions, timezone_config);
 		fit++;
 		for (; fit != filter_collection.filters.end(); ++fit) {
-			SEXP rhs =
-			    r.Protect(TransformFilterExpression(*fit->second, columns[fit->first], functions, timezone_config));
-			res = r.Protect(CreateExpression(functions, "and_kleene", res, rhs));
+			cpp11::sexp rhs = TransformFilterExpression(*fit->second, columns[fit->first], functions, timezone_config);
+			res = CreateExpression(functions, "and_kleene", res, rhs);
 		}
 		return res;
 	}
@@ -193,8 +187,7 @@ private:
 	}
 
 	static SEXP CreateExpression(SEXP functions, const string name, SEXP op1, SEXP op2 = R_NilValue) {
-		RProtector r;
-		auto name_sexp = r.Protect(Rf_mkString(name.c_str()));
+		cpp11::sexp name_sexp = Rf_mkString(name.c_str());
 		return CallArrowFactory(functions, 1, name_sexp, op1, op2);
 	}
 
@@ -207,22 +200,22 @@ private:
 	}
 };
 
-unique_ptr<TableFunctionRef> duckdb::ArrowScanReplacement(ClientContext &context, const string &table_name,
-                                                          ReplacementScanData *data_p) {
+unique_ptr<TableRef> duckdb::ArrowScanReplacement(ClientContext &context, const string &table_name,
+                                                  ReplacementScanData *data_p) {
 	auto &data = (ArrowScanReplacementData &)*data_p;
 	auto db_wrapper = data.wrapper;
 	lock_guard<mutex> arrow_scans_lock(db_wrapper->lock);
 	for (auto &e : db_wrapper->arrow_scans) {
 		if (e.first == table_name) {
-			auto table_function = make_unique<TableFunctionRef>();
-			vector<unique_ptr<ParsedExpression>> children;
-			children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)R_ExternalPtrAddr(e.second))));
+			auto table_function = make_uniq<TableFunctionRef>();
+			vector<duckdb::unique_ptr<ParsedExpression>> children;
+			children.push_back(make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)R_ExternalPtrAddr(e.second))));
 			children.push_back(
-			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::Produce)));
+			    make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::Produce)));
 			children.push_back(
-			    make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::GetSchema)));
-			table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
-			return table_function;
+			    make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::GetSchema)));
+			table_function->function = make_uniq<FunctionExpression>("arrow_scan", std::move(children));
+			return std::move(table_function);
 		}
 	}
 	return nullptr;

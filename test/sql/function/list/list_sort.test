@@ -61,7 +61,7 @@ SELECT list_sort([1, 2], 'NULLS FIRST')
 
 foreach func_name list_sort list_reverse_sort
 
-foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval json blob
+foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
 
 statement error
 SELECT ${func_name}(NULL::${type})
@@ -321,18 +321,6 @@ SELECT list_sort([NULL::${type}])
 
 endloop
 
-# JSON
-
-query I
-SELECT list_sort(['{a: 1}'::JSON, '{a: 3}'::JSON])
-----
-[{a: 1}, {a: 3}]
-
-query I
-SELECT list_sort([NULL::JSON])
-----
-[NULL]
-
 # BLOB
 
 query I
@@ -405,3 +393,16 @@ query IIII
 select k, v, map(k,v), map(k,v)[(array_sort(k,'DESC'))[1]] from (values ([1,2,3,4],[2,3,4,5])) as t(k,v);
 ----
 [1, 2, 3, 4]	[2, 3, 4, 5]	{1=2, 2=3, 3=4, 4=5}	[5]
+
+# bug fixes test for #5694
+
+require parquet
+
+statement ok
+CREATE TABLE stage AS SELECT * FROM 'data/parquet-testing/list_sort_segfault.parquet';
+
+statement ok
+CREATE TABLE health (a VARCHAR[]);
+
+statement ok
+INSERT INTO health SELECT list_sort(string_to_array(s, ',')) AS a FROM stage;

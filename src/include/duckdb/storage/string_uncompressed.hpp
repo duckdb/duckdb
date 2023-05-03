@@ -9,7 +9,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/string_uncompressed.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
@@ -61,7 +61,7 @@ public:
 	static unique_ptr<CompressionAppendState> StringInitAppend(ColumnSegment &segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		auto handle = buffer_manager.Pin(segment.block);
-		return make_unique<CompressionAppendState>(move(handle));
+		return make_uniq<CompressionAppendState>(std::move(handle));
 	}
 
 	static idx_t StringAppend(CompressionAppendState &append_state, ColumnSegment &segment, SegmentStatistics &stats,
@@ -155,7 +155,7 @@ public:
 				remaining_space -= required_space;
 				auto dict_pos = end - *dictionary_size;
 				// now write the actual string data into the dictionary
-				memcpy(dict_pos, source_data[source_idx].GetDataUnsafe(), string_length);
+				memcpy(dict_pos, source_data[source_idx].GetData(), string_length);
 
 				// place the dictionary offset into the set of vectors
 				result_data[target_idx] = *dictionary_size;
@@ -173,8 +173,7 @@ public:
 
 public:
 	static inline void UpdateStringStats(SegmentStatistics &stats, const string_t &new_value) {
-		auto &sstats = (StringStatistics &)*stats.statistics;
-		sstats.Update(new_value);
+		StringStats::Update(stats.statistics, new_value);
 	}
 
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer dict);

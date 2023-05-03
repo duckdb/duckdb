@@ -9,11 +9,11 @@ unique_ptr<TransactionStatement> Transformer::TransformTransaction(duckdb_libpgq
 	switch (stmt->kind) {
 	case duckdb_libpgquery::PG_TRANS_STMT_BEGIN:
 	case duckdb_libpgquery::PG_TRANS_STMT_START:
-		return make_unique<TransactionStatement>(TransactionType::BEGIN_TRANSACTION);
+		return make_uniq<TransactionStatement>(TransactionType::BEGIN_TRANSACTION);
 	case duckdb_libpgquery::PG_TRANS_STMT_COMMIT:
-		return make_unique<TransactionStatement>(TransactionType::COMMIT);
+		return make_uniq<TransactionStatement>(TransactionType::COMMIT);
 	case duckdb_libpgquery::PG_TRANS_STMT_ROLLBACK:
-		return make_unique<TransactionStatement>(TransactionType::ROLLBACK);
+		return make_uniq<TransactionStatement>(TransactionType::ROLLBACK);
 	default:
 		throw NotImplementedException("Transaction type %d not implemented yet", stmt->kind);
 	}

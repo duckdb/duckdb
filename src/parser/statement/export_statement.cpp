@@ -3,7 +3,7 @@
 namespace duckdb {
 
 ExportStatement::ExportStatement(unique_ptr<CopyInfo> info)
-    : SQLStatement(StatementType::EXPORT_STATEMENT), info(move(info)) {
+    : SQLStatement(StatementType::EXPORT_STATEMENT), info(std::move(info)) {
 }
 
 ExportStatement::ExportStatement(const ExportStatement &other) : SQLStatement(other), info(other.info->Copy()) {

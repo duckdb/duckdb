@@ -51,12 +51,20 @@ struct PendingQueryParameters {
 	bool allow_stream_result = false;
 };
 
+//! ClientContextState is virtual base class for ClientContext-local (or Query-Local, using QueryEnd callback) state
+//! e.g. caches that need to live as long as a ClientContext or Query.
+class ClientContextState {
+public:
+	virtual ~ClientContextState() {};
+	virtual void QueryEnd() = 0;
+};
+
 //! The ClientContext holds information relevant to the current client session
 //! during execution
 class ClientContext : public std::enable_shared_from_this<ClientContext> {
 	friend class PendingQueryResult;
 	friend class StreamQueryResult;
-	friend class TransactionManager;
+	friend class DuckTransactionManager;
 
 public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
@@ -64,20 +72,21 @@ public:
 
 	//! The database that this client is connected to
 	shared_ptr<DatabaseInstance> db;
-	//! Data for the currently running transaction
-	TransactionContext transaction;
 	//! Whether or not the query is interrupted
 	atomic<bool> interrupted;
 	//! External Objects (e.g., Python objects) that views depend of
 	unordered_map<string, vector<shared_ptr<ExternalDependency>>> external_dependencies;
-
+	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
+	unordered_map<string, shared_ptr<ClientContextState>> registered_state;
 	//! The client configuration
 	ClientConfig config;
 	//! The set of client-specific data
 	unique_ptr<ClientData> client_data;
+	//! Data for the currently running transaction
+	TransactionContext transaction;
 
 public:
-	DUCKDB_API Transaction &ActiveTransaction() {
+	DUCKDB_API MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
 	}
 
@@ -113,6 +122,8 @@ public:
 	DUCKDB_API void TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
 
 	//! Execute a relation
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const shared_ptr<Relation> &relation,
+	                                                       bool allow_stream_result);
 	DUCKDB_API unique_ptr<QueryResult> Execute(const shared_ptr<Relation> &relation);
 
 	//! Prepare a query
@@ -138,7 +149,7 @@ public:
 	DUCKDB_API double GetProgress();
 
 	//! Register function in the temporary schema
-	DUCKDB_API void RegisterFunction(CreateFunctionInfo *info);
+	DUCKDB_API void RegisterFunction(CreateFunctionInfo &info);
 
 	//! Parse statements from a query
 	DUCKDB_API vector<unique_ptr<SQLStatement>> ParseStatements(const string &query);
@@ -176,6 +187,9 @@ public:
 	DUCKDB_API unordered_set<string> GetTableNames(const string &query);
 
 	DUCKDB_API ClientProperties GetClientProperties() const;
+
+	//! Returns true if execution of the current query is finished
+	DUCKDB_API bool ExecutionIsFinished();
 
 private:
 	//! Parse statements and resolve pragmas from a query
@@ -235,6 +249,9 @@ private:
 	unique_ptr<PendingQueryResult> PendingQueryPreparedInternal(ClientContextLock &lock, const string &query,
 	                                                            shared_ptr<PreparedStatementData> &prepared,
 	                                                            PendingQueryParameters parameters);
+
+	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &, const shared_ptr<Relation> &relation,
+	                                                    bool allow_stream_result);
 
 private:
 	//! Lock on using the ClientContext in parallel

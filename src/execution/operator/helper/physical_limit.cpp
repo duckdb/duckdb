@@ -12,8 +12,9 @@ namespace duckdb {
 PhysicalLimit::PhysicalLimit(vector<LogicalType> types, idx_t limit, idx_t offset,
                              unique_ptr<Expression> limit_expression, unique_ptr<Expression> offset_expression,
                              idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::LIMIT, move(types), estimated_cardinality), limit_value(limit),
-      offset_value(offset), limit_expression(move(limit_expression)), offset_expression(move(offset_expression)) {
+    : PhysicalOperator(PhysicalOperatorType::LIMIT, std::move(types), estimated_cardinality), limit_value(limit),
+      offset_value(offset), limit_expression(std::move(limit_expression)),
+      offset_expression(std::move(offset_expression)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -46,11 +47,11 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalLimit::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<LimitGlobalState>(context, *this);
+	return make_uniq<LimitGlobalState>(context, *this);
 }
 
 unique_ptr<LocalSinkState> PhysicalLimit::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<LimitLocalState>(context.client, *this);
+	return make_uniq<LimitLocalState>(context.client, *this);
 }
 
 bool PhysicalLimit::ComputeOffset(ExecutionContext &context, DataChunk &input, idx_t &limit, idx_t &offset,
@@ -95,7 +96,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
                                    DataChunk &input) const {
 
 	D_ASSERT(input.size() > 0);
-	auto &state = (LimitLocalState &)lstate;
+	auto &state = lstate.Cast<LimitLocalState>();
 	auto &limit = state.limit;
 	auto &offset = state.offset;
 
@@ -110,12 +111,15 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	}
 	state.data.Append(input, lstate.batch_index);
 	state.current_offset += input.size();
+	if (state.current_offset == max_element) {
+		return SinkResultType::FINISHED;
+	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
 void PhysicalLimit::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &gstate = (LimitGlobalState &)gstate_p;
-	auto &state = (LimitLocalState &)lstate_p;
+	auto &gstate = gstate_p.Cast<LimitGlobalState>();
+	auto &state = lstate_p.Cast<LimitLocalState>();
 
 	lock_guard<mutex> lock(gstate.glock);
 	gstate.limit = state.limit;
@@ -139,13 +143,13 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalLimit::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<LimitSourceState>();
+	return make_uniq<LimitSourceState>();
 }
 
 void PhysicalLimit::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                             LocalSourceState &lstate) const {
-	auto &gstate = (LimitGlobalState &)*sink_state;
-	auto &state = (LimitSourceState &)gstate_p;
+	auto &gstate = sink_state->Cast<LimitGlobalState>();
+	auto &state = gstate_p.Cast<LimitSourceState>();
 	while (state.current_offset < gstate.limit + gstate.offset) {
 		if (!state.initialized) {
 			gstate.data.InitializeScan(state.scan_state);

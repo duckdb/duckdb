@@ -38,6 +38,7 @@ public:
 
 public:
 	BoundOrderByNode Copy() const;
+	bool Equals(const BoundOrderByNode &other) const;
 	string ToString() const;
 
 	void Serialize(Serializer &serializer) const;
@@ -64,13 +65,20 @@ public:
 
 	//! List of order nodes
 	vector<BoundOrderByNode> orders;
+
+	unique_ptr<BoundOrderModifier> Copy() const;
+	static bool Equals(const BoundOrderModifier *left, const BoundOrderModifier *right);
 };
+
+enum class DistinctType : uint8_t { DISTINCT = 0, DISTINCT_ON = 1 };
 
 class BoundDistinctModifier : public BoundResultModifier {
 public:
 	BoundDistinctModifier();
 
-	//! list of distinct on targets (if any)
+	//! Whether or not this is a DISTINCT or DISTINCT ON
+	DistinctType distinct_type;
+	//! list of distinct on targets
 	vector<unique_ptr<Expression>> target_distincts;
 };
 

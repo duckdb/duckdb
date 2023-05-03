@@ -7,30 +7,31 @@ namespace duckdb {
 
 CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string view_name_p, bool replace_p,
                                        bool temporary_p)
-    : Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(move(child_p)),
-      view_name(move(view_name_p)), replace(replace_p), temporary(temporary_p) {
+    : Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(std::move(child_p)),
+      view_name(std::move(view_name_p)), replace(replace_p), temporary(temporary_p) {
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string schema_name_p, string view_name_p,
                                        bool replace_p, bool temporary_p)
-    : Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(move(child_p)),
-      schema_name(move(schema_name_p)), view_name(move(view_name_p)), replace(replace_p), temporary(temporary_p) {
+    : Relation(child_p->context, RelationType::CREATE_VIEW_RELATION), child(std::move(child_p)),
+      schema_name(std::move(schema_name_p)), view_name(std::move(view_name_p)), replace(replace_p),
+      temporary(temporary_p) {
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 BoundStatement CreateViewRelation::Bind(Binder &binder) {
-	auto select = make_unique<SelectStatement>();
+	auto select = make_uniq<SelectStatement>();
 	select->node = child->GetQueryNode();
 
 	CreateStatement stmt;
-	auto info = make_unique<CreateViewInfo>();
-	info->query = move(select);
+	auto info = make_uniq<CreateViewInfo>();
+	info->query = std::move(select);
 	info->view_name = view_name;
 	info->temporary = temporary;
 	info->schema = schema_name;
 	info->on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
-	stmt.info = move(info);
+	stmt.info = std::move(info);
 	return binder.Bind((SQLStatement &)stmt);
 }
 

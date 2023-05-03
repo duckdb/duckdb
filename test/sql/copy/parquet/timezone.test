@@ -1,0 +1,24 @@
+# name: test/sql/copy/parquet/timezone.test
+# description: Test reading from a Parquet file with timezone information
+# group: [parquet]
+
+require parquet
+
+require icu
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select typeof(TimeRecStart) from 'data/parquet-testing/tz.parquet' limit 1;
+----
+TIMESTAMP WITH TIME ZONE
+
+statement ok
+SET timezone='UTC'
+
+query I
+select TimeRecStart from 'data/parquet-testing/tz.parquet';
+----
+2022-10-17 21:52:27+00
+2022-10-17 21:52:27+00

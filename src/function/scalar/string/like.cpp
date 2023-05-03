@@ -2,7 +2,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
+
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
@@ -65,7 +65,7 @@ bool TemplatedLikeOperator(const char *sdata, idx_t slen, const char *pdata, idx
 }
 
 struct LikeSegment {
-	explicit LikeSegment(string pattern) : pattern(move(pattern)) {
+	explicit LikeSegment(string pattern) : pattern(std::move(pattern)) {
 	}
 
 	string pattern;
@@ -73,12 +73,12 @@ struct LikeSegment {
 
 struct LikeMatcher : public FunctionData {
 	LikeMatcher(string like_pattern_p, vector<LikeSegment> segments, bool has_start_percentage, bool has_end_percentage)
-	    : like_pattern(move(like_pattern_p)), segments(move(segments)), has_start_percentage(has_start_percentage),
-	      has_end_percentage(has_end_percentage) {
+	    : like_pattern(std::move(like_pattern_p)), segments(std::move(segments)),
+	      has_start_percentage(has_start_percentage), has_end_percentage(has_end_percentage) {
 	}
 
 	bool Match(string_t &str) {
-		auto str_data = (const unsigned char *)str.GetDataUnsafe();
+		auto str_data = (const unsigned char *)str.GetData();
 		auto str_len = str.GetSize();
 		idx_t segment_idx = 0;
 		idx_t end_idx = segments.size() - 1;
@@ -170,11 +170,12 @@ struct LikeMatcher : public FunctionData {
 		if (segments.empty()) {
 			return nullptr;
 		}
-		return make_unique<LikeMatcher>(move(like_pattern), move(segments), has_start_percentage, has_end_percentage);
+		return make_uniq<LikeMatcher>(std::move(like_pattern), std::move(segments), has_start_percentage,
+		                              has_end_percentage);
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<LikeMatcher>(like_pattern, segments, has_start_percentage, has_end_percentage);
+		return make_uniq<LikeMatcher>(like_pattern, segments, has_start_percentage, has_end_percentage);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -212,14 +213,14 @@ bool LikeOperatorFunction(const char *s, idx_t slen, const char *pattern, idx_t 
 }
 
 bool LikeOperatorFunction(string_t &s, string_t &pat) {
-	return LikeOperatorFunction(s.GetDataUnsafe(), s.GetSize(), pat.GetDataUnsafe(), pat.GetSize());
+	return LikeOperatorFunction(s.GetData(), s.GetSize(), pat.GetData(), pat.GetSize());
 }
 
 bool LikeOperatorFunction(string_t &s, string_t &pat, char escape) {
-	return LikeOperatorFunction(s.GetDataUnsafe(), s.GetSize(), pat.GetDataUnsafe(), pat.GetSize(), escape);
+	return LikeOperatorFunction(s.GetData(), s.GetSize(), pat.GetData(), pat.GetSize(), escape);
 }
 
-bool LikeFun::Glob(const char *string, idx_t slen, const char *pattern, idx_t plen) {
+bool LikeFun::Glob(const char *string, idx_t slen, const char *pattern, idx_t plen, bool allow_question_mark) {
 	idx_t sidx = 0;
 	idx_t pidx = 0;
 main_loop : {
@@ -248,8 +249,11 @@ main_loop : {
 			return false;
 		}
 		case '?':
-			// wildcard: matches anything but null
-			break;
+			// when enabled: matches anything but null
+			if (allow_question_mark) {
+				break;
+			}
+			DUCKDB_EXPLICIT_FALLTHROUGH;
 		case '[':
 			pidx++;
 			goto parse_bracket;
@@ -358,15 +362,14 @@ static char GetEscapeChar(string_t escape) {
 	if (escape.GetSize() > 1) {
 		throw SyntaxException("Invalid escape string. Escape string must be empty or one character.");
 	}
-	return escape.GetSize() == 0 ? '\0' : *escape.GetDataUnsafe();
+	return escape.GetSize() == 0 ? '\0' : *escape.GetData();
 }
 
 struct LikeEscapeOperator {
 	template <class TA, class TB, class TC>
 	static inline bool Operation(TA str, TB pattern, TC escape) {
 		char escape_char = GetEscapeChar(escape);
-		return LikeOperatorFunction(str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize(),
-		                            escape_char);
+		return LikeOperatorFunction(str.GetData(), str.GetSize(), pattern.GetData(), pattern.GetSize(), escape_char);
 	}
 };
 
@@ -385,9 +388,9 @@ struct LikeOperator {
 };
 
 bool ILikeOperatorFunction(string_t &str, string_t &pattern, char escape = '\0') {
-	auto str_data = str.GetDataUnsafe();
+	auto str_data = str.GetData();
 	auto str_size = str.GetSize();
-	auto pat_data = pattern.GetDataUnsafe();
+	auto pat_data = pattern.GetData();
 	auto pat_size = pattern.GetSize();
 
 	// lowercase both the str and the pattern
@@ -442,8 +445,8 @@ struct NotILikeOperator {
 struct ILikeOperatorASCII {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA str, TB pattern) {
-		return TemplatedLikeOperator<'%', '_', false, ASCIILCaseReader>(
-		    str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize(), '\0');
+		return TemplatedLikeOperator<'%', '_', false, ASCIILCaseReader>(str.GetData(), str.GetSize(), pattern.GetData(),
+		                                                                pattern.GetSize(), '\0');
 	}
 };
 
@@ -457,7 +460,7 @@ struct NotILikeOperatorASCII {
 struct GlobOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA str, TB pattern) {
-		return LikeFun::Glob(str.GetDataUnsafe(), str.GetSize(), pattern.GetDataUnsafe(), pattern.GetSize());
+		return LikeFun::Glob(str.GetData(), str.GetSize(), pattern.GetData(), pattern.GetSize());
 	}
 };
 
@@ -478,11 +481,7 @@ static unique_ptr<BaseStatistics> ILikePropagateStats(ClientContext &context, Fu
 	auto &expr = input.expr;
 	D_ASSERT(child_stats.size() >= 1);
 	// can only propagate stats if the children have stats
-	if (!child_stats[0]) {
-		return nullptr;
-	}
-	auto &sstats = (StringStatistics &)*child_stats[0];
-	if (!sstats.has_unicode) {
+	if (!StringStats::CanContainUnicode(child_stats[0])) {
 		expr.function.function = ScalarFunction::BinaryFunction<string_t, string_t, bool, ASCII_OP>;
 	}
 	return nullptr;
@@ -490,7 +489,7 @@ static unique_ptr<BaseStatistics> ILikePropagateStats(ClientContext &context, Fu
 
 template <class OP, bool INVERT>
 static void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	if (func_expr.bind_info) {
 		auto &matcher = (LikeMatcher &)*func_expr.bind_info;
 		// use fast like matcher

@@ -22,10 +22,12 @@ public:
 	ColumnBindingResolver();
 
 	void VisitOperator(LogicalOperator &op) override;
+	static void Verify(LogicalOperator &op);
 
 protected:
 	vector<ColumnBinding> bindings;
 
 	unique_ptr<Expression> VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) override;
+	static unordered_set<idx_t> VerifyInternal(LogicalOperator &op);
 };
 } // namespace duckdb

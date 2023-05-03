@@ -54,7 +54,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		// aggregate
 		if (!everything_referenced) {
 			// FIXME: groups that are not referenced need to stay -> but they don't need to be scanned and output!
-			auto &aggr = (LogicalAggregate &)op;
+			auto &aggr = op.Cast<LogicalAggregate>();
 			ClearUnusedExpressions(aggr.expressions, aggr.aggregate_index);
 			if (aggr.expressions.empty() && aggr.groups.empty()) {
 				// removed all expressions from the aggregate: push a COUNT(*)
@@ -71,10 +71,11 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		remove.VisitOperator(*op.children[0]);
 		return;
 	}
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		if (!everything_referenced) {
-			auto &comp_join = (LogicalComparisonJoin &)op;
+			auto &comp_join = op.Cast<LogicalComparisonJoin>();
 
 			if (comp_join.join_type != JoinType::INNER) {
 				break;
@@ -88,8 +89,8 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 					    cond.right->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
 						// comparison join between two bound column refs
 						// we can replace any reference to the RHS (build-side) with a reference to the LHS (probe-side)
-						auto &lhs_col = (BoundColumnRefExpression &)*cond.left;
-						auto &rhs_col = (BoundColumnRefExpression &)*cond.right;
+						auto &lhs_col = cond.left->Cast<BoundColumnRefExpression>();
+						auto &rhs_col = cond.right->Cast<BoundColumnRefExpression>();
 						// if there are any columns that refer to the RHS,
 						auto colrefs = column_references.find(rhs_col.binding);
 						if (colrefs != column_references.end()) {
@@ -112,7 +113,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we
 			// encounter a UNION node that is not preceded by a DISTINCT)
 			// this happens when UNION ALL is used
-			auto &setop = (LogicalSetOperation &)op;
+			auto &setop = op.Cast<LogicalSetOperation>();
 			vector<idx_t> entries;
 			for (idx_t i = 0; i < setop.column_count; i++) {
 				entries.push_back(i);
@@ -138,12 +139,12 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 					expressions.reserve(entries.size());
 					for (auto &column_idx : entries) {
 						expressions.push_back(
-						    make_unique<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
+						    make_uniq<BoundColumnRefExpression>(child->types[column_idx], bindings[column_idx]));
 					}
 					auto new_projection =
-					    make_unique<LogicalProjection>(binder.GenerateTableIndex(), move(expressions));
-					new_projection->children.push_back(move(child));
-					op.children[child_idx] = move(new_projection);
+					    make_uniq<LogicalProjection>(binder.GenerateTableIndex(), std::move(expressions));
+					new_projection->children.push_back(std::move(child));
+					op.children[child_idx] = std::move(new_projection);
 
 					remove.VisitOperator(*op.children[child_idx]);
 				}
@@ -165,7 +166,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		return;
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		if (!everything_referenced) {
-			auto &order = (LogicalOrder &)op;
+			auto &order = op.Cast<LogicalOrder>();
 			D_ASSERT(order.projections.empty()); // should not yet be set
 			const auto all_bindings = order.GetColumnBindings();
 
@@ -182,14 +183,14 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		return;
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		if (!everything_referenced) {
-			auto &proj = (LogicalProjection &)op;
+			auto &proj = op.Cast<LogicalProjection>();
 			ClearUnusedExpressions(proj.expressions, proj.table_index);
 
 			if (proj.expressions.empty()) {
 				// nothing references the projected expressions
 				// this happens in the case of e.g. EXISTS(SELECT * FROM ...)
 				// in this case we only need to project a single constant
-				proj.expressions.push_back(make_unique<BoundConstantExpression>(Value::INTEGER(42)));
+				proj.expressions.push_back(make_uniq<BoundConstantExpression>(Value::INTEGER(42)));
 			}
 		}
 		// then recurse into the children of this projection
@@ -214,7 +215,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_GET:
 		LogicalOperatorVisitor::VisitOperatorExpressions(op);
 		if (!everything_referenced) {
-			auto &get = (LogicalGet &)op;
+			auto &get = op.Cast<LogicalGet>();
+			if (!get.function.projection_pushdown) {
+				return;
+			}
 
 			// Create "selection vector" of all column ids
 			vector<idx_t> proj_sel;
@@ -254,7 +258,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			for (auto col_sel_idx : col_sel) {
 				column_ids.push_back(get.column_ids[col_sel_idx]);
 			}
-			get.column_ids = move(column_ids);
+			get.column_ids = std::move(column_ids);
 
 			if (get.function.filter_prune) {
 				// Now set the projection cols by matching the "selection vector" that excludes filter columns
@@ -278,6 +282,15 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		return;
+	case LogicalOperatorType::LOGICAL_FILTER: {
+		auto &filter = op.Cast<LogicalFilter>();
+		if (!filter.projection_map.empty()) {
+			// if we have any entries in the filter projection map don't prune any columns
+			// FIXME: we can do something more clever here
+			everything_referenced = true;
+		}
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
 		// distinct, all projected columns are used for the DISTINCT computation
 		// mark all columns as used and continue to the children
@@ -290,6 +303,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_CTE_REF: {
+		everything_referenced = true;
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_PIVOT: {
 		everything_referenced = true;
 		break;
 	}

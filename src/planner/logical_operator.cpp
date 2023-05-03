@@ -7,6 +7,7 @@
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/operator/logical_extension_operator.hpp"
 
 namespace duckdb {
 
@@ -17,7 +18,7 @@ LogicalOperator::LogicalOperator(LogicalOperatorType type)
 }
 
 LogicalOperator::LogicalOperator(LogicalOperatorType type, vector<unique_ptr<Expression>> expressions)
-    : type(type), expressions(move(expressions)), estimated_cardinality(0), has_estimated_cardinality(false) {
+    : type(type), expressions(std::move(expressions)), estimated_cardinality(0), has_estimated_cardinality(false) {
 }
 
 LogicalOperator::~LogicalOperator() {
@@ -56,6 +57,7 @@ void LogicalOperator::ResolveOperatorTypes() {
 
 vector<ColumnBinding> LogicalOperator::GenerateColumnBindings(idx_t table_idx, idx_t column_count) {
 	vector<ColumnBinding> result;
+	result.reserve(column_count);
 	for (idx_t i = 0; i < column_count; i++) {
 		result.emplace_back(table_idx, i);
 	}
@@ -83,6 +85,7 @@ vector<ColumnBinding> LogicalOperator::MapBindings(const vector<ColumnBinding> &
 		vector<ColumnBinding> result_bindings;
 		result_bindings.reserve(projection_map.size());
 		for (auto index : projection_map) {
+			D_ASSERT(index < bindings.size());
 			result_bindings.push_back(bindings[index]);
 		}
 		return result_bindings;
@@ -125,6 +128,8 @@ void LogicalOperator::Verify(ClientContext &context) {
 			continue;
 		}
 		BufferedSerializer serializer;
+		// We are serializing a query plan
+		serializer.is_query_plan = true;
 		try {
 			expressions[expr_idx]->Serialize(serializer);
 		} catch (NotImplementedException &ex) {
@@ -133,7 +138,7 @@ void LogicalOperator::Verify(ClientContext &context) {
 		}
 
 		auto data = serializer.GetData();
-		auto deserializer = BufferedDeserializer(data.data.get(), data.size);
+		auto deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);
 
 		PlanDeserializationState state(context);
 		auto deserialized_expression = Expression::Deserialize(deserializer, state);
@@ -151,7 +156,7 @@ void LogicalOperator::Verify(ClientContext &context) {
 
 void LogicalOperator::AddChild(unique_ptr<LogicalOperator> child) {
 	D_ASSERT(child);
-	children.push_back(move(child));
+	children.push_back(std::move(child));
 }
 
 idx_t LogicalOperator::EstimateCardinality(ClientContext &context) {
@@ -164,7 +169,8 @@ idx_t LogicalOperator::EstimateCardinality(ClientContext &context) {
 		max_cardinality = MaxValue(child->EstimateCardinality(context), max_cardinality);
 	}
 	has_estimated_cardinality = true;
-	return max_cardinality;
+	estimated_cardinality = max_cardinality;
+	return estimated_cardinality;
 }
 
 void LogicalOperator::Print() {
@@ -251,6 +257,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 		result = LogicalDelimJoin::Deserialize(state, reader);
 		break;
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		result = LogicalAsOfJoin::Deserialize(state, reader);
+		break;
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		result = LogicalComparisonJoin::Deserialize(state, reader);
 		break;
@@ -259,6 +268,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		break;
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
 		result = LogicalCrossProduct::Deserialize(state, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
+		result = LogicalPositionalJoin::Deserialize(state, reader);
 		break;
 	case LogicalOperatorType::LOGICAL_UNION:
 		result = LogicalSetOperation::Deserialize(state, reader);
@@ -281,9 +293,6 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_UPDATE:
 		result = LogicalUpdate::Deserialize(state, reader);
 		break;
-	case LogicalOperatorType::LOGICAL_ALTER:
-		result = LogicalSimple::Deserialize(state, reader);
-		break;
 	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
 		result = LogicalCreateTable::Deserialize(state, reader);
 		break;
@@ -302,14 +311,8 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
 		result = LogicalCreate::Deserialize(state, reader);
 		break;
-	case LogicalOperatorType::LOGICAL_DROP:
-		result = LogicalSimple::Deserialize(state, reader);
-		break;
 	case LogicalOperatorType::LOGICAL_PRAGMA:
 		result = LogicalPragma::Deserialize(state, reader);
-		break;
-	case LogicalOperatorType::LOGICAL_TRANSACTION:
-		result = LogicalSimple::Deserialize(state, reader);
 		break;
 	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
 		result = LogicalCreate::Deserialize(state, reader);
@@ -329,26 +332,41 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_EXPORT:
 		result = LogicalExport::Deserialize(state, reader);
 		break;
-	case LogicalOperatorType::LOGICAL_VACUUM:
-		result = LogicalSimple::Deserialize(state, reader);
-		break;
 	case LogicalOperatorType::LOGICAL_SET:
 		result = LogicalSet::Deserialize(state, reader);
 		break;
+	case LogicalOperatorType::LOGICAL_RESET:
+		result = LogicalReset::Deserialize(state, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_ALTER:
+	case LogicalOperatorType::LOGICAL_VACUUM:
 	case LogicalOperatorType::LOGICAL_LOAD:
+	case LogicalOperatorType::LOGICAL_ATTACH:
+	case LogicalOperatorType::LOGICAL_TRANSACTION:
+	case LogicalOperatorType::LOGICAL_DROP:
 		result = LogicalSimple::Deserialize(state, reader);
 		break;
+	case LogicalOperatorType::LOGICAL_DETACH:
+		throw SerializationException("Logical Detach does not support serialization");
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
-		throw SerializationException("Invalid type for operator deserialization");
+		result = LogicalExtensionOperator::Deserialize(state, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_PIVOT:
+		result = LogicalPivot::Deserialize(state, reader);
+		break;
 	case LogicalOperatorType::LOGICAL_INVALID:
 		/* no default here to trigger a warning if we forget to implement deserialize for a new operator */
 		throw SerializationException("Invalid type for operator deserialization");
 	}
 
 	reader.Finalize();
-	result->children = move(children);
+	result->children = std::move(children);
 
 	return result;
+}
+
+vector<idx_t> LogicalOperator::GetTableIndex() const {
+	return vector<idx_t> {};
 }
 
 unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {
@@ -361,7 +379,7 @@ unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const 
 		                              std::string(ex.what()));
 	}
 	auto data = logical_op_serializer.GetData();
-	auto logical_op_deserializer = BufferedDeserializer(data.data.get(), data.size);
+	auto logical_op_deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);
 	PlanDeserializationState state(context);
 	auto op_copy = LogicalOperator::Deserialize(logical_op_deserializer, state);
 	return op_copy;

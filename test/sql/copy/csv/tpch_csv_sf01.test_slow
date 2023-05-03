@@ -1,0 +1,39 @@
+# name: test/sql/copy/csv/tpch_csv_sf01.test_slow
+# description: Test running TPC-H SF0.1 over CSV files directly
+# group: [csv]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0.1, suffix='_original');
+
+foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
+
+statement ok
+COPY ${tpch_tbl}_original TO '__TEST_DIR__/${tpch_tbl}.csv' (DELIMITER '|', HEADER);
+
+statement ok
+CREATE VIEW ${tpch_tbl} AS FROM read_csv_auto('__TEST_DIR__/${tpch_tbl}.csv', sep='|', header=1);
+
+endloop
+
+statement ok
+SET threads=1
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.1/q${i}.csv
+
+endloop

@@ -8,13 +8,16 @@
 
 #pragma once
 
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
 //! LogicalColumnDataGet represents a scan operation from a ColumnDataCollection
 class LogicalColumnDataGet : public LogicalOperator {
+public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_CHUNK_GET;
+
 public:
 	LogicalColumnDataGet(idx_t table_index, vector<LogicalType> types, unique_ptr<ColumnDataCollection> collection);
 
@@ -30,6 +33,7 @@ public:
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
+	vector<idx_t> GetTableIndex() const override;
 
 protected:
 	void ResolveTypes() override {

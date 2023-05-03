@@ -30,7 +30,7 @@ WHERE d1.d_month_seq BETWEEN 1200 AND 1200+11
 GROUP BY rollup(s_state,s_county)
 ORDER BY lochierarchy DESC ,
          CASE
-             WHEN lochierarchy = 0 THEN s_state
+             WHEN grouping(s_state)+grouping(s_county) = 0 THEN s_state
          END ,
          rank_within_parent
 LIMIT 100;

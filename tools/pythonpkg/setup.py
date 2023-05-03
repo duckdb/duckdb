@@ -5,6 +5,7 @@ import os
 import sys
 import platform
 import multiprocessing.pool
+from glob import glob
 
 from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext as _build_ext
@@ -57,12 +58,12 @@ class build_ext(CompilerLauncherMixin, _build_ext):
 
 lib_name = 'duckdb'
 
-extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer', 'json', 'excel']
+extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'json']
 
 if platform.system() == 'Windows':
-    extensions = ['parquet', 'icu', 'fts', 'tpch', 'json', 'excel']
+    extensions = ['parquet', 'icu', 'fts', 'tpch', 'json']
 
-if platform.system() == 'Linux' and platform.architecture()[0] == '64bit':
+if platform.system() == 'Linux' and platform.architecture()[0] == '64bit' and not hasattr(sys, 'getandroidapilevel'):
     extensions.append('jemalloc')
 
 unity_build = 0
@@ -89,7 +90,7 @@ def parallel_cpp_compile(self, sources, output_dir=None, macros=None, include_di
 
 
 # speed up compilation with: -j = cpu_number() on non Windows machines
-if os.name != 'nt':
+if os.name != 'nt' and os.environ.get('DUCKDB_DISABLE_PARALLEL_COMPILE', '') != '1':
     import distutils.ccompiler
     distutils.ccompiler.CCompiler.compile = parallel_cpp_compile
 
@@ -152,19 +153,18 @@ class get_pybind_include(object):
         import pybind11
         return pybind11.get_include(self.user)
 
-class get_numpy_include(object):
-    def __str__(self):
-        import numpy
-        return numpy.get_include()
-
 extra_files = []
 header_files = []
+
+def list_source_files(directory):
+    sources = glob('src/**/*.cpp', recursive=True)
+    return sources
 
 script_path = os.path.dirname(os.path.abspath(__file__))
 main_include_path = os.path.join(script_path, 'src', 'include')
 main_source_path = os.path.join(script_path, 'src')
-main_source_files = ['duckdb_python.cpp'] + [os.path.join('src', x) for x in os.listdir(main_source_path) if '.cpp' in x]
-include_directories = [main_include_path, get_numpy_include(), get_pybind_include(), get_pybind_include(user=True)]
+main_source_files = ['duckdb_python.cpp'] + list_source_files(main_source_path)
+include_directories = [main_include_path, get_pybind_include(), get_pybind_include(user=True)]
 
 if len(existing_duckdb_dir) == 0:
     # no existing library supplied: compile everything from source
@@ -205,9 +205,13 @@ if len(existing_duckdb_dir) == 0:
         # read the include files, source list and include files from the supplied lists
         with open_utf8('sources.list', 'r') as f:
             duckdb_sources = [x for x in f.read().split('\n') if len(x) > 0]
+            if hasattr(sys, 'getandroidapilevel'):
+                duckdb_sources = [x for x in duckdb_sources if 'jemalloc' not in x]
 
         with open_utf8('includes.list', 'r') as f:
             duckdb_includes = [x for x in f.read().split('\n') if len(x) > 0]
+            if hasattr(sys, 'getandroidapilevel'):
+                duckdb_includes = [x for x in duckdb_includes if 'jemalloc' not in x]
 
     source_files += duckdb_sources
     include_directories = duckdb_includes + include_directories
@@ -280,16 +284,13 @@ setup(
     url="https://www.duckdb.org",
     long_description = 'See here for an introduction: https://duckdb.org/docs/api/python/overview',
     license='MIT',
-    install_requires=[ # these version is still available for Python 2, newer ones aren't
-         'numpy>=1.14'
-    ],
     data_files = data_files,
     packages=[
-        'duckdb_query_graph',
+        'pyduckdb',
         'duckdb-stubs'
     ],
     include_package_data=True,
-    setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'numpy>=1.14', 'pybind11>=2.6.0'],
+    setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'pybind11>=2.6.0'],
     use_scm_version = setuptools_scm_conf,
     tests_require=['google-cloud-storage', 'mypy', 'pytest'],
     classifiers = [

@@ -22,43 +22,63 @@ SELECT INTERVAL '2Y 1 M';
 ----
 2 years 00:01:00
 
-# 2 years 4 days one minute 3 seconds 20 milliseconds
+# 2 years 4 days one minute 3 seconds 20 milliseconds 16 microseconds
 query T
-SELECT INTERVAL '2Y 1 month 1 M 3S 20mS';
+SELECT INTERVAL '2Y 1 month 1 M 3S 20mS 16uS';
 ----
-2 years 1 month 00:01:03.02
+2 years 1 month 00:01:03.020016
 
 query T
-SELECT INTERVAL '2Y 1 month 02:01:03';
+SELECT INTERVAL '2Y 1 month 02:01:03.020016';
 ----
-2 years 1 month 02:01:03
+2 years 1 month 02:01:03.020016
 
 query T
-SELECT INTERVAL '2Y 1 month 1M 3S 20mS'::VARCHAR;
+SELECT INTERVAL '2Y 1 month 1M 3S 20mS 16uS'::VARCHAR;
 ----
-2 years 1 month 00:01:03.02
-
-# -2 years +4 days +one minute 3 seconds 20 milliseconds
-query T
-SELECT INTERVAL '-2Y 4 days 1 MinUteS 3S 20mS';
-----
--2 years 4 days 00:01:03.02
+2 years 1 month 00:01:03.020016
 
 query T
-SELECT INTERVAL '-2Y 4 days 1 MinUteS 3S 20mS'::VARCHAR;
+SELECT INTERVAL '2 yr 1 mon 1 min 3 sec 20 msec 16 usec';
 ----
--2 years 4 days 00:01:03.02
+2 years 1 month 00:01:03.020016
+
+query T
+SELECT INTERVAL '2 yrs 1 mons 1 mins 3 secs 20 msecs 16 usecs';
+----
+2 years 1 month 00:01:03.020016
+
+# -2 years +4 days 5 hours 1 minute 3 seconds 20 milliseconds 16 microseconds
+query T
+SELECT INTERVAL '-2Y 4 days 5 Hours 1 MinUteS 3S 20mS 16uS';
+----
+-2 years 4 days 05:01:03.020016
+
+query T
+SELECT INTERVAL '-2Y 4 days 5 Hours 1 MinUteS 3S 20mS 16uS'::VARCHAR;
+----
+-2 years 4 days 05:01:03.020016
+
+query T
+SELECT INTERVAL '-2yr 4 d 5 hr 1 min 3 second 20 msecond 16 usecond';
+----
+-2 years 4 days 05:01:03.020016
+
+query T
+SELECT INTERVAL '-2yrs 4 d 5 hrs 1 mins 3 seconds 20 mseconds 16 useconds'::VARCHAR;
+----
+-2 years 4 days 05:01:03.020016
 
 # test ago usage
 query T
-SELECT INTERVAL '2Y 4 days 1 MinUteS 3S 20mS ago'::VARCHAR;
+SELECT INTERVAL '2Y 4 days 1 MinUteS 3S 20mS 16uS ago'::VARCHAR;
 ----
--2 years -4 days -00:01:03.02
+-2 years -4 days -00:01:03.020016
 
 query T
-SELECT INTERVAL '2Y 4 days 1 MinUteS 3S 20mS ago  '::VARCHAR;
+SELECT INTERVAL '2Y 4 days 1 MinUteS 3S 20mS 16uS ago  '::VARCHAR;
 ----
--2 years -4 days -00:01:03.02
+-2 years -4 days -00:01:03.020016
 
 # months and hours, with optional @
 query T
@@ -235,6 +255,20 @@ SELECT INTERVAL '1 millennium 2 centuries 1 decade 3 quarter';
 ----
 1210 years 9 months
 
+query T
+SELECT INTERVAL '1 millenniums 2 century 1 dec 3 quarter';
+----
+1210 years 9 months
+
+query T
+SELECT INTERVAL '1 mil 2 cent 1 decs 3 quarter';
+----
+1210 years 9 months
+
+query T
+SELECT INTERVAL '1 mils 2 c 1 decades 3 quarter';
+----
+1210 years 9 months
 
 query T
 SELECT INTERVAL '-2147483647 months -2147483647 days -9223372036854775msecs';

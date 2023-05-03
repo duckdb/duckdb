@@ -81,7 +81,7 @@ data_ptr_t HyperLogLog::GetPtr() const {
 }
 
 unique_ptr<HyperLogLog> HyperLogLog::Copy() {
-	auto result = make_unique<HyperLogLog>();
+	auto result = make_uniq<HyperLogLog>();
 	lock_guard<mutex> guard(lock);
 	memcpy(result->GetPtr(), GetPtr(), GetSize());
 	D_ASSERT(result->Count() == Count());
@@ -94,7 +94,7 @@ void HyperLogLog::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<HyperLogLog> HyperLogLog::Deserialize(FieldReader &reader) {
-	auto result = make_unique<HyperLogLog>();
+	auto result = make_uniq<HyperLogLog>();
 	auto storage_type = reader.ReadRequired<HLLStorageType>();
 	switch (storage_type) {
 	case HLLStorageType::UNCOMPRESSED:
@@ -169,7 +169,7 @@ inline uint64_t HashOtherSize(const data_ptr_t &data, const idx_t &len) {
 
 template <>
 inline uint64_t TemplatedHash(const string_t &elem) {
-	data_ptr_t data = (data_ptr_t)elem.GetDataUnsafe();
+	data_ptr_t data = (data_ptr_t)elem.GetData();
 	const auto &len = elem.GetSize();
 	uint64_t h = 0;
 	for (idx_t i = 0; i + sizeof(uint64_t) <= len; i += sizeof(uint64_t)) {

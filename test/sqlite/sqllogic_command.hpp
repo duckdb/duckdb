@@ -14,6 +14,7 @@ namespace duckdb {
 class SQLLogicTestRunner;
 
 enum class SortStyle : uint8_t { NO_SORT, ROW_SORT, VALUE_SORT };
+enum class ExpectedResult : uint8_t { RESULT_SUCCESS, RESULT_ERROR, RESULT_UNKNOWN };
 
 struct LoopDefinition {
 	string loop_iterator_name;
@@ -28,7 +29,7 @@ struct ExecuteContext {
 	ExecuteContext() : con(nullptr), is_parallel(false) {
 	}
 	ExecuteContext(Connection *con, vector<LoopDefinition> running_loops_p)
-	    : con(con), running_loops(move(running_loops_p)), is_parallel(true) {
+	    : con(con), running_loops(std::move(running_loops_p)), is_parallel(true) {
 	}
 
 	Connection *con;
@@ -53,8 +54,8 @@ public:
 public:
 	Connection *CommandConnection(ExecuteContext &context) const;
 
-	unique_ptr<MaterializedQueryResult> ExecuteQuery(ExecuteContext &context, Connection *connection, string file_name,
-	                                                 idx_t query_line) const;
+	duckdb::unique_ptr<MaterializedQueryResult> ExecuteQuery(ExecuteContext &context, Connection *connection,
+	                                                         string file_name, idx_t query_line) const;
 
 	virtual void ExecuteInternal(ExecuteContext &context) const = 0;
 	void Execute(ExecuteContext &context) const;
@@ -67,7 +68,7 @@ class Statement : public Command {
 public:
 	Statement(SQLLogicTestRunner &runner);
 
-	bool expect_ok;
+	ExpectedResult expected_result;
 	string expected_error;
 
 public:
@@ -96,13 +97,21 @@ public:
 	void ExecuteInternal(ExecuteContext &context) const override;
 };
 
+class ReconnectCommand : public Command {
+public:
+	ReconnectCommand(SQLLogicTestRunner &runner);
+
+public:
+	void ExecuteInternal(ExecuteContext &context) const override;
+};
+
 class LoopCommand : public Command {
 public:
 	LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p);
 
 public:
 	LoopDefinition definition;
-	vector<unique_ptr<Command>> loop_commands;
+	vector<duckdb::unique_ptr<Command>> loop_commands;
 
 	void ExecuteInternal(ExecuteContext &context) const override;
 };

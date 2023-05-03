@@ -7,6 +7,9 @@
     con = DBInterface.connect(db)
 
     df = DataFrame(DBInterface.execute(con, "SELECT * FROM test_all_types()"))
+    #println(names(df))
+    # we can also use 'propertynames()' to get the column names as symbols, that might make for a better testing approach
+    # If we add a dictionary that maps from the symbol to the expected result
 
     @test isequal(df.bool, [false, true, missing])
     @test isequal(df.tinyint, [-128, 127, missing])
@@ -38,7 +41,6 @@
         df.dec38_10,
         [-9999999999999999999999999999.9999999999, 9999999999999999999999999999.9999999999, missing]
     )
-    @test isequal(df.json, ["🦆🦆🦆🦆🦆🦆", "goose", missing])
     @test isequal(df.small_enum, ["DUCK_DUCK_ENUM", "GOOSE", missing])
     @test isequal(df.medium_enum, ["enum_0", "enum_299", missing])
     @test isequal(df.large_enum, ["enum_0", "enum_69999", missing])

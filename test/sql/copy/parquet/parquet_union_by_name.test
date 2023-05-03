@@ -1,0 +1,138 @@
+# name: test/sql/copy/parquet/parquet_union_by_name.test
+# description: Test parquet files UNION_BY_NAME reading
+# group: [parquet]
+
+statement ok
+SET default_null_order='nulls_first';
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+# we run this twice, once with multi threading and once without
+loop i 0 2
+
+statement ok
+CREATE OR REPLACE TABLE ubn1(a BIGINT);
+
+statement ok
+CREATE OR REPLACE TABLE ubn2(a INTEGER, b INTEGER);
+
+statement ok
+CREATE OR REPLACE TABLE ubn3(a INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO ubn1 VALUES (1), (2), (9223372036854775807);
+
+statement ok
+INSERT INTO ubn2 VALUES (3,4), (5, 6);
+
+statement ok
+INSERT INTO ubn3 VALUES (100,101), (102, 103);
+
+statement ok
+COPY ubn1 TO '__TEST_DIR__/ubn1.parquet' WITH (FORMAT PARQUET);
+
+statement ok
+COPY ubn2 TO '__TEST_DIR__/ubn2.parquet' WITH (FORMAT PARQUET);
+
+statement ok
+COPY ubn3 TO '__TEST_DIR__/ubn3.parquet' WITH (FORMAT PARQUET);
+
+# If use SELECT * some filesystem may surprisingly success
+statement error
+SELECT a,b,c FROM parquet_scan('__TEST_DIR__/ubn*.parquet')
+
+query III
+SELECT a,b,c 
+FROM parquet_scan('__TEST_DIR__/ubn*.parquet', UNION_BY_NAME=TRUE) 
+ORDER BY a;
+----
+1	NULL	NULL
+2	NULL	NULL
+3	4	NULL
+5	6	NULL
+100	NULL	101
+102	NULL	103
+9223372036854775807	NULL	NULL
+
+
+# without union by name, parquet reader will use the first parquet files's type
+statement error
+SELECT a 
+FROM parquet_scan(['__TEST_DIR__/ubn2.parquet', '__TEST_DIR__/ubn1.parquet', '__TEST_DIR__/ubn3.parquet']) 
+ORDER BY a;
+
+# with union by name, parquet readers will use max logical type
+query I
+SELECT a 
+FROM parquet_scan('__TEST_DIR__/ubn*.parquet', UNION_BY_NAME=TRUE) 
+ORDER BY a;
+----
+1
+2
+3
+5
+100
+102
+9223372036854775807
+
+
+statement error
+SELECT b
+FROM parquet_scan('__TEST_DIR__/ubn*.parquet') 
+ORDER BY b;
+
+query I
+SELECT b
+FROM parquet_scan('__TEST_DIR__/ubn*.parquet', UNION_BY_NAME=TRUE) 
+ORDER BY b;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+4
+6
+
+query TTT
+SELECT typeof(a), typeof(b), typeof(c)
+FROM parquet_scan('__TEST_DIR__/ubn*.parquet', UNION_BY_NAME=TRUE)
+LIMIT 1;
+----
+BIGINT	INTEGER	INTEGER
+
+statement ok
+COPY (SELECT [42::INT] a, [43::INT] b) TO '__TEST_DIR__/listubn1.parquet' (FORMAT PARQUET)
+
+statement ok
+COPY (SELECT [44::BIGINT] b, [45::INT] c) TO '__TEST_DIR__/listubn2.parquet' (FORMAT PARQUET)
+
+query III
+SELECT a,b,c 
+FROM parquet_scan('__TEST_DIR__/listubn[12].parquet', union_by_name=true)
+ORDER BY a;
+----
+NULL	[44]	[45]
+[42]	[43]	NULL
+
+
+query TTT
+SELECT typeof(a),typeof(b),typeof(c)
+FROM parquet_scan('__TEST_DIR__/listubn[12].parquet', union_by_name=true)
+LIMIT 1;
+----
+INTEGER[]	BIGINT[]	INTEGER[]
+
+
+# interger can not cast to list
+statement error
+SELECT *
+FROM parquet_scan('__TEST_DIR__/*.parquet', union_by_name=true);
+
+statement ok
+PRAGMA threads=1
+
+endloop

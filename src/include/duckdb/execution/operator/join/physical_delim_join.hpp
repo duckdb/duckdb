@@ -18,15 +18,18 @@ class PhysicalHashAggregate;
 //! PhysicalColumnDataScan in the RHS.
 class PhysicalDelimJoin : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::DELIM_JOIN;
+
+public:
 	PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
-	                  vector<PhysicalOperator *> delim_scans, idx_t estimated_cardinality);
+	                  vector<const_reference<PhysicalOperator>> delim_scans, idx_t estimated_cardinality);
 
 	unique_ptr<PhysicalOperator> join;
 	unique_ptr<PhysicalHashAggregate> distinct;
-	vector<PhysicalOperator *> delim_scans;
+	vector<const_reference<PhysicalOperator>> delim_scans;
 
 public:
-	vector<PhysicalOperator *> GetChildren() const override;
+	vector<const_reference<PhysicalOperator>> GetChildren() const override;
 
 public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
@@ -43,7 +46,10 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
-	bool IsOrderPreserving() const override {
+	OrderPreservationType SourceOrder() const override {
+		return OrderPreservationType::NO_ORDER;
+	}
+	bool SinkOrderDependent() const override {
 		return false;
 	}
 	string ParamsToString() const override;

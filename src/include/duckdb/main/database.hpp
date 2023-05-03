@@ -14,6 +14,8 @@
 #include "duckdb/main/extension.hpp"
 
 namespace duckdb {
+class BufferManager;
+class DatabaseManager;
 class StorageManager;
 class Catalog;
 class TransactionManager;
@@ -21,6 +23,7 @@ class ConnectionManager;
 class FileSystem;
 class TaskScheduler;
 class ObjectCache;
+struct AttachInfo;
 
 class DatabaseInstance : public std::enable_shared_from_this<DatabaseInstance> {
 	friend class DuckDB;
@@ -32,10 +35,10 @@ public:
 	DBConfig config;
 
 public:
-	DUCKDB_API StorageManager &GetStorageManager();
-	DUCKDB_API Catalog &GetCatalog();
+	BufferPool &GetBufferPool();
+	DUCKDB_API BufferManager &GetBufferManager();
+	DUCKDB_API DatabaseManager &GetDatabaseManager();
 	DUCKDB_API FileSystem &GetFileSystem();
-	DUCKDB_API TransactionManager &GetTransactionManager();
 	DUCKDB_API TaskScheduler &GetScheduler();
 	DUCKDB_API ObjectCache &GetObjectCache();
 	DUCKDB_API ConnectionManager &GetConnectionManager();
@@ -47,18 +50,23 @@ public:
 	DUCKDB_API static DatabaseInstance &GetDatabase(ClientContext &context);
 
 	DUCKDB_API const unordered_set<std::string> &LoadedExtensions();
+	DUCKDB_API bool ExtensionIsLoaded(const std::string &name);
 
 	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
+	//! Get the database extension type from a given path
+	string ExtractDatabaseType(string &path);
+	unique_ptr<AttachedDatabase> CreateAttachedDatabase(AttachInfo &info, const string &type, AccessMode access_mode);
+
 private:
 	void Initialize(const char *path, DBConfig *config);
+	void CreateDatabase(const string &database_type);
 
 	void Configure(DBConfig &config);
 
 private:
-	unique_ptr<StorageManager> storage;
-	unique_ptr<Catalog> catalog;
-	unique_ptr<TransactionManager> transaction_manager;
+	unique_ptr<BufferManager> buffer_manager;
+	unique_ptr<DatabaseManager> db_manager;
 	unique_ptr<TaskScheduler> scheduler;
 	unique_ptr<ObjectCache> object_cache;
 	unique_ptr<ConnectionManager> connection_manager;
@@ -95,6 +103,7 @@ public:
 	DUCKDB_API idx_t NumberOfThreads();
 	DUCKDB_API static const char *SourceID();
 	DUCKDB_API static const char *LibraryVersion();
+	DUCKDB_API static idx_t StandardVectorSize();
 	DUCKDB_API static string Platform();
 	DUCKDB_API bool ExtensionIsLoaded(const std::string &name);
 };

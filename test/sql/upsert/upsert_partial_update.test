@@ -1,0 +1,22 @@
+# name: test/sql/upsert/upsert_partial_update.test
+# group: [upsert]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create or replace table tbl (a integer primary key, b integer);
+
+statement ok
+insert into tbl VALUES (1,3), (2,2), (3,10), (4,3);
+
+statement ok
+insert into tbl VALUES (3,8), (2,2) ON CONFLICT (a) DO UPDATE SET b = b*2 WHERE b == excluded.b;
+
+query II
+select * from tbl;
+----
+1	3
+2	4
+3	10
+4	3

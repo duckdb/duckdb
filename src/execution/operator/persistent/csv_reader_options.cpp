@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
+#include "duckdb/common/bind_helpers.hpp"
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/common/string_util.hpp"
 
@@ -59,54 +60,18 @@ static int64_t ParseInteger(const Value &value, const string &loption) {
 	return value.GetValue<int64_t>();
 }
 
-static vector<bool> ParseColumnList(const vector<Value> &set, vector<string> &names, const string &loption) {
-	vector<bool> result;
-
-	if (set.empty()) {
-		throw BinderException("\"%s\" expects a column list or * as parameter", loption);
-	}
-	// list of options: parse the list
-	unordered_map<string, bool> option_map;
-	for (idx_t i = 0; i < set.size(); i++) {
-		option_map[set[i].ToString()] = false;
-	}
-	result.resize(names.size(), false);
-	for (idx_t i = 0; i < names.size(); i++) {
-		auto entry = option_map.find(names[i]);
-		if (entry != option_map.end()) {
-			result[i] = true;
-			entry->second = true;
-		}
-	}
-	for (auto &entry : option_map) {
-		if (!entry.second) {
-			throw BinderException("\"%s\" expected to find %s, but it was not found in the table", loption,
-			                      entry.first.c_str());
-		}
-	}
-	return result;
+void BufferedCSVReaderOptions::SetHeader(bool input) {
+	this->header = input;
+	this->has_header = true;
 }
 
-static vector<bool> ParseColumnList(const Value &value, vector<string> &names, const string &loption) {
-	vector<bool> result;
+void BufferedCSVReaderOptions::SetCompression(const string &compression_p) {
+	this->compression = FileCompressionTypeFromString(compression_p);
+}
 
-	// Only accept a list of arguments
-	if (value.type().id() != LogicalTypeId::LIST) {
-		// Support a single argument if it's '*'
-		if (value.type().id() == LogicalTypeId::VARCHAR && value.GetValue<string>() == "*") {
-			result.resize(names.size(), true);
-			return result;
-		}
-		throw BinderException("\"%s\" expects a column list or * as parameter", loption);
-	}
-	auto &children = ListValue::GetChildren(value);
-	// accept '*' as single argument
-	if (children.size() == 1 && children[0].type().id() == LogicalTypeId::VARCHAR &&
-	    children[0].GetValue<string>() == "*") {
-		result.resize(names.size(), true);
-		return result;
-	}
-	return ParseColumnList(children, names, loption);
+void BufferedCSVReaderOptions::SetEscape(const string &input) {
+	this->escape = input;
+	this->has_escape = true;
 }
 
 void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
@@ -117,15 +82,29 @@ void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 	}
 }
 
+void BufferedCSVReaderOptions::SetQuote(const string &quote_p) {
+	this->quote = quote_p;
+	this->has_quote = true;
+}
+
+void BufferedCSVReaderOptions::SetNewline(const string &input) {
+	if (input == "\\n" || input == "\\r") {
+		new_line = NewLineIdentifier::SINGLE;
+	} else if (input == "\\r\\n") {
+		new_line = NewLineIdentifier::CARRY_ON;
+	} else {
+		throw InvalidInputException("This is not accepted as a newline: " + input);
+	}
+	has_newline = true;
+}
+
 void BufferedCSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
 	string error;
 	if (read_format) {
-		auto &date_format = this->date_format[type];
-		error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
-		date_format.format_specifier = format;
+		error = StrTimeFormat::ParseFormatSpecifier(format, date_format[type]);
+		date_format[type].format_specifier = format;
 	} else {
-		auto &date_format = this->write_date_format[type];
-		error = StrTimeFormat::ParseFormatSpecifier(format, date_format);
+		error = StrTimeFormat::ParseFormatSpecifier(format, write_date_format[type]);
 	}
 	if (!error.empty()) {
 		throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
@@ -153,10 +132,11 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 			sample_chunks = 1;
 		} else {
 			sample_chunk_size = STANDARD_VECTOR_SIZE;
-			sample_chunks = sample_size / STANDARD_VECTOR_SIZE;
+			sample_chunks = sample_size / STANDARD_VECTOR_SIZE + 1;
 		}
 	} else if (loption == "skip") {
 		skip_rows = ParseInteger(value, loption);
+		skip_rows_set = true;
 	} else if (loption == "max_line_size" || loption == "maximum_line_size") {
 		maximum_line_size = ParseInteger(value, loption);
 	} else if (loption == "sample_chunk_size") {
@@ -181,18 +161,22 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 	} else if (loption == "timestamp_format" || loption == "timestampformat") {
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::TIMESTAMP, format, true);
-	} else if (loption == "escape") {
-		escape = ParseString(value, loption);
-		has_escape = true;
 	} else if (loption == "ignore_errors") {
 		ignore_errors = ParseBoolean(value, loption);
-	} else if (loption == "union_by_name") {
-		union_by_name = ParseBoolean(value, loption);
 	} else if (loption == "buffer_size") {
 		buffer_size = ParseInteger(value, loption);
 		if (buffer_size == 0) {
 			throw InvalidInputException("Buffer Size option must be higher than 0");
 		}
+	} else if (loption == "decimal_separator") {
+		decimal_separator = ParseString(value, loption);
+		if (decimal_separator != "." && decimal_separator != ",") {
+			throw BinderException("Unsupported parameter for DECIMAL_SEPARATOR: should be '.' or ','");
+		}
+	} else if (loption == "null_padding") {
+		null_padding = ParseBoolean(value, loption);
+	} else if (loption == "allow_quoted_nulls") {
+		allow_quoted_nulls = ParseBoolean(value, loption);
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}
@@ -204,7 +188,7 @@ void BufferedCSVReaderOptions::SetWriteOption(const string &loption, const Value
 	}
 
 	if (loption == "force_quote") {
-		force_quote = ParseColumnList(value, names, loption);
+		force_quote = ParseColumnList(value, name_list, loption);
 	} else if (loption == "date_format" || loption == "dateformat") {
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::DATE, format, false);
@@ -214,6 +198,7 @@ void BufferedCSVReaderOptions::SetWriteOption(const string &loption, const Value
 			format = "%Y-%m-%dT%H:%M:%S.%fZ";
 		}
 		SetDateFormat(LogicalTypeId::TIMESTAMP, format, false);
+		SetDateFormat(LogicalTypeId::TIMESTAMP_TZ, format, false);
 	} else {
 		throw BinderException("Unrecognized option CSV writer \"%s\"", loption);
 	}
@@ -226,14 +211,13 @@ bool BufferedCSVReaderOptions::SetBaseOption(const string &loption, const Value 
 	if (StringUtil::StartsWith(loption, "delim") || StringUtil::StartsWith(loption, "sep")) {
 		SetDelimiter(ParseString(value, loption));
 	} else if (loption == "quote") {
-		quote = ParseString(value, loption);
-		has_quote = true;
+		SetQuote(ParseString(value, loption));
+	} else if (loption == "new_line") {
+		SetNewline(ParseString(value, loption));
 	} else if (loption == "escape") {
-		escape = ParseString(value, loption);
-		has_escape = true;
+		SetEscape(ParseString(value, loption));
 	} else if (loption == "header") {
-		header = ParseBoolean(value, loption);
-		has_header = true;
+		SetHeader(ParseBoolean(value, loption));
 	} else if (loption == "null" || loption == "nullstr") {
 		null_str = ParseString(value, loption);
 	} else if (loption == "encoding") {
@@ -242,7 +226,7 @@ bool BufferedCSVReaderOptions::SetBaseOption(const string &loption, const Value 
 			throw BinderException("Copy is only supported for UTF-8 encoded files, ENCODING 'UTF-8'");
 		}
 	} else if (loption == "compression") {
-		compression = FileCompressionTypeFromString(ParseString(value, loption));
+		SetCompression(ParseString(value, loption));
 	} else {
 		// unrecognized option in base CSV
 		return false;
@@ -251,13 +235,14 @@ bool BufferedCSVReaderOptions::SetBaseOption(const string &loption, const Value 
 }
 
 std::string BufferedCSVReaderOptions::ToString() const {
-	return "DELIMITER='" + delimiter + (has_delimiter ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-	       ", QUOTE='" + quote + (has_quote ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-	       ", ESCAPE='" + escape + (has_escape ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-	       ", HEADER=" + std::to_string(header) +
+	return "  file=" + file_path + "\n  delimiter='" + delimiter +
+	       (has_delimiter ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  quote='" + quote +
+	       (has_quote ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  escape='" + escape +
+	       (has_escape ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
+	       "\n  header=" + std::to_string(header) +
 	       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
-	       ", SAMPLE_SIZE=" + std::to_string(sample_chunk_size * sample_chunks) +
-	       ", IGNORE_ERRORS=" + std::to_string(ignore_errors) + ", ALL_VARCHAR=" + std::to_string(all_varchar);
+	       "\n  sample_size=" + std::to_string(sample_chunk_size * sample_chunks) +
+	       "\n  ignore_errors=" + std::to_string(ignore_errors) + "\n  all_varchar=" + std::to_string(all_varchar);
 }
 
 } // namespace duckdb

@@ -40,12 +40,14 @@ public:
 				connections.erase(it.first);
 				continue;
 			} else {
-				result.push_back(move(connection));
+				result.push_back(std::move(connection));
 			}
 		}
 
 		return result;
 	}
+
+	ClientContext *GetConnection(DatabaseInstance *db);
 
 	static ConnectionManager &Get(DatabaseInstance &db);
 	static ConnectionManager &Get(ClientContext &context);

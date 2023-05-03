@@ -10,20 +10,21 @@
 namespace duckdb {
 
 unique_ptr<Expression> JoinCondition::CreateExpression(JoinCondition cond) {
-	auto bound_comparison = make_unique<BoundComparisonExpression>(cond.comparison, move(cond.left), move(cond.right));
-	return move(bound_comparison);
+	auto bound_comparison =
+	    make_uniq<BoundComparisonExpression>(cond.comparison, std::move(cond.left), std::move(cond.right));
+	return std::move(bound_comparison);
 }
 
 unique_ptr<Expression> JoinCondition::CreateExpression(vector<JoinCondition> conditions) {
 	unique_ptr<Expression> result;
 	for (auto &cond : conditions) {
-		auto expr = CreateExpression(move(cond));
+		auto expr = CreateExpression(std::move(cond));
 		if (!result) {
-			result = move(expr);
+			result = std::move(expr);
 		} else {
-			auto conj =
-			    make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, move(expr), move(result));
-			result = move(conj);
+			auto conj = make_uniq<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(expr),
+			                                                  std::move(result));
+			result = std::move(conj);
 		}
 	}
 	return result;
@@ -45,8 +46,8 @@ JoinCondition JoinCondition::Deserialize(Deserializer &source, PlanDeserializati
 	FieldReader reader(source);
 	auto left = reader.ReadOptional<Expression>(nullptr, state);
 	auto right = reader.ReadOptional<Expression>(nullptr, state);
-	result.left = move(left);
-	result.right = move(right);
+	result.left = std::move(left);
+	result.right = std::move(right);
 	result.comparison = reader.ReadRequired<ExpressionType>();
 	reader.Finalize();
 	return result;
@@ -65,8 +66,8 @@ JoinSide JoinSide::CombineJoinSide(JoinSide left, JoinSide right) {
 	return left;
 }
 
-JoinSide JoinSide::GetJoinSide(idx_t table_binding, unordered_set<idx_t> &left_bindings,
-                               unordered_set<idx_t> &right_bindings) {
+JoinSide JoinSide::GetJoinSide(idx_t table_binding, const unordered_set<idx_t> &left_bindings,
+                               const unordered_set<idx_t> &right_bindings) {
 	if (left_bindings.find(table_binding) != left_bindings.end()) {
 		// column references table on left side
 		D_ASSERT(right_bindings.find(table_binding) == right_bindings.end());
@@ -78,10 +79,10 @@ JoinSide JoinSide::GetJoinSide(idx_t table_binding, unordered_set<idx_t> &left_b
 	}
 }
 
-JoinSide JoinSide::GetJoinSide(Expression &expression, unordered_set<idx_t> &left_bindings,
-                               unordered_set<idx_t> &right_bindings) {
+JoinSide JoinSide::GetJoinSide(Expression &expression, const unordered_set<idx_t> &left_bindings,
+                               const unordered_set<idx_t> &right_bindings) {
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = (BoundColumnRefExpression &)expression;
+		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		if (colref.depth > 0) {
 			throw Exception("Non-inner join on correlated columns not supported");
 		}
@@ -90,7 +91,7 @@ JoinSide JoinSide::GetJoinSide(Expression &expression, unordered_set<idx_t> &lef
 	D_ASSERT(expression.type != ExpressionType::BOUND_REF);
 	if (expression.type == ExpressionType::SUBQUERY) {
 		D_ASSERT(expression.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY);
-		auto &subquery = (BoundSubqueryExpression &)expression;
+		auto &subquery = expression.Cast<BoundSubqueryExpression>();
 		JoinSide side = JoinSide::NONE;
 		if (subquery.child) {
 			side = GetJoinSide(*subquery.child, left_bindings, right_bindings);
@@ -115,8 +116,8 @@ JoinSide JoinSide::GetJoinSide(Expression &expression, unordered_set<idx_t> &lef
 	return join_side;
 }
 
-JoinSide JoinSide::GetJoinSide(const unordered_set<idx_t> &bindings, unordered_set<idx_t> &left_bindings,
-                               unordered_set<idx_t> &right_bindings) {
+JoinSide JoinSide::GetJoinSide(const unordered_set<idx_t> &bindings, const unordered_set<idx_t> &left_bindings,
+                               const unordered_set<idx_t> &right_bindings) {
 	JoinSide side = JoinSide::NONE;
 	for (auto binding : bindings) {
 		side = CombineJoinSide(side, GetJoinSide(binding, left_bindings, right_bindings));

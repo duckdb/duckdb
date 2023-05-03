@@ -1,14 +1,11 @@
 #define DUCKDB_EXTENSION_MAIN
-
 #include "tpcds-extension.hpp"
 
 #include "dsdgen.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #endif
@@ -27,9 +24,9 @@ struct DSDGenFunctionData : public TableFunctionData {
 	bool keys = false;
 };
 
-static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunctionBindInput &input,
-                                           vector<LogicalType> &return_types, vector<string> &names) {
-	auto result = make_unique<DSDGenFunctionData>();
+static duckdb::unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunctionBindInput &input,
+                                                   vector<LogicalType> &return_types, vector<string> &names) {
+	auto result = make_uniq<DSDGenFunctionData>();
 	for (auto &kv : input.named_parameters) {
 		if (kv.first == "sf") {
 			result->sf = kv.second.GetValue<double>();
@@ -45,7 +42,7 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, TableFunction
 	}
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
-	return move(result);
+	return std::move(result);
 }
 
 static void DsdgenFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -66,12 +63,12 @@ struct TPCDSData : public GlobalTableFunctionState {
 };
 
 unique_ptr<GlobalTableFunctionState> TPCDSInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<TPCDSData>();
-	return move(result);
+	auto result = make_uniq<TPCDSData>();
+	return std::move(result);
 }
 
-static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, TableFunctionBindInput &input,
-                                               vector<LogicalType> &return_types, vector<string> &names) {
+static duckdb::unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, TableFunctionBindInput &input,
+                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("query_nr");
 	return_types.emplace_back(LogicalType::INTEGER);
 
@@ -101,8 +98,8 @@ static void TPCDSQueryFunction(ClientContext &context, TableFunctionInput &data_
 	output.SetCardinality(chunk_count);
 }
 
-static unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, TableFunctionBindInput &input,
-                                                     vector<LogicalType> &return_types, vector<string> &names) {
+static duckdb::unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, TableFunctionBindInput &input,
+                                                             vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("query_nr");
 	return_types.emplace_back(LogicalType::INTEGER);
 
@@ -147,8 +144,7 @@ static string PragmaTpcdsQuery(ClientContext &context, const FunctionParameters 
 }
 
 void TPCDSExtension::Load(DuckDB &db) {
-	Connection con(db);
-	con.BeginTransaction();
+	auto &db_instance = *db.instance;
 
 	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind);
 	dsdgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
@@ -156,29 +152,20 @@ void TPCDSExtension::Load(DuckDB &db) {
 	dsdgen_func.named_parameters["keys"] = LogicalType::BOOLEAN;
 	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
 	dsdgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
-	CreateTableFunctionInfo dsdgen_info(dsdgen_func);
-
-	// create the dsdgen function
-	auto &catalog = Catalog::GetCatalog(*con.context);
-	catalog.CreateTableFunction(*con.context, &dsdgen_info);
+	ExtensionUtil::RegisterFunction(db_instance, dsdgen_func);
 
 	// create the TPCDS pragma that allows us to run the query
 	auto tpcds_func = PragmaFunction::PragmaCall("tpcds", PragmaTpcdsQuery, {LogicalType::BIGINT});
-	CreatePragmaFunctionInfo info(tpcds_func);
-	catalog.CreatePragmaFunction(*con.context, &info);
+	ExtensionUtil::RegisterFunction(db_instance, tpcds_func);
 
 	// create the TPCDS_QUERIES function that returns the query
 	TableFunction tpcds_query_func("tpcds_queries", {}, TPCDSQueryFunction, TPCDSQueryBind, TPCDSInit);
-	CreateTableFunctionInfo tpcds_query_info(tpcds_query_func);
-	catalog.CreateTableFunction(*con.context, &tpcds_query_info);
+	ExtensionUtil::RegisterFunction(db_instance, tpcds_query_func);
 
 	// create the TPCDS_ANSWERS that returns the query result
 	TableFunction tpcds_query_answer_func("tpcds_answers", {}, TPCDSQueryAnswerFunction, TPCDSQueryAnswerBind,
 	                                      TPCDSInit);
-	CreateTableFunctionInfo tpcds_query_asnwer_info(tpcds_query_answer_func);
-	catalog.CreateTableFunction(*con.context, &tpcds_query_asnwer_info);
-
-	con.Commit();
+	ExtensionUtil::RegisterFunction(db_instance, tpcds_query_answer_func);
 }
 
 std::string TPCDSExtension::GetQuery(int query) {

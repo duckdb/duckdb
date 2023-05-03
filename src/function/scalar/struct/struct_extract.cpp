@@ -3,12 +3,13 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
-#include "duckdb/storage/statistics/struct_statistics.hpp"
+#include "duckdb/storage/statistics/struct_stats.hpp"
 
 namespace duckdb {
 
 struct StructExtractBindData : public FunctionData {
-	StructExtractBindData(string key, idx_t index, LogicalType type) : key(move(key)), index(index), type(move(type)) {
+	StructExtractBindData(string key, idx_t index, LogicalType type)
+	    : key(std::move(key)), index(index), type(std::move(type)) {
 	}
 
 	string key;
@@ -17,7 +18,7 @@ struct StructExtractBindData : public FunctionData {
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<StructExtractBindData>(key, index, type);
+		return make_uniq<StructExtractBindData>(key, index, type);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = (const StructExtractBindData &)other_p;
@@ -26,8 +27,8 @@ public:
 };
 
 static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (StructExtractBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<StructExtractBindData>();
 
 	// this should be guaranteed by the binder
 	auto &vec = args.data[0];
@@ -61,7 +62,7 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	if (key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
 		throw BinderException("Key name for struct_extract needs to be a constant string");
 	}
-	Value key_val = ExpressionExecutor::EvaluateScalar(context, *key_child.get());
+	Value key_val = ExpressionExecutor::EvaluateScalar(context, *key_child);
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
 	auto &key_str = StringValue::Get(key_val);
 	if (key_val.IsNull() || key_str.empty()) {
@@ -95,21 +96,16 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	}
 
 	bound_function.return_type = return_type;
-	return make_unique<StructExtractBindData>(key, key_index, return_type);
+	return make_uniq<StructExtractBindData>(std::move(key), key_index, std::move(return_type));
 }
 
 static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &bind_data = input.bind_data;
-	if (!child_stats[0]) {
-		return nullptr;
-	}
-	auto &struct_stats = (StructStatistics &)*child_stats[0];
-	auto &info = (StructExtractBindData &)*bind_data;
-	if (info.index >= struct_stats.child_stats.size() || !struct_stats.child_stats[info.index]) {
-		return nullptr;
-	}
-	return struct_stats.child_stats[info.index]->Copy();
+
+	auto &info = bind_data->Cast<StructExtractBindData>();
+	auto struct_child_stats = StructStats::GetChildStats(child_stats[0]);
+	return struct_child_stats[info.index].ToUnique();
 }
 
 ScalarFunction StructExtractFun::GetFunction() {

@@ -13,10 +13,15 @@
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
-enum QueryNodeType : uint8_t {
+class FormatDeserializer;
+class FormatSerializer;
+
+enum class QueryNodeType : uint8_t {
 	SELECT_NODE = 1,
 	SET_OPERATION_NODE = 2,
 	BOUND_SUBQUERY_NODE = 3,
@@ -29,11 +34,15 @@ class CommonTableExpressionMap {
 public:
 	CommonTableExpressionMap();
 
-	unordered_map<string, unique_ptr<CommonTableExpressionInfo>> map;
+	case_insensitive_map_t<unique_ptr<CommonTableExpressionInfo>> map;
 
 public:
 	string ToString() const;
 	CommonTableExpressionMap Copy() const;
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	// static void FormatDeserialize(FormatDeserializer &deserializer, CommonTableExpressionMap &ret);
+	static CommonTableExpressionMap FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 class QueryNode {
@@ -72,10 +81,30 @@ public:
 	//! Adds a distinct modifier to the query node
 	void AddDistinct();
 
+	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<QueryNode> FormatDeserialize(FormatDeserializer &deserializer);
+
 protected:
 	//! Copy base QueryNode properties from another expression to this one,
 	//! used in Copy method
 	void CopyProperties(QueryNode &other) const;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast query node to type - query node type mismatch");
+		}
+		return (TARGET &)*this;
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast query node to type - query node type mismatch");
+		}
+		return (const TARGET &)*this;
+	}
 };
 
 } // namespace duckdb

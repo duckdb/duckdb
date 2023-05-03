@@ -1,0 +1,72 @@
+# name: test/sql/attach/attach_nested_types.test
+# description: Test attach with nested types
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+# attach a new database
+statement ok
+ATTACH DATABASE ':memory:' AS database;
+
+statement ok
+CREATE SCHEMA database.schema;
+
+statement ok
+CREATE TABLE database.schema.table(col ROW(field INTEGER));
+
+statement ok
+INSERT INTO database.schema.table VALUES ({'col': 42});
+
+query I
+SELECT database.schema.table.col.field FROM database.schema.table
+----
+42
+
+query I
+SELECT database.schema.table.col FROM database.schema.table
+----
+{'field': 42}
+
+query I
+SELECT database.schema.table FROM database.schema.table
+----
+{'col': {'field': 42}}
+
+statement ok
+USE database
+
+query I
+SELECT schema.table FROM database.schema.table
+----
+{'col': {'field': 42}}
+
+query I
+SELECT "table" FROM database.schema.table
+----
+{'col': {'field': 42}}
+
+statement ok
+USE "database.schema"
+
+query I
+SELECT "table" FROM "table"
+----
+{'col': {'field': 42}}
+
+query I
+SELECT schema.table FROM "table"
+----
+{'col': {'field': 42}}
+
+query I
+SELECT database.table FROM "table"
+----
+{'col': {'field': 42}}
+
+query I
+SELECT database.schema.table FROM "table"
+----
+{'col': {'field': 42}}

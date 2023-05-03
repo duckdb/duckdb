@@ -38,7 +38,7 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBSettingsData>();
+	auto result = make_uniq<DuckDBSettingsData>();
 
 	auto &config = DBConfig::GetConfig(context);
 	auto options_count = DBConfig::GetOptionCount();
@@ -51,7 +51,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		value.description = option->description;
 		value.input_type = LogicalTypeIdToString(option->parameter_type);
 
-		result->settings.push_back(move(value));
+		result->settings.push_back(std::move(value));
 	}
 	for (auto &ext_param : config.extension_parameters) {
 		Value setting_val;
@@ -61,17 +61,17 @@ unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, 
 		}
 		DuckDBSettingValue value;
 		value.name = ext_param.first;
-		value.value = move(setting_str_val);
+		value.value = std::move(setting_str_val);
 		value.description = ext_param.second.description;
 		value.input_type = ext_param.second.type.ToString();
 
-		result->settings.push_back(move(value));
+		result->settings.push_back(std::move(value));
 	}
-	return move(result);
+	return std::move(result);
 }
 
 void DuckDBSettingsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBSettingsData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBSettingsData>();
 	if (data.offset >= data.settings.size()) {
 		// finished returning values
 		return;

@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
@@ -66,5 +67,22 @@ public:
 	DUCKDB_API virtual void Serialize(FieldWriter &writer) const = 0;
 	//! Deserializes a blob back into a Constraint
 	DUCKDB_API static unique_ptr<Constraint> Deserialize(Deserializer &source);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast constraint to type - constraint type mismatch");
+		}
+		return (TARGET &)*this;
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast constraint to type - constraint type mismatch");
+		}
+		return (const TARGET &)*this;
+	}
 };
 } // namespace duckdb

@@ -51,7 +51,7 @@ struct CreateSequenceInfo : public CreateInfo {
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {
-		auto result = make_unique<CreateSequenceInfo>();
+		auto result = make_uniq<CreateSequenceInfo>();
 		CopyProperties(*result);
 		result->name = name;
 		result->schema = schema;
@@ -61,7 +61,7 @@ public:
 		result->max_value = max_value;
 		result->start_value = start_value;
 		result->cycle = cycle;
-		return move(result);
+		return std::move(result);
 	}
 
 protected:

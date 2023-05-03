@@ -1,0 +1,47 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_nulls.test
+# description: Test bitpacking with nulls
+# group: [bitpacking]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+PRAGMA force_compression='bitpacking'
+
+foreach bitpacking_mode delta_for for constant_delta constant
+
+statement ok
+PRAGMA force_bitpacking_mode='${bitpacking_mode}'
+
+# simple compression with few values
+statement ok
+CREATE TABLE test (a BIGINT);
+
+# Constant compressible range
+statement ok
+INSERT INTO test SELECT case when i%5=0 then null else 1337 end FROM range(0,10000) tbl(i);
+
+# Constant delta compressible range
+statement ok
+INSERT INTO test SELECT case when i%5=0 then null else i end FROM range(0,10000) tbl(i);
+
+# FOR/FOR-delta compressible range
+statement ok
+INSERT INTO test SELECT case when i%5=0 then null else i//2 end FROM range(0,10000) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'BIGINT' and compression != 'BitPacking';
+----
+
+query III
+select sum(a), min(a), max(a) from test;
+----
+70694000	0	9999
+
+statement ok
+DROP TABLE test;
+
+endloop

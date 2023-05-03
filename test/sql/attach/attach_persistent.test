@@ -1,0 +1,42 @@
+# name: test/sql/attach/attach_persistent.test
+# description: Test attaching of a persistent database
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/persistent_attach.db'
+
+statement error
+ATTACH '__TEST_DIR__/persistent_attach.db'
+
+statement ok
+CREATE TABLE persistent_attach.integers(i INTEGER)
+
+statement ok
+INSERT INTO persistent_attach.integers VALUES (42)
+
+query I
+SELECT SUM(i) FROM persistent_attach.integers
+----
+42
+
+# detach and re-attach
+statement ok
+DETACH persistent_attach
+
+statement error
+SELECT SUM(i) FROM persistent_attach.integers
+----
+does not exist
+
+statement ok
+ATTACH '__TEST_DIR__/persistent_attach.db'
+
+query I
+SELECT SUM(i) FROM persistent_attach.integers
+----
+42

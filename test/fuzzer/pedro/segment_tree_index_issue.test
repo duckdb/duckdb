@@ -1,0 +1,57 @@
+# name: test/fuzzer/pedro/segment_tree_index_issue.test
+# description: Segment tree index issue
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0 (c1 INT);
+
+statement ok
+INSERT INTO t0 VALUES (0);
+
+statement ok
+START TRANSACTION;
+
+statement ok
+INSERT INTO t0 VALUES (1);
+
+statement ok
+DELETE FROM t0 USING (SELECT 1) t1;
+
+query I
+SELECT * FROM t0
+----
+
+statement ok
+COMMIT
+
+# now do the same but with a table with foreign key constraints
+statement ok
+DROP TABLE t0
+
+statement ok
+CREATE TABLE t0 (c1 INT PRIMARY KEY);
+
+statement ok
+CREATE TABLE fk_integers(id INTEGER REFERENCES t0(c1))
+
+statement ok
+INSERT INTO t0 VALUES (0);
+
+statement ok
+START TRANSACTION;
+
+statement ok
+INSERT INTO t0 VALUES (1);
+
+statement ok
+DELETE FROM t0 USING (SELECT 1) t1;
+
+query I
+SELECT * FROM t0
+----
+
+statement ok
+COMMIT

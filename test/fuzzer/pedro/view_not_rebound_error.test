@@ -1,0 +1,22 @@
+# name: test/fuzzer/pedro/view_not_rebound_error.test
+# group: [pedro]
+
+statement ok
+CREATE TABLE t1 (c1 INT);
+
+statement ok
+CREATE VIEW t0 AS SELECT 1 FROM t1 GROUP BY c1;
+
+statement ok
+DROP TABLE t1;
+
+statement ok
+CREATE TABLE t2 (c1 INT);
+
+statement ok
+CREATE TABLE t1 (c2 INT);
+
+statement error
+SELECT 1 FROM t2 JOIN t1 ON (SELECT TRUE FROM t0);
+----
+Contents of view were altered

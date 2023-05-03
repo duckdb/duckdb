@@ -1,0 +1,40 @@
+# name: test/sql/function/numeric/test_sign_bit.test
+# description: signbit test
+# group: [numeric]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA enable_verification
+
+foreach type FLOAT DOUBLE
+
+query III
+SELECT signbit(3::${type}), signbit(-3::${type}), signbit(NULL::${type})
+----
+false	true	NULL
+
+statement ok
+CREATE TABLE floats(f ${type})
+
+statement ok
+INSERT INTO floats VALUES (3), (1.0::float), (-0.0::float), ('inf'), ('-inf'), (NULL)
+
+query IIII
+SELECT f, signbit(f), isinf(f), isfinite(f) FROM floats ORDER BY f
+----
+NULL	NULL	NULL	NULL
+-inf	True	True	False
+-0	True	False	True
+1	False	False	True
+3	False	False	True
+inf	False	True	False
+
+statement ok
+SELECT signbit(1.0 / 0.0);
+
+statement ok
+DROP TABLE floats
+
+endloop

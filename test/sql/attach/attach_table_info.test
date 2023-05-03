@@ -1,0 +1,51 @@
+# name: test/sql/attach/attach_table_info.test
+# description: Test ATTACH with table info
+# group: [attach]
+
+# avoid loading a storage database because it changes the initial database name
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+# attach a new database
+statement ok
+ATTACH DATABASE ':memory:' AS new_database;
+
+statement ok
+CREATE TABLE new_database.integers(i INTEGER)
+
+query ITTTTT nosort table_info
+PRAGMA table_info('new_database.integers');
+----
+0	i	INTEGER	0	NULL	0
+
+# mixed with a schema
+statement ok
+CREATE SCHEMA new_database.new_schema
+
+statement ok
+CREATE TABLE new_database.new_schema.integers(i INTEGER)
+
+query ITTTTT nosort table_info
+PRAGMA table_info('new_database.new_schema.integers');
+----
+0	i	INTEGER	0	NULL	0
+
+query I
+SELECT current_database()
+----
+memory
+
+statement ok
+USE "new_database.new_schema"
+
+query ITTTTT nosort table_info
+PRAGMA table_info('integers');
+----
+0	i	INTEGER	0	NULL	0
+
+query I
+SELECT current_database()
+----
+new_database

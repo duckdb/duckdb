@@ -9,7 +9,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test ART index with rollbacks", "[art][.]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -35,7 +35,7 @@ TEST_CASE("Test ART index with rollbacks", "[art][.]") {
 }
 
 TEST_CASE("Test ART index with the same value multiple times", "[art][.]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -97,14 +97,14 @@ int full_scan(T *keys, idx_t size, T low, T high) {
 }
 
 TEST_CASE("ART Floating Point Small", "[art-float-small]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	int64_t a, b;
-	vector<int64_t> min_values, max_values;
+	duckdb::vector<int64_t> min_values, max_values;
 	Connection con(db);
 	// Will use 100 keys
 	idx_t n = 100;
-	auto keys = unique_ptr<int64_t[]>(new int64_t[n]);
+	auto keys = duckdb::unique_ptr<int64_t[]>(new int64_t[n]);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i BIGINT)"));
 	// Generate 10 small floats (0.0 - 1.0)
 	for (idx_t i = 0; i < n / 10; i++) {
@@ -169,14 +169,14 @@ TEST_CASE("ART Floating Point Small", "[art-float-small]") {
 }
 
 TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	int64_t a, b;
-	vector<int64_t> min_values, max_values;
+	duckdb::vector<int64_t> min_values, max_values;
 	Connection con(db);
 	// Will use 100 keys
 	idx_t n = 100;
-	auto keys = unique_ptr<int64_t[]>(new int64_t[n]);
+	auto keys = duckdb::unique_ptr<int64_t[]>(new int64_t[n]);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i BIGINT)"));
 	// Generate 10 small floats (0.0 - 1.0)
 	for (idx_t i = 0; i < n / 10; i++) {
@@ -241,14 +241,14 @@ TEST_CASE("ART Floating Point Double Small", "[art-double-small]") {
 }
 
 TEST_CASE("ART Floating Point", "[art-float][.]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	int64_t a, b;
-	vector<int64_t> min_values, max_values;
+	duckdb::vector<int64_t> min_values, max_values;
 	Connection con(db);
 	// Will use 10k keys
 	idx_t n = 10000;
-	auto keys = unique_ptr<int64_t[]>(new int64_t[n]);
+	auto keys = duckdb::unique_ptr<int64_t[]>(new int64_t[n]);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE numbers(i BIGINT)"));
 	// Generate 1000 small floats (0.0 - 1.0)
 	for (idx_t i = 0; i < n / 10; i++) {
@@ -313,14 +313,14 @@ TEST_CASE("ART Floating Point", "[art-float][.]") {
 }
 
 TEST_CASE("ART Floating Point Double", "[art-double][.]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	int64_t a, b;
-	vector<int64_t> min_values, max_values;
+	duckdb::vector<int64_t> min_values, max_values;
 	Connection con(db);
 	// Will use 10000 keys
 	idx_t n = 10000;
-	auto keys = unique_ptr<int64_t[]>(new int64_t[n]);
+	auto keys = duckdb::unique_ptr<int64_t[]>(new int64_t[n]);
 	con.Query("CREATE TABLE numbers(i BIGINT)");
 	// Generate 1000 small floats (0.0 - 1.0)
 	for (idx_t i = 0; i < n / 10; i++) {

@@ -1,0 +1,137 @@
+# name: test/sql/types/list/recursive_unnest.test
+# description: Test nested unnests
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+# recursive unnest
+query I
+SELECT UNNEST([[1, 2, 3]], recursive := true)
+----
+1
+2
+3
+
+query I
+SELECT UNNEST([[[[[1, 2], [3, 4]], [[5]]], [[[]]]]], recursive := true)
+----
+1
+2
+3
+4
+5
+
+query I
+SELECT UNNEST([[[[[1, 2], [3, 4]], [[5]]], [[[]]]]], max_depth := 1)
+----
+[[[[1, 2], [3, 4]], [[5]]], [[[]]]]
+
+query I
+SELECT UNNEST([[[[[1, 2], [3, 4]], [[5]]], [[[]]]]], max_depth := 2)
+----
+[[[1, 2], [3, 4]], [[5]]]
+[[[]]]
+
+query I
+SELECT UNNEST([[[[[1, 2], [3, 4]], [[5]]], [[[]]]]], max_depth := 3)
+----
+[[1, 2], [3, 4]]
+[[5]]
+[[]]
+
+query I
+SELECT UNNEST([[[[[1, 2], [3, 4]], [[5]]], [[[]]]]], max_depth := 4)
+----
+[1, 2]
+[3, 4]
+[5]
+[]
+
+query I
+SELECT UNNEST([[[[[1, 2], [3, 4]], [[5]]], [[[]]]]], max_depth := 5)
+----
+1
+2
+3
+4
+5
+
+# mix of unnests of different levels
+query II
+SELECT UNNEST([[1, 2, 3], [4, 5]]) AS a, UNNEST([1, 2, 3]) AS b
+----
+[1, 2, 3]	1
+[4, 5]	2
+NULL	3
+
+query II
+SELECT UNNEST([[1, 2, 3], [4, 5]], recursive := true) AS a, UNNEST([1, 2, 3]) AS b ORDER BY a NULLS LAST
+----
+1	1
+2	2
+3	3
+4	1
+5	2
+NULL	3
+
+query II
+SELECT UNNEST([[1, 2, 3], [4, 5]], recursive := true) AS a, UNNEST([1, 2, 3]) AS b ORDER BY a NULLS LAST
+----
+1	1
+2	2
+3	3
+4	1
+5	2
+NULL	3
+
+query II
+SELECT UNNEST(a), b FROM (SELECT UNNEST([[1, 2, 3], [4, 5]]) AS a, UNNEST([1, 2, 3]) AS b)
+----
+1	1
+2	1
+3	1
+4	2
+5	2
+
+statement error
+SELECT UNNEST(UNNEST([[1, 2, 3]]))
+----
+Nested UNNEST calls are not supported
+
+statement error
+SELECT UNNEST();
+----
+requires a single argument
+
+statement error
+SELECT UNNEST([1, 2, 3], 'hello');
+----
+unnest only supports recursive
+
+statement error
+SELECT UNNEST([1, 2, 3], recursive := 'hello');
+----
+Could not convert string
+
+statement error
+SELECT UNNEST([1, 2, 3], rec := true);
+----
+Unsupported parameter "rec"
+
+# cannot mix parameters
+statement error
+SELECT UNNEST([1, 2, 3], recursive := true, recursive := true);
+----
+only supports a single additional argument
+
+statement error
+SELECT UNNEST([1, 2, 3], max_depth := 9999, recursive := true);
+----
+only supports a single additional argument
+
+# max-depth of 0 is not supported
+statement error
+SELECT UNNEST([1, 2, 3], max_depth := 0);
+----
+cannot have a max depth of 0

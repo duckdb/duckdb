@@ -8,6 +8,7 @@
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -19,16 +20,16 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	if (bound_table->type != TableReferenceType::BASE_TABLE) {
 		throw BinderException("Can only delete from base table!");
 	}
-	auto &table_binding = (BoundBaseTableRef &)*bound_table;
-	auto table = table_binding.table;
+	auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
+	auto &table = table_binding.table;
 
 	auto root = CreatePlan(*bound_table);
-	auto &get = (LogicalGet &)*root;
+	auto &get = root->Cast<LogicalGet>();
 	D_ASSERT(root->type == LogicalOperatorType::LOGICAL_GET);
 
-	if (!table->temporary) {
+	if (!table.temporary) {
 		// delete from persistent table: not read only!
-		properties.read_only = false;
+		properties.modified_databases.insert(table.catalog.GetName());
 	}
 
 	// Add CTEs as bindable
@@ -39,17 +40,19 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		unique_ptr<LogicalOperator> child_operator;
 		for (auto &using_clause : stmt.using_clauses) {
 			// bind the using clause
-			auto bound_node = Bind(*using_clause);
+			auto using_binder = Binder::CreateBinder(context, this);
+			auto bound_node = using_binder->Bind(*using_clause);
 			auto op = CreatePlan(*bound_node);
 			if (child_operator) {
 				// already bound a child: create a cross product to unify the two
-				child_operator = LogicalCrossProduct::Create(move(child_operator), move(op));
+				child_operator = LogicalCrossProduct::Create(std::move(child_operator), std::move(op));
 			} else {
-				child_operator = move(op);
+				child_operator = std::move(op);
 			}
+			bind_context.AddContext(std::move(using_binder->bind_context));
 		}
 		if (child_operator) {
-			root = LogicalCrossProduct::Create(move(root), move(child_operator));
+			root = LogicalCrossProduct::Create(std::move(root), std::move(child_operator));
 		}
 	}
 
@@ -59,17 +62,17 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		WhereBinder binder(*this, context);
 		condition = binder.Bind(stmt.condition);
 
-		PlanSubqueries(&condition, &root);
-		auto filter = make_unique<LogicalFilter>(move(condition));
-		filter->AddChild(move(root));
-		root = move(filter);
+		PlanSubqueries(condition, root);
+		auto filter = make_uniq<LogicalFilter>(std::move(condition));
+		filter->AddChild(std::move(root));
+		root = std::move(filter);
 	}
 	// create the delete node
-	auto del = make_unique<LogicalDelete>(table);
-	del->AddChild(move(root));
+	auto del = make_uniq<LogicalDelete>(table, GenerateTableIndex());
+	del->AddChild(std::move(root));
 
 	// set up the delete expression
-	del->expressions.push_back(make_unique<BoundColumnRefExpression>(
+	del->expressions.push_back(make_uniq<BoundColumnRefExpression>(
 	    LogicalType::ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
 	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
@@ -79,11 +82,11 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		auto update_table_index = GenerateTableIndex();
 		del->table_index = update_table_index;
 
-		unique_ptr<LogicalOperator> del_as_logicaloperator = move(del);
-		return BindReturning(move(stmt.returning_list), table, update_table_index, move(del_as_logicaloperator),
-		                     move(result));
+		unique_ptr<LogicalOperator> del_as_logicaloperator = std::move(del);
+		return BindReturning(std::move(stmt.returning_list), table, stmt.table->alias, update_table_index,
+		                     std::move(del_as_logicaloperator), std::move(result));
 	}
-	result.plan = move(del);
+	result.plan = std::move(del);
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 	properties.allow_stream_result = false;

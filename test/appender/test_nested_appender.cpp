@@ -8,7 +8,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test appender with lists", "[appender]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 
@@ -31,7 +31,7 @@ TEST_CASE("Test appender with lists", "[appender]") {
 }
 
 TEST_CASE("Test appender with nested lists", "[appender]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 

@@ -7,9 +7,11 @@ PRAGMA enable_verification
 
 statement error
 CREATE TYPE type_a AS ENUM (SELECT '1', '2');
+----
+single column
 
-statement error
-CREATE TYPE type_a AS ENUM (SELECT 1);
+statement ok
+CREATE TYPE type_int AS ENUM (SELECT 1);
 
 statement ok
 CREATE TABLE test (x VARCHAR, y VARCHAR);

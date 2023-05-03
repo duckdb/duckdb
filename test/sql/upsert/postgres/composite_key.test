@@ -1,0 +1,101 @@
+# name: test/sql/upsert/postgres/composite_key.test
+# group: [postgres]
+
+statement ok
+pragma enable_verification;
+
+# insert...on conflict do unique index inference
+
+statement ok
+create table insertconflicttest(
+	key int4,
+	fruit text,
+	other int4,
+	unique (key, fruit)
+);
+
+# fails
+
+statement error
+insert into insertconflicttest values(0, 'Crowberry', 0) on conflict (key) do nothing;
+
+statement error
+insert into insertconflicttest values(0, 'Crowberry', 0) on conflict (fruit) do nothing;
+
+# succeeds
+
+statement ok
+insert into insertconflicttest values(0, 'Crowberry', 0) on conflict (key, fruit) do nothing;
+
+statement ok
+insert into insertconflicttest values(0, 'Crowberry', 0) on conflict (fruit, key, fruit, key) do nothing;
+
+## -- We explicitly don't support a subquery in the WHERE clause currently -- ##
+statement error
+insert into insertconflicttest
+values (0, 'Crowberry', 0) on conflict (key, fruit) do update set other = 1 where exists (select 1 from insertconflicttest ii where ii.key = excluded.key);
+----
+Binder Error: conflict_target WHERE clause can not be a subquery
+
+# inference succeeds:
+
+statement ok
+insert into insertconflicttest values (7, 'Raspberry', 0) on conflict (key, fruit) do update set other = 1
+
+statement ok
+insert into insertconflicttest values (8, 'Lime', 0) on conflict (fruit, key) do update set other = 1
+
+# inference fails:
+
+statement error
+insert into insertconflicttest values (9, 'Banana', 0) on conflict (key) do update set other = 1
+
+statement error
+insert into insertconflicttest values (10, 'Blueberry', 0) on conflict (key, key, key) do update set other = 1
+
+## -- This fails on postgres for some reason? -- ##
+statement ok
+insert into insertconflicttest values (11, 'Cherry', 0) on conflict (key, fruit) do update set other = 1
+
+## -- This fails on postgres for some reason? -- ##
+statement ok
+insert into insertconflicttest values (12, 'Date', 0) on conflict (fruit, key) do update set other = 1
+
+# Partial index tests, no inference predicate specified
+statement ok
+create unique index part_comp_key_index on insertconflicttest(key, fruit) where key < 5;
+
+statement ok
+create unique index expr_part_comp_key_index on insertconflicttest(key, fruit) where key < 5;
+
+# Expression index tests
+statement ok
+create unique index expr_key_index on insertconflicttest(fruit);
+
+# inference succeeds:
+
+statement ok
+insert into insertconflicttest values (20, 'Quince', 0) on conflict (fruit) do update set other = 1
+
+statement ok
+insert into insertconflicttest values (21, 'Pomegranate', 0) on conflict (fruit, fruit) do update set other = 1
+
+
+# Expression index tests (with regular column)
+statement ok
+create unique index expr_comp_key_index on insertconflicttest(key, fruit);
+
+statement ok
+create unique index tricky_expr_comp_key_index on insertconflicttest(key, fruit, fruit);
+
+# inference succeeds:
+
+statement ok
+insert into insertconflicttest values (24, 'Plum', 0) on conflict (key, fruit) do update set other = 1
+
+statement ok
+insert into insertconflicttest values (25, 'Peach', 0) on conflict (fruit, key) do update set other = 1
+# Should not infer "tricky_expr_comp_key_index" index:
+
+statement ok
+insert into insertconflicttest values (26, 'Fig', 0) on conflict (fruit, key, fruit, key) do update set other = 1

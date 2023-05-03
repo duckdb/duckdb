@@ -1,0 +1,13 @@
+# name: test/sql/function/nested/test_issue_5437.test
+# description: Issue #5437: Python crashes with struct_insert
+# group: [nested]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+with data as (
+select * from (VALUES ('Amsterdam', {'x': 1, 'y': 2, 'z': 3}), ('London', {'x': 4, 'y': 5, 'z': 6})) Cities(Name, Id)
+)
+select *, struct_insert(Id, d := 4)
+from data

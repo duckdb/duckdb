@@ -1,0 +1,48 @@
+# name: test/sql/storage/compression/chimp/chimp_read_float.test_slow
+# group: [chimp]
+
+require parquet
+
+require httpfs
+
+load __TEST_DIR__/test_chimp.db
+
+statement ok
+DROP TABLE IF EXISTS temperatures;
+
+statement ok
+PRAGMA force_compression='chimp';
+
+statement ok
+CREATE TABLE temperatures (
+	temperature FLOAT
+);
+
+statement ok
+INSERT INTO temperatures SELECT temp FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet' t(temp), range(1);
+
+statement ok
+CHECKPOINT;
+
+statement ok
+create table reference_temperatures (
+	temperature FLOAT
+);
+
+statement ok
+PRAGMA force_compression='uncompressed';
+
+statement ok
+INSERT INTO reference_temperatures SELECT temp FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/city_temperature.parquet' t(temp), range(1);
+
+statement ok
+checkpoint;
+
+query I nosort r1
+select temperature from reference_temperatures;
+----
+
+query I nosort r1
+select temperature from temperatures
+----
+

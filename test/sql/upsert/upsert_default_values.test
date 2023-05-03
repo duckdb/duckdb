@@ -1,0 +1,20 @@
+# name: test/sql/upsert/upsert_default_values.test
+# group: [upsert]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create or replace table tbl (
+	a integer primary key DEFAULT 5,
+	b integer
+);
+
+statement ok
+insert into tbl DEFAULT VALUES;
+
+query II
+FROM tbl
+----
+5	NULL
+

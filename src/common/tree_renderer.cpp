@@ -3,11 +3,10 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/pair.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/execution/operator/scan/physical_positional_scan.hpp"
 #include "duckdb/parallel/pipeline.hpp"
-
 #include "utf8proc_wrapper.hpp"
 
 #include <sstream>
@@ -37,7 +36,7 @@ idx_t RenderTree::GetPosition(idx_t x, idx_t y) {
 }
 
 void RenderTree::SetNode(idx_t x, idx_t y, unique_ptr<RenderTreeNode> node) {
-	nodes[GetPosition(x, y)] = move(node);
+	nodes[GetPosition(x, y)] = std::move(node);
 }
 
 void TreeRenderer::RenderTopLayer(RenderTree &root, std::ostream &ss, idx_t y) {
@@ -356,9 +355,9 @@ string TreeRenderer::ExtraInfoSeparator() {
 }
 
 unique_ptr<RenderTreeNode> TreeRenderer::CreateRenderNode(string name, string extra_info) {
-	auto result = make_unique<RenderTreeNode>();
-	result->name = move(name);
-	result->extra_text = move(extra_info);
+	auto result = make_uniq<RenderTreeNode>();
+	result->name = std::move(name);
+	result->extra_text = std::move(extra_info);
 	return result;
 }
 
@@ -378,10 +377,13 @@ public:
 
 template <>
 bool TreeChildrenIterator::HasChildren(const PhysicalOperator &op) {
-	if (op.type == PhysicalOperatorType::DELIM_JOIN) {
+	switch (op.type) {
+	case PhysicalOperatorType::DELIM_JOIN:
+	case PhysicalOperatorType::POSITIONAL_SCAN:
 		return true;
+	default:
+		return !op.children.empty();
 	}
-	return !op.children.empty();
 }
 template <>
 void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
@@ -390,16 +392,21 @@ void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
 		callback(*child);
 	}
 	if (op.type == PhysicalOperatorType::DELIM_JOIN) {
-		auto &delim = (PhysicalDelimJoin &)op;
+		auto &delim = op.Cast<PhysicalDelimJoin>();
 		callback(*delim.join);
+	} else if ((op.type == PhysicalOperatorType::POSITIONAL_SCAN)) {
+		auto &pscan = op.Cast<PhysicalPositionalScan>();
+		for (auto &table : pscan.child_tables) {
+			callback(*table);
+		}
 	}
 }
 
 struct PipelineRenderNode {
-	explicit PipelineRenderNode(PhysicalOperator &op) : op(op) {
+	explicit PipelineRenderNode(const PhysicalOperator &op) : op(op) {
 	}
 
-	PhysicalOperator &op;
+	const PhysicalOperator &op;
 	unique_ptr<PipelineRenderNode> child;
 };
 
@@ -438,7 +445,7 @@ static void GetTreeWidthHeight(const T &op, idx_t &width, idx_t &height) {
 template <class T>
 idx_t TreeRenderer::CreateRenderTreeRecursive(RenderTree &result, const T &op, idx_t x, idx_t y) {
 	auto node = TreeRenderer::CreateNode(op);
-	result.SetNode(x, y, move(node));
+	result.SetNode(x, y, std::move(node));
 
 	if (!TreeChildrenIterator::HasChildren(op)) {
 		return 1;
@@ -455,7 +462,7 @@ unique_ptr<RenderTree> TreeRenderer::CreateRenderTree(const T &op) {
 	idx_t width, height;
 	GetTreeWidthHeight<T>(op, width, height);
 
-	auto result = make_unique<RenderTree>(width, height);
+	auto result = make_uniq<RenderTree>(width, height);
 
 	// now fill in the tree
 	CreateRenderTreeRecursive<T>(*result, op, 0, 0);
@@ -535,9 +542,9 @@ unique_ptr<RenderTree> TreeRenderer::CreateTree(const Pipeline &op) {
 	D_ASSERT(!operators.empty());
 	unique_ptr<PipelineRenderNode> node;
 	for (auto &op : operators) {
-		auto new_node = make_unique<PipelineRenderNode>(*op);
-		new_node->child = move(node);
-		node = move(new_node);
+		auto new_node = make_uniq<PipelineRenderNode>(op.get());
+		new_node->child = std::move(node);
+		node = std::move(new_node);
 	}
 	return CreateRenderTree<PipelineRenderNode>(*node);
 }

@@ -2,20 +2,21 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/common/algorithm.hpp"
 
 namespace duckdb {
 
 //! Shared information about a collection of distinct aggregates
 DistinctAggregateCollectionInfo::DistinctAggregateCollectionInfo(const vector<unique_ptr<Expression>> &aggregates,
                                                                  vector<idx_t> indices)
-    : indices(move(indices)), aggregates(aggregates) {
+    : indices(std::move(indices)), aggregates(aggregates) {
 	table_count = CreateTableIndexMap();
 
 	const idx_t aggregate_count = aggregates.size();
 
 	total_child_count = 0;
 	for (idx_t i = 0; i < aggregate_count; i++) {
-		auto &aggregate = (BoundAggregateExpression &)*aggregates[i];
+		auto &aggregate = aggregates[i]->Cast<BoundAggregateExpression>();
 
 		if (!aggregate.IsDistinct()) {
 			continue;
@@ -34,7 +35,7 @@ DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data
 
 	idx_t aggregate_count = data.info.aggregates.size();
 	for (idx_t i = 0; i < aggregate_count; i++) {
-		auto &aggregate = (BoundAggregateExpression &)*data.info.aggregates[i];
+		auto &aggregate = data.info.aggregates[i]->Cast<BoundAggregateExpression>();
 
 		// Initialize the child executor and get the payload types for every aggregate
 		for (auto &child : aggregate.children) {
@@ -61,7 +62,7 @@ DistinctAggregateState::DistinctAggregateState(const DistinctAggregateData &data
 		}
 
 		// This is used in Finalize to get the data from the radix table
-		distinct_output_chunks[table_idx] = make_unique<DataChunk>();
+		distinct_output_chunks[table_idx] = make_uniq<DataChunk>();
 		distinct_output_chunks[table_idx]->Initialize(client, chunk_types);
 	}
 }
@@ -79,7 +80,7 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 	grouping_sets.resize(info.table_count);
 
 	for (auto &i : info.indices) {
-		auto &aggregate = (BoundAggregateExpression &)*info.aggregates[i];
+		auto &aggregate = info.aggregates[i]->Cast<BoundAggregateExpression>();
 
 		D_ASSERT(info.table_map.count(i));
 		idx_t table_idx = info.table_map.at(i);
@@ -99,10 +100,10 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 			grouping_set.insert(set_idx + group_by_size);
 		}
 		// Create the hashtable for the aggregate
-		grouped_aggregate_data[table_idx] = make_unique<GroupedAggregateData>();
+		grouped_aggregate_data[table_idx] = make_uniq<GroupedAggregateData>();
 		grouped_aggregate_data[table_idx]->InitializeDistinct(info.aggregates[i], group_expressions);
 		radix_tables[table_idx] =
-		    make_unique<RadixPartitionedHashTable>(grouping_set, *grouped_aggregate_data[table_idx]);
+		    make_uniq<RadixPartitionedHashTable>(grouping_set, *grouped_aggregate_data[table_idx]);
 
 		// Fill the chunk_types (only contains the payload of the distinct aggregates)
 		vector<LogicalType> chunk_types;
@@ -112,7 +113,7 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 	}
 }
 
-using aggr_ref_t = std::reference_wrapper<BoundAggregateExpression>;
+using aggr_ref_t = reference<BoundAggregateExpression>;
 
 struct FindMatchingAggregate {
 	explicit FindMatchingAggregate(const aggr_ref_t &aggr) : aggr_r(aggr) {
@@ -127,8 +128,8 @@ struct FindMatchingAggregate {
 			return false;
 		}
 		for (idx_t i = 0; i < aggr.children.size(); i++) {
-			auto &other_child = (BoundReferenceExpression &)*other.children[i];
-			auto &aggr_child = (BoundReferenceExpression &)*aggr.children[i];
+			auto &other_child = other.children[i]->Cast<BoundReferenceExpression>();
+			auto &aggr_child = aggr.children[i]->Cast<BoundReferenceExpression>();
 			if (other_child.index != aggr_child.index) {
 				return false;
 			}
@@ -144,7 +145,7 @@ idx_t DistinctAggregateCollectionInfo::CreateTableIndexMap() {
 	D_ASSERT(table_map.empty());
 	for (auto &agg_idx : indices) {
 		D_ASSERT(agg_idx < aggregates.size());
-		auto &aggregate = (BoundAggregateExpression &)*aggregates[agg_idx];
+		auto &aggregate = aggregates[agg_idx]->Cast<BoundAggregateExpression>();
 
 		auto matching_inputs =
 		    std::find_if(table_inputs.begin(), table_inputs.end(), FindMatchingAggregate(std::ref(aggregate)));
@@ -178,7 +179,7 @@ static vector<idx_t> GetDistinctIndices(vector<unique_ptr<Expression>> &aggregat
 	vector<idx_t> distinct_indices;
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggregate = aggregates[i];
-		auto &aggr = (BoundAggregateExpression &)*aggregate;
+		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		if (aggr.IsDistinct()) {
 			distinct_indices.push_back(i);
 		}
@@ -192,7 +193,7 @@ DistinctAggregateCollectionInfo::Create(vector<unique_ptr<Expression>> &aggregat
 	if (indices.empty()) {
 		return nullptr;
 	}
-	return make_unique<DistinctAggregateCollectionInfo>(aggregates, move(indices));
+	return make_uniq<DistinctAggregateCollectionInfo>(aggregates, std::move(indices));
 }
 
 bool DistinctAggregateData::IsDistinct(idx_t index) const {

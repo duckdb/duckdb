@@ -29,6 +29,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_DISTINCT = 11,
 	LOGICAL_SAMPLE = 12,
 	LOGICAL_LIMIT_PERCENT = 13,
+	LOGICAL_PIVOT = 14,
 
 	// -----------------------------
 	// Data sources
@@ -48,6 +49,8 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_COMPARISON_JOIN = 52,
 	LOGICAL_ANY_JOIN = 53,
 	LOGICAL_CROSS_PRODUCT = 54,
+	LOGICAL_POSITIONAL_JOIN = 55,
+	LOGICAL_ASOF_JOIN = 56,
 	// -----------------------------
 	// SetOps
 	// -----------------------------
@@ -77,6 +80,8 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_PRAGMA = 133,
 	LOGICAL_TRANSACTION = 134,
 	LOGICAL_CREATE_TYPE = 135,
+	LOGICAL_ATTACH = 136,
+	LOGICAL_DETACH = 137,
 
 	// -----------------------------
 	// Explain
@@ -97,6 +102,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_VACUUM = 178,
 	LOGICAL_SET = 179,
 	LOGICAL_LOAD = 180,
+	LOGICAL_RESET = 181,
 
 	LOGICAL_EXTENSION_OPERATOR = 255
 };

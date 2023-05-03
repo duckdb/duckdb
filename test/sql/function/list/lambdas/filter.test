@@ -208,3 +208,29 @@ SELECT list_filter([1, 2, 3, 4, 5, 6, 7, 8, 9], x -> x > #1) FROM range(10)
 [8, 9]
 [9]
 []
+
+# fixes 5816
+# auto casting in list_filter, or exception if not possible (casting is strict)
+
+statement ok
+create table lambdas AS SELECT [5,6] AS col1, [4,8] AS col2;
+
+query I
+SELECT list_apply(col1, x -> list_filter(col2, y -> y)) from lambdas;
+----
+[[4, 8], [4, 8]]
+
+query I
+SELECT list_apply([5,6], x -> list_filter([4,8], y -> y));
+----
+[[4, 8], [4, 8]]
+
+query I
+SELECT list_apply([[5,6]], x -> list_filter(x, y -> y));
+----
+[[5, 6]]
+
+statement error
+SELECT list_transform([['abc']], x -> list_filter(x, y -> y));
+----
+Conversion Error: Could not convert string 'abc' to BOOL

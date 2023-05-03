@@ -18,7 +18,7 @@
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/operator/subtract.hpp"
@@ -49,20 +49,16 @@ public:
 			}
 
 			if (is_valid) {
-				NumericStatistics::Update<VALUE_TYPE>(state_wrapper->current_segment->stats, value);
+				NumericStats::Update<VALUE_TYPE>(state_wrapper->current_segment->stats.statistics, value);
 			}
 
-			state_wrapper->WriteValue(*(EXACT_TYPE *)(&value));
+			state_wrapper->WriteValue(Load<EXACT_TYPE>((const_data_ptr_t)&value));
 		}
 	};
 
 	explicit PatasCompressionState(ColumnDataCheckpointer &checkpointer, PatasAnalyzeState<T> *analyze_state)
-	    : checkpointer(checkpointer) {
-
-		auto &db = checkpointer.GetDatabase();
-		auto &type = checkpointer.GetType();
-		auto &config = DBConfig::GetConfig(db);
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_PATAS, type.InternalType());
+	    : checkpointer(checkpointer),
+	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_PATAS)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
 		state.data_ptr = (void *)this;
@@ -71,7 +67,7 @@ public:
 	}
 
 	ColumnDataCheckpointer &checkpointer;
-	CompressionFunction *function;
+	CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
 	idx_t group_idx = 0;
@@ -130,7 +126,7 @@ public:
 		auto &type = checkpointer.GetType();
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		compressed_segment->function = function;
-		current_segment = move(compressed_segment);
+		current_segment = std::move(compressed_segment);
 
 		auto &buffer_manager = BufferManager::GetBufferManager(db);
 		handle = buffer_manager.Pin(current_segment->block);
@@ -203,7 +199,7 @@ public:
 		// Store the offset to the metadata
 		Store<uint32_t>(metadata_offset + metadata_size, dataptr);
 		handle.Destroy();
-		checkpoint_state.FlushSegment(move(current_segment), total_segment_size);
+		checkpoint_state.FlushSegment(std::move(current_segment), total_segment_size);
 	}
 
 	void Finalize() {
@@ -217,7 +213,7 @@ public:
 template <class T>
 unique_ptr<CompressionState> PatasInitCompression(ColumnDataCheckpointer &checkpointer,
                                                   unique_ptr<AnalyzeState> state) {
-	return make_unique<PatasCompressionState<T>>(checkpointer, (PatasAnalyzeState<T> *)state.get());
+	return make_uniq<PatasCompressionState<T>>(checkpointer, (PatasAnalyzeState<T> *)state.get());
 }
 
 template <class T>

@@ -1,0 +1,37 @@
+# name: test/sql/subquery/lateral/lateral_join_aggregate.test
+# description: Lateral join with aggregates
+# group: [lateral]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+# we cannot bind aggregates over lateral joins
+# FIXME: the error message here could use improving
+# Postgres error message is "aggregate functions are not allowed in FROM clause of their own query level"
+statement error
+SELECT * FROM integers, (SELECT SUM(i)) t(sum);
+----
+not found in FROM clause
+
+statement error
+SELECT * FROM integers, LATERAL (SELECT SUM(i)) t(sum);
+----
+not found in FROM clause
+
+# we can use lateral columns inside aggregate expressions, however
+query II
+SELECT * FROM integers i1, LATERAL (SELECT SUM(i + i1.i) FROM integers) t(sum) ORDER BY i;
+----
+NULL	NULL
+1	9
+2	12
+3	15

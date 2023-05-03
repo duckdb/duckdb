@@ -46,7 +46,7 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(DataChunk &input, GlobalSortState
 
 	//	Only sort the primary key
 	DataChunk join_head;
-	join_head.data.emplace_back(Vector(keys.data[0]));
+	join_head.data.emplace_back(keys.data[0]);
 	join_head.SetCardinality(keys.size());
 
 	// Sink the data into the local sort state
@@ -86,7 +86,7 @@ public:
 
 public:
 	RangeJoinMergeTask(shared_ptr<Event> event_p, ClientContext &context, GlobalSortedTable &table)
-	    : ExecutorTask(context), event(move(event_p)), context(context), table(table) {
+	    : ExecutorTask(context), event(std::move(event_p)), context(context), table(table) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -126,9 +126,9 @@ public:
 
 		vector<unique_ptr<Task>> iejoin_tasks;
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
-			iejoin_tasks.push_back(make_unique<RangeJoinMergeTask>(shared_from_this(), context, table));
+			iejoin_tasks.push_back(make_uniq<RangeJoinMergeTask>(shared_from_this(), context, table));
 		}
-		SetTasks(move(iejoin_tasks));
+		SetTasks(std::move(iejoin_tasks));
 	}
 
 	void FinishEvent() override {
@@ -146,7 +146,7 @@ void PhysicalRangeJoin::GlobalSortedTable::ScheduleMergeTasks(Pipeline &pipeline
 	// Initialize global sort state for a round of merging
 	global_sort_state.InitializeMergeRound();
 	auto new_event = make_shared<RangeJoinMergeEvent>(*this, pipeline);
-	event.InsertEvent(move(new_event));
+	event.InsertEvent(std::move(new_event));
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::Finalize(Pipeline &pipeline, Event &event) {
@@ -162,7 +162,7 @@ void PhysicalRangeJoin::GlobalSortedTable::Finalize(Pipeline &pipeline, Event &e
 PhysicalRangeJoin::PhysicalRangeJoin(LogicalOperator &op, PhysicalOperatorType type, unique_ptr<PhysicalOperator> left,
                                      unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                      idx_t estimated_cardinality)
-    : PhysicalComparisonJoin(op, type, move(cond), join_type, estimated_cardinality) {
+    : PhysicalComparisonJoin(op, type, std::move(cond), join_type, estimated_cardinality) {
 	// Reorder the conditions so that ranges are at the front.
 	// TODO: use stats to improve the choice?
 	// TODO: Prefer fixed length types?
@@ -186,8 +186,8 @@ PhysicalRangeJoin::PhysicalRangeJoin(LogicalOperator &op, PhysicalOperatorType t
 		}
 	}
 
-	children.push_back(move(left));
-	children.push_back(move(right));
+	children.push_back(std::move(left));
+	children.push_back(std::move(right));
 }
 
 idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition> &conditions) {
@@ -315,7 +315,7 @@ BufferHandle PhysicalRangeJoin::SliceSortedPayload(DataChunk &payload, GlobalSor
 		col.Slice(gsel, result_count);
 	}
 
-	return move(read_state.payload_heap_handle);
+	return std::move(read_state.payload_heap_handle);
 }
 
 idx_t PhysicalRangeJoin::SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,
@@ -334,7 +334,9 @@ idx_t PhysicalRangeJoin::SelectJoinTail(const ExpressionType &condition, Vector 
 	case ExpressionType::COMPARE_DISTINCT_FROM:
 		return VectorOperations::DistinctFrom(left, right, sel, count, true_sel, nullptr);
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
+		return VectorOperations::NotDistinctFrom(left, right, sel, count, true_sel, nullptr);
 	case ExpressionType::COMPARE_EQUAL:
+		return VectorOperations::Equals(left, right, sel, count, true_sel, nullptr);
 	default:
 		throw InternalException("Unsupported comparison type for PhysicalRangeJoin");
 	}

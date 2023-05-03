@@ -6,9 +6,6 @@ import platform
 
 extensions = ['parquet']
 
-if platform.system() == 'Linux' and platform.architecture()[0] == '64bit':
-    extensions.append('jemalloc')
-
 # check if there are any additional extensions being requested
 if 'DUCKDB_R_EXTENSIONS' in os.environ:
     extensions = extensions + os.environ['DUCKDB_R_EXTENSIONS'].split(",")
@@ -19,6 +16,10 @@ if 'DUCKDB_BUILD_UNITY' in os.environ:
         unity_build = int(DUCKDB_BUILD_UNITY)
     except:
         pass
+
+debug_move_flag = ''
+if 'DUCKDB_DEBUG_MOVE' in os.environ:
+    debug_move_flag = '-DDUCKDB_DEBUG_MOVE'
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'scripts'))
 import package_build
@@ -96,6 +97,11 @@ include_list = ' '.join(['-I' + 'duckdb/' + x for x in include_list])
 include_list += ' -I' + os.path.join('..', 'inst', 'include')
 include_list += ' -Iduckdb'
 include_list += extension_list
+include_list += ' ' + debug_move_flag
+
+# add -Werror if enabled
+if 'TREAT_WARNINGS_AS_ERRORS' in os.environ:
+    include_list += ' -Werror'
 
 # read Makevars.in and replace the {{ SOURCES }} and {{ INCLUDES }} macros
 with open_utf8(os.path.join('src', 'Makevars.in'), 'r') as f:

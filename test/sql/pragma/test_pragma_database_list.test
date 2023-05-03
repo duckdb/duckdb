@@ -5,23 +5,16 @@
 # explicitly load an in-memory database
 load
 
-query III
+query III nosort dblist
 PRAGMA database_list
-----
-0	main	(empty)
 
-query III
-SELECT * FROM pragma_database_list()
+query III nosort dblist
+SELECT * FROM pragma_database_list
+
+query II
+SELECT name, file FROM pragma_database_list
 ----
-0	main	(empty)
+memory	NULL
 
 statement error
 PRAGMA database_list()
-
-# load a database file
-load __TEST_DIR__/test.db
-
-query II
-SELECT seq, name FROM pragma_database_list() WHERE file LIKE '%test.db%'
-----
-0	main

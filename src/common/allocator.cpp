@@ -25,6 +25,9 @@ AllocatedData::AllocatedData() : allocator(nullptr), pointer(nullptr), allocated
 
 AllocatedData::AllocatedData(Allocator &allocator, data_ptr_t pointer, idx_t allocated_size)
     : allocator(&allocator), pointer(pointer), allocated_size(allocated_size) {
+	if (!pointer) {
+		throw InternalException("AllocatedData object constructed with nullptr");
+	}
 }
 AllocatedData::~AllocatedData() {
 	Reset();
@@ -99,15 +102,15 @@ Allocator::Allocator()
 Allocator::Allocator(allocate_function_ptr_t allocate_function_p, free_function_ptr_t free_function_p,
                      reallocate_function_ptr_t reallocate_function_p, unique_ptr<PrivateAllocatorData> private_data_p)
     : allocate_function(allocate_function_p), free_function(free_function_p),
-      reallocate_function(reallocate_function_p), private_data(move(private_data_p)) {
+      reallocate_function(reallocate_function_p), private_data(std::move(private_data_p)) {
 	D_ASSERT(allocate_function);
 	D_ASSERT(free_function);
 	D_ASSERT(reallocate_function);
 #ifdef DEBUG
 	if (!private_data) {
-		private_data = make_unique<PrivateAllocatorData>();
+		private_data = make_uniq<PrivateAllocatorData>();
 	}
-	private_data->debug_info = make_unique<AllocatorDebugInfo>();
+	private_data->debug_info = make_uniq<AllocatorDebugInfo>();
 #endif
 }
 
@@ -116,11 +119,19 @@ Allocator::~Allocator() {
 
 data_ptr_t Allocator::AllocateData(idx_t size) {
 	D_ASSERT(size > 0);
+	if (size >= MAXIMUM_ALLOC_SIZE) {
+		D_ASSERT(false);
+		throw InternalException("Requested allocation size of %llu is out of range - maximum allocation size is %llu",
+		                        size, MAXIMUM_ALLOC_SIZE);
+	}
 	auto result = allocate_function(private_data.get(), size);
 #ifdef DEBUG
 	D_ASSERT(private_data);
 	private_data->debug_info->AllocateData(result, size);
 #endif
+	if (!result) {
+		throw OutOfMemoryException("Failed to allocate block of %llu bytes", size);
+	}
 	return result;
 }
 
@@ -140,11 +151,20 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 	if (!pointer) {
 		return nullptr;
 	}
+	if (size >= MAXIMUM_ALLOC_SIZE) {
+		D_ASSERT(false);
+		throw InternalException(
+		    "Requested re-allocation size of %llu is out of range - maximum allocation size is %llu", size,
+		    MAXIMUM_ALLOC_SIZE);
+	}
 	auto new_pointer = reallocate_function(private_data.get(), pointer, old_size, size);
 #ifdef DEBUG
 	D_ASSERT(private_data);
 	private_data->debug_info->ReallocateData(pointer, new_pointer, old_size, size);
 #endif
+	if (!new_pointer) {
+		throw OutOfMemoryException("Failed to re-allocate block of %llu bytes", size);
+	}
 	return new_pointer;
 }
 

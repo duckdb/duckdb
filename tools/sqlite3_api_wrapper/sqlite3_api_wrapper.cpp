@@ -2,7 +2,6 @@
 #include "duckdb_shell_wrapper.h"
 #endif
 #include "sqlite3.h"
-#include "sql_auto_complete_extension.hpp"
 #include "udf_struct_sqlite3.h"
 #include "sqlite3_udf_wrapper.hpp"
 #include "cast_sqlite.hpp"
@@ -32,14 +31,14 @@ using namespace duckdb;
 using namespace std;
 
 extern "C" {
-char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_value);
+char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value, int columnar);
 }
 
 static char *sqlite3_strdup(const char *str);
 
 struct sqlite3_string_buffer {
 	//! String data
-	unique_ptr<char[]> data;
+	duckdb::unique_ptr<char[]> data;
 	//! String length
 	int data_len;
 };
@@ -50,19 +49,19 @@ struct sqlite3_stmt {
 	//! The query string
 	string query_string;
 	//! The prepared statement object, if successfully prepared
-	unique_ptr<PreparedStatement> prepared;
+	duckdb::unique_ptr<PreparedStatement> prepared;
 	//! The result object, if successfully executed
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	//! The current chunk that we are iterating over
-	unique_ptr<DataChunk> current_chunk;
+	duckdb::unique_ptr<DataChunk> current_chunk;
 	//! The current row into the current chunk that we are iterating over
 	int64_t current_row;
 	//! Bound values, used for binding to the prepared statement
-	vector<Value> bound_values;
+	duckdb::vector<Value> bound_values;
 	//! Names of the prepared parameters
-	vector<string> bound_names;
+	duckdb::vector<string> bound_names;
 	//! The current column values converted to string, used and filled by sqlite3_column_text
-	unique_ptr<sqlite3_string_buffer[]> current_text;
+	duckdb::unique_ptr<sqlite3_string_buffer[]> current_text;
 };
 
 void sqlite3_randomness(int N, void *pBuf) {
@@ -113,9 +112,8 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		    "Extension \"%s\" could not be loaded because its signature is either missing or invalid and unsigned "
 		    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
 		    "(e.g. duckdb -unsigned).");
-		pDb->db = make_unique<DuckDB>(filename, &config);
-		pDb->db->LoadExtension<SQLAutoCompleteExtension>();
-		pDb->con = make_unique<Connection>(*pDb->db);
+		pDb->db = make_uniq<DuckDB>(filename, &config);
+		pDb->con = make_uniq<Connection>(*pDb->db);
 	} catch (const Exception &ex) {
 		if (pDb) {
 			pDb->last_error = PreservedError(ex);
@@ -172,15 +170,18 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		bool set_remainder = next_location < query.size();
 
 		// extract the first statement
-		vector<unique_ptr<SQLStatement>> statements;
-		statements.push_back(move(parser.statements[0]));
+		duckdb::vector<duckdb::unique_ptr<SQLStatement>> statements;
+		statements.push_back(std::move(parser.statements[0]));
 
 		db->con->context->HandlePragmaStatements(statements);
+		if (statements.empty()) {
+			return SQLITE_OK;
+		}
 
 		// if there are multiple statements here, we are dealing with an import database statement
 		// we directly execute all statements besides the final one
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
-			auto res = db->con->Query(move(statements[i]));
+			auto res = db->con->Query(std::move(statements[i]));
 			if (res->HasError()) {
 				db->last_error = res->GetErrorObject();
 				return SQLITE_ERROR;
@@ -188,7 +189,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		}
 
 		// now prepare the query
-		auto prepared = db->con->Prepare(move(statements.back()));
+		auto prepared = db->con->Prepare(std::move(statements.back()));
 		if (prepared->HasError()) {
 			// failed to prepare: set the error message
 			db->last_error = prepared->error;
@@ -196,10 +197,10 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 		}
 
 		// create the statement entry
-		unique_ptr<sqlite3_stmt> stmt = make_unique<sqlite3_stmt>();
+		duckdb::unique_ptr<sqlite3_stmt> stmt = make_uniq<sqlite3_stmt>();
 		stmt->db = db;
 		stmt->query_string = query;
-		stmt->prepared = move(prepared);
+		stmt->prepared = std::move(prepared);
 		stmt->current_row = -1;
 		for (idx_t i = 0; i < stmt->prepared->n_param; i++) {
 			stmt->bound_names.push_back("$" + to_string(i + 1));
@@ -222,7 +223,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 	}
 }
 
-char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_value) {
+char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value, int columnar) {
 	if (!pStmt) {
 		return nullptr;
 	}
@@ -262,6 +263,10 @@ char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, char *null_val
 	if (null_value) {
 		config.null_value = null_value;
 	}
+	if (columnar) {
+		config.render_mode = RenderMode::COLUMNS;
+	}
+	config.max_width = max_width;
 	BoxRenderer renderer(config);
 	auto result_rendering =
 	    renderer.ToString(*pStmt->db->con->context, pStmt->result->names, materialized.Collection());
@@ -548,13 +553,13 @@ const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
 	try {
 		if (!pStmt->current_text) {
 			pStmt->current_text =
-			    unique_ptr<sqlite3_string_buffer[]>(new sqlite3_string_buffer[pStmt->result->types.size()]);
+			    duckdb::unique_ptr<sqlite3_string_buffer[]>(new sqlite3_string_buffer[pStmt->result->types.size()]);
 		}
 		auto &entry = pStmt->current_text[iCol];
 		if (!entry.data) {
 			// not initialized yet, convert the value and initialize it
 			auto &str_val = StringValue::Get(val);
-			entry.data = unique_ptr<char[]>(new char[str_val.size() + 1]);
+			entry.data = duckdb::unique_ptr<char[]>(new char[str_val.size() + 1]);
 			memcpy(entry.data.get(), str_val.c_str(), str_val.size() + 1);
 			entry.data_len = str_val.length();
 		}
@@ -573,13 +578,13 @@ const void *sqlite3_column_blob(sqlite3_stmt *pStmt, int iCol) {
 	try {
 		if (!pStmt->current_text) {
 			pStmt->current_text =
-			    unique_ptr<sqlite3_string_buffer[]>(new sqlite3_string_buffer[pStmt->result->types.size()]);
+			    duckdb::unique_ptr<sqlite3_string_buffer[]>(new sqlite3_string_buffer[pStmt->result->types.size()]);
 		}
 		auto &entry = pStmt->current_text[iCol];
 		if (!entry.data) {
 			// not initialized yet, convert the value and initialize it
 			auto &str_val = StringValue::Get(val);
-			entry.data = unique_ptr<char[]>(new char[str_val.size() + 1]);
+			entry.data = duckdb::unique_ptr<char[]>(new char[str_val.size() + 1]);
 			memcpy(entry.data.get(), str_val.c_str(), str_val.size() + 1);
 			entry.data_len = str_val.length();
 		}
@@ -1045,9 +1050,25 @@ int sqlite3_complete(const char *zSql) {
 
 // length of varchar or blob value
 int sqlite3_column_bytes(sqlite3_stmt *pStmt, int iCol) {
-	// fprintf(stderr, "sqlite3_column_bytes: unsupported.\n");
-	return pStmt->current_text[iCol].data_len;
-	// return -1;
+
+	if (!pStmt || iCol < 0 || pStmt->result->types.size() <= static_cast<size_t>(iCol))
+		return 0;
+
+	// checks if the current column is initialized
+	if (!pStmt->current_text) {
+		if (!sqlite3_column_text(pStmt, iCol) && !sqlite3_column_blob(pStmt, iCol)) {
+			return 0;
+		}
+	}
+	sqlite3_string_buffer *col_text = &pStmt->current_text[iCol];
+	if (!col_text->data) {
+		if (!sqlite3_column_text(pStmt, iCol) && !sqlite3_column_blob(pStmt, iCol)) {
+			return 0;
+		}
+		col_text = &pStmt->current_text[iCol];
+	}
+
+	return col_text->data_len;
 }
 
 sqlite3_value *sqlite3_column_value(sqlite3_stmt *, int iCol) {
@@ -1089,11 +1110,30 @@ int sqlite3_table_column_metadata(sqlite3 *db,             /* Connection handle 
 	return -1;
 }
 
+const char *sqlite3_column_table_name(sqlite3_stmt *pStmt, int iCol) {
+	if (!pStmt || !pStmt->prepared) {
+		return nullptr;
+	}
+
+	auto &&names = pStmt->prepared->GetNames();
+	if (iCol < 0 || names.size() <= static_cast<size_t>(iCol)) {
+		return nullptr;
+	}
+
+	return names[iCol].c_str();
+}
+
 const char *sqlite3_column_decltype(sqlite3_stmt *pStmt, int iCol) {
 	if (!pStmt || !pStmt->prepared) {
-		return NULL;
+		return nullptr;
 	}
-	auto column_type = pStmt->prepared->GetTypes()[iCol];
+
+	auto &&types = pStmt->prepared->GetTypes();
+	if (iCol < 0 || types.size() <= static_cast<size_t>(iCol)) {
+		return nullptr;
+	}
+
+	auto column_type = types[iCol];
 	switch (column_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return "BOOLEAN";
@@ -1235,7 +1275,7 @@ int sqlite3_create_function(sqlite3 *db, const char *zFunctionName, int nArg, in
 		nArg = 0;
 	}
 
-	vector<LogicalType> argv_types(nArg);
+	duckdb::vector<LogicalType> argv_types(nArg);
 	for (idx_t i = 0; i < (idx_t)nArg; ++i) {
 		argv_types[i] = LogicalType::ANY;
 	}

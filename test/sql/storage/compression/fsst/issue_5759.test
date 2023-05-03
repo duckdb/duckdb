@@ -1,0 +1,12 @@
+# name: test/sql/storage/compression/fsst/issue_5759.test
+# description: Issue #5759: segfault on sample creation
+# group: [fsst]
+
+load __TEST_DIR__/issue_5759.db
+
+statement ok
+pragma force_compression='fsst'
+
+# With many short and a few small strings, the sample calculation would overflow
+statement ok
+CREATE TABLE trigger5759 AS SELECT CASE WHEN RANDOM() > 0.95 THEN repeat('ab', 1500) ELSE 'c' END FROM range(0,1000);

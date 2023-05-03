@@ -10,8 +10,11 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/type_util.hpp"
 
 namespace duckdb {
+
+struct interval_t;
 
 struct MultiplyOperator {
 	template <class TA, class TB, class TR>
@@ -53,6 +56,8 @@ template <>
 bool TryMultiplyOperator::Operation(int32_t left, int32_t right, int32_t &result);
 template <>
 DUCKDB_API bool TryMultiplyOperator::Operation(int64_t left, int64_t right, int64_t &result);
+template <>
+DUCKDB_API bool TryMultiplyOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result);
 
 struct MultiplyOperatorOverflowCheck {
 	template <class TA, class TB, class TR>

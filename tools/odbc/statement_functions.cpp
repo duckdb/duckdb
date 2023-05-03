@@ -13,12 +13,12 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/vector.hpp"
 
 #include <algorithm>
 #include <codecvt>
 #include <locale>
-
-using std::string;
 
 using duckdb::date_t;
 using duckdb::Decimal;
@@ -33,8 +33,10 @@ using duckdb::OdbcInterval;
 using duckdb::OdbcUtils;
 using duckdb::SQLStateType;
 using duckdb::Store;
+using duckdb::string;
 using duckdb::string_t;
 using duckdb::timestamp_t;
+using duckdb::vector;
 
 SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length) {
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
@@ -99,7 +101,7 @@ SQLRETURN duckdb::SingleExecuteStmt(duckdb::OdbcHandleStmt *stmt) {
 		*stmt->rows_fetched_ptr = 0;
 	}
 
-	std::vector<Value> values;
+	duckdb::vector<Value> values;
 	SQLRETURN ret = stmt->param_desc->GetParamValues(values);
 	if (ret == SQL_NEED_DATA || ret == SQL_ERROR) {
 		return ret;
@@ -242,7 +244,11 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		}
 
 		Value val;
-		stmt->odbc_fetcher->GetValue(col_or_param_num - 1, val);
+		if (col_or_param_num > 0) {
+			// Prevent underflow
+			col_or_param_num--;
+		}
+		stmt->odbc_fetcher->GetValue(col_or_param_num, val);
 		if (val.IsNull()) {
 			if (!str_len_or_ind_ptr) {
 				return SQL_ERROR;

@@ -14,16 +14,16 @@ using Filter = FilterPushdown::Filter;
 
 static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> expr, unordered_set<idx_t> &right_bindings) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = (BoundColumnRefExpression &)*expr;
+		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 		if (right_bindings.find(bound_colref.binding.table_index) != right_bindings.end()) {
 			// bound colref belongs to RHS
 			// replace it with a constant NULL
-			return make_unique<BoundConstantExpression>(Value(expr->return_type));
+			return make_uniq<BoundConstantExpression>(Value(expr->return_type));
 		}
 		return expr;
 	}
 	ExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<Expression> &child) { child = ReplaceColRefWithNull(move(child), right_bindings); });
+	    *expr, [&](unique_ptr<Expression> &child) { child = ReplaceColRefWithNull(std::move(child), right_bindings); });
 	return expr;
 }
 
@@ -32,11 +32,11 @@ static bool FilterRemovesNull(ClientContext &context, ExpressionRewriter &rewrit
 	// make a copy of the expression
 	auto copy = expr->Copy();
 	// replace all BoundColumnRef expressions frmo the RHS with NULL constants in the copied expression
-	copy = ReplaceColRefWithNull(move(copy), right_bindings);
+	copy = ReplaceColRefWithNull(std::move(copy), right_bindings);
 
 	// attempt to flatten the expression by running the expression rewriter on it
-	auto filter = make_unique<LogicalFilter>();
-	filter->expressions.push_back(move(copy));
+	auto filter = make_uniq<LogicalFilter>();
+	filter->expressions.push_back(std::move(copy));
 	rewriter.VisitOperator(*filter);
 
 	// check if all expressions are foldable
@@ -60,19 +60,22 @@ static bool FilterRemovesNull(ClientContext &context, ExpressionRewriter &rewrit
 unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalOperator> op,
                                                              unordered_set<idx_t> &left_bindings,
                                                              unordered_set<idx_t> &right_bindings) {
-	auto &join = (LogicalJoin &)*op;
-	D_ASSERT(join.join_type == JoinType::LEFT);
-	D_ASSERT(op->type != LogicalOperatorType::LOGICAL_DELIM_JOIN);
+	auto &join = op->Cast<LogicalJoin>();
+	if (op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		return FinishPushdown(std::move(op));
+	}
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 	// for a comparison join we create a FilterCombiner that checks if we can push conditions on LHS join conditions
 	// into the RHS of the join
 	FilterCombiner filter_combiner(optimizer);
-	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+	const auto isComparison = (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
+	                           op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN);
+	if (isComparison) {
 		// add all comparison conditions
-		auto &comparison_join = (LogicalComparisonJoin &)*op;
+		auto &comparison_join = op->Cast<LogicalComparisonJoin>();
 		for (auto &cond : comparison_join.conditions) {
 			filter_combiner.AddFilter(
-			    make_unique<BoundComparisonExpression>(cond.comparison, cond.left->Copy(), cond.right->Copy()));
+			    make_uniq<BoundComparisonExpression>(cond.comparison, cond.left->Copy(), cond.right->Copy()));
 		}
 	}
 	// now check the set of filters
@@ -81,12 +84,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 		if (side == JoinSide::LEFT) {
 			// bindings match left side
 			// we can push the filter into the left side
-			if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			if (isComparison) {
 				// we MIGHT be able to push it down the RHS as well, but only if it is a comparison that matches the
 				// join predicates we use the FilterCombiner to figure this out add the expression to the FilterCombiner
 				filter_combiner.AddFilter(filters[i]->filter->Copy());
 			}
-			left_pushdown.filters.push_back(move(filters[i]));
+			left_pushdown.filters.push_back(std::move(filters[i]));
 			// erase the filter from the list of filters
 			filters.erase(filters.begin() + i);
 			i--;
@@ -100,10 +103,10 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 				// now we can do more pushdown
 				// move all filters we added to the left_pushdown back into the filter list
 				for (auto &left_filter : left_pushdown.filters) {
-					filters.push_back(move(left_filter));
+					filters.push_back(std::move(left_filter));
 				}
 				// now push down the inner join
-				return PushdownInnerJoin(move(op), left_bindings, right_bindings);
+				return PushdownInnerJoin(std::move(op), left_bindings, right_bindings);
 			}
 		}
 	}
@@ -115,13 +118,13 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	// (a=500) into the RHS
 	filter_combiner.GenerateFilters([&](unique_ptr<Expression> filter) {
 		if (JoinSide::GetJoinSide(*filter, left_bindings, right_bindings) == JoinSide::RIGHT) {
-			right_pushdown.AddFilter(move(filter));
+			right_pushdown.AddFilter(std::move(filter));
 		}
 	});
 	right_pushdown.GenerateFilters();
-	op->children[0] = left_pushdown.Rewrite(move(op->children[0]));
-	op->children[1] = right_pushdown.Rewrite(move(op->children[1]));
-	return FinishPushdown(move(op));
+	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
+	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
+	return PushFinalFilters(std::move(op));
 }
 
 } // namespace duckdb

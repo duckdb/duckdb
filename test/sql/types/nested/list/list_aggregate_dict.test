@@ -1,0 +1,29 @@
+# name: test/sql/types/nested/list/list_aggregate_dict.test
+# description: Test lists with aggregations on a table with dictionary compression
+# group: [list]
+
+load __TEST_DIR__/store_dict.db
+
+statement ok
+pragma force_compression='dictionary';
+
+statement ok
+CREATE TABLE Hosts (ips varchar[]);
+
+statement ok
+INSERT INTO Hosts SELECT * FROM 'data/csv/ips.csv.gz';
+
+query I
+SELECT min(list_string_agg(ips)) FROM Hosts
+----
+248.128.0.0
+
+query I
+SELECT min(ips[1]) FROM Hosts
+----
+248.128.0.0
+
+query I
+SELECT min([x[2:4] for x in ips if x[1]::int > 1]) FROM Hosts
+----
+[48.]

@@ -2,6 +2,9 @@
 # description: Test RENAME VIEW four view renames and four parallel transactions
 # group: [rename_view]
 
+statement ok
+SET immediate_transaction_mode=true
+
 statement ok con1
 CREATE TABLE tbl1(i INTEGER)
 

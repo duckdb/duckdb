@@ -7,13 +7,6 @@ require json
 statement ok
 pragma enable_verification
 
-
-statement error
-select json_structure('{"a": 42, "a": 7}')
-
-
-
-
 # singletons
 query T
 select json_structure('42')
@@ -40,7 +33,7 @@ select json_structure('"duck"')
 ----
 "VARCHAR"
 
-# simple objects
+# simple values
 query T
 select json_structure('{"a": 42}')
 ----
@@ -86,10 +79,7 @@ select json_structure('{"a": {"b": 42}}')
 ----
 {"a":{"b":"UBIGINT"}}
 
-# now the hard part: JSON arrays
-# we derive some kind of consistent structure from arrays, while not being too strict
-# i.e., objects in arrays can have a different set of keys, null is a wildcard
-# If same keys have a different type, we take the 'max' logical type in terms of what we can cast
+# we want strong typing for JSON arrays. If we find inconsistent types, we just set the type to JSON
 query T
 select json_structure('[null,null]')
 ----
@@ -103,22 +93,22 @@ select json_structure('[true,null,false]')
 query T
 select json_structure('[true,null,false,1]')
 ----
-["UBIGINT"]
+["JSON"]
 
 query T
 select json_structure('[true,null,false,1,-1]')
 ----
-["BIGINT"]
+["JSON"]
 
 query T
 select json_structure('[true,null,false,1,-1,0.42]')
 ----
-["DOUBLE"]
+["JSON"]
 
 query T
 select json_structure('[true,null,false,1,-1,0.42,"42"]')
 ----
-["VARCHAR"]
+["JSON"]
 
 # nested stuff
 query T
@@ -147,14 +137,20 @@ select json_structure('[{"a": [{"b": 42}, {"b": null}]}, {"a": [{"c": 7}]}]')
 [{"a":[{"b":"UBIGINT","c":"UBIGINT"}]}]
 
 # inconsistent types
-statement error
+query T
 select json_structure('[1, [1]]')
+----
+["JSON"]
 
-statement error
+query T
 select json_structure('[1, {"a": 1}]')
+----
+["JSON"]
 
-statement error
+query T
 select json_structure('[[1], {"a": 1}]')
+----
+["JSON"]
 
 # duplicate key
 statement error

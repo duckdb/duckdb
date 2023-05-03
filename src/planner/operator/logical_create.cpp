@@ -10,11 +10,8 @@ unique_ptr<LogicalOperator> LogicalCreate::Deserialize(LogicalDeserializationSta
 	auto &context = state.gstate.context;
 	auto info = CreateInfo::Deserialize(reader.GetSource());
 
-	auto &catalog = Catalog::GetCatalog(context);
-	// TODO(stephwang): review if below is necessary or just not pass schema_catalog_entry
-	SchemaCatalogEntry *schema_catalog_entry = catalog.GetSchema(context, info->schema, true);
-
-	return make_unique<LogicalCreate>(state.type, move(info), schema_catalog_entry);
+	auto schema_catalog_entry = Catalog::GetSchema(context, info->catalog, info->schema, OnEntryNotFound::RETURN_NULL);
+	return make_uniq<LogicalCreate>(state.type, std::move(info), schema_catalog_entry);
 }
 
 idx_t LogicalCreate::EstimateCardinality(ClientContext &context) {

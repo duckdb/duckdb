@@ -1,12 +1,13 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
-#include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/expression_binder/base_select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
@@ -16,34 +17,71 @@
 
 namespace duckdb {
 
-static void InvertPercentileFractions(ClientContext &context, unique_ptr<ParsedExpression> &fractions) {
-	D_ASSERT(fractions.get());
-	D_ASSERT(fractions->expression_class == ExpressionClass::BOUND_EXPRESSION);
-	auto &bound = (BoundExpression &)*fractions;
-
-	if (!bound.expr->IsFoldable()) {
-		return;
+static Value NegatePercentileValue(const Value &v, const bool desc) {
+	if (v.IsNull()) {
+		return v;
 	}
 
-	Value value = ExpressionExecutor::EvaluateScalar(context, *bound.expr);
-	if (value.type().id() == LogicalTypeId::LIST) {
-		vector<Value> values;
-		for (const auto &element_val : ListValue::GetChildren(value)) {
-			if (element_val.IsNull()) {
-				values.push_back(element_val);
-			} else {
-				values.push_back(Value::DOUBLE(1 - element_val.GetValue<double>()));
-			}
+	const auto frac = v.GetValue<double>();
+	if (frac < 0 || frac > 1) {
+		throw BinderException("PERCENTILEs can only take parameters in the range [0, 1]");
+	}
+
+	if (!desc) {
+		return v;
+	}
+
+	const auto &type = v.type();
+	switch (type.id()) {
+	case LogicalTypeId::DECIMAL: {
+		// Negate DECIMALs as DECIMAL.
+		const auto integral = IntegralValue::Get(v);
+		const auto width = DecimalType::GetWidth(type);
+		const auto scale = DecimalType::GetScale(type);
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			return Value::DECIMAL(Cast::Operation<hugeint_t, int16_t>(-integral), width, scale);
+		case PhysicalType::INT32:
+			return Value::DECIMAL(Cast::Operation<hugeint_t, int32_t>(-integral), width, scale);
+		case PhysicalType::INT64:
+			return Value::DECIMAL(Cast::Operation<hugeint_t, int64_t>(-integral), width, scale);
+		case PhysicalType::INT128:
+			return Value::DECIMAL(-integral, width, scale);
+		default:
+			throw InternalException("Unknown DECIMAL type");
 		}
-		bound.expr = make_unique<BoundConstantExpression>(Value::LIST(values));
-	} else if (value.IsNull()) {
-		bound.expr = make_unique<BoundConstantExpression>(value);
-	} else {
-		bound.expr = make_unique<BoundConstantExpression>(Value::DOUBLE(1 - value.GetValue<double>()));
+	}
+	default:
+		// Everything else can just be a DOUBLE
+		return Value::DOUBLE(-v.GetValue<double>());
 	}
 }
 
-BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry *func, idx_t depth) {
+static void NegatePercentileFractions(ClientContext &context, unique_ptr<ParsedExpression> &fractions, bool desc) {
+	D_ASSERT(fractions.get());
+	D_ASSERT(fractions->expression_class == ExpressionClass::BOUND_EXPRESSION);
+	auto &bound = BoundExpression::GetExpression(*fractions);
+
+	if (!bound->IsFoldable()) {
+		return;
+	}
+
+	Value value = ExpressionExecutor::EvaluateScalar(context, *bound);
+	if (value.type().id() == LogicalTypeId::LIST) {
+		vector<Value> values;
+		for (const auto &element_val : ListValue::GetChildren(value)) {
+			values.push_back(NegatePercentileValue(element_val, desc));
+		}
+		if (values.empty()) {
+			throw BinderException("Empty list in percentile not allowed");
+		}
+		bound = make_uniq<BoundConstantExpression>(Value::LIST(values));
+	} else {
+		bound = make_uniq<BoundConstantExpression>(NegatePercentileValue(value, desc));
+	}
+}
+
+BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFunctionCatalogEntry &func, idx_t depth) {
 	// first bind the child of the aggregate expression (if any)
 	this->bound_aggregate = true;
 	unique_ptr<Expression> bound_filter;
@@ -58,7 +96,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	// Handle ordered-set aggregates by moving the single ORDER BY expression to the front of the children.
 	//	https://www.postgresql.org/docs/current/functions-aggregate.html#FUNCTIONS-ORDEREDSET-TABLE
 	bool ordered_set_agg = false;
-	bool invert_fractions = false;
+	bool negate_fractions = false;
 	if (aggr.order_bys && aggr.order_bys->orders.size() == 1) {
 		const auto &func_name = aggr.function_name;
 		ordered_set_agg = (func_name == "quantile_cont" || func_name == "quantile_disc" || func_name == "mode");
@@ -68,15 +106,15 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 			const auto &order = aggr.order_bys->orders[0];
 			const auto sense =
 			    (order.type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : order.type;
-			invert_fractions = (sense == OrderType::DESCENDING);
+			negate_fractions = (sense == OrderType::DESCENDING);
 		}
 	}
 
 	for (auto &child : aggr.children) {
 		aggregate_binder.BindChild(child, 0, error);
-		// We have to invert the fractions for PERCENTILE_XXXX DESC
-		if (error.empty() && invert_fractions) {
-			InvertPercentileFractions(context, child);
+		// We have to negate the fractions for PERCENTILE_XXXX DESC
+		if (error.empty() && ordered_set_agg) {
+			NegatePercentileFractions(context, child, negate_fractions);
 		}
 	}
 
@@ -99,8 +137,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 				if (!success) {
 					throw BinderException(error);
 				}
-				auto &bound_expr = (BoundExpression &)*aggr.children[i];
-				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+				auto &bound_expr = BoundExpression::GetExpression(*aggr.children[i]);
+				ExtractCorrelatedExpressions(binder, *bound_expr);
 			}
 			if (aggr.filter) {
 				bool success = aggregate_binder.BindCorrelatedColumns(aggr.filter);
@@ -108,8 +146,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 				if (!success) {
 					throw BinderException(error);
 				}
-				auto &bound_expr = (BoundExpression &)*aggr.filter;
-				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+				auto &bound_expr = BoundExpression::GetExpression(*aggr.filter);
+				ExtractCorrelatedExpressions(binder, *bound_expr);
 			}
 			if (aggr.order_bys && !aggr.order_bys->orders.empty()) {
 				for (auto &order : aggr.order_bys->orders) {
@@ -117,8 +155,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 					if (!success) {
 						throw BinderException(error);
 					}
-					auto &bound_expr = (BoundExpression &)*order.expression;
-					ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+					auto &bound_expr = BoundExpression::GetExpression(*order.expression);
+					ExtractCorrelatedExpressions(binder, *bound_expr);
 				}
 			}
 		} else {
@@ -133,8 +171,8 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	}
 
 	if (aggr.filter) {
-		auto &child = (BoundExpression &)*aggr.filter;
-		bound_filter = BoundCastExpression::AddCastToType(context, move(child.expr), LogicalType::BOOLEAN);
+		auto &child = BoundExpression::GetExpression(*aggr.filter);
+		bound_filter = BoundCastExpression::AddCastToType(context, std::move(child), LogicalType::BOOLEAN);
 	}
 
 	// all children bound successfully
@@ -145,70 +183,69 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 
 	if (ordered_set_agg) {
 		for (auto &order : aggr.order_bys->orders) {
-			auto &child = (BoundExpression &)*order.expression;
-			types.push_back(child.expr->return_type);
-			arguments.push_back(child.expr->return_type);
-			children.push_back(move(child.expr));
+			auto &child = BoundExpression::GetExpression(*order.expression);
+			types.push_back(child->return_type);
+			arguments.push_back(child->return_type);
+			children.push_back(std::move(child));
 		}
 		aggr.order_bys->orders.clear();
 	}
 
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
-		auto &child = (BoundExpression &)*aggr.children[i];
-		types.push_back(child.expr->return_type);
-		arguments.push_back(child.expr->return_type);
-		children.push_back(move(child.expr));
+		auto &child = BoundExpression::GetExpression(*aggr.children[i]);
+		types.push_back(child->return_type);
+		arguments.push_back(child->return_type);
+		children.push_back(std::move(child));
 	}
 
 	// bind the aggregate
 	FunctionBinder function_binder(context);
-	idx_t best_function = function_binder.BindFunction(func->name, func->functions, types, error);
+	idx_t best_function = function_binder.BindFunction(func.name, func.functions, types, error);
 	if (best_function == DConstants::INVALID_INDEX) {
 		throw BinderException(binder.FormatError(aggr, error));
 	}
 	// found a matching function!
-	auto bound_function = func->functions.GetFunctionByOffset(best_function);
+	auto bound_function = func.functions.GetFunctionByOffset(best_function);
 
 	// Bind any sort columns, unless the aggregate is order-insensitive
-	auto order_bys = make_unique<BoundOrderModifier>();
+	unique_ptr<BoundOrderModifier> order_bys;
 	if (!aggr.order_bys->orders.empty()) {
+		order_bys = make_uniq<BoundOrderModifier>();
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
-			auto &order_expr = (BoundExpression &)*order.expression;
-			const auto sense =
-			    (order.type == OrderType::ORDER_DEFAULT) ? config.options.default_order_type : order.type;
-			const auto null_order = (order.null_order == OrderByNullType::ORDER_DEFAULT)
-			                            ? config.options.default_null_order
-			                            : order.null_order;
-			order_bys->orders.emplace_back(BoundOrderByNode(sense, null_order, move(order_expr.expr)));
+			auto &order_expr = BoundExpression::GetExpression(*order.expression);
+			const auto sense = config.ResolveOrder(order.type);
+			const auto null_order = config.ResolveNullOrder(sense, order.null_order);
+			order_bys->orders.emplace_back(sense, null_order, std::move(order_expr));
 		}
 	}
 
-	auto aggregate = function_binder.BindAggregateFunction(
-	    bound_function, move(children), move(bound_filter),
-	    aggr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT, move(order_bys));
+	auto aggregate =
+	    function_binder.BindAggregateFunction(bound_function, std::move(children), std::move(bound_filter),
+	                                          aggr.distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
 	if (aggr.export_state) {
-		aggregate = ExportAggregateFunction::Bind(move(aggregate));
+		aggregate = ExportAggregateFunction::Bind(std::move(aggregate));
 	}
+	aggregate->order_bys = std::move(order_bys);
 
 	// check for all the aggregates if this aggregate already exists
 	idx_t aggr_index;
-	auto entry = node.aggregate_map.find(aggregate.get());
+	auto entry = node.aggregate_map.find(*aggregate);
 	if (entry == node.aggregate_map.end()) {
 		// new aggregate: insert into aggregate list
 		aggr_index = node.aggregates.size();
-		node.aggregate_map.insert(make_pair(aggregate.get(), aggr_index));
-		node.aggregates.push_back(move(aggregate));
+		node.aggregate_map[*aggregate] = aggr_index;
+		node.aggregates.push_back(std::move(aggregate));
 	} else {
 		// duplicate aggregate: simplify refer to this aggregate
 		aggr_index = entry->second;
 	}
 
 	// now create a column reference referring to the aggregate
-	auto colref = make_unique<BoundColumnRefExpression>(
+	auto colref = make_uniq<BoundColumnRefExpression>(
 	    aggr.alias.empty() ? node.aggregates[aggr_index]->ToString() : aggr.alias,
 	    node.aggregates[aggr_index]->return_type, ColumnBinding(node.aggregate_index, aggr_index), depth);
 	// move the aggregate expression into the set of bound aggregates
-	return BindResult(move(colref));
+	return BindResult(std::move(colref));
 }
 } // namespace duckdb

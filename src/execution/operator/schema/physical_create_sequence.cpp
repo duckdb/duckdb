@@ -15,16 +15,17 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalCreateSequence::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<CreateSequenceSourceState>();
+	return make_uniq<CreateSequenceSourceState>();
 }
 
 void PhysicalCreateSequence::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                      LocalSourceState &lstate) const {
-	auto &state = (CreateSequenceSourceState &)gstate;
+	auto &state = gstate.Cast<CreateSequenceSourceState>();
 	if (state.finished) {
 		return;
 	}
-	Catalog::GetCatalog(context.client).CreateSequence(context.client, info.get());
+	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
+	catalog.CreateSequence(context.client, *info);
 	state.finished = true;
 }
 

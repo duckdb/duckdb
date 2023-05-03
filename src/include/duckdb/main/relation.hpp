@@ -17,6 +17,7 @@
 #include "duckdb/common/named_parameter_map.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/external_dependencies.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
 
 #include <memory>
 
@@ -51,6 +52,7 @@ public:
 	DUCKDB_API virtual BoundStatement Bind(Binder &binder);
 	DUCKDB_API virtual string GetAlias();
 
+	DUCKDB_API unique_ptr<QueryResult> ExecuteOrThrow();
 	DUCKDB_API unique_ptr<QueryResult> Execute();
 	DUCKDB_API string ToString();
 	DUCKDB_API virtual string ToString(idx_t depth) = 0;
@@ -65,7 +67,7 @@ public:
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &name, const string &sql);
 
 	//! Explain the query plan of this relation
-	DUCKDB_API unique_ptr<QueryResult> Explain();
+	DUCKDB_API unique_ptr<QueryResult> Explain(ExplainType type = ExplainType::EXPLAIN_STANDARD);
 
 	DUCKDB_API virtual unique_ptr<TableRef> GetTableRef();
 	DUCKDB_API virtual bool IsReadOnly() {
@@ -116,16 +118,29 @@ public:
 	DUCKDB_API shared_ptr<Relation> Alias(const string &alias);
 
 	//! Insert the data from this relation into a table
+	DUCKDB_API shared_ptr<Relation> InsertRel(const string &schema_name, const string &table_name);
 	DUCKDB_API void Insert(const string &table_name);
 	DUCKDB_API void Insert(const string &schema_name, const string &table_name);
 	//! Insert a row (i.e.,list of values) into a table
 	DUCKDB_API void Insert(const vector<vector<Value>> &values);
 	//! Create a table and insert the data from this relation into that table
+	DUCKDB_API shared_ptr<Relation> CreateRel(const string &schema_name, const string &table_name);
 	DUCKDB_API void Create(const string &table_name);
 	DUCKDB_API void Create(const string &schema_name, const string &table_name);
 
 	//! Write a relation to a CSV file
-	DUCKDB_API void WriteCSV(const string &csv_file);
+	DUCKDB_API shared_ptr<Relation>
+	WriteCSVRel(const string &csv_file,
+	            case_insensitive_map_t<vector<Value>> options = case_insensitive_map_t<vector<Value>>());
+	DUCKDB_API void WriteCSV(const string &csv_file,
+	                         case_insensitive_map_t<vector<Value>> options = case_insensitive_map_t<vector<Value>>());
+	//! Write a relation to a Parquet file
+	DUCKDB_API shared_ptr<Relation>
+	WriteParquetRel(const string &parquet_file,
+	                case_insensitive_map_t<vector<Value>> options = case_insensitive_map_t<vector<Value>>());
+	DUCKDB_API void
+	WriteParquet(const string &parquet_file,
+	             case_insensitive_map_t<vector<Value>> options = case_insensitive_map_t<vector<Value>>());
 
 	//! Update a table, can only be used on a TableRelation
 	DUCKDB_API virtual void Update(const string &update, const string &condition = string());

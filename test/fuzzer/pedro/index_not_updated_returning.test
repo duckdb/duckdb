@@ -1,0 +1,17 @@
+# name: test/fuzzer/pedro/index_not_updated_returning.test
+# description: Issue #4978 (23): Index not updated assertion
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t2 AS SELECT 1 c1, 1 c2;
+
+statement ok
+CREATE INDEX i0 ON t2 (c1);
+
+query II
+UPDATE t2 SET c2 = 2 RETURNING *;
+----
+1	2

@@ -1,0 +1,160 @@
+# name: test/sql/types/bit/test_bit_bitwise_operations.test
+# description: Test bitwise operations of bit string type
+# group: [bit]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE bits (b bit);
+
+statement ok
+INSERT INTO bits VALUES('101111011010'), ('110001100100'), ('101001000110')
+
+# **** bitwise & ****
+query I
+SELECT '10101'::BIT & '10001'::BIT
+----
+10001
+
+query I 
+SELECT '1000001101011111'::BIT & '1100101101000011'::BIT
+----
+1000001101000011
+
+query I 
+SELECT '01011'::BIT & '11000'::BIT
+----
+01000
+
+query I 
+SELECT b & '011100011011'::BIT FROM bits
+----
+001100011010
+010000000000
+001000000010
+
+statement error
+SELECT '010110'::BIT & '11000'::BIT
+----
+Invalid Input Error: Cannot AND bit strings of different sizes
+
+# # **** bitwise | ****
+query I
+SELECT '10001111'::BIT | '00011011'::BIT
+----
+10011111
+
+query I
+SELECT '1011'::BIT | '0001'::BIT
+----
+1011
+
+query I
+SELECT '10000010011101011111'::BIT | '11001011010011100011'::BIT
+----
+11001011011111111111
+
+query I 
+SELECT b | '011100011011'::BIT FROM bits
+----
+111111011011
+111101111111
+111101011111
+
+statement error
+SELECT '0110'::BIT | '11000'::BIT
+----
+Invalid Input Error: Cannot OR bit strings of different sizes
+
+# # **** bitwise xor ****
+query I
+SELECT xor('101'::BIT, '001'::BIT)
+----
+100
+
+query I
+SELECT xor('10000010011101011111'::BIT, '11001011010111000011'::BIT)
+----
+01001001001010011100
+
+query I 
+SELECT xor(b, '011100011011'::BIT) FROM bits
+----
+110011000001
+101101111111
+110101011101
+
+statement error
+SELECT xor('011010110'::BIT, '11000'::BIT)
+----
+Invalid Input Error: Cannot XOR bit strings of different sizes
+
+# # **** bitwise not ****
+query I
+SELECT ~('101'::BIT)
+----
+010
+
+query I
+SELECT ~('1001010101111111000111'::BIT)
+----
+0110101010000000111000
+
+query I 
+SELECT ~(b) FROM bits
+----
+010000100101
+001110011011
+010110111001
+
+# # **** left bitshifting ****
+query I
+SELECT '1001010101111111000111'::BIT << 4
+----
+0101011111110001110000
+
+query I
+SELECT '010101'::BIT << 50
+----
+000000
+
+query I
+SELECT '101'::BIT << 0
+----
+101
+
+statement error
+SELECT '010101'::BIT << -2
+----
+Out of Range Error: Cannot left-shift by negative number -2
+
+query I 
+SELECT b << 3 FROM bits
+----
+111011010000
+001100100000
+001000110000
+
+# # **** right bitshifting ****
+query I
+SELECT '1001010101111111000111'::BIT >> 10
+----
+0000000000100101010111
+
+query I
+SELECT '010101'::BIT >> 50
+----
+000000
+
+query I
+SELECT '101'::BIT >> 0
+----
+101
+
+query I 
+SELECT b >> 5 FROM bits
+----
+000001011110
+000001100011
+000001010010

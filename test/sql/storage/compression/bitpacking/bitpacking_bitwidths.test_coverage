@@ -8,10 +8,15 @@ load __TEST_DIR__/test_bitpacking.db
 statement ok
 PRAGMA force_compression = 'bitpacking'
 
+foreach bitpacking_mode delta_for for constant_delta constant
+
 foreach typesize 8 16 32 64
 
 statement ok
-CREATE TABLE test_unsigned AS SELECT cast(2**(i/2048) as UINT${typesize}) i FROM range(${typesize}*2048) tbl(i);
+PRAGMA force_bitpacking_mode='${bitpacking_mode}'
+
+statement ok
+CREATE TABLE test_unsigned AS SELECT cast(2**(i//2048) as UINT${typesize}) i FROM range(${typesize}*2048) tbl(i);
 
 statement ok
 CHECKPOINT;
@@ -27,7 +32,7 @@ SELECT DISTINCT(c_i) FROM (SELECT count(i) AS c_i FROM test_unsigned GROUP BY i)
 2048
 
 query IIII
-select count(*)=1, count(*)=(${typesize}-1) , AVG(c_i), (i/delta) AS diff_to_next_row from (
+select count(*)=1, count(*)=(${typesize}-1) , AVG(c_i), (i//delta) AS diff_to_next_row from (
     SELECT i, count(i) as c_i, lag(i, 1) OVER (ORDER BY i) delta FROM test_unsigned GROUP BY i
 ) GROUP BY diff_to_next_row;
 ----
@@ -35,7 +40,7 @@ True	False	2048.000000	NULL
 False	True	2048.000000	2
 
 statement ok
-CREATE TABLE test_signed_neg AS SELECT cast(-(2**(i/2048)) as INT${typesize}) i FROM range(${typesize}*2048) tbl(i);
+CREATE TABLE test_signed_neg AS SELECT cast(-(2**(i//2048)) as INT${typesize}) i FROM range(${typesize}*2048) tbl(i);
 
 statement ok
 CHECKPOINT;
@@ -51,7 +56,7 @@ SELECT DISTINCT(c_i) FROM (SELECT count(i) AS c_i FROM test_signed_neg GROUP BY 
 2048
 
 query IIII
-select count(*)=1, count(*)=(${typesize}-1) , AVG(c_i), (i/delta) AS diff_to_next_row from (
+select count(*)=1, count(*)=(${typesize}-1) , AVG(c_i), (i//delta) AS diff_to_next_row from (
     SELECT i, count(i) as c_i, lag(i, 1) OVER (ORDER BY i) delta FROM test_unsigned GROUP BY i
 ) GROUP BY diff_to_next_row;
 ----
@@ -59,7 +64,7 @@ True	False	2048.000000	NULL
 False	True	2048.000000	2
 
 statement ok
-CREATE TABLE test_signed_pos AS SELECT cast(2**(i/2048) as INT${typesize}) i FROM range((${typesize}-1)*2048) tbl(i);
+CREATE TABLE test_signed_pos AS SELECT cast(2**(i//2048) as INT${typesize}) i FROM range((${typesize}-1)*2048) tbl(i);
 
 statement ok
 CHECKPOINT;
@@ -75,7 +80,7 @@ SELECT DISTINCT(c_i) FROM (SELECT count(i) AS c_i FROM test_signed_neg GROUP BY 
 2048
 
 query IIII
-select count(*)=1, count(*)=(${typesize}-1) , AVG(c_i), (i/delta) AS diff_to_next_row from (
+select count(*)=1, count(*)=(${typesize}-1) , AVG(c_i), (i//delta) AS diff_to_next_row from (
     SELECT i, count(i) as c_i, lag(i, 1) OVER (ORDER BY i) delta FROM test_unsigned GROUP BY i
 ) GROUP BY diff_to_next_row;
 ----
@@ -96,7 +101,7 @@ endloop
 foreach type <integral> bool
 
 statement ok
-CREATE TABLE test_nullpack AS SELECT CAST((i/3000)%2 as ${type}) as i FROM range(0,12000) tbl(i);
+CREATE TABLE test_nullpack AS SELECT CAST((i//3000)%2 as ${type}) as i FROM range(0,12000) tbl(i);
 
 statement ok
 CHECKPOINT;
@@ -108,5 +113,7 @@ SELECT AVG(cast (i as int)) FROM test_nullpack
 
 statement ok
 drop table test_nullpack
+
+endloop
 
 endloop

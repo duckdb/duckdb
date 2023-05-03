@@ -12,6 +12,7 @@
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
@@ -22,10 +23,10 @@ struct VacuumOptions {
 
 struct VacuumInfo : public ParseInfo {
 public:
-	explicit VacuumInfo(VacuumOptions options) : options(options), has_table(false), table(nullptr) {};
+	explicit VacuumInfo(VacuumOptions options) : options(options), has_table(false) {};
 
 	unique_ptr<VacuumInfo> Copy() {
-		auto result = make_unique<VacuumInfo>(options);
+		auto result = make_uniq<VacuumInfo>(options);
 		result->has_table = has_table;
 		if (has_table) {
 			result->ref = ref->Copy();
@@ -38,7 +39,7 @@ public:
 public:
 	bool has_table;
 	unique_ptr<TableRef> ref;
-	TableCatalogEntry *table;
+	optional_ptr<TableCatalogEntry> table;
 	unordered_map<idx_t, idx_t> column_id_map;
 	vector<string> columns;
 };

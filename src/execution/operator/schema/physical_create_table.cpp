@@ -7,10 +7,10 @@
 
 namespace duckdb {
 
-PhysicalCreateTable::PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry *schema,
+PhysicalCreateTable::PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry &schema,
                                          unique_ptr<BoundCreateTableInfo> info, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::CREATE_TABLE, op.types, estimated_cardinality), schema(schema),
-      info(move(info)) {
+      info(std::move(info)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -25,17 +25,17 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalCreateTable::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<CreateTableSourceState>();
+	return make_uniq<CreateTableSourceState>();
 }
 
 void PhysicalCreateTable::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                   LocalSourceState &lstate) const {
-	auto &state = (CreateTableSourceState &)gstate;
+	auto &state = gstate.Cast<CreateTableSourceState>();
 	if (state.finished) {
 		return;
 	}
-	auto &catalog = Catalog::GetCatalog(context.client);
-	catalog.CreateTable(context.client, schema, info.get());
+	auto &catalog = schema.catalog;
+	catalog.CreateTable(catalog.GetCatalogTransaction(context.client), schema, *info);
 	state.finished = true;
 }
 

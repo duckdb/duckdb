@@ -15,10 +15,13 @@ namespace duckdb {
 //! LogicalExpressionGet represents a scan operation over a set of to-be-executed expressions
 class LogicalExpressionGet : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_EXPRESSION_GET;
+
+public:
 	LogicalExpressionGet(idx_t table_index, vector<LogicalType> types,
 	                     vector<vector<unique_ptr<Expression>>> expressions)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPRESSION_GET), table_index(table_index), expr_types(types),
-	      expressions(move(expressions)) {
+	      expressions(std::move(expressions)) {
 	}
 
 	//! The table index in the current bind context
@@ -37,6 +40,7 @@ public:
 	idx_t EstimateCardinality(ClientContext &context) override {
 		return expressions.size();
 	}
+	vector<idx_t> GetTableIndex() const override;
 
 protected:
 	void ResolveTypes() override {

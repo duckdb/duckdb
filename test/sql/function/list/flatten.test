@@ -124,3 +124,19 @@ SELECT i, flatten([[1, 2], [3, 4]]) FROM nested_lists
 1	[1, 2, 3, 4]
 2	[1, 2, 3, 4]
 3	[1, 2, 3, 4]
+
+# Issue #6856 - flatten() segfaults when called on bad input
+statement error
+select flatten(42);
+----
+No function matches the given name and argument types
+
+statement error
+select flatten([1, 2]);
+----
+No function matches the given name and argument types
+
+query I
+select flatten(NULL);
+----
+NULL

@@ -8,20 +8,20 @@
 namespace duckdb {
 
 static void RevertFilterPullup(LogicalProjection &proj, vector<unique_ptr<Expression>> &expressions) {
-	unique_ptr<LogicalFilter> filter = make_unique<LogicalFilter>();
+	unique_ptr<LogicalFilter> filter = make_uniq<LogicalFilter>();
 	for (idx_t i = 0; i < expressions.size(); ++i) {
-		filter->expressions.push_back(move(expressions[i]));
+		filter->expressions.push_back(std::move(expressions[i]));
 	}
 	expressions.clear();
-	filter->children.push_back(move(proj.children[0]));
-	proj.children[0] = move(filter);
+	filter->children.push_back(std::move(proj.children[0]));
+	proj.children[0] = std::move(filter);
 }
 
 static void ReplaceExpressionBinding(vector<unique_ptr<Expression>> &proj_expressions, Expression &expr,
                                      idx_t proj_table_idx) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
 		bool found_proj_col = false;
-		BoundColumnRefExpression &colref = (BoundColumnRefExpression &)expr;
+		BoundColumnRefExpression &colref = expr.Cast<BoundColumnRefExpression>();
 		// find the corresponding column index in the projection expressions
 		for (idx_t proj_idx = 0; proj_idx < proj_expressions.size(); proj_idx++) {
 			auto proj_expr = proj_expressions[proj_idx].get();
@@ -39,7 +39,7 @@ static void ReplaceExpressionBinding(vector<unique_ptr<Expression>> &proj_expres
 			auto new_colref = colref.Copy();
 			colref.binding.table_index = proj_table_idx;
 			colref.binding.column_index = proj_expressions.size();
-			proj_expressions.push_back(move(new_colref));
+			proj_expressions.push_back(std::move(new_colref));
 		}
 	}
 	ExpressionIterator::EnumerateChildren(
@@ -58,7 +58,7 @@ void FilterPullup::ProjectSetOperation(LogicalProjection &proj) {
 	for (idx_t i = 0; i < filters_expr_pullup.size(); ++i) {
 		auto copy_filter_expr = filters_expr_pullup[i]->Copy();
 		ReplaceExpressionBinding(copy_proj_expressions, (Expression &)*copy_filter_expr, proj.table_index);
-		changed_filter_expressions.push_back(move(copy_filter_expr));
+		changed_filter_expressions.push_back(std::move(copy_filter_expr));
 	}
 
 	/// Case new columns were added into the projection
@@ -71,15 +71,15 @@ void FilterPullup::ProjectSetOperation(LogicalProjection &proj) {
 	// now we must replace the filter bindings
 	D_ASSERT(filters_expr_pullup.size() == changed_filter_expressions.size());
 	for (idx_t i = 0; i < filters_expr_pullup.size(); ++i) {
-		filters_expr_pullup[i] = move(changed_filter_expressions[i]);
+		filters_expr_pullup[i] = std::move(changed_filter_expressions[i]);
 	}
 }
 
 unique_ptr<LogicalOperator> FilterPullup::PullupProjection(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_PROJECTION);
-	op->children[0] = Rewrite(move(op->children[0]));
+	op->children[0] = Rewrite(std::move(op->children[0]));
 	if (!filters_expr_pullup.empty()) {
-		auto &proj = (LogicalProjection &)*op;
+		auto &proj = op->Cast<LogicalProjection>();
 		// INTERSECT, EXCEPT, and DISTINCT
 		if (!can_add_column) {
 			// special treatment for operators that cannot add columns, e.g., INTERSECT, EXCEPT, and DISTINCT

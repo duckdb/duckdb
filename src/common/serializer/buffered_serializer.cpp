@@ -10,7 +10,7 @@ BufferedSerializer::BufferedSerializer(idx_t maximum_size)
 
 BufferedSerializer::BufferedSerializer(unique_ptr<data_t[]> data, idx_t size) : maximum_size(size), data(data.get()) {
 	blob.size = 0;
-	blob.data = move(data);
+	blob.data = std::move(data);
 }
 
 BufferedSerializer::BufferedSerializer(data_ptr_t data, idx_t size) : maximum_size(size), data(data) {

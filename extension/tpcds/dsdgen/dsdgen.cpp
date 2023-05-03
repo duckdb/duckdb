@@ -19,7 +19,7 @@ namespace tpcds {
 
 template <class T>
 static void CreateTPCDSTable(ClientContext &context, string schema, string suffix, bool keys, bool overwrite) {
-	auto info = make_unique<CreateTableInfo>();
+	auto info = make_uniq<CreateTableInfo>();
 	info->schema = schema;
 	info->table = T::Name + suffix;
 	info->on_conflict = overwrite ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
@@ -28,14 +28,14 @@ static void CreateTPCDSTable(ClientContext &context, string schema, string suffi
 		info->columns.AddColumn(ColumnDefinition(T::Columns[i], T::Types[i]));
 	}
 	if (keys) {
-		vector<string> pk_columns;
+		duckdb::vector<string> pk_columns;
 		for (idx_t i = 0; i < T::PrimaryKeyCount; i++) {
 			pk_columns.push_back(T::PrimaryKeyColumns[i]);
 		}
-		info->constraints.push_back(make_unique<UniqueConstraint>(move(pk_columns), true));
+		info->constraints.push_back(make_uniq<UniqueConstraint>(std::move(pk_columns), true));
 	}
-	auto &catalog = Catalog::GetCatalog(context);
-	catalog.CreateTable(context, move(info));
+	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
+	catalog.CreateTable(context, std::move(info));
 }
 
 void DSDGenWrapper::CreateTPCDSSchema(ClientContext &context, string schema, string suffix, bool keys, bool overwrite) {
@@ -74,9 +74,9 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string schema, 
 	InitializeDSDgen(scale);
 
 	// populate append info
-	vector<unique_ptr<tpcds_append_information>> append_info;
+	duckdb::vector<duckdb::unique_ptr<tpcds_append_information>> append_info;
 	append_info.resize(DBGEN_VERSION);
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 
 	int tmin = CALL_CENTER, tmax = DBGEN_VERSION;
 
@@ -84,11 +84,11 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string schema, 
 		auto table_def = GetTDefByNumber(table_id);
 		auto table_name = table_def.name + suffix;
 		assert(table_def.name);
-		auto table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
+		auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
 
-		auto append = make_unique<tpcds_append_information>(context, table_entry);
+		auto append = make_uniq<tpcds_append_information>(context, &table_entry);
 		append->table_def = table_def;
-		append_info[table_id] = move(append);
+		append_info[table_id] = std::move(append);
 	}
 
 	// actually generate tables using modified data generator functions

@@ -1,0 +1,1 @@
+%type <str> opt_col_id

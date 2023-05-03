@@ -13,13 +13,19 @@ struct DuckDBTypesData : public GlobalTableFunctionState {
 	DuckDBTypesData() : offset(0) {
 	}
 
-	vector<TypeCatalogEntry *> entries;
+	vector<reference<TypeCatalogEntry>> entries;
 	idx_t offset;
 	unordered_set<int64_t> oids;
 };
 
 static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, TableFunctionBindInput &input,
                                                 vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("database_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("database_oid");
+	return_types.emplace_back(LogicalType::BIGINT);
+
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -45,26 +51,24 @@ static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, TableFun
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
+	names.emplace_back("labels");
+	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
 	return nullptr;
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBTypesInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBTypesData>();
-	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
+	auto result = make_uniq<DuckDBTypesData>();
+	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
-		schema->Scan(context, CatalogType::TYPE_ENTRY,
-		             [&](CatalogEntry *entry) { result->entries.push_back((TypeCatalogEntry *)entry); });
+		schema.get().Scan(context, CatalogType::TYPE_ENTRY,
+		                  [&](CatalogEntry &entry) { result->entries.push_back(entry.Cast<TypeCatalogEntry>()); });
 	};
-
-	// check the temp schema as well
-	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(context, CatalogType::TYPE_ENTRY, [&](CatalogEntry *entry) {
-		result->entries.push_back((TypeCatalogEntry *)entry);
-	});
-	return move(result);
+	return std::move(result);
 }
 
 void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBTypesData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBTypesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -73,20 +77,25 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &type_entry = data.entries[data.offset++];
-		auto &type = type_entry->user_type;
+		auto &type_entry = data.entries[data.offset++].get();
+		auto &type = type_entry.user_type;
 
 		// return values:
+		idx_t col = 0;
+		// database_name, VARCHAR
+		output.SetValue(col++, count, type_entry.catalog.GetName());
+		// database_oid, BIGINT
+		output.SetValue(col++, count, Value::BIGINT(type_entry.catalog.GetOid()));
 		// schema_name, LogicalType::VARCHAR
-		output.SetValue(0, count, Value(type_entry->schema->name));
+		output.SetValue(col++, count, Value(type_entry.schema.name));
 		// schema_oid, LogicalType::BIGINT
-		output.SetValue(1, count, Value::BIGINT(type_entry->schema->oid));
+		output.SetValue(col++, count, Value::BIGINT(type_entry.schema.oid));
 		// type_oid, BIGINT
 		int64_t oid;
-		if (type_entry->internal) {
+		if (type_entry.internal) {
 			oid = int64_t(type.id());
 		} else {
-			oid = type_entry->oid;
+			oid = type_entry.oid;
 		}
 		Value oid_val;
 		if (data.oids.find(oid) == data.oids.end()) {
@@ -95,15 +104,15 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		} else {
 			oid_val = Value();
 		}
-		output.SetValue(2, count, oid_val);
+		output.SetValue(col++, count, oid_val);
 		// type_name, VARCHAR
-		output.SetValue(3, count, Value(type_entry->name));
+		output.SetValue(col++, count, Value(type_entry.name));
 		// type_size, BIGINT
 		auto internal_type = type.InternalType();
-		output.SetValue(4, count,
+		output.SetValue(col++, count,
 		                internal_type == PhysicalType::INVALID ? Value() : Value::BIGINT(GetTypeIdSize(internal_type)));
 		// logical_type, VARCHAR
-		output.SetValue(5, count, Value(LogicalTypeIdToString(type.id())));
+		output.SetValue(col++, count, Value(LogicalTypeIdToString(type.id())));
 		// type_category, VARCHAR
 		string category;
 		switch (type.id()) {
@@ -148,9 +157,23 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		default:
 			break;
 		}
-		output.SetValue(6, count, category.empty() ? Value() : Value(category));
+		output.SetValue(col++, count, category.empty() ? Value() : Value(category));
 		// internal, BOOLEAN
-		output.SetValue(7, count, Value::BOOLEAN(type_entry->internal));
+		output.SetValue(col++, count, Value::BOOLEAN(type_entry.internal));
+		// labels, VARCHAR[]
+		if (type.id() == LogicalTypeId::ENUM && type.AuxInfo()) {
+			auto data = FlatVector::GetData<string_t>(EnumType::GetValuesInsertOrder(type));
+			idx_t size = EnumType::GetSize(type);
+
+			vector<Value> labels;
+			for (idx_t i = 0; i < size; i++) {
+				labels.emplace_back(data[i]);
+			}
+
+			output.SetValue(col++, count, Value::LIST(labels));
+		} else {
+			output.SetValue(col++, count, Value());
+		}
 
 		count++;
 	}

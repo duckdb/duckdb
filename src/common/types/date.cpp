@@ -425,13 +425,18 @@ int64_t Date::Epoch(date_t date) {
 }
 
 int64_t Date::EpochNanoseconds(date_t date) {
-	return ((int64_t)date.days) * (Interval::MICROS_PER_DAY * 1000);
+	int64_t result;
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(date.days, Interval::MICROS_PER_DAY * 1000,
+	                                                               result)) {
+		throw ConversionException("Could not convert DATE (%s) to nanoseconds", Date::ToString(date));
+	}
+	return result;
 }
 
 int64_t Date::EpochMicroseconds(date_t date) {
 	int64_t result;
 	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(date.days, Interval::MICROS_PER_DAY, result)) {
-		throw ConversionException("Could not convert DATE to microseconds");
+		throw ConversionException("Could not convert DATE (%s) to microseconds", Date::ToString(date));
 	}
 	return result;
 }
@@ -502,32 +507,51 @@ int32_t Date::ExtractISODayOfTheWeek(date_t date) {
 	}
 }
 
-static int32_t GetISOYearWeek(int32_t &year, int32_t month, int32_t day) {
-	auto day_of_the_year =
-	    (Date::IsLeapYear(year) ? Date::CUMULATIVE_LEAP_DAYS[month] : Date::CUMULATIVE_DAYS[month]) + day;
-	// get the first day of the first week of the year
-	// the first week is the week that has the 4th of January in it
-	const auto weekday_of_the_fourth = Date::ExtractISODayOfTheWeek(Date::FromDate(year, 1, 4));
-	// if fourth is monday, then fourth is the first day
-	// if fourth is tuesday, third is the first day
-	// if fourth is wednesday, second is the first day
-	// if fourth is thursday, first is the first day
-	// if fourth is friday - sunday, day is in the previous year
-	// (day is 0-based, weekday is 1-based)
-	const auto first_day_of_the_first_isoweek = 4 - weekday_of_the_fourth;
-	if (day_of_the_year < first_day_of_the_first_isoweek) {
-		// day is part of last year (13th month)
-		--year;
-		return GetISOYearWeek(year, 12, day);
-	} else {
-		return ((day_of_the_year - first_day_of_the_first_isoweek) / 7) + 1;
+template <typename T>
+static T PythonDivMod(const T &x, const T &y, T &r) {
+	// D_ASSERT(y > 0);
+	T quo = x / y;
+	r = x - quo * y;
+	if (r < 0) {
+		--quo;
+		r += y;
 	}
+	// D_ASSERT(0 <= r && r < y);
+	return quo;
+}
+
+static date_t GetISOWeekOne(int32_t year) {
+	const auto first_day = Date::FromDate(year, 1, 1); /* ord of 1/1 */
+	/* 0 if 1/1 is a Monday, 1 if a Tue, etc. */
+	const auto first_weekday = Date::ExtractISODayOfTheWeek(first_day) - 1;
+	/* ordinal of closest Monday at or before 1/1 */
+	auto week1_monday = first_day - first_weekday;
+
+	if (first_weekday > 3) { /* if 1/1 was Fri, Sat, Sun */
+		week1_monday += 7;
+	}
+
+	return week1_monday;
+}
+
+static int32_t GetISOYearWeek(const date_t date, int32_t &year) {
+	int32_t month, day;
+	Date::Convert(date, year, month, day);
+	auto week1_monday = GetISOWeekOne(year);
+	auto week = PythonDivMod((date.days - week1_monday.days), 7, day);
+	if (week < 0) {
+		week1_monday = GetISOWeekOne(--year);
+		week = PythonDivMod((date.days - week1_monday.days), 7, day);
+	} else if (week >= 52 && date >= GetISOWeekOne(year + 1)) {
+		++year;
+		week = 0;
+	}
+
+	return week + 1;
 }
 
 void Date::ExtractISOYearWeek(date_t date, int32_t &year, int32_t &week) {
-	int32_t month, day;
-	Date::Convert(date, year, month, day);
-	week = GetISOYearWeek(year, month - 1, day - 1);
+	week = GetISOYearWeek(date, year);
 }
 
 int32_t Date::ExtractISOWeekNumber(date_t date) {

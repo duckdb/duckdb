@@ -9,7 +9,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Aggregate UDFs", "[coverage][.]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();

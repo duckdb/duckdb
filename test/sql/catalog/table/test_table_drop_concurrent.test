@@ -1,0 +1,17 @@
+# name: test/sql/catalog/table/test_table_drop_concurrent.test
+# group: [table]
+
+require 64bit
+
+# Create 4000 threads that all run the contents of this loop
+concurrentloop threadid 0 300
+
+# Create a table
+statement ok
+CREATE OR REPLACE TABLE df${threadid} as select i,i,i from range(100) tbl(i)
+
+# Drop the table
+statement ok
+DROP TABLE df${threadid};
+
+endloop

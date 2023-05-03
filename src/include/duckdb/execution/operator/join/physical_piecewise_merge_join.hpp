@@ -19,6 +19,9 @@ class MergeJoinGlobalState;
 //! two tables
 class PhysicalPiecewiseMergeJoin : public PhysicalRangeJoin {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::PIECEWISE_MERGE_JOIN;
+
+public:
 	PhysicalPiecewiseMergeJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
 	                           unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
 	                           idx_t estimated_cardinality);

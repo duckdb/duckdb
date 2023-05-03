@@ -1,0 +1,6 @@
+# name: test/fuzzer/pedro/strptime_null_argument.test
+# description: Strptime null argument
+# group: [pedro]
+
+statement ok
+SELECT strptime(NULL,'p') IS DISTINCT FROM DATE '-543572-1-1';

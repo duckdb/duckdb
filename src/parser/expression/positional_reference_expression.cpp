@@ -5,6 +5,9 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/to_string.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 PositionalReferenceExpression::PositionalReferenceExpression(idx_t index)
@@ -15,15 +18,15 @@ string PositionalReferenceExpression::ToString() const {
 	return "#" + to_string(index);
 }
 
-bool PositionalReferenceExpression::Equals(const PositionalReferenceExpression *a,
-                                           const PositionalReferenceExpression *b) {
+bool PositionalReferenceExpression::Equal(const PositionalReferenceExpression *a,
+                                          const PositionalReferenceExpression *b) {
 	return a->index == b->index;
 }
 
 unique_ptr<ParsedExpression> PositionalReferenceExpression::Copy() const {
-	auto copy = make_unique<PositionalReferenceExpression>(index);
+	auto copy = make_uniq<PositionalReferenceExpression>(index);
 	copy->CopyProperties(*this);
-	return move(copy);
+	return std::move(copy);
 }
 
 hash_t PositionalReferenceExpression::Hash() const {
@@ -36,8 +39,19 @@ void PositionalReferenceExpression::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<ParsedExpression> PositionalReferenceExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	auto expression = make_unique<PositionalReferenceExpression>(reader.ReadRequired<idx_t>());
-	return move(expression);
+	auto expression = make_uniq<PositionalReferenceExpression>(reader.ReadRequired<idx_t>());
+	return std::move(expression);
+}
+
+void PositionalReferenceExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("index", index);
+}
+
+unique_ptr<ParsedExpression> PositionalReferenceExpression::FormatDeserialize(ExpressionType type,
+                                                                              FormatDeserializer &deserializer) {
+	auto expression = make_uniq<PositionalReferenceExpression>(deserializer.ReadProperty<idx_t>("index"));
+	return std::move(expression);
 }
 
 } // namespace duckdb

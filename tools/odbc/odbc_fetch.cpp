@@ -79,9 +79,9 @@ SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *stmt) {
 					// holding only one chunk to avoid full materialization in memory
 					chunks.clear();
 				}
-				chunks.emplace_back(move(chunk));
+				chunks.emplace_back(std::move(chunk));
 			} else {
-				chunks.emplace_back(move(chunk));
+				chunks.emplace_back(std::move(chunk));
 			}
 		} catch (duckdb::Exception &e) {
 			// TODO this is quite dirty, we should have separate error holder

@@ -3,7 +3,7 @@
 namespace duckdb {
 
 ExplainStatement::ExplainStatement(unique_ptr<SQLStatement> stmt, ExplainType explain_type)
-    : SQLStatement(StatementType::EXPLAIN_STATEMENT), stmt(move(stmt)), explain_type(explain_type) {
+    : SQLStatement(StatementType::EXPLAIN_STATEMENT), stmt(std::move(stmt)), explain_type(explain_type) {
 }
 
 ExplainStatement::ExplainStatement(const ExplainStatement &other)

@@ -44,7 +44,7 @@ OnCreateConflict Transformer::TransformOnConflict(duckdb_libpgquery::PGOnCreateC
 unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(duckdb_libpgquery::PGCollateClause *collate) {
 	auto child = TransformExpression(collate->arg);
 	auto collation = TransformCollation(collate);
-	return make_unique<CollateExpression>(collation, move(child));
+	return make_uniq<CollateExpression>(collation, std::move(child));
 }
 
 ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGColumnDef *cdef) {
@@ -70,19 +70,19 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateStmt *>(node);
 	D_ASSERT(stmt);
-	auto result = make_unique<CreateStatement>();
-	auto info = make_unique<CreateTableInfo>();
+	auto result = make_uniq<CreateStatement>();
+	auto info = make_uniq<CreateTableInfo>();
 
 	if (stmt->inhRelations) {
 		throw NotImplementedException("inherited relations not implemented");
 	}
 	D_ASSERT(stmt->relation);
 
-	info->schema = INVALID_SCHEMA;
-	if (stmt->relation->schemaname) {
-		info->schema = stmt->relation->schemaname;
-	}
-	info->table = stmt->relation->relname;
+	info->catalog = INVALID_CATALOG;
+	auto qname = TransformQualifiedName(stmt->relation);
+	info->catalog = qname.catalog;
+	info->schema = qname.schema;
+	info->table = qname.name;
 	info->on_conflict = TransformOnConflict(stmt->onconflict);
 	info->temporary =
 	    stmt->relation->relpersistence == duckdb_libpgquery::PGPostgresRelPersistence::PG_RELPERSISTENCE_TEMP;
@@ -106,11 +106,11 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
 					auto constraint = TransformConstraint(constr, centry, info->columns.LogicalColumnCount());
 					if (constraint) {
-						info->constraints.push_back(move(constraint));
+						info->constraints.push_back(std::move(constraint));
 					}
 				}
 			}
-			info->columns.AddColumn(move(centry));
+			info->columns.AddColumn(std::move(centry));
 			column_count++;
 			break;
 		}
@@ -127,7 +127,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 		throw ParserException("Table must have at least one column!");
 	}
 
-	result->info = move(info);
+	result->info = std::move(info);
 	return result;
 }
 

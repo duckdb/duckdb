@@ -1,0 +1,13 @@
+# name: test/sql/copy/parquet/parquet_6044.test
+# description: Issue #6044: node: assertion failure when calling parquet_metadata
+# group: [parquet]
+
+require parquet
+
+statement ok
+copy (select 0.9 AS a) to '__TEST_DIR__/tiny_decimal.parquet' (format 'parquet', codec 'zstd');
+
+query I
+SELECT * FROM '__TEST_DIR__/tiny_decimal.parquet'
+----
+0.9

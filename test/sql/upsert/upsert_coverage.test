@@ -1,0 +1,29 @@
+# name: test/sql/upsert/upsert_coverage.test
+# group: [upsert]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create table tbl (
+	a integer,
+	b integer unique,
+	c integer unique,
+	d integer unique
+);
+
+statement ok
+insert into tbl(b,c,d) values
+	(1,2,3),
+	(2,3,1),
+	(3,1,2)
+
+# This creates conflicts in 3 existing tuples, and is caused by only 1 insert tuple
+statement ok
+insert into tbl(b,c,d) values
+	(3,3,3) on conflict do nothing;
+
+
+# We will never have to deal with one-to-many issues in anything other than a DO NOTHING action
+# because we need a (explicit or implicit) conflict target
+# to use any sort of WHERE or SET expression that references the existing table

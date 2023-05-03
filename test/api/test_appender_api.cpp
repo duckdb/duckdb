@@ -1,20 +1,64 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 
 using namespace duckdb;
 using namespace std;
 
+template <class SRC>
+void TestAppendingSingleDecimalValue(SRC value, Value expected_result, uint8_t width, uint8_t scale) {
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto conn = make_uniq<Connection>(*db);
+	duckdb::unique_ptr<Appender> appender;
+	duckdb::unique_ptr<QueryResult> result;
+	REQUIRE_NO_FAIL(conn->Query(StringUtil::Format("CREATE TABLE decimals(i DECIMAL(%d,%d))", width, scale)));
+	appender = make_uniq<Appender>(*conn, "decimals");
+
+	appender->BeginRow();
+	appender->Append<SRC>(value);
+	appender->EndRow();
+
+	appender->Flush();
+
+	result = conn->Query("SELECT * FROM decimals");
+	REQUIRE(CHECK_COLUMN(result, 0, {expected_result}));
+}
+
+TEST_CASE("Test appending to a decimal column", "[api]") {
+	TestAppendingSingleDecimalValue<int32_t>(1, Value::DECIMAL(1000, 4, 3), 4, 3);
+	TestAppendingSingleDecimalValue<int16_t>(-9999, Value::DECIMAL(-9999, 4, 0), 4, 0);
+	TestAppendingSingleDecimalValue<int16_t>(9999, Value::DECIMAL(9999, 4, 0), 4, 0);
+	TestAppendingSingleDecimalValue<int32_t>(99999999, Value::DECIMAL(99999999, 8, 0), 8, 0);
+	TestAppendingSingleDecimalValue<const char *>("1.234", Value::DECIMAL(1234, 4, 3), 4, 3);
+	TestAppendingSingleDecimalValue<const char *>("123.4", Value::DECIMAL(1234, 4, 1), 4, 1);
+	hugeint_t hugeint_value;
+	bool result;
+	result = Hugeint::TryConvert<const char *>("3245234123123", hugeint_value);
+	REQUIRE(result);
+	TestAppendingSingleDecimalValue<const char *>("3245234.123123", Value::DECIMAL(hugeint_value, 19, 6), 19, 6);
+	int64_t bigint_reference_value = 3245234123123;
+	TestAppendingSingleDecimalValue<const char *>("3245234.123123", Value::DECIMAL(bigint_reference_value, 13, 6), 13,
+	                                              6);
+	// Precision loss
+	TestAppendingSingleDecimalValue<float>(12.3124324f, Value::DECIMAL(123124320, 9, 7), 9, 7);
+
+	// Precision loss
+	result = Hugeint::TryConvert<const char *>("12345234234312432287744000", hugeint_value);
+	REQUIRE(result);
+	TestAppendingSingleDecimalValue<double>(12345234234.31243244234324, Value::DECIMAL(hugeint_value, 26, 15), 26, 15);
+}
+
 TEST_CASE("Test using appender after connection is gone", "[api]") {
-	auto db = make_unique<DuckDB>(nullptr);
-	auto conn = make_unique<Connection>(*db);
-	unique_ptr<Appender> appender;
-	unique_ptr<QueryResult> result;
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto conn = make_uniq<Connection>(*db);
+	duckdb::unique_ptr<Appender> appender;
+	duckdb::unique_ptr<QueryResult> result;
 	// create an appender for a non-existing table fails
-	REQUIRE_THROWS(make_unique<Appender>(*conn, "integers"));
+	REQUIRE_THROWS(make_uniq<Appender>(*conn, "integers"));
 	// now create the table and create the appender
 	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE integers(i INTEGER)"));
-	appender = make_unique<Appender>(*conn, "integers");
+	appender = make_uniq<Appender>(*conn, "integers");
 
 	// we can use the appender
 	appender->BeginRow();
@@ -39,7 +83,7 @@ TEST_CASE("Test using appender after connection is gone", "[api]") {
 	appender.reset();
 
 	// if we re-create the connection we can verify the data was actually inserted
-	conn = make_unique<Connection>(*db);
+	conn = make_uniq<Connection>(*db);
 
 	result = conn->Query("SELECT * FROM integers ORDER BY i");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
@@ -47,10 +91,10 @@ TEST_CASE("Test using appender after connection is gone", "[api]") {
 
 TEST_CASE("Test appender and connection destruction order", "[api]") {
 	for (idx_t i = 0; i < 6; i++) {
-		auto db = make_unique<DuckDB>(nullptr);
-		auto con = make_unique<Connection>(*db);
+		auto db = make_uniq<DuckDB>(nullptr);
+		auto con = make_uniq<Connection>(*db);
 		REQUIRE_NO_FAIL(con->Query("CREATE TABLE integers(i INTEGER)"));
-		auto appender = make_unique<Appender>(*con, "integers");
+		auto appender = make_uniq<Appender>(*con, "integers");
 
 		switch (i) {
 		case 0:
@@ -143,7 +187,7 @@ TEST_CASE("Test using appender after table is altered", "[api]") {
 TEST_CASE("Test appenders and transactions", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	// create the table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	// now create the appender
@@ -175,7 +219,7 @@ TEST_CASE("Test appenders and transactions", "[api]") {
 TEST_CASE("Test using multiple appenders", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	// create the table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t2(i VARCHAR, j DATE)"));
@@ -210,7 +254,7 @@ TEST_CASE("Test using multiple appenders", "[api]") {
 TEST_CASE("Test usage of appender interleaved with connection usage", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	// create the table
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE t1(i INTEGER)"));
 	Appender appender(con, "t1");

@@ -8,7 +8,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test the way appenders interact with transactions", "[appender]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 

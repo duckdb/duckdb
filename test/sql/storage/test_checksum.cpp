@@ -6,8 +6,8 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test functioning of checksum", "[storage]") {
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	unique_ptr<DuckDB> database;
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<DuckDB> database;
 	auto storage_database = TestCreatePath("checksum_test");
 	auto config = GetTestConfig();
 
@@ -21,7 +21,7 @@ TEST_CASE("Test functioning of checksum", "[storage]") {
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES (3);"));
 	}
 	// we can open the database file now
-	REQUIRE_NOTHROW(database = make_unique<DuckDB>(storage_database, config.get()));
+	REQUIRE_NOTHROW(database = make_uniq<DuckDB>(storage_database, config.get()));
 	database.reset();
 
 	// now write random values into the file
@@ -31,7 +31,7 @@ TEST_CASE("Test functioning of checksum", "[storage]") {
 	handle->Sync();
 	handle.reset();
 	// reloading the database no longer works
-	REQUIRE_THROWS(database = make_unique<DuckDB>(storage_database, config.get()));
+	REQUIRE_THROWS(database = make_uniq<DuckDB>(storage_database, config.get()));
 
 	DeleteDatabase(storage_database);
 }

@@ -1,11 +1,11 @@
 #include "duckdb/execution/operator/persistent/physical_delete.hpp"
 
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/transaction/transaction.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
-
-#include "duckdb/common/atomic.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -33,11 +33,11 @@ public:
 
 SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                     DataChunk &input) const {
-	auto &gstate = (DeleteGlobalState &)state;
-	auto &ustate = (DeleteLocalState &)lstate;
+	auto &gstate = state.Cast<DeleteGlobalState>();
+	auto &ustate = lstate.Cast<DeleteLocalState>();
 
 	// get rows and
-	auto &transaction = Transaction::GetTransaction(context.client);
+	auto &transaction = DuckTransaction::Get(context.client, table.db);
 	auto &row_identifiers = input.data[row_id_index];
 
 	vector<column_t> column_ids;
@@ -58,11 +58,11 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &
 }
 
 unique_ptr<GlobalSinkState> PhysicalDelete::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<DeleteGlobalState>(context, GetTypes());
+	return make_uniq<DeleteGlobalState>(context, GetTypes());
 }
 
 unique_ptr<LocalSinkState> PhysicalDelete::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<DeleteLocalState>(Allocator::Get(context.client), table.GetTypes());
+	return make_uniq<DeleteLocalState>(Allocator::Get(context.client), table.GetTypes());
 }
 
 //===--------------------------------------------------------------------===//
@@ -73,7 +73,7 @@ public:
 	explicit DeleteSourceState(const PhysicalDelete &op) : finished(false) {
 		if (op.return_chunk) {
 			D_ASSERT(op.sink_state);
-			auto &g = (DeleteGlobalState &)*op.sink_state;
+			auto &g = op.sink_state->Cast<DeleteGlobalState>();
 			g.return_collection.InitializeScan(scan_state);
 		}
 	}
@@ -83,13 +83,13 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalDelete::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<DeleteSourceState>(*this);
+	return make_uniq<DeleteSourceState>(*this);
 }
 
 void PhysicalDelete::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                              LocalSourceState &lstate) const {
-	auto &state = (DeleteSourceState &)gstate;
-	auto &g = (DeleteGlobalState &)*sink_state;
+	auto &state = gstate.Cast<DeleteSourceState>();
+	auto &g = sink_state->Cast<DeleteGlobalState>();
 	if (state.finished) {
 		return;
 	}

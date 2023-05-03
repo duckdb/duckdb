@@ -1,0 +1,14 @@
+# name: test/sql/types/alias/test_alias_functions.test
+# description: Verify that types created through CREATE TYPE inherit function compatibility
+# group: [alias]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE str_alias as VARCHAR;
+
+query I
+SELECT upper('hello'::str_alias)
+----
+HELLO

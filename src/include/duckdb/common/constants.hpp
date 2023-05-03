@@ -9,67 +9,33 @@
 #pragma once
 
 #include <memory>
-#include <cstdint>
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
 
-// API versions
-// if no explicit API version is defined, the latest API version is used
-// Note that using older API versions (i.e. not using DUCKDB_API_LATEST) is deprecated.
-// These will not be supported long-term, and will be removed in future versions.
-
-#ifndef DUCKDB_API_0_3_1
-#define DUCKDB_API_0_3_1 1
-#endif
-#ifndef DUCKDB_API_0_3_2
-#define DUCKDB_API_0_3_2 2
-#endif
-#ifndef DUCKDB_API_LATEST
-#define DUCKDB_API_LATEST DUCKDB_API_0_3_2
-#endif
-
-#ifndef DUCKDB_API_VERSION
-#define DUCKDB_API_VERSION DUCKDB_API_LATEST
-#endif
-
 //! inline std directives that we use frequently
+#ifndef DUCKDB_DEBUG_MOVE
 using std::move;
-using std::shared_ptr;
-using std::unique_ptr;
-using std::weak_ptr;
-using data_ptr = unique_ptr<char[]>;
-using std::make_shared;
+#endif
+
+// template <class _Tp, class _Dp = std::default_delete<_Tp>>
+// class unique_ptr;
+
+// using data_ptr = unique_ptr<char[]>;
 
 // NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
-#define DEFAULT_SCHEMA "main"
-#define TEMP_SCHEMA    "temp"
-#define INVALID_SCHEMA ""
+#define DEFAULT_SCHEMA  "main"
+#define INVALID_SCHEMA  ""
+#define INVALID_CATALOG ""
+#define SYSTEM_CATALOG  "system"
+#define TEMP_CATALOG    "temp"
 
-//! a saner size_t for loop indices etc
-typedef uint64_t idx_t;
+DUCKDB_API bool IsInvalidSchema(const string &str);
+DUCKDB_API bool IsInvalidCatalog(const string &str);
 
-//! The type used for row identifiers
-typedef int64_t row_t;
-
-//! The type used for hashes
-typedef uint64_t hash_t;
-
-//! data pointers
-typedef uint8_t data_t;
-typedef data_t *data_ptr_t;
-typedef const data_t *const_data_ptr_t;
-
-//! Type used for the selection vector
-typedef uint32_t sel_t;
-//! Type used for transaction timestamps
-typedef idx_t transaction_t;
-
-//! Type used for column identifiers
-typedef idx_t column_t;
-//! Type used for storage (column) identifiers
-typedef idx_t storage_t;
 //! Special value used to signify the ROW ID of a table
 DUCKDB_API extern const column_t COLUMN_IDENTIFIER_ROW_ID;
 DUCKDB_API bool IsRowIdColumnId(column_t column_id);
@@ -144,6 +110,8 @@ struct PhysicalIndex {
 	}
 };
 
-uint64_t NextPowerOfTwo(uint64_t v);
+DUCKDB_API bool IsPowerOfTwo(uint64_t v);
+DUCKDB_API uint64_t NextPowerOfTwo(uint64_t v);
+DUCKDB_API uint64_t PreviousPowerOfTwo(uint64_t v);
 
 } // namespace duckdb

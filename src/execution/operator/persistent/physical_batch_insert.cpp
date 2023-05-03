@@ -1,25 +1,28 @@
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
-#include "duckdb/storage/table_io_manager.hpp"
+
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/storage/table/row_group_collection.hpp"
-#include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
+#include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/transaction/local_storage.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 
-PhysicalBatchInsert::PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry *table,
+PhysicalBatchInsert::PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry &table,
                                          physical_index_vector_t<idx_t> column_index_map,
                                          vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::BATCH_INSERT, move(types), estimated_cardinality),
-      column_index_map(std::move(column_index_map)), insert_table(table), insert_types(table->GetTypes()),
-      bound_defaults(move(bound_defaults)) {
+    : PhysicalOperator(PhysicalOperatorType::BATCH_INSERT, std::move(types), estimated_cardinality),
+      column_index_map(std::move(column_index_map)), insert_table(&table), insert_types(table.GetTypes()),
+      bound_defaults(std::move(bound_defaults)) {
 }
 
-PhysicalBatchInsert::PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry *schema,
+PhysicalBatchInsert::PhysicalBatchInsert(LogicalOperator &op, SchemaCatalogEntry &schema,
                                          unique_ptr<BoundCreateTableInfo> info_p, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::BATCH_CREATE_TABLE_AS, op.types, estimated_cardinality),
-      insert_table(nullptr), schema(schema), info(move(info_p)) {
+      insert_table(nullptr), schema(&schema), info(std::move(info_p)) {
 	PhysicalInsert::GetInsertInfo(*info, insert_types, bound_defaults);
 }
 
@@ -37,7 +40,7 @@ public:
 
 public:
 	void AddCollection(unique_ptr<RowGroupCollection> collection) {
-		current_collections.push_back(move(collection));
+		current_collections.push_back(std::move(collection));
 	}
 
 	bool Empty() {
@@ -48,22 +51,9 @@ public:
 		if (Empty()) {
 			return nullptr;
 		}
-		unique_ptr<RowGroupCollection> new_collection;
-		if (current_collections.size() == 1) {
-			// we have gathered only one row group collection: merge it directly
-			new_collection = move(current_collections[0]);
-		} else {
+		unique_ptr<RowGroupCollection> new_collection = std::move(current_collections[0]);
+		if (current_collections.size() > 1) {
 			// we have gathered multiple collections: create one big collection and merge that
-			// find the biggest collection
-			idx_t biggest_index = 0;
-			for (idx_t i = 1; i < current_collections.size(); i++) {
-				D_ASSERT(current_collections[i]);
-				if (current_collections[i]->GetTotalRows() > current_collections[biggest_index]->GetTotalRows()) {
-					biggest_index = i;
-				}
-			}
-			// now append all the other collections to this collection
-			new_collection = move(current_collections[biggest_index]);
 			auto &types = new_collection->GetTypes();
 			TableAppendState append_state;
 			new_collection->InitializeAppend(append_state);
@@ -106,11 +96,11 @@ public:
 
 class BatchInsertGlobalState : public GlobalSinkState {
 public:
-	explicit BatchInsertGlobalState() : insert_count(0) {
+	explicit BatchInsertGlobalState(DuckTableEntry &table) : table(table), insert_count(0) {
 	}
 
 	mutex lock;
-	TableCatalogEntry *table;
+	DuckTableEntry &table;
 	idx_t insert_count;
 	map<idx_t, unique_ptr<RowGroupCollection>> collections;
 
@@ -133,7 +123,7 @@ public:
 		} else {
 			// add the
 			D_ASSERT(result);
-			result->push_back(move(entry->second));
+			result->push_back(std::move(entry->second));
 			collections.erase(batch_index);
 		}
 		return true;
@@ -151,7 +141,7 @@ public:
 	                                                OptimisticDataWriter &writer) {
 		CollectionMerger merger(context);
 		for (auto &collection : merge_collections) {
-			merger.AddCollection(move(collection));
+			merger.AddCollection(std::move(collection));
 		}
 		return merger.Flush(writer);
 	}
@@ -166,7 +156,8 @@ public:
 	}
 
 	void AddCollection(ClientContext &context, idx_t batch_index, unique_ptr<RowGroupCollection> current_collection,
-	                   OptimisticDataWriter *writer = nullptr, bool *written_to_disk = nullptr) {
+	                   optional_ptr<OptimisticDataWriter> writer = nullptr,
+	                   optional_ptr<bool> written_to_disk = nullptr) {
 		vector<unique_ptr<RowGroupCollection>> merge_collections;
 		idx_t merge_count;
 		{
@@ -201,7 +192,8 @@ public:
 					// note that we need to gather them in order of batch index
 					for (idx_t i = start_batch_index; i <= end_batch_index; i++) {
 						if (i == batch_index) {
-							merge_collections.push_back(move(current_collection));
+							merge_collections.push_back(std::move(current_collection));
+							current_collection.reset();
 							continue;
 						}
 						auto can_merge = CheckMerge(i, merge_collections);
@@ -213,13 +205,14 @@ public:
 			}
 			if (merge_collections.empty()) {
 				// no collections to merge together - add the collection to the batch index
-				collections[batch_index] = move(current_collection);
+				collections[batch_index] = std::move(current_collection);
+				current_collection.reset();
 			}
 		}
 		if (!merge_collections.empty()) {
 			// merge together the collections
 			D_ASSERT(writer);
-			auto final_collection = MergeCollections(context, move(merge_collections), *writer);
+			auto final_collection = MergeCollections(context, std::move(merge_collections), *writer);
 			D_ASSERT(final_collection->GetTotalRows() == merge_count);
 			D_ASSERT(final_collection->GetTotalRows() >= RowGroup::ROW_GROUP_SIZE);
 			if (written_to_disk) {
@@ -229,7 +222,7 @@ public:
 			{
 				lock_guard<mutex> l(lock);
 				VerifyUniqueBatch(batch_index);
-				collections[batch_index] = move(final_collection);
+				collections[batch_index] = std::move(final_collection);
 			}
 		}
 	}
@@ -248,7 +241,7 @@ public:
 	idx_t current_index;
 	TableAppendState current_append_state;
 	unique_ptr<RowGroupCollection> current_collection;
-	OptimisticDataWriter *writer;
+	optional_ptr<OptimisticDataWriter> writer;
 	bool written_to_disk;
 
 	void FlushToDisk() {
@@ -261,10 +254,10 @@ public:
 		writer->FlushToDisk(*current_collection, true);
 	}
 
-	void CreateNewCollection(TableCatalogEntry *table, const vector<LogicalType> &insert_types) {
-		auto &table_info = table->storage->info;
-		auto &block_manager = TableIOManager::Get(*table->storage).GetBlockManagerForRowData();
-		current_collection = make_unique<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
+	void CreateNewCollection(DuckTableEntry &table, const vector<LogicalType> &insert_types) {
+		auto &table_info = table.GetStorage().info;
+		auto &block_manager = TableIOManager::Get(table.GetStorage()).GetBlockManagerForRowData();
+		current_collection = make_uniq<RowGroupCollection>(table_info, block_manager, insert_types, MAX_ROW_ID);
 		current_collection->InitializeEmpty();
 		current_collection->InitializeAppend(current_append_state);
 		written_to_disk = false;
@@ -272,47 +265,53 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContext &context) const {
-	auto result = make_unique<BatchInsertGlobalState>();
+	optional_ptr<TableCatalogEntry> table;
 	if (info) {
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
-		auto &catalog = Catalog::GetCatalog(context);
-		result->table = (TableCatalogEntry *)catalog.CreateTable(context, schema, info.get());
+		auto &catalog = schema->catalog;
+		table = (TableCatalogEntry *)catalog
+		            .CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(), *info)
+		            .get();
 	} else {
 		D_ASSERT(insert_table);
-		result->table = insert_table;
+		D_ASSERT(insert_table->IsDuckTable());
+		table = insert_table.get_mutable();
 	}
-	return move(result);
+	auto result = make_uniq<BatchInsertGlobalState>(table->Cast<DuckTableEntry>());
+	return std::move(result);
 }
 
 unique_ptr<LocalSinkState> PhysicalBatchInsert::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<BatchInsertLocalState>(context.client, insert_types, bound_defaults);
+	return make_uniq<BatchInsertLocalState>(context.client, insert_types, bound_defaults);
 }
 
 SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
                                          DataChunk &chunk) const {
-	auto &gstate = (BatchInsertGlobalState &)state;
-	auto &lstate = (BatchInsertLocalState &)lstate_p;
+	auto &gstate = state.Cast<BatchInsertGlobalState>();
+	auto &lstate = lstate_p.Cast<BatchInsertLocalState>();
 
-	auto table = gstate.table;
+	auto &table = gstate.table;
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
 
 	if (!lstate.current_collection) {
 		lock_guard<mutex> l(gstate.lock);
 		// no collection yet: create a new one
 		lstate.CreateNewCollection(table, insert_types);
-		lstate.writer = gstate.table->storage->CreateOptimisticWriter(context.client);
+		lstate.writer = &table.GetStorage().CreateOptimisticWriter(context.client);
 	} else if (lstate.current_index != lstate.batch_index) {
 		// batch index has changed: move the old collection to the global state and create a new collection
 		TransactionData tdata(0, 0);
 		lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
 		lstate.FlushToDisk();
-		gstate.AddCollection(context.client, lstate.current_index, move(lstate.current_collection), lstate.writer,
+		gstate.AddCollection(context.client, lstate.current_index, std::move(lstate.current_collection), lstate.writer,
 		                     &lstate.written_to_disk);
 		lstate.CreateNewCollection(table, insert_types);
 	}
 	lstate.current_index = lstate.batch_index;
-	table->storage->VerifyAppendConstraints(*table, context.client, lstate.insert_chunk);
+
+	table.GetStorage().VerifyAppendConstraints(table, context.client, lstate.insert_chunk);
+
 	auto new_row_group = lstate.current_collection->Append(lstate.insert_chunk, lstate.current_append_state);
 	if (new_row_group) {
 		lstate.writer->CheckFlushToDisk(*lstate.current_collection);
@@ -323,10 +322,10 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkSt
 
 void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
                                   LocalSinkState &lstate_p) const {
-	auto &gstate = (BatchInsertGlobalState &)gstate_p;
-	auto &lstate = (BatchInsertLocalState &)lstate_p;
+	auto &gstate = gstate_p.Cast<BatchInsertGlobalState>();
+	auto &lstate = lstate_p.Cast<BatchInsertLocalState>();
 	auto &client_profiler = QueryProfiler::Get(context.client);
-	context.thread.profiler.Flush(this, &lstate.default_executor, "default_executor", 1);
+	context.thread.profiler.Flush(*this, lstate.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 
 	if (!lstate.current_collection) {
@@ -337,51 +336,51 @@ void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gs
 
 	TransactionData tdata(0, 0);
 	lstate.current_collection->FinalizeAppend(tdata, lstate.current_append_state);
-	gstate.AddCollection(context.client, lstate.current_index, move(lstate.current_collection));
+	gstate.AddCollection(context.client, lstate.current_index, std::move(lstate.current_collection));
 }
 
 SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                GlobalSinkState &gstate_p) const {
-	auto &gstate = (BatchInsertGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<BatchInsertGlobalState>();
 
 	// in the finalize, do a final pass over all of the collections we created and try to merge smaller collections
 	// together
 	vector<unique_ptr<CollectionMerger>> mergers;
 	unique_ptr<CollectionMerger> current_merger;
 
-	auto &storage = *gstate.table->storage;
+	auto &storage = gstate.table.GetStorage();
 	for (auto &collection : gstate.collections) {
 		if (collection.second->GetTotalRows() < LocalStorage::MERGE_THRESHOLD) {
 			// this collection has very few rows: add it to the merge set
 			if (!current_merger) {
-				current_merger = make_unique<CollectionMerger>(context);
+				current_merger = make_uniq<CollectionMerger>(context);
 			}
-			current_merger->AddCollection(move(collection.second));
+			current_merger->AddCollection(std::move(collection.second));
 		} else {
 			// this collection has a lot of rows: it does not need to be merged
 			// create a separate collection merger only for this entry
 			if (current_merger) {
 				// we have small collections remaining: flush them
-				mergers.push_back(move(current_merger));
+				mergers.push_back(std::move(current_merger));
 				current_merger.reset();
 			}
-			auto larger_merger = make_unique<CollectionMerger>(context);
-			larger_merger->AddCollection(move(collection.second));
-			mergers.push_back(move(larger_merger));
+			auto larger_merger = make_uniq<CollectionMerger>(context);
+			larger_merger->AddCollection(std::move(collection.second));
+			mergers.push_back(std::move(larger_merger));
 		}
 	}
 	if (current_merger) {
-		mergers.push_back(move(current_merger));
+		mergers.push_back(std::move(current_merger));
 	}
 
 	// now that we have created all of the mergers, perform the actual merging
 	vector<unique_ptr<RowGroupCollection>> final_collections;
 	final_collections.reserve(mergers.size());
-	auto writer = storage.CreateOptimisticWriter(context);
+	auto &writer = storage.CreateOptimisticWriter(context);
 	for (auto &merger : mergers) {
-		final_collections.push_back(merger->Flush(*writer));
+		final_collections.push_back(merger->Flush(writer));
 	}
-	writer->FinalFlush();
+	writer.FinalFlush();
 
 	// finally, merge the row groups into the local storage
 	for (auto &collection : final_collections) {
@@ -402,13 +401,13 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalBatchInsert::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<BatchInsertSourceState>();
+	return make_uniq<BatchInsertSourceState>();
 }
 
 void PhysicalBatchInsert::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                   LocalSourceState &lstate) const {
-	auto &state = (BatchInsertSourceState &)gstate;
-	auto &insert_gstate = (BatchInsertGlobalState &)*sink_state;
+	auto &state = gstate.Cast<BatchInsertSourceState>();
+	auto &insert_gstate = sink_state->Cast<BatchInsertGlobalState>();
 	if (state.finished) {
 		return;
 	}

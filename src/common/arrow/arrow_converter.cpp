@@ -1,5 +1,5 @@
 #include "duckdb/common/types/data_chunk.hpp"
-
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/exception.hpp"
@@ -17,7 +17,7 @@ namespace duckdb {
 
 void ArrowConverter::ToArrowArray(DataChunk &input, ArrowArray *out_array) {
 	ArrowAppender appender(input.GetTypes(), input.size());
-	appender.Append(input);
+	appender.Append(input, 0, input.size(), input.size());
 	*out_array = appender.Finalize();
 }
 
@@ -30,8 +30,8 @@ struct DuckDBArrowSchemaHolder {
 	// unused in children
 	vector<ArrowSchema *> children_ptrs;
 	//! used for nested structures
-	std::list<std::vector<ArrowSchema>> nested_children;
-	std::list<std::vector<ArrowSchema *>> nested_children_ptr;
+	std::list<vector<ArrowSchema>> nested_children;
+	std::list<vector<ArrowSchema *>> nested_children_ptr;
 	//! This holds strings created to represent decimal types
 	vector<unique_ptr<char[]>> owned_type_names;
 };
@@ -73,11 +73,7 @@ void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 	InitializeChild(root_holder.nested_children.back()[0]);
 	child.children = &root_holder.nested_children_ptr.back()[0];
 	child.children[0]->name = "entries";
-	child_list_t<LogicalType> struct_child_types;
-	struct_child_types.push_back(std::make_pair("key", ListType::GetChildType(StructType::GetChildType(type, 0))));
-	struct_child_types.push_back(std::make_pair("value", ListType::GetChildType(StructType::GetChildType(type, 1))));
-	auto struct_type = LogicalType::STRUCT(move(struct_child_types));
-	SetArrowFormat(root_holder, *child.children[0], struct_type, config_timezone);
+	SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), config_timezone);
 }
 
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
@@ -120,7 +116,6 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "g";
 		break;
 	case LogicalTypeId::UUID:
-	case LogicalTypeId::JSON:
 	case LogicalTypeId::VARCHAR:
 		child.format = "u";
 		break;
@@ -141,7 +136,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 			format_ptr[i] = format[i];
 		}
 		format_ptr[format.size()] = '\0';
-		root_holder.owned_type_names.push_back(move(format_ptr));
+		root_holder.owned_type_names.push_back(std::move(format_ptr));
 		child.format = root_holder.owned_type_names.back().get();
 		break;
 	}
@@ -155,7 +150,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "tsm:";
 		break;
 	case LogicalTypeId::INTERVAL:
-		child.format = "tDm";
+		child.format = "tin";
 		break;
 	case LogicalTypeId::DECIMAL: {
 		uint8_t width, scale;
@@ -166,7 +161,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 			format_ptr[i] = format[i];
 		}
 		format_ptr[format.size()] = '\0';
-		root_holder.owned_type_names.push_back(move(format_ptr));
+		root_holder.owned_type_names.push_back(std::move(format_ptr));
 		child.format = root_holder.owned_type_names.back().get();
 		break;
 	}
@@ -174,7 +169,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "n";
 		break;
 	}
-	case LogicalTypeId::BLOB: {
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::BIT: {
 		child.format = "z";
 		break;
 	}
@@ -213,7 +209,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 				name_ptr[i] = struct_col_name[i];
 			}
 			name_ptr[struct_col_name.size()] = '\0';
-			root_holder.owned_type_names.push_back(move(name_ptr));
+			root_holder.owned_type_names.push_back(std::move(name_ptr));
 
 			child.children[type_idx]->name = root_holder.owned_type_names.back().get();
 			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, config_timezone);
@@ -259,7 +255,7 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, vector<LogicalType> 
 	D_ASSERT(types.size() == names.size());
 	idx_t column_count = types.size();
 	// Allocate as unique_ptr first to cleanup properly on error
-	auto root_holder = make_unique<DuckDBArrowSchemaHolder>();
+	auto root_holder = make_uniq<DuckDBArrowSchemaHolder>();
 
 	// Allocate the children
 	root_holder->children.resize(column_count);

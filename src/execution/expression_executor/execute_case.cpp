@@ -15,14 +15,14 @@ struct CaseExpressionState : public ExpressionState {
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseExpression &expr,
                                                                 ExpressionExecutorState &root) {
-	auto result = make_unique<CaseExpressionState>(expr, root);
+	auto result = make_uniq<CaseExpressionState>(expr, root);
 	for (auto &case_check : expr.case_checks) {
 		result->AddChild(case_check.when_expr.get());
 		result->AddChild(case_check.then_expr.get());
 	}
 	result->AddChild(expr.else_expr.get());
 	result->Finalize();
-	return move(result);
+	return std::move(result);
 }
 
 void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionState *state_p, const SelectionVector *sel,

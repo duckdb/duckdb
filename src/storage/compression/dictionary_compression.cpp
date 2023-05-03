@@ -36,11 +36,15 @@ public:
 				new_string = !LookupString(data[idx]);
 			}
 
-			bool fits = HasEnoughSpace(new_string, string_size);
+			bool fits = CalculateSpaceRequirements(new_string, string_size);
 			if (!fits) {
 				Flush();
 				new_string = true;
-				D_ASSERT(HasEnoughSpace(new_string, string_size));
+
+				fits = CalculateSpaceRequirements(new_string, string_size);
+				if (!fits) {
+					throw InternalException("Dictionary compression could not write to new segment");
+				}
 			}
 
 			if (!row_is_valid) {
@@ -68,8 +72,8 @@ protected:
 	virtual void AddNewString(string_t str) = 0;
 	// Add a null value to the compression state
 	virtual void AddNull() = 0;
-	// Check if we have enough space to add a string
-	virtual bool HasEnoughSpace(bool new_string, size_t string_size) = 0;
+	// Needs to be called before adding a value. Will return false if a flush is required first.
+	virtual bool CalculateSpaceRequirements(bool new_string, size_t string_size) = 0;
 	// Flush the segment to disk if compressing or reset the counters if analyzing
 	virtual void Flush(bool final = false) = 0;
 };
@@ -126,15 +130,15 @@ struct DictionaryCompressionStorage {
 // scanning the whole dictionary at once and then scanning the selection buffer for each emitted vector. Secondly, it
 // allows for efficient bitpacking compression as the selection values should remain relatively small.
 struct DictionaryCompressionCompressState : public DictionaryCompressionState {
-	explicit DictionaryCompressionCompressState(ColumnDataCheckpointer &checkpointer) : checkpointer(checkpointer) {
-		auto &db = checkpointer.GetDatabase();
-		auto &config = DBConfig::GetConfig(db);
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY, PhysicalType::VARCHAR);
+	explicit DictionaryCompressionCompressState(ColumnDataCheckpointer &checkpointer_p)
+	    : checkpointer(checkpointer_p),
+	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
+	      heap(BufferAllocator::Get(checkpointer.GetDatabase())) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 	}
 
 	ColumnDataCheckpointer &checkpointer;
-	CompressionFunction *function;
+	CompressionFunction &function;
 
 	// State regarding current segment
 	unique_ptr<ColumnSegment> current_segment;
@@ -145,8 +149,8 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 	// Buffers and map for current segment
 	StringHeap heap;
 	string_map_t<uint32_t> current_string_map;
-	std::vector<uint32_t> index_buffer;
-	std::vector<uint32_t> selection_buffer;
+	vector<uint32_t> index_buffer;
+	vector<uint32_t> selection_buffer;
 
 	bitpacking_width_t current_width = 0;
 	bitpacking_width_t next_width = 0;
@@ -159,7 +163,7 @@ public:
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
-		current_segment = move(compressed_segment);
+		current_segment = std::move(compressed_segment);
 
 		current_segment->function = function;
 
@@ -204,7 +208,7 @@ public:
 		// Copy string to dict
 		current_dictionary.size += str.GetSize();
 		auto dict_pos = current_end_ptr - current_dictionary.size;
-		memcpy(dict_pos, str.GetDataUnsafe(), str.GetSize());
+		memcpy(dict_pos, str.GetData(), str.GetSize());
 		current_dictionary.Verify();
 		D_ASSERT(current_dictionary.end == Storage::BLOCK_SIZE);
 
@@ -232,7 +236,7 @@ public:
 		current_segment->count++;
 	}
 
-	bool HasEnoughSpace(bool new_string, size_t string_size) override {
+	bool CalculateSpaceRequirements(bool new_string, size_t string_size) override {
 		if (new_string) {
 			next_width = BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1 + new_string);
 			return DictionaryCompressionStorage::HasEnoughSpace(current_segment->count.load() + 1,
@@ -249,7 +253,7 @@ public:
 
 		auto segment_size = Finalize();
 		auto &state = checkpointer.GetCheckpointState();
-		state.FlushSegment(move(current_segment), segment_size);
+		state.FlushSegment(std::move(current_segment), segment_size);
 
 		if (!final) {
 			CreateEmptySegment(next_start);
@@ -353,7 +357,7 @@ struct DictionaryAnalyzeState : public DictionaryCompressionState {
 		current_tuple_count++;
 	}
 
-	bool HasEnoughSpace(bool new_string, size_t string_size) override {
+	bool CalculateSpaceRequirements(bool new_string, size_t string_size) override {
 		if (new_string) {
 			next_width =
 			    BitpackingPrimitives::MinimumBitWidth(current_unique_count + 2); // 1 for null, one for new string
@@ -376,14 +380,14 @@ struct DictionaryAnalyzeState : public DictionaryCompressionState {
 };
 
 struct DictionaryCompressionAnalyzeState : public AnalyzeState {
-	DictionaryCompressionAnalyzeState() : analyze_state(make_unique<DictionaryAnalyzeState>()) {
+	DictionaryCompressionAnalyzeState() : analyze_state(make_uniq<DictionaryAnalyzeState>()) {
 	}
 
 	unique_ptr<DictionaryAnalyzeState> analyze_state;
 };
 
 unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<DictionaryCompressionAnalyzeState>();
+	return make_uniq<DictionaryCompressionAnalyzeState>();
 }
 
 bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
@@ -407,7 +411,7 @@ idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 unique_ptr<CompressionState> DictionaryCompressionStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
                                                                            unique_ptr<AnalyzeState> state) {
-	return make_unique<DictionaryCompressionCompressState>(checkpointer);
+	return make_uniq<DictionaryCompressionCompressState>(checkpointer);
 }
 
 void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
@@ -432,7 +436,7 @@ struct CompressedStringScanState : public StringScanState {
 };
 
 unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(ColumnSegment &segment) {
-	auto state = make_unique<CompressedStringScanState>();
+	auto state = make_uniq<CompressedStringScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	state->handle = buffer_manager.Pin(segment.block);
 
@@ -456,7 +460,7 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 		dict_child_data[i] = FetchStringFromDict(segment, dict, baseptr, index_buffer_ptr[i], str_len);
 	}
 
-	return move(state);
+	return std::move(state);
 }
 
 //===--------------------------------------------------------------------===//

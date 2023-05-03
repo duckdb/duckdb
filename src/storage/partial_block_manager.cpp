@@ -45,7 +45,7 @@ bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<Partial
 		return false;
 	}
 	// found a partially filled block! fill in the info
-	partial_block = move(entry->second);
+	partial_block = std::move(entry->second);
 	partially_filled_blocks.erase(entry);
 
 	D_ASSERT(partial_block->state.offset_in_block > 0);
@@ -54,33 +54,40 @@ bool PartialBlockManager::GetPartialBlock(idx_t segment_size, unique_ptr<Partial
 }
 
 void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation &&allocation) {
-	auto &state(allocation.partial_block->state);
+	auto &state = allocation.partial_block->state;
 	if (state.block_use_count < max_use_count) {
-		auto new_size = AlignValue(allocation.allocation_size + state.offset_in_block);
+		auto unaligned_size = allocation.allocation_size + state.offset_in_block;
+		auto new_size = AlignValue(unaligned_size);
+		if (new_size != unaligned_size) {
+			// register the uninitialized region so we can correctly initialize it before writing to disk
+			allocation.partial_block->AddUninitializedRegion(unaligned_size, new_size);
+		}
 		state.offset_in_block = new_size;
 		auto new_space_left = state.block_size - new_size;
 		// check if the block is STILL partially filled after adding the segment_size
 		if (new_space_left >= Storage::BLOCK_SIZE - max_partial_block_size) {
 			// the block is still partially filled: add it to the partially_filled_blocks list
-			partially_filled_blocks.insert(make_pair(new_space_left, move(allocation.partial_block)));
+			partially_filled_blocks.insert(make_pair(new_space_left, std::move(allocation.partial_block)));
 		}
 	}
-	auto block_to_free = move(allocation.partial_block);
+	idx_t free_space = state.block_size - state.offset_in_block;
+	auto block_to_free = std::move(allocation.partial_block);
 	if (!block_to_free && partially_filled_blocks.size() > MAX_BLOCK_MAP_SIZE) {
 		// Free the page with the least space free.
 		auto itr = partially_filled_blocks.begin();
-		block_to_free = move(itr->second);
+		block_to_free = std::move(itr->second);
+		free_space = state.block_size - itr->first;
 		partially_filled_blocks.erase(itr);
 	}
 	// Flush any block that we're not going to reuse.
 	if (block_to_free) {
-		block_to_free->Flush();
+		block_to_free->Flush(free_space);
 	}
 }
 
 void PartialBlockManager::FlushPartialBlocks() {
 	for (auto &e : partially_filled_blocks) {
-		e.second->Flush();
+		e.second->Flush(e.first);
 	}
 	partially_filled_blocks.clear();
 }

@@ -20,7 +20,7 @@ public:
 
 	virtual void AddTask(unique_ptr<Task> task) {
 		++task_count;
-		scheduler.ScheduleTask(*token, move(task));
+		scheduler.ScheduleTask(*token, std::move(task));
 	}
 
 	virtual void FinishTask() const {

@@ -1,0 +1,72 @@
+# name: test/sql/attach/attach_did_you_mean.test
+# description: The error messages that suggest possible alternative mixed with ATTACH
+# group: [attach]
+
+require noforcestorage
+
+statement ok
+ATTACH DATABASE ':memory:' AS db1;
+
+# did you mean errors with an attached database
+statement ok
+CREATE TABLE hello(i INTEGER);
+
+statement ok
+CREATE TABLE db1.test(a INTEGER);
+
+statement error
+SELECT * FROM test;
+----
+Did you mean "db1.test"
+
+statement ok
+CREATE SCHEMA db1.myschema
+
+statement ok
+CREATE TABLE db1.myschema.blablabla(i INTEGER)
+
+statement error
+SELECT * FROM blablabla;
+----
+Did you mean "db1.myschema.blablabla"
+
+# what if we switch the default database?
+statement ok
+USE db1
+
+statement ok
+SELECT * FROM test
+
+statement error
+SELECT * FROM blablabla
+----
+Did you mean "myschema.blablabla"
+
+statement ok
+SELECT * FROM myschema.blablabla
+
+statement error
+SELECT * FROM hello;
+----
+Did you mean "memory.hello"
+
+statement ok
+SELECT * FROM memory.hello
+
+# what if we switch default database AND default schema?
+statement ok
+USE "db1.myschema"
+
+statement ok
+SELECT * FROM blablabla
+
+statement ok
+SELECT * FROM test;
+
+statement ok
+SELECT * FROM db1.main.test
+
+statement error
+SELECT * FROM hello;
+----
+Did you mean "memory.hello"

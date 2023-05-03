@@ -13,7 +13,7 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF: {
 		// if expr is a parameter, replace it with its argument
-		auto &colref = (ColumnRefExpression &)*expr;
+		auto &colref = expr->Cast<ColumnRefExpression>();
 		bool bind_macro_parameter = false;
 		if (colref.IsQualified()) {
 			bind_macro_parameter = false;
@@ -31,7 +31,7 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 	}
 	case ExpressionClass::SUBQUERY: {
 		// replacing parameters within a subquery is slightly different
-		auto &sq = ((SubqueryExpression &)*expr).subquery;
+		auto &sq = (expr->Cast<SubqueryExpression>()).subquery;
 		ParsedExpressionIterator::EnumerateQueryNodeChildren(
 		    *sq->node, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParametersRecursive(child); });
 		break;
@@ -44,19 +44,19 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParametersRecursive(child); });
 }
 
-BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry *macro_func, idx_t depth,
-                                       unique_ptr<ParsedExpression> *expr) {
+BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
+                                       unique_ptr<ParsedExpression> &expr) {
 	// recast function so we can access the scalar member function->expression
-	auto &macro_def = (ScalarMacroFunction &)*macro_func->function;
+	auto &macro_def = macro_func.function->Cast<ScalarMacroFunction>();
 
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positionals;
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
 
 	string error =
-	    MacroFunction::ValidateArguments(*macro_func->function, macro_func->name, function, positionals, defaults);
+	    MacroFunction::ValidateArguments(*macro_func.function, macro_func.name, function, positionals, defaults);
 	if (!error.empty()) {
-		throw BinderException(binder.FormatError(*expr->get(), error));
+		throw BinderException(binder.FormatError(*expr, error));
 	}
 
 	// create a MacroBinding to bind this macro's parameters to its arguments
@@ -65,7 +65,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	// positional parameters
 	for (idx_t i = 0; i < macro_def.parameters.size(); i++) {
 		types.emplace_back(LogicalType::SQLNULL);
-		auto &param = (ColumnRefExpression &)*macro_def.parameters[i];
+		auto &param = macro_def.parameters[i]->Cast<ColumnRefExpression>();
 		names.push_back(param.GetColumnName());
 	}
 	// default parameters
@@ -73,15 +73,15 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 		types.emplace_back(LogicalType::SQLNULL);
 		names.push_back(it->first);
 		// now push the defaults into the positionals
-		positionals.push_back(move(defaults[it->first]));
+		positionals.push_back(std::move(defaults[it->first]));
 	}
-	auto new_macro_binding = make_unique<DummyBinding>(types, names, macro_func->name);
+	auto new_macro_binding = make_uniq<DummyBinding>(types, names, macro_func.name);
 	new_macro_binding->arguments = &positionals;
 	macro_binding = new_macro_binding.get();
 
 	// replace current expression with stored macro expression, and replace params
-	*expr = macro_def.expression->Copy();
-	ReplaceMacroParametersRecursive(*expr);
+	expr = macro_def.expression->Copy();
+	ReplaceMacroParametersRecursive(expr);
 
 	// bind the unfolded macro
 	return BindExpression(expr, depth);

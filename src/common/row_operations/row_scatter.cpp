@@ -8,8 +8,8 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/types/row_data_collection.hpp"
-#include "duckdb/common/types/row_layout.hpp"
+#include "duckdb/common/types/row/row_data_collection.hpp"
+#include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 
@@ -67,6 +67,8 @@ static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr
 	auto string_data = (string_t *)col.data;
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
+	// Write out zero length to avoid swizzling problems.
+	const string_t null(nullptr, 0);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto col_idx = col.sel->get_index(idx);
@@ -74,13 +76,13 @@ static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr
 		if (!col.validity.RowIsValid(col_idx)) {
 			ValidityBytes col_mask(row);
 			col_mask.SetInvalidUnsafe(col_no);
-			Store<string_t>(NullValue<string_t>(), row + col_offset);
+			Store<string_t>(null, row + col_offset);
 		} else if (string_data[col_idx].IsInlined()) {
 			Store<string_t>(string_data[col_idx], row + col_offset);
 		} else {
 			const auto &str = string_data[col_idx];
 			string_t inserted((const char *)str_locations[i], str.GetSize());
-			memcpy(inserted.GetDataWriteable(), str.GetDataUnsafe(), str.GetSize());
+			memcpy(inserted.GetDataWriteable(), str.GetData(), str.GetSize());
 			str_locations[i] += str.GetSize();
 			inserted.Finalize();
 			Store<string_t>(inserted, row + col_offset);
@@ -143,7 +145,6 @@ void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], 
 				ComputeStringEntrySizes(col, entry_sizes, sel, count);
 				break;
 			case PhysicalType::LIST:
-			case PhysicalType::MAP:
 			case PhysicalType::STRUCT:
 				RowOperations::ComputeEntrySizes(vec, col, entry_sizes, vcount, count, sel);
 				break;
@@ -153,7 +154,7 @@ void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], 
 		}
 
 		// Build out the buffer space
-		string_heap.Build(count, data_locations, entry_sizes);
+		handles = string_heap.Build(count, data_locations, entry_sizes);
 
 		// Serialize information that is needed for swizzling if the computation goes out-of-core
 		const idx_t heap_pointer_offset = layout.GetHeapOffset();
@@ -215,7 +216,6 @@ void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], 
 			ScatterStringVector(col, rows, data_locations, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::LIST:
-		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 			ScatterNestedVector(vec, col, rows, data_locations, sel, count, col_offset, col_no, vcount);
 			break;

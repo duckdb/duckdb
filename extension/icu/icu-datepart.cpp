@@ -203,6 +203,14 @@ struct ICUDatePart : public ICUDateFunc {
 		return Date::EpochToDate(ExtractEpoch(calendar, 0));
 	}
 
+	static string_t MonthName(icu::Calendar *calendar, const uint64_t micros) {
+		return Date::MONTH_NAMES[ExtractMonth(calendar, micros) - 1];
+	}
+
+	static string_t DayName(icu::Calendar *calendar, const uint64_t micros) {
+		return Date::DAY_NAMES[ExtractDayOfWeek(calendar, micros)];
+	}
+
 	template <typename RESULT_TYPE>
 	struct BindAdapterData : public BindData {
 		using result_t = RESULT_TYPE;
@@ -223,8 +231,8 @@ struct ICUDatePart : public ICUDateFunc {
 			return BindData::Equals(other_p) && adapters == other.adapters;
 		}
 
-		unique_ptr<FunctionData> Copy() const override {
-			return make_unique<BindAdapterData>(*this);
+		duckdb::unique_ptr<FunctionData> Copy() const override {
+			return make_uniq<BindAdapterData>(*this);
 		}
 	};
 
@@ -234,7 +242,7 @@ struct ICUDatePart : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 1);
 		auto &date_arg = args.data[0];
 
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = (BIND_TYPE &)*func_expr.bind_info;
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
@@ -246,7 +254,7 @@ struct ICUDatePart : public ICUDateFunc {
 				                                                         return info.adapters[0](calendar, micros);
 			                                                         } else {
 				                                                         mask.SetInvalid(idx);
-				                                                         return RESULT_TYPE(0);
+				                                                         return RESULT_TYPE();
 			                                                         }
 		                                                         });
 	}
@@ -258,7 +266,7 @@ struct ICUDatePart : public ICUDateFunc {
 		auto &part_arg = args.data[0];
 		auto &date_arg = args.data[1];
 
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = (BIND_TYPE &)*func_expr.bind_info;
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
@@ -280,7 +288,7 @@ struct ICUDatePart : public ICUDateFunc {
 	template <typename INPUT_TYPE>
 	static void StructFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		using BIND_TYPE = BindAdapterData<int64_t>;
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = (BIND_TYPE &)*func_expr.bind_info;
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
@@ -329,24 +337,24 @@ struct ICUDatePart : public ICUDateFunc {
 			for (idx_t i = 0; i < count; ++i) {
 				const auto idx = rdata.sel->get_index(i);
 				if (arg_valid.RowIsValid(idx)) {
-					res_valid.SetValid(idx);
+					res_valid.SetValid(i);
 					auto micros = SetTime(calendar, tdata[idx]);
 					const auto is_finite = Timestamp::IsFinite(tdata[idx]);
 					for (size_t col = 0; col < child_entries.size(); ++col) {
 						auto &child_entry = child_entries[col];
 						if (is_finite) {
-							FlatVector::Validity(*child_entry).SetValid(idx);
+							FlatVector::Validity(*child_entry).SetValid(i);
 							auto pdata = FlatVector::GetData<int64_t>(*child_entry);
 							auto adapter = info.adapters[col];
-							pdata[idx] = adapter(calendar, micros);
+							pdata[i] = adapter(calendar, micros);
 						} else {
-							FlatVector::Validity(*child_entry).SetInvalid(idx);
+							FlatVector::Validity(*child_entry).SetInvalid(i);
 						}
 					}
 				} else {
-					res_valid.SetInvalid(idx);
+					res_valid.SetInvalid(i);
 					for (auto &child_entry : child_entries) {
-						FlatVector::Validity(*child_entry).SetInvalid(idx);
+						FlatVector::Validity(*child_entry).SetInvalid(i);
 					}
 				}
 			}
@@ -356,22 +364,22 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	template <typename BIND_TYPE>
-	static unique_ptr<FunctionData> BindAdapter(ClientContext &context, ScalarFunction &bound_function,
-	                                            vector<unique_ptr<Expression>> &arguments,
-	                                            typename BIND_TYPE::adapter_t adapter) {
-		return make_unique<BIND_TYPE>(context, adapter);
+	static duckdb::unique_ptr<FunctionData> BindAdapter(ClientContext &context, ScalarFunction &bound_function,
+	                                                    vector<duckdb::unique_ptr<Expression>> &arguments,
+	                                                    typename BIND_TYPE::adapter_t adapter) {
+		return make_uniq<BIND_TYPE>(context, adapter);
 	}
 
-	static unique_ptr<FunctionData> BindDatePart(ClientContext &context, ScalarFunction &bound_function,
-	                                             vector<unique_ptr<Expression>> &arguments) {
+	static duckdb::unique_ptr<FunctionData> BindDatePart(ClientContext &context, ScalarFunction &bound_function,
+	                                                     vector<duckdb::unique_ptr<Expression>> &arguments) {
 		using data_t = BindAdapterData<int64_t>;
 		auto adapter =
 		    (arguments.size() == 1) ? PartCodeAdapterFactory(GetDatePartSpecifier(bound_function.name)) : nullptr;
 		return BindAdapter<data_t>(context, bound_function, arguments, adapter);
 	}
 
-	static unique_ptr<FunctionData> BindStruct(ClientContext &context, ScalarFunction &bound_function,
-	                                           vector<unique_ptr<Expression>> &arguments) {
+	static duckdb::unique_ptr<FunctionData> BindStruct(ClientContext &context, ScalarFunction &bound_function,
+	                                                   vector<duckdb::unique_ptr<Expression>> &arguments) {
 		using data_t = BindAdapterData<int64_t>;
 		using adapters_t = data_t::adapters_t;
 
@@ -411,8 +419,8 @@ struct ICUDatePart : public ICUDateFunc {
 		}
 
 		Function::EraseArgument(bound_function, arguments, 0);
-		bound_function.return_type = LogicalType::STRUCT(move(struct_children));
-		return make_unique<data_t>(context, adapters);
+		bound_function.return_type = LogicalType::STRUCT(std::move(struct_children));
+		return make_uniq<data_t>(context, adapters);
 	}
 
 	static void SerializeFunction(FieldWriter &writer, const FunctionData *bind_data_p,
@@ -420,8 +428,8 @@ struct ICUDatePart : public ICUDateFunc {
 		throw NotImplementedException("FIXME: serialize icu-datepart");
 	}
 
-	static unique_ptr<FunctionData> DeserializeFunction(ClientContext &context, FieldReader &reader,
-	                                                    ScalarFunction &bound_function) {
+	static duckdb::unique_ptr<FunctionData> DeserializeFunction(ClientContext &context, FieldReader &reader,
+	                                                            ScalarFunction &bound_function) {
 		throw NotImplementedException("FIXME: serialize icu-datepart");
 	}
 
@@ -432,11 +440,11 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static void AddUnaryPartCodeFunctions(const string &name, ClientContext &context) {
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetUnaryPartCodeFunction<timestamp_t, int64_t>(LogicalType::TIMESTAMP_TZ));
 		CreateScalarFunctionInfo func_info(set);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
@@ -456,16 +464,16 @@ struct ICUDatePart : public ICUDateFunc {
 	}
 
 	static void AddDatePartFunctions(const string &name, ClientContext &context) {
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetBinaryPartCodeFunction<timestamp_t, int64_t>(LogicalType::TIMESTAMP_TZ));
 		set.AddFunction(GetStructFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
 		CreateScalarFunctionInfo func_info(set);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 
-	static unique_ptr<FunctionData> BindLastDate(ClientContext &context, ScalarFunction &bound_function,
-	                                             vector<unique_ptr<Expression>> &arguments) {
+	static duckdb::unique_ptr<FunctionData> BindLastDate(ClientContext &context, ScalarFunction &bound_function,
+	                                                     vector<duckdb::unique_ptr<Expression>> &arguments) {
 		using data_t = BindAdapterData<date_t>;
 		return BindAdapter<data_t>(context, bound_function, arguments, MakeLastDay);
 	}
@@ -476,11 +484,49 @@ struct ICUDatePart : public ICUDateFunc {
 		                      BindLastDate);
 	}
 	static void AddLastDayFunctions(const string &name, ClientContext &context) {
-		auto &catalog = Catalog::GetCatalog(context);
+		auto &catalog = Catalog::GetSystemCatalog(context);
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetLastDayFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
 		CreateScalarFunctionInfo func_info(set);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
+	}
+
+	static unique_ptr<FunctionData> BindMonthName(ClientContext &context, ScalarFunction &bound_function,
+	                                              vector<unique_ptr<Expression>> &arguments) {
+		using data_t = BindAdapterData<string_t>;
+		return BindAdapter<data_t>(context, bound_function, arguments, MonthName);
+	}
+
+	template <typename INPUT_TYPE>
+	static ScalarFunction GetMonthNameFunction(const LogicalType &temporal_type) {
+		return ScalarFunction({temporal_type}, LogicalType::VARCHAR, UnaryTimestampFunction<INPUT_TYPE, string_t>,
+		                      BindMonthName);
+	}
+	static void AddMonthNameFunctions(const string &name, ClientContext &context) {
+		auto &catalog = Catalog::GetSystemCatalog(context);
+		ScalarFunctionSet set(name);
+		set.AddFunction(GetMonthNameFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		CreateScalarFunctionInfo func_info(set);
+		catalog.AddFunction(context, func_info);
+	}
+
+	static unique_ptr<FunctionData> BindDayName(ClientContext &context, ScalarFunction &bound_function,
+	                                            vector<unique_ptr<Expression>> &arguments) {
+		using data_t = BindAdapterData<string_t>;
+		return BindAdapter<data_t>(context, bound_function, arguments, DayName);
+	}
+
+	template <typename INPUT_TYPE>
+	static ScalarFunction GetDayNameFunction(const LogicalType &temporal_type) {
+		return ScalarFunction({temporal_type}, LogicalType::VARCHAR, UnaryTimestampFunction<INPUT_TYPE, string_t>,
+		                      BindDayName);
+	}
+	static void AddDayNameFunctions(const string &name, ClientContext &context) {
+		auto &catalog = Catalog::GetSystemCatalog(context);
+		ScalarFunctionSet set(name);
+		set.AddFunction(GetDayNameFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		CreateScalarFunctionInfo func_info(set);
+		catalog.AddFunction(context, func_info);
 	}
 };
 
@@ -519,6 +565,10 @@ void RegisterICUDatePartFunctions(ClientContext &context) {
 
 	//  register the last_day function
 	ICUDatePart::AddLastDayFunctions("last_day", context);
+
+	// register the dayname/monthname functions
+	ICUDatePart::AddMonthNameFunctions("monthname", context);
+	ICUDatePart::AddDayNameFunctions("dayname", context);
 
 	// finally the actual date_part function
 	ICUDatePart::AddDatePartFunctions("date_part", context);

@@ -28,15 +28,17 @@ public:
 
 public:
 	void AddFunction(T function) {
-		functions.push_back(move(function));
+		functions.push_back(std::move(function));
 	}
 	idx_t Size() {
 		return functions.size();
 	}
 	T GetFunctionByOffset(idx_t offset) {
+		D_ASSERT(offset < functions.size());
 		return functions[offset];
 	}
 	T &GetFunctionReferenceByOffset(idx_t offset) {
+		D_ASSERT(offset < functions.size());
 		return functions[offset];
 	}
 	bool MergeFunctionSet(FunctionSet<T> new_functions) {
@@ -61,14 +63,18 @@ public:
 
 class ScalarFunctionSet : public FunctionSet<ScalarFunction> {
 public:
+	DUCKDB_API explicit ScalarFunctionSet();
 	DUCKDB_API explicit ScalarFunctionSet(string name);
+	DUCKDB_API explicit ScalarFunctionSet(ScalarFunction fun);
 
 	DUCKDB_API ScalarFunction GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments);
 };
 
 class AggregateFunctionSet : public FunctionSet<AggregateFunction> {
 public:
+	DUCKDB_API explicit AggregateFunctionSet();
 	DUCKDB_API explicit AggregateFunctionSet(string name);
+	DUCKDB_API explicit AggregateFunctionSet(AggregateFunction fun);
 
 	DUCKDB_API AggregateFunction GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments);
 };
@@ -76,14 +82,15 @@ public:
 class TableFunctionSet : public FunctionSet<TableFunction> {
 public:
 	DUCKDB_API explicit TableFunctionSet(string name);
+	DUCKDB_API explicit TableFunctionSet(TableFunction fun);
 
 	TableFunction GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments);
 };
 
 class PragmaFunctionSet : public FunctionSet<PragmaFunction> {
 public:
-	explicit PragmaFunctionSet(string name) : FunctionSet(move(name)) {
-	}
+	DUCKDB_API explicit PragmaFunctionSet(string name);
+	DUCKDB_API explicit PragmaFunctionSet(PragmaFunction fun);
 };
 
 } // namespace duckdb

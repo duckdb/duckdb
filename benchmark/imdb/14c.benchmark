@@ -1,0 +1,7 @@
+# name: benchmark/imdb/14c.benchmark
+# description: Run query 14c from the imdb benchmark (single-threaded)
+# group: [imdb]
+
+template benchmark/imdb/imdb.benchmark.in
+QUERY_NUMBER=14c
+QUERY_NUMBER_PADDED=14c

@@ -2,6 +2,9 @@
 # description: UNIQUE constraint on temporary tables
 # group: [unique]
 
+statement ok
+SET default_null_order='nulls_first';
+
 require skip_reload
 
 statement ok

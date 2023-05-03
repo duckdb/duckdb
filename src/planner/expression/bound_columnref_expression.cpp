@@ -7,17 +7,17 @@
 namespace duckdb {
 
 BoundColumnRefExpression::BoundColumnRefExpression(string alias_p, LogicalType type, ColumnBinding binding, idx_t depth)
-    : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, move(type)), binding(binding),
-      depth(depth) {
-	this->alias = move(alias_p);
+    : Expression(ExpressionType::BOUND_COLUMN_REF, ExpressionClass::BOUND_COLUMN_REF, std::move(type)),
+      binding(binding), depth(depth) {
+	this->alias = std::move(alias_p);
 }
 
 BoundColumnRefExpression::BoundColumnRefExpression(LogicalType type, ColumnBinding binding, idx_t depth)
-    : BoundColumnRefExpression(string(), move(type), binding, depth) {
+    : BoundColumnRefExpression(string(), std::move(type), binding, depth) {
 }
 
 unique_ptr<Expression> BoundColumnRefExpression::Copy() {
-	return make_unique<BoundColumnRefExpression>(alias, return_type, binding, depth);
+	return make_uniq<BoundColumnRefExpression>(alias, return_type, binding, depth);
 }
 
 hash_t BoundColumnRefExpression::Hash() const {
@@ -31,8 +31,8 @@ bool BoundColumnRefExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundColumnRefExpression *)other_p;
-	return other->binding == binding && other->depth == depth;
+	auto &other = other_p->Cast<BoundColumnRefExpression>();
+	return other.binding == binding && other.depth == depth;
 }
 
 string BoundColumnRefExpression::ToString() const {
@@ -58,7 +58,7 @@ unique_ptr<Expression> BoundColumnRefExpression::Deserialize(ExpressionDeseriali
 	auto column_index = reader.ReadRequired<idx_t>();
 	auto depth = reader.ReadRequired<idx_t>();
 
-	return make_unique<BoundColumnRefExpression>(alias, return_type, ColumnBinding(table_index, column_index), depth);
+	return make_uniq<BoundColumnRefExpression>(alias, return_type, ColumnBinding(table_index, column_index), depth);
 }
 
 } // namespace duckdb

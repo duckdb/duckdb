@@ -1,0 +1,13 @@
+# name: test/sql/copy/csv/csv_quoted_newline_incorrect.test
+# description: Read a CSV with a null byte
+# group: [csv]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+select * from 'data/csv/csv_quoted_newline_odd.csv';
+----
+csv_quoted_newline_odd.csv": CSV options could not be auto-detected

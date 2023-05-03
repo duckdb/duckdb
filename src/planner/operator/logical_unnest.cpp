@@ -26,8 +26,13 @@ void LogicalUnnest::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalUnnest::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto unnest_index = reader.ReadRequired<idx_t>();
 	auto expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
-	auto result = make_unique<LogicalUnnest>(unnest_index);
-	result->expressions = move(expressions);
-	return move(result);
+	auto result = make_uniq<LogicalUnnest>(unnest_index);
+	result->expressions = std::move(expressions);
+	return std::move(result);
 }
+
+vector<idx_t> LogicalUnnest::GetTableIndex() const {
+	return vector<idx_t> {unnest_index};
+}
+
 } // namespace duckdb

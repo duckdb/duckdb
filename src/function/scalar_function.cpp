@@ -10,8 +10,9 @@ ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, Logic
                                dependency_function_t dependency, function_statistics_t statistics,
                                init_local_state_t init_local_state, LogicalType varargs,
                                FunctionSideEffects side_effects, FunctionNullHandling null_handling)
-    : BaseScalarFunction(move(name), move(arguments), move(return_type), side_effects, move(varargs), null_handling),
-      function(move(function)), bind(bind), init_local_state(init_local_state), dependency(dependency),
+    : BaseScalarFunction(std::move(name), std::move(arguments), std::move(return_type), side_effects,
+                         std::move(varargs), null_handling),
+      function(std::move(function)), bind(bind), init_local_state(init_local_state), dependency(dependency),
       statistics(statistics), serialize(nullptr), deserialize(nullptr) {
 }
 
@@ -20,8 +21,8 @@ ScalarFunction::ScalarFunction(vector<LogicalType> arguments, LogicalType return
                                function_statistics_t statistics, init_local_state_t init_local_state,
                                LogicalType varargs, FunctionSideEffects side_effects,
                                FunctionNullHandling null_handling)
-    : ScalarFunction(string(), move(arguments), move(return_type), move(function), bind, dependency, statistics,
-                     init_local_state, move(varargs), side_effects, null_handling) {
+    : ScalarFunction(string(), std::move(arguments), std::move(return_type), std::move(function), bind, dependency,
+                     statistics, init_local_state, std::move(varargs), side_effects, null_handling) {
 }
 
 bool ScalarFunction::operator==(const ScalarFunction &rhs) const {

@@ -89,7 +89,7 @@ struct TreeRendererConfig {
 
 class TreeRenderer {
 public:
-	explicit TreeRenderer(TreeRendererConfig config_p = TreeRendererConfig()) : config(move(config_p)) {
+	explicit TreeRenderer(TreeRendererConfig config_p = TreeRendererConfig()) : config(std::move(config_p)) {
 	}
 
 	string ToString(const LogicalOperator &op);

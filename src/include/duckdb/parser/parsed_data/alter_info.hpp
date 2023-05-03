@@ -11,6 +11,7 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_data/parse_info.hpp"
+#include "duckdb/common/enums/on_entry_not_found.hpp"
 
 namespace duckdb {
 
@@ -20,20 +21,39 @@ enum class AlterType : uint8_t {
 	ALTER_VIEW = 2,
 	ALTER_SEQUENCE = 3,
 	CHANGE_OWNERSHIP = 4,
-	ALTER_FUNCTION = 5
+	ALTER_SCALAR_FUNCTION = 5,
+	ALTER_TABLE_FUNCTION = 6
+};
+
+struct AlterEntryData {
+	AlterEntryData() {
+	}
+	AlterEntryData(string catalog_p, string schema_p, string name_p, OnEntryNotFound if_not_found)
+	    : catalog(std::move(catalog_p)), schema(std::move(schema_p)), name(std::move(name_p)),
+	      if_not_found(if_not_found) {
+	}
+
+	string catalog;
+	string schema;
+	string name;
+	OnEntryNotFound if_not_found;
 };
 
 struct AlterInfo : public ParseInfo {
-	AlterInfo(AlterType type, string schema, string name, bool if_exists);
+	AlterInfo(AlterType type, string catalog, string schema, string name, OnEntryNotFound if_not_found);
 	virtual ~AlterInfo() override;
 
 	AlterType type;
 	//! if exists
-	bool if_exists;
+	OnEntryNotFound if_not_found;
+	//! Catalog name to alter
+	string catalog;
 	//! Schema name to alter
 	string schema;
 	//! Entry name to alter
 	string name;
+	//! Allow altering internal entries
+	bool allow_internal;
 
 public:
 	virtual CatalogType GetCatalogType() const = 0;
@@ -41,6 +61,11 @@ public:
 	void Serialize(Serializer &serializer) const;
 	virtual void Serialize(FieldWriter &writer) const = 0;
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
+	virtual string GetColumnName() const {
+		return "";
+	};
+
+	AlterEntryData GetAlterEntryData() const;
 };
 
 } // namespace duckdb

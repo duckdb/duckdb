@@ -8,9 +8,9 @@
 
 #pragma once
 
-#include "array_wrapper.hpp"
+#include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb.hpp"
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/hugeint.hpp"
@@ -38,6 +38,7 @@ enum class PythonObjectType {
 	List,
 	Dict,
 	NdArray,
+	NdDatetime,
 };
 
 PythonObjectType GetPythonObjectType(py::handle &ele);

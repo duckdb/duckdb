@@ -1,0 +1,10 @@
+# name: test/sql/copy/parquet/delta_byte_array_length_mismatch.test
+# description: Test reading a delta
+# group: [parquet]
+
+require parquet
+
+require httpfs
+
+statement ok
+SELECT * FROM parquet_scan('https://github.com/duckdb/duckdb-data/releases/download/v1.0/delta_byte_array_length_mismatch.parquet')

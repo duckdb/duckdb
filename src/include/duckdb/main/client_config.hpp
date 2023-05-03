@@ -13,6 +13,7 @@
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/progress_bar/progress_bar.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -39,6 +40,8 @@ struct ClientConfig {
 	//! to output anything
 	bool emit_profiler_output = true;
 
+	//! system-wide progress bar disable.
+	const char *system_progress_bar_disable_reason = nullptr;
 	//! If the progress bar is enabled or not.
 	bool enable_progress_bar = false;
 	//! If the print of the progress bar is enabled
@@ -68,12 +71,31 @@ struct ClientConfig {
 	bool force_external = false;
 	//! Force disable cross product generation when hyper graph isn't connected, used for testing
 	bool force_no_cross_product = false;
+	//! Force use of IEJoin to implement AsOfJoin, used for testing
+	bool force_asof_iejoin = false;
+	//! If this context should also try to use the available replacement scans
+	//! True by default
+	bool use_replacement_scans = true;
 	//! Maximum bits allowed for using a perfect hash table (i.e. the perfect HT can hold up to 2^perfect_ht_threshold
 	//! elements)
 	idx_t perfect_ht_threshold = 12;
+	//! The maximum number of rows to accumulate before sorting ordered aggregates.
+	idx_t ordered_aggregate_threshold = (idx_t(1) << 18);
+
+	//! Callback to create a progress bar display
+	progress_bar_display_create_func_t display_create_func = nullptr;
+
+	//! Override for the default extension repository
+	string custom_extension_repo = "";
 
 	//! The explain output type used when none is specified (default: PHYSICAL_ONLY)
 	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
+
+	//! The maximum amount of pivot columns
+	idx_t pivot_limit = 100000;
+
+	//! Whether or not the "/" division operator defaults to integer division or floating point division
+	bool integer_division = false;
 
 	//! Generic options
 	case_insensitive_map_t<Value> set_variables;
@@ -85,8 +107,6 @@ struct ClientConfig {
 public:
 	static ClientConfig &GetConfig(ClientContext &context);
 	static const ClientConfig &GetConfig(const ClientContext &context);
-
-	static string ExtractTimezoneFromConfig(ClientConfig &config);
 
 	string ExtractTimezone() const;
 

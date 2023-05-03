@@ -1,7 +1,12 @@
+if(NOT CLANG_TIDY)
+  add_subdirectory(adbc)
+endif()
+
 add_subdirectory(arrow)
 add_subdirectory(crypto)
 add_subdirectory(enums)
 add_subdirectory(operator)
+add_subdirectory(progress_bar)
 add_subdirectory(row_operations)
 add_subdirectory(serializer)
 add_subdirectory(sort)
@@ -19,6 +24,7 @@ add_library_unity(
   OBJECT
   allocator.cpp
   assert.cpp
+  bind_helpers.cpp
   box_renderer.cpp
   compressed_file_system.cpp
   constants.cpp
@@ -29,15 +35,15 @@ add_library_unity(
   field_writer.cpp
   file_buffer.cpp
   file_system.cpp
+  filename_pattern.cpp
   fsst.cpp
   gzip_file_system.cpp
   hive_partitioning.cpp
   pipe_file_system.cpp
-  limits.cpp
   local_file_system.cpp
+  multi_file_reader.cpp
   preserved_error.cpp
   printer.cpp
-  progress_bar.cpp
   radix_partitioning.cpp
   re2_regex.cpp
   random_engine.cpp
@@ -46,6 +52,7 @@ add_library_unity(
   symbols.cpp
   tree_renderer.cpp
   types.cpp
+  vector.cpp
   virtual_file_system.cpp
   windows_util.cpp)
 set(ALL_OBJECT_FILES

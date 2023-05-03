@@ -1,37 +1,43 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/pyresult.hpp
+// duckdb_python/pyrelation.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb.hpp"
-#include "arrow_array_stream.hpp"
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/arrow/arrow_array_stream.hpp"
 #include "duckdb/main/external_dependencies.hpp"
-#include "duckdb_python/pandas_type.hpp"
+#include "duckdb_python/numpy/numpy_type.hpp"
+#include "duckdb_python/pybind11/registered_py_object.hpp"
+#include "duckdb_python/pyresult.hpp"
+#include "duckdb/parser/statement/explain_statement.hpp"
+#include "duckdb_python/pybind11/conversions/explain_enum.hpp"
+#include "duckdb_python/pybind11/dataframe.hpp"
 
 namespace duckdb {
 
-struct DuckDBPyResult;
+struct DuckDBPyConnection;
 
 class PythonDependencies : public ExternalDependency {
 public:
+	explicit PythonDependencies() : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
+	}
 	explicit PythonDependencies(py::function map_function)
 	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY), map_function(std::move(map_function)) {};
 	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object)
 	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
-		py_object_list.push_back(move(py_object));
+		py_object_list.push_back(std::move(py_object));
 	};
 	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object_original,
 	                            unique_ptr<RegisteredObject> py_object_copy)
 	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
-		py_object_list.push_back(move(py_object_original));
-		py_object_list.push_back(move(py_object_copy));
+		py_object_list.push_back(std::move(py_object_original));
+		py_object_list.push_back(std::move(py_object_copy));
 	};
 	py::function map_function;
 	vector<unique_ptr<RegisteredObject>> py_object_list;
@@ -40,77 +46,28 @@ public:
 struct DuckDBPyRelation {
 public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
-
-	shared_ptr<Relation> rel;
-	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_stream_factory;
+	explicit DuckDBPyRelation(unique_ptr<DuckDBPyResult> result);
 
 public:
 	static void Initialize(py::handle &m);
 
-	static unique_ptr<DuckDBPyRelation> FromDf(const DataFrame &df,
-	                                           DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	py::list Description();
 
-	static unique_ptr<DuckDBPyRelation> Values(py::object values = py::list(),
-	                                           DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	void Close();
 
-	static unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias,
-	                                              DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
-	static unique_ptr<DuckDBPyRelation> RunQuery(const string &query, const string &alias,
-	                                             DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
-	static unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename,
-	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
-	static unique_ptr<DuckDBPyRelation> FromParquet(const string &filename, bool binary_as_string,
-	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
-	static unique_ptr<DuckDBPyRelation>
-	FromSubstrait(py::bytes &proto, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
-	static unique_ptr<DuckDBPyRelation>
-	GetSubstrait(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
-	static unique_ptr<DuckDBPyRelation>
-	GetSubstraitJSON(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
-	void InstallExtension(const string &query, bool force_install,
-	                      DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
-	void LoadExtension(const string &query, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
-	static unique_ptr<DuckDBPyRelation>
-	FromParquetDefault(const string &filename, DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
-	static unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object,
-	                                              DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
-	unique_ptr<DuckDBPyRelation> Project(const string &expr);
-
-	static unique_ptr<DuckDBPyRelation> ProjectDf(const DataFrame &df, const string &expr,
-	                                              DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	unique_ptr<DuckDBPyRelation> GetAttribute(const string &name);
 
 	py::str GetAlias();
 
 	unique_ptr<DuckDBPyRelation> SetAlias(const string &expr);
 
-	static unique_ptr<DuckDBPyRelation> AliasDF(const DataFrame &df, const string &expr,
-	                                            DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	unique_ptr<DuckDBPyRelation> ProjectFromExpression(const string &expr);
+	unique_ptr<DuckDBPyRelation> ProjectFromTypes(const py::object &types);
+	unique_ptr<DuckDBPyRelation> Project(const string &expr);
 
 	unique_ptr<DuckDBPyRelation> Filter(const string &expr);
-
-	static unique_ptr<DuckDBPyRelation> FilterDf(const DataFrame &df, const string &expr,
-	                                             DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
 	unique_ptr<DuckDBPyRelation> Limit(int64_t n, int64_t offset = 0);
-
-	static unique_ptr<DuckDBPyRelation> LimitDF(const DataFrame &df, int64_t n,
-	                                            DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
 	unique_ptr<DuckDBPyRelation> Order(const string &expr);
-
-	static unique_ptr<DuckDBPyRelation> OrderDf(const DataFrame &df, const string &expr,
-	                                            DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
 
 	unique_ptr<DuckDBPyRelation> Aggregate(const string &expr, const string &groups = "");
 
@@ -153,6 +110,10 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Describe();
 
+	string ToSQL();
+
+	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t rows_per_batch);
+
 	idx_t Length();
 
 	py::tuple Shape();
@@ -165,25 +126,29 @@ public:
 	unique_ptr<DuckDBPyRelation> CumMax(const string &aggr_columns);
 	unique_ptr<DuckDBPyRelation> CumMin(const string &aggr_columns);
 
-	static unique_ptr<DuckDBPyRelation> AggregateDF(const DataFrame &df, const string &expr, const string &groups = "",
-	                                                DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
-
 	unique_ptr<DuckDBPyRelation> Distinct();
 
-	static unique_ptr<DuckDBPyRelation> DistinctDF(const DataFrame &df,
-	                                               DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	PandasDataFrame FetchDF(bool date_as_object);
 
-	DataFrame ToDF(bool date_as_object);
+	Optional<py::tuple> FetchOne();
 
-	py::object Fetchone();
+	py::list FetchAll();
 
-	py::object Fetchmany(idx_t size);
-
-	py::object Fetchall();
+	py::list FetchMany(idx_t size);
 
 	py::dict FetchNumpy();
 
+	py::dict FetchPyTorch();
+
+	py::dict FetchTF();
+
+	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
+
+	PandasDataFrame FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object);
+
 	duckdb::pyarrow::Table ToArrowTable(idx_t batch_size);
+
+	PolarsDataFrame ToPolars(idx_t batch_size);
 
 	duckdb::pyarrow::RecordBatchReader ToRecordBatch(idx_t batch_size);
 
@@ -193,28 +158,29 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Intersect(DuckDBPyRelation *other);
 
-	unique_ptr<DuckDBPyRelation> Map(py::function fun);
+	unique_ptr<DuckDBPyRelation> Map(py::function fun, Optional<py::object> schema);
 
 	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const string &condition, const string &type);
 
-	void WriteCsv(const string &file);
+	void ToParquet(const string &filename, const py::object &compression = py::none());
 
-	static void WriteCsvDF(const DataFrame &df, const string &file,
-	                       DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	void ToCSV(const string &filename, const py::object &sep = py::none(), const py::object &na_rep = py::none(),
+	           const py::object &header = py::none(), const py::object &quotechar = py::none(),
+	           const py::object &escapechar = py::none(), const py::object &date_format = py::none(),
+	           const py::object &timestamp_format = py::none(), const py::object &quoting = py::none(),
+	           const py::object &encoding = py::none(), const py::object &compression = py::none());
 
 	// should this return a rel with the new view?
 	unique_ptr<DuckDBPyRelation> CreateView(const string &view_name, bool replace = true);
 
 	unique_ptr<DuckDBPyRelation> Query(const string &view_name, const string &sql_query);
 
-	unique_ptr<DuckDBPyResult> Execute();
-
-	static unique_ptr<DuckDBPyResult> QueryDF(const DataFrame &df, const string &view_name, const string &sql_query,
-	                                          DuckDBPyConnection *conn = DuckDBPyConnection::DefaultConnection());
+	// Update the internal result of the relation
+	DuckDBPyRelation &Execute();
 
 	void InsertInto(const string &table);
 
-	void Insert(py::object params = py::list());
+	void Insert(const py::object &params = py::list());
 
 	void Create(const string &table);
 
@@ -222,14 +188,35 @@ public:
 	py::list Columns();
 	py::list ColumnTypes();
 
-	string Print();
+	string ToString();
+	void Print();
 
-	string Explain();
+	string Explain(ExplainType type);
+
+	static bool IsRelation(const py::object &object);
+
+	Relation &GetRel();
 
 private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
 	                              const string &projected_columns = "", const string &window_function = "");
+	string GenerateExpressionList(const string &function_name, const vector<string> &aggregated_columns,
+	                              const string &groups = "", const string &function_parameter = "",
+	                              const string &projected_columns = "", const string &window_function = "");
+	void AssertResult() const;
+	void AssertResultOpen() const;
+	void AssertRelation() const;
+	bool ContainsColumnByName(const string &name) const;
+	void ExecuteOrThrow(bool stream_result = false);
+	unique_ptr<QueryResult> ExecuteInternal(bool stream_result = false);
+
+private:
+	shared_ptr<Relation> rel;
+	vector<LogicalType> types;
+	vector<string> names;
+	unique_ptr<DuckDBPyResult> result;
+	std::string rendered_result;
 };
 
 } // namespace duckdb

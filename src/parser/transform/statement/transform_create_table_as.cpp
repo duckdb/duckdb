@@ -19,15 +19,16 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 	}
 	auto query = TransformSelect(stmt->query, false);
 
-	auto result = make_unique<CreateStatement>();
-	auto info = make_unique<CreateTableInfo>();
+	auto result = make_uniq<CreateStatement>();
+	auto info = make_uniq<CreateTableInfo>();
+	info->catalog = qname.catalog;
 	info->schema = qname.schema;
 	info->table = qname.name;
 	info->on_conflict = TransformOnConflict(stmt->onconflict);
 	info->temporary =
 	    stmt->into->rel->relpersistence == duckdb_libpgquery::PGPostgresRelPersistence::PG_RELPERSISTENCE_TEMP;
-	info->query = move(query);
-	result->info = move(info);
+	info->query = std::move(query);
+	result->info = std::move(info);
 	return result;
 }
 

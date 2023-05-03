@@ -1,0 +1,22 @@
+# name: test/sql/pg_catalog/pg_settings.test
+# description: Test pg_settings function
+# group: [pg_catalog]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+SELECT * FROM pg_settings;
+
+query II
+SELECT name, setting FROM pg_settings WHERE name='default_null_order';
+----
+default_null_order	nulls_first
+
+statement ok
+SET default_null_order='nulls_last'
+
+query II
+SELECT name, setting FROM pg_settings WHERE name='default_null_order';
+----
+default_null_order	nulls_last

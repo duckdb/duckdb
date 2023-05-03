@@ -38,14 +38,13 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 		          return order * Comparators::CompareVal(left_ptr, right_ptr, logical_type) < 0;
 	          });
 	// Re-order
-	auto temp_block =
-	    buffer_manager.Allocate(MaxValue((end - start) * sort_layout.entry_size, (idx_t)Storage::BLOCK_SIZE));
-	data_ptr_t temp_ptr = temp_block.Ptr();
+	auto temp_block = buffer_manager.GetBufferAllocator().Allocate((end - start) * sort_layout.entry_size);
+	data_ptr_t temp_ptr = temp_block.get();
 	for (idx_t i = 0; i < end - start; i++) {
 		FastMemcpy(temp_ptr, entry_ptrs[i], sort_layout.entry_size);
 		temp_ptr += sort_layout.entry_size;
 	}
-	memcpy(dataptr + start * sort_layout.entry_size, temp_block.Ptr(), (end - start) * sort_layout.entry_size);
+	memcpy(dataptr + start * sort_layout.entry_size, temp_block.get(), (end - start) * sort_layout.entry_size);
 	// Determine if there are still ties (if this is not the last column)
 	if (tie_col < sort_layout.column_count - 1) {
 		data_ptr_t idx_ptr = dataptr + start * sort_layout.entry_size + sort_layout.comparison_size;
@@ -110,7 +109,7 @@ static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &col
 //! Textbook LSD radix sort
 void RadixSortLSD(BufferManager &buffer_manager, const data_ptr_t &dataptr, const idx_t &count, const idx_t &col_offset,
                   const idx_t &row_width, const idx_t &sorting_size) {
-	auto temp_block = buffer_manager.Allocate(MaxValue(count * row_width, (idx_t)Storage::BLOCK_SIZE));
+	auto temp_block = buffer_manager.GetBufferAllocator().Allocate(count * row_width);
 	bool swap = false;
 
 	idx_t counts[SortConstants::VALUES_PER_RADIX];
@@ -118,8 +117,8 @@ void RadixSortLSD(BufferManager &buffer_manager, const data_ptr_t &dataptr, cons
 		// Init counts to 0
 		memset(counts, 0, sizeof(counts));
 		// Const some values for convenience
-		const data_ptr_t source_ptr = swap ? temp_block.Ptr() : dataptr;
-		const data_ptr_t target_ptr = swap ? dataptr : temp_block.Ptr();
+		const data_ptr_t source_ptr = swap ? temp_block.get() : dataptr;
+		const data_ptr_t target_ptr = swap ? dataptr : temp_block.get();
 		const idx_t offset = col_offset + sorting_size - r;
 		// Collect counts
 		data_ptr_t offset_ptr = source_ptr + offset;
@@ -147,7 +146,7 @@ void RadixSortLSD(BufferManager &buffer_manager, const data_ptr_t &dataptr, cons
 	}
 	// Move data back to original buffer (if it was swapped)
 	if (swap) {
-		memcpy(dataptr, temp_block.Ptr(), count * row_width);
+		memcpy(dataptr, temp_block.get(), count * row_width);
 	}
 }
 

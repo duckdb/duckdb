@@ -8,7 +8,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Abort appender due to primary key conflict", "[appender]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 

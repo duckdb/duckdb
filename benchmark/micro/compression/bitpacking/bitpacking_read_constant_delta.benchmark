@@ -1,0 +1,20 @@
+# name: benchmark/micro/compression/bitpacking/bitpacking_read_constant_delta.benchmark
+# description: Scanning 1GB of ints compressed mostly with the CONSTANT_DELTA bitpacking mode
+# group: [bitpacking]
+
+name Bitpacking Scan Constant Delta Mode
+group bitpacking
+storage persistent
+
+load
+DROP TABLE IF EXISTS integers;
+PRAGMA force_compression='bitpacking';
+PRAGMA force_bitpacking_mode='constant_delta';
+CREATE TABLE integers AS SELECT i::INT32 as i FROM range(0, 250000000) tbl(i);
+checkpoint;
+
+run
+select avg(i) from integers;
+
+result I
+124999999.5

@@ -91,7 +91,7 @@ statement ok con1
 COMMIT
 
 statement ok con2
-COMMIT
+ROLLBACK
 
 query I con1
 SELECT count(*) from t
@@ -130,7 +130,7 @@ statement error con2
 INSERT INTO t VALUES(1, NULL)
 
 statement ok con2
-COMMIT
+ROLLBACK
 
 query I con1
 SELECT count(*) from t
@@ -234,7 +234,7 @@ statement error con1
 ALTER TABLE t ALTER COLUMN j SET NOT NULL
 
 statement ok con1
-COMMIT
+ROLLBACK
 
 query I con1
 SELECT count(*) from t

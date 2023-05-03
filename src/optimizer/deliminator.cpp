@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/deliminator.hpp"
 
+#include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
@@ -13,13 +14,15 @@ namespace duckdb {
 
 class DeliminatorPlanUpdater : LogicalOperatorVisitor {
 public:
-	DeliminatorPlanUpdater() {
+	explicit DeliminatorPlanUpdater(ClientContext &context) : context(context) {
 	}
 	//! Update the plan after a DelimGet has been removed
 	void VisitOperator(LogicalOperator &op) override;
 	void VisitExpression(unique_ptr<Expression> *expression) override;
 
 public:
+	ClientContext &context;
+
 	expression_map_t<Expression *> expr_map;
 	column_binding_map_t<bool> projection_map;
 	column_binding_map_t<Expression *> reverse_proj_or_agg_map;
@@ -63,7 +66,7 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 	VisitOperatorChildren(op);
 	VisitOperatorExpressions(op);
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN && DelimGetCount(op) == 0) {
-		auto &delim_join = (LogicalDelimJoin &)op;
+		auto &delim_join = op.Cast<LogicalDelimJoin>();
 		auto decs = &delim_join.duplicate_eliminated_columns;
 		for (auto &cond : delim_join.conditions) {
 			if (!IsEqualityJoinCondition(cond)) {
@@ -71,13 +74,13 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 			}
 			auto rhs = cond.right.get();
 			while (rhs->type == ExpressionType::OPERATOR_CAST) {
-				auto &cast = (BoundCastExpression &)*rhs;
+				auto &cast = rhs->Cast<BoundCastExpression>();
 				rhs = cast.child.get();
 			}
 			if (rhs->type != ExpressionType::BOUND_COLUMN_REF) {
 				throw InternalException("Error in Deliminator: expected a bound column reference");
 			}
-			auto &colref = (BoundColumnRefExpression &)*rhs;
+			auto &colref = rhs->Cast<BoundColumnRefExpression>();
 			if (projection_map.find(colref.binding) != projection_map.end()) {
 				// value on the right is a projection of removed DelimGet
 				for (idx_t i = 0; i < decs->size(); i++) {
@@ -94,13 +97,19 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 		// change type if there are no more duplicate-eliminated columns
 		if (decs->empty()) {
 			delim_join.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
+			// sub-plans with DelimGets are not re-orderable (yet), however, we removed all DelimGet of this DelimJoin
+			// the DelimGets are on the RHS of the DelimJoin, so we can call the JoinOrderOptimizer on the RHS now
+			JoinOrderOptimizer optimizer(context);
+			delim_join.children[1] = optimizer.Optimize(std::move(delim_join.children[1]));
 		}
 	}
 }
 
 void DeliminatorPlanUpdater::VisitExpression(unique_ptr<Expression> *expression) {
-	if (expr_map.find(expression->get()) != expr_map.end()) {
-		*expression = expr_map[expression->get()]->Copy();
+	auto &expr = **expression;
+	auto entry = expr_map.find(expr);
+	if (entry != expr_map.end()) {
+		*expression = entry->second->Copy();
 	} else {
 		VisitExpressionChildren(**expression);
 	}
@@ -111,7 +120,7 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 	FindCandidates(&op, candidates);
 
 	for (auto &candidate : candidates) {
-		DeliminatorPlanUpdater updater;
+		DeliminatorPlanUpdater updater(context);
 		if (RemoveCandidate(&op, candidate, updater)) {
 			updater.VisitOperator(*op);
 		}
@@ -180,7 +189,7 @@ static bool ChildJoinTypeCanBeDeliminated(JoinType &join_type) {
 bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<LogicalOperator> *candidate,
                                   DeliminatorPlanUpdater &updater) {
 	auto &proj_or_agg = **candidate;
-	auto &join = (LogicalComparisonJoin &)*proj_or_agg.children[0];
+	auto &join = proj_or_agg.children[0]->Cast<LogicalComparisonJoin>();
 	if (!ChildJoinTypeCanBeDeliminated(join.join_type)) {
 		return false;
 	}
@@ -193,24 +202,24 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 	if (join.children[delim_idx]->type == LogicalOperatorType::LOGICAL_FILTER) {
 		filter = (LogicalFilter *)join.children[delim_idx].get();
 	}
-	auto &delim_get = (LogicalDelimGet &)*(filter ? filter->children[0].get() : join.children[delim_idx].get());
+	auto &delim_get = (filter ? filter->children[0] : join.children[delim_idx])->Cast<LogicalDelimGet>();
 	if (join.conditions.size() != delim_get.chunk_types.size()) {
 		// joining with DelimGet adds new information
 		return false;
 	}
 	// check if joining with the DelimGet is redundant, and collect relevant column information
 	bool all_equality_conditions = true;
-	vector<Expression *> nulls_are_not_equal_exprs;
+	vector<reference<Expression>> nulls_are_not_equal_exprs;
 	for (auto &cond : join.conditions) {
 		all_equality_conditions = all_equality_conditions && IsEqualityJoinCondition(cond);
-		auto delim_side = delim_idx == 0 ? cond.left.get() : cond.right.get();
-		auto other_side = delim_idx == 0 ? cond.right.get() : cond.left.get();
-		if (delim_side->type != ExpressionType::BOUND_COLUMN_REF) {
+		auto &delim_side = delim_idx == 0 ? *cond.left : *cond.right;
+		auto &other_side = delim_idx == 0 ? *cond.right : *cond.left;
+		if (delim_side.type != ExpressionType::BOUND_COLUMN_REF) {
 			// non-colref e.g. expression -(4, 1) in 4-i=j where i is from DelimGet
 			// FIXME: might be possible to also eliminate these
 			return false;
 		}
-		updater.expr_map[delim_side] = other_side;
+		updater.expr_map[delim_side] = &other_side;
 		if (cond.comparison != ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			nulls_are_not_equal_exprs.push_back(other_side);
 		}
@@ -222,17 +231,18 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 			updater.projection_map[cb] = true;
 			updater.reverse_proj_or_agg_map[cb] = proj_or_agg.expressions[cb.column_index].get();
 			for (auto &expr : nulls_are_not_equal_exprs) {
-				if (proj_or_agg.expressions[cb.column_index]->Equals(expr)) {
+				if (proj_or_agg.expressions[cb.column_index]->Equals(&expr.get())) {
 					updater.projection_map[cb] = false;
 					break;
 				}
 			}
 		}
 	} else {
-		auto &agg = (LogicalAggregate &)proj_or_agg;
+		auto &agg = proj_or_agg.Cast<LogicalAggregate>();
 
 		// Create a vector of all exprs in the agg
 		vector<Expression *> all_agg_exprs;
+		all_agg_exprs.reserve(agg.groups.size() + agg.expressions.size());
 		for (auto &expr : agg.groups) {
 			all_agg_exprs.push_back(expr.get());
 		}
@@ -244,8 +254,8 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 			updater.projection_map[cb] = true;
 			updater.reverse_proj_or_agg_map[cb] = all_agg_exprs[cb.column_index];
 			for (auto &expr : nulls_are_not_equal_exprs) {
-				if ((cb.table_index == agg.group_index && agg.groups[cb.column_index]->Equals(expr)) ||
-				    (cb.table_index == agg.aggregate_index && agg.expressions[cb.column_index]->Equals(expr))) {
+				if ((cb.table_index == agg.group_index && agg.groups[cb.column_index]->Equals(&expr.get())) ||
+				    (cb.table_index == agg.aggregate_index && agg.expressions[cb.column_index]->Equals(&expr.get()))) {
 					updater.projection_map[cb] = false;
 					break;
 				}
@@ -262,28 +272,28 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 
 	// make a filter if needed
 	if (!nulls_are_not_equal_exprs.empty() || filter != nullptr) {
-		auto filter_op = make_unique<LogicalFilter>();
+		auto filter_op = make_uniq<LogicalFilter>();
 		if (!nulls_are_not_equal_exprs.empty()) {
 			// add an IS NOT NULL filter that was implicitly in JoinCondition::null_values_are_equal
 			for (auto &expr : nulls_are_not_equal_exprs) {
 				auto is_not_null_expr =
-				    make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-				is_not_null_expr->children.push_back(expr->Copy());
-				filter_op->expressions.push_back(move(is_not_null_expr));
+				    make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
+				is_not_null_expr->children.push_back(expr.get().Copy());
+				filter_op->expressions.push_back(std::move(is_not_null_expr));
 			}
 		}
 		if (filter != nullptr) {
 			for (auto &expr : filter->expressions) {
-				filter_op->expressions.push_back(move(expr));
+				filter_op->expressions.push_back(std::move(expr));
 			}
 		}
-		filter_op->children.push_back(move(join.children[1 - delim_idx]));
-		join.children[1 - delim_idx] = move(filter_op);
+		filter_op->children.push_back(std::move(join.children[1 - delim_idx]));
+		join.children[1 - delim_idx] = std::move(filter_op);
 	}
 	// temporarily save deleted operator so its expressions are still available
-	updater.temp_ptr = move(proj_or_agg.children[0]);
+	updater.temp_ptr = std::move(proj_or_agg.children[0]);
 	// replace the redundant join
-	proj_or_agg.children[0] = move(join.children[1 - delim_idx]);
+	proj_or_agg.children[0] = std::move(join.children[1 - delim_idx]);
 	return true;
 }
 
@@ -324,7 +334,7 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 	GetDelimJoins(**plan, delim_joins);
 
 	LogicalOperator *parent = nullptr;
-	idx_t parent_delim_get_side;
+	idx_t parent_delim_get_side = 0;
 	for (auto dj : delim_joins) {
 		D_ASSERT(dj->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 		if (!HasChild(dj, &proj_or_agg, parent_delim_get_side)) {
@@ -337,7 +347,7 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 		}
 
 		// we can only remove inequality join with a DelimGet if the parent DelimJoin has one of these join types
-		auto &delim_join = (LogicalDelimJoin &)*dj;
+		auto &delim_join = dj->Cast<LogicalDelimJoin>();
 		if (!InequalityDelimJoinCanBeEliminated(delim_join.join_type)) {
 			continue;
 		}
@@ -351,8 +361,8 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 
 	// we found the parent delim join, and we may be able to remove the child DelimGet join
 	// but we need to make sure that their conditions refer to exactly the same columns
-	auto &parent_delim_join = (LogicalDelimJoin &)*parent;
-	auto &join = (LogicalComparisonJoin &)*proj_or_agg.children[0];
+	auto &parent_delim_join = parent->Cast<LogicalDelimJoin>();
+	auto &join = proj_or_agg.children[0]->Cast<LogicalComparisonJoin>();
 	if (parent_delim_join.conditions.size() != join.conditions.size()) {
 		// different number of conditions, can't replace
 		return false;
@@ -368,7 +378,7 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 			// can only deal with colrefs
 			return false;
 		}
-		auto &parent_colref = (BoundColumnRefExpression &)*parent_expr;
+		auto &parent_colref = parent_expr->Cast<BoundColumnRefExpression>();
 		auto it = updater.reverse_proj_or_agg_map.find(parent_colref.binding);
 		if (it == updater.reverse_proj_or_agg_map.end()) {
 			// refers to a column that was not in the child DelimGet join
@@ -406,16 +416,16 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 	// this time without checks because we already did them, and replace the expressions
 	for (auto &parent_cond : parent_delim_join.conditions) {
 		auto &parent_expr = parent_delim_get_side == 0 ? parent_cond.left : parent_cond.right;
-		auto &parent_colref = (BoundColumnRefExpression &)*parent_expr;
+		auto &parent_colref = parent_expr->Cast<BoundColumnRefExpression>();
 		auto it = updater.reverse_proj_or_agg_map.find(parent_colref.binding);
 		auto child_expr = it->second;
 		for (auto &child_cond : join.conditions) {
 			if (!child_cond.left->Equals(child_expr) && !child_cond.right->Equals(child_expr)) {
 				continue;
 			}
-			parent_expr =
-			    make_unique<BoundColumnRefExpression>(parent_expr->alias, parent_expr->return_type, it->first);
-			parent_cond.comparison = child_cond.comparison;
+			parent_expr = make_uniq<BoundColumnRefExpression>(parent_expr->alias, parent_expr->return_type, it->first);
+			parent_cond.comparison =
+			    parent_delim_get_side == 0 ? child_cond.comparison : FlipComparisonExpression(child_cond.comparison);
 			break;
 		}
 	}

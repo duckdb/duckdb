@@ -18,30 +18,30 @@ void INETExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
 
-	auto &catalog = Catalog::GetCatalog(*con.context);
+	auto &catalog = Catalog::GetSystemCatalog(*con.context);
 
 	// add the "inet" type
 	child_list_t<LogicalType> children;
 	children.push_back(make_pair("ip_type", LogicalType::UTINYINT));
 	children.push_back(make_pair("address", LogicalType::HUGEINT));
 	children.push_back(make_pair("mask", LogicalType::USMALLINT));
-	auto inet_type = LogicalType::STRUCT(move(children));
+	auto inet_type = LogicalType::STRUCT(std::move(children));
 	inet_type.SetAlias("inet");
 
 	CreateTypeInfo info("inet", inet_type);
 	info.temporary = true;
 	info.internal = true;
-	catalog.CreateType(*con.context, &info);
+	catalog.CreateType(*con.context, info);
 
 	// add inet functions
 	auto host_fun = ScalarFunction("host", {inet_type}, LogicalType::VARCHAR, INetFunctions::Host);
 	CreateScalarFunctionInfo host_info(host_fun);
-	catalog.CreateFunction(*con.context, &host_info);
+	catalog.CreateFunction(*con.context, host_info);
 
 	auto substract_fun = ScalarFunction("-", {inet_type, LogicalType::BIGINT}, inet_type, INetFunctions::Subtract);
 	CreateScalarFunctionInfo subtract_info(substract_fun);
 	subtract_info.on_conflict = OnCreateConflict::ALTER_ON_CONFLICT;
-	catalog.CreateFunction(*con.context, &subtract_info);
+	catalog.CreateFunction(*con.context, subtract_info);
 
 	// add inet casts
 	auto &config = DBConfig::GetConfig(*con.context);

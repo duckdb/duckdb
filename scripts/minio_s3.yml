@@ -7,8 +7,8 @@ services:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - /data
-      - /root/.minio
+      - /tmp/minio_test_data:/data
+      - /tmp/minio_root_data:/root/.minio
     environment:
       - MINIO_ROOT_USER=duckdb_minio_admin
       - MINIO_ROOT_PASSWORD=duckdb_minio_admin_password
@@ -22,6 +22,8 @@ services:
       - minio
     links:
       - minio
+    volumes:
+      - ${PWD}/data:/duckdb/data
     entrypoint: >
       /bin/sh -c "
         while true; do
@@ -54,5 +56,18 @@ services:
         /usr/bin/mc mb myminio/test-bucket-public
         /usr/bin/mc policy set download myminio/test-bucket-public
         /usr/bin/mc policy get myminio/test-bucket-public
+
+        # This is for the test of presigned URLs
+        # small file upload
+        /usr/bin/mc cp /duckdb/data/csv/phonenumbers.csv myminio/test-bucket/presigned/phonenumbers.csv
+        /usr/bin/mc cp /duckdb/data/parquet-testing/glob/t1.parquet myminio/test-bucket/presigned/t1.parquet
+
+        # large file upload
+        /usr/bin/mc cp /duckdb/data/parquet-testing/presigned/presigned-url-lineitem.parquet myminio/test-bucket/presigned/lineitem_large.parquet
+
+        /usr/bin/mc share download myminio/test-bucket/presigned/phonenumbers.csv
+        /usr/bin/mc share download myminio/test-bucket/presigned/t1.parquet
+        /usr/bin/mc share download myminio/test-bucket/presigned/lineitem_large.parquet
+
         exit 0;
       "

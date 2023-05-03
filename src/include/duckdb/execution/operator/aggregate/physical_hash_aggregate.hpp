@@ -58,6 +58,9 @@ public:
 //! This only contains read-only variables, anything that is stateful instead gets stored in the Global/Local states
 class PhysicalHashAggregate : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::HASH_GROUP_BY;
+
+public:
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      idx_t estimated_cardinality);
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
@@ -90,12 +93,15 @@ public:
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	             LocalSourceState &lstate) const override;
 
+	bool IsSource() const override {
+		return true;
+	}
 	bool ParallelSource() const override {
 		return true;
 	}
 
-	bool IsOrderPreserving() const override {
-		return false;
+	OrderPreservationType SourceOrder() const override {
+		return OrderPreservationType::NO_ORDER;
 	}
 
 public:
@@ -117,6 +123,10 @@ public:
 
 	bool ParallelSink() const override {
 		return true;
+	}
+
+	bool SinkOrderDependent() const override {
+		return false;
 	}
 
 public:

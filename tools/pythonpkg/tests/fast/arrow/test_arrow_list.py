@@ -22,12 +22,6 @@ def create_and_register_arrow_table(column_list, duckdb_conn):
     duck_from_arrow = duckdb_conn.from_arrow(res)
     duck_from_arrow.create("testarrow")
 
-# If the value is a numpy array, turn it into a list (numpy.ndarray not currently supported by TransformPythonValue)
-def transform(val):
-    if (isinstance(val, np.ndarray)):
-        val = list(val)
-    return val
-
 def create_and_register_comparison_result(column_list, duckdb_conn):
     columns = ",".join([f'{name} {dtype}' for (name, dtype, _) in column_list])
     column_amount = len(column_list)
@@ -36,7 +30,7 @@ def create_and_register_comparison_result(column_list, duckdb_conn):
     inserted_values = []
     for row in range(row_amount):
         for col in range(column_amount):
-            inserted_values.append(transform(column_list[col][2][row]))
+            inserted_values.append(column_list[col][2][row])
     inserted_values = tuple(inserted_values)
 
     column_format = ",".join(['?' for _ in range(column_amount)])

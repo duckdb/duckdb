@@ -26,7 +26,7 @@ unique_ptr<LogicalOperator> LogicalEmptyResult::Deserialize(LogicalDeserializati
 	auto result = unique_ptr<LogicalEmptyResult>(new LogicalEmptyResult());
 	result->return_types = return_types;
 	result->bindings = bindings;
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

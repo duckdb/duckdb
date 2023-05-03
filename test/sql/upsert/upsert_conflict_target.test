@@ -1,0 +1,46 @@
+# name: test/sql/upsert/upsert_conflict_target.test
+# group: [upsert]
+
+statement ok
+pragma enable_verification;
+
+# Create a primary key on both 'a' and 'b'
+statement ok
+create or replace table tbl (
+	a integer,
+	b integer,
+	c integer,
+	primary key (a, b)
+);
+
+# 'a' and 'b' combined are not unique
+statement error
+insert into tbl VALUES (1,2,3), (1,2,3);
+----
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key
+
+statement ok
+insert into tbl VALUES (1,2,3), (1,4,5);
+
+# Conflict target does not match any index on the table, only valid conflict target would be: (a,b)
+statement error
+insert into tbl VALUES (1,4,7), (1,8,4) ON CONFLICT (a) DO UPDATE set c = 5;
+----
+Binder Error: The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT
+
+# Conflict target does not match any index on the table, only valid conflict target would be: (a,b)
+statement error
+insert into tbl VALUES (1,4,7), (1,8,4) ON CONFLICT (b) DO UPDATE set c = 5;
+----
+Binder Error: The specified columns as conflict target are not referenced by a UNIQUE/PRIMARY KEY CONSTRAINT
+
+# Conflict target matches the index on the table, conflict is resolved by the ON CONFLICT clause
+statement ok
+insert into tbl VALUES (1,4,7), (1,8,4) ON CONFLICT (a,b) DO UPDATE set c = 5;
+
+query III
+select * from tbl;
+----
+1	2	3
+1	4	5
+1	8	4

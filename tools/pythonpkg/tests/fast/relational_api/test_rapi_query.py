@@ -57,6 +57,27 @@ class TestRAPIQuery(object):
         with pytest.raises(duckdb.InvalidInputException):
             rel.insert([5])
 
+    def test_query_non_select(self):
+        con = duckdb.connect()
+        rel = con.query("select [1,2,3,4]");
+        rel.query("relation", "create table tbl as select * from relation")
+
+        result = con.execute("select * from tbl").fetchall()
+        assert result == [([1,2,3,4],)]
+
+    def test_query_non_select_fail(self):
+        con = duckdb.connect()
+        rel = con.query("select [1,2,3,4]")
+        con.execute("create table tbl as select range(10)")
+        # Table already exists
+        with pytest.raises(duckdb.CatalogException):
+            rel.query("relation", "create table tbl as select * from relation")
+
+        # View referenced does not exist
+        with pytest.raises(duckdb.CatalogException):
+            rel.query("relation", "create table tbl as select * from not_a_valid_view")
+
+
     def test_query_table_unrelated(self, tbl_table):
         con = duckdb.default_connection
         rel = con.table("tbl")
@@ -65,12 +86,33 @@ class TestRAPIQuery(object):
         result = rel.execute()
         assert(result.fetchall() == [(5,)])
 
-    def test_query_broken(self, tbl_table):
-        con = duckdb.default_connection
-        rel = con.query("select i from range(10000) tbl(i)")
+    def test_query_non_select_result(self):
+        with pytest.raises(duckdb.ParserException, match="syntax error"):
+            duckdb.query('selec 42')
 
-        with pytest.raises(duckdb.InvalidInputException):
-            rel = rel.query("x", "insert into tbl VALUES(5)")
-        result = rel.execute()
-        # The query has no result, so the original relation wasn't executed in the last `rel.query` call
-        assert(len(result.fetchall()) == 10000)
+        res = duckdb.query('explain select 42').fetchall()
+        assert len(res) > 0
+
+        res = duckdb.query('describe select 42::INT AS column_name').fetchall()
+        assert res[0][0] == 'column_name'
+
+        res = duckdb.query('create or replace table tbl_non_select_result(i integer)')
+        assert res is None
+
+        res = duckdb.query('insert into tbl_non_select_result values (42)')
+        assert res is None
+
+        res = duckdb.query('insert into tbl_non_select_result values (84) returning *').fetchall()
+        assert res == [(84,)]
+
+        res = duckdb.query('select * from tbl_non_select_result').fetchall()
+        assert res == [(42,), (84,)]
+
+        res = duckdb.query('insert into tbl_non_select_result select * from range(10000) returning *').fetchall()
+        assert len(res) == 10000
+
+        res = duckdb.query('show tables').fetchall()
+        assert len(res) > 0
+
+        res = duckdb.query('drop table tbl_non_select_result')
+        assert res is None

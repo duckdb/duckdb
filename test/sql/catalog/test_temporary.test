@@ -2,7 +2,7 @@
 # description: Test temporary catalog entry creation
 # group: [catalog]
 
-require skip_reload
+require noforcestorage
 
 # basic temp table creation works
 statement ok
@@ -12,9 +12,13 @@ CREATE TEMPORARY TABLE integers(i INTEGER) ON COMMIT PRESERVE ROWS
 statement ok
 CREATE TEMPORARY TABLE integersx(i INTEGER)
 
-# we can't prefix temp tables with a schema that is not "temp"
-statement error
-CREATE TEMPORARY TABLE asdf.integersy(i INTEGER)
+# we don't support temporary schemas (yet?)
+#statement error
+#CREATE TEMPORARY SCHEMA asdf
+
+# we can prefix temp tables with a schema that is not "temp"
+statement ok
+CREATE TEMPORARY TABLE main.integersy(i INTEGER)
 
 statement ok
 CREATE TEMPORARY TABLE s1 AS SELECT 42
@@ -31,12 +35,25 @@ SELECT * FROM s1
 
 statement error
 CREATE TABLE temp.integersy(i INTEGER)
+----
+Only TEMPORARY table names can use the "temp" catalog
 
-statement error
+statement ok
 CREATE SCHEMA temp
 
 statement error
-DROP TABLE main.integersx
+CREATE TABLE temp.integersy(i INTEGER)
+----
+Ambiguous
+
+statement ok
+CREATE TABLE memory.temp.integersy(i INTEGER)
+
+statement ok
+DROP SCHEMA temp CASCADE
+
+statement error
+DROP TABLE memory.main.integersx
 
 statement ok
 DROP TABLE integersx
@@ -47,7 +64,7 @@ CREATE TEMPORARY TABLE temp.integersx(i INTEGER)
 statement ok
 DROP TABLE temp.integersx
 
-# unsupported because stupid
+# unsupported
 statement error
 CREATE TEMPORARY TABLE integers2(i INTEGER) ON COMMIT DELETE ROWS
 

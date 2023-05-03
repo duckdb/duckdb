@@ -1,13 +1,18 @@
 import duckdb
 import os
-import pandas as pd
+from pytest import raises, mark
+import pytest
+from conftest import NumpyPandas, ArrowPandas
 
+# We only run this test if this env var is set
+pytestmark = mark.skipif(
+    not os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED', False),
+    reason='httpfs extension not available'
+)
 
-def test_httpfs(require):
-    # We only run this test if this env var is set
-    if not os.getenv('DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED', False):
-        return
-    connection = require('httpfs')     
+@pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+def test_httpfs(require, pandas):
+    connection = require('httpfs')
     try:
         connection.execute("SELECT id, first_name, last_name FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet') LIMIT 3;")
     except RuntimeError as e:
@@ -20,9 +25,21 @@ def test_httpfs(require):
             raise e
 
     result_df = connection.fetchdf()
-    exp_result = pd.DataFrame({
-        'id': pd.Series([1, 2, 3], dtype="int32"),
+    exp_result = pandas.DataFrame({
+        'id': pandas.Series([1, 2, 3], dtype="int32"),
         'first_name': ['Amanda', 'Albert', 'Evelyn'],
         'last_name': ['Jordan', 'Freeman', 'Morgan']
     })
-    assert(result_df.equals(exp_result))
+    pandas.testing.assert_frame_equal(result_df, exp_result)
+
+def test_http_exception(require):
+    connection = require('httpfs')
+
+    with raises(duckdb.HTTPException) as exc:
+        connection.execute("SELECT * FROM PARQUET_SCAN('https://example.com/userdata1.parquet')")
+
+    value = exc.value
+    assert value.status_code == 404
+    assert value.reason == 'Not Found'
+    assert value.body == ''
+    assert 'Content-Length' in value.headers

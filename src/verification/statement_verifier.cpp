@@ -1,7 +1,7 @@
 #include "duckdb/verification/statement_verifier.hpp"
 
 #include "duckdb/common/preserved_error.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/verification/copied_statement_verifier.hpp"
 #include "duckdb/verification/deserialized_statement_verifier.hpp"
@@ -13,12 +13,13 @@
 namespace duckdb {
 
 StatementVerifier::StatementVerifier(VerificationType type, string name, unique_ptr<SQLStatement> statement_p)
-    : type(type), name(move(name)), statement(unique_ptr_cast<SQLStatement, SelectStatement>(move(statement_p))),
+    : type(type), name(std::move(name)),
+      statement(unique_ptr_cast<SQLStatement, SelectStatement>(std::move(statement_p))),
       select_list(statement->node->GetSelectList()) {
 }
 
 StatementVerifier::StatementVerifier(unique_ptr<SQLStatement> statement_p)
-    : StatementVerifier(VerificationType::ORIGINAL, "Original", move(statement_p)) {
+    : StatementVerifier(VerificationType::ORIGINAL, "Original", std::move(statement_p)) {
 }
 
 StatementVerifier::~StatementVerifier() noexcept {
@@ -105,17 +106,17 @@ bool StatementVerifier::Run(
 	context.config.enable_optimizer = !DisableOptimizer();
 	context.config.force_external = ForceExternal();
 	try {
-		auto result = run(query, move(statement));
+		auto result = run(query, std::move(statement));
 		if (result->HasError()) {
 			failed = true;
 		}
-		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
+		materialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 	} catch (const Exception &ex) {
 		failed = true;
-		materialized_result = make_unique<MaterializedQueryResult>(PreservedError(ex));
+		materialized_result = make_uniq<MaterializedQueryResult>(PreservedError(ex));
 	} catch (std::exception &ex) {
 		failed = true;
-		materialized_result = make_unique<MaterializedQueryResult>(PreservedError(ex));
+		materialized_result = make_uniq<MaterializedQueryResult>(PreservedError(ex));
 	}
 	context.interrupted = false;
 

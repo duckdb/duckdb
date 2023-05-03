@@ -24,17 +24,17 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		D_ASSERT(catalog_entry);
 		D_ASSERT(catalog_entry->set);
-		catalog_entry->set->CleanupEntry(catalog_entry);
+		catalog_entry->set->CleanupEntry(*catalog_entry);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
 		auto info = (DeleteInfo *)data;
-		CleanupDelete(info);
+		CleanupDelete(*info);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
 		auto info = (UpdateInfo *)data;
-		CleanupUpdate(info);
+		CleanupUpdate(*info);
 		break;
 	}
 	default:
@@ -42,28 +42,34 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 	}
 }
 
-void CleanupState::CleanupUpdate(UpdateInfo *info) {
+void CleanupState::CleanupUpdate(UpdateInfo &info) {
 	// remove the update info from the update chain
 	// first obtain an exclusive lock on the segment
-	info->segment->CleanupUpdate(info);
+	info.segment->CleanupUpdate(info);
 }
 
-void CleanupState::CleanupDelete(DeleteInfo *info) {
-	auto version_table = info->table;
-	D_ASSERT(version_table->info->cardinality >= info->count);
-	version_table->info->cardinality -= info->count;
+void CleanupState::CleanupDelete(DeleteInfo &info) {
+	auto version_table = info.table;
+	D_ASSERT(version_table->info->cardinality >= info.count);
+	version_table->info->cardinality -= info.count;
+
 	if (version_table->info->indexes.Empty()) {
 		// this table has no indexes: no cleanup to be done
 		return;
 	}
+
 	if (current_table != version_table) {
 		// table for this entry differs from previous table: flush and switch to the new table
 		Flush();
 		current_table = version_table;
 	}
+
+	// possibly vacuum any indexes in this table later
+	indexed_tables[current_table->info->table] = current_table;
+
 	count = 0;
-	for (idx_t i = 0; i < info->count; i++) {
-		row_numbers[count++] = info->vinfo->start + info->rows[i];
+	for (idx_t i = 0; i < info.count; i++) {
+		row_numbers[count++] = info.vinfo->start + info.rows[i];
 	}
 	Flush();
 }
@@ -77,7 +83,10 @@ void CleanupState::Flush() {
 	Vector row_identifiers(LogicalType::ROW_TYPE, (data_ptr_t)row_numbers);
 
 	// delete the tuples from all the indexes
-	current_table->RemoveFromIndexes(row_identifiers, count);
+	try {
+		current_table->RemoveFromIndexes(row_identifiers, count);
+	} catch (...) {
+	}
 
 	count = 0;
 }

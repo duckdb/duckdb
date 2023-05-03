@@ -1,0 +1,7 @@
+# name: test/fuzzer/pedro/sample_limit_overflow.test
+# description: Sample limit overflow
+# group: [pedro]
+
+statement ok
+SELECT 1 FROM (SELECT 1 ORDER BY ALL LIMIT 514322393620248226) USING SAMPLE SYSTEM (36%);
+

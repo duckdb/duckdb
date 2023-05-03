@@ -28,6 +28,8 @@ struct FileHandle;
 //! The version number of the database storage format
 extern const uint64_t VERSION_NUMBER;
 
+const char *GetDuckDBVersion(idx_t version_number);
+
 using block_id_t = int64_t;
 
 #define INVALID_BLOCK (-1)

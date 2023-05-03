@@ -69,13 +69,6 @@ private:
 	//! The final chunk used for moving data into the sink
 	DataChunk final_chunk;
 
-	//! Indicates that the first non-finished operator in the pipeline with RequireFinalExecute has some pending result
-	bool pending_final_execute = false;
-	//! The OperatorFinalizeResultType corresponding to the currently pending final_execute result
-	OperatorFinalizeResultType cached_final_execute_result;
-	//! Source has been exhausted
-	bool source_empty = false;
-
 	//! The operators that are not yet finished executing and have data remaining
 	//! If the stack of in_process_operators is empty, we fetch from the source instead
 	stack<idx_t> in_process_operators;
@@ -87,8 +80,8 @@ private:
 	bool requires_batch_index = false;
 
 private:
-	void StartOperator(PhysicalOperator *op);
-	void EndOperator(PhysicalOperator *op, DataChunk *chunk);
+	void StartOperator(PhysicalOperator &op);
+	void EndOperator(PhysicalOperator &op, optional_ptr<DataChunk> chunk);
 
 	//! Reset the operator index to the first operator
 	void GoToSource(idx_t &current_idx, idx_t initial_idx);

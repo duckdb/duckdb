@@ -1,0 +1,17 @@
+# name: test/sql/catalog/view/test_view_drop_concurrent.test
+# group: [view]
+
+require 64bit
+
+# Create 4000 threads that all run the contents of this loop
+concurrentloop threadid 0 300
+
+# Create the view
+statement ok
+CREATE TEMPORARY VIEW df AS select 0,0,0 from range(10);
+
+# Drop the view
+statement ok
+DROP VIEW df;
+
+endloop

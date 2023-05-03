@@ -956,14 +956,14 @@ SELECT sum(a) OVER (
     PARTITION BY (
 SELECT t FROM map WHERE v=a
     ) ORDER BY a
-  ) FROM tx;
+  ) FROM tx ORDER BY ALL;
 ----
-2
-6
-12
 1
+2
 4
+6
 9
+12
 
 query I
 SELECT sum(a) OVER win FROM tx
@@ -971,14 +971,14 @@ SELECT sum(a) OVER win FROM tx
     PARTITION BY (
 SELECT t FROM map WHERE v=a
     ) ORDER BY a
-  );
+  ) ORDER BY ALL;
 ----
-2
-6
-12
 1
+2
 4
+6
 9
+12
 
 query I
   WITH map2 AS (
@@ -988,14 +988,14 @@ SELECT sum(a) OVER (
     PARTITION BY (
 SELECT t FROM map2 WHERE v=a
     ) ORDER BY a
-  ) FROM tx;
+  ) FROM tx ORDER BY ALL;
 ----
-2
-6
-12
 1
+2
 4
+6
 9
+12
 
 query I
   WITH map2 AS (
@@ -1006,14 +1006,14 @@ SELECT sum(a) OVER win FROM tx
     PARTITION BY (
 SELECT t FROM map2 WHERE v=a
     ) ORDER BY a
-  );
+  ) ORDER BY ALL;
 ----
-2
-6
-12
 1
+2
 4
+6
 9
+12
 
 #==========================================================================
 

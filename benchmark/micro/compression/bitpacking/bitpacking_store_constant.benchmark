@@ -1,0 +1,17 @@
+# name: benchmark/micro/compression/bitpacking/bitpacking_store_constant.benchmark
+# description: Storing 1GB of ints compressed mostly with the CONSTANT bitpacking mode
+# group: [bitpacking]
+
+name Bitpacking Insert Constant Mode
+group bitpacking
+storage persistent
+require_reinit
+
+load
+PRAGMA force_compression='bitpacking';
+PRAGMA force_bitpacking_mode='constant';
+DROP TABLE IF EXISTS integers;
+
+run
+CREATE TABLE integers AS SELECT (i/119000)::INT32 as i FROM range(0, 250000000) tbl(i);
+checkpoint;

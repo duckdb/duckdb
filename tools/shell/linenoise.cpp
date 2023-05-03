@@ -117,6 +117,8 @@
 #include <unistd.h>
 #include "linenoise.h"
 #include "utf8proc_wrapper.hpp"
+#include <unordered_set>
+#include <vector>
 
 #if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
 // disable highlighting on windows (for now?)
@@ -155,27 +157,38 @@ static Color terminal_colors[] = {{"red", "\033[31m"},           {"green", "\033
                                   {"brightmagenta", "\033[95m"}, {"brightcyan", "\033[96m"},
                                   {"brightwhite", "\033[97m"},   {nullptr, nullptr}};
 static std::string bold = "\033[1m";
+static std::string underline = "\033[4m";
 static std::string keyword = "\033[32m\033[1m";
 static std::string constant = "\033[33m";
 static std::string reset = "\033[00m";
 #endif
 
+struct searchMatch {
+	size_t history_index;
+	size_t match_start;
+	size_t match_end;
+};
+
 /* The linenoiseState structure represents the state during line editing.
  * We pass this state to functions implementing specific editing
  * functionalities. */
 struct linenoiseState {
-	int ifd;            /* Terminal stdin file descriptor. */
-	int ofd;            /* Terminal stdout file descriptor. */
-	char *buf;          /* Edited line buffer. */
-	size_t buflen;      /* Edited line buffer size. */
-	const char *prompt; /* Prompt to display. */
-	size_t plen;        /* Prompt length. */
-	size_t pos;         /* Current cursor position. */
-	size_t oldpos;      /* Previous refresh cursor position. */
-	size_t len;         /* Current edited line length. */
-	size_t cols;        /* Number of columns in terminal. */
-	size_t maxrows;     /* Maximum num of rows used so far (multiline mode) */
-	int history_index;  /* The history index we are currently editing. */
+	int ifd;                                 /* Terminal stdin file descriptor. */
+	int ofd;                                 /* Terminal stdout file descriptor. */
+	char *buf;                               /* Edited line buffer. */
+	size_t buflen;                           /* Edited line buffer size. */
+	const char *prompt;                      /* Prompt to display. */
+	size_t plen;                             /* Prompt length. */
+	size_t pos;                              /* Current cursor position. */
+	size_t oldpos;                           /* Previous refresh cursor position. */
+	size_t len;                              /* Current edited line length. */
+	size_t cols;                             /* Number of columns in terminal. */
+	size_t maxrows;                          /* Maximum num of rows used so far (multiline mode) */
+	int history_index;                       /* The history index we are currently editing. */
+	bool search;                             /* Whether or not we are searching our history */
+	std::string search_buf;                  //! The search buffer
+	std::vector<searchMatch> search_matches; //! The set of search matches in our history
+	size_t search_index;                     //! The current match index
 };
 
 enum KEY_ACTION {
@@ -186,6 +199,7 @@ enum KEY_ACTION {
 	CTRL_D = 4,     /* Ctrl-d */
 	CTRL_E = 5,     /* Ctrl-e */
 	CTRL_F = 6,     /* Ctrl-f */
+	CTRL_G = 7,     /* Ctrl-g */
 	CTRL_H = 8,     /* Ctrl-h */
 	TAB = 9,        /* Tab */
 	CTRL_K = 11,    /* Ctrl+k */
@@ -193,6 +207,7 @@ enum KEY_ACTION {
 	ENTER = 13,     /* Enter */
 	CTRL_N = 14,    /* Ctrl-n */
 	CTRL_P = 16,    /* Ctrl-p */
+	CTRL_R = 18,    /* Ctrl-r */
 	CTRL_T = 20,    /* Ctrl-t */
 	CTRL_U = 21,    /* Ctrl+u */
 	CTRL_W = 23,    /* Ctrl+w */
@@ -666,21 +681,78 @@ int linenoiseParseOption(const char **azArg, int nArg, const char **out_error) {
 #include <sstream>
 #include "duckdb/parser/parser.hpp"
 
-std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_pos) {
+struct highlightToken {
+	duckdb::SimplifiedTokenType type;
+	size_t start = 0;
+	bool search_match = false;
+};
+
+std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_pos, searchMatch *match = nullptr) {
 	std::string sql(buf, len);
-	auto tokens = duckdb::Parser::Tokenize(sql);
+	auto parseTokens = duckdb::Parser::Tokenize(sql);
 	std::stringstream ss;
+	std::vector<highlightToken> tokens;
+
+	for (auto &token : parseTokens) {
+		highlightToken new_token;
+		new_token.type = token.type;
+		new_token.start = token.start;
+		tokens.push_back(new_token);
+	}
+
 	if (!tokens.empty() && tokens[0].start > 0) {
-		duckdb::SimplifiedToken new_token;
+		highlightToken new_token;
 		new_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
 		new_token.start = 0;
 		tokens.insert(tokens.begin(), new_token);
 	}
 	if (tokens.empty() && sql.size() > 0) {
-		duckdb::SimplifiedToken new_token;
+		highlightToken new_token;
 		new_token.type = duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_IDENTIFIER;
 		new_token.start = 0;
 		tokens.push_back(new_token);
+	}
+	if (match) {
+		// we have a search match - insert it into the token list
+		// we want to insert a search token with start = match_start, end = match_end
+		// first figure out which token type we would have at match_end (if any)
+		for (size_t i = 0; i + 1 < tokens.size(); i++) {
+			if (tokens[i].start <= match->match_start && tokens[i + 1].start >= match->match_start) {
+				// this token begins after the search position, insert the token here
+				size_t token_position = i + 1;
+				duckdb::SimplifiedTokenType end_type = tokens[i].type;
+				if (tokens[i].start == match->match_start) {
+					// exact start: only set the search match
+					tokens[i].search_match = true;
+				} else {
+					// non-exact start: add a new token
+					highlightToken search_token;
+					search_token.type = tokens[i].type;
+					search_token.start = match->match_start;
+					search_token.search_match = true;
+					tokens.insert(tokens.begin() + token_position, search_token);
+					token_position++;
+				}
+
+				// move forwards
+				while (token_position < tokens.size() && tokens[token_position].start < match->match_end) {
+					// this token is
+					// mark this token as a search token
+					end_type = tokens[token_position].type;
+					tokens[token_position].search_match = true;
+					token_position++;
+				}
+				if (token_position >= tokens.size() || tokens[token_position].start > match->match_end) {
+					// insert the token that marks the end of the search
+					highlightToken end_token;
+					end_token.type = end_type;
+					end_token.start = match->match_end;
+					tokens.insert(tokens.begin() + token_position, end_token);
+					token_position++;
+				}
+				break;
+			}
+		}
 	}
 	for (size_t i = 0; i < tokens.size(); i++) {
 		size_t next = i + 1 < tokens.size() ? tokens[i + 1].start : len;
@@ -696,6 +768,9 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 			continue;
 		}
 		std::string text = std::string(buf + start, end - start);
+		if (token.search_match) {
+			ss << underline;
+		}
 		switch (token.type) {
 		case duckdb::SimplifiedTokenType::SIMPLIFIED_TOKEN_KEYWORD:
 			ss << keyword << text << reset;
@@ -706,32 +781,20 @@ std::string highlightText(char *buf, size_t len, size_t start_pos, size_t end_po
 			break;
 		default:
 			ss << text;
+			if (token.search_match) {
+				ss << reset;
+			}
 		}
 	}
 	return ss.str();
 }
 #endif
 
-/* Single line low level line refresh.
- *
- * Rewrite the currently edited line accordingly to the buffer content,
- * cursor position, and number of columns of the terminal. */
-static void refreshSingleLine(struct linenoiseState *l) {
-	char seq[64];
-	size_t plen = linenoiseComputeRenderWidth(l->prompt, strlen(l->prompt));
-	int fd = l->ofd;
-	char *buf = l->buf;
-	size_t len = l->len;
-	size_t pos = l->pos;
-	struct abuf ab;
-	size_t render_pos = 0;
-#ifndef DISABLE_HIGHLIGHT
-	std::string highlight_buffer;
-#endif
-
-	if (duckdb::Utf8Proc::IsValid(l->buf, l->len)) {
+static void renderText(size_t &render_pos, char *&buf, size_t &len, size_t pos, size_t cols, size_t plen,
+                       std::string &highlight_buffer, bool highlight, searchMatch *match = nullptr) {
+	if (duckdb::Utf8Proc::IsValid(buf, len)) {
 		// utf8 in prompt, handle rendering
-		size_t remaining_render_width = l->cols - plen - 1;
+		size_t remaining_render_width = cols - plen - 1;
 		size_t start_pos = 0;
 		size_t cpos = 0;
 		size_t prev_pos = 0;
@@ -743,7 +806,7 @@ static void refreshSingleLine(struct linenoiseState *l) {
 			total_render_width += cpos - prev_pos;
 			if (total_render_width >= remaining_render_width) {
 				// character does not fit anymore! we need to figure something out
-				if (prev_pos >= l->pos) {
+				if (prev_pos >= pos) {
 					// we passed the cursor: break
 					cpos = prev_pos;
 					break;
@@ -758,13 +821,13 @@ static void refreshSingleLine(struct linenoiseState *l) {
 					}
 				}
 			}
-			if (prev_pos < l->pos) {
+			if (prev_pos < pos) {
 				render_pos += char_render_width;
 			}
 		}
 #ifndef DISABLE_HIGHLIGHT
-		if (enableHighlighting) {
-			highlight_buffer = highlightText(l->buf, l->len, start_pos, cpos);
+		if (highlight) {
+			highlight_buffer = highlightText(buf, len, start_pos, cpos, match);
 			buf = (char *)highlight_buffer.c_str();
 			len = highlight_buffer.size();
 		} else
@@ -775,16 +838,33 @@ static void refreshSingleLine(struct linenoiseState *l) {
 		}
 	} else {
 		// invalid UTF8: fallback
-		while ((plen + pos) >= l->cols) {
+		while ((plen + pos) >= cols) {
 			buf++;
 			len--;
 			pos--;
 		}
-		while (plen + len > l->cols) {
+		while (plen + len > cols) {
 			len--;
 		}
 		render_pos = pos;
 	}
+}
+
+/* Single line low level line refresh.
+ *
+ * Rewrite the currently edited line accordingly to the buffer content,
+ * cursor position, and number of columns of the terminal. */
+static void refreshSingleLine(struct linenoiseState *l) {
+	char seq[64];
+	size_t plen = linenoiseComputeRenderWidth(l->prompt, strlen(l->prompt));
+	int fd = l->ofd;
+	char *buf = l->buf;
+	size_t len = l->len;
+	struct abuf ab;
+	size_t render_pos = 0;
+	std::string highlight_buffer;
+
+	renderText(render_pos, buf, len, l->pos, l->cols, plen, highlight_buffer, enableHighlighting);
 
 	abInit(&ab);
 	/* Cursor to left edge */
@@ -793,6 +873,100 @@ static void refreshSingleLine(struct linenoiseState *l) {
 	/* Write the prompt and the current buffer content */
 	abAppend(&ab, l->prompt, strlen(l->prompt));
 	abAppend(&ab, buf, len);
+	/* Show hits if any. */
+	refreshShowHints(&ab, l, plen);
+	/* Erase to right */
+	snprintf(seq, 64, "\x1b[0K");
+	abAppend(&ab, seq, strlen(seq));
+	/* Move cursor to original position. */
+	snprintf(seq, 64, "\r\x1b[%dC", (int)(render_pos + plen));
+	abAppend(&ab, seq, strlen(seq));
+	if (write(fd, ab.b, ab.len) == -1) {
+	} /* Can't recover from write error. */
+	abFree(&ab);
+}
+
+static void refreshSearch(struct linenoiseState *l) {
+	std::string search_prompt;
+	static const size_t SEARCH_PROMPT_RENDER_SIZE = 28;
+	std::string no_matches_text = "(no matches)";
+	bool no_matches = l->search_index >= l->search_matches.size();
+	if (l->search_buf.empty()) {
+		search_prompt = "search" + std::string(SEARCH_PROMPT_RENDER_SIZE - 8, ' ') + "> ";
+		no_matches_text = "(type to search)";
+	} else {
+		std::string search_text;
+		std::string matches_text;
+		search_text += l->search_buf;
+		if (!no_matches) {
+			matches_text += std::to_string(l->search_index + 1);
+			matches_text += "/" + std::to_string(l->search_matches.size());
+		}
+		size_t search_text_length = linenoiseComputeRenderWidth(search_text.c_str(), search_text.size());
+		size_t matches_text_length = linenoiseComputeRenderWidth(matches_text.c_str(), matches_text.size());
+		size_t total_text_length = search_text_length + matches_text_length;
+		if (total_text_length < SEARCH_PROMPT_RENDER_SIZE - 2) {
+			// search text is short: we can render the entire search text
+			search_prompt = search_text;
+			search_prompt += std::string(SEARCH_PROMPT_RENDER_SIZE - 2 - total_text_length, ' ');
+			search_prompt += matches_text;
+			search_prompt += "> ";
+		} else {
+			// search text length is too long to fit: truncate
+			bool render_matches = matches_text_length < SEARCH_PROMPT_RENDER_SIZE - 8;
+			char *search_buf = (char *)search_text.c_str();
+			size_t search_len = search_text.size();
+			size_t search_render_pos = 0;
+			size_t max_render_size = SEARCH_PROMPT_RENDER_SIZE - 3;
+			if (render_matches) {
+				max_render_size -= matches_text_length;
+			}
+			std::string highlight_buffer;
+			renderText(search_render_pos, search_buf, search_len, search_len, max_render_size, 0, highlight_buffer,
+			           false);
+			search_prompt = std::string(search_buf, search_len);
+			for (size_t i = search_render_pos; i < max_render_size; i++) {
+				search_prompt += " ";
+			}
+			if (render_matches) {
+				search_prompt += matches_text;
+			}
+			search_prompt += "> ";
+		}
+	}
+
+	char seq[64];
+	size_t plen = linenoiseComputeRenderWidth(search_prompt.c_str(), search_prompt.size());
+	int fd = l->ofd;
+	char *buf;
+	size_t len;
+	size_t cols = l->cols;
+	struct abuf ab;
+	size_t render_pos = 0;
+	std::string highlight_buffer;
+
+	if (!no_matches) {
+		// if there are matches render the current history item
+		auto search_match = l->search_matches[l->search_index];
+		auto history_index = search_match.history_index;
+		auto cursor_position = search_match.match_end;
+		buf = history[history_index];
+		len = strlen(history[history_index]);
+		renderText(render_pos, buf, len, cursor_position, cols, plen, highlight_buffer, enableHighlighting,
+		           &search_match);
+	}
+
+	abInit(&ab);
+	/* Cursor to left edge */
+	snprintf(seq, 64, "\r");
+	abAppend(&ab, seq, strlen(seq));
+	/* Write the prompt and the current buffer content */
+	abAppend(&ab, search_prompt.c_str(), search_prompt.size());
+	if (no_matches) {
+		abAppend(&ab, no_matches_text.c_str(), no_matches_text.size());
+	} else {
+		abAppend(&ab, buf, len);
+	}
 	/* Show hits if any. */
 	refreshShowHints(&ab, l, plen);
 	/* Erase to right */
@@ -1106,6 +1280,216 @@ static int hasMoreData(int fd) {
 	return select(1, &rfds, NULL, NULL, &tv);
 }
 
+static void cancelSearch(linenoiseState *l) {
+	l->search = false;
+	l->search_buf = std::string();
+	l->search_matches.clear();
+	l->search_index = 0;
+	refreshLine(l);
+}
+
+static char acceptSearch(linenoiseState *l, char nextCommand) {
+	if (l->search_index < l->search_matches.size()) {
+		// if there is a match - copy it into the buffer
+		auto match = l->search_matches[l->search_index];
+		auto history_entry = history[match.history_index];
+		auto history_len = strlen(history_entry);
+		memcpy(l->buf, history_entry, history_len);
+		l->buf[history_len] = '\0';
+		l->pos = match.match_end;
+		l->len = history_len;
+	}
+	cancelSearch(l);
+	return nextCommand;
+}
+
+static void performSearch(linenoiseState *l) {
+	// we try to maintain the current match while searching
+	size_t current_match = history_len;
+	if (l->search_index < l->search_matches.size()) {
+		current_match = l->search_matches[l->search_index].history_index;
+	}
+	l->search_matches.clear();
+	l->search_index = 0;
+	if (l->search_buf.empty()) {
+		return;
+	}
+	std::unordered_set<std::string> matches;
+	auto lsearch = duckdb::StringUtil::Lower(l->search_buf);
+	for (size_t i = history_len; i > 0; i--) {
+		size_t history_index = i - 1;
+		auto lhistory = duckdb::StringUtil::Lower(history[history_index]);
+		if (matches.find(lhistory) != matches.end()) {
+			continue;
+		}
+		matches.insert(lhistory);
+		auto entry = lhistory.find(lsearch);
+		if (entry != duckdb::string::npos) {
+			if (history_index == current_match) {
+				l->search_index = l->search_matches.size();
+			}
+			searchMatch match;
+			match.history_index = history_index;
+			match.match_start = entry;
+			match.match_end = entry + lsearch.size();
+			l->search_matches.push_back(match);
+		}
+	}
+}
+
+static void searchPrev(linenoiseState *l) {
+	if (l->search_index > 0) {
+		l->search_index--;
+	} else if (l->search_matches.size() > 0) {
+		l->search_index = l->search_matches.size() - 1;
+	}
+}
+
+static void searchNext(linenoiseState *l) {
+	l->search_index += 1;
+	if (l->search_index >= l->search_matches.size()) {
+		l->search_index = 0;
+	}
+}
+
+static char linenoiseSearch(linenoiseState *l, char c) {
+	char seq[64];
+
+	switch (c) {
+	case 10:
+	case ENTER: /* enter */
+		// accept search and run
+		return acceptSearch(l, ENTER);
+	case CTRL_R:
+		// move to the next match index
+		searchNext(l);
+		break;
+	case ESC: /* escape sequence */
+		/* Read the next two bytes representing the escape sequence.
+		 * Use two calls to handle slow terminals returning the two
+		 * chars at different times. */
+		// note: in search mode we ignore almost all special commands
+		if (read(l->ifd, seq, 1) == -1)
+			break;
+		if (seq[0] == ESC) {
+			// double escape accepts search without any additional command
+			return acceptSearch(l, 0);
+		}
+		if (seq[0] == 'b' || seq[0] == 'f') {
+			break;
+		}
+		if (read(l->ifd, seq + 1, 1) == -1)
+			break;
+
+		/* ESC [ sequences. */
+		if (seq[0] == '[') {
+			if (seq[1] >= '0' && seq[1] <= '9') {
+				/* Extended escape, read additional byte. */
+				if (read(l->ifd, seq + 2, 1) == -1)
+					break;
+				if (seq[2] == '~') {
+					switch (seq[1]) {
+					case '1':
+						return acceptSearch(l, CTRL_A);
+					case '4':
+					case '8':
+						return acceptSearch(l, CTRL_E);
+					default:
+						break;
+					}
+				} else if (seq[2] == ';') {
+					// read 2 extra bytes
+					if (read(l->ifd, seq + 3, 2) == -1)
+						break;
+				}
+			} else {
+				switch (seq[1]) {
+				case 'A': /* Up */
+					searchPrev(l);
+					break;
+				case 'B': /* Down */
+					searchNext(l);
+					break;
+				case 'D': /* Left */
+					return acceptSearch(l, CTRL_B);
+				case 'C': /* Right */
+					return acceptSearch(l, CTRL_F);
+				case 'H': /* Home */
+					return acceptSearch(l, CTRL_A);
+				case 'F': /* End*/
+					return acceptSearch(l, CTRL_E);
+				default:
+					break;
+				}
+			}
+		}
+		/* ESC O sequences. */
+		else if (seq[0] == 'O') {
+			switch (seq[1]) {
+			case 'H': /* Home */
+				return acceptSearch(l, CTRL_A);
+			case 'F': /* End*/
+				return acceptSearch(l, CTRL_E);
+			default:
+				break;
+			}
+		}
+		break;
+	case CTRL_A: // accept search, move to start of line
+		return acceptSearch(l, CTRL_A);
+	case '\t':
+	case CTRL_E: // accept search - move to end of line
+		return acceptSearch(l, CTRL_E);
+	case CTRL_B: // accept search - move cursor left
+		return acceptSearch(l, CTRL_B);
+	case CTRL_F: // accept search - move cursor right
+		return acceptSearch(l, CTRL_F);
+	case CTRL_T: // accept search: swap character
+		return acceptSearch(l, CTRL_T);
+	case CTRL_U: // accept search, clear buffer
+		return acceptSearch(l, CTRL_U);
+	case CTRL_K: // accept search, clear after cursor
+		return acceptSearch(l, CTRL_K);
+	case CTRL_D: // accept saerch, delete a character
+		return acceptSearch(l, CTRL_D);
+	case CTRL_L:
+		linenoiseClearScreen();
+		break;
+	case CTRL_P:
+		searchPrev(l);
+		break;
+	case CTRL_N:
+		searchNext(l);
+		break;
+	case CTRL_C:
+	case CTRL_G:
+		// abort search
+		cancelSearch(l);
+		return 0;
+	case BACKSPACE: /* backspace */
+	case 8:         /* ctrl-h */
+	case CTRL_W:    /* ctrl-w */
+		// remove trailing UTF-8 bytes (if any)
+		while (!l->search_buf.empty() && ((l->search_buf.back() & 0xc0) == 0x80)) {
+			l->search_buf.pop_back();
+		}
+		// finally remove the first UTF-8 byte
+		if (!l->search_buf.empty()) {
+			l->search_buf.pop_back();
+		}
+		performSearch(l);
+		break;
+	default:
+		// add input to search buffer
+		l->search_buf += c;
+		// perform the search
+		performSearch(l);
+		break;
+	}
+	refreshSearch(l);
+	return 0;
+}
+
 /* This function is the core of the line editing capability of linenoise.
  * It expects 'fd' to be already in "raw mode" so that every key pressed
  * will be returned ASAP to read().
@@ -1130,6 +1514,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 	l.cols = getColumns(stdin_fd, stdout_fd);
 	l.maxrows = 0;
 	l.history_index = 0;
+	l.search = false;
 
 	/* Buffer starts empty. */
 	l.buf[0] = '\0';
@@ -1149,6 +1534,16 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		nread = read(l.ifd, &c, 1);
 		if (nread <= 0)
 			return l.len;
+
+		if (l.search) {
+			char ret = linenoiseSearch(&l, c);
+			if (l.search || ret == '\0') {
+				// still searching - continue searching
+				continue;
+			}
+			// run subsequent command
+			c = ret;
+		}
 
 		/* Only autocomplete when the callback is set. It returns < 0 when
 		 * there was an error reading from fd. Otherwise it will return the
@@ -1185,6 +1580,7 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 				hintsCallback = hc;
 			}
 			return (int)l.len;
+		case CTRL_G:
 		case CTRL_C: /* ctrl-c */ {
 			l.buf[0] = '\3';
 			// we keep track of whether or not the line was empty by writing \3 to the second position of the line
@@ -1242,6 +1638,15 @@ static int linenoiseEdit(int stdin_fd, int stdout_fd, char *buf, size_t buflen, 
 		case CTRL_N: /* ctrl-n */
 			linenoiseEditHistoryNext(&l, LINENOISE_HISTORY_NEXT);
 			break;
+		case CTRL_R: /* ctrl-r */ {
+			// initiate reverse search
+			l.search = true;
+			l.search_buf = std::string();
+			l.search_matches.clear();
+			l.search_index = 0;
+			refreshSearch(&l);
+			break;
+		}
 		case ESC: /* escape sequence */
 			/* Read the next two bytes representing the escape sequence.
 			 * Use two calls to handle slow terminals returning the two
@@ -1561,6 +1966,12 @@ int linenoiseHistoryAdd(const char *line) {
 	linecopy = strdup(line);
 	if (!linecopy)
 		return 0;
+	// replace all newlines with spaces
+	for (auto ptr = linecopy; *ptr; ptr++) {
+		if (*ptr == '\n' || *ptr == '\r') {
+			*ptr = ' ';
+		}
+	}
 	if (history_len == history_max_len) {
 		free(history[0]);
 		memmove(history, history + 1, sizeof(char *) * (history_max_len - 1));

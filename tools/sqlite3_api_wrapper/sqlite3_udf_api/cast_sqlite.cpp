@@ -48,14 +48,14 @@ void CastSQLite::InputVectorsToVarchar(DataChunk &data_chunk, DataChunk &new_chu
 
 VectorType CastSQLite::ToVectorsSQLiteValue(DataChunk &data_chunk, Vector &result,
                                             vector<unique_ptr<vector<sqlite3_value>>> &vec_sqlite_values,
-                                            unique_ptr<UnifiedVectorFormat[]> vec_data) {
+                                            duckdb::unique_ptr<UnifiedVectorFormat[]> vec_data) {
 	VectorType result_vec_type = VectorType::CONSTANT_VECTOR;
 
 	// Casting input data to sqlite_value
 	for (idx_t i = 0; i < data_chunk.ColumnCount(); ++i) {
 		auto input_data = vec_data[i];
 		auto sqlite_values = CastSQLite::ToVector(data_chunk.data[i].GetType(), input_data, data_chunk.size(), result);
-		vec_sqlite_values[i] = move(sqlite_values);
+		vec_sqlite_values[i] = std::move(sqlite_values);
 
 		// case there is a non-constant input vector, the result must be a FLAT vector
 		if (data_chunk.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {

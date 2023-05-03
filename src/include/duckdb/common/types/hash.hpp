@@ -14,6 +14,7 @@
 namespace duckdb {
 
 struct string_t;
+struct interval_t;
 
 // efficient hash function that maximizes the avalanche effect and minimizes
 // bias

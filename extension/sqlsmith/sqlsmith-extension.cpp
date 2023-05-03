@@ -6,8 +6,8 @@
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/extension_util.hpp"
 #endif
 
 namespace duckdb {
@@ -27,9 +27,9 @@ struct SQLSmithFunctionData : public TableFunctionData {
 	bool finished = false;
 };
 
-static unique_ptr<FunctionData> SQLSmithBind(ClientContext &context, TableFunctionBindInput &input,
-                                             vector<LogicalType> &return_types, vector<string> &names) {
-	auto result = make_unique<SQLSmithFunctionData>();
+static duckdb::unique_ptr<FunctionData> SQLSmithBind(ClientContext &context, TableFunctionBindInput &input,
+                                                     vector<LogicalType> &return_types, vector<string> &names) {
+	auto result = make_uniq<SQLSmithFunctionData>();
 	for (auto &kv : input.named_parameters) {
 		if (kv.first == "seed") {
 			result->seed = IntegerValue::Get(kv.second);
@@ -51,7 +51,7 @@ static unique_ptr<FunctionData> SQLSmithBind(ClientContext &context, TableFuncti
 	}
 	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
-	return move(result);
+	return std::move(result);
 }
 
 static void SQLSmithFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -82,12 +82,12 @@ struct ReduceSQLFunctionData : public TableFunctionData {
 	idx_t offset = 0;
 };
 
-static unique_ptr<FunctionData> ReduceSQLBind(ClientContext &context, TableFunctionBindInput &input,
-                                              vector<LogicalType> &return_types, vector<string> &names) {
+static duckdb::unique_ptr<FunctionData> ReduceSQLBind(ClientContext &context, TableFunctionBindInput &input,
+                                                      vector<LogicalType> &return_types, vector<string> &names) {
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("sql");
 
-	auto result = make_unique<ReduceSQLFunctionData>();
+	auto result = make_uniq<ReduceSQLFunctionData>();
 	auto sql = input.inputs[0].ToString();
 	Parser parser;
 	parser.ParseQuery(sql);
@@ -97,7 +97,7 @@ static unique_ptr<FunctionData> ReduceSQLBind(ClientContext &context, TableFunct
 	auto &statement = *parser.statements[0];
 	StatementSimplifier simplifier(statement, result->statements);
 	simplifier.Simplify(statement);
-	return result;
+	return std::move(result);
 }
 
 static void ReduceSQLFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -118,9 +118,7 @@ static void ReduceSQLFunction(ClientContext &context, TableFunctionInput &data_p
 }
 
 void SQLSmithExtension::Load(DuckDB &db) {
-	Connection con(db);
-	con.BeginTransaction();
-	auto &catalog = Catalog::GetCatalog(*con.context);
+	auto &db_instance = *db.instance;
 
 	TableFunction sqlsmith_func("sqlsmith", {}, SQLSmithFunction, SQLSmithBind);
 	sqlsmith_func.named_parameters["seed"] = LogicalType::INTEGER;
@@ -131,14 +129,10 @@ void SQLSmithExtension::Load(DuckDB &db) {
 	sqlsmith_func.named_parameters["verbose_output"] = LogicalType::BOOLEAN;
 	sqlsmith_func.named_parameters["complete_log"] = LogicalType::VARCHAR;
 	sqlsmith_func.named_parameters["log"] = LogicalType::VARCHAR;
-	CreateTableFunctionInfo sqlsmith_info(sqlsmith_func);
-	catalog.CreateTableFunction(*con.context, &sqlsmith_info);
+	ExtensionUtil::RegisterFunction(db_instance, sqlsmith_func);
 
 	TableFunction reduce_sql_function("reduce_sql_statement", {LogicalType::VARCHAR}, ReduceSQLFunction, ReduceSQLBind);
-	CreateTableFunctionInfo reduce_sql_info(reduce_sql_function);
-	catalog.CreateTableFunction(*con.context, &reduce_sql_info);
-
-	con.Commit();
+	ExtensionUtil::RegisterFunction(db_instance, reduce_sql_function);
 }
 
 std::string SQLSmithExtension::Name() {

@@ -1,0 +1,32 @@
+# name: test/sql/table_function/range_non_foldable.test
+# description: Issue #5546: non-foldable constant parameters to table function
+# group: [table_function]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT COUNT(*)
+FROM range(
+  current_date,
+  current_date + interval '7' days,
+  interval '1 day'
+)
+----
+7
+
+statement ok
+SELECT to_timestamp(range) as entry
+    FROM range(
+      epoch(date_trunc('month', current_date)),
+      epoch(date_trunc('month', current_date) + interval '1 month' - interval '1 day'),
+      epoch(interval '1 day')
+    )
+
+statement ok
+SELECT to_timestamp(range) as entry
+FROM range(
+  epoch(date_trunc('month', current_date)),
+  epoch(date_trunc('month', current_date) + interval '1 month' - interval '1 day'),
+  epoch(interval '1 day')
+)

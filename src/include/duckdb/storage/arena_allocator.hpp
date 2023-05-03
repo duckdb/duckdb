@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/common.hpp"
 
 namespace duckdb {
 
@@ -28,19 +28,29 @@ class ArenaAllocator {
 	static constexpr const idx_t ARENA_ALLOCATOR_INITIAL_CAPACITY = 2048;
 
 public:
-	ArenaAllocator(Allocator &allocator, idx_t initial_capacity = ARENA_ALLOCATOR_INITIAL_CAPACITY);
-	~ArenaAllocator();
+	DUCKDB_API ArenaAllocator(Allocator &allocator, idx_t initial_capacity = ARENA_ALLOCATOR_INITIAL_CAPACITY);
+	DUCKDB_API ~ArenaAllocator();
 
-	data_ptr_t Allocate(idx_t size);
+	DUCKDB_API data_ptr_t Allocate(idx_t size);
+	DUCKDB_API data_ptr_t Reallocate(data_ptr_t pointer, idx_t old_size, idx_t size);
+
+	DUCKDB_API data_ptr_t AllocateAligned(idx_t size);
+	DUCKDB_API data_ptr_t ReallocateAligned(data_ptr_t pointer, idx_t old_size, idx_t size);
+
 	//! Resets the current head and destroys all previous arena chunks
-	void Reset();
-	void Destroy();
-	void Move(ArenaAllocator &allocator);
+	DUCKDB_API void Reset();
+	DUCKDB_API void Destroy();
+	DUCKDB_API void Move(ArenaAllocator &allocator);
 
-	ArenaChunk *GetHead();
-	ArenaChunk *GetTail();
+	DUCKDB_API ArenaChunk *GetHead();
+	DUCKDB_API ArenaChunk *GetTail();
 
-	bool IsEmpty();
+	DUCKDB_API bool IsEmpty();
+
+	//! Returns an "Allocator" wrapper for this arena allocator
+	Allocator &GetAllocator() {
+		return arena_allocator;
+	}
 
 private:
 	//! Internal allocator that is used by the arena allocator
@@ -48,6 +58,8 @@ private:
 	idx_t current_capacity;
 	unique_ptr<ArenaChunk> head;
 	ArenaChunk *tail;
+	//! An allocator wrapper using this arena allocator
+	Allocator arena_allocator;
 };
 
 } // namespace duckdb

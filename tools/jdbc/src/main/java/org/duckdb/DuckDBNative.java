@@ -63,10 +63,8 @@ public class DuckDBNative {
 	 * the C header. CMake does this as well
 	 */
 
-	// results db_ref database reference object
+	// results ConnectionHolder reference object
 	protected static native ByteBuffer duckdb_jdbc_startup(byte[] path, boolean read_only, Properties props) throws SQLException;
-
-	protected static native void duckdb_jdbc_shutdown(ByteBuffer db_ref);
 
 	// returns conn_ref connection reference object
 	protected static native ByteBuffer duckdb_jdbc_connect(ByteBuffer db_ref) throws SQLException;
@@ -77,7 +75,13 @@ public class DuckDBNative {
 
 	protected static native void duckdb_jdbc_disconnect(ByteBuffer conn_ref);
 
+	protected static native void duckdb_jdbc_set_schema(ByteBuffer conn_ref, String schema);
+
+	protected static native void duckdb_jdbc_set_catalog(ByteBuffer conn_ref, String catalog);
+
 	protected static native String duckdb_jdbc_get_schema(ByteBuffer conn_ref);
+
+	protected static native String duckdb_jdbc_get_catalog(ByteBuffer conn_ref);
 
 	// returns stmt_ref result reference object
 	protected static native ByteBuffer duckdb_jdbc_prepare(ByteBuffer conn_ref, byte[] query) throws SQLException;
@@ -91,11 +95,13 @@ public class DuckDBNative {
 
 	protected static native void duckdb_jdbc_free_result(ByteBuffer res_ref);
 
-	protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref) throws SQLException;
+	protected static native DuckDBVector[] duckdb_jdbc_fetch(ByteBuffer res_ref, ByteBuffer conn_ref) throws SQLException;
 	
 	protected static native int duckdb_jdbc_fetch_size();
 
-	protected static native long duckdb_jdbc_arrow_stream(ByteBuffer appender_ref, long batch_size);
+	protected static native long duckdb_jdbc_arrow_stream(ByteBuffer res_ref, long batch_size);
+	
+	protected static native void duckdb_jdbc_arrow_register(ByteBuffer conn_ref, long arrow_array_stream_pointer, byte[] name);
 
 	protected static native ByteBuffer duckdb_jdbc_create_appender(ByteBuffer conn_ref, byte[] schema_name, byte[] table_name) throws SQLException;
 
@@ -104,6 +110,8 @@ public class DuckDBNative {
 	protected static native void duckdb_jdbc_appender_end_row(ByteBuffer appender_ref) throws SQLException;
 
 	protected static native void duckdb_jdbc_appender_flush(ByteBuffer appender_ref) throws SQLException;
+
+	protected static native void duckdb_jdbc_interrupt(ByteBuffer conn_ref);
 
 	protected static native void duckdb_jdbc_appender_close(ByteBuffer appender_ref) throws SQLException;
 
@@ -124,4 +132,10 @@ public class DuckDBNative {
 	protected static native void duckdb_jdbc_appender_append_string(ByteBuffer appender_ref, byte[] value) throws SQLException;
 
 	protected static native void duckdb_jdbc_appender_append_null(ByteBuffer appender_ref) throws SQLException;
+
+	protected static native void duckdb_jdbc_create_extension_type(ByteBuffer conn_ref) throws SQLException;
+
+	public static void duckdb_jdbc_create_extension_type(DuckDBConnection conn) throws SQLException {
+		duckdb_jdbc_create_extension_type(conn.conn_ref);
+	}
 }

@@ -107,4 +107,3 @@ test_that("structs give the same results via Arrow", {
     )
   ))
 })
-

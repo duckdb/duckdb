@@ -1,0 +1,15 @@
+# name: benchmark/micro/index/range/wide_range_query_without_index.benchmark
+# description: Wide (non-selective) range query without index
+# group: [range]
+
+name Big Range Query (No Index)
+group index
+
+load
+CREATE TABLE integers AS SELECT i, i + 2 AS j FROM range(0, 100000000) t(i);
+
+run
+SELECT COUNT(j) FROM integers WHERE i >= 0 AND i < 15000200;
+
+result I
+15000200

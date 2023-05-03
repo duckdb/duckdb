@@ -1,0 +1,50 @@
+# name: test/sql/overflow/double_float_overflow.test
+# description: Test handling of overflow doubles and floats;
+# group: [overflow]
+
+# this is tested extra because floats and doubles can represent inf and nan as well. And we 
+# want to make sure we still catch overflows for these functions
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT 1e308::DOUBLE + 1e308::DOUBLE;
+----
+inf
+
+query I
+SELECT 0::DOUBLE - 1e308::DOUBLE - 1e308::DOUBLE;
+----
+-inf
+
+query I
+SELECT 1e308::DOUBLE * 1e308::DOUBLE;
+----
+inf
+
+query I
+SELECT 1e308::DOUBLE * 1e308::DOUBLE;
+----
+inf
+
+query I
+SELECT 1e308::DOUBLE / 0.1;
+----
+inf
+
+query I
+SELECT 2e38::FLOAT + 2e38::FLOAT;
+----
+inf
+
+query I
+SELECT 2e38::FLOAT * 2e38::FLOAT;
+----
+inf
+
+query I
+SELECT 2e38::FLOAT / 0.1;
+----
+inf
+

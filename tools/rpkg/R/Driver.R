@@ -25,12 +25,12 @@ drv_to_string <- function(drv) {
 #'
 #' @import methods DBI
 #' @export
-duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE, bigint="numeric", config = list()) {
+duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE, bigint = "numeric", config = list()) {
   check_flag(read_only)
 
   switch(bigint,
     numeric = {
-        # fine
+      # fine
     },
     integer64 = {
       if (!is_installed("bit64")) {
@@ -39,6 +39,11 @@ duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE, bigint="numeric", co
     },
     stop(paste("Unsupported bigint configuration", bigint))
   )
+
+  # R packages are not allowed to write extensions into home directory, so use R_user_dir instead
+  if (!("extension_directory" %in% names(config))) {
+    config["extension_directory"] <- tools::R_user_dir("duckdb", "data")
+  }
 
   new(
     "duckdb_driver",

@@ -17,10 +17,10 @@ struct RadixPartitionInfo {
 	const idx_t n_partitions;
 	const idx_t radix_bits;
 	const hash_t radix_mask;
-	constexpr static idx_t RADIX_SHIFT = 40;
+	const idx_t radix_shift;
 
 	inline hash_t GetHashPartition(hash_t hash) const {
-		return (hash & radix_mask) >> RADIX_SHIFT;
+		return (hash & radix_mask) >> radix_shift;
 	}
 };
 
@@ -54,12 +54,16 @@ private:
 	vector<idx_t> sel_vector_sizes;
 	DataChunk group_subset, payload_subset;
 	Vector hashes, hashes_subset;
+	AggregateHTAppendState append_state;
 
 	HashTableList unpartitioned_hts;
-	unordered_map<hash_t, HashTableList> radix_partitioned_hts;
+	vector<HashTableList> radix_partitioned_hts;
+	idx_t tuple_size;
 
 private:
 	idx_t ListAddChunk(HashTableList &list, DataChunk &groups, Vector &group_hashes, DataChunk &payload,
 	                   const vector<idx_t> &filter);
+	//! Returns the HT entry size used for intermediate hash tables
+	HtEntryType GetHTEntrySize();
 };
 } // namespace duckdb

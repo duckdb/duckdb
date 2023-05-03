@@ -1,0 +1,72 @@
+# name: test/sql/copy/per_thread_output.test
+# description: test PER_THREAD_OUTPUT parameter for COPY
+# group: [copy]
+
+require parquet
+
+statement ok
+PRAGMA verify_parallelism;
+
+statement ok
+pragma threads=4;
+
+statement ok
+CREATE TABLE bigdata AS SELECT i AS col_a, i AS col_b FROM range(0,10000) tbl(i);
+
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
+
+query I
+SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output/*.parquet')
+----
+10000
+
+query I
+SELECT STR_SPLIT(REPLACE(file, '\','/'), '/')[-1]  f FROM GLOB('__TEST_DIR__/per_thread_output/*.parquet') ORDER BY f
+----
+data_0.parquet
+data_1.parquet
+data_2.parquet
+data_3.parquet
+
+# CSV also works
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output_csv' (FORMAT CSV, HEADER TRUE, PER_THREAD_OUTPUT TRUE);
+
+query I
+SELECT COUNT(*) FROM read_csv('__TEST_DIR__/per_thread_output_csv/*.csv', columns={'col_a': 'INT', 'col_b' : 'INT'}, header=True);
+----
+10000
+
+query I
+SELECT STR_SPLIT(REPLACE(file, '\','/'), '/')[-1]  f FROM GLOB('__TEST_DIR__/per_thread_output_csv/*.csv') ORDER BY f
+----
+data_0.csv
+data_1.csv
+data_2.csv
+data_3.csv
+
+# with a trailing slash
+statement ok
+COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output2/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
+
+query I
+SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output2/*.parquet')
+----
+10000
+
+
+# cant write to existing folders
+statement error
+COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output2/' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE);
+
+# we have not added anything
+query I
+SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output2/*.parquet')
+----
+10000
+
+
+# this should not work
+statement error
+COPY (FROM bigdata) TO '__TEST_DIR__/per_thread_output3' (FORMAT PARQUET, PER_THREAD_OUTPUT TRUE, USE_TMP_FILE TRUE);

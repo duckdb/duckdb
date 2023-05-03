@@ -1,6 +1,7 @@
 #include "duckdb/main/database.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -10,9 +11,14 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "duckdb/main/replacement_opens.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/error_manager.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/storage/magic_bytes.hpp"
+#include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/execution/operator/helper/physical_set.hpp"
+#include "duckdb/storage/standard_buffer_manager.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -21,26 +27,20 @@
 namespace duckdb {
 
 DBConfig::DBConfig() {
-	compression_functions = make_unique<CompressionFunctionSet>();
-	replacement_opens.push_back(ExtensionPrefixReplacementOpen());
-	cast_functions = make_unique<CastFunctionSet>();
-	error_manager = make_unique<ErrorManager>();
+	compression_functions = make_uniq<CompressionFunctionSet>();
+	cast_functions = make_uniq<CastFunctionSet>();
+	error_manager = make_uniq<ErrorManager>();
 }
 
-DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) {
-	compression_functions = make_unique<CompressionFunctionSet>();
+DBConfig::DBConfig(std::unordered_map<string, string> &config_dict, bool read_only) : DBConfig::DBConfig() {
 	if (read_only) {
 		options.access_mode = AccessMode::READ_ONLY;
 	}
 	for (auto &kv : config_dict) {
 		string key = kv.first;
 		string val = kv.second;
-		auto config_property = DBConfig::GetOptionByName(key);
-		if (!config_property) {
-			throw InvalidInputException("Unrecognized configuration property \"%s\"", key);
-		}
 		auto opt_val = Value(val);
-		DBConfig::SetOption(*config_property, opt_val);
+		DBConfig::SetOptionByName(key, opt_val);
 	}
 }
 
@@ -51,43 +51,41 @@ DatabaseInstance::DatabaseInstance() {
 }
 
 DatabaseInstance::~DatabaseInstance() {
-	if (Exception::UncaughtException()) {
-		return;
-	}
-
-	// shutting down: attempt to checkpoint the database
-	// but only if we are not cleaning up as part of an exception unwind
-	try {
-		auto &storage = StorageManager::GetStorageManager(*this);
-		if (!storage.InMemory()) {
-			auto &config = storage.db.config;
-			if (!config.options.checkpoint_on_shutdown) {
-				return;
-			}
-			storage.CreateCheckpoint(true);
-		}
-	} catch (...) {
-	}
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
-	return *db.GetStorageManager().buffer_manager;
+	return db.GetBufferManager();
+}
+
+BufferManager &BufferManager::GetBufferManager(AttachedDatabase &db) {
+	return BufferManager::GetBufferManager(db.GetDatabase());
 }
 
 DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
 	return *context.db;
 }
 
-StorageManager &StorageManager::GetStorageManager(DatabaseInstance &db) {
-	return db.GetStorageManager();
+DatabaseManager &DatabaseInstance::GetDatabaseManager() {
+	if (!db_manager) {
+		throw InternalException("Missing DB manager");
+	}
+	return *db_manager;
 }
 
-Catalog &Catalog::GetCatalog(DatabaseInstance &db) {
+Catalog &Catalog::GetSystemCatalog(DatabaseInstance &db) {
+	return db.GetDatabaseManager().GetSystemCatalog();
+}
+
+Catalog &Catalog::GetCatalog(AttachedDatabase &db) {
 	return db.GetCatalog();
 }
 
 FileSystem &FileSystem::GetFileSystem(DatabaseInstance &db) {
 	return db.GetFileSystem();
+}
+
+FileSystem &FileSystem::Get(AttachedDatabase &db) {
+	return FileSystem::GetFileSystem(db.GetDatabase());
 }
 
 DBConfig &DBConfig::GetConfig(DatabaseInstance &db) {
@@ -98,6 +96,10 @@ ClientConfig &ClientConfig::GetConfig(ClientContext &context) {
 	return context.config;
 }
 
+DBConfig &DBConfig::Get(AttachedDatabase &db) {
+	return DBConfig::GetConfig(db.GetDatabase());
+}
+
 const DBConfig &DBConfig::GetConfig(const DatabaseInstance &db) {
 	return db.config;
 }
@@ -106,11 +108,7 @@ const ClientConfig &ClientConfig::GetConfig(const ClientContext &context) {
 	return context.config;
 }
 
-TransactionManager &TransactionManager::Get(ClientContext &context) {
-	return TransactionManager::Get(DatabaseInstance::GetDatabase(context));
-}
-
-TransactionManager &TransactionManager::Get(DatabaseInstance &db) {
+TransactionManager &TransactionManager::Get(AttachedDatabase &db) {
 	return db.GetTransactionManager();
 }
 
@@ -118,8 +116,87 @@ ConnectionManager &ConnectionManager::Get(DatabaseInstance &db) {
 	return db.GetConnectionManager();
 }
 
+ClientContext *ConnectionManager::GetConnection(DatabaseInstance *db) {
+	for (auto &conn : connections) {
+		if (conn.first->db.get() == db) {
+			return conn.first;
+		}
+	}
+	return nullptr;
+}
+
 ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
+}
+
+string DatabaseInstance::ExtractDatabaseType(string &path) {
+	// first check if there is an existing prefix
+	auto extension = ExtensionHelper::ExtractExtensionPrefixFromPath(path);
+	if (!extension.empty()) {
+		// path is prefixed with an extension - remove it
+		path = StringUtil::Replace(path, extension + ":", "");
+		return extension;
+	}
+	// if there isn't - check the magic bytes of the file (if any)
+	auto file_type = MagicBytes::CheckMagicBytes(config.file_system.get(), path);
+	if (file_type == DataFileType::SQLITE_FILE) {
+		return "sqlite";
+	}
+	return string();
+}
+
+duckdb::unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo &info, const string &type,
+                                                                              AccessMode access_mode) {
+	duckdb::unique_ptr<AttachedDatabase> attached_database;
+	if (!type.empty()) {
+		// find the storage extension
+		auto extension_name = ExtensionHelper::ApplyExtensionAlias(type);
+		auto entry = config.storage_extensions.find(extension_name);
+		if (entry == config.storage_extensions.end()) {
+			throw BinderException("Unrecognized storage type \"%s\"", type);
+		}
+
+		if (entry->second->attach != nullptr && entry->second->create_transaction_manager != nullptr) {
+			// use storage extension to create the initial database
+			attached_database = make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), *entry->second,
+			                                                info.name, info, access_mode);
+		} else {
+			attached_database =
+			    make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);
+		}
+	} else {
+		// check if this is an in-memory database or not
+		attached_database =
+		    make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);
+	}
+	return attached_database;
+}
+
+void DatabaseInstance::CreateDatabase(const string &database_type) {
+	AttachInfo info;
+	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
+	info.path = config.options.database_path;
+
+	auto attached_database = CreateAttachedDatabase(info, database_type, config.options.access_mode);
+	auto initial_database = attached_database.get();
+	{
+		Connection con(*this);
+		con.BeginTransaction();
+		db_manager->AddDatabase(*con.context, std::move(attached_database));
+		con.Commit();
+	}
+
+	// initialize the database
+	initial_database->Initialize();
+}
+
+void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
+	auto unrecognized_options_iter = unrecognized_options.begin();
+	string unrecognized_option_keys = unrecognized_options_iter->first;
+	for (; unrecognized_options_iter == unrecognized_options.end(); ++unrecognized_options_iter) {
+		unrecognized_option_keys = "," + unrecognized_options_iter->first;
+	}
+	throw InvalidInputException("Unrecognized configuration property \"%s\"", unrecognized_option_keys);
 }
 
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
@@ -144,15 +221,6 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	} else {
 		config_ptr->options.database_path.clear();
 	}
-
-	for (auto &open : config_ptr->replacement_opens) {
-		if (open.pre_func) {
-			open.data = open.pre_func(*config_ptr, open.static_data.get());
-			if (open.data) {
-				break;
-			}
-		}
-	}
 	Configure(*config_ptr);
 
 	if (user_config && !user_config->options.use_temporary_directory) {
@@ -160,29 +228,33 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 		config.options.temporary_directory = string();
 	}
 
-	// TODO: Support an extension here, to generate different storage managers
-	// depending on the DB path structure/prefix.
-	const string dbPath = config.options.database_path;
-	storage = make_unique<SingleFileStorageManager>(*this, dbPath, config.options.access_mode == AccessMode::READ_ONLY);
+	db_manager = make_uniq<DatabaseManager>(*this);
+	buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
+	scheduler = make_uniq<TaskScheduler>(*this);
+	object_cache = make_uniq<ObjectCache>();
+	connection_manager = make_uniq<ConnectionManager>();
 
-	catalog = make_unique<Catalog>(*this);
-	transaction_manager = make_unique<TransactionManager>(*this);
-	scheduler = make_unique<TaskScheduler>(*this);
-	object_cache = make_unique<ObjectCache>();
-	connection_manager = make_unique<ConnectionManager>();
+	// check if we are opening a standard DuckDB database or an extension database
+	auto database_type = ExtractDatabaseType(config.options.database_path);
 
-	// initialize the database
-	storage->Initialize();
+	// initialize the system catalog
+	db_manager->InitializeSystemCatalog();
+
+	if (!database_type.empty()) {
+		// if we are opening an extension database - load the extension
+		ExtensionHelper::LoadExternalExtension(*this, nullptr, database_type);
+	}
+
+	if (!config.options.unrecognized_options.empty()) {
+		ThrowExtensionSetUnrecognizedOptions(config.options.unrecognized_options);
+	}
+
+	if (!db_manager->HasDefaultDatabase()) {
+		CreateDatabase(database_type);
+	}
 
 	// only increase thread count after storage init because we get races on catalog otherwise
 	scheduler->SetThreads(config.options.maximum_threads);
-
-	for (auto &open : config.replacement_opens) {
-		if (open.post_func && open.data) {
-			open.post_func(*this, open.data.get());
-			break;
-		}
-	}
 }
 
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<DatabaseInstance>()) {
@@ -201,16 +273,20 @@ DuckDB::DuckDB(DatabaseInstance &instance_p) : instance(instance_p.shared_from_t
 DuckDB::~DuckDB() {
 }
 
-StorageManager &DatabaseInstance::GetStorageManager() {
-	return *storage;
+BufferManager &DatabaseInstance::GetBufferManager() {
+	return *buffer_manager;
 }
 
-Catalog &DatabaseInstance::GetCatalog() {
-	return *catalog;
+BufferPool &DatabaseInstance::GetBufferPool() {
+	return *config.buffer_pool;
 }
 
-TransactionManager &DatabaseInstance::GetTransactionManager() {
-	return *transaction_manager;
+DatabaseManager &DatabaseManager::Get(DatabaseInstance &db) {
+	return db.GetDatabaseManager();
+}
+
+DatabaseManager &DatabaseManager::Get(ClientContext &db) {
+	return DatabaseManager::Get(*db.db);
 }
 
 TaskScheduler &DatabaseInstance::GetScheduler() {
@@ -241,42 +317,43 @@ Allocator &Allocator::Get(DatabaseInstance &db) {
 	return *db.config.allocator;
 }
 
+Allocator &Allocator::Get(AttachedDatabase &db) {
+	return Allocator::Get(db.GetDatabase());
+}
+
 void DatabaseInstance::Configure(DBConfig &new_config) {
 	config.options = new_config.options;
 	if (config.options.access_mode == AccessMode::UNDEFINED) {
 		config.options.access_mode = AccessMode::READ_WRITE;
 	}
 	if (new_config.file_system) {
-		config.file_system = move(new_config.file_system);
+		config.file_system = std::move(new_config.file_system);
 	} else {
-		config.file_system = make_unique<VirtualFileSystem>();
+		config.file_system = make_uniq<VirtualFileSystem>();
 	}
 	if (config.options.maximum_memory == (idx_t)-1) {
-		auto memory = FileSystem::GetAvailableMemory();
-		if (memory != DConstants::INVALID_INDEX) {
-			config.options.maximum_memory = memory * 8 / 10;
-		}
+		config.SetDefaultMaxMemory();
 	}
 	if (new_config.options.maximum_threads == (idx_t)-1) {
-#ifndef DUCKDB_NO_THREADS
-		config.options.maximum_threads = std::thread::hardware_concurrency();
-#else
-		config.options.maximum_threads = 1;
-#endif
+		config.SetDefaultMaxThreads();
 	}
-	config.allocator = move(new_config.allocator);
+	config.allocator = std::move(new_config.allocator);
 	if (!config.allocator) {
-		config.allocator = make_unique<Allocator>();
+		config.allocator = make_uniq<Allocator>();
 	}
-	config.replacement_scans = move(new_config.replacement_scans);
-	config.replacement_opens = move(new_config.replacement_opens);
-	config.parser_extensions = move(new_config.parser_extensions);
-	config.error_manager = move(new_config.error_manager);
+	config.replacement_scans = std::move(new_config.replacement_scans);
+	config.parser_extensions = std::move(new_config.parser_extensions);
+	config.error_manager = std::move(new_config.error_manager);
 	if (!config.error_manager) {
-		config.error_manager = make_unique<ErrorManager>();
+		config.error_manager = make_uniq<ErrorManager>();
 	}
 	if (!config.default_allocator) {
 		config.default_allocator = Allocator::DefaultAllocatorReference();
+	}
+	if (new_config.buffer_pool) {
+		config.buffer_pool = std::move(new_config.buffer_pool);
+	} else {
+		config.buffer_pool = make_shared<BufferPool>(config.options.maximum_memory);
 	}
 }
 
@@ -300,11 +377,18 @@ idx_t DuckDB::NumberOfThreads() {
 	return instance->NumberOfThreads();
 }
 
-bool DuckDB::ExtensionIsLoaded(const std::string &name) {
-	return instance->loaded_extensions.find(name) != instance->loaded_extensions.end();
+bool DatabaseInstance::ExtensionIsLoaded(const std::string &name) {
+	auto extension_name = ExtensionHelper::GetExtensionName(name);
+	return loaded_extensions.find(extension_name) != loaded_extensions.end();
 }
+
+bool DuckDB::ExtensionIsLoaded(const std::string &name) {
+	return instance->ExtensionIsLoaded(name);
+}
+
 void DatabaseInstance::SetExtensionLoaded(const std::string &name) {
-	loaded_extensions.insert(name);
+	auto extension_name = ExtensionHelper::GetExtensionName(name);
+	loaded_extensions.insert(extension_name);
 }
 
 bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) {

@@ -23,6 +23,8 @@ struct UpdateNode;
 class UpdateSegment {
 public:
 	UpdateSegment(ColumnData &column_data);
+	// Construct a duplicate of 'other' with 'new_owner' as it's column data
+	UpdateSegment(UpdateSegment &other, ColumnData &new_owner);
 	~UpdateSegment();
 
 	ColumnData &column_data;
@@ -32,7 +34,6 @@ public:
 	bool HasUncommittedUpdates(idx_t vector_index);
 	bool HasUpdates(idx_t vector_index) const;
 	bool HasUpdates(idx_t start_row_idx, idx_t end_row_idx);
-	void ClearUpdates();
 
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result);
 	void FetchCommitted(idx_t vector_index, Vector &result);
@@ -41,9 +42,9 @@ public:
 	            Vector &base_data);
 	void FetchRow(TransactionData transaction, idx_t row_id, Vector &result, idx_t result_idx);
 
-	void RollbackUpdate(UpdateInfo *info);
-	void CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo *info);
-	void CleanupUpdate(UpdateInfo *info);
+	void RollbackUpdate(UpdateInfo &info);
+	void CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo &info);
+	void CleanupUpdate(UpdateInfo &info);
 
 	unique_ptr<BaseStatistics> GetStatistics();
 	StringHeap &GetStringHeap() {
@@ -76,7 +77,7 @@ public:
 	                                                 Vector &result);
 	typedef void (*fetch_row_function_t)(transaction_t start_time, transaction_t transaction_id, UpdateInfo *info,
 	                                     idx_t row_idx, Vector &result, idx_t result_idx);
-	typedef void (*rollback_update_function_t)(UpdateInfo *base_info, UpdateInfo *rollback_info);
+	typedef void (*rollback_update_function_t)(UpdateInfo &base_info, UpdateInfo &rollback_info);
 	typedef idx_t (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats, Vector &update,
 	                                              idx_t count, SelectionVector &sel);
 

@@ -10,12 +10,14 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 
 struct CSVFileHandle {
 public:
-	explicit CSVFileHandle(unique_ptr<FileHandle> file_handle_p) : file_handle(move(file_handle_p)) {
+	explicit CSVFileHandle(unique_ptr<FileHandle> file_handle_p, bool enable_reset = true)
+	    : file_handle(std::move(file_handle_p)), reset_enabled(enable_reset) {
 		can_seek = file_handle->CanSeek();
 		plain_file_source = file_handle->OnDiskFile() && can_seek;
 		file_size = file_handle->GetFileSize();
@@ -87,6 +89,7 @@ public:
 			// we have data left to read from the file
 			// read directly into the buffer
 			auto bytes_read = file_handle->Read((char *)buffer + result_offset, nr_bytes - result_offset);
+			file_size = file_handle->GetFileSize();
 			read_position += bytes_read;
 			if (reset_enabled) {
 				// if reset caching is enabled, we need to cache the bytes that we have read
@@ -98,7 +101,7 @@ public:
 					if (buffer_size > 0) {
 						memcpy(new_buffer.get(), cached_buffer.get(), buffer_size);
 					}
-					cached_buffer = move(new_buffer);
+					cached_buffer = std::move(new_buffer);
 				}
 				memcpy(cached_buffer.get() + buffer_size, (char *)buffer + result_offset, bytes_read);
 				buffer_size += bytes_read;

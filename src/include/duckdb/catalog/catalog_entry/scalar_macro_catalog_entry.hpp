@@ -18,11 +18,15 @@ namespace duckdb {
 //! A macro function in the catalog
 class ScalarMacroCatalogEntry : public MacroCatalogEntry {
 public:
-	ScalarMacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info);
+	static constexpr const CatalogType Type = CatalogType::MACRO_ENTRY;
+	static constexpr const char *Name = "macro function";
+
+public:
+	ScalarMacroCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateMacroInfo &info);
 
 public:
 	//! Serialize the meta information of the ScalarMacroCatalogEntry
-	void Serialize(Serializer &serializer) override;
+	void Serialize(Serializer &serializer) const override;
 	//! Deserializes to a CreateMacroInfo
 	static unique_ptr<CreateMacroInfo> Deserialize(Deserializer &source, ClientContext &context);
 };

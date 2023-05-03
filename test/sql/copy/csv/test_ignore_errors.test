@@ -6,10 +6,10 @@ statement ok
 CREATE TABLE integers(i INTEGER, j INTEGER);
 
 statement ok
-COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER, IGNORE_ERRORS)
+COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING FALSE)
 
 statement error
-COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER)
+COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little.csv' (HEADER, NULL_PADDING FALSE)
 
 # not enough columns provided
 query II
@@ -25,10 +25,10 @@ statement ok
 DELETE FROM integers;
 
 statement ok
-INSERT INTO integers SELECT * FROM read_csv('test/sql/copy/csv/data/test/error_too_little.csv', columns={'i': 'INTEGER', 'j': 'INTEGER'}, header=1, ignore_errors=1)
+INSERT INTO integers SELECT * FROM read_csv('test/sql/copy/csv/data/test/error_too_little.csv', columns={'i': 'INTEGER', 'j': 'INTEGER'}, header=1, ignore_errors=1, null_padding=0)
 
 statement error
-INSERT INTO integers SELECT * FROM read_csv('test/sql/copy/csv/data/test/error_too_little.csv', columns={'i': 'INTEGER'}, header=1)
+INSERT INTO integers SELECT * FROM read_csv('test/sql/copy/csv/data/test/error_too_little.csv', columns={'i': 'INTEGER'}, header=1, null_padding=0)
 
 # not enough columns provided
 query II
@@ -44,10 +44,10 @@ statement ok
 DELETE FROM integers;
 
 statement ok
-COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_single.csv' (HEADER, IGNORE_ERRORS)
+COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_single.csv' (HEADER, IGNORE_ERRORS, NULL_PADDING 0)
 
 statement error
-COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_single.csv' (HEADER)
+COPY integers FROM 'test/sql/copy/csv/data/test/error_too_little_single.csv' (HEADER, NULL_PADDING 0)
 
 # not enough columns provided, single value
 query II

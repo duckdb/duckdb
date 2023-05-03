@@ -1,0 +1,63 @@
+# name: test/fuzzer/pedro/create_index_error.test
+# description: Errors while inserting into indexes
+# group: [pedro]
+
+# create an index with an expression that leads to an error on insert
+statement ok
+CREATE TABLE t0 (c0 VARCHAR, c1 INT);
+
+statement ok
+INSERT INTO t0(c0) VALUES ('a');
+
+# error (should) is already thrown during index creation
+# cannot CAST str to int
+statement error
+CREATE INDEX i1 ON t0 (c1, CAST('c' AS INT));
+----
+Conversion Error: Could not convert string 'c' to INT32
+
+statement ok
+CREATE INDEX i0 ON t0 (c0);
+
+statement ok
+DROP TABLE t0
+
+# create an index with an expression that leads to an error on insert, then delete from that table
+statement ok
+CREATE TABLE t0 (c1 INT, c0 INT);
+
+statement ok
+INSERT INTO t0(c0) VALUES (1);
+
+# error (should) is already thrown during index creation
+# Error: Conversion Error: Failure in decode: [...] blob contained invalid UTF8 characters
+statement error
+CREATE INDEX i1 ON t0 ((decode('\x0C\xE4\x85\xF5'::BLOB)::VARCHAR), c1);
+----
+Conversion Error: Failure in decode: could not convert blob to UTF8 string, the blob contained invalid UTF8 characters
+
+statement ok
+DELETE FROM t0;
+
+statement ok
+DROP TABLE t0;
+
+statement ok
+CREATE TABLE t1 (c1 BOOLEAN);
+
+statement ok
+INSERT INTO t1 VALUES (0);
+
+statement ok
+DELETE FROM t1;
+
+statement ok
+CREATE INDEX i0 ON t1 (c1, (decode('\x81\x5C\xE5'::BLOB)::VARCHAR));
+
+statement error
+INSERT INTO t1 VALUES (1);
+----
+Conversion Error: Failure in decode: could not convert blob to UTF8 string, the blob contained invalid UTF8 characters
+
+statement ok
+CREATE INDEX i1 ON t1 USING ART (c1);

@@ -78,3 +78,16 @@ SELECT COLUMNS(*) + COLUMNS(* EXCLUDE(j)) FROM integers
 # COLUMNS in subquery without FROM clause
 statement error
 SELECT (SELECT COLUMNS(*)) FROM integers
+
+# COLUMNS in order by clause
+query III
+SELECT * FROM grouped_table ORDER BY COLUMNS('index[0-9]');
+----
+2	13	14
+1	42	84
+
+query III
+SELECT * FROM grouped_table ORDER BY COLUMNS(*);
+----
+1	42	84
+2	13	14

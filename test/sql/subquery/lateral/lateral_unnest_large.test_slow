@@ -1,0 +1,21 @@
+# name: test/sql/subquery/lateral/lateral_unnest_large.test_slow
+# description: Test large LATERAL UNNEST
+# group: [lateral]
+
+# large table
+statement ok
+CREATE TABLE lists AS SELECT ARRAY[i, NULL, i + 1, i + 2, NULL] l FROM generate_series(0, 999999, 1) t(i);
+
+query I
+SELECT SUM(k) FROM lists, UNNEST(l) t(k)
+----
+1500001500000
+
+# strings
+statement ok
+CREATE TABLE lists_strings AS SELECT ARRAY['longstringprefix_' || i, NULL, 'longstringprefix_' || (i + 1), 'longstringprefix_' || (i + 2), NULL] l FROM generate_series(0, 999999, 1) t(i);
+
+query I
+SELECT SUM(replace(k, 'longstringprefix_', '')::BIGINT) FROM lists_strings, UNNEST(l) t(k)
+----
+1500001500000

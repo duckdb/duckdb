@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   transform_array_access.cpp
   transform_bool_expr.cpp
+  transform_boolean_test.cpp
   transform_case.cpp
   transform_cast.cpp
   transform_coalesce.cpp

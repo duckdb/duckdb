@@ -10,6 +10,7 @@
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #endif
 
 #define DECLARER /* EXTERN references get defined here */
@@ -18,6 +19,7 @@
 #include "dbgen/dsstypes.h"
 
 #include <cassert>
+#include <cmath>
 #include <mutex>
 
 using namespace duckdb;
@@ -25,7 +27,7 @@ using namespace duckdb;
 namespace tpch {
 
 struct tpch_append_information {
-	unique_ptr<InternalAppender> appender;
+	duckdb::unique_ptr<InternalAppender> appender;
 };
 
 void append_value(tpch_append_information &info, int32_t value) {
@@ -92,7 +94,7 @@ static void append_line(order_t *o, tpch_append_information *info) {
 		// l_linenumber
 		append_value(append_info, o->l[i].lcnt);
 		// l_quantity
-		append_value(append_info, o->l[i].quantity);
+		append_decimal(append_info, o->l[i].quantity);
 		// l_extendedprice
 		append_decimal(append_info, o->l[i].eprice);
 		// l_discount
@@ -244,14 +246,15 @@ static void append_region(code_t *c, tpch_append_information *info) {
 	append_info.appender->EndRow();
 }
 
-static void gen_tbl(int tnum, DSS_HUGE count, tpch_append_information *info, DBGenContext *dbgen_ctx) {
+static void gen_tbl(int tnum, DSS_HUGE count, tpch_append_information *info, DBGenContext *dbgen_ctx,
+                    idx_t offset = 0) {
 	order_t o;
 	supplier_t supp;
 	customer_t cust;
 	part_t part;
 	code_t code;
 
-	for (DSS_HUGE i = 1; count; count--, i++) {
+	for (DSS_HUGE i = offset + 1; count; count--, i++) {
 		row_start(tnum, dbgen_ctx);
 		switch (tnum) {
 		case LINE:
@@ -405,7 +408,7 @@ const char *LineitemInfo::Columns[] = {"l_orderkey",    "l_partkey",       "l_su
                                        "l_receiptdate", "l_shipinstruct",  "l_shipmode", "l_comment"};
 const LogicalType LineitemInfo::Types[] = {
     LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType::DECIMAL(15, 2),
+    LogicalType(LogicalTypeId::INTEGER), LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),
     LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::VARCHAR),
     LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::DATE),
     LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
@@ -413,17 +416,17 @@ const LogicalType LineitemInfo::Types[] = {
 
 template <class T>
 static void CreateTPCHTable(ClientContext &context, string schema, string suffix) {
-	auto info = make_unique<CreateTableInfo>();
+	auto info = make_uniq<CreateTableInfo>();
 	info->schema = schema;
 	info->table = T::Name + suffix;
-	info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
+	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	info->temporary = false;
 	for (idx_t i = 0; i < T::ColumnCount; i++) {
 		info->columns.AddColumn(ColumnDefinition(T::Columns[i], T::Types[i]));
-		info->constraints.push_back(make_unique<NotNullConstraint>(LogicalIndex(i)));
+		info->constraints.push_back(make_uniq<NotNullConstraint>(LogicalIndex(i)));
 	}
-	auto &catalog = Catalog::GetCatalog(context);
-	catalog.CreateTable(context, move(info));
+	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
+	catalog.CreateTable(context, std::move(info));
 }
 
 void DBGenWrapper::CreateTPCHSchema(ClientContext &context, string schema, string suffix) {
@@ -437,13 +440,40 @@ void DBGenWrapper::CreateTPCHSchema(ClientContext &context, string schema, strin
 	CreateTPCHTable<LineitemInfo>(context, schema, suffix);
 }
 
-void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string schema, string suffix) {
+void skip(int table, int children, DSS_HUGE step, DBGenContext &dbgen_ctx) {
+	switch (table) {
+	case CUST:
+		sd_cust(children, step, &dbgen_ctx);
+		break;
+	case SUPP:
+		sd_supp(children, step, &dbgen_ctx);
+		break;
+	case NATION:
+		sd_nation(children, step, &dbgen_ctx);
+		break;
+	case REGION:
+		sd_region(children, step, &dbgen_ctx);
+		break;
+	case ORDER_LINE:
+		sd_line(children, step, &dbgen_ctx);
+		sd_order(children, step, &dbgen_ctx);
+		break;
+	case PART_PSUPP:
+		sd_part(children, step, &dbgen_ctx);
+		sd_psupp(children, step, &dbgen_ctx);
+		break;
+	}
+}
+
+void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string schema, string suffix, int children_p,
+                                int current_step) {
 	if (flt_scale == 0) {
 		return;
 	}
 
 	// generate the actual data
 	DSS_HUGE rowcnt = 0;
+	DSS_HUGE extra;
 	DSS_HUGE i;
 	// all tables
 	table = (1 << CUST) | (1 << SUPP) | (1 << NATION) | (1 << REGION) | (1 << PART_PSUPP) | (1 << ORDER_LINE);
@@ -471,8 +501,12 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 	tdefs[NATION].base = NATIONS_MAX;
 	tdefs[REGION].base = NATIONS_MAX;
 
-	children = 1;
+	children = children_p;
 	d_path = NULL;
+
+	if (current_step >= children) {
+		return;
+	}
 
 	if (flt_scale < MIN_SCALE) {
 		int i;
@@ -489,23 +523,22 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 	} else {
 		dbgen_ctx.scale_factor = (long)flt_scale;
 	}
-
-	load_dists(300 * 1024 * 1024, &dbgen_ctx); // 300MiB
+	load_dists(10 * 1024 * 1024, &dbgen_ctx); // 10MiB
 
 	/* have to do this after init */
 	tdefs[NATION].base = nations.count;
 	tdefs[REGION].base = regions.count;
 
-	auto &catalog = Catalog::GetCatalog(context);
+	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
 
-	auto append_info = unique_ptr<tpch_append_information[]>(new tpch_append_information[REGION + 1]);
+	auto append_info = duckdb::unique_ptr<tpch_append_information[]>(new tpch_append_information[REGION + 1]);
 	memset(append_info.get(), 0, sizeof(tpch_append_information) * REGION + 1);
 	for (size_t i = PART; i <= REGION; i++) {
 		auto tname = get_table_name(i);
 		if (!tname.empty()) {
 			string full_tname = string(tname) + string(suffix);
-			auto tbl_catalog = catalog.GetEntry<TableCatalogEntry>(context, schema, full_tname);
-			append_info[i].appender = make_unique<InternalAppender>(context, *tbl_catalog);
+			auto &tbl_catalog = catalog.GetEntry<TableCatalogEntry>(context, schema, full_tname);
+			append_info[i].appender = make_uniq<InternalAppender>(context, tbl_catalog);
 		}
 	}
 
@@ -516,8 +549,20 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 			} else {
 				rowcnt = tdefs[i].base;
 			}
-			// actually doing something
-			gen_tbl((int)i, rowcnt, append_info.get(), &dbgen_ctx);
+			if (children > 1 && current_step != -1) {
+				size_t part_size = std::ceil((double)rowcnt / (double)children);
+				auto part_offset = part_size * current_step;
+				auto part_end = part_offset + part_size;
+				rowcnt = part_end > rowcnt ? rowcnt - part_offset : part_size;
+				skip(i, children, part_offset, dbgen_ctx);
+				if (rowcnt > 0) {
+					// generate part of the table
+					gen_tbl((int)i, rowcnt, append_info.get(), &dbgen_ctx, part_offset);
+				}
+			} else {
+				// generate full table
+				gen_tbl((int)i, rowcnt, append_info.get(), &dbgen_ctx);
+			}
 		}
 	}
 	// flush any incomplete chunks

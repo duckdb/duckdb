@@ -1,0 +1,142 @@
+# name: test/sql/cast/test_string_binary_cast.test
+# group: [cast]
+
+foreach prefix 0b 0B
+
+# Empty binary should fail
+statement error
+SELECT '${prefix}'::INT
+
+# Binary with invalid characters should fail
+statement error
+SELECT '${prefix}2'::INT
+
+statement error
+SELECT '${prefix}10105'::INT
+
+# Negative binary should fail
+statement error
+SELECT '${prefix}-1'::INT
+
+statement error
+SELECT '-${prefix}1'::INT
+
+# Basic asserts
+query I
+SELECT '${prefix}1'::INT
+----
+1
+
+query I
+SELECT '${prefix}10'::INT
+----
+2
+
+query I
+SELECT '${prefix}11'::INT
+----
+3
+
+query I
+SELECT '${prefix}0000000'::INT
+----
+0
+
+# Allow underscores as digit separators
+query I
+SELECT '${prefix}1_0'::INT
+----
+2
+
+query I
+SELECT '${prefix}1_0_0'::INT
+----
+4
+
+query I
+SELECT '${prefix}11110000_11110000'::INT
+----
+61680
+
+# But dont allow them at the start or end
+statement error
+SELECT '${prefix}_1'::INT
+
+statement error
+SELECT '${prefix}1_'::INT
+
+statement error
+SELECT '${prefix}1_0_'::INT
+
+statement error
+SELECT '${prefix}_1_0'::INT
+
+
+# Property check! 
+foreach binary 1 01 00 0_0 10 10101 1001 0001 1111 1111_1111 01111111111111111111111111111111 01111111_11111111_11111111_11111111
+
+query I
+WITH binary_string as (select replace('${binary}', '_', '') as str)
+SELECT 
+	list_sum([ (CASE WHEN str[i+1] = '0' THEN 0 ELSE 1 END) * (2 ** (len(str)-(i+1))) for i in range(len(str))])::INT
+	==
+	'${prefix}${binary}'::INT
+FROM binary_string
+----
+true
+
+endloop
+
+
+# Test limits
+query I
+SELECT '${prefix}0000000000000000000000000000000001111111'::TINYINT
+----
+127
+
+query I
+SELECT '${prefix}0000000000000000000000000000000011111111'::UINT8
+----
+255
+
+statement error
+SELECT '${prefix}00000000000000000000000000000000111111111'::TINYINT
+
+query I
+SELECT '${prefix}1111111111111111111111111111111'::INT
+----
+2147483647
+
+statement error
+SELECT '${prefix}11111111111111111111111111111111'::INT
+
+query I
+SELECT '${prefix}01111111111111111111111111111111'::UINT32
+----
+2147483647
+
+query I
+SELECT '${prefix}11111111111111111111111111111111'::UINT32
+----
+4294967295
+
+query I
+SELECT '${prefix}11111111111111111111111111111111'::BIGINT
+----
+4294967295
+
+query I
+SELECT '${prefix}111111111111111111111111111111111111111111111111111111111111111'::BIGINT
+----
+9223372036854775807
+
+statement error
+SELECT '${prefix}1111111111111111111111111111111111111111111111111111111111111111'::BIGINT
+
+query I
+SELECT '${prefix}1111111111111111111111111111111111111111111111111111111111111111'::UINT64
+----
+18446744073709551615
+
+
+endloop

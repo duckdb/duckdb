@@ -1,0 +1,31 @@
+# name: test/fuzzer/pedro/another_binder_error.test
+# description: Issue #4978 (issue 48): Another Binder Issue
+# group: [pedro]
+
+mode skip
+
+statement error
+SELECT avg(0) c0, (SELECT 0 OFFSET c0);
+----
+Correlated columns not supported in LIMIT/OFFSET
+
+statement error
+SELECT avg(0) c0, (SELECT 0 OFFSET c0 + 1);
+----
+Correlated columns not supported in LIMIT/OFFSET
+
+query II
+SELECT 1 c0, (SELECT 0 OFFSET c0 - 1);
+----
+1	0
+
+
+statement error
+SELECT (SELECT avg(0)) c0, (SELECT 0 OFFSET c0 + 1);
+----
+Serialization Error: Cannot copy BoundSubqueryExpression
+
+query II
+select avg(0) AS c0, (SELECT c0);
+----
+0.0	0.0

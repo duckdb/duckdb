@@ -1,0 +1,30 @@
+# name: test/fuzzer/pedro/rename_restart.test
+# description: Rename table restart
+# group: [pedro]
+
+load __TEST_DIR__/rename_restart.db
+
+statement ok
+SET wal_autocheckpoint='10MB';
+
+statement ok
+CREATE TABLE t0(c0 INT);
+
+statement ok
+CREATE VIEW t1 AS SELECT 1 c0;
+
+statement ok
+CREATE INDEX i1 ON t0(c0);
+
+statement error
+ALTER TABLE t0 RENAME TO t1;
+----
+t1
+
+statement ok
+CHECKPOINT;
+
+restart
+
+statement ok
+select 42

@@ -4,17 +4,12 @@
 
 namespace duckdb {
 
-PhysicalExecute::PhysicalExecute(PhysicalOperator *plan)
-    : PhysicalOperator(PhysicalOperatorType::EXECUTE, plan->types, -1), plan(plan) {
+PhysicalExecute::PhysicalExecute(PhysicalOperator &plan)
+    : PhysicalOperator(PhysicalOperatorType::EXECUTE, plan.types, -1), plan(plan) {
 }
 
-vector<PhysicalOperator *> PhysicalExecute::GetChildren() const {
+vector<const_reference<PhysicalOperator>> PhysicalExecute::GetChildren() const {
 	return {plan};
-}
-
-bool PhysicalExecute::AllOperatorsPreserveOrder() const {
-	D_ASSERT(plan);
-	return plan->AllOperatorsPreserveOrder();
 }
 
 void PhysicalExecute::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {

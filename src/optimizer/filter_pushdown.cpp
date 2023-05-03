@@ -16,62 +16,64 @@ unique_ptr<LogicalOperator> FilterPushdown::Rewrite(unique_ptr<LogicalOperator> 
 	D_ASSERT(!combiner.HasFilters());
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		return PushdownAggregate(move(op));
+		return PushdownAggregate(std::move(op));
 	case LogicalOperatorType::LOGICAL_FILTER:
-		return PushdownFilter(move(op));
+		return PushdownFilter(std::move(op));
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT:
-		return PushdownCrossProduct(move(op));
+		return PushdownCrossProduct(std::move(op));
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-		return PushdownJoin(move(op));
+		return PushdownJoin(std::move(op));
 	case LogicalOperatorType::LOGICAL_PROJECTION:
-		return PushdownProjection(move(op));
+		return PushdownProjection(std::move(op));
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_UNION:
-		return PushdownSetOperation(move(op));
+		return PushdownSetOperation(std::move(op));
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 	case LogicalOperatorType::LOGICAL_ORDER_BY: {
 		// we can just push directly through these operations without any rewriting
-		op->children[0] = Rewrite(move(op->children[0]));
+		op->children[0] = Rewrite(std::move(op->children[0]));
 		return op;
 	}
 	case LogicalOperatorType::LOGICAL_GET:
-		return PushdownGet(move(op));
+		return PushdownGet(std::move(op));
 	case LogicalOperatorType::LOGICAL_LIMIT:
-		return PushdownLimit(move(op));
+		return PushdownLimit(std::move(op));
 	default:
-		return FinishPushdown(move(op));
+		return FinishPushdown(std::move(op));
 	}
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-	         op->type == LogicalOperatorType::LOGICAL_ANY_JOIN || op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
-	auto &join = (LogicalJoin &)*op;
+	         op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op->type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
+	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
+	auto &join = op->Cast<LogicalJoin>();
 	unordered_set<idx_t> left_bindings, right_bindings;
 	LogicalJoin::GetTableReferences(*op->children[0], left_bindings);
 	LogicalJoin::GetTableReferences(*op->children[1], right_bindings);
 
 	switch (join.join_type) {
 	case JoinType::INNER:
-		return PushdownInnerJoin(move(op), left_bindings, right_bindings);
+		return PushdownInnerJoin(std::move(op), left_bindings, right_bindings);
 	case JoinType::LEFT:
-		return PushdownLeftJoin(move(op), left_bindings, right_bindings);
+		return PushdownLeftJoin(std::move(op), left_bindings, right_bindings);
 	case JoinType::MARK:
-		return PushdownMarkJoin(move(op), left_bindings, right_bindings);
+		return PushdownMarkJoin(std::move(op), left_bindings, right_bindings);
 	case JoinType::SINGLE:
-		return PushdownSingleJoin(move(op), left_bindings, right_bindings);
+		return PushdownSingleJoin(std::move(op), left_bindings, right_bindings);
 	default:
 		// unsupported join type: stop pushing down
-		return FinishPushdown(move(op));
+		return FinishPushdown(std::move(op));
 	}
 }
 void FilterPushdown::PushFilters() {
 	for (auto &f : filters) {
-		auto result = combiner.AddFilter(move(f->filter));
-		D_ASSERT(result == FilterResult::SUCCESS);
+		auto result = combiner.AddFilter(std::move(f->filter));
+		D_ASSERT(result != FilterResult::UNSUPPORTED);
 		(void)result;
 	}
 	filters.clear();
@@ -81,11 +83,11 @@ FilterResult FilterPushdown::AddFilter(unique_ptr<Expression> expr) {
 	PushFilters();
 	// split up the filters by AND predicate
 	vector<unique_ptr<Expression>> expressions;
-	expressions.push_back(move(expr));
+	expressions.push_back(std::move(expr));
 	LogicalFilter::SplitPredicates(expressions);
 	// push the filters into the combiner
 	for (auto &child_expr : expressions) {
-		if (combiner.AddFilter(move(child_expr)) == FilterResult::UNSATISFIABLE) {
+		if (combiner.AddFilter(std::move(child_expr)) == FilterResult::UNSATISFIABLE) {
 			return FilterResult::UNSATISFIABLE;
 		}
 	}
@@ -98,30 +100,34 @@ void FilterPushdown::GenerateFilters() {
 		return;
 	}
 	combiner.GenerateFilters([&](unique_ptr<Expression> filter) {
-		auto f = make_unique<Filter>();
-		f->filter = move(filter);
+		auto f = make_uniq<Filter>();
+		f->filter = std::move(filter);
 		f->ExtractBindings();
-		filters.push_back(move(f));
+		filters.push_back(std::move(f));
 	});
+}
+
+unique_ptr<LogicalOperator> FilterPushdown::PushFinalFilters(unique_ptr<LogicalOperator> op) {
+	if (filters.empty()) {
+		// no filters to push
+		return op;
+	}
+	auto filter = make_uniq<LogicalFilter>();
+	for (auto &f : filters) {
+		filter->expressions.push_back(std::move(f->filter));
+	}
+	filter->children.push_back(std::move(op));
+	return std::move(filter);
 }
 
 unique_ptr<LogicalOperator> FilterPushdown::FinishPushdown(unique_ptr<LogicalOperator> op) {
 	// unhandled type, first perform filter pushdown in its children
 	for (auto &child : op->children) {
 		FilterPushdown pushdown(optimizer);
-		child = pushdown.Rewrite(move(child));
+		child = pushdown.Rewrite(std::move(child));
 	}
 	// now push any existing filters
-	if (filters.empty()) {
-		// no filters to push
-		return op;
-	}
-	auto filter = make_unique<LogicalFilter>();
-	for (auto &f : filters) {
-		filter->expressions.push_back(move(f->filter));
-	}
-	filter->children.push_back(move(op));
-	return move(filter);
+	return PushFinalFilters(std::move(op));
 }
 
 void FilterPushdown::Filter::ExtractBindings() {

@@ -15,10 +15,13 @@ namespace duckdb {
 //! LogicalLimitPercent represents a LIMIT PERCENT clause
 class LogicalLimitPercent : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_LIMIT_PERCENT;
+
+public:
 	LogicalLimitPercent(double limit_percent, int64_t offset_val, unique_ptr<Expression> limit,
 	                    unique_ptr<Expression> offset)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_LIMIT_PERCENT), limit_percent(limit_percent),
-	      offset_val(offset_val), limit(move(limit)), offset(move(offset)) {
+	      offset_val(offset_val), limit(std::move(limit)), offset(std::move(offset)) {
 	}
 
 	//! Limit percent and offset values in case they are constants, used in optimizations.

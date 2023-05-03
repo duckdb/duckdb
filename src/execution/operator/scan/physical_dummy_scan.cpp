@@ -11,7 +11,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalDummyScan::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<DummyScanState>();
+	return make_uniq<DummyScanState>();
 }
 
 void PhysicalDummyScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,

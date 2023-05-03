@@ -1,0 +1,87 @@
+# name: test/sql/function/list/lambdas/rhs_parameters.test
+# description: Test nested lambda parameters in the rhs of lambda expressions
+# group: [lambdas]
+
+# issue #5795
+query I
+SELECT list_apply([1,2], x -> list_apply([3,4], y -> (x,y))) AS bug;
+----
+[[{'x': 1, 'y': 3}, {'x': 1, 'y': 4}], [{'x': 2, 'y': 3}, {'x': 2, 'y': 4}]]
+
+# arbitrary other nested lambdas
+
+query I
+select list_transform([1,2], x -> list_transform([3,4], y -> x + y));
+----
+[[4, 5], [5, 6]]
+
+query I
+select list_transform([1,2], x -> list_transform([3,4], y -> list_transform([5,6], z -> z + y + x)));
+----
+[[[9, 10], [10, 11]], [[10, 11], [11, 12]]]
+
+query I
+select list_transform([1,2,3,4], x -> list_filter([4,5,1,2,3,3,3,5,1,4], y -> y != x))
+----
+[[4, 5, 2, 3, 3, 3, 5, 4], [4, 5, 1, 3, 3, 3, 5, 1, 4], [4, 5, 1, 2, 5, 1, 4], [5, 1, 2, 3, 3, 3, 5, 1]]
+
+query I
+select list_transform([[2, 4, 6]], x -> list_transform(x, y -> list_sum([y] || x)))
+----
+[[14, 16, 18]]
+
+query I
+SELECT list_apply(range(5), x -> {x:x, w:list_filter(range(5), y -> abs(y-x) < 2)});
+----
+[{'x': 0, 'w': [0, 1]}, {'x': 1, 'w': [0, 1, 2]}, {'x': 2, 'w': [1, 2, 3]}, {'x': 3, 'w': [2, 3, 4]}, {'x': 4, 'w': [3, 4]}]
+
+query I
+SELECT list_apply(range(8), x -> list_aggr(list_apply(range(8),
+y -> list_element('▁▂▃▄▅▆▇█', 1+abs(y-x))), 'string_agg', ''));
+----
+[▁▂▃▄▅▆▇█, ▂▁▂▃▄▅▆▇, ▃▂▁▂▃▄▅▆, ▄▃▂▁▂▃▄▅, ▅▄▃▂▁▂▃▄, ▆▅▄▃▂▁▂▃, ▇▆▅▄▃▂▁▂, █▇▆▅▄▃▂▁]
+
+statement ok
+CREATE TABLE lists (i integer, v varchar[])
+
+statement ok
+INSERT INTO lists VALUES (1, ['a', 'b', 'c']), (8, NULL), (3, ['duck', 'db', 'tests']), (NULL, NULL), (NULL, ['lambdas!'])
+
+query I
+SELECT list_transform(v, x -> list_transform(v, y -> x || y)) FROM lists
+----
+[[aa, ab, ac], [ba, bb, bc], [ca, cb, cc]]
+NULL
+[[duckduck, duckdb, ducktests], [dbduck, dbdb, dbtests], [testsduck, testsdb, teststests]]
+NULL
+[[lambdas!lambdas!]]
+
+query I
+SELECT list_transform(v, x -> list_transform(v, y -> list_transform(v, z -> x || y || z))) FROM lists
+----
+[[[aaa, aab, aac], [aba, abb, abc], [aca, acb, acc]], [[baa, bab, bac], [bba, bbb, bbc], [bca, bcb, bcc]], [[caa, cab, cac], [cba, cbb, cbc], [cca, ccb, ccc]]]
+NULL
+[[[duckduckduck, duckduckdb, duckducktests], [duckdbduck, duckdbdb, duckdbtests], [ducktestsduck, ducktestsdb, duckteststests]], [[dbduckduck, dbduckdb, dbducktests], [dbdbduck, dbdbdb, dbdbtests], [dbtestsduck, dbtestsdb, dbteststests]], [[testsduckduck, testsduckdb, testsducktests], [testsdbduck, testsdbdb, testsdbtests], [teststestsduck, teststestsdb, teststeststests]]]
+NULL
+[[[lambdas!lambdas!lambdas!]]]
+
+query I
+SELECT list_transform(v, x -> [list_transform([':-)'], y -> x || y || '-#lambdaLove')]
+|| list_filter(list_transform(['B-)'], k -> [k] || [x]), j -> list_contains(j, 'a') or list_contains(j, 'duck')))
+FROM lists
+----
+[[[a:-)-#lambdaLove], [B-), a]], [[b:-)-#lambdaLove]], [[c:-)-#lambdaLove]]]
+NULL
+[[[duck:-)-#lambdaLove], [B-), duck]], [[db:-)-#lambdaLove]], [[tests:-)-#lambdaLove]]]
+NULL
+[[[lambdas!:-)-#lambdaLove]]]
+
+statement ok
+create table no_overwrite as select [range, range + 1] l from range(3);
+
+query II
+select l, [[(x + y, x, y, l) for y in [42, 43]] for x in l] from no_overwrite;
+----
+[0, 1]	[[{'v1': 42, 'x': 0, 'y': 42, 'l': [0, 1]}, {'v1': 43, 'x': 0, 'y': 43, 'l': [0, 1]}], [{'v1': 43, 'x': 1, 'y': 42, 'l': [0, 1]}, {'v1': 44, 'x': 1, 'y': 43, 'l': [0, 1]}]]
+[1, 2]	[[{'v1': 43, 'x': 1, 'y': 42, 'l': [1, 2]}, {'v1': 44, 'x': 1, 'y': 43, 'l': [1, 2]}], [{'v1': 44, 'x': 2, 'y': 42, 'l': [1, 2]}, {'v1': 45, 'x': 2, 'y': 43, 'l': [1, 2]}]]
+[2, 3]	[[{'v1': 44, 'x': 2, 'y': 42, 'l': [2, 3]}, {'v1': 45, 'x': 2, 'y': 43, 'l': [2, 3]}], [{'v1': 45, 'x': 3, 'y': 42, 'l': [2, 3]}, {'v1': 46, 'x': 3, 'y': 43, 'l': [2, 3]}]]
