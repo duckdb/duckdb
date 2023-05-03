@@ -1,0 +1,29 @@
+# name: test/sql/types/nested/map/test_map_concat.test
+# group: [map]
+
+#statement ok
+#pragma enable_verification;
+
+# Basic use, 2 maps, same type, no nulls
+query I
+select map_concat(map([3,4,5], ['a', 'b', 'c']), map([1], ['d']));
+----
+{3=a, 4=b, 5=c, 1=d}
+
+# Appending an empty map to a non-empty map
+query I
+select map_concat(map([3,4,5], ['a', 'b', 'c']), map([], []));
+----
+{3=a, 4=b, 5=c}
+
+# Appending two empty maps
+query I
+select map_concat(map([], []), map([], []))
+----
+{}
+
+# Appending a non empty map to an empty map
+query I
+select map_concat(map([], []), map([3,4,5], ['a', 'b', 'c']));
+----
+{3=a, 4=b, 5=c}

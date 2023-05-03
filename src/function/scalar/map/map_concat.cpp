@@ -12,6 +12,8 @@ namespace duckdb {
 namespace {
 
 struct MapKeyIndexPair {
+	MapKeyIndexPair(idx_t map, idx_t key) : map_index(map), key_index(key) {
+	}
 	// The index of the map that this key comes from
 	idx_t map_index;
 	// The index within the maps key_list
@@ -20,34 +22,102 @@ struct MapKeyIndexPair {
 
 } // namespace
 
-static void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-	auto count = args.size();
-	auto arg_count = args.ColumnCount();
-
-	UnifiedVectorFormat result_data;
-	result.ToUnifiedFormat(count, result_data);
-
-	for (idx_t i = 0; i < arg_count; i++) {
+vector<Value> GetListEntries(vector<Value> keys, vector<Value> values) {
+	D_ASSERT(keys.size() == values.size());
+	vector<Value> entries;
+	for (idx_t i = 0; i < keys.size(); i++) {
+		child_list_t<Value> children;
+		children.emplace_back(make_pair("key", std::move(keys[i])));
+		children.emplace_back(make_pair("value", std::move(values[i])));
+		entries.push_back(Value::STRUCT(std::move(children)));
 	}
+	return entries;
+}
 
-	auto &map = args.data[0];
-	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
-	auto child = get_child_vector(map);
+static void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
+		// All inputs are NULL, just return NULL
+		auto &entry = ListVector::GetData(result)[0];
+		entry.length = 0;
+		entry.offset = 0;
+		auto &validity = FlatVector::Validity(result);
+		validity.SetInvalid(0);
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		return;
+	}
+	D_ASSERT(result.GetType().id() == LogicalTypeId::MAP);
+	auto count = args.size();
 
-	auto &entries = ListVector::GetEntry(result);
-	entries.Reference(child);
+	auto map_count = args.ColumnCount();
+	vector<UnifiedVectorFormat> map_formats(map_count);
+	for (idx_t i = 0; i < map_count; i++) {
+		auto &map = args.data[i];
+		map.ToUnifiedFormat(count, map_formats[i]);
+	}
+	auto result_data = FlatVector::GetData<list_entry_t>(result);
 
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	FlatVector::SetData(result, map_data.data);
-	FlatVector::SetValidity(result, map_data.validity);
-	auto list_size = ListVector::GetListSize(map);
-	ListVector::SetListSize(result, list_size);
+	for (idx_t i = 0; i < count; i++) {
+		// Loop through all the maps per list
+		// we cant do better because all the entries of the child vector have to be contiguous
+		// so we cant start the next row before we have finished the one before it
+		auto &result_entry = result_data[i];
+		vector<MapKeyIndexPair> index_to_map;
+		vector<Value> keys_list;
+		for (idx_t map_idx = 0; map_idx < map_count; map_idx++) {
+			auto &map_format = map_formats[map_idx];
+			auto &keys = MapVector::GetKeys(args.data[map_idx]);
+
+			auto index = map_format.sel->get_index(i);
+			auto entry = ((list_entry_t *)map_format.data)[index];
+
+			// Update the list for this row
+			for (idx_t list_idx = 0; list_idx < entry.length; list_idx++) {
+				auto key_index = entry.offset + list_idx;
+				auto key = keys.GetValue(key_index);
+				auto entry = std::find(keys_list.begin(), keys_list.end(), key);
+				if (entry == keys_list.end()) {
+					// Result list does not contain this value yet
+					keys_list.push_back(key);
+					index_to_map.emplace_back(map_idx, key_index);
+				} else {
+					// Result list already contains this, update where to find the value at
+					auto distance = std::distance(keys_list.begin(), entry);
+					auto &mapping = *(index_to_map.begin() + distance);
+					mapping.key_index = key_index;
+					mapping.map_index = map_idx;
+				}
+			}
+		}
+		vector<Value> values_list;
+		D_ASSERT(keys_list.size() == index_to_map.size());
+		// Get the values from the mapping
+		for (auto &mapping : index_to_map) {
+			auto &map = args.data[mapping.map_index];
+			auto &values = MapVector::GetValues(map);
+			values_list.push_back(values.GetValue(mapping.key_index));
+		}
+		idx_t entries_count = keys_list.size();
+		D_ASSERT(values_list.size() == keys_list.size());
+		result_entry.offset = ListVector::GetListSize(result);
+		result_entry.length = values_list.size();
+		auto list_entries = GetListEntries(std::move(keys_list), std::move(values_list));
+		for (auto &list_entry : list_entries) {
+			ListVector::PushBack(result, list_entry);
+		}
+		ListVector::SetListSize(result, ListVector::GetListSize(result) + entries_count);
+	}
 
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 	result.Verify(count);
+}
+
+static bool IsEmptyMap(const LogicalType &map) {
+	D_ASSERT(map.id() == LogicalTypeId::MAP);
+	auto &key_type = MapType::KeyType(map);
+	auto &value_type = MapType::ValueType(map);
+	return key_type.id() == LogicalType::SQLNULL && value_type.id() == LogicalType::SQLNULL;
 }
 
 static unique_ptr<FunctionData> MapConcatBind(ClientContext &context, ScalarFunction &bound_function,
@@ -65,8 +135,11 @@ static unique_ptr<FunctionData> MapConcatBind(ClientContext &context, ScalarFunc
 		return nullptr;
 	}
 
+	LogicalType expected = LogicalType::SQLNULL;
+
+	bool is_null = true;
 	// Check and verify that all the maps are of the same type
-	for (idx_t i = 1; i < arg_count; i++) {
+	for (idx_t i = 0; i < arg_count; i++) {
 		auto &arg = arguments[i];
 		auto &map = arg->return_type;
 		// TODO: add a test using prepared statements
@@ -76,25 +149,36 @@ static unique_ptr<FunctionData> MapConcatBind(ClientContext &context, ScalarFunc
 			bound_function.return_type = LogicalType(LogicalTypeId::SQLNULL);
 			return nullptr;
 		}
+		if (map.id() == LogicalTypeId::SQLNULL) {
+			// The maps are allowed to be NULL
+			continue;
+		}
+		is_null = false;
+		if (IsEmptyMap(map)) {
+			// Map is allowed to be empty
+			continue;
+		}
 
-		auto &expected = arguments[0]->return_type;
-		auto &actual = arguments[i]->return_type;
-
-		if (actual != expected) {
+		if (expected.id() == LogicalTypeId::SQLNULL) {
+			expected = map;
+		} else if (map != expected) {
 			throw InvalidInputException(
 			    "'value' type of map differs between arguments, expected '%s', found '%s' instead", expected.ToString(),
-			    actual.ToString());
+			    map.ToString());
 		}
 	}
 
-	bound_function.return_type = arguments[0]->return_type;
+	if (expected.id() == LogicalTypeId::SQLNULL && is_null == false) {
+		expected = LogicalType::MAP(LogicalType::SQLNULL, LogicalType::SQLNULL);
+	}
+	bound_function.return_type = expected;
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 void MapConcatFun::RegisterFunction(BuiltinFunctions &set) {
 	//! the arguments and return types are actually set in the binder function
 	ScalarFunction fun("map_concat", {}, LogicalTypeId::LIST, MapConcatFunction, MapConcatBind);
-	fun.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 }

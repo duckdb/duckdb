@@ -25,6 +25,7 @@ void BuiltinFunctions::RegisterNestedFunctions() {
 	Register<MapEntriesFun>();
 	Register<MapValuesFun>();
 	Register<MapKeysFun>();
+	Register<MapConcatFun>();
 	Register<MapExtractFun>();
 	Register<UnionValueFun>();
 	Register<UnionExtractFun>();
