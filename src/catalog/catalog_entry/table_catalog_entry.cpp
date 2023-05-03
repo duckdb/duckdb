@@ -58,9 +58,8 @@ CreateTableInfo TableCatalogEntry::GetTableInfoForSerialization() const {
 	result.table = name;
 	result.columns = columns.Copy();
 	result.constraints.reserve(constraints.size());
-	std::for_each(constraints.begin(), constraints.end(), [&result](const unique_ptr<Constraint> &c) {
-		result.constraints.emplace_back(c->Copy());
-	});
+	std::for_each(constraints.begin(), constraints.end(),
+	              [&result](const unique_ptr<Constraint> &c) { result.constraints.emplace_back(c->Copy()); });
 	return result;
 }
 
