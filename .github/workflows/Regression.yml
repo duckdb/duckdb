@@ -143,12 +143,12 @@ jobs:
       shell: bash
       run: |
         make
-        mkdir -p safe/build
+        mkdir -p safe
         mv build safe/build
         cp -r benchmark safe/
 
         DISABLE_MEMORY_SAFETY=1 make
-        mkdir -p unsafe/build
+        mkdir -p unsafe
         mv build unsafe/build
         cp -r benchmark unsafe/
 
