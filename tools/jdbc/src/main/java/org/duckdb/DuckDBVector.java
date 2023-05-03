@@ -37,7 +37,14 @@ public class DuckDBVector {
 		return buf;
 	}
 
+	private boolean check_and_null(int columnIndex) {
+		return nullmask[columnIndex];
+	}
+
 	public long getLong(int columnIndex) throws SQLException {
+		if (check_and_null(columnIndex)) {
+			return 0;
+		}
 		if (duckdb_type == DuckDBColumnType.BIGINT || duckdb_type == DuckDBColumnType.TIMESTAMP) {
 			return getbuf(columnIndex, 8).getLong();
 		}
@@ -49,6 +56,9 @@ public class DuckDBVector {
 	}
 
 	public int getInt(int columnIndex) throws SQLException {
+		if (check_and_null(columnIndex)) {
+			return 0;
+		}
 		if (duckdb_type == DuckDBColumnType.INTEGER) {
 			return getbuf(columnIndex, 4).getInt();
 		}
