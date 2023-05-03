@@ -34,7 +34,7 @@ void OptimisticDataWriter::WriteAllButLastRowGroup(RowGroupCollection &row_group
 		return;
 	}
 	auto row_group_count = row_groups.RowGroupCount();
-	for(idx_t i = 0; i + 1 < row_group_count; i++) {
+	for (idx_t i = 0; i + 1 < row_group_count; i++) {
 		auto row_group = row_groups.GetRowGroup(i);
 		FlushToDisk(row_group);
 	}

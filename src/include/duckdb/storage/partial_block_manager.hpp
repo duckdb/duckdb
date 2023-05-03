@@ -46,7 +46,8 @@ struct PartialBlock {
 public:
 	virtual void AddUninitializedRegion(idx_t start, idx_t end) = 0;
 	virtual void Flush(idx_t free_space_left) = 0;
-	virtual void Clear() {}
+	virtual void Clear() {
+	}
 	virtual void Merge(PartialBlock &other, idx_t offset, idx_t other_size);
 
 public:
