@@ -396,9 +396,13 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet &node) {
 	//! Neighbors should be reversed when iterating over them.
 	std::sort(neighbors.begin(), neighbors.end(), std::greater_equal<idx_t>());
 	for (idx_t i = 0; i < neighbors.size() - 1; i++) {
-		D_ASSERT(neighbors[i] >= neighbors[i + 1]);
+		D_ASSERT(neighbors[i] > neighbors[i + 1]);
 	}
 
+	// Dphyp paper missiing this.
+	// Because we are traversing in reverse order, we need to add neighbors whose number is smaller than the current
+	// node to exclusion_set
+	// This avoids duplicated enumeration
 	unordered_set<idx_t> new_exclusion_set = exclusion_set;
 	for (idx_t i = 0; i < neighbors.size(); ++i) {
 		D_ASSERT(new_exclusion_set.find(neighbors[i]) == new_exclusion_set.end());
@@ -439,9 +443,7 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelati
 		// emit the combinations of this node and its neighbors
 		auto &combined_set = set_manager.Union(right, neighbor);
 
-		if (combined_set.count <= right.count) {
-			exit(1);
-		}
+		D_ASSERT(combined_set.count > right.count);
 		if (plans.find(&combined_set) != plans.end()) {
 			auto connections = query_graph.GetConnections(left, combined_set);
 			if (!connections.empty()) {
@@ -489,14 +491,15 @@ bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet &node, unordered_
 		// Reset the exclusion set so that the algorithm considers all combinations
 		// of the exclusion_set with a subset of neighbors.
 
-		// FIXME(lokax): This looks like there is a problem with duplicated enumeration
-		// But simply remove 'new_exclusion_set = exclusion_set' will result in a segfault
-		// Because the small subset will be enumerated first, then the large subset,
-		// and then the small subset.
-		// eg. We already get best JoinNode{R1, R2, R3}, then the JoinNode in plans[R1, R2] will be updated, resulting
-		// in the appearance of wild pointers for the children of JoinNode{R1, R2, R3} Maybe we should get all subsets
-		// of neighbors and traverse from small to large subsets And new_exclusion_set will be (exclusion_set U all
-		// neighbors)
+		// FIXME(lokax): This looks like there is a problem with duplicated enumeration?
+		// eg. S1 = {R0}, neighbors = {R1, R2}
+		// First, S1 = {R0} ==> {R0, R1} ==> {R0, R1, R2}
+		// Then, S1 = {R0} ==> {R0, R2} ==> {R0, R1, R2}
+		// S1 = {R0, R1, R2} will be duplicated enumerated.
+		// Although this is necessary for correctness, since {R0, R1, R2} may be updated. But we do have duplicated
+		// enumeration. Maybe we should get all subsets of neighbors and traverse from small to large subsets And
+		// new_exclusion_set will be (exclusion_set U all neighbors) eg. S1 = {R0} ==> {R0, R1} ==> {R0, R2} ==> {R0,
+		// R1, R2}
 		new_exclusion_set = exclusion_set;
 		new_exclusion_set.insert(neighbors[i]);
 		// updated the set of excluded entries with this neighbor
