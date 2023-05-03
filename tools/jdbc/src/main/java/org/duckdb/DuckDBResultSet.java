@@ -160,8 +160,7 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Object getObject(int columnIndex) throws SQLException {
-		check_and_null(columnIndex);
-		if (was_null) {
+		if (check_and_null(columnIndex)) {
 			return null;
 		}
 		DuckDBColumnType switch_no = current_chunk[columnIndex - 1].duckdb_type;
@@ -295,28 +294,14 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.TINYINT)) {
-			return getbuf(columnIndex, 1).get();
-		}
-		Object o = getObject(columnIndex);
-		if (o instanceof Number) {
-			return ((Number) o).byteValue();
-		}
-		return Byte.parseByte(o.toString());
+		return current_chunk[columnIndex - 1].getByte(chunk_idx - 1);
 	}
 
 	public short getShort(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.SMALLINT)) {
-			return getbuf(columnIndex, 2).getShort();
-		}
-		Object o = getObject(columnIndex);
-		if (o instanceof Number) {
-			return ((Number) o).shortValue();
-		}
-		return Short.parseShort(o.toString());
+		return current_chunk[columnIndex - 1].getShort(chunk_idx - 1);
 	}
 
 	public int getInt(int columnIndex) throws SQLException {
@@ -330,56 +315,28 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.UTINYINT)) {
-			ByteBuffer buf = ByteBuffer.allocate(2);
-			getbuf(columnIndex, 1).get(buf.array(), 1, 1);
-			return buf.getShort();
-
-		}
-		throw new SQLFeatureNotSupportedException("getUint8");
+		return current_chunk[columnIndex - 1].getUint8(chunk_idx - 1);
 	}
 
 	private int getUint16(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.USMALLINT)) {
-			ByteBuffer buf = ByteBuffer.allocate(4);
-			buf.order(ByteOrder.LITTLE_ENDIAN);
-			getbuf(columnIndex, 2).get(buf.array(), 0, 2);
-			return buf.getInt();
-		}
-		throw new SQLFeatureNotSupportedException("getUint16");
-
+		return current_chunk[columnIndex - 1].getUint16(chunk_idx - 1);
 	}
 
 	private long getUint32(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.UINTEGER)) {
-			ByteBuffer buf = ByteBuffer.allocate(8);
-			buf.order(ByteOrder.LITTLE_ENDIAN);
-			getbuf(columnIndex, 4).get(buf.array(), 0, 4);
-			return buf.getLong();
-		}
-		throw new SQLFeatureNotSupportedException("getUint32");
+		return current_chunk[columnIndex - 1].getUint32(chunk_idx - 1);
 	}
 
 	private BigInteger getUint64(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return BigInteger.ZERO;
 		}
-		if (isType(columnIndex, DuckDBColumnType.UBIGINT)) {
-			byte[] buf_res = new byte[16];
-			byte[] buf = new byte[8];
-			getbuf(columnIndex, 8).get(buf);
-			for (int i = 0; i < 8; i++) {
-				buf_res[i + 8] = buf[7 - i];
-			}
-			return new BigInteger(buf_res);
-		}
-		throw new SQLFeatureNotSupportedException("getUint64");
+		return current_chunk[columnIndex - 1].getUint64(chunk_idx - 1);
 	}
 
 	public long getLong(int columnIndex) throws SQLException {
@@ -393,46 +350,21 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return BigInteger.ZERO;
 		}
-		if (isType(columnIndex, DuckDBColumnType.HUGEINT)) {
-			byte[] buf = new byte[16];
-			getbuf(columnIndex, 16).get(buf);
-			for (int i = 0; i < 8; i++) {
-				byte keep = buf[i];
-				buf[i] = buf[15 - i];
-				buf[15 - i] = keep;
-			}
-			return new BigInteger(buf);
-		}
-		Object o = getObject(columnIndex);
-		return new BigInteger(o.toString());
+		return current_chunk[columnIndex - 1].getHugeint(chunk_idx - 1);
 	}
 
 	public float getFloat(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return Float.NaN;
 		}
-		if (isType(columnIndex, DuckDBColumnType.FLOAT)) {
-			return getbuf(columnIndex, 4).getFloat();
-		}
-		Object o = getObject(columnIndex);
-		if (o instanceof Number) {
-			return ((Number) o).floatValue();
-		}
-		return Float.parseFloat(o.toString());
+		return current_chunk[columnIndex - 1].getFloat(chunk_idx - 1);
 	}
 
 	public double getDouble(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return Double.NaN;
 		}
-		if (isType(columnIndex, DuckDBColumnType.DOUBLE)) {
-			return getbuf(columnIndex, 8).getDouble();
-		}
-		Object o = getObject(columnIndex);
-		if (o instanceof Number) {
-			return ((Number) o).doubleValue();
-		}
-		return Double.parseDouble(o.toString());
+		return current_chunk[columnIndex - 1].getDouble(chunk_idx - 1);
 	}
 
 	public int findColumn(String columnLabel) throws SQLException {
