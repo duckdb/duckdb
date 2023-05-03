@@ -18,6 +18,8 @@
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb_python/pybind11/conversions/explain_enum.hpp"
 #include "duckdb_python/pybind11/dataframe.hpp"
+#include "duckdb_python/python_objects.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {
 
@@ -189,7 +191,8 @@ public:
 	py::list ColumnTypes();
 
 	string ToString();
-	void Print();
+	void Print(Optional<py::int_> max_width, Optional<py::int_> max_rows, Optional<py::int_> max_col_width,
+	           Optional<py::str> null_value);
 
 	string Explain(ExplainType type);
 
@@ -198,6 +201,7 @@ public:
 	Relation &GetRel();
 
 private:
+	string ToStringInternal(const BoxRendererConfig &config, bool invalidate_cache = false);
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
 	                              const string &projected_columns = "", const string &window_function = "");

@@ -12,6 +12,7 @@
 #include "duckdb_python/typing.hpp"
 #include "duckdb_python/connection_wrapper.hpp"
 #include "duckdb_python/pybind11/conversions/pyconnection_default.hpp"
+#include "duckdb/common/box_renderer.hpp"
 
 #include "duckdb.hpp"
 

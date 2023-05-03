@@ -857,24 +857,54 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun, Optional<py
 	return relation;
 }
 
-string DuckDBPyRelation::ToString() {
+string DuckDBPyRelation::ToStringInternal(const BoxRendererConfig &config, bool invalidate_cache) {
 	AssertRelation();
-	if (rendered_result.empty()) {
-		idx_t limit_rows = 10000;
+	if (rendered_result.empty() || invalidate_cache) {
 		BoxRenderer renderer;
-		auto limit = Limit(limit_rows, 0);
+		auto limit = Limit(config.limit, 0);
 		auto res = limit->ExecuteInternal();
 
 		auto context = rel->context.GetContext();
-		BoxRendererConfig config;
-		config.limit = limit_rows;
 		rendered_result = res->ToBox(*context, config);
 	}
 	return rendered_result;
 }
 
-void DuckDBPyRelation::Print() {
-	py::print(py::str(ToString()));
+string DuckDBPyRelation::ToString() {
+	BoxRendererConfig config;
+	config.limit = 1000;
+	return ToStringInternal(config);
+}
+
+static idx_t IndexFromPyInt(const py::object &object) {
+	auto index = py::cast<idx_t>(object);
+	return index;
+}
+
+void DuckDBPyRelation::Print(Optional<py::int_> max_width, Optional<py::int_> max_rows,
+                             Optional<py::int_> max_col_width, Optional<py::str> null_value) {
+	BoxRendererConfig config;
+	config.limit = 10000;
+
+	bool invalidate_cache = false;
+	if (!py::none().is(max_width)) {
+		invalidate_cache = true;
+		config.max_width = IndexFromPyInt(max_width);
+	}
+	if (!py::none().is(max_rows)) {
+		invalidate_cache = true;
+		config.max_rows = IndexFromPyInt(max_rows);
+	}
+	if (!py::none().is(max_col_width)) {
+		invalidate_cache = true;
+		config.max_col_width = IndexFromPyInt(max_col_width);
+	}
+	if (!py::none().is(null_value)) {
+		invalidate_cache = true;
+		config.null_value = py::cast<std::string>(null_value);
+	}
+
+	py::print(py::str(ToStringInternal(config, invalidate_cache)));
 }
 
 string DuckDBPyRelation::Explain(ExplainType type) {
