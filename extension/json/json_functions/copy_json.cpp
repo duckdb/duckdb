@@ -98,10 +98,23 @@ static duckdb::unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context,
 		bind_data->timestamp_format = StringValue::Get(it->second.back());
 	}
 
-	bind_data->InitializeFormats();
-
 	bind_data->transform_options = JSONTransformOptions(true, true, true, true);
 	bind_data->transform_options.delay_error = true;
+
+	it = info.options.find("auto_detect");
+	if (it != info.options.end()) {
+		// Wrap this with auto detect true/false so we can detect date/timestamp formats
+		// Note that auto_detect for names/types is not actually true because these are already know when we COPY
+		bind_data->auto_detect = true;
+		bind_data->InitializeFormats();
+		bind_data->auto_detect = false;
+
+		bind_data->options.format = JSONFormat::AUTO_DETECT;
+		bind_data->record_type = JSONRecordType::AUTO;
+		JSONScan::AutoDetect(context, *bind_data, expected_types, expected_names);
+	} else {
+		bind_data->InitializeFormats();
+	}
 
 	return std::move(bind_data);
 }
@@ -113,8 +126,8 @@ CopyFunction JSONFunctions::GetJSONCopyFunction() {
 	function.plan = CopyToJSONPlan;
 
 	function.copy_from_bind = CopyFromJSONBind;
-	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(
-	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::RECORDS, false));
+	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(make_shared<JSONScanInfo>(
+	    JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, JSONRecordType::RECORDS, false));
 
 	return function;
 }
