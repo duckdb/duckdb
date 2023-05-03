@@ -45,7 +45,7 @@ public class DuckDBVector {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (duckdb_type == DuckDBColumnType.BIGINT || duckdb_type == DuckDBColumnType.TIMESTAMP) {
+		if (isType(columnIndex, DuckDBColumnType.BIGINT) || isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
 			return getbuf(columnIndex, 8).getLong();
 		}
 		Object o = getObject(columnIndex);
@@ -59,7 +59,7 @@ public class DuckDBVector {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (duckdb_type == DuckDBColumnType.INTEGER) {
+		if (isType(columnIndex, DuckDBColumnType.INTEGER)) {
 			return getbuf(columnIndex, 4).getInt();
 		}
 		Object o = getObject(columnIndex);
@@ -67,5 +67,9 @@ public class DuckDBVector {
 			return ((Number) o).intValue();
 		}
 		return Integer.parseInt(o.toString());
+	}
+
+	private boolean isType(int columnIndex, DuckDBColumnType columnType) {
+		return duckdb_type == columnType;
 	}
 }
