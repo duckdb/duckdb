@@ -48,53 +48,53 @@ struct MultiFileReaderOptions {
 		return true;
 	}
 
-		static bool AutoDetectHivePartitioningSplit(const vector<string> &files) {
-			if (files.empty()) {
-				return false;
-			}
-			std::unordered_set<string> uset;
-			idx_t splits_size;
-			{
-				//	front file
-				auto splits = StringUtil::Split(files.front(), "/");
-				splits_size = splits.size();
-				if (splits.size() < 2) {
-					return false;
-				}
-				for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
-					auto part = StringUtil::Split(*it, "=");
-					if (part.size() == 2) {
-						uset.insert(part.front());
-					}
-				}
-			}
-			if (uset.empty()) {
-				return false;
-			}
-			for (auto &file : files) {
-				auto splits = StringUtil::Split(file, "/");
-				if (splits.size() != splits_size) {
-					return false;
-				}
-				for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
-					auto part = StringUtil::Split(*it, "=");
-					if (part.size() == 2) {
-						if (uset.find(part.front()) == uset.end()) {
-							return false;
-						}
-					}
-				}
-			}
-			return true;
+	static bool AutoDetectHivePartitioningSplit(const vector<string> &files) {
+		if (files.empty()) {
+			return false;
 		}
+		std::unordered_set<string> uset;
+		idx_t splits_size;
+		{
+			//	front file
+			auto splits = StringUtil::Split(files.front(), "/");
+			splits_size = splits.size();
+			if (splits.size() < 2) {
+				return false;
+			}
+			for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
+				auto part = StringUtil::Split(*it, "=");
+				if (part.size() == 2) {
+					uset.insert(part.front());
+				}
+			}
+		}
+		if (uset.empty()) {
+			return false;
+		}
+		for (auto &file : files) {
+			auto splits = StringUtil::Split(file, "/");
+			if (splits.size() != splits_size) {
+				return false;
+			}
+			for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
+				auto part = StringUtil::Split(*it, "=");
+				if (part.size() == 2) {
+					if (uset.find(part.front()) == uset.end()) {
+						return false;
+					}
+				}
+			}
+		}
+		return true;
+	}
 
 	static bool AutoDetectHivePartitioning(const vector<string> &files) {
 
-		#ifdef __linux__
-			return AutoDetectHivePartitioningSplit(files);
-		#else
-			return AutoDetectHivePartitioningRegex(files);
-		#endif
+#ifdef __linux__
+		return AutoDetectHivePartitioningSplit(files);
+#else
+		return AutoDetectHivePartitioningRegex(files);
+#endif
 	}
 };
 
