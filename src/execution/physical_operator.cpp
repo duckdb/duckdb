@@ -10,10 +10,6 @@
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/random_engine.hpp"
-
-#include <thread>
-#include <chrono>
 
 namespace duckdb {
 

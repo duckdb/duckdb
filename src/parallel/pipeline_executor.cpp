@@ -2,8 +2,10 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/limits.hpp"
 
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 #include <thread>
 #include <chrono>
+#endif
 
 namespace duckdb {
 

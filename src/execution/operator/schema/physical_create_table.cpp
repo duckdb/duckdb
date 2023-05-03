@@ -16,27 +16,10 @@ PhysicalCreateTable::PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class CreateTableSourceState : public GlobalSourceState {
-public:
-	CreateTableSourceState() : finished(false) {
-	}
-
-	bool finished;
-};
-
-unique_ptr<GlobalSourceState> PhysicalCreateTable::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<CreateTableSourceState>();
-}
-
 SourceResultType PhysicalCreateTable::GetData(ExecutionContext &context, DataChunk &chunk,
                                               OperatorSourceInput &input) const {
-	auto &state = input.global_state.Cast<CreateTableSourceState>();
-	if (state.finished) {
-		return SourceResultType::FINISHED;
-	}
 	auto &catalog = schema.catalog;
 	catalog.CreateTable(catalog.GetCatalogTransaction(context.client), schema, *info);
-	state.finished = true;
 
 	return SourceResultType::FINISHED;
 }

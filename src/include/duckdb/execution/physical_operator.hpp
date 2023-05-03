@@ -25,19 +25,6 @@ class PhysicalOperator;
 class Pipeline;
 class PipelineBuildState;
 class MetaPipeline;
-class InterruptState;
-
-struct OperatorSinkInput {
-	GlobalSinkState &global_state;
-	LocalSinkState &local_state;
-	InterruptState &interrupt_state;
-};
-
-struct OperatorSourceInput {
-	GlobalSourceState &global_state;
-	LocalSourceState &local_state;
-	InterruptState &interrupt_state;
-};
 
 //! PhysicalOperator is the base class of the physical operators present in the
 //! execution plan
