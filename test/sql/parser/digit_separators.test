@@ -1,6 +1,12 @@
 # name: test/sql/parser/digit_separators.test
 # group: [parser]
 
+statement ok
+PRAGMA enable_verification
+
+# TODO: We should not allow multiple underscores:
+# https://www.cybertec-postgresql.com/en/underscores-in-numeric-constants-in-postgresql-16/
+
 query I
 SELECT 1__2
 ----
