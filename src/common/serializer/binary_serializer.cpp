@@ -9,39 +9,15 @@ void BinarySerializer::SetTag(const char *tag) {
 	stack.back().field_count++;
 }
 
-/*
-void BinarySerializer::OnSerializationBegin() {
-	if(stack.size() == 1) {
-		// Check if there is an old serialization result lingering
-		stack.pop_back();
-	}
-	stack.push_back(StackFrame());
-	auto &frame = stack.back();
-	// We patch these values at the end
-	frame.buffer.Write<uint32_t>(0); // field count
-	frame.buffer.Write<uint64_t>(0); // size
-}
-void BinarySerializer::OnSerializationEnd() {
-	D_ASSERT(stack.size() == 1); // we should never have popped the root frame
-	
-	D_ASSERT(stack.size() > 1); // we should never pop the root frame
-
-	auto &parent = stack[stack.size() - 2];
-	auto &frame = stack.back();
-	Store<uint32_t>(frame.field_count, parent.buffer.data);
-	Store<uint64_t>(frame.buffer.blob.size, parent.buffer.data + sizeof(uint32_t));
-}
-*/
-
 //===--------------------------------------------------------------------===//
 // Nested types
 //===--------------------------------------------------------------------===//
 void BinarySerializer::OnOptionalBegin(bool present) {
-	stack.back().buffer.Write(present);
+	Write(present);
 }
 
 void BinarySerializer::OnListBegin(idx_t count) {
-	stack.back().buffer.Write(count);
+	Write(count);
 }
 
 void BinarySerializer::OnListEnd(idx_t count) {
@@ -49,7 +25,7 @@ void BinarySerializer::OnListEnd(idx_t count) {
 
 // Serialize maps as arrays of objects with "key" and "value" properties.
 void BinarySerializer::OnMapBegin(idx_t count) {
-	stack.back().buffer.Write(count);
+	Write(count);
 }
 
 void BinarySerializer::OnMapEntryBegin() {
@@ -68,18 +44,17 @@ void BinarySerializer::OnMapEnd(idx_t count) {
 }
 
 void BinarySerializer::OnObjectBegin() {
-	stack.push_back(State());
+	stack.push_back(State({0, 0, data.size()}));
+	Write<uint32_t>(0); // Placeholder for the field count
+	Write<uint64_t>(0); // Placeholder for the size
 }
 
 void BinarySerializer::OnObjectEnd() {
-	D_ASSERT(stack.size() > 1); // we should never pop the root frame
-
-	auto &parent = stack[stack.size() - 2];
 	auto &frame = stack.back();
-	parent.buffer.Write(frame.field_count);
-	parent.buffer.Write(frame.buffer.blob.size);
-	parent.buffer.WriteData(frame.buffer.blob.data.get(), frame.buffer.blob.size);
-
+	// Patch the field count and size
+	auto message_start = &data[frame.offset];
+	Store<uint32_t>(frame.field_count, message_start);
+	Store<uint64_t>(frame.size, message_start + sizeof(uint32_t));
 	stack.pop_back();
 }
 
@@ -103,71 +78,86 @@ void BinarySerializer::WriteNull() {
 }
 
 void BinarySerializer::WriteValue(uint8_t value) {
-	stack.back().buffer.Write(value);
+	Write(value);
 }
 
 void BinarySerializer::WriteValue(int8_t value) {
-	stack.back().buffer.Write(value);
+	Write(value);
 }
 
 void BinarySerializer::WriteValue(uint16_t value) {
-	stack.back().buffer.Write(value);
+	Write(value);
 }
 
 void BinarySerializer::WriteValue(int16_t value) {
-	stack.back().buffer.Write(value);
+	Write(value);
 }
 
 void BinarySerializer::WriteValue(uint32_t value) {
-	stack.back().buffer.Write(value);
+	Write(value);
 }
 
 void BinarySerializer::WriteValue(int32_t value) {
-	stack.back().buffer.Write(value);
+	Write(value);
 }
 
 void BinarySerializer::WriteValue(uint64_t value) {
-	stack.back().buffer.Write(value);
+	Write(value);
 }
 
 void BinarySerializer::WriteValue(int64_t value) {
-	stack.back().buffer.Write(value);
+	Write(value);
 }
 
 void BinarySerializer::WriteValue(hugeint_t value) {
-	stack.back().buffer.Write(value);
+	Write(value);
 }
 
 void BinarySerializer::WriteValue(float value) {
-	stack.back().buffer.Write(value);
+	Write(value);
 }
 
 void BinarySerializer::WriteValue(double value) {
-	stack.back().buffer.Write(value);
+	Write(value);
 }
 
 void BinarySerializer::WriteValue(interval_t value) {
-	stack.back().buffer.Write(value);
+	Write(value);
 }
 
 void BinarySerializer::WriteValue(const string &value) {
-	stack.back().buffer.WriteString(value);
+	auto len = value.length();
+	Write<uint32_t>((uint32_t)len);
+	if (len > 0) {
+		WriteData((const_data_ptr_t)value.c_str(), len);
+	}
 }
 
 void BinarySerializer::WriteValue(const string_t value) {
-	stack.back().buffer.WriteStringLen((const unsigned char *)(value.GetDataUnsafe()), value.GetSize());
+	auto len = value.GetSize();
+	Write<uint32_t>((uint32_t)len);
+	if (len > 0) {
+		WriteData((const_data_ptr_t)value.GetDataUnsafe(), len);
+	}
 }
 
 void BinarySerializer::WriteValue(const char *value) {
-	stack.back().buffer.WriteString(value);
+	auto len = strlen(value);
+	Write<uint32_t>((uint32_t)len);
+	if (len > 0) {
+		WriteData((const_data_ptr_t)value, len);
+	}
 }
 
 void BinarySerializer::WriteValue(bool value) {
-	stack.back().buffer.Write(value);
+	Write(value);
 }
 
 void BinarySerializer::WriteDataPtr(const_data_ptr_t ptr, idx_t count) {
-	stack.back().buffer.WriteData(ptr, count);
+	WriteData(ptr, count);
 }
 
 } // namespace duckdb
+
+
+

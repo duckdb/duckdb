@@ -5,30 +5,45 @@
 namespace duckdb {
 
 struct BinarySerializer : public FormatSerializer {
-public:
-	explicit BinarySerializer() {
-		stack.push_back(State());
-		serialize_enum_as_string = false;
-	}
-
+	
 private:
 	struct State {
+		// how many fields are present in the object
 		uint32_t field_count;
-		BufferedSerializer buffer;
+		// the size of the object
+		uint64_t size;       
+		// the offset of the object start in the buffer
+		uint64_t offset; 
 	};
 
 	const char *current_tag;
+
+	vector<data_t> data;
 	vector<State> stack;
 
+	template<class T>
+	void Write(T element) {
+		static_assert(std::is_trivially_destructible<T>(), "Write element must be trivially destructible");
+		WriteData((const_data_ptr_t)&element, sizeof(T));
+	}
+	void WriteData(const_data_ptr_t buffer, idx_t write_size) {
+		data.insert(data.end(), buffer, buffer + write_size);
+		stack.back().size += write_size;
+	}
+
+	explicit BinarySerializer() {
+		serialize_enum_as_string = false;
+	}
+
 public:
-	uint32_t GetRootFieldCount() {
-		return stack.back().field_count;
-	}
-	data_ptr_t GetRootBlobData() {
-		return stack.back().buffer.blob.data.get();
-	}
-	idx_t GetRootBlobSize() {
-		return stack.back().buffer.blob.size;
+
+	template<class T>
+	static vector<data_t> Serialize(T &obj) {
+		BinarySerializer serializer;
+		serializer.OnObjectBegin();
+		obj.FormatSerialize(serializer);
+		serializer.OnObjectEnd();
+		return std::move(serializer.data);
 	}
 
 	void SetTag(const char *tag) final;

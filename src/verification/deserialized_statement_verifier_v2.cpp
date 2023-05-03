@@ -11,16 +11,10 @@ DeserializedStatementVerifierV2::DeserializedStatementVerifierV2(unique_ptr<SQLS
 unique_ptr<StatementVerifier> DeserializedStatementVerifierV2::Create(const SQLStatement &statement) {
 	auto &select_stmt = statement.Cast<SelectStatement>();
 
-	BinarySerializer serializer;
-	select_stmt.FormatSerialize(serializer);
+	auto blob = BinarySerializer::Serialize(select_stmt);
+	auto result = BinaryDeserializer::Deserialize<SelectStatement>(blob.data(), blob.size());
 
-	auto data = serializer.GetRootBlobData();
-	auto len = serializer.GetRootBlobSize();
-
-	BinaryDeserializer deserializer(data, len);
-
-
-	return make_uniq<DeserializedStatementVerifierV2>(SelectStatement::FormatDeserialize(deserializer));
+	return make_uniq<DeserializedStatementVerifierV2>(std::move(result));
 }
 
 } // namespace duckdb

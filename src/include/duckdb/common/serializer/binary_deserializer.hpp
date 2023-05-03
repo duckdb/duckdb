@@ -5,11 +5,18 @@ namespace duckdb {
 
 class BinaryDeserializer : public FormatDeserializer {
 public:
-	explicit BinaryDeserializer(data_ptr_t ptr, idx_t length) : ptr(ptr), end_ptr(ptr + length), stack({{0, 0}}) {
+	template<class T>
+	static unique_ptr<T> Deserialize(data_ptr_t ptr, idx_t length) {
+		BinaryDeserializer deserializer(ptr, length);
+		deserializer.OnObjectBegin();
+		auto result = T::FormatDeserialize(deserializer);
+		deserializer.OnObjectEnd();
+		return std::move(result);
+	} 
+private:
+	explicit BinaryDeserializer(data_ptr_t ptr, idx_t length) : ptr(ptr), end_ptr(ptr + length) {
 		deserialize_enum_from_string = false;
 	}
-
-private:
 	struct State {
 		uint32_t expected_field_count;
 		idx_t expected_size;
@@ -85,3 +92,4 @@ private:
 };
 
 } // namespace duckdb
+
