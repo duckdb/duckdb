@@ -5,23 +5,41 @@ namespace duckdb {
 
 class BinaryDeserializer : public FormatDeserializer {
 public:
-	explicit BinaryDeserializer(Deserializer &reader) : reader(reader), stack({{0, 0}}) {
+	explicit BinaryDeserializer(data_ptr_t ptr, idx_t length) : ptr(ptr), end_ptr(ptr + length), stack({{0, 0}}) {
 		deserialize_enum_from_string = false;
 	}
 
 private:
-	struct StackFrame {
+	struct State {
 		uint32_t expected_field_count;
 		idx_t expected_size;
 		uint32_t read_field_count;
-		StackFrame(uint32_t expected_field_count, idx_t expected_size)
+		State(uint32_t expected_field_count, idx_t expected_size)
 		    : expected_field_count(expected_field_count), expected_size(expected_size), read_field_count(0) {
 		}
 	};
 
 	const char *current_tag = nullptr;
-	Deserializer &reader;
-	vector<StackFrame> stack;
+	data_ptr_t ptr;
+	data_ptr_t end_ptr;
+	vector<State> stack;
+
+
+	template <class T>
+	T ReadPrimitive() {
+		T value;
+		ReadData((data_ptr_t)&value, sizeof(T));
+		return value;
+	}
+
+	void ReadData(data_ptr_t buffer, idx_t read_size) {
+		if (ptr + read_size > end_ptr) {
+			throw SerializationException("Failed to deserialize: not enough data in buffer to fulfill read request");
+		}
+		memcpy(buffer, ptr, read_size);
+		ptr += read_size;
+	}	
+
 
 	// Set the 'tag' of the property to read
 	void SetTag(const char *tag) final;

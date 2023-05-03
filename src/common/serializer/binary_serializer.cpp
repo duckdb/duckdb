@@ -9,6 +9,30 @@ void BinarySerializer::SetTag(const char *tag) {
 	stack.back().field_count++;
 }
 
+/*
+void BinarySerializer::OnSerializationBegin() {
+	if(stack.size() == 1) {
+		// Check if there is an old serialization result lingering
+		stack.pop_back();
+	}
+	stack.push_back(StackFrame());
+	auto &frame = stack.back();
+	// We patch these values at the end
+	frame.buffer.Write<uint32_t>(0); // field count
+	frame.buffer.Write<uint64_t>(0); // size
+}
+void BinarySerializer::OnSerializationEnd() {
+	D_ASSERT(stack.size() == 1); // we should never have popped the root frame
+	
+	D_ASSERT(stack.size() > 1); // we should never pop the root frame
+
+	auto &parent = stack[stack.size() - 2];
+	auto &frame = stack.back();
+	Store<uint32_t>(frame.field_count, parent.buffer.data);
+	Store<uint64_t>(frame.buffer.blob.size, parent.buffer.data + sizeof(uint32_t));
+}
+*/
+
 //===--------------------------------------------------------------------===//
 // Nested types
 //===--------------------------------------------------------------------===//
@@ -44,7 +68,7 @@ void BinarySerializer::OnMapEnd(idx_t count) {
 }
 
 void BinarySerializer::OnObjectBegin() {
-	stack.push_back(StackFrame());
+	stack.push_back(State());
 }
 
 void BinarySerializer::OnObjectEnd() {

@@ -11,8 +11,8 @@ void BinaryDeserializer::SetTag(const char *tag) {
 // Nested Types Hooks
 //===--------------------------------------------------------------------===//
 void BinaryDeserializer::OnObjectBegin() {
-	auto expected_field_count = reader.Read<uint32_t>();
-	auto expected_size = reader.Read<uint64_t>();
+	auto expected_field_count = ReadPrimitive<uint32_t>();
+	auto expected_size = ReadPrimitive<uint64_t>();
 	D_ASSERT(expected_field_count > 0);
 	D_ASSERT(expected_size > 0);
 
@@ -29,7 +29,7 @@ void BinaryDeserializer::OnObjectEnd() {
 }
 
 idx_t BinaryDeserializer::OnListBegin() {
-	return reader.Read<idx_t>();
+	return ReadPrimitive<idx_t>();
 }
 
 void BinaryDeserializer::OnListEnd() {
@@ -37,7 +37,7 @@ void BinaryDeserializer::OnListEnd() {
 
 // Deserialize maps as [ { key: ..., value: ... } ]
 idx_t BinaryDeserializer::OnMapBegin() {
-	return reader.Read<idx_t>();
+	return ReadPrimitive<idx_t>();
 }
 
 void BinaryDeserializer::OnMapEntryBegin() {
@@ -68,70 +68,76 @@ void BinaryDeserializer::OnPairEnd() {
 }
 
 bool BinaryDeserializer::OnOptionalBegin() {
-	return reader.Read<bool>();
+	return ReadPrimitive<bool>();
 }
 
 //===--------------------------------------------------------------------===//
 // Primitive Types
 //===--------------------------------------------------------------------===//
 bool BinaryDeserializer::ReadBool() {
-	return reader.Read<bool>();
+	return ReadPrimitive<bool>();
 }
 
 int8_t BinaryDeserializer::ReadSignedInt8() {
-	return reader.Read<int8_t>();
+	return ReadPrimitive<int8_t>();
 }
 
 uint8_t BinaryDeserializer::ReadUnsignedInt8() {
-	return reader.Read<uint8_t>();
+	return ReadPrimitive<uint8_t>();
 }
 
 int16_t BinaryDeserializer::ReadSignedInt16() {
-	return reader.Read<int16_t>();
+	return ReadPrimitive<int16_t>();
 }
 
 uint16_t BinaryDeserializer::ReadUnsignedInt16() {
-	return reader.Read<uint16_t>();
+	return ReadPrimitive<uint16_t>();
 }
 
 int32_t BinaryDeserializer::ReadSignedInt32() {
-	return reader.Read<int32_t>();
+	return ReadPrimitive<int32_t>();
 }
 
 uint32_t BinaryDeserializer::ReadUnsignedInt32() {
-	return reader.Read<uint32_t>();
+	return ReadPrimitive<uint32_t>();
 }
 
 int64_t BinaryDeserializer::ReadSignedInt64() {
-	return reader.Read<int64_t>();
+	return ReadPrimitive<int64_t>();
 }
 
 uint64_t BinaryDeserializer::ReadUnsignedInt64() {
-	return reader.Read<uint64_t>();
+	return ReadPrimitive<uint64_t>();
 }
 
 float BinaryDeserializer::ReadFloat() {
-	return reader.Read<float>();
+	return ReadPrimitive<float>();
 }
 
 double BinaryDeserializer::ReadDouble() {
-	return reader.Read<double>();
+	return ReadPrimitive<double>();
 }
 
 string BinaryDeserializer::ReadString() {
-	return reader.Read<string>();
+	uint32_t size = ReadPrimitive<uint32_t>();
+	if (size == 0) {
+		return string();
+	}
+	auto buffer = unique_ptr<data_t[]>(new data_t[size]);
+	ReadData(buffer.get(), size);
+	return string((char *)buffer.get(), size);
 }
 
 interval_t BinaryDeserializer::ReadInterval() {
-	return reader.Read<interval_t>();
+	return ReadPrimitive<interval_t>();
 }
 
 hugeint_t BinaryDeserializer::ReadHugeInt() {
-	return reader.Read<hugeint_t>();
+	return ReadPrimitive<hugeint_t>();
 }
 
 void BinaryDeserializer::ReadDataPtr(data_ptr_t &ptr, idx_t count) {
-	reader.ReadData(ptr, count);
+	ReadData(ptr, count);
 }
 
 } // namespace duckdb

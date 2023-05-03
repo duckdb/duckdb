@@ -11,14 +11,14 @@ DeserializedStatementVerifierV2::DeserializedStatementVerifierV2(unique_ptr<SQLS
 unique_ptr<StatementVerifier> DeserializedStatementVerifierV2::Create(const SQLStatement &statement) {
 	auto &select_stmt = statement.Cast<SelectStatement>();
 
-	BufferedSerializer serializer;
-	select_stmt.Serialize(serializer);
-	/*
 	BinarySerializer serializer;
 	select_stmt.FormatSerialize(serializer);
-	*/
-	BufferedDeserializer buffer(serializer);
-	BinaryDeserializer deserializer(buffer);
+
+	auto data = serializer.GetRootBlobData();
+	auto len = serializer.GetRootBlobSize();
+
+	BinaryDeserializer deserializer(data, len);
+
 
 	return make_uniq<DeserializedStatementVerifierV2>(SelectStatement::FormatDeserialize(deserializer));
 }

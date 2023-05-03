@@ -7,18 +7,18 @@ namespace duckdb {
 struct BinarySerializer : public FormatSerializer {
 public:
 	explicit BinarySerializer() {
-		stack.push_back(StackFrame());
+		stack.push_back(State());
 		serialize_enum_as_string = false;
 	}
 
 private:
-	struct StackFrame {
+	struct State {
 		uint32_t field_count;
 		BufferedSerializer buffer;
 	};
 
 	const char *current_tag;
-	vector<StackFrame> stack;
+	vector<State> stack;
 
 public:
 	uint32_t GetRootFieldCount() {
