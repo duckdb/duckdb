@@ -59,7 +59,8 @@ void PartialBlockForCheckpoint::Flush(idx_t free_space_left) {
 	// into the page owned by first_segment. We flush all segment data to
 	// disk with the following call.
 	// persist the first segment to disk and point the remaining segments to the same block
-	if (state.block_id == INVALID_BLOCK) {
+	bool fetch_new_block = state.block_id == INVALID_BLOCK;
+	if (fetch_new_block) {
 		state.block_id = block_manager.GetFreeBlockId();
 	}
 	for (idx_t i = 0; i < segments.size(); i++) {
@@ -74,6 +75,10 @@ void PartialBlockForCheckpoint::Flush(idx_t free_space_left) {
 		} else {
 			// subsequent segments are MARKED as persistent - they don't need to be rewritten
 			segment.segment.MarkAsPersistent(block, segment.offset_in_block);
+			if (fetch_new_block) {
+				// if we fetched a new block we need to increase the reference count to the block
+				block_manager.IncreaseBlockReferenceCount(state.block_id);
+			}
 		}
 	}
 	Clear();
