@@ -8,8 +8,10 @@ namespace duckdb {
 OptimisticDataWriter::OptimisticDataWriter(DataTable &table) : table(table) {
 }
 
-OptimisticDataWriter::OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent)
-    : table(table), partial_manager(std::move(parent.partial_manager)) {
+OptimisticDataWriter::OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent) : table(table) {
+	if (parent.partial_manager) {
+		parent.partial_manager->ClearBlocks();
+	}
 }
 
 OptimisticDataWriter::~OptimisticDataWriter() {

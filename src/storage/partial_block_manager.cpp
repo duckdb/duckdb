@@ -157,7 +157,7 @@ void PartialBlockManager::FlushPartialBlocks() {
 }
 
 void PartialBlockManager::Rollback() {
-	partially_filled_blocks.clear();
+	ClearBlocks();
 	for (auto &block_id : written_blocks) {
 		block_manager.MarkBlockAsFree(block_id);
 	}

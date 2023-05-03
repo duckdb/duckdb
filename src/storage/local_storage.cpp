@@ -208,6 +208,7 @@ void LocalTableStorage::Rollback() {
 		writer->Rollback();
 	}
 	optimistic_writers.clear();
+	optimistic_writer.Rollback();
 }
 
 //===--------------------------------------------------------------------===//
