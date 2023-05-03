@@ -1,0 +1,35 @@
+# name: test/sql/copy/csv/batched_write/batch_csv_write.test
+# description: Batched copy to file
+# group: [batched_write]
+
+statement ok
+CREATE TABLE integers AS SELECT i, i // 5 AS j FROM range(1000000) t(i) ;
+
+statement ok
+COPY integers TO '__TEST_DIR__/batched_integers.csv' (HEADER);
+
+statement ok
+CREATE TABLE integers_copied AS FROM '__TEST_DIR__/batched_integers.csv'
+
+query IIIII
+SELECT SUM(i), SUM(j), COUNT(*), COUNT(i), COUNT(j) FROM integers_copied
+----
+499999500000	99999500000	1000000	1000000	1000000
+
+query II
+SELECT * FROM integers_copied LIMIT 5
+----
+0	0
+1	0
+2	0
+3	0
+4	0
+
+query II
+SELECT * FROM integers_copied LIMIT 5 OFFSET 99997
+----
+99997	19999
+99998	19999
+99999	19999
+100000	20000
+100001	20000

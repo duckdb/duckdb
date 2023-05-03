@@ -43,7 +43,7 @@ public:
 // Sink
 //===--------------------------------------------------------------------===//
 
-void MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
+void PhysicalCopyToFile::MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto file_path = tmp_file_path.substr(0, tmp_file_path.length() - 4);
 	if (fs.FileExists(file_path)) {
