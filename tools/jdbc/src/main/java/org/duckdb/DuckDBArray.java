@@ -7,9 +7,12 @@ import java.util.Map;
 
 public class DuckDBArray implements Array {
     private DuckDBVector vector;
+    int offset, length;
 
-    public DuckDBArray(DuckDBVector vector) {
+    public DuckDBArray(DuckDBVector vector, int offset, int length) {
         this.vector = vector;
+        this.length = length;
+        this.offset = offset;
     }
 
     @Override
@@ -20,9 +23,9 @@ public class DuckDBArray implements Array {
 
     @Override
     public Object getArray() throws SQLException {
-        Object[] out = new Object[vector.length];
-        for (int i=0; i<vector.length; i++) {
-            out[i] = vector.getObject(i);
+        Object[] out = new Object[length];
+        for (int i=0; i<length; i++) {
+            out[i] = vector.getObject(offset + i);
         }
         return out;
     }

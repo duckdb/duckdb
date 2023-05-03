@@ -1056,7 +1056,7 @@ public class DuckDBResultSet implements ResultSet {
 
 	public Array getArray(int columnIndex) throws SQLException {
 		if (isType(columnIndex, DuckDBColumnType.LIST)) {
-			return new DuckDBArray((DuckDBVector) current_chunk[columnIndex-1].varlen_data[chunk_idx - 1]);
+			return (DuckDBArray) current_chunk[columnIndex-1].varlen_data[chunk_idx - 1];
 		}
 		throw new SQLFeatureNotSupportedException("getArray");
 	}

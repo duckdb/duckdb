@@ -63,6 +63,9 @@ static jmethodID J_DuckVector_init;
 static jfieldID J_DuckVector_constlen;
 static jfieldID J_DuckVector_varlen;
 
+static jclass J_DuckArray;
+static jmethodID J_DuckArray_init;
+
 static jclass J_ByteBuffer;
 
 static jmethodID J_Map_entrySet;
@@ -145,6 +148,13 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	tmpLocalRef = env->FindClass("java/util/Iterator");
 	J_Iterator_hasNext = env->GetMethodID(tmpLocalRef, "hasNext", "()Z");
 	J_Iterator_next = env->GetMethodID(tmpLocalRef, "next", "()Ljava/lang/Object;");
+	env->DeleteLocalRef(tmpLocalRef);
+
+	tmpLocalRef = env->FindClass("org/duckdb/DuckDBArray");
+	D_ASSERT(tmpLocalRef);
+	J_DuckArray = (jclass)env->NewGlobalRef(tmpLocalRef);
+	J_DuckArray_init = env->GetMethodID(J_DuckArray, "<init>", "(Lorg/duckdb/DuckDBVector;II)V");
+	D_ASSERT(J_DuckArray_init);
 	env->DeleteLocalRef(tmpLocalRef);
 
 	tmpLocalRef = env->FindClass("java/util/Map$Entry");
@@ -831,12 +841,13 @@ jobject ProcessVector(JNIEnv *env, Connection* conn_ref, Vector &vec, idx_t row_
 			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
 			break;
 		case LogicalTypeId::LIST: {
-			varlen_data = env->NewObjectArray(row_count, J_DuckVector, nullptr);
+			varlen_data = env->NewObjectArray(row_count, J_DuckArray, nullptr);
 
 			auto list_entries = FlatVector::GetData<list_entry_t>(vec);
 
 			auto list_size = ListVector::GetListSize(vec);
 			auto &list_vector = ListVector::GetEntry(vec);
+			auto j_vec = ProcessVector(env, conn_ref, list_vector, list_size);
 
 			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 				if (FlatVector::IsNull(vec, row_idx)) {
@@ -845,7 +856,9 @@ jobject ProcessVector(JNIEnv *env, Connection* conn_ref, Vector &vec, idx_t row_
 
 				// TODO: apply offset
 				auto offset = list_entries[row_idx].offset;
-				auto j_obj = ProcessVector(env, conn_ref, list_vector, list_entries[row_idx].length);
+				auto limit = list_entries[row_idx].length;
+
+				auto j_obj = env->NewObject(J_DuckArray, J_DuckArray_init, j_vec, offset, limit);
 
 				env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
 			}
