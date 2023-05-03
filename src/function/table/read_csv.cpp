@@ -234,6 +234,13 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	} else {
 		result->reader_bind = MultiFileReader::BindOptions(options.file_options, result->files, return_types, names);
 	}
+	auto &fs = FileSystem::GetFileSystem(context);
+	for (auto &file : result->files) {
+		if (fs.IsPipe(file)) {
+			result->file_exists = false;
+			break;
+		}
+	}
 	result->return_types = return_types;
 	result->return_names = names;
 	result->FinalizeRead(context);
@@ -790,13 +797,6 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 //===--------------------------------------------------------------------===//
 static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
-	auto &fs = FileSystem::GetFileSystem(context);
-	for (auto &file : bind_data.files) {
-		if (!fs.FileExists(file)) {
-			bind_data.file_exists = false;
-			break;
-		}
-	}
 	bind_data.single_threaded = bind_data.single_threaded || !bind_data.file_exists;
 	if (bind_data.single_threaded) {
 		return SingleThreadedCSVInit(context, input);
