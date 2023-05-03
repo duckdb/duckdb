@@ -34,19 +34,29 @@ void Transformer::AddPivotEntry(string enum_name, unique_ptr<SelectNode> base, u
 }
 
 bool Transformer::HasPivotEntries() {
-	if (parent) {
-		return parent->HasPivotEntries();
-	}
-	return !pivot_entries.empty();
+	return !GetPivotEntries().empty();
 }
 
 idx_t Transformer::PivotEntryCount() {
-	if (parent) {
-		return parent->PivotEntryCount();
-	}
-	return pivot_entries.size();
+	return GetPivotEntries().size();
 }
 
+vector<unique_ptr<Transformer::CreatePivotEntry>> &Transformer::GetPivotEntries() {
+	if (parent) {
+		return parent->GetPivotEntries();
+	}
+	return pivot_entries;
+}
+
+void Transformer::PivotEntryCheck(const string &type) {
+	auto &entries = GetPivotEntries();
+	if (!entries.empty()) {
+		throw ParserException(
+		    "PIVOT statements with pivot elements extracted from the data cannot be used in %ss.\nIn order to use "
+		    "PIVOT in a %s the PIVOT values must be manually specified, e.g.:\nPIVOT ... ON %s IN (val1, val2, ...)",
+		    type, type, entries[0]->column->ToString());
+	}
+}
 unique_ptr<SQLStatement> Transformer::GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTypeInfo>();

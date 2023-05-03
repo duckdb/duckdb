@@ -91,6 +91,8 @@ private:
 	unique_ptr<SQLStatement> GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry);
 	bool HasPivotEntries();
 	idx_t PivotEntryCount();
+	vector<unique_ptr<CreatePivotEntry>> &GetPivotEntries();
+	void PivotEntryCheck(const string &type);
 	void ExtractCTEsRecursive(CommonTableExpressionMap &cte_map);
 
 private:
