@@ -210,7 +210,7 @@ public:
 	JSONTransformOptions transform_options;
 
 private:
-	yyjson_val *ParseLine(char *line_start, idx_t line_size, idx_t remaining, JSONLine &line);
+	yyjson_val *ParseLine(char *const line_start, const idx_t line_size, const idx_t remaining, JSONLine &line);
 	idx_t GetObjectsFromArray(JSONScanGlobalState &gstate);
 
 private:

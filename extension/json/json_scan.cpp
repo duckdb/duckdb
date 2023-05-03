@@ -329,7 +329,8 @@ static inline void TrimWhitespace(JSONLine &line) {
 	}
 }
 
-yyjson_val *JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, idx_t remaining, JSONLine &line) {
+yyjson_val *JSONScanLocalState::ParseLine(char *const line_start, const idx_t line_size, const idx_t remaining,
+                                          JSONLine &line) {
 	yyjson_doc *doc;
 	if (bind_data.ignore_errors) {
 		doc = JSONCommon::ReadDocumentUnsafe(line_start, line_size, JSONCommon::READ_FLAG,
@@ -373,6 +374,59 @@ yyjson_val *JSONScanLocalState::ParseLine(char *line_start, idx_t line_size, idx
 		return doc->root;
 	} else {
 		return nullptr;
+	}
+}
+
+static inline const char *NextArrayElement(const char *ptr, const idx_t size) {
+	idx_t parents = 0;
+	const char *const end = ptr + size;
+	while (ptr != end) {
+		auto current_char = *ptr++;
+		if (StringUtil::CharacterIsSpace(current_char)) {
+			while (ptr != end) {
+				current_char = *ptr;
+				if (!StringUtil::CharacterIsSpace(current_char)) {
+					break;
+				}
+			}
+		}
+
+		if (parents == 0) {
+			if (current_char == ',' || current_char == ']') {
+				break;
+			}
+		}
+
+		switch (current_char) {
+		case '{':
+		case '[':
+			parents++;
+			break;
+		case '}':
+		case ']':
+			parents--;
+		case '"': {
+			while (ptr != end) {
+				auto string_char = *ptr++;
+				if (string_char == '"') {
+					break;
+				} else if (string_char == '\\') {
+					if (ptr != end) {
+						ptr++; // skip the escaped char
+					}
+				}
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
+	if (ptr == end) {
+		return nullptr;
+	} else {
+		return ptr;
 	}
 }
 
