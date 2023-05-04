@@ -371,13 +371,13 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 		}
 
 		idx_t updated_tuples = OnConflictHandling(table, context, lstate);
+		gstate.insert_count += lstate.insert_chunk.size();
+		gstate.insert_count += updated_tuples;
 		storage.LocalAppend(gstate.append_state, table, context.client, lstate.insert_chunk, true);
 
 		if (return_chunk) {
 			gstate.return_collection.Append(lstate.insert_chunk);
 		}
-		gstate.insert_count += lstate.insert_chunk.size();
-		gstate.insert_count += updated_tuples;
 	} else {
 		D_ASSERT(!return_chunk);
 		// parallel append
@@ -391,11 +391,11 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = &gstate.table.GetStorage().CreateOptimisticWriter(context.client);
 		}
-		lstate.update_count += OnConflictHandling(table, context, lstate);
+		OnConflictHandling(table, context, lstate);
 
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);
 		if (new_row_group) {
-			lstate.writer->CheckFlushToDisk(*lstate.local_collection);
+			lstate.writer->WriteNewRowGroup(*lstate.local_collection);
 		}
 	}
 
@@ -421,11 +421,10 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 
 	auto append_count = lstate.local_collection->GetTotalRows();
 
-	if (append_count < LocalStorage::MERGE_THRESHOLD) {
+	lock_guard<mutex> lock(gstate.lock);
+	gstate.insert_count += append_count;
+	if (append_count < RowGroup::ROW_GROUP_SIZE) {
 		// we have few rows - append to the local storage directly
-		lock_guard<mutex> lock(gstate.lock);
-		gstate.insert_count += append_count;
-		gstate.insert_count += lstate.update_count;
 		auto &table = gstate.table;
 		auto &storage = table.GetStorage();
 		storage.InitializeLocalAppend(gstate.append_state, context.client);
@@ -436,14 +435,8 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 		});
 		storage.FinalizeLocalAppend(gstate.append_state);
 	} else {
-		// we have many rows - flush the row group collection to disk (if required) and merge into the transaction-local
-		// state
-		lstate.writer->FlushToDisk(*lstate.local_collection);
-		lstate.writer->FinalFlush();
-
-		lock_guard<mutex> lock(gstate.lock);
-		gstate.insert_count += append_count;
-		gstate.insert_count += lstate.update_count;
+		// we have written rows to disk optimistically - merge directly into the transaction-local storage
+		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
 		gstate.table.GetStorage().LocalMerge(context.client, *lstate.local_collection);
 	}
 }

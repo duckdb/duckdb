@@ -28,7 +28,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 		order_matters = true;
 	}
 	if (sink) {
-		if (sink->SinkOrderDependent() && !sink->RequiresBatchIndex()) {
+		if (sink->SinkOrderDependent() || sink->RequiresBatchIndex()) {
 			order_matters = true;
 		}
 		if (!sink->ParallelSink()) {

@@ -210,10 +210,10 @@ void CommitState::WriteUpdate(UpdateInfo &info) {
 
 	// construct the column index path
 	vector<column_t> column_indexes;
-	auto column_data_ptr = &column_data;
-	while (column_data_ptr->parent) {
-		column_indexes.push_back(column_data_ptr->column_index);
-		column_data_ptr = column_data_ptr->parent;
+	reference<ColumnData> current_column_data = column_data;
+	while (current_column_data.get().parent) {
+		column_indexes.push_back(current_column_data.get().column_index);
+		current_column_data = *current_column_data.get().parent;
 	}
 	column_indexes.push_back(info.column_index);
 	std::reverse(column_indexes.begin(), column_indexes.end());
