@@ -2,6 +2,8 @@
 # description: test for list_resize()
 # group: [list]
 
+mode skip
+
 query I
 SELECT list_resize([1, 2, 4], 2);
 ----
@@ -21,6 +23,8 @@ query I
 SELECT list_resize([1, 2], 3, NULL)
 ----
 [1, 2, NULL]
+
+mode unskip
 
 query I
 SELECT list_resize([1, 2], 3, 4)

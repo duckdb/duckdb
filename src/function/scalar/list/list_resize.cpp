@@ -5,22 +5,36 @@
 
 namespace duckdb {
 
-template <class T>
 struct StandardCopyValue {
-	static void Operation(T &source, T &target, Vector &result_child) {
-		target = source;
+	template <class T>
+	static void Operation(Vector &child, Vector &result_child, idx_t i, idx_t result_child_offset) {
+		UnifiedVectorFormat child_data;
+		child.ToUnifiedFormat(i, child_data);
+
+		auto child_entries = (T *)child_data.data;
+		auto result_child_data = FlatVector::GetData<T>(result_child);
+
+		result_child_data[result_child_offset] = child_entries[i];
 	}
 };
 
 struct StringCopyValue {
-	static void Operation(string_t &source, string_t &target, Vector &result_child) {
-		target = StringVector::AddString(result_child, source);
+	template <class T>
+	static void Operation(Vector &child, Vector &result_child, idx_t i, idx_t result_child_offset) {
+		UnifiedVectorFormat child_data;
+		child.ToUnifiedFormat(i, child_data);
+
+		auto child_entries = (string_t *)child_data.data;
+		auto result_child_data = FlatVector::GetData<string_t>(result_child);
+
+		result_child_data[result_child_offset] = StringVector::AddString(result_child, child_entries[i]);
 	}
 };
 
 struct NestedCopyValue {
-	static void Operation(string_t &source, string_t &target, Vector &result_child) {
-		result_child.SetValue(i, source.GetValue(j));
+	template <class T>
+	static void Operation(Vector &child, Vector &result_child, idx_t i, idx_t result_child_offset) {
+		result_child.SetValue(result_child_offset, child.GetValue(i));
 	}
 };
 
@@ -41,14 +55,14 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 	auto &new_size = args.data[1];
 
 	bool has_default = false;
-	T default_value = 0;
+	T default_value;
 	if (args.ColumnCount() == 3) {
 		auto &d = args.data[2];
 		UnifiedVectorFormat d_data;
 		d.ToUnifiedFormat(count, d_data);
 		auto d_entries = (T *)d_data.data;
 		if (d_data.validity.RowIsValid(0)) {
-			default_value = d_entries[0];
+//			default_value = d_entries[0];
 			has_default = true;
 		}
 	}
@@ -94,13 +108,13 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 			if (!child_data.validity.RowIsValid(list_entries[l_index].offset + j)) {
 				result_child_validity.SetInvalid(result_child_offset);
 			} else {
-				COPY_FUNCTION::Operation(child_entries[list_entries[l_index].offset + j],
-				                         result_child_data[result_child_offset], result_child);
+				COPY_FUNCTION::template Operation<T>(child, result_child, list_entries[l_index].offset + j,
+				                         result_child_offset);
 			}
 			result_child_offset++;
 		}
-		auto new_size = (idx_t)new_size_entries[new_index];
-		for (idx_t j = values_to_copy; j < new_size; j++) {
+		auto new_size_entry = (idx_t)new_size_entries[new_index];
+		for (idx_t j = values_to_copy; j < new_size_entry; j++) {
 			if (has_default) {
 				result_child_data[result_child_offset] = default_value;
 			} else {
@@ -115,49 +129,49 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 	}
 }
 
-void ListResizeFun(DataChunk &args, Vector &result) {
+void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	const auto physical_type = args.data[1].GetType().InternalType();
 	switch (physical_type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		TemplatedListResizeFunction<int8_t, StandardCopyValue<int8_t>>(args, result);
+		TemplatedListResizeFunction<int8_t, StandardCopyValue> (args, result);
 		break;
 	case PhysicalType::INT16:
-		TemplatedListResizeFunction<int16_t, StandardCopyValue<int16_t>>(args, result);
+		TemplatedListResizeFunction<int16_t, StandardCopyValue>(args, result);
 		break;
 	case PhysicalType::INT32:
-		TemplatedListResizeFunction<int32_t, StandardCopyValue<int32_t>>(args, result);
+		TemplatedListResizeFunction<int32_t, StandardCopyValue>(args, result);
 		break;
 	case PhysicalType::INT64:
-		TemplatedListResizeFunction<int64_t, StandardCopyValue<int64_t>>(args, result);
+		TemplatedListResizeFunction<int64_t, StandardCopyValue>(args, result);
 		break;
 	case PhysicalType::INT128:
-		TemplatedListResizeFunction<hugeint_t, StandardCopyValue<hugeint_t>>(args, result);
+		TemplatedListResizeFunction<hugeint_t, StandardCopyValue>(args, result);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedListResizeFunction<uint8_t, StandardCopyValue<uint8_t>>(args, result);
+		TemplatedListResizeFunction<uint8_t, StandardCopyValue>(args, result);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedListResizeFunction<uint16_t, StandardCopyValue<uint16_t>>(args, result);
+		TemplatedListResizeFunction<uint16_t, StandardCopyValue>(args, result);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedListResizeFunction<uint32_t, StandardCopyValue<uint32_t>>(args, result);
+		TemplatedListResizeFunction<uint32_t, StandardCopyValue>(args, result);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedListResizeFunction<uint64_t, StandardCopyValue<uint64_t>>(args, result);
+		TemplatedListResizeFunction<uint64_t, StandardCopyValue>(args, result);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedListResizeFunction<float, StandardCopyValue<float>>(args, result);
+		TemplatedListResizeFunction<float, StandardCopyValue>(args, result);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedListResizeFunction<double, StandardCopyValue<double>>(args, result);
+		TemplatedListResizeFunction<double, StandardCopyValue>(args, result);
 		break;
 	case PhysicalType::VARCHAR:
 		TemplatedListResizeFunction<string_t, StringCopyValue>(args, result);
 		break;
-	case PhysicalType::INTERVAL:
-		TemplatedListResizeFunction<interval_t, StringCopyValue>(args, result);
-		break;
+//	case PhysicalType::INTERVAL:
+//		TemplatedListResizeFunction<interval_t, StringCopyValue>(args, result);
+//		break;
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
 		TemplatedListResizeFunction<int8_t, NestedCopyValue>(args, result);
