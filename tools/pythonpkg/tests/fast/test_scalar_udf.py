@@ -28,10 +28,9 @@ class TestScalarUDF(object):
         res = con.sql('select plus_one(i) from range_table tbl(i)').fetchall()
         assert len(res) == 5000
 
-        # FIXME: this is dependent on the duckdb vector size
-        # which we can get through `duckdb.__standard_vector_size__`
-        res = con.sql('select i, plus_one(i) from test_vector_types(NULL::BIGINT, false) t(i), range(2000)')
-        assert len(res) == 22000
+        vector_size = duckdb.__standard_vector_size__
+        res = con.sql(f'select i, plus_one(i) from test_vector_types(NULL::BIGINT, false) t(i), range({vector_size})')
+        assert len(res) == (vector_size * 11)
 
     def test_passthrough(self):
         def passthrough(x):
