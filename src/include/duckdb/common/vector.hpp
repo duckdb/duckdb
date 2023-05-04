@@ -99,4 +99,7 @@ public:
 	}
 };
 
+template <typename T>
+using unsafe_vector = vector<T, false>;
+
 } // namespace duckdb

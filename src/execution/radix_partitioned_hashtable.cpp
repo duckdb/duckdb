@@ -132,7 +132,7 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 
 void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                      DataChunk &groups_input, DataChunk &payload_input,
-                                     const vector<idx_t, false> &filter) const {
+                                     const unsafe_vector<idx_t> &filter) const {
 	auto &llstate = lstate.Cast<RadixHTLocalState>();
 	auto &gstate = state.Cast<RadixHTGlobalState>();
 	D_ASSERT(!gstate.is_finalized);
