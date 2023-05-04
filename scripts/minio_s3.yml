@@ -59,16 +59,18 @@ services:
         /usr/bin/mc policy get myminio/test-bucket-public
 
         # This is for the test of presigned URLs
+        # !!! When missing, be sure that you have ran 'scripts/generate_presigned_url.sh' !!!
+
         # small file upload
         /usr/bin/mc cp /duckdb/data/csv/phonenumbers.csv myminio/test-bucket/presigned/phonenumbers.csv
         /usr/bin/mc cp /duckdb/data/parquet-testing/glob/t1.parquet myminio/test-bucket/presigned/t1.parquet
 
-        ## large file upload
-        #/usr/bin/mc cp /duckdb/data/parquet-testing/presigned/presigned-url-lineitem.parquet myminio/test-bucket/presigned/lineitem_large.parquet
+        # large file upload
+        /usr/bin/mc cp /duckdb/data/parquet-testing/presigned/presigned-url-lineitem.parquet myminio/test-bucket/presigned/lineitem_large.parquet
 
-        #/usr/bin/mc share download myminio/test-bucket/presigned/phonenumbers.csv
-        #/usr/bin/mc share download myminio/test-bucket/presigned/t1.parquet
-        #/usr/bin/mc share download myminio/test-bucket/presigned/lineitem_large.parquet
+        /usr/bin/mc share download myminio/test-bucket/presigned/phonenumbers.csv
+        /usr/bin/mc share download myminio/test-bucket/presigned/t1.parquet
+        /usr/bin/mc share download myminio/test-bucket/presigned/lineitem_large.parquet
 
         exit 0;
       "
