@@ -51,16 +51,27 @@ vector<LogicalType> TableCatalogEntry::GetTypes() {
 	return types;
 }
 
+CreateTableInfo TableCatalogEntry::GetTableInfoForSerialization() const {
+	CreateTableInfo result;
+	result.catalog = catalog.GetName();
+	result.schema = schema.name;
+	result.table = name;
+	result.columns = columns.Copy();
+	result.constraints.reserve(constraints.size());
+	std::for_each(constraints.begin(), constraints.end(),
+	              [&result](const unique_ptr<Constraint> &c) { result.constraints.emplace_back(c->Copy()); });
+	return result;
+}
+
 void TableCatalogEntry::Serialize(Serializer &serializer) const {
 	D_ASSERT(!internal);
-
+	const auto info = GetTableInfoForSerialization();
 	FieldWriter writer(serializer);
-	auto catalog_name = catalog.GetName();
-	writer.WriteString(catalog_name);
-	writer.WriteString(schema.name);
-	writer.WriteString(name);
-	columns.Serialize(writer);
-	writer.WriteSerializableList(constraints);
+	writer.WriteString(info.catalog);
+	writer.WriteString(info.schema);
+	writer.WriteString(info.table);
+	info.columns.Serialize(writer);
+	writer.WriteSerializableList(info.constraints);
 	writer.Finalize();
 }
 

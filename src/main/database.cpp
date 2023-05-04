@@ -149,8 +149,9 @@ duckdb::unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(At
                                                                               AccessMode access_mode) {
 	duckdb::unique_ptr<AttachedDatabase> attached_database;
 	if (!type.empty()) {
-		// find the storage extensionon database
-		auto entry = config.storage_extensions.find(type);
+		// find the storage extension
+		auto extension_name = ExtensionHelper::ApplyExtensionAlias(type);
+		auto entry = config.storage_extensions.find(extension_name);
 		if (entry == config.storage_extensions.end()) {
 			throw BinderException("Unrecognized storage type \"%s\"", type);
 		}
@@ -169,6 +170,33 @@ duckdb::unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(At
 		    make_uniq<AttachedDatabase>(*this, Catalog::GetSystemCatalog(*this), info.name, info.path, access_mode);
 	}
 	return attached_database;
+}
+
+void DatabaseInstance::CreateDatabase(const string &database_type) {
+	AttachInfo info;
+	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
+	info.path = config.options.database_path;
+
+	auto attached_database = CreateAttachedDatabase(info, database_type, config.options.access_mode);
+	auto initial_database = attached_database.get();
+	{
+		Connection con(*this);
+		con.BeginTransaction();
+		db_manager->AddDatabase(*con.context, std::move(attached_database));
+		con.Commit();
+	}
+
+	// initialize the database
+	initial_database->Initialize();
+}
+
+void ThrowExtensionSetUnrecognizedOptions(const unordered_map<string, Value> &unrecognized_options) {
+	auto unrecognized_options_iter = unrecognized_options.begin();
+	string unrecognized_option_keys = unrecognized_options_iter->first;
+	for (; unrecognized_options_iter == unrecognized_options.end(); ++unrecognized_options_iter) {
+		unrecognized_option_keys = "," + unrecognized_options_iter->first;
+	}
+	throw InvalidInputException("Unrecognized configuration property \"%s\"", unrecognized_option_keys);
 }
 
 void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_config) {
@@ -208,27 +236,9 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	// check if we are opening a standard DuckDB database or an extension database
 	auto database_type = ExtractDatabaseType(config.options.database_path);
-	if (!database_type.empty()) {
-		// we are opening an extension database, run storage_init
-		ExtensionHelper::StorageInit(database_type, config);
-	}
-	AttachInfo info;
-	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
-	info.path = config.options.database_path;
-
-	auto attached_database = CreateAttachedDatabase(info, database_type, config.options.access_mode);
-	auto initial_database = attached_database.get();
-	{
-		Connection con(*this);
-		con.BeginTransaction();
-		db_manager->AddDatabase(*con.context, std::move(attached_database));
-		con.Commit();
-	}
 
 	// initialize the system catalog
 	db_manager->InitializeSystemCatalog();
-	// initialize the database
-	initial_database->Initialize();
 
 	if (!database_type.empty()) {
 		// if we are opening an extension database - load the extension
@@ -236,24 +246,11 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	}
 
 	if (!config.options.unrecognized_options.empty()) {
-		// check if all unrecognized options can be handled by the loaded extension(s)
-		for (auto &unrecognized_option : config.options.unrecognized_options) {
-			auto entry = config.extension_parameters.find(unrecognized_option.first);
-			if (entry == config.extension_parameters.end()) {
-				throw InvalidInputException("Unrecognized configuration property \"%s\"", unrecognized_option.first);
-			}
-		}
+		ThrowExtensionSetUnrecognizedOptions(config.options.unrecognized_options);
+	}
 
-		// if so - set the options
-		Connection con(*this);
-		con.BeginTransaction();
-		for (auto &unrecognized_option : config.options.unrecognized_options) {
-			auto entry = config.extension_parameters.find(unrecognized_option.first);
-			D_ASSERT(entry != config.extension_parameters.end());
-			PhysicalSet::SetExtensionVariable(*con.context, entry->second, unrecognized_option.first, SetScope::GLOBAL,
-			                                  unrecognized_option.second);
-		}
-		con.Commit();
+	if (!db_manager->HasDefaultDatabase()) {
+		CreateDatabase(database_type);
 	}
 
 	// only increase thread count after storage init because we get races on catalog otherwise
