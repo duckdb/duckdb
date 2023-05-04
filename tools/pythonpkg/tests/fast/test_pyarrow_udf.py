@@ -89,6 +89,8 @@ class TestPyArrowUDF(object):
         (BLOB, b'\xF6\x96\xB0\x85'),
         (INTERVAL, datetime.timedelta(days=30969, seconds=999, microseconds=999999)),
         (BOOLEAN, True),
+        (duckdb.struct_type(['BIGINT[]','VARCHAR[]']), {'v1': [1, 2, 3], 'v2': ['a', 'non-inlined string', 'duckdb']}),
+        (duckdb.list_type('VARCHAR'), ['the', 'duck', 'non-inlined string'])
     ])
     def test_type_coverage(self, test_type, function_type):
         type = test_type[0]

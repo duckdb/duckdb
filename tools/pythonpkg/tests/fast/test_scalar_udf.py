@@ -130,6 +130,15 @@ class TestScalarUDF(object):
         assert res1 == [('3',)]
         assert res2 == [('test',)]
 
+    def test_return_incorrectly_typed_object(self):
+        def returns_duckdb() -> int:
+            return 'duckdb'
+        
+        con = duckdb.connect()
+        con.create_function('fastest_database_in_the_west', returns_duckdb)
+        with pytest.raises(duckdb.InvalidInputException, match="Failed to cast value: Could not convert string 'duckdb' to INT64"):
+            res = con.sql('select fastest_database_in_the_west()').fetchall()
+
     def test_nulls(self):
         def five_if_null(x):
             if (x == None):
