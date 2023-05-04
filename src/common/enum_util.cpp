@@ -10,6 +10,7 @@
 
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/parallel/task.hpp"
+#include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -136,6 +137,8 @@ const char *EnumUtil::EnumToString<TaskExecutionResult>(TaskExecutionResult valu
 		return "TASK_NOT_FINISHED";
 	case TaskExecutionResult::TASK_ERROR:
 		return "TASK_ERROR";
+	case TaskExecutionResult::TASK_BLOCKED:
+		return "TASK_BLOCKED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -151,6 +154,37 @@ TaskExecutionResult EnumUtil::StringToEnum<TaskExecutionResult>(const char *valu
 	}
 	if (StringUtil::Equals(value, "TASK_ERROR")) {
 		return TaskExecutionResult::TASK_ERROR;
+	}
+	if (StringUtil::Equals(value, "TASK_BLOCKED")) {
+		return TaskExecutionResult::TASK_BLOCKED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template <>
+const char *EnumUtil::EnumToString<InterruptMode>(InterruptMode value) {
+	switch (value) {
+	case InterruptMode::NO_INTERRUPTS:
+		return "NO_INTERRUPTS";
+	case InterruptMode::TASK:
+		return "TASK";
+	case InterruptMode::BLOCKING:
+		return "BLOCKING";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template <>
+InterruptMode EnumUtil::StringToEnum<InterruptMode>(const char *value) {
+	if (StringUtil::Equals(value, "NO_INTERRUPTS")) {
+		return InterruptMode::NO_INTERRUPTS;
+	}
+	if (StringUtil::Equals(value, "TASK")) {
+		return InterruptMode::TASK;
+	}
+	if (StringUtil::Equals(value, "BLOCKING")) {
+		return InterruptMode::BLOCKING;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -1557,6 +1591,8 @@ const char *EnumUtil::EnumToString<VerificationType>(VerificationType value) {
 		return "PARSED";
 	case VerificationType::UNOPTIMIZED:
 		return "UNOPTIMIZED";
+	case VerificationType::NO_OPERATOR_CACHING:
+		return "NO_OPERATOR_CACHING";
 	case VerificationType::PREPARED:
 		return "PREPARED";
 	case VerificationType::EXTERNAL:
@@ -1587,6 +1623,9 @@ VerificationType EnumUtil::StringToEnum<VerificationType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "UNOPTIMIZED")) {
 		return VerificationType::UNOPTIMIZED;
+	}
+	if (StringUtil::Equals(value, "NO_OPERATOR_CACHING")) {
+		return VerificationType::NO_OPERATOR_CACHING;
 	}
 	if (StringUtil::Equals(value, "PREPARED")) {
 		return VerificationType::PREPARED;
@@ -4855,6 +4894,8 @@ const char *EnumUtil::EnumToString<OperatorResultType>(OperatorResultType value)
 		return "HAVE_MORE_OUTPUT";
 	case OperatorResultType::FINISHED:
 		return "FINISHED";
+	case OperatorResultType::BLOCKED:
+		return "BLOCKED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4870,6 +4911,9 @@ OperatorResultType EnumUtil::StringToEnum<OperatorResultType>(const char *value)
 	}
 	if (StringUtil::Equals(value, "FINISHED")) {
 		return OperatorResultType::FINISHED;
+	}
+	if (StringUtil::Equals(value, "BLOCKED")) {
+		return OperatorResultType::BLOCKED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4898,12 +4942,42 @@ OperatorFinalizeResultType EnumUtil::StringToEnum<OperatorFinalizeResultType>(co
 }
 
 template <>
+const char *EnumUtil::EnumToString<SourceResultType>(SourceResultType value) {
+	switch (value) {
+	case SourceResultType::HAVE_MORE_OUTPUT:
+		return "HAVE_MORE_OUTPUT";
+	case SourceResultType::FINISHED:
+		return "FINISHED";
+	case SourceResultType::BLOCKED:
+		return "BLOCKED";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template <>
+SourceResultType EnumUtil::StringToEnum<SourceResultType>(const char *value) {
+	if (StringUtil::Equals(value, "HAVE_MORE_OUTPUT")) {
+		return SourceResultType::HAVE_MORE_OUTPUT;
+	}
+	if (StringUtil::Equals(value, "FINISHED")) {
+		return SourceResultType::FINISHED;
+	}
+	if (StringUtil::Equals(value, "BLOCKED")) {
+		return SourceResultType::BLOCKED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template <>
 const char *EnumUtil::EnumToString<SinkResultType>(SinkResultType value) {
 	switch (value) {
 	case SinkResultType::NEED_MORE_INPUT:
 		return "NEED_MORE_INPUT";
 	case SinkResultType::FINISHED:
 		return "FINISHED";
+	case SinkResultType::BLOCKED:
+		return "BLOCKED";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -4916,6 +4990,9 @@ SinkResultType EnumUtil::StringToEnum<SinkResultType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "FINISHED")) {
 		return SinkResultType::FINISHED;
+	}
+	if (StringUtil::Equals(value, "BLOCKED")) {
+		return SinkResultType::BLOCKED;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

@@ -28,6 +28,8 @@ enum class TaskExecutionMode : uint8_t;
 
 enum class TaskExecutionResult : uint8_t;
 
+enum class InterruptMode : uint8_t;
+
 enum class DistinctType : uint8_t;
 
 enum class TableFilterType : uint8_t;
@@ -206,6 +208,8 @@ enum class OperatorResultType : uint8_t;
 
 enum class OperatorFinalizeResultType : uint8_t;
 
+enum class SourceResultType : uint8_t;
+
 enum class SinkResultType : uint8_t;
 
 enum class SinkFinalizeType : uint8_t;
@@ -255,6 +259,9 @@ const char *EnumUtil::EnumToString<TaskExecutionMode>(TaskExecutionMode value);
 
 template <>
 const char *EnumUtil::EnumToString<TaskExecutionResult>(TaskExecutionResult value);
+
+template <>
+const char *EnumUtil::EnumToString<InterruptMode>(InterruptMode value);
 
 template <>
 const char *EnumUtil::EnumToString<DistinctType>(DistinctType value);
@@ -524,6 +531,9 @@ template <>
 const char *EnumUtil::EnumToString<OperatorFinalizeResultType>(OperatorFinalizeResultType value);
 
 template <>
+const char *EnumUtil::EnumToString<SourceResultType>(SourceResultType value);
+
+template <>
 const char *EnumUtil::EnumToString<SinkResultType>(SinkResultType value);
 
 template <>
@@ -594,6 +604,9 @@ TaskExecutionMode EnumUtil::StringToEnum<TaskExecutionMode>(const char *value);
 
 template <>
 TaskExecutionResult EnumUtil::StringToEnum<TaskExecutionResult>(const char *value);
+
+template <>
+InterruptMode EnumUtil::StringToEnum<InterruptMode>(const char *value);
 
 template <>
 DistinctType EnumUtil::StringToEnum<DistinctType>(const char *value);
@@ -861,6 +874,9 @@ OperatorResultType EnumUtil::StringToEnum<OperatorResultType>(const char *value)
 
 template <>
 OperatorFinalizeResultType EnumUtil::StringToEnum<OperatorFinalizeResultType>(const char *value);
+
+template <>
+SourceResultType EnumUtil::StringToEnum<SourceResultType>(const char *value);
 
 template <>
 SinkResultType EnumUtil::StringToEnum<SinkResultType>(const char *value);
