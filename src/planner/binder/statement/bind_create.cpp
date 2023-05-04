@@ -8,6 +8,8 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -24,6 +26,7 @@
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
@@ -605,41 +608,27 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::TYPE_ENTRY: {
 		auto &schema = BindCreateSchema(*stmt.info);
-		auto &create_type_info = (CreateTypeInfo &)(*stmt.info);
+		auto &create_type_info = stmt.info->Cast<CreateTypeInfo>();
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), &schema);
 		if (create_type_info.query) {
 			// CREATE TYPE mood AS ENUM (SELECT 'happy')
-			auto &select_stmt = create_type_info.query->Cast<SelectStatement>();
-			auto &query_node = *select_stmt.node;
-
-			// We always add distinct modifier implicitly
-			bool need_to_add = true;
-			if (!query_node.modifiers.empty()) {
-				if (query_node.modifiers[0]->type == ResultModifierType::DISTINCT_MODIFIER) {
-					// There are cases where the same column is grouped repeatedly
-					// CREATE TYPE mood AS ENUM (SELECT DISTINCT ON(x) x FROM test);
-					// When we push into a constant expression
-					// => CREATE TYPE mood AS ENUM (SELECT DISTINCT ON(x, x) x FROM test);
-					auto &distinct_modifier = (DistinctModifier &)*query_node.modifiers[0];
-					if (distinct_modifier.distinct_on_targets.empty()) {
-						need_to_add = false;
-					}
-				}
-			}
-
-			// Add distinct modifier
-			if (need_to_add) {
-				auto distinct_modifier = make_uniq<DistinctModifier>();
-				query_node.modifiers.emplace(query_node.modifiers.begin(), std::move(distinct_modifier));
-			}
-
 			auto query_obj = Bind(*create_type_info.query);
 			auto query = std::move(query_obj.plan);
 
 			auto &sql_types = query_obj.types;
-			if (sql_types.size() != 1 || sql_types[0].id() != LogicalType::VARCHAR) {
+			if (sql_types.size() != 1) {
 				// add cast expression?
-				throw BinderException("The query must return one varchar column");
+				throw BinderException("The query must return a single column");
+			}
+			if (sql_types[0].id() != LogicalType::VARCHAR) {
+				// push a projection casting to varchar
+				vector<unique_ptr<Expression>> select_list;
+				auto ref = make_uniq<BoundColumnRefExpression>(sql_types[0], query->GetColumnBindings()[0]);
+				auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(ref), LogicalType::VARCHAR);
+				select_list.push_back(std::move(cast_expr));
+				auto proj = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(select_list));
+				proj->AddChild(std::move(query));
+				query = std::move(proj);
 			}
 
 			result.plan->AddChild(std::move(query));
@@ -660,7 +649,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::DATABASE_ENTRY: {
 		// not supported in DuckDB yet but allow extensions to intercept and implement this functionality
-		auto &base = (CreateDatabaseInfo &)*stmt.info;
+		auto &base = stmt.info->Cast<CreateDatabaseInfo>();
 		string database_name = base.name;
 		string source_path = base.path;
 
