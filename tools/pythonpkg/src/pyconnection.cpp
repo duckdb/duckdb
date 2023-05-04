@@ -333,8 +333,8 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &ud
 	auto &context = *connection->context;
 
 	if (registered_functions.find(name) != registered_functions.end()) {
-		throw NotImplementedException("A function by the name of '%s' is already registered, registering multiple "
-		                              "functions by the same name is not supported yet, please unregister it first",
+		throw NotImplementedException("A function by the name of '%s' is already created, creating multiple "
+		                              "functions with the same name is not supported yet, please remove it first",
 		                              name);
 	}
 	auto scalar_function = CreateScalarUDF(name, udf, parameters_p, return_type_p, type == PythonUDFType::ARROW,
