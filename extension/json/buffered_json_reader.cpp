@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-void BufferedJSONReaderOptions::Serialize(FieldWriter &writer) {
+void BufferedJSONReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteString(file_path);
 	writer.WriteField<JSONFormat>(format);
 	writer.WriteField<FileCompressionType>(compression);
@@ -22,7 +22,7 @@ JSONBufferHandle::JSONBufferHandle(idx_t buffer_index_p, idx_t readers_p, Alloca
     : buffer_index(buffer_index_p), readers(readers_p), buffer(std::move(buffer_p)), buffer_size(buffer_size_p) {
 }
 
-JSONFileHandle::JSONFileHandle(duckdb::unique_ptr<FileHandle> file_handle_p, Allocator &allocator_p)
+JSONFileHandle::JSONFileHandle(unique_ptr<FileHandle> file_handle_p, Allocator &allocator_p)
     : file_handle(std::move(file_handle_p)), allocator(allocator_p), can_seek(file_handle->CanSeek()),
       plain_file_source(file_handle->OnDiskFile() && can_seek), file_size(file_handle->GetFileSize()), read_position(0),
       requested_reads(0), actual_reads(0), cached_size(0) {
@@ -178,7 +178,7 @@ void BufferedJSONReader::CloseJSONFile() {
 	}
 }
 
-bool BufferedJSONReader::IsOpen() {
+bool BufferedJSONReader::IsOpen() const {
 	return file_handle != nullptr;
 }
 
@@ -186,11 +186,15 @@ BufferedJSONReaderOptions &BufferedJSONReader::GetOptions() {
 	return options;
 }
 
+const BufferedJSONReaderOptions &BufferedJSONReader::GetOptions() const {
+	return options;
+}
+
 JSONFileHandle &BufferedJSONReader::GetFileHandle() const {
 	return *file_handle;
 }
 
-void BufferedJSONReader::InsertBuffer(idx_t buffer_idx, duckdb::unique_ptr<JSONBufferHandle> &&buffer) {
+void BufferedJSONReader::InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> &&buffer) {
 	lock_guard<mutex> guard(lock);
 	buffer_map.insert(make_pair(buffer_idx, std::move(buffer)));
 }

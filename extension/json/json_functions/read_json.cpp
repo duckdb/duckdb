@@ -35,13 +35,7 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 			break;
 		}
 		idx_t next = MinValue<idx_t>(read_count, remaining);
-		yyjson_val **values;
-		if (bind_data.record_type == JSONRecordType::ARRAY_OF_RECORDS ||
-		    bind_data.record_type == JSONRecordType::ARRAY_OF_JSON) {
-			values = lstate.array_values;
-		} else {
-			values = lstate.values;
-		}
+		yyjson_val **values = lstate.values;
 		for (idx_t i = 0; i < next; i++) {
 			if (values[i]) {
 				JSONStructure::ExtractStructure(values[i], node);
@@ -99,13 +93,6 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 			}
 		}
 	}
-
-	for (auto &reader : gstate.json_readers) {
-		if (reader->IsOpen()) {
-			reader->Reset();
-		}
-	}
-	bind_data.stored_readers = std::move(gstate.json_readers);
 }
 
 void JSONScan::InitializeBindData(ClientContext &context, JSONScanData &bind_data,
@@ -201,12 +188,12 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
                                       vector<LogicalType> &return_types, vector<string> &names) {
 	// First bind default params
 	auto result = JSONScanData::Bind(context, input);
-	auto &bind_data = (JSONScanData &)*result;
+	auto &bind_data = result->Cast<JSONScanData>();
 
 	JSONScan::InitializeBindData(context, bind_data, input.named_parameters, names, return_types);
 
 	if (!bind_data.names.empty()) {
-		bind_data.auto_detect = false; // override auto_detect when columns are specified
+		bind_data.auto_detect = false; // Override auto_detect when columns are specified
 	} else if (!bind_data.auto_detect) {
 		throw BinderException("read_json \"columns\" parameter is required when auto_detect is false");
 	}
@@ -229,34 +216,32 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 }
 
 static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &gstate = ((JSONGlobalTableFunctionState &)*data_p.global_state).state;
-	auto &lstate = ((JSONLocalTableFunctionState &)*data_p.local_state).state;
+	auto &gstate = data_p.global_state->Cast<JSONGlobalTableFunctionState>().state;
+	auto &lstate = data_p.local_state->Cast<JSONLocalTableFunctionState>().state;
+	D_ASSERT(output.ColumnCount() == gstate.projected_columns.size());
 
 	const auto count = lstate.ReadNext(gstate);
-	yyjson_val **values;
-	if (gstate.bind_data.record_type == JSONRecordType::ARRAY_OF_RECORDS ||
-	    gstate.bind_data.record_type == JSONRecordType::ARRAY_OF_JSON) {
-		values = lstate.array_values;
-	} else {
-		D_ASSERT(gstate.bind_data.record_type != JSONRecordType::AUTO);
-		values = lstate.values;
-	}
+	yyjson_val **values = lstate.values;
 	output.SetCardinality(count);
 
 	vector<Vector *> result_vectors;
 	result_vectors.reserve(output.ColumnCount());
-	for (auto &valid_col_idx : gstate.bind_data.valid_cols) {
-		result_vectors.push_back(&output.data[valid_col_idx]);
+	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
+		const auto &col_id = gstate.projected_columns[col_idx];
+		if (gstate.projected_columns.empty() || !IsRowIdColumnId(col_id)) {
+			result_vectors.emplace_back(&output.data[col_idx]);
+		}
 	}
-	D_ASSERT(result_vectors.size() == gstate.bind_data.names.size());
 
 	// Pass current reader to transform options so we can get line number information if an error occurs
 	bool success;
-	if (gstate.bind_data.record_type == JSONRecordType::RECORDS ||
-	    gstate.bind_data.record_type == JSONRecordType::ARRAY_OF_RECORDS) {
-		success = JSONTransform::TransformObject(values, lstate.GetAllocator(), count, gstate.bind_data.names,
-		                                         result_vectors, lstate.transform_options);
-	} else {
+	switch (gstate.bind_data.record_type) {
+	case JSONRecordType::RECORDS:
+	case JSONRecordType::ARRAY_OF_RECORDS:
+		success = JSONTransform::TransformObject(values, lstate.GetAllocator(), count, gstate.names, result_vectors,
+		                                         lstate.transform_options);
+		break;
+	default:
 		success = JSONTransform::Transform(values, lstate.GetAllocator(), *result_vectors[0], count,
 		                                   lstate.transform_options);
 	}

@@ -14,8 +14,8 @@ unique_ptr<FunctionData> ReadJSONObjectsBind(ClientContext &context, TableFuncti
 static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	D_ASSERT(output.ColumnCount() == 1);
 	D_ASSERT(JSONCommon::LogicalTypeIsJSON(output.data[0].GetType()));
-	auto &gstate = ((JSONGlobalTableFunctionState &)*data_p.global_state).state;
-	auto &lstate = ((JSONLocalTableFunctionState &)*data_p.local_state).state;
+	auto &gstate = data_p.global_state->Cast<JSONGlobalTableFunctionState>().state;
+	auto &lstate = data_p.local_state->Cast<JSONLocalTableFunctionState>().state;
 
 	// Fetch next lines
 	const auto count = lstate.ReadNext(gstate);

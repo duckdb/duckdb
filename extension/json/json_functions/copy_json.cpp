@@ -29,14 +29,14 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	new_select_node.from_table = std::move(subquery_ref);
 
 	// Create new select list
-	vector<duckdb::unique_ptr<ParsedExpression>> select_list;
+	vector<unique_ptr<ParsedExpression>> select_list;
 	select_list.reserve(bound_original.types.size());
 
 	// strftime if the user specified a format (loop also gives columns a name, needed for struct_pack)
 	// TODO: deal with date/timestamp within nested types
 	const auto date_it = info.options.find("dateformat");
 	const auto timestamp_it = info.options.find("timestampformat");
-	vector<duckdb::unique_ptr<ParsedExpression>> strftime_children;
+	vector<unique_ptr<ParsedExpression>> strftime_children;
 	for (idx_t col_idx = 0; col_idx < bound_original.types.size(); col_idx++) {
 		auto column = make_uniq_base<ParsedExpression, PositionalReferenceExpression>(col_idx + 1);
 		strftime_children.clear();
@@ -71,16 +71,12 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	return binder.Bind(*stmt_copy);
 }
 
-static duckdb::unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInfo &info,
-                                                         vector<string> &expected_names,
-                                                         vector<LogicalType> &expected_types) {
+static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
+                                                 vector<LogicalType> &expected_types) {
 	auto bind_data = make_uniq<JSONScanData>();
 
 	bind_data->file_paths.emplace_back(info.file_path);
 	bind_data->names = expected_names;
-	for (idx_t col_idx = 0; col_idx < expected_names.size(); col_idx++) {
-		bind_data->valid_cols.emplace_back(col_idx);
-	}
 
 	auto it = info.options.find("dateformat");
 	if (it == info.options.end()) {

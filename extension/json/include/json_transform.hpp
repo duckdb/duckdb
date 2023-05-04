@@ -44,7 +44,7 @@ public:
 	idx_t object_index = DConstants::INVALID_INDEX;
 
 public:
-	void Serialize(FieldWriter &writer);
+	void Serialize(FieldWriter &writer) const;
 	void Deserialize(FieldReader &reader);
 
 	void ThrowException(const string &msg) {

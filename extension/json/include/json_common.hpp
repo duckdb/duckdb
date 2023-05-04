@@ -62,7 +62,7 @@ struct JSONKeyHash {
 			memcpy(&result, k.ptr + k.len - sizeof(size_t), sizeof(size_t));
 		} else {
 			result = 0;
-			duckdb::FastMemcpy(&result, k.ptr, k.len);
+			FastMemcpy(&result, k.ptr, k.len);
 		}
 		return result;
 	}
@@ -73,7 +73,7 @@ struct JSONKeyEquality {
 		if (a.len != b.len) {
 			return false;
 		}
-		return duckdb::FastMemcmp(a.ptr, b.ptr, a.len) == 0;
+		return FastMemcmp(a.ptr, b.ptr, a.len) == 0;
 	}
 };
 

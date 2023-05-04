@@ -34,13 +34,12 @@ public:
 	static void BinaryExecute(DataChunk &args, ExpressionState &state, Vector &result,
 	                          std::function<T(yyjson_val *, yyjson_alc *, Vector &)> fun) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		const auto &info = (JSONReadFunctionData &)*func_expr.bind_info;
+		const auto &info = func_expr.bind_info->Cast<JSONReadFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator.GetYYJSONAllocator();
 
 		auto &inputs = args.data[0];
-		if (info.constant) {
-			// Constant path
+		if (info.constant) { // Constant path
 			const char *ptr = info.ptr;
 			const idx_t &len = info.len;
 			UnaryExecutor::ExecuteWithNulls<string_t, T>(
@@ -55,8 +54,7 @@ public:
 					    return fun(val, alc, result);
 				    }
 			    });
-		} else {
-			// Columnref path
+		} else { // Columnref path
 			auto &paths = args.data[1];
 			BinaryExecutor::ExecuteWithNulls<string_t, string_t, T>(
 			    inputs, paths, result, args.size(), [&](string_t input, string_t path, ValidityMask &mask, idx_t idx) {
@@ -81,7 +79,7 @@ public:
 	static void ExecuteMany(DataChunk &args, ExpressionState &state, Vector &result,
 	                        std::function<T(yyjson_val *, yyjson_alc *, Vector &)> fun) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		const auto &info = (JSONReadManyFunctionData &)*func_expr.bind_info;
+		const auto &info = func_expr.bind_info->Cast<JSONReadManyFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
 		auto alc = lstate.json_allocator.GetYYJSONAllocator();
 		D_ASSERT(info.ptrs.size() == info.lens.size());

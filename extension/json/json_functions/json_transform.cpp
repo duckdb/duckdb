@@ -19,7 +19,7 @@ JSONTransformOptions::JSONTransformOptions(bool strict_cast_p, bool error_duplic
       error_unknown_key(error_unkown_key_p) {
 }
 
-void JSONTransformOptions::Serialize(FieldWriter &writer) {
+void JSONTransformOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField(strict_cast);
 	writer.WriteField(error_duplicate_key);
 	writer.WriteField(error_missing_key);

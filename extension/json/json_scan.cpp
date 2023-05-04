@@ -15,7 +15,7 @@ unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctio
 	auto result = make_uniq<JSONScanData>();
 	auto &options = result->options;
 
-	auto &info = (JSONScanInfo &)*input.info;
+	auto &info = input.info->Cast<JSONScanInfo>();
 	result->type = info.type;
 	options.format = info.format;
 	result->record_type = info.record_type;
@@ -53,6 +53,11 @@ unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctio
 				throw BinderException("compression must be one of ['none', 'gzip', 'zstd', 'auto']");
 			}
 		}
+	}
+
+	result->json_readers.reserve(result->file_paths.size());
+	for (idx_t i = 0; i < result->file_paths.size(); i++) {
+		result->json_readers.push_back(make_uniq<BufferedJSONReader>(context, result->options, result->file_paths[i]));
 	}
 
 	return std::move(result);
@@ -101,7 +106,7 @@ void JSONScanData::InitializeFormats(bool auto_detect_p) {
 	}
 }
 
-void JSONScanData::Serialize(FieldWriter &writer) {
+void JSONScanData::Serialize(FieldWriter &writer) const {
 	writer.WriteField<JSONScanType>(type);
 	options.Serialize(writer);
 	writer.WriteList<string>(file_paths);
@@ -111,7 +116,6 @@ void JSONScanData::Serialize(FieldWriter &writer) {
 	writer.WriteField<bool>(auto_detect);
 	writer.WriteField<idx_t>(sample_size);
 	writer.WriteList<string>(names);
-	writer.WriteList<idx_t>(valid_cols);
 	writer.WriteField<idx_t>(max_depth);
 	writer.WriteField<JSONRecordType>(record_type);
 	if (!date_format.empty()) {
@@ -136,7 +140,6 @@ void JSONScanData::Deserialize(FieldReader &reader) {
 	auto_detect = reader.ReadRequired<bool>();
 	sample_size = reader.ReadRequired<idx_t>();
 	names = reader.ReadRequiredList<string>();
-	valid_cols = reader.ReadRequiredList<idx_t>();
 	max_depth = reader.ReadRequired<idx_t>();
 	record_type = reader.ReadRequired<JSONRecordType>();
 	date_format = reader.ReadRequired<string>();
@@ -146,22 +149,22 @@ void JSONScanData::Deserialize(FieldReader &reader) {
 	transform_options.date_format_map = &date_format_map;
 }
 
-JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, JSONScanData &bind_data_p)
-    : bind_data(bind_data_p), allocator(BufferManager::GetBufferManager(context).GetBufferAllocator()),
+JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const JSONScanData &bind_data_p)
+    : bind_data(bind_data_p), transform_options(bind_data.transform_options),
+      allocator(BufferManager::GetBufferManager(context).GetBufferAllocator()),
       buffer_capacity(bind_data.maximum_object_size * 2), file_index(0), batch_index(0),
       system_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()) {
-	if (bind_data.stored_readers.empty()) {
-		json_readers.reserve(bind_data.file_paths.size());
-		for (idx_t i = 0; i < bind_data.file_paths.size(); i++) {
-			json_readers.push_back(make_uniq<BufferedJSONReader>(context, bind_data.options, bind_data.file_paths[i]));
+	json_readers.reserve(bind_data.json_readers.size());
+	for (auto &reader : bind_data.json_readers) {
+		json_readers.emplace_back(reader.get());
+		if (json_readers.back()->IsOpen()) {
+			json_readers.back()->Reset();
 		}
-	} else {
-		json_readers = std::move(bind_data.stored_readers);
 	}
 }
 
 JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
-    : scan_count(0), array_idx(0), array_offset(0), batch_index(DConstants::INVALID_INDEX), bind_data(gstate.bind_data),
+    : scan_count(0), batch_index(DConstants::INVALID_INDEX), bind_data(gstate.bind_data),
       json_allocator(BufferAllocator::Get(context)), current_reader(nullptr), current_buffer_handle(nullptr),
       is_last(false), buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
 
@@ -174,33 +177,32 @@ JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalSta
 }
 
 JSONGlobalTableFunctionState::JSONGlobalTableFunctionState(ClientContext &context, TableFunctionInitInput &input)
-    : state(context, (JSONScanData &)*input.bind_data) {
+    : state(context, input.bind_data->Cast<JSONScanData>()) {
 }
 
 unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientContext &context,
                                                                         TableFunctionInitInput &input) {
-	auto &bind_data = (JSONScanData &)*input.bind_data;
+	auto &bind_data = input.bind_data->Cast<JSONScanData>();
 	auto result = make_uniq<JSONGlobalTableFunctionState>(context, input);
+	auto &gstate = result->state;
 
 	// Perform projection pushdown
 	if (bind_data.type == JSONScanType::READ_JSON) {
 		D_ASSERT(input.column_ids.size() <= bind_data.names.size()); // Can't project to have more columns
-		vector<string> names;
-		names.reserve(input.column_ids.size());
-		for (idx_t i = 0; i < input.column_ids.size(); i++) {
-			const auto &id = input.column_ids[i];
-			if (IsRowIdColumnId(id)) {
-				continue;
+		gstate.projected_columns = input.column_ids;
+
+		idx_t column_count = 0;
+		for (const auto &col_id : input.column_ids) {
+			if (!IsRowIdColumnId(col_id)) {
+				column_count++;
 			}
-			names.push_back(std::move(bind_data.names[id]));
-			bind_data.valid_cols.push_back(i);
 		}
-		if (names.size() < bind_data.names.size()) {
+
+		if (column_count < bind_data.names.size()) {
 			// If we are auto-detecting, but don't need all columns present in the file,
 			// then we don't need to throw an error if we encounter an unseen column
-			bind_data.transform_options.error_unknown_key = false;
+			gstate.transform_options.error_unknown_key = false;
 		}
-		bind_data.names = std::move(names);
 	}
 	return std::move(result);
 }
@@ -235,12 +237,12 @@ JSONLocalTableFunctionState::JSONLocalTableFunctionState(ClientContext &context,
 unique_ptr<LocalTableFunctionState> JSONLocalTableFunctionState::Init(ExecutionContext &context,
                                                                       TableFunctionInitInput &input,
                                                                       GlobalTableFunctionState *global_state) {
-	auto &gstate = (JSONGlobalTableFunctionState &)*global_state;
+	auto &gstate = global_state->Cast<JSONGlobalTableFunctionState>();
 	auto result = make_uniq<JSONLocalTableFunctionState>(context.client, gstate.state);
 
 	// Copy the transform options / date format map because we need to do thread-local stuff
 	result->state.date_format_map = gstate.state.bind_data.date_format_map;
-	result->state.transform_options = gstate.state.bind_data.transform_options;
+	result->state.transform_options = gstate.state.transform_options;
 	result->state.transform_options.date_format_map = &result->state.date_format_map;
 
 	return std::move(result);
@@ -260,12 +262,6 @@ static inline void SkipWhitespace(const char *buffer_ptr, idx_t &buffer_offset, 
 
 idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 	json_allocator.Reset();
-
-	if ((gstate.bind_data.record_type == JSONRecordType::ARRAY_OF_RECORDS ||
-	     gstate.bind_data.record_type == JSONRecordType::ARRAY_OF_JSON) &&
-	    array_idx < scan_count) {
-		return GetObjectsFromArray(gstate);
-	}
 
 	idx_t count = 0;
 	if (buffer_offset == buffer_size) {
@@ -294,13 +290,6 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 
 	// Skip over any remaining whitespace for the next scan
 	SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
-
-	if (gstate.bind_data.record_type == JSONRecordType::ARRAY_OF_RECORDS ||
-	    gstate.bind_data.record_type == JSONRecordType::ARRAY_OF_JSON) {
-		array_idx = 0;
-		array_offset = 0;
-		return GetObjectsFromArray(gstate);
-	}
 
 	return count;
 }
@@ -428,40 +417,6 @@ static inline const char *NextArrayElement(const char *ptr, const idx_t size) {
 	} else {
 		return ptr;
 	}
-}
-
-idx_t JSONScanLocalState::GetObjectsFromArray(JSONScanGlobalState &gstate) {
-	idx_t arr_count = 0;
-
-	size_t idx, max;
-	yyjson_val *val;
-	for (; array_idx < scan_count; array_idx++, array_offset = 0) {
-		auto &value = values[array_idx];
-		if (!value) {
-			continue;
-		}
-		if (unsafe_yyjson_is_arr(value)) {
-			yyjson_arr_foreach(value, idx, max, val) {
-				if (idx < array_offset) {
-					continue;
-				}
-				array_values[arr_count++] = val;
-				if (arr_count == STANDARD_VECTOR_SIZE) {
-					break;
-				}
-			}
-			array_offset = idx + 1;
-			if (arr_count == STANDARD_VECTOR_SIZE) {
-				break;
-			}
-		} else if (!gstate.bind_data.ignore_errors) {
-			ThrowTransformError(
-			    array_idx,
-			    StringUtil::Format("Expected JSON ARRAY but got %s: %s\nTry setting json_format to 'records'",
-			                       JSONCommon::ValTypeToString(value), JSONCommon::ValToString(value, 50)));
-		}
-	}
-	return arr_count;
 }
 
 bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
