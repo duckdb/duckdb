@@ -444,7 +444,7 @@ unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, Funct
 	for (auto &chunk : collection->Chunks()) {
 		WriteCSVChunkInternal(context, bind_data, cast_chunk, batch->serializer, chunk);
 	}
-	return batch;
+	return std::move(batch);
 }
 
 //===--------------------------------------------------------------------===//
