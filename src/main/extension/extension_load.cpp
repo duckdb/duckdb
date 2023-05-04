@@ -19,7 +19,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 typedef void (*ext_init_fun_t)(DatabaseInstance &);
 typedef const char *(*ext_version_fun_t)(void);
-typedef void (*ext_storage_init_t)(DBConfig &);
+typedef bool (*ext_is_storage_t)(void);
 
 template <class T>
 static T LoadFunctionFromDLL(void *dll, const string &function_name, const string &filename) {
@@ -30,14 +30,18 @@ static T LoadFunctionFromDLL(void *dll, const string &function_name, const strin
 	return (T)function;
 }
 
-void ComputeSHA256(FileHandle *handle, const idx_t start, const idx_t end, std::string *res) {
+static void ComputeSHA256String(const std::string &to_hash, std::string *res) {
+	// Invoke MbedTls function to actually compute sha256
+	*res = duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(to_hash);
+}
+
+static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, const idx_t end, std::string *res) {
 	const idx_t len = end - start;
 	string file_content;
 	file_content.resize(len);
 	handle->Read((void *)file_content.data(), len, start);
 
-	// Invoke MbedTls function to actually compute sha256
-	*res = duckdb_mbedtls::MbedTlsWrapper::ComputeSha256Hash(file_content);
+	ComputeSHA256String(file_content, res);
 }
 
 bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const string &extension,
@@ -86,19 +90,19 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const
 
 		const idx_t maxLenChunks = 1024 * 1024;
 		const idx_t numChunks = (signature_offset + maxLenChunks - 1) / maxLenChunks;
-		std::vector<std::string> chunks(numChunks);
+		std::vector<std::string> hash_chunks(numChunks);
 		std::vector<idx_t> splits(numChunks + 1);
 
-		splits.back() = signature_offset;
-		for (idx_t i = 0; i < chunks.size(); i++) {
+		for (idx_t i = 0; i < numChunks; i++) {
 			splits[i] = maxLenChunks * i;
 		}
+		splits.back() = signature_offset;
 
 #ifndef DUCKDB_NO_THREADS
 		std::vector<std::thread> threads;
 		threads.reserve(numChunks);
 		for (idx_t i = 0; i < numChunks; i++) {
-			threads.emplace_back(ComputeSHA256, handle.get(), splits[i], splits[i + 1], &chunks[i]);
+			threads.emplace_back(ComputeSHA256FileSegment, handle.get(), splits[i], splits[i + 1], &hash_chunks[i]);
 		}
 
 		for (auto &thread : threads) {
@@ -106,26 +110,26 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const
 		}
 #else
 		for (idx_t i = 0; i < numChunks; i++) {
-			ComputeSHA256(handle.get(), splits[i], splits[i + 1], &chunks[i]);
+			ComputeSHA256FileSegment(handle.get(), splits[i], splits[i + 1], &hash_chunks[i]);
 		}
 #endif // DUCKDB_NO_THREADS
 
-		string file_content;
-		file_content.reserve(256 * numChunks);
+		string hash_concatenation;
+		hash_concatenation.reserve(32 * numChunks); // 256 bits -> 32 bytes per chunk
 
-		for (auto &chunk : chunks) {
-			file_content += chunk;
+		for (auto &hash_chunk : hash_chunks) {
+			hash_concatenation += hash_chunk;
 		}
 
-		string hash;
-		ComputeSHA256(handle.get(), 0, file_content.size(), &hash);
+		string two_level_hash;
+		ComputeSHA256String(hash_concatenation, &two_level_hash);
 
 		// TODO maybe we should do a stream read / hash update here
 		handle->Read((void *)signature.data(), signature.size(), signature_offset);
 
 		bool any_valid = false;
 		for (auto &key : ExtensionHelper::GetPublicKeys()) {
-			if (duckdb_mbedtls::MbedTlsWrapper::IsValidSha256Signature(key, signature, hash)) {
+			if (duckdb_mbedtls::MbedTlsWrapper::IsValidSha256Signature(key, signature, two_level_hash)) {
 				any_valid = true;
 				break;
 			}
@@ -201,7 +205,18 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 	string error;
 	ExtensionInitResult result;
 	if (!TryInitialLoad(config, opener, extension, result, error)) {
-		throw IOException(error);
+		if (!ExtensionHelper::AllowAutoInstall(extension)) {
+			throw IOException(error);
+		}
+		// the extension load failed - try installing the extension
+		if (!config.file_system) {
+			throw InternalException("Attempting to install an extension without a file system");
+		}
+		ExtensionHelper::InstallExtension(config, *config.file_system, extension, false);
+		// try loading again
+		if (!TryInitialLoad(config, nullptr, extension, result, error)) {
+			throw IOException(error);
+		}
 	}
 	return result;
 }
@@ -249,38 +264,6 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileOpener *op
 
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
 	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileOpener(context), extension);
-}
-
-void ExtensionHelper::StorageInit(string &extension, DBConfig &config) {
-	extension = ExtensionHelper::ApplyExtensionAlias(extension);
-	ExtensionInitResult res;
-	string error;
-	if (!TryInitialLoad(config, nullptr, extension, res, error)) {
-		if (!ExtensionHelper::AllowAutoInstall(extension)) {
-			throw IOException(error);
-		}
-		// the extension load failed - try installing the extension
-		if (!config.file_system) {
-			throw InternalException("Attempting to install an extension without a file system");
-		}
-		ExtensionHelper::InstallExtension(config, *config.file_system, extension, false);
-		// try loading again
-		if (!TryInitialLoad(config, nullptr, extension, res, error)) {
-			throw IOException(error);
-		}
-	}
-	auto storage_fun_name = res.basename + "_storage_init";
-
-	ext_storage_init_t storage_init_fun;
-	storage_init_fun = LoadFunctionFromDLL<ext_storage_init_t>(res.lib_hdl, storage_fun_name, res.filename);
-
-	try {
-		(*storage_init_fun)(config);
-	} catch (std::exception &e) {
-		throw InvalidInputException(
-		    "Storage initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"", storage_fun_name,
-		    res.filename, e.what());
-	}
 }
 
 string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {

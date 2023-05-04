@@ -2,6 +2,7 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -50,6 +51,15 @@ void LogicalUpdate::ResolveTypes() {
 	} else {
 		types.emplace_back(LogicalType::BIGINT);
 	}
+}
+
+string LogicalUpdate::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index);
+	}
+#endif
+	return LogicalOperator::GetName();
 }
 
 } // namespace duckdb

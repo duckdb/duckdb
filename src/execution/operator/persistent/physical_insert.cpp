@@ -356,10 +356,9 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 	return updated_tuples;
 }
 
-SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
-                                    DataChunk &chunk) const {
-	auto &gstate = state.Cast<InsertGlobalState>();
-	auto &lstate = lstate_p.Cast<InsertLocalState>();
+SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<InsertGlobalState>();
+	auto &lstate = input.local_state.Cast<InsertLocalState>();
 
 	auto &table = gstate.table;
 	auto &storage = table.GetStorage();
@@ -465,7 +464,7 @@ SinkFinalizeType PhysicalInsert::Finalize(Pipeline &pipeline, Event &event, Clie
 //===--------------------------------------------------------------------===//
 class InsertSourceState : public GlobalSourceState {
 public:
-	explicit InsertSourceState(const PhysicalInsert &op) : finished(false) {
+	explicit InsertSourceState(const PhysicalInsert &op) {
 		if (op.return_chunk) {
 			D_ASSERT(op.sink_state);
 			auto &g = op.sink_state->Cast<InsertGlobalState>();
@@ -474,28 +473,24 @@ public:
 	}
 
 	ColumnDataScanState scan_state;
-	bool finished;
 };
 
 unique_ptr<GlobalSourceState> PhysicalInsert::GetGlobalSourceState(ClientContext &context) const {
 	return make_uniq<InsertSourceState>(*this);
 }
 
-void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                             LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<InsertSourceState>();
+SourceResultType PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk,
+                                         OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<InsertSourceState>();
 	auto &insert_gstate = sink_state->Cast<InsertGlobalState>();
-	if (state.finished) {
-		return;
-	}
 	if (!return_chunk) {
 		chunk.SetCardinality(1);
 		chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));
-		state.finished = true;
-		return;
+		return SourceResultType::FINISHED;
 	}
 
 	insert_gstate.return_collection.Scan(state.scan_state, chunk);
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

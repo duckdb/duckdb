@@ -1,5 +1,6 @@
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/execution/executor.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -10,6 +11,16 @@ ExecutorTask::ExecutorTask(ClientContext &context) : ExecutorTask(Executor::Get(
 }
 
 ExecutorTask::~ExecutorTask() {
+}
+
+void ExecutorTask::Deschedule() {
+	auto this_ptr = shared_from_this();
+	executor.AddToBeRescheduled(this_ptr);
+}
+
+void ExecutorTask::Reschedule() {
+	auto this_ptr = shared_from_this();
+	executor.RescheduleTask(this_ptr);
 }
 
 TaskExecutionResult ExecutorTask::Execute(TaskExecutionMode mode) {
