@@ -7,9 +7,9 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include <limits>
 
 namespace duckdb {
@@ -151,8 +151,9 @@ static bool RequiresQuotes(WriteCSVData &csv_data, const char *str, idx_t len) {
 	}
 	if (csv_data.is_simple) {
 		// simple CSV: check for newlines, quotes and delimiter all at once
+		auto str_data = reinterpret_cast<const_data_ptr_t>(str);
 		for (idx_t i = 0; i < len; i++) {
-			if (csv_data.requires_quotes[str[i]]) {
+			if (csv_data.requires_quotes[str_data[i]]) {
 				// this byte requires quotes - write a quoted string
 				return true;
 			}
