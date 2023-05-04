@@ -36,10 +36,6 @@ import java.util.Objects;
 import java.util.UUID;
 
 public class DuckDBResultSet implements ResultSet {
-
-	// Constant to construct BigDecimals from hugeint_t
-	private final static BigDecimal ULONG_MULTIPLIER = new BigDecimal("18446744073709551616");
-
 	private final DuckDBPreparedStatement stmt;
 	private final DuckDBResultSetMetaData meta;
 
@@ -216,13 +212,6 @@ public class DuckDBResultSet implements ResultSet {
 		} else {
 			return res.toString();
 		}
-	}
-
-	private ByteBuffer getbuf(int columnIndex, int typeWidth) throws SQLException {
-		ByteBuffer buf = current_chunk[columnIndex - 1].constlen_data;
-		buf.order(ByteOrder.LITTLE_ENDIAN);
-		buf.position((chunk_idx - 1) * typeWidth);
-		return buf;
 	}
 
 	public boolean getBoolean(int columnIndex) throws SQLException {
@@ -584,28 +573,7 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		if (isType(columnIndex, DuckDBColumnType.DECIMAL)) {
-			switch (meta.column_types_meta[columnIndex - 1].type_size) {
-			case 16:
-				return new BigDecimal((int) getbuf(columnIndex, 2).getShort())
-						.scaleByPowerOfTen(meta.column_types_meta[columnIndex - 1].scale * -1);
-			case 32:
-				return new BigDecimal(getbuf(columnIndex, 4).getInt())
-						.scaleByPowerOfTen(meta.column_types_meta[columnIndex - 1].scale * -1);
-			case 64:
-				return new BigDecimal(getbuf(columnIndex, 8).getLong())
-						.scaleByPowerOfTen(meta.column_types_meta[columnIndex - 1].scale * -1);
-			case 128:
-				ByteBuffer buf = getbuf(columnIndex, 16);
-				long lower = buf.getLong();
-				long upper = buf.getLong();
-				return new BigDecimal(upper).multiply(ULONG_MULTIPLIER)
-						.add(new BigDecimal(Long.toUnsignedString(lower)))
-						.scaleByPowerOfTen(meta.column_types_meta[columnIndex - 1].scale * -1);
-			}
-		}
-		Object o = getObject(columnIndex);
-		return new BigDecimal(o.toString());
+		return current_chunk[columnIndex - 1].getBigDecimal(chunk_idx - 1);
 	}
 
 	public BigDecimal getBigDecimal(String columnLabel) throws SQLException {

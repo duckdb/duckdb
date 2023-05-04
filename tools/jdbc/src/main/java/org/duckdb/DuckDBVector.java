@@ -18,10 +18,15 @@ import java.util.Calendar;
 import java.util.UUID;
 
 public class DuckDBVector {
-	
+	// Constant to construct BigDecimals from hugeint_t
+	private final static BigDecimal ULONG_MULTIPLIER = new BigDecimal("18446744073709551616");
+
+	private final DuckDBColumnTypeMetaData meta;
+
 	public DuckDBVector(String duckdb_type, int length,  boolean[] nullmask) {
 		super();
 		this.duckdb_type = DuckDBResultSetMetaData.TypeNameToType(duckdb_type);
+		this.meta = this.duckdb_type == DuckDBColumnType.DECIMAL ? DuckDBColumnTypeMetaData.parseColumnTypeMetadata(duckdb_type) : null;
 		this.length = length;
 		this.nullmask = nullmask;
 	}
@@ -88,8 +93,32 @@ public class DuckDBVector {
 		}
 	}
 
-	private BigDecimal getBigDecimal(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+	BigDecimal getBigDecimal(int columnIndex) throws SQLException {
+		if (check_and_null(columnIndex)) {
+			return null;
+		}
+		if (isType(columnIndex, DuckDBColumnType.DECIMAL)) {
+			switch (meta.type_size) {
+				case 16:
+					return new BigDecimal((int) getbuf(columnIndex, 2).getShort())
+							.scaleByPowerOfTen(meta.scale * -1);
+				case 32:
+					return new BigDecimal(getbuf(columnIndex, 4).getInt())
+							.scaleByPowerOfTen(meta.scale * -1);
+				case 64:
+					return new BigDecimal(getbuf(columnIndex, 8).getLong())
+							.scaleByPowerOfTen(meta.scale * -1);
+				case 128:
+					ByteBuffer buf = getbuf(columnIndex, 16);
+					long lower = buf.getLong();
+					long upper = buf.getLong();
+					return new BigDecimal(upper).multiply(ULONG_MULTIPLIER)
+							.add(new BigDecimal(Long.toUnsignedString(lower)))
+							.scaleByPowerOfTen(meta.scale * -1);
+			}
+		}
+		Object o = getObject(columnIndex);
+		return new BigDecimal(o.toString());
 	}
 
 	OffsetDateTime getOffsetDateTime(int columnIndex) throws SQLException {

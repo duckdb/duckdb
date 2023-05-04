@@ -3,7 +3,6 @@ package org.duckdb;
 import java.sql.Date;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
@@ -13,8 +12,6 @@ import java.time.OffsetDateTime;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.UUID;
-
-import org.duckdb.DuckDBResultSet.DuckDBBlobResult;
 
 public class DuckDBResultSetMetaData implements ResultSetMetaData {
 
@@ -36,10 +33,8 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		this.column_types = column_types_al.toArray(this.column_types);
 
 		for (String column_type_detail : this.column_types_details) {
-			if (!column_type_detail.equals("")) {
-				String[] split_details = column_type_detail.split(";");
-				column_types_meta.add(new DuckDBColumnTypeMetaData(Short.parseShort(split_details[0].replace("DECIMAL", ""))
-							, Short.parseShort(split_details[1]), Short.parseShort(split_details[2])));
+			if (column_type_detail.startsWith("DECIMAL")) {
+				column_types_meta.add(DuckDBColumnTypeMetaData.parseColumnTypeMetadata(column_type_detail));
 			}
 			else { column_types_meta.add(null); }
 		}

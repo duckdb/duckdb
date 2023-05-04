@@ -658,7 +658,7 @@ static std::string type_to_jduckdb_type(LogicalType logical_type) {
 		}
 	} break;
 	default:
-		return std::string("");
+		return logical_type.ToString();
 	}
 }
 
@@ -734,7 +734,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 	return vec_array;
 }
 jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count) {
-	auto type_str = env->NewStringUTF(vec.GetType().ToString().c_str());
+	auto type_str = env->NewStringUTF(type_to_jduckdb_type(vec.GetType()).c_str());
 	// construct nullmask
 	auto null_array = env->NewBooleanArray(row_count);
 	jboolean *null_array_ptr = env->GetBooleanArrayElements(null_array, nullptr);
