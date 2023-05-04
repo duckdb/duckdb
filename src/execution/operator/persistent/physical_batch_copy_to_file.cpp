@@ -287,7 +287,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 			current_collection->InitializeAppend(append_state);
 		}
 	}
-	if (current_collection->Count() > 0) {
+	if (current_collection && current_collection->Count() > 0) {
 		// if there are any remaining batches that are not filled up to the batch size
 		// AND this is not the final collection
 		// re-add it to the set of raw (to-be-merged) batches
