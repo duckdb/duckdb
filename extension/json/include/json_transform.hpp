@@ -32,8 +32,6 @@ public:
 	//! Throws an error if an object has a key we didn't know about
 	bool error_unknown_key = false;
 
-	//! Whether we are casting
-	bool cast = false;
 	//! Whether to delay the error when transforming (e.g., when non-strict casting or reading from file)
 	bool delay_error = false;
 	//! Date format used for parsing (can be NULL)
@@ -46,23 +44,6 @@ public:
 public:
 	void Serialize(FieldWriter &writer);
 	void Deserialize(FieldReader &reader);
-
-	void ThrowException(const string &msg) {
-		if (cast) {
-			throw ConversionException(msg);
-		} else {
-			throw InvalidInputException(msg);
-		}
-	}
-
-	template <typename... Args>
-	void ThrowException(const string &msg, Args... params) {
-		if (cast) {
-			throw ConversionException(msg, params...);
-		} else {
-			throw InvalidInputException(msg, params...);
-		}
-	}
 };
 
 struct TryParseDate {

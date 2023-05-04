@@ -35,7 +35,7 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 	} else {
 		// cast it to the type specified by the cast expression
 		D_ASSERT(result.GetType() == expr.return_type);
-		CastParameters parameters(expr.bound_cast.cast_data.get(), true, nullptr, lstate);
+		CastParameters parameters(expr.bound_cast.cast_data.get(), false, nullptr, lstate);
 		expr.bound_cast.function(child, result, count, parameters);
 	}
 }
