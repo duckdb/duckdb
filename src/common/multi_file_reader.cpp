@@ -100,8 +100,6 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 	}
 
 	// Add generated constant columns from hive partitioning scheme
-	// bool hive_partitioning = options.auto_detect_hive_partitioning ? AutoDetectHivePartitioning::AutoDetect(files) :
-	// options.hive_partitioning;
 	if (options.hive_partitioning) {
 		D_ASSERT(!files.empty());
 		auto partitions = HivePartitioning::Parse(files[0]);
