@@ -237,7 +237,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	auto &fs = FileSystem::GetFileSystem(context);
 	for (auto &file : result->files) {
 		if (fs.IsPipe(file)) {
-			result->file_exists = false;
+			result->is_pipe = true;
+			result->single_threaded = true;
 			break;
 		}
 	}
@@ -700,8 +701,9 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
 		return std::move(result);
 	} else {
 		bind_data.options.file_path = bind_data.files[0];
-		if (bind_data.initial_reader && !bind_data.file_exists) {
-			// If this is not an on disk file we gotta reuse the reader.
+		if (bind_data.initial_reader && bind_data.is_pipe) {
+			// If this is a pipe and an initial reader already exists due to read_csv_auto
+			// We must re-use it, since we can't restart the reader due for it being a pipe.
 			result->initial_reader = std::move(bind_data.initial_reader);
 		} else {
 			result->initial_reader = make_uniq<BufferedCSVReader>(context, bind_data.options, bind_data.csv_types);
@@ -797,7 +799,6 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 //===--------------------------------------------------------------------===//
 static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
-	bind_data.single_threaded = bind_data.single_threaded || !bind_data.file_exists;
 	if (bind_data.single_threaded) {
 		return SingleThreadedCSVInit(context, input);
 	} else {
