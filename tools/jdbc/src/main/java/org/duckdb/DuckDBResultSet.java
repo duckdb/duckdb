@@ -26,7 +26,6 @@ import java.sql.SQLXML;
 import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
-import java.sql.Types;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.OffsetTime;
@@ -163,63 +162,14 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		DuckDBColumnType switch_no = current_chunk[columnIndex - 1].duckdb_type;
-		switch (switch_no) {
-		case BOOLEAN:
-			return getBoolean(columnIndex);
-		case TINYINT:
-			return getByte(columnIndex);
-		case SMALLINT:
-			return getShort(columnIndex);
-		case INTEGER:
-			return getInt(columnIndex);
-		case BIGINT:
-			return getLong(columnIndex);
-		case HUGEINT:
-			return getHugeint(columnIndex);
-		case UTINYINT:
-			return getUint8(columnIndex);
-		case USMALLINT:
-			return getUint16(columnIndex);
-		case UINTEGER:
-			return getUint32(columnIndex);
-		case UBIGINT:
-			return getUint64(columnIndex);
-		case FLOAT:
-			return getFloat(columnIndex);
-		case DOUBLE:
-			return getDouble(columnIndex);
-		case DECIMAL:
-			return getBigDecimal(columnIndex);
-		case TIME:
-			return getTime(columnIndex);
-		case TIME_WITH_TIME_ZONE:
-			return getOffsetTime(columnIndex);
-		case DATE:
-			return getDate(columnIndex);
-		case TIMESTAMP:
-		case TIMESTAMP_NS:
-		case TIMESTAMP_S:
-		case TIMESTAMP_MS:
-			return getTimestamp(columnIndex);
-		case TIMESTAMP_WITH_TIME_ZONE:
-			return getOffsetDateTime(columnIndex);
-		case JSON:
-			return getJsonObject(columnIndex);
-		case BLOB:
-			return getBlob(columnIndex);
-		case UUID:
-			return getUuid(columnIndex);
-		case LIST:
-			return getArray(columnIndex);
-		default:
-			return getLazyString(columnIndex);
-		}
-
+		return current_chunk[columnIndex - 1].getObject(chunk_idx - 1);
 	}
 
 	public OffsetTime getOffsetTime(int columnIndex) throws SQLException {
-		return DuckDBTimestamp.toOffsetTime(getbuf(columnIndex, 8).getLong());
+		if (check_and_null(columnIndex)) {
+			return null;
+		}
+		return current_chunk[columnIndex - 1].getOffsetTime(chunk_idx - 1);
 	}
 
 	public boolean wasNull() throws SQLException {
@@ -279,15 +229,7 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return false;
 		}
-		if (isType(columnIndex, DuckDBColumnType.BOOLEAN)) {
-			return getbuf(columnIndex, 1).get() == 1;
-		}
-		Object o = getObject(columnIndex);
-		if (o instanceof Number) {
-			return ((Number) o).byteValue() == 1;
-		}
-
-		return Boolean.parseBoolean(getObject(columnIndex).toString());
+		return current_chunk[columnIndex - 1].getBoolean(chunk_idx - 1);
 	}
 
 	public byte getByte(int columnIndex) throws SQLException {
@@ -452,59 +394,28 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
-			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong());
-		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_MS)) {
-			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong() * 1000);
-		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_NS)) {
-			return DuckDBTimestamp.toSqlTimestampNanos(getbuf(columnIndex, 8).getLong());
-		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_S)) {
-			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong() * 1_000_000);
-		}
-		Object o = getObject(columnIndex);
-		return Timestamp.valueOf(o.toString());
+		return current_chunk[columnIndex - 1].getTimestamp(chunk_idx - 1);
 	}
 
 	private LocalDateTime getLocalDateTime(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
-			return DuckDBTimestamp.toLocalDateTime(getbuf(columnIndex, 8).getLong());
-		}
-		Object o = getObject(columnIndex);
-		return LocalDateTime.parse(o.toString());
+		return current_chunk[columnIndex - 1].getLocalDateTime(chunk_idx - 1);
 	}
 
 	private OffsetDateTime getOffsetDateTime(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
-			return DuckDBTimestamp.toOffsetDateTime(getbuf(columnIndex, 8).getLong());
-		}
-		Object o = getObject(columnIndex);
-		return OffsetDateTime.parse(o.toString());
+		return current_chunk[columnIndex - 1].getOffsetDateTime(chunk_idx - 1);
 	}
 
 	public UUID getUuid(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-
-		if (isType(columnIndex, DuckDBColumnType.UUID)) {
-			ByteBuffer buffer = getbuf(columnIndex, 16);
-			long leastSignificantBits = buffer.getLong();
-
-			// Account for unsigned
-			long mostSignificantBits = buffer.getLong() - Long.MAX_VALUE - 1;
-			return new UUID(mostSignificantBits, leastSignificantBits);
-		}
-		Object o = getObject(columnIndex);
-		return UUID.fromString(o.toString());
+		return current_chunk[columnIndex - 1].getUuid(chunk_idx - 1);
 	}
 
 	static class DuckDBBlobResult implements Blob {
@@ -598,11 +509,7 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		if (isType(columnIndex, DuckDBColumnType.BLOB)) {
-			return new DuckDBBlobResult(((ByteBuffer[]) current_chunk[columnIndex - 1].varlen_data)[chunk_idx - 1]);
-		}
-
-		throw new SQLFeatureNotSupportedException("getBlob");
+		return current_chunk[columnIndex - 1].getBlob(chunk_idx - 1);
 	}
 
 	public Blob getBlob(String columnLabel) throws SQLException {
@@ -987,10 +894,10 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Array getArray(int columnIndex) throws SQLException {
-		if (isType(columnIndex, DuckDBColumnType.LIST)) {
-			return (DuckDBArray) current_chunk[columnIndex-1].varlen_data[chunk_idx - 1];
+		if (check_and_null(columnIndex)) {
+			return null;
 		}
-		throw new SQLFeatureNotSupportedException("getArray");
+		return current_chunk[columnIndex - 1].getArray(chunk_idx - 1);
 	}
 
 	public Object getObject(String columnLabel, Map<String, Class<?>> map) throws SQLException {
@@ -1029,22 +936,7 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		// Our raw data is already a proper count of units since the epoch
-		// So just construct the SQL Timestamp.
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
-			return DuckDBTimestamp.fromMicroInstant(getbuf(columnIndex, 8).getLong());
-		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_MS)) {
-			return DuckDBTimestamp.fromMilliInstant(getbuf(columnIndex, 8).getLong());
-		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_NS)) {
-			return DuckDBTimestamp.fromNanoInstant(getbuf(columnIndex, 8).getLong());
-		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_S)) {
-			return DuckDBTimestamp.fromSecondInstant(getbuf(columnIndex, 8).getLong());
-		}
-		Object o = getObject(columnIndex);
-		return Timestamp.valueOf(o.toString());
+		return current_chunk[columnIndex - 1].getTimestamp(chunk_idx - 1, cal);
 	}
 
 	public Timestamp getTimestamp(String columnLabel, Calendar cal) throws SQLException {
