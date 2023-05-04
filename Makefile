@@ -293,6 +293,7 @@ reldebug:
 		${DISABLE_SANITIZER_FLAG} \
 		${STATIC_LIBCPP} \
 		${EXTENSIONS} \
+		${EXTRA_CMAKE_VARIABLES} \
 		-DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
@@ -309,6 +310,7 @@ relassert:
 		${STATIC_LIBCPP} \
 		${EXTENSIONS} \
 		-DFORCE_ASSERT=1 \
+		${EXTRA_CMAKE_VARIABLES} \
 		-DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
@@ -327,6 +329,7 @@ benchmark:
 		${STATIC_LIBCPP} \
 		${EXTENSIONS} \
 		-DBUILD_BENCHMARKS=1 \
+		${EXTRA_CMAKE_VARIABLES} \
 		-DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build . --config Release
 
@@ -341,6 +344,7 @@ amaldebug:
 		${EXTENSIONS} \
 		${FORCE_32_BIT_FLAG} \
 		-DAMALGAMATION_BUILD=1 \
+		${EXTRA_CMAKE_VARIABLES} \
 		-DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
 
@@ -352,6 +356,7 @@ tidy-check:
 		-DDISABLE_UNITY=1 \
 		-DBUILD_PARQUET_EXTENSION=TRUE \
 		-DBUILD_PYTHON_PKG=TRUE \
+		${EXTRA_CMAKE_VARIABLES} \
 		-DBUILD_SHELL=0 ../.. && \
 	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER}
 
@@ -362,6 +367,7 @@ tidy-fix:
 		-DCLANG_TIDY=1 \
 		-DDISABLE_UNITY=1 \
 		-DBUILD_PARQUET_EXTENSION=TRUE \
+		${EXTRA_CMAKE_VARIABLES} \
 		-DBUILD_SHELL=0 ../.. && \
 	python3 ../../scripts/run-clang-tidy.py -fix
 
