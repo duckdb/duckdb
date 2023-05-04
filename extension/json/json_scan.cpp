@@ -165,8 +165,8 @@ JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const JSONScanD
 
 JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
     : scan_count(0), batch_index(DConstants::INVALID_INDEX), bind_data(gstate.bind_data),
-      json_allocator(BufferAllocator::Get(context)), current_reader(nullptr), current_buffer_handle(nullptr),
-      is_last(false), buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
+      allocator(BufferAllocator::Get(context)), current_reader(nullptr), current_buffer_handle(nullptr), is_last(false),
+      buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
 
 	// Buffer to reconstruct JSON values when they cross a buffer boundary
 	reconstruct_buffer = gstate.allocator.Allocate(gstate.bind_data.maximum_object_size + YYJSON_PADDING_SIZE);
@@ -261,7 +261,7 @@ static inline void SkipWhitespace(const char *buffer_ptr, idx_t &buffer_offset, 
 }
 
 idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
-	json_allocator.Reset();
+	allocator.Reset();
 
 	if (buffer_offset == buffer_size) {
 		if (!ReadNextBuffer(gstate)) {
@@ -272,21 +272,7 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 			scan_count++;
 		}
 	}
-
-	switch (current_reader->GetFormat()) {
-	case JSONFormat::UNSTRUCTURED:
-		ReadUnstructured();
-		break;
-	case JSONFormat::NEWLINE_DELIMITED:
-	case JSONFormat::ARRAY:
-		ReadChunked();
-		break;
-	default:
-		throw InternalException("Unknown JSON format");
-	}
-
-	// Skip over any remaining whitespace for the next scan
-	SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
+	ParseNextChunk();
 
 	return scan_count;
 }
@@ -305,64 +291,6 @@ static inline const char *PreviousNewline(const char *ptr) {
 	return ptr;
 }
 
-static inline void TrimWhitespace(JSONLine &line) {
-	while (line.size != 0 && StringUtil::CharacterIsSpace(line[0])) {
-		line.pointer++;
-		line.size--;
-	}
-	while (line.size != 0 && StringUtil::CharacterIsSpace(line[line.size - 1])) {
-		line.size--;
-	}
-}
-
-yyjson_val *JSONScanLocalState::ParseLine(char *const line_start, const idx_t line_size, const idx_t remaining,
-                                          JSONLine &line) {
-	yyjson_doc *doc;
-	if (bind_data.ignore_errors) {
-		doc = JSONCommon::ReadDocumentUnsafe(line_start, line_size, JSONCommon::READ_FLAG,
-		                                     json_allocator.GetYYJSONAllocator());
-	} else {
-		yyjson_read_err err;
-		if (bind_data.type != JSONScanType::READ_JSON_OBJECTS) {
-			// Optimization: if we don't ignore errors, and don't need to return strings, we can parse INSITU
-			doc = JSONCommon::ReadDocumentUnsafe(line_start, remaining, JSONCommon::STOP_READ_FLAG,
-			                                     json_allocator.GetYYJSONAllocator(), &err);
-			idx_t read_size = yyjson_doc_get_read_size(doc);
-			if (read_size > line_size) {
-				err.pos = line_size;
-				err.code = YYJSON_READ_ERROR_UNEXPECTED_END;
-				err.msg = "unexpected end of data";
-			} else if (read_size < line_size) {
-				idx_t diff = line_size - read_size;
-				char *ptr = line_start + read_size;
-				for (idx_t i = 0; i < diff; i++) {
-					if (!StringUtil::CharacterIsSpace(ptr[i])) {
-						err.pos = read_size;
-						err.code = YYJSON_READ_ERROR_UNEXPECTED_CONTENT;
-						err.msg = "unexpected content after document";
-					}
-				}
-			}
-		} else {
-			doc = JSONCommon::ReadDocumentUnsafe(line_start, line_size, JSONCommon::READ_FLAG,
-			                                     json_allocator.GetYYJSONAllocator(), &err);
-		}
-		if (err.code != YYJSON_READ_SUCCESS) {
-			current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, err);
-		}
-	}
-	lines_or_objects_in_buffer++;
-
-	if (doc) {
-		// Set the JSONLine and trim
-		line = JSONLine(line_start, line_size);
-		TrimWhitespace(line);
-		return doc->root;
-	} else {
-		return nullptr;
-	}
-}
-
 static inline const char *NextJSON(const char *ptr, const idx_t size) {
 	D_ASSERT(!StringUtil::CharacterIsSpace(*ptr)); // Should be handled before
 
@@ -373,12 +301,12 @@ static inline const char *NextJSON(const char *ptr, const idx_t size) {
 		case '{':
 		case '[':
 			parents++;
-			break;
+			continue;
 		case '}':
 		case ']':
 			parents--;
 			break;
-		case '"': {
+		case '"':
 			while (ptr != end) {
 				auto string_char = *ptr++;
 				if (string_char == '"') {
@@ -390,9 +318,8 @@ static inline const char *NextJSON(const char *ptr, const idx_t size) {
 				}
 			}
 			break;
-		}
 		default:
-			break;
+			continue;
 		}
 
 		if (parents == 0) {
@@ -404,6 +331,37 @@ static inline const char *NextJSON(const char *ptr, const idx_t size) {
 		return nullptr;
 	}
 	return ptr;
+}
+
+static inline void TrimWhitespace(JSONLine &line) {
+	while (line.size != 0 && StringUtil::CharacterIsSpace(line[0])) {
+		line.pointer++;
+		line.size--;
+	}
+	while (line.size != 0 && StringUtil::CharacterIsSpace(line[line.size - 1])) {
+		line.size--;
+	}
+}
+
+void JSONScanLocalState::ParseJSON(char *const json_start, const idx_t json_size) {
+	yyjson_doc *doc;
+	yyjson_read_err err;
+	const auto read_flag = // If we return strings, we cannot parse INSITU
+	    bind_data.type == JSONScanType::READ_JSON_OBJECTS ? JSONCommon::READ_FLAG : JSONCommon::READ_INSITU_FLAG;
+	doc = JSONCommon::ReadDocumentUnsafe(json_start, json_size, read_flag, allocator.GetYYAlc(), &err);
+	if (!bind_data.ignore_errors && err.code != YYJSON_READ_SUCCESS) {
+		current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, err);
+	}
+	lines_or_objects_in_buffer++;
+
+	if (doc) {
+		// Set the JSONLine and trim
+		lines[scan_count] = JSONLine(json_start, json_size);
+		TrimWhitespace(lines[scan_count]);
+		values[scan_count] = doc->root;
+	} else {
+		values[scan_count] = nullptr;
+	}
 }
 
 pair<JSONFormat, JSONRecordType> DetectFormatAndRecordType(const char *const buffer_ptr, const idx_t buffer_size,
@@ -556,8 +514,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			continue;
 		}
 
-		auto format_and_record_type =
-		    DetectFormatAndRecordType(buffer_ptr, buffer_size, json_allocator.GetYYJSONAllocator());
+		auto format_and_record_type = DetectFormatAndRecordType(buffer_ptr, buffer_size, allocator.GetYYAlc());
 		current_reader->SetFormat(format_and_record_type.first);
 		if (!current_reader->IsParallel()) {
 			gstate.file_index++;
@@ -704,85 +661,51 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 		current_reader->RemoveBuffer(current_buffer_handle->buffer_index - 1);
 	}
 
-	values[0] = ParseLine((char *)reconstruct_ptr, line_size, line_size, lines[0]);
+	ParseJSON((char *)reconstruct_ptr, line_size);
 }
 
-void JSONScanLocalState::ReadUnstructured() {
-	// yyjson does not always return YYJSON_READ_ERROR_UNEXPECTED_END properly
-	// if a different error code happens within the last 50 bytes
-	// we assume it should be YYJSON_READ_ERROR_UNEXPECTED_END instead
-	static constexpr idx_t END_BOUND = 50;
-
-	const auto max_obj_size = reconstruct_buffer.GetSize();
-	yyjson_read_err error;
+void JSONScanLocalState::ParseNextChunk() {
+	const auto format = current_reader->GetFormat();
 	for (; scan_count < STANDARD_VECTOR_SIZE; scan_count++) {
-		const auto obj_start = buffer_ptr + buffer_offset;
-		const auto obj_copy_start = buffer_copy_ptr + buffer_offset;
-
+		auto json_start = buffer_ptr + buffer_offset;
 		idx_t remaining = buffer_size - buffer_offset;
 		if (remaining == 0) {
 			break;
 		}
-
-		// Read next JSON doc
-		auto read_doc = JSONCommon::ReadDocumentUnsafe((char *)obj_start, remaining, JSONCommon::STOP_READ_FLAG,
-		                                               json_allocator.GetYYJSONAllocator(), &error);
-		if (error.code == YYJSON_READ_SUCCESS) {
-			idx_t line_size = yyjson_doc_get_read_size(read_doc);
-			lines[scan_count] = JSONLine(obj_copy_start, line_size);
-			TrimWhitespace(lines[scan_count]);
-
-			buffer_offset += line_size;
-			SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
-			lines_or_objects_in_buffer++;
-		} else if (error.pos > max_obj_size) {
-			current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, error,
-			                                "Try increasing \"maximum_object_size\".");
-		} else if (!is_last && (error.code == YYJSON_READ_ERROR_UNEXPECTED_END || remaining - error.pos < END_BOUND)) {
-			// Copy remaining to reconstruct_buffer
-			const auto reconstruct_ptr = reconstruct_buffer.get();
-			memcpy(reconstruct_ptr, obj_copy_start, remaining);
-			prev_buffer_remainder = remaining;
-			buffer_offset = buffer_size;
-			break;
-		} else {
-			current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, error);
-		}
-		values[scan_count] = read_doc->root;
-	}
-}
-
-void JSONScanLocalState::ReadChunked() {
-	for (; scan_count < STANDARD_VECTOR_SIZE; scan_count++) {
-		auto line_start = buffer_ptr + buffer_offset;
-		idx_t remaining = buffer_size - buffer_offset;
-		if (remaining == 0) {
-			break;
-		}
-
-		// Search for newline
-		auto line_end = NextNewline(line_start, remaining);
-
-		if (line_end == nullptr) {
+		const char *json_end = format == JSONFormat::NEWLINE_DELIMITED ? NextNewline(json_start, remaining)
+		                                                               : NextJSON(json_start, remaining);
+		if (json_end == nullptr) {
 			// We reached the end of the buffer
 			if (!is_last) {
 				// Last bit of data belongs to the next batch
 				buffer_offset = buffer_size;
 				break;
 			}
-			line_end = line_start + remaining;
+			json_end = json_start + remaining;
 		}
-		idx_t line_size = line_end - line_start;
 
-		values[scan_count] = ParseLine((char *)line_start, line_size, remaining, lines[scan_count]);
+		idx_t json_size = json_end - json_start;
+		ParseJSON((char *)json_start, json_size);
+		buffer_offset += json_size;
 
-		buffer_offset += line_size;
+		if (format == JSONFormat::ARRAY) {
+			SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
+			if (buffer_ptr[buffer_offset] == ',' || buffer_ptr[buffer_offset] == ']') {
+				buffer_offset++;
+			} else { // We can't ignore this error, even with 'ignore_errors'
+				yyjson_read_err err;
+				err.code = YYJSON_READ_ERROR_UNEXPECTED_CHARACTER;
+				err.msg = "unexpected character";
+				err.pos = json_size;
+				current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, err);
+			}
+		}
 		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
 	}
 }
 
 yyjson_alc *JSONScanLocalState::GetAllocator() {
-	return json_allocator.GetYYJSONAllocator();
+	return allocator.GetYYAlc();
 }
 
 void JSONScanLocalState::ThrowTransformError(idx_t object_index, const string &error_message) {

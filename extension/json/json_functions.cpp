@@ -208,7 +208,7 @@ unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, 
 static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
-	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+	auto alc = lstate.json_allocator.GetYYAlc();
 
 	bool success = true;
 	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(

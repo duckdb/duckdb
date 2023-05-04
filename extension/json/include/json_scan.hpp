@@ -207,13 +207,13 @@ public:
 	JSONTransformOptions transform_options;
 
 private:
-	yyjson_val *ParseLine(char *const line_start, const idx_t line_size, const idx_t remaining, JSONLine &line);
+	void ParseJSON(char *const json_start, const idx_t json_size);
 
 private:
 	//! Bind data
 	const JSONScanData &bind_data;
 	//! Thread-local allocator
-	JSONAllocator json_allocator;
+	JSONAllocator allocator;
 
 	//! Current reader and buffer handle
 	optional_ptr<BufferedJSONReader> current_reader;
@@ -241,9 +241,7 @@ private:
 	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, idx_t &buffer_index);
 
 	void ReconstructFirstObject(JSONScanGlobalState &gstate);
-
-	void ReadUnstructured();
-	void ReadChunked();
+	void ParseNextChunk();
 };
 
 struct JSONGlobalTableFunctionState : public GlobalTableFunctionState {

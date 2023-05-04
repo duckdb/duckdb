@@ -22,7 +22,7 @@ public:
 	    : arena_allocator(allocator), yyjson_allocator({Allocate, Reallocate, Free, &arena_allocator}) {
 	}
 
-	inline yyjson_alc *GetYYJSONAllocator() {
+	inline yyjson_alc *GetYYAlc() {
 		return &yyjson_allocator;
 	}
 
@@ -98,7 +98,7 @@ public:
 public:
 	//! Read/Write flags
 	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS;
-	static constexpr auto STOP_READ_FLAG = READ_FLAG | YYJSON_READ_STOP_WHEN_DONE | YYJSON_READ_INSITU;
+	static constexpr auto READ_INSITU_FLAG = READ_FLAG | YYJSON_READ_INSITU;
 	static constexpr auto WRITE_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN;
 	static constexpr auto WRITE_PRETTY_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY;
 

@@ -99,8 +99,7 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
 		JSONAllocator json_allocator(Allocator::DefaultAllocator());
 		yyjson_read_err err;
-		auto doc = JSONCommon::ReadDocumentUnsafe(structure_string, JSONCommon::READ_FLAG,
-		                                          json_allocator.GetYYJSONAllocator(), &err);
+		auto doc = JSONCommon::ReadDocumentUnsafe(structure_string, JSONCommon::READ_FLAG, json_allocator.GetYYAlc(), &err);
 		if (err.code != YYJSON_READ_SUCCESS) {
 			JSONCommon::ThrowParseError(structure_string.GetData(), structure_string.GetSize(), err);
 		}
@@ -800,7 +799,7 @@ static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &
 template <bool strict>
 static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+	auto alc = lstate.json_allocator.GetYYAlc();
 
 	JSONTransformOptions options(strict, strict, strict, false);
 	if (!TransformFunctionInternal(args.data[0], args.size(), result, alc, options)) {
@@ -835,7 +834,7 @@ ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 static bool JSONToNestedCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
-	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+	auto alc = lstate.json_allocator.GetYYAlc();
 
 	JSONTransformOptions options(true, true, true, true);
 	options.delay_error = !parameters.strict; // Set this so the error is delayed

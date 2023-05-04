@@ -20,7 +20,7 @@ public:
 	static void UnaryExecute(DataChunk &args, ExpressionState &state, Vector &result,
 	                         std::function<T(yyjson_val *, yyjson_alc *, Vector &)> fun) {
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-		auto alc = lstate.json_allocator.GetYYJSONAllocator();
+		auto alc = lstate.json_allocator.GetYYAlc();
 
 		auto &inputs = args.data[0];
 		UnaryExecutor::Execute<string_t, T>(inputs, result, args.size(), [&](string_t input) {
@@ -36,7 +36,7 @@ public:
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		const auto &info = func_expr.bind_info->Cast<JSONReadFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-		auto alc = lstate.json_allocator.GetYYJSONAllocator();
+		auto alc = lstate.json_allocator.GetYYAlc();
 
 		auto &inputs = args.data[0];
 		if (info.constant) { // Constant path
@@ -44,8 +44,7 @@ public:
 			const idx_t &len = info.len;
 			UnaryExecutor::ExecuteWithNulls<string_t, T>(
 			    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
-				    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG,
-				                                        lstate.json_allocator.GetYYJSONAllocator());
+				    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, lstate.json_allocator.GetYYAlc());
 				    auto val = JSONCommon::GetPointerUnsafe<yyjson_val>(doc->root, ptr, len);
 				    if (!val) {
 					    mask.SetInvalid(idx);
@@ -58,8 +57,7 @@ public:
 			auto &paths = args.data[1];
 			BinaryExecutor::ExecuteWithNulls<string_t, string_t, T>(
 			    inputs, paths, result, args.size(), [&](string_t input, string_t path, ValidityMask &mask, idx_t idx) {
-				    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG,
-				                                        lstate.json_allocator.GetYYJSONAllocator());
+				    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, lstate.json_allocator.GetYYAlc());
 				    auto val = JSONCommon::GetPointer<yyjson_val>(doc->root, path);
 				    if (!val) {
 					    mask.SetInvalid(idx);
@@ -81,7 +79,7 @@ public:
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		const auto &info = func_expr.bind_info->Cast<JSONReadManyFunctionData>();
 		auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-		auto alc = lstate.json_allocator.GetYYJSONAllocator();
+		auto alc = lstate.json_allocator.GetYYAlc();
 		D_ASSERT(info.ptrs.size() == info.lens.size());
 
 		const auto count = args.size();
@@ -110,8 +108,7 @@ public:
 				continue;
 			}
 
-			auto doc = JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG,
-			                                    lstate.json_allocator.GetYYJSONAllocator());
+			auto doc = JSONCommon::ReadDocument(inputs[idx], JSONCommon::READ_FLAG, lstate.json_allocator.GetYYAlc());
 			for (idx_t path_i = 0; path_i < num_paths; path_i++) {
 				auto child_idx = offset + path_i;
 				val = JSONCommon::GetPointerUnsafe<yyjson_val>(doc->root, info.ptrs[path_i], info.lens[path_i]);
