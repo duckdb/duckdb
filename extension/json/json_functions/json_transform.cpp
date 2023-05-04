@@ -268,13 +268,14 @@ bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const
 	bool success = true;
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
-		if (!val || unsafe_yyjson_is_null(val)) {
+		if (!val || !unsafe_yyjson_is_str(val)) {
 			validity.SetInvalid(i);
-		} else if (success && options.strict_cast && !unsafe_yyjson_is_str(val)) {
-			options.error_message = StringUtil::Format("Unable to cast '%s' to " + LogicalTypeIdToString(target.id()),
-			                                           JSONCommon::ValToString(val, 50));
-			options.object_index = i;
-			success = false;
+			if (success && options.strict_cast && !unsafe_yyjson_is_str(val)) {
+				options.error_message = StringUtil::Format(
+				    "Unable to cast '%s' to " + LogicalTypeIdToString(target.id()), JSONCommon::ValToString(val, 50));
+				options.object_index = i;
+				success = false;
+			}
 		} else {
 			data[i] = GetString(val);
 		}
