@@ -208,6 +208,11 @@ struct ListSortFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct ListResizeFun {
+	static ScalarFunction GetFunction();
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct CardinalityFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

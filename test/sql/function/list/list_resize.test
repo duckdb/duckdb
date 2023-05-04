@@ -1,0 +1,66 @@
+# name: test/sql/function/list/list_resize.test
+# description: test for list_resize()
+# group: [list]
+
+query I
+SELECT list_resize([1, 2, 4], 2);
+----
+[1, 2]
+
+query I
+SELECT list_resize([1, NULL, 3], 2);
+----
+[1, NULL]
+
+query I
+SELECT list_resize(NULL, 5);
+----
+NULL
+
+query I
+SELECT list_resize([1, 2], 3, NULL)
+----
+[1, 2, NULL]
+
+query I
+SELECT list_resize([1, 2], 3, 4)
+----
+[1, 2, 4]
+
+statement ok
+create table tbl(a int[], b int);
+
+statement ok
+insert into tbl values ([5,4,3], 3);
+
+statement ok
+insert into tbl values ([6,7,8], 8);
+
+statement ok
+insert into tbl values ([1,2,3], 5);
+
+query I
+select list_resize(a, b) from tbl;
+----
+[5, 4, 3]
+[6, 7, 8, NULL, NULL, NULL, NULL, NULL]
+[1, 2, 3, NULL, NULL]
+
+statement ok
+create table tbl(a string, b int);
+
+statement ok
+insert into tbl values ('abc', 3);
+
+statement ok
+insert into tbl values ('def', 8);
+
+statement ok
+insert into tbl values ('ghi', 5);
+
+query I
+select list_resize(a, b) from tbl;
+----
+['abc']
+['def', NULL, NULL, NULL, NULL, NULL]
+['ghi', NULL, NULL]
