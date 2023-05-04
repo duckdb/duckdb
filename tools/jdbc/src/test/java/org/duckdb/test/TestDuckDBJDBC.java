@@ -2669,7 +2669,7 @@ public class TestDuckDBJDBC {
 			assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
 			JsonNode jsonNode = (JsonNode) rs.getObject(1);
 			assertTrue(jsonNode.isArray());
-			assertEquals(jsonNode.toString(), "[1, 5]");
+			assertEquals(jsonNode.toString(), "[1,5]");
 		}
 
 		try (Statement stmt = conn.createStatement()) {
