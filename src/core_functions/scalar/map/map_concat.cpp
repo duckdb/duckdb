@@ -146,7 +146,6 @@ static unique_ptr<FunctionData> MapConcatBind(ClientContext &context, ScalarFunc
 	for (idx_t i = 0; i < arg_count; i++) {
 		auto &arg = arguments[i];
 		auto &map = arg->return_type;
-		// TODO: add a test using prepared statements
 		if (map.id() == LogicalTypeId::UNKNOWN) {
 			// Prepared statement
 			bound_function.arguments.emplace_back(LogicalTypeId::UNKNOWN);

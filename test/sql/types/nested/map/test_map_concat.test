@@ -40,6 +40,12 @@ select map_concat(NULL, NULL);
 ----
 NULL
 
+# Appending NULL to a non-empty map
+query I
+select map_concat(map([1], [1]), NULL);
+----
+{1=1}
+
 # More than 2 inputs
 query I
 select map_concat(
@@ -153,3 +159,15 @@ select map_concat(val, val, val) from (
 	select map(c1, c1) as val from test_vector_types(NULL::VARCHAR[], false) tbl(c1) where c1 != [] and c1 != [NULL]
 )
 ----
+
+statement ok
+prepare q1 as select map_concat($1, $2, $3);
+
+query I
+execute q1(
+	MAP([1,2,7], ['a', 'b', 'non_inlined_string']),
+	MAP([], []),
+	MAP([2,3,4,5], ['a', 'b', 'c', 'd'])
+)
+----
+{1=a, 2=a, 7=non_inlined_string, 3=b, 4=c, 5=d}
