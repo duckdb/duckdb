@@ -5,6 +5,11 @@
 
 namespace duckdb {
 
+// **DEPRECATED**: Use EnumUtil directly instead.
+string SampleMethodToString(SampleMethod method) {
+	return EnumUtil::ToString(method);
+}
+
 void SampleOptions::Serialize(Serializer &serializer) {
 	FieldWriter writer(serializer);
 	writer.WriteSerializable(sample_size);

@@ -11,4 +11,9 @@ bool IsRightOuterJoin(JoinType type) {
 	return type == JoinType::OUTER || type == JoinType::RIGHT;
 }
 
+// **DEPRECATED**: Use EnumUtil directly instead.
+string JoinTypeToString(JoinType type) {
+	return EnumUtil::ToString(type);
+}
+
 } // namespace duckdb

@@ -137,7 +137,7 @@ with open(enum_util_header_file, "w") as f:
     static T FromString(const char *value) = delete;
 
     template <class T>
-    static T FromString(const std::string &value) { return FromString<T>(value.c_str()); }
+    static T FromString(const string &value) { return FromString<T>(value.c_str()); }
 
     // Enum -> String
     template <class T>

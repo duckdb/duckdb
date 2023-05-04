@@ -35,4 +35,7 @@ bool IsLeftOuterJoin(JoinType type);
 //! True if join is rght or full outer join
 bool IsRightOuterJoin(JoinType type);
 
+// **DEPRECATED**: Use EnumUtil directly instead.
+string JoinTypeToString(JoinType type);
+
 } // namespace duckdb

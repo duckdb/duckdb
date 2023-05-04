@@ -158,6 +158,11 @@ PhysicalType LogicalType::GetInternalType() {
 	}
 }
 
+// **DEPRECATED**: Use EnumUtil directly instead.
+string LogicalTypeIdToString(LogicalTypeId type) {
+	return EnumUtil::ToString(type);
+}
+
 constexpr const LogicalTypeId LogicalType::INVALID;
 constexpr const LogicalTypeId LogicalType::SQLNULL;
 constexpr const LogicalTypeId LogicalType::BOOLEAN;

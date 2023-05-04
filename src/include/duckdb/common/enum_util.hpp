@@ -20,7 +20,7 @@ struct EnumUtil {
 	static T FromString(const char *value) = delete;
 
 	template <class T>
-	static T FromString(const std::string &value) {
+	static T FromString(const string &value) {
 		return FromString<T>(value.c_str());
 	}
 
