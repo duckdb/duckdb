@@ -49,7 +49,7 @@ static LikeString GetLikeStringEscaped(duckdb_re2::Regexp *regexp, bool contains
 				ret.escaped = true;
 				ret.like_string += ret.escaped_character;
 			}
-			auto run_as_str{chr};
+			auto run_as_str {chr};
 			ret.like_string += run_as_str;
 		}
 	} else {
@@ -64,7 +64,7 @@ static LikeString GetLikeStringEscaped(duckdb_re2::Regexp *regexp, bool contains
 			ret.escaped = true;
 			ret.like_string += ret.escaped_character;
 		}
-		auto rune_as_str{chr};
+		auto rune_as_str {chr};
 		ret.like_string += rune_as_str;
 	}
 	D_ASSERT(ret.like_string.size() >= 1);
