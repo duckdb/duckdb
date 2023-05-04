@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"

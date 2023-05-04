@@ -22,6 +22,12 @@ struct CreateFunctionInfo : public CreateInfo {
 
 	//! Function name
 	string name;
+	//! The description (if any)
+	string description;
+	//! Parameter names (if any)
+	vector<string> parameter_names;
+	//! The example (if any)
+	string example;
 
 protected:
 	void SerializeInternal(Serializer &serializer) const override {

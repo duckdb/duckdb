@@ -147,7 +147,7 @@ void ScanNumpyObject(PandasColumnBindData &bind_data, PyObject *object, idx_t of
 }
 
 static void VerifyMapConstraints(Vector &vec, idx_t count) {
-	auto invalid_reason = CheckMapValidity(vec, count);
+	auto invalid_reason = MapVector::CheckMapValidity(vec, count);
 	switch (invalid_reason) {
 	case MapInvalidReason::VALID:
 		return;

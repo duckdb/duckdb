@@ -54,7 +54,7 @@ public:
 
 public:
 	void ExecuteFile(string script);
-	void LoadDatabase(string dbpath);
+	virtual void LoadDatabase(string dbpath);
 
 	string ReplaceKeywords(string input);
 

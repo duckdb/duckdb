@@ -1393,11 +1393,26 @@ static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &databa
 	return res;
 }
 
+bool IsDefaultConnectionString(const string &database, bool read_only, unordered_map<string, string> &config) {
+	bool is_default = StringUtil::CIEquals(database, ":default:");
+	if (!is_default) {
+		return false;
+	}
+	// Only allow fetching the default connection when no options are passed
+	if (read_only == true || !config.empty()) {
+		throw InvalidInputException("Default connection fetching is only allowed without additional options");
+	}
+	return true;
+}
+
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
                                                            const py::dict &config_options) {
 	auto config_dict = TransformPyConfigDict(config_options);
-	DBConfig config(config_dict, read_only);
+	if (IsDefaultConnectionString(database, read_only, config_dict)) {
+		return DuckDBPyConnection::DefaultConnection();
+	}
 
+	DBConfig config(config_dict, read_only);
 	auto res = FetchOrCreateInstance(database, config);
 	auto &client_context = *res->connection->context;
 	SetDefaultConfigArguments(client_context);

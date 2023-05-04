@@ -43,16 +43,15 @@ unique_ptr<GlobalSinkState> PhysicalVacuum::GetGlobalSinkState(ClientContext &co
 	return make_uniq<VacuumGlobalSinkState>(*info);
 }
 
-SinkResultType PhysicalVacuum::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                    DataChunk &input) const {
-	auto &lstate = lstate_p.Cast<VacuumLocalSinkState>();
+SinkResultType PhysicalVacuum::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &lstate = input.local_state.Cast<VacuumLocalSinkState>();
 	D_ASSERT(lstate.column_distinct_stats.size() == info->column_id_map.size());
 
-	for (idx_t col_idx = 0; col_idx < input.data.size(); col_idx++) {
-		if (!DistinctStatistics::TypeIsSupported(input.data[col_idx].GetType())) {
+	for (idx_t col_idx = 0; col_idx < chunk.data.size(); col_idx++) {
+		if (!DistinctStatistics::TypeIsSupported(chunk.data[col_idx].GetType())) {
 			continue;
 		}
-		lstate.column_distinct_stats[col_idx]->Update(input.data[col_idx], input.size(), false);
+		lstate.column_distinct_stats[col_idx]->Update(chunk.data[col_idx], chunk.size(), false);
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
@@ -82,9 +81,10 @@ SinkFinalizeType PhysicalVacuum::Finalize(Pipeline &pipeline, Event &event, Clie
 	return SinkFinalizeType::READY;
 }
 
-void PhysicalVacuum::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                             LocalSourceState &lstate) const {
+SourceResultType PhysicalVacuum::GetData(ExecutionContext &context, DataChunk &chunk,
+                                         OperatorSourceInput &input) const {
 	// NOP
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

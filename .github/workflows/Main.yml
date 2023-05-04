@@ -204,6 +204,48 @@ jobs:
       shell: bash
       run: build/debug/test/unittest
 
+ force-blocking-sink-source:
+    name: Forcing async Sinks/Sources
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_INET: 1
+      BUILD_PARQUET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      FORCE_ASYNC_SINK_SOURCE: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build
+      shell: bash
+      run: make relassert
+
+    - name: Test
+      shell: bash
+      run: build/relassert/test/unittest
+
 
  storage-initialization:
     name: Storage Initialization Verification
@@ -381,6 +423,7 @@ jobs:
       CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       DISABLE_UNITY: 1
+      DISABLE_PARQUET: 1
       GEN: ninja
 
     steps:

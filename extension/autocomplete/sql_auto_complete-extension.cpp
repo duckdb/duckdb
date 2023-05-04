@@ -10,9 +10,9 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "sql_auto_complete-extension.hpp"
+#include "duckdb/main/extension_util.hpp"
 
 namespace duckdb {
 
@@ -399,18 +399,9 @@ void SQLAutoCompleteFunction(ClientContext &context, TableFunctionInput &data_p,
 }
 
 static void LoadInternal(DatabaseInstance &db) {
-	Connection con(db);
-	con.BeginTransaction();
-
-	auto &context = *con.context;
-
-	Catalog &catalog = Catalog::GetSystemCatalog(context);
 	TableFunction auto_complete_fun("sql_auto_complete", {LogicalType::VARCHAR}, SQLAutoCompleteFunction,
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
-	CreateTableFunctionInfo auto_complete_info(auto_complete_fun);
-	catalog.CreateTableFunction(context, auto_complete_info);
-
-	con.Commit();
+	ExtensionUtil::RegisterFunction(db, auto_complete_fun);
 }
 void SQLAutoCompleteExtension::Load(DuckDB &db) {
 	LoadInternal(*db.instance);

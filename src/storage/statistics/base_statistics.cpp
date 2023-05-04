@@ -271,6 +271,7 @@ void BaseStatistics::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteField<bool>(has_null);
 	writer.WriteField<bool>(has_no_null);
+	writer.WriteField<idx_t>(distinct_count);
 	Serialize(writer);
 	writer.Finalize();
 }
@@ -316,9 +317,11 @@ BaseStatistics BaseStatistics::Deserialize(Deserializer &source, LogicalType typ
 	FieldReader reader(source);
 	bool has_null = reader.ReadRequired<bool>();
 	bool has_no_null = reader.ReadRequired<bool>();
+	idx_t distinct_count = reader.ReadRequired<idx_t>();
 	auto result = DeserializeType(reader, std::move(type));
 	result.has_null = has_null;
 	result.has_no_null = has_no_null;
+	result.distinct_count = distinct_count;
 	reader.Finalize();
 	return result;
 }

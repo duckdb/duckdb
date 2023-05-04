@@ -46,22 +46,22 @@ TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, shared_ptr<JS
 	return table_function;
 }
 
-CreateTableFunctionInfo JSONFunctions::GetReadJSONObjectsFunction() {
+TableFunctionSet JSONFunctions::GetReadJSONObjectsFunction() {
 	TableFunctionSet function_set("read_json_objects");
 	auto function_info =
 	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON_OBJECTS, JSONFormat::UNSTRUCTURED, JSONRecordType::JSON);
 	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, function_info));
 	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, function_info));
-	return CreateTableFunctionInfo(function_set);
+	return function_set;
 }
 
-CreateTableFunctionInfo JSONFunctions::GetReadNDJSONObjectsFunction() {
+TableFunctionSet JSONFunctions::GetReadNDJSONObjectsFunction() {
 	TableFunctionSet function_set("read_ndjson_objects");
 	auto function_info =
 	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON_OBJECTS, JSONFormat::NEWLINE_DELIMITED, JSONRecordType::JSON);
 	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, function_info));
 	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, function_info));
-	return CreateTableFunctionInfo(function_set);
+	return function_set;
 }
 
 } // namespace duckdb

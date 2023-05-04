@@ -106,7 +106,7 @@ static duckdb::unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context,
 	return std::move(bind_data);
 }
 
-CreateCopyFunctionInfo JSONFunctions::GetJSONCopyFunction() {
+CopyFunction JSONFunctions::GetJSONCopyFunction() {
 	CopyFunction function("json");
 	function.extension = "json";
 
@@ -116,7 +116,7 @@ CreateCopyFunctionInfo JSONFunctions::GetJSONCopyFunction() {
 	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(
 	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::RECORDS, false));
 
-	return CreateCopyFunctionInfo(function);
+	return function;
 }
 
 } // namespace duckdb
