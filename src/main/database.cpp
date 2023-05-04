@@ -19,6 +19,7 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/execution/operator/helper/physical_set.hpp"
 #include "duckdb/storage/standard_buffer_manager.hpp"
+#include "duckdb/main/database_path_and_type.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -129,22 +130,6 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
 
-pair<string, string> DatabaseInstance::ExtractDatabaseType(const string &path) {
-	// first check if there is an existing prefix
-	auto extension = ExtensionHelper::ExtractExtensionPrefixFromPath(path);
-	if (!extension.empty()) {
-		// path is prefixed with an extension - remove it
-		auto db_path = StringUtil::Replace(path, extension + ":", "");
-		return {ExtensionHelper::ApplyExtensionAlias(extension), db_path};
-	}
-	// if there isn't - check the magic bytes of the file (if any)
-	auto file_type = MagicBytes::CheckMagicBytes(config.file_system.get(), path);
-	if (file_type == DataFileType::SQLITE_FILE) {
-		return {"sqlite", path};
-	}
-	return {string(), path};
-}
-
 duckdb::unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo &info, const string &type,
                                                                               AccessMode access_mode) {
 	duckdb::unique_ptr<AttachedDatabase> attached_database;
@@ -236,9 +221,9 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	// check if we are opening a standard DuckDB database or an extension database
 	if (config.options.database_type.empty()) {
-		auto type_path = ExtractDatabaseType(config.options.database_path);
-		config.options.database_type = type_path.first;
-		config.options.database_path = type_path.second;
+		auto path_and_type = DBPathAndType::Parse(config.options.database_path, config);
+		config.options.database_type = path_and_type.type;
+		config.options.database_path = path_and_type.path;
 	}
 
 	// initialize the system catalog

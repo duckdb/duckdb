@@ -21,6 +21,7 @@ add_library_unity(
   config.cpp
   connection.cpp
   database.cpp
+  database_path_and_type.cpp
   database_manager.cpp
   db_instance_cache.cpp
   error_manager.cpp

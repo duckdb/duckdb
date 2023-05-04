@@ -1,11 +1,13 @@
 #include "duckdb/execution/operator/schema/physical_attach.hpp"
-#include "duckdb/parser/parsed_data/attach_info.hpp"
+
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
 
@@ -59,9 +61,9 @@ void PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	auto &db = DatabaseInstance::GetDatabase(context.client);
 	if (type.empty()) {
 		// try to extract type from path
-		auto ext_path = db.ExtractDatabaseType(info->path);
-		type = ext_path.first;
-		info->path = ext_path.second;
+		auto path_and_type = DBPathAndType::Parse(info->path, config);
+		type = path_and_type.type;
+		info->path = path_and_type.path;
 	}
 
 	if (type.empty() && !unrecognized_option.empty()) {
