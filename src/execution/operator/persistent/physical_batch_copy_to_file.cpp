@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/batched_data_collection.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -78,6 +79,11 @@ public:
 		return entry;
 	}
 
+	idx_t TaskCount() {
+		lock_guard<mutex> l(task_lock);
+		return task_queue.size();
+	}
+
 	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch) {
 		// move the batch data to the set of prepared batch data
 		lock_guard<mutex> l(lock);
@@ -135,17 +141,68 @@ void PhysicalBatchCopyToFile::Combine(ExecutionContext &context, GlobalSinkState
 	auto &state = lstate.Cast<BatchCopyToLocalState>();
 	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
 	gstate.rows_copied += state.rows_copied;
+	ExecuteTasks(context.client, gstate_p);
 }
 
-SinkFinalizeType PhysicalBatchCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                                   GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
-	idx_t min_batch_index = idx_t(NumericLimits<int64_t>::Maximum());
-	if (gstate.RequiresRepartition()) {
-		// there are raw batches remaining - repartition
-		RepartitionBatches(context, gstate_p, min_batch_index, true);
-		ExecuteTasks(context, gstate_p);
+//===--------------------------------------------------------------------===//
+// ProcessRemainingBatchesEvent
+//===--------------------------------------------------------------------===//
+class ProcessRemainingBatchesTask : public ExecutorTask {
+public:
+	ProcessRemainingBatchesTask(Executor &executor, shared_ptr<Event> event_p, BatchCopyToGlobalState &state_p,
+	                            ClientContext &context, const PhysicalBatchCopyToFile &op)
+	    : ExecutorTask(executor), event(std::move(event_p)), gstate(state_p), context(context), op(op) {
 	}
+
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		op.ExecuteTasks(context, gstate);
+		event->FinishTask();
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+private:
+	shared_ptr<Event> event;
+	const PhysicalBatchCopyToFile &op;
+	BatchCopyToGlobalState &gstate;
+	ClientContext &context;
+};
+
+class ProcessRemainingBatchesEvent : public BasePipelineEvent {
+public:
+	ProcessRemainingBatchesEvent(const PhysicalBatchCopyToFile &op_p, BatchCopyToGlobalState &gstate_p,
+	                             Pipeline &pipeline_p, ClientContext &context)
+	    : BasePipelineEvent(pipeline_p), op(op_p), gstate(gstate_p), context(context) {
+	}
+	const PhysicalBatchCopyToFile &op;
+	BatchCopyToGlobalState &gstate;
+	ClientContext &context;
+
+public:
+	void Schedule() override {
+		vector<shared_ptr<Task>> tasks;
+		for (idx_t i = 0; i < idx_t(TaskScheduler::GetScheduler(context).NumberOfThreads()); i++) {
+			auto process_task =
+			    make_uniq<ProcessRemainingBatchesTask>(pipeline->executor, shared_from_this(), gstate, context, op);
+			tasks.push_back(std::move(process_task));
+		}
+		D_ASSERT(!tasks.empty());
+		SetTasks(std::move(tasks));
+	}
+
+	void FinishEvent() override {
+		//! Now that all batches are processed we finish flushing the file to disk
+		op.FinalFlush(context, gstate);
+	}
+};
+//===--------------------------------------------------------------------===//
+// Finalize
+//===--------------------------------------------------------------------===//
+SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, GlobalSinkState &gstate_p) const {
+	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
+	if (gstate.TaskCount() != 0) {
+		throw InternalException("Unexecuted tasks are remaining in PhysicalBatchCopyToFile::FinalFlush!?");
+	}
+	idx_t min_batch_index = idx_t(NumericLimits<int64_t>::Maximum());
 	FlushBatchData(context, gstate_p, min_batch_index);
 	if (gstate.scheduled_batch_index != gstate.flushed_batch_index) {
 		throw InternalException("Not all batches were flushed to disk - incomplete file?");
@@ -160,18 +217,41 @@ SinkFinalizeType PhysicalBatchCopyToFile::Finalize(Pipeline &pipeline, Event &ev
 	return SinkFinalizeType::READY;
 }
 
+SinkFinalizeType PhysicalBatchCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                   GlobalSinkState &gstate_p) const {
+	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
+	idx_t min_batch_index = idx_t(NumericLimits<int64_t>::Maximum());
+	if (gstate.RequiresRepartition()) {
+		// there are raw batches remaining - repartition
+		RepartitionBatches(context, gstate_p, min_batch_index, true);
+	}
+	// check if we have multiple tasks to execute
+	if (gstate.TaskCount() <= 1) {
+		// we don't - just execute the remaining task and finish flushing to disk
+		ExecuteTasks(context, gstate_p);
+		FinalFlush(context, gstate_p);
+		return SinkFinalizeType::READY;
+	}
+	// we have multiple tasks remaining - launch an event to execute the tasks in parallel
+	auto new_event = make_shared<ProcessRemainingBatchesEvent>(*this, gstate, pipeline, context);
+	event.InsertEvent(std::move(new_event));
+	return SinkFinalizeType::READY;
+}
+
 //===--------------------------------------------------------------------===//
 // Tasks
 //===--------------------------------------------------------------------===//
-class BatchCopyFlushTask : public BatchCopyTask {
+class RepartitionedFlushTask : public BatchCopyTask {
 public:
-	explicit BatchCopyFlushTask(idx_t min_index) : min_index(min_index) {
+	RepartitionedFlushTask() {
 	}
 
-	idx_t min_index;
-
 	void Execute(const PhysicalBatchCopyToFile &op, ClientContext &context, GlobalSinkState &gstate_p) override {
-		op.FlushBatchData(context, gstate_p, min_index);
+		auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
+		D_ASSERT(gstate.RequiresRepartition());
+
+		lock_guard<mutex> l(gstate.flush_lock);
+		op.FlushBatchDataRepartitioned(context, gstate_p);
 	}
 };
 
@@ -189,6 +269,9 @@ public:
 		auto batch_data =
 		    op.function.prepare_batch(context, *op.bind_data, *gstate.global_state, std::move(collection));
 		gstate.AddBatchData(batch_index, std::move(batch_data));
+		if (batch_index == gstate.flushed_batch_index) {
+			gstate.AddTask(make_uniq<RepartitionedFlushTask>());
+		}
 	}
 };
 
@@ -379,15 +462,20 @@ void PhysicalBatchCopyToFile::FlushBatchData(ClientContext &context, GlobalSinkS
 //===--------------------------------------------------------------------===//
 // Tasks
 //===--------------------------------------------------------------------===//
+bool PhysicalBatchCopyToFile::ExecuteTask(ClientContext &context, GlobalSinkState &gstate_p) const {
+	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
+	auto task = gstate.GetTask();
+	if (!task) {
+		return false;
+	}
+	task->Execute(*this, context, gstate_p);
+	return true;
+}
+
 void PhysicalBatchCopyToFile::ExecuteTasks(ClientContext &context, GlobalSinkState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
-	while (true) {
-		auto task = gstate.GetTask();
-		if (!task) {
-			break;
-		}
-		task->Execute(*this, context, gstate_p);
-	}
+	while (ExecuteTask(context, gstate_p))
+		;
 }
 
 //===--------------------------------------------------------------------===//
@@ -397,6 +485,7 @@ void PhysicalBatchCopyToFile::NextBatch(ExecutionContext &context, GlobalSinkSta
                                         LocalSinkState &lstate) const {
 	auto &state = lstate.Cast<BatchCopyToLocalState>();
 	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
+
 	if (state.collection) {
 		// we finished processing this batch
 		// start flushing data
@@ -409,8 +498,8 @@ void PhysicalBatchCopyToFile::NextBatch(ExecutionContext &context, GlobalSinkSta
 			// no desired batch size - we can directly prepare and flush the batch data for this batch
 			PrepareBatchData(context.client, gstate_p, state.batch_index, std::move(state.collection));
 		}
-		gstate.AddTask(make_uniq<BatchCopyFlushTask>(min_batch_index));
-		ExecuteTasks(context.client, gstate_p);
+		ExecuteTask(context.client, gstate_p);
+		FlushBatchData(context.client, gstate_p, min_batch_index);
 	}
 	state.batch_index = lstate.partition_info.batch_index.GetIndex();
 
