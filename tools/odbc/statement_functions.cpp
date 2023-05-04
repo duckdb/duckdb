@@ -15,6 +15,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 #include <algorithm>
 #include <codecvt>
@@ -24,6 +25,7 @@ using duckdb::date_t;
 using duckdb::Decimal;
 using duckdb::DecimalType;
 using duckdb::dtime_t;
+using duckdb::EnumUtil;
 using duckdb::hugeint_t;
 using duckdb::interval_t;
 using duckdb::LogicalType;
