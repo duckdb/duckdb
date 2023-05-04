@@ -1,15 +1,14 @@
 #include "duckdb/execution/index/art/leaf.hpp"
 
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/art/art_key.hpp"
-#include "duckdb/execution/index/art/leaf_segment.hpp"
 #include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/leaf_segment.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
 
-Leaf &Leaf::New(ART &art, Node &node, const ARTKey &key, const uint32_t depth, const row_t row_id) {
+Leaf &Leaf::New(ART &art, Node &node, const row_t row_id) {
 
 	node.SetPtr(Node::GetAllocator(art, NType::LEAF).New());
 	node.type = (uint8_t)NType::LEAF;
@@ -18,39 +17,27 @@ Leaf &Leaf::New(ART &art, Node &node, const ARTKey &key, const uint32_t depth, c
 	// set the fields of the leaf
 	leaf.count = 1;
 	leaf.row_ids.inlined = row_id;
-
-	// initialize the prefix
-	D_ASSERT(key.len >= depth);
-	leaf.prefix.Initialize(art, key, depth, key.len - depth);
-
 	return leaf;
 }
 
-Leaf &Leaf::New(ART &art, Node &node, const ARTKey &key, const uint32_t depth, const row_t *row_ids,
-                const idx_t count) {
+Leaf &Leaf::New(ART &art, Node &node, const row_t *row_ids, const idx_t count) {
 
 	// inlined leaf
 	D_ASSERT(count >= 1);
 	if (count == 1) {
-		return Leaf::New(art, node, key, depth, row_ids[0]);
+		return Leaf::New(art, node, row_ids[0]);
 	}
 
 	node.SetPtr(Node::GetAllocator(art, NType::LEAF).New());
 	node.type = (uint8_t)NType::LEAF;
 	auto &leaf = Leaf::Get(art, node);
 
-	// set the fields of the leaf
+	// reset the count to copy the row IDs
 	leaf.count = 0;
-
-	// copy the row IDs
 	reference<LeafSegment> segment(LeafSegment::New(art, leaf.row_ids.ptr));
 	for (idx_t i = 0; i < count; i++) {
 		segment = segment.get().Append(art, leaf.count, row_ids[i]);
 	}
-
-	// set the prefix
-	D_ASSERT(key.len >= depth);
-	leaf.prefix.Initialize(art, key, depth, key.len - depth);
 
 	return leaf;
 }
@@ -308,7 +295,6 @@ BlockPointer Leaf::Serialize(const ART &art, MetaBlockWriter &writer) const {
 	auto block_pointer = writer.GetBlockPointer();
 	writer.Write(NType::LEAF);
 	writer.Write<uint32_t>(count);
-	prefix.Serialize(art, writer);
 
 	if (IsInlined()) {
 		writer.Write(row_ids.inlined);
@@ -341,7 +327,6 @@ BlockPointer Leaf::Serialize(const ART &art, MetaBlockWriter &writer) const {
 void Leaf::Deserialize(ART &art, MetaBlockReader &reader) {
 
 	auto count_p = reader.Read<uint32_t>();
-	prefix.Deserialize(art, reader);
 
 	// inlined
 	if (count_p == 1) {

@@ -5,7 +5,6 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
-#include "duckdb/execution/index/art/prefix_segment.hpp"
 #include "duckdb/execution/index/art/leaf_segment.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
@@ -45,7 +44,7 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	}
 
 	// initialize all allocators
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(PrefixSegment), buffer_manager.GetBufferAllocator()));
+	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Prefix), buffer_manager.GetBufferAllocator()));
 	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(LeafSegment), buffer_manager.GetBufferAllocator()));
 	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Leaf), buffer_manager.GetBufferAllocator()));
 	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node4), buffer_manager.GetBufferAllocator()));
@@ -304,10 +303,11 @@ bool Construct(ART &art, vector<ARTKey> &keys, row_t *row_ids, Node &node, KeySe
 			return false;
 		}
 
+		Prefix::New(art, node, start_key, prefix_start, start_key.len - prefix_start);
 		if (single_row_id) {
-			Leaf::New(art, node, start_key, prefix_start, row_ids[key_section.start]);
+			Leaf::New(art, node, row_ids[key_section.start]);
 		} else {
-			Leaf::New(art, node, start_key, prefix_start, row_ids + key_section.start, num_row_ids);
+			Leaf::New(art, node, row_ids + key_section.start, num_row_ids);
 		}
 		return true;
 	}
@@ -318,11 +318,13 @@ bool Construct(ART &art, vector<ARTKey> &keys, row_t *row_ids, Node &node, KeySe
 	vector<KeySection> child_sections;
 	GetChildSections(child_sections, keys, key_section);
 
+	// set the prefix
+	auto prefix_length = key_section.depth - prefix_start;
+	Prefix::New(art, node, start_key, prefix_start, prefix_length);
+
+	// set the node
 	auto node_type = Node::GetARTNodeTypeByCount(child_sections.size());
 	Node::New(art, node, node_type);
-
-	auto prefix_length = key_section.depth - prefix_start;
-	node.GetPrefix(art).Initialize(art, start_key, prefix_start, prefix_length);
 
 	// recurse on each child section
 	for (auto &child_section : child_sections) {
@@ -436,58 +438,47 @@ bool ART::InsertToLeaf(Node &leaf_node, const row_t &row_id) {
 
 bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id) {
 
+	// node is currently empty, create a leaf here with the key
 	if (!node.IsSet()) {
-		// node is currently empty, create a leaf here with the key
-		Leaf::New(*this, node, key, depth, row_id);
+		Prefix::New(*this, node, key, depth, key.len - depth);
+		Leaf::New(*this, node, row_id);
 		return true;
 	}
 
+	// insert the row ID into this leaf
 	if (node.DecodeARTNodeType() == NType::LEAF) {
-
-		// add a row ID to a leaf, if they have the same key
-		auto &leaf = Leaf::Get(*this, node);
-		auto mismatch_position = leaf.prefix.KeyMismatchPosition(*this, key, depth);
-		if (mismatch_position == leaf.prefix.count && depth + leaf.prefix.count == key.len) {
-			return InsertToLeaf(node, row_id);
-		}
-
-		// replace leaf with Node4 and store both leaves in it
-		auto old_node = node;
-		auto &new_n4 = Node4::New(*this, node);
-		new_n4.prefix.Initialize(*this, key, depth, mismatch_position);
-
-		auto key_byte = old_node.GetPrefix(*this).Reduce(*this, mismatch_position);
-		Node4::InsertChild(*this, node, key_byte, old_node);
-
-		Node leaf_node;
-		Leaf::New(*this, leaf_node, key, depth + mismatch_position + 1, row_id);
-		Node4::InsertChild(*this, node, key[depth + mismatch_position], leaf_node);
-
-		return true;
+		return InsertToLeaf(node, row_id);
 	}
 
-	// handle prefix of inner node
-	auto &old_node_prefix = node.GetPrefix(*this);
-	if (old_node_prefix.count) {
+	// check if the prefix matches the key
+	if (node.DecodeARTNodeType() == NType::PREFIX) {
 
-		auto mismatch_position = old_node_prefix.KeyMismatchPosition(*this, key, depth);
-		if (mismatch_position != old_node_prefix.count) {
+		// if the prefix matches the key, then we can recurse into node
+		// otherwise, we need to create a new Node4; this new Node4 has two children,
+		// the remaining part of the prefix, and the new leaf
 
-			// prefix differs, create new node
-			auto old_node = node;
+		idx_t compare_count = 0;
+		if (Prefix::FindMismatchPosition(*this, node, key, depth, compare_count)) {
+
+			// split prefix
+			Node remaining_node;
+			auto split_byte = Prefix::Split(*this, node, remaining_node, compare_count);
+
+			// insert remaining prefix/subtree into a new Node4
 			auto &new_n4 = Node4::New(*this, node);
-			new_n4.prefix.Initialize(*this, key, depth, mismatch_position);
+			Node4::InsertChild(*this, node, split_byte, remaining_node);
 
-			auto key_byte = old_node_prefix.Reduce(*this, mismatch_position);
-			Node4::InsertChild(*this, node, key_byte, old_node);
-
+			// insert the new leaf into the Node4
 			Node leaf_node;
-			Leaf::New(*this, leaf_node, key, depth + mismatch_position + 1, row_id);
-			Node4::InsertChild(*this, node, key[depth + mismatch_position], leaf_node);
-
+			Prefix::New(*this, leaf_node, key, depth + compare_count + 1,
+			            key.len - (depth + compare_count + 1));
+			Leaf::New(*this, leaf_node, row_id);
+			Node4::InsertChild(*this, node, key[depth + compare_count], leaf_node);
 			return true;
 		}
-		depth += node.GetPrefix(*this).count;
+
+		// prefix matches key
+		depth += compare_count;
 	}
 
 	// recurse
@@ -499,9 +490,9 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 		return success;
 	}
 
-	// insert at position
 	Node leaf_node;
-	Leaf::New(*this, leaf_node, key, depth + 1, row_id);
+	Prefix::New(*this, leaf_node, key, depth + 1, key.len - (depth + 1));
+	Leaf::New(*this, leaf_node, row_id);
 	Node::InsertChild(*this, node, key[depth], leaf_node);
 	return true;
 }

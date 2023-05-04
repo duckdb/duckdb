@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/fixed_size_allocator.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/index/art/prefix.hpp"
 
 namespace duckdb {
 
@@ -20,8 +19,6 @@ class Node256 {
 public:
 	//! Number of non-null children
 	uint16_t count;
-	//! Compressed path (prefix)
-	Prefix prefix;
 	//! ART node pointers to the child nodes
 	Node children[Node::NODE_256_CAPACITY];
 

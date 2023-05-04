@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/fixed_size_allocator.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/index/art/prefix.hpp"
 
 namespace duckdb {
 
@@ -20,8 +19,6 @@ class Node4 {
 public:
 	//! Number of non-null children
 	uint8_t count;
-	//! Compressed path (prefix)
-	Prefix prefix;
 	//! Array containing all partial key bytes
 	uint8_t key[Node::NODE_4_CAPACITY];
 	//! ART node pointers to the child nodes

@@ -3,11 +3,94 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/index/art/prefix_segment.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
+
+void Prefix::New(ART &art, Node &node, const ARTKey &key, const uint32_t depth,
+                 uint32_t count) {
+
+	if (count == 0) {
+		return;
+	}
+	idx_t copy_count = 0;
+
+	while (count) {
+		node.SetPtr(Node::GetAllocator(art, NType::PREFIX).New());
+		node.type = (uint8_t)NType::PREFIX;
+		auto &prefix = Prefix::Get(art, node);
+
+		auto this_count = MinValue(uint32_t(Node::PREFIX_SIZE - 1), count);
+		prefix.data[0] = (uint8_t)this_count;
+		memcpy(prefix.data + 1, key.data + depth + copy_count, this_count);
+
+		node = prefix.ptr;
+		copy_count += this_count;
+		count -= this_count;
+	}
+}
+
+bool Prefix::FindMismatchPosition(const ART &art, Node &node, const ARTKey &key,
+                                   const uint32_t depth, idx_t &compare_count) {
+
+	D_ASSERT(node.DecodeARTNodeType() == NType::PREFIX);
+	while (node.DecodeARTNodeType() == NType::PREFIX) {
+
+		auto &prefix = Prefix::Get(art, node);
+		for (idx_t i = 0; i < prefix.data[0]; i++) {
+			// mismatch position
+			if (prefix.data[i + 1] != key[depth + compare_count]) {
+				return true;
+			}
+			compare_count++;
+		}
+
+		// no mismatch position in this prefix node, compare to next one
+		node = prefix.ptr;
+	}
+
+	// prefix matches the key
+	return false;
+}
+
+uint8_t Prefix::Split(ART &art, Node &node, Node &remaining_node, const idx_t compare_count) {
+
+	D_ASSERT(node.DecodeARTNodeType() == NType::PREFIX);
+	auto &prefix = Prefix::Get(art, node);
+
+	// adjust the count of the prefix node
+	uint8_t split_position = compare_count % Node::PREFIX_SIZE;
+	auto split_byte = prefix.data[1 + split_position];
+
+	// we might have to move all prefix bytes after split_position to a new
+	// chain of prefix segments
+	if (split_position + 1 < prefix.data[0] || prefix.ptr.DecodeARTNodeType() == NType::PREFIX) {
+
+		idx_t copy_count = 0;
+		reference<Node> current_node(remaining_node);
+
+		while ()
+		if (copy_count)
+
+		Prefix::New(art, )
+	}
+
+
+	// if the new count is zero, then we free the prefix (chain) and don't change &node
+	if (split_position == 0) {
+		Node::Free(art, node);
+
+	} else {
+		// we adjust the count and &node to the subsequent node
+		prefix.data[0] = split_position;
+		node = prefix.ptr;
+	}
+
+
+
+
+}
 
 void Prefix::Free(ART &art) {
 
@@ -24,60 +107,6 @@ void Prefix::Free(ART &art) {
 	}
 
 	Initialize();
-}
-
-void Prefix::Initialize(ART &art, const ARTKey &key, const uint32_t depth, const uint32_t count_p) {
-
-	// prefix can be inlined
-	if (count_p <= Node::PREFIX_INLINE_BYTES) {
-		memcpy(data.inlined, key.data + depth, count_p);
-		count = count_p;
-		return;
-	}
-
-	// prefix cannot be inlined, copy to segment(s)
-	count = 0;
-	reference<PrefixSegment> segment(PrefixSegment::New(art, data.ptr));
-	for (idx_t i = 0; i < count_p; i++) {
-		segment = segment.get().Append(art, count, key.data[depth + i]);
-	}
-	D_ASSERT(count == count_p);
-}
-
-void Prefix::Initialize(ART &art, const Prefix &other, const uint32_t count_p) {
-
-	D_ASSERT(count_p <= other.count);
-
-	// copy inlined data
-	if (other.IsInlined()) {
-		memcpy(data.inlined, other.data.inlined, count_p);
-		count = count_p;
-		return;
-	}
-
-	// initialize the count and get the first segment
-	count = 0;
-	reference<PrefixSegment> segment(PrefixSegment::New(art, data.ptr));
-
-	// iterate the segments of the other prefix and copy their data
-	auto other_ptr = other.data.ptr;
-	auto remaining = count_p;
-
-	while (remaining != 0) {
-		D_ASSERT(other_ptr.IsSet());
-		auto &other_segment = PrefixSegment::Get(art, other_ptr);
-		auto copy_count = MinValue(Node::PREFIX_SEGMENT_SIZE, remaining);
-
-		// copy the data
-		for (idx_t i = 0; i < copy_count; i++) {
-			segment = segment.get().Append(art, count, other_segment.bytes[i]);
-		}
-
-		// adjust the loop variables
-		other_ptr = other_segment.next;
-		remaining -= copy_count;
-	}
-	D_ASSERT(count == count_p);
 }
 
 void Prefix::InitializeMerge(ART &art, const idx_t buffer_count) {
@@ -277,42 +306,6 @@ uint8_t Prefix::GetByte(const ART &art, const idx_t position) const {
 	}
 
 	return segment.get().bytes[position % Node::PREFIX_SEGMENT_SIZE];
-}
-
-uint32_t Prefix::KeyMismatchPosition(const ART &art, const ARTKey &key, const uint32_t depth) const {
-
-	if (IsInlined()) {
-		for (idx_t mismatch_position = 0; mismatch_position < count; mismatch_position++) {
-			D_ASSERT(depth + mismatch_position < key.len);
-			if (key[depth + mismatch_position] != data.inlined[mismatch_position]) {
-				return mismatch_position;
-			}
-		}
-		return count;
-	}
-
-	uint32_t mismatch_position = 0;
-	auto ptr = data.ptr;
-
-	while (mismatch_position != count) {
-		D_ASSERT(depth + mismatch_position < key.len);
-		D_ASSERT(ptr.IsSet());
-
-		auto &segment = PrefixSegment::Get(art, ptr);
-		auto compare_count = MinValue(Node::PREFIX_SEGMENT_SIZE, count - mismatch_position);
-
-		// compare bytes
-		for (uint32_t i = 0; i < compare_count; i++) {
-			if (key[depth + mismatch_position] != segment.bytes[i]) {
-				return mismatch_position;
-			}
-			mismatch_position++;
-		}
-
-		// adjust loop variables
-		ptr = segment.next;
-	}
-	return count;
 }
 
 uint32_t Prefix::MismatchPosition(const ART &art, const Prefix &other) const {

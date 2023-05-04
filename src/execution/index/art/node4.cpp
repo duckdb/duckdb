@@ -1,7 +1,5 @@
 #include "duckdb/execution/index/art/node4.hpp"
 
-#include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
@@ -15,7 +13,6 @@ Node4 &Node4::New(ART &art, Node &node) {
 	auto &n4 = Node4::Get(art, node);
 
 	n4.count = 0;
-	n4.prefix.Initialize();
 	return n4;
 }
 
@@ -38,8 +35,6 @@ Node4 &Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
 	auto &n16 = Node16::Get(art, node16);
 
 	n4.count = n16.count;
-	n4.prefix.Move(n16.prefix);
-
 	for (idx_t i = 0; i < n16.count; i++) {
 		n4.key[i] = n16.key[i];
 		n4.children[i] = n16.children[i];
@@ -122,11 +117,15 @@ void Node4::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 	// this is a one way node, compress
 	if (n4.count == 1) {
 
-		// get only child and concatenate prefixes
+		// get only child
 		auto child = *n4.GetChild(n4.key[0]);
-		child.GetPrefix(art).Concatenate(art, n4.key[0], n4.prefix);
-		n4.count--;
 
+		// TODO: push the n4.key[0] byte as the first byte into the prefix chain
+		// TODO: leading down to the leaf, or create a new prefix node if there
+		// TODO: is no prefix yet
+//		child.GetPrefix(art).Concatenate(art, n4.key[0], n4.prefix);
+
+		n4.count--;
 		Node::Free(art, node);
 		node = child;
 	}
@@ -177,7 +176,6 @@ BlockPointer Node4::Serialize(ART &art, MetaBlockWriter &writer) {
 	auto block_pointer = writer.GetBlockPointer();
 	writer.Write(NType::NODE_4);
 	writer.Write<uint8_t>(count);
-	prefix.Serialize(art, writer);
 
 	// write key values
 	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
@@ -196,7 +194,6 @@ BlockPointer Node4::Serialize(ART &art, MetaBlockWriter &writer) {
 void Node4::Deserialize(ART &art, MetaBlockReader &reader) {
 
 	count = reader.Read<uint8_t>();
-	prefix.Deserialize(art, reader);
 
 	// read key values
 	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {

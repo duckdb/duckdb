@@ -1,15 +1,15 @@
+#include "duckdb/execution/index/art/node.hpp"
+
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/swap.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/node256.hpp"
+#include "duckdb/execution/index/art/node48.hpp"
+#include "duckdb/execution/index/art/node16.hpp"
+#include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/leaf_segment.hpp"
-#include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/index/art/node16.hpp"
-#include "duckdb/execution/index/art/node256.hpp"
-#include "duckdb/execution/index/art/node4.hpp"
-#include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
-#include "duckdb/execution/index/art/prefix_segment.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
@@ -29,9 +29,6 @@ Node::Node(MetaBlockReader &reader) : SwizzleablePointer(reader) {
 void Node::New(ART &art, Node &node, const NType type) {
 
 	switch (type) {
-	case NType::PREFIX_SEGMENT:
-		PrefixSegment::New(art, node);
-		break;
 	case NType::LEAF_SEGMENT:
 		LeafSegment::New(art, node);
 		break;
@@ -63,11 +60,8 @@ void Node::Free(ART &art, Node &node) {
 	if (!node.IsSwizzled()) {
 
 		auto type = node.DecodeARTNodeType();
-		if (type != NType::PREFIX_SEGMENT && type != NType::LEAF_SEGMENT) {
-			node.GetPrefix(art).Free(art);
-		}
 
-		// free the prefixes and children of the nodes
+		// free the children of the nodes
 		switch (type) {
 		case NType::LEAF:
 			Leaf::Free(art, node);
