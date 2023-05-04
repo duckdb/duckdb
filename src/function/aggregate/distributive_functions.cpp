@@ -7,26 +7,9 @@
 namespace duckdb {
 
 void BuiltinFunctions::RegisterDistributiveAggregates() {
-	Register<BitAndFun>();
-	Register<BitOrFun>();
-	Register<BitXorFun>();
-	Register<BitStringAggFun>();
 	Register<CountStarFun>();
 	Register<CountFun>();
 	Register<FirstFun>();
-	Register<MaxFun>();
-	Register<MinFun>();
-	Register<SumFun>();
-	Register<StringAggFun>();
-	Register<ApproxCountDistinctFun>();
-	Register<ProductFun>();
-	Register<BoolOrFun>();
-	Register<BoolAndFun>();
-	Register<ArgMinFun>();
-	Register<ArgMaxFun>();
-	Register<SkewFun>();
-	Register<KurtosisFun>();
-	Register<EntropyFun>();
 }
 
 } // namespace duckdb

@@ -385,6 +385,13 @@ pivot_column_entry:
 				n->pivot_columns = list_make1($1);
 				$$ = (PGNode *) n;
 			}
+			| b_expr IN_P '(' select_no_parens ')'
+			{
+				PGPivot *n = makeNode(PGPivot);
+				n->pivot_columns = list_make1($1);
+				n->subquery = $4;
+				$$ = (PGNode *) n;
+			}
 			| single_pivot_value													{ $$ = $1; }
 		;
 

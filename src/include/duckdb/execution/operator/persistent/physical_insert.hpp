@@ -116,9 +116,10 @@ public:
 protected:
 	void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
 	                                    ClientContext &client) const;
-	void OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertLocalState &lstate) const;
-	void PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table,
-	                             Vector &row_ids) const;
+	//! Returns the amount of updated tuples
+	idx_t OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertLocalState &lstate) const;
+	idx_t PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table,
+	                              Vector &row_ids) const;
 	void RegisterUpdatedRows(InsertLocalState &lstate, const Vector &row_ids, idx_t count) const;
 };
 

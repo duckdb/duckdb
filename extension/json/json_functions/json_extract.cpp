@@ -35,13 +35,12 @@ static void GetExtractFunctionsInternal(ScalarFunctionSet &set, const LogicalTyp
 	                               JSONReadManyFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetExtractFunction() {
+ScalarFunctionSet JSONFunctions::GetExtractFunction() {
 	// Generic extract function
 	ScalarFunctionSet set("json_extract");
 	GetExtractFunctionsInternal(set, LogicalType::VARCHAR);
 	GetExtractFunctionsInternal(set, JSONCommon::JSONType());
-
-	return CreateScalarFunctionInfo(set);
+	return set;
 }
 
 static void GetExtractStringFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
@@ -52,13 +51,12 @@ static void GetExtractStringFunctionsInternal(ScalarFunctionSet &set, const Logi
 	                               JSONReadManyFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetExtractStringFunction() {
+ScalarFunctionSet JSONFunctions::GetExtractStringFunction() {
 	// String extract function
 	ScalarFunctionSet set("json_extract_string");
 	GetExtractStringFunctionsInternal(set, LogicalType::VARCHAR);
 	GetExtractStringFunctionsInternal(set, JSONCommon::JSONType());
-
-	return CreateScalarFunctionInfo(set);
+	return set;
 }
 
 } // namespace duckdb

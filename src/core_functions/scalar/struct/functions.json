@@ -1,0 +1,17 @@
+[
+    {
+        "name": "struct_insert",
+        "parameters": "struct,any",
+        "description": "Add field(s)/value(s) to an existing STRUCT with the argument values. The entry name(s) will be the bound variable name(s).",
+        "example": "struct_insert({'a': 1}, b := 2)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "struct_pack",
+        "parameters": "any",
+        "description": "Create a STRUCT containing the argument values. The entry name will be the bound variable name",
+        "example": "struct_pack(i := 4, s := 'string')",
+        "type": "scalar_function",
+        "aliases": ["row"]
+    }
+]

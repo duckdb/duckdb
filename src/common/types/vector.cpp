@@ -18,6 +18,7 @@
 #include "duckdb/common/fsst.hpp"
 #include "fsst.h"
 #include "duckdb/common/types/bit.hpp"
+#include "duckdb/common/types/value_map.hpp"
 
 #include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
@@ -1256,7 +1257,7 @@ void Vector::UTFVerify(idx_t count) {
 void Vector::VerifyMap(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
 #ifdef DEBUG
 	D_ASSERT(vector_p.GetType().id() == LogicalTypeId::MAP);
-	auto valid_check = CheckMapValidity(vector_p, count, sel_p);
+	auto valid_check = MapVector::CheckMapValidity(vector_p, count, sel_p);
 	D_ASSERT(valid_check == MapInvalidReason::VALID);
 #endif // DEBUG
 }
@@ -1264,7 +1265,7 @@ void Vector::VerifyMap(Vector &vector_p, const SelectionVector &sel_p, idx_t cou
 void Vector::VerifyUnion(Vector &vector_p, const SelectionVector &sel_p, idx_t count) {
 #ifdef DEBUG
 	D_ASSERT(vector_p.GetType().id() == LogicalTypeId::UNION);
-	auto valid_check = CheckUnionValidity(vector_p, count, sel_p);
+	auto valid_check = UnionVector::CheckUnionValidity(vector_p, count, sel_p);
 	D_ASSERT(valid_check == UnionInvalidReason::VALID);
 #endif // DEBUG
 }
@@ -1439,6 +1440,9 @@ void Vector::Verify(idx_t count) {
 	Verify(*this, *flat_sel, count);
 }
 
+//===--------------------------------------------------------------------===//
+// FlatVector
+//===--------------------------------------------------------------------===//
 void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 	vector.validity.Set(idx, !is_null);
@@ -1451,6 +1455,9 @@ void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// ConstantVector
+//===--------------------------------------------------------------------===//
 void ConstantVector::SetNull(Vector &vector, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	vector.validity.Set(0, !is_null);
@@ -1539,6 +1546,9 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// StringVector
+//===--------------------------------------------------------------------===//
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
 	return StringVector::AddString(vector, string_t(data, len));
 }
@@ -1629,6 +1639,9 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 	StringVector::AddBuffer(vector, other.auxiliary);
 }
 
+//===--------------------------------------------------------------------===//
+// FSSTVector
+//===--------------------------------------------------------------------===//
 string_t FSSTVector::AddCompressedString(Vector &vector, const char *data, idx_t len) {
 	return FSSTVector::AddCompressedString(vector, string_t(data, len));
 }
@@ -1714,6 +1727,9 @@ void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offs
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// MapVector
+//===--------------------------------------------------------------------===//
 Vector &MapVector::GetKeys(Vector &vector) {
 	auto &entries = StructVector::GetEntries(ListVector::GetEntry(vector));
 	D_ASSERT(entries.size() == 2);
@@ -1732,6 +1748,67 @@ const Vector &MapVector::GetValues(const Vector &vector) {
 	return GetValues((Vector &)vector);
 }
 
+MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const SelectionVector &sel) {
+	D_ASSERT(map.GetType().id() == LogicalTypeId::MAP);
+	UnifiedVectorFormat map_vdata;
+
+	map.ToUnifiedFormat(count, map_vdata);
+	auto &map_validity = map_vdata.validity;
+
+	auto list_data = ListVector::GetData(map);
+	auto &keys = MapVector::GetKeys(map);
+	UnifiedVectorFormat key_vdata;
+	keys.ToUnifiedFormat(count, key_vdata);
+	auto &key_validity = key_vdata.validity;
+
+	for (idx_t row = 0; row < count; row++) {
+		auto mapped_row = sel.get_index(row);
+		auto row_idx = map_vdata.sel->get_index(mapped_row);
+		// map is allowed to be NULL
+		if (!map_validity.RowIsValid(row_idx)) {
+			continue;
+		}
+		row_idx = key_vdata.sel->get_index(row);
+		value_set_t unique_keys;
+		for (idx_t i = 0; i < list_data[row_idx].length; i++) {
+			auto index = list_data[row_idx].offset + i;
+			index = key_vdata.sel->get_index(index);
+			if (!key_validity.RowIsValid(index)) {
+				return MapInvalidReason::NULL_KEY;
+			}
+			auto value = keys.GetValue(index);
+			auto result = unique_keys.insert(value);
+			if (!result.second) {
+				return MapInvalidReason::DUPLICATE_KEY;
+			}
+		}
+	}
+	return MapInvalidReason::VALID;
+}
+
+void MapVector::MapConversionVerify(Vector &vector, idx_t count) {
+	auto valid_check = MapVector::CheckMapValidity(vector, count);
+	switch (valid_check) {
+	case MapInvalidReason::VALID:
+		break;
+	case MapInvalidReason::DUPLICATE_KEY: {
+		throw InvalidInputException("Map keys have to be unique");
+	}
+	case MapInvalidReason::NULL_KEY: {
+		throw InvalidInputException("Map keys can not be NULL");
+	}
+	case MapInvalidReason::NULL_KEY_LIST: {
+		throw InvalidInputException("The list of map keys is not allowed to be NULL");
+	}
+	default: {
+		throw InternalException("MapInvalidReason not implemented");
+	}
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// StructVector
+//===--------------------------------------------------------------------===//
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::STRUCT || vector.GetType().id() == LogicalTypeId::UNION);
 
@@ -1750,6 +1827,9 @@ const vector<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector)
 	return GetEntries((Vector &)vector);
 }
 
+//===--------------------------------------------------------------------===//
+// ListVector
+//===--------------------------------------------------------------------===//
 const Vector &ListVector::GetEntry(const Vector &vector) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::LIST || vector.GetType().id() == LogicalTypeId::MAP);
 	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
@@ -1928,7 +2008,9 @@ void ListVector::GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel
 	//	info.second.offset = 0;
 }
 
-// Union vector
+//===--------------------------------------------------------------------===//
+// UnionVector
+//===--------------------------------------------------------------------===//
 const Vector &UnionVector::GetMember(const Vector &vector, idx_t member_index) {
 	D_ASSERT(member_index < UnionType::GetMemberCount(vector.GetType()));
 	auto &entries = StructVector::GetEntries(vector);
@@ -2013,6 +2095,57 @@ union_tag_t UnionVector::GetTag(const Vector &vector, idx_t index) {
 		return ConstantVector::GetData<union_tag_t>(tag_vector)[0];
 	}
 	return FlatVector::GetData<union_tag_t>(tag_vector)[index];
+}
+
+UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector, idx_t count, const SelectionVector &sel) {
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::UNION);
+	auto member_count = UnionType::GetMemberCount(vector.GetType());
+	if (member_count == 0) {
+		return UnionInvalidReason::NO_MEMBERS;
+	}
+
+	UnifiedVectorFormat union_vdata;
+	vector.ToUnifiedFormat(count, union_vdata);
+
+	UnifiedVectorFormat tags_vdata;
+	auto &tag_vector = UnionVector::GetTags(vector);
+	tag_vector.ToUnifiedFormat(count, tags_vdata);
+
+	// check that only one member is valid at a time
+	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
+		auto union_mapped_row_idx = sel.get_index(row_idx);
+		if (!union_vdata.validity.RowIsValid(union_mapped_row_idx)) {
+			continue;
+		}
+
+		auto tag_mapped_row_idx = tags_vdata.sel->get_index(row_idx);
+		if (!tags_vdata.validity.RowIsValid(tag_mapped_row_idx)) {
+			continue;
+		}
+
+		auto tag = ((union_tag_t *)tags_vdata.data)[tag_mapped_row_idx];
+		if (tag >= member_count) {
+			return UnionInvalidReason::TAG_OUT_OF_RANGE;
+		}
+
+		bool found_valid = false;
+		for (idx_t member_idx = 0; member_idx < member_count; member_idx++) {
+
+			UnifiedVectorFormat member_vdata;
+			auto &member = UnionVector::GetMember(vector, member_idx);
+			member.ToUnifiedFormat(count, member_vdata);
+
+			auto mapped_row_idx = member_vdata.sel->get_index(row_idx);
+			if (member_vdata.validity.RowIsValid(mapped_row_idx)) {
+				if (found_valid) {
+					return UnionInvalidReason::VALIDITY_OVERLAP;
+				}
+				found_valid = true;
+			}
+		}
+	}
+
+	return UnionInvalidReason::VALID;
 }
 
 } // namespace duckdb

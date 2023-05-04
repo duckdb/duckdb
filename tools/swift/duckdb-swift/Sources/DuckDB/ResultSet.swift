@@ -45,7 +45,7 @@ public final class ResultSet: Sendable {
   public var columnCount: DBInt { duckdb_column_count(ptr) }
   
   /// The total number of rows in the result set
-  var rowCount: DBInt {
+  public var rowCount: DBInt {
     guard chunkCount > 0 else { return DBInt(0) }
     let lastChunk = dataChunk(at: chunkCount - 1)
     return (chunkCount - 1) * Vector.vectorSize + lastChunk.count
@@ -114,6 +114,10 @@ public final class ResultSet: Sendable {
   func columnDataType(at index: DBInt) -> DatabaseType {
     let dataType = duckdb_column_type(ptr, index)
     return DatabaseType(rawValue: dataType.rawValue)
+  }
+
+  func columnLogicalType(at index: DBInt) -> LogicalType {
+    return LogicalType { duckdb_column_logical_type(ptr, index) }
   }
   
   func withCResult<T>(_ body: (UnsafeMutablePointer<duckdb_result>) throws -> T) rethrows -> T {
