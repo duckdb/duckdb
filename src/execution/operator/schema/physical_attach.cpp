@@ -12,24 +12,9 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class AttachSourceState : public GlobalSourceState {
-public:
-	AttachSourceState() : finished(false) {
-	}
 
-	bool finished;
-};
-
-unique_ptr<GlobalSourceState> PhysicalAttach::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<AttachSourceState>();
-}
-
-void PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                             LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<AttachSourceState>();
-	if (state.finished) {
-		return;
-	}
+SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk,
+                                         OperatorSourceInput &input) const {
 	// parse the options
 	auto &config = DBConfig::GetConfig(context.client);
 	AccessMode access_mode = config.options.access_mode;
@@ -91,7 +76,8 @@ void PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	new_db->Initialize();
 
 	db_manager.AddDatabase(context.client, std::move(new_db));
-	state.finished = true;
+
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

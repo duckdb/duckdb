@@ -29,10 +29,10 @@ public:
 	BatchedDataCollection data;
 };
 
-SinkResultType PhysicalBatchCollector::Sink(ExecutionContext &context, GlobalSinkState &gstate,
-                                            LocalSinkState &lstate_p, DataChunk &input) const {
-	auto &state = lstate_p.Cast<BatchCollectorLocalState>();
-	state.data.Append(input, state.batch_index);
+SinkResultType PhysicalBatchCollector::Sink(ExecutionContext &context, DataChunk &chunk,
+                                            OperatorSinkInput &input) const {
+	auto &state = input.local_state.Cast<BatchCollectorLocalState>();
+	state.data.Append(chunk, state.batch_index);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

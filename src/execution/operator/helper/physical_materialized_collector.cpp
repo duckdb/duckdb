@@ -25,10 +25,10 @@ public:
 	ColumnDataAppendState append_state;
 };
 
-SinkResultType PhysicalMaterializedCollector::Sink(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                                   LocalSinkState &lstate_p, DataChunk &input) const {
-	auto &lstate = lstate_p.Cast<MaterializedCollectorLocalState>();
-	lstate.collection->Append(lstate.append_state, input);
+SinkResultType PhysicalMaterializedCollector::Sink(ExecutionContext &context, DataChunk &chunk,
+                                                   OperatorSinkInput &input) const {
+	auto &lstate = input.local_state.Cast<MaterializedCollectorLocalState>();
+	lstate.collection->Append(lstate.append_state, chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

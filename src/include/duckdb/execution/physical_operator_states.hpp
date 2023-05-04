@@ -23,6 +23,7 @@ class PhysicalOperator;
 class Pipeline;
 class PipelineBuildState;
 class MetaPipeline;
+class InterruptState;
 
 // LCOV_EXCL_START
 class OperatorState {
@@ -143,6 +144,18 @@ public:
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
 		return (const TARGET &)*this;
 	}
+};
+
+struct OperatorSinkInput {
+	GlobalSinkState &global_state;
+	LocalSinkState &local_state;
+	InterruptState &interrupt_state;
+};
+
+struct OperatorSourceInput {
+	GlobalSourceState &global_state;
+	LocalSourceState &local_state;
+	InterruptState &interrupt_state;
 };
 
 // LCOV_EXCL_STOP

@@ -72,8 +72,8 @@ unique_ptr<GlobalSourceState> PhysicalOperator::GetGlobalSourceState(ClientConte
 }
 
 // LCOV_EXCL_START
-void PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                               LocalSourceState &lstate) const {
+SourceResultType PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk,
+                                           OperatorSourceInput &input) const {
 	throw InternalException("Calling GetData on a node that is not a source!");
 }
 
@@ -91,10 +91,10 @@ double PhysicalOperator::GetProgress(ClientContext &context, GlobalSourceState &
 // Sink
 //===--------------------------------------------------------------------===//
 // LCOV_EXCL_START
-SinkResultType PhysicalOperator::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                      DataChunk &input) const {
+SinkResultType PhysicalOperator::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	throw InternalException("Calling Sink on a node that is not a sink!");
 }
+
 // LCOV_EXCL_STOP
 
 void PhysicalOperator::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
@@ -238,7 +238,9 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 		state.initialized = true;
 		state.can_cache_chunk = true;
 
-		if (!context.pipeline || !caching_supported) {
+		if (!context.client.config.enable_caching_operators) {
+			state.can_cache_chunk = false;
+		} else if (!context.pipeline || !caching_supported) {
 			state.can_cache_chunk = false;
 		} else if (!context.pipeline->GetSink()) {
 			// Disabling for pipelines without Sink, i.e. when pulling
@@ -252,6 +254,7 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 	if (!state.can_cache_chunk) {
 		return child_result;
 	}
+	// TODO chunk size of 0 should not result in a cache being created!
 	if (chunk.size() < CACHE_THRESHOLD) {
 		// we have filtered out a significant amount of tuples
 		// add this chunk to the cache and continue

@@ -181,30 +181,29 @@ unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext 
 	return make_uniq<HashJoinLocalSinkState>(*this, context.client);
 }
 
-SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                      DataChunk &input) const {
-	auto &lstate = lstate_p.Cast<HashJoinLocalSinkState>();
+SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &lstate = input.local_state.Cast<HashJoinLocalSinkState>();
 
 	// resolve the join keys for the right chunk
 	lstate.join_keys.Reset();
-	lstate.build_executor.Execute(input, lstate.join_keys);
+	lstate.build_executor.Execute(chunk, lstate.join_keys);
 
 	// build the HT
 	auto &ht = *lstate.hash_table;
 	if (!right_projection_map.empty()) {
 		// there is a projection map: fill the build chunk with the projected columns
 		lstate.build_chunk.Reset();
-		lstate.build_chunk.SetCardinality(input);
+		lstate.build_chunk.SetCardinality(chunk);
 		for (idx_t i = 0; i < right_projection_map.size(); i++) {
-			lstate.build_chunk.data[i].Reference(input.data[right_projection_map[i]]);
+			lstate.build_chunk.data[i].Reference(chunk.data[right_projection_map[i]]);
 		}
 		ht.Build(lstate.append_state, lstate.join_keys, lstate.build_chunk);
 	} else if (!build_types.empty()) {
 		// there is not a projected map: place the entire right chunk in the HT
-		ht.Build(lstate.append_state, lstate.join_keys, input);
+		ht.Build(lstate.append_state, lstate.join_keys, chunk);
 	} else {
 		// there are only keys: place an empty chunk in the payload
-		lstate.build_chunk.SetCardinality(input.size());
+		lstate.build_chunk.SetCardinality(chunk.size());
 		ht.Build(lstate.append_state, lstate.join_keys, lstate.build_chunk);
 	}
 
@@ -261,7 +260,7 @@ public:
 	void Schedule() override {
 		auto &context = pipeline->GetClientContext();
 
-		vector<unique_ptr<Task>> finalize_tasks;
+		vector<shared_ptr<Task>> finalize_tasks;
 		auto &ht = *sink.hash_table;
 		const auto chunk_count = ht.GetDataCollection().ChunkCount();
 		const idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
@@ -346,7 +345,7 @@ public:
 public:
 	void Schedule() override {
 		auto &context = pipeline->GetClientContext();
-		vector<unique_ptr<Task>> partition_tasks;
+		vector<shared_ptr<Task>> partition_tasks;
 		partition_tasks.reserve(local_hts.size());
 		for (auto &local_ht : local_hts) {
 			partition_tasks.push_back(
@@ -880,15 +879,15 @@ void HashJoinLocalSourceState::ExternalScanHT(HashJoinGlobalSinkState &sink, Has
 	}
 }
 
-void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                               LocalSourceState &lstate_p) const {
+SourceResultType PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk,
+                                           OperatorSourceInput &input) const {
 	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
-	auto &gstate = gstate_p.Cast<HashJoinGlobalSourceState>();
-	auto &lstate = lstate_p.Cast<HashJoinLocalSourceState>();
+	auto &gstate = input.global_state.Cast<HashJoinGlobalSourceState>();
+	auto &lstate = input.local_state.Cast<HashJoinLocalSourceState>();
 	sink.scanned_data = true;
 
 	if (!sink.external && !IsRightOuterJoin(join_type)) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 
 	if (gstate.global_stage == HashJoinSourceStage::INIT) {
@@ -905,6 +904,8 @@ void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 			gstate.TryPrepareNextStage(sink);
 		}
 	}
+
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

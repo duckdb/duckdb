@@ -21,6 +21,7 @@ enum class VerificationType : uint8_t {
 	DESERIALIZED_V2,
 	PARSED,
 	UNOPTIMIZED,
+	NO_OPERATOR_CACHING,
 	PREPARED,
 	EXTERNAL,
 
@@ -57,6 +58,10 @@ public:
 	}
 
 	virtual bool DisableOptimizer() const {
+		return false;
+	}
+
+	virtual bool DisableOperatorCaching() const {
 		return false;
 	}
 

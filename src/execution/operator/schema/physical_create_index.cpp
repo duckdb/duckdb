@@ -85,15 +85,14 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	return std::move(state);
 }
 
-SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                         DataChunk &input) const {
+SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 
-	D_ASSERT(input.ColumnCount() >= 2);
-	auto &lstate = lstate_p.Cast<CreateIndexLocalSinkState>();
-	auto &row_identifiers = input.data[input.ColumnCount() - 1];
+	D_ASSERT(chunk.ColumnCount() >= 2);
+	auto &lstate = input.local_state.Cast<CreateIndexLocalSinkState>();
+	auto &row_identifiers = chunk.data[chunk.ColumnCount() - 1];
 
 	// generate the keys for the given input
-	lstate.key_chunk.ReferenceColumns(input, lstate.key_column_ids);
+	lstate.key_chunk.ReferenceColumns(chunk, lstate.key_column_ids);
 	lstate.arena_allocator.Reset();
 	ART::GenerateKeys(lstate.arena_allocator, lstate.key_chunk, lstate.keys);
 
@@ -160,9 +159,9 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 // Source
 //===--------------------------------------------------------------------===//
 
-void PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                  LocalSourceState &lstate) const {
-	// NOP
+SourceResultType PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk,
+                                              OperatorSourceInput &input) const {
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb
