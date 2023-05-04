@@ -61,19 +61,19 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 			break;
 		case LogicalTypeId::LIST: {
 			if (more_than_one) {
-				bind_data.record_type = JSONRecordType::JSON;
+				bind_data.record_type = JSONRecordType::VALUES;
 			} else {
 				type = ListType::GetChildType(type);
 				if (type.id() == LogicalTypeId::STRUCT) {
 					bind_data.record_type = JSONRecordType::ARRAY_OF_RECORDS;
 				} else {
-					bind_data.record_type = JSONRecordType::ARRAY_OF_JSON;
+					bind_data.record_type = JSONRecordType::ARRAY_OF_VALUES;
 				}
 			}
 			break;
 		}
 		default:
-			bind_data.record_type = JSONRecordType::JSON;
+			bind_data.record_type = JSONRecordType::VALUES;
 		}
 	}
 
@@ -171,9 +171,9 @@ void JSONScan::InitializeBindData(ClientContext &context, JSONScanData &bind_dat
 			} else if (arg == "array_of_records") {
 				bind_data.record_type = JSONRecordType::ARRAY_OF_RECORDS;
 			} else if (arg == "values") {
-				bind_data.record_type = JSONRecordType::JSON;
+				bind_data.record_type = JSONRecordType::VALUES;
 			} else if (arg == "array_of_values") {
-				bind_data.record_type = JSONRecordType::ARRAY_OF_JSON;
+				bind_data.record_type = JSONRecordType::ARRAY_OF_VALUES;
 			} else if (arg == "auto") {
 				bind_data.record_type = JSONRecordType::AUTO;
 			} else {

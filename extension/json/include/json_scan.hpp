@@ -10,6 +10,7 @@
 
 #include "buffered_json_reader.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/types/type_map.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "json_transform.hpp"
@@ -27,28 +28,16 @@ enum class JSONScanType : uint8_t {
 };
 
 enum class JSONRecordType : uint8_t {
-	//! Sequential values
-	RECORDS = 0,
-	//! Array of values
-	ARRAY_OF_RECORDS = 1,
-	//! Sequential non-object JSON
-	JSON = 2,
-	//! Array of non-object JSON
-	ARRAY_OF_JSON = 3,
-	//! Auto-detect
-	AUTO = 4,
-};
-
-//! Even though LogicalTypeId is just a uint8_t, this is still needed ...
-struct LogicalTypeIdHash {
-	inline std::size_t operator()(const LogicalTypeId &id) const {
-		return (size_t)id;
-	}
+	AUTO = 0,
+	//! Sequential objects that are unpacked
+	RECORDS = 1,
+	//! Any other JSON type, e.g., ARRAY
+	VALUES = 2,
 };
 
 struct DateFormatMap {
 public:
-	void Initialize(const unordered_map<LogicalTypeId, vector<const char *>, LogicalTypeIdHash> &format_templates) {
+	void Initialize(const type_id_map_t<vector<const char *>> &format_templates) {
 		for (const auto &entry : format_templates) {
 			const auto &type = entry.first;
 			for (const auto &format_string : entry.second) {
@@ -84,7 +73,7 @@ public:
 	}
 
 private:
-	unordered_map<LogicalTypeId, vector<StrpTimeFormat>, LogicalTypeIdHash> candidate_formats;
+	type_id_map_t<vector<StrpTimeFormat>> candidate_formats;
 };
 
 struct JSONScanData : public TableFunctionData {
@@ -253,8 +242,8 @@ private:
 
 	void ReconstructFirstObject(JSONScanGlobalState &gstate);
 
-	void ReadUnstructured(idx_t &count);
-	void ReadNewlineDelimited(idx_t &count);
+	void ReadUnstructured();
+	void ReadChunked();
 };
 
 struct JSONGlobalTableFunctionState : public GlobalTableFunctionState {

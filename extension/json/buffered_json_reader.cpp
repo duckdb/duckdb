@@ -190,6 +190,19 @@ const BufferedJSONReaderOptions &BufferedJSONReader::GetOptions() const {
 	return options;
 }
 
+JSONFormat BufferedJSONReader::GetFormat() const {
+	return options.format;
+}
+
+void BufferedJSONReader::SetFormat(JSONFormat format) {
+	D_ASSERT(options.format == JSONFormat::AUTO_DETECT);
+	options.format = format;
+}
+
+bool BufferedJSONReader::IsParallel() const {
+	return options.format == JSONFormat::NEWLINE_DELIMITED && options.compression == FileCompressionType::UNCOMPRESSED;
+}
+
 JSONFileHandle &BufferedJSONReader::GetFileHandle() const {
 	return *file_handle;
 }
@@ -225,7 +238,7 @@ void BufferedJSONReader::SetBufferLineOrObjectCount(idx_t index, idx_t count) {
 }
 
 idx_t BufferedJSONReader::GetLineNumber(idx_t buf_index, idx_t line_or_object_in_buf) {
-	D_ASSERT(options.format == JSONFormat::UNSTRUCTURED || options.format == JSONFormat::NEWLINE_DELIMITED);
+	D_ASSERT(options.format != JSONFormat::AUTO_DETECT);
 	while (true) {
 		lock_guard<mutex> guard(lock);
 		idx_t line = line_or_object_in_buf;
@@ -248,7 +261,7 @@ idx_t BufferedJSONReader::GetLineNumber(idx_t buf_index, idx_t line_or_object_in
 
 void BufferedJSONReader::ThrowParseError(idx_t buf_index, idx_t line_or_object_in_buf, yyjson_read_err &err,
                                          const string &extra) {
-	string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "object";
+	string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "record/value";
 	auto line = GetLineNumber(buf_index, line_or_object_in_buf);
 	throw InvalidInputException("Malformed JSON in file \"%s\", at byte %llu in %s %llu: %s. %s", file_path,
 	                            err.pos + 1, unit, line + 1, err.msg, extra);
@@ -256,7 +269,7 @@ void BufferedJSONReader::ThrowParseError(idx_t buf_index, idx_t line_or_object_i
 
 void BufferedJSONReader::ThrowTransformError(idx_t buf_index, idx_t line_or_object_in_buf,
                                              const string &error_message) {
-	string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "object";
+	string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "record/value";
 	auto line = GetLineNumber(buf_index, line_or_object_in_buf);
 	throw InvalidInputException("JSON transform error in file \"%s\", in %s %llu: %s", file_path, unit, line,
 	                            error_message);

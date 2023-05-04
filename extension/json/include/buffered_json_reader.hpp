@@ -19,10 +19,12 @@ namespace duckdb {
 enum class JSONFormat : uint8_t {
 	//! Auto-detect format (UNSTRUCTURED / NEWLINE_DELIMITED)
 	AUTO_DETECT = 0,
-	//! One object after another, newlines can be anywhere
+	//! One unit after another, newlines can be anywhere
 	UNSTRUCTURED = 1,
-	//! Objects are separated by newlines, newlines do not occur within values (NDJSON)
+	//! Units are separated by newlines, newlines do not occur within Units (NDJSON)
 	NEWLINE_DELIMITED = 2,
+	//! File is one big array of units
+	ARRAY = 3,
 };
 
 struct BufferedJSONReaderOptions {
@@ -107,6 +109,10 @@ public:
 
 	BufferedJSONReaderOptions &GetOptions();
 	const BufferedJSONReaderOptions &GetOptions() const;
+	JSONFormat GetFormat() const;
+	void SetFormat(JSONFormat format);
+	bool IsParallel() const;
+
 	JSONFileHandle &GetFileHandle() const;
 
 	//! Insert/get/remove buffer (grabs the lock)
