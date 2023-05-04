@@ -60,13 +60,16 @@ public:
 		return true;
 	}
 
-private:
-	void AddBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t batch_index,
-	                  unique_ptr<ColumnDataCollection> collection) const;
+public:
+	void AddRawBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t batch_index,
+	                     unique_ptr<ColumnDataCollection> collection) const;
 	void RepartitionBatches(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index,
 	                        bool final = false) const;
 	void PrepareBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t batch_index,
 	                      unique_ptr<ColumnDataCollection> collection) const;
 	void FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const;
+	void ExecuteTasks(ClientContext &context, GlobalSinkState &gstate_p) const;
+	void FlushBatchDataRepartitioned(ClientContext &context, GlobalSinkState &gstate_p) const;
+	void FlushBatchDataSerial(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const;
 };
 } // namespace duckdb

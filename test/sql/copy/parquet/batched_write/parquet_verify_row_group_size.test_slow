@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/batched_write/parquet_verify_row_group_size.test
+# name: test/sql/copy/parquet/batched_write/parquet_verify_row_group_size.test_slow
 # description: Verify row group size is respected
 # group: [batched_write]
 
