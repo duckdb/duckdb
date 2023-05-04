@@ -11,6 +11,7 @@
 #pragma once
 
 #include <stdint.h>
+#include "duckdb/common/string.hpp"
 
 namespace duckdb {
 

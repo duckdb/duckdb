@@ -127,7 +127,8 @@ with open(enum_util_header_file, "w") as f:
     f.write(header)
 
     f.write('#pragma once\n\n')
-    f.write('#include <stdint.h>\n\n')
+    f.write('#include <stdint.h>\n')
+    f.write('#include "duckdb/common/string.hpp"\n\n')
     
     f.write("namespace duckdb {\n\n")
     
