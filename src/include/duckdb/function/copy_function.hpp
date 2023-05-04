@@ -94,7 +94,7 @@ typedef CopyFunctionExecutionMode (*copy_to_execution_mode_t)(bool preserve_inse
 
 typedef unique_ptr<PreparedBatchData> (*copy_prepare_batch_t)(ClientContext &context, FunctionData &bind_data,
                                                               GlobalFunctionData &gstate,
-                                                              ColumnDataCollection &collection);
+                                                              unique_ptr<ColumnDataCollection> collection);
 typedef void (*copy_flush_batch_t)(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                                    PreparedBatchData &batch);
 

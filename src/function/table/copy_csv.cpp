@@ -428,7 +428,8 @@ struct WriteCSVBatchData : public PreparedBatchData {
 };
 
 unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, FunctionData &bind_data,
-                                                   GlobalFunctionData &gstate, ColumnDataCollection &collection) {
+                                                   GlobalFunctionData &gstate,
+                                                   unique_ptr<ColumnDataCollection> collection) {
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 
 	// create the cast chunk with VARCHAR types
@@ -439,7 +440,7 @@ unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, Funct
 
 	auto batch = make_uniq<WriteCSVBatchData>();
 	// write CSV chunks to the batch data
-	for (auto &chunk : collection.Chunks()) {
+	for (auto &chunk : collection->Chunks()) {
 		WriteCSVChunkInternal(context, bind_data, cast_chunk, batch->serializer, chunk);
 	}
 	return batch;

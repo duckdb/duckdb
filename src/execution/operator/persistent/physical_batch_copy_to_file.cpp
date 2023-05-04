@@ -53,14 +53,14 @@ public:
 	}
 };
 
-SinkResultType PhysicalBatchCopyToFile::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                             DataChunk &input) const {
-	auto &state = lstate.Cast<BatchCopyToLocalState>();
+SinkResultType PhysicalBatchCopyToFile::Sink(ExecutionContext &context, DataChunk &chunk,
+                                             OperatorSinkInput &input) const {
+	auto &state = input.local_state.Cast<BatchCopyToLocalState>();
 	if (!state.collection) {
 		state.InitializeCollection(context.client, *this);
 	}
-	state.rows_copied += input.size();
-	state.collection->Append(state.append_state, input);
+	state.rows_copied += chunk.size();
+	state.collection->Append(state.append_state, chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -90,7 +90,7 @@ void PhysicalBatchCopyToFile::PrepareBatchData(ClientContext &context, GlobalSin
 	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
 
 	// prepare the batch
-	auto batch_data = function.prepare_batch(context, *bind_data, *gstate.global_state, *collection);
+	auto batch_data = function.prepare_batch(context, *bind_data, *gstate.global_state, std::move(collection));
 	// move the batch data to the set of prepared batch data
 	lock_guard<mutex> l(gstate.lock);
 	gstate.batch_data[batch_index] = std::move(batch_data);
@@ -153,29 +153,13 @@ unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientCo
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class BatchCopyToFileState : public GlobalSourceState {
-public:
-	BatchCopyToFileState() : finished(false) {
-	}
-
-	bool finished;
-};
-
-unique_ptr<GlobalSourceState> PhysicalBatchCopyToFile::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<BatchCopyToFileState>();
-}
-
-void PhysicalBatchCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                      LocalSourceState &lstate) const {
-	auto &state = (BatchCopyToFileState &)gstate;
+SourceResultType PhysicalBatchCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                  OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<BatchCopyToGlobalState>();
-	if (state.finished) {
-		return;
-	}
 
 	chunk.SetCardinality(1);
 	chunk.SetValue(0, 0, Value::BIGINT(g.rows_copied));
-	state.finished = true;
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb
