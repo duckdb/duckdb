@@ -29,7 +29,7 @@ struct LikeString {
 	string like_string = "";
 };
 
-static LikeString GetLikeString(duckdb_re2::Regexp *regexp, bool contains = false) {
+static LikeString GetLikeStringEscaped(duckdb_re2::Regexp *regexp, bool contains = false) {
 	D_ASSERT(regexp->op() == duckdb_re2::kRegexpLiteralString || regexp->op() == duckdb_re2::kRegexpLiteral);
 	LikeString ret;
 	// case insensitivity may be on now, but it can also turn off.
@@ -43,13 +43,14 @@ static LikeString GetLikeString(duckdb_re2::Regexp *regexp, bool contains = fals
 				ret.exists = false;
 				return ret;
 			}
-			auto chr = toascii(runes[i]);
+			char chr = toascii(runes[i]);
 			// if a character is equal to the escaped character and the like string is already escaped`
 			if (!contains && (chr == '%' || chr == '_' || chr == ret.escaped_character[0])) {
 				ret.escaped = true;
 				ret.like_string += ret.escaped_character;
 			}
-			ret.like_string += toascii(runes[i]);
+			auto run_as_str{chr};
+			ret.like_string += run_as_str;
 		}
 	} else {
 		auto rune = regexp->rune();
@@ -57,13 +58,14 @@ static LikeString GetLikeString(duckdb_re2::Regexp *regexp, bool contains = fals
 			ret.exists = false;
 			return ret;
 		}
-		auto chr = toascii(rune);
+		char chr = toascii(rune);
 		// if a character is equal to the escaped character return that there is no escaped like string.
 		if (!contains && (chr == '%' || chr == '_' || chr == ret.escaped_character[0])) {
 			ret.escaped = true;
 			ret.like_string += ret.escaped_character;
 		}
-		ret.like_string += toascii(rune);
+		auto rune_as_str{chr};
+		ret.like_string += rune_as_str;
 	}
 	D_ASSERT(ret.like_string.size() >= 1);
 	ret.exists = true;
@@ -104,7 +106,7 @@ static LikeString LikeMatchFromRegex(duckdb_re2::RE2 &pattern) {
 			}
 			// if the kRegexpLiteral or kRegexpLiteralString is the only op to match
 			// the string can directly be converted into a contains
-			LikeString escaped_like_string = GetLikeString(subs[cur_sub_index], false);
+			LikeString escaped_like_string = GetLikeStringEscaped(subs[cur_sub_index], false);
 			if (!escaped_like_string.exists) {
 				return escaped_like_string;
 			}
@@ -174,7 +176,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||
 	    pattern.Regexp()->op() == duckdb_re2::kRegexpLiteral) {
 		// convert to contains.
-		LikeString escaped_like_string = GetLikeString(pattern.Regexp(), true);
+		LikeString escaped_like_string = GetLikeStringEscaped(pattern.Regexp(), true);
 		if (!escaped_like_string.exists) {
 			return nullptr;
 		}
