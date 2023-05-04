@@ -355,11 +355,10 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 
 			// non-null value, fetch the string value from the cast chunk
 			auto str_data = FlatVector::GetData<string_t>(cast_chunk.data[col_idx]);
-			auto str_value = str_data[row_idx];
 			// FIXME: we could gain some performance here by checking for certain types if they ever require quotes
 			// (e.g. integers only require quotes if the delimiter is a number, decimals only require quotes if the
 			// delimiter is a number or "." character)
-			WriteQuotedString(writer, csv_data, str_value.GetData(), str_value.GetSize(),
+			WriteQuotedString(writer, csv_data, str_data[row_idx].GetData(), str_data[row_idx].GetSize(),
 			                  csv_data.options.force_quote[col_idx]);
 		}
 		writer.WriteBufferData(csv_data.newline);

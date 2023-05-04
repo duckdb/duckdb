@@ -33,3 +33,7 @@ SELECT * FROM integers_copied LIMIT 5 OFFSET 99997
 99999	19999
 100000	20000
 100001	20000
+
+query II
+SELECT * FROM integers_copied QUALIFY i<=lag(i) over ()
+----
