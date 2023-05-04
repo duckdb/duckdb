@@ -14,11 +14,19 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 	if (op.use_tmp_file) {
 		op.file_path += ".tmp";
 	}
+	if (op.per_thread_output || op.partition_output || !op.partition_columns.empty() || op.overwrite_or_ignore) {
+		// hive-partitioning/per-thread output does not care about insertion order, and does not support batch indexes
+		preserve_insertion_order = false;
+		supports_batch_index = false;
+	}
 	auto mode = CopyFunctionExecutionMode::REGULAR_COPY_TO_FILE;
 	if (op.function.execution_mode) {
 		mode = op.function.execution_mode(preserve_insertion_order, supports_batch_index);
 	}
 	if (mode == CopyFunctionExecutionMode::BATCH_COPY_TO_FILE) {
+		if (!supports_batch_index) {
+			throw InternalException("BATCH_COPY_TO_FILE can only be used if batch indexes are supported");
+		}
 		// batched copy to file
 		auto copy = make_uniq<PhysicalBatchCopyToFile>(op.types, op.function, std::move(op.bind_data),
 		                                               op.estimated_cardinality);

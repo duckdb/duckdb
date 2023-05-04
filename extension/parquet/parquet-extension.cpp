@@ -671,9 +671,6 @@ CopyFunctionExecutionMode ParquetWriteExecutionMode(bool preserve_insertion_orde
 	if (!preserve_insertion_order) {
 		return CopyFunctionExecutionMode::PARALLEL_COPY_TO_FILE;
 	}
-	if (supports_batch_index) {
-		return CopyFunctionExecutionMode::BATCH_COPY_TO_FILE;
-	}
 	return CopyFunctionExecutionMode::REGULAR_COPY_TO_FILE;
 }
 
