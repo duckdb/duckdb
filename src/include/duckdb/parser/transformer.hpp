@@ -45,6 +45,7 @@ class Transformer {
 		string enum_name;
 		unique_ptr<SelectNode> base;
 		unique_ptr<ParsedExpression> column;
+		unique_ptr<QueryNode> subquery;
 	};
 
 public:
@@ -85,10 +86,13 @@ private:
 	bool GetNamedParam(const string &name, int32_t &index);
 	bool HasNamedParameters() const;
 
-	void AddPivotEntry(string enum_name, unique_ptr<SelectNode> source, unique_ptr<ParsedExpression> column);
+	void AddPivotEntry(string enum_name, unique_ptr<SelectNode> source, unique_ptr<ParsedExpression> column,
+	                   unique_ptr<QueryNode> subquery);
 	unique_ptr<SQLStatement> GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry);
 	bool HasPivotEntries();
 	idx_t PivotEntryCount();
+	vector<unique_ptr<CreatePivotEntry>> &GetPivotEntries();
+	void PivotEntryCheck(const string &type);
 	void ExtractCTEsRecursive(CommonTableExpressionMap &cte_map);
 
 private:

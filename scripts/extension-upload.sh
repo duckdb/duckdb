@@ -16,8 +16,8 @@ do
 	# encrypt hash with extension signing private key to create signature
 	openssl pkeyutl -sign -in $f.hash -inkey private.pem -pkeyopt digest:sha256 -out $f.sign
 	# append signature to extension binary
-  cat $f.sign >> $f
-  # compress extension binary
+	cat $f.sign >> $f
+	# compress extension binary
 	gzip < $f > "$f.gz"
 	# upload compressed extension binary to S3
 	aws s3 cp $f.gz s3://duckdb-extensions/$2/$1/$ext.duckdb_extension.gz --acl public-read

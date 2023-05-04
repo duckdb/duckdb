@@ -45,7 +45,7 @@ public final class ResultSet: Sendable {
   public var columnCount: DBInt { duckdb_column_count(ptr) }
   
   /// The total number of rows in the result set
-  var rowCount: DBInt {
+  public var rowCount: DBInt {
     guard chunkCount > 0 else { return DBInt(0) }
     let lastChunk = dataChunk(at: chunkCount - 1)
     return (chunkCount - 1) * Vector.vectorSize + lastChunk.count

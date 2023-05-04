@@ -315,10 +315,9 @@ void PhysicalBatchInsert::NextBatch(ExecutionContext &context, GlobalSinkState &
 	lstate.current_index = batch_index;
 }
 
-SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
-                                         DataChunk &chunk) const {
-	auto &gstate = state.Cast<BatchInsertGlobalState>();
-	auto &lstate = lstate_p.Cast<BatchInsertLocalState>();
+SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
+	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
 
 	auto &table = gstate.table;
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
@@ -422,29 +421,15 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class BatchInsertSourceState : public GlobalSourceState {
-public:
-	explicit BatchInsertSourceState() : finished(false) {
-	}
 
-	bool finished;
-};
-
-unique_ptr<GlobalSourceState> PhysicalBatchInsert::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<BatchInsertSourceState>();
-}
-
-void PhysicalBatchInsert::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                  LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<BatchInsertSourceState>();
+SourceResultType PhysicalBatchInsert::GetData(ExecutionContext &context, DataChunk &chunk,
+                                              OperatorSourceInput &input) const {
 	auto &insert_gstate = sink_state->Cast<BatchInsertGlobalState>();
-	if (state.finished) {
-		return;
-	}
+
 	chunk.SetCardinality(1);
 	chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));
-	state.finished = true;
-	return;
+
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb
