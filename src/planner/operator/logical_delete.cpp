@@ -1,6 +1,7 @@
 #include "duckdb/planner/operator/logical_delete.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 
 namespace duckdb {
@@ -49,6 +50,15 @@ void LogicalDelete::ResolveTypes() {
 	} else {
 		types.emplace_back(LogicalType::BIGINT);
 	}
+}
+
+string LogicalDelete::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index);
+	}
+#endif
+	return LogicalOperator::GetName();
 }
 
 } // namespace duckdb
