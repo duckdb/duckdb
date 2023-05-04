@@ -129,7 +129,7 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
 
-pair<string,string> DatabaseInstance::ExtractDatabaseType(const string &path) {
+pair<string, string> DatabaseInstance::ExtractDatabaseType(const string &path) {
 	// first check if there is an existing prefix
 	auto extension = ExtensionHelper::ExtractExtensionPrefixFromPath(path);
 	if (!extension.empty()) {

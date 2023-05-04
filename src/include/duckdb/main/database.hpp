@@ -55,7 +55,7 @@ public:
 	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
 	//! Get the database extension type from a given path, returning a pair of <extension type, rest of path>
-	pair<string,string> ExtractDatabaseType(const string &path);
+	pair<string, string> ExtractDatabaseType(const string &path);
 	unique_ptr<AttachedDatabase> CreateAttachedDatabase(AttachInfo &info, const string &type, AccessMode access_mode);
 
 private:
