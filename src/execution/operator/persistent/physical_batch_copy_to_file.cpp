@@ -117,6 +117,10 @@ void PhysicalBatchCopyToFile::AddBatchData(ClientContext &context, GlobalSinkSta
 	}
 }
 
+static bool CorrectSizeForBatch(idx_t collection_size, idx_t desired_size) {
+	return idx_t(AbsValue<int64_t>(int64_t(collection_size) - int64_t(desired_size))) < STANDARD_VECTOR_SIZE;
+}
+
 void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index,
                                                  bool final) const {
 	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
@@ -158,17 +162,17 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 	// now perform the actual repartitioning
 	for (auto &collection : collections) {
 		if (!current_collection) {
-			if (collection->Count() < gstate.batch_size) {
-				// the collection is not too large for the current batch size - we can use the collection as-is and
-				// continue
-				current_collection = std::move(collection);
-				collection.reset();
-			} else if (collection->Count() == gstate.batch_size) {
-				// exact batch size! no need to repartition at all
+			if (CorrectSizeForBatch(collection->Count(), gstate.batch_size)) {
+				// the collection is ~approximately equal to the batch size (off by at most one vector)
+				// use it directly
 				result.push_back(std::move(collection));
 				collection.reset();
+			} else if (collection->Count() < gstate.batch_size) {
+				// the collection is smaller than the batch size - use it as a starting point
+				current_collection = std::move(collection);
+				collection.reset();
 			} else {
-				// the collection is too large - we need to repartition
+				// the collection is too large for a batch - we need to repartition
 				// create an empty collection
 				current_collection = make_uniq<ColumnDataCollection>(Allocator::Get(context), children[0]->types);
 			}
@@ -182,45 +186,23 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 		}
 		// iterate the collection while appending
 		for (auto &chunk : collection->Chunks()) {
-			if (current_collection->Count() + chunk.size() <= gstate.batch_size) {
-				// standard case: we can append the chunk in its entirety
-				current_collection->Append(append_state, chunk);
+			// append the chunk to the collection
+			current_collection->Append(append_state, chunk);
+			if (current_collection->Count() < gstate.batch_size) {
+				// the collection is still under the batch size - continue
 				continue;
-			}
-			// the chunk does not fit - we need to slice the chunk
-			idx_t original_size = chunk.size();
-			idx_t append_count = gstate.batch_size - current_collection->Count();
-			idx_t remaining_count = original_size - append_count;
-			if (append_count > 0) {
-				chunk.SetCardinality(append_count);
-				current_collection->Append(append_state, chunk);
-			}
-			if (current_collection->Count() != gstate.batch_size) {
-				throw InternalException("Collection count should be equal to batch size now!?");
 			}
 			// the collection is full - move it to the result and create a new one
 			result.push_back(std::move(current_collection));
 			current_collection = make_uniq<ColumnDataCollection>(Allocator::Get(context), children[0]->types);
 			current_collection->InitializeAppend(append_state);
-
-			if (remaining_count > 0) {
-				// if there are any remaining tuples in this chunk - slice the chunk for the remaining tuples
-				// and add them to the current collection again
-				chunk.SetCardinality(original_size);
-				SelectionVector sel(remaining_count);
-				for (idx_t i = 0; i < remaining_count; i++) {
-					sel.set_index(i, append_count + i);
-				}
-				chunk.Slice(sel, remaining_count);
-				current_collection->Append(append_state, chunk);
-			}
 		}
 	}
 	if (current_collection->Count() > 0) {
 		// if there are any remaining batches that are not filled up to the batch size
 		// AND this is not the final collection
 		// re-add it to the set of raw (to-be-merged) batches
-		if (final) {
+		if (final || CorrectSizeForBatch(current_collection->Count(), gstate.batch_size)) {
 			result.push_back(std::move(current_collection));
 		} else {
 			gstate.raw_batches[max_batch_index] = std::move(current_collection);
