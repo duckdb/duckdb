@@ -270,6 +270,11 @@ final class TypeConversionTests: XCTestCase {
     try extractTest(testColumnName: "int_array", expected: expected) { $0.cast(to: [Int32?].self) }
   }
   
+  func test_extract_from_int_array_casting_to_swift_int() throws {
+    let expected = [[], [Int(42), 999, nil, nil, -42], nil]
+    try extractTest(testColumnName: "int_array", expected: expected) { $0.cast(to: [Int?].self) }
+  }
+  
   func test_extract_from_double_array() throws {
     // We need this contraption to work around .nan != .nan
     enum DoubleBox: Equatable {
