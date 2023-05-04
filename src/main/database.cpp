@@ -129,20 +129,20 @@ ConnectionManager &ConnectionManager::Get(ClientContext &context) {
 	return ConnectionManager::Get(DatabaseInstance::GetDatabase(context));
 }
 
-string DatabaseInstance::ExtractDatabaseType(string &path) {
+pair<string,string> DatabaseInstance::ExtractDatabaseType(const string &path) {
 	// first check if there is an existing prefix
 	auto extension = ExtensionHelper::ExtractExtensionPrefixFromPath(path);
 	if (!extension.empty()) {
 		// path is prefixed with an extension - remove it
-		path = StringUtil::Replace(path, extension + ":", "");
-		return extension;
+		auto db_path = StringUtil::Replace(path, extension + ":", "");
+		return {ExtensionHelper::ApplyExtensionAlias(extension), db_path};
 	}
 	// if there isn't - check the magic bytes of the file (if any)
 	auto file_type = MagicBytes::CheckMagicBytes(config.file_system.get(), path);
 	if (file_type == DataFileType::SQLITE_FILE) {
-		return "sqlite";
+		return {"sqlite", path};
 	}
-	return string();
+	return {string(), path};
 }
 
 duckdb::unique_ptr<AttachedDatabase> DatabaseInstance::CreateAttachedDatabase(AttachInfo &info, const string &type,
@@ -207,16 +207,20 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	connection_manager = make_uniq<ConnectionManager>();
 
 	// check if we are opening a standard DuckDB database or an extension database
-	auto database_type = ExtractDatabaseType(config.options.database_path);
-	if (!database_type.empty()) {
+	if (config.options.database_type.empty()) {
+		auto type_path = ExtractDatabaseType(config.options.database_path);
+		config.options.database_type = type_path.first;
+		config.options.database_path = type_path.second;
+	}
+	if (!config.options.database_type.empty()) {
 		// we are opening an extension database, run storage_init
-		ExtensionHelper::StorageInit(database_type, config);
+		ExtensionHelper::StorageInit(config.options.database_type, config);
 	}
 	AttachInfo info;
 	info.name = AttachedDatabase::ExtractDatabaseName(config.options.database_path);
 	info.path = config.options.database_path;
 
-	auto attached_database = CreateAttachedDatabase(info, database_type, config.options.access_mode);
+	auto attached_database = CreateAttachedDatabase(info, config.options.database_type, config.options.access_mode);
 	auto initial_database = attached_database.get();
 	{
 		Connection con(*this);
@@ -230,9 +234,9 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	// initialize the database
 	initial_database->Initialize();
 
-	if (!database_type.empty()) {
+	if (!config.options.database_type.empty()) {
 		// if we are opening an extension database - load the extension
-		ExtensionHelper::LoadExternalExtension(*this, nullptr, database_type);
+		ExtensionHelper::LoadExternalExtension(*this, nullptr, config.options.database_type);
 	}
 
 	if (!config.options.unrecognized_options.empty()) {

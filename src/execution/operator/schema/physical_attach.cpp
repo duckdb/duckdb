@@ -59,11 +59,11 @@ void PhysicalAttach::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	auto &db = DatabaseInstance::GetDatabase(context.client);
 	if (type.empty()) {
 		// try to extract type from path
-		type = db.ExtractDatabaseType(info->path);
+		auto ext_path = db.ExtractDatabaseType(info->path);
+		type = ext_path.first;
+		info->path = ext_path.second;
 	}
-	if (!type.empty()) {
-		type = ExtensionHelper::ApplyExtensionAlias(type);
-	}
+
 	if (type.empty() && !unrecognized_option.empty()) {
 		throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
 	}
