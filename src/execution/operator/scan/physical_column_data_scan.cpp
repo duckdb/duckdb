@@ -27,17 +27,19 @@ unique_ptr<GlobalSourceState> PhysicalColumnDataScan::GetGlobalSourceState(Clien
 	return make_uniq<PhysicalColumnDataScanState>();
 }
 
-void PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                     LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<PhysicalColumnDataScanState>();
+SourceResultType PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                 OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<PhysicalColumnDataScanState>();
 	if (collection->Count() == 0) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 	if (!state.initialized) {
 		collection->InitializeScan(state.scan_state);
 		state.initialized = true;
 	}
 	collection->Scan(state.scan_state, chunk);
+
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 //===--------------------------------------------------------------------===//

@@ -92,25 +92,24 @@ bool PhysicalLimit::ComputeOffset(ExecutionContext &context, DataChunk &input, i
 	return true;
 }
 
-SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                   DataChunk &input) const {
+SinkResultType PhysicalLimit::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 
-	D_ASSERT(input.size() > 0);
-	auto &state = lstate.Cast<LimitLocalState>();
+	D_ASSERT(chunk.size() > 0);
+	auto &state = input.local_state.Cast<LimitLocalState>();
 	auto &limit = state.limit;
 	auto &offset = state.offset;
 
 	idx_t max_element;
-	if (!ComputeOffset(context, input, limit, offset, state.current_offset, max_element, limit_expression.get(),
+	if (!ComputeOffset(context, chunk, limit, offset, state.current_offset, max_element, limit_expression.get(),
 	                   offset_expression.get())) {
 		return SinkResultType::FINISHED;
 	}
 	auto max_cardinality = max_element - state.current_offset;
-	if (max_cardinality < input.size()) {
-		input.SetCardinality(max_cardinality);
+	if (max_cardinality < chunk.size()) {
+		chunk.SetCardinality(max_cardinality);
 	}
-	state.data.Append(input, lstate.batch_index);
-	state.current_offset += input.size();
+	state.data.Append(chunk, input.local_state.batch_index);
+	state.current_offset += chunk.size();
 	if (state.current_offset == max_element) {
 		return SinkResultType::FINISHED;
 	}
@@ -146,10 +145,9 @@ unique_ptr<GlobalSourceState> PhysicalLimit::GetGlobalSourceState(ClientContext 
 	return make_uniq<LimitSourceState>();
 }
 
-void PhysicalLimit::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                            LocalSourceState &lstate) const {
+SourceResultType PhysicalLimit::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<LimitGlobalState>();
-	auto &state = gstate_p.Cast<LimitSourceState>();
+	auto &state = input.global_state.Cast<LimitSourceState>();
 	while (state.current_offset < gstate.limit + gstate.offset) {
 		if (!state.initialized) {
 			gstate.data.InitializeScan(state.scan_state);
@@ -157,12 +155,14 @@ void PhysicalLimit::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 		}
 		gstate.data.Scan(state.scan_state, chunk);
 		if (chunk.size() == 0) {
-			break;
+			return SourceResultType::FINISHED;
 		}
 		if (HandleOffset(chunk, state.current_offset, gstate.offset, gstate.limit)) {
 			break;
 		}
 	}
+
+	return chunk.size() > 0 ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
 }
 
 bool PhysicalLimit::HandleOffset(DataChunk &input, idx_t &current_offset, idx_t offset, idx_t limit) {
