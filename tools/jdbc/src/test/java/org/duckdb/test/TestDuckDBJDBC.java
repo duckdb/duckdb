@@ -3,10 +3,10 @@ package org.duckdb.test;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Array;
 import java.sql.Blob;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -21,7 +21,13 @@ import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
-import java.time.*;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
@@ -45,6 +51,8 @@ import org.duckdb.DuckDBColumnType;
 import org.duckdb.DuckDBResultSetMetaData;
 import org.duckdb.DuckDBNative;
 import org.duckdb.JsonNode;
+
+import static java.util.Collections.singletonList;
 
 public class TestDuckDBJDBC {
 
@@ -3214,15 +3222,31 @@ public class TestDuckDBJDBC {
 			 Statement statement = connection.createStatement()) {
 			try (ResultSet rs = statement.executeQuery("select [1]")) {
 				assertTrue(rs.next());
-				assertEquals(Arrays.asList((Object[])rs.getArray(1).getArray()), Arrays.asList(1));
+				assertEquals(arrayToList(rs.getArray(1)), singletonList(1));
 			}
 			try (ResultSet rs = statement.executeQuery("select unnest([[1], [42, 69]])")) {
 				assertTrue(rs.next());
-				assertEquals(Arrays.asList((Object[])rs.getArray(1).getArray()), Arrays.asList(1));
+				assertEquals(arrayToList(rs.getArray(1)), singletonList(1));
 				assertTrue(rs.next());
-				assertEquals(Arrays.asList((Object[])rs.getArray(1).getArray()), Arrays.asList(42, 69));
+				assertEquals(arrayToList(rs.getArray(1)), Arrays.asList(42, 69));
+			}
+			try (ResultSet rs = statement.executeQuery("select unnest([[[42], [69]]])")) {
+				assertTrue(rs.next());
+
+				List<List<Integer>> expected = Arrays.asList(singletonList(42), singletonList(69));
+				List<Array> actual = TestDuckDBJDBC.<Array>arrayToList(rs.getArray(1));
+
+				for (int i=0; i<actual.size(); i++) {
+					assertEquals(arrayToList(actual.get(i)), expected.get(i));
+				}
 			}
 		}
+	}
+
+	private static <T> List<T> arrayToList(Array actual) throws SQLException {
+		@SuppressWarnings("unchecked")
+		T[] array = (T[]) actual.getArray();
+		return Arrays.asList(array);
 	}
 
 	public static void test_map() throws Exception {
