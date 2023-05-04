@@ -24,7 +24,6 @@ void JSONTransformOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField(error_duplicate_key);
 	writer.WriteField(error_missing_key);
 	writer.WriteField(error_unknown_key);
-	writer.WriteField(cast);
 	writer.WriteField(delay_error);
 }
 
@@ -33,7 +32,6 @@ void JSONTransformOptions::Deserialize(FieldReader &reader) {
 	error_duplicate_key = reader.ReadRequired<bool>();
 	error_missing_key = reader.ReadRequired<bool>();
 	error_unknown_key = reader.ReadRequired<bool>();
-	cast = reader.ReadRequired<bool>();
 	delay_error = reader.ReadRequired<bool>();
 }
 
@@ -269,13 +267,14 @@ bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const
 	bool success = true;
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
-		if (!val || unsafe_yyjson_is_null(val)) {
+		if (!val || !unsafe_yyjson_is_str(val)) {
 			validity.SetInvalid(i);
-		} else if (success && options.strict_cast && !unsafe_yyjson_is_str(val)) {
-			options.error_message = StringUtil::Format("Unable to cast '%s' to " + LogicalTypeIdToString(target.id()),
-			                                           JSONCommon::ValToString(val, 50));
-			options.object_index = i;
-			success = false;
+			if (success && options.strict_cast && !unsafe_yyjson_is_str(val)) {
+				options.error_message = StringUtil::Format(
+				    "Unable to cast '%s' to " + LogicalTypeIdToString(target.id()), JSONCommon::ValToString(val, 50));
+				options.object_index = i;
+				success = false;
+			}
 		} else {
 			data[i] = GetString(val);
 		}
@@ -468,22 +467,14 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 		}
 	}
 
-	if (!success) {
-		if (!options.delay_error) {
-			options.ThrowException(options.error_message);
-		}
-		if (!options.cast) {
-			return success; // When we cast we still perform the transform of the nested stuff
-		}
-	}
-
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		if (!JSONTransform::Transform(nested_vals[col_idx], alc, *result_vectors[col_idx], count, options)) {
 			success = false;
 		}
-		if (!options.delay_error && !success) {
-			options.ThrowException(options.error_message);
-		}
+	}
+
+	if (!options.delay_error && !success) {
+		throw InvalidInputException(options.error_message);
 	}
 
 	return success;
@@ -566,14 +557,6 @@ static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 				options.object_index = i;
 			}
 		}
-
-		if (!options.delay_error) {
-			options.ThrowException(options.error_message);
-		}
-
-		if (!options.cast) {
-			return success; // When we cast we still perform the transform of the nested stuff
-		}
 	}
 
 	// Transform array values
@@ -582,7 +565,7 @@ static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 	}
 
 	if (!options.delay_error && !success) {
-		options.ThrowException(options.error_message);
+		throw InvalidInputException(options.error_message);
 	}
 
 	return success;
@@ -638,23 +621,10 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 		}
 	}
 
-	if (!success) {
-		if (!options.delay_error) {
-			options.ThrowException(options.error_message);
-		}
-		if (!options.cast) {
-			return success; // When we cast we still perform the transform of the nested stuff
-		}
-	}
-
 	// Transform keys
 	if (!JSONTransform::Transform(keys, alc, MapVector::GetKeys(result), list_size, options)) {
 		throw ConversionException(
 		    StringUtil::Format(options.error_message, ". Cannot default to NULL, because map keys cannot be NULL"));
-	}
-
-	if (!options.delay_error && !success) {
-		options.ThrowException(options.error_message);
 	}
 
 	// Transform values
@@ -663,7 +633,7 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 	}
 
 	if (!options.delay_error && !success) {
-		options.ThrowException(options.error_message);
+		throw InvalidInputException(options.error_message);
 	}
 
 	return success;
@@ -803,7 +773,7 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 	JSONTransformOptions options(strict, strict, strict, false);
 	if (!TransformFunctionInternal(args.data[0], args.size(), result, alc, options)) {
-		options.ThrowException(options.error_message);
+		throw InvalidInputException(options.error_message);
 	}
 }
 
@@ -837,9 +807,17 @@ static bool JSONToNestedCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto alc = lstate.json_allocator.GetYYAlc();
 
 	JSONTransformOptions options(true, true, true, true);
-	options.delay_error = !parameters.strict; // Set this so the error is delayed
-	options.cast = true;
-	return TransformFunctionInternal(source, count, result, alc, options);
+	options.delay_error = true;
+
+	auto success = TransformFunctionInternal(source, count, result, alc, options);
+	if (!success) {
+		if (parameters.error_message) {
+			*parameters.error_message = options.error_message;
+		} else {
+			throw ConversionException(options.error_message);
+		}
+	}
+	return success;
 }
 
 BoundCastInfo JSONToNestedCastBind(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
