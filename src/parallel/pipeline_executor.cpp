@@ -470,7 +470,7 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 	// Ensures Sinks only return empty results when Blocking or Finished
 	D_ASSERT(res != SourceResultType::BLOCKED || result.size() == 0);
 
-	if (requires_batch_index) {
+	if (requires_batch_index && res != SourceResultType::BLOCKED) {
 		idx_t next_batch_index;
 		if (result.size() == 0) {
 			next_batch_index = NumericLimits<int64_t>::Maximum();
