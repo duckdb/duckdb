@@ -5,28 +5,28 @@
 #pragma enable_verification;
 
 # Basic use, 2 maps, same type, no nulls
-#query I
-#select map_concat(map([3,4,5], ['a', 'b', 'c']), map([1], ['d']));
-#----
-#{3=a, 4=b, 5=c, 1=d}
+query I
+select map_concat(map([3,4,5], ['a', 'b', 'c']), map([1], ['d']));
+----
+{3=a, 4=b, 5=c, 1=d}
 
-## Appending an empty map to a non-empty map
-#query I
-#select map_concat(map([3,4,5], ['a', 'b', 'c']), map([], []));
-#----
-#{3=a, 4=b, 5=c}
+# Appending an empty map to a non-empty map
+query I
+select map_concat(map([3,4,5], ['a', 'b', 'c']), map([], []));
+----
+{3=a, 4=b, 5=c}
 
-## Appending two empty maps
-#query I
-#select map_concat(map([], []), map([], []))
-#----
-#{}
+# Appending two empty maps
+query I
+select map_concat(map([], []), map([], []))
+----
+{}
 
-## Appending a non empty map to an empty map
-#query I
-#select map_concat(map([], []), map([3,4,5], ['a', 'b', 'c']));
-#----
-#{3=a, 4=b, 5=c}
+# Appending a non empty map to an empty map
+query I
+select map_concat(map([], []), map([3,4,5], ['a', 'b', 'c']));
+----
+{3=a, 4=b, 5=c}
 
 # Appending NULL to an empty map
 query I
@@ -93,3 +93,63 @@ select map_concat(x, y, z) from tbl;
 {3=1, 4=over_twelve_characters, 2=c, 1=a, 5=b, 7=NULL, 6=123}
 {42=small, 1=this is a long string, 0=tiny}
 {5=long, 1337=longer, 0=longest}
+
+query I
+select map_concat(x, y, z) from tbl where rowid != 0;
+----
+{42=small, 1=this is a long string, 0=tiny}
+{5=long, 1337=longer, 0=longest}
+
+query I map_concat(x, y, z) from tbl where rowid == 1;
+----
+{42=small, 1=this is a long string, 0=tiny}
+
+statement ok
+drop table tbl;
+
+statement ok
+create table tbl as select
+	map(lower_range, lower_range) as c1,
+	map(upper_range, upper_range) as c2 from (
+		select
+			range(3000) as lower_range,
+			[i + 3000 for i in range(3000)] as upper_range
+	)
+
+query I nosort result1
+select map_concat(c1, c2) from tbl;
+----
+
+query I nosort result1
+select map(range(6000), range(6000));
+----
+
+statement ok
+drop table tbl;
+
+statement ok
+create table tbl as select
+	map([i], [i]) as c1,
+	map([i + 1], [i + 1]) as c2 from (
+		select * from range(3000) tbl(i)
+	)
+
+query I nosort result2
+select map_concat(c1, c2) from tbl;
+----
+
+query I nosort result2
+select map(range(i, i+2), range(i, i+2)) from (
+	select * from range(3000) tbl(i)
+);
+----
+
+query I nosort result3
+select map(c1, c1) as val from test_vector_types(NULL::VARCHAR[], false) tbl(c1) where c1 != [] and c1 != [NULL]
+----
+
+query I nosort result3
+select map_concat(val, val, val) from (
+	select map(c1, c1) as val from test_vector_types(NULL::VARCHAR[], false) tbl(c1) where c1 != [] and c1 != [NULL]
+)
+----
