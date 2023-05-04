@@ -377,6 +377,7 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 	auto &hfh = (HTTPFileHandle &)handle;
 
 	D_ASSERT(hfh.state);
+	lock_guard<mutex> lock(hfh.state->cached_files_mutex);
 	auto &cached_file = hfh.state->cached_files[hfh.path];
 	if (cached_file.data) {
 		memcpy(buffer, cached_file.data.get() + location, nr_bytes);
@@ -622,7 +623,6 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	auto client_context = FileOpener::TryGetClientContext(opener);
 
 	if (client_context->client_data->registered_url.find(path) != client_context->client_data->registered_url.end()) {
-		//! It's a bingo
 		lock_guard<mutex> lock(state->cached_files_mutex);
 		state->cached_files[path] = client_context->client_data->registered_url[path];
 		length = state->cached_files[path].length;

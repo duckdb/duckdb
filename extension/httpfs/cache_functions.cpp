@@ -53,6 +53,7 @@ void CacheRemoteFile::Function(ClientContext &context, TableFunctionInput &data,
 		}
 		client_config.set_variables["force_download"] = force_download;
 		auto hfh = (HTTPFileHandle *)fh.get();
+		lock_guard<mutex> lock(hfh->state->cached_files_mutex);
 		url_cache[url] = hfh->state->cached_files[url];
 
 	} else {
