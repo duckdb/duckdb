@@ -80,7 +80,7 @@ public:
 	virtual unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) = 0;
 
 	//! Serialize the meta information of the TableCatalogEntry a serializer
-	virtual void Serialize(Serializer &serializer) const;
+	void Serialize(Serializer &serializer) const;
 	//! Deserializes to a CreateTableInfo
 	static unique_ptr<CreateTableInfo> Deserialize(Deserializer &source, ClientContext &context);
 
@@ -103,6 +103,12 @@ public:
 	virtual TableStorageInfo GetStorageInfo(ClientContext &context) = 0;
 
 protected:
+	// This is used to serialize the entry by #Serialize(Serializer& ). It is virtual to allow
+	// Custom catalog implementations to override the default implementation. We can not make
+	// The Serialize method itself virtual as the logic is tightly coupled to the static
+	// Deserialize method.
+	virtual CreateTableInfo GetTableInfoForSerialization() const;
+
 	//! A list of columns that are part of this table
 	ColumnList columns;
 	//! A list of constraints that are part of this table
