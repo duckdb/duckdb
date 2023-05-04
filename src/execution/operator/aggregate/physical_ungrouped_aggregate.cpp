@@ -12,6 +12,7 @@
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/parallel/interrupt.hpp"
 #include <functional>
 #include "duckdb/execution/operator/aggregate/distinct_aggregate_data.hpp"
 
@@ -186,10 +187,10 @@ unique_ptr<LocalSinkState> PhysicalUngroupedAggregate::GetLocalSinkState(Executi
 	return make_uniq<UngroupedAggregateLocalState>(*this, children[0]->GetTypes(), gstate, context);
 }
 
-void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                              DataChunk &input) const {
-	auto &sink = lstate.Cast<UngroupedAggregateLocalState>();
-	auto &global_sink = state.Cast<UngroupedAggregateGlobalState>();
+void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, DataChunk &chunk,
+                                              OperatorSinkInput &input) const {
+	auto &sink = input.local_state.Cast<UngroupedAggregateLocalState>();
+	auto &global_sink = input.global_state.Cast<UngroupedAggregateGlobalState>();
 	D_ASSERT(distinct_data);
 	auto &distinct_state = *global_sink.distinct_state;
 	auto &distinct_info = *distinct_collection_info;
@@ -211,6 +212,7 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 		auto &radix_table = *distinct_data->radix_tables[table_idx];
 		auto &radix_global_sink = *distinct_state.radix_states[table_idx];
 		auto &radix_local_sink = *sink.radix_states[table_idx];
+		OperatorSinkInput sink_input {radix_global_sink, radix_local_sink, input.interrupt_state};
 
 		if (aggregate.filter) {
 			// The hashtable can apply a filter, but only on the payload
@@ -218,26 +220,25 @@ void PhysicalUngroupedAggregate::SinkDistinct(ExecutionContext &context, GlobalS
 
 			// Apply the filter before inserting into the hashtable
 			auto &filtered_data = sink.filter_set.GetFilterData(idx);
-			idx_t count = filtered_data.ApplyFilter(input);
+			idx_t count = filtered_data.ApplyFilter(chunk);
 			filtered_data.filtered_payload.SetCardinality(count);
 
-			radix_table.Sink(context, radix_global_sink, radix_local_sink, filtered_data.filtered_payload, empty_chunk,
-			                 distinct_filter);
+			radix_table.Sink(context, filtered_data.filtered_payload, sink_input, empty_chunk, distinct_filter);
 		} else {
-			radix_table.Sink(context, radix_global_sink, radix_local_sink, input, empty_chunk, distinct_filter);
+			radix_table.Sink(context, chunk, sink_input, empty_chunk, distinct_filter);
 		}
 	}
 }
 
-SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, GlobalSinkState &state,
-                                                LocalSinkState &lstate, DataChunk &input) const {
-	auto &sink = lstate.Cast<UngroupedAggregateLocalState>();
+SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, DataChunk &chunk,
+                                                OperatorSinkInput &input) const {
+	auto &sink = input.local_state.Cast<UngroupedAggregateLocalState>();
 
 	// perform the aggregation inside the local state
 	sink.Reset();
 
 	if (distinct_data) {
-		SinkDistinct(context, state, lstate, input);
+		SinkDistinct(context, chunk, input);
 	}
 
 	DataChunk &payload_chunk = sink.aggregate_input_chunk;
@@ -259,13 +260,13 @@ SinkResultType PhysicalUngroupedAggregate::Sink(ExecutionContext &context, Globa
 		// resolve the filter (if any)
 		if (aggregate.filter) {
 			auto &filtered_data = sink.filter_set.GetFilterData(aggr_idx);
-			auto count = filtered_data.ApplyFilter(input);
+			auto count = filtered_data.ApplyFilter(chunk);
 
 			sink.child_executor.SetChunk(filtered_data.filtered_payload);
 			payload_chunk.SetCardinality(count);
 		} else {
-			sink.child_executor.SetChunk(input);
-			payload_chunk.SetCardinality(input);
+			sink.child_executor.SetChunk(chunk);
+			payload_chunk.SetCardinality(chunk);
 		}
 
 #ifdef DEBUG
@@ -396,10 +397,17 @@ public:
 			//! Retrieve the stored data from the hashtable
 			while (true) {
 				output_chunk.Reset();
-				radix_table_p->GetData(temp_exec_context, output_chunk, *distinct_state.radix_states[table_idx],
-				                       *global_source_state, *local_source_state);
-				if (output_chunk.size() == 0) {
+
+				InterruptState interrupt_state;
+				OperatorSourceInput source_input {*global_source_state, *local_source_state, interrupt_state};
+				auto res = radix_table_p->GetData(temp_exec_context, output_chunk,
+				                                  *distinct_state.radix_states[table_idx], source_input);
+				if (res == SourceResultType::FINISHED) {
+					D_ASSERT(output_chunk.size() == 0);
 					break;
+				} else if (res == SourceResultType::BLOCKED) {
+					throw InternalException(
+					    "Unexpected interrupt from radix table GetData in UngroupedDistinctAggregateFinalizeTask");
 				}
 
 				// We dont need to resolve the filter, we already did this in Sink
@@ -450,7 +458,7 @@ public:
 
 public:
 	void Schedule() override {
-		vector<unique_ptr<Task>> tasks;
+		vector<shared_ptr<Task>> tasks;
 		tasks.push_back(make_uniq<UngroupedDistinctAggregateFinalizeTask>(pipeline->executor, shared_from_this(),
 		                                                                  gstate, context, op));
 		D_ASSERT(!tasks.empty());
@@ -474,7 +482,7 @@ public:
 	void Schedule() override {
 		auto &distinct_state = *gstate.distinct_state;
 		auto &distinct_data = *op.distinct_data;
-		vector<unique_ptr<Task>> tasks;
+		vector<shared_ptr<Task>> tasks;
 		for (idx_t table_idx = 0; table_idx < distinct_data.radix_tables.size(); table_idx++) {
 			distinct_data.radix_tables[table_idx]->ScheduleTasks(pipeline->executor, shared_from_this(),
 			                                                     *distinct_state.radix_states[table_idx], tasks);
@@ -533,18 +541,6 @@ SinkFinalizeType PhysicalUngroupedAggregate::Finalize(Pipeline &pipeline, Event 
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class UngroupedAggregateState : public GlobalSourceState {
-public:
-	UngroupedAggregateState() : finished(false) {
-	}
-
-	bool finished;
-};
-
-unique_ptr<GlobalSourceState> PhysicalUngroupedAggregate::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<UngroupedAggregateState>();
-}
-
 void VerifyNullHandling(DataChunk &chunk, AggregateState &state, const vector<unique_ptr<Expression>> &aggregates) {
 #ifdef DEBUG
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
@@ -559,14 +555,10 @@ void VerifyNullHandling(DataChunk &chunk, AggregateState &state, const vector<un
 #endif
 }
 
-void PhysicalUngroupedAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                         LocalSourceState &lstate) const {
+SourceResultType PhysicalUngroupedAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                     OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<UngroupedAggregateGlobalState>();
-	auto &state = (UngroupedAggregateState &)gstate_p;
 	D_ASSERT(gstate.finished);
-	if (state.finished) {
-		return;
-	}
 
 	// initialize the result chunk with the aggregate values
 	chunk.SetCardinality(1);
@@ -578,7 +570,8 @@ void PhysicalUngroupedAggregate::GetData(ExecutionContext &context, DataChunk &c
 		aggregate.function.finalize(state_vector, aggr_input_data, chunk.data[aggr_idx], 1, 0);
 	}
 	VerifyNullHandling(chunk, gstate.state, aggregates);
-	state.finished = true;
+
+	return SourceResultType::FINISHED;
 }
 
 string PhysicalUngroupedAggregate::ParamsToString() const {
