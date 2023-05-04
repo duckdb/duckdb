@@ -53,6 +53,14 @@
         "type": "scalar_function"
     },
     {
+        "name": "format_bytes",
+        "parameters": "bytes",
+        "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 16KB)",
+        "example": "format_bytes(1000 * 16)",
+        "type": "scalar_function",
+        "aliases": ["formatReadableDecimalSize"]
+    },
+    {
         "name": "hamming",
         "parameters": "str1,str2",
         "description": "The number of positions with different characters for 2 strings of equal length. Different case is considered different.",

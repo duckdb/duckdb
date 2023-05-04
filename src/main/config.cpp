@@ -14,6 +14,10 @@
 
 namespace duckdb {
 
+#ifdef DEBUG
+bool DBConfigOptions::debug_print_bindings = false;
+#endif
+
 #define DUCKDB_GLOBAL(_PARAM)                                                                                          \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::ResetGlobal,         \

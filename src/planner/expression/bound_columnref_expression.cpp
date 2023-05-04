@@ -1,8 +1,8 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
-#include "duckdb/common/types/hash.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/types/hash.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -35,11 +35,25 @@ bool BoundColumnRefExpression::Equals(const BaseExpression *other_p) const {
 	return other.binding == binding && other.depth == depth;
 }
 
+string BoundColumnRefExpression::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return binding.ToString();
+	}
+#endif
+	return Expression::GetName();
+}
+
 string BoundColumnRefExpression::ToString() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return binding.ToString();
+	}
+#endif
 	if (!alias.empty()) {
 		return alias;
 	}
-	return "#[" + to_string(binding.table_index) + "." + to_string(binding.column_index) + "]";
+	return binding.ToString();
 }
 
 void BoundColumnRefExpression::Serialize(FieldWriter &writer) const {
