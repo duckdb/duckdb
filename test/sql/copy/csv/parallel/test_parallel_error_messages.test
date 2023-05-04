@@ -47,6 +47,23 @@ SELECT * FROM read_csv('data/csv/error/mixedtypes.csv', parallel=false, sep=',',
 ----
 line 10001
 
+# the first error is on line 10001
+statement error
+SELECT * FROM read_csv('data/csv/error/mixedtypes_rn.csv', parallel=false, sep=',', columns={'h1': int, 'h2': varchar}, header=True)
+----
+line 10001
+
+# the first error is on line 10001
+statement error
+SELECT * FROM read_csv('data/csv/error/mixedtypes_rn.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
+----
+line 10001
+
+statement error
+SELECT * FROM read_csv('data/csv/error/mixedtypes_rn.csv', parallel=false, sep=',', buffer_size=100, columns={'h1': int, 'h2': varchar}, header=True)
+----
+line 10001
+
 statement error
 SELECT * FROM read_csv('data/csv/error/quotednewlines.csv', parallel=true, sep=',', buffer_size=100, columns={'h1': varchar, 'h2': varchar}, header=True)
 ----
