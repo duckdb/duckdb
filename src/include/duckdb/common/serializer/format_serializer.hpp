@@ -39,7 +39,7 @@ public:
 		SetTag(tag);
 		if (serialize_enum_as_string) {
 			// Use the enum serializer to lookup tostring function
-			auto str = EnumUtil::EnumToString(value);
+			auto str = EnumUtil::ToChars(value);
 			WriteValue(str);
 		} else {
 			// Use the underlying type

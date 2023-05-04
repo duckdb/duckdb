@@ -331,96 +331,6 @@ bool TypeIsInteger(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
 }
 
-string LogicalTypeIdToString(LogicalTypeId id) {
-	switch (id) {
-	case LogicalTypeId::BOOLEAN:
-		return "BOOLEAN";
-	case LogicalTypeId::TINYINT:
-		return "TINYINT";
-	case LogicalTypeId::SMALLINT:
-		return "SMALLINT";
-	case LogicalTypeId::INTEGER:
-		return "INTEGER";
-	case LogicalTypeId::BIGINT:
-		return "BIGINT";
-	case LogicalTypeId::HUGEINT:
-		return "HUGEINT";
-	case LogicalTypeId::UUID:
-		return "UUID";
-	case LogicalTypeId::UTINYINT:
-		return "UTINYINT";
-	case LogicalTypeId::USMALLINT:
-		return "USMALLINT";
-	case LogicalTypeId::UINTEGER:
-		return "UINTEGER";
-	case LogicalTypeId::UBIGINT:
-		return "UBIGINT";
-	case LogicalTypeId::DATE:
-		return "DATE";
-	case LogicalTypeId::TIME:
-		return "TIME";
-	case LogicalTypeId::TIMESTAMP:
-		return "TIMESTAMP";
-	case LogicalTypeId::TIMESTAMP_MS:
-		return "TIMESTAMP_MS";
-	case LogicalTypeId::TIMESTAMP_NS:
-		return "TIMESTAMP_NS";
-	case LogicalTypeId::TIMESTAMP_SEC:
-		return "TIMESTAMP_S";
-	case LogicalTypeId::TIMESTAMP_TZ:
-		return "TIMESTAMP WITH TIME ZONE";
-	case LogicalTypeId::TIME_TZ:
-		return "TIME WITH TIME ZONE";
-	case LogicalTypeId::FLOAT:
-		return "FLOAT";
-	case LogicalTypeId::DOUBLE:
-		return "DOUBLE";
-	case LogicalTypeId::DECIMAL:
-		return "DECIMAL";
-	case LogicalTypeId::VARCHAR:
-		return "VARCHAR";
-	case LogicalTypeId::BLOB:
-		return "BLOB";
-	case LogicalTypeId::CHAR:
-		return "CHAR";
-	case LogicalTypeId::INTERVAL:
-		return "INTERVAL";
-	case LogicalTypeId::SQLNULL:
-		return "NULL";
-	case LogicalTypeId::ANY:
-		return "ANY";
-	case LogicalTypeId::VALIDITY:
-		return "VALIDITY";
-	case LogicalTypeId::STRUCT:
-		return "STRUCT";
-	case LogicalTypeId::LIST:
-		return "LIST";
-	case LogicalTypeId::MAP:
-		return "MAP";
-	case LogicalTypeId::POINTER:
-		return "POINTER";
-	case LogicalTypeId::TABLE:
-		return "TABLE";
-	case LogicalTypeId::LAMBDA:
-		return "LAMBDA";
-	case LogicalTypeId::INVALID:
-		return "INVALID";
-	case LogicalTypeId::UNION:
-		return "UNION";
-	case LogicalTypeId::UNKNOWN:
-		return "UNKNOWN";
-	case LogicalTypeId::ENUM:
-		return "ENUM";
-	case LogicalTypeId::AGGREGATE_STATE:
-		return "AGGREGATE_STATE";
-	case LogicalTypeId::USER:
-		return "USER";
-	case LogicalTypeId::BIT:
-		return "BIT";
-	}
-	return "UNDEFINED";
-}
-
 string LogicalType::ToString() const {
 	auto alias = GetAlias();
 	if (!alias.empty()) {
@@ -492,7 +402,7 @@ string LogicalType::ToString() const {
 		return AggregateStateType::GetTypeName(*this);
 	}
 	default:
-		return LogicalTypeIdToString(id_);
+		return EnumUtil::ToString(id_);
 	}
 }
 // LCOV_EXCL_STOP

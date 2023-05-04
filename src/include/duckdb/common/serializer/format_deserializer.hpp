@@ -296,7 +296,7 @@ private:
 	inline typename std::enable_if<std::is_enum<T>::value, T>::type Read() {
 		if (deserialize_enum_from_string) {
 			auto str = ReadString();
-			return EnumUtil::StringToEnum<T>(str.c_str());
+			return EnumUtil::FromString<T>(str.c_str());
 		} else {
 			return (T)Read<typename std::underlying_type<T>::type>();
 		}

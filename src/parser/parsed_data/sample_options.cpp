@@ -1,23 +1,9 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
-
-string SampleMethodToString(SampleMethod method) {
-	switch (method) {
-	case SampleMethod::SYSTEM_SAMPLE:
-		return "System";
-	case SampleMethod::BERNOULLI_SAMPLE:
-		return "Bernoulli";
-	case SampleMethod::RESERVOIR_SAMPLE:
-		return "Reservoir";
-	default:
-		return "Unknown";
-	}
-}
 
 void SampleOptions::Serialize(Serializer &serializer) {
 	FieldWriter writer(serializer);

@@ -97,7 +97,7 @@ string SelectNode::ToString() const {
 		if (sample->is_percentage) {
 			result += "%";
 		}
-		result += " (" + SampleMethodToString(sample->method);
+		result += " (" + EnumUtil::ToString(sample->method);
 		if (sample->seed >= 0) {
 			result += ", " + std::to_string(sample->seed);
 		}

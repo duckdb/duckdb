@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -112,7 +113,7 @@ void DuckDBTypesFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 		output.SetValue(col++, count,
 		                internal_type == PhysicalType::INVALID ? Value() : Value::BIGINT(GetTypeIdSize(internal_type)));
 		// logical_type, VARCHAR
-		output.SetValue(col++, count, Value(LogicalTypeIdToString(type.id())));
+		output.SetValue(col++, count, Value(EnumUtil::ToString(type.id())));
 		// type_category, VARCHAR
 		string category;
 		switch (type.id()) {

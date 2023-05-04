@@ -457,8 +457,6 @@ struct AggregateStateType {
 	DUCKDB_API static const aggregate_state_t &GetStateType(const LogicalType &type);
 };
 
-DUCKDB_API string LogicalTypeIdToString(LogicalTypeId type);
-
 DUCKDB_API LogicalTypeId TransformStringToLogicalTypeId(const string &str);
 
 DUCKDB_API LogicalType TransformStringToLogicalType(const string &str);

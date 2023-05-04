@@ -140,8 +140,8 @@ SQLRETURN duckdb::FetchStmtResult(SQLHSTMT statement_handle, SQLSMALLINT fetch_o
 
 static void ValidateType(LogicalTypeId input, LogicalTypeId expected, duckdb::OdbcHandleStmt *stmt) {
 	if (input != expected) {
-		string msg = "Type mismatch error: received " + LogicalTypeIdToString(input) + ", but expected " +
-		             LogicalTypeIdToString(expected);
+		string msg = "Type mismatch error: received " + EnumUtil::ToString(input) + ", but expected " +
+		             EnumUtil::ToString(expected);
 		duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE, stmt->dbc->GetDataSourceName());
 		throw duckdb::OdbcException("ValidateType", SQL_ERROR, diag_rec);
 	}
