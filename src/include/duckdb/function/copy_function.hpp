@@ -97,6 +97,7 @@ typedef unique_ptr<PreparedBatchData> (*copy_prepare_batch_t)(ClientContext &con
                                                               unique_ptr<ColumnDataCollection> collection);
 typedef void (*copy_flush_batch_t)(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                                    PreparedBatchData &batch);
+typedef idx_t (*copy_desired_batch_size_t)(ClientContext &context, FunctionData &bind_data);
 
 class CopyFunction : public Function {
 public:
@@ -104,7 +105,7 @@ public:
 	    : Function(name), plan(nullptr), copy_to_bind(nullptr), copy_to_initialize_local(nullptr),
 	      copy_to_initialize_global(nullptr), copy_to_sink(nullptr), copy_to_combine(nullptr),
 	      copy_to_finalize(nullptr), execution_mode(nullptr), prepare_batch(nullptr), flush_batch(nullptr),
-	      serialize(nullptr), deserialize(nullptr), copy_from_bind(nullptr) {
+	      desired_batch_size(nullptr), serialize(nullptr), deserialize(nullptr), copy_from_bind(nullptr) {
 	}
 
 	//! Plan rewrite copy function
@@ -120,6 +121,7 @@ public:
 
 	copy_prepare_batch_t prepare_batch;
 	copy_flush_batch_t flush_batch;
+	copy_desired_batch_size_t desired_batch_size;
 
 	copy_to_serialize_t serialize;
 	copy_to_deserialize_t deserialize;
