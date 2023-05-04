@@ -1,0 +1,101 @@
+# name: test/sql/function/string/format_bytes.test
+# description: Test the to_hex/from_hex function
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT format_bytes(0);
+----
+0 bytes
+
+query I
+SELECT format_bytes(999);
+----
+999 bytes
+
+query I
+SELECT format_bytes(1000);
+----
+1KB
+
+query I
+SELECT pg_size_pretty(1000);
+----
+1KB
+
+query I
+SELECT formatReadableDecimalSize(1000);
+----
+1KB
+
+query I
+SELECT format_bytes(1000*1000-1);
+----
+999KB
+
+query I
+SELECT format_bytes(1000*1000);
+----
+1.0MB
+
+query I
+SELECT format_bytes(1000*1000 + 555555);
+----
+1.5MB
+
+query I
+SELECT format_bytes(1000*1000*1000-1);
+----
+999.9MB
+
+query I
+SELECT format_bytes(1000*1000*1000);
+----
+1.0GB
+
+query I
+SELECT format_bytes(1000::BIGINT*1000*1000*1000-1);
+----
+999.9GB
+
+query I
+SELECT format_bytes(1000::BIGINT*1000*1000*1000);
+----
+1.0TB
+
+query I
+SELECT format_bytes(1000::BIGINT*1000*1000*1000*1000-1);
+----
+999.9TB
+
+query I
+SELECT format_bytes(1000::BIGINT*1000*1000*1000*1000);
+----
+1.0PB
+
+query I
+SELECT format_bytes(9223372036854775807);
+----
+9223.3PB
+
+query I
+SELECT format_bytes(NULL);
+----
+NULL
+
+query I
+SELECT format_bytes(1);
+----
+1 byte
+
+query I
+SELECT format_bytes(-1);
+----
+-1 byte
+
+query I
+SELECT format_bytes(-9223372036854775808);
+----
+-9223.3PB

@@ -148,6 +148,8 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(ListFlattenFun),
 	DUCKDB_SCALAR_FUNCTION_SET(FloorFun),
 	DUCKDB_SCALAR_FUNCTION(FormatFun),
+	DUCKDB_SCALAR_FUNCTION_ALIAS(FormatreadabledecimalsizeFun),
+	DUCKDB_SCALAR_FUNCTION(FormatBytesFun),
 	DUCKDB_SCALAR_FUNCTION(FromBase64Fun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(FromBinaryFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(FromHexFun),

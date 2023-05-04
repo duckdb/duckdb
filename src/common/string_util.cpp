@@ -163,6 +163,11 @@ string StringUtil::BytesToHumanReadableString(idx_t bytes) {
 	megabytes -= gigabytes * 1000;
 	auto terabytes = gigabytes / 1000;
 	gigabytes -= terabytes * 1000;
+	auto petabytes = terabytes / 1000;
+	terabytes -= petabytes * 1000;
+	if (petabytes > 0) {
+		return to_string(petabytes) + "." + to_string(terabytes / 100) + "PB";
+	}
 	if (terabytes > 0) {
 		return to_string(terabytes) + "." + to_string(gigabytes / 100) + "TB";
 	} else if (gigabytes > 0) {
@@ -172,7 +177,7 @@ string StringUtil::BytesToHumanReadableString(idx_t bytes) {
 	} else if (kilobytes > 0) {
 		return to_string(kilobytes) + "KB";
 	} else {
-		return to_string(bytes) + " bytes";
+		return to_string(bytes) + (bytes == 1 ? " byte" : " bytes");
 	}
 }
 
