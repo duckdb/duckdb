@@ -72,13 +72,13 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	      py::arg("connection") = py::none())
 	    .def("duplicate", &PyConnectionWrapper::Cursor, "Create a duplicate of the current connection",
 	         py::arg("connection") = py::none());
-	m.def("register_scalar_udf", &PyConnectionWrapper::RegisterScalarUDF,
-	      "Register a scalar UDF so it can be used in queries", py::arg("name"), py::arg("function"),
-	      py::arg("return_type") = py::none(), py::arg("parameters") = py::none(), py::kw_only(),
-	      py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0, py::arg("exception_handling") = 0,
-	      py::arg("connection") = py::none());
+	m.def("create_function", &PyConnectionWrapper::RegisterScalarUDF,
+	      "Create a DuckDB function out of the passing in python function so it can be used in queries",
+	      py::arg("name"), py::arg("function"), py::arg("return_type") = py::none(), py::arg("parameters") = py::none(),
+	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0,
+	      py::arg("exception_handling") = 0, py::arg("connection") = py::none());
 
-	m.def("unregister_udf", &PyConnectionWrapper::UnregisterUDF, "Remove a previously registered function",
+	m.def("remove_function", &PyConnectionWrapper::UnregisterUDF, "Remove a previously created function",
 	      py::arg("name"), py::arg("connection") = py::none());
 
 	DefineMethod({"sqltype", "dtype", "type"}, m, &PyConnectionWrapper::Type, "Create a type object from 'type_str'",
