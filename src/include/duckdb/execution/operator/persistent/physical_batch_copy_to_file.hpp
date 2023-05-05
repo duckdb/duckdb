@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/physical_copy_to_file.hpp
+// duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -17,27 +17,18 @@
 namespace duckdb {
 
 //! Copy the contents of a query into a table
-class PhysicalCopyToFile : public PhysicalOperator {
+class PhysicalBatchCopyToFile : public PhysicalOperator {
 public:
-	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::COPY_TO_FILE;
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::BATCH_COPY_TO_FILE;
 
 public:
-	PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function, unique_ptr<FunctionData> bind_data,
-	                   idx_t estimated_cardinality);
+	PhysicalBatchCopyToFile(vector<LogicalType> types, CopyFunction function, unique_ptr<FunctionData> bind_data,
+	                        idx_t estimated_cardinality);
 
 	CopyFunction function;
 	unique_ptr<FunctionData> bind_data;
 	string file_path;
 	bool use_tmp_file;
-	FilenamePattern filename_pattern;
-	bool overwrite_or_ignore;
-	bool parallel;
-	bool per_thread_output;
-
-	bool partition_output;
-	vector<idx_t> partition_columns;
-	vector<string> names;
-	vector<LogicalType> expected_types;
 
 public:
 	// Source interface
@@ -55,19 +46,23 @@ public:
 	                          GlobalSinkState &gstate) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+	void NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const override;
+
+	bool RequiresBatchIndex() const override {
+		return true;
+	}
 
 	bool IsSink() const override {
 		return true;
 	}
 
-	bool SinkOrderDependent() const override {
+	bool ParallelSink() const override {
 		return true;
 	}
 
-	bool ParallelSink() const override {
-		return per_thread_output || partition_output || parallel;
-	}
-
-	static void MoveTmpFile(ClientContext &context, const string &tmp_file_path);
+private:
+	void PrepareBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t batch_index,
+	                      unique_ptr<ColumnDataCollection> collection) const;
+	void FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const;
 };
 } // namespace duckdb

@@ -125,15 +125,15 @@ select count(distinct row_group_id) < 20 from pragma_storage_info('integers3');
 ----
 true
 
-query IIIII nosort full_match3
+query IIIII
 SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM v3
 ----
-261256463520	0	802815	602816	602816
+348499650000	0	989999	700000	700000
 
-query IIIII nosort full_match3
+query IIIII
 SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM integers3
 ----
-261256463520	0	802815	602816	602816
+348499650000	0	989999	700000	700000
 
 query I
 SELECT * FROM v3 LIMIT 5 OFFSET 9999
