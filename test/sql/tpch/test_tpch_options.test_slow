@@ -136,7 +136,7 @@ statement ok
 ATTACH DATABASE ':memory:' AS db1;
 
 statement ok
-CALL dbgen(sf=0.01, catalog='db1');
+CALL dbgen(sf=1, catalog='db1');
 
 foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
 
