@@ -17,26 +17,25 @@ import java.time.OffsetTime;
 import java.util.Calendar;
 import java.util.UUID;
 
-public class DuckDBVector {
+class DuckDBVector {
 	// Constant to construct BigDecimals from hugeint_t
 	private final static BigDecimal ULONG_MULTIPLIER = new BigDecimal("18446744073709551616");
 
-	private final DuckDBColumnTypeMetaData meta;
-
-	public DuckDBVector(String duckdb_type, int length,  boolean[] nullmask) {
+	DuckDBVector(String duckdb_type, int length, boolean[] nullmask) {
 		super();
 		this.duckdb_type = DuckDBResultSetMetaData.TypeNameToType(duckdb_type);
 		this.meta = this.duckdb_type == DuckDBColumnType.DECIMAL ? DuckDBColumnTypeMetaData.parseColumnTypeMetadata(duckdb_type) : null;
 		this.length = length;
 		this.nullmask = nullmask;
 	}
+	private final DuckDBColumnTypeMetaData meta;
 	protected DuckDBColumnType duckdb_type;
 	protected int length;
 	protected boolean[] nullmask;
 	protected ByteBuffer constlen_data = null;
 	protected Object[] varlen_data = null;
 
-	public Object getObject(int columnIndex) throws SQLException {
+	Object getObject(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
@@ -171,14 +170,14 @@ public class DuckDBVector {
 		return UUID.fromString(o.toString());
 	}
 
-	public String getLazyString(int idx) {
+	String getLazyString(int idx) {
 		if (check_and_null(idx)) {
 			return null;
 		}
 		return (String) varlen_data[idx];
 	}
 
-	public Array getArray(int columnIndex) throws SQLException {
+	Array getArray(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
@@ -188,7 +187,7 @@ public class DuckDBVector {
 		throw new SQLFeatureNotSupportedException("getArray");
 	}
 
-	public Blob getBlob(int columnIndex) throws SQLException {
+	Blob getBlob(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
@@ -199,7 +198,7 @@ public class DuckDBVector {
 		throw new SQLFeatureNotSupportedException("getBlob");
 	}
 
-	public JsonNode getJsonObject(int idx) {
+	JsonNode getJsonObject(int idx) {
 		if (check_and_null(idx)) {
 			return null;
 		}
@@ -207,7 +206,7 @@ public class DuckDBVector {
 		return result == null ? null : new JsonNode(result);
 	}
 
-	public Date getDate(int idx) {
+	Date getDate(int idx) {
 		if (check_and_null(idx)) {
 			return null;
 		}
@@ -223,14 +222,14 @@ public class DuckDBVector {
 		}
 	}
 
-	public OffsetTime getOffsetTime(int columnIndex) {
+	OffsetTime getOffsetTime(int columnIndex) {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
 		return DuckDBTimestamp.toOffsetTime(getbuf(columnIndex, 8).getLong());
 	}
 
-	public Time getTime(int idx) {
+	Time getTime(int idx) {
 		// TODO: load from native format
 		String string_value = getLazyString(idx);
 		if (string_value == null) {
@@ -243,7 +242,7 @@ public class DuckDBVector {
 		}
 	}
 
-	public Boolean getBoolean(int idx) throws SQLException {
+	Boolean getBoolean(int idx) throws SQLException {
 		if (check_and_null(idx)) {
 			return false;
 		}
@@ -269,7 +268,7 @@ public class DuckDBVector {
 		return nullmask[columnIndex];
 	}
 
-	public long getLong(int columnIndex) throws SQLException {
+	long getLong(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
@@ -283,7 +282,7 @@ public class DuckDBVector {
 		return Long.parseLong(o.toString());
 	}
 
-	public int getInt(int columnIndex) throws SQLException {
+	int getInt(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
@@ -297,7 +296,7 @@ public class DuckDBVector {
 		return Integer.parseInt(o.toString());
 	}
 
-	public short getUint8(int columnIndex) throws SQLException {
+	short getUint8(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
@@ -309,7 +308,7 @@ public class DuckDBVector {
 		throw new SQLFeatureNotSupportedException("getUint8");
 	}
 
-	public long getUint32(int columnIndex) throws SQLException {
+	long getUint32(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
@@ -322,7 +321,7 @@ public class DuckDBVector {
 		throw new SQLFeatureNotSupportedException("getUint32");
 	}
 
-	public int getUint16(int columnIndex) throws SQLException {
+	int getUint16(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
@@ -335,7 +334,7 @@ public class DuckDBVector {
 		throw new SQLFeatureNotSupportedException("getUint16");
 	}
 
-	public BigInteger getUint64(int columnIndex) throws SQLException {
+	BigInteger getUint64(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return BigInteger.ZERO;
 		}
@@ -351,7 +350,7 @@ public class DuckDBVector {
 		throw new SQLFeatureNotSupportedException("getUint64");
 	}
 
-	public double getDouble(int columnIndex) throws SQLException {
+	double getDouble(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return Double.NaN;
 		}
@@ -365,7 +364,7 @@ public class DuckDBVector {
 		return Double.parseDouble(o.toString());
 	}
 
-	public byte getByte(int columnIndex) throws SQLException {
+	byte getByte(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
@@ -379,7 +378,7 @@ public class DuckDBVector {
 		return Byte.parseByte(o.toString());
 	}
 
-	public short getShort(int columnIndex) throws SQLException {
+	short getShort(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
@@ -393,7 +392,7 @@ public class DuckDBVector {
 		return Short.parseShort(o.toString());
 	}
 
-	public BigInteger getHugeint(int columnIndex) throws SQLException {
+	BigInteger getHugeint(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return BigInteger.ZERO;
 		}
@@ -429,7 +428,7 @@ public class DuckDBVector {
 		return duckdb_type == columnType;
 	}
 
-	public Timestamp getTimestamp(int columnIndex, Calendar cal) throws SQLException {
+	Timestamp getTimestamp(int columnIndex, Calendar cal) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
@@ -451,7 +450,7 @@ public class DuckDBVector {
 		return Timestamp.valueOf(o.toString());
 	}
 
-	public LocalDateTime getLocalDateTime(int columnIndex) throws SQLException {
+	LocalDateTime getLocalDateTime(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
