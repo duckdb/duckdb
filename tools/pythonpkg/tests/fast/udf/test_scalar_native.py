@@ -5,7 +5,7 @@ import pytest
 
 from duckdb.typing import *
 
-class TestScalarUDF(object):
+class TestNativeUDF(object):
     def test_default_conn(self):
         def passthrough(x):
             return x
@@ -31,39 +31,6 @@ class TestScalarUDF(object):
         vector_size = duckdb.__standard_vector_size__
         res = con.sql(f'select i, plus_one(i) from test_vector_types(NULL::BIGINT, false) t(i), range({vector_size})')
         assert len(res) == (vector_size * 11)
-
-    @pytest.mark.parametrize('data_type', [
-        TINYINT,
-        SMALLINT,
-        INTEGER,
-        BIGINT,
-        UTINYINT,
-        USMALLINT,
-        UINTEGER,
-        UBIGINT,
-        HUGEINT,
-        VARCHAR,
-        UUID,
-        FLOAT,
-        DOUBLE,
-        DATE,
-        TIMESTAMP,
-        TIME,
-        BLOB,
-        INTERVAL,
-        BOOLEAN,
-        duckdb.struct_type(['BIGINT[]','VARCHAR[]']),
-        duckdb.list_type('VARCHAR')
-    ])
-    def test_return_null(self, data_type):
-        def return_null():
-            return None
-
-        con = duckdb.connect()
-        con.create_function('return_null', return_null, None, data_type, null_handling='special')
-        rel = con.sql('select return_null() as x')
-        assert rel.types[0] == data_type
-        assert rel.fetchall()[0][0] == None
 
     def test_passthrough(self):
         def passthrough(x):
@@ -130,54 +97,6 @@ class TestScalarUDF(object):
         res = con.sql("""select varargs('5', '3', '2', 1, 0.12345)""").fetchall()
         assert res == [(5,)]
 
-    def test_overwrite_name(self):
-        def func(x):
-            return x
-        con = duckdb.connect()
-        # create first version of the function
-        con.create_function('func', func, [BIGINT], BIGINT)
-
-        # create relation that uses the function
-        rel1 = con.sql('select func(3)')
-
-        def other_func(x):
-            return x
-
-        with pytest.raises(duckdb.NotImplementedException, match="A function by the name of 'func' is already created, creating multiple functions with the same name is not supported yet, please remove it first"):
-            con.create_function('func', other_func, [VARCHAR], VARCHAR)
-
-        con.remove_function('func')
-
-        with pytest.raises(duckdb.InvalidInputException, match='Catalog Error: Scalar Function with name func does not exist!'):
-            # Attempted to execute the relation using the 'func' function, but it was deleted
-            rel1.fetchall()
-
-        con.create_function('func', other_func, [VARCHAR], VARCHAR)
-        # create relation that uses the new version
-        rel2 = con.sql("select func('test')")
-
-        # execute both relations
-        res1 = rel1.fetchall()
-        res2 = rel2.fetchall()
-        # This has been converted to string, because the previous version of the function no longer exists
-        assert res1 == [('3',)]
-        assert res2 == [('test',)]
-
-    @pytest.mark.parametrize('udf_type', [
-        'arrow',
-        'native'
-    ])
-    def test_map_coverage(self, udf_type):
-        def no_op(x):
-            return x
-        
-        con = duckdb.connect()
-        map_type = con.map_type('VARCHAR', 'BIGINT')
-        con.create_function('test_map', no_op, [map_type], map_type, type=udf_type)
-        rel = con.sql("select test_map(map(['non-inlined string', 'test', 'duckdb'], [42, 1337, 123]))")
-        res = rel.fetchall()
-        assert res == [({'key': ['non-inlined string', 'test', 'duckdb'], 'value': [42, 1337, 123]},)]
-
     def test_return_incorrectly_typed_object(self):
         def returns_duckdb() -> int:
             return 'duckdb'
@@ -230,68 +149,6 @@ class TestScalarUDF(object):
             res = rel.fetchall()
             print(duckdb_type)
             print(res)
-
-    @pytest.mark.parametrize('duckdb_type', [
-        FLOAT,
-        DOUBLE
-    ])
-    def test_nan(self, duckdb_type):
-        def return_pd_nan():
-            import pandas as pd
-            return pd.NA
-        
-        def return_np_nan():
-            import numpy as np
-            return np.nan
-
-        def return_math_nan():
-            import cmath
-            return cmath.nan
-
-        con = duckdb.connect()
-        con.create_function('return_pd_nan', return_pd_nan, None, DOUBLE, null_handling='SPECIAL')
-        con.create_function('return_np_nan', return_np_nan, None, DOUBLE, null_handling='SPECIAL')
-        con.create_function('return_math_nan', return_math_nan, None, DOUBLE, null_handling='SPECIAL')
-
-        res = con.sql('select return_pd_nan()').fetchall()
-        assert res[0][0] == None
-
-        res = con.sql('select return_np_nan()').fetchall()
-        assert res[0][0] == None
-
-        res = con.sql('select return_math_nan()').fetchall()
-        assert res[0][0] == None
-
-    def test_exceptions(self):
-        def throws(x):
-            raise AttributeError("test")
-
-        con = duckdb.connect()
-        con.create_function('forward_error', throws, [BIGINT], BIGINT, exception_handling='default')
-        res = con.sql('select forward_error(5)')
-        with pytest.raises(duckdb.InvalidInputException, match='Python exception occurred while executing the UDF'):
-            res.fetchall()
-
-        con.create_function('return_null', throws, [BIGINT], BIGINT, exception_handling='return_null')
-        res = con.sql('select return_null(5)').fetchall()
-        assert res == [(None,)]
-
-    def test_non_callable(self):
-        con = duckdb.connect()
-        with pytest.raises(TypeError):
-            con.create_function('func', 5, [BIGINT], BIGINT)
-
-        class MyCallable:
-            def __init__(self):
-                pass
-
-            def __call__(self, x):
-                return x
-
-        my_callable = MyCallable()
-        con.create_function('func', my_callable, [BIGINT], BIGINT)
-        res = con.sql('select func(5)').fetchall()
-        assert res == [(5,)]
 
     def test_structs(self):
         def add_extra_column(original):

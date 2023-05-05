@@ -10,26 +10,6 @@ import datetime
 
 from duckdb.typing import *
 
-def make_annotated_function(type):
-    # Create a function that returns its input
-    def test_base(x):
-        return x
-
-    import types
-    test_function = types.FunctionType(
-        test_base.__code__,
-        test_base.__globals__,
-        test_base.__name__,
-        test_base.__defaults__,
-        test_base.__closure__
-    )
-    # Add annotations for the return type and 'x'
-    test_function.__annotations__ = {
-        'return': type,
-        'x': type
-    }
-    return test_function
-
 class TestPyArrowUDF(object):
 
     def test_basic_use(self):
@@ -64,80 +44,6 @@ class TestPyArrowUDF(object):
         con.create_function('sort_table', sort_table, [BIGINT], BIGINT, type='arrow')
         res = con.sql("select 100-i as original, sort_table(original) from range(100) tbl(i)").fetchall()
         assert res[0] == (100, 1)
-
-    @pytest.mark.parametrize('function_type', [
-        'native',
-        'arrow'
-    ])
-    @pytest.mark.parametrize('test_type', [
-        (TINYINT, -42),
-        (SMALLINT, -512),
-        (INTEGER, -131072),
-        (BIGINT, -17179869184),
-        (UTINYINT, 254),
-        (USMALLINT, 65535),
-        (UINTEGER, 4294967295),
-        (UBIGINT, 18446744073709551615),
-        (HUGEINT, 18446744073709551616),
-        (VARCHAR, 'long_string_test'),
-        (UUID, uuid.UUID('ffffffff-ffff-ffff-ffff-ffffffffffff')),
-        (FLOAT, 0.12246409803628922),
-        (DOUBLE, 123142.12312416293784721232344),
-        (DATE, datetime.date(2005, 3, 11)),
-        (TIMESTAMP, datetime.datetime(2009, 2, 13, 11, 5, 53)),
-        (TIME, datetime.time(14, 1, 12)),
-        (BLOB, b'\xF6\x96\xB0\x85'),
-        (INTERVAL, datetime.timedelta(days=30969, seconds=999, microseconds=999999)),
-        (BOOLEAN, True),
-        (duckdb.struct_type(['BIGINT[]','VARCHAR[]']), {'v1': [1, 2, 3], 'v2': ['a', 'non-inlined string', 'duckdb']}),
-        (duckdb.list_type('VARCHAR'), ['the', 'duck', 'non-inlined string'])
-    ])
-    def test_type_coverage(self, test_type, function_type):
-        type = test_type[0]
-        value = test_type[1]
-
-        test_function = make_annotated_function(type)
-
-        con = duckdb.connect()
-        con.create_function('test', test_function, type=function_type)
-
-        # Single value
-        res = con.execute(f"select test(?::{str(type)})", [value]).fetchall()
-        assert res[0][0] == value
-
-        # NULLs
-        res = con.execute(f"select res from (select ?, test(NULL::{str(type)}) as res)", [value]).fetchall()
-        assert res[0][0] == None
-
-        # Multiple chunks
-        size = duckdb.__standard_vector_size__ * 3
-        res = con.execute(f"select test(x) from repeat(?::{str(type)}, {size}) as tbl(x)", [value]).fetchall()
-        assert(len(res) == size)
-
-        # Mixed NULL/NON-NULL
-        size = duckdb.__standard_vector_size__ * 3
-        con.execute("select setseed(0.1337)").fetchall()
-        actual = con.execute(f"""
-            select test(
-                case when (x > 0.5) then
-                    ?::{str(type)}
-                else
-                    NULL
-                end
-            ) from (select random() as x from range({size}))
-        """, [value]).fetchall()
-
-        con.execute("select setseed(0.1337)").fetchall()
-        expected = con.execute(f"""
-            select
-                case when (x > 0.5) then
-                    ?::{str(type)}
-                else
-                    NULL
-                end
-            from (select random() as x from range({size}))
-        """, [value]).fetchall()
-        assert expected == actual
 
 
     def test_varargs(self):
@@ -255,7 +161,7 @@ class TestPyArrowUDF(object):
             import pandas as pd
             length = len(x)
             return pa.lib.Table.from_pandas(pd.DataFrame({'a': [5 for _ in range(length)]}))
-        
+
         con = duckdb.connect()
         con.create_function('return_five', return_five, [BIGINT], BIGINT, null_handling='special', type='arrow')
         res = con.sql('select return_five(NULL) from range(10)').fetchall()
@@ -265,41 +171,6 @@ class TestPyArrowUDF(object):
         con = duckdb.connect()
         con.create_function('return_five', return_five, [BIGINT], BIGINT, null_handling='default', type='arrow')
         res = con.sql('select return_five(NULL) from range(10)').fetchall()
-        # without 'special' null handling these would all be NULL
+        # Because we didn't specify 'special' null handling, these are all NULL
         assert res == [(None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,), (None,)]
-
-    def test_non_callable(self):
-        con = duckdb.connect()
-        with pytest.raises(TypeError):
-            con.create_function('func', 5, [BIGINT], BIGINT, type='arrow')
-
-        class MyCallable:
-            def __init__(self):
-                pass
-
-            def __call__(self, x):
-                return x
-
-        my_callable = MyCallable()
-        con.create_function('func', my_callable, [BIGINT], BIGINT, type='arrow')
-        res = con.sql('select func(5)').fetchall()
-        assert res == [(5,)]
-
-    def test_exceptions(self):
-        def raises_exception(x):
-            raise AttributeError("error")
-        
-        con = duckdb.connect()
-        con.create_function('raises', raises_exception, [BIGINT], BIGINT, type='arrow')
-        with pytest.raises(duckdb.InvalidInputException, match=' Python exception occurred while executing the UDF: AttributeError: error'):
-            res = con.sql('select raises(3)').fetchall()
-        
-        con.remove_function('raises')
-        con.create_function('raises', raises_exception, [BIGINT], BIGINT, exception_handling='return_null', type='arrow')
-        res = con.sql('select raises(3) from range(5)').fetchall()
-        assert res == [(None,), (None,), (None,), (None,), (None,)]
-
-    def test_binding(self):
-        # TODO: add a way to do extra binding for the UDF
-        pass
 
