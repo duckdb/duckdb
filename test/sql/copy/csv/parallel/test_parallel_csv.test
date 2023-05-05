@@ -27,3 +27,29 @@ select * from read_csv_auto('data/csv/dirty_line.csv', parallel = false)
 ----
 1.5	a	3
 2.5	b	4
+
+query II
+select * from read_csv_auto('data/csv/null_string.csv', parallel = true, nullstr="null")
+----
+1	NULL
+NULL	2
+
+query II
+select * from read_csv_auto('data/csv/null_string.csv', parallel = true)
+----
+a	b
+1	null
+null	2
+
+
+query II
+explain select * from read_csv_auto('data/csv/null_string.csv', parallel = true, nullstr="null")
+----
+physical_plan	<REGEX>:.*MULTI.*
+
+
+query II
+select * from read_csv_auto('data/csv/null_string.csv', parallel = false, nullstr="null")
+----
+1	NULL
+NULL	2
