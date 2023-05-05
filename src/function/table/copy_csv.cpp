@@ -7,9 +7,9 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
-#include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include <limits>
 
 namespace duckdb {
@@ -77,6 +77,14 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 	bind_data->Finalize();
 	bind_data->is_simple = bind_data->options.delimiter.size() == 1 && bind_data->options.escape.size() == 1 &&
 	                       bind_data->options.quote.size() == 1;
+	if (bind_data->is_simple) {
+		bind_data->requires_quotes = unique_ptr<bool[]>(new bool[256]);
+		memset(bind_data->requires_quotes.get(), 0, sizeof(bool) * 256);
+		bind_data->requires_quotes['\n'] = true;
+		bind_data->requires_quotes['\r'] = true;
+		bind_data->requires_quotes[bind_data->options.delimiter[0]] = true;
+		bind_data->requires_quotes[bind_data->options.quote[0]] = true;
+	}
 	return std::move(bind_data);
 }
 
@@ -143,9 +151,10 @@ static bool RequiresQuotes(WriteCSVData &csv_data, const char *str, idx_t len) {
 	}
 	if (csv_data.is_simple) {
 		// simple CSV: check for newlines, quotes and delimiter all at once
+		auto str_data = reinterpret_cast<const_data_ptr_t>(str);
 		for (idx_t i = 0; i < len; i++) {
-			if (str[i] == '\n' || str[i] == '\r' || str[i] == options.quote[0] || str[i] == options.delimiter[0]) {
-				// newline, write a quoted string
+			if (csv_data.requires_quotes[str_data[i]]) {
+				// this byte requires quotes - write a quoted string
 				return true;
 			}
 		}
@@ -237,7 +246,7 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-struct LocalReadCSVData : public LocalFunctionData {
+struct LocalWriteCSVData : public LocalFunctionData {
 	//! The thread-local buffer to write data into
 	BufferedSerializer serializer;
 	//! A chunk with VARCHAR columns to cast intermediates into
@@ -264,8 +273,8 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 };
 
 static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &context, FunctionData &bind_data) {
-	auto &csv_data = (WriteCSVData &)bind_data;
-	auto local_data = make_uniq<LocalReadCSVData>();
+	auto &csv_data = bind_data.Cast<WriteCSVData>();
+	auto local_data = make_uniq<LocalWriteCSVData>();
 
 	// create the chunk with VARCHAR types
 	vector<LogicalType> types;
@@ -277,7 +286,7 @@ static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &c
 
 static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data,
                                                                const string &file_path) {
-	auto &csv_data = (WriteCSVData &)bind_data;
+	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &options = csv_data.options;
 	auto global_data = make_uniq<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path,
 	                                                 FileSystem::GetFileOpener(context), options.compression);
@@ -299,17 +308,12 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	return std::move(global_data);
 }
 
-static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
-                         LocalFunctionData &lstate, DataChunk &input) {
-	auto &csv_data = (WriteCSVData &)bind_data;
+static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_data, DataChunk &cast_chunk,
+                                  BufferedSerializer &writer, DataChunk &input) {
+	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &options = csv_data.options;
-	auto &local_data = (LocalReadCSVData &)lstate;
-	auto &global_state = (GlobalWriteCSVData &)gstate;
-
-	// write data into the local buffer
 
 	// first cast the columns of the chunk to varchar
-	auto &cast_chunk = local_data.cast_chunk;
 	cast_chunk.Reset();
 	cast_chunk.SetCardinality(input);
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
@@ -332,12 +336,11 @@ static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, Glo
 			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
 		} else {
 			// non varchar column, perform the cast
-			VectorOperations::Cast(context.client, input.data[col_idx], cast_chunk.data[col_idx], input.size());
+			VectorOperations::Cast(context, input.data[col_idx], cast_chunk.data[col_idx], input.size());
 		}
 	}
 
 	cast_chunk.Flatten();
-	auto &writer = local_data.serializer;
 	// now loop over the vectors and output the values
 	for (idx_t row_idx = 0; row_idx < cast_chunk.size(); row_idx++) {
 		// write values
@@ -353,16 +356,27 @@ static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, Glo
 
 			// non-null value, fetch the string value from the cast chunk
 			auto str_data = FlatVector::GetData<string_t>(cast_chunk.data[col_idx]);
-			auto str_value = str_data[row_idx];
 			// FIXME: we could gain some performance here by checking for certain types if they ever require quotes
 			// (e.g. integers only require quotes if the delimiter is a number, decimals only require quotes if the
 			// delimiter is a number or "." character)
-			WriteQuotedString(writer, csv_data, str_value.GetData(), str_value.GetSize(),
+			WriteQuotedString(writer, csv_data, str_data[row_idx].GetData(), str_data[row_idx].GetSize(),
 			                  csv_data.options.force_quote[col_idx]);
 		}
 		writer.WriteBufferData(csv_data.newline);
 	}
+}
+
+static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                         LocalFunctionData &lstate, DataChunk &input) {
+	auto &csv_data = bind_data.Cast<WriteCSVData>();
+	auto &local_data = lstate.Cast<LocalWriteCSVData>();
+	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
+
+	// write data into the local buffer
+	WriteCSVChunkInternal(context.client, bind_data, local_data.cast_chunk, local_data.serializer, input);
+
 	// check if we should flush what we have currently written
+	auto &writer = local_data.serializer;
 	if (writer.blob.size >= csv_data.flush_size) {
 		global_state.WriteData(writer.blob.data.get(), writer.blob.size);
 		writer.Reset();
@@ -374,8 +388,8 @@ static void WriteCSVSink(ExecutionContext &context, FunctionData &bind_data, Glo
 //===--------------------------------------------------------------------===//
 static void WriteCSVCombine(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
                             LocalFunctionData &lstate) {
-	auto &local_data = (LocalReadCSVData &)lstate;
-	auto &global_state = (GlobalWriteCSVData &)gstate;
+	auto &local_data = lstate.Cast<LocalWriteCSVData>();
+	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 	auto &writer = local_data.serializer;
 	// flush the local writer
 	if (writer.blob.size > 0) {
@@ -388,21 +402,61 @@ static void WriteCSVCombine(ExecutionContext &context, FunctionData &bind_data, 
 // Finalize
 //===--------------------------------------------------------------------===//
 void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
-	auto &global_state = (GlobalWriteCSVData &)gstate;
+	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
 
 	global_state.handle->Close();
 	global_state.handle.reset();
 }
 
 //===--------------------------------------------------------------------===//
-// Parallel
+// Execution Mode
 //===--------------------------------------------------------------------===//
-bool WriteCSVIsParallel(ClientContext &context, FunctionData &bind_data) {
-	auto &config = DBConfig::GetConfig(context);
-	if (config.options.preserve_insertion_order) {
-		return false;
+CopyFunctionExecutionMode WriteCSVExecutionMode(bool preserve_insertion_order, bool supports_batch_index) {
+	if (!preserve_insertion_order) {
+		return CopyFunctionExecutionMode::PARALLEL_COPY_TO_FILE;
 	}
-	return true;
+	if (supports_batch_index) {
+		return CopyFunctionExecutionMode::BATCH_COPY_TO_FILE;
+	}
+	return CopyFunctionExecutionMode::REGULAR_COPY_TO_FILE;
+}
+//===--------------------------------------------------------------------===//
+// Prepare Batch
+//===--------------------------------------------------------------------===//
+struct WriteCSVBatchData : public PreparedBatchData {
+	//! The thread-local buffer to write data into
+	BufferedSerializer serializer;
+};
+
+unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, FunctionData &bind_data,
+                                                   GlobalFunctionData &gstate,
+                                                   unique_ptr<ColumnDataCollection> collection) {
+	auto &csv_data = bind_data.Cast<WriteCSVData>();
+
+	// create the cast chunk with VARCHAR types
+	vector<LogicalType> types;
+	types.resize(csv_data.options.name_list.size(), LogicalType::VARCHAR);
+	DataChunk cast_chunk;
+	cast_chunk.Initialize(Allocator::Get(context), types);
+
+	auto batch = make_uniq<WriteCSVBatchData>();
+	// write CSV chunks to the batch data
+	for (auto &chunk : collection->Chunks()) {
+		WriteCSVChunkInternal(context, bind_data, cast_chunk, batch->serializer, chunk);
+	}
+	return std::move(batch);
+}
+
+//===--------------------------------------------------------------------===//
+// Flush Batch
+//===--------------------------------------------------------------------===//
+void WriteCSVFlushBatch(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                        PreparedBatchData &batch) {
+	auto &csv_batch = batch.Cast<WriteCSVBatchData>();
+	auto &global_state = gstate.Cast<GlobalWriteCSVData>();
+	auto &writer = csv_batch.serializer;
+	global_state.WriteData(writer.blob.data.get(), writer.blob.size);
+	writer.Reset();
 }
 
 void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
@@ -413,7 +467,9 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.copy_to_sink = WriteCSVSink;
 	info.copy_to_combine = WriteCSVCombine;
 	info.copy_to_finalize = WriteCSVFinalize;
-	info.parallel = WriteCSVIsParallel;
+	info.execution_mode = WriteCSVExecutionMode;
+	info.prepare_batch = WriteCSVPrepareBatch;
+	info.flush_batch = WriteCSVFlushBatch;
 
 	info.copy_from_bind = ReadCSVBind;
 	info.copy_from_function = ReadCSVTableFunction::GetFunction();

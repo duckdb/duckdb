@@ -108,7 +108,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, DataChunk &chunk, 
 	if (max_cardinality < chunk.size()) {
 		chunk.SetCardinality(max_cardinality);
 	}
-	state.data.Append(chunk, input.local_state.batch_index);
+	state.data.Append(chunk, state.partition_info.batch_index.GetIndex());
 	state.current_offset += chunk.size();
 	if (state.current_offset == max_element) {
 		return SinkResultType::FINISHED;

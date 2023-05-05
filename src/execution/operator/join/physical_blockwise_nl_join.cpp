@@ -6,6 +6,7 @@
 #include "duckdb/execution/operator/join/outer_join_marker.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 #include "duckdb/execution/operator/join/physical_cross_product.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -200,7 +201,7 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 }
 
 string PhysicalBlockwiseNLJoin::ParamsToString() const {
-	string extra_info = JoinTypeToString(join_type) + "\n";
+	string extra_info = EnumUtil::ToString(join_type) + "\n";
 	extra_info += condition->GetName();
 	return extra_info;
 }

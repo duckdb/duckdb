@@ -96,6 +96,10 @@ RowGroup *RowGroupCollection::GetRowGroup(int64_t index) {
 	return (RowGroup *)row_groups->GetSegmentByIndex(index);
 }
 
+idx_t RowGroupCollection::RowGroupCount() {
+	return row_groups->GetSegmentCount();
+}
+
 void RowGroupCollection::Verify() {
 #ifdef DEBUG
 	idx_t current_total_rows = 0;
@@ -444,10 +448,12 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row, idx_t count) {
 void RowGroupCollection::MergeStorage(RowGroupCollection &data) {
 	D_ASSERT(data.types == types);
 	auto index = row_start + total_rows.load();
-	for (auto &row_group : data.row_groups->Segments()) {
-		auto new_group = make_uniq<RowGroup>(row_group, *this, index);
-		index += new_group->count;
-		row_groups->AppendSegment(std::move(new_group));
+	auto segments = data.row_groups->MoveSegments();
+	for (auto &entry : segments) {
+		auto &row_group = entry.node;
+		row_group->MoveToCollection(*this, index);
+		index += row_group->count;
+		row_groups->AppendSegment(std::move(row_group));
 	}
 	stats.MergeStats(data.stats);
 	total_rows += data.total_rows.load();

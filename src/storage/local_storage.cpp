@@ -9,111 +9,14 @@
 #include "duckdb/storage/partial_block_manager.hpp"
 
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 
-//===--------------------------------------------------------------------===//
-// OptimisticDataWriter
-//===--------------------------------------------------------------------===//
-OptimisticDataWriter::OptimisticDataWriter(DataTable &table) : table(table) {
-}
-
-OptimisticDataWriter::OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent)
-    : table(table), partial_manager(std::move(parent.partial_manager)),
-      written_blocks(std::move(parent.written_blocks)) {
-	if (partial_manager) {
-		partial_manager->FlushPartialBlocks();
-	}
-}
-
-OptimisticDataWriter::~OptimisticDataWriter() {
-}
-
-bool OptimisticDataWriter::PrepareWrite() {
-	// check if we should pre-emptively write the table to disk
-	if (table.info->IsTemporary() || StorageManager::Get(table.info->db).InMemory()) {
-		return false;
-	}
-	// we should! write the second-to-last row group to disk
-	// allocate the partial block-manager if none is allocated yet
-	if (!partial_manager) {
-		auto &block_manager = table.info->table_io_manager->GetBlockManagerForRowData();
-		partial_manager = make_uniq<PartialBlockManager>(block_manager);
-	}
-	return true;
-}
-
-void OptimisticDataWriter::CheckFlushToDisk(RowGroupCollection &row_groups) {
-	// we finished writing a complete row group
-	if (!PrepareWrite()) {
-		return;
-	}
-	// flush second-to-last row group
-	auto row_group = row_groups.GetRowGroup(-2);
-	FlushToDisk(row_group);
-}
-
-void OptimisticDataWriter::FlushToDisk(RowGroup *row_group) {
-	// flush the specified row group
-	D_ASSERT(row_group);
-	//! The set of column compression types (if any)
-	vector<CompressionType> compression_types;
-	D_ASSERT(compression_types.empty());
-	for (auto &column : table.column_definitions) {
-		compression_types.push_back(column.CompressionType());
-	}
-	auto row_group_pointer = row_group->WriteToDisk(*partial_manager, compression_types);
-
-	// update the set of written blocks
-	for (idx_t col_idx = 0; col_idx < row_group_pointer.statistics.size(); col_idx++) {
-		row_group_pointer.states[col_idx]->GetBlockIds(written_blocks);
-	}
-}
-
-void OptimisticDataWriter::FlushToDisk(RowGroupCollection &row_groups, bool force) {
-	if (!partial_manager) {
-		if (!force) {
-			// no partial manager - nothing to flush
-			return;
-		}
-		if (!PrepareWrite()) {
-			return;
-		}
-	}
-	// flush the last row group
-	FlushToDisk(row_groups.GetRowGroup(-1));
-}
-
-void OptimisticDataWriter::FinalFlush() {
-	if (!partial_manager) {
-		return;
-	}
-	// then flush the partial manager
-	partial_manager->FlushPartialBlocks();
-	partial_manager.reset();
-}
-
-void OptimisticDataWriter::Rollback() {
-	if (partial_manager) {
-		partial_manager->Clear();
-		partial_manager.reset();
-	}
-	if (!written_blocks.empty()) {
-		auto &block_manager = table.info->table_io_manager->GetBlockManagerForRowData();
-		for (auto block_id : written_blocks) {
-			block_manager.MarkBlockAsFree(block_id);
-		}
-	}
-}
-
-//===--------------------------------------------------------------------===//
-// Local Table Storage
-//===--------------------------------------------------------------------===//
 LocalTableStorage::LocalTableStorage(DataTable &table)
-    : table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(table) {
+    : table_ref(table), allocator(Allocator::Get(table.db)), deleted_rows(0), optimistic_writer(table),
+      merged_storage(false) {
 	auto types = table.GetTypes();
 	row_groups = make_shared<RowGroupCollection>(table.info, TableIOManager::Get(table).GetBlockManagerForRowData(),
 	                                             types, MAX_ROW_ID, 0);
@@ -140,7 +43,8 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
                                      idx_t changed_idx, const LogicalType &target_type,
                                      const vector<column_t> &bound_columns, Expression &cast_expr)
     : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)) {
+      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)),
+      merged_storage(parent.merged_storage) {
 	row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -148,7 +52,8 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
 
 LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t drop_idx)
     : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)) {
+      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)),
+      merged_storage(parent.merged_storage) {
 	row_groups = parent.row_groups->RemoveColumn(drop_idx);
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -157,7 +62,8 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
                                      ColumnDefinition &new_column, optional_ptr<Expression> default_value)
     : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)) {
+      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)),
+      merged_storage(parent.merged_storage) {
 	row_groups = parent.row_groups->AddColumn(context, new_column, default_value.get());
 	parent.row_groups.reset();
 	indexes.Move(parent.indexes);
@@ -187,16 +93,18 @@ idx_t LocalTableStorage::EstimatedSize() {
 	return appended_rows * row_size;
 }
 
-void LocalTableStorage::CheckFlushToDisk() {
+void LocalTableStorage::WriteNewRowGroup() {
 	if (deleted_rows != 0) {
 		// we have deletes - we cannot merge row groups
 		return;
 	}
-	optimistic_writer.CheckFlushToDisk(*row_groups);
+	optimistic_writer.WriteNewRowGroup(*row_groups);
 }
 
-void LocalTableStorage::FlushToDisk() {
-	optimistic_writer.FlushToDisk(*row_groups);
+void LocalTableStorage::FlushBlocks() {
+	if (!merged_storage && row_groups->GetTotalRows() > RowGroup::ROW_GROUP_SIZE) {
+		optimistic_writer.WriteLastRowGroup(*row_groups);
+	}
 	optimistic_writer.FinalFlush();
 }
 
@@ -286,12 +194,28 @@ OptimisticDataWriter &LocalTableStorage::CreateOptimisticWriter() {
 	return *optimistic_writers.back();
 }
 
+void LocalTableStorage::FinalizeOptimisticWriter(OptimisticDataWriter &writer) {
+	// remove the writer from the set of optimistic writers
+	unique_ptr<OptimisticDataWriter> owned_writer;
+	for (idx_t i = 0; i < optimistic_writers.size(); i++) {
+		if (optimistic_writers[i].get() == &writer) {
+			owned_writer = std::move(optimistic_writers[i]);
+			optimistic_writers.erase(optimistic_writers.begin() + i);
+			break;
+		}
+	}
+	if (!owned_writer) {
+		throw InternalException("Error in FinalizeOptimisticWriter - could not find writer");
+	}
+	optimistic_writer.Merge(*owned_writer);
+}
+
 void LocalTableStorage::Rollback() {
-	optimistic_writer.Rollback();
 	for (auto &writer : optimistic_writers) {
 		writer->Rollback();
 	}
 	optimistic_writers.clear();
+	optimistic_writer.Rollback();
 }
 
 //===--------------------------------------------------------------------===//
@@ -429,7 +353,7 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 
 	//! Check if we should pre-emptively flush blocks to disk
 	if (new_row_group) {
-		storage->CheckFlushToDisk();
+		storage->WriteNewRowGroup();
 	}
 }
 
@@ -448,11 +372,17 @@ void LocalStorage::LocalMerge(DataTable &table, RowGroupCollection &collection) 
 		}
 	}
 	storage.row_groups->MergeStorage(collection);
+	storage.merged_storage = true;
 }
 
 OptimisticDataWriter &LocalStorage::CreateOptimisticWriter(DataTable &table) {
 	auto &storage = table_manager.GetOrCreateStorage(table);
 	return storage.CreateOptimisticWriter();
+}
+
+void LocalStorage::FinalizeOptimisticWriter(DataTable &table, OptimisticDataWriter &writer) {
+	auto &storage = table_manager.GetOrCreateStorage(table);
+	storage.FinalizeOptimisticWriter(writer);
 }
 
 bool LocalStorage::ChangesMade() noexcept {
@@ -502,8 +432,8 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage) {
 	if ((append_state.row_start == 0 || storage.row_groups->GetTotalRows() >= MERGE_THRESHOLD) &&
 	    storage.deleted_rows == 0) {
 		// table is currently empty OR we are bulk appending: move over the storage directly
-		// first flush any out-standing storage nodes
-		storage.FlushToDisk();
+		// first flush any outstanding blocks
+		storage.FlushBlocks();
 		// now append to the indexes (if there are any)
 		// FIXME: we should be able to merge the transaction-local index directly into the main table index
 		// as long we just rewrite some row-ids

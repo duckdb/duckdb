@@ -287,7 +287,9 @@ void SingleFileBlockManager::MarkBlockAsFree(block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	D_ASSERT(block_id >= 0);
 	D_ASSERT(block_id < max_block);
-	D_ASSERT(free_list.find(block_id) == free_list.end());
+	if (free_list.find(block_id) != free_list.end()) {
+		throw InternalException("MarkBlockAsFree called but block %llu was already freed!", block_id);
+	}
 	multi_use_blocks.erase(block_id);
 	free_list.insert(block_id);
 }
