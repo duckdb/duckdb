@@ -69,5 +69,6 @@ protected:
 
 	idx_t EstimateCardinality(ClientContext &context) override;
 	vector<idx_t> GetTableIndex() const override;
+	string GetName() const override;
 };
 } // namespace duckdb

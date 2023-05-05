@@ -476,11 +476,11 @@ static void GetStructureFunctionInternal(ScalarFunctionSet &set, const LogicalTy
 	                               JSONFunctionLocalState::Init));
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetStructureFunction() {
+ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 	ScalarFunctionSet set("json_structure");
 	GetStructureFunctionInternal(set, LogicalType::VARCHAR);
 	GetStructureFunctionInternal(set, JSONCommon::JSONType());
-	return CreateScalarFunctionInfo(set);
+	return set;
 }
 
 static LogicalType StructureToTypeArray(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,

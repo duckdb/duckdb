@@ -130,19 +130,18 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 	group_chunk.Verify();
 }
 
-void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                     DataChunk &groups_input, DataChunk &payload_input,
-                                     const vector<idx_t> &filter) const {
-	auto &llstate = lstate.Cast<RadixHTLocalState>();
-	auto &gstate = state.Cast<RadixHTGlobalState>();
+void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
+                                     DataChunk &payload_input, const vector<idx_t> &filter) const {
+	auto &llstate = input.local_state.Cast<RadixHTLocalState>();
+	auto &gstate = input.global_state.Cast<RadixHTGlobalState>();
 	D_ASSERT(!gstate.is_finalized);
 
 	DataChunk &group_chunk = llstate.group_chunk;
-	PopulateGroupChunk(group_chunk, groups_input);
+	PopulateGroupChunk(group_chunk, chunk);
 
 	// if we have non-combinable aggregates (e.g. string_agg) we cannot keep parallel hash
 	// tables
-	if (ForceSingleHT(state)) {
+	if (ForceSingleHT(input.global_state)) {
 		lock_guard<mutex> glock(gstate.lock);
 		gstate.is_empty = gstate.is_empty && group_chunk.size() == 0;
 		if (gstate.finalized_hts.empty()) {
@@ -304,7 +303,7 @@ private:
 };
 
 void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_ptr<Event> &event,
-                                              GlobalSinkState &state, vector<unique_ptr<Task>> &tasks) const {
+                                              GlobalSinkState &state, vector<shared_ptr<Task>> &tasks) const {
 	auto &gstate = state.Cast<RadixHTGlobalState>();
 	if (!gstate.is_partitioned) {
 		return;
@@ -382,14 +381,14 @@ idx_t RadixPartitionedHashTable::Size(GlobalSinkState &sink_state) const {
 	return count;
 }
 
-void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state,
-                                        GlobalSourceState &gsstate, LocalSourceState &lsstate) const {
+SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                    GlobalSinkState &sink_state, OperatorSourceInput &input) const {
 	auto &gstate = sink_state.Cast<RadixHTGlobalState>();
-	auto &state = gsstate.Cast<RadixHTGlobalSourceState>();
-	auto &lstate = lsstate.Cast<RadixHTLocalSourceState>();
+	auto &state = input.global_state.Cast<RadixHTGlobalSourceState>();
+	auto &lstate = input.local_state.Cast<RadixHTLocalSourceState>();
 	D_ASSERT(gstate.is_finalized);
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 
 	// special case hack to sort out aggregating from empty intermediates
@@ -421,11 +420,11 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 			chunk.data[null_groups.size() + op.aggregates.size() + i].Reference(grouping_values[i]);
 		}
 		state.finished = true;
-		return;
+		return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 	}
 	if (gstate.is_empty) {
 		state.finished = true;
-		return;
+		return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 	}
 	idx_t elements_found = 0;
 
@@ -461,7 +460,7 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 			ht_index = state.ht_index;
 			if (ht_index >= gstate.finalized_hts.size()) {
 				state.finished = true;
-				return;
+				return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 			}
 		}
 		D_ASSERT(ht_index < gstate.finalized_hts.size());
@@ -511,6 +510,7 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 	for (idx_t i = 0; i < op.grouping_functions.size(); i++) {
 		chunk.data[op.GroupCount() + op.aggregates.size() + i].Reference(grouping_values[i]);
 	}
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

@@ -6,8 +6,8 @@
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/extension_util.hpp"
 #endif
 
 namespace duckdb {
@@ -118,9 +118,7 @@ static void ReduceSQLFunction(ClientContext &context, TableFunctionInput &data_p
 }
 
 void SQLSmithExtension::Load(DuckDB &db) {
-	Connection con(db);
-	con.BeginTransaction();
-	auto &catalog = Catalog::GetSystemCatalog(*con.context);
+	auto &db_instance = *db.instance;
 
 	TableFunction sqlsmith_func("sqlsmith", {}, SQLSmithFunction, SQLSmithBind);
 	sqlsmith_func.named_parameters["seed"] = LogicalType::INTEGER;
@@ -131,14 +129,10 @@ void SQLSmithExtension::Load(DuckDB &db) {
 	sqlsmith_func.named_parameters["verbose_output"] = LogicalType::BOOLEAN;
 	sqlsmith_func.named_parameters["complete_log"] = LogicalType::VARCHAR;
 	sqlsmith_func.named_parameters["log"] = LogicalType::VARCHAR;
-	CreateTableFunctionInfo sqlsmith_info(sqlsmith_func);
-	catalog.CreateTableFunction(*con.context, sqlsmith_info);
+	ExtensionUtil::RegisterFunction(db_instance, sqlsmith_func);
 
 	TableFunction reduce_sql_function("reduce_sql_statement", {LogicalType::VARCHAR}, ReduceSQLFunction, ReduceSQLBind);
-	CreateTableFunctionInfo reduce_sql_info(reduce_sql_function);
-	catalog.CreateTableFunction(*con.context, reduce_sql_info);
-
-	con.Commit();
+	ExtensionUtil::RegisterFunction(db_instance, reduce_sql_function);
 }
 
 std::string SQLSmithExtension::Name() {
