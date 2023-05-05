@@ -117,7 +117,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::UUID:
 	case LogicalTypeId::VARCHAR:
-		child.format = "u";
+		child.format = "U";
 		break;
 	case LogicalTypeId::DATE:
 		child.format = "tdD";
@@ -171,7 +171,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT: {
-		child.format = "z";
+		child.format = "Z";
 		break;
 	}
 	case LogicalTypeId::LIST: {

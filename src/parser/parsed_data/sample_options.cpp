@@ -1,13 +1,13 @@
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/common/field_writer.hpp"
-#include "duckdb/common/serializer/enum_serializer.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
+// **DEPRECATED**: Use EnumUtil directly instead.
 string SampleMethodToString(SampleMethod method) {
-	return EnumSerializer::EnumToString(method);
+	return EnumUtil::ToString(method);
 }
 
 void SampleOptions::Serialize(Serializer &serializer) {

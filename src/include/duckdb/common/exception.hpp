@@ -10,11 +10,11 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception_format_value.hpp"
-#include "duckdb/common/vector.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/typedefs.hpp"
 
+#include <vector>
 #include <stdexcept>
 
 namespace duckdb {
@@ -105,14 +105,14 @@ public:
 
 	template <typename... Args>
 	static string ConstructMessage(const string &msg, Args... params) {
-		vector<ExceptionFormatValue> values;
+		std::vector<ExceptionFormatValue> values;
 		return ConstructMessageRecursive(msg, values, params...);
 	}
 
-	DUCKDB_API static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values);
+	DUCKDB_API static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values);
 
 	template <class T, typename... Args>
-	static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values, T param,
+	static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values, T param,
 	                                        Args... params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return ConstructMessageRecursive(msg, values, params...);

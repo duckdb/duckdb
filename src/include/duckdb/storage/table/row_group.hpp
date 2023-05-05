@@ -59,20 +59,20 @@ public:
 public:
 	RowGroup(RowGroupCollection &collection, idx_t start, idx_t count);
 	RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer);
-	RowGroup(RowGroup &row_group, RowGroupCollection &collection, idx_t start);
 	~RowGroup();
 
 private:
 	//! The RowGroupCollection this row-group is a part of
-	RowGroupCollection &collection;
+	reference<RowGroupCollection> collection;
 	//! The version info of the row_group (inserted and deleted tuple info)
 	shared_ptr<VersionNode> version_info;
 	//! The column data of the row_group
 	vector<shared_ptr<ColumnData>> columns;
 
 public:
+	void MoveToCollection(RowGroupCollection &collection, idx_t new_start);
 	RowGroupCollection &GetCollection() {
-		return collection;
+		return collection.get();
 	}
 	DatabaseInstance &GetDatabase();
 	BlockManager &GetBlockManager();

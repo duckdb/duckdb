@@ -12,7 +12,6 @@
 #include "duckdb/parallel/pipeline_event.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
-#include "duckdb/parallel/thread_context.hpp"
 
 namespace duckdb {
 
@@ -33,14 +32,32 @@ public:
 		if (!pipeline_executor) {
 			pipeline_executor = make_uniq<PipelineExecutor>(pipeline.GetClientContext(), pipeline);
 		}
+
+		pipeline_executor->SetTaskForInterrupts(shared_from_this());
+
 		if (mode == TaskExecutionMode::PROCESS_PARTIAL) {
-			bool finished = pipeline_executor->Execute(PARTIAL_CHUNK_COUNT);
-			if (!finished) {
+			auto res = pipeline_executor->Execute(PARTIAL_CHUNK_COUNT);
+
+			switch (res) {
+			case PipelineExecuteResult::NOT_FINISHED:
 				return TaskExecutionResult::TASK_NOT_FINISHED;
+			case PipelineExecuteResult::INTERRUPTED:
+				return TaskExecutionResult::TASK_BLOCKED;
+			case PipelineExecuteResult::FINISHED:
+				break;
 			}
 		} else {
-			pipeline_executor->Execute();
+			auto res = pipeline_executor->Execute();
+			switch (res) {
+			case PipelineExecuteResult::NOT_FINISHED:
+				throw InternalException("Execute without limit should not return NOT_FINISHED");
+			case PipelineExecuteResult::INTERRUPTED:
+				return TaskExecutionResult::TASK_BLOCKED;
+			case PipelineExecuteResult::FINISHED:
+				break;
+			}
 		}
+
 		event->FinishTask();
 		pipeline_executor.reset();
 		return TaskExecutionResult::TASK_FINISHED;
@@ -68,7 +85,7 @@ bool Pipeline::GetProgress(double &current_percentage, idx_t &source_cardinality
 }
 
 void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {
-	vector<unique_ptr<Task>> tasks;
+	vector<shared_ptr<Task>> tasks;
 	tasks.push_back(make_uniq<PipelineTask>(*this, event));
 	event->SetTasks(std::move(tasks));
 }
@@ -149,7 +166,7 @@ bool Pipeline::LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads) {
 	}
 
 	// launch a task for every thread
-	vector<unique_ptr<Task>> tasks;
+	vector<shared_ptr<Task>> tasks;
 	for (idx_t i = 0; i < max_threads; i++) {
 		tasks.push_back(make_uniq<PipelineTask>(*this, event));
 	}
@@ -265,6 +282,32 @@ vector<const_reference<PhysicalOperator>> Pipeline::GetOperators() const {
 	return result;
 }
 
+void Pipeline::ClearSource() {
+	source_state.reset();
+	batch_indexes.clear();
+}
+
+idx_t Pipeline::RegisterNewBatchIndex() {
+	lock_guard<mutex> l(batch_lock);
+	idx_t minimum = batch_indexes.empty() ? base_batch_index : *batch_indexes.begin();
+	batch_indexes.insert(minimum);
+	return minimum;
+}
+
+idx_t Pipeline::UpdateBatchIndex(idx_t old_index, idx_t new_index) {
+	lock_guard<mutex> l(batch_lock);
+	if (new_index < *batch_indexes.begin()) {
+		throw InternalException("Processing batch index %llu, but previous min batch index was %llu", new_index,
+		                        *batch_indexes.begin());
+	}
+	auto entry = batch_indexes.find(old_index);
+	if (entry == batch_indexes.end()) {
+		throw InternalException("Batch index %llu was not found in set of active batch indexes", old_index);
+	}
+	batch_indexes.erase(entry);
+	batch_indexes.insert(new_index);
+	return *batch_indexes.begin();
+}
 //===--------------------------------------------------------------------===//
 // Pipeline Build State
 //===--------------------------------------------------------------------===//

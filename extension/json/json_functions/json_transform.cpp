@@ -1,6 +1,7 @@
 #include "json_transform.hpp"
 
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
@@ -272,7 +273,7 @@ bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const
 			validity.SetInvalid(i);
 			if (success && options.strict_cast && !unsafe_yyjson_is_str(val)) {
 				options.error_message = StringUtil::Format(
-				    "Unable to cast '%s' to " + LogicalTypeIdToString(target.id()), JSONCommon::ValToString(val, 50));
+				    "Unable to cast '%s' to " + EnumUtil::ToString(target.id()), JSONCommon::ValToString(val, 50));
 				options.object_index = i;
 				success = false;
 			}
@@ -359,7 +360,7 @@ static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, co
 		}
 		break;
 	default:
-		throw InternalException("No date/timestamp formats for %s", LogicalTypeIdToString(result.GetType().id()));
+		throw InternalException("No date/timestamp formats for %s", EnumUtil::ToString(result.GetType().id()));
 	}
 	return success;
 }
