@@ -283,7 +283,8 @@ jobs:
       - name: Find GCC
         shell: bash
         run: |
-          ls "/cygdrive/c/rtools*/x68_64-w64-mingw*"
+          ls "c:/rtools*"
+          ls "c:/rtools*/x68_64-w64-mingw*"
       
 
       - uses: ./.github/actions/build_extensions
