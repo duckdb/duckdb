@@ -517,7 +517,7 @@ unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientCo
 	} else {
 		result->batch_size = 0;
 	}
-	return result;
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//
