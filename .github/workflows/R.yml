@@ -280,12 +280,6 @@ jobs:
 #        run: |
 #          choco install openssl -y --force
 
-      - name: Find GCC
-        shell: bash
-        run: |
-          which gcc
-          gcc -v  
-          g++ -v
 
       - uses: ./.github/actions/build_extensions
         with:
@@ -296,6 +290,8 @@ jobs:
           s3_key: ${{ secrets.S3_KEY }}
           signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
           python_name: python
+          override_c: gcc
+          override_cxx: g++
 
   rstats-windows-warnings:
     name: R Package Windows (Warnings)
