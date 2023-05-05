@@ -276,7 +276,7 @@ private:
 
 class ClientContextWrapper {
 public:
-	DUCKDB_API explicit ClientContextWrapper(const shared_ptr<ClientContext> &context)
+	explicit ClientContextWrapper(const shared_ptr<ClientContext> &context)
 	    : client_context(context) {
 
 	      };

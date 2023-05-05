@@ -199,10 +199,10 @@ public:
 	vector<ColumnDataRow>::const_iterator cend() const {
 		return rows.cend();
 	}
-	DUCKDB_API vector<ColumnDataRow>::const_iterator begin() const {
+	vector<ColumnDataRow>::const_iterator begin() const {
 		return rows.begin();
 	}
-	DUCKDB_API vector<ColumnDataRow>::const_iterator end() const {
+	vector<ColumnDataRow>::const_iterator end() const {
 		return rows.end();
 	}
 

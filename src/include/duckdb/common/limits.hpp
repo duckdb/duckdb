@@ -187,13 +187,13 @@ struct NumericLimits<double> {
 	static constexpr double Minimum() {
 		return std::numeric_limits<double>::lowest();
 	};
-	DUCKDB_API static constexpr double Maximum() {
+	static constexpr double Maximum() {
 		return std::numeric_limits<double>::max();
 	};
-	DUCKDB_API static bool IsSigned() {
+	static bool IsSigned() {
 		return true;
 	}
-	DUCKDB_API static idx_t Digits() {
+	static idx_t Digits() {
 		return 250;
 	}
 };
