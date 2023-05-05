@@ -1078,4 +1078,20 @@ Value UsernameSetting::GetSetting(ClientContext &context) {
 	return Value();
 }
 
+//===--------------------------------------------------------------------===//
+// Ignored CSV Errors Limit
+//===--------------------------------------------------------------------===//
+
+void MaxCSVErrorsSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).max_csv_errors = ClientConfig().max_csv_errors;
+}
+
+void MaxCSVErrorsSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).max_csv_errors = input.GetValue<uint64_t>();
+}
+
+Value MaxCSVErrorsSetting::GetSetting(ClientContext &context) {
+	return Value::BIGINT(ClientConfig::GetConfig(context).max_csv_errors);
+}
+
 } // namespace duckdb

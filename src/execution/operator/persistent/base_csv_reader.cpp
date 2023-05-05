@@ -1,5 +1,4 @@
 #include "duckdb/execution/operator/persistent/base_csv_reader.hpp"
-
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -17,7 +16,7 @@
 #include "utf8proc.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/main/error_manager.hpp"
-
+#include "duckdb/main/client_data.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -493,10 +492,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 			if (try_add_line) {
 				return false;
 			}
-			if (options.ignore_errors) {
-				conversion_error_ignored = true;
-				continue;
-			}
+
 			string col_name = to_string(col_idx);
 			if (col_idx < names.size()) {
 				col_name = "\"" + names[col_idx] + "\"";
@@ -512,6 +508,18 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 				}
 			}
 			auto error_line = linenr - (parse_chunk.size() - row_idx) + 1;
+
+			if (options.ignore_errors) {
+				conversion_error_ignored = true;
+				
+				// Register the error
+				auto max_errors = context.config.max_csv_errors;
+				auto &errors = context.client_data->csv_ignored_errors;
+				if(errors.size() < max_errors) {
+					errors.push_back({error_line, col_idx, error_message, GetFileName()});
+				}
+				continue;
+			}
 
 			if (options.auto_detect) {
 				throw InvalidInputException("%s in column %s, at line %llu.\n\nParser "

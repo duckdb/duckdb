@@ -473,4 +473,14 @@ struct UsernameSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct MaxCSVErrorsSetting {
+	static constexpr const char *Name = "max_csv_errors";
+	static constexpr const char *Description =
+	    "The maximum numer of csv errors to log when reading with 'ignored_errors' set to true";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
 } // namespace duckdb

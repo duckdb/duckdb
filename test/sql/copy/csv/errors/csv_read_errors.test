@@ -1,0 +1,34 @@
+
+query III
+SELECT * FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/bad.csv', 
+    columns = {'0': 'INTEGER', '1': 'INTEGER', '3': 'VARCHAR'}, 
+    ignore_errors=true);
+----
+1	2	TEXT
+6	7	TEXT
+
+
+query IIII
+FROM read_csv_errors()
+----
+2	1	Could not convert string 'TEXT' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv
+
+# Test with multiple files
+query III
+SELECT * FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/*.csv', 
+    columns = {'0': 'INTEGER', '1': 'INTEGER', '3': 'VARCHAR'}, 
+    ignore_errors=true);
+----
+1		2	TEXT
+6		7	TEXT
+1		2	TEXT
+4		5	9
+
+
+query IIII
+FROM read_csv_errors()
+----
+2	1	Could not convert string 'TEXT' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv
+4	0	Could not convert string 'TEXT' to INT32	test/sql/copy/csv/data/error/mismatch/bad2.csv

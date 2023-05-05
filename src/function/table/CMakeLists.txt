@@ -12,6 +12,7 @@ add_library_unity(
   repeat_row.cpp
   copy_csv.cpp
   read_csv.cpp
+  read_csv_errors.cpp
   system_functions.cpp
   summary.cpp
   table_scan.cpp

@@ -1,4 +1,5 @@
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/function/table/read_csv_errors.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -67,6 +68,7 @@ uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
                                             vector<LogicalType> &return_types, vector<string> &names) {
+
 	auto result = make_uniq<ReadCSVData>();
 	auto &options = result->options;
 	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "CSV");
@@ -533,6 +535,10 @@ void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions,
 
 static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext &context,
                                                                   TableFunctionInitInput &input) {
+	// TODO: Not sure if this is the best place to reset, but it has to work for multiple files
+	// and cant be in the bind.
+	context.client_data->csv_ignored_errors.clear();
+
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
 	if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
@@ -1067,6 +1073,7 @@ unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, const string &ta
 void BuiltinFunctions::RegisterReadFunctions() {
 	CSVCopyFunction::RegisterFunction(*this);
 	ReadCSVTableFunction::RegisterFunction(*this);
+	ReadCSVErrorsTableFunction::RegisterFunction(*this);
 	auto &config = DBConfig::GetConfig(*transaction.db);
 	config.replacement_scans.emplace_back(ReadCSVReplacement);
 }

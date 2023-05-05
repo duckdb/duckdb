@@ -26,6 +26,12 @@ class QueryProfilerHistory;
 class PreparedStatementData;
 class SchemaCatalogEntry;
 struct RandomEngine;
+struct IgnoredCSVError {
+	idx_t line;
+	idx_t column;
+	string error;
+	string file_name;
+};
 
 struct ClientData {
 	ClientData(ClientContext &context);
@@ -60,6 +66,9 @@ struct ClientData {
 
 	//! The Max Line Length Size of Last Query Executed on a CSV File. (Only used for testing)
 	idx_t max_line_length = 0;
+
+	//! The row numbers of failed COPY reads
+	vector<IgnoredCSVError> csv_ignored_errors;
 
 public:
 	DUCKDB_API static ClientData &Get(ClientContext &context);
