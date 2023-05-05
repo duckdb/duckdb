@@ -67,7 +67,7 @@ public:
 	                      vector<unique_ptr<Expression>> groups, idx_t estimated_cardinality);
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      vector<unique_ptr<Expression>> groups, vector<GroupingSet> grouping_sets,
-	                      vector<vector<idx_t>> grouping_functions, idx_t estimated_cardinality);
+	                      vector<unsafe_vector<idx_t>> grouping_functions, idx_t estimated_cardinality);
 
 	//! The grouping sets
 	GroupedAggregateData grouped_aggregate_data;
@@ -80,8 +80,8 @@ public:
 	vector<LogicalType> input_group_types;
 
 	// Filters given to Sink and friends
-	vector<idx_t> non_distinct_filter;
-	vector<idx_t> distinct_filter;
+	unsafe_vector<idx_t> non_distinct_filter;
+	unsafe_vector<idx_t> distinct_filter;
 
 	unordered_map<Expression *, size_t> filter_indexes;
 
