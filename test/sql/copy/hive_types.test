@@ -16,7 +16,7 @@ FROM read_parquet('../file.parquet', hive_partitioning=1, hive_types={'date':'no
 ----
 Catalog Error:
 
-#	bad logical type
+#	empty logical type
 statement error
 FROM read_parquet('../file.parquet', hive_partitioning=1, hive_types={'date':'', 'ref':'smallint'});
 ----

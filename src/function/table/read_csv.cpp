@@ -498,7 +498,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		reader->options.file_path = current_file_path;
 		MultiFileReader::InitializeReader(*reader, bind_data.options.file_options, bind_data.reader_bind,
 		                                  bind_data.return_types, bind_data.return_names, column_ids, nullptr,
-		                                  bind_data.files.front());
+		                                  bind_data.files.front(), context);
 	} else {
 		// update the current reader
 		reader->SetBufferRead(std::move(result));
@@ -662,7 +662,7 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 			}
 			MultiFileReader::InitializeReader(*result, bind_data.options.file_options, bind_data.reader_bind,
 			                                  bind_data.return_types, bind_data.return_names, column_ids, nullptr,
-			                                  bind_data.files.front());
+			                                  bind_data.files.front(), context);
 		}
 		total_size = result->file_handle->FileSize();
 		return result;
@@ -710,14 +710,14 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
 	}
 	MultiFileReader::InitializeReader(*result->initial_reader, bind_data.options.file_options, bind_data.reader_bind,
 	                                  bind_data.return_types, bind_data.return_names, input.column_ids, input.filters,
-	                                  bind_data.files.front());
+	                                  bind_data.files.front(), context);
 	for (auto &reader : bind_data.union_readers) {
 		if (!reader) {
 			continue;
 		}
 		MultiFileReader::InitializeReader(*reader, bind_data.options.file_options, bind_data.reader_bind,
 		                                  bind_data.return_types, bind_data.return_names, input.column_ids,
-		                                  input.filters, bind_data.files.front());
+		                                  input.filters, bind_data.files.front(), context);
 	}
 	result->column_ids = input.column_ids;
 

@@ -149,17 +149,28 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 				throw BinderException("Hive partition mismatch between file \"%s\" and \"%s\"", files[0], f);
 			}
 		}
-		for (auto &part : partitions) {
+		for (auto &part : partitions) {	//loop door de partitions van file[0]
 			idx_t hive_partitioning_index = DConstants::INVALID_INDEX;
-			auto lookup = std::find(names.begin(), names.end(), part.first);
+			auto lookup = std::find(names.begin(), names.end(), part.first); //zoek naar partition name in table columns
 			if (lookup != names.end()) {
 				// hive partitioning column also exists in file - override
 				auto idx = lookup - names.begin();
 				hive_partitioning_index = idx;
-				return_types[idx] = LogicalType::VARCHAR;
+				
+				// get the logical type from the hive_types flag
+				LogicalType type;
+				auto it = options.hive_types_schema.find(part.first);
+				if (it != options.hive_types_schema.end()) {
+					type = it->second;
+				} else {
+					type = LogicalType::VARCHAR;
+				}
+				return_types[idx] = type;
+				
 			} else {
 				// hive partitioning column does not exist in file - add a new column containing the key
 				hive_partitioning_index = names.size();
+				//dont forget to add the same logic for hive_types here //lars
 				return_types.emplace_back(LogicalType::VARCHAR);
 				names.emplace_back(part.first);
 			}
@@ -172,7 +183,8 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
                                    const string &filename, const vector<string> &local_names,
                                    const vector<LogicalType> &global_types, const vector<string> &global_names,
-                                   const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data) {
+                                   const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data, ClientContext& context) {
+	
 	// create a map of name -> column index
 	case_insensitive_map_t<idx_t> name_map;
 	if (file_options.union_by_name) {
@@ -198,8 +210,17 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			D_ASSERT(partitions.size() == options.hive_partitioning_indexes.size());
 			bool found_partition = false;
 			for (auto &entry : options.hive_partitioning_indexes) {
+				
 				if (column_id == entry.index) {
-					reader_data.constant_map.emplace_back(i, Value(partitions[entry.value]));
+					auto it = file_options.hive_types_schema.find(entry.value);
+					Value value(partitions[entry.value]);
+					if (it != file_options.hive_types_schema.end()){
+						// value.DefaultCastAs(it->second);
+						if (!value.TryCastAs(context, it->second)) {
+							throw InvalidInputException("something went terribly wrong!");
+						}
+					}
+					reader_data.constant_map.emplace_back(i, value);
 					found_partition = true;
 					break;
 				}
