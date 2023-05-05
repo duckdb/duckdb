@@ -123,6 +123,7 @@ with open_utf8(os.path.join('src', 'Makevars'), 'w+') as f:
 with open_utf8(os.path.join('src', 'Makevars.in'), 'r') as f:
     text = f.read()
 
+object_list += " -DDUCKDB_OVERRIDE_PLATFORM_POSTFIX=_rtools"
 text = text.replace('{{ SOURCES }}', object_list)
 text = text.replace('{{ INCLUDES }}', include_list)
 text = text.replace('{{ LINK_FLAGS }}', "-lws2_32")
