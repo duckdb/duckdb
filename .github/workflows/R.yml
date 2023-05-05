@@ -290,7 +290,7 @@ jobs:
           s3_key: ${{ secrets.S3_KEY }}
           signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
           python_name: python
-          override_c: gcc
+          override_cc: gcc
           override_cxx: g++
 
   rstats-windows-warnings:

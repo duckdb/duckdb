@@ -87,7 +87,7 @@ inputs:
   aarch64_cross_compile:
     description: 'Enable Linux aarch64 cross-compiling'
     default: 0
-  override_c:
+  override_cc:
     description: 'Override C Compiler'
     default: ''
   override_cxx:
@@ -119,10 +119,10 @@ runs:
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
-        OVERRIDE_C: ${{ inputs.override_c }}
-        OVERRIDE_CXX: ${{ inputs.override_cxx }}
-        CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || $OVERRIDE_C }}
-        CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || $OVERRIDE_CXX }}
+        CC: ${{ inputs.override_cc }}
+        CXX: ${{ inputs.override_cxx }}
+#        CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || }}
+#        CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || }}
 
       run: |
         cd  ${{ inputs.build_dir}}
