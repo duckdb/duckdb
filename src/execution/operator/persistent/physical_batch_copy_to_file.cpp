@@ -39,7 +39,7 @@ class BatchCopyToGlobalState : public GlobalSinkState {
 public:
 	explicit BatchCopyToGlobalState(unique_ptr<GlobalFunctionData> global_state)
 	    : rows_copied(0), global_state(std::move(global_state)), batch_size(0), scheduled_batch_index(0),
-	      flushed_batch_index(0) {
+	      flushed_batch_index(0), any_flushing(false), any_finished(false) {
 	}
 
 	mutex lock;
@@ -58,6 +58,10 @@ public:
 	atomic<idx_t> scheduled_batch_index;
 	//! The index of the latest batch index that has been flushed
 	atomic<idx_t> flushed_batch_index;
+	//! Whether or not any thread is flushing
+	atomic<bool> any_flushing;
+	//! Whether or not any threads are finished
+	atomic<bool> any_finished;
 
 	//! Whether or not we need to repartition the batches
 	bool RequiresRepartition() {
@@ -142,7 +146,12 @@ void PhysicalBatchCopyToFile::Combine(ExecutionContext &context, GlobalSinkState
 	auto &state = lstate.Cast<BatchCopyToLocalState>();
 	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
 	gstate.rows_copied += state.rows_copied;
-	ExecuteTasks(context.client, gstate_p);
+	if (!gstate.any_finished) {
+		// signal that this thread is finished processing batches and that we should move on to Finalize
+		lock_guard<mutex> l(gstate.lock);
+		gstate.any_finished = true;
+	}
+	ExecuteTasks(context.client, gstate);
 }
 
 //===--------------------------------------------------------------------===//
@@ -156,7 +165,9 @@ public:
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		op.ExecuteTasks(context, gstate);
+		while (op.ExecuteTask(context, gstate)) {
+			op.FlushBatchData(context, gstate, 0);
+		}
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -251,8 +262,7 @@ public:
 		auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
 		D_ASSERT(gstate.RequiresRepartition());
 
-		lock_guard<mutex> l(gstate.flush_lock);
-		op.FlushBatchDataRepartitioned(context, gstate_p);
+		op.FlushBatchData(context, gstate_p, 0);
 	}
 };
 
@@ -305,6 +315,12 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 		return;
 	}
 	if (!final) {
+		if (gstate.any_finished) {
+			// we only repartition in ::NextBatch if all threads are still busy processing batches
+			// otherwise we might end up repartitioning a lot of data with only a few threads remaining
+			// which causes erratic performance
+			return;
+		}
 		// if this is not the final flush we first check if we have enough data to merge past the batch threshold
 		idx_t candidate_rows = 0;
 		for (auto entry = gstate.raw_batches.begin(); entry != gstate.raw_batches.end(); entry++) {
@@ -446,13 +462,31 @@ void PhysicalBatchCopyToFile::FlushBatchDataSerial(ClientContext &context, Globa
 	}
 }
 
+struct ActiveFlushGuard {
+	explicit ActiveFlushGuard(atomic<bool> &bool_value_p) : bool_value(bool_value_p) {
+		bool_value = true;
+	}
+	~ActiveFlushGuard() {
+		bool_value = false;
+	}
+
+	atomic<bool> &bool_value;
+};
+
 void PhysicalBatchCopyToFile::FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const {
 	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
 
 	// flush batch data to disk (if there are any to flush)
 	// grab the flush lock - we can only call flush_batch with this lock
 	// otherwise the data might end up in the wrong order
-	lock_guard<mutex> l(gstate.flush_lock);
+	{
+		lock_guard<mutex> l(gstate.flush_lock);
+		if (gstate.any_flushing) {
+			return;
+		}
+		gstate.any_flushing = true;
+	}
+	ActiveFlushGuard active_flush(gstate.any_flushing);
 	if (gstate.RequiresRepartition()) {
 		FlushBatchDataRepartitioned(context, gstate_p);
 	} else {
@@ -474,8 +508,8 @@ bool PhysicalBatchCopyToFile::ExecuteTask(ClientContext &context, GlobalSinkStat
 }
 
 void PhysicalBatchCopyToFile::ExecuteTasks(ClientContext &context, GlobalSinkState &gstate_p) const {
-	while (ExecuteTask(context, gstate_p))
-		;
+	while (ExecuteTask(context, gstate_p)) {
+	}
 }
 
 //===--------------------------------------------------------------------===//
