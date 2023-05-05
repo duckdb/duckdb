@@ -113,7 +113,6 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 
 SinkFinalizeType PhysicalBatchCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                    GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
 	FinalFlush(context, gstate_p);
 	return SinkFinalizeType::READY;
 }
@@ -175,8 +174,6 @@ void PhysicalBatchCopyToFile::FlushBatchData(ClientContext &context, GlobalSinkS
 void PhysicalBatchCopyToFile::NextBatch(ExecutionContext &context, GlobalSinkState &gstate_p,
                                         LocalSinkState &lstate) const {
 	auto &state = lstate.Cast<BatchCopyToLocalState>();
-	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
-
 	if (state.collection && state.collection->Count() > 0) {
 		// we finished processing this batch
 		// start flushing data
