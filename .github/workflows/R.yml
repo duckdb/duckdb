@@ -283,7 +283,7 @@ jobs:
       - name: Find GCC
         shell: bash
         run: |
-          ls "c:/rtools*"
+          ls "C:\rtools*"
           ls "c:/rtools*/x68_64-w64-mingw*"
       
 
