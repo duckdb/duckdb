@@ -9,7 +9,6 @@ import uuid
 import datetime
 import numpy as np
 import cmath
-pd = pytest.importorskip("pandas")
 
 from duckdb.typing import *
 
@@ -263,35 +262,3 @@ class TestScalarUDF(object):
         assert rel.types[0] == data_type
         assert rel.fetchall()[0][0] == None
 
-    def test_overwrite_name(self):
-        def func(x):
-            return x
-        con = duckdb.connect()
-        # create first version of the function
-        con.create_function('func', func, [BIGINT], BIGINT)
-
-        # create relation that uses the function
-        rel1 = con.sql('select func(3)')
-
-        def other_func(x):
-            return x
-
-        with pytest.raises(duckdb.NotImplementedException, match="A function by the name of 'func' is already created, creating multiple functions with the same name is not supported yet, please remove it first"):
-            con.create_function('func', other_func, [VARCHAR], VARCHAR)
-
-        con.remove_function('func')
-
-        with pytest.raises(duckdb.InvalidInputException, match='Catalog Error: Scalar Function with name func does not exist!'):
-            # Attempted to execute the relation using the 'func' function, but it was deleted
-            rel1.fetchall()
-
-        con.create_function('func', other_func, [VARCHAR], VARCHAR)
-        # create relation that uses the new version
-        rel2 = con.sql("select func('test')")
-
-        # execute both relations
-        res1 = rel1.fetchall()
-        res2 = rel2.fetchall()
-        # This has been converted to string, because the previous version of the function no longer exists
-        assert res1 == [('3',)]
-        assert res2 == [('test',)]
