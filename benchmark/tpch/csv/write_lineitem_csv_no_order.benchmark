@@ -5,10 +5,14 @@
 name Write Lineitem CSV (Non-Order Preserving)
 group csv
 
+cache tpch_sf1.duckdb
+
 require tpch
 
 load
 CALL dbgen(sf=1);
+
+init
 SET preserve_insertion_order=false;
 
 run
