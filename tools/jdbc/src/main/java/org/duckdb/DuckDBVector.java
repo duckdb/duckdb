@@ -96,7 +96,7 @@ class DuckDBVector {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		if (isType(columnIndex, DuckDBColumnType.DECIMAL)) {
+		if (isType(DuckDBColumnType.DECIMAL)) {
 			switch (meta.type_size) {
 				case 16:
 					return new BigDecimal((int) getbuf(columnIndex, 2).getShort())
@@ -125,7 +125,7 @@ class DuckDBVector {
 			return null;
 		}
 
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
+		if (isType(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
 			return DuckDBTimestamp.toOffsetDateTime(getbuf(columnIndex, 8).getLong());
 		}
 		Object o = getObject(columnIndex);
@@ -137,16 +137,16 @@ class DuckDBVector {
 			return null;
 		}
 
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
+		if (isType(DuckDBColumnType.TIMESTAMP)) {
 			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong());
 		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_MS)) {
+		if (isType(DuckDBColumnType.TIMESTAMP_MS)) {
 			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong() * 1000);
 		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_NS)) {
+		if (isType(DuckDBColumnType.TIMESTAMP_NS)) {
 			return DuckDBTimestamp.toSqlTimestampNanos(getbuf(columnIndex, 8).getLong());
 		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_S)) {
+		if (isType(DuckDBColumnType.TIMESTAMP_S)) {
 			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong() * 1_000_000);
 		}
 		Object o = getObject(columnIndex);
@@ -158,7 +158,7 @@ class DuckDBVector {
 			return null;
 		}
 
-		if (isType(columnIndex, DuckDBColumnType.UUID)) {
+		if (isType(DuckDBColumnType.UUID)) {
 			ByteBuffer buffer = getbuf(columnIndex, 16);
 			long leastSignificantBits = buffer.getLong();
 
@@ -181,7 +181,7 @@ class DuckDBVector {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		if (isType(columnIndex, DuckDBColumnType.LIST)) {
+		if (isType(DuckDBColumnType.LIST)) {
 			return (Array) varlen_data[columnIndex];
 		}
 		throw new SQLFeatureNotSupportedException("getArray");
@@ -191,7 +191,7 @@ class DuckDBVector {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		if (isType(columnIndex, DuckDBColumnType.BLOB)) {
+		if (isType(DuckDBColumnType.BLOB)) {
 			return new DuckDBResultSet.DuckDBBlobResult((ByteBuffer) varlen_data[columnIndex]);
 		}
 
@@ -246,7 +246,7 @@ class DuckDBVector {
 		if (check_and_null(idx)) {
 			return false;
 		}
-		if (isType(idx, DuckDBColumnType.BOOLEAN)) {
+		if (isType(DuckDBColumnType.BOOLEAN)) {
 			return getbuf(idx, 1).get() == 1;
 		}
 		Object o = getObject(idx);
@@ -272,7 +272,7 @@ class DuckDBVector {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.BIGINT) || isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
+		if (isType(DuckDBColumnType.BIGINT) || isType(DuckDBColumnType.TIMESTAMP)) {
 			return getbuf(columnIndex, 8).getLong();
 		}
 		Object o = getObject(columnIndex);
@@ -286,7 +286,7 @@ class DuckDBVector {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.INTEGER)) {
+		if (isType(DuckDBColumnType.INTEGER)) {
 			return getbuf(columnIndex, 4).getInt();
 		}
 		Object o = getObject(columnIndex);
@@ -300,7 +300,7 @@ class DuckDBVector {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.UTINYINT)) {
+		if (isType(DuckDBColumnType.UTINYINT)) {
 			ByteBuffer buf = ByteBuffer.allocate(2);
 			getbuf(columnIndex, 1).get(buf.array(), 1, 1);
 			return buf.getShort();
@@ -312,7 +312,7 @@ class DuckDBVector {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.UINTEGER)) {
+		if (isType(DuckDBColumnType.UINTEGER)) {
 			ByteBuffer buf = ByteBuffer.allocate(8);
 			buf.order(ByteOrder.LITTLE_ENDIAN);
 			getbuf(columnIndex, 4).get(buf.array(), 0, 4);
@@ -325,7 +325,7 @@ class DuckDBVector {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.USMALLINT)) {
+		if (isType(DuckDBColumnType.USMALLINT)) {
 			ByteBuffer buf = ByteBuffer.allocate(4);
 			buf.order(ByteOrder.LITTLE_ENDIAN);
 			getbuf(columnIndex, 2).get(buf.array(), 0, 2);
@@ -338,7 +338,7 @@ class DuckDBVector {
 		if (check_and_null(columnIndex)) {
 			return BigInteger.ZERO;
 		}
-		if (isType(columnIndex, DuckDBColumnType.UBIGINT)) {
+		if (isType(DuckDBColumnType.UBIGINT)) {
 			byte[] buf_res = new byte[16];
 			byte[] buf = new byte[8];
 			getbuf(columnIndex, 8).get(buf);
@@ -354,7 +354,7 @@ class DuckDBVector {
 		if (check_and_null(columnIndex)) {
 			return Double.NaN;
 		}
-		if (isType(columnIndex, DuckDBColumnType.DOUBLE)) {
+		if (isType(DuckDBColumnType.DOUBLE)) {
 			return getbuf(columnIndex, 8).getDouble();
 		}
 		Object o = getObject(columnIndex);
@@ -368,7 +368,7 @@ class DuckDBVector {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.TINYINT)) {
+		if (isType(DuckDBColumnType.TINYINT)) {
 			return getbuf(columnIndex, 1).get();
 		}
 		Object o = getObject(columnIndex);
@@ -382,7 +382,7 @@ class DuckDBVector {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.SMALLINT)) {
+		if (isType(DuckDBColumnType.SMALLINT)) {
 			return getbuf(columnIndex, 2).getShort();
 		}
 		Object o = getObject(columnIndex);
@@ -396,7 +396,7 @@ class DuckDBVector {
 		if (check_and_null(columnIndex)) {
 			return BigInteger.ZERO;
 		}
-		if (isType(columnIndex, DuckDBColumnType.HUGEINT)) {
+		if (isType(DuckDBColumnType.HUGEINT)) {
 			byte[] buf = new byte[16];
 			getbuf(columnIndex, 16).get(buf);
 			for (int i = 0; i < 8; i++) {
@@ -410,11 +410,11 @@ class DuckDBVector {
 		return new BigInteger(o.toString());
 	}
 
-	public float getFloat(int columnIndex) throws SQLException {
+	float getFloat(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return Float.NaN;
 		}
-		if (isType(columnIndex, DuckDBColumnType.FLOAT)) {
+		if (isType(DuckDBColumnType.FLOAT)) {
 			return getbuf(columnIndex, 4).getFloat();
 		}
 		Object o = getObject(columnIndex);
@@ -424,7 +424,7 @@ class DuckDBVector {
 		return Float.parseFloat(o.toString());
 	}
 
-	private boolean isType(int columnIndex, DuckDBColumnType columnType) {
+	private boolean isType(DuckDBColumnType columnType) {
 		return duckdb_type == columnType;
 	}
 
@@ -434,16 +434,16 @@ class DuckDBVector {
 		}
 		// Our raw data is already a proper count of units since the epoch
 		// So just construct the SQL Timestamp.
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
+		if (isType(DuckDBColumnType.TIMESTAMP)) {
 			return DuckDBTimestamp.fromMicroInstant(getbuf(columnIndex, 8).getLong(columnIndex));
 		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_MS)) {
+		if (isType(DuckDBColumnType.TIMESTAMP_MS)) {
 			return DuckDBTimestamp.fromMilliInstant(getbuf(columnIndex, 8).getLong());
 		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_NS)) {
+		if (isType(DuckDBColumnType.TIMESTAMP_NS)) {
 			return DuckDBTimestamp.fromNanoInstant(getbuf(columnIndex, 8).getLong());
 		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_S)) {
+		if (isType(DuckDBColumnType.TIMESTAMP_S)) {
 			return DuckDBTimestamp.fromSecondInstant(getbuf(columnIndex, 8).getLong());
 		}
 		Object o = getObject(columnIndex);
@@ -454,7 +454,7 @@ class DuckDBVector {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
+		if (isType(DuckDBColumnType.TIMESTAMP)) {
 			return DuckDBTimestamp.toLocalDateTime(getbuf(columnIndex, 8).getLong());
 		}
 		Object o = getObject(columnIndex);
