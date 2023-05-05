@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/batched_write/batch_csv_mixed_batches.test_slow
+# name: test/sql/copy/parquet/batched_write/parquet_write_mixed_batches.test_slow
 # description: Test batch Parquet write with mixed batches
 # group: [batched_write]
 
