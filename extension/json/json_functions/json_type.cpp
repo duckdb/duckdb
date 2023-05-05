@@ -28,12 +28,11 @@ static void GetTypeFunctionsInternal(ScalarFunctionSet &set, const LogicalType &
 	                               JSONReadManyFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetTypeFunction() {
+ScalarFunctionSet JSONFunctions::GetTypeFunction() {
 	ScalarFunctionSet set("json_type");
 	GetTypeFunctionsInternal(set, LogicalType::VARCHAR);
 	GetTypeFunctionsInternal(set, JSONCommon::JSONType());
-
-	return CreateScalarFunctionInfo(std::move(set));
+	return set;
 }
 
 } // namespace duckdb

@@ -171,9 +171,6 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 static idx_t DataFrameScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
 	D_ASSERT(bind_data_p);
 	auto bind_data = (const DataFrameScanBindData *)bind_data_p;
-	if (!bind_data->experimental) {
-		return 1;
-	}
 	return ceil((double)bind_data->row_count / bind_data->rows_per_task);
 }
 

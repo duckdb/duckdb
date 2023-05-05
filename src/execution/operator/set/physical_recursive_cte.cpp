@@ -61,16 +61,15 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) 
 	return new_group_count;
 }
 
-SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                          DataChunk &input) const {
-	auto &gstate = state.Cast<RecursiveCTEState>();
+SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<RecursiveCTEState>();
 	if (!union_all) {
-		idx_t match_count = ProbeHT(input, gstate);
+		idx_t match_count = ProbeHT(chunk, gstate);
 		if (match_count > 0) {
-			gstate.intermediate_table.Append(input);
+			gstate.intermediate_table.Append(chunk);
 		}
 	} else {
-		gstate.intermediate_table.Append(input);
+		gstate.intermediate_table.Append(chunk);
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -78,8 +77,8 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, GlobalSinkS
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-void PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                   LocalSourceState &lstate) const {
+SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataChunk &chunk,
+                                               OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<RecursiveCTEState>();
 	if (!gstate.initialized) {
 		gstate.intermediate_table.InitializeScan(gstate.scan_state);
@@ -117,6 +116,8 @@ void PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataChunk &chunk, 
 			gstate.intermediate_table.InitializeScan(gstate.scan_state);
 		}
 	}
+
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) const {

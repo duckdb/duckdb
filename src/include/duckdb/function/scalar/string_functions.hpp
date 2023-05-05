@@ -18,10 +18,6 @@ class RE2;
 
 namespace duckdb {
 
-struct ReverseFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct LowerFun {
 	static uint8_t ascii_to_lower_map[];
 
@@ -96,28 +92,8 @@ struct LikeEscapeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct LpadFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct LeftFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct MD5Fun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct NFCNormalizeFun {
 	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct RightFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct RegexpFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -127,41 +103,13 @@ struct SubstringFun {
 	static string_t SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length);
 };
 
-struct PrintfFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct InstrFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct PrefixFun {
 	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct RepeatFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ReplaceFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct TranslateFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct RpadFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct SuffixFun {
 	static ScalarFunction GetFunction();
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct TrimFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -173,51 +121,7 @@ struct ContainsFun {
 	                  idx_t needle_size);
 };
 
-struct StartsWithFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct UnicodeFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct StringSplitFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct BarFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ASCII {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct CHR {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct MismatchesFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct LevenshteinFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct DamerauLevenshteinFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct JaccardFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct JaroWinklerFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct HexFun {
+struct RegexpFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

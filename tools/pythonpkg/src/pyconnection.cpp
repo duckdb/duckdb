@@ -163,8 +163,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("begin", &DuckDBPyConnection::Begin, "Start a new transaction")
 	    .def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction")
 	    .def("rollback", &DuckDBPyConnection::Rollback, "Roll back changes performed within a transaction")
-	    .def("append", &DuckDBPyConnection::Append, "Append the passed Data.Frame to the named table",
-	         py::arg("table_name"), py::arg("df"))
+	    .def("append", &DuckDBPyConnection::Append, "Append the passed DataFrame to the named table",
+	         py::arg("table_name"), py::arg("df"), py::kw_only(), py::arg("by_name") = false)
 	    .def("register", &DuckDBPyConnection::RegisterPythonObject,
 	         "Register the passed Python Object value for querying with a view", py::arg("view_name"),
 	         py::arg("python_object"))
@@ -439,9 +439,19 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 	return shared_from_this();
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, const PandasDataFrame &value) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, const PandasDataFrame &value,
+                                                          bool by_name) {
 	RegisterPythonObject("__append_df", value);
-	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
+	string columns = "";
+	if (by_name) {
+		auto df_columns = value.attr("columns");
+		vector<string> column_names;
+		for (auto &column : df_columns) {
+			column_names.push_back(std::string(py::str(column)));
+		}
+		columns = StringUtil::Format("(%s)", StringUtil::Join(column_names, ","));
+	}
+	return Execute(StringUtil::Format("INSERT INTO \"%s\"%s SELECT * FROM __append_df", name, columns));
 }
 
 void DuckDBPyConnection::RegisterArrowObject(const py::object &arrow_object, const string &name) {
@@ -1383,11 +1393,26 @@ static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &databa
 	return res;
 }
 
+bool IsDefaultConnectionString(const string &database, bool read_only, unordered_map<string, string> &config) {
+	bool is_default = StringUtil::CIEquals(database, ":default:");
+	if (!is_default) {
+		return false;
+	}
+	// Only allow fetching the default connection when no options are passed
+	if (read_only == true || !config.empty()) {
+		throw InvalidInputException("Default connection fetching is only allowed without additional options");
+	}
+	return true;
+}
+
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
                                                            const py::dict &config_options) {
 	auto config_dict = TransformPyConfigDict(config_options);
-	DBConfig config(config_dict, read_only);
+	if (IsDefaultConnectionString(database, read_only, config_dict)) {
+		return DuckDBPyConnection::DefaultConnection();
+	}
 
+	DBConfig config(config_dict, read_only);
 	auto res = FetchOrCreateInstance(database, config);
 	auto &client_context = *res->connection->context;
 	SetDefaultConfigArguments(client_context);

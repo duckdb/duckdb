@@ -347,4 +347,9 @@ ScalarFunction ExportAggregateFunction::GetCombine() {
 	return result;
 }
 
+void ExportAggregateFunction::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ExportAggregateFunction::GetCombine());
+	set.AddFunction(ExportAggregateFunction::GetFinalize());
+}
+
 } // namespace duckdb

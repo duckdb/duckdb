@@ -257,10 +257,11 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 
 	// cast the parameters to the type of the function
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (table_function.arguments[i] != LogicalType::ANY && table_function.arguments[i] != LogicalType::TABLE &&
-		    table_function.arguments[i] != LogicalType::POINTER &&
-		    table_function.arguments[i].id() != LogicalTypeId::LIST) {
-			parameters[i] = parameters[i].CastAs(context, table_function.arguments[i]);
+		auto target_type = i < table_function.arguments.size() ? table_function.arguments[i] : table_function.varargs;
+
+		if (target_type != LogicalType::ANY && target_type != LogicalType::TABLE &&
+		    target_type != LogicalType::POINTER && target_type.id() != LogicalTypeId::LIST) {
+			parameters[i] = parameters[i].CastAs(context, target_type);
 		}
 	}
 

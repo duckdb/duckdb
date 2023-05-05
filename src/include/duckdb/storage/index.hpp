@@ -32,8 +32,7 @@ struct IndexScanState;
 class Index {
 public:
 	Index(AttachedDatabase &db, IndexType type, TableIOManager &table_io_manager, const vector<column_t> &column_ids,
-	      const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
-	      bool track_memory);
+	      const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type);
 	virtual ~Index() = default;
 
 	//! The type of the index
@@ -57,25 +56,21 @@ public:
 	AttachedDatabase &db;
 	//! Buffer manager of the database instance
 	BufferManager &buffer_manager;
-	//! The size of the index in memory
-	//! This does not track the size of the index meta information, but only allocated nodes and leaves
-	idx_t memory_size;
-	//! Flag determining if this index's size is tracked by the buffer manager
-	bool track_memory;
 
 public:
 	//! Initialize a single predicate scan on the index with the given expression and column IDs
 	virtual unique_ptr<IndexScanState> InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
-	                                                                 ExpressionType expressionType) = 0;
+	                                                                 const ExpressionType expression_type) = 0;
 	//! Initialize a two predicate scan on the index with the given expression and column IDs
-	virtual unique_ptr<IndexScanState> InitializeScanTwoPredicates(Transaction &transaction, const Value &low_value,
-	                                                               ExpressionType low_expression_type,
+	virtual unique_ptr<IndexScanState> InitializeScanTwoPredicates(const Transaction &transaction,
+	                                                               const Value &low_value,
+	                                                               const ExpressionType low_expression_type,
 	                                                               const Value &high_value,
-	                                                               ExpressionType high_expression_type) = 0;
+	                                                               const ExpressionType high_expression_type) = 0;
 	//! Performs a lookup on the index, fetching up to max_count result IDs. Returns true if all row IDs were fetched,
 	//! and false otherwise
-	virtual bool Scan(Transaction &transaction, DataTable &table, IndexScanState &state, idx_t max_count,
-	                  vector<row_t> &result_ids) = 0;
+	virtual bool Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state,
+	                  const idx_t max_count, vector<row_t> &result_ids) = 0;
 
 	//! Obtain a lock on the index
 	virtual void InitializeLock(IndexLock &state);
@@ -104,23 +99,13 @@ public:
 	//! Obtains a lock and calls MergeIndexes while holding that lock
 	bool MergeIndexes(Index &other_index);
 
+	//! Traverses an ART and vacuums the qualifying nodes. The lock obtained from InitializeLock must be held
+	virtual void Vacuum(IndexLock &state) = 0;
+	//! Obtains a lock and calls Vacuum while holding that lock
+	void Vacuum();
+
 	//! Returns the string representation of an index
 	virtual string ToString() = 0;
-	//! Verifies that the in-memory size value of the index matches its actual size
-	virtual void Verify() = 0;
-	//! Increases the memory size by the difference between the old size and the current size
-	//! and performs verifications
-	virtual void IncreaseAndVerifyMemorySize(idx_t old_memory_size) = 0;
-
-	//! Increases the in-memory size value
-	inline void IncreaseMemorySize(idx_t size) {
-		memory_size += size;
-	};
-	//! Decreases the in-memory size value
-	inline void DecreaseMemorySize(idx_t size) {
-		D_ASSERT(memory_size >= size);
-		memory_size -= size;
-	};
 
 	//! Returns true if the index is affected by updates on the specified column IDs, and false otherwise
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;

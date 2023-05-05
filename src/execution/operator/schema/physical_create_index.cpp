@@ -6,6 +6,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
+#include "duckdb/execution/index/art/art_key.hpp"
 
 namespace duckdb {
 
@@ -39,7 +40,7 @@ public:
 
 	unique_ptr<Index> local_index;
 	ArenaAllocator arena_allocator;
-	vector<Key> keys;
+	vector<ARTKey> keys;
 	DataChunk key_chunk;
 	vector<column_t> key_column_ids;
 };
@@ -52,7 +53,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateIndex::GetGlobalSinkState(ClientContex
 	case IndexType::ART: {
 		auto &storage = table.GetStorage();
 		state->global_index = make_uniq<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
-		                                     info->constraint_type, storage.db, true);
+		                                     info->constraint_type, storage.db);
 		break;
 	}
 	default:
@@ -69,13 +70,13 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	case IndexType::ART: {
 		auto &storage = table.GetStorage();
 		state->local_index = make_uniq<ART>(storage_ids, TableIOManager::Get(storage), unbound_expressions,
-		                                    info->constraint_type, storage.db, false);
+		                                    info->constraint_type, storage.db);
 		break;
 	}
 	default:
 		throw InternalException("Unimplemented index type");
 	}
-	state->keys = vector<Key>(STANDARD_VECTOR_SIZE);
+	state->keys = vector<ARTKey>(STANDARD_VECTOR_SIZE);
 	state->key_chunk.Initialize(Allocator::Get(context.client), state->local_index->logical_types);
 
 	for (idx_t i = 0; i < state->key_chunk.ColumnCount(); i++) {
@@ -84,22 +85,20 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	return std::move(state);
 }
 
-SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                         DataChunk &input) const {
+SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 
-	D_ASSERT(input.ColumnCount() >= 2);
-	auto &lstate = lstate_p.Cast<CreateIndexLocalSinkState>();
-	auto &row_identifiers = input.data[input.ColumnCount() - 1];
+	D_ASSERT(chunk.ColumnCount() >= 2);
+	auto &lstate = input.local_state.Cast<CreateIndexLocalSinkState>();
+	auto &row_identifiers = chunk.data[chunk.ColumnCount() - 1];
 
 	// generate the keys for the given input
-	lstate.key_chunk.ReferenceColumns(input, lstate.key_column_ids);
+	lstate.key_chunk.ReferenceColumns(chunk, lstate.key_column_ids);
 	lstate.arena_allocator.Reset();
 	ART::GenerateKeys(lstate.arena_allocator, lstate.key_chunk, lstate.keys);
 
 	auto &storage = table.GetStorage();
-	auto art =
-	    make_uniq<ART>(lstate.local_index->column_ids, lstate.local_index->table_io_manager,
-	                   lstate.local_index->unbound_expressions, lstate.local_index->constraint_type, storage.db, false);
+	auto art = make_uniq<ART>(lstate.local_index->column_ids, lstate.local_index->table_io_manager,
+	                          lstate.local_index->unbound_expressions, lstate.local_index->constraint_type, storage.db);
 	if (!art->ConstructFromSorted(lstate.key_chunk.size(), lstate.keys, row_identifiers)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
@@ -134,11 +133,6 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 	}
 
-	state.global_index->Verify();
-	if (state.global_index->track_memory) {
-		state.global_index->buffer_manager.IncreaseUsedMemory(state.global_index->memory_size);
-	}
-
 	auto &schema = table.schema;
 	auto index_entry = schema.CreateIndex(context, *info, table).get();
 	if (!index_entry) {
@@ -153,6 +147,10 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 		index.parsed_expressions.push_back(parsed_expr->Copy());
 	}
 
+	// vacuum excess memory
+	state.global_index->Vacuum();
+
+	// add index to storage
 	storage.info->indexes.AddIndex(std::move(state.global_index));
 	return SinkFinalizeType::READY;
 }
@@ -161,9 +159,9 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 // Source
 //===--------------------------------------------------------------------===//
 
-void PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                  LocalSourceState &lstate) const {
-	// NOP
+SourceResultType PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk,
+                                              OperatorSourceInput &input) const {
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

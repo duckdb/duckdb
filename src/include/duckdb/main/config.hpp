@@ -149,6 +149,8 @@ struct DBConfigOptions {
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	//! The set of unrecognized (other) options
 	unordered_map<string, Value> unrecognized_options;
+	//! Whether to print bindings when printing the plan (debug mode only)
+	static bool debug_print_bindings;
 
 	bool operator==(const DBConfigOptions &other) const;
 };

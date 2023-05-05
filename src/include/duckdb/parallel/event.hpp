@@ -41,7 +41,7 @@ public:
 
 	void CompleteDependency();
 
-	void SetTasks(vector<unique_ptr<Task>> tasks);
+	void SetTasks(vector<shared_ptr<Task>> tasks);
 
 	void InsertEvent(shared_ptr<Event> replacement_event);
 
