@@ -14,61 +14,61 @@ namespace duckdb {
 RegexOptimizationRule::RegexOptimizationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	auto func = make_uniq<FunctionExpressionMatcher>();
 	func->function = make_uniq<SpecificFunctionMatcher>("regexp_matches");
-	func->policy = SetMatcher::Policy::PARTIAL_ORDERED;
+	func->policy = SetMatcher::Policy::SOME_ORDERED;
 	func->matchers.push_back(make_uniq<ExpressionMatcher>());
-	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
 	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
 
 	root = std::move(func);
 }
 
 struct LikeString {
-	bool exists = false;
+	bool exists = true;
 	bool escaped = false;
-	string escaped_character = "\\";
 	string like_string = "";
 };
+
+static void AddCharacter(char chr, LikeString &ret, bool contains) {
+	// if we are not converting into a contains, and the string has LIKE special characters
+	// then don't return a possible LIKE match
+	// same if the character is a control character
+	if (iscntrl(chr) || (!contains && (chr == '%' || chr == '_'))) {
+		ret.exists = false;
+		return;
+	}
+	auto run_as_str {chr};
+	ret.like_string += run_as_str;
+}
 
 static LikeString GetLikeStringEscaped(duckdb_re2::Regexp *regexp, bool contains = false) {
 	D_ASSERT(regexp->op() == duckdb_re2::kRegexpLiteralString || regexp->op() == duckdb_re2::kRegexpLiteral);
 	LikeString ret;
+
+	if (regexp->parse_flags() & duckdb_re2::Regexp::FoldCase ||
+	    !(regexp->parse_flags() & duckdb_re2::Regexp::OneLine)) {
+		// parse flags can turn on and off within a regex match, return no optimization
+		// For now, we just don't optimize if these every turn on.
+		// TODO: logic to attempt the optimization, then if the parse flags change, then abort
+		ret.exists = false;
+		return ret;
+	}
+
 	// case insensitivity may be on now, but it can also turn off.
 	if (regexp->op() == duckdb_re2::kRegexpLiteralString) {
 		auto nrunes = (idx_t)regexp->nrunes();
 		auto runes = regexp->runes();
 		for (idx_t i = 0; i < nrunes; i++) {
-			// don't bother trying to convert regex with control characters to like. Let
-			// RE2 handle that
-			if (iscntrl(runes[i])) {
-				ret.exists = false;
+			char chr = toascii(runes[i]);
+			AddCharacter(chr, ret, contains);
+			if (!ret.exists) {
 				return ret;
 			}
-			char chr = toascii(runes[i]);
-			// if a character is equal to the escaped character and the like string is already escaped`
-			if (!contains && (chr == '%' || chr == '_' || chr == ret.escaped_character[0])) {
-				ret.escaped = true;
-				ret.like_string += ret.escaped_character;
-			}
-			auto run_as_str {chr};
-			ret.like_string += run_as_str;
 		}
 	} else {
 		auto rune = regexp->rune();
-		if (iscntrl(rune)) {
-			ret.exists = false;
-			return ret;
-		}
 		char chr = toascii(rune);
-		// if a character is equal to the escaped character return that there is no escaped like string.
-		if (!contains && (chr == '%' || chr == '_' || chr == ret.escaped_character[0])) {
-			ret.escaped = true;
-			ret.like_string += ret.escaped_character;
-		}
-		auto rune_as_str {chr};
-		ret.like_string += rune_as_str;
+		AddCharacter(chr, ret, contains);
 	}
-	D_ASSERT(ret.like_string.size() >= 1);
-	ret.exists = true;
+	D_ASSERT(ret.like_string.size() >= 1 || !ret.exists);
 	return ret;
 }
 
@@ -95,6 +95,7 @@ static LikeString LikeMatchFromRegex(duckdb_re2::RE2 &pattern) {
 				ret.like_string += "%";
 				break;
 			}
+			ret.exists = false;
 			return ret;
 		case duckdb_re2::kRegexpLiteralString:
 		case duckdb_re2::kRegexpLiteral: {
@@ -125,11 +126,11 @@ static LikeString LikeMatchFromRegex(duckdb_re2::RE2 &pattern) {
 		default:
 			// some other regexp op that doesn't have an equivalent to a like string
 			// return false;
+			ret.exists = false;
 			return ret;
 		}
 		cur_sub_index += 1;
 	}
-	ret.exists = true;
 	return ret;
 }
 
@@ -165,12 +166,6 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	}
 
 	LikeString like_string;
-	if (pattern.Regexp()->parse_flags() & duckdb_re2::Regexp::FoldCase ||
-	    !(pattern.Regexp()->parse_flags() & duckdb_re2::Regexp::OneLine)) {
-		// parse flags can turn on and off within a regex match, return no optimization
-		// TODO: logic to attempt the optimization, then if the parse flags change, then abort
-		return nullptr;
-	}
 	// check for a like string. If we can convert it to a like string, the like string
 	// optimizer will further optimize suffix and prefix things.
 	if (pattern.Regexp()->op() == duckdb_re2::kRegexpLiteralString ||
@@ -188,6 +183,8 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		return std::move(contains);
 	} else if (pattern.Regexp()->op() == duckdb_re2::kRegexpConcat) {
 		like_string = LikeMatchFromRegex(pattern);
+	} else {
+		like_string.exists = false;
 	}
 
 	if (!like_string.exists) {
@@ -200,15 +197,6 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		D_ASSERT(root.children.size() == 2);
 	}
 
-	if (like_string.escaped) {
-		auto like_escape_expression = make_uniq<BoundFunctionExpression>(
-		    root.return_type, LikeEscapeFun::GetLikeEscapeFun(), std::move(root.children), nullptr);
-		auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(like_string.like_string)));
-		auto escape = make_uniq<BoundConstantExpression>(Value(std::move(like_string.escaped_character)));
-		like_escape_expression->children[1] = std::move(parameter);
-		like_escape_expression->children.push_back(std::move(escape));
-		return std::move(like_escape_expression);
-	}
 	auto like_expression = make_uniq<BoundFunctionExpression>(root.return_type, LikeFun::GetLikeFunction(),
 	                                                          std::move(root.children), nullptr);
 	auto parameter = make_uniq<BoundConstantExpression>(Value(std::move(like_string.like_string)));
