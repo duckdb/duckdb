@@ -63,7 +63,8 @@ static void DbgenFunction(ClientContext &context, TableFunctionInput &data_p, Da
 		return;
 	}
 	tpch::DBGenWrapper::CreateTPCHSchema(context, data.catalog, data.schema, data.suffix);
-	tpch::DBGenWrapper::LoadTPCHData(context, data.sf, data.catalog, data.schema, data.suffix, data.children, data.step);
+	tpch::DBGenWrapper::LoadTPCHData(context, data.sf, data.catalog, data.schema, data.suffix, data.children,
+	                                 data.step);
 
 	data.finished = true;
 }
