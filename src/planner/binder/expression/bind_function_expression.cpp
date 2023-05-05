@@ -45,7 +45,10 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 				colref = make_uniq<ColumnRefExpression>(function.schema, function.catalog);
 			}
 			auto new_colref = QualifyColumnName(*colref, error);
-			if (error.empty()) {
+			bool is_col = error.empty() ? true : false;
+			bool is_col_alias = QualifyColumnAlias(*colref);
+
+			if (is_col || is_col_alias) {
 				// we can! transform this into a function call on the column
 				// i.e. "x.lower()" becomes "lower(x)"
 				function.children.insert(function.children.begin(), std::move(colref));

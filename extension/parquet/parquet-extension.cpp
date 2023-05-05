@@ -304,6 +304,9 @@ public:
 				parquet_options.file_row_number = BooleanValue::Get(kv.second);
 			}
 		}
+		if (parquet_options.file_options.auto_detect_hive_partitioning) {
+			parquet_options.file_options.hive_partitioning = MultiFileReaderOptions::AutoDetectHivePartitioning(files);
+		}
 		return ParquetScanBindInternal(context, std::move(files), return_types, names, parquet_options);
 	}
 

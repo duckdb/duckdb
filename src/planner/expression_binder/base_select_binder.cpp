@@ -143,4 +143,11 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_
 	                                                      ColumnBinding(node.group_index, group_index), depth));
 }
 
+bool BaseSelectBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
+	if (!colref.IsQualified()) {
+		return alias_map.find(colref.column_names[0]) != alias_map.end() ? true : false;
+	}
+	return false;
+}
+
 } // namespace duckdb
