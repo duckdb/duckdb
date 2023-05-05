@@ -80,7 +80,7 @@ jobs:
       with:
         python-version: '3.7'
 
-    - uses: r-lib/actions/setup-r@v1
+    - uses: r-lib/actions/setup-r@v2
       with:
         r-version: 'devel'
 
@@ -181,7 +181,7 @@ jobs:
       with:
         python-version: '3.7'
 
-    - uses: r-lib/actions/setup-r@v1
+    - uses: r-lib/actions/setup-r@v2
       with:
         r-version: 'devel'
 
@@ -220,7 +220,7 @@ jobs:
       with:
         python-version: '3.7'
 
-    - uses: r-lib/actions/setup-r@v1
+    - uses: r-lib/actions/setup-r@v2
       with:
         r-version: 'devel'
         update-rtools: true
@@ -262,7 +262,7 @@ jobs:
         with:
           python-version: '3.7'
 
-      - uses: r-lib/actions/setup-r@v1
+      - uses: r-lib/actions/setup-r@v2
         with:
           r-version: 'devel'
           update-rtools: true
@@ -275,15 +275,21 @@ jobs:
           key: ${{ github.job }}
           save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
-      - name: Install OpenSSL
+#      - name: Install OpenSSL
+#        shell: bash
+#        run: |
+#          choco install openssl -y --force
+
+      - name: Find GCC
         shell: bash
         run: |
-          choco install openssl -y --force
+          ls "/cygdrive/c/rtools*/x68_64-w64-mingw*"
+      
 
       - uses: ./.github/actions/build_extensions
         with:
           deploy_as: windows_rtools_amd64
-          post_install: choco uninstall openssl -y --force
+#          post_install: choco uninstall openssl -y --force
           treat_warn_as_error: 0
           s3_id: ${{ secrets.S3_ID }}
           s3_key: ${{ secrets.S3_KEY }}
@@ -305,7 +311,7 @@ jobs:
       with:
         python-version: '3.7'
 
-    - uses: r-lib/actions/setup-r@v1
+    - uses: r-lib/actions/setup-r@v2
       with:
         r-version: 'devel'
         update-rtools: true
