@@ -3320,6 +3320,22 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	// https://github.com/duckdb/duckdb/issues/7218
+	public static void test_unknown_result_type() throws Exception {
+		try (Connection connection = DriverManager.getConnection("jdbc:duckdb:");
+			 PreparedStatement p = connection.prepareStatement("select generate_series.generate_series from generate_series(?, ?) order by 1")) {
+			p.setInt(1, 0);
+			p.setInt(2, 1);
+	
+			try (ResultSet rs = p.executeQuery()) {
+				rs.next();
+				assertEquals(rs.getInt(1), 0);
+				rs.next();
+				assertEquals(rs.getInt(1), 1);
+			}
+		}
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
