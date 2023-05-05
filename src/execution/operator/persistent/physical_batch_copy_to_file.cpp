@@ -102,7 +102,7 @@ private:
 class BatchCopyToLocalState : public LocalSinkState {
 public:
 	explicit BatchCopyToLocalState(unique_ptr<LocalFunctionData> local_state_p)
-	    : local_state(std::move(local_state_p)), rows_copied(0), batch_index(0) {
+	    : local_state(std::move(local_state_p)), rows_copied(0) {
 	}
 
 	//! Local copy state
@@ -114,7 +114,7 @@ public:
 	//! How many rows have been copied in total
 	idx_t rows_copied;
 	//! The current batch index
-	idx_t batch_index;
+	optional_idx batch_index;
 
 	void InitializeCollection(ClientContext &context, const PhysicalOperator &op) {
 		collection = make_uniq<ColumnDataCollection>(Allocator::Get(context), op.children[0]->types);
@@ -130,6 +130,7 @@ SinkResultType PhysicalBatchCopyToFile::Sink(ExecutionContext &context, DataChun
 	auto &state = input.local_state.Cast<BatchCopyToLocalState>();
 	if (!state.collection) {
 		state.InitializeCollection(context.client, *this);
+		state.batch_index = state.partition_info.batch_index.GetIndex();
 	}
 	state.rows_copied += chunk.size();
 	state.collection->Append(state.append_state, chunk);
@@ -151,7 +152,7 @@ class ProcessRemainingBatchesTask : public ExecutorTask {
 public:
 	ProcessRemainingBatchesTask(Executor &executor, shared_ptr<Event> event_p, BatchCopyToGlobalState &state_p,
 	                            ClientContext &context, const PhysicalBatchCopyToFile &op)
-	    : ExecutorTask(executor), event(std::move(event_p)), gstate(state_p), op(op), context(context) {
+	    : ExecutorTask(executor), event(std::move(event_p)), op(op), gstate(state_p), context(context) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -485,17 +486,17 @@ void PhysicalBatchCopyToFile::NextBatch(ExecutionContext &context, GlobalSinkSta
 	auto &state = lstate.Cast<BatchCopyToLocalState>();
 	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
 
-	if (state.collection) {
+	if (state.collection && state.collection->Count() > 0) {
 		// we finished processing this batch
 		// start flushing data
 		auto min_batch_index = lstate.partition_info.min_batch_index.GetIndex();
 		if (gstate.RequiresRepartition()) {
 			// we have a desired batch size - we need to repartition to ensure `PrepareBatchData` is only called with
-			AddRawBatchData(context.client, gstate_p, state.batch_index, std::move(state.collection));
+			AddRawBatchData(context.client, gstate_p, state.batch_index.GetIndex(), std::move(state.collection));
 			RepartitionBatches(context.client, gstate_p, min_batch_index);
 		} else {
 			// no desired batch size - we can directly prepare and flush the batch data for this batch
-			PrepareBatchData(context.client, gstate_p, state.batch_index, std::move(state.collection));
+			PrepareBatchData(context.client, gstate_p, state.batch_index.GetIndex(), std::move(state.collection));
 		}
 		ExecuteTask(context.client, gstate_p);
 		FlushBatchData(context.client, gstate_p, min_batch_index);

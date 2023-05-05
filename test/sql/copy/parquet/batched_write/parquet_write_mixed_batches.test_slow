@@ -1,5 +1,5 @@
 # name: test/sql/copy/csv/batched_write/batch_csv_mixed_batches.test_slow
-# description: Test batch CSV write with mixed batches
+# description: Test batch Parquet write with mixed batches
 # group: [batched_write]
 
 require parquet
@@ -33,12 +33,12 @@ CREATE VIEW v4 AS FROM v1 WHERE i>998 AND i<1000 AND i%2=0
 loop i 0 2
 
 query I
-COPY v1 TO '__TEST_DIR__/mixed_batches_v1.csv' (HEADER)
+COPY v1 TO '__TEST_DIR__/mixed_batches_v1.parquet'
 ----
 1000000
 
 query I
-CREATE TABLE mixed_batches_v1 AS FROM '__TEST_DIR__/mixed_batches_v1.csv'
+CREATE TABLE mixed_batches_v1 AS FROM '__TEST_DIR__/mixed_batches_v1.parquet'
 ----
 1000000
 
@@ -62,12 +62,12 @@ endloop
 
 # now do the same, but filter out half of the values
 query I
-COPY v2 TO '__TEST_DIR__/mixed_batches_v2.csv' (HEADER)
+COPY v2 TO '__TEST_DIR__/mixed_batches_v2.parquet'
 ----
 500000
 
 query I
-CREATE TABLE mixed_batches_v2 AS FROM '__TEST_DIR__/mixed_batches_v2.csv'
+CREATE TABLE mixed_batches_v2 AS FROM '__TEST_DIR__/mixed_batches_v2.parquet'
 ----
 500000
 
@@ -91,12 +91,12 @@ endloop
 
 # do it again, but this time only filter out SOME small batches
 query I
-COPY v3 TO '__TEST_DIR__/mixed_batches_v3.csv' (HEADER)
+COPY v3 TO '__TEST_DIR__/mixed_batches_v3.parquet'
 ----
 700000
 
 query I
-CREATE TABLE mixed_batches_v3 AS FROM '__TEST_DIR__/mixed_batches_v3.csv'
+CREATE TABLE mixed_batches_v3 AS FROM '__TEST_DIR__/mixed_batches_v3.parquet'
 ----
 700000
 
@@ -120,12 +120,12 @@ endloop
 
 # now with an empty table
 query I
-COPY v4 TO '__TEST_DIR__/mixed_batches_v4.csv' (HEADER)
+COPY v4 TO '__TEST_DIR__/mixed_batches_v4.parquet'
 ----
 0
 
 query I
-CREATE TABLE mixed_batches_v4 AS FROM '__TEST_DIR__/mixed_batches_v4.csv'
+CREATE TABLE mixed_batches_v4 AS FROM '__TEST_DIR__/mixed_batches_v4.parquet'
 ----
 0
 
