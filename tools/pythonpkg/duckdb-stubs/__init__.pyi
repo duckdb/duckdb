@@ -135,6 +135,7 @@ class DuckDBPyConnection:
         all_varchar: Optional[bool] = None,
         normalize_names: Optional[bool] = None,
         filename: Optional[bool] = None,
+        null_padding: Optional[bool] = None,
     ) -> DuckDBPyRelation: ...
     def from_df(self, df: pandas.DataFrame = ...) -> DuckDBPyRelation: ...
     @overload
@@ -451,6 +452,7 @@ def from_csv_auto(
     all_varchar: Optional[bool] = None,
     normalize_names: Optional[bool] = None,
     filename: Optional[bool] = None,
+    null_padding: Optional[bool] = None,
     connection: DuckDBPyConnection = ...
 ) -> DuckDBPyRelation: ...
 
