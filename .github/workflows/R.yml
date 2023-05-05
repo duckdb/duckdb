@@ -249,6 +249,47 @@ jobs:
         _R_CHECK_CRAN_INCOMING_=FALSE _R_CHECK_PKG_SIZES_=FALSE R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
         if egrep 'NOTE|WARNING|ERROR' /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
+  rstats-windows-extensions:
+    name: R Package Windows (Extensions)
+#    needs: rstats-linux
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.7'
+
+      - uses: r-lib/actions/setup-r@v1
+        with:
+          r-version: 'devel'
+          update-rtools: true
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
+      - name: Install OpenSSL
+        shell: bash
+        run: |
+          choco install openssl -y --force
+
+      - uses: ./.github/actions/build_extensions
+        with:
+          deploy_as: windows_rtools_amd64
+          post_install: choco uninstall openssl -y --force
+          treat_warn_as_error: 0
+          s3_id: ${{ secrets.S3_ID }}
+          s3_key: ${{ secrets.S3_KEY }}
+          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+          python_name: python
+
   rstats-windows-warnings:
     name: R Package Windows (Warnings)
     needs: rstats-linux
