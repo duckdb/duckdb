@@ -251,7 +251,7 @@ jobs:
 
   rstats-windows-extensions:
     name: R Package Windows (Extensions)
-    needs: rstats-linux
+#    needs: rstats-linux
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
