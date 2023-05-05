@@ -45,25 +45,25 @@ public:
 		throw InvalidInputException("Invalid input for binary digit: %s", string(c, 1));
 	}
 
-	DUCKDB_API static bool CharacterIsSpace(char c) {
+	static bool CharacterIsSpace(char c) {
 		return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
 	}
-	DUCKDB_API static bool CharacterIsNewline(char c) {
+	static bool CharacterIsNewline(char c) {
 		return c == '\n' || c == '\r';
 	}
-	DUCKDB_API static bool CharacterIsDigit(char c) {
+	static bool CharacterIsDigit(char c) {
 		return c >= '0' && c <= '9';
 	}
-	DUCKDB_API static bool CharacterIsHex(char c) {
+	static bool CharacterIsHex(char c) {
 		return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 	}
-	DUCKDB_API static char CharacterToLower(char c) {
+	static char CharacterToLower(char c) {
 		if (c >= 'A' && c <= 'Z') {
 			return c - ('A' - 'a');
 		}
 		return c;
 	}
-	DUCKDB_API static char CharacterIsAlpha(char c) {
+	static char CharacterIsAlpha(char c) {
 		return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 	}
 	static bool CharacterIsOperator(char c) {
@@ -200,7 +200,7 @@ public:
 
 	//! Returns true if two null-terminated strings are equal or point to the same address.
 	//! Returns false if only one of the strings is nullptr
-	DUCKDB_API static bool Equals(const char *s1, const char *s2) {
+	static bool Equals(const char *s1, const char *s2) {
 		if (s1 == s2) {
 			return true;
 		}

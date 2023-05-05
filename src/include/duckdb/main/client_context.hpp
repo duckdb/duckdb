@@ -86,7 +86,7 @@ public:
 	TransactionContext transaction;
 
 public:
-	DUCKDB_API MetaTransaction &ActiveTransaction() {
+	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
 	}
 
