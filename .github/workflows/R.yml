@@ -292,6 +292,7 @@ jobs:
           python_name: python
           override_cc: gcc
           override_cxx: g++
+          httpfs: 0 # for now
 
   rstats-windows-warnings:
     name: R Package Windows (Warnings)
