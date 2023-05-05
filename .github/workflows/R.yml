@@ -283,8 +283,9 @@ jobs:
       - name: Find GCC
         shell: bash
         run: |
-          dir c:\
-          dir c:\rtools*
+          which gcc
+          gcc -v  
+          g++ -v
 
       - uses: ./.github/actions/build_extensions
         with:
