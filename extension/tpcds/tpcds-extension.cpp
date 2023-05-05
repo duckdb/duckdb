@@ -18,6 +18,7 @@ struct DSDGenFunctionData : public TableFunctionData {
 
 	bool finished = false;
 	double sf = 0;
+	string catalog = INVALID_CATALOG;
 	string schema = DEFAULT_SCHEMA;
 	string suffix;
 	bool overwrite = false;
@@ -30,6 +31,8 @@ static duckdb::unique_ptr<FunctionData> DsdgenBind(ClientContext &context, Table
 	for (auto &kv : input.named_parameters) {
 		if (kv.first == "sf") {
 			result->sf = kv.second.GetValue<double>();
+		} else if (kv.first == "catalog") {
+			result->schema = StringValue::Get(kv.second);
 		} else if (kv.first == "schema") {
 			result->schema = StringValue::Get(kv.second);
 		} else if (kv.first == "suffix") {
@@ -50,8 +53,8 @@ static void DsdgenFunction(ClientContext &context, TableFunctionInput &data_p, D
 	if (data.finished) {
 		return;
 	}
-	tpcds::DSDGenWrapper::CreateTPCDSSchema(context, data.schema, data.suffix, data.keys, data.overwrite);
-	tpcds::DSDGenWrapper::DSDGen(data.sf, context, data.schema, data.suffix);
+	tpcds::DSDGenWrapper::CreateTPCDSSchema(context, data.catalog, data.schema, data.suffix, data.keys, data.overwrite);
+	tpcds::DSDGenWrapper::DSDGen(data.sf, context, data.catalog, data.schema, data.suffix);
 
 	data.finished = true;
 }
@@ -150,6 +153,7 @@ void TPCDSExtension::Load(DuckDB &db) {
 	dsdgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
 	dsdgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
 	dsdgen_func.named_parameters["keys"] = LogicalType::BOOLEAN;
+	dsdgen_func.named_parameters["catalog"] = LogicalType::VARCHAR;
 	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
 	dsdgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
 	ExtensionUtil::RegisterFunction(db_instance, dsdgen_func);
