@@ -4,14 +4,14 @@ all: release
 opt: release
 unit: unittest
 
-GENERATOR=
-FORCE_COLOR=
-WARNINGS_AS_ERRORS=
-FORCE_WARN_UNUSED_FLAG=
-DISABLE_UNITY_FLAG=
-DISABLE_SANITIZER_FLAG=
-OSX_BUILD_UNIVERSAL_FLAG=
-FORCE_32_BIT_FLAG=
+GENERATOR ?=
+FORCE_COLOR ?=
+WARNINGS_AS_ERRORS ?=
+FORCE_WARN_UNUSED_FLAG ?=
+DISABLE_UNITY_FLAG ?=
+DISABLE_SANITIZER_FLAG ?=
+OSX_BUILD_UNIVERSAL_FLAG ?=
+FORCE_32_BIT_FLAG ?=
 
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
@@ -50,7 +50,8 @@ endif
 ifeq (${STATIC_LIBCPP}, 1)
 	STATIC_LIBCPP=-DSTATIC_LIBCPP=TRUE
 endif
-EXTENSIONS=-DBUILD_PARQUET_EXTENSION=TRUE
+EXTENSIONS ?=
+EXTENSIONS += -DBUILD_PARQUET_EXTENSION=TRUE
 ifeq (${DISABLE_PARQUET}, 1)
 	EXTENSIONS:=
 endif
@@ -152,11 +153,15 @@ endif
 ifneq ($(BUILD_OUT_OF_TREE_EXTENSIONS),)
 	EXTENSIONS:=${EXTENSIONS} -DDUCKDB_OOT_EXTENSION_NAMES="$(BUILD_OUT_OF_TREE_EXTENSIONS)"
 endif
+
 ifeq (${CRASH_ON_ASSERT}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DASSERT_EXCEPTION=0
 endif
 ifeq (${DISABLE_STRING_INLINE}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DDISABLE_STR_INLINE=1
+endif
+ifeq (${DISABLE_MEMORY_SAFETY}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DDISABLE_MEMORY_SAFETY=1
 endif
 ifeq (${DESTROY_UNPINNED_BLOCKS}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DDESTROY_UNPINNED_BLOCKS=1
@@ -186,25 +191,75 @@ clean-python:
 debug:
 	mkdir -p ./build/debug && \
 	cd build/debug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DDEBUG_MOVE=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	echo ${DUCKDB_OOT_EXTENSION_SUBSTRAIT_PATH} && \
+	cmake \
+		$(GENERATOR) \
+		$(FORCE_COLOR) \
+		${WARNINGS_AS_ERRORS} \
+		${FORCE_32_BIT_FLAG} \
+		${DISABLE_UNITY_FLAG} \
+		${DISABLE_SANITIZER_FLAG} \
+		${STATIC_LIBCPP} \
+		${EXTENSIONS} \
+		${EXTRA_CMAKE_VARIABLES} \
+		-DDEBUG_MOVE=1 \
+		-DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
 
 release:
 	mkdir -p ./build/release && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${OSX_BUILD_UNIVERSAL_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake \
+		$(GENERATOR) \
+		$(FORCE_COLOR) \
+		${WARNINGS_AS_ERRORS} \
+		${FORCE_WARN_UNUSED_FLAG} \
+		${FORCE_32_BIT_FLAG} \
+		${DISABLE_UNITY_FLAG} \
+		${DISABLE_SANITIZER_FLAG} \
+		${OSX_BUILD_UNIVERSAL_FLAG} \
+		${STATIC_LIBCPP} \
+		${EXTENSIONS} \
+		${EXTRA_CMAKE_VARIABLES} \
+		-DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build . --config Release
 
 cldebug:
 	mkdir -p ./build/cldebug && \
 	cd build/cldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake \
+		$(GENERATOR) \
+		$(FORCE_COLOR) \
+		${WARNINGS_AS_ERRORS} \
+		${FORCE_32_BIT_FLAG} \
+		${DISABLE_UNITY_FLAG} \
+		${EXTENSIONS} \
+		-DBUILD_PYTHON=1 \
+		-DBUILD_R=1 \
+		-DENABLE_SANITIZER=0 \
+		-DENABLE_UBSAN=0 \
+		${EXTRA_CMAKE_VARIABLES} \
+		-DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
 
 clreldebug:
 	mkdir -p ./build/clreldebug && \
 	cd build/clreldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake \
+		$(GENERATOR) \
+		$(FORCE_COLOR) \
+		${WARNINGS_AS_ERRORS} \
+		${FORCE_32_BIT_FLAG} \
+		${DISABLE_UNITY_FLAG} \
+		${STATIC_LIBCPP} \
+		${EXTENSIONS} \
+		-DBUILD_PYTHON=1 \
+		-DBUILD_R=1 \
+		-DBUILD_FTS_EXTENSION=1 \
+		-DENABLE_SANITIZER=0 \
+		-DENABLE_UBSAN=0 \
+		${EXTRA_CMAKE_VARIABLES} \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
 unittest: debug
@@ -232,38 +287,91 @@ doxygen: docs
 reldebug:
 	mkdir -p ./build/reldebug && \
 	cd build/reldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG}  ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake \
+		$(GENERATOR) \
+		$(FORCE_COLOR) \
+		${WARNINGS_AS_ERRORS} \
+		${FORCE_32_BIT_FLAG} \
+		${DISABLE_UNITY_FLAG} \
+		${DISABLE_SANITIZER_FLAG} \
+		${STATIC_LIBCPP} \
+		${EXTENSIONS} \
+		${EXTRA_CMAKE_VARIABLES} \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
 relassert:
 	mkdir -p ./build/relassert && \
 	cd build/relassert && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DFORCE_ASSERT=1 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake \
+		$(GENERATOR) \
+		$(FORCE_COLOR) \
+		${WARNINGS_AS_ERRORS} \
+		${FORCE_32_BIT_FLAG} \
+		${DISABLE_UNITY_FLAG} \
+		${DISABLE_SANITIZER_FLAG} \
+		${STATIC_LIBCPP} \
+		${EXTENSIONS} \
+		-DFORCE_ASSERT=1 \
+		${EXTRA_CMAKE_VARIABLES} \
+		-DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
 benchmark:
 	mkdir -p ./build/release && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${OSX_BUILD_UNIVERSAL_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DBUILD_BENCHMARKS=1 -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake \
+		$(GENERATOR) \
+		$(FORCE_COLOR) \
+		${WARNINGS_AS_ERRORS} \
+		${FORCE_WARN_UNUSED_FLAG} \
+		${FORCE_32_BIT_FLAG} \
+		${DISABLE_UNITY_FLAG} \
+		${DISABLE_SANITIZER_FLAG} \
+		${OSX_BUILD_UNIVERSAL_FLAG} \
+		${STATIC_LIBCPP} \
+		${EXTENSIONS} \
+		-DBUILD_BENCHMARKS=1 \
+		${EXTRA_CMAKE_VARIABLES} \
+		-DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build . --config Release
 
 amaldebug:
 	mkdir -p ./build/amaldebug && \
 	python3 scripts/amalgamation.py && \
 	cd build/amaldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${STATIC_LIBCPP} ${EXTENSIONS} ${FORCE_32_BIT_FLAG} -DAMALGAMATION_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
+	cmake \
+		$(GENERATOR) \
+		$(FORCE_COLOR) \
+		${STATIC_LIBCPP} \
+		${EXTENSIONS} \
+		${FORCE_32_BIT_FLAG} \
+		-DAMALGAMATION_BUILD=1 \
+		${EXTRA_CMAKE_VARIABLES} \
+		-DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
 
 tidy-check:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
-	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_PARQUET_EXTENSION=TRUE -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 ../.. && \
+	cmake \
+		-DCLANG_TIDY=1 \
+		-DDISABLE_UNITY=1 \
+		-DBUILD_PARQUET_EXTENSION=TRUE \
+		-DBUILD_PYTHON_PKG=TRUE \
+		${EXTRA_CMAKE_VARIABLES} \
+		-DBUILD_SHELL=0 ../.. && \
 	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER}
 
 tidy-fix:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
-	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_PARQUET_EXTENSION=TRUE -DBUILD_SHELL=0 ../.. && \
+	cmake \
+		-DCLANG_TIDY=1 \
+		-DDISABLE_UNITY=1 \
+		-DBUILD_PARQUET_EXTENSION=TRUE \
+		${EXTRA_CMAKE_VARIABLES} \
+		-DBUILD_SHELL=0 ../.. && \
 	python3 ../../scripts/run-clang-tidy.py -fix
 
 test_compile: # test compilation of individual cpp files
