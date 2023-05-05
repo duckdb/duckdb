@@ -193,17 +193,16 @@ public:
 
 	//	LHS sorting
 	ExpressionExecutor lhs_executor;
+	DataChunk lhs_payload;
 	DataChunk lhs_keys;
+	DataChunk lhs_sorted;
 	ValidityMask lhs_valid_mask;
 	SelectionVector lhs_sel;
-	idx_t lhs_valid;
 	RowLayout lhs_layout;
 	unique_ptr<GlobalSortState> lhs_global_state;
-	DataChunk lhs_sorted;
 
 	// LHS binning
 	Vector hash_vector;
-	Vector bin_vector;
 
 	//	Output
 	idx_t lhs_match_count;
@@ -217,15 +216,17 @@ public:
 AsOfLocalState::AsOfLocalState(ClientContext &context, const PhysicalAsOfJoin &op, bool force_external)
     : context(context), allocator(Allocator::Get(context)), op(op),
       buffer_manager(BufferManager::GetBufferManager(context)), force_external(force_external), lhs_executor(context),
-      hash_vector(LogicalType::HASH), bin_vector(LogicalType::HASH), left_outer(IsLeftOuterJoin(op.join_type)),
-      fetch_next_left(true) {
+      hash_vector(LogicalType::HASH), left_outer(IsLeftOuterJoin(op.join_type)), fetch_next_left(true) {
 	vector<unique_ptr<BaseStatistics>> partition_stats;
 	Orders partitions; // Not used.
 	PartitionGlobalSinkState::GenerateOrderings(partitions, lhs_orders, op.lhs_partitions, op.lhs_orders,
 	                                            partition_stats);
 
 	//	We sort the row numbers of the incoming block, not the rows
-	lhs_layout.Initialize({LogicalType::UINTEGER});
+	auto lhs_types = op.children[0]->types;
+	lhs_payload.InitializeEmpty(lhs_types);
+	lhs_types.push_back(LogicalType::HASH);
+	lhs_layout.Initialize(lhs_types);
 	lhs_sorted.Initialize(allocator, lhs_layout.GetTypes());
 
 	lhs_keys.Initialize(allocator, op.join_key_types);
@@ -258,7 +259,7 @@ void AsOfLocalState::ResolveJoinKeys(DataChunk &input) {
 
 	//	Convert the mask to a selection vector.
 	//	We need this anyway for sorting
-	lhs_valid = 0;
+	idx_t lhs_valid = 0;
 	const auto entry_count = lhs_valid_mask.EntryCount(count);
 	idx_t base_idx = 0;
 	for (idx_t entry_idx = 0; entry_idx < entry_count;) {
@@ -280,26 +281,66 @@ void AsOfLocalState::ResolveJoinKeys(DataChunk &input) {
 		}
 	}
 
-	//	Slice the keys to the ones we can match
-	if (lhs_valid < count) {
+	// 	For a left join, we need to sort ALL the rows -
+	//	including the ones we already know don't match.
+	//	We mark the failures with an invalid bin number
+	//	below so they won't match.
+	lhs_sorted.Reset();
+	if (left_outer.Enabled() || lhs_valid == count) {
+		lhs_sorted.Reference(input);
+		lhs_sorted.SetCardinality(input);
+	} else {
+		//	Slice the keys to the ones we can match
 		lhs_keys.Slice(lhs_sel, lhs_valid);
+		lhs_sorted.Slice(input, lhs_sel, lhs_valid);
+		lhs_sorted.SetCardinality(lhs_valid);
 	}
+	auto &bin_vector = lhs_sorted.data.back();
 
 	//	Hash to assign the partitions
 	auto &global_partition = op.sink_state->Cast<AsOfGlobalSinkState>().global_partition;
+	const hash_t invalid_bin = global_partition.bin_groups.size();
 	if (op.lhs_partitions.empty()) {
 		// Only one hash group
-		bin_vector.Reference(Value::HASH(0));
+		if (left_outer.Enabled() && lhs_valid < count) {
+			//	Left join: Unselected rows are invalid
+			bin_vector.Reference(Value::HASH(invalid_bin));
+			bin_vector.Flatten(count);
+			auto bins = FlatVector::GetData<hash_t>(bin_vector);
+			for (idx_t i = 0; i < lhs_valid; ++i) {
+				const auto idx = lhs_sel.get_index(i);
+				bins[idx] = 0;
+			}
+		} else {
+			//	All remaining rows are valid
+			bin_vector.Reference(Value::HASH(0));
+		}
 	} else {
-		//	Hash to determine the partitions.
-		VectorOperations::Hash(lhs_keys.data[0], hash_vector, lhs_sel, lhs_valid);
+		//	Hash the valid keys
+		VectorOperations::Hash(lhs_keys.data[0], hash_vector, lhs_valid);
 		for (size_t prt_idx = 1; prt_idx < op.lhs_partitions.size(); ++prt_idx) {
-			VectorOperations::CombineHash(hash_vector, lhs_keys.data[prt_idx], lhs_sel, lhs_valid);
+			VectorOperations::CombineHash(hash_vector, lhs_keys.data[prt_idx], lhs_valid);
 		}
 
 		// Convert hashes to hash groups
 		const auto radix_bits = global_partition.grouping_data->GetRadixBits();
-		RadixPartitioning::HashesToBins(hash_vector, radix_bits, bin_vector, count);
+		if (left_outer.Enabled() && lhs_valid < count) {
+			//	Left join: Unselected rows are invalid
+			bin_vector.Reference(Value::HASH(invalid_bin));
+			bin_vector.Flatten(count);
+			Vector valid_vector(LogicalType::HASH);
+			RadixPartitioning::HashesToBins(hash_vector, radix_bits, valid_vector, lhs_valid);
+			//	Scatter the valid bins
+			auto valid_bins = FlatVector::GetData<hash_t>(valid_vector);
+			auto bins = FlatVector::GetData<hash_t>(bin_vector);
+			for (idx_t i = 0; i < lhs_valid; ++i) {
+				const auto idx = lhs_sel.get_index(i);
+				bins[idx] = valid_bins[i];
+			}
+		} else {
+			//	All remaining rows are valid
+			RadixPartitioning::HashesToBins(hash_vector, radix_bits, bin_vector, lhs_valid);
+		}
 	}
 
 	// 	Sort the selection vector on the valid keys
@@ -307,12 +348,7 @@ void AsOfLocalState::ResolveJoinKeys(DataChunk &input) {
 	auto &global_state = *lhs_global_state;
 	LocalSortState local_sort;
 	local_sort.Initialize(*lhs_global_state, buffer_manager);
-
-	DataChunk payload_chunk;
-	payload_chunk.InitializeEmpty({LogicalType::UINTEGER});
-	FlatVector::SetData(payload_chunk.data[0], (data_ptr_t)lhs_sel.data());
-	payload_chunk.SetCardinality(lhs_valid);
-	local_sort.SinkChunk(lhs_keys, payload_chunk);
+	local_sort.SinkChunk(lhs_keys, lhs_sorted);
 
 	// Set external (can be forced with the PRAGMA)
 	global_state.external = force_external;
@@ -338,27 +374,31 @@ void AsOfLocalState::ResolveJoin(bool *found_match, std::pair<hash_t, idx_t> *ma
 
 	// The bins are contiguous from sorting, so load them one at a time
 	// But they may be constant, so unify.
+	const auto count = lhs_sorted.size();
+	auto &bin_vector = lhs_sorted.data.back();
 	UnifiedVectorFormat bin_unified;
-	bin_vector.ToUnifiedFormat(lhs_valid, bin_unified);
+	bin_vector.ToUnifiedFormat(count, bin_unified);
 	const auto bins = (hash_t *)bin_unified.data;
 
-	hash_t prev_bin = global_partition.bin_groups.size();
+	const hash_t invalid_bin = global_partition.bin_groups.size();
+	hash_t prev_bin = invalid_bin;
 	optional_ptr<PartitionGlobalHashGroup> hash_group;
 	optional_ptr<OuterJoinMarker> right_outer;
 	//	Searching for right <= left
 	SBIterator left(*lhs_global_state, ExpressionType::COMPARE_LESSTHANOREQUALTO);
 	unique_ptr<SBIterator> right;
 	lhs_match_count = 0;
-	const auto sorted_sel = FlatVector::GetData<sel_t>(lhs_sorted.data[0]);
-	for (idx_t i = 0; i < lhs_valid; ++i) {
-		//	idx is the index in the input; i is the index in the sorted keys
-		const auto idx = sorted_sel[i];
-		const auto curr_bin = bins[bin_unified.sel->get_index(idx)];
+	for (idx_t i = 0; i < count; ++i) {
+		const auto curr_bin = bins[bin_unified.sel->get_index(i)];
+		if (curr_bin == invalid_bin) {
+			//	Already filtered out (NULLs)
+			continue;
+		}
 		if (!hash_group || curr_bin != prev_bin) {
 			//	Grab the next group
 			prev_bin = curr_bin;
 			const auto group_idx = global_partition.bin_groups[curr_bin];
-			if (group_idx >= global_partition.hash_groups.size()) {
+			if (group_idx >= invalid_bin) {
 				//	No matching partition
 				hash_group = nullptr;
 				right_outer = nullptr;
@@ -414,14 +454,14 @@ void AsOfLocalState::ResolveJoin(bool *found_match, std::pair<hash_t, idx_t> *ma
 
 		// Emit match data
 		right_outer->SetMatch(first);
-		left_outer.SetMatch(idx);
+		left_outer.SetMatch(i);
 		if (found_match) {
-			found_match[idx] = true;
+			found_match[i] = true;
 		}
 		if (matches) {
-			matches[idx] = Match(curr_bin, first);
+			matches[i] = Match(curr_bin, first);
 		}
-		lhs_matched.set_index(lhs_match_count++, idx);
+		lhs_matched.set_index(lhs_match_count++, i);
 	}
 }
 
@@ -464,7 +504,7 @@ OperatorResultType AsOfLocalState::ResolveComplexJoin(ExecutionContext &context,
 		if (left_outer.Enabled()) {
 			// left join: before we move to the next chunk, see if we need to output any vectors that didn't
 			// have a match found
-			left_outer.ConstructLeftJoinResult(input, chunk);
+			left_outer.ConstructLeftJoinResult(lhs_payload, chunk);
 			left_outer.Reset();
 		}
 		return OperatorResultType::NEED_MORE_INPUT;
@@ -511,8 +551,13 @@ OperatorResultType AsOfLocalState::ResolveComplexJoin(ExecutionContext &context,
 		}
 	}
 
-	//	Slice the input into the left side
-	chunk.Slice(input, lhs_matched, lhs_match_count);
+	//	Slice the sorted input into the left side
+	for (column_t i = 0; i < lhs_payload.ColumnCount(); ++i) {
+		lhs_payload.data[i].Reference(lhs_sorted.data[i]);
+		chunk.data[i].Slice(lhs_sorted.data[i], lhs_matched, lhs_match_count);
+	}
+	lhs_payload.SetCardinality(lhs_sorted);
+	chunk.SetCardinality(lhs_match_count);
 
 	//	If we are doing a left join, come back for the NULLs
 	if (left_outer.Enabled()) {
