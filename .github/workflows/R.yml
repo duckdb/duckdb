@@ -280,10 +280,6 @@ jobs:
         shell: bash
         run: cmake -version
 
-      - name: Uninstall OpenSSL
-        shell: bash
-        run: choco uninstall openssl -y --force
-
       - uses: ./.github/actions/build_extensions
         with:
           deploy_as: windows_amd64_rtools
