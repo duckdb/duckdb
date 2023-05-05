@@ -20,7 +20,7 @@ Catalog Error:
 statement error
 FROM read_parquet('../file.parquet', hive_partitioning=1, hive_types={'date':'', 'ref':'smallint'});
 ----
-Catalog Error:
+Parser Error: 
 
 #	the old way, provides the expected output
 query IIII
@@ -34,14 +34,14 @@ select * exclude(date,dist), date::Date date, dist::SMALLINT dist FROM read_parq
 5	19	2020-02-12	18
 6	25	2020-02-12	24
 
-#	the new way, no code to get this yet
+#	the new way
 query IIII
 FROM read_parquet('../file.parquet', hive_partitioning=1, hive_types={'date':'date', 'ref':'smallint'});
 ----
-0	30	2020-01-01	10
-1	37	2020-01-01	10
-2	29	2020-01-01	13
-3	45	2020-01-01	14
-4	51	2020-02-12	18
-5	19	2020-02-12	18
-6	25	2020-02-12	24
+0	2020-01-01	10	30
+1	2020-01-01	10	37
+2	2020-01-01	13	29
+3	2020-01-01	14	45
+4	2020-02-12	18	51
+5	2020-02-12	18	19
+6	2020-02-12	24	25

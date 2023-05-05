@@ -60,10 +60,14 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		options.union_by_name = BooleanValue::Get(val);
 	} else if (loption == "hive_types") {
 		options.hive_types = true;
+		// if (!options.hive_types_auto_detect && !options.hive_partitioning) {	// not (yet) implemented, different PR
+		// 	throw InvalidInputException("cannot disable hive_partitioning when using hive_types");
+		// }
 		// using 'hive_types' implies 'hive_partitioning'
 		options.hive_partitioning = true;
 		// turn off the auto_detection
 		// options.hive_partitioning_auto_detect = false;	// not (yet) implemented, different PR
+		
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException("'hive_types' only accepts a STRUCT(name : VARCHAR, ...), not %s", val.type().ToString());
 		}
@@ -72,7 +76,7 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		for (idx_t i = 0; i < children.size(); i++) {
 			auto child = children[i];
 			if (child.type().id() != LogicalType::VARCHAR) {
-				throw InvalidInputException("one of the children... uhhh... is not a VARCHAR: %s", child.type().ToString());
+				throw InvalidInputException("one of the children... uhhh... is not a VARCHAR: %s", child.type().ToString());	//lars
 			}
 			// for every child of the struct, perform TransformStringToLogicalType to get the logical type
 			auto transformed_type = TransformStringToLogicalType(child.ToString(), context);
@@ -149,9 +153,9 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 				throw BinderException("Hive partition mismatch between file \"%s\" and \"%s\"", files[0], f);
 			}
 		}
-		for (auto &part : partitions) {	//loop door de partitions van file[0]
+		for (auto &part : partitions) {
 			idx_t hive_partitioning_index = DConstants::INVALID_INDEX;
-			auto lookup = std::find(names.begin(), names.end(), part.first); //zoek naar partition name in table columns
+			auto lookup = std::find(names.begin(), names.end(), part.first);
 			if (lookup != names.end()) {
 				// hive partitioning column also exists in file - override
 				auto idx = lookup - names.begin();
@@ -217,7 +221,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 					if (it != file_options.hive_types_schema.end()){
 						// value.DefaultCastAs(it->second);
 						if (!value.TryCastAs(context, it->second)) {
-							throw InvalidInputException("something went terribly wrong!");
+							throw InvalidInputException("ohno! something went terribly wrong!");
 						}
 					}
 					reader_data.constant_map.emplace_back(i, value);
