@@ -689,7 +689,7 @@ unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &context, F
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto result = make_uniq<ParquetWriteBatchData>();
 	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group);
-	return result;
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//
