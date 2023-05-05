@@ -457,6 +457,7 @@ struct AggregateStateType {
 	DUCKDB_API static const aggregate_state_t &GetStateType(const LogicalType &type);
 };
 
+// **DEPRECATED**: Use EnumUtil directly instead.
 DUCKDB_API string LogicalTypeIdToString(LogicalTypeId type);
 
 DUCKDB_API LogicalTypeId TransformStringToLogicalTypeId(const string &str);

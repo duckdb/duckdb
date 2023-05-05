@@ -69,8 +69,12 @@ class TestArrowDataset(object):
         df = userdata_parquet_dataset.to_table().to_pandas().sort_values('id').reset_index(drop=True)
         # turn it into an arrow table
         arrow_table_2 = pyarrow.Table.from_pandas(df)
+        result_1 = duckdb_conn.execute("select * from arrow_table order by all").fetchall()
 
-        assert arrow_table.equals(arrow_table_2)
+        result_2 = duckdb_conn.execute("select * from arrow_table_2 order by all").fetchall()
+
+        assert result_1 == result_2
+
 
     def test_ducktyping(self, duckdb_cursor):
         duckdb_conn = duckdb.connect()

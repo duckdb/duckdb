@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/transaction/transaction.hpp"
 
@@ -63,7 +64,14 @@ public:
 		if (source_offset >= source.size()) {
 			if (!exhausted) {
 				source.Reset();
-				table.GetData(context, source, global_state, *local_state);
+
+				InterruptState interrupt_state;
+				OperatorSourceInput source_input {global_state, *local_state, interrupt_state};
+				auto source_result = table.GetData(context, source, source_input);
+				if (source_result == SourceResultType::BLOCKED) {
+					throw NotImplementedException(
+					    "Unexpected interrupt from table Source in PositionalTableScanner refill");
+				}
 			}
 			source_offset = 0;
 		}
@@ -146,9 +154,9 @@ unique_ptr<GlobalSourceState> PhysicalPositionalScan::GetGlobalSourceState(Clien
 	return make_uniq<PositionalScanGlobalSourceState>(context, *this);
 }
 
-void PhysicalPositionalScan::GetData(ExecutionContext &context, DataChunk &output, GlobalSourceState &gstate_p,
-                                     LocalSourceState &lstate_p) const {
-	auto &lstate = lstate_p.Cast<PositionalScanLocalSourceState>();
+SourceResultType PhysicalPositionalScan::GetData(ExecutionContext &context, DataChunk &output,
+                                                 OperatorSourceInput &input) const {
+	auto &lstate = input.local_state.Cast<PositionalScanLocalSourceState>();
 
 	// Find the longest source block
 	idx_t count = 0;
@@ -158,7 +166,7 @@ void PhysicalPositionalScan::GetData(ExecutionContext &context, DataChunk &outpu
 
 	//	All done?
 	if (!count) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 
 	// Copy or reference the source columns
@@ -168,6 +176,7 @@ void PhysicalPositionalScan::GetData(ExecutionContext &context, DataChunk &outpu
 	}
 
 	output.SetCardinality(count);
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 double PhysicalPositionalScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {

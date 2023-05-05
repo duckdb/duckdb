@@ -102,9 +102,10 @@ public:
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
-	idx_t AddChunk(AggregateHTAppendState &state, DataChunk &groups, DataChunk &payload, const vector<idx_t> &filter);
+	idx_t AddChunk(AggregateHTAppendState &state, DataChunk &groups, DataChunk &payload,
+	               const unsafe_vector<idx_t> &filter);
 	idx_t AddChunk(AggregateHTAppendState &state, DataChunk &groups, Vector &group_hashes, DataChunk &payload,
-	               const vector<idx_t> &filter);
+	               const unsafe_vector<idx_t> &filter);
 	idx_t AddChunk(AggregateHTAppendState &state, DataChunk &groups, DataChunk &payload, AggregateType filter);
 
 	//! Scan the HT starting from the scan_position until the result and group

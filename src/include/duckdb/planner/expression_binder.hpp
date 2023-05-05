@@ -101,6 +101,8 @@ public:
 	static bool ContainsType(const LogicalType &type, LogicalTypeId target);
 	static LogicalType ExchangeType(const LogicalType &type, LogicalTypeId target, LogicalType new_type);
 
+	virtual bool QualifyColumnAlias(const ColumnRefExpression &colref);
+
 	//! Bind the given expresion. Unlike Bind(), this does *not* mute the given ParsedExpression.
 	//! Exposed to be used from sub-binders that aren't subclasses of ExpressionBinder.
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,

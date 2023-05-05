@@ -58,7 +58,7 @@ string Exception::GetStackTrace(int max_depth) {
 #endif
 }
 
-string Exception::ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values) {
+string Exception::ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values) {
 	return ExceptionFormatValue::Format(msg, values);
 }
 

@@ -23,8 +23,8 @@
 #include "compare_result.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types.hpp"
-
 namespace duckdb {
 
 bool TestForceStorage();

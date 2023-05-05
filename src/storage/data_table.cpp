@@ -665,6 +665,11 @@ OptimisticDataWriter &DataTable::CreateOptimisticWriter(ClientContext &context) 
 	return local_storage.CreateOptimisticWriter(*this);
 }
 
+void DataTable::FinalizeOptimisticWriter(ClientContext &context, OptimisticDataWriter &writer) {
+	auto &local_storage = LocalStorage::Get(context, db);
+	local_storage.FinalizeOptimisticWriter(*this, writer);
+}
+
 void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collection) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	local_storage.LocalMerge(*this, collection);

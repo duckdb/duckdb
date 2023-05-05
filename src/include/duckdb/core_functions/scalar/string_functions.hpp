@@ -88,6 +88,21 @@ struct FormatFun {
 	static ScalarFunction GetFunction();
 };
 
+struct FormatBytesFun {
+	static constexpr const char *Name = "format_bytes";
+	static constexpr const char *Parameters = "bytes";
+	static constexpr const char *Description = "Converts bytes to a human-readable presentation (e.g. 16000 -> 16KB)";
+	static constexpr const char *Example = "format_bytes(1000 * 16)";
+
+	static ScalarFunction GetFunction();
+};
+
+struct FormatreadabledecimalsizeFun {
+	using ALIAS = FormatBytesFun;
+
+	static constexpr const char *Name = "formatReadableDecimalSize";
+};
+
 struct HammingFun {
 	static constexpr const char *Name = "hamming";
 	static constexpr const char *Parameters = "str1,str2";
