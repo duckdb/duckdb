@@ -266,6 +266,7 @@ jobs:
         with:
           r-version: 'devel'
           update-rtools: true
+          rtools-version: '43'
 
       - uses: r-lib/actions/setup-pandoc@v2
 
@@ -275,11 +276,13 @@ jobs:
           key: ${{ github.job }}
           save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
-#      - name: Install OpenSSL
-#        shell: bash
-#        run: |
-#          choco install openssl -y --force
+      - name: CMake Version?
+        shell: bash
+        run: cmake -version
 
+      - name: Uninstall OpenSSL
+        shell: bash
+        run: choco uninstall openssl -y --force
 
       - uses: ./.github/actions/build_extensions
         with:
