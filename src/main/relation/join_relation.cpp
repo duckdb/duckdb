@@ -3,6 +3,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -51,7 +52,7 @@ const vector<ColumnDefinition> &JoinRelation::Columns() {
 
 string JoinRelation::ToString(idx_t depth) {
 	string str = RenderWhitespace(depth);
-	str += "Join " + JoinTypeToString(join_type);
+	str += "Join " + EnumUtil::ToString(join_type);
 	if (condition) {
 		str += " " + condition->GetName();
 	}

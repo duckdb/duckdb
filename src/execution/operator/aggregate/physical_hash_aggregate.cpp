@@ -117,7 +117,8 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
                                              vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p,
                                              vector<GroupingSet> grouping_sets_p,
-                                             vector<vector<idx_t>> grouping_functions_p, idx_t estimated_cardinality)
+                                             vector<unsafe_vector<idx_t>> grouping_functions_p,
+                                             idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::HASH_GROUP_BY, std::move(types), estimated_cardinality),
       grouping_sets(std::move(grouping_sets_p)) {
 	// get a list of all aggregates to be computed
@@ -266,7 +267,7 @@ void PhysicalHashAggregate::SinkDistinctGrouping(ExecutionContext &context, Data
 	DataChunk empty_chunk;
 
 	// Create an empty filter for Sink, since we don't need to update any aggregate states here
-	vector<idx_t> empty_filter;
+	unsafe_vector<idx_t> empty_filter;
 
 	for (idx_t &idx : distinct_info.indices) {
 		auto &aggregate = grouped_aggregate_data.aggregates[idx]->Cast<BoundAggregateExpression>();

@@ -3,6 +3,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/union_by_name.hpp"
 #include "duckdb/main/config.hpp"
@@ -59,7 +60,7 @@ uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 	auto it = auto_type_candidates_specificity.find(id);
 	if (it == auto_type_candidates_specificity.end()) {
 		throw BinderException("Auto Type Candidate of type %s is not accepted as a valid input",
-		                      LogicalTypeIdToString(candidate_type.id()));
+		                      EnumUtil::ToString(candidate_type.id()));
 	}
 	return it->second;
 }

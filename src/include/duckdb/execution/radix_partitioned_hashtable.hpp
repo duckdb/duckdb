@@ -26,7 +26,7 @@ public:
 
 	GroupingSet &grouping_set;
 	//! The indices specified in the groups_count that do not appear in the grouping_set
-	vector<idx_t> null_groups;
+	unsafe_vector<idx_t> null_groups;
 	const GroupedAggregateData &op;
 
 	vector<LogicalType> group_types;
@@ -42,7 +42,7 @@ public:
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 
 	void Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input, DataChunk &aggregate_input_chunk,
-	          const vector<idx_t> &filter) const;
+	          const unsafe_vector<idx_t> &filter) const;
 	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const;
 	bool Finalize(ClientContext &context, GlobalSinkState &gstate_p) const;
 

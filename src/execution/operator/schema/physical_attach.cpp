@@ -1,11 +1,13 @@
 #include "duckdb/execution/operator/schema/physical_attach.hpp"
-#include "duckdb/parser/parsed_data/attach_info.hpp"
+
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/main/database_path_and_type.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
 
@@ -44,11 +46,11 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	auto &db = DatabaseInstance::GetDatabase(context.client);
 	if (type.empty()) {
 		// try to extract type from path
-		type = db.ExtractDatabaseType(info->path);
+		auto path_and_type = DBPathAndType::Parse(info->path, config);
+		type = path_and_type.type;
+		info->path = path_and_type.path;
 	}
-	if (!type.empty()) {
-		type = ExtensionHelper::ApplyExtensionAlias(type);
-	}
+
 	if (type.empty() && !unrecognized_option.empty()) {
 		throw BinderException("Unrecognized option for attach \"%s\"", unrecognized_option);
 	}
