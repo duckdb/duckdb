@@ -293,7 +293,7 @@ jobs:
           override_cc: gcc
           override_cxx: g++
           httpfs: 0 # for now
-          tpcds: 0 # compile error yay
+          excel: 0
 
   rstats-windows-warnings:
     name: R Package Windows (Warnings)
