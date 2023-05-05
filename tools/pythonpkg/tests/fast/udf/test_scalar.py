@@ -107,6 +107,12 @@ class TestScalarUDF(object):
         """, [value]).fetchall()
         assert expected == actual
 
+        # Using 'relation.project'
+        con.execute(f"create table tbl as select ?::{str(type)} as x", [value])
+        table_rel = con.table('tbl')
+        res = table_rel.project('test(x)').fetchall()
+        assert res[0][0] == value
+
     @pytest.mark.parametrize('udf_type', [
         'arrow',
         'native'
