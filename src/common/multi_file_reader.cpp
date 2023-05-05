@@ -54,20 +54,20 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 	if (loption == "filename") {
 		options.filename = BooleanValue::Get(val);
 	} else if (loption == "hive_partitioning") {
-		//turn on hive_types auto_detection?
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
+		options.auto_detect_hive_types = true;
 	} else if (loption == "union_by_name") {
 		options.union_by_name = BooleanValue::Get(val);
 	} else if (loption == "hive_types") {
+		if (!options.auto_detect_hive_partitioning && !options.hive_partitioning) {
+			throw InvalidInputException("cannot disable hive_partitioning when using hive_types");
+		}
 		options.hive_types = true;
-		// if (!options.hive_types_auto_detect && !options.hive_partitioning) {	// not (yet) implemented, different PR
-		// 	throw InvalidInputException("cannot disable hive_partitioning when using hive_types");
-		// }
 		// using 'hive_types' implies 'hive_partitioning'
 		options.hive_partitioning = true;
 		// turn off the auto_detection
-		// options.hive_partitioning_auto_detect = false;	// not (yet) implemented, different PR
+		options.auto_detect_hive_types = false;
 		
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException("'hive_types' only accepts a STRUCT(name : VARCHAR, ...), not %s", val.type().ToString());

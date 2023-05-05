@@ -7,10 +7,6 @@ require parquet
 statement ok
 PRAGMA enable_verification
 
-#	create a table with multiple columns,   -   right now I'm using a localfile(!)  //lars
-#	...
-
-#	the old way, provides the expected output
 query IIII
 select * exclude(date,dist), date::Date date, dist::SMALLINT dist FROM read_parquet('../file.parquet', hive_partitioning=1);
 ----
@@ -22,7 +18,6 @@ select * exclude(date,dist), date::Date date, dist::SMALLINT dist FROM read_parq
 5	19	2020-02-12	18
 6	25	2020-02-12	24
 
-#	the new way
 query IIII
 FROM read_parquet('../file.parquet', hive_partitioning=1, hive_types={'date':'date', 'ref':'smallint'});
 ----

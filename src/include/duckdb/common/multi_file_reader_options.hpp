@@ -23,7 +23,7 @@ struct MultiFileReaderOptions {
 	bool auto_detect_hive_partitioning = true;
 	bool union_by_name = false;
 	bool hive_types = false;
-	bool hive_types_auto_detect = false;
+	bool auto_detect_hive_types = false;
 	case_insensitive_map_t<LogicalType> hive_types_schema;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
