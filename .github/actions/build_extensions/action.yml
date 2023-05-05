@@ -119,8 +119,10 @@ runs:
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
-        CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || ${{ inputs.override_c }} }}
-        CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || ${{ inputs.override_cxx }} }}
+        OVERRIDE_C: ${{ inputs.override_c }}
+        OVERRIDE_CXX: ${{ inputs.override_cxx }}
+        CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || $OVERRIDE_C }}
+        CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || $OVERRIDE_CXX }}
 
       run: |
         cd  ${{ inputs.build_dir}}
