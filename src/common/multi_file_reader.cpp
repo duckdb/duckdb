@@ -216,12 +216,13 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			for (auto &entry : options.hive_partitioning_indexes) {
 				
 				if (column_id == entry.index) {
-					auto it = file_options.hive_types_schema.find(entry.value);
 					Value value(partitions[entry.value]);
-					if (it != file_options.hive_types_schema.end()){
-						// value.DefaultCastAs(it->second);
-						if (!value.TryCastAs(context, it->second)) {
-							throw InvalidInputException("ohno! something went terribly wrong!");
+					if (file_options.hive_types) {
+						auto it = file_options.hive_types_schema.find(entry.value);
+						if (it != file_options.hive_types_schema.end()){
+							if (!value.TryCastAs(context, it->second)) {
+								throw InvalidInputException("something went terribly wrong!");	//lars
+							}
 						}
 					}
 					reader_data.constant_map.emplace_back(i, value);

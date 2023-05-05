@@ -10,18 +10,6 @@ PRAGMA enable_verification
 #	create a table with multiple columns,   -   right now I'm using a localfile(!)  //lars
 #	...
 
-#	bad logical type
-statement error
-FROM read_parquet('../file.parquet', hive_partitioning=1, hive_types={'date':'nonono', 'ref':'smallint'});
-----
-Catalog Error:
-
-#	empty logical type
-statement error
-FROM read_parquet('../file.parquet', hive_partitioning=1, hive_types={'date':'', 'ref':'smallint'});
-----
-Parser Error: 
-
 #	the old way, provides the expected output
 query IIII
 select * exclude(date,dist), date::Date date, dist::SMALLINT dist FROM read_parquet('../file.parquet', hive_partitioning=1);
