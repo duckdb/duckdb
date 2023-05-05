@@ -32,6 +32,39 @@ class TestScalarUDF(object):
         res = con.sql(f'select i, plus_one(i) from test_vector_types(NULL::BIGINT, false) t(i), range({vector_size})')
         assert len(res) == (vector_size * 11)
 
+    @pytest.mark.parametrize('data_type', [
+        TINYINT,
+        SMALLINT,
+        INTEGER,
+        BIGINT,
+        UTINYINT,
+        USMALLINT,
+        UINTEGER,
+        UBIGINT,
+        HUGEINT,
+        VARCHAR,
+        UUID,
+        FLOAT,
+        DOUBLE,
+        DATE,
+        TIMESTAMP,
+        TIME,
+        BLOB,
+        INTERVAL,
+        BOOLEAN,
+        duckdb.struct_type(['BIGINT[]','VARCHAR[]']),
+        duckdb.list_type('VARCHAR')
+    ])
+    def test_return_null(self, data_type):
+        def return_null():
+            return None
+
+        con = duckdb.connect()
+        con.create_function('return_null', return_null, None, data_type, null_handling='special')
+        rel = con.sql('select return_null() as x')
+        assert rel.types[0] == data_type
+        assert rel.fetchall()[0][0] == None
+
     def test_passthrough(self):
         def passthrough(x):
             return x
@@ -130,6 +163,21 @@ class TestScalarUDF(object):
         assert res1 == [('3',)]
         assert res2 == [('test',)]
 
+    @pytest.mark.parametrize('udf_type', [
+        'arrow',
+        'native'
+    ])
+    def test_map_coverage(self, udf_type):
+        def no_op(x):
+            return x
+        
+        con = duckdb.connect()
+        map_type = con.map_type('VARCHAR', 'BIGINT')
+        con.create_function('test_map', no_op, [map_type], map_type, type=udf_type)
+        rel = con.sql("select test_map(map(['non-inlined string', 'test', 'duckdb'], [42, 1337, 123]))")
+        res = rel.fetchall()
+        assert res == [({'key': ['non-inlined string', 'test', 'duckdb'], 'value': [42, 1337, 123]},)]
+
     def test_return_incorrectly_typed_object(self):
         def returns_duckdb() -> int:
             return 'duckdb'
@@ -148,6 +196,71 @@ class TestScalarUDF(object):
         con.create_function('null_test', five_if_null, [BIGINT], BIGINT, null_handling = "SPECIAL")
         res = con.sql('select null_test(NULL)').fetchall()
         assert res == [(5,)]
+
+    @pytest.mark.parametrize('pair', [
+        (TINYINT, -129),
+        (TINYINT, 128),
+        (SMALLINT, -32769),
+        (SMALLINT, 32768),
+        (INTEGER, -2147483649),
+        (INTEGER, 2147483648),
+        (BIGINT, -9223372036854775815),
+        (BIGINT, 9223372036854775808),
+        (UTINYINT, -1),
+        (UTINYINT, 256),
+        (USMALLINT, -1),
+        (USMALLINT, 65536),
+        (UINTEGER, -1),
+        (UINTEGER, 4294967296),
+        (UBIGINT, -1),
+        (UBIGINT, 18446744073709551616),
+        (HUGEINT, -170141183460469231731687303715884105729),
+        (HUGEINT, 170141183460469231731687303715884105728),
+    ])
+    def test_return_overflow(self, pair):
+        duckdb_type, overflowing_value = pair
+
+        def return_overflow():
+            return overflowing_value
+        
+        con = duckdb.connect()
+        con.create_function('return_overflow', return_overflow, None, duckdb_type)
+        with pytest.raises(duckdb.InvalidInputException, match='Invalid Input Error: Failed to cast value:'):
+            rel = con.sql('select return_overflow()')
+            res = rel.fetchall()
+            print(duckdb_type)
+            print(res)
+
+    @pytest.mark.parametrize('duckdb_type', [
+        FLOAT,
+        DOUBLE
+    ])
+    def test_nan(self, duckdb_type):
+        def return_pd_nan():
+            import pandas as pd
+            return pd.NA
+        
+        def return_np_nan():
+            import numpy as np
+            return np.nan
+
+        def return_math_nan():
+            import cmath
+            return cmath.nan
+
+        con = duckdb.connect()
+        con.create_function('return_pd_nan', return_pd_nan, None, DOUBLE, null_handling='SPECIAL')
+        con.create_function('return_np_nan', return_np_nan, None, DOUBLE, null_handling='SPECIAL')
+        con.create_function('return_math_nan', return_math_nan, None, DOUBLE, null_handling='SPECIAL')
+
+        res = con.sql('select return_pd_nan()').fetchall()
+        assert res[0][0] == None
+
+        res = con.sql('select return_np_nan()').fetchall()
+        assert res[0][0] == None
+
+        res = con.sql('select return_math_nan()').fetchall()
+        assert res[0][0] == None
 
     def test_exceptions(self):
         def throws(x):
