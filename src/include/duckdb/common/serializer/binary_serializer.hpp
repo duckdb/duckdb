@@ -1,46 +1,49 @@
 #pragma once
 
-#include "json_common.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
 
 namespace duckdb {
 
-struct JsonSerializer : FormatSerializer {
+struct BinarySerializer : public FormatSerializer {
+
 private:
-	yyjson_mut_doc *doc;
-	yyjson_mut_val *current_tag;
-	vector<yyjson_mut_val *> stack;
-
-	// Skip writing property if null
-	bool skip_if_null = false;
-	// Skip writing property if empty string, empty list or empty map.
-	bool skip_if_empty = false;
-
-	// Get the current json value
-	inline yyjson_mut_val *Current() {
-		return stack.back();
+	struct State {
+		// how many fields are present in the object
+		uint32_t field_count;
+		// the size of the object
+		uint64_t size;
+		// the offset of the object start in the buffer
+		uint64_t offset;
 	};
 
-	// Either adds a value to the current object with the current tag, or appends it to the current array
-	void PushValue(yyjson_mut_val *val);
+	const char *current_tag;
 
-	explicit JsonSerializer(yyjson_mut_doc *doc, bool skip_if_null, bool skip_if_empty)
-	    : doc(doc), stack({yyjson_mut_obj(doc)}), skip_if_null(skip_if_null), skip_if_empty(skip_if_empty) {
-		serialize_enum_as_string = true;
+	vector<data_t> data;
+	vector<State> stack;
+
+	template <class T>
+	void Write(T element) {
+		static_assert(std::is_trivially_destructible<T>(), "Write element must be trivially destructible");
+		WriteData((const_data_ptr_t)&element, sizeof(T));
+	}
+	void WriteData(const_data_ptr_t buffer, idx_t write_size) {
+		data.insert(data.end(), buffer, buffer + write_size);
+		stack.back().size += write_size;
+	}
+
+	explicit BinarySerializer() {
+		serialize_enum_as_string = false;
 	}
 
 public:
 	template <class T>
-	static yyjson_mut_val *Serialize(T &value, yyjson_mut_doc *doc, bool skip_if_null, bool skip_if_empty) {
-		JsonSerializer serializer(doc, skip_if_null, skip_if_empty);
-		value.FormatSerialize(serializer);
-		return serializer.GetRootObject();
+	static vector<data_t> Serialize(T &obj) {
+		BinarySerializer serializer;
+		serializer.OnObjectBegin();
+		obj.FormatSerialize(serializer);
+		serializer.OnObjectEnd();
+		return std::move(serializer.data);
 	}
-
-	yyjson_mut_val *GetRootObject() {
-		D_ASSERT(stack.size() == 1); // or we forgot to pop somewhere
-		return stack.front();
-	};
 
 	void SetTag(const char *tag) final;
 

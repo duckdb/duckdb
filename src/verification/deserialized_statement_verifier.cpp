@@ -1,6 +1,7 @@
 #include "duckdb/verification/deserialized_statement_verifier.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
-
+#include "duckdb/common/serializer/binary_serializer.hpp"
+#include "duckdb/common/serializer/binary_deserializer.hpp"
 namespace duckdb {
 
 DeserializedStatementVerifier::DeserializedStatementVerifier(unique_ptr<SQLStatement> statement_p)

@@ -28,7 +28,7 @@
 #include "duckdb/parser/parser.hpp"
 
 #include "duckdb/common/serializer/format_deserializer.hpp"
-#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
 
 #include <cmath>
@@ -156,6 +156,11 @@ PhysicalType LogicalType::GetInternalType() {
 	default:
 		throw InternalException("Invalid LogicalType %s", ToString());
 	}
+}
+
+// **DEPRECATED**: Use EnumUtil directly instead.
+string LogicalTypeIdToString(LogicalTypeId type) {
+	return EnumUtil::ToString(type);
 }
 
 constexpr const LogicalTypeId LogicalType::INVALID;
@@ -331,10 +336,6 @@ bool TypeIsInteger(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
 }
 
-string LogicalTypeIdToString(LogicalTypeId id) {
-	return EnumSerializer::EnumToString(id);
-}
-
 string LogicalType::ToString() const {
 	auto alias = GetAlias();
 	if (!alias.empty()) {
@@ -406,7 +407,7 @@ string LogicalType::ToString() const {
 		return AggregateStateType::GetTypeName(*this);
 	}
 	default:
-		return LogicalTypeIdToString(id_);
+		return EnumUtil::ToString(id_);
 	}
 }
 // LCOV_EXCL_STOP
@@ -1566,17 +1567,18 @@ void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, FieldWriter &writer) {
 }
 void ExtraTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("type", type);
+	// BREAKING: we used to write the alias last if there was additional type info, but now we write it second.
 	serializer.WriteProperty("alias", alias);
 }
 
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto type = deserializer.ReadProperty<ExtraTypeInfoType>("type");
+	auto alias = deserializer.ReadProperty<string>("alias");
+	// BREAKING: we used to read the alias last, but now we read it second.
 
 	shared_ptr<ExtraTypeInfo> result;
 	switch (type) {
 	case ExtraTypeInfoType::INVALID_TYPE_INFO: {
-		string alias;
-		deserializer.ReadOptionalProperty("alias", alias);
 		if (!alias.empty()) {
 			return make_shared<ExtraTypeInfo>(type, alias);
 		}
@@ -1620,11 +1622,10 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::FormatDeserialize(FormatDeserializer &d
 	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
 		result = AggregateStateTypeInfo::FormatDeserialize(deserializer);
 		break;
-
 	default:
 		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
 	}
-	deserializer.ReadOptionalPropertyOrDefault("alias", result->alias, string());
+	result->alias = alias;
 	return result;
 }
 

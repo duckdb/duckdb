@@ -1,51 +1,51 @@
 #pragma once
-#include "json_common.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
-class JsonDeserializer : public FormatDeserializer {
+class BinaryDeserializer : public FormatDeserializer {
 public:
-	JsonDeserializer(yyjson_val *val, yyjson_doc *doc) : doc(doc) {
-		deserialize_enum_from_string = true;
-		stack.emplace_back(val);
-	}
-	~JsonDeserializer() {
-		yyjson_doc_free(doc);
+	template <class T>
+	static unique_ptr<T> Deserialize(data_ptr_t ptr, idx_t length) {
+		BinaryDeserializer deserializer(ptr, length);
+		deserializer.OnObjectBegin();
+		auto result = T::FormatDeserialize(deserializer);
+		deserializer.OnObjectEnd();
+		return result;
 	}
 
 private:
-	struct StackFrame {
-		yyjson_val *val;
-		yyjson_arr_iter arr_iter;
-		explicit StackFrame(yyjson_val *val) : val(val) {
-			yyjson_arr_iter_init(val, &arr_iter);
+	explicit BinaryDeserializer(data_ptr_t ptr, idx_t length) : ptr(ptr), end_ptr(ptr + length) {
+		deserialize_enum_from_string = false;
+	}
+	struct State {
+		uint32_t expected_field_count;
+		idx_t expected_size;
+		uint32_t read_field_count;
+		State(uint32_t expected_field_count, idx_t expected_size)
+		    : expected_field_count(expected_field_count), expected_size(expected_size), read_field_count(0) {
 		}
 	};
 
-	yyjson_doc *doc;
 	const char *current_tag = nullptr;
-	vector<StackFrame> stack;
+	data_ptr_t ptr;
+	data_ptr_t end_ptr;
+	vector<State> stack;
 
-	void DumpDoc();
-	void DumpCurrent();
-	void Dump(yyjson_mut_val *val);
-	void Dump(yyjson_val *val);
-
-	// Get the current json value
-	inline StackFrame &Current() {
-		return stack.back();
-	};
-
-	inline void Push(yyjson_val *val) {
-		stack.emplace_back(val);
+	template <class T>
+	T ReadPrimitive() {
+		T value;
+		ReadData((data_ptr_t)&value, sizeof(T));
+		return value;
 	}
-	inline void Pop() {
-		stack.pop_back();
-	}
-	yyjson_val *GetNextValue();
 
-	void ThrowTypeError(yyjson_val *val, const char *expected);
+	void ReadData(data_ptr_t buffer, idx_t read_size) {
+		if (ptr + read_size > end_ptr) {
+			throw SerializationException("Failed to deserialize: not enough data in buffer to fulfill read request");
+		}
+		memcpy(buffer, ptr, read_size);
+		ptr += read_size;
+	}
 
 	// Set the 'tag' of the property to read
 	void SetTag(const char *tag) final;
