@@ -7,22 +7,23 @@ namespace duckdb {
 
 struct StandardCopyValue {
 	template <class T>
-	static void Operation(Vector &child, Vector &result_child, idx_t i, idx_t result_child_offset) {
+	static void Operation(Vector &child, Vector &result_child, idx_t i, idx_t result_child_offset, uint64_t count) {
 		UnifiedVectorFormat child_data;
-		child.ToUnifiedFormat(i, child_data);
+		child.ToUnifiedFormat(count, child_data);
 
 		auto child_entries = (T *)child_data.data;
 		auto result_child_data = FlatVector::GetData<T>(result_child);
 
+		std::cout << "child_entries[i] = " << child_entries[i] << std::endl;
 		result_child_data[result_child_offset] = child_entries[i];
 	}
 };
 
 struct StringCopyValue {
 	template <class T>
-	static void Operation(Vector &child, Vector &result_child, idx_t i, idx_t result_child_offset) {
+	static void Operation(Vector &child, Vector &result_child, idx_t i, idx_t result_child_offset, uint64_t count) {
 		UnifiedVectorFormat child_data;
-		child.ToUnifiedFormat(i, child_data);
+		child.ToUnifiedFormat(count, child_data);
 
 		auto child_entries = (string_t *)child_data.data;
 		auto result_child_data = FlatVector::GetData<string_t>(result_child);
@@ -33,7 +34,7 @@ struct StringCopyValue {
 
 struct NestedCopyValue {
 	template <class T>
-	static void Operation(Vector &child, Vector &result_child, idx_t i, idx_t result_child_offset) {
+	static void Operation(Vector &child, Vector &result_child, idx_t i, idx_t result_child_offset, uint64_t count) {
 		result_child.SetValue(result_child_offset, child.GetValue(i));
 	}
 };
@@ -54,18 +55,6 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 	auto &child = ListVector::GetEntry(args.data[0]);
 	auto &new_size = args.data[1];
 
-	bool has_default = false;
-	T default_value;
-	if (args.ColumnCount() == 3) {
-		auto &d = args.data[2];
-		UnifiedVectorFormat d_data;
-		d.ToUnifiedFormat(count, d_data);
-		auto d_entries = (T *)d_data.data;
-		if (d_data.validity.RowIsValid(0)) {
-//			default_value = d_entries[0];
-			has_default = true;
-		}
-	}
 
 	UnifiedVectorFormat list_data;
 	UnifiedVectorFormat new_size_data;
@@ -76,6 +65,21 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 	auto list_entries = (list_entry_t*)list_data.data;
 	auto new_size_entries = (int64_t *)new_size_data.data;
 	auto child_entries = (T *)child_data.data;
+
+	bool has_default = false;
+	T default_value;
+//	if (args.ColumnCount() == 3) {
+//		D_ASSERT(child.GetType() == args.data[2].GetType());
+//		auto &d = args.data[2];
+//		UnifiedVectorFormat d_data;
+//		d.ToUnifiedFormat(count, d_data);
+////		auto d_entries = (T *)d_data.data;
+//		if (d_data.validity.RowIsValid(0)) {
+//			default_value = args.data[2].GetValue(0);
+////			default_value = def.GetValue<T>();
+//			has_default = true;
+//		}
+//	}
 
 	auto new_child_size = 0;
 
@@ -104,19 +108,25 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 		auto values_to_copy = MinValue<idx_t>(list_entries[l_index].length, new_size_entries[new_index]);
 		result_entries[i].offset = result_child_offset;
 		result_entries[i].length = new_size_entries[new_index];
+		child_entries[l_index].Print();
 		for (idx_t j = 0; j < values_to_copy; j++) {
 			if (!child_data.validity.RowIsValid(list_entries[l_index].offset + j)) {
 				result_child_validity.SetInvalid(result_child_offset);
 			} else {
 				COPY_FUNCTION::template Operation<T>(child, result_child, list_entries[l_index].offset + j,
-				                         result_child_offset);
+				                         result_child_offset, count);
 			}
 			result_child_offset++;
 		}
 		auto new_size_entry = (idx_t)new_size_entries[new_index];
 		for (idx_t j = values_to_copy; j < new_size_entry; j++) {
 			if (has_default) {
+//				Vector default_vec(default_value);
+
+//				COPY_FUNCTION::template Operation<T>(default_vec, result_child, 0, result_child_offset);
 				result_child_data[result_child_offset] = default_value;
+				std::cout << "Default value: " << default_value << std::endl;
+				std::cout << "Result[" << result_child_offset << "]: " << result_child_data[result_child_offset] << std::endl;
 			} else {
 				result_child_validity.SetInvalid(result_child_offset);
 			}
@@ -124,9 +134,18 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 		}
 	}
 
+	args.Print();
+
+	std::cout << "Print before const" << std::endl;
+	result.Print(count);
+
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
+
+	std::cout << "Print after const" << std::endl;
+	result.Print(count);
+
 }
 
 void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -145,9 +164,9 @@ void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	case PhysicalType::INT64:
 		TemplatedListResizeFunction<int64_t, StandardCopyValue>(args, result);
 		break;
-	case PhysicalType::INT128:
-		TemplatedListResizeFunction<hugeint_t, StandardCopyValue>(args, result);
-		break;
+//	case PhysicalType::INT128:
+//		TemplatedListResizeFunction<hugeint_t, StandardCopyValue>(args, result);
+//		break;
 	case PhysicalType::UINT8:
 		TemplatedListResizeFunction<uint8_t, StandardCopyValue>(args, result);
 		break;
@@ -166,16 +185,16 @@ void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	case PhysicalType::DOUBLE:
 		TemplatedListResizeFunction<double, StandardCopyValue>(args, result);
 		break;
-	case PhysicalType::VARCHAR:
-		TemplatedListResizeFunction<string_t, StringCopyValue>(args, result);
-		break;
+//	case PhysicalType::VARCHAR:
+//		TemplatedListResizeFunction<string_t, StringCopyValue>(args, result);
+//		break;
 //	case PhysicalType::INTERVAL:
 //		TemplatedListResizeFunction<interval_t, StringCopyValue>(args, result);
 //		break;
-	case PhysicalType::STRUCT:
-	case PhysicalType::LIST:
-		TemplatedListResizeFunction<int8_t, NestedCopyValue>(args, result);
-		break;
+//	case PhysicalType::STRUCT:
+//	case PhysicalType::LIST:
+//		TemplatedListResizeFunction<int8_t, NestedCopyValue>(args, result);
+//		break;
 	default:
 		throw NotImplementedException("This function has not been implemented for physical type %s",
 		                              TypeIdToString(physical_type));

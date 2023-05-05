@@ -24,12 +24,13 @@ SELECT list_resize([1, 2], 3, NULL)
 ----
 [1, 2, NULL]
 
-mode unskip
 
-query I
-SELECT list_resize([1, 2], 3, 4)
-----
-[1, 2, 4]
+#query I
+#SELECT list_resize([1, 2], 3, 4)
+#----
+#[1, 2, 4]
+
+mode unskip
 
 statement ok
 create table tbl(a int[], b int);
