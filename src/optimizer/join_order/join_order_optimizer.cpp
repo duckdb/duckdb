@@ -661,6 +661,8 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 					}
 				}
 			}
+
+			// Seems like only smallest_plans[0] gets populated since join_relations[0].getCardinality > join_relations[1].getCardinality()
 			if (!smallest_plans[0] || !smallest_plans[1]) {
 				throw InternalException("Internal error in join order optimizer");
 			}
