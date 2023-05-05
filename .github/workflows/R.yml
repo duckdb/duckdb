@@ -293,6 +293,15 @@ jobs:
           out_of_tree_ext: 0
           openssl_path: C:/rtools43/x86_64-w64-mingw32.static.posix # not sure if this is required, there seems to be an openssl there
 
+      - name: Test
+        shell: bash
+        run: |
+          cd tools/rpkg
+          ./configure
+          R CMD build .
+          R CMD INSTALL duckdb_*.tar.gz
+          
+
   rstats-windows-warnings:
     name: R Package Windows (Warnings)
     needs: rstats-linux
