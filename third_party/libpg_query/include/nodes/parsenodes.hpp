@@ -2013,6 +2013,16 @@ typedef struct PGImportStmt {
 } PGImportStmt;
 
 /* ----------------------
+ *		Copy Database Statement
+ * ----------------------
+ */
+typedef struct PGCopyDatabaseStmt {
+	PGNodeTag type;
+	const char *from_database;
+	const char *to_database;
+} PGCopyDatabaseStmt;
+
+/* ----------------------
  *		Interval Constant
  * ----------------------
  */

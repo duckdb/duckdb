@@ -162,6 +162,7 @@ private:
 	unique_ptr<AttachStatement> TransformAttach(duckdb_libpgquery::PGNode *node);
 	unique_ptr<DetachStatement> TransformDetach(duckdb_libpgquery::PGNode *node);
 	unique_ptr<SetStatement> TransformUse(duckdb_libpgquery::PGNode *node);
+	unique_ptr<CopyDatabaseStatement> TransformCopyDatabase(duckdb_libpgquery::PGNode *node);
 
 	unique_ptr<PrepareStatement> TransformPrepare(duckdb_libpgquery::PGNode *node);
 	unique_ptr<ExecuteStatement> TransformExecute(duckdb_libpgquery::PGNode *node);

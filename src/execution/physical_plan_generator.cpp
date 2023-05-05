@@ -209,6 +209,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		plan = CreatePlan((LogicalPivot &)op);
 		break;
+	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
+		plan = CreatePlan(op.Cast<LogicalCopyDatabase>());
+		break;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		plan = ((LogicalExtensionOperator &)op).CreatePlan(context, *this);
 

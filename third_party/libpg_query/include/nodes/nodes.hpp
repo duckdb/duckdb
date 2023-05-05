@@ -323,6 +323,7 @@ typedef enum PGNodeTag {
 	T_PGClosePortalStmt,
 	T_PGClusterStmt,
 	T_PGCopyStmt,
+	T_PGCopyDatabaseStmt,
 	T_PGCreateStmt,
 	T_PGDefineStmt,
 	T_PGDropStmt,

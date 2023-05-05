@@ -46,6 +46,13 @@ CopyStmt:	COPY opt_binary qualified_name opt_column_list opt_oids
 
 					$$ = (PGNode *)n;
 				}
+			|  COPY FROM DATABASE ColId TO ColId
+    		{
+				PGCopyDatabaseStmt *n = makeNode(PGCopyDatabaseStmt);
+				n->from_database = $4;
+				n->to_database = $6;
+				$$ = (PGNode *)n;
+			}
 		;
 
 
@@ -210,7 +217,6 @@ copy_opt_item:
 copy_generic_opt_arg_list_item:
 			opt_boolean_or_string	{ $$ = (PGNode *) makeString($1); }
 		;
-
 
 
 copy_file_name:

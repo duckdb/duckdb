@@ -6,6 +6,7 @@ add_library_unity(
   plan_asof_join.cpp
   plan_column_data_get.cpp
   plan_comparison_join.cpp
+  plan_copy_database.cpp
   plan_copy_to_file.cpp
   plan_create.cpp
   plan_create_index.cpp

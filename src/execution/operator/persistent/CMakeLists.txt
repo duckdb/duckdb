@@ -8,6 +8,7 @@ add_library_unity(
   csv_reader_options.cpp
   physical_batch_copy_to_file.cpp
   physical_batch_insert.cpp
+  physical_copy_database.cpp
   physical_copy_to_file.cpp
   physical_delete.cpp
   physical_export.cpp

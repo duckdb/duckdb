@@ -354,6 +354,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		result = LogicalPivot::Deserialize(state, reader);
 		break;
+	case LogicalOperatorType::LOGICAL_COPY_DATABASE:
+		result = LogicalCopyDatabase::Deserialize(state, reader);
+		break;
 	case LogicalOperatorType::LOGICAL_INVALID:
 		/* no default here to trigger a warning if we forget to implement deserialize for a new operator */
 		throw SerializationException("Invalid type for operator deserialization");
