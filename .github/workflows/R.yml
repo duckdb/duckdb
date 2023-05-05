@@ -283,10 +283,8 @@ jobs:
       - name: Find GCC
         shell: bash
         run: |
-          ls /
-          ls /cygdrive/
-          ls /cygdrive/c
-
+          dir c:\
+          dir c:\rtools*
 
       - uses: ./.github/actions/build_extensions
         with:
