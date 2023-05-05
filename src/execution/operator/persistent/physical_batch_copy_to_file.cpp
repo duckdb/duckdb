@@ -151,7 +151,7 @@ class ProcessRemainingBatchesTask : public ExecutorTask {
 public:
 	ProcessRemainingBatchesTask(Executor &executor, shared_ptr<Event> event_p, BatchCopyToGlobalState &state_p,
 	                            ClientContext &context, const PhysicalBatchCopyToFile &op)
-	    : ExecutorTask(executor), event(std::move(event_p)), gstate(state_p), context(context), op(op) {
+	    : ExecutorTask(executor), event(std::move(event_p)), gstate(state_p), op(op), context(context) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -473,7 +473,6 @@ bool PhysicalBatchCopyToFile::ExecuteTask(ClientContext &context, GlobalSinkStat
 }
 
 void PhysicalBatchCopyToFile::ExecuteTasks(ClientContext &context, GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<BatchCopyToGlobalState>();
 	while (ExecuteTask(context, gstate_p))
 		;
 }
