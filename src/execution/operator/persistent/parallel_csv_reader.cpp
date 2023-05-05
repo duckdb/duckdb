@@ -79,6 +79,25 @@ void ParallelCSVReader::SkipEmptyLines() {
 }
 
 bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
+	// If line is not set, we have to figure it out, we assume whatever is in the first line
+	if (options.new_line == NewLineIdentifier::NOT_SET) {
+		for (idx_t cur_pos = position_buffer; cur_pos < end_buffer; cur_pos++) {
+			if (StringUtil::CharacterIsNewline((*buffer)[cur_pos])) {
+				bool carriage_return = (*buffer)[cur_pos] == '\r';
+				bool carriage_return_followed = false;
+				cur_pos++;
+				if (cur_pos < end_buffer) {
+					if (carriage_return && (*buffer)[cur_pos] == '\n') {
+						carriage_return_followed = true;
+						cur_pos++;
+					}
+				}
+				if (NewLineDelimiter(carriage_return, carriage_return_followed, cur_pos - 1 == start_buffer)) {
+					break;
+				}
+			}
+		}
+	}
 	if (buffer->buffer->IsCSVFileFirstBuffer() && start_buffer == position_buffer &&
 	    start_buffer == first_pos_first_buffer) {
 		start_buffer = buffer->buffer->GetStart();
@@ -86,27 +105,7 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 		verification_positions.beginning_of_first_line = position_buffer;
 		verification_positions.end_of_last_line = position_buffer;
 		// First buffer doesn't need any setting
-		// Unless we don't have the new line identifier set
-		if (options.new_line == NewLineIdentifier::NOT_SET) {
-			for (idx_t cur_pos = position_buffer; cur_pos < end_buffer; cur_pos++) {
-				if (StringUtil::CharacterIsNewline((*buffer)[cur_pos])) {
-					bool carriage_return = (*buffer)[cur_pos] == '\r';
-					bool carriage_return_followed = false;
-					cur_pos++;
-					if (cur_pos < end_buffer) {
-						if (carriage_return && (*buffer)[cur_pos] == '\n') {
-							carriage_return_followed = true;
-							cur_pos++;
-						}
-					}
-					if (NewLineDelimiter(carriage_return, carriage_return_followed, cur_pos - 1 == start_buffer)) {
-						break;
-					}
-				}
-			}
-		}
 
-		// Or we have a header
 		if (options.header) {
 			for (; position_buffer < end_buffer; position_buffer++) {
 				if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
