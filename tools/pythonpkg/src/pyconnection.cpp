@@ -195,7 +195,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	             py::arg("escapechar") = py::none(), py::arg("encoding") = py::none(), py::arg("parallel") = py::none(),
 	             py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(),
 	             py::arg("sample_size") = py::none(), py::arg("all_varchar") = py::none(),
-	             py::arg("normalize_names") = py::none(), py::arg("filename") = py::none());
+	             py::arg("normalize_names") = py::none(), py::arg("filename") = py::none(),
+	             py::arg("null_padding") = py::none());
 
 	m.def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	      py::arg("df") = py::none())
@@ -595,7 +596,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
     const py::object &delimiter, const py::object &dtype, const py::object &na_values, const py::object &skiprows,
     const py::object &quotechar, const py::object &escapechar, const py::object &encoding, const py::object &parallel,
     const py::object &date_format, const py::object &timestamp_format, const py::object &sample_size,
-    const py::object &all_varchar, const py::object &normalize_names, const py::object &filename) {
+    const py::object &all_varchar, const py::object &normalize_names, const py::object &filename,
+    const py::object &null_padding) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -786,6 +788,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 			throw InvalidInputException("read_csv only accepts 'filename' as a boolean");
 		}
 		read_csv.AddNamedParameter("filename", Value::INTEGER(py::bool_(filename)));
+	}
+
+	if (!py::none().is(null_padding)) {
+		if (!py::isinstance<py::bool_>(null_padding)) {
+			throw InvalidInputException("read_csv only accepts 'null_padding' as a boolean");
+		}
+		read_csv.AddNamedParameter("null_padding", Value::INTEGER(py::bool_(null_padding)));
 	}
 
 	return make_uniq<DuckDBPyRelation>(read_csv_p->Alias(name));
