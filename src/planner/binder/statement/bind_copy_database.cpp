@@ -13,17 +13,6 @@
 
 namespace duckdb {
 
-void AddNextOperator(Binder &binder, unique_ptr<LogicalOperator> next_operator, unique_ptr<LogicalOperator> &result) {
-	if (result) {
-		// use UNION ALL to combine the individual copy statements into a single node
-		auto copy_union =
-			make_uniq<LogicalSetOperation>(binder.GenerateTableIndex(), 1, std::move(result),
-										   std::move(next_operator), LogicalOperatorType::LOGICAL_UNION, false);
-		result = std::move(copy_union);
-	} else {
-		result = std::move(next_operator);
-	}
-}
 template<class T, class SRC, typename... Args>
 unique_ptr<T> GetCreateInfo(SRC &input, Args&&... args) {
 	BufferedSerializer serializer;
@@ -33,6 +22,18 @@ unique_ptr<T> GetCreateInfo(SRC &input, Args&&... args) {
 	return SRC::Deserialize(source, args...);
 }
 
+void AddNextOperator(Binder &binder, unique_ptr<LogicalOperator> next_operator, unique_ptr<LogicalOperator> &result) {
+	if (result) {
+		// use UNION ALL to combine the individual copy statements into a single node
+		auto copy_union =
+		make_uniq<LogicalSetOperation>(binder.GenerateTableIndex(), 1, std::move(result), std::move(next_operator), LogicalOperatorType::LOGICAL_UNION, false);
+		result = std::move(copy_union);
+	} else {
+		result = std::move(next_operator);
+	}
+}
+
+
 BoundStatement Binder::Bind(CopyDatabaseStatement &stmt) {
 	BoundStatement result;
 	result.types = {LogicalType::BOOLEAN};
@@ -41,36 +42,31 @@ BoundStatement Binder::Bind(CopyDatabaseStatement &stmt) {
 	auto &from_database = Catalog::GetCatalog(context, stmt.from_database);
 	auto &to_database = Catalog::GetCatalog(context, stmt.to_database);
 
-	unique_ptr<LogicalOperator> plan;
 	auto from_schemas = from_database.GetSchemas(context);
 
 	ExportEntries entries;
 	PhysicalExport::ExtractEntries(context, from_schemas, entries);
 
-	// generate the set of CREATE SCHEMA statements
+	auto info = make_uniq<CopyDatabaseInfo>(from_database, to_database);
+
+	// get a list of all schemas to copy over
 	for(auto &schema_ref : from_schemas) {
 		auto &schema = schema_ref.get().Cast<SchemaCatalogEntry>();
 		auto create_info = GetCreateInfo<CreateSchemaInfo>(schema);
 		create_info->catalog = to_database.GetName();
 		create_info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-		auto create_schema = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(create_info));
-		AddNextOperator(*this, std::move(create_schema), plan);
+		info->schemas.push_back(std::move(create_info));
 	}
-	// generate the tables
+	// get a list of all tables to copy over
 	for(auto &table_ref : entries.tables) {
 		auto &table = table_ref.get().Cast<TableCatalogEntry>();
 		auto create_info = GetCreateInfo<CreateTableInfo>(table, context);
 		create_info->catalog = to_database.GetName();
-		create_info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-		auto create_table = make_uniq<LogicalCreateTable>(LogicalOperatorType::LOGICAL_CREATE_TABLE, std::move(create_info));
-		AddNextOperator(*this, std::move(create_table), plan);
+		create_info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
+		info->tables.push_back(std::move(create_info));
 	}
 
-	auto copy_database = make_uniq<LogicalCopyDatabase>();
-	if (!plan) {
-		throw BinderException("Empty database to copy!?");
-	}
-	copy_database->AddChild(std::move(plan));
+	auto copy_database = make_uniq<LogicalCopyDatabase>(std::move(info));
 
 	result.plan = std::move(copy_database);
 	properties.allow_stream_result = false;

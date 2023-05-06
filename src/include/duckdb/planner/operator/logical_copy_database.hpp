@@ -15,23 +15,31 @@
 
 namespace duckdb {
 
+struct CopyDatabaseInfo {
+	CopyDatabaseInfo(Catalog &from_database, Catalog &to_database);
+	~CopyDatabaseInfo();
+
+	Catalog &from_database;
+	Catalog &to_database;
+	vector<unique_ptr<CreateSchemaInfo>> schemas;
+	vector<unique_ptr<CreateTableInfo>> tables;
+};
+
 class LogicalCopyDatabase : public LogicalOperator {
 public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_COPY_DATABASE;
 
 public:
-	LogicalCopyDatabase()
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_COPY_DATABASE) {
-	}
+	explicit LogicalCopyDatabase(unique_ptr<CopyDatabaseInfo> info_p);
+	~LogicalCopyDatabase() override;
 
+	unique_ptr<CopyDatabaseInfo> info;
 public:
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
 protected:
-	void ResolveTypes() override {
-		types.emplace_back(LogicalType::BOOLEAN);
-	}
+	void ResolveTypes() override;
 };
 
 } // namespace duckdb

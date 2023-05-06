@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/planner/operator/logical_copy_database.hpp"
 
 namespace duckdb {
 
@@ -17,9 +18,10 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::COPY_DATABASE;
 
 public:
-	PhysicalCopyDatabase(vector<LogicalType> types, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::COPY_DATABASE, std::move(types), estimated_cardinality) {
-	}
+	PhysicalCopyDatabase(vector<LogicalType> types, idx_t estimated_cardinality, unique_ptr<CopyDatabaseInfo> info_p);
+	~PhysicalCopyDatabase() override;
+
+	unique_ptr<CopyDatabaseInfo> info;
 
 public:
 	// Source interface
@@ -28,20 +30,6 @@ public:
 	bool IsSource() const override {
 		return true;
 	}
-
-public:
-	// Sink interface
-	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
-
-	bool ParallelSink() const override {
-		return true;
-	}
-	bool IsSink() const override {
-		return true;
-	}
-
-public:
-	vector<const_reference<PhysicalOperator>> GetSources() const override;
 };
 
 } // namespace duckdb
