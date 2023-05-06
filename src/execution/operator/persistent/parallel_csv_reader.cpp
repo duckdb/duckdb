@@ -267,7 +267,12 @@ bool AllNewLine(string_t value, idx_t column_amount) {
 bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line) {
 	// If line is not set, we have to figure it out, we assume whatever is in the first line
 	if (options.new_line == NewLineIdentifier::NOT_SET) {
-		for (idx_t cur_pos = position_buffer; cur_pos < end_buffer; cur_pos++) {
+		idx_t cur_pos = position_buffer;
+		while (StringUtil::CharacterIsNewline((*buffer)[cur_pos]) && cur_pos < end_buffer) {
+			// we can start in the middle of a new line, so move a bit forward.
+			cur_pos++;
+		}
+		for (; cur_pos < end_buffer; cur_pos++) {
 			if (StringUtil::CharacterIsNewline((*buffer)[cur_pos])) {
 				bool carriage_return = (*buffer)[cur_pos] == '\r';
 				bool carriage_return_followed = false;
@@ -278,9 +283,8 @@ bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 						cur_pos++;
 					}
 				}
-				if (NewLineDelimiter(carriage_return, carriage_return_followed, cur_pos - 1 == start_buffer)) {
-					break;
-				}
+				SetNewLineDelimiter(carriage_return, carriage_return_followed);
+				break;
 			}
 		}
 	}
