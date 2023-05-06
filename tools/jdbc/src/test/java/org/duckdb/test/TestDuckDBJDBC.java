@@ -33,9 +33,12 @@ import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Comparator;
 import java.util.GregorianCalendar;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.TimeZone;
 import java.util.UUID;
@@ -52,6 +55,8 @@ import org.duckdb.DuckDBResultSetMetaData;
 import org.duckdb.DuckDBNative;
 import org.duckdb.JsonNode;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 
 public class TestDuckDBJDBC {
@@ -1998,7 +2003,7 @@ public class TestDuckDBJDBC {
 
 	public static void test_get_table_types() throws Exception {
 		String[] tableTypesArray = new String[]{"BASE TABLE", "LOCAL TEMPORARY", "VIEW"};
-		List<String> tableTypesList = new ArrayList<String>(Arrays.asList(tableTypesArray));
+		List<String> tableTypesList = new ArrayList<>(asList(tableTypesArray));
 		tableTypesList.sort(Comparator.naturalOrder());
 
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
@@ -3228,17 +3233,21 @@ public class TestDuckDBJDBC {
 				assertTrue(rs.next());
 				assertEquals(arrayToList(rs.getArray(1)), singletonList(1));
 				assertTrue(rs.next());
-				assertEquals(arrayToList(rs.getArray(1)), Arrays.asList(42, 69));
+				assertEquals(arrayToList(rs.getArray(1)), asList(42, 69));
 			}
 			try (ResultSet rs = statement.executeQuery("select unnest([[[42], [69]]])")) {
 				assertTrue(rs.next());
 
-				List<List<Integer>> expected = Arrays.asList(singletonList(42), singletonList(69));
-				List<Array> actual = TestDuckDBJDBC.<Array>arrayToList(rs.getArray(1));
+				List<List<Integer>> expected = asList(singletonList(42), singletonList(69));
+				List<Array> actual = arrayToList(rs.getArray(1));
 
 				for (int i=0; i<actual.size(); i++) {
 					assertEquals(arrayToList(actual.get(i)), expected.get(i));
 				}
+			}
+			try (ResultSet rs = statement.executeQuery("select unnest([[], [69]])")) {
+				assertTrue(rs.next());
+				assertTrue(arrayToList(rs.getArray(1)).isEmpty());
 			}
 		}
 	}
@@ -3246,7 +3255,17 @@ public class TestDuckDBJDBC {
 	private static <T> List<T> arrayToList(Array actual) throws SQLException {
 		@SuppressWarnings("unchecked")
 		T[] array = (T[]) actual.getArray();
-		return Arrays.asList(array);
+		List<Object> out = new ArrayList<>();
+		for (T t : array) {
+			if (t instanceof Double && Double.isNaN((Double) t)) {
+				out.add("NaN");
+			} else if (t instanceof Array) {
+				out.add(arrayToList((Array) t));
+			} else {
+				out.add(t);
+			}
+		}
+		return (List<T>) out;
 	}
 
 	public static void test_map() throws Exception {
@@ -3332,6 +3351,83 @@ public class TestDuckDBJDBC {
 				assertEquals(rs.getInt(1), 0);
 				rs.next();
 				assertEquals(rs.getInt(1), 1);
+			}
+		}
+	}
+
+	static List<Object> trio(Object... max) {
+		return asList(emptyList(), asList(max), null);
+	}
+
+	static Map<String, List<Object>> correct_answer_map = new HashMap<>();
+	static {
+		correct_answer_map.put("int_array", trio(
+				42, 999, null, null, -42
+		));
+		correct_answer_map.put("double_array", trio(
+				42.0, "NaN", Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, null, -42.0
+		));
+		correct_answer_map.put("date_array", trio(
+				Date.valueOf("1970-01-01"), null, null, null, Date.valueOf("2022-05-12")
+		));
+		correct_answer_map.put("timestamp_array", trio(
+				Timestamp.valueOf("1970-01-01 00:00:00.0"),
+				DuckDBTimestamp.toSqlTimestamp(9223372036854775807L),
+				DuckDBTimestamp.toSqlTimestamp(-9223372036854775807L),
+				null,
+				Timestamp.valueOf("2022-05-12 16:23:45.0")
+		));
+		correct_answer_map.put("timestamptz_array", trio(
+				OffsetDateTime.parse("1970-01-01T00:00Z"),
+				OffsetDateTime.parse("+294247-01-10T04:00:54.775807Z"),
+				OffsetDateTime.parse("-290308-12-21T19:59:05.224193Z"),
+				null,
+				OffsetDateTime.parse("2022-05-12T23:23:45Z")
+		));
+		correct_answer_map.put("varchar_array", trio(
+				"🦆🦆🦆🦆🦆🦆",
+				"goose",
+				null,
+				""
+		));
+		correct_answer_map.put("nested_int_array", trio(
+				emptyList(),
+				asList(42, 999, null, null, -42),
+				null,
+				emptyList(),
+				asList(42, 999, null, null, -42)
+		));
+		correct_answer_map.put("struct_of_arrays", asList(
+				"{'a': NULL, 'b': NULL}", "{'a': [42, 999, NULL, NULL, -42], 'b': [🦆🦆🦆🦆🦆🦆, goose, NULL, ]}", null
+		));
+		correct_answer_map.put("array_of_structs", trio(
+				"{'a': NULL, 'b': NULL}", "{'a': 42, 'b': 🦆🦆🦆🦆🦆🦆}", null
+		));
+	}
+
+	public static void test_all_types() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			 PreparedStatement stmt = conn.prepareStatement("select COLUMNS('.*array') from test_all_types()");
+			 ResultSet rs = stmt.executeQuery()) {
+
+			int rowIdx = 0;
+			while (rs.next()) {
+				ResultSetMetaData metaData = rs.getMetaData();
+				for (int i = 0; i< metaData.getColumnCount(); i++) {
+					String columnName = metaData.getColumnName(i + 1);
+					List<Object> answers = correct_answer_map.get(columnName);
+					if (Objects.equals(answers, null)) {
+						fail(columnName);
+					}
+					Object answer = answers.get(rowIdx);
+
+					Object object = rs.getObject(i + 1);
+					if (object instanceof Array) {
+						object = arrayToList((Array) object);
+					}
+					assertEquals(object, answer);
+				}
+				rowIdx++;
 			}
 		}
 	}
