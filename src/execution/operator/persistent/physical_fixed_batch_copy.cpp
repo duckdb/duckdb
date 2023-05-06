@@ -326,7 +326,7 @@ void PhysicalFixedBatchCopy::RepartitionBatches(ClientContext &context, GlobalSi
 		}
 	}
 	// gather all collections we can repartition
-	idx_t max_batch_index;
+	idx_t max_batch_index = 0;
 	vector<unique_ptr<ColumnDataCollection>> collections;
 	for (auto entry = gstate.raw_batches.begin(); entry != gstate.raw_batches.end();) {
 		if (entry->first >= min_index) {
