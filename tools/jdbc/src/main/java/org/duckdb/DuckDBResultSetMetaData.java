@@ -1,16 +1,16 @@
 package org.duckdb;
 
-import java.sql.Date;
-import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
-import java.sql.Time;
-import java.sql.Timestamp;
-import java.sql.Types;
-import java.util.ArrayList;
-import java.time.OffsetTime;
-import java.time.OffsetDateTime;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.util.ArrayList;
 import java.util.UUID;
 
 public class DuckDBResultSetMetaData implements ResultSetMetaData {
@@ -146,19 +146,15 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		case TINYINT:
 			return Byte.class.getName();
 		case SMALLINT:
-			return Short.class.getName();
-		case INTEGER:
-			return Integer.class.getName();
-		case BIGINT:
-			return Long.class.getName();
-		case HUGEINT:
-			return BigInteger.class.getName();
 		case UTINYINT:
 			return Short.class.getName();
+		case INTEGER:
 		case USMALLINT:
 			return Integer.class.getName();
+		case BIGINT:
 		case UINTEGER:
 			return Long.class.getName();
+		case HUGEINT:
 		case UBIGINT:
 			return BigInteger.class.getName();
 		case FLOAT:
@@ -168,11 +164,11 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		case DECIMAL:
 			return BigDecimal.class.getName();
 		case TIME:
-			return Time.class.getName();
+			return LocalTime.class.getName();
 		case TIME_WITH_TIME_ZONE:
 			return OffsetTime.class.getName();
 		case DATE:
-			return Date.class.getName();
+			return LocalDate.class.getName();
 		case TIMESTAMP:
 		case TIMESTAMP_NS:
 		case TIMESTAMP_S:

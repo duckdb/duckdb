@@ -11,15 +11,34 @@ import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.sql.Time;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.OffsetTime;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.TextStyle;
+import java.time.temporal.ChronoField;
 import java.util.Calendar;
 import java.util.UUID;
 
 class DuckDBVector {
 	// Constant to construct BigDecimals from hugeint_t
 	private final static BigDecimal ULONG_MULTIPLIER = new BigDecimal("18446744073709551616");
+	private final static DateTimeFormatter ERA_FORMAT = new DateTimeFormatterBuilder()
+			.appendValue(ChronoField.YEAR_OF_ERA)
+			.appendLiteral("-")
+			.appendValue(ChronoField.MONTH_OF_YEAR)
+			.appendLiteral("-")
+			.appendValue(ChronoField.DAY_OF_MONTH)
+			.appendOptional(
+					new DateTimeFormatterBuilder()
+							.appendLiteral(" (")
+							.appendText(ChronoField.ERA, TextStyle.SHORT)
+							.appendLiteral(")")
+							.toFormatter()
+			).toFormatter();
 
 	DuckDBVector(String duckdb_type, int length, boolean[] nullmask) {
 		super();
@@ -67,11 +86,11 @@ class DuckDBVector {
 			case DECIMAL:
 				return getBigDecimal(idx);
 			case TIME:
-				return getTime(idx);
+				return getLocalTime(idx);
 			case TIME_WITH_TIME_ZONE:
 				return getOffsetTime(idx);
 			case DATE:
-				return getDate(idx);
+				return getLocalDate(idx);
 			case TIMESTAMP:
 			case TIMESTAMP_NS:
 			case TIMESTAMP_S:
@@ -90,6 +109,21 @@ class DuckDBVector {
 			default:
 				return getLazyString(idx);
 		}
+	}
+
+	LocalTime getLocalTime(int idx) throws SQLException {
+		String lazyString = getLazyString(idx);
+
+		return lazyString == null ? null : LocalTime.parse(lazyString);
+	}
+
+	LocalDate getLocalDate(int idx) throws SQLException {
+		String lazyString = getLazyString(idx);
+
+		if ("infinity".equals(lazyString)) return LocalDate.MAX;
+		else if ("-infinity".equals(lazyString)) return LocalDate.MIN;
+
+		return lazyString == null ? null : LocalDate.from(ERA_FORMAT.parse(lazyString));
 	}
 
 	BigDecimal getBigDecimal(int idx) throws SQLException {
