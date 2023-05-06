@@ -268,9 +268,13 @@ bool ParallelCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error
 	// If line is not set, we have to figure it out, we assume whatever is in the first line
 	if (options.new_line == NewLineIdentifier::NOT_SET) {
 		idx_t cur_pos = position_buffer;
-		while (StringUtil::CharacterIsNewline((*buffer)[cur_pos]) && cur_pos < end_buffer) {
-			// we can start in the middle of a new line, so move a bit forward.
-			cur_pos++;
+		// we can start in the middle of a new line, so move a bit forward.
+		while (cur_pos < end_buffer) {
+			if (StringUtil::CharacterIsNewline((*buffer)[cur_pos])) {
+				cur_pos++;
+			} else {
+				break;
+			}
 		}
 		for (; cur_pos < end_buffer; cur_pos++) {
 			if (StringUtil::CharacterIsNewline((*buffer)[cur_pos])) {
