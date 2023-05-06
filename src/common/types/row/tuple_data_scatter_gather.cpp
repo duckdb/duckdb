@@ -1,6 +1,7 @@
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -135,7 +136,7 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 		break;
 	}
 	default:
-		throw NotImplementedException("ComputeHeapSizes for %s", LogicalTypeIdToString(source_v.GetType().id()));
+		throw NotImplementedException("ComputeHeapSizes for %s", EnumUtil::ToString(source_v.GetType().id()));
 	}
 }
 
@@ -164,8 +165,7 @@ void TupleDataCollection::WithinListHeapComputeSizes(Vector &heap_sizes_v, const
 		                                                    append_count, list_data);
 		break;
 	default:
-		throw NotImplementedException("WithinListHeapComputeSizes for %s",
-		                              LogicalTypeIdToString(source_v.GetType().id()));
+		throw NotImplementedException("WithinListHeapComputeSizes for %s", EnumUtil::ToString(source_v.GetType().id()));
 	}
 }
 

@@ -1,11 +1,10 @@
 #include "duckdb/core_functions/scalar/list_functions.hpp"
-#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/config.hpp"
-
 #include "duckdb/common/sort/sort.hpp"
 
 namespace duckdb {
@@ -251,7 +250,7 @@ static T GetOrder(ClientContext &context, Expression &expr) {
 	}
 	Value order_value = ExpressionExecutor::EvaluateScalar(context, expr);
 	auto order_name = StringUtil::Upper(order_value.ToString());
-	return EnumSerializer::StringToEnum<T>(order_name.c_str());
+	return EnumUtil::FromString<T>(order_name.c_str());
 }
 
 static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, ScalarFunction &bound_function,

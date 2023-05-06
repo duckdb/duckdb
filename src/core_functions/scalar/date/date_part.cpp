@@ -3,6 +3,7 @@
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -81,7 +82,7 @@ DatePartSpecifier GetDateTypePartSpecifier(const string &specifier, LogicalType 
 		break;
 	}
 
-	throw NotImplementedException("\"%s\" units \"%s\" not recognized", LogicalTypeIdToString(type.id()), specifier);
+	throw NotImplementedException("\"%s\" units \"%s\" not recognized", EnumUtil::ToString(type.id()), specifier);
 }
 
 template <int64_t MIN, int64_t MAX>

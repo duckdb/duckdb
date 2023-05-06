@@ -52,6 +52,7 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		options.filename = BooleanValue::Get(val);
 	} else if (loption == "hive_partitioning") {
 		options.hive_partitioning = BooleanValue::Get(val);
+		options.auto_detect_hive_partitioning = false;
 	} else if (loption == "union_by_name") {
 		options.union_by_name = BooleanValue::Get(val);
 	} else {
@@ -107,12 +108,25 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 			auto file_partitions = HivePartitioning::Parse(f);
 			for (auto &part_info : partitions) {
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
+					if (options.auto_detect_hive_partitioning == true) {
+						throw BinderException(
+						    "Hive partitioning was enabled automatically, but an error was encountered: Hive partition "
+						    "mismatch between file \"%s\" and \"%s\": key \"%s\" not found\n\nTo switch off hive "
+						    "partition, set: HIVE_PARTITIONING=0",
+						    files[0], f, part_info.first);
+					}
 					throw BinderException(
 					    "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found", files[0], f,
 					    part_info.first);
 				}
 			}
 			if (partitions.size() != file_partitions.size()) {
+				if (options.auto_detect_hive_partitioning == true) {
+					throw BinderException("Hive partitioning was enabled automatically, but an error was encountered: "
+					                      "Hive partition mismatch between file \"%s\" and \"%s\"\n\nTo switch off "
+					                      "hive partition, set: HIVE_PARTITIONING=0",
+					                      files[0], f);
+				}
 				throw BinderException("Hive partition mismatch between file \"%s\" and \"%s\"", files[0], f);
 			}
 		}

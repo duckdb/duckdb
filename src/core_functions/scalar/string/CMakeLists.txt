@@ -5,6 +5,7 @@ add_library_unity(
   bar.cpp
   chr.cpp
   damerau_levenshtein.cpp
+  format_bytes.cpp
   hamming.cpp
   hex.cpp
   instr.cpp

@@ -41,6 +41,7 @@ public:
 		return expressions.size();
 	}
 	vector<idx_t> GetTableIndex() const override;
+	string GetName() const override;
 
 protected:
 	void ResolveTypes() override {

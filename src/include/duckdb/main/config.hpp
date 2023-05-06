@@ -84,6 +84,8 @@ struct ExtensionOption {
 struct DBConfigOptions {
 	//! Database file path. May be empty for in-memory mode
 	string database_path;
+	//! Database type. If empty, automatically extracted from `database_path`, where a `type:path` syntax is expected
+	string database_type;
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
 	//! Checkpoint when WAL reaches this size (default: 16MB)
@@ -149,6 +151,8 @@ struct DBConfigOptions {
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
 	//! The set of unrecognized (other) options
 	unordered_map<string, Value> unrecognized_options;
+	//! Whether to print bindings when printing the plan (debug mode only)
+	static bool debug_print_bindings;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
