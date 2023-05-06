@@ -3242,7 +3242,7 @@ public class TestDuckDBJDBC {
 				List<Array> actual = arrayToList(rs.getArray(1));
 
 				for (int i=0; i<actual.size(); i++) {
-					assertEquals(arrayToList(actual.get(i)), expected.get(i));
+					assertEquals(actual.get(i), expected.get(i));
 				}
 			}
 			try (ResultSet rs = statement.executeQuery("select unnest([[], [69]])")) {
