@@ -407,7 +407,7 @@ public class DuckDBResultSet implements ResultSet {
 		return current_chunk[columnIndex - 1].getUuid(chunk_idx - 1);
 	}
 
-	static class DuckDBBlobResult implements Blob {
+	public static class DuckDBBlobResult implements Blob {
 
 		static class ByteBufferBackedInputStream extends InputStream {
 
@@ -488,6 +488,26 @@ public class DuckDBResultSet implements ResultSet {
 		public int setBytes(long pos, byte[] bytes, int offset, int len) throws SQLException {
 			throw new SQLFeatureNotSupportedException("setBytes");
 
+		}
+
+		@Override
+		public String toString() {
+			return "DuckDBBlobResult{" +
+					"buffer=" + buffer +
+					'}';
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+			DuckDBBlobResult that = (DuckDBBlobResult) o;
+			return Objects.equals(buffer, that.buffer);
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(buffer);
 		}
 
 		private ByteBuffer buffer;
