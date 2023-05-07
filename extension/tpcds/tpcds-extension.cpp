@@ -32,7 +32,7 @@ static duckdb::unique_ptr<FunctionData> DsdgenBind(ClientContext &context, Table
 		if (kv.first == "sf") {
 			result->sf = kv.second.GetValue<double>();
 		} else if (kv.first == "catalog") {
-			result->schema = StringValue::Get(kv.second);
+			result->catalog = StringValue::Get(kv.second);
 		} else if (kv.first == "schema") {
 			result->schema = StringValue::Get(kv.second);
 		} else if (kv.first == "suffix") {
