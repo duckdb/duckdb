@@ -3331,9 +3331,6 @@ public class TestDuckDBJDBC {
 				rs.next();
 				for (int i=1; i<=rsmd.getColumnCount(); i++) {
 					Object value = rs.getObject(i);
-					if (value == null) {
-						continue; // FIXME: when we add a complete test_all_types() test
-					}
 
 					assertEquals(
 						rsmd.getColumnClassName(i),
@@ -3515,10 +3512,6 @@ public class TestDuckDBJDBC {
 					for (int i = 0; i<metaData.getColumnCount(); i++) {
 						String columnName = metaData.getColumnName(i + 1);
 						List<Object> answers = correct_answer_map.get(columnName);
-						if (answers == null) {
-							logger.warning(String.format("Skipping %s for now", columnName));
-							continue;
-						}
 						Object expected = answers.get(rowIdx);
 
 						Object actual = rs.getObject(i + 1);
