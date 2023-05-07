@@ -355,28 +355,11 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Date getDate(int columnIndex) throws SQLException {
-		String string_value = getLazyString(columnIndex);
-		if (string_value == null) {
-			return null;
-		}
-		try {
-			return Date.valueOf(string_value);
-		} catch (Exception e) {
-			return null;
-		}
+		return check_and_null(columnIndex) ? null : current_chunk[columnIndex - 1].getDate(chunk_idx - 1);
 	}
 
 	public Time getTime(int columnIndex) throws SQLException {
-		String string_value = getLazyString(columnIndex);
-		if (string_value == null) {
-			return null;
-		}
-		try {
-
-			return Time.valueOf(getLazyString(columnIndex));
-		} catch (Exception e) {
-			return null;
-		}
+		return check_and_null(columnIndex) ? null : current_chunk[columnIndex - 1].getTime(chunk_idx - 1);
 	}
 
 	public Timestamp getTimestamp(int columnIndex) throws SQLException {
