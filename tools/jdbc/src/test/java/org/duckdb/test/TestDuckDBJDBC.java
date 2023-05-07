@@ -3271,9 +3271,7 @@ public class TestDuckDBJDBC {
 		T[] array = (T[]) actual.getArray();
 		List<Object> out = new ArrayList<>();
 		for (T t : array) {
-			if (t instanceof Double && Double.isNaN((Double) t)) {
-				out.add("NaN");
-			} else if (t instanceof Array) {
+			if (t instanceof Array) {
 				out.add(arrayToList((Array) t));
 			} else {
 				out.add(t);
@@ -3402,7 +3400,7 @@ public class TestDuckDBJDBC {
 				42, 999, null, null, -42
 		));
 		correct_answer_map.put("double_array", trio(
-				42.0, "NaN", Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, null, -42.0
+				42.0, Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, null, -42.0
 		));
 		correct_answer_map.put("date_array", trio(
 				LocalDate.parse("1970-01-01"),
