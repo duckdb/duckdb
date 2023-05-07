@@ -1619,12 +1619,12 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getObject("ts"), Timestamp.valueOf("2019-11-26 21:11:00"));
 		assertEquals(rs.getTimestamp("ts"), Timestamp.valueOf("2019-11-26 21:11:00"));
 
-		assertEquals(rs.getObject("dt"), Date.valueOf("2019-11-26"));
+		assertEquals(rs.getObject("dt"), LocalDate.parse("2019-11-26"));
 		assertEquals(rs.getDate("dt"), Date.valueOf("2019-11-26"));
 
 		assertEquals(rs.getObject("iv"), "5 days");
 
-		assertEquals(rs.getObject("te"), Time.valueOf("21:11:00"));
+		assertEquals(rs.getObject("te"), LocalTime.parse("21:11:00"));
 		assertEquals(rs.getTime("te"), Time.valueOf("21:11:00"));
 
 		assertFalse(rs.next());
