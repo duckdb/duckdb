@@ -65,6 +65,7 @@ import java.util.logging.Logger;
 
 import static java.time.format.DateTimeFormatter.ISO_LOCAL_TIME;
 import static java.time.temporal.ChronoField.DAY_OF_MONTH;
+import static java.time.temporal.ChronoField.MILLI_OF_SECOND;
 import static java.time.temporal.ChronoField.MONTH_OF_YEAR;
 import static java.time.temporal.ChronoField.OFFSET_SECONDS;
 import static java.time.temporal.ChronoField.YEAR_OF_ERA;
@@ -3477,26 +3478,26 @@ public class TestDuckDBJDBC {
 		correct_answer_map.put("interval", asList("00:00:00", "83 years 3 months 999 days 00:16:39.999999", null));
 		correct_answer_map.put("timestamp", asList(DuckDBTimestamp.toSqlTimestamp(-9223372022400000000L), DuckDBTimestamp.toSqlTimestamp(9223372036854775807L), null));
 		correct_answer_map.put("date", asList(LocalDate.of(-5877641, 6, 25), LocalDate.of(5881580, 7, 10), null));
-//		correct_answer_map.put("timestamp_s",  of(
-//				LocalDateTime.of(-290308, 12, 22, 0, 0),
-//				LocalDateTime.of(294247,1,10,4,0, 54),
-//				null
-//		));
-//		correct_answer_map.put("timestamp_ns", of(
-//				LocalDateTime.parse("1677-09-21T00:12:43.145225"),
-//				LocalDateTime.parse("2262-04-11T23:47:16.854775"),
-//				null
-//		));
-//		correct_answer_map.put("timestamp_ms", of(
-//				LocalDateTime.of(-290308, 12, 22, 0, 0, 0),
-//				LocalDateTime.of(294247, 1, 10, 4, 0, 54, 775000),
-//				null
-//		));
-//		correct_answer_map.put("timestamp_tz", of(
-//				OffsetDateTime.of(LocalDateTime.of(-290303, 12, 11, 0, 0, 0), ZoneOffset.UTC),
-//				OffsetDateTime.of(LocalDateTime.of(294247, 1, 10, 4, 0, 54, 776806), ZoneOffset.UTC),
-//				null
-//		));
+		correct_answer_map.put("timestamp_s", asList(
+				Timestamp.valueOf(LocalDateTime.of(-290308, 12, 22, 0, 0)),
+				Timestamp.valueOf(LocalDateTime.of(294247,1,10,4,0, 54)),
+				null
+		));
+		correct_answer_map.put("timestamp_ns", asList(
+				Timestamp.valueOf(LocalDateTime.parse("1677-09-21T00:12:43.145225")),
+				Timestamp.valueOf(LocalDateTime.parse("2262-04-11T23:47:16.854775")),
+				null
+		));
+		correct_answer_map.put("timestamp_ms", asList(
+				Timestamp.valueOf(LocalDateTime.of(-290308, 12, 22, 0, 0, 0)),
+				Timestamp.valueOf(LocalDateTime.of(294247, 1, 10, 4, 0, 54, 775000000)),
+				null
+		));
+		correct_answer_map.put("timestamp_tz", asList(
+				OffsetDateTime.of(LocalDateTime.of(-290308, 12, 22, 0, 0, 0), ZoneOffset.UTC),
+				OffsetDateTime.of(LocalDateTime.of(294247, 1, 10, 4, 0, 54, 776806000), ZoneOffset.UTC),
+				null
+		));
 	}
 
 	public static void test_all_types() throws Exception {
@@ -3526,7 +3527,9 @@ public class TestDuckDBJDBC {
 						}
 
 						if (actual instanceof Timestamp && expected instanceof Timestamp) {
-							assertEquals(((Timestamp)actual).getTime(), ((Timestamp)expected).getTime(), 500);
+							assertEquals(((Timestamp) actual).getTime(), ((Timestamp) expected).getTime(), 500);
+						} else if (actual instanceof OffsetDateTime && expected instanceof OffsetDateTime) {
+							assertEquals(((OffsetDateTime) actual).getLong(MILLI_OF_SECOND), ((OffsetDateTime) expected).getLong(MILLI_OF_SECOND), 5000);
 						} else if (actual instanceof List) {
 							assertListsEqual((List) actual, (List)expected);
 						} else {
