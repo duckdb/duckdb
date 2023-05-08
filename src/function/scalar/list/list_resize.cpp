@@ -7,45 +7,30 @@ namespace duckdb {
 
 struct StandardCopyValue {
 	template <class T>
-	static void Operation(Vector &child, Vector &result_child, idx_t i, idx_t result_child_offset, uint64_t count) {
-		UnifiedVectorFormat child_data;
-		child.ToUnifiedFormat(count, child_data);
-
-		auto child_entries = (T *)child_data.data;
-		auto result_child_data = FlatVector::GetData<T>(result_child);
-
-		std::cout << "child_entries[i] = " << child_entries[i] << std::endl;
+	static void Operation(T *result_child_data, T *child_entries, Vector &,
+	                      Vector &, idx_t i, idx_t result_child_offset) {
 		result_child_data[result_child_offset] = child_entries[i];
 	}
 };
 
 struct StringCopyValue {
 	template <class T>
-	static void Operation(Vector &child, Vector &result_child, idx_t i, idx_t result_child_offset, uint64_t count) {
-		UnifiedVectorFormat child_data;
-		child.ToUnifiedFormat(count, child_data);
-
-		auto child_entries = (string_t *)child_data.data;
-		auto result_child_data = FlatVector::GetData<string_t>(result_child);
-
+	static void Operation(T *result_child_data, T *child_entries, Vector &,
+	                      Vector &result_child, idx_t i, idx_t result_child_offset) {
 		result_child_data[result_child_offset] = StringVector::AddString(result_child, child_entries[i]);
 	}
 };
 
 struct NestedCopyValue {
 	template <class T>
-	static void Operation(Vector &child, Vector &result_child, idx_t i, idx_t result_child_offset, uint64_t count) {
+	static void Operation(T *, T *, Vector &child,
+	                      Vector &result_child, idx_t i, idx_t result_child_offset) {
 		result_child.SetValue(result_child_offset, child.GetValue(i));
 	}
 };
 
 template <class T, class COPY_FUNCTION>
 static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
-	auto &result_validity = FlatVector::Validity(result);
-	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
-		result_validity.SetInvalid(0);
-		return;
-	}
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto count = args.size();
 
@@ -54,7 +39,6 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 	auto &list = args.data[0];
 	auto &child = ListVector::GetEntry(args.data[0]);
 	auto &new_size = args.data[1];
-
 
 	UnifiedVectorFormat list_data;
 	UnifiedVectorFormat new_size_data;
@@ -66,26 +50,24 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 	auto new_size_entries = (int64_t *)new_size_data.data;
 	auto child_entries = (T *)child_data.data;
 
-	bool has_default = false;
-	T default_value;
-//	if (args.ColumnCount() == 3) {
-//		D_ASSERT(child.GetType() == args.data[2].GetType());
-//		auto &d = args.data[2];
-//		UnifiedVectorFormat d_data;
-//		d.ToUnifiedFormat(count, d_data);
-////		auto d_entries = (T *)d_data.data;
-//		if (d_data.validity.RowIsValid(0)) {
-//			default_value = args.data[2].GetValue(0);
-////			default_value = def.GetValue<T>();
-//			has_default = true;
-//		}
-//	}
 
+	// Find the new size of the result child vector
 	auto new_child_size = 0;
-
 	for (idx_t i = 0; i < count; i++) {
 		auto index = list_data.sel->get_index(i);
 		new_child_size += new_size_entries[index];
+	}
+
+	// Create the default vector if it exists
+	bool has_default = false;
+	T*default_entries = nullptr;
+    UnifiedVectorFormat default_data;
+    Vector &default_vector = args.data[0];
+	if (args.ColumnCount() == 3) {
+		default_vector.ReferenceAndSetType(args.data[2]);
+		D_ASSERT(child.GetType() == args.data[2].GetType() || args.data[2].GetType() == LogicalTypeId::SQLNULL);
+		default_vector.ToUnifiedFormat(count, default_data);
+		default_entries = (T *)default_data.data;
 	}
 
 	ListVector::Reserve(result, new_child_size);
@@ -95,62 +77,73 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 	auto &result_child = ListVector::GetEntry(result);
 	auto result_child_data = FlatVector::GetData<T>(result_child);
 
-	auto &result_child_validity = FlatVector::Validity(result_child);
-
+	// for each list in the args
 	idx_t result_child_offset = 0;
-	for (idx_t i = 0; i < count; i++) {
-		auto l_index = list_data.sel->get_index(i);
-		auto new_index = new_size_data.sel->get_index(i);
+	for (idx_t args_index = 0; args_index < count; args_index++) {
+		auto l_index = list_data.sel->get_index(args_index);
+		auto new_index = new_size_data.sel->get_index(args_index);
+
+		// set null if list is null
 		if (!list_data.validity.RowIsValid(l_index)) {
-			result_validity.SetInvalid(i);
+			FlatVector::SetNull(result, args_index, true);
 			continue;
 		}
+
+		// set default value if it exists
+		idx_t def_index = 0;
+		if (args.ColumnCount() == 3) {
+			def_index = default_data.sel->get_index(args_index);
+            if (default_data.validity.RowIsValid(def_index)) {
+                has_default = true;
+            }
+		}
+
+		// find the smallest size between list and new_size
 		auto values_to_copy = MinValue<idx_t>(list_entries[l_index].length, new_size_entries[new_index]);
-		result_entries[i].offset = result_child_offset;
-		result_entries[i].length = new_size_entries[new_index];
-		child_entries[l_index].Print();
-		for (idx_t j = 0; j < values_to_copy; j++) {
-			if (!child_data.validity.RowIsValid(list_entries[l_index].offset + j)) {
-				result_child_validity.SetInvalid(result_child_offset);
+
+		// set the result entry
+		result_entries[args_index].offset = result_child_offset;
+		result_entries[args_index].length = new_size_entries[new_index];
+
+		// copy the values from the child vector
+		for (idx_t list_index = 0; list_index < values_to_copy; list_index++) {
+			if (!child_data.validity.RowIsValid(list_entries[l_index].offset + list_index)) {
+				FlatVector::SetNull(result_child, result_child_offset, true);
 			} else {
-				COPY_FUNCTION::template Operation<T>(child, result_child, list_entries[l_index].offset + j,
-				                         result_child_offset, count);
+				COPY_FUNCTION::template Operation<T>(result_child_data, child_entries, child, result_child, list_entries[l_index].offset + list_index,
+				                                     result_child_offset);
 			}
 			result_child_offset++;
 		}
+
+		// if the new size is larger than the old size, fill in the default value
 		auto new_size_entry = (idx_t)new_size_entries[new_index];
 		for (idx_t j = values_to_copy; j < new_size_entry; j++) {
 			if (has_default) {
-//				Vector default_vec(default_value);
-
-//				COPY_FUNCTION::template Operation<T>(default_vec, result_child, 0, result_child_offset);
-				result_child_data[result_child_offset] = default_value;
-				std::cout << "Default value: " << default_value << std::endl;
-				std::cout << "Result[" << result_child_offset << "]: " << result_child_data[result_child_offset] << std::endl;
+				COPY_FUNCTION::template Operation<T>(result_child_data, default_entries, default_vector, result_child, def_index,
+				                                     result_child_offset);
 			} else {
-				result_child_validity.SetInvalid(result_child_offset);
+				FlatVector::SetNull(result_child, result_child_offset, true);
 			}
 			result_child_offset++;
 		}
+
+		has_default = false;
 	}
-
-	args.Print();
-
-	std::cout << "Print before const" << std::endl;
-	result.Print(count);
 
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
-
-	std::cout << "Print after const" << std::endl;
-	result.Print(count);
-
 }
 
 void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	const auto physical_type = args.data[1].GetType().InternalType();
-	switch (physical_type) {
+	D_ASSERT(args.data[1].GetType().id() == LogicalTypeId::BIGINT);
+	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
+		FlatVector::Validity(result).SetInvalid(0);
+		return;
+	}
+	auto child_type = ListType::GetChildType(args.data[0].GetType()).InternalType();
+	switch (child_type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		TemplatedListResizeFunction<int8_t, StandardCopyValue> (args, result);
@@ -164,9 +157,9 @@ void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	case PhysicalType::INT64:
 		TemplatedListResizeFunction<int64_t, StandardCopyValue>(args, result);
 		break;
-//	case PhysicalType::INT128:
-//		TemplatedListResizeFunction<hugeint_t, StandardCopyValue>(args, result);
-//		break;
+	case PhysicalType::INT128:
+		TemplatedListResizeFunction<hugeint_t, StandardCopyValue>(args, result);
+		break;
 	case PhysicalType::UINT8:
 		TemplatedListResizeFunction<uint8_t, StandardCopyValue>(args, result);
 		break;
@@ -185,19 +178,19 @@ void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	case PhysicalType::DOUBLE:
 		TemplatedListResizeFunction<double, StandardCopyValue>(args, result);
 		break;
-//	case PhysicalType::VARCHAR:
-//		TemplatedListResizeFunction<string_t, StringCopyValue>(args, result);
-//		break;
-//	case PhysicalType::INTERVAL:
-//		TemplatedListResizeFunction<interval_t, StringCopyValue>(args, result);
-//		break;
-//	case PhysicalType::STRUCT:
-//	case PhysicalType::LIST:
-//		TemplatedListResizeFunction<int8_t, NestedCopyValue>(args, result);
-//		break;
+	case PhysicalType::VARCHAR:
+		TemplatedListResizeFunction<string_t, StringCopyValue>(args, result);
+		break;
+	case PhysicalType::INTERVAL:
+		TemplatedListResizeFunction<interval_t, NestedCopyValue>(args, result);
+		break;
+	case PhysicalType::STRUCT:
+	case PhysicalType::LIST:
+		TemplatedListResizeFunction<int8_t, NestedCopyValue>(args, result);
+		break;
 	default:
 		throw NotImplementedException("This function has not been implemented for physical type %s",
-		                              TypeIdToString(physical_type));
+		                              TypeIdToString(child_type));
 	}
 }
 

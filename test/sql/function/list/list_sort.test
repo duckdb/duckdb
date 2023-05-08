@@ -1,4 +1,4 @@
-# name: test/sql/function/list/list_sort.test
+ # name: test/sql/function/list/list_sort.test
 # description: Test list_sort function
 # group: [list]
 
