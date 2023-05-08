@@ -36,9 +36,6 @@ ParallelCSVReader::ParallelCSVReader(ClientContext &context, BufferedCSVReaderOp
 	}
 }
 
-ParallelCSVReader::~ParallelCSVReader() {
-}
-
 void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	return_types = requested_types;
 	InitParseChunk(return_types.size());
@@ -412,6 +409,9 @@ add_row : {
 	if (carriage_return) {
 		// \r newline, go to special state that parses an optional \n afterwards
 		// optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
+		if (!BufferRemainder()) {
+			goto final_state;
+		}
 		if ((*buffer)[position_buffer] == '\n') {
 			if (options.new_line == NewLineIdentifier::SINGLE) {
 				error_message = "Wrong NewLine Identifier. Expecting \\r\\n";

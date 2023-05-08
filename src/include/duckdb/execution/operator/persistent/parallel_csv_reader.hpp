@@ -22,8 +22,8 @@ namespace duckdb {
 struct CSVBufferRead {
 	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p, idx_t batch_index,
 	              idx_t local_batch_index_p, optional_ptr<LineInfo> line_info_p)
-	    : buffer(std::move(buffer_p)), buffer_start(buffer_start_p), buffer_end(buffer_end_p), batch_index(batch_index),
-	      local_batch_index(local_batch_index_p), line_info(line_info_p) {
+	    : buffer(std::move(buffer_p)), line_info(line_info_p), buffer_start(buffer_start_p), buffer_end(buffer_end_p),
+	      batch_index(batch_index), local_batch_index(local_batch_index_p) {
 		if (buffer) {
 			if (buffer_end > buffer->GetBufferSize()) {
 				buffer_end = buffer->GetBufferSize();
@@ -105,7 +105,8 @@ class ParallelCSVReader : public BaseCSVReader {
 public:
 	ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options, unique_ptr<CSVBufferRead> buffer,
 	                  idx_t first_pos_first_buffer, const vector<LogicalType> &requested_types, idx_t file_idx_p);
-	~ParallelCSVReader();
+	virtual ~ParallelCSVReader() {
+	}
 
 	//! Current Position (Relative to the Buffer)
 	idx_t position_buffer = 0;
