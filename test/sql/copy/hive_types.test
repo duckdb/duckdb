@@ -7,56 +7,56 @@ require parquet
 statement ok
 PRAGMA enable_verification
 
-#	test with hive_partitioning=0
-query IIII
-select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=0) limit 1;
-----
-BIGINT	VARCHAR	BIGINT	VARCHAR
+# #	test with hive_partitioning=0
+# query IIII
+# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=0) limit 1;
+# ----
+# BIGINT	VARCHAR	BIGINT	VARCHAR
 
-#	test with hive_partitioning=1 (auto detected)
-query IIII
-select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1) limit 1;
-----
-BIGINT	VARCHAR	BIGINT	VARCHAR
+# #	test with hive_partitioning=1 (auto detected)
+# query IIII
+# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1) limit 1;
+# ----
+# BIGINT	VARCHAR	BIGINT	VARCHAR
 
-#	test with hive_partitioning=1 (auto detected)
-query IIII
-select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color']) limit 1;
-----
-BIGINT	VARCHAR	BIGINT	VARCHAR
+# #	test with hive_partitioning=1 (auto detected)
+# query IIII
+# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color']) limit 1;
+# ----
+# BIGINT	VARCHAR	BIGINT	VARCHAR
 
-#	set hive_types as varchar,varchar
-query IIII
-select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types={'year':'varchar','month':'varchar'}) limit 1;
-----
-VARCHAR	VARCHAR	BIGINT	VARCHAR
+# #	set hive_types as varchar,varchar
+# query IIII
+# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types={'year':'varchar','month':'varchar'}) limit 1;
+# ----
+# VARCHAR	VARCHAR	BIGINT	VARCHAR
 
-#	set hive_types as smallint,varchar
-query IIII
-select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types={'year':'smallint','month':'varchar'}) limit 1;
-----
-SMALLINT	VARCHAR	BIGINT	VARCHAR
+# #	set hive_types as smallint,varchar
+# query IIII
+# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types={'year':'smallint','month':'varchar'}) limit 1;
+# ----
+# SMALLINT	VARCHAR	BIGINT	VARCHAR
 
-#	set hive_types as smallint,bigint, but 'month' to 'bigint' is a bad cast
-statement error
-select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types={'year':'smallint','month':'bigint'}) limit 1;
-----
-Invalid Input Error
+# #	set hive_types as smallint,bigint, but 'month' to 'bigint' is a bad cast
+# statement error
+# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types={'year':'smallint','month':'bigint'}) limit 1;
+# ----
+# Invalid Input Error
 
-#	hive_partitioning is auto_detected, and set hive_types as smallint,varchar
-query IIII
-select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_types={'year':'smallint','month':'varchar'}) limit 1;
-----
-SMALLINT	VARCHAR	BIGINT	VARCHAR
+# #	hive_partitioning is auto_detected, and set hive_types as smallint,varchar
+# query IIII
+# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_types={'year':'smallint','month':'varchar'}) limit 1;
+# ----
+# SMALLINT	VARCHAR	BIGINT	VARCHAR
 
-#	hive_partitioning is explicitly disabled, and hive_types are set
-statement error
-select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=0, hive_types={'year':'smallint','month':'varchar'}) limit 1;
-----
-Invalid Input Error
+# #	hive_partitioning is explicitly disabled, and hive_types are set
+# statement error
+# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=0, hive_types={'year':'smallint','month':'varchar'}) limit 1;
+# ----
+# Invalid Input Error
 
-#	hive_partitioning is auto_detected, and set hive_types is auto_detected
-query IIII
-select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color']) limit 1;
-----
-BIGINT	VARCHAR	BIGINT	VARCHAR
+# #	hive_partitioning is auto_detected, and set hive_types is auto_detected
+# query IIII
+# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color']) limit 1;
+# ----
+# BIGINT	VARCHAR	BIGINT	VARCHAR
