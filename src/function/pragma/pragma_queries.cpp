@@ -20,23 +20,29 @@ string PragmaTableInfo(ClientContext &context, const FunctionParameters &paramet
 string PragmaShowTables(ClientContext &context, const FunctionParameters &parameters) {
 	auto catalog = DatabaseManager::GetDefaultDatabase(context);
 	auto schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
-	schema = (schema == INVALID_SCHEMA) ? DEFAULT_SCHEMA : schema; // NOLINT
+	schema = (schema == INVALID_SCHEMA) ? DEFAULT_SCHEMA : schema;
 
-	auto where_clause =
-	    StringUtil::Join({"where database_name = '", catalog, "' and schema_name = '", schema, "'"}, "");
+	auto where_clause = StringUtil::Format("where ((database_name = '%s') and (schema_name = '%s'))", catalog, schema);
 	// clang-format off
-	auto pragma_query = StringUtil::Join(
-	    {"with tables as (", 
-						"	SELECT table_name as name FROM duckdb_tables ", where_clause, 
-			 "), views as (",
-						"	SELECT view_name as name FROM duckdb_views ", where_clause, 
-			 "), indexes as (",
-						"	SELECT index_name as name FROM duckdb_indexes ", where_clause, 
-			 "), db_objects as (",
-						"	SELECT name FROM tables UNION ALL SELECT name FROM views UNION ALL SELECT name FROM indexes",
-	     ") SELECT name FROM db_objects ORDER BY name;"
-			}, "");
-	// clang-format on
+	auto pragma_query = StringUtil::Format("\
+	with \"tables\" as						\
+	(										\
+		SELECT table_name as \"name\"		\
+		FROM duckdb_tables %s				\
+	), \"views\" as							\
+	(										\
+		SELECT view_name as \"name\"		\
+		FROM duckdb_views %s				\
+	), db_objects as						\
+	(										\
+		SELECT \"name\" FROM \"tables\"		\
+		UNION ALL							\
+		SELECT \"name\" FROM \"views\"		\
+	)										\
+	SELECT \"name\"							\
+	FROM db_objects							\
+	ORDER BY \"name\";", where_clause, where_clause, where_clause);
+	// clang-format off
 
 	return pragma_query;
 }
