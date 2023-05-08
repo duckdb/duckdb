@@ -35,7 +35,7 @@ public:
 	//! The set of grouping sets (optional).
 	vector<GroupingSet> grouping_sets;
 	//! The list of grouping function calls (optional)
-	vector<vector<idx_t>> grouping_functions;
+	vector<unsafe_vector<idx_t>> grouping_functions;
 	//! Group statistics (optional)
 	vector<unique_ptr<BaseStatistics>> group_stats;
 

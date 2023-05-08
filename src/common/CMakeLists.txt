@@ -49,10 +49,10 @@ add_library_unity(
   random_engine.cpp
   serializer.cpp
   string_util.cpp
+  enum_util.cpp
   symbols.cpp
   tree_renderer.cpp
   types.cpp
-  vector.cpp
   virtual_file_system.cpp
   windows_util.cpp)
 set(ALL_OBJECT_FILES

@@ -2,9 +2,10 @@
 
 namespace duckdb {
 
-PartialBlockManager::PartialBlockManager(BlockManager &block_manager, uint32_t max_partial_block_size,
-                                         uint32_t max_use_count)
-    : block_manager(block_manager), max_partial_block_size(max_partial_block_size), max_use_count(max_use_count) {
+PartialBlockManager::PartialBlockManager(BlockManager &block_manager, CheckpointType checkpoint_type,
+                                         uint32_t max_partial_block_size, uint32_t max_use_count)
+    : block_manager(block_manager), checkpoint_type(checkpoint_type), max_partial_block_size(max_partial_block_size),
+      max_use_count(max_use_count) {
 }
 PartialBlockManager::~PartialBlockManager() {
 }
@@ -23,7 +24,9 @@ PartialBlockAllocation PartialBlockManager::GetBlockAllocation(uint32_t segment_
 		//! there is! increase the reference count of this block
 		allocation.partial_block->state.block_use_count += 1;
 		allocation.state = allocation.partial_block->state;
-		block_manager.IncreaseBlockReferenceCount(allocation.state.block_id);
+		if (checkpoint_type == CheckpointType::FULL_CHECKPOINT) {
+			block_manager.IncreaseBlockReferenceCount(allocation.state.block_id);
+		}
 	} else {
 		// full block: get a free block to write to
 		AllocateBlock(allocation.state, segment_size);
@@ -31,9 +34,18 @@ PartialBlockAllocation PartialBlockManager::GetBlockAllocation(uint32_t segment_
 	return allocation;
 }
 
+bool PartialBlockManager::HasBlockAllocation(uint32_t segment_size) {
+	return segment_size <= max_partial_block_size &&
+	       partially_filled_blocks.lower_bound(segment_size) != partially_filled_blocks.end();
+}
+
 void PartialBlockManager::AllocateBlock(PartialBlockState &state, uint32_t segment_size) {
 	D_ASSERT(segment_size <= Storage::BLOCK_SIZE);
-	state.block_id = block_manager.GetFreeBlockId();
+	if (checkpoint_type == CheckpointType::FULL_CHECKPOINT) {
+		state.block_id = block_manager.GetFreeBlockId();
+	} else {
+		state.block_id = INVALID_BLOCK;
+	}
 	state.block_size = Storage::BLOCK_SIZE;
 	state.offset_in_block = 0;
 	state.block_use_count = 1;
@@ -82,7 +94,59 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation &&allocati
 	// Flush any block that we're not going to reuse.
 	if (block_to_free) {
 		block_to_free->Flush(free_space);
+		AddWrittenBlock(block_to_free->state.block_id);
 	}
+}
+
+void PartialBlock::Merge(PartialBlock &other, idx_t offset, idx_t other_size) {
+	throw InternalException("PartialBlock::Merge not implemented for this block type");
+}
+
+void PartialBlockManager::Merge(PartialBlockManager &other) {
+	if (&other == this) {
+		throw InternalException("Cannot merge into itself");
+	}
+	// for each partially filled block in the other manager, check if we can merge it into an existing block in this
+	// manager
+	for (auto &e : other.partially_filled_blocks) {
+		if (!e.second) {
+			throw InternalException("Empty partially filled block found");
+		}
+		auto used_space = Storage::BLOCK_SIZE - e.first;
+		if (HasBlockAllocation(used_space)) {
+			// we can merge this block into an existing block - merge them
+			// merge blocks
+			auto allocation = GetBlockAllocation(used_space);
+			allocation.partial_block->Merge(*e.second, allocation.state.offset_in_block, used_space);
+
+			// re-register the partial block
+			allocation.state.offset_in_block += used_space;
+			RegisterPartialBlock(std::move(allocation));
+		} else {
+			// we cannot merge this block - append it directly to the current block manager
+			partially_filled_blocks.insert(make_pair(e.first, std::move(e.second)));
+		}
+	}
+	// copy over the written blocks
+	for (auto &block_id : other.written_blocks) {
+		AddWrittenBlock(block_id);
+	}
+	other.written_blocks.clear();
+	other.partially_filled_blocks.clear();
+}
+
+void PartialBlockManager::AddWrittenBlock(block_id_t block) {
+	auto entry = written_blocks.insert(block);
+	if (!entry.second) {
+		throw InternalException("Written block already exists");
+	}
+}
+
+void PartialBlockManager::ClearBlocks() {
+	for (auto &e : partially_filled_blocks) {
+		e.second->Clear();
+	}
+	partially_filled_blocks.clear();
 }
 
 void PartialBlockManager::FlushPartialBlocks() {
@@ -92,11 +156,11 @@ void PartialBlockManager::FlushPartialBlocks() {
 	partially_filled_blocks.clear();
 }
 
-void PartialBlockManager::Clear() {
-	for (auto &e : partially_filled_blocks) {
-		e.second->Clear();
+void PartialBlockManager::Rollback() {
+	ClearBlocks();
+	for (auto &block_id : written_blocks) {
+		block_manager.MarkBlockAsFree(block_id);
 	}
-	partially_filled_blocks.clear();
 }
 
 } // namespace duckdb

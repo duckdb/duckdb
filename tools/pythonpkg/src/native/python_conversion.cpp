@@ -4,6 +4,7 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
+#include "duckdb/common/types.hpp"
 
 #include "datetime.h" //From Python
 
@@ -211,15 +212,23 @@ void TransformPythonUnsigned(uint64_t value, Value &res) {
 }
 
 // TODO: add support for HUGEINT
-bool TryTransformPythonNumeric(Value &res, py::handle ele) {
+bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &target_type) {
 	auto ptr = ele.ptr();
 
 	int overflow;
 	int64_t value = PyLong_AsLongLongAndOverflow(ptr, &overflow);
 	if (overflow == -1) {
 		PyErr_Clear();
+		if (target_type.id() == LogicalTypeId::BIGINT) {
+			throw InvalidInputException(StringUtil::Format("Failed to cast value: Python value '%s' to INT64",
+			                                               std::string(pybind11::str(ele))));
+		}
 		return TryTransformPythonIntegerToDouble(res, ele);
 	} else if (overflow == 1) {
+		if (target_type.InternalType() == PhysicalType::INT64) {
+			throw InvalidInputException(StringUtil::Format("Failed to cast value: Python value '%s' to INT64",
+			                                               std::string(pybind11::str(ele))));
+		}
 		uint64_t unsigned_value = PyLong_AsUnsignedLongLong(ptr);
 		if (PyErr_Occurred()) {
 			PyErr_Clear();
@@ -303,7 +312,7 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		return Value::BOOLEAN(ele.cast<bool>());
 	case PythonObjectType::Integer: {
 		Value integer;
-		if (!TryTransformPythonNumeric(integer, ele)) {
+		if (!TryTransformPythonNumeric(integer, ele, target_type)) {
 			throw InvalidInputException("An error occurred attempting to convert a python integer");
 		}
 		return integer;

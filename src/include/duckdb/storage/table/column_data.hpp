@@ -39,12 +39,11 @@ class ColumnData {
 
 public:
 	ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
-	           ColumnData *parent);
-	ColumnData(ColumnData &other, idx_t start, ColumnData *parent);
+	           optional_ptr<ColumnData> parent);
 	virtual ~ColumnData();
 
 	//! The start row
-	const idx_t start;
+	idx_t start;
 	//! The count of the column data
 	idx_t count;
 	//! The block manager
@@ -56,7 +55,7 @@ public:
 	//! The type of the column
 	LogicalType type;
 	//! The parent column (if any)
-	ColumnData *parent;
+	optional_ptr<ColumnData> parent;
 
 public:
 	virtual bool CheckZonemap(ColumnScanState &state, TableFilter &filter) = 0;
@@ -70,6 +69,7 @@ public:
 
 	void IncrementVersion();
 
+	virtual void SetStart(idx_t new_start);
 	//! The root type of the column
 	const LogicalType &RootType() const;
 
@@ -122,13 +122,13 @@ public:
 	virtual unique_ptr<ColumnCheckpointState>
 	Checkpoint(RowGroup &row_group, PartialBlockManager &partial_block_manager, ColumnCheckpointInfo &checkpoint_info);
 
-	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
+	virtual void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
 
 	virtual void DeserializeColumn(Deserializer &source);
 	static shared_ptr<ColumnData> Deserialize(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
 	                                          idx_t start_row, Deserializer &source, const LogicalType &type,
-	                                          ColumnData *parent);
+	                                          optional_ptr<ColumnData> parent);
 
 	virtual void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result);
 	virtual void Verify(RowGroup &parent);
@@ -136,12 +136,11 @@ public:
 	bool CheckZonemap(TableFilter &filter);
 
 	static shared_ptr<ColumnData> CreateColumn(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-	                                           idx_t start_row, const LogicalType &type, ColumnData *parent = nullptr);
-	static shared_ptr<ColumnData> CreateColumn(ColumnData &other, idx_t start_row, ColumnData *parent = nullptr);
+	                                           idx_t start_row, const LogicalType &type,
+	                                           optional_ptr<ColumnData> parent = nullptr);
 	static unique_ptr<ColumnData> CreateColumnUnique(BlockManager &block_manager, DataTableInfo &info,
 	                                                 idx_t column_index, idx_t start_row, const LogicalType &type,
-	                                                 ColumnData *parent = nullptr);
-	static unique_ptr<ColumnData> CreateColumnUnique(ColumnData &other, idx_t start_row, ColumnData *parent = nullptr);
+	                                                 optional_ptr<ColumnData> parent = nullptr);
 
 	void MergeStatistics(const BaseStatistics &other);
 	void MergeIntoStatistics(BaseStatistics &other);

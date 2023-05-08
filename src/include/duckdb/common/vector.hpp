@@ -10,21 +10,30 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/likely.hpp"
+#include "duckdb/common/exception.hpp"
 #include <vector>
 
 namespace duckdb {
 
-// TODO: inline this, needs changes to 'exception.hpp' and other headers to avoid circular dependency
-void AssertIndexInBounds(idx_t index, idx_t size);
-
-template <class _Tp, class _Allocator = std::allocator<_Tp>>
-class vector : public std::vector<_Tp, _Allocator> {
+template <class _Tp, bool SAFE = true>
+class vector : public std::vector<_Tp, std::allocator<_Tp>> {
 public:
-	using original = std::vector<_Tp, _Allocator>;
+	using original = std::vector<_Tp, std::allocator<_Tp>>;
 	using original::original;
 	using size_type = typename original::size_type;
 	using const_reference = typename original::const_reference;
 	using reference = typename original::reference;
+
+	static inline void AssertIndexInBounds(idx_t index, idx_t size) {
+#if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
+		return;
+#else
+		if (DUCKDB_UNLIKELY(index >= size)) {
+			throw InternalException("Attempted to access index %ld within vector of size %ld", index, size);
+		}
+#endif
+	}
 
 #ifdef DUCKDB_CLANG_TIDY
 	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
@@ -40,19 +49,57 @@ public:
 	vector() = default;
 	vector(original &&other) : original(std::move(other)) {
 	}
+	template <bool _SAFE>
+	vector(vector<_Tp, _SAFE> &&other) : original(std::move(other)) {
+	}
+
+	template <bool _SAFE = false>
+	inline typename original::reference get(typename original::size_type __n) {
+		if (_SAFE) {
+			AssertIndexInBounds(__n, original::size());
+		}
+		return original::operator[](__n);
+	}
+
+	template <bool _SAFE = false>
+	inline typename original::const_reference get(typename original::size_type __n) const {
+		if (_SAFE) {
+			AssertIndexInBounds(__n, original::size());
+		}
+		return original::operator[](__n);
+	}
 
 	typename original::reference operator[](typename original::size_type __n) {
-#ifdef DEBUG
-		AssertIndexInBounds(__n, original::size());
-#endif
-		return original::operator[](__n);
+		return get<SAFE>(__n);
 	}
 	typename original::const_reference operator[](typename original::size_type __n) const {
-#ifdef DEBUG
-		AssertIndexInBounds(__n, original::size());
-#endif
-		return original::operator[](__n);
+		return get<SAFE>(__n);
+	}
+
+	typename original::reference front() {
+		return get<SAFE>(0);
+	}
+
+	typename original::const_reference front() const {
+		return get<SAFE>(0);
+	}
+
+	typename original::reference back() {
+		if (original::empty()) {
+			throw InternalException("'back' called on an empty vector!");
+		}
+		return get<SAFE>(original::size() - 1);
+	}
+
+	typename original::const_reference back() const {
+		if (original::empty()) {
+			throw InternalException("'back' called on an empty vector!");
+		}
+		return get<SAFE>(original::size() - 1);
 	}
 };
+
+template <typename T>
+using unsafe_vector = vector<T, false>;
 
 } // namespace duckdb

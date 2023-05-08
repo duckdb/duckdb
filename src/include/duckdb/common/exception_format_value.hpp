@@ -10,7 +10,8 @@
 
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/hugeint.hpp"
-#include "duckdb/common/vector.hpp"
+
+#include <vector>
 
 namespace duckdb {
 
@@ -40,7 +41,7 @@ public:
 	static ExceptionFormatValue CreateFormatValue(T value) {
 		return int64_t(value);
 	}
-	static string Format(const string &msg, vector<ExceptionFormatValue> &values);
+	static string Format(const string &msg, std::vector<ExceptionFormatValue> &values);
 };
 
 template <>
