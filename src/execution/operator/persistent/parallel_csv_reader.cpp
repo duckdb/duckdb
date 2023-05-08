@@ -412,12 +412,6 @@ add_row : {
 	position_buffer++;
 	start_buffer = position_buffer;
 	verification_positions.end_of_last_line = position_buffer;
-	if (reached_remainder_state) {
-		goto final_state;
-	}
-	if (!BufferRemainder()) {
-		goto final_state;
-	}
 	if (carriage_return) {
 		// \r newline, go to special state that parses an optional \n afterwards
 		// optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
@@ -453,6 +447,12 @@ add_row : {
 		if (options.new_line == NewLineIdentifier::CARRY_ON) {
 			error_message = "Wrong NewLine Identifier. Expecting \\r or \\n";
 			return false;
+		}
+		if (reached_remainder_state) {
+			goto final_state;
+		}
+		if (!BufferRemainder()) {
+			goto final_state;
 		}
 		SkipEmptyLines();
 		verification_positions.end_of_last_line = position_buffer;

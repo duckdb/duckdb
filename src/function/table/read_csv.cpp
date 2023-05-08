@@ -467,6 +467,7 @@ void LineInfo::Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos) {
 		if (first_pos == tuple_start_set.end()) {
 			has_error = true;
 			problematic_line = GetLine(cur_batch);
+			break;
 		}
 	}
 	if (!has_error) {
