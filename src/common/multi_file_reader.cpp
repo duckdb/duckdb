@@ -57,7 +57,7 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 	} else if (loption == "hive_partitioning") {
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
-		options.auto_detect_hive_types = true; // doesnt do anything yet //lars
+		options.auto_detect_hive_types = options.hive_partitioning; // doesnt do anything yet //lars
 	} else if (loption == "union_by_name") {
 		options.union_by_name = BooleanValue::Get(val);
 	} else if (loption == "hive_types") {

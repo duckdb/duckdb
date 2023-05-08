@@ -304,7 +304,7 @@ public:
 				parquet_options.file_row_number = BooleanValue::Get(kv.second);
 			}
 		}
-		parquet_options.file_options.AutoDetect(files);
+		parquet_options.file_options.AutoDetect(files, context);
 		return ParquetScanBindInternal(context, std::move(files), return_types, names, parquet_options);
 	}
 

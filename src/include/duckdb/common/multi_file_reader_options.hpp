@@ -11,6 +11,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 class Serializer;
@@ -30,7 +31,7 @@ struct MultiFileReaderOptions {
 	DUCKDB_API static MultiFileReaderOptions Deserialize(Deserializer &source);
 	DUCKDB_API void AddBatchInfo(BindInfo &bind_info) const;
 
-	void AutoDetect(const vector<string> &files) {
+	void AutoDetect(const vector<string> &files, ClientContext& context) {
 		if (!auto_detect_hive_partitioning && !hive_partitioning && hive_types) {
 			throw InvalidInputException("cannot disable hive_partitioning when using hive_types");
 		}
@@ -39,9 +40,10 @@ struct MultiFileReaderOptions {
 		}
 		if (auto_detect_hive_partitioning) {
 			hive_partitioning = AutoDetectHivePartitioning(files);
+			auto_detect_hive_types = hive_partitioning;
 		}
 		if (hive_partitioning && auto_detect_hive_types && !hive_types) {
-			hive_types = AutoDetectHiveTypes(files.front());
+			hive_types = AutoDetectHiveTypes(files.front(), context);
 		}
 	}
 
@@ -82,9 +84,37 @@ struct MultiFileReaderOptions {
 		return true;
 	}
 
-	static bool AutoDetectHiveTypes(const string &file) {
-		return false;
-		throw NotImplementedException("hive_type auto detection is not (yet) implemented");
+	bool AutoDetectHiveTypes(const string &file, ClientContext& context) {
+		std::map<string,string> partitions;
+		auto splits = StringUtil::Split(file, FileSystem::PathSeparator());
+		if (splits.size() < 2) {
+			return false;
+		}
+		for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
+			auto part = StringUtil::Split(*it, "=");
+			if (part.size() == 2) {
+				partitions[part.front()] = part.back();
+			}
+		}
+		if (m.empty()) {
+			return false;
+		}
+
+		// do the actual detection
+		const LogicalType candidates[] = {LogicalType::DATE,LogicalType::TIMESTAMP,LogicalType::BIGINT};
+		for (auto& child : partitions) {
+			const string& name = child.first;
+			const string& type = child.second;
+			Value value(type);
+			for (auto& candidate : candidates) {
+				const bool success = value.TryCastAs(context, candidate);
+				if (success) {
+					hive_types_schema[name] = candidate;
+					break;
+				}
+			}
+		}
+		return !hive_types_schema.empty();
 	}
 
 	LogicalType GetHiveLogicalType(const string &hive_partition_column) const {
