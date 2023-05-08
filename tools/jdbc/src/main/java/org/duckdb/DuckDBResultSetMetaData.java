@@ -11,7 +11,7 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.OffsetTime;
 import java.util.ArrayList;
-import java.util.Map;
+import java.util.HashMap;
 import java.util.UUID;
 
 public class DuckDBResultSetMetaData implements ResultSetMetaData {
@@ -187,13 +187,13 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
         case LIST:
             return DuckDBArray.class.getName();
         case MAP:
-			return Map.class.getName();
-		case STRUCT:
-			return DuckDBStruct.class.getName();
-		default:
-			return String.class.getName();
-		}
-	}
+            return HashMap.class.getName();
+        case STRUCT:
+            return DuckDBStruct.class.getName();
+        default:
+            return String.class.getName();
+        }
+    }
 
     public String getColumnTypeName(int column) throws SQLException {
         if (column > column_count) {
