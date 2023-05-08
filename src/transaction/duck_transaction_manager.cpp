@@ -147,7 +147,6 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 			for (size_t i = 0; i < active_transactions.size(); i++) {
 				auto &transaction = active_transactions[i];
 				// rollback the transaction
-				D_ASSERT(!transaction->previous_rollback);
 				transaction->Rollback();
 				auto transaction_context = transaction->context.lock();
 
@@ -218,7 +217,6 @@ string DuckTransactionManager::CommitTransaction(ClientContext &context, Transac
 		// commit unsuccessful: rollback the transaction instead
 		checkpoint = false;
 		transaction->commit_id = 0;
-		D_ASSERT(!transaction->previous_rollback);
 		transaction->Rollback();
 	}
 	if (!checkpoint) {
@@ -246,7 +244,6 @@ void DuckTransactionManager::RollbackTransaction(Transaction *transaction_p) {
 	lock_guard<mutex> lock(transaction_lock);
 
 	// rollback the transaction
-	D_ASSERT(!transaction->previous_rollback);
 	transaction->Rollback();
 
 	// remove the transaction id from the list of active transactions

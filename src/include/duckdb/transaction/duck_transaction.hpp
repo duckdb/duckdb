@@ -28,9 +28,6 @@ public:
 	unordered_map<SequenceCatalogEntry *, SequenceValue> sequence_usage;
 	//! Highest active query when the transaction finished, used for cleaning up
 	transaction_t highest_active_query;
-	//! This flag is set to true after rolling back the changes in this transaction. This ensures that we never rollback
-	//! the same transaction twice
-	bool previous_rollback;
 
 public:
 	static DuckTransaction &Get(ClientContext &context, AttachedDatabase &db);
