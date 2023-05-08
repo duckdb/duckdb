@@ -64,8 +64,11 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
     UnifiedVectorFormat default_data;
     Vector &default_vector = args.data[0];
 	if (args.ColumnCount() == 3) {
+		if (child.GetType() != args.data[2].GetType() && args.data[2].GetType() != LogicalTypeId::SQLNULL) {
+			throw InvalidInputException("Default value must be of the same type as the list, or NULL");
+
+		}
 		default_vector.ReferenceAndSetType(args.data[2]);
-		D_ASSERT(child.GetType() == args.data[2].GetType() || args.data[2].GetType() == LogicalTypeId::SQLNULL);
 		default_vector.ToUnifiedFormat(count, default_data);
 		default_entries = (T *)default_data.data;
 	}

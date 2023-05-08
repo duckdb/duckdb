@@ -61,12 +61,14 @@ select list_resize(a, b) from string_tbl;
 [here is a little story about a duck,, whose name is harold., He is a cool duck who lives in a cool world, NULL, NULL]
 
 # Null Check
+statement ok
+CREATE TABLE nulls(l INT[], b INT);
 
 statement ok
-INSERT INTO lists VALUES ([1, 2, 3], 2), (NULL, 6), ([], 4), ([NULL, NULL, 5, 6, NULL], 6);
+INSERT INTO nulls VALUES ([1, 2, 3], 2), (NULL, 6), ([], 4), ([NULL, NULL, 5, 6, NULL], 6);
 
 query I
-SELECT list_resize(l, b) FROM lists;
+SELECT list_resize(l, b) FROM nulls;
 ----
 [1, 2]
 NULL
@@ -79,10 +81,6 @@ query I
 SELECT list_resize([[1], [1, 2], NULL, [NULL], [], [1, 2, 3]], 3)
 ----
 [[1], [1, 2], NULL]
-
-statement ok
-CREATE TABLE lists(l INT[], b INT);
-
 
 statement ok
 create table list_tbl(a int[][], b int);
@@ -156,7 +154,9 @@ SELECT list_resize([1, 2], 3, NULL)
 [1, 2, NULL]
 
 statement error
-select list_resize([1, 2, 3], 2, a);
+select list_resize([1, 2, 3], 2, 'a');
+----
+Invalid Input Error: Default value must be of the same type as the list, or NULL
 
 # Struct Default Values
 
