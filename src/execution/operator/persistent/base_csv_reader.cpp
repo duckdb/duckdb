@@ -26,28 +26,16 @@
 
 namespace duckdb {
 
-string BaseCSVReader::GetLineNumberStr(idx_t linenr, bool linenr_estimated, optional_ptr<LineInfo> line_info, idx_t buffer_idx) {
+string BaseCSVReader::GetLineNumberStr(idx_t line_error, bool is_line_estimated, idx_t buffer_idx) {
 	// If an error happens during auto-detect it is an estimated line
-	string estimated = (linenr_estimated ? string(" (estimated)") : string(""));
-	if (line_info) {
-		// This must be a parallel read
-		auto parallel_reader = (ParallelCSVReader *)this;
-		while (true) {
-			if (line_info->CanItGetLine(parallel_reader->file_idx, buffer_idx)) {
-				return to_string(line_info->GetLine(buffer_idx, linenr, parallel_reader->file_idx,
-				                                    parallel_reader->verification_positions.beginning_of_first_line +
-				                                        parallel_reader->buffer->buffer->GetCSVGlobalStart(),
-				                                    false));
-			}
-		}
-	}
-	return to_string(linenr + 1) + estimated;
+	string estimated = (is_line_estimated ? string(" (estimated)") : string(""));
+	return to_string(GetLineError(line_error,buffer_idx)) + estimated;
 }
 
 BaseCSVReader::BaseCSVReader(ClientContext &context_p, BufferedCSVReaderOptions options_p,
-                             const vector<LogicalType> &requested_types, optional_ptr<LineInfo> line_info)
+                             const vector<LogicalType> &requested_types)
     : context(context_p), fs(FileSystem::GetFileSystem(context)), allocator(Allocator::Get(context)),
-      opener(FileSystem::GetFileOpener(context)), options(std::move(options_p)), line_info(line_info) {
+      opener(FileSystem::GetFileOpener(context)), options(std::move(options_p)) {
 }
 
 BaseCSVReader::~BaseCSVReader() {
@@ -284,7 +272,7 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 		} else {
 			throw InvalidInputException(
 			    "Error in file \"%s\", on line %s: expected %lld values per row, but got more. (%s)", options.file_path,
-			    GetLineNumberStr(linenr, linenr_estimated, line_info, buffer_idx).c_str(), return_types.size(),
+			    GetLineNumberStr(linenr, linenr_estimated, buffer_idx).c_str(), return_types.size(),
 			    options.ToString());
 		}
 	}
@@ -363,7 +351,7 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 			} else {
 				throw InvalidInputException(
 				    "Error in file \"%s\" on line %s: expected %lld values per row, but got %d.\nParser options:\n%s",
-				    options.file_path, GetLineNumberStr(linenr, linenr_estimated, line_info, buffer_idx).c_str(),
+				    options.file_path, GetLineNumberStr(linenr, linenr_estimated, buffer_idx).c_str(),
 				    return_types.size(), column, options.ToString());
 			}
 		}
@@ -551,7 +539,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			line_error += linenr;
 			line_error -= parse_chunk.size();
 
-			error_line = GetLineError(line_error,buffer_idx,line_info);
+			error_line = GetLineError(line_error,buffer_idx);
 
 			if (options.auto_detect) {
 				throw InvalidInputException("%s in column %s, at line %llu.\n\nParser "

@@ -510,7 +510,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 	// set up the current buffer
 	line_info.current_batches.back().insert(local_batch_index);
 	auto result = make_uniq<CSVBufferRead>(current_buffer, next_buffer, next_byte, next_byte + bytes_per_local_state,
-	                                       batch_index++, local_batch_index++);
+	                                       batch_index++, local_batch_index++, &line_info);
 	// move the byte index of the CSV reader to the next buffer
 	next_byte += bytes_per_local_state;
 	if (next_byte >= current_buffer->GetBufferSize()) {
@@ -531,18 +531,18 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 			// we are doing UNION BY NAME - fetch the options from the union reader for this file
 			auto &union_reader = *bind_data.union_readers[file_index - 1];
 			reader = make_uniq<ParallelCSVReader>(context, union_reader.options, std::move(result), first_position,
-			                                      union_reader.GetTypes(), &line_info, file_index - 1);
+			                                      union_reader.GetTypes(), file_index - 1);
 			reader->names = union_reader.GetNames();
 		} else if (file_index <= bind_data.column_info.size()) {
 			// Serialized Union By name
 			reader =
 			    make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result), first_position,
-			                                 bind_data.column_info[file_index - 1].types, &line_info, file_index - 1);
+			                                 bind_data.column_info[file_index - 1].types, file_index - 1);
 			reader->names = bind_data.column_info[file_index - 1].names;
 		} else {
 			// regular file - use the standard options
 			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result), first_position,
-			                                      bind_data.csv_types, &line_info, file_index - 1);
+			                                      bind_data.csv_types, file_index - 1);
 			reader->names = bind_data.csv_names;
 		}
 		reader->options.file_path = current_file_path;

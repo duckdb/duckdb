@@ -21,9 +21,9 @@ namespace duckdb {
 
 struct CSVBufferRead {
 	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p, idx_t batch_index,
-	              idx_t local_batch_index_p)
+	              idx_t local_batch_index_p, optional_ptr<LineInfo> line_info_p)
 	    : buffer(std::move(buffer_p)), buffer_start(buffer_start_p), buffer_end(buffer_end_p), batch_index(batch_index),
-	      local_batch_index(local_batch_index_p) {
+	      local_batch_index(local_batch_index_p), line_info(line_info_p) {
 		if (buffer) {
 			if (buffer_end > buffer->GetBufferSize()) {
 				buffer_end = buffer->GetBufferSize();
@@ -35,12 +35,12 @@ struct CSVBufferRead {
 	}
 
 	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, shared_ptr<CSVBuffer> nxt_buffer_p, idx_t buffer_start_p,
-	              idx_t buffer_end_p, idx_t batch_index, idx_t local_batch_index)
-	    : CSVBufferRead(std::move(buffer_p), buffer_start_p, buffer_end_p, batch_index, local_batch_index) {
+	              idx_t buffer_end_p, idx_t batch_index, idx_t local_batch_index, optional_ptr<LineInfo> line_info_p)
+	    : CSVBufferRead(std::move(buffer_p), buffer_start_p, buffer_end_p, batch_index, local_batch_index, line_info_p) {
 		next_buffer = std::move(nxt_buffer_p);
 	}
 
-	CSVBufferRead() : buffer_start(0), buffer_end(NumericLimits<idx_t>::Maximum()) {};
+	CSVBufferRead() : buffer_start(0), buffer_end(NumericLimits<idx_t>::Maximum()){};
 
 	const char &operator[](size_t i) const {
 		if (i < buffer->GetBufferSize()) {
@@ -85,6 +85,7 @@ struct CSVBufferRead {
 	shared_ptr<CSVBuffer> buffer;
 	shared_ptr<CSVBuffer> next_buffer;
 	vector<unique_ptr<char[]>> intersections;
+	optional_ptr<LineInfo> line_info;
 
 	idx_t buffer_start;
 	idx_t buffer_end;
@@ -102,7 +103,7 @@ struct VerificationPositions {
 class ParallelCSVReader : public BaseCSVReader {
 public:
 	ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options, unique_ptr<CSVBufferRead> buffer,
-	                  idx_t first_pos_first_buffer, const vector<LogicalType> &requested_types, LineInfo *line_info,
+	                  idx_t first_pos_first_buffer, const vector<LogicalType> &requested_types,
 	                  idx_t file_idx_p);
 	~ParallelCSVReader();
 
@@ -135,7 +136,7 @@ public:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(DataChunk &insert_chunk);
 
-	idx_t GetLineError(idx_t line_error, idx_t buffer_idx, optional_ptr<LineInfo> line_info) override;
+	idx_t GetLineError(idx_t line_error, idx_t buffer_idx) override;
 
 
 private:
@@ -148,7 +149,7 @@ private:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	bool TryParseCSV(ParserMode mode, DataChunk &insert_chunk, string &error_message);
 	//! Sets Position depending on the byte_start of this thread
-	bool SetPosition(DataChunk &insert_chunk);
+	bool SetPosition();
 	//! Called when scanning the 1st buffer, skips empty lines
 	void SkipEmptyLines();
 	//! When a buffer finishes reading its piece, it still can try to scan up to the real end of the buffer
