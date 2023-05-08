@@ -115,10 +115,13 @@ private:
 	// Table functions
 	static TableFunctionSet GetReadJSONObjectsFunction();
 	static TableFunctionSet GetReadNDJSONObjectsFunction();
+	static TableFunctionSet GetReadJSONObjectsAutoFunction();
+
 	static TableFunctionSet GetReadJSONFunction();
 	static TableFunctionSet GetReadNDJSONFunction();
 	static TableFunctionSet GetReadJSONAutoFunction();
 	static TableFunctionSet GetReadNDJSONAutoFunction();
+
 	static TableFunctionSet GetExecuteJsonSerializedSqlFunction();
 };
 

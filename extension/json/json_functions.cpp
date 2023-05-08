@@ -173,6 +173,7 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 	// Reads JSON as string
 	functions.push_back(GetReadJSONObjectsFunction());
 	functions.push_back(GetReadNDJSONObjectsFunction());
+	functions.push_back(GetReadJSONObjectsAutoFunction());
 
 	// Read JSON as columnar data
 	functions.push_back(GetReadJSONFunction());

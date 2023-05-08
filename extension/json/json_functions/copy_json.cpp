@@ -75,8 +75,9 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
                                                  vector<LogicalType> &expected_types) {
 	auto bind_data = make_uniq<JSONScanData>();
 
-	bind_data->file_paths.emplace_back(info.file_path);
+	bind_data->files.emplace_back(info.file_path);
 	bind_data->names = expected_names;
+	bind_data->options.record_type = JSONRecordType::RECORDS;
 
 	auto it = info.options.find("dateformat");
 	if (it == info.options.end()) {
@@ -103,7 +104,6 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
 		// Note that auto_detect for names/types is not actually true because these are already know when we COPY
 		bind_data->InitializeFormats(true);
 		bind_data->options.format = JSONFormat::AUTO_DETECT;
-		bind_data->record_type = JSONRecordType::AUTO;
 		JSONScan::AutoDetect(context, *bind_data, expected_types, expected_names);
 		bind_data->auto_detect = true;
 	} else {

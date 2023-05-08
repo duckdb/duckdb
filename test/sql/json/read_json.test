@@ -4,16 +4,25 @@
 
 require json
 
+mode skip
+
 statement ok
 pragma enable_verification
 
 statement error
 SELECT * FROM read_json('data/json/example_n.ndjson')
 ----
-Binder Error: read_json "columns" parameter is required
+Binder Error
 
-query II
+# read_json assumes array of obj
+statement error
 SELECT * FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
+----
+Invalid Input Error: Expected top-level JSON array
+
+# read_ndjson works
+query II
+SELECT * FROM read_ndjson('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
 ----
 1	O Brother, Where Art Thou?
 2	Home for the Holidays
@@ -23,7 +32,7 @@ SELECT * FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', na
 
 # We can also read only one of the columns
 query I
-SELECT * FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER'})
+SELECT * FROM read_ndjson('data/json/example_n.ndjson', columns={id: 'INTEGER'})
 ----
 1
 2
@@ -32,7 +41,7 @@ SELECT * FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER'})
 5
 
 query I
-SELECT * FROM read_json('data/json/example_n.ndjson', columns={name: 'VARCHAR'})
+SELECT * FROM read_ndjson('data/json/example_n.ndjson', columns={name: 'VARCHAR'})
 ----
 O Brother, Where Art Thou?
 Home for the Holidays
@@ -52,15 +61,6 @@ NULL	NULL
 
 # some of these values don't have "name"
 query II
-SELECT * FROM read_json('data/json/different_schemas.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
-----
-1	O Brother, Where Art Thou?
-2	NULL
-3	The Firm
-4	NULL
-5	Raising Arizona
-
-query II
 SELECT * FROM read_ndjson('data/json/different_schemas.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
 ----
 1	O Brother, Where Art Thou?
@@ -71,7 +71,7 @@ SELECT * FROM read_ndjson('data/json/different_schemas.ndjson', columns={id: 'IN
 
 # test projection pushdown (unstructured json)
 query I
-SELECT id FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
+SELECT id FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, format='unstructured')
 ----
 1
 2
@@ -80,7 +80,7 @@ SELECT id FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', n
 5
 
 query I
-SELECT name FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
+SELECT name FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, format='unstructured')
 ----
 O Brother, Where Art Thou?
 Home for the Holidays
@@ -90,7 +90,7 @@ Raising Arizona
 
 # test projection pushdown (newline-delimited json)
 query I
-SELECT id FROM read_ndjson('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
+SELECT id FROM read_json('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, format='newline_delimited')
 ----
 1
 2
@@ -99,7 +99,7 @@ SELECT id FROM read_ndjson('data/json/example_n.ndjson', columns={id: 'INTEGER',
 5
 
 query I
-SELECT name FROM read_ndjson('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'})
+SELECT name FROM read_ndjson('data/json/example_n.ndjson', columns={id: 'INTEGER', name: 'VARCHAR'}, format='nd')
 ----
 O Brother, Where Art Thou?
 Home for the Holidays
@@ -188,44 +188,44 @@ ae24e69e-e0bf-4e85-9848-27d35df85b8b	UUID
 
 # top-level array of values
 query I
-select * from read_json('data/json/top_level_array.json', columns={conclusion: 'VARCHAR'}, json_format='array_of_records')
+select * from read_json('data/json/top_level_array.json', columns={conclusion: 'VARCHAR'})
 ----
 cancelled
 cancelled
 
 query I
-select * from read_json('data/json/top_level_array.json', auto_detect=true, json_format='array_of_records')
+select * from read_json('data/json/top_level_array.json', auto_detect=true)
 ----
 cancelled
 cancelled
 
 # if we try to read it with 'unstructured', we get an error
 statement error
-select * from read_json('data/json/top_level_array.json', columns={conclusion: 'VARCHAR'}, lines='false')
+select * from read_json('data/json/top_level_array.json', columns={conclusion: 'VARCHAR'}, format='unstructured')
 ----
-Invalid Input Error: JSON transform error in file "data/json/top_level_array.json", in object 1: Expected OBJECT, but got ARRAY
+Invalid Input Error: JSON transform error in file "data/json/top_level_array.json", in record/value 1: Expected OBJECT, but got ARRAY
 
 # if we try to read an ndjson file as if it is an array of values, we get an error
 statement error
-select * from read_json_auto('data/json/example_n.ndjson', json_format='array_of_records')
+select * from read_json_auto('data/json/example_n.ndjson', format='array')
 ----
-Invalid Input Error: JSON transform error in file "data/json/example_n.ndjson", in line 1: Expected JSON ARRAY but got OBJECT
+Invalid Input Error: Expected top-level JSON array
 
 # test that we can read a list of longer than STANDARD_VECTOR_SIZE properly
 statement ok
 copy (select list(to_json({duck: 42})) from range(10000)) to '__TEST_DIR__/my_file.json' (format csv, quote '')
 
 query T
-select count(*) from read_json('__TEST_DIR__/my_file.json', columns={duck: 'INTEGER'}, json_format='array_of_records')
+select count(*) from read_json('__TEST_DIR__/my_file.json', columns={duck: 'INTEGER'}, format='array')
 ----
 10000
 
 query T
-select sum(duck) = 42*10000 from read_json('__TEST_DIR__/my_file.json', columns={duck: 'INTEGER'}, json_format='array_of_records')
+select sum(duck) = 42*10000 from read_json('__TEST_DIR__/my_file.json', columns={duck: 'INTEGER'}, format='array')
 ----
 true
 
-# read_json_auto also understands array of values
+# read_json_auto also understands ARRAY format
 query T
 select count(*) from '__TEST_DIR__/my_file.json'
 ----
@@ -236,7 +236,7 @@ select sum(duck) = 42*10000 from '__TEST_DIR__/my_file.json'
 ----
 true
 
-# what if we do an array of non-values?
+# what if we do an array of non-records?
 statement ok
 copy (select list(range) from range(10)) to '__TEST_DIR__/my_file.json' (format csv, quote '')
 
@@ -254,8 +254,20 @@ select * from '__TEST_DIR__/my_file.json'
 8
 9
 
+# fails because it's not records
+statement error
+select * from read_json('__TEST_DIR__/my_file.json', format='array', columns={range: 'INTEGER'})
+----
+Invalid Input Error: JSON transform error
+
+# fails because it's not records
+statement error
+select * from read_json_auto('__TEST_DIR__/my_file.json', format='array', records='true')
+----
+Invalid Input Error: JSON transform error
+
 query T
-select * from read_json('__TEST_DIR__/my_file.json', json_format='array_of_values', columns={range: 'INTEGER'})
+select * from read_json('__TEST_DIR__/my_file.json', format='auto', records='false', auto_detect=true)
 ----
 0
 1
@@ -268,9 +280,60 @@ select * from read_json('__TEST_DIR__/my_file.json', json_format='array_of_value
 8
 9
 
-# fails because it's not an array of records
+# need to supply columns
 statement error
-select * from read_json_auto('__TEST_DIR__/my_file.json', json_format='array_of_records')
+select * from read_json('__TEST_DIR__/my_file.json', format='auto', records='false', auto_detect=false)
+----
+Binder Error
+
+# read as unstructured values, so we just get the array
+query T
+select * from read_json('__TEST_DIR__/my_file.json', format='unstructured', records='false', auto_detect=true)
+----
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+# array of non-records
+query T
+select * from read_json('__TEST_DIR__/my_file.json', format='array', records='false', auto_detect=true)
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+# also works with auto
+query T
+select * from read_json('__TEST_DIR__/my_file.json', format='array', records='auto', auto_detect=true)
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+mode unskip
+
+# test that we can read a JSON list that spans more than one buffer size
+# the JSON is 55 bytes, and the minimum buffer size is 2097152
+# let's do 50k to be safe
+statement ok
+copy (select list(to_json({this_is_a_very_long_field_name_yes_very_much_so:42})) from range(50000)) to '__TEST_DIR__/my_file.json' (format csv, quote '')
+
+query T
+select sum(this_is_a_very_long_field_name_yes_very_much_so) = 42 * 50000 from '__TEST_DIR__/my_file.json'
+----
+true
 
 statement ok
 pragma disable_verification

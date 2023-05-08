@@ -19,7 +19,7 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 
 	// Fetch next lines
 	const auto count = lstate.ReadNext(gstate);
-	const auto lines = lstate.lines;
+	const auto units = lstate.units;
 	const auto objects = lstate.values;
 
 	// Create the strings without copying them
@@ -27,7 +27,7 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 	auto &validity = FlatVector::Validity(output.data[0]);
 	for (idx_t i = 0; i < count; i++) {
 		if (objects[i]) {
-			strings[i] = string_t(lines[i].pointer, lines[i].size);
+			strings[i] = string_t(units[i].pointer, units[i].size);
 		} else {
 			validity.SetInvalid(i);
 		}
@@ -48,8 +48,7 @@ TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, shared_ptr<JS
 
 TableFunctionSet JSONFunctions::GetReadJSONObjectsFunction() {
 	TableFunctionSet function_set("read_json_objects");
-	auto function_info =
-	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON_OBJECTS, JSONFormat::UNSTRUCTURED, JSONRecordType::VALUES);
+	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON_OBJECTS, JSONFormat::ARRAY);
 	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, function_info));
 	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, function_info));
 	return function_set;
@@ -57,8 +56,15 @@ TableFunctionSet JSONFunctions::GetReadJSONObjectsFunction() {
 
 TableFunctionSet JSONFunctions::GetReadNDJSONObjectsFunction() {
 	TableFunctionSet function_set("read_ndjson_objects");
-	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON_OBJECTS, JSONFormat::NEWLINE_DELIMITED,
-	                                               JSONRecordType::VALUES);
+	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON_OBJECTS, JSONFormat::NEWLINE_DELIMITED);
+	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, function_info));
+	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, function_info));
+	return function_set;
+}
+
+TableFunctionSet JSONFunctions::GetReadJSONObjectsAutoFunction() {
+	TableFunctionSet function_set("read_json_objects_auto");
+	auto function_info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON_OBJECTS, JSONFormat::AUTO_DETECT);
 	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, function_info));
 	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, function_info));
 	return function_set;

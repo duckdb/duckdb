@@ -11,6 +11,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "json_common.hpp"
 
@@ -27,14 +28,24 @@ enum class JSONFormat : uint8_t {
 	ARRAY = 3,
 };
 
+enum class JSONRecordType : uint8_t {
+	AUTO_DETECT = 0,
+	//! Sequential objects that are unpacked
+	RECORDS = 1,
+	//! Any other JSON type, e.g., ARRAY
+	VALUES = 2,
+};
+
 struct BufferedJSONReaderOptions {
 public:
-	//! The file path of the JSON file to read
-	string file_path;
 	//! The format of the JSON
 	JSONFormat format = JSONFormat::AUTO_DETECT;
+	//! Whether record types in the JSON
+	JSONRecordType record_type = JSONRecordType::AUTO_DETECT;
 	//! Whether file is compressed or not, and if so which compression type
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
+	//! Multi-file reader options
+	MultiFileReaderOptions file_options;
 
 public:
 	void Serialize(FieldWriter &writer) const;
@@ -101,20 +112,47 @@ private:
 
 class BufferedJSONReader {
 public:
-	BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options, string file_path);
+	BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options, string file_name);
 
+private:
+	ClientContext &context;
+	BufferedJSONReaderOptions options;
+
+	//! File name
+	const string file_name;
+	//! File handle
+	unique_ptr<JSONFileHandle> file_handle;
+
+	//! Next buffer index within the file
+	idx_t buffer_index;
+	//! Mapping from batch index to currently held buffers
+	unordered_map<idx_t, unique_ptr<JSONBufferHandle>> buffer_map;
+
+	//! Line count per buffer
+	vector<int64_t> buffer_line_or_object_counts;
+
+public:
+	mutex lock;
+
+public:
 	void OpenJSONFile();
 	void CloseJSONFile();
 	bool IsOpen() const;
 
 	BufferedJSONReaderOptions &GetOptions();
 	const BufferedJSONReaderOptions &GetOptions() const;
+
 	JSONFormat GetFormat() const;
 	void SetFormat(JSONFormat format);
+	JSONRecordType GetRecordType() const;
+	void SetRecordType(JSONRecordType type);
+
 	bool IsParallel() const;
 
+	const string &GetFileName() const;
 	JSONFileHandle &GetFileHandle() const;
 
+public:
 	//! Insert/get/remove buffer (grabs the lock)
 	void InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> &&buffer);
 	JSONBufferHandle *GetBuffer(idx_t buffer_idx);
@@ -134,27 +172,6 @@ public:
 
 private:
 	idx_t GetLineNumber(idx_t buf_index, idx_t line_or_object_in_buf);
-
-public:
-	mutex lock;
-
-	//! File path
-	const string file_path;
-
-private:
-	ClientContext &context;
-	BufferedJSONReaderOptions options;
-
-	//! File handle
-	unique_ptr<JSONFileHandle> file_handle;
-
-	//! Next buffer index within the file
-	idx_t buffer_index;
-	//! Mapping from batch index to currently held buffers
-	unordered_map<idx_t, unique_ptr<JSONBufferHandle>> buffer_map;
-
-	//! Line count per buffer
-	vector<int64_t> buffer_line_or_object_counts;
 };
 
 } // namespace duckdb

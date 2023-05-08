@@ -8,97 +8,101 @@ namespace duckdb {
 
 void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalType> &return_types,
                           vector<string> &names) {
-	auto original_scan_type = bind_data.type;
-	bind_data.type = JSONScanType::SAMPLE; // Set scan type to sample for the auto-detect, we restore it later
-	JSONScanGlobalState gstate(context, bind_data);
-	JSONScanLocalState lstate(context, gstate);
-	ArenaAllocator allocator(BufferAllocator::Get(context));
+	// Change scan type during detection
+	bind_data.type = JSONScanType::SAMPLE;
 
-	// Read for the specified sample size
+	// These are used across files (if union_by_name)
 	JSONStructureNode node;
-	bool more_than_one = false;
+	ArenaAllocator allocator(BufferAllocator::Get(context));
 	Vector string_vector(LogicalType::VARCHAR);
-	idx_t remaining = bind_data.sample_size;
-	while (remaining != 0) {
-		allocator.Reset();
 
-		if (gstate.file_index >= 10) {
-			// We really shouldn't open more than 10 files when sampling
-			break;
+	// Loop through the files (if union_by_name, else just sample the first file)
+	for (idx_t file_idx = 0; file_idx < bind_data.files.size(); file_idx++) {
+		// Create global/local state and place the reader in the right field
+		JSONScanGlobalState gstate(context, bind_data);
+		JSONScanLocalState lstate(context, gstate);
+		if (file_idx == 0) {
+			gstate.json_readers.emplace_back(bind_data.initial_reader.get());
+		} else {
+			gstate.json_readers.emplace_back(bind_data.union_readers[file_idx - 1].get());
 		}
 
-		auto read_count = lstate.ReadNext(gstate);
-		if (lstate.scan_count > 1) {
-			more_than_one = true;
-		}
-		if (read_count == 0) {
-			break;
-		}
-		idx_t next = MinValue<idx_t>(read_count, remaining);
-		yyjson_val **values = lstate.values;
-		for (idx_t i = 0; i < next; i++) {
-			if (values[i]) {
-				JSONStructure::ExtractStructure(values[i], node);
+		// Read and detect schema
+		idx_t remaining = bind_data.sample_size;
+		while (remaining != 0) {
+			allocator.Reset();
+			auto read_count = lstate.ReadNext(gstate);
+			if (read_count == 0) {
+				break;
 			}
+
+			idx_t next = MinValue<idx_t>(read_count, remaining);
+			for (idx_t i = 0; i < next; i++) {
+				const auto &val = lstate.values[i];
+				if (val) {
+					JSONStructure::ExtractStructure(val, node);
+				}
+			}
+			if (!node.ContainsVarchar()) { // Can't refine non-VARCHAR types
+				continue;
+			}
+			node.InitializeCandidateTypes(bind_data.max_depth);
+			node.RefineCandidateTypes(lstate.values, next, string_vector, allocator, bind_data.date_format_map);
+			remaining -= next;
 		}
-		if (!node.ContainsVarchar()) { // Can't refine non-VARCHAR types
-			continue;
+
+		if (file_idx == 0 && lstate.total_tuple_count != 0) {
+			bind_data.avg_tuple_size = lstate.total_read_size / lstate.total_tuple_count;
 		}
-		node.InitializeCandidateTypes(bind_data.max_depth);
-		node.RefineCandidateTypes(values, next, string_vector, allocator, bind_data.date_format_map);
-		remaining -= next;
+
+		// Close the file and stop detection if not union_by_name
+		gstate.json_readers.back()->Reset();
+		if (!bind_data.options.file_options.union_by_name) {
+			break;
+		}
 	}
-	bind_data.type = original_scan_type;
+
+	// Restore the scan type
+	bind_data.type = JSONScanType::READ_JSON;
 
 	// Convert structure to logical type
 	auto type = JSONStructure::StructureToType(context, node, bind_data.max_depth);
 
-	// Detect record type
-	if (bind_data.record_type == JSONRecordType::AUTO) {
-		switch (type.id()) {
-		case LogicalTypeId::STRUCT:
-			bind_data.record_type = JSONRecordType::RECORDS;
-			break;
-		case LogicalTypeId::LIST: {
-			if (more_than_one) {
-				bind_data.record_type = JSONRecordType::VALUES;
-			} else {
-				type = ListType::GetChildType(type);
-				if (type.id() == LogicalTypeId::STRUCT) {
-					bind_data.record_type = JSONRecordType::ARRAY_OF_RECORDS;
-				} else {
-					bind_data.record_type = JSONRecordType::ARRAY_OF_VALUES;
-				}
-			}
-			break;
-		}
-		default:
-			bind_data.record_type = JSONRecordType::VALUES;
+	// Auto-detect record type
+	if (bind_data.options.record_type == JSONRecordType::AUTO_DETECT) {
+		if (type.id() == LogicalTypeId::STRUCT) {
+			bind_data.options.record_type = JSONRecordType::RECORDS;
+		} else {
+			bind_data.options.record_type = JSONRecordType::VALUES;
 		}
 	}
 
-	// Detect return type
-	if (bind_data.auto_detect) {
-		bind_data.transform_options.date_format_map = &bind_data.date_format_map;
-		if (type.id() != LogicalTypeId::STRUCT) {
-			return_types.emplace_back(type);
-			names.emplace_back("json");
-		} else {
-			const auto &child_types = StructType::GetChildTypes(type);
-			return_types.reserve(child_types.size());
-			names.reserve(child_types.size());
-			for (auto &child_type : child_types) {
-				return_types.emplace_back(child_type.second);
-				names.emplace_back(child_type.first);
-			}
+	if (!bind_data.auto_detect) {
+		return;
+	}
+
+	// Auto-detect columns
+	if (type.id() == LogicalTypeId::STRUCT) {
+		const auto &child_types = StructType::GetChildTypes(type);
+		return_types.reserve(child_types.size());
+		names.reserve(child_types.size());
+		for (auto &child_type : child_types) {
+			return_types.emplace_back(child_type.second);
+			names.emplace_back(child_type.first);
 		}
+	} else {
+		return_types.emplace_back(type);
+		names.emplace_back("json"); // TODO: more intuitive name?
 	}
 }
 
-void JSONScan::InitializeBindData(ClientContext &context, JSONScanData &bind_data,
-                                  const named_parameter_map_t &named_parameters, vector<string> &names,
-                                  vector<LogicalType> &return_types) {
-	for (auto &kv : named_parameters) {
+unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindInput &input,
+                                      vector<LogicalType> &return_types, vector<string> &names) {
+	// First bind default params
+	auto result = JSONScanData::Bind(context, input);
+	auto &bind_data = result->Cast<JSONScanData>();
+
+	for (auto &kv : input.named_parameters) {
 		auto loption = StringUtil::Lower(kv.first);
 		if (loption == "columns") {
 			auto &child_type = kv.second.type();
@@ -164,46 +168,30 @@ void JSONScan::InitializeBindData(ClientContext &context, JSONScanData &bind_dat
 			if (!error.empty()) {
 				throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
 			}
-		} else if (loption == "json_format") {
+		} else if (loption == "records") {
 			auto arg = StringValue::Get(kv.second);
-			if (arg == "records") {
-				bind_data.record_type = JSONRecordType::RECORDS;
-			} else if (arg == "array_of_records") {
-				bind_data.record_type = JSONRecordType::ARRAY_OF_RECORDS;
-			} else if (arg == "values") {
-				bind_data.record_type = JSONRecordType::VALUES;
-			} else if (arg == "array_of_values") {
-				bind_data.record_type = JSONRecordType::ARRAY_OF_VALUES;
-			} else if (arg == "auto") {
-				bind_data.record_type = JSONRecordType::AUTO;
+			if (arg == "auto") {
+				bind_data.options.record_type = JSONRecordType::AUTO_DETECT;
+			} else if (arg == "true") {
+				bind_data.options.record_type = JSONRecordType::RECORDS;
+			} else if (arg == "false") {
+				bind_data.options.record_type = JSONRecordType::VALUES;
 			} else {
-				throw InvalidInputException("\"json_format\" must be one of ['records', 'array_of_records', 'json', "
-				                            "'array_of_json', 'auto']");
+				throw InvalidInputException("units must be one of ['auto', 'true', 'false']");
 			}
 		}
 	}
-}
-
-unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindInput &input,
-                                      vector<LogicalType> &return_types, vector<string> &names) {
-	// First bind default params
-	auto result = JSONScanData::Bind(context, input);
-	auto &bind_data = result->Cast<JSONScanData>();
-
-	JSONScan::InitializeBindData(context, bind_data, input.named_parameters, names, return_types);
-
-	if (!bind_data.names.empty()) {
-		bind_data.auto_detect = false; // Override auto_detect when columns are specified
-	} else if (!bind_data.auto_detect) {
-		throw BinderException("read_json \"columns\" parameter is required when auto_detect is false");
+	if (!bind_data.auto_detect && return_types.empty()) {
+		throw BinderException("read_json requires columns to be specified through the 'columns' option. Use "
+		                      "read_json_auto or set read_json(..., AUTO_DETECT=TRUE) to automatically guess columns.");
 	}
-
-	bind_data.InitializeFormats();
-
-	if (bind_data.auto_detect || bind_data.record_type == JSONRecordType::AUTO) {
+	if (bind_data.auto_detect || bind_data.options.record_type == JSONRecordType::AUTO_DETECT) {
 		JSONScan::AutoDetect(context, bind_data, return_types, names);
 		bind_data.names = names;
 	}
+	D_ASSERT(return_types.size() == names.size());
+
+	bind_data.InitializeFormats();
 
 	auto &transform_options = bind_data.transform_options;
 	transform_options.strict_cast = !bind_data.ignore_errors;
@@ -218,30 +206,30 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &gstate = data_p.global_state->Cast<JSONGlobalTableFunctionState>().state;
 	auto &lstate = data_p.local_state->Cast<JSONLocalTableFunctionState>().state;
-	D_ASSERT(output.ColumnCount() == gstate.projected_columns.size());
 
 	const auto count = lstate.ReadNext(gstate);
 	yyjson_val **values = lstate.values;
 	output.SetCardinality(count);
 
+	if (gstate.names.empty()) {
+		return; // count(*)
+	}
+
 	vector<Vector *> result_vectors;
 	result_vectors.reserve(output.ColumnCount());
 	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
-		const auto &col_id = gstate.projected_columns[col_idx];
-		if (gstate.projected_columns.empty() || !IsRowIdColumnId(col_id)) {
+		if (!gstate.is_rowid[col_idx]) {
 			result_vectors.emplace_back(&output.data[col_idx]);
 		}
 	}
 
-	// Pass current reader to transform options so we can get line number information if an error occurs
+	D_ASSERT(gstate.bind_data.options.record_type != JSONRecordType::AUTO_DETECT);
 	bool success;
-	switch (gstate.bind_data.record_type) {
-	case JSONRecordType::RECORDS:
-	case JSONRecordType::ARRAY_OF_RECORDS:
+	if (gstate.bind_data.options.record_type == JSONRecordType::RECORDS) {
 		success = JSONTransform::TransformObject(values, lstate.GetAllocator(), count, gstate.names, result_vectors,
 		                                         lstate.transform_options);
-		break;
-	default:
+	} else {
+		D_ASSERT(gstate.bind_data.options.record_type == JSONRecordType::VALUES);
 		success = JSONTransform::Transform(values, lstate.GetAllocator(), *result_vectors[0], count,
 		                                   lstate.transform_options);
 	}
@@ -270,7 +258,7 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> f
 	table_function.named_parameters["date_format"] = LogicalType::VARCHAR;
 	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["timestamp_format"] = LogicalType::VARCHAR;
-	table_function.named_parameters["json_format"] = LogicalType::VARCHAR;
+	table_function.named_parameters["records"] = LogicalType::VARCHAR;
 
 	table_function.projection_pushdown = true;
 	// TODO: might be able to do filter pushdown/prune too
@@ -290,25 +278,25 @@ TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> in
 }
 
 TableFunctionSet JSONFunctions::GetReadJSONFunction() {
-	auto info =
-	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::UNSTRUCTURED, JSONRecordType::RECORDS, false);
+	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::ARRAY, JSONRecordType::RECORDS);
 	return CreateJSONFunctionInfo("read_json", std::move(info));
 }
 
 TableFunctionSet JSONFunctions::GetReadNDJSONFunction() {
-	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
-	                                      JSONRecordType::RECORDS, false);
+	auto info =
+	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, JSONRecordType::RECORDS);
 	return CreateJSONFunctionInfo("read_ndjson", std::move(info));
 }
 
 TableFunctionSet JSONFunctions::GetReadJSONAutoFunction() {
-	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::AUTO, true);
+	auto info =
+	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::AUTO_DETECT, true);
 	return CreateJSONFunctionInfo("read_json_auto", std::move(info), true);
 }
 
 TableFunctionSet JSONFunctions::GetReadNDJSONAutoFunction() {
-	auto info =
-	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, JSONRecordType::AUTO, true);
+	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
+	                                      JSONRecordType::AUTO_DETECT, true);
 	return CreateJSONFunctionInfo("read_ndjson_auto", std::move(info), true);
 }
 
