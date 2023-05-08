@@ -22,4 +22,4 @@ struct ReadCSVErrorLogTableFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-}; // namespace duckdb
+} // namespace duckdb
