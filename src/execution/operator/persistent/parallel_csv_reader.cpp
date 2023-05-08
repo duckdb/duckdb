@@ -207,10 +207,8 @@ void ParallelCSVReader::SetBufferRead(unique_ptr<CSVBufferRead> buffer_read_p) {
 	} else {
 		buffer_size = buffer_read_p->buffer->GetBufferSize();
 	}
-	//	linenr = buffer_read_p->estimated_linenr;
 	buffer = std::move(buffer_read_p);
 
-	//	linenr_estimated = true;
 	reached_remainder_state = false;
 	verification_positions.beginning_of_first_line = 0;
 	verification_positions.end_of_last_line = 0;
@@ -640,6 +638,18 @@ void ParallelCSVReader::ParseCSV(DataChunk &insert_chunk) {
 		throw InvalidInputException(error_message);
 	}
 }
+
+idx_t  ParallelCSVReader::GetLineError(idx_t line_error, idx_t buffer_idx, optional_ptr<LineInfo> line_info){
+
+	while (true) {
+		if (line_info->CanItGetLine(file_idx, buffer_idx)) {
+			auto cur_start = verification_positions.beginning_of_first_line +
+						                           buffer->buffer->GetCSVGlobalStart();
+			return line_info->GetLine(buffer_idx, line_error, file_idx, cur_start,false);
+					}
+				}
+}
+
 
 bool ParallelCSVReader::TryParseCSV(ParserMode mode) {
 	DataChunk dummy_chunk;

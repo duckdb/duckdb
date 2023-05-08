@@ -258,7 +258,7 @@ public:
 	                       idx_t rows_to_skip, bool force_parallelism_p, vector<column_t> column_ids_p, bool has_header)
 	    : file_handle(std::move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p),
 	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
-	      line_info(&main_mutex, &batch_to_tuple_end, &tuple_start, &tuple_end) {
+	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
 		file_handle->DisableReset();
 		current_file_path = files_path_p[0];
 		line_info.lines_read[0] = rows_to_skip;
@@ -295,7 +295,7 @@ public:
 		tuple_end_to_batch.resize(file_count);
 		batch_to_tuple_end.resize(file_count);
 	}
-	ParallelCSVGlobalState() : line_info(&main_mutex, &batch_to_tuple_end, &tuple_start, &tuple_end) {
+	ParallelCSVGlobalState() : line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
 		running_threads = MaxThreads();
 	}
 
@@ -453,9 +453,9 @@ void ParallelCSVGlobalState::Verify() {
 }
 
 void LineInfo::Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos) {
-	auto &tuple_start_set = (*tuple_start)[file_idx];
-	auto &processed_batches = (*batch_to_tuple_end)[file_idx];
-	auto &tuple_end_vec = (*tuple_end)[file_idx];
+	auto &tuple_start_set = tuple_start[file_idx];
+	auto &processed_batches = batch_to_tuple_end[file_idx];
+	auto &tuple_end_vec = tuple_end[file_idx];
 	bool has_error = false;
 	idx_t problematic_line;
 	if (batch_idx == 0 || tuple_start_set.empty()) {
@@ -577,7 +577,7 @@ void ParallelCSVGlobalState::UpdateLinesRead(CSVBufferRead &buffer_read, idx_t f
 }
 
 bool LineInfo::CanItGetLine(idx_t file_idx, idx_t batch_idx) {
-	lock_guard<mutex> parallel_lock(*main_mutex);
+	lock_guard<mutex> parallel_lock(main_mutex);
 	if (current_batches.empty() || done) {
 		return true;
 	}
@@ -591,7 +591,7 @@ bool LineInfo::CanItGetLine(idx_t file_idx, idx_t batch_idx) {
 idx_t LineInfo::GetLine(idx_t batch_idx, idx_t line_error, idx_t file_idx, idx_t cur_start, bool verify) {
 	unique_ptr<lock_guard<mutex>> parallel_lock;
 	if (!verify) {
-		parallel_lock = duckdb::make_uniq<lock_guard<mutex>>(*main_mutex);
+		parallel_lock = duckdb::make_uniq<lock_guard<mutex>>(main_mutex);
 	}
 	idx_t line_count = 0;
 	if (done) {

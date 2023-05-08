@@ -26,7 +26,7 @@
 
 namespace duckdb {
 
-string BaseCSVReader::GetLineNumberStr(idx_t linenr, bool linenr_estimated, LineInfo *line_info, idx_t buffer_idx) {
+string BaseCSVReader::GetLineNumberStr(idx_t linenr, bool linenr_estimated, optional_ptr<LineInfo> line_info, idx_t buffer_idx) {
 	// If an error happens during auto-detect it is an estimated line
 	string estimated = (linenr_estimated ? string(" (estimated)") : string(""));
 	if (line_info) {
@@ -45,7 +45,7 @@ string BaseCSVReader::GetLineNumberStr(idx_t linenr, bool linenr_estimated, Line
 }
 
 BaseCSVReader::BaseCSVReader(ClientContext &context_p, BufferedCSVReaderOptions options_p,
-                             const vector<LogicalType> &requested_types, LineInfo *line_info)
+                             const vector<LogicalType> &requested_types, optional_ptr<LineInfo> line_info)
     : context(context_p), fs(FileSystem::GetFileSystem(context)), allocator(Allocator::Get(context)),
       opener(FileSystem::GetFileOpener(context)), options(std::move(options_p)), line_info(line_info) {
 }
@@ -551,22 +551,8 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			line_error += linenr;
 			line_error -= parse_chunk.size();
 
-			if (line_info) {
-				// This must be a parallel read
-				auto parallel_reader = (ParallelCSVReader *)this;
-				while (true) {
-					if (line_info->CanItGetLine(parallel_reader->file_idx, buffer_idx)) {
-						error_line =
-						    line_info->GetLine(buffer_idx, line_error, parallel_reader->file_idx,
-						                       parallel_reader->verification_positions.beginning_of_first_line +
-						                           parallel_reader->buffer->buffer->GetCSVGlobalStart(),
-						                       false);
-						break;
-					}
-				}
-			} else {
-				error_line = line_error;
-			}
+			error_line = GetLineError(line_error,buffer_idx,line_info);
+
 			if (options.auto_detect) {
 				throw InvalidInputException("%s in column %s, at line %llu.\n\nParser "
 				                            "options:\n%s.\n\nConsider either increasing the sample size "

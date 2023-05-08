@@ -135,6 +135,9 @@ public:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(DataChunk &insert_chunk);
 
+	idx_t GetLineError(idx_t line_error, idx_t buffer_idx, optional_ptr<LineInfo> line_info) override;
+
+
 private:
 	//! Initialize Parser
 	void Initialize(const vector<LogicalType> &requested_types);

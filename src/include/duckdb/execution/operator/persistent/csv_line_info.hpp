@@ -11,8 +11,8 @@
 namespace duckdb {
 struct LineInfo {
 public:
-	explicit LineInfo(mutex *main_mutex_p, vector<unordered_map<idx_t, idx_t>> *batch_to_tuple_end_p,
-	                  vector<set<idx_t>> *tuple_start_p, vector<vector<idx_t>> *tuple_end_p)
+	explicit LineInfo(mutex &main_mutex_p, vector<unordered_map<idx_t, idx_t>> &batch_to_tuple_end_p,
+	                  vector<set<idx_t>> &tuple_start_p, vector<vector<idx_t>> &tuple_end_p)
 	    : main_mutex(main_mutex_p), batch_to_tuple_end(batch_to_tuple_end_p), tuple_start(tuple_start_p),
 	      tuple_end(tuple_end_p) {};
 	bool CanItGetLine(idx_t file_idx, idx_t batch_idx);
@@ -25,13 +25,13 @@ public:
 	//! Set of batches that have been initialized but are not yet finished.
 	vector<set<idx_t>> current_batches;
 	//! Pointer to CSV Reader Mutex
-	mutex *main_mutex = nullptr;
+	mutex &main_mutex;
 	//! Pointer Batch to Tuple End
-	vector<unordered_map<idx_t, idx_t>> *batch_to_tuple_end = nullptr;
+	vector<unordered_map<idx_t, idx_t>> &batch_to_tuple_end;
 	//! Pointer Batch to Tuple Start
-	vector<set<idx_t>> *tuple_start = nullptr;
+	vector<set<idx_t>> &tuple_start;
 	//! Pointer Batch to Tuple End
-	vector<vector<idx_t>> *tuple_end = nullptr;
+	vector<vector<idx_t>> &tuple_end;
 	//! If we already threw an exception on a previous thread.
 	bool done = false;
 	idx_t first_line = 0;

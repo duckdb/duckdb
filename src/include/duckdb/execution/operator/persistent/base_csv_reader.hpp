@@ -36,7 +36,7 @@ enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DA
 class BaseCSVReader {
 public:
 	BaseCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
-	              const vector<LogicalType> &requested_types = vector<LogicalType>(), LineInfo *line_info = nullptr);
+	              const vector<LogicalType> &requested_types = vector<LogicalType>(), optional_ptr<LineInfo> line_info = nullptr);
 	~BaseCSVReader();
 
 	ClientContext &context;
@@ -50,7 +50,7 @@ public:
 
 	idx_t linenr = 0;
 	bool linenr_estimated = false;
-	LineInfo *line_info;
+	optional_ptr<LineInfo> line_info;
 
 	bool row_empty = false;
 	idx_t sample_chunk_idx = 0;
@@ -77,6 +77,11 @@ public:
 	const vector<LogicalType> &GetTypes() {
 		return return_types;
 	}
+	virtual idx_t GetLineError(idx_t line_error, idx_t buffer_idx, optional_ptr<LineInfo> line_info){
+	   return line_error;
+	};
+
+
 	//! Initialize projection indices to select all columns
 	void InitializeProjection();
 
@@ -102,7 +107,7 @@ protected:
 
 	void VerifyUTF8(idx_t col_idx);
 	void VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, int64_t offset = 0);
-	string GetLineNumberStr(idx_t linenr, bool linenr_estimated, LineInfo *line_info = nullptr, idx_t buffer_idx = 0);
+	string GetLineNumberStr(idx_t linenr, bool linenr_estimated, optional_ptr<LineInfo> line_info = nullptr, idx_t buffer_idx = 0);
 
 	//! Sets the newline delimiter
 	void SetNewLineDelimiter(bool carry = false, bool carry_followed_by_nl = false);
