@@ -406,5 +406,17 @@ sqlite: release | third_party/sqllogictest
 sqlsmith: debug
 	./build/debug/third_party/sqlsmith/sqlsmith --duckdb=:memory:
 
+# Bloaty: a size profiler for binaries, is a project backed by Google engineers, https://github.com/google/bloaty for more info
+# works both on executable, libraries (-> .duckdb_extension) and on WebAssembly
+bloaty/bloaty:
+	git clone https://github.com/google/bloaty.git
+	cd bloaty && git submodule update --init --recursive && cmake -B build -G Ninja -S . && cmake --build build
+	mv bloaty/build/bloaty bloaty/bloaty
+
+bloaty: reldebug bloaty/bloaty
+	cd build/reldebug && dsymutil duckdb
+	./bloaty/bloaty  build/reldebug/duckdb -d symbols -n 20 --debug-file=build/reldebug/duckdb.dSYM/Contents/Resources/DWARF/duckdb
+	# ./bloaty/bloaty  build/reldebug/extension/parquet/parquet.duckdb_extension -d symbols -n 20 # to execute on extension
+
 clangd:
 	cmake -DCMAKE_BUILD_TYPE=Debug ${EXTENSIONS} -B build/clangd .

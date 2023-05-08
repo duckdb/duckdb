@@ -5,6 +5,8 @@
 name Write Lineitem CSV
 group csv
 
+cache tpch_sf1.duckdb
+
 require tpch
 
 load

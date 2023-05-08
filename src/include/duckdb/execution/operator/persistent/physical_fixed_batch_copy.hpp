@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp
+// duckdb/execution/operator/persistent/physical_fixed_batch_copy.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -16,14 +16,13 @@
 
 namespace duckdb {
 
-//! Copy the contents of a query into a table
-class PhysicalBatchCopyToFile : public PhysicalOperator {
+class PhysicalFixedBatchCopy : public PhysicalOperator {
 public:
-	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::BATCH_COPY_TO_FILE;
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::FIXED_BATCH_COPY_TO_FILE;
 
 public:
-	PhysicalBatchCopyToFile(vector<LogicalType> types, CopyFunction function, unique_ptr<FunctionData> bind_data,
-	                        idx_t estimated_cardinality);
+	PhysicalFixedBatchCopy(vector<LogicalType> types, CopyFunction function, unique_ptr<FunctionData> bind_data,
+	                       idx_t estimated_cardinality);
 
 	CopyFunction function;
 	unique_ptr<FunctionData> bind_data;
@@ -60,22 +59,14 @@ public:
 		return true;
 	}
 
-private:
-	void PrepareBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t batch_index,
-	                      unique_ptr<ColumnDataCollection> collection) const;
+public:
+	void AddRawBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t batch_index,
+	                     unique_ptr<ColumnDataCollection> collection) const;
+	void RepartitionBatches(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index,
+	                        bool final = false) const;
 	void FlushBatchData(ClientContext &context, GlobalSinkState &gstate_p, idx_t min_index) const;
+	bool ExecuteTask(ClientContext &context, GlobalSinkState &gstate_p) const;
+	void ExecuteTasks(ClientContext &context, GlobalSinkState &gstate_p) const;
 	SinkFinalizeType FinalFlush(ClientContext &context, GlobalSinkState &gstate_p) const;
 };
-
-struct ActiveFlushGuard {
-	explicit ActiveFlushGuard(atomic<bool> &bool_value_p) : bool_value(bool_value_p) {
-		bool_value = true;
-	}
-	~ActiveFlushGuard() {
-		bool_value = false;
-	}
-
-	atomic<bool> &bool_value;
-};
-
 } // namespace duckdb
