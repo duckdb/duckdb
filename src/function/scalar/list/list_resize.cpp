@@ -208,4 +208,4 @@ void ListResizeFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(resize);
 }
 
-}; // namespace duckdb
+} // namespace duckdb
