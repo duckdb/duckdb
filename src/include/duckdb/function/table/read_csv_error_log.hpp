@@ -8,9 +8,10 @@ namespace duckdb {
 struct LoggedCSVError {
 	idx_t line;
 	idx_t column;
+	string column_name;
+	string parsed_value;
 	string error;
 	string file_name;
-	string parsed_value;
 };
 
 struct ReadCSVErrorLog {
@@ -21,4 +22,4 @@ struct ReadCSVErrorLogTableFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-};
+}; // namespace duckdb

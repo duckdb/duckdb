@@ -106,7 +106,7 @@ struct ClientConfig {
 	//! Defaults to PhysicalMaterializedCollector
 	get_result_collector_t result_collector = nullptr;
 
-	//! Maximum number of ignored csv reader errors to keep around 
+	//! Maximum number of ignored csv reader errors to keep around
 	idx_t max_csv_errors = STANDARD_VECTOR_SIZE;
 
 public:

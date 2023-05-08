@@ -1,24 +1,26 @@
+# name: test/sql/copy/csv/errors/csv_read_errors.test
+# group: [errors]
 
 query III
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/bad.csv', 
-    columns = {'0': 'INTEGER', '1': 'INTEGER', '3': 'VARCHAR'}, 
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'}, 
     ignore_errors=true);
 ----
 1	2	AAA
 6	7	CCC
 
 
-query IIIII
+query IIIIII
 FROM read_csv_error_log()
 ----
-2	1	BBB	Could not convert string 'BBB' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv
+2	1	"col1"	BBB	Could not convert string 'BBB' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv
 
 # Test with multiple files
 query III
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/*.csv', 
-    columns = {'0': 'INTEGER', '1': 'INTEGER', '3': 'VARCHAR'}, 
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'}, 
     ignore_errors=true);
 ----
 1	2	AAA
@@ -27,11 +29,11 @@ SELECT * FROM read_csv(
 4	5	9
 
 
-query IIIII
+query IIIIII
 FROM read_csv_error_log()
 ----
-2	1	BBB	Could not convert string 'BBB' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv
-4	0	EEE	Could not convert string 'EEE' to INT32	test/sql/copy/csv/data/error/mismatch/bad2.csv
+2	1	"col1"	BBB	Could not convert string 'BBB' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv
+4	0	"col0"	EEE	Could not convert string 'EEE' to INT32	test/sql/copy/csv/data/error/mismatch/bad2.csv
 
 # Set limit
 statement ok
@@ -40,7 +42,7 @@ SET csv_error_log_size = 1;
 query III
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/*.csv', 
-    columns = {'0': 'INTEGER', '1': 'INTEGER', '3': 'VARCHAR'}, 
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'}, 
     ignore_errors=true);
 ----
 1	2	AAA
@@ -49,7 +51,7 @@ SELECT * FROM read_csv(
 4	5	9
 
 # We should now have only one error logged
-query IIIII
+query IIIIII
 FROM read_csv_error_log()
 ----
-2	1	BBB	Could not convert string 'BBB' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv
+2	1	"col1"	BBB	Could not convert string 'BBB' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv

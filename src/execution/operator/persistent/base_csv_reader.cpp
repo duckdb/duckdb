@@ -512,13 +512,14 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 
 			if (options.ignore_errors) {
 				conversion_error_ignored = true;
-				
+
 				// Register the error
 				auto max_errors = context.config.max_csv_errors;
 				auto &error_log = context.client_data->read_csv_error_log->errors;
-				if(error_log.size() < max_errors) {
+				if (error_log.size() < max_errors) {
 					auto parsed_str = FlatVector::GetData<string_t>(parse_vector)[row_idx].GetString();
-					error_log.push_back(LoggedCSVError{error_line, col_idx, error_message, GetFileName(), parsed_str});
+					error_log.push_back(
+					    LoggedCSVError {error_line, col_idx, col_name, parsed_str, error_message, GetFileName()});
 				}
 				continue;
 			}
