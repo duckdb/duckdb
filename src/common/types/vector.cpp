@@ -1763,15 +1763,14 @@ MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const Sel
 
 	for (idx_t row = 0; row < count; row++) {
 		auto mapped_row = sel.get_index(row);
-		auto row_idx = map_vdata.sel->get_index(mapped_row);
+		auto map_idx = map_vdata.sel->get_index(mapped_row);
 		// map is allowed to be NULL
-		if (!map_validity.RowIsValid(row_idx)) {
+		if (!map_validity.RowIsValid(map_idx)) {
 			continue;
 		}
-		row_idx = key_vdata.sel->get_index(row);
 		value_set_t unique_keys;
-		for (idx_t i = 0; i < list_data[row_idx].length; i++) {
-			auto index = list_data[row_idx].offset + i;
+		for (idx_t i = 0; i < list_data[map_idx].length; i++) {
+			auto index = list_data[map_idx].offset + i;
 			index = key_vdata.sel->get_index(index);
 			if (!key_validity.RowIsValid(index)) {
 				return MapInvalidReason::NULL_KEY;
