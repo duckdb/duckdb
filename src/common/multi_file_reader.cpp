@@ -235,7 +235,13 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 						auto it = file_options.hive_types_schema.find(entry.value);
 						if (it != file_options.hive_types_schema.end()){
 							if (!value.TryCastAs(context, it->second)) {
-								throw InvalidInputException("something went terribly wrong!");	//lars
+								string msg("Unable to cast '");
+								msg.append(value.ToString());
+								msg.append("' (from column: ");
+								msg.append(StringUtil::Upper(it->first));
+								msg.append(") to: ");
+								msg.append(it->second.ToString());
+								throw InvalidInputException(msg.c_str());
 							}
 						}
 					}
@@ -392,11 +398,10 @@ MultiFileReaderOptions MultiFileReaderOptions::Deserialize(Deserializer &source)
 	result.hive_types = reader.ReadRequired<bool>();
 	result.auto_detect_hive_types = reader.ReadRequired<bool>();
 	//deserialize hive_types_schema
-	uint32_t schema_size = reader.ReadRequired<uint32_t>();
+	const uint32_t schema_size = reader.ReadRequired<uint32_t>();
 	for (idx_t i = 0; i < schema_size; i++) {
 		const string name = reader.ReadRequired<string>();
-		const string str = reader.ReadRequired<string>();
-		const LogicalType type = TransformStringToLogicalType(str);
+		const LogicalType type = TransformStringToLogicalType(reader.ReadRequired<string>());
 		result.hive_types_schema[name] = type;
 	}
 	reader.Finalize();
