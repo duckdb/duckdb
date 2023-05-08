@@ -30,11 +30,22 @@ struct MultiFileReaderOptions {
 	DUCKDB_API static MultiFileReaderOptions Deserialize(Deserializer &source);
 	DUCKDB_API void AddBatchInfo(BindInfo &bind_info) const;
 
-	static bool AutoDetectHivePartitioning(const vector<string> &files) {
-		if (files.empty()) {
-			return false;
+	void AutoDetect(const vector<string> &files) {
+		if (!auto_detect_hive_partitioning && !hive_partitioning && hive_types) {
+			throw InvalidInputException("cannot disable hive_partitioning when using hive_types");
 		}
+		if (files.empty()) {
+			return;
+		}
+		if (auto_detect_hive_partitioning) {
+			hive_partitioning = AutoDetectHivePartitioning(files);
+		}
+		if (hive_partitioning && auto_detect_hive_types && !hive_types) {
+			hive_types = AutoDetectHiveTypes(files.front());
+		}
+	}
 
+	static bool AutoDetectHivePartitioning(const vector<string> &files) {
 		std::unordered_set<string> uset;
 		idx_t splits_size;
 		{
@@ -69,6 +80,21 @@ struct MultiFileReaderOptions {
 			}
 		}
 		return true;
+	}
+
+	static bool AutoDetectHiveTypes(const string &file) {
+		return false;
+		throw NotImplementedException("hive_type auto detection is not (yet) implemented");
+	}
+
+	LogicalType GetHiveLogicalType(const string &hive_partition_column) const {
+		if (hive_types) {
+			auto it = hive_types_schema.find(hive_partition_column);
+			if (it != hive_types_schema.end()) {
+				return it->second;
+			}
+		}
+		return LogicalType::VARCHAR;
 	}
 };
 

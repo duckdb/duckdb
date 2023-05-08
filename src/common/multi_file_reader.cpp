@@ -49,44 +49,44 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 	return files;
 }
 
-bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options, ClientContext &context) {
+bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,
+                                  ClientContext &context) {
 	auto loption = StringUtil::Lower(key);
 	if (loption == "filename") {
 		options.filename = BooleanValue::Get(val);
 	} else if (loption == "hive_partitioning") {
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
-		options.auto_detect_hive_types = true;
+		options.auto_detect_hive_types = true; // doesnt do anything yet //lars
 	} else if (loption == "union_by_name") {
 		options.union_by_name = BooleanValue::Get(val);
 	} else if (loption == "hive_types") {
-		if (!options.auto_detect_hive_partitioning && !options.hive_partitioning) {
-			throw InvalidInputException("cannot disable hive_partitioning when using hive_types");
-		}
 		options.hive_types = true;
 		// using 'hive_types' implies 'hive_partitioning'
 		options.hive_partitioning = true;
 		// turn off the auto_detection
-		options.auto_detect_hive_types = false;
-		
+		options.auto_detect_hive_types = false; // doesnt do anything yet //lars
+
 		if (val.type().id() != LogicalTypeId::STRUCT) {
-			throw InvalidInputException("'hive_types' only accepts a STRUCT(name : VARCHAR, ...), not %s", val.type().ToString());
+			throw InvalidInputException("'hive_types' only accepts a STRUCT(name : VARCHAR, ...), not %s",
+			                            val.type().ToString());
 		}
 		// verify that that all the children of the struct value are VARCHAR
-		auto& children = StructValue::GetChildren(val);
+		auto &children = StructValue::GetChildren(val);
 		for (idx_t i = 0; i < children.size(); i++) {
-			auto child = children[i];
+			const Value &child = children[i];
 			if (child.type().id() != LogicalType::VARCHAR) {
-				throw InvalidInputException("one of the children... uhhh... is not a VARCHAR: %s", child.type().ToString());	//lars
+				throw InvalidInputException("one of the children... uhhh... is not a VARCHAR: %s",
+				                            child.type().ToString()); // lars
 			}
-			// for every child of the struct, perform TransformStringToLogicalType to get the logical type
-			auto transformed_type = TransformStringToLogicalType(child.ToString(), context);
-			auto& name = StructType::GetChildName(val.type(), i);
-			
-			// add the hivetype to the map
+			// for every child of the struct, get the logical type
+			LogicalType transformed_type = TransformStringToLogicalType(child.ToString(), context);
+			const string &name = StructType::GetChildName(val.type(), i);
+
 			if (options.hive_types_schema.find(name) != options.hive_types_schema.end()) {
 				throw InvalidInputException("\'HIVE_TYPES\' contains duplicate entries");
 			}
+			// add the hive_type to the map
 			options.hive_types_schema[name] = transformed_type;
 		}
 		if (options.hive_types_schema.empty()) {
@@ -174,22 +174,11 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 				// hive partitioning column also exists in file - override
 				auto idx = lookup - names.begin();
 				hive_partitioning_index = idx;
-				
-				// get the logical type from the hive_types flag
-				LogicalType type;
-				auto it = options.hive_types_schema.find(part.first);
-				if (it != options.hive_types_schema.end()) {
-					type = it->second;
-				} else {
-					type = LogicalType::VARCHAR;
-				}
-				return_types[idx] = type;
-				
+				return_types[idx] = options.GetHiveLogicalType(part.first);
 			} else {
 				// hive partitioning column does not exist in file - add a new column containing the key
 				hive_partitioning_index = names.size();
-				//dont forget to add the same logic for hive_types here //lars
-				return_types.emplace_back(LogicalType::VARCHAR);
+				return_types.emplace_back(options.GetHiveLogicalType(part.first));
 				names.emplace_back(part.first);
 			}
 			bind_data.hive_partitioning_indexes.emplace_back(part.first, hive_partitioning_index);
@@ -201,8 +190,9 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
                                    const string &filename, const vector<string> &local_names,
                                    const vector<LogicalType> &global_types, const vector<string> &global_names,
-                                   const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data, ClientContext& context) {
-	
+                                   const vector<column_t> &global_column_ids, MultiFileReaderData &reader_data,
+                                   ClientContext &context) {
+
 	// create a map of name -> column index
 	case_insensitive_map_t<idx_t> name_map;
 	if (file_options.union_by_name) {
@@ -228,12 +218,12 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			D_ASSERT(partitions.size() == options.hive_partitioning_indexes.size());
 			bool found_partition = false;
 			for (auto &entry : options.hive_partitioning_indexes) {
-				
+
 				if (column_id == entry.index) {
 					Value value(partitions[entry.value]);
 					if (file_options.hive_types) {
 						auto it = file_options.hive_types_schema.find(entry.value);
-						if (it != file_options.hive_types_schema.end()){
+						if (it != file_options.hive_types_schema.end()) {
 							if (!value.TryCastAs(context, it->second)) {
 								string msg("Unable to cast '");
 								msg.append(value.ToString());
@@ -379,9 +369,9 @@ void MultiFileReaderOptions::Serialize(Serializer &serializer) const {
 	writer.WriteField<bool>(union_by_name);
 	writer.WriteField<bool>(hive_types);
 	writer.WriteField<bool>(auto_detect_hive_types);
-	//serialize hive_types_schema
+	// serialize hive_types_schema
 	writer.WriteField<uint32_t>((uint32_t)hive_types_schema.size());
-	for (auto& hive_type : hive_types_schema) {
+	for (auto &hive_type : hive_types_schema) {
 		writer.WriteString(hive_type.first);
 		writer.WriteString(hive_type.second.ToString());
 	}
@@ -397,7 +387,7 @@ MultiFileReaderOptions MultiFileReaderOptions::Deserialize(Deserializer &source)
 	result.union_by_name = reader.ReadRequired<bool>();
 	result.hive_types = reader.ReadRequired<bool>();
 	result.auto_detect_hive_types = reader.ReadRequired<bool>();
-	//deserialize hive_types_schema
+	// deserialize hive_types_schema
 	const uint32_t schema_size = reader.ReadRequired<uint32_t>();
 	for (idx_t i = 0; i < schema_size; i++) {
 		const string name = reader.ReadRequired<string>();

@@ -71,3 +71,10 @@ select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto
 ----
 SMALLINT	VARCHAR	BIGINT	VARCHAR
 
+#	hive_partitioning is explicitly disabled, and hive_types are set
+statement error
+select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=0, hive_types={'year':'smallint','month':'varchar'}) limit 1;
+----
+Invalid Input Error
+
+
