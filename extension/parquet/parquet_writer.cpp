@@ -261,17 +261,13 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *fil
 	}
 }
 
-void ParquetWriter::Flush(ColumnDataCollection &buffer) {
-	if (buffer.Count() == 0) {
-		return;
-	}
-
+void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result) {
 	// set up a new row group for this chunk collection
-	ParquetRowGroup row_group;
+	auto &row_group = result.row_group;
 	row_group.num_rows = buffer.Count();
 	row_group.__isset.file_offset = true;
 
-	vector<duckdb::unique_ptr<ColumnWriterState>> states;
+	auto &states = result.states;
 	// iterate over each of the columns of the chunk collection and write them
 	D_ASSERT(buffer.ColumnCount() == column_writers.size());
 	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
@@ -292,10 +288,17 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 		}
 		states.push_back(std::move(write_state));
 	}
+}
 
+void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	lock_guard<mutex> glock(lock);
+	auto &row_group = prepared.row_group;
+	auto &states = prepared.states;
+	if (states.empty()) {
+		throw InternalException("Attempting to flush a row group with no rows");
+	}
 	row_group.file_offset = writer->GetTotalWritten();
-	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < states.size(); col_idx++) {
 		const auto &col_writer = column_writers[col_idx];
 		auto write_state = std::move(states[col_idx]);
 		col_writer->FinalizeWrite(*write_state);
@@ -303,7 +306,18 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 
 	// append the row group to the file meta data
 	file_meta_data.row_groups.push_back(row_group);
-	file_meta_data.num_rows += buffer.Count();
+	file_meta_data.num_rows += row_group.num_rows;
+}
+
+void ParquetWriter::Flush(ColumnDataCollection &buffer) {
+	if (buffer.Count() == 0) {
+		return;
+	}
+
+	PreparedRowGroup prepared_row_group;
+	PrepareRowGroup(buffer, prepared_row_group);
+
+	FlushRowGroup(prepared_row_group);
 }
 
 void ParquetWriter::Finalize() {
