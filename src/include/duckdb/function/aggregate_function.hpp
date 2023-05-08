@@ -81,7 +81,6 @@ typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(ClientContext &conte
 
 class AggregateFunction : public BaseScalarFunction {
 public:
-	DUCKDB_API
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
 	                  aggregate_combine_t combine, aggregate_finalize_t finalize,
@@ -97,7 +96,6 @@ public:
 	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
 	}
 
-	DUCKDB_API
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
 	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
 	                  aggregate_combine_t combine, aggregate_finalize_t finalize,
@@ -125,7 +123,6 @@ public:
 	                        deserialize) {
 	}
 
-	DUCKDB_API
 	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
