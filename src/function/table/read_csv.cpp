@@ -539,8 +539,6 @@ void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions,
 
 static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext &context,
                                                                   TableFunctionInitInput &input) {
-	// TODO: Not sure if this is the best place to reset, but it has to work for multiple files
-	// and cant be in the bind.
 	context.client_data->read_csv_error_log->errors.clear();
 
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
