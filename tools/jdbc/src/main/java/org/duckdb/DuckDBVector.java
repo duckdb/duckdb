@@ -109,8 +109,8 @@ class DuckDBVector {
 				return getBlob(idx);
 			case UUID:
 				return getUuid(idx);
-                        case MAP:
-                                return getMap(idx);
+			case MAP:
+				return getMap(idx);
 			case LIST:
 				return getArray(idx);
 			case STRUCT:
