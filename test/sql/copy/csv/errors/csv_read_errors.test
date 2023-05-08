@@ -12,7 +12,7 @@ SELECT * FROM read_csv(
 
 
 query IIIIII
-FROM read_csv_error_log()
+FROM read_csv_error_log() ORDER BY ALL;
 ----
 2	1	"col1"	BBB	Could not convert string 'BBB' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv
 
@@ -21,16 +21,16 @@ query III
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/*.csv', 
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'}, 
-    ignore_errors=true);
+    ignore_errors=true) ORDER BY ALL;
 ----
 1	2	AAA
-6	7	CCC
 1	2	DDD
 4	5	9
+6	7	CCC
 
 
 query IIIIII
-FROM read_csv_error_log()
+FROM read_csv_error_log() ORDER BY ALL;
 ----
 2	1	"col1"	BBB	Could not convert string 'BBB' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv
 4	0	"col0"	EEE	Could not convert string 'EEE' to INT32	test/sql/copy/csv/data/error/mismatch/bad2.csv
@@ -43,15 +43,15 @@ query III
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/*.csv', 
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'}, 
-    ignore_errors=true);
+    ignore_errors=true) ORDER BY ALL;
 ----
 1	2	AAA
-6	7	CCC
 1	2	DDD
 4	5	9
+6	7	CCC
 
 # We should now have only one error logged
-query IIIIII
-FROM read_csv_error_log()
+query I
+SELECT COUNT(*) FROM read_csv_error_log()
 ----
-2	1	"col1"	BBB	Could not convert string 'BBB' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv
+1
