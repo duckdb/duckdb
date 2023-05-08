@@ -52,6 +52,6 @@ public class DuckDBStruct implements Struct {
         } catch (SQLException e) {
             v = e;
         }
-        return String.format("<DuckDBStruct %s>", v);
+        return v.toString();
     }
 }
