@@ -581,11 +581,13 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 				conflict_manager->SetMode(ConflictManagerMode::SCAN);
 				conflict_manager->SetIndexCount(matching_indexes);
 				// First we verify only the indexes that match our conflict target
+				unordered_set<Index*> conflict_target;
 				info->indexes.Scan([&](Index &index) {
 					if (!index.IsUnique()) {
 						return false;
 					}
 					if (conflict_info.ConflictTargetMatches(index)) {
+						conflict_target.insert(&index);
 						index.VerifyAppend(chunk, *conflict_manager);
 					}
 					return false;
@@ -596,6 +598,9 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 				// the scan
 				info->indexes.Scan([&](Index &index) {
 					if (!index.IsUnique()) {
+						return false;
+					}
+					if (conflict_target.count(&index)) {
 						return false;
 					}
 					index.VerifyAppend(chunk, *conflict_manager);
