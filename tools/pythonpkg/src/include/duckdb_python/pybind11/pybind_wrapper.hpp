@@ -70,6 +70,16 @@ inline bool isinstance(handle obj, handle type) {
 	return result != 0;
 }
 
+template <class T>
+bool try_cast(const handle &object, T &result) {
+	try {
+		result = cast<T>(object);
+	} catch (cast_error &e) {
+		return false;
+	}
+	return true;
+}
+
 } // namespace py
 
 template <class T, typename... ARGS>
