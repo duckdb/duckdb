@@ -1,4 +1,4 @@
-# name: test/optimizer/joins/tpcds_nofail.test
+# name: test/optimizer/joins/tpcds_nofail.test_slow
 # description: This query should not fail
 # group: [joins]
 

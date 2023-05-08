@@ -666,14 +666,12 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 				for (idx_t j = 0; j < 2; j++) {
 					if (!smallest_plans[j] ||
 					    smallest_plans[j]->GetCardinality<double>() > current_plan->GetCardinality<double>()) {
-
 						smallest_plans[j] = current_plan;
 						smallest_index[j] = i;
 						break;
 					}
 				}
 			}
-
 			if (!smallest_plans[0] || !smallest_plans[1]) {
 				throw InternalException("Internal error in join order optimizer");
 			}
