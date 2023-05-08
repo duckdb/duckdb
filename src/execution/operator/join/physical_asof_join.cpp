@@ -178,7 +178,8 @@ public:
 	void ResolveJoin(bool *found_matches, Match *matches = nullptr);
 	bool Sink(DataChunk &input);
 	void Sort();
-	void Scan();
+	void BeginScan();
+	void EndScan();
 
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)
 	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk);
@@ -210,6 +211,12 @@ public:
 	Vector hash_vector;
 
 	//	Output
+	hash_t prev_bin;
+	optional_ptr<PartitionGlobalHashGroup> hash_group;
+	optional_ptr<OuterJoinMarker> right_outer;
+	unique_ptr<SBIterator> left_itr;
+	unique_ptr<SBIterator> right_itr;
+
 	idx_t lhs_match_count;
 	SelectionVector lhs_matched;
 	OuterJoinMarker left_outer;
@@ -375,7 +382,7 @@ void AsOfLocalState::Sort() {
 	lhs_scanner = make_uniq<PayloadScanner>(*global_state.sorted_blocks[0]->payload_data, global_state, false);
 }
 
-void AsOfLocalState::Scan() {
+void AsOfLocalState::BeginScan() {
 	//	Scan the next sorted chunk
 	lhs_sorted.Reset();
 	lhs_scanner->Scan(lhs_sorted);
@@ -385,6 +392,22 @@ void AsOfLocalState::Scan() {
 		lhs_payload.data[i].Reference(lhs_sorted.data[i]);
 	}
 	lhs_payload.SetCardinality(lhs_sorted);
+
+	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
+	auto &global_partition = gsink.global_partition;
+	prev_bin = global_partition.bin_groups.size();
+	left_itr = make_uniq<SBIterator>(*lhs_global_sort, ExpressionType::COMPARE_LESSTHANOREQUALTO);
+}
+
+void AsOfLocalState::EndScan() {
+	hash_group = nullptr;
+	right_outer = nullptr;
+	left_itr.reset();
+	right_itr.reset();
+
+	lhs_scanner.reset();
+	lhs_local_sort.reset();
+	lhs_global_sort.reset();
 }
 
 void AsOfLocalState::ResolveJoin(bool *found_match, std::pair<hash_t, idx_t> *matches) {
@@ -400,12 +423,8 @@ void AsOfLocalState::ResolveJoin(bool *found_match, std::pair<hash_t, idx_t> *ma
 	const auto bins = (hash_t *)bin_unified.data;
 
 	const hash_t invalid_bin = global_partition.bin_groups.size();
-	hash_t prev_bin = invalid_bin;
-	optional_ptr<PartitionGlobalHashGroup> hash_group;
-	optional_ptr<OuterJoinMarker> right_outer;
+	const auto left_base = left_itr->GetIndex();
 	//	Searching for right <= left
-	SBIterator left(*lhs_global_sort, ExpressionType::COMPARE_LESSTHANOREQUALTO);
-	unique_ptr<SBIterator> right;
 	lhs_match_count = 0;
 	for (idx_t i = 0; i < count; ++i) {
 		const auto curr_bin = bins[bin_unified.sel->get_index(i)];
@@ -421,30 +440,30 @@ void AsOfLocalState::ResolveJoin(bool *found_match, std::pair<hash_t, idx_t> *ma
 				//	No matching partition
 				hash_group = nullptr;
 				right_outer = nullptr;
-				right.reset();
+				right_itr.reset();
 				continue;
 			}
 			hash_group = global_partition.hash_groups[group_idx].get();
 			right_outer = gsink.right_outers.data() + group_idx;
-			right = make_uniq<SBIterator>(*(hash_group->global_sort), ExpressionType::COMPARE_LESSTHANOREQUALTO);
+			right_itr = make_uniq<SBIterator>(*(hash_group->global_sort), ExpressionType::COMPARE_LESSTHANOREQUALTO);
 		}
-		left.SetIndex(i);
+		left_itr->SetIndex(left_base + i);
 
 		//	If right > left, then there is no match
-		if (!right->Compare(left)) {
+		if (!right_itr->Compare(*left_itr)) {
 			continue;
 		}
 
 		// Exponential search forward for a non-matching value using radix iterators
 		// (We use exponential search to avoid thrashing the block manager on large probes)
 		idx_t bound = 1;
-		idx_t begin = right->GetIndex();
-		right->SetIndex(begin + bound);
-		while (right->GetIndex() < hash_group->count) {
-			if (right->Compare(left)) {
+		idx_t begin = right_itr->GetIndex();
+		right_itr->SetIndex(begin + bound);
+		while (right_itr->GetIndex() < hash_group->count) {
+			if (right_itr->Compare(*left_itr)) {
 				//	If right <= left, jump ahead
 				bound *= 2;
-				right->SetIndex(begin + bound);
+				right_itr->SetIndex(begin + bound);
 			} else {
 				break;
 			}
@@ -456,18 +475,18 @@ void AsOfLocalState::ResolveJoin(bool *found_match, std::pair<hash_t, idx_t> *ma
 		auto last = MinValue<idx_t>(begin + bound, hash_group->count);
 		while (first < last) {
 			const auto mid = first + (last - first) / 2;
-			right->SetIndex(mid);
-			if (right->Compare(left)) {
+			right_itr->SetIndex(mid);
+			if (right_itr->Compare(*left_itr)) {
 				//	If right <= left, new lower bound
 				first = mid + 1;
 			} else {
 				last = mid;
 			}
 		}
-		right->SetIndex(--first);
+		right_itr->SetIndex(--first);
 
 		//	Check partitions for strict equality
-		if (!op.lhs_partitions.empty() && hash_group->ComparePartitions(left, *right)) {
+		if (!op.lhs_partitions.empty() && hash_group->ComparePartitions(*left_itr, *right_itr)) {
 			continue;
 		}
 
@@ -482,6 +501,8 @@ void AsOfLocalState::ResolveJoin(bool *found_match, std::pair<hash_t, idx_t> *ma
 		}
 		lhs_matched.set_index(lhs_match_count++, i);
 	}
+
+	left_itr->SetIndex(left_base + count);
 }
 
 unique_ptr<OperatorState> PhysicalAsOfJoin::GetOperatorState(ExecutionContext &context) const {
@@ -579,9 +600,7 @@ OperatorResultType AsOfLocalState::ExecuteInternal(ExecutionContext &context, Da
 
 	//	Get rid of completed scans
 	if (lhs_scanner && !lhs_scanner->Remaining()) {
-		lhs_scanner.reset();
-		lhs_local_sort.reset();
-		lhs_global_sort.reset();
+		EndScan();
 	}
 
 	//	Buffer the data and ask for more
@@ -592,7 +611,7 @@ OperatorResultType AsOfLocalState::ExecuteInternal(ExecutionContext &context, Da
 
 	//	We have enough data to process, so sort and start emitting
 	Sort();
-	Scan();
+	BeginScan();
 
 	switch (op.join_type) {
 	case JoinType::SEMI:
