@@ -70,7 +70,7 @@ OptionValuePair &GetValueForOption(const string &name) {
 	    {"worker_threads", {42}},
 	    {"enable_http_metadata_cache", {true}},
 	    {"force_bitpacking_mode", {"constant"}},
-	};
+	    {"csv_error_log_size", {2048}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		REQUIRE(name == "MISSING_FROM_MAP");

@@ -539,7 +539,6 @@ void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions,
 
 static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext &context,
                                                                   TableFunctionInitInput &input) {
-	context.client_data->read_csv_error_log->errors.clear();
 
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
 	if (bind_data.files.empty()) {
@@ -811,6 +810,9 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 //===--------------------------------------------------------------------===//
 static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
+
+	context.client_data->read_csv_error_log->errors.clear();
+
 	if (bind_data.single_threaded) {
 		return SingleThreadedCSVInit(context, input);
 	} else {
