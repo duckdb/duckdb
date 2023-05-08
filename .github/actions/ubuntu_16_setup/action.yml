@@ -42,21 +42,6 @@ runs:
       with:
         fetch-depth: 0
 
-    - name: Install Python 3.7
-      if: ${{ inputs.python }} == 1
-      shell: bash
-      run: |
-        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
-        tar xvf Python-3.7.12.tgz
-        cd Python-3.7.12
-        mkdir -p pythonbin
-        ./configure --with-ensurepip=install
-        make -j
-        make install
-        python3.7 --version
-        python3.7 -m pip install pip
-        python3.7 -m pip install requests awscli
-
     - name: Install CMake 3.21
       shell: bash
       run: |
@@ -92,6 +77,21 @@ runs:
         perl ./Configure --prefix=$OPENSSL_ROOT_DIR linux-aarch64 no-asm
         make -j
         make install_sw
+
+    - name: Install Python 3.7
+      if: ${{ inputs.python }} == 1
+      shell: bash
+      run: |
+        wget https://www.python.org/ftp/python/3.7.12/Python-3.7.12.tgz
+        tar xvf Python-3.7.12.tgz
+        cd Python-3.7.12
+        mkdir -p pythonbin
+        ./configure --with-ensurepip=install
+        make -j
+        make install
+        python3.7 --version
+        python3.7 -m pip install pip
+        python3.7 -m pip install requests awscli
 
     - name: Version Check
       shell: bash
