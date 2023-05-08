@@ -5,8 +5,6 @@
 statement ok 
 PRAGMA enable_verification;
 
-#mode skip
-
 query I
 SELECT list_resize([1, 2, 4], 2);
 ----
@@ -120,8 +118,6 @@ select list_resize([1, 2, 3], len(list_resize([1, 2, 3], 2)));
 ----
 [1, 2]
 
-#mode unskip
-
 # Default Values
 
 query I
@@ -159,7 +155,6 @@ select list_resize([1, 2, 3], 2, 'a');
 Invalid Input Error: Default value must be of the same type as the list, or NULL
 
 # Struct Default Values
-
 query I
 select list_resize([{'i': 1,'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}], 4, {'i': 5, 'j': [10, 10]});
 ----
