@@ -535,9 +535,8 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 			reader->names = union_reader.GetNames();
 		} else if (file_index <= bind_data.column_info.size()) {
 			// Serialized Union By name
-			reader =
-			    make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result), first_position,
-			                                 bind_data.column_info[file_index - 1].types, file_index - 1);
+			reader = make_uniq<ParallelCSVReader>(context, bind_data.options, std::move(result), first_position,
+			                                      bind_data.column_info[file_index - 1].types, file_index - 1);
 			reader->names = bind_data.column_info[file_index - 1].names;
 		} else {
 			// regular file - use the standard options

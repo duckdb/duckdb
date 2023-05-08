@@ -76,10 +76,9 @@ public:
 	const vector<LogicalType> &GetTypes() {
 		return return_types;
 	}
-	virtual idx_t GetLineError(idx_t line_error, idx_t buffer_idx){
-	   return line_error;
+	virtual idx_t GetLineError(idx_t line_error, idx_t buffer_idx) {
+		return line_error;
 	};
-
 
 	//! Initialize projection indices to select all columns
 	void InitializeProjection();

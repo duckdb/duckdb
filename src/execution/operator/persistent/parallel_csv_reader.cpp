@@ -26,8 +26,7 @@ namespace duckdb {
 
 ParallelCSVReader::ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
                                      unique_ptr<CSVBufferRead> buffer_p, idx_t first_pos_first_buffer_p,
-                                     const vector<LogicalType> &requested_types,
-                                     idx_t file_idx_p)
+                                     const vector<LogicalType> &requested_types, idx_t file_idx_p)
     : BaseCSVReader(context, std::move(options_p), requested_types), file_idx(file_idx_p),
       first_pos_first_buffer(first_pos_first_buffer_p) {
 	Initialize(requested_types);
@@ -241,10 +240,10 @@ bool ParallelCSVReader::BufferRemainder() {
 
 void ParallelCSVReader::VerifyLineLength(idx_t line_size) {
 	if (line_size > options.maximum_line_size) {
-		throw InvalidInputException(
-		    "Error in file \"%s\" on line %s: Maximum line size of %llu bytes exceeded!", options.file_path,
-		    GetLineNumberStr(parse_chunk.size(), linenr_estimated, buffer->batch_index).c_str(),
-		    options.maximum_line_size);
+		throw InvalidInputException("Error in file \"%s\" on line %s: Maximum line size of %llu bytes exceeded!",
+		                            options.file_path,
+		                            GetLineNumberStr(parse_chunk.size(), linenr_estimated, buffer->batch_index).c_str(),
+		                            options.maximum_line_size);
 	}
 }
 
@@ -483,10 +482,9 @@ in_quotes:
 				return false;
 			}
 			// still in quoted state at the end of the file or at the end of a buffer when running multithreaded, error:
-			throw InvalidInputException(
-			    "Error in file \"%s\" on line %s: unterminated quotes. (%s)", options.file_path,
-			    GetLineNumberStr(linenr, linenr_estimated, buffer->local_batch_index).c_str(),
-			    options.ToString());
+			throw InvalidInputException("Error in file \"%s\" on line %s: unterminated quotes. (%s)", options.file_path,
+			                            GetLineNumberStr(linenr, linenr_estimated, buffer->local_batch_index).c_str(),
+			                            options.ToString());
 		} else {
 			goto final_state;
 		}
@@ -542,15 +540,13 @@ handle_escape : {
 	if (position_buffer >= buffer_size && buffer->buffer->IsCSVFileLastBuffer()) {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
-		    GetLineNumberStr(linenr, linenr_estimated, buffer->local_batch_index).c_str(),
-		    options.ToString());
+		    GetLineNumberStr(linenr, linenr_estimated, buffer->local_batch_index).c_str(), options.ToString());
 		return false;
 	}
 	if ((*buffer)[position_buffer] != options.quote[0] && (*buffer)[position_buffer] != options.escape[0]) {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
-		    GetLineNumberStr(linenr, linenr_estimated, buffer->local_batch_index).c_str(),
-		    options.ToString());
+		    GetLineNumberStr(linenr, linenr_estimated, buffer->local_batch_index).c_str(), options.ToString());
 		return false;
 	}
 	// escape was followed by quote or escape, go back to quoted state
@@ -639,17 +635,15 @@ void ParallelCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	}
 }
 
-idx_t  ParallelCSVReader::GetLineError(idx_t line_error, idx_t buffer_idx){
+idx_t ParallelCSVReader::GetLineError(idx_t line_error, idx_t buffer_idx) {
 
 	while (true) {
 		if (buffer->line_info->CanItGetLine(file_idx, buffer_idx)) {
-			auto cur_start = verification_positions.beginning_of_first_line +
-						                           buffer->buffer->GetCSVGlobalStart();
-			return buffer->line_info->GetLine(buffer_idx, line_error, file_idx, cur_start,false);
-					}
-				}
+			auto cur_start = verification_positions.beginning_of_first_line + buffer->buffer->GetCSVGlobalStart();
+			return buffer->line_info->GetLine(buffer_idx, line_error, file_idx, cur_start, false);
+		}
+	}
 }
-
 
 bool ParallelCSVReader::TryParseCSV(ParserMode mode) {
 	DataChunk dummy_chunk;

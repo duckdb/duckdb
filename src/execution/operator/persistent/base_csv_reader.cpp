@@ -29,7 +29,7 @@ namespace duckdb {
 string BaseCSVReader::GetLineNumberStr(idx_t line_error, bool is_line_estimated, idx_t buffer_idx) {
 	// If an error happens during auto-detect it is an estimated line
 	string estimated = (is_line_estimated ? string(" (estimated)") : string(""));
-	return to_string(GetLineError(line_error,buffer_idx)) + estimated;
+	return to_string(GetLineError(line_error, buffer_idx)) + estimated;
 }
 
 BaseCSVReader::BaseCSVReader(ClientContext &context_p, BufferedCSVReaderOptions options_p,
@@ -539,7 +539,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			line_error += linenr;
 			line_error -= parse_chunk.size();
 
-			error_line = GetLineError(line_error,buffer_idx);
+			error_line = GetLineError(line_error, buffer_idx);
 
 			if (options.auto_detect) {
 				throw InvalidInputException("%s in column %s, at line %llu.\n\nParser "
