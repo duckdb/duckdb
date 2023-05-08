@@ -20,6 +20,7 @@ struct DBGenFunctionData : public TableFunctionData {
 
 	bool finished = false;
 	double sf = 0;
+	string catalog = INVALID_CATALOG;
 	string schema = DEFAULT_SCHEMA;
 	string suffix;
 	bool overwrite = false;
@@ -33,6 +34,8 @@ static duckdb::unique_ptr<FunctionData> DbgenBind(ClientContext &context, TableF
 	for (auto &kv : input.named_parameters) {
 		if (kv.first == "sf") {
 			result->sf = DoubleValue::Get(kv.second);
+		} else if (kv.first == "catalog") {
+			result->catalog = StringValue::Get(kv.second);
 		} else if (kv.first == "schema") {
 			result->schema = StringValue::Get(kv.second);
 		} else if (kv.first == "suffix") {
@@ -59,8 +62,9 @@ static void DbgenFunction(ClientContext &context, TableFunctionInput &data_p, Da
 	if (data.finished) {
 		return;
 	}
-	tpch::DBGenWrapper::CreateTPCHSchema(context, data.schema, data.suffix);
-	tpch::DBGenWrapper::LoadTPCHData(context, data.sf, data.schema, data.suffix, data.children, data.step);
+	tpch::DBGenWrapper::CreateTPCHSchema(context, data.catalog, data.schema, data.suffix);
+	tpch::DBGenWrapper::LoadTPCHData(context, data.sf, data.catalog, data.schema, data.suffix, data.children,
+	                                 data.step);
 
 	data.finished = true;
 }
@@ -158,6 +162,7 @@ void TPCHExtension::Load(DuckDB &db) {
 	TableFunction dbgen_func("dbgen", {}, DbgenFunction, DbgenBind);
 	dbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
 	dbgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
+	dbgen_func.named_parameters["catalog"] = LogicalType::VARCHAR;
 	dbgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
 	dbgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
 	dbgen_func.named_parameters["children"] = LogicalType::UINTEGER;
