@@ -129,6 +129,9 @@ public:
 	bool OnDiskFile(FileHandle &handle) override {
 		return false;
 	}
+	bool IsPipe(const string &filename) override {
+		return false;
+	}
 	string GetName() const override {
 		return "HTTPFileSystem";
 	}

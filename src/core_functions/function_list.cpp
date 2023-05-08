@@ -212,6 +212,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(MakeTimeFun),
 	DUCKDB_SCALAR_FUNCTION(MakeTimestampFun),
 	DUCKDB_SCALAR_FUNCTION(MapFun),
+	DUCKDB_SCALAR_FUNCTION(MapConcatFun),
 	DUCKDB_SCALAR_FUNCTION(MapEntriesFun),
 	DUCKDB_SCALAR_FUNCTION(MapExtractFun),
 	DUCKDB_SCALAR_FUNCTION(MapFromEntriesFun),
