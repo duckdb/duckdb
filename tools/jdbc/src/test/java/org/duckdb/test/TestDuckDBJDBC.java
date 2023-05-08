@@ -3442,13 +3442,13 @@ public class TestDuckDBJDBC {
                                                           .toFormatter()
                                                           .withResolverStyle(ResolverStyle.LENIENT);
 
-	static Map<String, Object> mapOf(Object... pairs) {
-		Map<String, Object> result = new HashMap<>(pairs.length / 2);
-		for (int i=0; i<pairs.length - 1; i+=2) {
-			result.put((String) pairs[i], pairs[i+1]);
-		}
-		return result;
-	}
+    static <K, V> Map<K, V> mapOf(Object... pairs) {
+        Map<K, V> result = new HashMap<>(pairs.length / 2);
+        for (int i = 0; i < pairs.length - 1; i += 2) {
+            result.put((K) pairs[i], (V) pairs[i + 1]);
+        }
+        return result;
+    }
 
     static Map<String, List<Object>> correct_answer_map = new HashMap<>();
     static {
