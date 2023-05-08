@@ -11,6 +11,7 @@ import java.time.LocalTime;
 import java.time.OffsetDateTime;
 import java.time.OffsetTime;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.UUID;
 
 public class DuckDBResultSetMetaData implements ResultSetMetaData {
