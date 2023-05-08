@@ -28,3 +28,33 @@ FROM read_parquet('../file.parquet', hive_partitioning=1, hive_types={'date':'da
 4	2020-02-12	18	51
 5	2020-02-12	18	19
 6	2020-02-12	24	25
+
+#	test with hive_partitioning=0
+query IIII
+select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=0) limit 1;
+----
+BIGINT	VARCHAR	BIGINT	VARCHAR
+
+#	test with hive_partitioning=1 (auto detected)
+query IIII
+select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1) limit 1;
+----
+VARCHAR	VARCHAR	BIGINT	VARCHAR
+
+#	test with hive_partitioning=1 (auto detected)
+query IIII
+select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color']) limit 1;
+----
+VARCHAR	VARCHAR	BIGINT	VARCHAR
+
+#	set hive_types as varchar,varchar
+query IIII
+select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types={'year':'varchar','month':'varchar'}) limit 1;
+----
+VARCHAR	VARCHAR	BIGINT	VARCHAR
+
+#	set hive_types as smallint,varchar
+query IIII
+select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types={'year':'smallint','month':'varchar'}) limit 1;
+----
+SMALLINT	VARCHAR	BIGINT	VARCHAR
