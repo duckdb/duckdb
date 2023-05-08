@@ -57,15 +57,12 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 	} else if (loption == "hive_partitioning") {
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
-		options.auto_detect_hive_types = options.hive_partitioning; // doesnt do anything yet //lars
 	} else if (loption == "union_by_name") {
 		options.union_by_name = BooleanValue::Get(val);
 	} else if (loption == "hive_types") {
 		options.hive_types = true;
 		// using 'hive_types' implies 'hive_partitioning'
 		options.hive_partitioning = true;
-		// turn off the auto_detection
-		options.auto_detect_hive_types = false; // doesnt do anything yet //lars
 
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException("'hive_types' only accepts a STRUCT(name : VARCHAR, ...), not %s",
@@ -368,7 +365,6 @@ void MultiFileReaderOptions::Serialize(Serializer &serializer) const {
 	writer.WriteField<bool>(auto_detect_hive_partitioning);
 	writer.WriteField<bool>(union_by_name);
 	writer.WriteField<bool>(hive_types);
-	writer.WriteField<bool>(auto_detect_hive_types);
 	// serialize hive_types_schema
 	writer.WriteField<uint32_t>((uint32_t)hive_types_schema.size());
 	for (auto &hive_type : hive_types_schema) {
@@ -386,7 +382,6 @@ MultiFileReaderOptions MultiFileReaderOptions::Deserialize(Deserializer &source)
 	result.auto_detect_hive_partitioning = reader.ReadRequired<bool>();
 	result.union_by_name = reader.ReadRequired<bool>();
 	result.hive_types = reader.ReadRequired<bool>();
-	result.auto_detect_hive_types = reader.ReadRequired<bool>();
 	// deserialize hive_types_schema
 	const uint32_t schema_size = reader.ReadRequired<uint32_t>();
 	for (idx_t i = 0; i < schema_size; i++) {

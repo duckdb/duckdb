@@ -24,7 +24,6 @@ struct MultiFileReaderOptions {
 	bool auto_detect_hive_partitioning = true;
 	bool union_by_name = false;
 	bool hive_types = false;
-	bool auto_detect_hive_types = false;
 	case_insensitive_map_t<LogicalType> hive_types_schema;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
@@ -40,9 +39,8 @@ struct MultiFileReaderOptions {
 		}
 		if (auto_detect_hive_partitioning) {
 			hive_partitioning = AutoDetectHivePartitioning(files);
-			auto_detect_hive_types = hive_partitioning;
 		}
-		if (hive_partitioning && auto_detect_hive_types && !hive_types) {
+		if (hive_partitioning && !hive_types) {
 			hive_types = AutoDetectHiveTypes(files.front(), context);
 		}
 	}
@@ -96,7 +94,7 @@ struct MultiFileReaderOptions {
 				partitions[part.front()] = part.back();
 			}
 		}
-		if (m.empty()) {
+		if (partitions.empty()) {
 			return false;
 		}
 
