@@ -21,6 +21,8 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.format.TextStyle;
 import java.time.temporal.ChronoField;
+import java.util.Map;
+import java.util.HashMap;
 import java.util.Calendar;
 import java.util.UUID;
 
@@ -57,59 +59,61 @@ class DuckDBVector {
     protected ByteBuffer constlen_data = null;
     protected Object[] varlen_data = null;
 
-    Object getObject(int idx) throws SQLException {
-        if (check_and_null(idx)) {
-            return null;
-        }
-        switch (duckdb_type) {
-        case BOOLEAN:
-            return getBoolean(idx);
-        case TINYINT:
-            return getByte(idx);
-        case SMALLINT:
-            return getShort(idx);
-        case INTEGER:
-            return getInt(idx);
-        case BIGINT:
-            return getLong(idx);
-        case HUGEINT:
-            return getHugeint(idx);
-        case UTINYINT:
-            return getUint8(idx);
-        case USMALLINT:
-            return getUint16(idx);
-        case UINTEGER:
-            return getUint32(idx);
-        case UBIGINT:
-            return getUint64(idx);
-        case FLOAT:
-            return getFloat(idx);
-        case DOUBLE:
-            return getDouble(idx);
-        case DECIMAL:
-            return getBigDecimal(idx);
-        case TIME:
-            return getLocalTime(idx);
-        case TIME_WITH_TIME_ZONE:
-            return getOffsetTime(idx);
-        case DATE:
-            return getLocalDate(idx);
-        case TIMESTAMP:
-        case TIMESTAMP_NS:
-        case TIMESTAMP_S:
-        case TIMESTAMP_MS:
-            return getTimestamp(idx);
-        case TIMESTAMP_WITH_TIME_ZONE:
-            return getOffsetDateTime(idx);
-        case JSON:
-            return getJsonObject(idx);
-        case BLOB:
-            return getBlob(idx);
-        case UUID:
-            return getUuid(idx);
-        case LIST:
-            return getArray(idx);
-        case STRUCT:
+	Object getObject(int idx) throws SQLException {
+		if (check_and_null(idx)) {
+			return null;
+		}
+		switch (duckdb_type) {
+			case BOOLEAN:
+				return getBoolean(idx);
+			case TINYINT:
+				return getByte(idx);
+			case SMALLINT:
+				return getShort(idx);
+			case INTEGER:
+				return getInt(idx);
+			case BIGINT:
+				return getLong(idx);
+			case HUGEINT:
+				return getHugeint(idx);
+			case UTINYINT:
+				return getUint8(idx);
+			case USMALLINT:
+				return getUint16(idx);
+			case UINTEGER:
+				return getUint32(idx);
+			case UBIGINT:
+				return getUint64(idx);
+			case FLOAT:
+				return getFloat(idx);
+			case DOUBLE:
+				return getDouble(idx);
+			case DECIMAL:
+				return getBigDecimal(idx);
+			case TIME:
+				return getLocalTime(idx);
+			case TIME_WITH_TIME_ZONE:
+				return getOffsetTime(idx);
+			case DATE:
+				return getLocalDate(idx);
+			case TIMESTAMP:
+			case TIMESTAMP_NS:
+			case TIMESTAMP_S:
+			case TIMESTAMP_MS:
+				return getTimestamp(idx);
+			case TIMESTAMP_WITH_TIME_ZONE:
+				return getOffsetDateTime(idx);
+			case JSON:
+				return getJsonObject(idx);
+			case BLOB:
+				return getBlob(idx);
+			case UUID:
+				return getUuid(idx);
+                        case MAP:
+                                return getMap(idx);
+			case LIST:
+				return getArray(idx);
+			case STRUCT:
 				return getStruct(idx);
 			default:
 				return getLazyString(idx);
@@ -224,6 +228,25 @@ class DuckDBVector {
             return (Array) varlen_data[idx];
         }
         throw new SQLFeatureNotSupportedException("getArray");
+    }
+
+    Map<Object, Object> getMap(int idx) throws SQLException {
+        if (check_and_null(idx)) {
+            return null;
+        }
+        if (!isType(DuckDBColumnType.MAP)) {
+            throw new SQLFeatureNotSupportedException("getMap");
+        }
+
+        Object[] entries = (Object[]) (((Array) varlen_data[idx]).getArray());
+        Map<Object, Object> result = new HashMap<>();
+
+        for (Object entry : entries) {
+            Object[] entry_val = ((Struct) entry).getAttributes();
+            result.put(entry_val[0], entry_val[1]);
+        }
+
+        return result;
     }
 
     Blob getBlob(int idx) throws SQLException {
