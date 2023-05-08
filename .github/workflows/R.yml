@@ -290,6 +290,7 @@ jobs:
           tpcds: 0 # compile error yay
           excel: 0
           icu : 0
+          httpfs: 0 # something about gzip
           out_of_tree_ext: 0
           openssl_path: C:/rtools43/x86_64-w64-mingw32.static.posix # not sure if this is required, there seems to be an openssl there
 
