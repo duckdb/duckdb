@@ -1,5 +1,5 @@
 # name: test/parquet/invalid_parquet.test
-# description: Test Parquet Reader with files on data/parquet-testing/
+# description: Test Parquet Reader on data/parquet-testing/invalid.parquet
 # group: [parquet]
 
 require parquet
