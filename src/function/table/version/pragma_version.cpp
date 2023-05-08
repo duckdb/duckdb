@@ -3,6 +3,8 @@
 
 #include <cstdint>
 
+#define DUCKDB_STRINGIFY(x) #x
+
 namespace duckdb {
 
 struct PragmaVersionData : public GlobalTableFunctionState {
@@ -86,7 +88,7 @@ string DuckDB::Platform() {
 #endif
 // this is used for the windows R builds which use a separate build environment
 #ifdef DUCKDB_OVERRIDE_PLATFORM_POSTFIX
-	postfix = DUCKDB_OVERRIDE_PLATFORM_POSTFIX;
+	postfix = DUCKDB_STRINGIFY(DUCKDB_OVERRIDE_PLATFORM_POSTFIX);
 #endif
 	return os + "_" + arch + postfix;
 }
