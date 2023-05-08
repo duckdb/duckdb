@@ -98,6 +98,9 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "count_if", {"l", nullptr}, "sum(if(l, 1, 0))"},
 	{DEFAULT_SCHEMA, "split_part", {"string", "delimiter", "position", nullptr}, "coalesce(string_split(string, delimiter)[position],'')"},
 
+//    {DEFAULT_SCHEMA, "list_intersect", {"l1", "l2", nullptr}, "list_value(l1) & list_value(l2)"},
+
+
 	// algebraic list aggregates
 	{DEFAULT_SCHEMA, "list_avg", {"l", nullptr}, "list_aggr(l, 'avg')"},
 	{DEFAULT_SCHEMA, "list_var_samp", {"l", nullptr}, "list_aggr(l, 'var_samp')"},
