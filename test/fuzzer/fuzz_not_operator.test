@@ -10,3 +10,7 @@ query I
 SELECT i FROM (select 1) tbl(i) WHERE ( 2060771621 != i + -2134619525 )
 ----
 1
+
+query I
+select i FROM (select 4195391146) tbl(i) WHERE ( 2060771621 != i + -2134619525)
+----
