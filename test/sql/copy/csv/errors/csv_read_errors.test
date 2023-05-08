@@ -5,14 +5,14 @@ SELECT * FROM read_csv(
     columns = {'0': 'INTEGER', '1': 'INTEGER', '3': 'VARCHAR'}, 
     ignore_errors=true);
 ----
-1	2	TEXT
-6	7	TEXT
+1	2	AAA
+6	7	CCC
 
 
-query IIII
-FROM read_csv_errors()
+query IIIII
+FROM read_csv_error_log()
 ----
-2	1	Could not convert string 'TEXT' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv
+2	1	BBB	Could not convert string 'BBB' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv
 
 # Test with multiple files
 query III
@@ -21,14 +21,35 @@ SELECT * FROM read_csv(
     columns = {'0': 'INTEGER', '1': 'INTEGER', '3': 'VARCHAR'}, 
     ignore_errors=true);
 ----
-1		2	TEXT
-6		7	TEXT
-1		2	TEXT
-4		5	9
+1	2	AAA
+6	7	CCC
+1	2	DDD
+4	5	9
 
 
-query IIII
-FROM read_csv_errors()
+query IIIII
+FROM read_csv_error_log()
 ----
-2	1	Could not convert string 'TEXT' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv
-4	0	Could not convert string 'TEXT' to INT32	test/sql/copy/csv/data/error/mismatch/bad2.csv
+2	1	BBB	Could not convert string 'BBB' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv
+4	0	EEE	Could not convert string 'EEE' to INT32	test/sql/copy/csv/data/error/mismatch/bad2.csv
+
+# Set limit
+statement ok
+SET csv_error_log_size = 1;
+
+query III
+SELECT * FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/*.csv', 
+    columns = {'0': 'INTEGER', '1': 'INTEGER', '3': 'VARCHAR'}, 
+    ignore_errors=true);
+----
+1	2	AAA
+6	7	CCC
+1	2	DDD
+4	5	9
+
+# We should now have only one error logged
+query IIIII
+FROM read_csv_error_log()
+----
+2	1	BBB	Could not convert string 'BBB' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv

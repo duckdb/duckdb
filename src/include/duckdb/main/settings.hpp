@@ -473,10 +473,10 @@ struct UsernameSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
-struct MaxCSVErrorsSetting {
-	static constexpr const char *Name = "max_csv_errors";
+struct CSVErrorLogSizeSetting {
+	static constexpr const char *Name = "csv_error_log_size";
 	static constexpr const char *Description =
-	    "The maximum numer of csv errors to log when reading with 'ignored_errors' set to true";
+	    "The maximum numer of csv parsing errors to log when executing csv_read with 'ignored_errors' set to true";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);

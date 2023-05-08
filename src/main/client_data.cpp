@@ -11,6 +11,7 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/function/table/read_csv_error_log.hpp"
 
 namespace duckdb {
 
@@ -23,6 +24,7 @@ ClientData::ClientData(ClientContext &context) : catalog_search_path(make_uniq<C
 	random_engine = make_uniq<RandomEngine>();
 	file_opener = make_uniq<ClientContextFileOpener>(context);
 	temporary_objects->Initialize();
+	read_csv_error_log = make_uniq<ReadCSVErrorLog>();
 }
 ClientData::~ClientData() {
 }

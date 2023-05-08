@@ -1,5 +1,5 @@
 #include "duckdb/function/table/read_csv.hpp"
-#include "duckdb/function/table/read_csv_errors.hpp"
+#include "duckdb/function/table/read_csv_error_log.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -537,7 +537,7 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
                                                                   TableFunctionInitInput &input) {
 	// TODO: Not sure if this is the best place to reset, but it has to work for multiple files
 	// and cant be in the bind.
-	context.client_data->csv_ignored_errors.clear();
+	context.client_data->read_csv_error_log->errors.clear();
 
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
 	if (bind_data.files.empty()) {
@@ -1073,7 +1073,7 @@ unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, const string &ta
 void BuiltinFunctions::RegisterReadFunctions() {
 	CSVCopyFunction::RegisterFunction(*this);
 	ReadCSVTableFunction::RegisterFunction(*this);
-	ReadCSVErrorsTableFunction::RegisterFunction(*this);
+	ReadCSVErrorLogTableFunction::RegisterFunction(*this);
 	auto &config = DBConfig::GetConfig(*transaction.db);
 	config.replacement_scans.emplace_back(ReadCSVReplacement);
 }

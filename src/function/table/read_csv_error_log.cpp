@@ -1,4 +1,4 @@
-#include "duckdb/function/table/read_csv_errors.hpp"
+#include "duckdb/function/table/read_csv_error_log.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -20,6 +20,9 @@ static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindIn
     names.push_back("column_number");
 
     return_types.push_back(LogicalType::VARCHAR);
+    names.push_back("parsed_value");
+
+    return_types.push_back(LogicalType::VARCHAR);
     names.push_back("error");
 
     return_types.push_back(LogicalType::VARCHAR);
@@ -34,17 +37,18 @@ unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionI
 
 static void Execute(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
     auto &state = input.global_state->Cast<State>();
-    idx_t total = context.client_data->csv_ignored_errors.size();
+    idx_t total = context.client_data->read_csv_error_log->errors.size();
     idx_t count = 0;
     auto next_idx = MinValue<idx_t>(state.cursor + STANDARD_VECTOR_SIZE, total);
 
     for (idx_t error_idx = state.cursor; error_idx < next_idx; error_idx++) {
-        auto &err = context.client_data->csv_ignored_errors[error_idx];
+        auto &err = context.client_data->read_csv_error_log->errors[error_idx];
 
         output.SetValue(0, count, Value::BIGINT(err.line));
         output.SetValue(1, count, Value::BIGINT(err.column));
-        output.SetValue(2, count, Value(err.error));
-        output.SetValue(3, count, Value(err.file_name));
+        output.SetValue(2, count, Value(err.parsed_value));
+        output.SetValue(3, count, Value(err.error));
+        output.SetValue(4, count, Value(err.file_name));
         count++;
     }
 
@@ -52,8 +56,8 @@ static void Execute(ClientContext &context, TableFunctionInput &input, DataChunk
     output.SetCardinality(count);
 }
 
-void ReadCSVErrorsTableFunction::RegisterFunction(BuiltinFunctions &set) {
-    set.AddFunction(TableFunction("read_csv_errors", {}, Execute, Bind, Init));
+void ReadCSVErrorLogTableFunction::RegisterFunction(BuiltinFunctions &set) {
+    set.AddFunction(TableFunction("read_csv_error_log", {}, Execute, Bind, Init));
 }
 
 }
