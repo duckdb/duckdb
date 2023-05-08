@@ -112,13 +112,21 @@ public:
 	                            ExpressionExecutor &defaults_executor, DataChunk &result);
 
 protected:
+	idx_t HandleGlobalConflicts(TableCatalogEntry &table, ExecutionContext &context, InsertLocalState &lstate,
+	                            DataTable &data_table) const;
+	idx_t HandleLocalConflicts(TableCatalogEntry &table, ExecutionContext &context, InsertLocalState &lstate,
+	                           DataTable &data_table) const;
 	void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
 	                                    ClientContext &client) const;
 	//! Returns the amount of updated tuples
+	void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table, Vector &row_ids,
+	                       DataChunk &result) const;
 	idx_t OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertLocalState &lstate) const;
-	idx_t PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table,
-	                              Vector &row_ids) const;
-	void RegisterUpdatedRows(InsertLocalState &lstate, const Vector &row_ids, idx_t count) const;
+	idx_t PerformGlobalOnConflictAction(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table,
+	                                    Vector &row_ids) const;
+	idx_t PerformLocalOnConflictAction(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table,
+	                                   Vector &row_ids) const;
+	void RegisterUpdatedRows(InsertLocalState &lstate, const Vector &row_ids, idx_t count, bool global) const;
 };
 
 } // namespace duckdb

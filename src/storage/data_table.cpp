@@ -542,8 +542,8 @@ bool HasUniqueIndexes(TableIndexList &list) {
 	return has_unique_index;
 }
 
-static void VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &context, DataChunk &chunk,
-                                ConflictManager *conflict_manager) {
+void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &context, DataChunk &chunk,
+                                    ConflictManager *conflict_manager) {
 	//! check whether or not the chunk can be inserted into the indexes
 	if (conflict_manager) {
 		// This is only provided when a ON CONFLICT clause was provided
@@ -558,7 +558,7 @@ static void VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &context,
 		conflict_manager->SetMode(ConflictManagerMode::SCAN);
 		conflict_manager->SetIndexCount(matching_indexes);
 		// First we verify only the indexes that match our conflict target
-		unordered_set<Index*> checked_indexes;
+		unordered_set<Index *> checked_indexes;
 		indexes.Scan([&](Index &index) {
 			if (!index.IsUnique()) {
 				return false;
@@ -638,59 +638,7 @@ void DataTable::VerifyAppendConstraints(TableCatalogEntry &table, ClientContext 
 			break;
 		}
 		case ConstraintType::UNIQUE: {
-<<<<<<< HEAD
-			//! check whether or not the chunk can be inserted into the indexes
-			if (conflict_manager) {
-				// This is only provided when a ON CONFLICT clause was provided
-				idx_t matching_indexes = 0;
-				auto &conflict_info = conflict_manager->GetConflictInfo();
-				// First we figure out how many indexes match our conflict target
-				// So we can optimize accordingly
-				info->indexes.Scan([&](Index &index) {
-					matching_indexes += conflict_info.ConflictTargetMatches(index);
-					return false;
-				});
-				conflict_manager->SetMode(ConflictManagerMode::SCAN);
-				conflict_manager->SetIndexCount(matching_indexes);
-				// First we verify only the indexes that match our conflict target
-				unordered_set<Index*> conflict_target;
-				info->indexes.Scan([&](Index &index) {
-					if (!index.IsUnique()) {
-						return false;
-					}
-					if (conflict_info.ConflictTargetMatches(index)) {
-						conflict_target.insert(&index);
-						index.VerifyAppend(chunk, *conflict_manager);
-					}
-					return false;
-				});
-
-				conflict_manager->SetMode(ConflictManagerMode::THROW);
-				// Then we scan the other indexes, throwing if they cause conflicts on tuples that were not found during
-				// the scan
-				info->indexes.Scan([&](Index &index) {
-					if (!index.IsUnique()) {
-						return false;
-					}
-					if (conflict_target.count(&index)) {
-						return false;
-					}
-					index.VerifyAppend(chunk, *conflict_manager);
-					return false;
-				});
-			} else {
-				// Only need to verify that no unique constraints are violated
-				info->indexes.Scan([&](Index &index) {
-					if (!index.IsUnique()) {
-						return false;
-					}
-					index.VerifyAppend(chunk);
-					return false;
-				});
-			}
-=======
 			// These were handled earlier on
->>>>>>> upsert_explicit_index
 			break;
 		}
 		case ConstraintType::FOREIGN_KEY: {
