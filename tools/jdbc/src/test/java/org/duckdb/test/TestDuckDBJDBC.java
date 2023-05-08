@@ -3312,7 +3312,7 @@ public class TestDuckDBJDBC {
              PreparedStatement statement = connection.prepareStatement("select map([100, 5], ['a', 'b'])")) {
             ResultSet rs = statement.executeQuery();
             assertTrue(rs.next());
-            assertEquals(rs.getObject(1), "{100=a, 5=b}");
+            assertEquals(rs.getObject(1), mapOf(100, "a", 5, "b"));
         }
     }
 
