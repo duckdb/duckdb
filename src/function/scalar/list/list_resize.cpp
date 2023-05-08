@@ -63,7 +63,7 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 	optional_ptr<Vector> default_vector;
 	if (args.ColumnCount() == 3) {
 		if (child->GetType() != args.data[2].GetType() && args.data[2].GetType() != LogicalTypeId::SQLNULL) {
-			throw InvalidInputException("Default value must be of the same type as the list, or NULL");
+			throw InvalidInputException("Default value must be of the same type as the list or NULL");
 		}
 		default_vector = &args.data[2];
 		default_vector->ToUnifiedFormat(count, default_data);

@@ -152,7 +152,7 @@ SELECT list_resize([1, 2], 3, NULL)
 statement error
 select list_resize([1, 2, 3], 2, 'a');
 ----
-Invalid Input Error: Default value must be of the same type as the list, or NULL
+Invalid Input Error: Default value must be of the same type as the list or NULL
 
 # Struct Default Values
 query I
