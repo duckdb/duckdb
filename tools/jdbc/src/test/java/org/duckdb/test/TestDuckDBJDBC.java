@@ -3341,7 +3341,7 @@ public class TestDuckDBJDBC {
                 assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
 
                 assertTrue(rs.next());
-                assertEquals(rs.getObject(1), "{'hello': foo, 'world': bar}");
+                assertEquals(rs.getObject(1), "{world=bar, hello=foo}");
             }
         }
     }
