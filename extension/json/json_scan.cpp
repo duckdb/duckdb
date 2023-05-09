@@ -379,14 +379,33 @@ void JSONScanLocalState::ParseJSON(char *const json_start, const idx_t json_size
 	yyjson_doc *doc;
 	yyjson_read_err err;
 	const auto read_flag = // If we return strings, we cannot parse INSITU
-	    bind_data.type == JSONScanType::READ_JSON_OBJECTS ? JSONCommon::READ_FLAG : JSONCommon::READ_INSITU_FLAG;
+	    bind_data.type == JSONScanType::READ_JSON_OBJECTS ? JSONCommon::READ_STOP_FLAG : JSONCommon::READ_INSITU_FLAG;
 	doc = JSONCommon::ReadDocumentUnsafe(json_start, remaining, read_flag, allocator.GetYYAlc(), &err);
 	if (!bind_data.ignore_errors && err.code != YYJSON_READ_SUCCESS) {
 		current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, err);
 	}
-	lines_or_objects_in_buffer++;
-	// TODO if we parse more than json_size, throw error
 
+	// We parse with YYJSON_STOP_WHEN_DONE, so we need to check this by hand
+	const auto read_size = yyjson_doc_get_read_size(doc);
+	if (read_size > json_size) {
+		// Can't go past the boundary, even with ignore_errors
+		err.code = YYJSON_READ_ERROR_UNEXPECTED_END;
+		err.msg = "unexpected end of data";
+		err.pos = json_size;
+		current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, err);
+	} else if (!bind_data.ignore_errors && read_size < json_size) {
+		idx_t off = read_size;
+		idx_t rem = json_size;
+		SkipWhitespace(json_start, off, rem);
+		if (off != rem) { // Between end of document and boundary should be whitespace only
+			err.code = YYJSON_READ_ERROR_UNEXPECTED_CONTENT;
+			err.msg = "unexpected content after document";
+			err.pos = read_size;
+			current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, err);
+		}
+	}
+
+	lines_or_objects_in_buffer++;
 	if (!doc) {
 		values[scan_count] = nullptr;
 		return;
@@ -404,11 +423,12 @@ static pair<JSONFormat, JSONRecordType> DetectFormatAndRecordType(const char *co
 	auto line_end = NextNewline(buffer_ptr, buffer_size);
 	if (line_end != nullptr) {
 		idx_t line_size = line_end - buffer_ptr;
+		SkipWhitespace(buffer_ptr, line_size, buffer_size);
 
 		yyjson_read_err error;
 		auto doc = JSONCommon::ReadDocumentUnsafe((char *)buffer_ptr, line_size, JSONCommon::READ_FLAG, alc, &error);
-		if (error.code == YYJSON_READ_SUCCESS) {
-			if (yyjson_is_arr(doc->root)) {
+		if (error.code == YYJSON_READ_SUCCESS) { // We successfully read the line
+			if (yyjson_is_arr(doc->root) && line_size == buffer_size) {
 				// It's just one array, let's actually assume ARRAY, not NEWLINE_DELIMITED
 				if (yyjson_arr_size(doc->root) == 0 || yyjson_is_obj(yyjson_arr_get(doc->root, 0))) {
 					// Either an empty array (assume records), or an array of objects
@@ -442,8 +462,8 @@ static pair<JSONFormat, JSONRecordType> DetectFormatAndRecordType(const char *co
 
 	// It's definitely an ARRAY, but now we have to figure out if there's more than one top-level array
 	yyjson_read_err error;
-	auto doc = JSONCommon::ReadDocumentUnsafe((char *)buffer_ptr + buffer_offset, remaining, JSONCommon::READ_FLAG, alc,
-	                                          &error);
+	auto doc = JSONCommon::ReadDocumentUnsafe((char *)buffer_ptr + buffer_offset, remaining, JSONCommon::READ_STOP_FLAG,
+	                                          alc, &error);
 	if (error.code == YYJSON_READ_SUCCESS) {
 		// We successfully read something!
 		buffer_offset += yyjson_doc_get_read_size(doc);
@@ -677,7 +697,8 @@ void JSONScanLocalState::SkipOverArrayStart() {
 		return; // Empty file
 	}
 	if (buffer_ptr[buffer_offset] != '[') {
-		throw InvalidInputException("Expected top-level JSON array with format='array', but first character is '%c'",
+		throw InvalidInputException("Expected top-level JSON array with format='array', but first character is '%c'"
+		                            "\n Try setting format='auto' or format='newline_delimited'",
 		                            buffer_ptr[buffer_offset]);
 	}
 	SkipWhitespace(buffer_ptr, ++buffer_offset, buffer_size);

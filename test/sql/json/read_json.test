@@ -124,6 +124,46 @@ SELECT * FROM 'data/json/example_n.ndjson'
 4	Broadcast News
 5	Raising Arizona
 
+# we can detect at varying levels, level 0 is just JSON
+query I
+SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=0)
+----
+{"id":1,"name":["O","Brother,","Where","Art","Thou?"]}
+{"id":2,"name":["Home","for","the","Holidays"]}
+{"id":3,"name":["The","Firm"]}
+{"id":4,"name":["Broadcast","News"]}
+{"id":5,"name":["Raising","Arizona"]}
+
+# at level one we get JSON and JSON
+query II
+SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=1)
+----
+1	["O","Brother,","Where","Art","Thou?"]
+2	["Home","for","the","Holidays"]
+3	["The","Firm"]
+4	["Broadcast","News"]
+5	["Raising","Arizona"]
+
+# at level 2 we get BIGINT and JSON[]
+query II
+SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=2)
+----
+1	["O", "Brother,", "Where", "Art", "Thou?"]
+2	["Home", "for", "the", "Holidays"]
+3	["The", "Firm"]
+4	["Broadcast", "News"]
+5	["Raising", "Arizona"]
+
+# at level 3 it's fully detected, and we get BIGINT and VARCHAR[]
+query II
+SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=3)
+----
+1	[O, Brother,, Where, Art, Thou?]
+2	[Home, for, the, Holidays]
+3	[The, Firm]
+4	[Broadcast, News]
+5	[Raising, Arizona]
+
 # we can detect lists too
 query III
 SELECT id, typeof(name), unnest(name) FROM 'data/json/with_list.json'
@@ -144,9 +184,9 @@ SELECT id, typeof(name), unnest(name) FROM 'data/json/with_list.json'
 5	VARCHAR[]	Raising
 5	VARCHAR[]	Arizona
 
-# with depth 1 we don't bother detecting inside of the list - defaults to JSON
+# with depth 2 we don't bother detecting inside of the list - defaults to JSON
 query III
-SELECT id, typeof(name), unnest(name) FROM read_json_auto('data/json/with_list.json', maximum_depth=1)
+SELECT id, typeof(name), unnest(name) FROM read_json_auto('data/json/with_list.json', maximum_depth=2)
 ----
 1	JSON[]	"O"
 1	JSON[]	"Brother,"
@@ -166,7 +206,7 @@ SELECT id, typeof(name), unnest(name) FROM read_json_auto('data/json/with_list.j
 
 # with depth 0 we don't bother detecting anything, everything defaults to JSON (even the "id" column in this case)
 query II
-SELECT typeof(id), typeof(name) FROM read_json_auto('data/json/with_list.json', maximum_depth=0)
+SELECT typeof(id), typeof(name) FROM read_json_auto('data/json/with_list.json', maximum_depth=1)
 ----
 JSON	JSON
 JSON	JSON

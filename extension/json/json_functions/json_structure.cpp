@@ -521,7 +521,7 @@ static LogicalType StructureToTypeString(const JSONStructureNode &node) {
 
 LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
                                            idx_t depth) {
-	if (depth > max_depth) {
+	if (depth >= max_depth) {
 		return JSONCommon::JSONType();
 	}
 	if (node.descriptions.empty()) {
