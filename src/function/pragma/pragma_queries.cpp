@@ -23,6 +23,7 @@ string PragmaShowTables(ClientContext &context, const FunctionParameters &parame
 	schema = (schema == INVALID_SCHEMA) ? DEFAULT_SCHEMA : schema; // NOLINT
 
 	auto where_clause = StringUtil::Format("where ((database_name = '%s') and (schema_name = '%s'))", catalog, schema);
+	// clang-format off
 	auto pragma_query = StringUtil::Format(R"EOF(
 	with "tables" as
 	(
@@ -41,6 +42,7 @@ string PragmaShowTables(ClientContext &context, const FunctionParameters &parame
 	SELECT "name"
 	FROM db_objects
 	ORDER BY "name";)EOF", where_clause, where_clause, where_clause);
+	// clang-format on
 
 	return pragma_query;
 }
