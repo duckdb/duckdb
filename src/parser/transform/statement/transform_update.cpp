@@ -26,7 +26,7 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGNo
 	if (stmt->withClause) {
 		TransformCTEInternal(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), result->cte_map,
 		                     &materialized_ctes);
-		if (materialized_ctes.size() != 0) {
+		if (!materialized_ctes.empty()) {
 			throw NotImplementedException("Materialized CTEs are not implemented for delete.");
 		}
 	}

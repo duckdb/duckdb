@@ -18,6 +18,7 @@
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/parser/query_node/cte_node.hpp"
 
 #include "pg_definitions.hpp"
 #include "nodes/parsenodes.hpp"
@@ -35,7 +36,6 @@ class OnConflictInfo;
 class UpdateSetInfo;
 struct ParserOptions;
 struct PivotColumn;
-class CTENode;
 
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
