@@ -1039,6 +1039,9 @@ void ART::InitializeMerge(ARTFlags &flags) {
 bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 
 	auto &other_art = other_index.Cast<ART>();
+	if (!other_art.tree->IsSet()) {
+		return true;
+	}
 
 	if (tree->IsSet()) {
 		//  fully deserialize other_index, and traverse it to increment its buffer IDs
