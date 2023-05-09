@@ -4,8 +4,6 @@
 
 require json
 
-mode skip
-
 statement ok
 PRAGMA enable_verification
 
@@ -222,8 +220,6 @@ SELECT * FROM jsons
 ["duck"]
 {"duck":42}
 
-mode unskip
-
 # test_all_types roundtrip, excludes:
 # 1. varchar (special case - input is not valid JSON)
 # 2. blob - contains '\0'
@@ -365,3 +361,28 @@ query I nosort q0
 select * from roundtrip
 ----
 
+
+# also check that we handle vector types properly
+foreach all_flat true false
+
+query I nosort q1
+select v from test_vector_types(null::int[], ${all_flat}) tbl(v)
+----
+
+
+query I nosort q1
+select v::JSON::INT[] from test_vector_types(null::int[], ${all_flat}) tbl(v)
+----
+
+
+query I nosort q2
+select v from test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), ${all_flat}) tbl(v)
+----
+
+
+query I nosort q2
+select v::JSON::ROW(i INTEGER, j VARCHAR) from test_vector_types(NULL::ROW(i INTEGER, j VARCHAR), ${all_flat}) tbl(v)
+----
+
+
+endloop
