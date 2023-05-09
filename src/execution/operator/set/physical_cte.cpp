@@ -42,13 +42,12 @@ unique_ptr<GlobalSinkState> PhysicalCTE::GetGlobalSinkState(ClientContext &conte
 	return make_uniq<CTEState>(context, *this);
 }
 
-SinkResultType PhysicalCTE::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                 DataChunk &input) const {
-	auto &gstate = state.Cast<CTEState>();
+SinkResultType PhysicalCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<CTEState>();
 	if(!gstate.finished_scan) {
-		working_table->Append(input);
+		working_table->Append(chunk);
 	} else {
-		gstate.intermediate_table.Append(input);
+		gstate.intermediate_table.Append(chunk);
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -56,8 +55,7 @@ SinkResultType PhysicalCTE::Sink(ExecutionContext &context, GlobalSinkState &sta
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-void PhysicalCTE::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                   LocalSourceState &lstate) const {
+SourceResultType PhysicalCTE::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<CTEState>();
 	if (!gstate.initialized) {
 		gstate.intermediate_table.InitializeScan(gstate.scan_state);
@@ -70,6 +68,8 @@ void PhysicalCTE::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 	}
 
 	gstate.intermediate_table.Scan(gstate.scan_state, chunk);
+
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 void PhysicalCTE::ExecuteRecursivePipelines(ExecutionContext &context) const {

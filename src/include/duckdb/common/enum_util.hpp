@@ -415,7 +415,7 @@ template <>
 const char *EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value);
 
 template <>
-const char *EnumUtil::ToChars<CTEMaterialized>(CTEMaterialize value);
+const char *EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value);
 
 template <>
 const char *EnumUtil::ToChars<OutputStream>(OutputStream value);
