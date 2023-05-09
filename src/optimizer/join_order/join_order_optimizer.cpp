@@ -152,7 +152,6 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 		if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
 			auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
 			auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
-			auto condition = join.condition.get();
 			if (rhs_cardinality > lhs_cardinality * 2) {
 				join.join_type = JoinType::RIGHT;
 				std::swap(join.children[0], join.children[1]);
