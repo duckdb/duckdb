@@ -300,6 +300,7 @@ jobs:
       - name: Install R package
         shell: bash
         run: |
+          R -e 'install.packages("DBI", repos = "https://cloud.r-project.org")'
           cd tools/rpkg
           ./configure
           R CMD build .
