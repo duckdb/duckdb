@@ -37,7 +37,7 @@ public:
 	vector<idx_t> right_projection_map;
 	//! Join Keys statistics (optional)
 	vector<unique_ptr<BaseStatistics>> join_stats;
-
+	
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
 	void Serialize(FieldWriter &writer) const override;
