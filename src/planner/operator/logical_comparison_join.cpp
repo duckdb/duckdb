@@ -2,7 +2,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
-
+#include "duckdb/common/enum_util.hpp"
 namespace duckdb {
 
 LogicalComparisonJoin::LogicalComparisonJoin(JoinType join_type, LogicalOperatorType logical_type)
@@ -10,7 +10,7 @@ LogicalComparisonJoin::LogicalComparisonJoin(JoinType join_type, LogicalOperator
 }
 
 string LogicalComparisonJoin::ParamsToString() const {
-	string result = JoinTypeToString(join_type);
+	string result = EnumUtil::ToChars(join_type);
 	for (auto &condition : conditions) {
 		result += "\n";
 		auto expr =

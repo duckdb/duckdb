@@ -39,9 +39,6 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, Bu
 	Initialize(requested_types);
 }
 
-BufferedCSVReader::~BufferedCSVReader() {
-}
-
 enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
 
 static bool StartsWithNumericDate(string &separator, const string &value) {

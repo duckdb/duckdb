@@ -126,6 +126,10 @@ extension VectorElementDataDecoder {
       element.unwrapNull()
     }
     
+    func decode(_ type: Int.Type) throws -> Int {
+      try attemptDecode { try element.unwrap(type) }
+    }
+    
     func decode(_ type: Int8.Type) throws -> Int8 {
       try attemptDecode { try element.unwrap(type) }
     }
@@ -139,6 +143,10 @@ extension VectorElementDataDecoder {
     }
     
     func decode(_ type: Int64.Type) throws -> Int64 {
+      try attemptDecode { try element.unwrap(type) }
+    }
+    
+    func decode(_ type: UInt.Type) throws -> UInt {
       try attemptDecode { try element.unwrap(type) }
     }
     

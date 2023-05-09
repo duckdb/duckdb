@@ -216,15 +216,17 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 	    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
 		    auto data = (char *)(input.GetData());
 		    auto length = input.GetSize();
-		    yyjson_read_err error;
 
+		    yyjson_read_err error;
 		    auto doc = JSONCommon::ReadDocumentUnsafe(data, length, JSONCommon::READ_FLAG, alc, &error);
 
 		    if (!doc) {
-			    HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error),
-			                                 parameters.error_message);
 			    mask.SetInvalid(idx);
-			    success = false;
+			    if (success) {
+				    HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error),
+				                                 parameters.error_message);
+				    success = false;
+			    }
 		    }
 		    return input;
 	    });

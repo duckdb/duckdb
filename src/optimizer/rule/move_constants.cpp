@@ -55,6 +55,9 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<refe
 		}
 		auto result_value = Value::HUGEINT(outer_value);
 		if (!result_value.DefaultTryCastAs(constant_type)) {
+			if (comparison.type != ExpressionType::COMPARE_EQUAL) {
+				return nullptr;
+			}
 			// if the cast is not possible then the comparison is not possible
 			// for example, if we have x + 5 = 3, where x is an unsigned number, we will get x = -2
 			// since this is not possible we can remove the entire branch here

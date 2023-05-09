@@ -297,8 +297,8 @@ void LimitPercentModifier::Serialize(FieldWriter &writer) const {
 
 void LimitPercentModifier::FormatSerialize(FormatSerializer &serializer) const {
 	ResultModifier::FormatSerialize(serializer);
-	serializer.WriteProperty("limit", limit);
-	serializer.WriteProperty("offset", offset);
+	serializer.WriteOptionalProperty("limit", limit);
+	serializer.WriteOptionalProperty("offset", offset);
 }
 
 unique_ptr<ResultModifier> LimitPercentModifier::Deserialize(FieldReader &reader) {

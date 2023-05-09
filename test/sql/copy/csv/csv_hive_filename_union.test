@@ -48,7 +48,7 @@ select part, filename.replace('\', '/').split('/')[-2], a, b from read_csv_auto(
 2	part=2	99	world
 
 query II
-select * exclude (filename) from read_csv_auto('data/csv/hive-partitioning/mismatching_types/*/*.csv', HEADER=1, FILENAME=1, UNION_BY_NAME=1)  order by 1
+select * exclude (filename) from read_csv_auto('data/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=0, HEADER=1, FILENAME=1, UNION_BY_NAME=1)  order by 1
 ----
 99	world
 xxx	42

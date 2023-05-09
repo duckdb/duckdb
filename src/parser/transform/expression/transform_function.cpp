@@ -1,4 +1,4 @@
-#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
@@ -305,8 +305,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		auto arg_expr = children[0].get();
 		auto &order_by = order_bys->orders[0];
 		if (arg_expr->Equals(order_by.expression.get())) {
-			auto sense = make_uniq<ConstantExpression>(EnumSerializer::EnumToString(order_by.type));
-			auto nulls = make_uniq<ConstantExpression>(EnumSerializer::EnumToString(order_by.null_order));
+			auto sense = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.type));
+			auto nulls = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.null_order));
 			order_bys = nullptr;
 			auto unordered = make_uniq<FunctionExpression>(catalog, schema, lowercase_name.c_str(), std::move(children),
 			                                               std::move(filter_expr), std::move(order_bys),

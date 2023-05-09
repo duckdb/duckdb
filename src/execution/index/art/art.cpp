@@ -879,7 +879,11 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 	case VerifyExistenceType::APPEND: {
 		// APPEND to PK/UNIQUE table, but node/key already exists in PK/UNIQUE table
 		string type = IsPrimary() ? "primary key" : "unique";
-		return StringUtil::Format("Duplicate key \"%s\" violates %s constraint", key_name, type);
+		return StringUtil::Format(
+		    "Duplicate key \"%s\" violates %s constraint. "
+		    "If this is an unexpected constraint violation please double "
+		    "check with the known index limitations section in our documentation (docs - sql - indexes).",
+		    key_name, type);
 	}
 	case VerifyExistenceType::APPEND_FK: {
 		// APPEND_FK to FK table, node/key does not exist in PK/UNIQUE table
@@ -1035,6 +1039,9 @@ void ART::InitializeMerge(ARTFlags &flags) {
 bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 
 	auto &other_art = other_index.Cast<ART>();
+	if (!other_art.tree->IsSet()) {
+		return true;
+	}
 
 	if (tree->IsSet()) {
 		//  fully deserialize other_index, and traverse it to increment its buffer IDs
