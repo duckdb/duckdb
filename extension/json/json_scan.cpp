@@ -448,20 +448,17 @@ static pair<JSONFormat, JSONRecordType> DetectFormatAndRecordType(const char *co
 		// We successfully read something!
 		buffer_offset += yyjson_doc_get_read_size(doc);
 		remaining = buffer_size - buffer_offset;
+		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
 
-		// Check if there's more than one array
-		JSONCommon::ReadDocumentUnsafe((char *)buffer_ptr + buffer_offset, remaining, JSONCommon::READ_FLAG, alc,
-		                               &error);
-		if (error.code == YYJSON_READ_ERROR_EMPTY_CONTENT) {
-			// Just one array, check what's in there
-			if (yyjson_is_obj(doc->root)) {
-				return make_pair(JSONFormat::ARRAY, JSONRecordType::RECORDS);
-			} else {
-				return make_pair(JSONFormat::ARRAY, JSONRecordType::VALUES);
-			}
-		} else {
-			// More than one array
+		if (remaining != 0) { // There's more
 			return make_pair(JSONFormat::UNSTRUCTURED, JSONRecordType::VALUES);
+		}
+
+		// Just one array, check what's in there
+		if (yyjson_is_obj(doc->root)) {
+			return make_pair(JSONFormat::ARRAY, JSONRecordType::RECORDS);
+		} else {
+			return make_pair(JSONFormat::ARRAY, JSONRecordType::VALUES);
 		}
 	}
 
