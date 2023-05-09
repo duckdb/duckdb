@@ -74,10 +74,12 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
                                                  vector<LogicalType> &expected_types) {
 	auto bind_data = make_uniq<JSONScanData>();
+	bind_data->type = JSONScanType::READ_JSON;
+	bind_data->options.record_type = JSONRecordType::RECORDS;
+	bind_data->options.format = JSONFormat::NEWLINE_DELIMITED;
 
 	bind_data->files.emplace_back(info.file_path);
 	bind_data->names = expected_names;
-	bind_data->options.record_type = JSONRecordType::RECORDS;
 
 	auto it = info.options.find("dateformat");
 	if (it == info.options.end()) {
@@ -99,7 +101,7 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
 	bind_data->transform_options.delay_error = true;
 
 	it = info.options.find("auto_detect");
-	if (it != info.options.end()) {
+	if (it != info.options.end() && BooleanValue::Get(it->second.back())) {
 		// Wrap this with auto detect true/false so we can detect date/timestamp formats
 		// Note that auto_detect for names/types is not actually true because these are already know when we COPY
 		bind_data->InitializeFormats(true);
@@ -108,7 +110,10 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
 		bind_data->auto_detect = true;
 	} else {
 		bind_data->InitializeFormats();
+		bind_data->transform_options.date_format_map = &bind_data->date_format_map;
 	}
+
+	bind_data->InitializeReaders(context);
 
 	return std::move(bind_data);
 }

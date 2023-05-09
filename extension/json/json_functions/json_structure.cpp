@@ -93,7 +93,7 @@ bool JSONStructureNode::ContainsVarchar() const {
 }
 
 void JSONStructureNode::InitializeCandidateTypes(const idx_t max_depth, idx_t depth) {
-	if (depth > max_depth) {
+	if (depth >= max_depth) {
 		return;
 	}
 	if (descriptions.size() != 1) {

@@ -26,9 +26,9 @@ select typeof(d), d from '__TEST_DIR__/my_file.json'
 ----
 DATE	1996-03-27
 
-# forced format read_json
+# forced format read_ndjson
 query II
-select typeof(d), d from read_json('__TEST_DIR__/my_file.json', columns={d: 'DATE'}, dateformat=${date_format})
+select typeof(d), d from read_ndjson('__TEST_DIR__/my_file.json', columns={d: 'DATE'}, dateformat=${date_format})
 ----
 DATE	1996-03-27
 
@@ -61,9 +61,9 @@ select typeof(t), t from '__TEST_DIR__/my_file.json'
 ----
 TIMESTAMP	1996-03-27 07:42:33
 
-# forced format read_json
+# forced format read_ndjson
 query II
-select typeof(t), t from read_json('__TEST_DIR__/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format=${a} ${b} ${c})
+select typeof(t), t from read_ndjson('__TEST_DIR__/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format=${a} ${b} ${c})
 ----
 TIMESTAMP	1996-03-27 07:42:33
 

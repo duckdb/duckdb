@@ -81,6 +81,8 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 		return;
 	}
 
+	bind_data.transform_options.date_format_map = &bind_data.date_format_map;
+
 	// Auto-detect columns
 	if (type.id() == LogicalTypeId::STRUCT) {
 		const auto &child_types = StructType::GetChildTypes(type);
@@ -185,13 +187,14 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 		throw BinderException("read_json requires columns to be specified through the 'columns' option. Use "
 		                      "read_json_auto or set read_json(..., AUTO_DETECT=TRUE) to automatically guess columns.");
 	}
+
+	bind_data.InitializeFormats();
+
 	if (bind_data.auto_detect || bind_data.options.record_type == JSONRecordType::AUTO_DETECT) {
 		JSONScan::AutoDetect(context, bind_data, return_types, names);
 		bind_data.names = names;
 	}
 	D_ASSERT(return_types.size() == names.size());
-
-	bind_data.InitializeFormats();
 
 	auto &transform_options = bind_data.transform_options;
 	transform_options.strict_cast = !bind_data.ignore_errors;
