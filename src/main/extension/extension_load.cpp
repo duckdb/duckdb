@@ -44,13 +44,11 @@ static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, cons
 	ComputeSHA256String(file_content, res);
 }
 
-bool ExtensionHelper::TryInitialLoad(DBConfig &config, const string &extension, ExtensionInitResult &result,
-                                     string &error) {
+bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
+                                     ExtensionInitResult &result, string &error) {
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
-	VirtualFileSystem fallback_file_system; // config may not contain one yet
-	auto &fs = config.file_system ? *config.file_system : fallback_file_system;
 	auto filename = fs.ConvertSeparators(extension);
 
 	// shorthand case
@@ -201,20 +199,17 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, const string &extension, 
 	return true;
 }
 
-ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, const string &extension) {
+ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileSystem &fs, const string &extension) {
 	string error;
 	ExtensionInitResult result;
-	if (!TryInitialLoad(config, extension, result, error)) {
+	if (!TryInitialLoad(config, fs, extension, result, error)) {
 		if (!ExtensionHelper::AllowAutoInstall(extension)) {
 			throw IOException(error);
 		}
 		// the extension load failed - try installing the extension
-		if (!config.file_system) {
-			throw InternalException("Attempting to install an extension without a file system");
-		}
-		ExtensionHelper::InstallExtension(config, *config.file_system, extension, false);
+		ExtensionHelper::InstallExtension(config, fs, extension, false);
 		// try loading again
-		if (!TryInitialLoad(config, extension, result, error)) {
+		if (!TryInitialLoad(config, fs, extension, result, error)) {
 			throw IOException(error);
 		}
 	}
@@ -241,12 +236,12 @@ string ExtensionHelper::GetExtensionName(const string &extension) {
 	return StringUtil::Lower(splits.front());
 }
 
-void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &extension) {
+void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension) {
 	if (db.ExtensionIsLoaded(extension)) {
 		return;
 	}
 
-	auto res = InitialLoad(DBConfig::GetConfig(db), extension);
+	auto res = InitialLoad(DBConfig::GetConfig(db), fs, extension);
 	auto init_fun_name = res.basename + "_init";
 
 	ext_init_fun_t init_fun;
@@ -263,7 +258,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &
 }
 
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
-	LoadExternalExtension(DatabaseInstance::GetDatabase(context), extension);
+	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), extension);
 }
 
 string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {

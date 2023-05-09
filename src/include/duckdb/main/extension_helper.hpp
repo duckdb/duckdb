@@ -43,7 +43,7 @@ public:
 	static void InstallExtension(ClientContext &context, const string &extension, bool force_install);
 	static void InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install);
 	static void LoadExternalExtension(ClientContext &context, const string &extension);
-	static void LoadExternalExtension(DatabaseInstance &db, const string &extension);
+	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension);
 
 	static string ExtensionDirectory(ClientContext &context);
 	static string ExtensionDirectory(DBConfig &config, FileSystem &fs);
@@ -70,8 +70,9 @@ private:
 	                                     const string &local_path, const string &extension, bool force_install);
 	static const vector<string> PathComponents();
 	static bool AllowAutoInstall(const string &extension);
-	static ExtensionInitResult InitialLoad(DBConfig &config, const string &extension);
-	static bool TryInitialLoad(DBConfig &config, const string &extension, ExtensionInitResult &result, string &error);
+	static ExtensionInitResult InitialLoad(DBConfig &config, FileSystem &fs, const string &extension);
+	static bool TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension, ExtensionInitResult &result,
+	                           string &error);
 	//! For tagged releases we use the tag, else we use the git commit hash
 	static const string GetVersionDirectoryName();
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
