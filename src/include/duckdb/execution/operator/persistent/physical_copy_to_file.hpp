@@ -67,5 +67,7 @@ public:
 	bool ParallelSink() const override {
 		return per_thread_output || partition_output || parallel;
 	}
+
+	static void MoveTmpFile(ClientContext &context, const string &tmp_file_path);
 };
 } // namespace duckdb

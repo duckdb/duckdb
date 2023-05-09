@@ -900,15 +900,15 @@ idx_t VectorOperations::DistinctLessThan(Vector &left, Vector &right, const Sele
 // true := A < B with nulls being minimal
 idx_t VectorOperations::DistinctLessThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                                    SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedDistinctSelectOperation<duckdb::DistinctLessThanNullsFirst, duckdb::DistinctLessThan>(
-	    left, right, sel, count, true_sel, false_sel);
+	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThanNullsFirst, duckdb::DistinctGreaterThan>(
+	    right, left, sel, count, true_sel, false_sel);
 }
 
 // true := A <= B with nulls being maximal
 idx_t VectorOperations::DistinctLessThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                                SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThanEquals>(right, left, sel, count, true_sel,
-	                                                                           false_sel);
+	return count -
+	       TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThan>(left, right, sel, count, false_sel, true_sel);
 }
 
 // true := A != B with nulls being equal, inputs selected

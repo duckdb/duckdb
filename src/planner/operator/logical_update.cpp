@@ -17,6 +17,7 @@ void LogicalUpdate::Serialize(FieldWriter &writer) const {
 	writer.WriteIndexList<PhysicalIndex>(columns);
 	writer.WriteSerializableList(bound_defaults);
 	writer.WriteField(update_is_del_and_insert);
+	writer.WriteSerializableList(this->expressions);
 }
 
 unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
@@ -31,6 +32,7 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(LogicalDeserializationSta
 	result->columns = reader.ReadRequiredIndexList<PhysicalIndex>();
 	result->bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	result->update_is_del_and_insert = reader.ReadRequired<bool>();
+	result->expressions = reader.ReadRequiredSerializableList<duckdb::Expression>(state.gstate);
 	return std::move(result);
 }
 

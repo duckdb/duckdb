@@ -45,16 +45,15 @@ RowGroup::RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer)
 	Verify();
 }
 
-RowGroup::RowGroup(RowGroup &row_group, RowGroupCollection &collection, idx_t start)
-    : SegmentBase<RowGroup>(start, row_group.count.load()), collection(collection),
-      version_info(std::move(row_group.version_info)) {
-	for (auto &column : row_group.GetColumns()) {
-		this->columns.push_back(ColumnData::CreateColumn(*column, start));
+void RowGroup::MoveToCollection(RowGroupCollection &collection, idx_t new_start) {
+	this->collection = collection;
+	this->start = new_start;
+	for (auto &column : GetColumns()) {
+		column->SetStart(new_start);
 	}
 	if (version_info) {
-		version_info->SetStart(start);
+		version_info->SetStart(new_start);
 	}
-	Verify();
 }
 
 void VersionNode::SetStart(idx_t start) {
@@ -101,8 +100,8 @@ ColumnData &RowGroup::GetColumn(idx_t c) {
 	if (column_pointers.size() != columns.size()) {
 		throw InternalException("Lazy loading a column but the pointer was not set");
 	}
-	auto &block_manager = collection.GetBlockManager();
-	auto &types = collection.GetTypes();
+	auto &block_manager = GetCollection().GetBlockManager();
+	auto &types = GetCollection().GetTypes();
 	auto &block_pointer = column_pointers[c];
 	MetaBlockReader column_data_reader(block_manager, block_pointer.block_id);
 	column_data_reader.offset = block_pointer.offset;
@@ -113,14 +112,14 @@ ColumnData &RowGroup::GetColumn(idx_t c) {
 }
 
 DatabaseInstance &RowGroup::GetDatabase() {
-	return collection.GetDatabase();
+	return GetCollection().GetDatabase();
 }
 
 BlockManager &RowGroup::GetBlockManager() {
-	return collection.GetBlockManager();
+	return GetCollection().GetBlockManager();
 }
 DataTableInfo &RowGroup::GetTableInfo() {
-	return collection.GetTableInfo();
+	return GetCollection().GetTableInfo();
 }
 
 void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
@@ -231,7 +230,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 	column_data->InitializeAppend(append_state);
 
 	// scan the original table, and fill the new column with the transformed value
-	scan_state.Initialize(collection.GetTypes());
+	scan_state.Initialize(GetCollection().GetTypes());
 	InitializeScan(scan_state);
 
 	DataChunk append_chunk;
@@ -537,7 +536,7 @@ void RowGroup::Scan(TransactionData transaction, CollectionScanState &state, Dat
 }
 
 void RowGroup::ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type) {
-	auto &transaction_manager = DuckTransactionManager::Get(collection.GetAttached());
+	auto &transaction_manager = DuckTransactionManager::Get(GetCollection().GetAttached());
 
 	auto lowest_active_start = transaction_manager.LowestActiveStart();
 	auto lowest_active_id = transaction_manager.LowestActiveId();

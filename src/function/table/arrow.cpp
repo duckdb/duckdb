@@ -286,9 +286,9 @@ unique_ptr<GlobalTableFunctionState> ArrowTableFunction::ArrowScanInitGlobal(Cli
 	return std::move(result);
 }
 
-unique_ptr<LocalTableFunctionState> ArrowTableFunction::ArrowScanInitLocal(ExecutionContext &context,
-                                                                           TableFunctionInitInput &input,
-                                                                           GlobalTableFunctionState *global_state_p) {
+unique_ptr<LocalTableFunctionState>
+ArrowTableFunction::ArrowScanInitLocalInternal(ClientContext &context, TableFunctionInitInput &input,
+                                               GlobalTableFunctionState *global_state_p) {
 	auto &global_state = global_state_p->Cast<ArrowScanGlobalState>();
 	auto current_chunk = make_uniq<ArrowArrayWrapper>();
 	auto result = make_uniq<ArrowScanLocalState>(std::move(current_chunk));
@@ -296,12 +296,18 @@ unique_ptr<LocalTableFunctionState> ArrowTableFunction::ArrowScanInitLocal(Execu
 	result->filters = input.filters.get();
 	if (input.CanRemoveFilterColumns()) {
 		auto &asgs = global_state_p->Cast<ArrowScanGlobalState>();
-		result->all_columns.Initialize(context.client, asgs.scanned_types);
+		result->all_columns.Initialize(context, asgs.scanned_types);
 	}
-	if (!ArrowScanParallelStateNext(context.client, input.bind_data.get(), *result, global_state)) {
+	if (!ArrowScanParallelStateNext(context, input.bind_data.get(), *result, global_state)) {
 		return nullptr;
 	}
 	return std::move(result);
+}
+
+unique_ptr<LocalTableFunctionState> ArrowTableFunction::ArrowScanInitLocal(ExecutionContext &context,
+                                                                           TableFunctionInitInput &input,
+                                                                           GlobalTableFunctionState *global_state_p) {
+	return ArrowScanInitLocalInternal(context.client, input, global_state_p);
 }
 
 void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

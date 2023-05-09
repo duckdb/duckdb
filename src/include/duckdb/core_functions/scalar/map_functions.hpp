@@ -43,7 +43,10 @@ struct MapEntriesFun {
 struct MapExtractFun {
 	static constexpr const char *Name = "map_extract";
 	static constexpr const char *Parameters = "map,key";
-	static constexpr const char *Description = "Return a list containing the value for a given key or an empty list if the key is not contained in the map. The type of the key provided in the second parameter must match the type of the map’s keys else an error is returned.";
+	static constexpr const char *Description =
+	    "Return a list containing the value for a given key or an empty list if the key is not contained in the map. "
+	    "The type of the key provided in the second parameter must match the type of the map’s keys else an error is "
+	    "returned.";
 	static constexpr const char *Example = "map_extract(map(['key'], ['val']), 'key')";
 
 	static ScalarFunction GetFunction();
@@ -60,6 +63,16 @@ struct MapFromEntriesFun {
 	static constexpr const char *Parameters = "map";
 	static constexpr const char *Description = "Returns a map created from the entries of the array";
 	static constexpr const char *Example = "map_from_entries([{k: 5, v: 'val1'}, {k: 3, v: 'val2'}]);";
+
+	static ScalarFunction GetFunction();
+};
+
+struct MapConcatFun {
+	static constexpr const char *Name = "map_concat";
+	static constexpr const char *Parameters = "any,...";
+	static constexpr const char *Description = "Returns a map created from merging the input maps, on key collision "
+	                                           "the value is taken from the last map with that key";
+	static constexpr const char *Example = "map_concat(map([1,2], ['a', 'b']), map([2,3], ['c', 'd']));";
 
 	static ScalarFunction GetFunction();
 };

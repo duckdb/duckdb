@@ -97,6 +97,19 @@ shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Execute(const string &query,
 	return conn->Execute(query, params, many);
 }
 
+shared_ptr<DuckDBPyConnection> PyConnectionWrapper::UnregisterUDF(const string &name,
+                                                                  shared_ptr<DuckDBPyConnection> conn) {
+	return conn->UnregisterUDF(name);
+}
+
+shared_ptr<DuckDBPyConnection>
+PyConnectionWrapper::RegisterScalarUDF(const string &name, const py::function &udf, const py::object &parameters_p,
+                                       const shared_ptr<DuckDBPyType> &return_type_p, PythonUDFType type,
+                                       FunctionNullHandling null_handling, PythonExceptionHandling exception_handling,
+                                       shared_ptr<DuckDBPyConnection> conn) {
+	return conn->RegisterScalarUDF(name, udf, parameters_p, return_type_p, type, null_handling, exception_handling);
+}
+
 shared_ptr<DuckDBPyConnection> PyConnectionWrapper::Append(const string &name, PandasDataFrame value, bool by_name,
                                                            shared_ptr<DuckDBPyConnection> conn) {
 	return conn->Append(name, value, by_name);
@@ -226,10 +239,10 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::ReadCSV(
     const py::object &na_values, const py::object &skiprows, const py::object &quotechar, const py::object &escapechar,
     const py::object &encoding, const py::object &parallel, const py::object &date_format,
     const py::object &timestamp_format, const py::object &sample_size, const py::object &all_varchar,
-    const py::object &normalize_names, const py::object &filename) {
+    const py::object &normalize_names, const py::object &filename, const py::object &null_padding) {
 	return conn->ReadCSV(name, header, compression, sep, delimiter, dtype, na_values, skiprows, quotechar, escapechar,
 	                     encoding, parallel, date_format, timestamp_format, sample_size, all_varchar, normalize_names,
-	                     filename);
+	                     filename, null_padding);
 }
 
 py::list PyConnectionWrapper::FetchMany(idx_t size, shared_ptr<DuckDBPyConnection> conn) {

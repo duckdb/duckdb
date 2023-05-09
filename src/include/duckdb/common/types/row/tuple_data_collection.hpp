@@ -229,7 +229,7 @@ private:
 	//! The number of entries stored in the TupleDataCollection
 	idx_t count;
 	//! The data segments of the TupleDataCollection
-	vector<TupleDataSegment> segments;
+	unsafe_vector<TupleDataSegment> segments;
 	//! The set of scatter functions
 	vector<TupleDataScatterFunction> scatter_functions;
 	//! The set of gather functions
