@@ -314,7 +314,8 @@ vector<unique_ptr<Expression>> Binder::BindCreateIndexExpressions(TableCatalogEn
 	vector<unique_ptr<Expression>> expressions;
 	expressions.reserve(info.expressions.size());
 	for (auto &expr : info.expressions) {
-		expressions.push_back(index_binder.Bind(expr));
+		auto bound_expression = index_binder.Bind(expr);
+		expressions.push_back(std::move(bound_expression));
 	}
 
 	return expressions;
