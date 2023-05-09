@@ -32,8 +32,8 @@ public:
 	//! Recursive CTEs require at least one ChunkScan, referencing the working_table.
 	//! This data structure is used to establish it.
 	unordered_map<idx_t, std::shared_ptr<ColumnDataCollection>> recursive_cte_tables;
-	//! Materialized CTE scans need to be collected for each CTE operator.
-	unordered_map<idx_t, vector<const_reference<PhysicalOperator>>> materialized_ctes;
+	//! Materialized CTE ids must be collected.
+	unordered_set<idx_t> materialized_ctes;
 
 public:
 	//! Creates a plan from the logical operator. This involves resolving column bindings and generating physical

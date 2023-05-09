@@ -24,8 +24,6 @@ public:
 	            unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality);
 	~PhysicalCTE() override;
 
-	vector<const_reference<PhysicalOperator>> cte_scans;
-
 	std::shared_ptr<ColumnDataCollection> working_table;
 	shared_ptr<MetaPipeline> recursive_meta_pipeline;
 
@@ -33,6 +31,10 @@ public:
 	string ctename;
 
 public:
+	// Source interface
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	             LocalSourceState &lstate) const override;
+
 	bool IsSource() const override {
 		return true;
 	}
@@ -54,6 +56,9 @@ public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 
 	vector<const_reference<PhysicalOperator>> GetSources() const override;
+
+private:
+	void ExecuteRecursivePipelines(ExecutionContext &context) const;
 };
 
 } // namespace duckdb

@@ -20,13 +20,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCTE &op) {
 	// Create the plan for the left side. This is the materialization.
 	auto left = CreatePlan(*op.children[0]);
 	// Initialize an empty vector to collect the scan operators.
-	materialized_ctes[op.table_index] = vector<const_reference<PhysicalOperator>>();
+	materialized_ctes.insert(op.table_index);
 	auto right = CreatePlan(*op.children[1]);
 
 	auto cte = make_uniq<PhysicalCTE>(op.ctename, op.table_index, op.children[1]->types, std::move(left),
 	                                  std::move(right), op.estimated_cardinality);
 	cte->working_table = working_table;
-	cte->cte_scans = materialized_ctes[op.table_index];
 
 	return std::move(cte);
 }

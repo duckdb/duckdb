@@ -3,6 +3,7 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
+#include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -243,6 +244,10 @@ void Executor::AddRecursiveCTE(PhysicalOperator &rec_cte) {
 	recursive_ctes.push_back(rec_cte);
 }
 
+void Executor::AddMaterializedCTE(PhysicalOperator &rec_cte) {
+	materialized_ctes.push_back(rec_cte);
+}
+
 void Executor::ReschedulePipelines(const vector<shared_ptr<MetaPipeline>> &pipelines_p,
                                    vector<shared_ptr<Event>> &events_p) {
 	ScheduleEventData event_data(pipelines_p, events_p, false);
@@ -320,6 +325,12 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 			rec_cte.recursive_meta_pipeline->Ready();
 		}
 
+		// ready recursive cte pipelines too
+		for (auto &rec_cte_ref : materialized_ctes) {
+			auto &rec_cte = rec_cte_ref.get().Cast<PhysicalCTE>();
+			rec_cte.recursive_meta_pipeline->Ready();
+		}
+
 		// set root pipelines, i.e., all pipelines that end in the final sink
 		root_pipeline->GetPipelines(root_pipelines, false);
 		root_pipeline_idx = 0;
@@ -355,6 +366,10 @@ void Executor::CancelTasks() {
 		}
 		for (auto &rec_cte_ref : recursive_ctes) {
 			auto &rec_cte = rec_cte_ref.get().Cast<PhysicalRecursiveCTE>();
+			rec_cte.recursive_meta_pipeline.reset();
+		}
+		for (auto &rec_cte_ref : materialized_ctes) {
+			auto &rec_cte = rec_cte_ref.get().Cast<PhysicalCTE>();
 			rec_cte.recursive_meta_pipeline.reset();
 		}
 		pipelines.clear();

@@ -26,16 +26,96 @@ PhysicalCTE::~PhysicalCTE() {
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
+class CTEState : public GlobalSinkState {
+public:
+	explicit CTEState(ClientContext &context, const PhysicalCTE &op)
+	    : intermediate_table(context, op.children[1]->GetTypes()) {
+	}
+	ColumnDataCollection intermediate_table;
+	ColumnDataScanState scan_state;
+	bool initialized = false;
+	bool finished_scan = false;
+};
 
 unique_ptr<GlobalSinkState> PhysicalCTE::GetGlobalSinkState(ClientContext &context) const {
 	working_table->Reset();
-	return make_uniq<GlobalSinkState>();
+	return make_uniq<CTEState>(context, *this);
 }
 
 SinkResultType PhysicalCTE::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                  DataChunk &input) const {
-	working_table->Append(input);
+	auto &gstate = state.Cast<CTEState>();
+	if(!gstate.finished_scan) {
+		working_table->Append(input);
+	} else {
+		gstate.intermediate_table.Append(input);
+	}
 	return SinkResultType::NEED_MORE_INPUT;
+}
+
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+void PhysicalCTE::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                                   LocalSourceState &lstate) const {
+	auto &gstate = sink_state->Cast<CTEState>();
+	if (!gstate.initialized) {
+		gstate.intermediate_table.InitializeScan(gstate.scan_state);
+		gstate.finished_scan = false;
+		gstate.initialized = true;
+	}
+	if(!gstate.finished_scan)	{
+		gstate.finished_scan = true;
+		ExecuteRecursivePipelines(context);
+	}
+
+	gstate.intermediate_table.Scan(gstate.scan_state, chunk);
+}
+
+void PhysicalCTE::ExecuteRecursivePipelines(ExecutionContext &context) const {
+	if (!recursive_meta_pipeline) {
+		throw InternalException("Missing meta pipeline for recursive CTE");
+	}
+
+	// get and reset pipelines
+	vector<shared_ptr<Pipeline>> pipelines;
+	recursive_meta_pipeline->GetPipelines(pipelines, true);
+	for (auto &pipeline : pipelines) {
+		auto sink = pipeline->GetSink();
+		if (sink.get() != this) {
+			sink->sink_state.reset();
+		}
+		for (auto &op_ref : pipeline->GetOperators()) {
+			auto &op = op_ref.get();
+			op.op_state.reset();
+		}
+		pipeline->ClearSource();
+	}
+
+	// get the MetaPipelines in the recursive_meta_pipeline and reschedule them
+	vector<shared_ptr<MetaPipeline>> meta_pipelines;
+	recursive_meta_pipeline->GetMetaPipelines(meta_pipelines, true, false);
+	auto &executor = recursive_meta_pipeline->GetExecutor();
+	vector<shared_ptr<Event>> events;
+	executor.ReschedulePipelines(meta_pipelines, events);
+
+	while (true) {
+		executor.WorkOnTasks();
+		if (executor.HasError()) {
+			executor.ThrowException();
+		}
+		bool finished = true;
+		for (auto &event : events) {
+			if (!event->IsFinished()) {
+				finished = false;
+				break;
+			}
+		}
+		if (finished) {
+			// all pipelines finished: done!
+			break;
+		}
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -45,17 +125,23 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 	D_ASSERT(children.size() == 2);
 	op_state.reset();
 	sink_state.reset();
+	recursive_meta_pipeline.reset();
+
+	auto &state = meta_pipeline.GetState();
+	state.SetPipelineSource(current, *this);
+
+	auto &executor = meta_pipeline.GetExecutor();
+	executor.AddMaterializedCTE(*this);
 
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
 	child_meta_pipeline.Build(*children[0]);
 
-	auto &state = meta_pipeline.GetState();
-
-	for (auto &cte_scan : cte_scans) {
-		state.cte_dependencies.insert(make_pair(cte_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
+	// the RHS is the recursive pipeline
+	recursive_meta_pipeline = make_shared<MetaPipeline>(executor, state, this);
+	if(meta_pipeline.HasRecursiveCTE()) {
+		recursive_meta_pipeline->SetRecursiveCTE();
 	}
-
-	children[1]->BuildPipelines(current, meta_pipeline);
+	recursive_meta_pipeline->Build(*children[1]);
 }
 
 vector<const_reference<PhysicalOperator>> PhysicalCTE::GetSources() const {
