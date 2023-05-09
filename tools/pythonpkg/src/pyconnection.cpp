@@ -39,6 +39,14 @@
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb_python/filesystem_object.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb_python/pandas/pandas_scan.hpp"
+#include "duckdb_python/python_objects.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 
 #include <random>
 
@@ -109,6 +117,15 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "List registered filesystems, including builtin ones")
 	    .def("filesystem_is_registered", &DuckDBPyConnection::FileSystemIsRegistered,
 	         "Check if a filesystem with the provided name is currently registered", py::arg("name"));
+
+	m.def("create_function", &DuckDBPyConnection::RegisterScalarUDF,
+	      "Create a DuckDB function out of the passing in python function so it can be used in queries",
+	      py::arg("name"), py::arg("function"), py::arg("return_type") = py::none(), py::arg("parameters") = py::none(),
+	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0,
+	      py::arg("exception_handling") = 0);
+
+	m.def("remove_function", &DuckDBPyConnection::UnregisterUDF, "Remove a previously created function",
+	      py::arg("name"));
 
 	DefineMethod({"sqltype", "dtype", "type"}, m, &DuckDBPyConnection::Type,
 	             "Create a type object by parsing the 'type_str' string", py::arg("type_str"));
@@ -276,6 +293,60 @@ py::list DuckDBPyConnection::ListFilesystems() {
 bool DuckDBPyConnection::FileSystemIsRegistered(const string &name) {
 	auto subsystems = database->GetFileSystem().ListSubSystems();
 	return std::find(subsystems.begin(), subsystems.end(), name) != subsystems.end();
+}
+
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterUDF(const string &name) {
+	if (!connection) {
+		throw ConnectionException("Connection already closed!");
+	}
+	auto entry = registered_functions.find(name);
+	if (entry == registered_functions.end()) {
+		// Not registered or already unregistered
+		throw InvalidInputException("No function by the name of '%s' was found in the list of registered functions",
+		                            name);
+	}
+
+	auto &context = *connection->context;
+
+	context.RunFunctionInTransaction([&]() {
+		// create function
+		auto &catalog = Catalog::GetCatalog(context, SYSTEM_CATALOG);
+		DropInfo info;
+		info.type = CatalogType::SCALAR_FUNCTION_ENTRY;
+		info.name = name;
+		info.allow_drop_internal = true;
+		info.cascade = false;
+		info.if_not_found = OnEntryNotFound::THROW_EXCEPTION;
+		catalog.DropEntry(context, info);
+	});
+	registered_functions.erase(entry);
+
+	return shared_from_this();
+}
+
+shared_ptr<DuckDBPyConnection>
+DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &udf, const py::object &parameters_p,
+                                      const shared_ptr<DuckDBPyType> &return_type_p, PythonUDFType type,
+                                      FunctionNullHandling null_handling, PythonExceptionHandling exception_handling) {
+	if (!connection) {
+		throw ConnectionException("Connection already closed!");
+	}
+	auto &context = *connection->context;
+
+	if (registered_functions.find(name) != registered_functions.end()) {
+		throw NotImplementedException("A function by the name of '%s' is already created, creating multiple "
+		                              "functions with the same name is not supported yet, please remove it first",
+		                              name);
+	}
+	auto scalar_function = CreateScalarUDF(name, udf, parameters_p, return_type_p, type == PythonUDFType::ARROW,
+	                                       null_handling, exception_handling);
+	CreateScalarFunctionInfo info(scalar_function);
+
+	context.RegisterFunction(info);
+
+	registered_functions[name] = make_uniq<PythonDependencies>(udf);
+
+	return shared_from_this();
 }
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
