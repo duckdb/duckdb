@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/persistent/buffered_csv_reader.hpp
+// duckdb/execution/operator/persistent/parallel_csv_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,6 +12,7 @@
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb/execution/operator/persistent/csv_file_handle.hpp"
 #include "duckdb/execution/operator/persistent/csv_buffer.hpp"
+#include "duckdb/execution/operator/persistent/csv_line_info.hpp"
 
 #include <sstream>
 #include <utility>
@@ -20,9 +21,9 @@ namespace duckdb {
 
 struct CSVBufferRead {
 	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, idx_t buffer_start_p, idx_t buffer_end_p, idx_t batch_index,
-	              idx_t estimated_linenr)
-	    : buffer(std::move(buffer_p)), buffer_start(buffer_start_p), buffer_end(buffer_end_p), batch_index(batch_index),
-	      estimated_linenr(estimated_linenr) {
+	              idx_t local_batch_index_p, optional_ptr<LineInfo> line_info_p)
+	    : buffer(std::move(buffer_p)), line_info(line_info_p), buffer_start(buffer_start_p), buffer_end(buffer_end_p),
+	      batch_index(batch_index), local_batch_index(local_batch_index_p) {
 		if (buffer) {
 			if (buffer_end > buffer->GetBufferSize()) {
 				buffer_end = buffer->GetBufferSize();
@@ -34,8 +35,9 @@ struct CSVBufferRead {
 	}
 
 	CSVBufferRead(shared_ptr<CSVBuffer> buffer_p, shared_ptr<CSVBuffer> nxt_buffer_p, idx_t buffer_start_p,
-	              idx_t buffer_end_p, idx_t batch_index, idx_t estimated_linenr)
-	    : CSVBufferRead(std::move(buffer_p), buffer_start_p, buffer_end_p, batch_index, estimated_linenr) {
+	              idx_t buffer_end_p, idx_t batch_index, idx_t local_batch_index, optional_ptr<LineInfo> line_info_p)
+	    : CSVBufferRead(std::move(buffer_p), buffer_start_p, buffer_end_p, batch_index, local_batch_index,
+	                    line_info_p) {
 		next_buffer = std::move(nxt_buffer_p);
 	}
 
@@ -84,23 +86,27 @@ struct CSVBufferRead {
 	shared_ptr<CSVBuffer> buffer;
 	shared_ptr<CSVBuffer> next_buffer;
 	vector<unique_ptr<char[]>> intersections;
+	optional_ptr<LineInfo> line_info;
 
 	idx_t buffer_start;
 	idx_t buffer_end;
 	idx_t batch_index;
-	idx_t estimated_linenr;
+	idx_t local_batch_index;
+	idx_t lines_read = 0;
 };
 
 struct VerificationPositions {
 	idx_t beginning_of_first_line = 0;
 	idx_t end_of_last_line = 0;
 };
-//! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
+
+//! CSV Reader for Parallel Reading
 class ParallelCSVReader : public BaseCSVReader {
 public:
 	ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options, unique_ptr<CSVBufferRead> buffer,
-	                  idx_t first_pos_first_buffer, const vector<LogicalType> &requested_types);
-	~ParallelCSVReader();
+	                  idx_t first_pos_first_buffer, const vector<LogicalType> &requested_types, idx_t file_idx_p);
+	virtual ~ParallelCSVReader() {
+	}
 
 	//! Current Position (Relative to the Buffer)
 	idx_t position_buffer = 0;
@@ -118,12 +124,20 @@ public:
 	bool finished = false;
 
 	unique_ptr<CSVBufferRead> buffer;
+
+	idx_t file_idx;
+
 	VerificationPositions GetVerificationPositions();
+
+	//! Position of the first read line and last read line for verification purposes
+	VerificationPositions verification_positions;
 
 public:
 	void SetBufferRead(unique_ptr<CSVBufferRead> buffer);
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(DataChunk &insert_chunk);
+
+	idx_t GetLineError(idx_t line_error, idx_t buffer_idx) override;
 
 private:
 	//! Initialize Parser
@@ -135,7 +149,7 @@ private:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	bool TryParseCSV(ParserMode mode, DataChunk &insert_chunk, string &error_message);
 	//! Sets Position depending on the byte_start of this thread
-	bool SetPosition(DataChunk &insert_chunk);
+	bool SetPosition();
 	//! Called when scanning the 1st buffer, skips empty lines
 	void SkipEmptyLines();
 	//! When a buffer finishes reading its piece, it still can try to scan up to the real end of the buffer
@@ -148,8 +162,9 @@ private:
 
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message, bool try_add_line = false);
-	//! Position of the first read line and last read line for verification purposes
-	VerificationPositions verification_positions;
+	//! Verifies that the line length did not go over a pre-defined limit.
+	void VerifyLineLength(idx_t line_size);
+
 	//! First Position of First Buffer
 	idx_t first_pos_first_buffer = 0;
 };

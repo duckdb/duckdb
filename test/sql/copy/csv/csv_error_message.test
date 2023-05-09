@@ -2,7 +2,6 @@
 # description: Various CSV reader error messages
 # group: [csv]
 
-#FIXME: ADD LINE BACK FOR CSV MULTITHREADING ERROR
 statement ok
 PRAGMA enable_verification
 
@@ -11,11 +10,23 @@ COPY (SELECT i::VARCHAR i FROM range(103) tbl(i) UNION ALL SELECT 'hello') TO '_
 
 statement error
 SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'}, header=True)
+----
+line 104
 
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'}, header=True, parallel = false)
+----
+line 104
 
 statement ok
 COPY (SELECT i::VARCHAR i FROM range(103) tbl(i) UNION ALL SELECT 'hello') TO '__TEST_DIR__/int_parse_error.csv' (HEADER 0, DELIMITER '|')
 
 statement error
 SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'}, header=False)
+----
+line 103
 
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'}, header=False, parallel = false)
+----
+line 103
