@@ -57,7 +57,8 @@ public:
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	BufferedCSVReader(ClientContext &context, string filename, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
-	~BufferedCSVReader();
+	virtual ~BufferedCSVReader() {
+	}
 
 	unique_ptr<char[]> buffer;
 	idx_t buffer_size;
