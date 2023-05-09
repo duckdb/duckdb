@@ -44,10 +44,6 @@ FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 	return *client_data.client_file_system;
 }
 
-FileOpener *FileSystem::GetFileOpener(ClientContext &context) {
-	return ClientData::Get(context).file_opener.get();
-}
-
 bool PathMatched(const string &path, const string &sub_path) {
 	if (path.rfind(sub_path, 0) == 0) {
 		return true;

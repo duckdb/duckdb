@@ -16,7 +16,7 @@ namespace duckdb {
 class OpenerFileSystem : public FileSystem {
 public:
 	virtual FileSystem &GetFileSystem() const = 0;
-	virtual FileOpener *GetOpener() const = 0;
+	virtual optional_ptr<FileOpener> GetOpener() const = 0;
 
 	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
 	                                FileCompressionType compression = FileCompressionType::UNCOMPRESSED,
@@ -24,7 +24,7 @@ public:
 		if (opener) {
 			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
 		}
-		return GetFileSystem().OpenFile(path, flags, lock, compression, GetOpener());
+		return GetFileSystem().OpenFile(path, flags, lock, compression, GetOpener().get());
 	}
 
 
@@ -78,7 +78,7 @@ public:
 		if (opener) {
 			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
 		}
-		return GetFileSystem().ListFiles(directory, callback, GetOpener());
+		return GetFileSystem().ListFiles(directory, callback, GetOpener().get());
 	}
 
 	void MoveFile(const string &source, const string &target) override {
@@ -108,11 +108,11 @@ public:
 		if (opener) {
 			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
 		}
-		return GetFileSystem().Glob(path, GetOpener());
+		return GetFileSystem().Glob(path, GetOpener().get());
 	}
 
 	std::string GetName() const override {
-		return GetFileSystem().GetName();
+		return "OpenerFileSystem - " + GetFileSystem().GetName();
 	}
 };
 

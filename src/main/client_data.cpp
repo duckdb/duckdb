@@ -24,8 +24,8 @@ public:
 		auto &config = DBConfig::GetConfig(context);
 		return *config.file_system;
 	}
-	FileOpener *GetOpener() const override {
-		return FileSystem::GetFileOpener(context);
+	optional_ptr<FileOpener> GetOpener() const override {
+		return ClientData::Get(context).file_opener.get();
 	}
 
 private:

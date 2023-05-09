@@ -110,7 +110,6 @@ public:
 	DUCKDB_API static FileSystem &GetFileSystem(ClientContext &context);
 	DUCKDB_API static FileSystem &GetFileSystem(DatabaseInstance &db);
 	DUCKDB_API static FileSystem &Get(AttachedDatabase &db);
-	DUCKDB_API static FileOpener *GetFileOpener(ClientContext &context);
 
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags,
 	                                                   FileLockType lock = DEFAULT_LOCK,
