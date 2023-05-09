@@ -589,8 +589,8 @@ StringColumnReader::StringColumnReader(ParquetReader &reader, LogicalType type_p
 	}
 }
 
-uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len, const bool isVarchar) {
-	if (!isVarchar) {
+uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len, const bool is_varchar) {
+	if (!is_varchar) {
 		return str_len;
 	}
 	// verify if a string is actually UTF8, and if there are no null bytes in the middle of the string
