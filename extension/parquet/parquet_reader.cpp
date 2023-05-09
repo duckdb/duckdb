@@ -427,16 +427,9 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	}
 }
 
-ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file_handle_p) : allocator(allocator_p) {
-	file_name = file_handle_p->path;
-	file_handle = std::move(file_handle_p);
-	metadata = LoadMetadata(allocator, *file_handle);
-	InitializeSchema();
-}
-
 ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, ParquetOptions parquet_options_p)
-    : allocator(BufferAllocator::Get(context_p)), parquet_options(parquet_options_p) {
-	auto &fs = FileSystem::GetFileSystem(context_p);
+    : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
+      parquet_options(parquet_options_p) {
 	file_name = std::move(file_name_p);
 	file_handle =
 	    fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK, FileSystem::DEFAULT_COMPRESSION);
@@ -464,7 +457,8 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 
 ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
-    : allocator(BufferAllocator::Get(context_p)), metadata(std::move(metadata_p)), parquet_options(parquet_options_p) {
+    : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
+      metadata(std::move(metadata_p)), parquet_options(parquet_options_p) {
 	InitializeSchema();
 }
 
@@ -631,8 +625,7 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<idx_t> 
 			state.prefetch_mode = false;
 		}
 
-		state.file_handle = file_handle->file_system.OpenFile(file_handle->path, flags, FileSystem::DEFAULT_LOCK,
-		                                                      FileSystem::DEFAULT_COMPRESSION);
+		state.file_handle = fs.OpenFile(file_handle->path, flags);
 	}
 
 	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle, state.prefetch_mode);

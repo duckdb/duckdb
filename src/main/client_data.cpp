@@ -17,7 +17,7 @@ namespace duckdb {
 
 class ClientFileSystem : public OpenerFileSystem {
 public:
-	ClientFileSystem(ClientContext &context_p) : context(context_p) {
+	explicit ClientFileSystem(ClientContext &context_p) : context(context_p) {
 	}
 
 	FileSystem &GetFileSystem() const override {

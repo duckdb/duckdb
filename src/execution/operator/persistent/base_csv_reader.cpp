@@ -32,7 +32,8 @@ string BaseCSVReader::GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
 
 BaseCSVReader::BaseCSVReader(ClientContext &context_p, BufferedCSVReaderOptions options_p,
                              const vector<LogicalType> &requested_types)
-    : context(context_p), fs(FileSystem::GetFileSystem(context)), allocator(Allocator::Get(context)) {
+    : context(context_p), fs(FileSystem::GetFileSystem(context)), allocator(Allocator::Get(context)),
+      options(std::move(options_p)) {
 }
 
 BaseCSVReader::~BaseCSVReader() {

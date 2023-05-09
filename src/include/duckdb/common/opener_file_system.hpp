@@ -27,7 +27,6 @@ public:
 		return GetFileSystem().OpenFile(path, flags, lock, compression, GetOpener().get());
 	}
 
-
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		GetFileSystem().Read(handle, buffer, nr_bytes, location);
 	};
