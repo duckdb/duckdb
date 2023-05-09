@@ -235,7 +235,11 @@ static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p
 
 	vector<column_t> physical_ids;
 	for (auto &id : state.column_ids) {
-		physical_ids.push_back(bind_data.table.GetColumn(LogicalIndex(id)).Physical().index);
+		if (id == COLUMN_IDENTIFIER_ROW_ID) {
+			physical_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
+		} else {
+			physical_ids.push_back(bind_data.table.GetColumn(LogicalIndex(id)).Physical().index);
+		}
 	}
 
 	if (!state.finished) {
