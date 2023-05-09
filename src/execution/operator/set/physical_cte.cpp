@@ -44,7 +44,7 @@ unique_ptr<GlobalSinkState> PhysicalCTE::GetGlobalSinkState(ClientContext &conte
 
 SinkResultType PhysicalCTE::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<CTEState>();
-	if(!gstate.finished_scan) {
+	if (!gstate.finished_scan) {
 		working_table->Append(chunk);
 	} else {
 		gstate.intermediate_table.Append(chunk);
@@ -62,7 +62,7 @@ SourceResultType PhysicalCTE::GetData(ExecutionContext &context, DataChunk &chun
 		gstate.finished_scan = false;
 		gstate.initialized = true;
 	}
-	if(!gstate.finished_scan)	{
+	if (!gstate.finished_scan) {
 		gstate.finished_scan = true;
 		ExecuteRecursivePipelines(context);
 	}
@@ -138,7 +138,7 @@ void PhysicalCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline)
 
 	// the RHS is the recursive pipeline
 	recursive_meta_pipeline = make_shared<MetaPipeline>(executor, state, this);
-	if(meta_pipeline.HasRecursiveCTE()) {
+	if (meta_pipeline.HasRecursiveCTE()) {
 		recursive_meta_pipeline->SetRecursiveCTE();
 	}
 	recursive_meta_pipeline->Build(*children[1]);
