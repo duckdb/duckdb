@@ -276,6 +276,7 @@ jobs:
           key: ${{ github.job }}
           save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
+
       - uses: ./.github/actions/build_extensions
         with:
           deploy_as: windows_amd64_rtools
@@ -295,14 +296,20 @@ jobs:
           openssl_path: C:/rtools43/x86_64-w64-mingw32.static.posix # not sure if this is required, there seems to be an openssl there
           run_tests: 0
 
-      - name: Test
+
+      - name: Install R package
         shell: bash
         run: |
           cd tools/rpkg
           ./configure
           R CMD build .
           R CMD INSTALL duckdb_*.tar.gz
-          
+
+      - name: Test Load
+        shell: bash
+        run: |
+          find build -name '*.duckdb_extension' -exec R --quiet -e 'con <- DBI::dbConnect(duckdb::duckdb(config = list("allow_unsigned_extensions" = "true"))); DBI::dbExecute(con, "LOAD \"{}\""); DBI::dbDisconnect(con, shutdown=TRUE)' \;
+
 
   rstats-windows-warnings:
     name: R Package Windows (Warnings)
