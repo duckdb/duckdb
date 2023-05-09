@@ -4,8 +4,6 @@
 
 require json
 
-mode skip
-
 statement ok
 pragma enable_verification
 
@@ -322,7 +320,8 @@ select * from read_json('__TEST_DIR__/my_file.json', format='array', records='au
 8
 9
 
-mode unskip
+statement ok
+pragma disable_verification
 
 # test that we can read a JSON list that spans more than one buffer size
 # the JSON is 55 bytes, and the minimum buffer size is 2097152
@@ -334,9 +333,6 @@ query T
 select sum(this_is_a_very_long_field_name_yes_very_much_so) = 42 * 50000 from '__TEST_DIR__/my_file.json'
 ----
 true
-
-statement ok
-pragma disable_verification
 
 require httpfs
 

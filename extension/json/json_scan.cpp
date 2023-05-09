@@ -275,7 +275,7 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 	scan_count = 0;
 	if (buffer_offset == buffer_size) {
 		if (!ReadNextBuffer(gstate)) {
-			return 0;
+			return scan_count;
 		}
 		if (current_buffer_handle->buffer_index != 0 && current_reader->GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
 			ReconstructFirstObject(gstate);
@@ -348,7 +348,7 @@ static inline const char *NextJSON(const char *ptr, const idx_t size) {
 		ptr = NextJSONDefault(ptr, size, end);
 		break;
 	default:
-		// Special case: JSON that is not obj/arr/str with clear "parents"
+		// Special case: JSON array containing JSON without clear "parents", i.e., not obj/arr/str
 		while (ptr != end) {
 			switch (*ptr++) {
 			case ',':
@@ -491,11 +491,11 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			buffer = gstate.allocator.Allocate(gstate.buffer_capacity);
 		}
 
-		if (is_last && gstate.bind_data.type != JSONScanType::SAMPLE) {
+		if (current_reader->GetFormat() != JSONFormat::NEWLINE_DELIMITED && !is_last) {
+			memcpy(buffer.get(), reconstruct_buffer.get(), prev_buffer_remainder); // Copy last bit of previous buffer
+		} else if (gstate.bind_data.type != JSONScanType::SAMPLE) {
 			current_reader->CloseJSONFile(); // Close files that are done if we're not sampling
 			current_reader = nullptr;
-		} else if (current_reader->GetFormat() != JSONFormat::NEWLINE_DELIMITED) {
-			memcpy(buffer.get(), reconstruct_buffer.get(), prev_buffer_remainder); // Copy last bit of previous buffer
 		}
 	} else {
 		buffer = gstate.allocator.Allocate(gstate.buffer_capacity);
@@ -749,6 +749,11 @@ void JSONScanLocalState::ParseNextChunk() {
 			// We reached the end of the buffer
 			if (!is_last) {
 				// Last bit of data belongs to the next batch
+				if (format != JSONFormat::NEWLINE_DELIMITED) {
+					const auto reconstruct_ptr = reconstruct_buffer.get();
+					memcpy(reconstruct_ptr, json_start, remaining);
+					prev_buffer_remainder = remaining;
+				}
 				buffer_offset = buffer_size;
 				break;
 			}
