@@ -226,19 +226,20 @@ bool ExtensionHelper::IsFullPath(const string &extension) {
 	       StringUtil::Contains(extension, "\\");
 }
 
-string ExtensionHelper::GetExtensionName(const string &extension) {
+string ExtensionHelper::GetExtensionName(const string &original_name) {
+	auto extension = StringUtil::Lower(original_name);
 	if (!IsFullPath(extension)) {
-		return extension;
+		return ExtensionHelper::ApplyExtensionAlias(extension);
 	}
 	auto splits = StringUtil::Split(StringUtil::Replace(extension, "\\", "/"), '/');
 	if (splits.empty()) {
-		return extension;
+		return ExtensionHelper::ApplyExtensionAlias(extension);
 	}
 	splits = StringUtil::Split(splits.back(), '.');
 	if (splits.empty()) {
-		return extension;
+		return ExtensionHelper::ApplyExtensionAlias(extension);
 	}
-	return StringUtil::Lower(splits.front());
+	return ExtensionHelper::ApplyExtensionAlias(splits.front());
 }
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileOpener *opener, const string &extension) {

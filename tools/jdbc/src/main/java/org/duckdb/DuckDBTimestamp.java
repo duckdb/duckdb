@@ -61,7 +61,7 @@ public class DuckDBTimestamp {
 	}
 
 	private static LocalTime toLocalTime(long timeMicros) {
-		return LocalTime.ofSecondOfDay(micros2seconds(timeMicros));
+		return LocalTime.ofNanoOfDay(timeMicros * 1000);
 	}
 
 	public static OffsetDateTime toOffsetDateTime(long timeMicros) {

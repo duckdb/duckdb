@@ -76,13 +76,17 @@ enum class PythonTypeObject : uint8_t {
 	BASE,      // 'builtin' type objects
 	UNION,     // typing.UnionType
 	COMPOSITE, // list|dict types
-	STRUCT     // dictionary
+	STRUCT,    // dictionary
+	STRING,    // string value
 };
 }
 
 static PythonTypeObject GetTypeObjectType(const py::handle &type_object) {
 	if (py::isinstance<py::type>(type_object)) {
 		return PythonTypeObject::BASE;
+	}
+	if (py::isinstance<py::str>(type_object)) {
+		return PythonTypeObject::STRING;
 	}
 	if (py::isinstance<PyGenericAlias>(type_object)) {
 		return PythonTypeObject::COMPOSITE;
@@ -248,6 +252,10 @@ static LogicalType FromObject(const py::object &object) {
 	}
 	case PythonTypeObject::UNION: {
 		return FromUnionType(object);
+	}
+	case PythonTypeObject::STRING: {
+		auto string_value = std::string(py::str(object));
+		return FromString(string_value, nullptr);
 	}
 	default: {
 		string actual_type = py::str(object.get_type());

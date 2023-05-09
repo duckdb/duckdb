@@ -70,6 +70,9 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		}
 	}
 	for (auto &copy_option : info.options) {
+		if (copy_option.first == "force_quote") {
+			continue;
+		}
 		ss << ", " << copy_option.first << " ";
 		if (copy_option.second.size() == 1) {
 			WriteValueAsSQL(ss, copy_option.second[0]);
