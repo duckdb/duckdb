@@ -44,8 +44,8 @@ static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, cons
 	ComputeSHA256String(file_content, res);
 }
 
-bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const string &extension,
-                                     ExtensionInitResult &result, string &error) {
+bool ExtensionHelper::TryInitialLoad(DBConfig &config, const string &extension, ExtensionInitResult &result,
+                                     string &error) {
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
@@ -55,13 +55,13 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const
 
 	// shorthand case
 	if (!ExtensionHelper::IsFullPath(extension)) {
-		string local_path = !config.options.extension_directory.empty() ? config.options.extension_directory
-		                                                                : fs.GetHomeDirectory(opener);
+		string local_path =
+		    !config.options.extension_directory.empty() ? config.options.extension_directory : fs.GetHomeDirectory();
 
 		// convert random separators to platform-canonic
 		local_path = fs.ConvertSeparators(local_path);
 		// expand ~ in extension directory
-		local_path = fs.ExpandPath(local_path, opener);
+		local_path = fs.ExpandPath(local_path);
 		auto path_components = PathComponents();
 		for (auto &path_ele : path_components) {
 			local_path = fs.JoinPath(local_path, path_ele);
@@ -201,10 +201,10 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const
 	return true;
 }
 
-ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *opener, const string &extension) {
+ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, const string &extension) {
 	string error;
 	ExtensionInitResult result;
-	if (!TryInitialLoad(config, opener, extension, result, error)) {
+	if (!TryInitialLoad(config, extension, result, error)) {
 		if (!ExtensionHelper::AllowAutoInstall(extension)) {
 			throw IOException(error);
 		}
@@ -214,7 +214,7 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *o
 		}
 		ExtensionHelper::InstallExtension(config, *config.file_system, extension, false);
 		// try loading again
-		if (!TryInitialLoad(config, nullptr, extension, result, error)) {
+		if (!TryInitialLoad(config, extension, result, error)) {
 			throw IOException(error);
 		}
 	}
@@ -241,12 +241,12 @@ string ExtensionHelper::GetExtensionName(const string &extension) {
 	return StringUtil::Lower(splits.front());
 }
 
-void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileOpener *opener, const string &extension) {
+void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &extension) {
 	if (db.ExtensionIsLoaded(extension)) {
 		return;
 	}
 
-	auto res = InitialLoad(DBConfig::GetConfig(db), opener, extension);
+	auto res = InitialLoad(DBConfig::GetConfig(db), extension);
 	auto init_fun_name = res.basename + "_init";
 
 	ext_init_fun_t init_fun;
@@ -263,7 +263,7 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileOpener *op
 }
 
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
-	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileOpener(context), extension);
+	LoadExternalExtension(DatabaseInstance::GetDatabase(context), extension);
 }
 
 string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {

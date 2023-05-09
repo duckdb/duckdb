@@ -124,7 +124,6 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 		throw PermissionException("Import is disabled through configuration");
 	}
 	auto &fs = FileSystem::GetFileSystem(context);
-	auto *opener = FileSystem::GetFileOpener(context);
 
 	string final_query;
 	// read the "shema.sql" and "load.sql" files
@@ -132,7 +131,7 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 	for (auto &file : files) {
 		auto file_path = fs.JoinPath(parameters.values[0].ToString(), file);
 		auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
-		                          FileSystem::DEFAULT_COMPRESSION, opener);
+		                          FileSystem::DEFAULT_COMPRESSION);
 		auto fsize = fs.GetFileSize(*handle);
 		auto buffer = unique_ptr<char[]>(new char[fsize]);
 		fs.Read(*handle, buffer.get(), fsize);
