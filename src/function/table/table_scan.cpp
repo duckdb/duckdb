@@ -233,8 +233,13 @@ static void IndexScanFunction(ClientContext &context, TableFunctionInput &data_p
 	auto &transaction = DuckTransaction::Get(context, bind_data.table.catalog);
 	auto &local_storage = LocalStorage::Get(transaction);
 
+	vector<column_t> physical_ids;
+	for (auto &id : state.column_ids) {
+		physical_ids.push_back(bind_data.table.GetColumn(LogicalIndex(id)).Physical().index);
+	}
+
 	if (!state.finished) {
-		bind_data.table.GetStorage().Fetch(transaction, output, state.column_ids, state.row_ids,
+		bind_data.table.GetStorage().Fetch(transaction, output, physical_ids, state.row_ids,
 		                                   bind_data.result_ids.size(), state.fetch_state);
 		state.finished = true;
 	}
