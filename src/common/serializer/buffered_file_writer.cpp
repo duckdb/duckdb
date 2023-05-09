@@ -10,7 +10,7 @@ constexpr uint8_t BufferedFileWriter::DEFAULT_OPEN_FLAGS;
 
 BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path_p, uint8_t open_flags)
     : fs(fs), path(path_p), data(unique_ptr<data_t[]>(new data_t[FILE_BUFFER_SIZE])), offset(0), total_written(0) {
-	handle = fs.OpenFile(path, open_flags, FileLockType::WRITE_LOCK, FileSystem::DEFAULT_COMPRESSION);
+	handle = fs.OpenFile(path, open_flags, FileLockType::WRITE_LOCK);
 }
 
 int64_t BufferedFileWriter::GetFileSize() {

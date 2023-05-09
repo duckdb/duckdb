@@ -239,8 +239,7 @@ public:
 					// missing metadata entry in cache, no usable stats
 					return nullptr;
 				}
-				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
-				                          FileSystem::DEFAULT_COMPRESSION);
+				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 				// we need to check if the metadata cache entries are current
 				if (fs.GetLastModifiedTime(*handle) >= metadata->read_time) {
 					// missing or invalid metadata entry in cache, no usable stats overall
