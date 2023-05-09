@@ -38,7 +38,7 @@ using namespace duckdb;
 			appender.BeginRow();                                                                                       \
 			appender.Append<int32_t>(i);                                                                               \
 			if (get_random_bool()) {                                                                                   \
-				char area_code[6] = {'0','0','0','0','0','0'};                                                         \
+				char area_code[6] = {'0', '0', '0', '0', '0', '0'};                                                    \
 				get_random_area_code(area_code);                                                                       \
 				appender.Append<string_t>(string_t(area_code, 6));                                                     \
 			} else {                                                                                                   \
