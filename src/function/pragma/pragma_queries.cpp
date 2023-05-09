@@ -23,26 +23,24 @@ string PragmaShowTables(ClientContext &context, const FunctionParameters &parame
 	schema = (schema == INVALID_SCHEMA) ? DEFAULT_SCHEMA : schema; // NOLINT
 
 	auto where_clause = StringUtil::Format("where ((database_name = '%s') and (schema_name = '%s'))", catalog, schema);
-	// clang-format off
-	auto pragma_query = StringUtil::Format("\
-	with \"tables\" as						\
-	(										\
-		SELECT table_name as \"name\"		\
-		FROM duckdb_tables %s				\
-	), \"views\" as							\
-	(										\
-		SELECT view_name as \"name\"		\
-		FROM duckdb_views %s				\
-	), db_objects as						\
-	(										\
-		SELECT \"name\" FROM \"tables\"		\
-		UNION ALL							\
-		SELECT \"name\" FROM \"views\"		\
-	)										\
-	SELECT \"name\"							\
-	FROM db_objects							\
-	ORDER BY \"name\";", where_clause, where_clause, where_clause);
-	// clang-format off
+	auto pragma_query = StringUtil::Format(R"EOF(
+	with "tables" as
+	(
+		SELECT table_name as "name"
+		FROM duckdb_tables %s
+	), "views" as
+	(
+		SELECT view_name as "name"
+		FROM duckdb_views %s
+	), db_objects as
+	(
+		SELECT "name" FROM "tables"
+		UNION ALL
+		SELECT "name" FROM "views"
+	)
+	SELECT "name"
+	FROM db_objects
+	ORDER BY "name";)EOF", where_clause, where_clause, where_clause);
 
 	return pragma_query;
 }
