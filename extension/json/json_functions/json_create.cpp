@@ -199,7 +199,7 @@ struct CreateJSONValue<INPUT_TYPE, double> {
 template <>
 struct CreateJSONValue<string_t, string_t> {
 	static inline yyjson_mut_val *Operation(yyjson_mut_doc *doc, const string_t &input) {
-		return yyjson_mut_strn(doc, input.GetData(), input.GetSize());
+		return yyjson_mut_strncpy(doc, input.GetData(), input.GetSize());
 	}
 };
 
@@ -447,6 +447,7 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 	case LogicalTypeId::DOUBLE:
 		TemplatedCreateValues<double, double>(doc, vals, value_v, count);
 		break;
+	case LogicalTypeId::BIT:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		TemplatedCreateValues<string_t, string_t>(doc, vals, value_v, count);
@@ -645,7 +646,7 @@ public:
 	StructNames const_struct_names;
 };
 
-static bool NestedToJSONCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+static bool AnyToJSONCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
 	auto alc = lstate.json_allocator.GetYYJSONAllocator();
@@ -655,24 +656,27 @@ static bool NestedToJSONCast(Vector &source, Vector &result, idx_t count, CastPa
 	return true;
 }
 
-BoundCastInfo NestedToJSONCastBind(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+BoundCastInfo AnyToJSONCastBind(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	auto cast_data = make_uniq<NestedToJSONCastData>();
 	GetJSONType(cast_data->const_struct_names, source);
-	return BoundCastInfo(NestedToJSONCast, std::move(cast_data), JSONFunctionLocalState::InitCastLocalState);
+	return BoundCastInfo(AnyToJSONCast, std::move(cast_data), JSONFunctionLocalState::InitCastLocalState);
 }
 
 void JSONFunctions::RegisterJSONCreateCastFunctions(CastFunctionSet &casts) {
+	auto json_to_any_cost = casts.ImplicitCastCost(LogicalType::ANY, JSONCommon::JSONType());
+	casts.RegisterCastFunction(LogicalType::ANY, JSONCommon::JSONType(), AnyToJSONCastBind, json_to_any_cost);
+
 	const auto struct_type = LogicalType::STRUCT({{"any", LogicalType::ANY}});
 	auto struct_to_json_cost = casts.ImplicitCastCost(struct_type, LogicalType::VARCHAR) - 2;
-	casts.RegisterCastFunction(struct_type, JSONCommon::JSONType(), NestedToJSONCastBind, struct_to_json_cost);
+	casts.RegisterCastFunction(struct_type, JSONCommon::JSONType(), AnyToJSONCastBind, struct_to_json_cost);
 
 	const auto list_type = LogicalType::LIST(LogicalType::ANY);
 	auto list_to_json_cost = casts.ImplicitCastCost(list_type, LogicalType::VARCHAR) - 2;
-	casts.RegisterCastFunction(list_type, JSONCommon::JSONType(), NestedToJSONCastBind, list_to_json_cost);
+	casts.RegisterCastFunction(list_type, JSONCommon::JSONType(), AnyToJSONCastBind, list_to_json_cost);
 
 	const auto map_type = LogicalType::MAP(LogicalType::ANY, LogicalType::ANY);
 	auto map_to_json_cost = casts.ImplicitCastCost(map_type, LogicalType::VARCHAR) - 2;
-	casts.RegisterCastFunction(map_type, JSONCommon::JSONType(), NestedToJSONCastBind, map_to_json_cost);
+	casts.RegisterCastFunction(map_type, JSONCommon::JSONType(), AnyToJSONCastBind, map_to_json_cost);
 }
 
 } // namespace duckdb

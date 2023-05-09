@@ -359,6 +359,7 @@ void Executor::CancelTasks() {
 		}
 		pipelines.clear();
 		root_pipelines.clear();
+		to_be_rescheduled_tasks.clear();
 		events.clear();
 	}
 	WorkOnTasks();
@@ -375,11 +376,42 @@ void Executor::CancelTasks() {
 void Executor::WorkOnTasks() {
 	auto &scheduler = TaskScheduler::GetScheduler(context);
 
-	unique_ptr<Task> task;
+	shared_ptr<Task> task;
 	while (scheduler.GetTaskFromProducer(*producer, task)) {
-		task->Execute(TaskExecutionMode::PROCESS_ALL);
+		auto res = task->Execute(TaskExecutionMode::PROCESS_ALL);
+		if (res == TaskExecutionResult::TASK_BLOCKED) {
+			task->Deschedule();
+		}
 		task.reset();
 	}
+}
+
+void Executor::RescheduleTask(shared_ptr<Task> &task) {
+	// This function will spin lock until the task provided is added to the to_be_rescheduled_tasks
+	while (true) {
+		lock_guard<mutex> l(executor_lock);
+		if (cancelled) {
+			return;
+		}
+		auto entry = to_be_rescheduled_tasks.find(task.get());
+		if (entry != to_be_rescheduled_tasks.end()) {
+			auto &scheduler = TaskScheduler::GetScheduler(context);
+			to_be_rescheduled_tasks.erase(task.get());
+			scheduler.ScheduleTask(GetToken(), task);
+			break;
+		}
+	}
+}
+
+void Executor::AddToBeRescheduled(shared_ptr<Task> &task) {
+	lock_guard<mutex> l(executor_lock);
+	if (cancelled) {
+		return;
+	}
+	if (to_be_rescheduled_tasks.find(task.get()) != to_be_rescheduled_tasks.end()) {
+		return;
+	}
+	to_be_rescheduled_tasks[task.get()] = std::move(task);
 }
 
 bool Executor::ExecutionIsFinished() {
@@ -400,7 +432,10 @@ PendingExecutionResult Executor::ExecuteTask() {
 		if (task) {
 			// if we have a task, partially process it
 			auto result = task->Execute(TaskExecutionMode::PROCESS_PARTIAL);
-			if (result != TaskExecutionResult::TASK_NOT_FINISHED) {
+			if (result == TaskExecutionResult::TASK_BLOCKED) {
+				task->Deschedule();
+				task.reset();
+			} else if (result == TaskExecutionResult::TASK_FINISHED) {
 				// if the task is finished, clean it up
 				task.reset();
 			}
@@ -444,6 +479,7 @@ void Executor::Reset() {
 	exceptions.clear();
 	pipelines.clear();
 	events.clear();
+	to_be_rescheduled_tasks.clear();
 	execution_result = PendingExecutionResult::RESULT_NOT_READY;
 }
 

@@ -17,8 +17,7 @@ namespace duckdb {
 class ListColumnData : public ColumnData {
 public:
 	ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-	               LogicalType type, ColumnData *parent = nullptr);
-	ListColumnData(ColumnData &original, idx_t start_row, ColumnData *parent = nullptr);
+	               LogicalType type, optional_ptr<ColumnData> parent = nullptr);
 
 	//! The child-column of the list
 	unique_ptr<ColumnData> child_column;
@@ -26,6 +25,7 @@ public:
 	ValidityColumnData validity;
 
 public:
+	void SetStart(idx_t new_start) override;
 	bool CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 
 	void InitializeScan(ColumnScanState &state) override;

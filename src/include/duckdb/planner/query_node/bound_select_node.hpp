@@ -78,7 +78,7 @@ public:
 	vector<unique_ptr<Expression>> aggregates;
 
 	//! GROUPING function calls
-	vector<vector<idx_t>> grouping_functions;
+	vector<unsafe_vector<idx_t>> grouping_functions;
 
 	//! Map from aggregate function to aggregate index (used to eliminate duplicate aggregates)
 	expression_map_t<idx_t> aggregate_map;

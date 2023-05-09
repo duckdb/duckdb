@@ -25,12 +25,19 @@ namespace duckdb {
 class FileSystem;
 class FileOpener;
 
+struct PreparedRowGroup {
+	duckdb_parquet::format::RowGroup row_group;
+	vector<duckdb::unique_ptr<ColumnWriterState>> states;
+};
+
 class ParquetWriter {
 public:
 	ParquetWriter(FileSystem &fs, string file_name, FileOpener *file_opener, vector<LogicalType> types,
 	              vector<string> names, duckdb_parquet::format::CompressionCodec::type codec);
 
 public:
+	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
+	void FlushRowGroup(PreparedRowGroup &row_group);
 	void Flush(ColumnDataCollection &buffer);
 	void Finalize();
 

@@ -15,6 +15,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 #include <algorithm>
 #include <codecvt>
@@ -24,6 +25,7 @@ using duckdb::date_t;
 using duckdb::Decimal;
 using duckdb::DecimalType;
 using duckdb::dtime_t;
+using duckdb::EnumUtil;
 using duckdb::hugeint_t;
 using duckdb::interval_t;
 using duckdb::LogicalType;
@@ -140,8 +142,8 @@ SQLRETURN duckdb::FetchStmtResult(SQLHSTMT statement_handle, SQLSMALLINT fetch_o
 
 static void ValidateType(LogicalTypeId input, LogicalTypeId expected, duckdb::OdbcHandleStmt *stmt) {
 	if (input != expected) {
-		string msg = "Type mismatch error: received " + LogicalTypeIdToString(input) + ", but expected " +
-		             LogicalTypeIdToString(expected);
+		string msg = "Type mismatch error: received " + EnumUtil::ToString(input) + ", but expected " +
+		             EnumUtil::ToString(expected);
 		duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE, stmt->dbc->GetDataSourceName());
 		throw duckdb::OdbcException("ValidateType", SQL_ERROR, diag_rec);
 	}

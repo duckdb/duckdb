@@ -55,9 +55,9 @@ public:
 	const vector<LogicalType> &GetTypes();
 
 private:
-	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
-
 	py::list FetchAllArrowChunks(idx_t rows_per_batch);
+
+	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
 
 	bool FetchArrowChunk(QueryResult *result, py::list &batches, idx_t rows_per_batch);
 

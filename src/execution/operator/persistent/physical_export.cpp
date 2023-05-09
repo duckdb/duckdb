@@ -70,6 +70,9 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		}
 	}
 	for (auto &copy_option : info.options) {
+		if (copy_option.first == "force_quote") {
+			continue;
+		}
 		ss << ", " << copy_option.first << " ";
 		if (copy_option.second.size() == 1) {
 			WriteValueAsSQL(ss, copy_option.second[0]);
@@ -96,11 +99,11 @@ unique_ptr<GlobalSourceState> PhysicalExport::GetGlobalSourceState(ClientContext
 	return make_uniq<ExportSourceState>();
 }
 
-void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                             LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<ExportSourceState>();
+SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk,
+                                         OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<ExportSourceState>();
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 
 	auto &ccontext = context.client;
@@ -180,13 +183,14 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	}
 	WriteStringStreamToFile(fs, opener, load_ss, fs.JoinPath(info->file_path, "load.sql"));
 	state.finished = true;
+
+	return SourceResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-SinkResultType PhysicalExport::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                    DataChunk &input) const {
+SinkResultType PhysicalExport::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	// nop
 	return SinkResultType::NEED_MORE_INPUT;
 }

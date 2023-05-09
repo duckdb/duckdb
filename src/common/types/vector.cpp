@@ -732,6 +732,11 @@ void Vector::Flatten(idx_t count) {
 		auto old_buffer = std::move(buffer);
 		auto old_data = data;
 		buffer = VectorBuffer::CreateStandardVector(type, MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count));
+		if (old_buffer) {
+			D_ASSERT(buffer->GetAuxiliaryData() == nullptr);
+			// The old buffer might be relying on the auxiliary data, keep it alive
+			buffer->MoveAuxiliaryData(*old_buffer);
+		}
 		data = buffer->GetData();
 		vector_type = VectorType::FLAT_VECTOR;
 		if (is_null) {
@@ -1763,15 +1768,14 @@ MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const Sel
 
 	for (idx_t row = 0; row < count; row++) {
 		auto mapped_row = sel.get_index(row);
-		auto row_idx = map_vdata.sel->get_index(mapped_row);
+		auto map_idx = map_vdata.sel->get_index(mapped_row);
 		// map is allowed to be NULL
-		if (!map_validity.RowIsValid(row_idx)) {
+		if (!map_validity.RowIsValid(map_idx)) {
 			continue;
 		}
-		row_idx = key_vdata.sel->get_index(row);
 		value_set_t unique_keys;
-		for (idx_t i = 0; i < list_data[row_idx].length; i++) {
-			auto index = list_data[row_idx].offset + i;
+		for (idx_t i = 0; i < list_data[map_idx].length; i++) {
+			auto index = list_data[map_idx].offset + i;
 			index = key_vdata.sel->get_index(index);
 			if (!key_validity.RowIsValid(index)) {
 				return MapInvalidReason::NULL_KEY;

@@ -3,6 +3,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/union_by_name.hpp"
 #include "duckdb/main/config.hpp"
@@ -59,7 +60,7 @@ uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 	auto it = auto_type_candidates_specificity.find(id);
 	if (it == auto_type_candidates_specificity.end()) {
 		throw BinderException("Auto Type Candidate of type %s is not accepted as a valid input",
-		                      LogicalTypeIdToString(candidate_type.id()));
+		                      EnumUtil::ToString(candidate_type.id()));
 	}
 	return it->second;
 }
@@ -183,6 +184,10 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			options.SetReadOption(loption, kv.second, names);
 		}
 	}
+	if (options.file_options.auto_detect_hive_partitioning) {
+		options.file_options.hive_partitioning = MultiFileReaderOptions::AutoDetectHivePartitioning(result->files);
+	}
+
 	if (!options.auto_detect && return_types.empty()) {
 		throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
 		                      "read_csv_auto or set read_csv(..., "
@@ -233,6 +238,14 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		}
 	} else {
 		result->reader_bind = MultiFileReader::BindOptions(options.file_options, result->files, return_types, names);
+	}
+	auto &fs = FileSystem::GetFileSystem(context);
+	for (auto &file : result->files) {
+		if (fs.IsPipe(file)) {
+			result->is_pipe = true;
+			result->single_threaded = true;
+			break;
+		}
 	}
 	result->return_types = return_types;
 	result->return_names = names;
@@ -695,8 +708,9 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
 		return std::move(result);
 	} else {
 		bind_data.options.file_path = bind_data.files[0];
-		if (bind_data.initial_reader && !bind_data.file_exists) {
-			// If this is not an on disk file we gotta reuse the reader.
+		if (bind_data.initial_reader && bind_data.is_pipe) {
+			// If this is a pipe and an initial reader already exists due to read_csv_auto
+			// We must re-use it, since we can't restart the reader due for it being a pipe.
 			result->initial_reader = std::move(bind_data.initial_reader);
 		} else {
 			result->initial_reader = make_uniq<BufferedCSVReader>(context, bind_data.options, bind_data.csv_types);
@@ -793,14 +807,6 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 //===--------------------------------------------------------------------===//
 static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = (ReadCSVData &)*input.bind_data;
-	auto &fs = FileSystem::GetFileSystem(context);
-	for (auto &file : bind_data.files) {
-		if (!fs.FileExists(file)) {
-			bind_data.file_exists = false;
-			break;
-		}
-	}
-	bind_data.single_threaded = bind_data.single_threaded || !bind_data.file_exists;
 	if (bind_data.single_threaded) {
 		return SingleThreadedCSVInit(context, input);
 	} else {

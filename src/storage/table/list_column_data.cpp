@@ -8,19 +8,19 @@
 namespace duckdb {
 
 ListColumnData::ListColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-                               LogicalType type_p, ColumnData *parent)
+                               LogicalType type_p, optional_ptr<ColumnData> parent)
     : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
-      validity(block_manager, info, 0, start_row, this) {
+      validity(block_manager, info, 0, start_row, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	auto &child_type = ListType::GetChildType(type);
 	// the child column, with column index 1 (0 is the validity mask)
 	child_column = ColumnData::CreateColumnUnique(block_manager, info, 1, start_row, child_type, this);
 }
 
-ListColumnData::ListColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
-    : ColumnData(original, start_row, parent), validity(((ListColumnData &)original).validity, start_row, this) {
-	auto &list_data = (ListColumnData &)original;
-	child_column = ColumnData::CreateColumnUnique(*list_data.child_column, start_row, this);
+void ListColumnData::SetStart(idx_t new_start) {
+	ColumnData::SetStart(new_start);
+	child_column->SetStart(new_start);
+	validity.SetStart(new_start);
 }
 
 bool ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -321,11 +321,6 @@ public:
 		ColumnCheckpointState::WriteDataPointers(writer);
 		validity_state->WriteDataPointers(writer);
 		child_state->WriteDataPointers(writer);
-	}
-	void GetBlockIds(unordered_set<block_id_t> &result) override {
-		ColumnCheckpointState::GetBlockIds(result);
-		validity_state->GetBlockIds(result);
-		child_state->GetBlockIds(result);
 	}
 };
 

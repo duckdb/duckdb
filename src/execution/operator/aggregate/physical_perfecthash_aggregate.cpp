@@ -114,9 +114,9 @@ unique_ptr<LocalSinkState> PhysicalPerfectHashAggregate::GetLocalSinkState(Execu
 	return make_uniq<PerfectHashAggregateLocalState>(*this, context);
 }
 
-SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state,
-                                                  LocalSinkState &lstate_p, DataChunk &input) const {
-	auto &lstate = lstate_p.Cast<PerfectHashAggregateLocalState>();
+SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, DataChunk &chunk,
+                                                  OperatorSinkInput &input) const {
+	auto &lstate = input.local_state.Cast<PerfectHashAggregateLocalState>();
 	DataChunk &group_chunk = lstate.group_chunk;
 	DataChunk &aggregate_input_chunk = lstate.aggregate_input_chunk;
 
@@ -124,7 +124,7 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Glo
 		auto &group = groups[group_idx];
 		D_ASSERT(group->type == ExpressionType::BOUND_REF);
 		auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
-		group_chunk.data[group_idx].Reference(input.data[bound_ref_expr.index]);
+		group_chunk.data[group_idx].Reference(chunk.data[bound_ref_expr.index]);
 	}
 	idx_t aggregate_input_idx = 0;
 	for (auto &aggregate : aggregates) {
@@ -132,7 +132,7 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Glo
 		for (auto &child_expr : aggr.children) {
 			D_ASSERT(child_expr->type == ExpressionType::BOUND_REF);
 			auto &bound_ref_expr = child_expr->Cast<BoundReferenceExpression>();
-			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[bound_ref_expr.index]);
+			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[bound_ref_expr.index]);
 		}
 	}
 	for (auto &aggregate : aggregates) {
@@ -140,13 +140,13 @@ SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, Glo
 		if (aggr.filter) {
 			auto it = filter_indexes.find(aggr.filter.get());
 			D_ASSERT(it != filter_indexes.end());
-			aggregate_input_chunk.data[aggregate_input_idx++].Reference(input.data[it->second]);
+			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[it->second]);
 		}
 	}
 
-	group_chunk.SetCardinality(input.size());
+	group_chunk.SetCardinality(chunk.size());
 
-	aggregate_input_chunk.SetCardinality(input.size());
+	aggregate_input_chunk.SetCardinality(chunk.size());
 
 	group_chunk.Verify();
 	aggregate_input_chunk.Verify();
@@ -184,12 +184,18 @@ unique_ptr<GlobalSourceState> PhysicalPerfectHashAggregate::GetGlobalSourceState
 	return make_uniq<PerfectHashAggregateState>();
 }
 
-void PhysicalPerfectHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                           LocalSourceState &lstate) const {
-	auto &state = (PerfectHashAggregateState &)gstate_p;
+SourceResultType PhysicalPerfectHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                       OperatorSourceInput &input) const {
+	auto &state = (PerfectHashAggregateState &)input.global_state;
 	auto &gstate = sink_state->Cast<PerfectHashAggregateGlobalState>();
 
 	gstate.ht->Scan(state.ht_scan_position, chunk);
+
+	if (chunk.size() > 0) {
+		return SourceResultType::HAVE_MORE_OUTPUT;
+	} else {
+		return SourceResultType::FINISHED;
+	}
 }
 
 string PhysicalPerfectHashAggregate::ParamsToString() const {

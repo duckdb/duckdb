@@ -13,7 +13,8 @@
 
 namespace duckdb {
 
-struct ArrowAuxiliaryData : VectorAuxiliaryData {
+struct ArrowAuxiliaryData : public VectorAuxiliaryData {
+	static constexpr const VectorAuxiliaryDataType TYPE = VectorAuxiliaryDataType::ARROW_AUXILIARY;
 	explicit ArrowAuxiliaryData(shared_ptr<ArrowArrayWrapper> arrow_array_p)
 	    : VectorAuxiliaryData(VectorAuxiliaryDataType::ARROW_AUXILIARY), arrow_array(std::move(arrow_array_p)) {
 	}

@@ -320,7 +320,7 @@ struct ArrowUUIDConverter {
 template <class SRC = string_t, class OP = ArrowVarcharConverter>
 struct ArrowVarcharData {
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
-		result.main_buffer.reserve((capacity + 1) * sizeof(uint32_t));
+		result.main_buffer.reserve((capacity + 1) * sizeof(uint64_t));
 		result.aux_buffer.reserve(capacity);
 	}
 
@@ -334,9 +334,9 @@ struct ArrowVarcharData {
 		auto validity_data = (uint8_t *)append_data.validity.data();
 
 		// resize the offset buffer - the offset buffer holds the offsets into the child array
-		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(uint32_t) * (size + 1));
+		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(uint64_t) * (size + 1));
 		auto data = (SRC *)format.data;
-		auto offset_data = (uint32_t *)append_data.main_buffer.data();
+		auto offset_data = (uint64_t *)append_data.main_buffer.data();
 		if (append_data.row_count == 0) {
 			// first entry
 			offset_data[0] = 0;

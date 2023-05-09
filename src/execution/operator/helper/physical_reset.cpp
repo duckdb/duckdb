@@ -19,8 +19,7 @@ void PhysicalReset::ResetExtensionVariable(ExecutionContext &context, DBConfig &
 	}
 }
 
-void PhysicalReset::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                            LocalSourceState &lstate) const {
+SourceResultType PhysicalReset::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto option = DBConfig::GetOptionByName(name);
 	if (!option) {
 		// check if this is an extra extension variable
@@ -30,7 +29,7 @@ void PhysicalReset::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 			throw Catalog::UnrecognizedConfigurationError(context.client, name);
 		}
 		ResetExtensionVariable(context, config, entry->second);
-		return;
+		return SourceResultType::FINISHED;
 	}
 
 	// Transform scope
@@ -63,6 +62,8 @@ void PhysicalReset::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 	default:
 		throw InternalException("Unsupported SetScope for variable");
 	}
+
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

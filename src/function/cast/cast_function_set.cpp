@@ -66,46 +66,33 @@ struct MapCastNode {
 	int64_t implicit_cast_cost;
 };
 
-static bool RelaxedTypeMatch(const LogicalType &entry_type, const LogicalType &type) {
-	D_ASSERT(entry_type != type); // we shouldn't be here if they're equal
-
-	if (!entry_type.AuxInfo()) {
-		return false;
-	}
-
-	// we might still be able to resolve
-	switch (entry_type.id()) {
+template <class MAP_VALUE_TYPE>
+static auto RelaxedTypeMatch(type_map_t<MAP_VALUE_TYPE> &map, const LogicalType &type) -> decltype(map.find(type)) {
+	D_ASSERT(map.find(type) == map.end()); // we shouldn't be here
+	switch (type.id()) {
 	case LogicalTypeId::LIST:
-		// if the list type is ANY we consider it a match
-		if (ListType::GetChildType(entry_type) != LogicalType::ANY) {
-			return false;
-		}
-		break;
+		return map.find(LogicalType::LIST(LogicalType::ANY));
 	case LogicalTypeId::STRUCT:
-		// if the struct has exactly one child and it's ANY type, we consider it a match
-		if (StructType::GetChildCount(entry_type) != 1 || StructType::GetChildType(entry_type, 0) != LogicalType::ANY) {
-			return false;
+		return map.find(LogicalType::STRUCT({{"any", LogicalType::ANY}}));
+	case LogicalTypeId::MAP:
+		for (auto it = map.begin(); it != map.end(); it++) {
+			const auto &entry_type = it->first;
+			if (entry_type.id() != LogicalTypeId::MAP) {
+				continue;
+			}
+			auto &entry_key_type = MapType::KeyType(entry_type);
+			auto &entry_val_type = MapType::ValueType(entry_type);
+			if ((entry_key_type == LogicalType::ANY || entry_key_type == MapType::KeyType(type)) &&
+			    (entry_val_type == LogicalType::ANY || entry_val_type == MapType::ValueType(type))) {
+				return it;
+			}
 		}
-		break;
-	case LogicalTypeId::MAP: {
-		// if the key/val matches exactly or is ANY we consider it a match
-		auto &entry_key_type = MapType::KeyType(entry_type);
-		auto &entry_val_type = MapType::ValueType(entry_type);
-		if ((entry_key_type != LogicalType::ANY && entry_key_type != MapType::KeyType(type)) ||
-		    (entry_val_type != LogicalType::ANY && entry_val_type != MapType::ValueType(type))) {
-			return false;
-		}
-		break;
-	}
+		return map.end();
 	case LogicalTypeId::UNION:
-		if (UnionType::GetMemberCount(entry_type) != 1 || UnionType::GetMemberType(entry_type, 0) != LogicalType::ANY) {
-			return false;
-		}
-		break;
+		return map.find(LogicalType::UNION({{"any", LogicalType::ANY}}));
 	default:
-		return false;
+		return map.find(LogicalType::ANY);
 	}
-	return true;
 }
 
 struct MapCastInfo : public BindCastInfo {
@@ -113,43 +100,37 @@ public:
 	const optional_ptr<MapCastNode> GetEntry(const LogicalType &source, const LogicalType &target) {
 		auto source_type_id_entry = casts.find(source.id());
 		if (source_type_id_entry == casts.end()) {
-			return nullptr;
+			source_type_id_entry = casts.find(LogicalTypeId::ANY);
+			if (source_type_id_entry == casts.end()) {
+				return nullptr;
+			}
 		}
 
 		auto &source_type_entries = source_type_id_entry->second;
 		auto source_type_entry = source_type_entries.find(source);
 		if (source_type_entry == source_type_entries.end()) {
-			for (source_type_entry = source_type_entries.begin(); source_type_entry != source_type_entries.end();
-			     source_type_entry++) {
-				if (RelaxedTypeMatch(source_type_entry->first, source)) {
-					break;
-				}
+			source_type_entry = RelaxedTypeMatch(source_type_entries, source);
+			if (source_type_entry == source_type_entries.end()) {
+				return nullptr;
 			}
-		}
-
-		if (source_type_entry == source_type_entries.end()) {
-			return nullptr;
 		}
 
 		auto &target_type_id_entries = source_type_entry->second;
 		auto target_type_id_entry = target_type_id_entries.find(target.id());
 		if (target_type_id_entry == target_type_id_entries.end()) {
-			return nullptr;
+			target_type_id_entry = target_type_id_entries.find(LogicalTypeId::ANY);
+			if (target_type_id_entry == target_type_id_entries.end()) {
+				return nullptr;
+			}
 		}
 
 		auto &target_type_entries = target_type_id_entry->second;
 		auto target_type_entry = target_type_entries.find(target);
 		if (target_type_entry == target_type_entries.end()) {
-			for (target_type_entry = target_type_entries.begin(); target_type_entry != target_type_entries.end();
-			     target_type_entry++) {
-				if (RelaxedTypeMatch(target_type_entry->first, target)) {
-					break;
-				}
+			target_type_entry = RelaxedTypeMatch(target_type_entries, target);
+			if (target_type_entry == target_type_entries.end()) {
+				return nullptr;
 			}
-		}
-
-		if (target_type_entry == target_type_entries.end()) {
-			return nullptr;
 		}
 
 		return &target_type_entry->second;
