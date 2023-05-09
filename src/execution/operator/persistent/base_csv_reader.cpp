@@ -546,21 +546,21 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 				result_vector.ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
 				idx_t row_idx;
 				for (row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
-					if (!inserted_column_data.validity.RowIsValid(row_idx) && !FlatVector::IsNull(parse_vector, row_idx)) {
+					if (!inserted_column_data.validity.RowIsValid(row_idx) &&
+					    !FlatVector::IsNull(parse_vector, row_idx)) {
 						break;
 					}
 				}
-				
+
 				// Register the error
 				auto max_errors = context.config.max_csv_errors;
 				auto &error_log = context.client_data->read_csv_error_log->errors;
 				if (error_log.size() < max_errors) {
 					auto parsed_str = FlatVector::GetData<string_t>(parse_vector)[row_idx].GetString();
-					error_log.push_back(
-					    LoggedCSVError {(error_line + row_idx) - 1 , col_idx, col_name, parsed_str, error_message, GetFileName()});
+					error_log.push_back(LoggedCSVError {(error_line + row_idx) - 1, col_idx, col_name, parsed_str,
+					                                    error_message, GetFileName()});
 				}
-			}
-			else if (options.auto_detect) {
+			} else if (options.auto_detect) {
 				throw InvalidInputException("%s in column %s, at line %llu.\n\nParser "
 				                            "options:\n%s.\n\nConsider either increasing the sample size "
 				                            "(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
