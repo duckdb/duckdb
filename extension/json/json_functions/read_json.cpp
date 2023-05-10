@@ -1,8 +1,8 @@
+#include "duckdb/common/multi_file_reader.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
 #include "json_structure.hpp"
 #include "json_transform.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
 
 namespace duckdb {
 
@@ -223,7 +223,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	transform_options.error_duplicate_key = !bind_data.ignore_errors;
 	transform_options.error_missing_key = false;
 	transform_options.error_unknown_key = bind_data.auto_detect && !bind_data.ignore_errors;
-	transform_options.from_file = true;
+	transform_options.delay_error = true;
 
 	return result;
 }
@@ -262,10 +262,12 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 
 	if (!success) {
-		string hint = gstate.bind_data.auto_detect
-		                  ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns' manually, "
-		                    "specifying 'lines' or 'json_format' manually, or setting 'ignore_errors' to true."
-		                  : "\n Try specifying 'lines' or 'json_format' manually, or setting 'ignore_errors' to true.";
+		string hint =
+		    gstate.bind_data.auto_detect
+		        ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns', 'lines' or "
+		          "'json_format' manually, or setting 'ignore_errors' to true."
+		        : "\nTry setting 'auto_detect' to true, specifying 'lines' or 'json_format' manually, or setting "
+		          "'ignore_errors' to true.";
 		lstate.ThrowTransformError(lstate.transform_options.object_index,
 		                           lstate.transform_options.error_message + hint);
 	}

@@ -87,6 +87,7 @@ public:
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input);
 	void InitializeFormats();
+	void InitializeFormats(bool auto_detect);
 
 	void Serialize(FieldWriter &writer);
 	void Deserialize(FieldReader &reader);
