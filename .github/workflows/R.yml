@@ -287,12 +287,9 @@ jobs:
           python_name: python
           override_cc: gcc
           override_cxx: g++
-          excel: 0
-#          httpfs: 0
           out_of_tree_ext: 0
           openssl_path: C:/rtools43/x86_64-w64-mingw32.static.posix # not sure if this is required, there seems to be an openssl there
           run_tests: 0
-
 
       - name: Install R package
         shell: bash
@@ -306,7 +303,7 @@ jobs:
       - name: Test Load
         shell: bash
         run: |
-          R --quiet -e 'con <- DBI::dbConnect(duckdb::duckdb(config = list("allow_unsigned_extensions" = "true"))); lapply(Sys.glob("build/release/extension/*/*.duckdb_extension"), function(x) DBI::dbExecute(con, sprintf("LOAD \"%s\"", x))); DBI::dbDisconnect(con, shutdown=TRUE);'
+          R -e 'con <- DBI::dbConnect(duckdb::duckdb(config = list("allow_unsigned_extensions" = "true"))); lapply(Sys.glob("build/release/extension/*/*.duckdb_extension"), function(x) DBI::dbExecute(con, sprintf("LOAD \"%s\"", x))); DBI::dbDisconnect(con, shutdown=TRUE);'
 
 
   rstats-windows-warnings:

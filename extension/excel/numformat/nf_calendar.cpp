@@ -22,8 +22,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#ifdef WIN32
-#include "windows.h"
+#ifdef _WIN32
+#include <timezoneapi.h>
+#include <sysinfoapi.h>
+
 #else
 #include <sys/time.h>
 #endif
