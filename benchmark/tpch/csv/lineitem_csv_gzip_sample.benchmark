@@ -1,4 +1,4 @@
-# name: benchmark/tpch/csv/lineitem_csv_gzip.benchmark
+# name: benchmark/tpch/csv/lineitem_csv_gzip_sample.benchmark
 # description: Read Lineitem CSV gzipped with auto-detection sampling the entire file
 # group: [csv]
 
