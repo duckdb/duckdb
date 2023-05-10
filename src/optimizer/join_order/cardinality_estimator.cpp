@@ -574,9 +574,9 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode &node, LogicalO
 	D_ASSERT(node.set.count == 1);
 	auto relation_id = node.set.relations[0];
 
-	double lowest_card_found = NumericLimits<double>::Maximum();
+	double lowest_card_found = node.GetBaseTableCardinality();
 	for (auto &column : relation_attributes[relation_id].columns) {
-		auto card_after_filters = node.GetBaseTableCardinality();
+		auto card_after_filters = lowest_card_found;
 		ColumnBinding key = ColumnBinding(relation_id, column);
 		optional_ptr<TableFilterSet> table_filters;
 		auto actual_binding = relation_column_to_original_column.find(key);
