@@ -244,8 +244,8 @@ void Executor::AddRecursiveCTE(PhysicalOperator &rec_cte) {
 	recursive_ctes.push_back(rec_cte);
 }
 
-void Executor::AddMaterializedCTE(PhysicalOperator &rec_cte) {
-	materialized_ctes.push_back(rec_cte);
+void Executor::AddMaterializedCTE(PhysicalOperator &mat_cte) {
+	materialized_ctes.push_back(mat_cte);
 }
 
 void Executor::ReschedulePipelines(const vector<shared_ptr<MetaPipeline>> &pipelines_p,
@@ -326,9 +326,9 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 		}
 
 		// ready recursive cte pipelines too
-		for (auto &rec_cte_ref : materialized_ctes) {
-			auto &rec_cte = rec_cte_ref.get().Cast<PhysicalCTE>();
-			rec_cte.recursive_meta_pipeline->Ready();
+		for (auto &mat_cte_ref : materialized_ctes) {
+			auto &mat_cte = mat_cte_ref.get().Cast<PhysicalCTE>();
+			mat_cte.recursive_meta_pipeline->Ready();
 		}
 
 		// set root pipelines, i.e., all pipelines that end in the final sink
@@ -368,9 +368,9 @@ void Executor::CancelTasks() {
 			auto &rec_cte = rec_cte_ref.get().Cast<PhysicalRecursiveCTE>();
 			rec_cte.recursive_meta_pipeline.reset();
 		}
-		for (auto &rec_cte_ref : materialized_ctes) {
-			auto &rec_cte = rec_cte_ref.get().Cast<PhysicalCTE>();
-			rec_cte.recursive_meta_pipeline.reset();
+		for (auto &mat_cte_ref : materialized_ctes) {
+			auto &mat_cte = mat_cte_ref.get().Cast<PhysicalCTE>();
+			mat_cte.recursive_meta_pipeline.reset();
 		}
 		pipelines.clear();
 		root_pipelines.clear();
