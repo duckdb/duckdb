@@ -98,7 +98,7 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "count_if", {"l", nullptr}, "sum(if(l, 1, 0))"},
 	{DEFAULT_SCHEMA, "split_part", {"string", "delimiter", "position", nullptr}, "coalesce(string_split(string, delimiter)[position],'')"},
 
-    {DEFAULT_SCHEMA, "list_intersect", {"l1", "l2"}, "list_filter(l1, (x) -> contains(l2, x))"},
+    {DEFAULT_SCHEMA, "list_intersect", {"l1", "l2", nullptr}, "list_filter(l1, (x) -> list_contains(l2, x))"},
 
 
 	// algebraic list aggregates
