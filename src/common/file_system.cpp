@@ -236,6 +236,24 @@ unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, F
 	throw NotImplementedException("%s: OpenFile is not implemented!", GetName());
 }
 
+unique_ptr<FileHandle> FileSystem::TryOpenFile(const string &path, uint8_t flags, FileLockType lock,
+                                               FileCompressionType compression, optional_ptr<FileOpener> opener,
+                                               optional_ptr<string> out_error) {
+	try {
+		return OpenFile(path, flags, lock, compression, opener.get());
+	} catch (std::exception &ex) {
+		if (out_error) {
+			*out_error = ex.what();
+		}
+		return nullptr;
+	} catch (...) {
+		if (out_error) {
+			*out_error = "Unknown exception type in FileSystem::TryOpenFile";
+		}
+		return nullptr;
+	}
+}
+
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	throw NotImplementedException("%s: Read (with location) is not implemented!", GetName());
 }
@@ -261,15 +279,21 @@ time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
 }
 
 FileType FileSystem::GetFileType(FileHandle &handle) {
-	return FileType::FILE_TYPE_INVALID;
+	throw NotImplementedException("%s: GetFileType is not implemented!", GetName());
+}
+
+FileType FileSystem::GetFileType(const string &filename, optional_ptr<FileOpener> opener) {
+	try {
+		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
+		                       FileCompressionType::UNCOMPRESSED, opener.get());
+		return GetFileType(*handle);
+	} catch (...) {
+		return FileType::FILE_TYPE_INVALID;
+	}
 }
 
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	throw NotImplementedException("%s: Truncate is not implemented!", GetName());
-}
-
-bool FileSystem::DirectoryExists(const string &directory) {
-	throw NotImplementedException("%s: DirectoryExists is not implemented!", GetName());
 }
 
 void FileSystem::CreateDirectory(const string &directory) {
@@ -289,12 +313,16 @@ void FileSystem::MoveFile(const string &source, const string &target) {
 	throw NotImplementedException("%s: MoveFile is not implemented!", GetName());
 }
 
+bool FileSystem::DirectoryExists(const string &directory) {
+	return GetFileType(directory) == FileType::FILE_TYPE_DIR;
+}
+
 bool FileSystem::FileExists(const string &filename) {
-	throw NotImplementedException("%s: FileExists is not implemented!", GetName());
+	return GetFileType(filename) == FileType::FILE_TYPE_REGULAR;
 }
 
 bool FileSystem::IsPipe(const string &filename) {
-	throw NotImplementedException("%s: IsPipe is not implemented!", GetName());
+	return GetFileType(filename) == FileType::FILE_TYPE_FIFO;
 }
 
 void FileSystem::RemoveFile(const string &filename) {

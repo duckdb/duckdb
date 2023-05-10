@@ -106,7 +106,7 @@ public:
 	      config_params(config_params_p) {
 
 		if (flags & FileFlags::FILE_FLAGS_WRITE && flags & FileFlags::FILE_FLAGS_READ) {
-			throw NotImplementedException("Cannot open an HTTP file for both reading and writing");
+			throw NotImplementedException("Cannot open a HTTP file for both reading and writing");
 		} else if (flags & FileFlags::FILE_FLAGS_APPEND) {
 			throw NotImplementedException("Cannot open an HTTP file for appending");
 		}

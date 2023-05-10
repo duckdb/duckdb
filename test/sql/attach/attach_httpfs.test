@@ -6,6 +6,7 @@ require skip_reload
 
 require httpfs
 
+# this test does not work if we upgrade the storage version - so skip it for now
 mode skip
 
 # ATTACH a DuckDB database over HTTPFS

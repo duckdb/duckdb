@@ -18,6 +18,10 @@ class VirtualFileSystem : public FileSystem {
 public:
 	VirtualFileSystem();
 
+	unique_ptr<FileHandle> TryOpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
+	                                   FileCompressionType compression = FileCompressionType::UNCOMPRESSED,
+	                                   optional_ptr<FileOpener> opener = nullptr,
+	                                   optional_ptr<string> out_error = nullptr) override;
 	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
 	                                FileCompressionType compression = FileCompressionType::UNCOMPRESSED,
 	                                FileOpener *opener = nullptr) override;
@@ -56,10 +60,6 @@ public:
 		handle.file_system.FileSync(handle);
 	}
 
-	// need to look up correct fs for this
-	bool DirectoryExists(const string &directory) override {
-		return FindFileSystem(directory)->DirectoryExists(directory);
-	}
 	void CreateDirectory(const string &directory) override {
 		FindFileSystem(directory)->CreateDirectory(directory);
 	}
@@ -77,10 +77,15 @@ public:
 		FindFileSystem(source)->MoveFile(source, target);
 	}
 
+	FileType GetFileType(const string &filename, optional_ptr<FileOpener> opener = nullptr) override {
+		return FindFileSystem(filename)->GetFileType(filename, opener);
+	}
+	bool DirectoryExists(const string &directory) override {
+		return FindFileSystem(directory)->DirectoryExists(directory);
+	}
 	bool FileExists(const string &filename) override {
 		return FindFileSystem(filename)->FileExists(filename);
 	}
-
 	bool IsPipe(const string &filename) override {
 		return FindFileSystem(filename)->IsPipe(filename);
 	}

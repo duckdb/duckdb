@@ -23,11 +23,8 @@ namespace duckdb {
 unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompressionType compression,
                                            ClientContext &context) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	auto file_handle = fs.OpenFile(file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, compression);
-	if (file_handle->CanSeek()) {
-		file_handle->Reset();
-	}
-	return make_uniq<CSVFileHandle>(BufferAllocator::Get(context), std::move(file_handle), false);
+	auto &allocator = BufferAllocator::Get(context);
+	return CSVFileHandle::OpenFile(fs, allocator, file_path, compression, false);
 }
 
 void ReadCSVData::FinalizeRead(ClientContext &context) {

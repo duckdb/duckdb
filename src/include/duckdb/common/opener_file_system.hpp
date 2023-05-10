@@ -18,6 +18,15 @@ public:
 	virtual FileSystem &GetFileSystem() const = 0;
 	virtual optional_ptr<FileOpener> GetOpener() const = 0;
 
+	unique_ptr<FileHandle> TryOpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
+	                                   FileCompressionType compression = FileCompressionType::UNCOMPRESSED,
+	                                   optional_ptr<FileOpener> opener = nullptr,
+	                                   optional_ptr<string> out_error = nullptr) override {
+		if (opener) {
+			throw InternalException("OpenerFileSystem cannot take an opener - the opener is pushed automatically");
+		}
+		return GetFileSystem().TryOpenFile(path, flags, lock, compression, GetOpener(), out_error);
+	}
 	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
 	                                FileCompressionType compression = FileCompressionType::UNCOMPRESSED,
 	                                FileOpener *opener = nullptr) override {
