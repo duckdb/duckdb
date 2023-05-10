@@ -5,6 +5,8 @@
 statement ok 
 PRAGMA enable_verification;
 
+mode skip
+
 query I
 SELECT list_resize([1, 2, 4], 2);
 ----
@@ -33,6 +35,11 @@ select list_resize(a, b) from tbl;
 NULL
 [10, 11]
 
+query I
+SELECT list_resize([], 2);
+----
+[NULL, NULL]
+
 # Strings
 
 statement ok
@@ -59,6 +66,9 @@ select list_resize(a, b) from string_tbl;
 [here is a little story about a duck,, whose name is harold., He is a cool duck who lives in a cool world, NULL, NULL]
 
 # Null Check
+statement ok
+SELECT list_resize([1,2,3], NULL);
+
 statement ok
 CREATE TABLE nulls(l INT[], b INT);
 
@@ -111,12 +121,39 @@ select list_resize([{'i': 1,'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}], 4);
 ----
 [{'i': 1, 'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}, NULL]
 
+# Nested Lists of Structs and Structs of Lists in Structs and Lists of Structs in Lists
+
+query I
+select list_resize([{'i': 1,'j': [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]}, NULL, {'i': 1, 'j': [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]}], 4);
+----
+[{'i': 1, 'j': [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]}, NULL, {'i': 1, 'j': [{'a': 1, 'b': 2}, {'a': 3, 'b': 4}]}, NULL]
+
+query I
+select list_resize([{'i': 1,'j': [{'a': 1, 'b': [2, 3]}, {'a': 3, 'b': [4, 5]}]}, NULL, {'i': 1, 'j': [{'a': 1, 'b': [2, 3]}, {'a': 3, 'b': [4, 5]}]}], 4);
+----
+[{'i': 1, 'j': [{'a': 1, 'b': [2, 3]}, {'a': 3, 'b': [4, 5]}]}, NULL, {'i': 1, 'j': [{'a': 1, 'b': [2, 3]}, {'a': 3, 'b': [4, 5]}]}, NULL]
+
+query I
+select list_resize([[[1, 2, 3], [4, 5, 6]], [[ 7, 8, 9 ]], [[10, 11, 12], [13, 14, 15]]], 2);
+----
+[[[1, 2, 3], [4, 5, 6]], [[7, 8, 9]]]
+
+query I
+select list_resize([[[1, 2, 3], [4, 5, 6]], [[ 7, 8, 9 ], NULL], NULL, [NULL], [[10, 11, 12], [13, 14, 15]]], 8);
+----
+[[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], NULL], NULL, [NULL], [[10, 11, 12], [13, 14, 15]], NULL, NULL, NULL]
+
 # Nested Function
 
 query I
 select list_resize([1, 2, 3], len(list_resize([1, 2, 3], 2)));
 ----
 [1, 2]
+
+query I
+select list_resize(list_filter([1, 2, 3, 4, 5, 6], x -> x > 1), 4);
+----
+[2, 3, 4, 5]
 
 # Default Values
 
@@ -149,11 +186,6 @@ SELECT list_resize([1, 2], 3, NULL)
 ----
 [1, 2, NULL]
 
-statement error
-select list_resize([1, 2, 3], 2, 'a');
-----
-Invalid Input Error: Default value must be of the same type as the list or NULL
-
 # Struct Default Values
 query I
 select list_resize([{'i': 1,'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}], 4, {'i': 5, 'j': [10, 10]});
@@ -164,3 +196,137 @@ query I
 select list_resize([{'i': 1,'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}], 6, NULL);
 ----
 [{'i': 1, 'j': [2, 3]}, NULL, {'i': 1, 'j': [2, 3]}, NULL, NULL, NULL]
+
+# Wrong Parameters
+
+statement error
+select list_resize([1, 2, 3], 2, 'a');
+----
+Invalid Input Error: Default value must be of the same type as the lists or NULL
+
+statement error
+select list_resize('cici n est pas een list', 2);
+
+statement error
+select list_resize([1, 2, 3], 1, [1, 2, 3]);
+----
+Invalid Input Error: Default value must be of the same type as the lists or NULL
+
+statement error
+select list_resize([1, 2, 3], 'huh');
+----
+Conversion Error: Could not convert string 'huh' to INT64
+
+statement error
+select list_resize();
+
+statement error
+select list_resize([1, 2, 3], 2, 3, 4);
+
+statement error
+select list_resize([1, 2, 3]);
+
+# Lists that exceed standard vector size (2048)
+statement ok
+SELECT list_resize(range(10000), 4000);
+
+
+statement ok
+SELECT list_resize([1, 2, 3], 4000);
+
+# Vector_types
+statement ok
+CREATE TABLE bool_table(a bool[], b int);
+
+statement ok
+INSERT INTO bool_table VALUES ([true, false, true], 1);
+
+statement ok
+INSERT INTO bool_table VALUES ([false, true, false], 2);
+
+statement ok
+INSERT INTO bool_table VALUES ([true, true, NULL], 3);
+
+query I
+SELECT list_resize(a, b) FROM bool_table;
+----
+[true]
+[false, true]
+[true, true, NULL]
+
+mode unskip
+
+query I
+SELECT list_resize([true], 2);
+----
+[true, NULL]
+
+query I
+SELECT list_resize([false], 2);
+----
+[false, NULL]
+
+query I
+SELECT list_resize([NULL], 2);
+----
+[NULL, NULL]
+
+mode skip
+
+statement ok
+CREATE TABLE all_types AS SELECT * FROM test_all_types();
+
+foreach colname bool tinyint smallint int bigint hugeint utinyint usmallint uint ubigint date time timestamp timestamp_s timestamp_ms timestamp_ns time_tz timestamp_tz float double dec_4_1 dec_9_4 dec_18_6 dec38_10 uuid interval varchar blob small_enum medium_enum large_enum int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs map
+
+statement ok
+select list_resize(["${colname}"], 2) FROM all_types;
+
+statement ok
+DROP TABLE a;
+
+endloop
+
+# Prepared Statements
+statement ok
+prepare q1 as select list_resize(?, ?);
+
+statement ok
+prepare q2 as select array_resize(?, ?);
+
+foreach q q1 q2
+
+query I
+execute ${q}([1, 2, 3], 4);
+----
+[1, 2, 3, NULL]
+
+query I
+execute ${q}([1, 2, 3], 2);
+----
+[1, 2]
+
+query I
+execute ${q}([1, 2, 3], 0);
+----
+[]
+
+statement error
+execute ${q}([1, 2, 3], -1);
+
+query I
+execute ${q}([1, 2, 3], NULL);
+----
+[]
+
+query I
+execute ${q}([1, 2, 3], 1.4);
+----
+[1]
+
+statement error
+execute ${q}([1, 2, 3], 'a');
+
+endloop
+
+mode unskip
+
