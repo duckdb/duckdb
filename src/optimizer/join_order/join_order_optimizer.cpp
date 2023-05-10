@@ -648,6 +648,7 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 			// we have to add a cross product; we add it between the two smallest relations
 			optional_ptr<JoinNode> smallest_plans[2];
 			idx_t smallest_index[2];
+			D_ASSERT(join_relations.size() >= 2);
 
 			// first just add the first two join relations. It doesn't matter the cost as the JOO
 			// will swap them on estimated cardinality anyway.
