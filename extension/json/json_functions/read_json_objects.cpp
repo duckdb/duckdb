@@ -6,14 +6,20 @@ namespace duckdb {
 
 unique_ptr<FunctionData> ReadJSONObjectsBind(ClientContext &context, TableFunctionBindInput &input,
                                              vector<LogicalType> &return_types, vector<string> &names) {
+	auto bind_data = make_uniq<JSONScanData>();
+	bind_data->Bind(context, input);
+
+	bind_data->names.emplace_back("json");
 	return_types.push_back(JSONCommon::JSONType());
 	names.emplace_back("json");
-	return JSONScanData::Bind(context, input);
+
+	bind_data->reader_bind =
+	    MultiFileReader::BindOptions(bind_data->options.file_options, bind_data->files, return_types, names);
+
+	return bind_data;
 }
 
 static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	D_ASSERT(output.ColumnCount() == 1);
-	D_ASSERT(JSONCommon::LogicalTypeIsJSON(output.data[0].GetType()));
 	auto &gstate = data_p.global_state->Cast<JSONGlobalTableFunctionState>().state;
 	auto &lstate = data_p.local_state->Cast<JSONLocalTableFunctionState>().state;
 
@@ -34,6 +40,10 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 	}
 
 	output.SetCardinality(count);
+
+	if (output.size() != 0) {
+		MultiFileReader::FinalizeChunk(gstate.bind_data.reader_bind, lstate.GetReaderData(), output);
+	}
 }
 
 TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info) {

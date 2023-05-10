@@ -10,14 +10,14 @@ void BufferedJSONReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField<JSONFormat>(format);
 	writer.WriteField<JSONRecordType>(record_type);
 	writer.WriteField<FileCompressionType>(compression);
-	file_options.Serialize(writer.GetSerializer());
+	writer.WriteSerializable(file_options);
 }
 
 void BufferedJSONReaderOptions::Deserialize(FieldReader &reader) {
 	format = reader.ReadRequired<JSONFormat>();
 	record_type = reader.ReadRequired<JSONRecordType>();
 	compression = reader.ReadRequired<FileCompressionType>();
-	file_options = MultiFileReaderOptions::Deserialize(reader.GetSource());
+	file_options = reader.ReadRequiredSerializable<MultiFileReaderOptions, MultiFileReaderOptions>();
 }
 
 JSONBufferHandle::JSONBufferHandle(idx_t buffer_index_p, idx_t readers_p, AllocatedData &&buffer_p, idx_t buffer_size_p)
@@ -302,6 +302,10 @@ void BufferedJSONReader::Reset() {
 	buffer_index = 0;
 	buffer_map.clear();
 	buffer_line_or_object_counts.clear();
+
+	if (!file_handle) {
+		return;
+	}
 
 	if (file_handle->CanSeek()) {
 		file_handle->Seek(0);

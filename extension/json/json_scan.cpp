@@ -10,22 +10,22 @@ namespace duckdb {
 JSONScanData::JSONScanData() {
 }
 
-unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
-	auto result = make_uniq<JSONScanData>();
-	auto &options = result->options;
-
+void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 	auto &info = input.info->Cast<JSONScanInfo>();
-	result->type = info.type;
+	type = info.type;
 	options.format = info.format;
 	options.record_type = info.record_type;
-	result->auto_detect = info.auto_detect;
+	auto_detect = info.auto_detect;
 
 	for (auto &kv : input.named_parameters) {
+		if (MultiFileReader::ParseOption(kv.first, kv.second, options.file_options)) {
+			continue;
+		}
 		auto loption = StringUtil::Lower(kv.first);
 		if (loption == "ignore_errors") {
-			result->ignore_errors = BooleanValue::Get(kv.second);
+			ignore_errors = BooleanValue::Get(kv.second);
 		} else if (loption == "maximum_object_size") {
-			result->maximum_object_size = MaxValue<idx_t>(UIntegerValue::Get(kv.second), result->maximum_object_size);
+			maximum_object_size = MaxValue<idx_t>(UIntegerValue::Get(kv.second), maximum_object_size);
 		} else if (loption == "format") {
 			auto arg = StringValue::Get(kv.second);
 			if (arg == "auto") {
@@ -56,10 +56,13 @@ unique_ptr<FunctionData> JSONScanData::Bind(ClientContext &context, TableFunctio
 		}
 	}
 
-	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "JSON");
-	result->InitializeReaders(context);
+	files = MultiFileReader::GetFileList(context, input.inputs[0], "JSON");
 
-	return std::move(result);
+	if (options.file_options.auto_detect_hive_partitioning) {
+		options.file_options.hive_partitioning = MultiFileReaderOptions::AutoDetectHivePartitioning(files);
+	}
+
+	InitializeReaders(context);
 }
 
 void JSONScanData::InitializeReaders(ClientContext &context) {
@@ -120,6 +123,9 @@ void JSONScanData::Serialize(FieldWriter &writer) const {
 	writer.WriteField<JSONScanType>(type);
 
 	options.Serialize(writer);
+
+	writer.WriteSerializable(reader_bind);
+
 	writer.WriteList<string>(files);
 
 	writer.WriteField<bool>(ignore_errors);
@@ -146,6 +152,9 @@ void JSONScanData::Deserialize(ClientContext &context, FieldReader &reader) {
 	type = reader.ReadRequired<JSONScanType>();
 
 	options.Deserialize(reader);
+
+	reader_bind = reader.ReadRequiredSerializable<MultiFileReaderBindData, MultiFileReaderBindData>();
+
 	files = reader.ReadRequiredList<string>();
 	InitializeReaders(context);
 
@@ -190,32 +199,56 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 	auto result = make_uniq<JSONGlobalTableFunctionState>(context, input);
 	auto &gstate = result->state;
 
-	// Perform projection pushdown
 	if (bind_data.type == JSONScanType::READ_JSON) {
-		D_ASSERT(input.column_ids.size() <= bind_data.names.size()); // Can't project to have more columns
+		// Perform projection pushdown
+		for (idx_t col_idx = 0; col_idx < input.column_ids.size(); col_idx++) {
+			const auto &col_id = input.column_ids[col_idx];
 
-		for (const auto &col_id : input.column_ids) {
-			if (IsRowIdColumnId(col_id)) {
-				gstate.is_rowid.push_back(true);
-			} else {
-				gstate.is_rowid.push_back(false);
-				gstate.names.emplace_back(bind_data.names[col_id]);
+			// Skip any multi-file reader / row id stuff
+			if (col_id == bind_data.reader_bind.filename_idx || IsRowIdColumnId(col_id)) {
+				continue;
 			}
+			bool skip = false;
+			for (const auto &hive_partitioning_index : bind_data.reader_bind.hive_partitioning_indexes) {
+				if (col_id == hive_partitioning_index.index) {
+					skip = true;
+					break;
+				}
+			}
+			if (skip) {
+				continue;
+			}
+
+			gstate.column_indices.push_back(col_idx);
+			gstate.names.push_back(bind_data.names[col_id]);
 		}
 
-		if (gstate.names.size() < bind_data.names.size()) {
+		if (gstate.names.size() < bind_data.names.size() || bind_data.options.file_options.union_by_name) {
 			// If we are auto-detecting, but don't need all columns present in the file,
 			// then we don't need to throw an error if we encounter an unseen column
 			gstate.transform_options.error_unknown_key = false;
 		}
+	} else {
+		D_ASSERT(bind_data.type == JSONScanType::READ_JSON_OBJECTS);
+		D_ASSERT(bind_data.names.size() == 1);
+		gstate.names.push_back(bind_data.names[0]);
 	}
 
 	// Place readers where they belong
 	if (bind_data.initial_reader) {
+		bind_data.initial_reader->Reset();
 		gstate.json_readers.emplace_back(bind_data.initial_reader.get());
 	}
 	for (const auto &reader : bind_data.union_readers) {
+		reader->Reset();
 		gstate.json_readers.emplace_back(reader.get());
+	}
+
+	vector<LogicalType> dummy_types(input.column_ids.size(), LogicalType::ANY);
+	for (auto &reader : gstate.json_readers) {
+		MultiFileReader::FinalizeBind(reader->GetOptions().file_options, gstate.bind_data.reader_bind,
+		                              reader->GetFileName(), gstate.names, dummy_types, bind_data.names,
+		                              input.column_ids, reader->reader_data);
 	}
 
 	return std::move(result);
@@ -579,7 +612,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 
 		auto format_and_record_type = DetectFormatAndRecordType(buffer_ptr, buffer_size, allocator.GetYYAlc());
 		current_reader->SetFormat(format_and_record_type.first);
-		if (bind_data.options.record_type == JSONRecordType::AUTO_DETECT) {
+		if (current_reader->GetRecordType() == JSONRecordType::AUTO_DETECT) {
 			current_reader->SetRecordType(format_and_record_type.second);
 		}
 		if (current_reader->GetFormat() == JSONFormat::ARRAY) {
@@ -806,6 +839,10 @@ void JSONScanLocalState::ParseNextChunk() {
 
 yyjson_alc *JSONScanLocalState::GetAllocator() {
 	return allocator.GetYYAlc();
+}
+
+const MultiFileReaderData &JSONScanLocalState::GetReaderData() const {
+	return current_reader->reader_data;
 }
 
 void JSONScanLocalState::ThrowTransformError(idx_t object_index, const string &error_message) {

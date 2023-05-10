@@ -11,7 +11,7 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "json_common.hpp"
 
@@ -133,6 +133,7 @@ private:
 
 public:
 	mutex lock;
+	MultiFileReaderData reader_data;
 
 public:
 	void OpenJSONFile();

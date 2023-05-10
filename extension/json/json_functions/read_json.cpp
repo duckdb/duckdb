@@ -56,7 +56,6 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 		}
 
 		// Close the file and stop detection if not union_by_name
-		gstate.json_readers.back()->Reset();
 		if (!bind_data.options.file_options.union_by_name) {
 			break;
 		}
@@ -101,8 +100,8 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindInput &input,
                                       vector<LogicalType> &return_types, vector<string> &names) {
 	// First bind default params
-	auto result = JSONScanData::Bind(context, input);
-	auto &bind_data = result->Cast<JSONScanData>();
+	auto bind_data = make_uniq<JSONScanData>();
+	bind_data->Bind(context, input);
 
 	for (auto &kv : input.named_parameters) {
 		auto loption = StringUtil::Lower(kv.first);
@@ -126,15 +125,15 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			if (names.empty()) {
 				throw BinderException("read_json \"columns\" parameter needs at least one column");
 			}
-			bind_data.names = names;
+			bind_data->names = names;
 		} else if (loption == "auto_detect") {
-			bind_data.auto_detect = BooleanValue::Get(kv.second);
+			bind_data->auto_detect = BooleanValue::Get(kv.second);
 		} else if (loption == "sample_size") {
 			auto arg = BigIntValue::Get(kv.second);
 			if (arg == -1) {
-				bind_data.sample_size = NumericLimits<idx_t>::Maximum();
+				bind_data->sample_size = NumericLimits<idx_t>::Maximum();
 			} else if (arg > 0) {
-				bind_data.sample_size = arg;
+				bind_data->sample_size = arg;
 			} else {
 				throw BinderException(
 				    "read_json \"sample_size\" parameter must be positive, or -1 to sample the entire file");
@@ -142,16 +141,16 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 		} else if (loption == "maximum_depth") {
 			auto arg = BigIntValue::Get(kv.second);
 			if (arg == -1) {
-				bind_data.max_depth = NumericLimits<idx_t>::Maximum();
+				bind_data->max_depth = NumericLimits<idx_t>::Maximum();
 			} else {
-				bind_data.max_depth = arg;
+				bind_data->max_depth = arg;
 			}
 		} else if (loption == "dateformat" || loption == "date_format") {
 			auto format_string = StringValue::Get(kv.second);
 			if (StringUtil::Lower(format_string) == "iso") {
 				format_string = "%Y-%m-%d";
 			}
-			bind_data.date_format = format_string;
+			bind_data->date_format = format_string;
 
 			StrpTimeFormat format;
 			auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
@@ -163,7 +162,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			if (StringUtil::Lower(format_string) == "iso") {
 				format_string = "%Y-%m-%dT%H:%M:%S.%fZ";
 			}
-			bind_data.timestamp_format = format_string;
+			bind_data->timestamp_format = format_string;
 
 			StrpTimeFormat format;
 			auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
@@ -173,37 +172,40 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 		} else if (loption == "records") {
 			auto arg = StringValue::Get(kv.second);
 			if (arg == "auto") {
-				bind_data.options.record_type = JSONRecordType::AUTO_DETECT;
+				bind_data->options.record_type = JSONRecordType::AUTO_DETECT;
 			} else if (arg == "true") {
-				bind_data.options.record_type = JSONRecordType::RECORDS;
+				bind_data->options.record_type = JSONRecordType::RECORDS;
 			} else if (arg == "false") {
-				bind_data.options.record_type = JSONRecordType::VALUES;
+				bind_data->options.record_type = JSONRecordType::VALUES;
 			} else {
 				throw InvalidInputException("units must be one of ['auto', 'true', 'false']");
 			}
 		}
 	}
-	if (!bind_data.auto_detect && return_types.empty()) {
+	if (!bind_data->auto_detect && return_types.empty()) {
 		throw BinderException("read_json requires columns to be specified through the 'columns' option. Use "
 		                      "read_json_auto or set read_json(..., AUTO_DETECT=TRUE) to automatically guess columns.");
 	}
 
-	bind_data.InitializeFormats();
+	bind_data->InitializeFormats();
 
-	if (bind_data.auto_detect || bind_data.options.record_type == JSONRecordType::AUTO_DETECT) {
-		JSONScan::AutoDetect(context, bind_data, return_types, names);
-		bind_data.names = names;
+	if (bind_data->auto_detect || bind_data->options.record_type == JSONRecordType::AUTO_DETECT) {
+		JSONScan::AutoDetect(context, *bind_data, return_types, names);
+		bind_data->names = names;
 	}
 	D_ASSERT(return_types.size() == names.size());
 
-	auto &transform_options = bind_data.transform_options;
-	transform_options.strict_cast = !bind_data.ignore_errors;
-	transform_options.error_duplicate_key = !bind_data.ignore_errors;
+	bind_data->reader_bind =
+	    MultiFileReader::BindOptions(bind_data->options.file_options, bind_data->files, return_types, names);
+
+	auto &transform_options = bind_data->transform_options;
+	transform_options.strict_cast = !bind_data->ignore_errors;
+	transform_options.error_duplicate_key = !bind_data->ignore_errors;
 	transform_options.error_missing_key = false;
-	transform_options.error_unknown_key = bind_data.auto_detect && !bind_data.ignore_errors;
+	transform_options.error_unknown_key = bind_data->auto_detect && !bind_data->ignore_errors;
 	transform_options.delay_error = true;
 
-	return result;
+	return bind_data;
 }
 
 static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -214,38 +216,38 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 	yyjson_val **values = lstate.values;
 	output.SetCardinality(count);
 
-	if (gstate.names.empty()) {
-		return; // count(*)
-	}
-
-	vector<Vector *> result_vectors;
-	result_vectors.reserve(output.ColumnCount());
-	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
-		if (!gstate.is_rowid[col_idx]) {
+	if (!gstate.names.empty()) {
+		vector<Vector *> result_vectors;
+		result_vectors.reserve(gstate.column_indices.size());
+		for (const auto &col_idx : gstate.column_indices) {
 			result_vectors.emplace_back(&output.data[col_idx]);
+		}
+
+		D_ASSERT(gstate.bind_data.options.record_type != JSONRecordType::AUTO_DETECT);
+		bool success;
+		if (gstate.bind_data.options.record_type == JSONRecordType::RECORDS) {
+			success = JSONTransform::TransformObject(values, lstate.GetAllocator(), count, gstate.names, result_vectors,
+			                                         lstate.transform_options);
+		} else {
+			D_ASSERT(gstate.bind_data.options.record_type == JSONRecordType::VALUES);
+			success = JSONTransform::Transform(values, lstate.GetAllocator(), *result_vectors[0], count,
+			                                   lstate.transform_options);
+		}
+
+		if (!success) {
+			string hint =
+			    gstate.bind_data.auto_detect
+			        ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns', 'format' or "
+			          "'records' manually, or setting 'ignore_errors' to true."
+			        : "\nTry setting 'auto_detect' to true, specifying 'format' or 'records' manually, or setting "
+			          "'ignore_errors' to true.";
+			lstate.ThrowTransformError(lstate.transform_options.object_index,
+			                           lstate.transform_options.error_message + hint);
 		}
 	}
 
-	D_ASSERT(gstate.bind_data.options.record_type != JSONRecordType::AUTO_DETECT);
-	bool success;
-	if (gstate.bind_data.options.record_type == JSONRecordType::RECORDS) {
-		success = JSONTransform::TransformObject(values, lstate.GetAllocator(), count, gstate.names, result_vectors,
-		                                         lstate.transform_options);
-	} else {
-		D_ASSERT(gstate.bind_data.options.record_type == JSONRecordType::VALUES);
-		success = JSONTransform::Transform(values, lstate.GetAllocator(), *result_vectors[0], count,
-		                                   lstate.transform_options);
-	}
-
-	if (!success) {
-		string hint =
-		    gstate.bind_data.auto_detect
-		        ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns', 'lines' or "
-		          "'json_format' manually, or setting 'ignore_errors' to true."
-		        : "\nTry setting 'auto_detect' to true, specifying 'lines' or 'json_format' manually, or setting "
-		          "'ignore_errors' to true.";
-		lstate.ThrowTransformError(lstate.transform_options.object_index,
-		                           lstate.transform_options.error_message + hint);
+	if (output.size() != 0) {
+		MultiFileReader::FinalizeChunk(gstate.bind_data.reader_bind, lstate.GetReaderData(), output);
 	}
 }
 

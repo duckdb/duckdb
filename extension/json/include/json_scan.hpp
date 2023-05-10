@@ -94,7 +94,8 @@ struct JSONScanData : public TableFunctionData {
 public:
 	JSONScanData();
 
-	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input);
+	void Bind(ClientContext &context, TableFunctionBindInput &input);
+
 	void InitializeReaders(ClientContext &context);
 
 	void InitializeFormats();
@@ -109,8 +110,9 @@ public:
 
 	//! File-specific options
 	BufferedJSONReaderOptions options;
-	//! Multi-file reader
-	MultiFileReaderData reader_data;
+
+	//! Multi-file reader stuff
+	MultiFileReaderBindData reader_bind;
 
 	//! The files we're reading
 	vector<string> files;
@@ -169,7 +171,7 @@ public:
 
 	//! Column names that we're actually reading (after projection pushdown)
 	vector<string> names;
-	vector<bool> is_rowid;
+	vector<column_t> column_indices;
 
 	//! Buffer manager allocator
 	Allocator &allocator;
@@ -194,6 +196,7 @@ public:
 public:
 	idx_t ReadNext(JSONScanGlobalState &gstate);
 	yyjson_alc *GetAllocator();
+	const MultiFileReaderData &GetReaderData() const;
 	void ThrowTransformError(idx_t object_index, const string &error_message);
 
 	//! Current scan data
@@ -323,6 +326,8 @@ public:
 	}
 
 	static void TableFunctionDefaults(TableFunction &table_function) {
+		MultiFileReader::AddParameters(table_function);
+
 		table_function.named_parameters["maximum_object_size"] = LogicalType::UINTEGER;
 		table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["format"] = LogicalType::VARCHAR;
