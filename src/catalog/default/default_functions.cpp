@@ -100,6 +100,7 @@ static DefaultMacro internal_macros[] = {
 
     {DEFAULT_SCHEMA, "list_has_any", {"l1", "l2", nullptr}, "list_has(list_transform(l1, (x) -> list_contains(l2, x)), true)"},
     {DEFAULT_SCHEMA, "list_has_all", {"l1", "l2", nullptr}, "CASE WHEN list_has(list_transform(l1, (x) -> list_contains(l2, x)), false) THEN false ELSE list_has_any(l1, l2) END"},
+    {DEFAULT_SCHEMA, "list_intersect", {"l1", "l2", nullptr}, "list_filter(l1, (x) -> list_contains(l2, x))"},
 
 	// algebraic list aggregates
 	{DEFAULT_SCHEMA, "list_avg", {"l", nullptr}, "list_aggr(l, 'avg')"},
@@ -207,9 +208,6 @@ unique_ptr<CatalogEntry> DefaultFunctionGenerator::CreateDefaultEntry(ClientCont
 vector<string> DefaultFunctionGenerator::GetDefaultEntries() {
 	vector<string> result;
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {
-		if (StringUtil::Lower(internal_macros[index].name) != internal_macros[index].name) {
-			throw InternalException("Default macro name: %s should be lowercase", internal_macros[index].name);
-		}
 		if (internal_macros[index].schema == schema.name) {
 			result.emplace_back(internal_macros[index].name);
 		}
