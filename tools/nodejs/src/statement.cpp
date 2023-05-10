@@ -357,7 +357,7 @@ struct RunPreparedTask : public Task {
 			std::shared_ptr<duckdb::QueryResult> result_ptr = std::move(result);
 
 			duckdb::idx_t out_idx = 1;
-			for(auto &chunk : materialized_result->Collection().Chunks()) {
+			for (auto &chunk : materialized_result->Collection().Chunks()) {
 				if (chunk.size() == 0) {
 					continue;
 				}
