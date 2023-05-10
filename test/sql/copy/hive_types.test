@@ -7,29 +7,59 @@ require parquet
 statement ok
 PRAGMA enable_verification
 
-# #	test with hive_partitioning=0
-# query IIII
-# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=0) limit 1;
-# ----
-# BIGINT	VARCHAR	BIGINT	VARCHAR
+#	hive_partitioning=0
+query IIII
+select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=0) limit 1;
+----
+BIGINT	VARCHAR	BIGINT	VARCHAR
 
-# #	test with hive_partitioning=1 (auto detected)
-# query IIII
-# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1) limit 1;
-# ----
-# BIGINT	VARCHAR	BIGINT	VARCHAR
+#	hive_partitioning=1, hive_types_autocast=0
+query IIII
+select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types_autocast=0) limit 1;
+----
+VARCHAR	VARCHAR	BIGINT	VARCHAR
 
-# #	test with hive_partitioning=1 (auto detected)
-# query IIII
-# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color']) limit 1;
-# ----
-# BIGINT	VARCHAR	BIGINT	VARCHAR
+#	hive_partitioning=1, hive_types_autocast=1		hive_types will autodetect
+query IIII
+select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types_autocast=1) limit 1;
+----
+BIGINT	VARCHAR	BIGINT	VARCHAR
 
-# #	set hive_types as varchar,varchar
-# query IIII
-# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types={'year':'varchar','month':'varchar'}) limit 1;
-# ----
-# VARCHAR	VARCHAR	BIGINT	VARCHAR
+#	hive_partitioning=1								hive_types will autodetect and autocast
+query IIII
+select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1) limit 1;
+----
+BIGINT	VARCHAR	BIGINT	VARCHAR
+
+#	turn off everything
+query IIII
+select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=0, hive_types_autocast=0) limit 1;
+----
+BIGINT	VARCHAR	BIGINT	VARCHAR
+
+#	autodetect hive_partitioning, turn off hive_types_autocast
+query IIII
+select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_types_autocast=0) limit 1;
+----
+VARCHAR	VARCHAR	BIGINT	VARCHAR
+
+#	autodetect hive_partitioning, turn on hive_types_autocast
+query IIII
+select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_types_autocast=1) limit 1;
+----
+BIGINT	VARCHAR	BIGINT	VARCHAR
+
+#	autodetect both
+query IIII
+select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color']) limit 1;
+----
+BIGINT	VARCHAR	BIGINT	VARCHAR
+
+#	set hive_types as varchar,varchar
+query IIII
+select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types={'year':'varchar','month':'varchar'}) limit 1;
+----
+VARCHAR	VARCHAR	BIGINT	VARCHAR
 
 # #	set hive_types as smallint,varchar
 # query IIII
@@ -60,3 +90,9 @@ PRAGMA enable_verification
 # select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color']) limit 1;
 # ----
 # BIGINT	VARCHAR	BIGINT	VARCHAR
+
+# # Complex filter filtering first file, filter should be pruned completely
+# query II
+# explain select id, value, part, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, hive_types={'date':'DATE'}) where date > '16-10-1989'::DATE;
+# ----
+# physical_plan    <!REGEX>:.*(PARQUET_SCAN.*Filters:|FILTER).*

@@ -24,6 +24,7 @@ struct MultiFileReaderOptions {
 	bool auto_detect_hive_partitioning = true;
 	bool union_by_name = false;
 	bool hive_types = false;
+	bool hive_types_autocast = true;
 	case_insensitive_map_t<LogicalType> hive_types_schema;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
@@ -32,7 +33,7 @@ struct MultiFileReaderOptions {
 
 	void AutoDetect(const vector<string> &files, ClientContext& context) {
 		if (!auto_detect_hive_partitioning && !hive_partitioning && hive_types) {
-			throw InvalidInputException("cannot disable hive_partitioning when using hive_types");
+			throw InvalidInputException("cannot disable hive_partitioning when hive_types is enabled");
 		}
 		if (files.empty()) {
 			return;
@@ -40,7 +41,7 @@ struct MultiFileReaderOptions {
 		if (auto_detect_hive_partitioning) {
 			hive_partitioning = AutoDetectHivePartitioning(files);
 		}
-		if (hive_partitioning && !hive_types) {
+		if (hive_partitioning && hive_types_autocast && hive_types_schema.empty()) {
 			hive_types = AutoDetectHiveTypes(files.front(), context);
 		}
 	}
@@ -98,12 +99,10 @@ struct MultiFileReaderOptions {
 			return false;
 		}
 
-		// do the actual detection
 		const LogicalType candidates[] = {LogicalType::DATE,LogicalType::TIMESTAMP,LogicalType::BIGINT};
-		for (auto& child : partitions) {
-			const string& name = child.first;
-			const string& type = child.second;
-			Value value(type);
+		for (auto& part : partitions) {
+			const string& name = part.first;
+			Value value(part.second);
 			for (auto& candidate : candidates) {
 				const bool success = value.TryCastAs(context, candidate);
 				if (success) {

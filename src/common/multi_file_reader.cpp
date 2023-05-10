@@ -16,6 +16,7 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
+	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
 }
 
 vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value &input, const string &name,
@@ -59,6 +60,8 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		options.auto_detect_hive_partitioning = false;
 	} else if (loption == "union_by_name") {
 		options.union_by_name = BooleanValue::Get(val);
+	} else if (loption == "hive_types_autocast"){
+		options.hive_types_autocast = BooleanValue::Get(val);
 	} else if (loption == "hive_types") {
 		options.hive_types = true;
 		// using 'hive_types' implies 'hive_partitioning'
@@ -89,6 +92,8 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		if (options.hive_types_schema.empty()) {
 			throw InvalidInputException("\'HIVE_TYPES\' can not be empty");
 		}
+	} else if (loption == "hive_types_autocast") {
+		options.hive_types_autocast = BooleanValue::Get(val);
 	} else {
 		return false;
 	}
@@ -222,13 +227,9 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 						auto it = file_options.hive_types_schema.find(entry.value);
 						if (it != file_options.hive_types_schema.end()) {
 							if (!value.TryCastAs(context, it->second)) {
-								string msg("Unable to cast '");
-								msg.append(value.ToString());
-								msg.append("' (from column: ");
-								msg.append(StringUtil::Upper(it->first));
-								msg.append(") to: ");
-								msg.append(it->second.ToString());
-								throw InvalidInputException(msg.c_str());
+								// what to do if value is NULL? //lars
+								const string errormsg(StringUtil::Format("Unable to cast '%s' (from column '%s') to: '%s'", value.ToString(), StringUtil::Upper(it->first), it->second.ToString()));
+								throw InvalidInputException(errormsg.c_str());
 							}
 						}
 					}
@@ -365,6 +366,7 @@ void MultiFileReaderOptions::Serialize(Serializer &serializer) const {
 	writer.WriteField<bool>(auto_detect_hive_partitioning);
 	writer.WriteField<bool>(union_by_name);
 	writer.WriteField<bool>(hive_types);
+	writer.WriteField<bool>(hive_types_autocast);
 	// serialize hive_types_schema
 	writer.WriteField<uint32_t>((uint32_t)hive_types_schema.size());
 	for (auto &hive_type : hive_types_schema) {
@@ -382,6 +384,7 @@ MultiFileReaderOptions MultiFileReaderOptions::Deserialize(Deserializer &source)
 	result.auto_detect_hive_partitioning = reader.ReadRequired<bool>();
 	result.union_by_name = reader.ReadRequired<bool>();
 	result.hive_types = reader.ReadRequired<bool>();
+	result.hive_types_autocast = reader.ReadRequired<bool>();
 	// deserialize hive_types_schema
 	const uint32_t schema_size = reader.ReadRequired<uint32_t>();
 	for (idx_t i = 0; i < schema_size; i++) {
