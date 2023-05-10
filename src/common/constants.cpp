@@ -2,6 +2,7 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
 
@@ -46,6 +47,15 @@ bool IsInvalidCatalog(const string &str) {
 
 bool IsRowIdColumnId(column_t column_id) {
 	return column_id == COLUMN_IDENTIFIER_ROW_ID;
+}
+
+void PhysicalIndex::Serialize(Serializer &serializer) const {
+	serializer.Write(index);
+}
+
+PhysicalIndex PhysicalIndex::Deserialize(Deserializer &source) {
+	auto index = source.Read<idx_t>();
+	return PhysicalIndex(index);
 }
 
 } // namespace duckdb

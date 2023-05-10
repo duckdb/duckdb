@@ -143,7 +143,6 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 
 static bool OperatorSupportsSerialization(LogicalOperator &op) {
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_INSERT:
 	case LogicalOperatorType::LOGICAL_UPDATE:
 	case LogicalOperatorType::LOGICAL_DELETE:
 	case LogicalOperatorType::LOGICAL_PREPARE:
@@ -175,6 +174,10 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 }
 
 void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op, bound_parameter_map_t *map) {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	// if alternate verification is enabled we run the original operator
+	return;
+#endif
 	if (!op || !ClientConfig::GetConfig(context).verify_serializer) {
 		return;
 	}
