@@ -13,8 +13,8 @@ struct StandardCopyValue {
 
 struct StringCopyValue {
 	template <class T>
-	static void Operation(T *result_child_data, optional_ptr<T> child_entries, optional_ptr<Vector>, Vector &result_child, idx_t i,
-	                      idx_t result_child_offset) {
+	static void Operation(T *result_child_data, optional_ptr<T> child_entries, optional_ptr<Vector>,
+	                      Vector &result_child, idx_t i, idx_t result_child_offset) {
 		result_child_data[result_child_offset] = StringVector::AddString(result_child, child_entries.get()[i]);
 	}
 };
@@ -49,7 +49,7 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 	UnifiedVectorFormat child_data;
 	child->ToUnifiedFormat(count, child_data);
 	optional_ptr<T> child_entries;
-	if (child->GetType() != LogicalTypeId::LIST && child->GetType().InternalType() != PhysicalType::STRUCT){
+	if (child->GetType() != LogicalTypeId::LIST && child->GetType().InternalType() != PhysicalType::STRUCT) {
 		child_entries = (T *)child_data.data;
 	}
 
@@ -202,9 +202,9 @@ static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFun
                                                vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2 || arguments.size() == 3);
 	if (bound_function.arguments.size() == 3) {
-//		if (child->GetType() != args.data[2].GetType() && args.data[2].GetType() != LogicalTypeId::SQLNULL) {
-//			throw InvalidInputException("Default value must be of the same type as the lists or NULL");
-//		}
+		//		if (child->GetType() != args.data[2].GetType() && args.data[2].GetType() != LogicalTypeId::SQLNULL) {
+		//			throw InvalidInputException("Default value must be of the same type as the lists or NULL");
+		//		}
 	}
 	bound_function.return_type = arguments[0]->return_type;
 	bound_function.arguments[1] = LogicalType::UBIGINT;
@@ -212,12 +212,12 @@ static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFun
 }
 
 void ListResizeFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction sfun({LogicalType::LIST(LogicalTypeId::ANY), LogicalTypeId::ANY}, LogicalType::LIST(LogicalTypeId::ANY),
-	                    ListResizeFunction, ListResizeBind);
+	ScalarFunction sfun({LogicalType::LIST(LogicalTypeId::ANY), LogicalTypeId::ANY},
+	                    LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction, ListResizeBind);
 	sfun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 
-	ScalarFunction dfun({LogicalType::LIST(LogicalTypeId::ANY), LogicalTypeId::ANY, LogicalTypeId::ANY}, LogicalType::LIST(LogicalTypeId::ANY),
-	                    ListResizeFunction, ListResizeBind);
+	ScalarFunction dfun({LogicalType::LIST(LogicalTypeId::ANY), LogicalTypeId::ANY, LogicalTypeId::ANY},
+	                    LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction, ListResizeBind);
 	dfun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 
 	ScalarFunctionSet list_resize("list_resize");
