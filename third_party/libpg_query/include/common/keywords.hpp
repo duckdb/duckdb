@@ -20,6 +20,7 @@
 #define COL_NAME_KEYWORD		1
 #define TYPE_FUNC_NAME_KEYWORD	2
 #define RESERVED_KEYWORD		3
+#define PGQ_UNRESERVED_KEYWORD 	4
 
 namespace duckdb_libpgquery {
 

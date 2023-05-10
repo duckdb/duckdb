@@ -2106,6 +2106,167 @@ typedef struct PGUseStmt {
 	PGRangeVar *name;    /* variable to be set */
 } PGUseStmt;
 
+/* -------------------------------
+ * CREATE PROPERTY GRAPH Statement
+ * -------------------------------
+ */
+
+typedef struct PGDropPropertyGraphStmt {
+    PGNodeTag type;
+    PGRangeVar *name;
+    PGDropBehavior behavior;
+} PGDropPropertyGraphStmt;
+
+typedef struct PGCreatePropertyGraphStmt {
+    PGNodeTag type;
+    PGRangeVar *name;
+    PGList *vertex_tables;
+    PGList *edge_tables;
+} PGCreatePropertyGraphStmt;
+
+typedef struct PGPropertyGraphTable {
+    PGNodeTag type;
+
+    /* Fields used for both edge and vertex table */
+    PGList *table; /* name of a SQL table, potentially with an alias*/
+
+    PGList *properties; /* list of column names */
+    PGList *labels; /* last label is main label, other labels depend on bit in discriminator (if present) */
+    PGRangeVar *discriminator; /* if non-NULL: BIGINT column ident with 64 bits for max 64 sub-label membership */
+
+    bool is_vertex_table;
+
+    /* Fields only used for Edge Tables */
+    PGList *src_fk, *dst_fk;
+    PGList *src_pk, *dst_pk;
+    PGRangeVar *src_name, *dst_name;
+} PGPropertyGraphTable;
+
+/* ------------------
+ * GRAPH_TABLE clause
+ * ------------------
+ */
+typedef enum PGMatchType {
+    PG_MATCH_VERTEX, 		/*   (spec)   */
+    PG_MATCH_EDGE_ANY, 		/*  -[spec]-  or <~[spec]~> */
+    PG_MATCH_EDGE_LEFT, 		/*  -[spec]-> */
+    PG_MATCH_EDGE_RIGHT, 		/* <-[spec]-  */
+    PG_MATCH_EDGE_LEFT_RIGHT, 	/* <-[spec]-> */
+} PGMatchType;
+
+typedef enum PGColumnSpec {
+    PG_COLUMNSPEC_EXPR,
+    PG_COLUMNSPEC_ELEMENTID,
+    PG_COLUMNSPEC_COST
+} PGColumnSpec;
+
+typedef enum PGPathMode {
+    PG_PATHMODE_NONE,
+    PG_PATHMODE_WALK,
+    PG_PATHMODE_SIMPLE,
+    PG_PATHMODE_TRAIL,
+    PG_PATHMODE_ACYCLIC
+} PGPathMode;
+
+typedef struct PGMatchClause { /* main structure of pattern matching */
+    PGNodeTag type;
+
+    /* a comma-separated list of PGPathPattern's */
+    PGList *paths;
+
+    /* property graph to match patterns in */
+    char *pg_name;
+
+    /* a filter condition over all variables in all paths */
+    PGNode *where_clause;
+
+    /* SQL name of the result (graph) table */
+    PGRangeVar *graph_table;
+
+    /* a list of columns of the result table */
+    PGList *columns;
+} PGMatchClause;
+
+typedef struct PGPathPattern { /* main structure for matching a path */
+    PGNodeTag type;
+
+    /* a list of PGPathElements (or SubPaths or PathUnions) that must be matched */
+    PGList *path;
+
+    /* path restriction */
+    PGPathMode mode;
+
+    /* all/shortest spec */
+    bool all, shortest, group;
+    int topk;
+} PGPathPattern;
+
+typedef struct PGPathUnion {
+    PGNodeTag type;
+    PGList *path1, *path2;
+    bool multiset; /* UNION or UNION_ALL */
+} PGPathUnion;
+
+typedef struct PGLabelTest {
+    /* identifier (label) or "%" or operators: "|",  "&" or "!" */
+    char* name;
+
+    /* operators can recurse (tree of label test operators with labels or % in leaves) */
+    struct PGLabelTest *left, *right;
+} PGLabelTest;
+
+typedef struct PGSubPath {
+    PGNodeTag type;
+
+    /* a list of path elements (or further subpaths) */
+    PGList *path;
+
+    /* can have their own mode (possibility of path mode conflict) */
+    PGPathMode mode;
+
+    /* if non-NULL: bind path variable */
+    const char *path_var;
+
+    /* bound variable is a single value (true in absence of Kleene except for ?) */
+    bool single_bind;
+
+    /* path repetition restriction (we encode *,+ with this as well) */
+    int lower,upper;
+
+    /* filter condition over all variables in ths path segment (NULL if absent) */
+    PGNode *where_clause;
+
+    /* a numeric cost expression over all variables in ths path segment (NULL if absent) */
+    PGNode *cost_expr;
+    double default_value;
+} PGSubPath;
+
+
+typedef struct PGPathElement {
+    PGNodeTag type;
+
+    /* vertex or edge (and what kind of edge) */
+    PGMatchType match_type;
+
+    /* variable binding (or NULL if none) */
+    const char *element_var;
+
+    /* label test (or null if none) */
+    PGLabelTest *label_expr;
+} PGPathElement;
+
+/* temporary struct to collect stuff
+ * it is only used during parsing but is not emitted by parsing
+ */
+typedef struct PGPathInfo {
+    PGNode *cost_expr;
+    double default_value;
+    const char* var_name;
+    PGPathMode mode;
+    PGNode *where_clause;
+    PGLabelTest* label_expr;
+    PGList *path, *elements;
+} PGPathInfo;
 
 
 }
