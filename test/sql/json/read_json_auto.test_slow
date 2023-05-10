@@ -2,10 +2,10 @@
 # description: Read json files - schema detection
 # group: [json]
 
+require json
+
 statement ok
 pragma enable_verification
-
-require json
 
 # some arrow tests (python/pyarrow/tests/test_json.py) on their github
 # these are very similar to the pandas tests, so let's not copy those

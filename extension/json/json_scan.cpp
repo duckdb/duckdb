@@ -508,8 +508,11 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			buffer = gstate.allocator.Allocate(gstate.buffer_capacity);
 		}
 
-		if (current_reader->GetFormat() != JSONFormat::NEWLINE_DELIMITED && !is_last) {
-			memcpy(buffer.get(), reconstruct_buffer.get(), prev_buffer_remainder); // Copy last bit of previous buffer
+		if (!is_last) {
+			if (current_reader->GetFormat() != JSONFormat::NEWLINE_DELIMITED) {
+				memcpy(buffer.get(), reconstruct_buffer.get(),
+				       prev_buffer_remainder); // Copy last bit of previous buffer
+			}
 		} else if (gstate.bind_data.type != JSONScanType::SAMPLE) {
 			current_reader->CloseJSONFile(); // Close files that are done if we're not sampling
 			current_reader = nullptr;

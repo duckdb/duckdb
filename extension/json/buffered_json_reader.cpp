@@ -211,7 +211,7 @@ void BufferedJSONReader::SetRecordType(duckdb::JSONRecordType type) {
 }
 
 bool BufferedJSONReader::IsParallel() const {
-	return options.format == JSONFormat::NEWLINE_DELIMITED && options.compression == FileCompressionType::UNCOMPRESSED;
+	return options.format == JSONFormat::NEWLINE_DELIMITED && file_handle->CanSeek();
 }
 
 const string &BufferedJSONReader::GetFileName() const {
