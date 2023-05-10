@@ -7,7 +7,7 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -37,9 +37,6 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, Bu
 	options.file_path = std::move(filename);
 	file_handle = OpenCSV(options);
 	Initialize(requested_types);
-}
-
-BufferedCSVReader::~BufferedCSVReader() {
 }
 
 enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };

@@ -1,6 +1,8 @@
+#include "duckdb/planner/operator/logical_insert.hpp"
+
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/field_writer.hpp"
-#include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 
 namespace duckdb {
@@ -41,7 +43,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	auto bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	auto action_type = reader.ReadRequired<OnConflictAction>();
 
-	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
+	auto &catalog = Catalog::GetCatalog(context, info->catalog);
 
 	auto &table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
 	auto result = make_uniq<LogicalInsert>(table_catalog_entry, table_index);
@@ -76,6 +78,15 @@ void LogicalInsert::ResolveTypes() {
 	} else {
 		types.emplace_back(LogicalType::BIGINT);
 	}
+}
+
+string LogicalInsert::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index);
+	}
+#endif
+	return LogicalOperator::GetName();
 }
 
 } // namespace duckdb

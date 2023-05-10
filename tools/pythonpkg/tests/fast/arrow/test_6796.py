@@ -20,6 +20,10 @@ def test_6796(pandas):
 	res_df = conn.execute(query).fetch_df()
 	res_arrow = conn.execute(query).fetch_arrow_table()
 
-	table = pyarrow.Table.from_pandas(res_df)
+	df_arrow_table = pyarrow.Table.from_pandas(res_df)
 
-	assert res_arrow.equals(table)
+	result_1 = conn.execute("select * from df_arrow_table order by all").fetchall()
+
+	result_2 = conn.execute("select * from res_arrow order by all").fetchall()
+
+	assert result_1 == result_2

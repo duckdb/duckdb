@@ -698,6 +698,22 @@ infinity	NULL	NULL
 -infinity	NULL	NULL
 NULL	NULL	NULL
 
+# dayname/monthname
+query II
+SELECT dayname(ts), monthname(ts) from timestamps;
+----
+Wednesday	March
+Tuesday	July
+Thursday	December
+Monday	February
+Friday	November
+Monday	November
+Monday	November
+Friday	December
+NULL	NULL
+NULL	NULL
+NULL	NULL
+
 #
 # Fractional Time Zones
 #
@@ -718,3 +734,30 @@ SELECT DATE_PART(['timezone', 'timezone_hour', 'timezone_minute'], '2021-12-22':
 ----
 {'timezone': -12600, 'timezone_hour': -3, 'timezone_minute': -30}
 
+
+#
+# 13 month Calendars
+#
+
+statement ok
+SET Calendar = 'hebrew';
+
+# Year 5872 (2021-2022) was a leap year
+query III
+SELECT year(ts), month(ts), monthname(ts)
+FROM range('5872-01-01'::TIMESTAMPTZ, '5873-01-01'::TIMESTAMPTZ, INTERVAL 1 DAY) tbl(ts)
+GROUP BY ALL
+ORDER BY ALL;
+----
+5872	1	January
+5872	2	February
+5872	3	March
+5872	4	April
+5872	5	May
+5872	7	July
+5872	8	August
+5872	9	September
+5872	10	October
+5872	11	November
+5872	12	December
+5872	13	Undecember

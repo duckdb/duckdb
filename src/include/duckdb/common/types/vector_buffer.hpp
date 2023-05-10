@@ -45,6 +45,23 @@ struct VectorAuxiliaryData {
 
 	virtual ~VectorAuxiliaryData() {
 	}
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast vector auxiliary data to type - type mismatch");
+		}
+		return (TARGET &)*this;
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast vector auxiliary data to type - type mismatch");
+		}
+		return (const TARGET &)*this;
+	}
 };
 
 //! The VectorBuffer is a class used by the vector to hold its data
@@ -80,6 +97,10 @@ public:
 
 	void SetAuxiliaryData(unique_ptr<VectorAuxiliaryData> aux_data_p) {
 		aux_data = std::move(aux_data_p);
+	}
+
+	void MoveAuxiliaryData(VectorBuffer &source_buffer) {
+		SetAuxiliaryData(std::move(source_buffer.aux_data));
 	}
 
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);

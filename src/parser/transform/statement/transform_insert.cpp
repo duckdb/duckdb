@@ -26,12 +26,6 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGInsertStmt *>(node);
 	D_ASSERT(stmt);
 
-	if (!stmt->selectStmt) {
-		// TODO: This should be easy to add, we already support DEFAULT in the values list,
-		// this could probably just be transformed into VALUES (DEFAULT, DEFAULT, DEFAULT, ..) in the Binder
-		throw ParserException("DEFAULT VALUES clause is not supported!");
-	}
-
 	auto result = make_uniq<InsertStatement>();
 	if (stmt->withClause) {
 		TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), result->cte_map);
@@ -49,7 +43,11 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 	if (stmt->returningList) {
 		Transformer::TransformExpressionList(*(stmt->returningList), result->returning_list);
 	}
-	result->select_statement = TransformSelect(stmt->selectStmt, false);
+	if (stmt->selectStmt) {
+		result->select_statement = TransformSelect(stmt->selectStmt, false);
+	} else {
+		result->default_values = true;
+	}
 
 	auto qname = TransformQualifiedName(stmt->relation);
 	result->table = qname.name;

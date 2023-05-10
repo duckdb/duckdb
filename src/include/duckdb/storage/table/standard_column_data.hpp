@@ -17,13 +17,13 @@ namespace duckdb {
 class StandardColumnData : public ColumnData {
 public:
 	StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
-	                   LogicalType type, ColumnData *parent = nullptr);
-	StandardColumnData(ColumnData &original, idx_t start_row, ColumnData *parent = nullptr);
+	                   LogicalType type, optional_ptr<ColumnData> parent = nullptr);
 
 	//! The validity column data
 	ValidityColumnData validity;
 
 public:
+	void SetStart(idx_t new_start) override;
 	bool CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
 
 	void InitializeScan(ColumnScanState &state) override;
@@ -51,7 +51,7 @@ public:
 	                                                        PartialBlockManager &partial_block_manager) override;
 	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, PartialBlockManager &partial_block_manager,
 	                                             ColumnCheckpointInfo &checkpoint_info) override;
-	void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
+	void CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                    Vector &scan_vector) override;
 
 	void DeserializeColumn(Deserializer &source) override;

@@ -233,10 +233,6 @@ Executor &ClientContext::GetExecutor() {
 	return *active_query->executor;
 }
 
-FileOpener *FileOpener::Get(ClientContext &context) {
-	return ClientData::Get(context).file_opener.get();
-}
-
 const string &ClientContext::GetCurrentQuery() {
 	D_ASSERT(active_query);
 	return active_query->query;
@@ -495,6 +491,7 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 	}
 
 	unique_ptr<LogicalOperator> plan;
+	client_data->http_state = make_uniq<HTTPState>();
 	RunFunctionInTransactionInternal(*lock, [&]() {
 		Planner planner(*this);
 		planner.CreatePlan(std::move(statements[0]));
@@ -1156,7 +1153,7 @@ ParserOptions ClientContext::GetParserOptions() const {
 
 ClientProperties ClientContext::GetClientProperties() const {
 	ClientProperties properties;
-	properties.timezone = ClientConfig::GetConfig(*this).ExtractTimezone();
+	properties.time_zone = ClientConfig::GetConfig(*this).ExtractTimezone();
 	return properties;
 }
 

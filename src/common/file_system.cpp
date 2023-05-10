@@ -40,11 +40,8 @@ FileSystem::~FileSystem() {
 }
 
 FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
-	return FileSystem::GetFileSystem(*context.db);
-}
-
-FileOpener *FileSystem::GetFileOpener(ClientContext &context) {
-	return ClientData::Get(context).file_opener.get();
+	auto &client_data = ClientData::Get(context);
+	return *client_data.client_file_system;
 }
 
 bool PathMatched(const string &path, const string &sub_path) {
@@ -193,7 +190,7 @@ string FileSystem::ExtractBaseName(const string &path) {
 	return vec[0];
 }
 
-string FileSystem::GetHomeDirectory(FileOpener *opener) {
+string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 	// read the home_directory setting first, if it is set
 	if (opener) {
 		Value result;
@@ -215,7 +212,11 @@ string FileSystem::GetHomeDirectory(FileOpener *opener) {
 	return string();
 }
 
-string FileSystem::ExpandPath(const string &path, FileOpener *opener) {
+string FileSystem::GetHomeDirectory() {
+	return GetHomeDirectory(nullptr);
+}
+
+string FileSystem::ExpandPath(const string &path, optional_ptr<FileOpener> opener) {
 	if (path.empty()) {
 		return path;
 	}
@@ -223,6 +224,10 @@ string FileSystem::ExpandPath(const string &path, FileOpener *opener) {
 		return GetHomeDirectory(opener) + path.substr(1);
 	}
 	return path;
+}
+
+string FileSystem::ExpandPath(const string &path) {
+	return FileSystem::ExpandPath(path, nullptr);
 }
 
 // LCOV_EXCL_START
@@ -245,14 +250,6 @@ int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 
 int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	throw NotImplementedException("%s: Write is not implemented!", GetName());
-}
-
-string FileSystem::GetFileExtension(FileHandle &handle) {
-	auto dot_location = handle.path.rfind('.');
-	if (dot_location != std::string::npos) {
-		return handle.path.substr(dot_location + 1, std::string::npos);
-	}
-	return string();
 }
 
 int64_t FileSystem::GetFileSize(FileHandle &handle) {
@@ -312,10 +309,6 @@ vector<string> FileSystem::Glob(const string &path, FileOpener *opener) {
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
 }
 
-vector<string> FileSystem::Glob(const string &path, ClientContext &context) {
-	return Glob(path, GetFileOpener(context));
-}
-
 void FileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
 	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
 }
@@ -337,7 +330,7 @@ bool FileSystem::CanHandleFile(const string &fpath) {
 }
 
 vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options) {
-	auto result = Glob(pattern, context);
+	auto result = Glob(pattern);
 	if (result.empty()) {
 		string required_extension;
 		const string prefixes[] = {"http://", "https://", "s3://"};

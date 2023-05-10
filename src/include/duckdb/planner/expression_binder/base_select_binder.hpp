@@ -59,6 +59,8 @@ protected:
 
 	idx_t TryBindGroup(ParsedExpression &expr, idx_t depth);
 	BindResult BindGroup(ParsedExpression &expr, idx_t depth, idx_t group_index);
+
+	bool QualifyColumnAlias(const ColumnRefExpression &colref) override;
 };
 
 } // namespace duckdb

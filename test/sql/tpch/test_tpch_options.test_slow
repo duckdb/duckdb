@@ -131,3 +131,23 @@ select count (*) from (SELECT * FROM ${tpch_tbl}_og EXCEPT SELECT * FROM ${tpch_
 0
 
 endloop
+
+statement ok
+ATTACH DATABASE ':memory:' AS db1;
+
+statement ok
+CALL dbgen(sf=1, catalog='db1');
+
+foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
+
+query I
+select count(*) from (SELECT * FROM ${tpch_tbl} EXCEPT SELECT * FROM db1.${tpch_tbl});
+----
+0
+
+query I
+select count (*) from (SELECT * FROM db1.${tpch_tbl} EXCEPT SELECT * FROM ${tpch_tbl});
+----
+0
+
+endloop
