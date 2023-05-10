@@ -1,6 +1,7 @@
 #include "parquet_statistics.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "parquet_timestamp.hpp"
+#include "string_column_reader.hpp"
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/blob.hpp"
@@ -253,15 +254,19 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	case LogicalTypeId::VARCHAR: {
 		auto string_stats = StringStats::CreateEmpty(type);
 		if (parquet_stats.__isset.min) {
+			StringColumnReader::VerifyString(parquet_stats.min.c_str(), parquet_stats.min.size(), true);
 			StringStats::Update(string_stats, parquet_stats.min);
 		} else if (parquet_stats.__isset.min_value) {
+			StringColumnReader::VerifyString(parquet_stats.min_value.c_str(), parquet_stats.min_value.size(), true);
 			StringStats::Update(string_stats, parquet_stats.min_value);
 		} else {
 			return nullptr;
 		}
 		if (parquet_stats.__isset.max) {
+			StringColumnReader::VerifyString(parquet_stats.max.c_str(), parquet_stats.max.size(), true);
 			StringStats::Update(string_stats, parquet_stats.max);
 		} else if (parquet_stats.__isset.max_value) {
+			StringColumnReader::VerifyString(parquet_stats.max_value.c_str(), parquet_stats.max_value.size(), true);
 			StringStats::Update(string_stats, parquet_stats.max_value);
 		} else {
 			return nullptr;
