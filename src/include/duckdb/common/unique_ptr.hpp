@@ -53,9 +53,9 @@ public:
 };
 
 template <class _Tp, bool SAFE>
-class unique_ptr<_Tp[], SAFE> : public std::unique_ptr<_Tp[], std::default_delete<_Tp>> {
+class unique_ptr<_Tp[], SAFE> : public std::unique_ptr<_Tp[], std::default_delete<_Tp[]>> {
 public:
-	using original = std::unique_ptr<_Tp[], std::default_delete<_Tp>>;
+	using original = std::unique_ptr<_Tp[], std::default_delete<_Tp[]>>;
 	using original::original;
 
 private:
