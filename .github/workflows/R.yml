@@ -251,7 +251,7 @@ jobs:
 
   rstats-windows-extensions:
     name: R Package Windows (Extensions)
-#    needs: rstats-linux
+    needs: rstats-linux
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v3
@@ -266,7 +266,7 @@ jobs:
         with:
           r-version: 'devel'
           update-rtools: true
-          rtools-version: '42'
+          rtools-version: '42' # linker bug in 43 ^^
 
       - uses: r-lib/actions/setup-pandoc@v2
 
@@ -275,7 +275,6 @@ jobs:
         with:
           key: ${{ github.job }}
           save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
 
       - uses: ./.github/actions/build_extensions
         with:
