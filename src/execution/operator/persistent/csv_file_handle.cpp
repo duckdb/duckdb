@@ -2,14 +2,17 @@
 
 namespace duckdb {
 
-CSVFileHandle::CSVFileHandle(FileSystem &fs, Allocator &allocator, unique_ptr<FileHandle> file_handle_p, const string &path_p, FileCompressionType compression, bool enable_reset)
-	: fs(fs), allocator(allocator), file_handle(std::move(file_handle_p)), path(path_p), compression(compression), reset_enabled(enable_reset) {
+CSVFileHandle::CSVFileHandle(FileSystem &fs, Allocator &allocator, unique_ptr<FileHandle> file_handle_p,
+                             const string &path_p, FileCompressionType compression, bool enable_reset)
+    : fs(fs), allocator(allocator), file_handle(std::move(file_handle_p)), path(path_p), compression(compression),
+      reset_enabled(enable_reset) {
 	can_seek = file_handle->CanSeek();
 	plain_file_source = file_handle->OnDiskFile();
 	file_size = file_handle->GetFileSize();
 }
 
-unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &allocator, const string &path, FileCompressionType compression) {
+unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &allocator, const string &path,
+                                                     FileCompressionType compression) {
 	auto file_handle = fs.OpenFile(path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, compression);
 	if (file_handle->CanSeek()) {
 		file_handle->Reset();
@@ -17,7 +20,8 @@ unique_ptr<FileHandle> CSVFileHandle::OpenFileHandle(FileSystem &fs, Allocator &
 	return file_handle;
 }
 
-unique_ptr<CSVFileHandle> CSVFileHandle::OpenFile(FileSystem &fs, Allocator &allocator, const string &path, FileCompressionType compression, bool enable_reset) {
+unique_ptr<CSVFileHandle> CSVFileHandle::OpenFile(FileSystem &fs, Allocator &allocator, const string &path,
+                                                  FileCompressionType compression, bool enable_reset) {
 	auto file_handle = CSVFileHandle::OpenFileHandle(fs, allocator, path, compression);
 	return make_uniq<CSVFileHandle>(fs, allocator, std::move(file_handle), path, compression, enable_reset);
 }
@@ -129,7 +133,7 @@ string CSVFileHandle::ReadLine() {
 			if (buffer[0] != '\n') {
 				if (!file_handle->CanSeek()) {
 					throw BinderException(
-						"Carriage return newlines not supported when reading CSV files in which we cannot seek");
+					    "Carriage return newlines not supported when reading CSV files in which we cannot seek");
 				}
 				file_handle->Seek(file_handle->SeekPosition() - 1);
 				return result;
@@ -150,5 +154,4 @@ void CSVFileHandle::DisableReset() {
 	this->reset_enabled = false;
 }
 
-
-}
+} // namespace duckdb
