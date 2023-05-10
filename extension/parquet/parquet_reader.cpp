@@ -49,16 +49,15 @@ using duckdb_parquet::format::Statistics;
 using duckdb_parquet::format::Type;
 
 static duckdb::unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
-CreateThriftProtocol(Allocator &allocator, FileHandle &file_handle, FileOpener &opener, bool prefetch_mode) {
-	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle, opener, prefetch_mode);
+CreateThriftProtocol(Allocator &allocator, FileHandle &file_handle, bool prefetch_mode) {
+	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle, prefetch_mode);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
-static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle,
-                                                         FileOpener &opener) {
+static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-	auto proto = CreateThriftProtocol(allocator, file_handle, opener, false);
+	auto proto = CreateThriftProtocol(allocator, file_handle, false);
 	auto &transport = ((ThriftFileTransport &)*proto->getTransport());
 	auto file_size = transport.GetSize();
 	if (file_size < 12) {
@@ -428,20 +427,11 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	}
 }
 
-ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file_handle_p) : allocator(allocator_p) {
-	file_name = file_handle_p->path;
-	file_handle = std::move(file_handle_p);
-	metadata = LoadMetadata(allocator, *file_handle, *file_opener);
-	InitializeSchema();
-}
-
 ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, ParquetOptions parquet_options_p)
-    : allocator(BufferAllocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)),
+    : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
       parquet_options(parquet_options_p) {
-	auto &fs = FileSystem::GetFileSystem(context_p);
 	file_name = std::move(file_name_p);
-	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
-	                          FileSystem::DEFAULT_COMPRESSION, file_opener);
+	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 	if (!file_handle->CanSeek()) {
 		throw NotImplementedException(
 		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
@@ -451,12 +441,12 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 	// or if this file has cached metadata
 	// or if the cached version already expired
 	if (!ObjectCache::ObjectCacheEnabled(context_p)) {
-		metadata = LoadMetadata(allocator, *file_handle, *file_opener);
+		metadata = LoadMetadata(allocator, *file_handle);
 	} else {
 		auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
 		metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
 		if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
-			metadata = LoadMetadata(allocator, *file_handle, *file_opener);
+			metadata = LoadMetadata(allocator, *file_handle);
 			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
 		}
 	}
@@ -466,7 +456,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 
 ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
-    : allocator(BufferAllocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)),
+    : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
       metadata(std::move(metadata_p)), parquet_options(parquet_options_p) {
 	InitializeSchema();
 }
@@ -634,11 +624,10 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<idx_t> 
 			state.prefetch_mode = false;
 		}
 
-		state.file_handle = file_handle->file_system.OpenFile(file_handle->path, flags, FileSystem::DEFAULT_LOCK,
-		                                                      FileSystem::DEFAULT_COMPRESSION, file_opener);
+		state.file_handle = fs.OpenFile(file_handle->path, flags);
 	}
 
-	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle, *file_opener, state.prefetch_mode);
+	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader();
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);

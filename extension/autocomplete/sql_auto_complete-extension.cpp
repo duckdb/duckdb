@@ -179,7 +179,7 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 	auto &fs = FileSystem::GetFileSystem(context);
 	string search_dir;
 	D_ASSERT(last_pos >= prefix.size());
-	auto is_path_absolute = FileSystem::IsPathAbsolute(prefix);
+	auto is_path_absolute = fs.IsPathAbsolute(prefix);
 	for (idx_t i = prefix.size(); i > 0; i--, last_pos--) {
 		if (prefix[i - 1] == '/' || prefix[i - 1] == '\\') {
 			search_dir = prefix.substr(0, i - 1);
@@ -190,7 +190,7 @@ static vector<AutoCompleteCandidate> SuggestFileName(ClientContext &context, str
 	if (search_dir.empty()) {
 		search_dir = is_path_absolute ? "/" : ".";
 	} else {
-		search_dir = fs.ExpandPath(search_dir, FileOpener::Get(context));
+		search_dir = fs.ExpandPath(search_dir);
 	}
 	vector<AutoCompleteCandidate> result;
 	fs.ListFiles(search_dir, [&](const string &fname, bool is_dir) {

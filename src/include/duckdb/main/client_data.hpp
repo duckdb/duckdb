@@ -20,6 +20,7 @@ class BufferedFileWriter;
 class ClientContext;
 class CatalogSearchPath;
 class FileOpener;
+class FileSystem;
 class HTTPState;
 class QueryProfiler;
 class QueryProfilerHistory;
@@ -54,6 +55,9 @@ struct ClientData {
 
 	//! HTTP State in this query
 	unique_ptr<HTTPState> http_state;
+
+	//! The clients' file system wrapper
+	unique_ptr<FileSystem> client_file_system;
 
 	//! The file search path
 	string file_search_path;

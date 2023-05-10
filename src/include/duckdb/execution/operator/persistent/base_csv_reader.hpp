@@ -42,7 +42,6 @@ public:
 	ClientContext &context;
 	FileSystem &fs;
 	Allocator &allocator;
-	FileOpener *opener;
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> return_types;
 	vector<string> names;
