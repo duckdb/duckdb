@@ -81,7 +81,7 @@ idx_t RowGroup::GetColumnCount() const {
 	return columns.size();
 }
 
-ColumnData &RowGroup::GetColumn(idx_t c) {
+ColumnData &RowGroup::GetColumn(storage_t c) {
 	D_ASSERT(c < columns.size());
 	if (!is_loaded) {
 		// not being lazy loaded
@@ -179,7 +179,7 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector
 	    this->start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - this->start);
 	D_ASSERT(state.column_scans);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		auto column = column_ids[i];
+		const auto &column = column_ids[i];
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
 			auto &column_data = GetColumn(column);
 			column_data.InitializeScanWithOffset(state.column_scans[i], start + vector_offset * STANDARD_VECTOR_SIZE);
@@ -334,9 +334,9 @@ void RowGroup::CommitDropColumn(idx_t column_idx) {
 
 void RowGroup::NextVector(CollectionScanState &state) {
 	state.vector_index++;
-	auto &column_ids = state.GetColumnIds();
+	const auto &column_ids = state.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		auto column = column_ids[i];
+		const auto &column = column_ids[i];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			continue;
 		}
@@ -345,11 +345,11 @@ void RowGroup::NextVector(CollectionScanState &state) {
 	}
 }
 
-bool RowGroup::CheckZonemap(TableFilterSet &filters, const vector<column_t> &column_ids) {
+bool RowGroup::CheckZonemap(TableFilterSet &filters, const vector<storage_t> &column_ids) {
 	for (auto &entry : filters.filters) {
 		auto column_index = entry.first;
 		auto &filter = entry.second;
-		auto base_column_index = column_ids[column_index];
+		const auto &base_column_index = column_ids[column_index];
 		if (!GetColumn(base_column_index).CheckZonemap(*filter)) {
 			return false;
 		}
@@ -366,7 +366,7 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	for (auto &entry : filters->filters) {
 		D_ASSERT(entry.first < column_ids.size());
 		auto column_idx = entry.first;
-		auto base_column_idx = column_ids[column_idx];
+		const auto &base_column_idx = column_ids[column_idx];
 		bool read_segment = GetColumn(base_column_idx).CheckZonemap(state.column_scans[column_idx], *entry.second);
 		if (!read_segment) {
 			idx_t target_row =
@@ -398,7 +398,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 	const bool ALLOW_UPDATES = TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES &&
 	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
 	auto table_filters = state.GetFilters();
-	auto &column_ids = state.GetColumnIds();
+	const auto &column_ids = state.GetColumnIds();
 	auto adaptive_filter = state.GetAdaptiveFilter();
 	while (true) {
 		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row_group_row) {
@@ -436,7 +436,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		if (count == max_count && !table_filters) {
 			// scan all vectors completely: full scan without deletions or table filters
 			for (idx_t i = 0; i < column_ids.size(); i++) {
-				auto column = column_ids[i];
+				const auto &column = column_ids[i];
 				if (column == COLUMN_IDENTIFIER_ROW_ID) {
 					// scan row id
 					D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
