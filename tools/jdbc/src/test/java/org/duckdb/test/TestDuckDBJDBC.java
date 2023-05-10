@@ -505,6 +505,19 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+    public static void test_consecutive_timestamps() throws Exception {
+    	long expected = 986860800000L;
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:"); Statement stmt = conn.createStatement()) {
+            try (ResultSet rs = stmt.executeQuery("select range from range(TIMESTAMP '2001-04-10', TIMESTAMP '2001-04-11', INTERVAL 30 MINUTE)")) {
+                while (rs.next()) {
+                    Timestamp actual = rs.getTimestamp(1, Calendar.getInstance());
+                    assertEquals(expected, actual.getTime());
+                    expected += 30 * 60 * 1_000;
+                }
+            }
+        }
+    }
+
 	public static void test_throw_wrong_datatype() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
