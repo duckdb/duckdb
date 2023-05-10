@@ -60,7 +60,7 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		options.auto_detect_hive_partitioning = false;
 	} else if (loption == "union_by_name") {
 		options.union_by_name = BooleanValue::Get(val);
-	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast"){
+	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
 		options.hive_types_autocast = BooleanValue::Get(val);
 	} else if (loption == "hive_types") {
 		// using 'hive_types' implies 'hive_partitioning'
@@ -75,8 +75,7 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		for (idx_t i = 0; i < children.size(); i++) {
 			const Value &child = children[i];
 			if (child.type().id() != LogicalType::VARCHAR) {
-				throw InvalidInputException("one of the children is not a VARCHAR: %s",
-				                            child.type().ToString());
+				throw InvalidInputException("one of the children is not a VARCHAR: %s", child.type().ToString());
 			}
 			// for every child of the struct, get the logical type
 			LogicalType transformed_type = TransformStringToLogicalType(child.ToString(), context);
@@ -223,7 +222,9 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 						auto it = file_options.hive_types_schema.find(entry.value);
 						if (it != file_options.hive_types_schema.end()) {
 							if (!value.TryCastAs(context, it->second)) {
-								const string errormsg(StringUtil::Format("Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(), StringUtil::Upper(it->first), it->second.ToString()));
+								const string errormsg(StringUtil::Format(
+								    "Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(),
+								    StringUtil::Upper(it->first), it->second.ToString()));
 								throw InvalidInputException(errormsg.c_str());
 							}
 						}
@@ -488,8 +489,8 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(const vector<str
 	}
 	return true;
 }
-void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const string &file, ClientContext& context) {
-	std::map<string,string> partitions;
+void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const string &file, ClientContext &context) {
+	std::map<string, string> partitions;
 	auto splits = StringUtil::Split(file, FileSystem::PathSeparator());
 	if (splits.size() < 2) {
 		return;
@@ -504,14 +505,14 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const string &file, Cli
 		return;
 	}
 
-	const LogicalType candidates[] = {LogicalType::DATE,LogicalType::TIMESTAMP,LogicalType::BIGINT};
-	for (auto& part : partitions) {
-		const string& name = part.first;
+	const LogicalType candidates[] = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::BIGINT};
+	for (auto &part : partitions) {
+		const string &name = part.first;
 		if (hive_types_schema.find(name) != hive_types_schema.end()) {
 			continue;
 		}
 		Value value(part.second);
-		for (auto& candidate : candidates) {
+		for (auto &candidate : candidates) {
 			const bool success = value.TryCastAs(context, candidate);
 			if (success) {
 				hive_types_schema[name] = candidate;
@@ -520,7 +521,7 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const string &file, Cli
 		}
 	}
 }
-void MultiFileReaderOptions::AutoDetectHivePartitioning(const vector<string> &files, ClientContext& context) {
+void MultiFileReaderOptions::AutoDetectHivePartitioning(const vector<string> &files, ClientContext &context) {
 	D_ASSERT(!files.empty());
 	if (!auto_detect_hive_partitioning && !hive_partitioning && !hive_types_schema.empty()) {
 		throw InvalidInputException("cannot disable hive_partitioning when hive_types is enabled");

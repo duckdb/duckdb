@@ -29,9 +29,9 @@ struct MultiFileReaderOptions {
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static MultiFileReaderOptions Deserialize(Deserializer &source);
 	DUCKDB_API void AddBatchInfo(BindInfo &bind_info) const;
-	DUCKDB_API void AutoDetectHivePartitioning(const vector<string> &files, ClientContext& context);
+	DUCKDB_API void AutoDetectHivePartitioning(const vector<string> &files, ClientContext &context);
 	DUCKDB_API static bool AutoDetectHivePartitioningInternal(const vector<string> &files);
-	DUCKDB_API void AutoDetectHiveTypesInternal(const string &file, ClientContext& context);
+	DUCKDB_API void AutoDetectHiveTypesInternal(const string &file, ClientContext &context);
 	DUCKDB_API LogicalType GetHiveLogicalType(const string &hive_partition_column) const;
 };
 
