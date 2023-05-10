@@ -21,7 +21,7 @@
 #endif
 
 #ifndef DUCKDB_EXTENSION_API
-#if defined(_WIN32) && !defined(__MINGW32__)
+#ifdef _WIN32
 #ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 #define DUCKDB_EXTENSION_API __declspec(dllexport)
 #else
