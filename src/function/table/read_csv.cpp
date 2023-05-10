@@ -23,9 +23,7 @@ namespace duckdb {
 unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompressionType compression,
                                            ClientContext &context) {
 	auto &fs = FileSystem::GetFileSystem(context);
-	auto opener = FileSystem::GetFileOpener(context);
-	auto file_handle =
-	    fs.OpenFile(file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, compression, opener);
+	auto file_handle = fs.OpenFile(file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, compression);
 	if (file_handle->CanSeek()) {
 		file_handle->Reset();
 	}
@@ -600,6 +598,7 @@ bool LineInfo::CanItGetLine(idx_t file_idx, idx_t batch_idx) {
 	return false;
 }
 
+// Returns the 1-indexed line number
 idx_t LineInfo::GetLine(idx_t batch_idx, idx_t line_error, idx_t file_idx, idx_t cur_start, bool verify) {
 	unique_ptr<lock_guard<mutex>> parallel_lock;
 	if (!verify) {
@@ -607,7 +606,8 @@ idx_t LineInfo::GetLine(idx_t batch_idx, idx_t line_error, idx_t file_idx, idx_t
 	}
 	idx_t line_count = 0;
 	if (done) {
-		return first_line;
+		// line count is 0-indexed, but we want to return 1-indexed
+		return first_line + 1;
 	}
 	for (idx_t i = 0; i <= batch_idx; i++) {
 		if (lines_read.find(i) == lines_read.end() && i != batch_idx) {
@@ -622,7 +622,8 @@ idx_t LineInfo::GetLine(idx_t batch_idx, idx_t line_error, idx_t file_idx, idx_t
 	}
 	done = true;
 	first_line = line_count + line_error;
-	return first_line;
+	// line count is 0-indexed, but we want to return 1-indexed
+	return first_line + 1;
 }
 
 static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext &context,

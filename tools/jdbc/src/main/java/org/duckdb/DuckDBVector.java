@@ -469,7 +469,7 @@ class DuckDBVector {
 		// Our raw data is already a proper count of units since the epoch
 		// So just construct the SQL Timestamp.
 		if (isType(DuckDBColumnType.TIMESTAMP)) {
-			return DuckDBTimestamp.fromMicroInstant(getbuf(idx, 8).getLong(idx));
+			return DuckDBTimestamp.fromMicroInstant(getbuf(idx, 8).getLong());
 		}
 		if (isType(DuckDBColumnType.TIMESTAMP_MS)) {
 			return DuckDBTimestamp.fromMilliInstant(getbuf(idx, 8).getLong());

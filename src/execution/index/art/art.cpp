@@ -130,6 +130,9 @@ static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_
 		auto idx = idata.sel->get_index(i);
 		if (idata.validity.RowIsValid(idx)) {
 			ARTKey::CreateARTKey<T>(allocator, input.GetType(), keys[i], input_data[idx]);
+		} else {
+			// we need to possibly reset the former key value in the keys vector
+			keys[i] = ARTKey();
 		}
 	}
 }
@@ -680,7 +683,6 @@ Node ART::Lookup(Node node, const ARTKey &key, idx_t depth) {
 			}
 			return node;
 		}
-
 		auto &node_prefix = node.GetPrefix(*this);
 		if (node_prefix.count) {
 			for (idx_t pos = 0; pos < node_prefix.count; pos++) {

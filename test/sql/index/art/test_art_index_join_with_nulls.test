@@ -1,0 +1,32 @@
+# name: test/sql/index/art/test_art_index_join_with_nulls.test
+# description: Test that we reset keys correctly during index joins
+# group: [art]
+
+# this tests contains the reproducible example of issue 7267 in a reduced size
+
+statement ok
+CREATE TABLE addresses (address int, state string);
+
+statement ok
+INSERT INTO addresses SELECT * FROM read_csv_auto('data/csv/index_join_issue_7267/addresses.csv');
+
+statement ok
+CREATE TABLE demos (demo int primary key);
+
+statement ok
+INSERT INTO demos SELECT * FROM read_csv_auto('data/csv/index_join_issue_7267/demos.csv');
+
+statement ok
+CREATE TABLE customers (customer int, cdemo int, caddress int);
+
+statement ok
+INSERT INTO customers SELECT * FROM read_csv_auto('data/csv/index_join_issue_7267/customers.csv');
+
+query I
+SELECT COUNT(c.customer)
+FROM customers c
+INNER JOIN addresses ca ON c.caddress = ca.address
+INNER JOIN demos d ON c.cdemo = d.demo
+WHERE ca.state ='GA';
+----
+260
