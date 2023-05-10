@@ -1,5 +1,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/execution/expression_executor_state.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/built_in_functions.hpp"
 
 namespace duckdb {
 
@@ -15,7 +17,7 @@ struct StringCopyValue {
 	template <class T>
 	static void Operation(T *result_child_data, optional_ptr<T> child_entries, optional_ptr<Vector>,
 	                      Vector &result_child, idx_t i, idx_t result_child_offset) {
-		result_child_data[result_child_offset] = StringVector::AddString(result_child, child_entries.get()[i]);
+		result_child_data[result_child_offset] = StringVector::AddStringOrBlob(result_child, child_entries.get()[i]);
 	}
 };
 
@@ -56,7 +58,7 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 	// Find the new size of the result child vector
 	idx_t new_child_size = 0;
 	for (idx_t i = 0; i < count; i++) {
-		auto index = list_data.sel->get_index(i);
+		auto index = new_size_data.sel->get_index(i);
 		if (new_size_data.validity.RowIsValid(index)) {
 			new_child_size += new_size_entries[index];
 		}
@@ -67,9 +69,6 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 	UnifiedVectorFormat default_data;
 	optional_ptr<Vector> default_vector;
 	if (args.ColumnCount() == 3) {
-		if (child->GetType() != args.data[2].GetType() && args.data[2].GetType() != LogicalTypeId::SQLNULL) {
-			throw InvalidInputException("Default value must be of the same type as the lists or NULL");
-		}
 		default_vector = &args.data[2];
 		default_vector->ToUnifiedFormat(count, default_data);
 		default_entries = (T *)default_data.data;
@@ -201,13 +200,17 @@ void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result)
 static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2 || arguments.size() == 3);
-	if (bound_function.arguments.size() == 3) {
-		//		if (child->GetType() != args.data[2].GetType() && args.data[2].GetType() != LogicalTypeId::SQLNULL) {
-		//			throw InvalidInputException("Default value must be of the same type as the lists or NULL");
-		//		}
-	}
 	bound_function.return_type = arguments[0]->return_type;
 	bound_function.arguments[1] = LogicalType::UBIGINT;
+	if (bound_function.arguments.size() == 3) {
+		if (arguments[0]->return_type == LogicalType::UNKNOWN) {
+			return make_uniq<VariableReturnBindData>(bound_function.return_type);
+		}
+		if (ListType::GetChildType(arguments[0]->return_type) != arguments[2]->return_type &&
+		    arguments[2]->return_type != LogicalTypeId::SQLNULL) {
+			throw InvalidInputException("Default value must be of the same type as the lists or NULL");
+		}
+	}
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
