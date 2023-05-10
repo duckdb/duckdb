@@ -25,8 +25,8 @@ unique_ptr<FileHandle> VirtualFileSystem::TryOpenFile(const string &path, uint8_
 		}
 	}
 	// open the base file handle
-	auto file_handle =
-	    FindFileSystem(path)->TryOpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED, opener, out_error);
+	auto &child_fs = FindFileSystem(path);
+	auto file_handle = child_fs.TryOpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED, opener, out_error);
 	if (!file_handle) {
 		return file_handle;
 	}

@@ -61,40 +61,40 @@ public:
 	}
 
 	void CreateDirectory(const string &directory) override {
-		FindFileSystem(directory)->CreateDirectory(directory);
+		FindFileSystem(directory).CreateDirectory(directory);
 	}
 
 	void RemoveDirectory(const string &directory) override {
-		FindFileSystem(directory)->RemoveDirectory(directory);
+		FindFileSystem(directory).RemoveDirectory(directory);
 	}
 
 	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
 	               FileOpener *opener = nullptr) override {
-		return FindFileSystem(directory)->ListFiles(directory, callback, opener);
+		return FindFileSystem(directory).ListFiles(directory, callback, opener);
 	}
 
 	void MoveFile(const string &source, const string &target) override {
-		FindFileSystem(source)->MoveFile(source, target);
+		FindFileSystem(source).MoveFile(source, target);
 	}
 
 	FileType GetFileType(const string &filename, optional_ptr<FileOpener> opener = nullptr) override {
-		return FindFileSystem(filename)->GetFileType(filename, opener);
+		return FindFileSystem(filename).GetFileType(filename, opener);
 	}
 	bool DirectoryExists(const string &directory) override {
-		return FindFileSystem(directory)->DirectoryExists(directory);
+		return FindFileSystem(directory).DirectoryExists(directory);
 	}
 	bool FileExists(const string &filename) override {
-		return FindFileSystem(filename)->FileExists(filename);
+		return FindFileSystem(filename).FileExists(filename);
 	}
 	bool IsPipe(const string &filename) override {
-		return FindFileSystem(filename)->IsPipe(filename);
+		return FindFileSystem(filename).IsPipe(filename);
 	}
 	virtual void RemoveFile(const string &filename) override {
-		FindFileSystem(filename)->RemoveFile(filename);
+		FindFileSystem(filename).RemoveFile(filename);
 	}
 
 	virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr) override {
-		return FindFileSystem(path)->Glob(path, opener);
+		return FindFileSystem(path).Glob(path, opener);
 	}
 
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override {
@@ -128,13 +128,13 @@ public:
 	}
 
 private:
-	FileSystem *FindFileSystem(const string &path) {
+	FileSystem &FindFileSystem(const string &path) {
 		for (auto &sub_system : sub_systems) {
 			if (sub_system->CanHandleFile(path)) {
-				return sub_system.get();
+				return *sub_system;
 			}
 		}
-		return default_fs.get();
+		return *default_fs;
 	}
 
 private:
