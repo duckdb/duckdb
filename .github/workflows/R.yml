@@ -309,7 +309,7 @@ jobs:
       - name: Test Load
         shell: bash
         run: |
-          find build -name '*.duckdb_extension' -exec R --quiet -e 'con <- DBI::dbConnect(duckdb::duckdb(config = list("allow_unsigned_extensions" = "true"))); DBI::dbExecute(con, "LOAD \"{}\""); DBI::dbDisconnect(con, shutdown=TRUE)' \;
+          find build -name '*.duckdb_extension' -print0 | xargs -I{} -0 R --quiet -e 'con <- DBI::dbConnect(duckdb::duckdb(config = list("allow_unsigned_extensions" = "true"))); DBI::dbExecute(con, "LOAD \"{}\""); DBI::dbDisconnect(con, shutdown=TRUE)'
 
 
   rstats-windows-warnings:
