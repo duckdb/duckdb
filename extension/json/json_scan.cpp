@@ -186,7 +186,7 @@ JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalSta
       current_buffer_handle(nullptr), is_last(false), buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
 
 	// Buffer to reconstruct JSON values when they cross a buffer boundary
-	reconstruct_buffer = gstate.allocator.Allocate(gstate.bind_data.maximum_object_size + YYJSON_PADDING_SIZE);
+	reconstruct_buffer = gstate.allocator.Allocate(gstate.buffer_capacity);
 }
 
 JSONGlobalTableFunctionState::JSONGlobalTableFunctionState(ClientContext &context, TableFunctionInitInput &input)
@@ -450,6 +450,12 @@ void JSONScanLocalState::ParseJSON(char *const json_start, const idx_t json_size
 	values[scan_count] = doc->root;
 }
 
+void JSONScanLocalState::ThrowObjectSizeError(const idx_t object_size) {
+	throw InvalidInputException("\"maximum_object_size\" of %llu bytes exceeded while reading JSON (>%llu bytes), "
+	                            "try increasing \"maximum_object_size\"",
+	                            bind_data.maximum_object_size, object_size);
+}
+
 static pair<JSONFormat, JSONRecordType> DetectFormatAndRecordType(const char *const buffer_ptr, const idx_t buffer_size,
                                                                   yyjson_alc *alc) {
 	// First we do the easy check whether it's NEWLINE_DELIMITED
@@ -577,55 +583,48 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		}
 
 		// This thread needs a new reader
-		lock_guard<mutex> guard(gstate.lock);
-		if (gstate.file_index == gstate.json_readers.size()) {
-			return false; // No more files left
-		}
-
-		// Try the next reader
-		current_reader = gstate.json_readers[gstate.file_index].get();
-		if (current_reader->IsOpen()) {
-			if (!current_reader->IsParallel()) {
-				// Can only be open from schema detection
-				batch_index = gstate.batch_index++;
-				gstate.file_index++;
+		{
+			lock_guard<mutex> guard(gstate.lock);
+			if (gstate.file_index == gstate.json_readers.size()) {
+				return false; // No more files left
 			}
-			continue; // Re-enter the loop to start scanning the assigned file
-		}
 
-		// Open the file
-		current_reader->OpenJSONFile();
-		batch_index = gstate.batch_index++;
-		if (current_reader->GetFormat() != JSONFormat::AUTO_DETECT) {
-			if (!current_reader->IsParallel()) {
-				gstate.file_index++;
+			// Try the next reader
+			current_reader = gstate.json_readers[gstate.file_index].get();
+			if (current_reader->IsOpen()) {
+				if (!current_reader->IsParallel()) {
+					// Can only be open from schema detection
+					batch_index = gstate.batch_index++;
+					gstate.file_index++;
+				}
+				continue; // Re-enter the loop to start scanning the assigned file
 			}
-			continue;
-		}
 
-		// We have to detect the JSON format - hold the gstate lock while we do this
-		ReadNextBufferInternal(gstate, buffer_index);
-		if (buffer_size == 0) {
-			gstate.file_index++; // Empty file, move to the next one
-			continue;
-		}
+			current_reader->OpenJSONFile();
+			batch_index = gstate.batch_index++;
+			if (current_reader->GetFormat() != JSONFormat::AUTO_DETECT) {
+				if (!current_reader->IsParallel()) {
+					gstate.file_index++;
+				}
+				continue;
+			}
 
-		auto format_and_record_type = DetectFormatAndRecordType(buffer_ptr, buffer_size, allocator.GetYYAlc());
-		current_reader->SetFormat(format_and_record_type.first);
-		if (current_reader->GetRecordType() == JSONRecordType::AUTO_DETECT) {
-			current_reader->SetRecordType(format_and_record_type.second);
-		}
-		if (current_reader->GetFormat() == JSONFormat::ARRAY) {
-			SkipOverArrayStart();
-		}
+			// If we have a low amount of files, we auto-detect within the lock,
+			// so other threads may join a parallel NDJSON scan
+			if (gstate.json_readers.size() < 100) {
+				if (ReadAndAutoDetect(gstate, buffer_index, false)) {
+					continue;
+				}
+				break;
+			}
 
-		if (bind_data.options.record_type == JSONRecordType::RECORDS &&
-		    current_reader->GetRecordType() != JSONRecordType::RECORDS) {
-			throw InvalidInputException("Expected file %s to contain records, got non-record JSON instead",
-			                            current_reader->GetFileName());
-		}
-		if (!current_reader->IsParallel()) {
+			// Increment the file index within the lock, then read/auto-detect outside of the lock
 			gstate.file_index++;
+		}
+
+		// High amount of files, just do 1 thread per file
+		if (ReadAndAutoDetect(gstate, buffer_index, true)) {
+			continue;
 		}
 		break;
 	}
@@ -648,6 +647,37 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 	memset((void *)(buffer_ptr + buffer_size), 0, YYJSON_PADDING_SIZE);
 
 	return true;
+}
+
+bool JSONScanLocalState::ReadAndAutoDetect(JSONScanGlobalState &gstate, idx_t &buffer_index,
+                                           const bool already_incremented_file_idx) {
+	// We have to detect the JSON format - hold the gstate lock while we do this
+	ReadNextBufferInternal(gstate, buffer_index);
+	if (buffer_size == 0) {
+		if (!already_incremented_file_idx) {
+			gstate.file_index++; // Empty file, move to the next one
+		}
+		return true;
+	}
+
+	auto format_and_record_type = DetectFormatAndRecordType(buffer_ptr, buffer_size, allocator.GetYYAlc());
+	current_reader->SetFormat(format_and_record_type.first);
+	if (current_reader->GetRecordType() == JSONRecordType::AUTO_DETECT) {
+		current_reader->SetRecordType(format_and_record_type.second);
+	}
+	if (current_reader->GetFormat() == JSONFormat::ARRAY) {
+		SkipOverArrayStart();
+	}
+
+	if (bind_data.options.record_type == JSONRecordType::RECORDS &&
+	    current_reader->GetRecordType() != JSONRecordType::RECORDS) {
+		throw InvalidInputException("Expected file %s to contain records, got non-record JSON instead",
+		                            current_reader->GetFileName());
+	}
+	if (!already_incremented_file_idx && !current_reader->IsParallel()) {
+		gstate.file_index++;
+	}
+	return false;
 }
 
 void JSONScanLocalState::ReadNextBufferInternal(JSONScanGlobalState &gstate, idx_t &buffer_index) {
@@ -761,8 +791,7 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 	// Now find the newline in the current block
 	auto line_end = NextNewline(buffer_ptr, buffer_size);
 	if (line_end == nullptr) {
-		throw InvalidInputException("maximum_object_size of %llu bytes exceeded (>%llu bytes), is the JSON valid?",
-		                            bind_data.maximum_object_size, buffer_size - buffer_offset);
+		ThrowObjectSizeError(buffer_size - buffer_offset);
 	} else {
 		line_end++;
 	}
@@ -770,8 +799,7 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 
 	idx_t line_size = part1_size + part2_size;
 	if (line_size > bind_data.maximum_object_size) {
-		throw InvalidInputException("maximum_object_size of %llu bytes exceeded (%llu bytes), is the JSON valid?",
-		                            bind_data.maximum_object_size, line_size);
+		ThrowObjectSizeError(line_size);
 	}
 
 	// And copy the remainder of the line to the reconstruct buffer
@@ -804,8 +832,10 @@ void JSONScanLocalState::ParseNextChunk() {
 			if (!is_last) {
 				// Last bit of data belongs to the next batch
 				if (format != JSONFormat::NEWLINE_DELIMITED) {
-					const auto reconstruct_ptr = reconstruct_buffer.get();
-					memcpy(reconstruct_ptr, json_start, remaining);
+					if (scan_count == 0) {
+						ThrowObjectSizeError(remaining);
+					}
+					memcpy(reconstruct_buffer.get(), json_start, remaining);
 					prev_buffer_remainder = remaining;
 				}
 				buffer_offset = buffer_size;
@@ -851,6 +881,75 @@ void JSONScanLocalState::ThrowTransformError(idx_t object_index, const string &e
 	D_ASSERT(object_index != DConstants::INVALID_INDEX);
 	auto line_or_object_in_buffer = lines_or_objects_in_buffer - scan_count + object_index;
 	current_reader->ThrowTransformError(current_buffer_handle->buffer_index, line_or_object_in_buffer, error_message);
+}
+
+double JSONScan::ScanProgress(ClientContext &context, const FunctionData *bind_data_p,
+                              const GlobalTableFunctionState *global_state) {
+	auto &gstate = global_state->Cast<JSONGlobalTableFunctionState>().state;
+	double progress = 0;
+	for (auto &reader : gstate.json_readers) {
+		progress += reader->GetProgress();
+	}
+	return progress / double(gstate.json_readers.size());
+}
+
+idx_t JSONScan::GetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
+                              LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
+	auto &lstate = local_state->Cast<JSONLocalTableFunctionState>();
+	return lstate.GetBatchIndex();
+}
+
+unique_ptr<NodeStatistics> JSONScan::Cardinality(ClientContext &context, const FunctionData *bind_data) {
+	auto &data = bind_data->Cast<JSONScanData>();
+	idx_t per_file_cardinality;
+	if (data.initial_reader && data.initial_reader->IsOpen()) {
+		per_file_cardinality = data.initial_reader->GetFileHandle().FileSize() / data.avg_tuple_size;
+	} else {
+		per_file_cardinality = 42; // The cardinality of an unknown JSON file is the almighty number 42
+	}
+	return make_uniq<NodeStatistics>(per_file_cardinality * data.files.size());
+}
+
+void JSONScan::ComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
+                                     vector<unique_ptr<Expression>> &filters) {
+	auto &data = bind_data_p->Cast<JSONScanData>();
+	auto reset_reader =
+	    MultiFileReader::ComplexFilterPushdown(context, data.files, data.options.file_options, get, filters);
+	if (reset_reader) {
+		MultiFileReader::PruneReaders(data);
+	}
+}
+
+void JSONScan::Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
+	auto &bind_data = bind_data_p->Cast<JSONScanData>();
+	bind_data.Serialize(writer);
+}
+
+unique_ptr<FunctionData> JSONScan::Deserialize(ClientContext &context, FieldReader &reader, TableFunction &function) {
+	auto result = make_uniq<JSONScanData>();
+	result->Deserialize(context, reader);
+	return std::move(result);
+}
+
+void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
+	MultiFileReader::AddParameters(table_function);
+
+	table_function.named_parameters["maximum_object_size"] = LogicalType::UINTEGER;
+	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["format"] = LogicalType::VARCHAR;
+	table_function.named_parameters["compression"] = LogicalType::VARCHAR;
+
+	table_function.table_scan_progress = ScanProgress;
+	table_function.get_batch_index = GetBatchIndex;
+	table_function.cardinality = Cardinality;
+
+	table_function.serialize = Serialize;
+	table_function.deserialize = Deserialize;
+
+	table_function.projection_pushdown = false;
+	table_function.filter_pushdown = false;
+	table_function.filter_prune = false;
+	table_function.pushdown_complex_filter = ComplexFilterPushdown;
 }
 
 } // namespace duckdb

@@ -1,9 +1,9 @@
 #include "json_structure.hpp"
 
+#include "duckdb/common/enum_util.hpp"
 #include "json_executors.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
-#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -541,6 +541,8 @@ LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStr
 		return StructureToTypeString(node);
 	case LogicalTypeId::SQLNULL:
 		return LogicalTypeId::INTEGER;
+	case LogicalTypeId::UBIGINT:
+		return LogicalTypeId::BIGINT; // We prefer not to return UBIGINT in our type auto-detection
 	default:
 		return desc.type;
 	}
