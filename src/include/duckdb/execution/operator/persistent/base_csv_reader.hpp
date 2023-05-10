@@ -75,8 +75,10 @@ public:
 	const vector<LogicalType> &GetTypes() {
 		return return_types;
 	}
+
+	//! Get the 1-indexed global line number for the given local error line
 	virtual idx_t GetLineError(idx_t line_error, idx_t buffer_idx) {
-		return line_error;
+		return line_error + 1;
 	};
 
 	//! Initialize projection indices to select all columns
