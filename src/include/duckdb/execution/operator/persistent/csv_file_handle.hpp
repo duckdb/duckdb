@@ -11,13 +11,14 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/allocator.hpp"
 
 namespace duckdb {
 
 struct CSVFileHandle {
 public:
-	explicit CSVFileHandle(unique_ptr<FileHandle> file_handle_p, bool enable_reset = true)
-	    : file_handle(std::move(file_handle_p)), reset_enabled(enable_reset) {
+	explicit CSVFileHandle(Allocator &allocator, unique_ptr<FileHandle> file_handle_p, bool enable_reset = true)
+	    : allocator(allocator), file_handle(std::move(file_handle_p)), reset_enabled(enable_reset) {
 		can_seek = file_handle->CanSeek();
 		plain_file_source = file_handle->OnDiskFile() && can_seek;
 		file_size = file_handle->GetFileSize();
@@ -78,10 +79,10 @@ public:
 				if (result_offset == nr_bytes) {
 					return nr_bytes;
 				}
-			} else if (!reset_enabled && cached_buffer) {
+			} else if (!reset_enabled && cached_buffer.IsSet()) {
 				// reset is disabled, but we still have cached data
 				// we can remove any cached data
-				cached_buffer.reset();
+				cached_buffer.Reset();
 				buffer_size = 0;
 				buffer_capacity = 0;
 				read_position = 0;
@@ -97,7 +98,7 @@ public:
 					// no space; first enlarge the buffer
 					buffer_capacity = MaxValue<idx_t>(NextPowerOfTwo(buffer_size + bytes_read), buffer_capacity * 2);
 
-					auto new_buffer = unique_ptr<data_t[]>(new data_t[buffer_capacity]);
+					auto new_buffer = allocator.Allocate(buffer_capacity);
 					if (buffer_size > 0) {
 						memcpy(new_buffer.get(), cached_buffer.get(), buffer_size);
 					}
@@ -150,13 +151,14 @@ public:
 	idx_t count = 0;
 
 private:
+	Allocator &allocator;
 	unique_ptr<FileHandle> file_handle;
 	bool reset_enabled = true;
 	bool can_seek = false;
 	bool plain_file_source = false;
 	idx_t file_size = 0;
 	// reset support
-	unique_ptr<data_t[]> cached_buffer;
+	AllocatedData cached_buffer;
 	idx_t read_position = 0;
 	idx_t buffer_size = 0;
 	idx_t buffer_capacity = 0;
