@@ -36,7 +36,7 @@
 #include "config.h"
 #include "porting.h"
 #include <stdio.h>
-#if !defined(WIN32) && !defined(__MSVC)
+#if !defined(WIN32) && !defined(__MSVC32_)
 #include <netinet/in.h>
 #endif
 #include <math.h>
