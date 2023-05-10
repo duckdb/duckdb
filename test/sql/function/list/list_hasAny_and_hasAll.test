@@ -1,11 +1,18 @@
-# name: test/sql/types/nested/list/list_hasAny_and_hasAll.test
-# description: Test list_hasAny and list_hasAll functions
+# name: test/sql/function/list/list_hasAny_and_hasAll.test
+# description: Test list_has_any and list_hasAll functions
 # group: [list]
 
 query I
-select list_hasAny([1,2,3], [2,3,4]);
+select list_has_any([1,2,3], [2,3,4]);
 ----
 true
+
+query I
+select list_has_all([1,2,3], [2,3,4]);
+----
+false
+
+# Test NULLs
 
 statement ok
 CREATE TABLE list_data(l1 int[], l2 int[]);
@@ -28,15 +35,32 @@ INSERT INTO list_data VALUES ([1,2,NULL], [2,3,NULL]);
 statement ok
 INSERT INTO list_data VALUES ([1,2,NULL], [NULL,3,4]);
 
+statement ok
+INSERT INTO list_data VALUES ([1,2,3], [1,2,3]);
+
 query I
-select list_hasAny(l1, l2) from list_data;
+select list_has_any(l1, l2) from list_data;
 ----
 NULL
 NULL
+0
+1
+1
+0
+1
+
+query I
+select list_has_all(l1, l2) from list_data;
+----
 NULL
-true
-true
-false
+NULL
+0
+0
+0
+0
+1
+
+# Test Lists in Lists
 
 statement ok
 DROP TABLE list_data;
@@ -53,15 +77,29 @@ insert into list_of_list values ([[1 , 2, 3], NULL, [3, 2, 1]], [[ 2, 3, 4], NUL
 statement ok
 insert into list_of_list values ([[1 , 2, 3], NULL, [3, 2, 1]], [[ 8, 8, 8], NULL, [8, 8, 8]]);
 
+statement ok
+insert into list_of_list values ([[1 , 2, 3], NULL, [8, 8, 8]], [[ 8, 8, 8], NULL, [1, 2, 3]]);
+
 query I
-select list_hasAny(l1, l2) from list_of_list;
+select list_has_any(l1, l2) from list_of_list;
 ----
 NULL
-true
-false
+1
+0
+1
+
+query I
+select list_has_all(l1, l2) from list_of_list;
+----
+NULL
+0
+0
+1
 
 statement ok
 drop table list_of_list;
+
+# test string lists
 
 statement ok
 create table list_of_strings(l1 string[], l2 string[]);
@@ -73,15 +111,85 @@ statement ok
 insert into list_of_strings values ([NULL, 'a', 'b', 'c'], [NULL, 'b', 'c', 'd']);
 
 statement ok
+insert into list_of_strings values (['a', 'b', 'c'], ['a', 'b', 'c']);
+
+statement ok
 insert into list_of_strings values (['here is a very long long string that is def more than 12 bytes', 'and a shorty'], ['here is a very long long string that is def more than 12 bytes', 'here is a very long long string that is def more than 12 bytes', 'c', 'd']);
 
 statement ok
 insert into list_of_strings values (['here is a very long long string that is def more than 12 bytes', 'and a shorty'], ['here is a very long string that is def more than 12 bytes', 'here is a very long string that is def more than 12 bytes', 'c', 'd']);
 
+statement ok
+insert into list_of_strings values (['here is a very long long string that is def more than 12 bytes', 'and a shorty'], ['here is a very long long string that is def more than 12 bytes', 'and a shorty']);
+
 query I
-select list_hasAny(l1, l2) from list_of_strings;
+select list_has_any(l1, l2) from list_of_strings;
 ----
 NULL
-true
-true
-false
+1
+1
+1
+0
+1
+
+query I
+select list_has_all(l1, l2) from list_of_strings;
+----
+NULL
+0
+1
+0
+0
+1
+
+# test error cases
+
+statement error
+select list_has_any(l1) from list_of_strings;
+
+statement error
+select list_has_any(l1, l2, l1) from list_of_strings;
+
+statement error
+select list_has_all(l1) from list_of_strings;
+
+statement error
+select list_has_all(l1, l2, l1) from list_of_strings;
+
+statement error
+select list_has_all([1, 2], 1);
+
+statement error
+select list_has_any([[1,2], [2,4]], ['abc', 'def']);
+
+# Test Large Lists
+
+statement ok
+create table large_lists(l1 int[], l2 int[]);
+
+statement ok
+insert into large_lists values (range(1, 3000), range(2000, 3000));
+
+statement ok
+insert into large_lists values (range(3000), range(3000));
+
+query I
+select list_has_any(l1, l2) from large_lists;
+----
+1
+1
+
+query I
+select list_has_all(l1, l2) from large_lists;
+----
+0
+1
+
+foreach f list_has_all list_has_any
+
+query I
+select ${f}(list_transform([1,2,3], (x) -> list_contains([2,3,4], x)), list_transform([2,3,4], (x) -> list_contains([1,2,3], x)));
+----
+1
+
+endloop
