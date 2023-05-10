@@ -60,10 +60,9 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		options.auto_detect_hive_partitioning = false;
 	} else if (loption == "union_by_name") {
 		options.union_by_name = BooleanValue::Get(val);
-	} else if (loption == "hive_types_autocast"){
+	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast"){
 		options.hive_types_autocast = BooleanValue::Get(val);
 	} else if (loption == "hive_types") {
-		options.hive_types = true;
 		// using 'hive_types' implies 'hive_partitioning'
 		options.hive_partitioning = true;
 
@@ -76,8 +75,8 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		for (idx_t i = 0; i < children.size(); i++) {
 			const Value &child = children[i];
 			if (child.type().id() != LogicalType::VARCHAR) {
-				throw InvalidInputException("one of the children... uhhh... is not a VARCHAR: %s",
-				                            child.type().ToString()); // lars
+				throw InvalidInputException("one of the children is not a VARCHAR: %s",
+				                            child.type().ToString());
 			}
 			// for every child of the struct, get the logical type
 			LogicalType transformed_type = TransformStringToLogicalType(child.ToString(), context);
@@ -92,8 +91,6 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		if (options.hive_types_schema.empty()) {
 			throw InvalidInputException("\'HIVE_TYPES\' can not be empty");
 		}
-	} else if (loption == "hive_types_autocast") {
-		options.hive_types_autocast = BooleanValue::Get(val);
 	} else {
 		return false;
 	}
@@ -220,14 +217,13 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			D_ASSERT(partitions.size() == options.hive_partitioning_indexes.size());
 			bool found_partition = false;
 			for (auto &entry : options.hive_partitioning_indexes) {
-
 				if (column_id == entry.index) {
 					Value value(partitions[entry.value]);
-					if (file_options.hive_types) {
+					if (!file_options.hive_types_schema.empty()) {
 						auto it = file_options.hive_types_schema.find(entry.value);
 						if (it != file_options.hive_types_schema.end()) {
 							if (!value.TryCastAs(context, it->second)) {
-								const string errormsg(StringUtil::Format("Unable to cast '%s' (from column '%s') to: '%s'", value.ToString(), StringUtil::Upper(it->first), it->second.ToString()));
+								const string errormsg(StringUtil::Format("Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(), StringUtil::Upper(it->first), it->second.ToString()));
 								throw InvalidInputException(errormsg.c_str());
 							}
 						}
@@ -364,7 +360,6 @@ void MultiFileReaderOptions::Serialize(Serializer &serializer) const {
 	writer.WriteField<bool>(hive_partitioning);
 	writer.WriteField<bool>(auto_detect_hive_partitioning);
 	writer.WriteField<bool>(union_by_name);
-	writer.WriteField<bool>(hive_types);
 	writer.WriteField<bool>(hive_types_autocast);
 	// serialize hive_types_schema
 	writer.WriteField<uint32_t>((uint32_t)hive_types_schema.size());
@@ -382,7 +377,6 @@ MultiFileReaderOptions MultiFileReaderOptions::Deserialize(Deserializer &source)
 	result.hive_partitioning = reader.ReadRequired<bool>();
 	result.auto_detect_hive_partitioning = reader.ReadRequired<bool>();
 	result.union_by_name = reader.ReadRequired<bool>();
-	result.hive_types = reader.ReadRequired<bool>();
 	result.hive_types_autocast = reader.ReadRequired<bool>();
 	// deserialize hive_types_schema
 	const uint32_t schema_size = reader.ReadRequired<uint32_t>();
@@ -456,6 +450,96 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 			union_col_types.emplace_back(sql_types[col]);
 		}
 	}
+}
+
+bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(const vector<string> &files) {
+	std::unordered_set<string> uset;
+	idx_t splits_size;
+	{
+		//	front file
+		auto splits = StringUtil::Split(files.front(), FileSystem::PathSeparator());
+		splits_size = splits.size();
+		if (splits.size() < 2) {
+			return false;
+		}
+		for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
+			auto part = StringUtil::Split(*it, "=");
+			if (part.size() == 2) {
+				uset.insert(part.front());
+			}
+		}
+	}
+	if (uset.empty()) {
+		return false;
+	}
+	for (auto &file : files) {
+		auto splits = StringUtil::Split(file, FileSystem::PathSeparator());
+		if (splits.size() != splits_size) {
+			return false;
+		}
+		for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
+			auto part = StringUtil::Split(*it, "=");
+			if (part.size() == 2) {
+				if (uset.find(part.front()) == uset.end()) {
+					return false;
+				}
+			}
+		}
+	}
+	return true;
+}
+void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const string &file, ClientContext& context) {
+	std::map<string,string> partitions;
+	auto splits = StringUtil::Split(file, FileSystem::PathSeparator());
+	if (splits.size() < 2) {
+		return;
+	}
+	for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
+		auto part = StringUtil::Split(*it, "=");
+		if (part.size() == 2) {
+			partitions[part.front()] = part.back();
+		}
+	}
+	if (partitions.empty()) {
+		return;
+	}
+
+	const LogicalType candidates[] = {LogicalType::DATE,LogicalType::TIMESTAMP,LogicalType::BIGINT};
+	for (auto& part : partitions) {
+		const string& name = part.first;
+		if (hive_types_schema.find(name) != hive_types_schema.end()) {
+			continue;
+		}
+		Value value(part.second);
+		for (auto& candidate : candidates) {
+			const bool success = value.TryCastAs(context, candidate);
+			if (success) {
+				hive_types_schema[name] = candidate;
+				break;
+			}
+		}
+	}
+}
+void MultiFileReaderOptions::AutoDetectHivePartitioning(const vector<string> &files, ClientContext& context) {
+	D_ASSERT(!files.empty());
+	if (!auto_detect_hive_partitioning && !hive_partitioning && !hive_types_schema.empty()) {
+		throw InvalidInputException("cannot disable hive_partitioning when hive_types is enabled");
+	}
+	if (auto_detect_hive_partitioning) {
+		hive_partitioning = AutoDetectHivePartitioningInternal(files);
+	}
+	if (hive_partitioning && hive_types_autocast) {
+		AutoDetectHiveTypesInternal(files.front(), context);
+	}
+}
+LogicalType MultiFileReaderOptions::GetHiveLogicalType(const string &hive_partition_column) const {
+	if (!hive_types_schema.empty()) {
+		auto it = hive_types_schema.find(hive_partition_column);
+		if (it != hive_types_schema.end()) {
+			return it->second;
+		}
+	}
+	return LogicalType::VARCHAR;
 }
 
 } // namespace duckdb

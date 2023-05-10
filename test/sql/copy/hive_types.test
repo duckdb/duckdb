@@ -61,6 +61,12 @@ select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto
 ----
 VARCHAR	VARCHAR	BIGINT	VARCHAR
 
+# some taxi stuff
+query II
+select typeof(passenger_count), typeof(vendorid) from read_parquet('../taxi/**/passenger_count=*.*/*.parquet', hive_partitioning=1, hive_types={'vendorid':'smallint','passenger_count':'smallint'}) limit 1;
+----
+SMALLINT	SMALLINT
+
 # #	set hive_types as smallint,varchar
 # query IIII
 # select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types={'year':'smallint','month':'varchar'}) limit 1;

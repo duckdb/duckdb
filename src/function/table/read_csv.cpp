@@ -185,7 +185,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			options.SetReadOption(loption, kv.second, names);
 		}
 	}
-	options.file_options.AutoDetect(result->files, context);
+	options.file_options.AutoDetectHivePartitioning(result->files, context);
 
 	if (!options.auto_detect && return_types.empty()) {
 		throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
