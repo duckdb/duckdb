@@ -17,6 +17,8 @@
 #include "duckdb/common/queue.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/execution/operator/persistent/csv_line_info.hpp"
+
 #include <sstream>
 
 namespace duckdb {
@@ -74,6 +76,10 @@ public:
 	const vector<LogicalType> &GetTypes() {
 		return return_types;
 	}
+	virtual idx_t GetLineError(idx_t line_error, idx_t buffer_idx) {
+		return line_error;
+	};
+
 	//! Initialize projection indices to select all columns
 	void InitializeProjection();
 
@@ -88,17 +94,18 @@ protected:
 	bool TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type);
 
 	//! Adds a value to the current row
-	void AddValue(string_t str_val, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes);
+	void AddValue(string_t str_val, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes,
+	              idx_t buffer_idx = 0);
 	//! Adds a row to the insert_chunk, returns true if the chunk is filled as a result of this row being added
-	bool AddRow(DataChunk &insert_chunk, idx_t &column, string &error_message);
+	bool AddRow(DataChunk &insert_chunk, idx_t &column, string &error_message, idx_t buffer_idx = 0);
 	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk
-	bool Flush(DataChunk &insert_chunk, bool try_add_line = false);
+	bool Flush(DataChunk &insert_chunk, idx_t buffer_idx = 0, bool try_add_line = false);
 
 	unique_ptr<CSVFileHandle> OpenCSV(const BufferedCSVReaderOptions &options);
 
 	void VerifyUTF8(idx_t col_idx);
 	void VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, int64_t offset = 0);
-	static string GetLineNumberStr(idx_t linenr, bool linenr_estimated);
+	string GetLineNumberStr(idx_t linenr, bool linenr_estimated, idx_t buffer_idx = 0);
 
 	//! Sets the newline delimiter
 	void SetNewLineDelimiter(bool carry = false, bool carry_followed_by_nl = false);
