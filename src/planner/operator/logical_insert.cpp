@@ -29,7 +29,7 @@ void LogicalInsert::Serialize(FieldWriter &writer) const {
 	writer.WriteList<column_t>(on_conflict_filter);
 	writer.WriteOptional(on_conflict_condition);
 	writer.WriteOptional(do_update_condition);
-	writer.WriteRegularSerializableList(set_columns);
+	writer.WriteIndexList(set_columns);
 	writer.WriteRegularSerializableList(set_types);
 	writer.WriteField(excluded_table_index);
 	writer.WriteList<column_t>(columns_to_fetch);
@@ -56,7 +56,7 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	auto on_conflict_filter = reader.ReadRequiredSet<column_t, unordered_set<column_t>>();
 	auto on_conflict_condition = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	auto do_update_condition = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	auto set_columns = reader.ReadRequiredSerializableList<PhysicalIndex, PhysicalIndex>();
+	auto set_columns = reader.ReadRequiredIndexList<PhysicalIndex>();
 	auto set_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	auto excluded_table_index = reader.ReadRequired<idx_t>();
 	auto columns_to_fetch = reader.ReadRequiredList<column_t>();

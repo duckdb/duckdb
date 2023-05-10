@@ -143,7 +143,6 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 
 static bool OperatorSupportsSerialization(LogicalOperator &op) {
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_UPDATE:
 	case LogicalOperatorType::LOGICAL_DELETE:
 	case LogicalOperatorType::LOGICAL_PREPARE:
 	case LogicalOperatorType::LOGICAL_EXECUTE:

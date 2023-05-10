@@ -110,11 +110,6 @@ struct PhysicalIndex {
 	bool IsValid() {
 		return index != DConstants::INVALID_INDEX;
 	}
-
-	DUCKDB_API void Serialize(Serializer &serializer) const;
-
-	//! Deserializes a blob back into an PhysicalIndex
-	DUCKDB_API static PhysicalIndex Deserialize(Deserializer &source);
 };
 
 DUCKDB_API bool IsPowerOfTwo(uint64_t v);
