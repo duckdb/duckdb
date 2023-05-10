@@ -227,7 +227,6 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 						auto it = file_options.hive_types_schema.find(entry.value);
 						if (it != file_options.hive_types_schema.end()) {
 							if (!value.TryCastAs(context, it->second)) {
-								// what to do if value is NULL? //lars
 								const string errormsg(StringUtil::Format("Unable to cast '%s' (from column '%s') to: '%s'", value.ToString(), StringUtil::Upper(it->first), it->second.ToString()));
 								throw InvalidInputException(errormsg.c_str());
 							}
