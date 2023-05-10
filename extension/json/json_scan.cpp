@@ -760,7 +760,7 @@ void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 	memcpy(reconstruct_ptr, part1_ptr, part1_size);
 	// Now find the newline in the current block
 	auto line_end = NextNewline(buffer_ptr, buffer_size);
-	if (line_end == nullptr) { // TODO I don't think we can ignore this even with ignore_errors ...
+	if (line_end == nullptr) {
 		throw InvalidInputException("maximum_object_size of %llu bytes exceeded (>%llu bytes), is the JSON valid?",
 		                            bind_data.maximum_object_size, buffer_size - buffer_offset);
 	} else {

@@ -360,6 +360,30 @@ select * from read_json('__TEST_DIR__/my_file.json', format='array', records='au
 8
 9
 
+# issue 6646, this is not an array, but we try to read it as one
+statement error
+select json_structure(json ->> '$.metadata') as structure,
+from read_json('data/json/issue.json', format='array', columns={'json': 'JSON'}, maximum_object_size=104857600)
+limit 1;
+----
+Invalid Input Error: Expected top-level JSON array
+
+# let's try a variation
+statement error
+select json_structure(json ->> '$.metadata') as structure,
+from read_json('data/json/issue.json', format='array', records='false', columns={'json': 'JSON'}, maximum_object_size=104857600)
+limit 1;
+----
+Invalid Input Error: Expected top-level JSON array
+
+# we can parse it as unstructured values, and give it a different col name
+query I
+select json_structure(my_json ->> '$.metadata') as structure,
+from read_json('data/json/issue.json', format='unstructured', records='false', columns={'my_json': 'JSON'}, maximum_object_size=104857600)
+limit 1;
+----
+{"argv":["VARCHAR"],"dag":{"dag_size":"VARCHAR","tasks":{"load_oscar":{"status":"VARCHAR","type":"VARCHAR","upstream":"VARCHAR","products":{"nb":"VARCHAR"}},"load_weather":{"status":"VARCHAR","type":"VARCHAR","upstream":"VARCHAR","products":{"nb":"VARCHAR"}},"compress":{"status":"VARCHAR","type":"VARCHAR","upstream":{"load_oscar":"VARCHAR"},"products":{"nb":"VARCHAR"}}}}}
+
 statement ok
 pragma disable_verification
 

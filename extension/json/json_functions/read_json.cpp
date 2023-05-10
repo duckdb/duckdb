@@ -93,7 +93,7 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 		}
 	} else {
 		return_types.emplace_back(type);
-		names.emplace_back("json"); // TODO: more intuitive name?
+		names.emplace_back("json");
 	}
 }
 
@@ -108,7 +108,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 		if (loption == "columns") {
 			auto &child_type = kv.second.type();
 			if (child_type.id() != LogicalTypeId::STRUCT) {
-				throw BinderException("read_json \"columns\" parameter requires a struct as input");
+				throw BinderException("read_json \"columns\" parameter requires a struct as input.");
 			}
 			auto &struct_children = StructValue::GetChildren(kv.second);
 			D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
@@ -117,13 +117,13 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 				auto &val = struct_children[i];
 				names.push_back(name);
 				if (val.type().id() != LogicalTypeId::VARCHAR) {
-					throw BinderException("read_json \"columns\" parameter type specification must be VARCHAR");
+					throw BinderException("read_json \"columns\" parameter type specification must be VARCHAR.");
 				}
 				return_types.emplace_back(TransformStringToLogicalType(StringValue::Get(val), context));
 			}
 			D_ASSERT(names.size() == return_types.size());
 			if (names.empty()) {
-				throw BinderException("read_json \"columns\" parameter needs at least one column");
+				throw BinderException("read_json \"columns\" parameter needs at least one column.");
 			}
 			bind_data->names = names;
 		} else if (loption == "auto_detect") {
@@ -136,7 +136,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 				bind_data->sample_size = arg;
 			} else {
 				throw BinderException(
-				    "read_json \"sample_size\" parameter must be positive, or -1 to sample the entire file");
+				    "read_json \"sample_size\" parameter must be positive, or -1 to sample the entire file.");
 			}
 		} else if (loption == "maximum_depth") {
 			auto arg = BigIntValue::Get(kv.second);
@@ -155,7 +155,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			StrpTimeFormat format;
 			auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 			if (!error.empty()) {
-				throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+				throw InvalidInputException("read_json could not parse \"dateformat\": '%s'.", error.c_str());
 			}
 		} else if (loption == "timestampformat" || loption == "timestamp_format") {
 			auto format_string = StringValue::Get(kv.second);
@@ -167,7 +167,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			StrpTimeFormat format;
 			auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 			if (!error.empty()) {
-				throw InvalidInputException("Could not parse TIMESTAMPFORMAT: %s", error.c_str());
+				throw InvalidInputException("read_json could not parse \"timestampformat\": '%s'.", error.c_str());
 			}
 		} else if (loption == "records") {
 			auto arg = StringValue::Get(kv.second);
@@ -178,13 +178,27 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			} else if (arg == "false") {
 				bind_data->options.record_type = JSONRecordType::VALUES;
 			} else {
-				throw InvalidInputException("units must be one of ['auto', 'true', 'false']");
+				throw InvalidInputException("read_json requires \"records\" to be one of ['auto', 'true', 'false'].");
 			}
 		}
 	}
-	if (!bind_data->auto_detect && return_types.empty()) {
-		throw BinderException("read_json requires columns to be specified through the 'columns' option. Use "
-		                      "read_json_auto or set read_json(..., AUTO_DETECT=TRUE) to automatically guess columns.");
+
+	// Specifying column names overrides auto-detect
+	if (!return_types.empty()) {
+		bind_data->auto_detect = false;
+	}
+
+	if (!bind_data->auto_detect) {
+		// Need to specify columns if RECORDS and not auto-detecting
+		if (return_types.empty()) {
+			throw BinderException("read_json requires columns to be specified through the \"columns\" parameter."
+			                      "\n Use read_json_auto or set auto_detect=true to automatically guess columns.");
+		}
+		// If we are reading VALUES, we can only have one column
+		if (bind_data->options.record_type == JSONRecordType::VALUES && return_types.size() != 1) {
+			throw BinderException("read_json requires a single column to be specified through the \"columns\" "
+			                      "parameter when \"records\" is set to 'false'.");
+		}
 	}
 
 	bind_data->InitializeFormats();
@@ -192,8 +206,8 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	if (bind_data->auto_detect || bind_data->options.record_type == JSONRecordType::AUTO_DETECT) {
 		JSONScan::AutoDetect(context, *bind_data, return_types, names);
 		bind_data->names = names;
+		D_ASSERT(return_types.size() == names.size());
 	}
-	D_ASSERT(return_types.size() == names.size());
 
 	bind_data->reader_bind =
 	    MultiFileReader::BindOptions(bind_data->options.file_options, bind_data->files, return_types, names);
