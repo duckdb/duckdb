@@ -43,16 +43,16 @@ ColumnCheckpointState &ColumnDataCheckpointer::GetCheckpointState() {
 void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
 	Vector scan_vector(intermediate.GetType(), nullptr);
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto segment = nodes[segment_idx].node.get();
+		auto &segment = *nodes[segment_idx].node;
 		ColumnScanState scan_state;
-		scan_state.current = segment;
-		segment->InitializeScan(scan_state);
+		scan_state.current = &segment;
+		segment.InitializeScan(scan_state);
 
-		for (idx_t base_row_index = 0; base_row_index < segment->count; base_row_index += STANDARD_VECTOR_SIZE) {
+		for (idx_t base_row_index = 0; base_row_index < segment.count; base_row_index += STANDARD_VECTOR_SIZE) {
 			scan_vector.Reference(intermediate);
 
-			idx_t count = MinValue<idx_t>(segment->count - base_row_index, STANDARD_VECTOR_SIZE);
-			scan_state.row_index = segment->start + base_row_index;
+			idx_t count = MinValue<idx_t>(segment.count - base_row_index, STANDARD_VECTOR_SIZE);
+			scan_state.row_index = segment.start + base_row_index;
 
 			col_data.CheckpointScan(segment, scan_state, row_group.start, count, scan_vector);
 
@@ -250,7 +250,7 @@ void ColumnDataCheckpointer::Checkpoint(vector<SegmentNode<ColumnSegment>> nodes
 		// no changes: only need to write the metadata for this column
 		WritePersistentSegments();
 	} else {
-		// there are changes: rewrite the set of columns
+		// there are changes: rewrite the set of columns);
 		WriteToDisk();
 	}
 }

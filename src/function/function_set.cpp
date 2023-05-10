@@ -3,7 +3,14 @@
 
 namespace duckdb {
 
+ScalarFunctionSet::ScalarFunctionSet() : FunctionSet("") {
+}
+
 ScalarFunctionSet::ScalarFunctionSet(string name) : FunctionSet(std::move(name)) {
+}
+
+ScalarFunctionSet::ScalarFunctionSet(ScalarFunction fun) : FunctionSet(std::move(fun.name)) {
+	functions.push_back(std::move(fun));
 }
 
 ScalarFunction ScalarFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
@@ -17,7 +24,14 @@ ScalarFunction ScalarFunctionSet::GetFunctionByArguments(ClientContext &context,
 	return GetFunctionByOffset(index);
 }
 
+AggregateFunctionSet::AggregateFunctionSet() : FunctionSet("") {
+}
+
 AggregateFunctionSet::AggregateFunctionSet(string name) : FunctionSet(std::move(name)) {
+}
+
+AggregateFunctionSet::AggregateFunctionSet(AggregateFunction fun) : FunctionSet(std::move(fun.name)) {
+	functions.push_back(std::move(fun));
 }
 
 AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &context,
@@ -53,6 +67,10 @@ AggregateFunction AggregateFunctionSet::GetFunctionByArguments(ClientContext &co
 TableFunctionSet::TableFunctionSet(string name) : FunctionSet(std::move(name)) {
 }
 
+TableFunctionSet::TableFunctionSet(TableFunction fun) : FunctionSet(std::move(fun.name)) {
+	functions.push_back(std::move(fun));
+}
+
 TableFunction TableFunctionSet::GetFunctionByArguments(ClientContext &context, const vector<LogicalType> &arguments) {
 	string error;
 	FunctionBinder binder(context);
@@ -62,6 +80,13 @@ TableFunction TableFunctionSet::GetFunctionByArguments(ClientContext &context, c
 		                        error);
 	}
 	return GetFunctionByOffset(index);
+}
+
+PragmaFunctionSet::PragmaFunctionSet(string name) : FunctionSet(std::move(name)) {
+}
+
+PragmaFunctionSet::PragmaFunctionSet(PragmaFunction fun) : FunctionSet(std::move(fun.name)) {
+	functions.push_back(std::move(fun));
 }
 
 } // namespace duckdb

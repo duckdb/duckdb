@@ -1,6 +1,7 @@
 #include "json_transform.hpp"
 
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "json_functions.hpp"
@@ -266,7 +267,7 @@ bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const
 		if (!val || unsafe_yyjson_is_null(val)) {
 			validity.SetInvalid(i);
 		} else if (options.strict_cast && !unsafe_yyjson_is_str(val)) {
-			options.error_message = StringUtil::Format("Unable to cast '%s' to " + LogicalTypeIdToString(target.id()),
+			options.error_message = StringUtil::Format("Unable to cast '%s' to " + EnumUtil::ToString(target.id()),
 			                                           JSONCommon::ValToString(val, 50));
 			options.object_index = i;
 			return false;
@@ -343,7 +344,7 @@ static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, co
 	case LogicalTypeId::TIMESTAMP:
 		return TransformStringWithFormat<TryParseTimeStamp, timestamp_t>(string_vector, format, count, result, options);
 	default:
-		throw InternalException("No date/timestamp formats for %s", LogicalTypeIdToString(result.GetType().id()));
+		throw InternalException("No date/timestamp formats for %s", EnumUtil::ToString(result.GetType().id()));
 	}
 }
 
@@ -685,11 +686,11 @@ static void GetTransformFunctionInternal(ScalarFunctionSet &set, const LogicalTy
 	                               JSONTransformBind, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetTransformFunction() {
+ScalarFunctionSet JSONFunctions::GetTransformFunction() {
 	ScalarFunctionSet set("json_transform");
 	GetTransformFunctionInternal(set, LogicalType::VARCHAR);
 	GetTransformFunctionInternal(set, JSONCommon::JSONType());
-	return CreateScalarFunctionInfo(set);
+	return set;
 }
 
 static void GetTransformStrictFunctionInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
@@ -697,11 +698,11 @@ static void GetTransformStrictFunctionInternal(ScalarFunctionSet &set, const Log
 	                               JSONTransformBind, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetTransformStrictFunction() {
+ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 	ScalarFunctionSet set("json_transform_strict");
 	GetTransformStrictFunctionInternal(set, LogicalType::VARCHAR);
 	GetTransformStrictFunctionInternal(set, JSONCommon::JSONType());
-	return CreateScalarFunctionInfo(set);
+	return set;
 }
 
 } // namespace duckdb

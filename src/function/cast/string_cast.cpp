@@ -330,7 +330,7 @@ bool VectorStringToMap::StringToNestedTypeCastLoop(string_t *source_data, Validi
 			}
 		}
 	}
-	MapConversionVerify(result, count);
+	MapVector::MapConversionVerify(result, count);
 	return all_converted;
 }
 

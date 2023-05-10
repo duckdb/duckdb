@@ -3,6 +3,7 @@
 #include "json_executors.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -300,7 +301,7 @@ bool JSONStructureNode::EliminateCandidateFormats(idx_t count, Vector &string_ve
 			success = TryParse<TryParseTimeStamp, timestamp_t>(string_vector, format, count);
 			break;
 		default:
-			throw InternalException("No date/timestamp formats for %s", LogicalTypeIdToString(type));
+			throw InternalException("No date/timestamp formats for %s", EnumUtil::ToString(type));
 		}
 		if (success) {
 			while (formats.size() > i) {
@@ -457,8 +458,7 @@ static inline yyjson_mut_val *ConvertStructure(const JSONStructureNode &node, yy
 	case LogicalTypeId::STRUCT:
 		return ConvertStructureObject(node, doc);
 	default:
-		auto type_string = LogicalTypeIdToString(desc.type); // TODO: this requires copying, can be optimized
-		return yyjson_mut_strncpy(doc, type_string.c_str(), type_string.length());
+		return yyjson_mut_str(doc, EnumUtil::ToChars(desc.type));
 	}
 }
 
@@ -476,11 +476,11 @@ static void GetStructureFunctionInternal(ScalarFunctionSet &set, const LogicalTy
 	                               JSONFunctionLocalState::Init));
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetStructureFunction() {
+ScalarFunctionSet JSONFunctions::GetStructureFunction() {
 	ScalarFunctionSet set("json_structure");
 	GetStructureFunctionInternal(set, LogicalType::VARCHAR);
 	GetStructureFunctionInternal(set, JSONCommon::JSONType());
-	return CreateScalarFunctionInfo(set);
+	return set;
 }
 
 static LogicalType StructureToTypeArray(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,

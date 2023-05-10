@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/table_index_list.hpp"
 #include "duckdb/storage/table/table_statistics.hpp"
+#include "duckdb/storage/optimistic_data_writer.hpp"
 
 namespace duckdb {
 class AttachedDatabase;
@@ -19,35 +20,6 @@ class Transaction;
 class WriteAheadLog;
 struct LocalAppendState;
 struct TableAppendState;
-
-class OptimisticDataWriter {
-public:
-	OptimisticDataWriter(DataTable &table);
-	OptimisticDataWriter(DataTable &table, OptimisticDataWriter &parent);
-	~OptimisticDataWriter();
-
-	void CheckFlushToDisk(RowGroupCollection &row_groups);
-	//! Flushes a specific row group to disk
-	void FlushToDisk(RowGroup *row_group);
-	//! Flushes the final row group to disk (if any)
-	void FlushToDisk(RowGroupCollection &row_groups, bool force = false);
-	//! Final flush: flush the partial block manager to disk
-	void FinalFlush();
-
-	void Rollback();
-
-private:
-	//! Prepare a write to disk
-	bool PrepareWrite();
-
-private:
-	//! The table
-	DataTable &table;
-	//! The partial block manager (if we created one yet)
-	unique_ptr<PartialBlockManager> partial_manager;
-	//! The set of blocks that have been pre-emptively written to disk
-	unordered_set<block_id_t> written_blocks;
-};
 
 class LocalTableStorage : public std::enable_shared_from_this<LocalTableStorage> {
 public:
@@ -76,13 +48,14 @@ public:
 	OptimisticDataWriter optimistic_writer;
 	//! The set of all optimistic data writers associated with this table
 	vector<unique_ptr<OptimisticDataWriter>> optimistic_writers;
+	//! Whether or not storage was merged
+	bool merged_storage = false;
 
 public:
 	void InitializeScan(CollectionScanState &state, optional_ptr<TableFilterSet> table_filters = nullptr);
-	//! Check if we should flush the previously written row-group to disk
-	void CheckFlushToDisk();
-	//! Flushes the final row group to disk (if any)
-	void FlushToDisk();
+	//! Write a new row group to disk (if possible)
+	void WriteNewRowGroup();
+	void FlushBlocks();
 	void Rollback();
 	idx_t EstimatedSize();
 
@@ -93,6 +66,7 @@ public:
 
 	//! Creates an optimistic writer for this table
 	OptimisticDataWriter &CreateOptimisticWriter();
+	void FinalizeOptimisticWriter(OptimisticDataWriter &writer);
 };
 
 class LocalTableManager {
@@ -114,7 +88,7 @@ private:
 class LocalStorage {
 public:
 	// Threshold to merge row groups instead of appending
-	static constexpr const idx_t MERGE_THRESHOLD = RowGroup::ROW_GROUP_SIZE / 2;
+	static constexpr const idx_t MERGE_THRESHOLD = RowGroup::ROW_GROUP_SIZE;
 
 public:
 	struct CommitState {
@@ -150,6 +124,7 @@ public:
 	void LocalMerge(DataTable &table, RowGroupCollection &collection);
 	//! Create an optimistic writer for the specified table
 	OptimisticDataWriter &CreateOptimisticWriter(DataTable &table);
+	void FinalizeOptimisticWriter(DataTable &table, OptimisticDataWriter &writer);
 
 	//! Delete a set of rows from the local storage
 	idx_t Delete(DataTable &table, Vector &row_ids, idx_t count);

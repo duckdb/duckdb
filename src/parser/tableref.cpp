@@ -30,7 +30,7 @@ string TableRef::BaseToString(string result, const vector<string> &column_name_a
 		result += ")";
 	}
 	if (sample) {
-		result += " TABLESAMPLE " + SampleMethodToString(sample->method);
+		result += " TABLESAMPLE " + EnumUtil::ToString(sample->method);
 		result += "(" + sample->sample_size.ToString() + " " + string(sample->is_percentage ? "PERCENT" : "ROWS") + ")";
 		if (sample->seed >= 0) {
 			result += "REPEATABLE (" + to_string(sample->seed) + ")";

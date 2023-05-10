@@ -73,14 +73,16 @@ unique_ptr<GlobalSourceState> PhysicalTableScan::GetGlobalSourceState(ClientCont
 	return make_uniq<TableScanGlobalSourceState>(context, *this);
 }
 
-void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                LocalSourceState &lstate) const {
+SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk,
+                                            OperatorSourceInput &input) const {
 	D_ASSERT(!column_ids.empty());
-	auto &gstate = gstate_p.Cast<TableScanGlobalSourceState>();
-	auto &state = lstate.Cast<TableScanLocalSourceState>();
+	auto &gstate = input.global_state.Cast<TableScanGlobalSourceState>();
+	auto &state = input.local_state.Cast<TableScanLocalSourceState>();
 
 	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
 	function.function(context.client, data, chunk);
+
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 double PhysicalTableScan::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {

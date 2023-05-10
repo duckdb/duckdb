@@ -554,7 +554,7 @@ void PartitionMergeEvent::Schedule() {
 	auto &ts = TaskScheduler::GetScheduler(context);
 	idx_t num_threads = ts.NumberOfThreads();
 
-	vector<unique_ptr<Task>> merge_tasks;
+	vector<shared_ptr<Task>> merge_tasks;
 	for (idx_t tnum = 0; tnum < num_threads; tnum++) {
 		merge_tasks.emplace_back(make_uniq<PartitionMergeTask>(shared_from_this(), context, merge_states));
 	}

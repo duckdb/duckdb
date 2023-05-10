@@ -5,7 +5,7 @@
 #include "duckdb/common/http_state.hpp"
 #include "duckdb/common/thread.hpp"
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
@@ -186,6 +186,7 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
 	client->set_write_timeout(http_params.timeout);
 	client->set_read_timeout(http_params.timeout);
 	client->set_connection_timeout(http_params.timeout);
+	client->set_decompress(false);
 	return client;
 }
 

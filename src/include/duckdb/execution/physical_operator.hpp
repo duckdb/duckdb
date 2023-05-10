@@ -15,6 +15,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/common/optional_idx.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 
@@ -102,8 +103,8 @@ public:
 	virtual unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                         GlobalSourceState &gstate) const;
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
-	virtual void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	                     LocalSourceState &lstate) const;
+	virtual SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const;
+
 	virtual idx_t GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
 	                            LocalSourceState &lstate) const;
 
@@ -132,8 +133,7 @@ public:
 
 	//! The sink method is called constantly with new input, as long as new input is available. Note that this method
 	//! CAN be called in parallel, proper locking is needed when accessing data inside the GlobalSinkState.
-	virtual SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-	                            DataChunk &input) const;
+	virtual SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const;
 	// The combine is called when a single thread has completed execution of its part of the pipeline, it is the final
 	// time that a specific LocalSinkState is accessible. This method can be called in parallel while other Sink() or
 	// Combine() calls are active on the same GlobalSinkState.
@@ -143,6 +143,9 @@ public:
 	//! If Finalize returns SinkResultType::FINISHED, the sink is marked as finished
 	virtual SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                                  GlobalSinkState &gstate) const;
+	//! For sinks with RequiresBatchIndex set to true, when a new batch starts being processed this method is called
+	//! This allows flushing of the current batch (e.g. to disk)
+	virtual void NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const;
 
 	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;

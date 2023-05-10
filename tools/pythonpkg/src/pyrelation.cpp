@@ -844,12 +844,16 @@ void DuckDBPyRelation::Create(const string &table) {
 	PyExecuteRelation(create);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun, Optional<py::object> schema) {
 	AssertRelation();
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)fun.ptr()));
+	params.emplace_back(Value::POINTER((uintptr_t)schema.ptr()));
 	auto relation = make_uniq<DuckDBPyRelation>(rel->TableFunction("python_map_function", params));
-	relation->rel->extra_dependencies = make_uniq<PythonDependencies>(fun);
+	auto rel_dependency = make_uniq<PythonDependencies>();
+	rel_dependency->map_function = std::move(fun);
+	rel_dependency->py_object_list.push_back(std::move(make_uniq<RegisteredObject>(std::move(schema))));
+	relation->rel->extra_dependencies = std::move(rel_dependency);
 	return relation;
 }
 
@@ -875,6 +879,7 @@ void DuckDBPyRelation::Print() {
 
 string DuckDBPyRelation::Explain(ExplainType type) {
 	AssertRelation();
+	py::gil_scoped_release release;
 	auto res = rel->Explain(type);
 	D_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
 	auto &materialized = (duckdb::MaterializedQueryResult &)*res;
