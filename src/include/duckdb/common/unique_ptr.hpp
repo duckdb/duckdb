@@ -2,6 +2,7 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/likely.hpp"
+#include "duckdb/common/memory_safety.hpp"
 
 #include <memory>
 #include <type_traits>
@@ -28,7 +29,7 @@ private:
 public:
 	typename std::add_lvalue_reference<_Tp>::type operator*() const {
 		const auto ptr = original::get();
-		if (SAFE) {
+		if (MemorySafety<SAFE>::enabled) {
 			AssertNotNull(!ptr);
 		}
 		return *ptr;
@@ -36,7 +37,7 @@ public:
 
 	typename original::pointer operator->() const {
 		const auto ptr = original::get();
-		if (SAFE) {
+		if (MemorySafety<SAFE>::enabled) {
 			AssertNotNull(!ptr);
 		}
 		return ptr;
@@ -72,7 +73,7 @@ private:
 public:
 	typename std::add_lvalue_reference<_Tp>::type operator[](size_t __i) const {
 		const auto ptr = original::get();
-		if (SAFE) {
+		if (MemorySafety<SAFE>::enabled) {
 			AssertNotNull(!ptr);
 		}
 		return ptr[__i];
@@ -84,5 +85,8 @@ using array_ptr = unique_ptr<T[], true>;
 
 template <typename T>
 using unsafe_array_ptr = unique_ptr<T[], false>;
+
+template <typename T>
+using unsafe_unique_ptr = unique_ptr<T, false>;
 
 } // namespace duckdb

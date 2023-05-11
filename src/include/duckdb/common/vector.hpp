@@ -12,6 +12,7 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/memory_safety.hpp"
 #include <vector>
 
 namespace duckdb {
@@ -57,7 +58,7 @@ public:
 
 	template <bool _SAFE = false>
 	inline typename original::reference get(typename original::size_type __n) {
-		if (_SAFE) {
+		if (MemorySafety<_SAFE>::enabled) {
 			AssertIndexInBounds(__n, original::size());
 		}
 		return original::operator[](__n);
@@ -65,7 +66,7 @@ public:
 
 	template <bool _SAFE = false>
 	inline typename original::const_reference get(typename original::size_type __n) const {
-		if (_SAFE) {
+		if (MemorySafety<_SAFE>::enabled) {
 			AssertIndexInBounds(__n, original::size());
 		}
 		return original::operator[](__n);
