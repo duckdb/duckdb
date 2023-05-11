@@ -65,7 +65,7 @@ struct ColumnInfo {
 		names = std::move(names_p);
 		types = std::move(types_p);
 	}
-	void Serialize(FieldWriter &writer) {
+	void Serialize(FieldWriter &writer) const {
 		writer.WriteList<string>(names);
 		writer.WriteRegularSerializableList<LogicalType>(types);
 	}

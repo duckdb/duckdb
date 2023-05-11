@@ -332,7 +332,7 @@ public:
 
 	bool Finished();
 
-	double GetProgress(ReadCSVData &bind_data) const {
+	double GetProgress(const ReadCSVData &bind_data) const {
 		idx_t total_files = bind_data.files.size();
 
 		// get the progress WITHIN the current file
@@ -735,7 +735,7 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 		return total_files;
 	}
 
-	double GetProgress(ReadCSVData &bind_data) const {
+	double GetProgress(const ReadCSVData &bind_data) const {
 		D_ASSERT(total_files == bind_data.files.size());
 		D_ASSERT(progress_in_files <= total_files * 100);
 		return (double(progress_in_files) / double(total_files));
@@ -901,7 +901,7 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 // Read CSV Functions
 //===--------------------------------------------------------------------===//
 static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = (ReadCSVData &)*input.bind_data;
+	auto &bind_data = input.bind_data->Cast<ReadCSVData>();
 	if (bind_data.single_threaded) {
 		return SingleThreadedCSVInit(context, input);
 	} else {
@@ -911,7 +911,7 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
                                                      GlobalTableFunctionState *global_state_p) {
-	auto &csv_data = (ReadCSVData &)*input.bind_data;
+	auto &csv_data = input.bind_data->Cast<ReadCSVData>();
 	if (csv_data.single_threaded) {
 		return SingleThreadedReadCSVInitLocal(context, input, global_state_p);
 	} else {
@@ -920,7 +920,7 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 }
 
 static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (ReadCSVData &)*data_p.bind_data;
+	auto &bind_data = data_p.bind_data->Cast<ReadCSVData>();
 	if (bind_data.single_threaded) {
 		SingleThreadedCSVFunction(context, data_p, output);
 	} else {
@@ -930,7 +930,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 
 static idx_t CSVReaderGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
                                     LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
-	auto &bind_data = (ReadCSVData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
 	if (bind_data.single_threaded) {
 		auto &data = local_state->Cast<SingleThreadedCSVLocalState>();
 		return data.file_index;
@@ -977,28 +977,28 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
                          const GlobalTableFunctionState *global_state) {
-	auto &bind_data = (ReadCSVData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
 	if (bind_data.single_threaded) {
-		auto &data = (SingleThreadedCSVState &)*global_state;
+		auto &data = global_state->Cast<SingleThreadedCSVState>();
 		return data.GetProgress(bind_data);
 	} else {
-		auto &data = (const ParallelCSVGlobalState &)*global_state;
+		auto &data = global_state->Cast<ParallelCSVGlobalState>();
 		return data.GetProgress(bind_data);
 	}
 }
 
 void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
                               vector<unique_ptr<Expression>> &filters) {
-	auto data = (ReadCSVData *)bind_data_p;
+	auto &data = bind_data_p->Cast<ReadCSVData>();
 	auto reset_reader =
-	    MultiFileReader::ComplexFilterPushdown(context, data->files, data->options.file_options, get, filters);
+	    MultiFileReader::ComplexFilterPushdown(context, data.files, data.options.file_options, get, filters);
 	if (reset_reader) {
-		MultiFileReader::PruneReaders(*data);
+		MultiFileReader::PruneReaders(data);
 	}
 }
 
 unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const FunctionData *bind_data_p) {
-	auto &bind_data = (ReadCSVData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
 	idx_t per_file_cardinality = 0;
 	if (bind_data.initial_reader && bind_data.initial_reader->file_handle) {
 		auto estimated_row_width = (bind_data.csv_types.size() * 5);
@@ -1083,7 +1083,7 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 }
 
 static void CSVReaderSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
-	auto &bind_data = (ReadCSVData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
 	writer.WriteList<string>(bind_data.files);
 	writer.WriteRegularSerializableList<LogicalType>(bind_data.csv_types);
 	writer.WriteList<string>(bind_data.csv_names);
