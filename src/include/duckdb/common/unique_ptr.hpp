@@ -80,8 +80,9 @@ public:
 	}
 };
 
+// Because array_ptr is used in performance critical places, we make these unsafe for now
 template <typename T>
-using array_ptr = unique_ptr<T[], true>;
+using array_ptr = unique_ptr<T[], false>;
 
 template <typename T>
 using unsafe_array_ptr = unique_ptr<T[], false>;
