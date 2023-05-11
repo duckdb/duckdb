@@ -1,5 +1,5 @@
 # name: benchmark/micro/join/join_from_parquet.benchmark
-# description: Join between two parquet files. We want to put the smaller parquet file on the build side  
+# description: Join between two parquet files. We want to put the smaller parquet file on the build side
 # group: [join]
 
 name Right Outer Join (big LHS, small RHS)
