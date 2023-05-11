@@ -83,15 +83,21 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 	bind_data.transform_options.date_format_map = &bind_data.date_format_map;
 
 	// Auto-detect columns
-	if (type.id() == LogicalTypeId::STRUCT) {
-		const auto &child_types = StructType::GetChildTypes(type);
-		return_types.reserve(child_types.size());
-		names.reserve(child_types.size());
-		for (auto &child_type : child_types) {
-			return_types.emplace_back(child_type.second);
-			names.emplace_back(child_type.first);
+	if (bind_data.options.record_type == JSONRecordType::RECORDS) {
+		if (type.id() == LogicalTypeId::STRUCT) {
+			const auto &child_types = StructType::GetChildTypes(type);
+			return_types.reserve(child_types.size());
+			names.reserve(child_types.size());
+			for (auto &child_type : child_types) {
+				return_types.emplace_back(child_type.second);
+				names.emplace_back(child_type.first);
+			}
+		} else {
+			throw BinderException("json_read expected records, but got non-record JSON instead."
+			                      "\n Try setting records='auto' or records='false'.");
 		}
 	} else {
+		D_ASSERT(bind_data.options.record_type == JSONRecordType::VALUES);
 		return_types.emplace_back(type);
 		names.emplace_back("json");
 	}

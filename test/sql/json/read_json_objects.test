@@ -35,6 +35,12 @@ SELECT * FROM read_ndjson_objects('data/json/example_n.ndjson')
 {"id":4,"name":"Broadcast News"}
 {"id":5,"name":"Raising Arizona"}
 
+# this one does not have the 'records' param
+statement error
+SELECT * FROM read_ndjson_objects('data/json/example_n.ndjson', records='false')
+----
+Binder Error: Invalid named parameter
+
 query I
 SELECT * FROM read_ndjson_objects('data/json/example_n.ndjson')
 ----

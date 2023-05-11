@@ -110,6 +110,13 @@ select * from read_json_auto('data/json/top_level_array.json', maximum_depth=1)
 "cancelled"
 "cancelled"
 
+# if we read this with records='false', we get the struct instead of the unpacked columns
+query I
+select typeof(json) from read_json_auto('data/json/top_level_array.json', records='false')
+----
+STRUCT(conclusion VARCHAR)
+STRUCT(conclusion VARCHAR)
+
 # however, if there are multiple top-level arrays, we default to reading them as lists
 query I
 select * from 'data/json/top_level_two_arrays.json'
@@ -117,6 +124,11 @@ select * from 'data/json/top_level_two_arrays.json'
 [{'conclusion': cancelled}, {'conclusion': cancelled}]
 [{'conclusion': cancelled}, {'conclusion': cancelled}]
 
+# if we read a top-level array as if it is a record, then we get an error
+statement error
+select * from read_json_auto('data/json/top_level_array.json', format='unstructured', records='true')
+----
+Binder Error: json_read expected records
 
 # issue Mark found when analyzing a JSON dump of our CI - projection pushdown wasn't working properly
 statement ok
