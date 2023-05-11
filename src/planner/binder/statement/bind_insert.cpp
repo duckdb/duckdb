@@ -414,8 +414,10 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		if (values_list) {
 			throw BinderException("INSERT BY NAME can only be used when inserting from a SELECT statement");
 		}
+		if (!stmt.columns.empty()) {
+			throw BinderException("INSERT BY NAME cannot be combined with an explicit column list");
+		}
 		D_ASSERT(stmt.select_statement);
-		D_ASSERT(stmt.columns.empty());
 		// INSERT BY NAME - generate the columns from the names of the SELECT statement
 		auto select_binder = Binder::CreateBinder(context, this);
 		root_select = select_binder->Bind(*stmt.select_statement);
