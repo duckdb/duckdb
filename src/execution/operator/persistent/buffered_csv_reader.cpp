@@ -239,6 +239,7 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 		if (return_types.empty()) {
 			throw InvalidInputException("Failed to detect column types from CSV: is the file a valid CSV file?");
 		}
+		JumpToBeginning(options.skip_rows, options.header);
 	} else {
 		return_types = requested_types;
 		ResetBuffer();
