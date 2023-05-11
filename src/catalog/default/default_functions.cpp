@@ -100,8 +100,8 @@ static DefaultMacro internal_macros[] = {
 
     // FIXME implement as actual function if we encounter a lot of performance issues. Complexity now: n * m, with hashing possibly n + m
     {DEFAULT_SCHEMA, "list_intersect", {"l1", "l2", nullptr}, "list_filter(l1, (x) -> list_contains(l2, x))"},
-    {DEFAULT_SCHEMA, "list_has_any", {"l1", "l2", nullptr}, "list_has(list_intersect(l1, l2), true)"},
-    {DEFAULT_SCHEMA, "list_has_all", {"l1", "l2", nullptr}, "CASE WHEN list_has(list_transform(l1, (x) -> list_contains(l2, x)), false) THEN false ELSE list_has_any(l1, l2) END"},
+    {DEFAULT_SCHEMA, "list_has_any", {"l1", "l2", nullptr}, "CASE WHEN len(list_intersect(l1, l2)) > 0 THEN true ELSE false END"},
+    {DEFAULT_SCHEMA, "list_has_all", {"l1", "l2", nullptr}, "CASE WHEN len(list_intersect(l2, l1)) = len(list_distinct(l2)) THEN true ELSE false END"},
 
 	// algebraic list aggregates
 	{DEFAULT_SCHEMA, "list_avg", {"l", nullptr}, "list_aggr(l, 'avg')"},
