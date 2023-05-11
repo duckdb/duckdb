@@ -64,12 +64,17 @@ make_uniq(_Args&&... __args)
 }
 
 template<class _Tp>
-inline 
-typename __unique_if<_Tp>::__unique_array_unknown_bound
-make_uniq(size_t __n)
+inline unique_ptr<_Tp[], true>
+make_array(size_t __n)
 {
-    typedef typename std::remove_extent<_Tp>::type _Up;
-    return unique_ptr<_Tp>(new _Up[__n]());
+    return unique_ptr<_Tp[], true>(new _Tp[__n]());
+}
+
+template<class _Tp>
+inline unique_ptr<_Tp[], false>
+make_unsafe_array(size_t __n)
+{
+    return unique_ptr<_Tp[], false>(new _Tp[__n]());
 }
 
 template<class _Tp, class... _Args>

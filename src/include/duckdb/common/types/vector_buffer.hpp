@@ -71,10 +71,10 @@ public:
 	}
 	explicit VectorBuffer(idx_t data_size) : buffer_type(VectorBufferType::STANDARD_BUFFER) {
 		if (data_size > 0) {
-			data = unique_ptr<data_t[]>(new data_t[data_size]);
+			data = make_array<data_t>(data_size);
 		}
 	}
-	explicit VectorBuffer(unique_ptr<data_t[]> data_p)
+	explicit VectorBuffer(array_ptr<data_t> data_p)
 	    : buffer_type(VectorBufferType::STANDARD_BUFFER), data(std::move(data_p)) {
 	}
 	virtual ~VectorBuffer() {
@@ -87,7 +87,7 @@ public:
 		return data.get();
 	}
 
-	void SetData(unique_ptr<data_t[]> new_data) {
+	void SetData(array_ptr<data_t> new_data) {
 		data = std::move(new_data);
 	}
 
@@ -120,7 +120,7 @@ public:
 protected:
 	VectorBufferType buffer_type;
 	unique_ptr<VectorAuxiliaryData> aux_data;
-	unique_ptr<data_t[]> data;
+	array_ptr<data_t> data;
 };
 
 //! The DictionaryBuffer holds a selection vector

@@ -60,12 +60,12 @@ public:
 	virtual ~BufferedCSVReader() {
 	}
 
-	unique_ptr<char[]> buffer;
+	array_ptr<char> buffer;
 	idx_t buffer_size;
 	idx_t position;
 	idx_t start = 0;
 
-	vector<unique_ptr<char[]>> cached_buffers;
+	vector<array_ptr<char>> cached_buffers;
 
 	unique_ptr<CSVFileHandle> file_handle;
 

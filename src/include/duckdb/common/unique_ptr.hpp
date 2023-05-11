@@ -79,4 +79,10 @@ public:
 	}
 };
 
+template <typename T>
+using array_ptr = unique_ptr<T[], true>;
+
+template <typename T>
+using unsafe_array_ptr = unique_ptr<T[], false>;
+
 } // namespace duckdb
