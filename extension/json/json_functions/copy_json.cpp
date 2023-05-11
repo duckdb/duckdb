@@ -16,6 +16,30 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	auto &copy = stmt_copy->Cast<CopyStatement>();
 	auto &info = *copy.info;
 
+	// Parse the options, creating options for the CSV writer while doing so
+	string date_format;
+	string timestamp_format;
+	case_insensitive_map_t<vector<Value>> csv_copy_options;
+	for (const auto &kv : info.options) {
+		const auto &loption = StringUtil::Lower(kv.first);
+		if (loption == "dateformat" || loption == "date_format") {
+			date_format = StringValue::Get(kv.second.back());
+		} else if (loption == "timestampformat" || loption == "timtestampformat") {
+			timestamp_format = StringValue::Get(kv.second.back());
+		} else if (loption == "compression") {
+			csv_copy_options.insert(kv);
+		} else if (loption == "array") {
+			auto array = BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
+			if (array) {
+				csv_copy_options["prefix"] = {"[\n\t"};
+				csv_copy_options["suffix"] = {"\n]\n"};
+				csv_copy_options["new_line"] = {",\n\t"};
+			}
+		} else {
+			throw BinderException("Unknown option for COPY ... TO ... (FORMAT JSON): \"%s\".", loption);
+		}
+	}
+
 	// Bind the select statement of the original to resolve the types
 	auto dummy_binder = Binder::CreateBinder(binder.context, &binder, true);
 	auto bound_original = dummy_binder->Bind(*stmt.select_statement);
@@ -34,21 +58,19 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 
 	// strftime if the user specified a format (loop also gives columns a name, needed for struct_pack)
 	// TODO: deal with date/timestamp within nested types
-	const auto date_it = info.options.find("dateformat");
-	const auto timestamp_it = info.options.find("timestampformat");
 	vector<unique_ptr<ParsedExpression>> strftime_children;
 	for (idx_t col_idx = 0; col_idx < bound_original.types.size(); col_idx++) {
 		auto column = make_uniq_base<ParsedExpression, PositionalReferenceExpression>(col_idx + 1);
-		strftime_children.clear();
+		strftime_children = vector<unique_ptr<ParsedExpression>>();
 		const auto &type = bound_original.types[col_idx];
 		const auto &name = bound_original.names[col_idx];
-		if (date_it != info.options.end() && type == LogicalTypeId::DATE) {
+		if (!date_format.empty() && type == LogicalTypeId::DATE) {
 			strftime_children.emplace_back(std::move(column));
-			strftime_children.emplace_back(make_uniq<ConstantExpression>(date_it->second.back()));
+			strftime_children.emplace_back(make_uniq<ConstantExpression>(date_format));
 			column = make_uniq<FunctionExpression>("strftime", std::move(strftime_children));
-		} else if (timestamp_it != info.options.end() && type == LogicalTypeId::TIMESTAMP) {
+		} else if (!timestamp_format.empty() && type == LogicalTypeId::TIMESTAMP) {
 			strftime_children.emplace_back(std::move(column));
-			strftime_children.emplace_back(make_uniq<ConstantExpression>(timestamp_it->second.back()));
+			strftime_children.emplace_back(make_uniq<ConstantExpression>(timestamp_format));
 			column = make_uniq<FunctionExpression>("strftime", std::move(strftime_children));
 		}
 		column->alias = name;
@@ -63,6 +85,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 
 	// Now we can just use the CSV writer
 	info.format = "csv";
+	info.options = std::move(csv_copy_options);
 	info.options["quote"] = {""};
 	info.options["escape"] = {""};
 	info.options["delimiter"] = {"\n"};
@@ -81,39 +104,38 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
 	bind_data->files.emplace_back(info.file_path);
 	bind_data->names = expected_names;
 
-	auto it = info.options.find("dateformat");
-	if (it == info.options.end()) {
-		it = info.options.find("date_format");
+	bool auto_detect = false;
+	for (auto &kv : info.options) {
+		const auto &loption = StringUtil::Lower(kv.first);
+		if (loption == "dateformat" || loption == "date_format") {
+			bind_data->date_format = StringValue::Get(kv.second.back());
+		} else if (loption == "timestampformat" || loption == "timtestampformat") {
+			bind_data->timestamp_format = StringValue::Get(kv.second.back());
+		} else if (loption == "auto_detect") {
+			auto_detect = BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
+		} else if (loption == "compression") {
+			bind_data->SetCompression(StringValue::Get(kv.second.back()));
+		} else if (loption == "array") {
+			bind_data->options.format = JSONFormat::ARRAY;
+		} else {
+			throw BinderException("Unknown option for COPY ... FROM ... (FORMAT JSON): \"%s\".", loption);
+		}
 	}
-	if (it != info.options.end()) {
-		bind_data->date_format = StringValue::Get(it->second.back());
-	}
-
-	it = info.options.find("timestampformat");
-	if (it == info.options.end()) {
-		it = info.options.find("timestamp_format");
-	}
-	if (it != info.options.end()) {
-		bind_data->timestamp_format = StringValue::Get(it->second.back());
+	bind_data->InitializeFormats(auto_detect);
+	if (auto_detect && bind_data->options.format != JSONFormat::ARRAY) {
+		bind_data->options.format = JSONFormat::AUTO_DETECT;
 	}
 
 	bind_data->transform_options = JSONTransformOptions(true, true, true, true);
 	bind_data->transform_options.delay_error = true;
 
-	it = info.options.find("auto_detect");
-	if (it != info.options.end() && BooleanValue::Get(it->second.back())) {
-		// Wrap this with auto detect true/false so we can detect date/timestamp formats
-		// Note that auto_detect for names/types is not actually true because these are already know when we COPY
-		bind_data->InitializeFormats(true);
-		bind_data->options.format = JSONFormat::AUTO_DETECT;
+	bind_data->InitializeReaders(context);
+	if (auto_detect) {
 		JSONScan::AutoDetect(context, *bind_data, expected_types, expected_names);
 		bind_data->auto_detect = true;
-	} else {
-		bind_data->InitializeFormats();
-		bind_data->transform_options.date_format_map = &bind_data->date_format_map;
 	}
 
-	bind_data->InitializeReaders(context);
+	bind_data->transform_options.date_format_map = &bind_data->date_format_map;
 
 	return std::move(bind_data);
 }

@@ -99,6 +99,7 @@ public:
 	void InitializeReaders(ClientContext &context);
 	void InitializeFormats();
 	void InitializeFormats(bool auto_detect);
+	void SetCompression(string compression);
 
 	void Serialize(FieldWriter &writer) const;
 	void Deserialize(ClientContext &context, FieldReader &reader);

@@ -99,12 +99,38 @@ copy conclusions from 'data/json/top_level_array.json'
 statement ok
 copy conclusions from 'data/json/top_level_array.json' (AUTO_DETECT TRUE)
 
+statement ok
+delete from conclusions;
+
+# and also if we say it's an array
+statement ok
+copy conclusions from 'data/json/top_level_array.json' (ARRAY TRUE)
+
 query I
 select * from conclusions
 ----
 cancelled
 cancelled
 
+# we can also write JSON arrays instead of newline-delimited
+statement ok
+copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (ARRAY TRUE)
+
+query T
+select * from read_json_auto('__TEST_DIR__/my.json', format='array')
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+# and now for the grand benchmark
 require tpch
 
 statement ok
@@ -113,6 +139,17 @@ start transaction
 statement ok
 call dbgen(sf=1)
 
+# first a quick check that ARRAY works properly
+statement ok
+COPY lineitem TO '__TEST_DIR__/lineitem.json' (ARRAY TRUE)
+
+statement ok
+create table lineitem2 as select * from lineitem limit 0;
+
+statement ok
+COPY lineitem2 from '__TEST_DIR__/lineitem.json' (ARRAY TRUE)
+
+# now we just export the whole thing
 statement ok
 EXPORT DATABASE '__TEST_DIR__/export_json_test' (FORMAT JSON)
 
@@ -150,7 +187,7 @@ statement ok
 rollback
 
 statement ok
-CREATE VIEW lineitem AS SELECT * FROM read_json(
+CREATE VIEW lineitem AS SELECT * FROM read_ndjson(
 	'__TEST_DIR__/export_json_test/lineitem.json',
 	columns={
 		l_orderkey: 'INTEGER',
@@ -173,7 +210,7 @@ CREATE VIEW lineitem AS SELECT * FROM read_json(
 );
 
 statement ok
-CREATE VIEW orders AS SELECT * FROM read_json(
+CREATE VIEW orders AS SELECT * FROM read_ndjson(
 	'__TEST_DIR__/export_json_test/orders.json',
 	columns={
 	    o_orderkey: 'INTEGER',
@@ -189,7 +226,7 @@ CREATE VIEW orders AS SELECT * FROM read_json(
 );
 
 statement ok
-CREATE VIEW partsupp AS SELECT * FROM read_json(
+CREATE VIEW partsupp AS SELECT * FROM read_ndjson(
 	'__TEST_DIR__/export_json_test/partsupp.json',
 	columns={
 		ps_partkey: 'INTEGER',
@@ -201,7 +238,7 @@ CREATE VIEW partsupp AS SELECT * FROM read_json(
 );
 
 statement ok
-CREATE VIEW part AS SELECT * FROM read_json(
+CREATE VIEW part AS SELECT * FROM read_ndjson(
 	'__TEST_DIR__/export_json_test/part.json',
 	columns={
 		p_partkey: 'INTEGER',
@@ -217,7 +254,7 @@ CREATE VIEW part AS SELECT * FROM read_json(
 );
 
 statement ok
-CREATE VIEW customer AS SELECT * FROM read_json(
+CREATE VIEW customer AS SELECT * FROM read_ndjson(
 	'__TEST_DIR__/export_json_test/customer.json',
 	columns={
 		c_custkey: 'INTEGER',
@@ -232,7 +269,7 @@ CREATE VIEW customer AS SELECT * FROM read_json(
 );
 
 statement ok
-CREATE VIEW supplier AS SELECT * FROM read_json(
+CREATE VIEW supplier AS SELECT * FROM read_ndjson(
 	'__TEST_DIR__/export_json_test/supplier.json',
 	columns={
 		s_suppkey: 'INTEGER',
@@ -246,7 +283,7 @@ CREATE VIEW supplier AS SELECT * FROM read_json(
 );
 
 statement ok
-CREATE VIEW nation AS SELECT * FROM read_json(
+CREATE VIEW nation AS SELECT * FROM read_ndjson(
 	'__TEST_DIR__/export_json_test/nation.json',
 	columns={
 		n_nationkey: 'INTEGER',
@@ -257,7 +294,7 @@ CREATE VIEW nation AS SELECT * FROM read_json(
 );
 
 statement ok
-CREATE VIEW region AS SELECT * FROM read_json(
+CREATE VIEW region AS SELECT * FROM read_ndjson(
 	'__TEST_DIR__/export_json_test/region.json',
 	columns={
 		r_regionkey: 'INTEGER',

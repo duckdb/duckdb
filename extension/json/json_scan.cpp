@@ -41,18 +41,7 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 				    "format must be one of ['auto', 'unstructured', 'newline_delimited', 'array']");
 			}
 		} else if (loption == "compression") {
-			auto compression = StringUtil::Lower(StringValue::Get(kv.second));
-			if (compression == "none") {
-				options.compression = FileCompressionType::UNCOMPRESSED;
-			} else if (compression == "gzip") {
-				options.compression = FileCompressionType::GZIP;
-			} else if (compression == "zstd") {
-				options.compression = FileCompressionType::ZSTD;
-			} else if (compression == "auto") {
-				options.compression = FileCompressionType::AUTO_DETECT;
-			} else {
-				throw BinderException("compression must be one of ['none', 'gzip', 'zstd', 'auto']");
-			}
+			SetCompression(StringUtil::Lower(StringValue::Get(kv.second)));
 		}
 	}
 
@@ -116,6 +105,20 @@ void JSONScanData::InitializeFormats(bool auto_detect_p) {
 				date_format_map.AddFormat(logical_type, format_string);
 			}
 		}
+	}
+}
+
+void JSONScanData::SetCompression(string compression) {
+	if (compression == "none") {
+		options.compression = FileCompressionType::UNCOMPRESSED;
+	} else if (compression == "gzip") {
+		options.compression = FileCompressionType::GZIP;
+	} else if (compression == "zstd") {
+		options.compression = FileCompressionType::ZSTD;
+	} else if (compression == "auto") {
+		options.compression = FileCompressionType::AUTO_DETECT;
+	} else {
+		throw BinderException("compression must be one of ['none', 'gzip', 'zstd', 'auto']");
 	}
 }
 
@@ -494,7 +497,7 @@ static pair<JSONFormat, JSONRecordType> DetectFormatAndRecordType(const char *co
 		return make_pair(JSONFormat::UNSTRUCTURED, JSONRecordType::RECORDS);
 	}
 
-	// We know it's not RECORDS, if it's not '[', it's not ARRAY either
+	// We know it's not top-level records, if it's not '[', it's not ARRAY either
 	if (buffer_ptr[buffer_offset] != '[') {
 		return make_pair(JSONFormat::UNSTRUCTURED, JSONRecordType::VALUES);
 	}
@@ -506,8 +509,8 @@ static pair<JSONFormat, JSONRecordType> DetectFormatAndRecordType(const char *co
 	if (error.code == YYJSON_READ_SUCCESS) {
 		// We successfully read something!
 		buffer_offset += yyjson_doc_get_read_size(doc);
-		remaining = buffer_size - buffer_offset;
 		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
+		remaining = buffer_size - buffer_offset;
 
 		if (remaining != 0) { // There's more
 			return make_pair(JSONFormat::UNSTRUCTURED, JSONRecordType::VALUES);
@@ -820,6 +823,7 @@ void JSONScanLocalState::ParseNextChunk() {
 
 	const auto format = current_reader->GetFormat();
 	for (; scan_count < STANDARD_VECTOR_SIZE; scan_count++) {
+		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
 		auto json_start = buffer_ptr + buffer_offset;
 		idx_t remaining = buffer_size - buffer_offset;
 		if (remaining == 0) {
