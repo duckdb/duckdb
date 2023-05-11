@@ -147,6 +147,18 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 			}
 		}
 	}
+	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN && non_reorderable_operation) {
+		auto &join = op->Cast<LogicalAnyJoin>();
+		if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
+			auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
+			auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
+			if (rhs_cardinality > lhs_cardinality * 2) {
+				join.join_type = JoinType::RIGHT;
+				std::swap(join.children[0], join.children[1]);
+			}
+		}
+	}
+
 	if (non_reorderable_operation) {
 		// we encountered a non-reordable operation (setop or non-inner join)
 		// we do not reorder non-inner joins yet, however we do want to expand the potential join graph around them
