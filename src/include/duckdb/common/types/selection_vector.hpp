@@ -18,7 +18,7 @@ class VectorBuffer;
 struct SelectionData {
 	DUCKDB_API explicit SelectionData(idx_t count);
 
-	array_ptr<sel_t> owned_data;
+	unsafe_array_ptr<sel_t> owned_data;
 };
 
 struct SelectionVector {

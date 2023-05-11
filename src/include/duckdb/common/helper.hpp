@@ -71,12 +71,11 @@ make_unsafe_uniq(_Args&&... __args)
     return unique_ptr<_Tp, false>(new _Tp(std::forward<_Args>(__args)...));
 }
 
-// Because array_ptr is used in performance critical places, we make these unsafe for now
 template<class _Tp>
-inline unique_ptr<_Tp[], false>
+inline unique_ptr<_Tp[], true>
 make_array(size_t __n)
 {
-    return unique_ptr<_Tp[], false>(new _Tp[__n]());
+    return unique_ptr<_Tp[], true>(new _Tp[__n]());
 }
 
 template<class _Tp>

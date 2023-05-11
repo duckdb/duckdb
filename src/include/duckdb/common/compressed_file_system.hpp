@@ -18,8 +18,8 @@ struct StreamData {
 	// various buffers & pointers
 	bool write = false;
 	bool refresh = false;
-	array_ptr<data_t> in_buff;
-	array_ptr<data_t> out_buff;
+	unsafe_array_ptr<data_t> in_buff;
+	unsafe_array_ptr<data_t> out_buff;
 	data_ptr_t out_buff_start = nullptr;
 	data_ptr_t out_buff_end = nullptr;
 	data_ptr_t in_buff_start = nullptr;
