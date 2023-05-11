@@ -308,9 +308,9 @@ static bool IsExplainAnalyze(SQLStatement *statement) {
 	return explain.explain_type == ExplainType::EXPLAIN_ANALYZE;
 }
 
-shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query,
-                                                                         unique_ptr<SQLStatement> statement,
-                                                                         const vector<reference<Value>> &values) {
+shared_ptr<PreparedStatementData>
+ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+                                       optional_ptr<case_insensitive_map_t<Value>> values) {
 	StatementType statement_type = statement->type;
 	auto result = make_shared<PreparedStatementData>(statement_type);
 
@@ -318,8 +318,11 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);
 	profiler.StartPhase("planner");
 	Planner planner(*this);
-	for (auto &value : values) {
-		planner.parameter_data.emplace_back(value);
+	if (values) {
+		auto &parameter_values = *values;
+		for (auto &value : parameter_values) {
+			planner.parameter_data.emplace(value);
+		}
 	}
 	planner.CreatePlan(std::move(statement));
 	D_ASSERT(planner.plan || !planner.properties.bound_all_parameters);
@@ -392,9 +395,12 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	}
 
 	// bind the bound values before execution
-	vector<Value> owned_values;
-	for (auto &val : parameters.parameters) {
-		owned_values.emplace_back(val);
+	case_insensitive_map_t<Value> owned_values;
+	if (parameters.parameters) {
+		auto &params = *parameters.parameters;
+		for (auto &val : params) {
+			owned_values.emplace(val);
+		}
 	}
 	statement.Bind(std::move(owned_values));
 
@@ -598,9 +604,9 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 }
 
 unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-                                               vector<Value> &values, bool allow_stream_result) {
+                                               case_insensitive_map_t<Value> &values, bool allow_stream_result) {
 	PendingQueryParameters parameters;
-	parameters.parameters = make_reference(values);
+	parameters.parameters = &values;
 	parameters.allow_stream_result = allow_stream_result;
 	return Execute(query, prepared, parameters);
 }
@@ -610,7 +616,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
                                                                        const PendingQueryParameters &parameters) {
 	// prepare the query for execution
 	auto prepared = CreatePreparedStatement(lock, query, std::move(statement), parameters.parameters);
-	if (prepared->properties.parameter_count > 0 && parameters.parameters.empty()) {
+	idx_t parameter_count = !parameters.parameters ? 0 : parameters.parameters->size();
+	if (prepared->properties.parameter_count > 0 && parameter_count == 0) {
 		string error_message = StringUtil::Format("Expected %lld parameters, but none were supplied",
 		                                          prepared->properties.parameter_count);
 		return make_uniq<PendingQueryResult>(PreservedError(error_message));

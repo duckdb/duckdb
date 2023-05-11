@@ -21,7 +21,7 @@ public:
 	         const std::function<unique_ptr<QueryResult>(const string &, unique_ptr<SQLStatement>)> &run) override;
 
 private:
-	vector<unique_ptr<ParsedExpression>> values;
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> values;
 	unique_ptr<SQLStatement> prepare_statement;
 	unique_ptr<SQLStatement> execute_statement;
 	unique_ptr<SQLStatement> dealloc_statement;

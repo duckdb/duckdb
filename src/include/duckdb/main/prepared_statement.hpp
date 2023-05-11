@@ -63,7 +63,7 @@ public:
 	//! Returns the result names of the prepared statement
 	DUCKDB_API const vector<string> &GetNames();
 	//! Returns the map of parameter index to the expected type of parameter
-	DUCKDB_API vector<LogicalType> GetExpectedParameterTypes() const;
+	DUCKDB_API case_insensitive_map_t<LogicalType> GetExpectedParameterTypes() const;
 
 	//! Create a pending query result of the prepared statement with the given set of arguments
 	template <typename... Args>
@@ -75,17 +75,15 @@ public:
 	//! Create a pending query result of the prepared statement with the given set of arguments
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(vector<Value> &values, bool allow_stream_result = true);
 
-	//! Create a pending query result of the prepared statement with the given set of unnamed+named arguments
-	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(vector<Value> &unnamed_values,
-	                                                       case_insensitive_map_t<Value> &named_values,
+	//! Create a pending query result of the prepared statement with the given set named arguments
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(case_insensitive_map_t<Value> &named_values,
 	                                                       bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of values
 	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values, bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of named+unnamed values
-	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &unnamed_values,
-	                                           case_insensitive_map_t<Value> &named_values,
+	DUCKDB_API unique_ptr<QueryResult> Execute(case_insensitive_map_t<Value> &named_values,
 	                                           bool allow_stream_result = true);
 
 	//! Execute the prepared statement with the given set of arguments
@@ -134,48 +132,18 @@ public:
 	}
 
 	template <class PAYLOAD>
-	static vector<reference<PAYLOAD>> PrepareParameters(vector<PAYLOAD> &unnamed,
-	                                                    case_insensitive_map_t<reference<PAYLOAD>> &named,
-	                                                    const case_insensitive_map_t<idx_t> &named_params) {
-		if (named.empty()) {
-			return make_reference(unnamed);
+	static void VerifyParameters(case_insensitive_map_t<PAYLOAD> &named,
+	                             const case_insensitive_map_t<idx_t> &named_params) {
+		if (named_params.size() == named.size()) {
+			return;
 		}
-		if (named_params.size() != named.size()) {
-			// Mismatch in expected and provided parameters/values
-			if (named_params.size() > named.size()) {
-				throw InvalidInputException(MissingValuesException(named_params, named));
-			} else {
-				D_ASSERT(named.size() > named_params.size());
-				throw InvalidInputException(ExcessValuesException(named_params, named));
-			}
+		// Mismatch in expected and provided parameters/values
+		if (named_params.size() > named.size()) {
+			throw InvalidInputException(MissingValuesException(named_params, named));
+		} else {
+			D_ASSERT(named.size() > named_params.size());
+			throw InvalidInputException(ExcessValuesException(named_params, named));
 		}
-		vector<idx_t> indices(named_params.size());
-		vector<reference<PAYLOAD>> intermediate;
-
-		// First populate the intermediate with all the items
-		for (auto &pair : named_params) {
-			auto &name = pair.first;
-			auto entry = named.find(name);
-			if (entry == named.end()) {
-				throw InvalidInputException(MissingValuesException(named_params, named));
-			}
-			auto &named_value = entry->second;
-			auto &param_idx = pair.second;
-			D_ASSERT(param_idx > 0);
-			D_ASSERT(param_idx - 1 < named_params.size());
-			indices[param_idx - 1] = intermediate.size();
-			intermediate.push_back(named_value);
-		}
-		D_ASSERT(named_params.size() == indices.size());
-		D_ASSERT(named_params.size() == intermediate.size());
-
-		// Then put them into the result in the right order
-		vector<reference<PAYLOAD>> result;
-		for (auto &index : indices) {
-			result.push_back(intermediate[index]);
-		}
-
-		return result;
 	}
 
 private:

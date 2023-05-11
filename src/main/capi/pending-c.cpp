@@ -24,8 +24,7 @@ duckdb_state duckdb_pending_prepared_internal(duckdb_prepared_statement prepared
 	result->allow_streaming = allow_streaming;
 
 	try {
-		duckdb::vector<Value> empty;
-		result->statement = wrapper->statement->PendingQuery(empty, wrapper->values, allow_streaming);
+		result->statement = wrapper->statement->PendingQuery(wrapper->values, allow_streaming);
 	} catch (const duckdb::Exception &ex) {
 		result->statement = make_uniq<PendingQueryResult>(duckdb::PreservedError(ex));
 	} catch (std::exception &ex) {

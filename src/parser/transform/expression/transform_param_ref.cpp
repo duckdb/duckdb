@@ -41,23 +41,21 @@ unique_ptr<ParsedExpression> Transformer::TransformParamRef(duckdb_libpgquery::P
 		// We have not seen this parameter before
 		if (node->number != 0) {
 			// Preserve the parameter number
-			expr->parameter_nr = node->number;
+			known_param_index = node->number;
 		} else {
-			expr->parameter_nr = ParamCount() + 1;
+			known_param_index = ParamCount() + 1;
 			if (!node->name) {
-				param.identifier = StringUtil::Format("%d", expr->parameter_nr);
+				param.identifier = StringUtil::Format("%d", known_param_index);
 			}
 		}
 
 		if (!named_param_map.count(param.identifier)) {
 			// Add it to the named parameter map so we can find it next time it's referenced
-			SetParam(param.identifier, expr->parameter_nr, param.type);
+			SetParam(param.identifier, known_param_index, param.type);
 		}
-	} else {
-		expr->parameter_nr = known_param_index;
 	}
 
-	idx_t new_param_count = MaxValue<idx_t>(ParamCount(), expr->parameter_nr);
+	idx_t new_param_count = MaxValue<idx_t>(ParamCount(), known_param_index);
 	SetParamCount(new_param_count);
 	return std::move(expr);
 }

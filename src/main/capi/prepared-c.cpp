@@ -123,7 +123,8 @@ duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_
 		return DUCKDB_TYPE_INVALID;
 	}
 	LogicalType param_type;
-	if (!wrapper->statement->data->TryGetType(param_idx, param_type)) {
+	auto identifier = std::to_string(param_idx);
+	if (!wrapper->statement->data->TryGetType(identifier, param_type)) {
 		return DUCKDB_TYPE_INVALID;
 	}
 	return ConvertCPPTypeToC(param_type);
@@ -279,8 +280,7 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 		return DuckDBError;
 	}
 
-	duckdb::vector<Value> empty;
-	auto result = wrapper->statement->Execute(empty, wrapper->values, false);
+	auto result = wrapper->statement->Execute(wrapper->values, false);
 	return duckdb_translate_result(std::move(result), out_result);
 }
 

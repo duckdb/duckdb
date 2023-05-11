@@ -102,8 +102,7 @@ duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_st
 		    wrapper->statement->context->config.set_variables["TimeZone"].GetValue<std::string>();
 	}
 
-	duckdb::vector<duckdb::Value> empty;
-	auto result = wrapper->statement->Execute(empty, wrapper->values, false);
+	auto result = wrapper->statement->Execute(wrapper->values, false);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	arrow_wrapper->result = duckdb::unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 	*out_result = (duckdb_arrow)arrow_wrapper;

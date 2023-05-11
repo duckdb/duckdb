@@ -26,38 +26,27 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	auto prepared = entry->second;
 	auto &named_param_map = prepared->unbound_statement->named_param_map;
 
-	auto intermediate = make_reference(stmt.named_values);
+	PreparedStatement::VerifyParameters(stmt.named_values, named_param_map);
 
-	// Add the unnamed values to the intermediate if they are present
-	if (named_param_map.size() != stmt.named_values.size()) {
-		// Lookup the parameter index from the vector index
-		for (idx_t i = 0; i < stmt.values.size(); i++) {
-			intermediate.emplace(std::make_pair(StringUtil::Format("%d", i + 1),
-			                                    reference<unique_ptr<ParsedExpression>>(stmt.values[i])));
-		}
-	}
-
-	auto mapped_named_values = PreparedStatement::PrepareParameters(stmt.values, intermediate, named_param_map);
-
+	auto &mapped_named_values = stmt.named_values;
 	// bind any supplied parameters
-	vector<Value> bind_values;
+	case_insensitive_map_t<Value> bind_values;
 	auto constant_binder = Binder::CreateBinder(context);
 	constant_binder->SetCanContainNulls(true);
-	for (idx_t i = 0; i < mapped_named_values.size(); i++) {
+	for (auto &pair : mapped_named_values) {
 		ConstantBinder cbinder(*constant_binder, context, "EXECUTE statement");
-		auto bound_expr = cbinder.Bind(mapped_named_values[i]);
+		auto bound_expr = cbinder.Bind(pair.second);
 
 		Value value = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
-		bind_values.push_back(std::move(value));
+		bind_values[pair.first] = std::move(value);
 	}
 	unique_ptr<LogicalOperator> rebound_plan;
-	auto bind_value_references = make_reference(bind_values);
 
-	if (prepared->RequireRebind(context, bind_value_references)) {
+	if (prepared->RequireRebind(context, &bind_values)) {
 		// catalog was modified or statement does not have clear types: rebind the statement before running the execute
 		Planner prepared_planner(context);
-		for (idx_t i = 0; i < bind_values.size(); i++) {
-			prepared_planner.parameter_data.emplace_back(bind_values[i]);
+		for (auto &pair : bind_values) {
+			prepared_planner.parameter_data.emplace(pair);
 		}
 		prepared = prepared_planner.PrepareSQLStatement(entry->second->unbound_statement->Copy());
 		rebound_plan = std::move(prepared_planner.plan);

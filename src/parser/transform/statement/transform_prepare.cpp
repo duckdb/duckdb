@@ -38,22 +38,22 @@ unique_ptr<ExecuteStatement> Transformer::TransformExecute(duckdb_libpgquery::PG
 	if (stmt->params) {
 		TransformExpressionList(*stmt->params, intermediate_values);
 	}
-	for (auto &expr : intermediate_values) {
+
+	idx_t param_idx = 0;
+	for (idx_t i = 0; i < intermediate_values.size(); i++) {
+		auto &expr = intermediate_values[i];
 		if (!expr->IsScalar()) {
 			throw InvalidInputException(NotAcceptedExpressionException());
 		}
-		if (!expr->alias.empty()) {
-			auto name = expr->alias;
-			expr->alias.clear();
-			result->named_values[name] = std::move(expr);
-		} else {
-			result->values.push_back(std::move(expr));
+		if (!expr->alias.empty() && param_idx != 0) {
+			// Found unnamed parameters mixed with named parameters
+			throw NotImplementedException("Mixing named parameters and positional parameters is not supported yet");
 		}
+		auto param_name = expr->alias.empty() ? std::to_string(i + 1) : expr->alias;
+		expr->alias.clear();
+		result->named_values[param_name] = std::move(expr);
 	}
 	intermediate_values.clear();
-	if (!result->named_values.empty() && !result->values.empty()) {
-		throw NotImplementedException("Mixing named parameters and positional parameters is not supported yet");
-	}
 	return result;
 }
 

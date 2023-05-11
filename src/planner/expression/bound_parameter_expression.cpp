@@ -6,10 +6,10 @@
 
 namespace duckdb {
 
-BoundParameterExpression::BoundParameterExpression(idx_t parameter_nr)
+BoundParameterExpression::BoundParameterExpression(const string &identifier)
     : Expression(ExpressionType::VALUE_PARAMETER, ExpressionClass::BOUND_PARAMETER,
                  LogicalType(LogicalTypeId::UNKNOWN)),
-      parameter_nr(parameter_nr) {
+      identifier(identifier) {
 }
 
 void BoundParameterExpression::Invalidate(Expression &expr) {
@@ -40,7 +40,7 @@ bool BoundParameterExpression::IsFoldable() const {
 }
 
 string BoundParameterExpression::ToString() const {
-	return "$" + to_string(parameter_nr);
+	return "$" + identifier;
 }
 
 bool BoundParameterExpression::Equals(const BaseExpression *other_p) const {
@@ -48,17 +48,17 @@ bool BoundParameterExpression::Equals(const BaseExpression *other_p) const {
 		return false;
 	}
 	auto &other = other_p->Cast<BoundParameterExpression>();
-	return parameter_nr == other.parameter_nr;
+	return StringUtil::CIEquals(identifier, other.identifier);
 }
 
 hash_t BoundParameterExpression::Hash() const {
 	hash_t result = Expression::Hash();
-	result = CombineHash(duckdb::Hash(parameter_nr), result);
+	result = CombineHash(duckdb::Hash(identifier.c_str(), identifier.size()), result);
 	return result;
 }
 
 unique_ptr<Expression> BoundParameterExpression::Copy() {
-	auto result = make_uniq<BoundParameterExpression>(parameter_nr);
+	auto result = make_uniq<BoundParameterExpression>(identifier);
 	result->parameter_data = parameter_data;
 	result->return_type = return_type;
 	result->CopyProperties(*this);
@@ -66,7 +66,7 @@ unique_ptr<Expression> BoundParameterExpression::Copy() {
 }
 
 void BoundParameterExpression::Serialize(FieldWriter &writer) const {
-	writer.WriteField(parameter_nr);
+	writer.WriteString(identifier);
 	writer.WriteSerializable(return_type);
 	writer.WriteSerializable(*parameter_data);
 }
@@ -74,7 +74,7 @@ void BoundParameterExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<Expression> BoundParameterExpression::Deserialize(ExpressionDeserializationState &state,
                                                              FieldReader &reader) {
 	auto &global_parameter_set = state.gstate.parameter_data;
-	auto parameter_nr = reader.ReadRequired<idx_t>();
+	auto parameter_nr = reader.ReadRequired<string>();
 	auto result = make_uniq<BoundParameterExpression>(parameter_nr);
 	result->return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto parameter_data = reader.ReadRequiredSerializable<BoundParameterData, shared_ptr<BoundParameterData>>();

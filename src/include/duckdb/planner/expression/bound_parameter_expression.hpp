@@ -18,9 +18,9 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_PARAMETER;
 
 public:
-	explicit BoundParameterExpression(idx_t parameter_nr);
+	explicit BoundParameterExpression(const string &identifier);
 
-	idx_t parameter_nr;
+	string identifier;
 	shared_ptr<BoundParameterData> parameter_data;
 
 public:

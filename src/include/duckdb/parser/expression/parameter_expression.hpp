@@ -18,7 +18,7 @@ public:
 public:
 	ParameterExpression();
 
-	idx_t parameter_nr;
+	string identifier;
 
 public:
 	bool IsScalar() const override {

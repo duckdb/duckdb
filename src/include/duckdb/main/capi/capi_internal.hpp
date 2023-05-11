@@ -30,7 +30,7 @@ struct DatabaseData {
 };
 
 struct PreparedStatementWrapper {
-	//! Map of name -> values index, populated by 'bind_parameter_index'
+	//! Map of name -> values
 	case_insensitive_map_t<Value> values;
 	unique_ptr<PreparedStatement> statement;
 };

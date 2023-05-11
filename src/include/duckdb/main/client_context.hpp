@@ -46,7 +46,7 @@ struct ClientData;
 
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
-	vector<reference<Value>> parameters;
+	optional_ptr<case_insensitive_map_t<Value>> parameters;
 	//! Whether or not a stream result should be allowed
 	bool allow_stream_result = false;
 };
@@ -142,7 +142,7 @@ public:
 	//! It is possible that the prepared statement will be re-bound. This will generally happen if the catalog is
 	//! modified in between the prepared statement being bound and the prepared statement being run.
 	DUCKDB_API unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
-	                                           vector<Value> &values, bool allow_stream_result = true);
+	                                           case_insensitive_map_t<Value> &values, bool allow_stream_result = true);
 	DUCKDB_API unique_ptr<QueryResult> Execute(const string &query, shared_ptr<PreparedStatementData> &prepared,
 	                                           const PendingQueryParameters &parameters);
 
@@ -222,7 +222,7 @@ private:
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	shared_ptr<PreparedStatementData>
 	CreatePreparedStatement(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
-	                        const vector<reference<Value>> &values = vector<reference<Value>>());
+	                        optional_ptr<case_insensitive_map_t<Value>> values = nullptr);
 	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement,
 	                                                        const PendingQueryParameters &parameters);
