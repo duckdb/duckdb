@@ -408,9 +408,13 @@ static inline void TrimWhitespace(JSONString &line) {
 void JSONScanLocalState::ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining) {
 	yyjson_doc *doc;
 	yyjson_read_err err;
-	const auto read_flag = // If we return strings, we cannot parse INSITU
-	    bind_data.type == JSONScanType::READ_JSON_OBJECTS ? JSONCommon::READ_STOP_FLAG : JSONCommon::READ_INSITU_FLAG;
-	doc = JSONCommon::ReadDocumentUnsafe(json_start, remaining, read_flag, allocator.GetYYAlc(), &err);
+	if (bind_data.type == JSONScanType::READ_JSON_OBJECTS) { // If we return strings, we cannot parse INSITU
+		doc = JSONCommon::ReadDocumentUnsafe(json_start, json_size, JSONCommon::READ_STOP_FLAG, allocator.GetYYAlc(),
+		                                     &err);
+	} else {
+		doc = JSONCommon::ReadDocumentUnsafe(json_start, remaining, JSONCommon::READ_INSITU_FLAG, allocator.GetYYAlc(),
+		                                     &err);
+	}
 	if (!bind_data.ignore_errors && err.code != YYJSON_READ_SUCCESS) {
 		current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, err);
 	}
