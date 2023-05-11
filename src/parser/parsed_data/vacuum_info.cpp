@@ -1,8 +1,9 @@
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
-VacuumInfo::VacuumInfo(VacuumOptions options) : options(options), has_table(false) {};
+VacuumInfo::VacuumInfo(VacuumOptions options) : options(options), has_table(false) {}
 
 unique_ptr<VacuumInfo> VacuumInfo::Copy() {
 	auto result = make_uniq<VacuumInfo>(options);

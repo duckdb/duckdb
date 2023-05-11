@@ -1,4 +1,5 @@
 #include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/common/field_writer.hpp"
 
 namespace duckdb {
 
