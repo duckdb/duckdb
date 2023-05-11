@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-VacuumInfo::VacuumInfo(VacuumOptions options) : options(options), has_table(false) {}
+VacuumInfo::VacuumInfo(VacuumOptions options) : options(options), has_table(false) {
+}
 
 unique_ptr<VacuumInfo> VacuumInfo::Copy() {
 	auto result = make_uniq<VacuumInfo>(options);
@@ -22,9 +23,9 @@ void VacuumInfo::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<ParseInfo> VacuumInfo::Deserialize(Deserializer &deserializer) {
-	FieldReader reader(deserializer);
 
 	VacuumOptions options;
+	FieldReader reader(deserializer);
 	options.analyze = reader.ReadRequired<bool>();
 	options.vacuum = reader.ReadRequired<bool>();
 	reader.Finalize();
@@ -33,4 +34,4 @@ unique_ptr<ParseInfo> VacuumInfo::Deserialize(Deserializer &deserializer) {
 	return std::move(vacuum_info);
 }
 
-}
+} // namespace duckdb

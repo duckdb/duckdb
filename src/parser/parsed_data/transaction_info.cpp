@@ -21,4 +21,4 @@ unique_ptr<ParseInfo> TransactionInfo::Deserialize(Deserializer &deserializer) {
 	return std::move(transaction_info);
 }
 
-}
+} // namespace duckdb

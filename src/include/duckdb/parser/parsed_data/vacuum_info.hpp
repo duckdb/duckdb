@@ -17,6 +17,9 @@
 namespace duckdb {
 
 struct VacuumOptions {
+	VacuumOptions() : vacuum(false), analyze(false) {
+	}
+
 	bool vacuum;
 	bool analyze;
 };

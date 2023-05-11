@@ -43,4 +43,4 @@ unique_ptr<ParseInfo> DropInfo::Deserialize(Deserializer &deserializer) {
 	return std::move(drop_info);
 }
 
-}
+} // namespace duckdb

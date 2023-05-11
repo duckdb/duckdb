@@ -31,4 +31,4 @@ unique_ptr<ParseInfo> DetachInfo::Deserialize(Deserializer &deserializer) {
 	return std::move(result);
 }
 
-}
+} // namespace duckdb
