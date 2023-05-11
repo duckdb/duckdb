@@ -1045,11 +1045,11 @@ typedef struct PGInferClause {
  */
 typedef struct PGOnConflictClause {
 	PGNodeTag type;
-	PGOnConflictAction action; /* DO NOTHING or UPDATE? */
-	PGInferClause *infer;      /* Optional index inference clause */
-	PGList *targetList;        /* the target list (of PGResTarget) */
-	PGNode *whereClause;       /* qualifications */
-	int location;              /* token location, or -1 if unknown */
+	PGOnConflictAction action;               /* DO NOTHING or UPDATE? */
+	PGInferClause *infer;                    /* Optional index inference clause */
+	PGList *targetList;                      /* the target list (of PGResTarget) */
+	PGNode *whereClause;                     /* qualifications */
+	int location;                            /* token location, or -1 if unknown */
 } PGOnConflictClause;
 
 /*
@@ -1125,14 +1125,15 @@ typedef struct PGRawStmt {
  */
 typedef struct PGInsertStmt {
 	PGNodeTag type;
-	PGRangeVar *relation;                 /* relation to insert into */
-	PGList *cols;                         /* optional: names of the target columns */
-	PGNode *selectStmt;                   /* the source SELECT/VALUES, or NULL */
+	PGRangeVar *relation;                    /* relation to insert into */
+	PGList *cols;                            /* optional: names of the target columns */
+	PGNode *selectStmt;                      /* the source SELECT/VALUES, or NULL */
 	PGOnConflictActionAlias onConflictAlias; /* the (optional) shorthand provided for the onConflictClause */
-	PGOnConflictClause *onConflictClause; /* ON CONFLICT clause */
-	PGList *returningList;                /* list of expressions to return */
-	PGWithClause *withClause;             /* WITH clause */
-	PGOverridingKind override;            /* OVERRIDING clause */
+	PGOnConflictClause *onConflictClause;    /* ON CONFLICT clause */
+	PGList *returningList;                   /* list of expressions to return */
+	PGWithClause *withClause;                /* WITH clause */
+	PGOverridingKind override;               /* OVERRIDING clause */
+	PGInsertColumnOrder insert_column_order; /* INSERT BY NAME or INSERT BY POSITION */
 } PGInsertStmt;
 
 /* ----------------------

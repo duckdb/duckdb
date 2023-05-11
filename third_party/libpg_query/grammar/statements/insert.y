@@ -18,13 +18,13 @@ InsertStmt:
 				}
 		;
 
-
 insert_rest:
-			SelectStmt
+			opt_by_name_or_position SelectStmt
 				{
 					$$ = makeNode(PGInsertStmt);
 					$$->cols = NIL;
-					$$->selectStmt = $1;
+					$$->insert_column_order = $1;
+					$$->selectStmt = $2;
 				}
 			| OVERRIDING override_kind VALUE_P SelectStmt
 				{
@@ -32,12 +32,14 @@ insert_rest:
 					$$->cols = NIL;
 					$$->override = $2;
 					$$->selectStmt = $4;
+					$$->insert_column_order = PG_INSERT_BY_POSITION;
 				}
 			| '(' insert_column_list ')' SelectStmt
 				{
 					$$ = makeNode(PGInsertStmt);
 					$$->cols = $2;
 					$$->selectStmt = $4;
+					$$->insert_column_order = PG_INSERT_BY_POSITION;
 				}
 			| '(' insert_column_list ')' OVERRIDING override_kind VALUE_P SelectStmt
 				{
@@ -45,12 +47,14 @@ insert_rest:
 					$$->cols = $2;
 					$$->override = $5;
 					$$->selectStmt = $7;
+					$$->insert_column_order = PG_INSERT_BY_POSITION;
 				}
 			| DEFAULT VALUES
 				{
 					$$ = makeNode(PGInsertStmt);
 					$$->cols = NIL;
 					$$->selectStmt = NULL;
+					$$->insert_column_order = PG_INSERT_BY_POSITION;
 				}
 		;
 
@@ -67,6 +71,11 @@ insert_target:
 				}
 		;
 
+opt_by_name_or_position:
+		BY NAME_P				{ $$ = PG_INSERT_BY_NAME; }
+		| BY POSITION			{ $$ = PG_INSERT_BY_POSITION; }
+		| /* empty */			{ $$ = PG_INSERT_BY_POSITION; }
+	;
 
 opt_conf_expr:
 			'(' index_params ')' where_clause
