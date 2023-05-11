@@ -33,8 +33,8 @@ unique_ptr<LogicalOperator> LogicalCreateIndex::Deserialize(LogicalDeserializati
 	}
 	auto index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(std::move(info));
 	auto &table = Catalog::GetEntry<TableCatalogEntry>(context, catalog, schema, table_name);
-	return make_uniq<LogicalCreateIndex>(std::move(bind_data), std::move(index_info), std::move(unbound_expressions), table,
-	                                     std::move(function));
+	return make_uniq<LogicalCreateIndex>(std::move(bind_data), std::move(index_info), std::move(unbound_expressions),
+	                                     table, std::move(function));
 }
 
 } // namespace duckdb

@@ -1049,7 +1049,7 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteListNoReference<bool>(force_quote);
 	// FIXME: serialize date_format / has_format
 	vector<string> csv_formats;
-	for(auto &format : date_format) {
+	for (auto &format : date_format) {
 		csv_formats.push_back(format.second.format_specifier);
 	}
 	writer.WriteList<string>(csv_formats);
@@ -1090,11 +1090,8 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	// write options
 	force_quote = reader.ReadRequiredList<bool>();
 	auto formats = reader.ReadRequiredList<string>();
-	vector<LogicalTypeId> format_types {
-		LogicalTypeId::DATE,
-		LogicalTypeId::TIMESTAMP
-	};
-	for(idx_t f_idx = 0; f_idx < formats.size(); f_idx++) {
+	vector<LogicalTypeId> format_types {LogicalTypeId::DATE, LogicalTypeId::TIMESTAMP};
+	for (idx_t f_idx = 0; f_idx < formats.size(); f_idx++) {
 		auto &format = formats[f_idx];
 		auto &type = format_types[f_idx];
 		if (format.empty()) {
