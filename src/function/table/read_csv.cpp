@@ -265,7 +265,7 @@ public:
 		}
 		file_size = file_handle->FileSize();
 		first_file_size = file_size;
-		is_plain_file = file_handle->PlainFileSource();
+		on_disk_file = file_handle->OnDiskFile();
 		bytes_read = 0;
 		if (buffer_size < file_size || file_size == 0) {
 			bytes_per_local_state = buffer_size / ParallelCSVGlobalState::MaxThreads();
@@ -357,8 +357,8 @@ private:
 	idx_t bytes_per_local_state;
 	//! Size of first file
 	idx_t first_file_size;
-	//! Whether or not this is a plain file
-	bool is_plain_file = true;
+	//! Whether or not this is an on-disk file
+	bool on_disk_file = true;
 	//! Basically max number of threads in DuckDB
 	idx_t system_threads;
 	//! Size of the buffers
@@ -392,7 +392,7 @@ private:
 };
 
 idx_t ParallelCSVGlobalState::MaxThreads() const {
-	if (force_parallelism || !is_plain_file) {
+	if (force_parallelism || !on_disk_file) {
 		return system_threads;
 	}
 	idx_t one_mb = 1000000; // We initialize max one thread per Mb
@@ -629,6 +629,7 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 
 	if (bind_data.initial_reader) {
 		file_handle = std::move(bind_data.initial_reader->file_handle);
+		file_handle->Reset();
 		file_handle->DisableReset();
 		bind_data.initial_reader.reset();
 	} else {

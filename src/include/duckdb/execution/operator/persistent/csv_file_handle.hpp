@@ -23,15 +23,12 @@ public:
 	              FileCompressionType compression, bool enable_reset = true);
 
 	mutex main_mutex;
-	idx_t count = 0;
 
 public:
 	bool CanSeek();
 	void Seek(idx_t position);
 	idx_t SeekPosition();
 	void Reset();
-	bool PlainFileSource();
-
 	bool OnDiskFile();
 
 	idx_t FileSize();
@@ -56,7 +53,7 @@ private:
 	FileCompressionType compression;
 	bool reset_enabled = true;
 	bool can_seek = false;
-	bool plain_file_source = false;
+	bool on_disk_file = false;
 	idx_t file_size = 0;
 	// reset support
 	AllocatedData cached_buffer;

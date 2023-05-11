@@ -260,13 +260,7 @@ void BufferedCSVReader::ResetBuffer() {
 }
 
 void BufferedCSVReader::ResetStream() {
-	if (!file_handle->CanSeek()) {
-		// seeking to the beginning appears to not be supported in all compiler/os-scenarios,
-		// so we have to create a new stream source here for now
-		file_handle->Reset();
-	} else {
-		file_handle->Seek(0);
-	}
+	file_handle->Reset();
 	linenr = 0;
 	linenr_estimated = false;
 	bytes_per_line_avg = 0;
@@ -330,7 +324,7 @@ bool BufferedCSVReader::JumpToNextSample() {
 
 	// if we deal with any other sources than plaintext files, jumping_samples can be tricky. In that case
 	// we just read x continuous chunks from the stream TODO: make jumps possible for zipfiles.
-	if (!file_handle->PlainFileSource() || !jumping_samples) {
+	if (!file_handle->OnDiskFile() || !jumping_samples) {
 		sample_chunk_idx++;
 		return true;
 	}

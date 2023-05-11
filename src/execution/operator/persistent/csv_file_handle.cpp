@@ -7,7 +7,7 @@ CSVFileHandle::CSVFileHandle(FileSystem &fs, Allocator &allocator, unique_ptr<Fi
     : fs(fs), allocator(allocator), file_handle(std::move(file_handle_p)), path(path_p), compression(compression),
       reset_enabled(enable_reset) {
 	can_seek = file_handle->CanSeek();
-	plain_file_source = file_handle->OnDiskFile();
+	on_disk_file = file_handle->OnDiskFile();
 	file_size = file_handle->GetFileSize();
 }
 
@@ -29,24 +29,29 @@ unique_ptr<CSVFileHandle> CSVFileHandle::OpenFile(FileSystem &fs, Allocator &all
 bool CSVFileHandle::CanSeek() {
 	return can_seek;
 }
+
 void CSVFileHandle::Seek(idx_t position) {
 	if (!can_seek) {
 		throw InternalException("Cannot seek in this file");
 	}
 	file_handle->Seek(position);
 }
+
 idx_t CSVFileHandle::SeekPosition() {
 	if (!can_seek) {
 		throw InternalException("Cannot seek in this file");
 	}
 	return file_handle->SeekPosition();
 }
+
 void CSVFileHandle::Reset() {
+	requested_bytes = 0;
+	read_position = 0;
 	if (can_seek) {
 		// we can seek - reset the file handle
 		file_handle->Reset();
-	} else if (plain_file_source) {
-		// we cannot seek but it is a plain file source - re-open the file
+	} else if (on_disk_file) {
+		// we cannot seek but it is an on-disk file - re-open the file
 		file_handle = CSVFileHandle::OpenFileHandle(fs, allocator, path, compression);
 	} else {
 		if (!reset_enabled) {
@@ -55,12 +60,8 @@ void CSVFileHandle::Reset() {
 		read_position = 0;
 	}
 }
-bool CSVFileHandle::PlainFileSource() {
-	return plain_file_source;
-}
-
 bool CSVFileHandle::OnDiskFile() {
-	return file_handle->OnDiskFile();
+	return on_disk_file;
 }
 
 idx_t CSVFileHandle::FileSize() {
@@ -73,7 +74,7 @@ bool CSVFileHandle::FinishedReading() {
 
 idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	requested_bytes += nr_bytes;
-	if (plain_file_source || can_seek) {
+	if (on_disk_file || can_seek) {
 		// if this is a plain file source OR we can seek we are not caching anything
 		return file_handle->Read(buffer, nr_bytes);
 	}
