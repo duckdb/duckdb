@@ -199,23 +199,11 @@ jobs:
           run_tests: 0
           osx_universal: 1
 
-      - name: Create separate binaries again
+      - name: Create separate binaries
         shell: bash
         run: |
           ./scripts/extension-lipo-strip.sh x86_64 build/release/extension build/release/extension_arm64
           ./scripts/extension-lipo-strip.sh arm64 build/release/extension build/release/extension_x64
-
-      - uses: actions/upload-artifact@v2
-        with:
-          name: test-extensions-upload-arm64
-          path: |
-            build/release/extension_arm64/*.duckdb_extension
-
-      - uses: actions/upload-artifact@v2
-        with:
-          name: test-extensions-upload-x64
-          path: |
-            build/release/extension_x64/*.duckdb_extension
 
       - name: Deploy
         shell: bash
