@@ -4,20 +4,23 @@
 
 namespace duckdb {
 
-BufferHandle::BufferHandle() : handle(nullptr), node(nullptr) {
+BufferHandle::BufferHandle() : handle(nullptr), node(nullptr), buffer_ptr(nullptr) {
 }
 
-BufferHandle::BufferHandle(shared_ptr<BlockHandle> handle, FileBuffer *node) : handle(std::move(handle)), node(node) {
+BufferHandle::BufferHandle(shared_ptr<BlockHandle> handle_p, FileBuffer *node_p)
+    : handle(std::move(handle_p)), node(node_p), buffer_ptr(node->buffer) {
 }
 
 BufferHandle::BufferHandle(BufferHandle &&other) noexcept {
 	std::swap(node, other.node);
 	std::swap(handle, other.handle);
+	std::swap(buffer_ptr, other.buffer_ptr);
 }
 
 BufferHandle &BufferHandle::operator=(BufferHandle &&other) noexcept {
 	std::swap(node, other.node);
 	std::swap(handle, other.handle);
+	std::swap(buffer_ptr, other.buffer_ptr);
 	return *this;
 }
 
@@ -29,16 +32,6 @@ bool BufferHandle::IsValid() const {
 	return node != nullptr;
 }
 
-data_ptr_t BufferHandle::Ptr() const {
-	D_ASSERT(IsValid());
-	return node->buffer;
-}
-
-data_ptr_t BufferHandle::Ptr() {
-	D_ASSERT(IsValid());
-	return node->buffer;
-}
-
 void BufferHandle::Destroy() {
 	if (!handle || !IsValid()) {
 		return;
@@ -46,6 +39,7 @@ void BufferHandle::Destroy() {
 	handle->block_manager.buffer_manager.Unpin(handle);
 	handle.reset();
 	node = nullptr;
+	buffer_ptr = nullptr;
 }
 
 FileBuffer &BufferHandle::GetFileBuffer() {

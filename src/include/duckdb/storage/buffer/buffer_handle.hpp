@@ -30,9 +30,15 @@ public:
 	//! Returns whether or not the BufferHandle is valid.
 	DUCKDB_API bool IsValid() const;
 	//! Returns a pointer to the buffer data. Handle must be valid.
-	DUCKDB_API data_ptr_t Ptr() const;
+	inline data_ptr_t Ptr() const {
+		D_ASSERT(IsValid());
+		return buffer_ptr;
+	}
 	//! Returns a pointer to the buffer data. Handle must be valid.
-	DUCKDB_API data_ptr_t Ptr();
+	inline data_ptr_t Ptr() {
+		D_ASSERT(IsValid());
+		return buffer_ptr;
+	}
 	//! Gets the underlying file buffer. Handle must be valid.
 	DUCKDB_API FileBuffer &GetFileBuffer();
 	//! Destroys the buffer handle
@@ -47,6 +53,8 @@ private:
 	shared_ptr<BlockHandle> handle;
 	//! The managed buffer node
 	FileBuffer *node;
+	//! Pointer to the buffer data
+	data_ptr_t buffer_ptr;
 };
 
 } // namespace duckdb

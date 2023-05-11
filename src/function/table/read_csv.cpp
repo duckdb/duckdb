@@ -4,7 +4,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/union_by_name.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -15,7 +14,6 @@
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/operator/persistent/csv_line_info.hpp"
-
 #include <limits>
 
 namespace duckdb {
@@ -235,14 +233,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	} else {
 		result->reader_bind = MultiFileReader::BindOptions(options.file_options, result->files, return_types, names);
 	}
-	auto &fs = FileSystem::GetFileSystem(context);
-	for (auto &file : result->files) {
-		if (fs.IsPipe(file)) {
-			result->is_pipe = true;
-			result->single_threaded = true;
-			break;
-		}
-	}
 	result->return_types = return_types;
 	result->return_names = names;
 	result->FinalizeRead(context);
@@ -262,7 +252,7 @@ static unique_ptr<FunctionData> ReadCSVAutoBind(ClientContext &context, TableFun
 struct ParallelCSVGlobalState : public GlobalTableFunctionState {
 public:
 	ParallelCSVGlobalState(ClientContext &context, unique_ptr<CSVFileHandle> file_handle_p,
-	                       vector<string> &files_path_p, idx_t system_threads_p, idx_t buffer_size_p,
+	                       const vector<string> &files_path_p, idx_t system_threads_p, idx_t buffer_size_p,
 	                       idx_t rows_to_skip, bool force_parallelism_p, vector<column_t> column_ids_p, bool has_header)
 	    : file_handle(std::move(file_handle_p)), system_threads(system_threads_p), buffer_size(buffer_size_p),
 	      force_parallelism(force_parallelism_p), column_ids(std::move(column_ids_p)),
@@ -275,6 +265,7 @@ public:
 		}
 		file_size = file_handle->FileSize();
 		first_file_size = file_size;
+		is_plain_file = file_handle->PlainFileSource();
 		bytes_read = 0;
 		if (buffer_size < file_size || file_size == 0) {
 			bytes_per_local_state = buffer_size / ParallelCSVGlobalState::MaxThreads();
@@ -366,6 +357,8 @@ private:
 	idx_t bytes_per_local_state;
 	//! Size of first file
 	idx_t first_file_size;
+	//! Whether or not this is a plain file
+	bool is_plain_file = true;
 	//! Basically max number of threads in DuckDB
 	idx_t system_threads;
 	//! Size of the buffers
@@ -399,7 +392,7 @@ private:
 };
 
 idx_t ParallelCSVGlobalState::MaxThreads() const {
-	if (force_parallelism) {
+	if (force_parallelism || !is_plain_file) {
 		return system_threads;
 	}
 	idx_t one_mb = 1000000; // We initialize max one thread per Mb
@@ -625,7 +618,7 @@ idx_t LineInfo::GetLine(idx_t batch_idx, idx_t line_error, idx_t file_idx, idx_t
 
 static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext &context,
                                                                   TableFunctionInitInput &input) {
-	auto &bind_data = (ReadCSVData &)*input.bind_data;
+	auto &bind_data = input.bind_data->CastNoConst<ReadCSVData>();
 	if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
 		return make_uniq<ParallelCSVGlobalState>();
@@ -633,7 +626,14 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 	unique_ptr<CSVFileHandle> file_handle;
 
 	bind_data.options.file_path = bind_data.files[0];
-	file_handle = ReadCSV::OpenCSV(bind_data.options.file_path, bind_data.options.compression, context);
+
+	if (bind_data.initial_reader) {
+		file_handle = std::move(bind_data.initial_reader->file_handle);
+		file_handle->DisableReset();
+		bind_data.initial_reader.reset();
+	} else {
+		file_handle = ReadCSV::OpenCSV(bind_data.options.file_path, bind_data.options.compression, context);
+	}
 	return make_uniq<ParallelCSVGlobalState>(
 	    context, std::move(file_handle), bind_data.files, context.db->NumberOfThreads(), bind_data.options.buffer_size,
 	    bind_data.options.skip_rows, ClientConfig::GetConfig(context).verify_parallelism, input.column_ids,
@@ -796,14 +796,14 @@ public:
 
 static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext &context,
                                                                   TableFunctionInitInput &input) {
-	auto &bind_data = (ReadCSVData &)*input.bind_data;
+	auto &bind_data = input.bind_data->CastNoConst<ReadCSVData>();
 	auto result = make_uniq<SingleThreadedCSVState>(bind_data.files.size());
 	if (bind_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
 		return std::move(result);
 	} else {
 		bind_data.options.file_path = bind_data.files[0];
-		if (bind_data.initial_reader && bind_data.is_pipe) {
+		if (bind_data.initial_reader) {
 			// If this is a pipe and an initial reader already exists due to read_csv_auto
 			// We must re-use it, since we can't restart the reader due for it being a pipe.
 			result->initial_reader = std::move(bind_data.initial_reader);
