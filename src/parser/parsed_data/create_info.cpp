@@ -8,14 +8,6 @@
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 
 namespace duckdb {
-void CreateInfo::DeserializeBase(Deserializer &deserializer) {
-	this->catalog = deserializer.Read<string>();
-	this->schema = deserializer.Read<string>();
-	this->on_conflict = deserializer.Read<OnCreateConflict>();
-	this->temporary = deserializer.Read<bool>();
-	this->internal = deserializer.Read<bool>();
-	this->sql = deserializer.Read<string>();
-}
 
 void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.Write(type);
@@ -26,6 +18,15 @@ void CreateInfo::Serialize(Serializer &serializer) const {
 	serializer.Write(internal);
 	serializer.WriteString(sql);
 	SerializeInternal(serializer);
+}
+
+void CreateInfo::DeserializeBase(Deserializer &deserializer) {
+	this->catalog = deserializer.Read<string>();
+	this->schema = deserializer.Read<string>();
+	this->on_conflict = deserializer.Read<OnCreateConflict>();
+	this->temporary = deserializer.Read<bool>();
+	this->internal = deserializer.Read<bool>();
+	this->sql = deserializer.Read<string>();
 }
 
 unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {

@@ -146,10 +146,7 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_PREPARE:
 	case LogicalOperatorType::LOGICAL_EXECUTE:
 	case LogicalOperatorType::LOGICAL_ALTER:
-	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
 	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
-	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
-	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
 	case LogicalOperatorType::LOGICAL_PRAGMA:
 	case LogicalOperatorType::LOGICAL_TRANSACTION:

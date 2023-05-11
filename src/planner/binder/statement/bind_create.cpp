@@ -455,7 +455,7 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
                                                          TableCatalogEntry &table, unique_ptr<LogicalOperator> plan) {
 	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
-	auto &base = (CreateIndexInfo &)*stmt.info;
+	auto &base = stmt.info->Cast<CreateIndexInfo>();
 
 	auto &get = plan->Cast<LogicalGet>();
 	// bind the index expressions
