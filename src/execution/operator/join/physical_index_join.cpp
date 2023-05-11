@@ -213,6 +213,8 @@ OperatorResultType PhysicalIndexJoin::ExecuteInternal(ExecutionContext &context,
 		state.lhs_idx = 0;
 		state.rhs_idx = 0;
 		state.first_fetch = true;
+		// reset the LHS chunk to reset the validity masks
+		state.join_keys.Reset();
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 	//! Output vectors
