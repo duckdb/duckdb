@@ -108,7 +108,7 @@ void JSONScanData::InitializeFormats(bool auto_detect_p) {
 	}
 }
 
-void JSONScanData::SetCompression(string compression) {
+void JSONScanData::SetCompression(const string &compression) {
 	if (compression == "none") {
 		options.compression = FileCompressionType::UNCOMPRESSED;
 	} else if (compression == "gzip") {
@@ -448,9 +448,14 @@ void JSONScanLocalState::ParseJSON(char *const json_start, const idx_t json_size
 }
 
 void JSONScanLocalState::ThrowObjectSizeError(const idx_t object_size) {
-	throw InvalidInputException("\"maximum_object_size\" of %llu bytes exceeded while reading JSON (>%llu bytes), "
-	                            "try increasing \"maximum_object_size\"",
-	                            bind_data.maximum_object_size, object_size);
+	throw InvalidInputException(
+	    "\"maximum_object_size\" of %llu bytes exceeded while reading file \"%s\" (>%llu bytes)."
+	    "\n Try increasing \"maximum_object_size\".",
+	    bind_data.maximum_object_size, current_reader->GetFileName(), object_size);
+}
+
+void JSONScanLocalState::ThrowInvalidAtEndError() {
+	throw InvalidInputException("Invalid JSON detected at the end of file \"%s\".", current_reader->GetFileName());
 }
 
 static pair<JSONFormat, JSONRecordType> DetectFormatAndRecordType(const char *const buffer_ptr, const idx_t buffer_size,
@@ -671,7 +676,7 @@ bool JSONScanLocalState::ReadAndAutoDetect(JSONScanGlobalState &gstate, idx_t &b
 
 	if (bind_data.options.record_type == JSONRecordType::RECORDS &&
 	    current_reader->GetRecordType() != JSONRecordType::RECORDS) {
-		throw InvalidInputException("Expected file %s to contain records, got non-record JSON instead",
+		throw InvalidInputException("Expected file \"%s\" to contain records, detected non-record JSON instead.",
 		                            current_reader->GetFileName());
 	}
 	if (!already_incremented_file_idx && !current_reader->IsParallel()) {
@@ -708,7 +713,7 @@ void JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, idx_t &
 		is_last = read_size < request_size;
 
 		if (!gstate.bind_data.ignore_errors && read_size == 0 && prev_buffer_remainder != 0) {
-			throw InvalidInputException("Invalid JSON detected at the end of file %s", current_reader->GetFileName());
+			ThrowInvalidAtEndError();
 		}
 
 		if (current_reader->GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
@@ -742,7 +747,7 @@ void JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, idx_t
 		is_last = read_size < request_size;
 
 		if (!gstate.bind_data.ignore_errors && read_size == 0 && prev_buffer_remainder != 0) {
-			throw InvalidInputException("Invalid JSON detected at the end of file %s", current_reader->GetFileName());
+			ThrowInvalidAtEndError();
 		}
 
 		if (current_reader->GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
@@ -763,9 +768,10 @@ void JSONScanLocalState::SkipOverArrayStart() {
 		return; // Empty file
 	}
 	if (buffer_ptr[buffer_offset] != '[') {
-		throw InvalidInputException("Expected top-level JSON array with format='array', but first character is '%c'"
-		                            "\n Try setting format='auto' or format='newline_delimited'",
-		                            buffer_ptr[buffer_offset]);
+		throw InvalidInputException(
+		    "Expected top-level JSON array with format='array', but first character is '%c' in file \"%s\"."
+		    "\n Try setting format='auto' or format='newline_delimited'.",
+		    buffer_ptr[buffer_offset], current_reader->GetFileName());
 	}
 	SkipWhitespace(buffer_ptr, ++buffer_offset, buffer_size);
 }

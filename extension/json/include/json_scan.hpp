@@ -99,7 +99,7 @@ public:
 	void InitializeReaders(ClientContext &context);
 	void InitializeFormats();
 	void InitializeFormats(bool auto_detect);
-	void SetCompression(string compression);
+	void SetCompression(const string &compression);
 
 	void Serialize(FieldWriter &writer) const;
 	void Deserialize(ClientContext &context, FieldReader &reader);
@@ -230,6 +230,7 @@ private:
 
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);
 	void ThrowObjectSizeError(const idx_t object_size);
+	void ThrowInvalidAtEndError();
 
 private:
 	//! Bind data
