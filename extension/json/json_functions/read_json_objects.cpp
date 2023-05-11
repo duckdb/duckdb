@@ -28,14 +28,16 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 	const auto units = lstate.units;
 	const auto objects = lstate.values;
 
-	// Create the strings without copying them
-	auto strings = FlatVector::GetData<string_t>(output.data[0]);
-	auto &validity = FlatVector::Validity(output.data[0]);
-	for (idx_t i = 0; i < count; i++) {
-		if (objects[i]) {
-			strings[i] = string_t(units[i].pointer, units[i].size);
-		} else {
-			validity.SetInvalid(i);
+	if (!gstate.names.empty()) {
+		// Create the strings without copying them
+		auto strings = FlatVector::GetData<string_t>(output.data[0]);
+		auto &validity = FlatVector::Validity(output.data[0]);
+		for (idx_t i = 0; i < count; i++) {
+			if (objects[i]) {
+				strings[i] = string_t(units[i].pointer, units[i].size);
+			} else {
+				validity.SetInvalid(i);
+			}
 		}
 	}
 

@@ -202,39 +202,33 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 	auto result = make_uniq<JSONGlobalTableFunctionState>(context, input);
 	auto &gstate = result->state;
 
-	if (bind_data.type == JSONScanType::READ_JSON) {
-		// Perform projection pushdown
-		for (idx_t col_idx = 0; col_idx < input.column_ids.size(); col_idx++) {
-			const auto &col_id = input.column_ids[col_idx];
+	// Perform projection pushdown
+	for (idx_t col_idx = 0; col_idx < input.column_ids.size(); col_idx++) {
+		const auto &col_id = input.column_ids[col_idx];
 
-			// Skip any multi-file reader / row id stuff
-			if (col_id == bind_data.reader_bind.filename_idx || IsRowIdColumnId(col_id)) {
-				continue;
+		// Skip any multi-file reader / row id stuff
+		if (col_id == bind_data.reader_bind.filename_idx || IsRowIdColumnId(col_id)) {
+			continue;
+		}
+		bool skip = false;
+		for (const auto &hive_partitioning_index : bind_data.reader_bind.hive_partitioning_indexes) {
+			if (col_id == hive_partitioning_index.index) {
+				skip = true;
+				break;
 			}
-			bool skip = false;
-			for (const auto &hive_partitioning_index : bind_data.reader_bind.hive_partitioning_indexes) {
-				if (col_id == hive_partitioning_index.index) {
-					skip = true;
-					break;
-				}
-			}
-			if (skip) {
-				continue;
-			}
-
-			gstate.column_indices.push_back(col_idx);
-			gstate.names.push_back(bind_data.names[col_id]);
+		}
+		if (skip) {
+			continue;
 		}
 
-		if (gstate.names.size() < bind_data.names.size() || bind_data.options.file_options.union_by_name) {
-			// If we are auto-detecting, but don't need all columns present in the file,
-			// then we don't need to throw an error if we encounter an unseen column
-			gstate.transform_options.error_unknown_key = false;
-		}
-	} else {
-		D_ASSERT(bind_data.type == JSONScanType::READ_JSON_OBJECTS);
-		D_ASSERT(bind_data.names.size() == 1);
-		gstate.names.push_back(bind_data.names[0]);
+		gstate.column_indices.push_back(col_idx);
+		gstate.names.push_back(bind_data.names[col_id]);
+	}
+
+	if (gstate.names.size() < bind_data.names.size() || bind_data.options.file_options.union_by_name) {
+		// If we are auto-detecting, but don't need all columns present in the file,
+		// then we don't need to throw an error if we encounter an unseen column
+		gstate.transform_options.error_unknown_key = false;
 	}
 
 	// Place readers where they belong
@@ -573,9 +567,11 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 					current_reader->CloseJSONFile();
 				}
 				if (current_reader->IsParallel()) {
+					// If this threads' current reader is still the one at gstate.file_index,
+					// this thread can end the parallel scan
 					lock_guard<mutex> guard(gstate.lock);
 					if (gstate.file_index < gstate.json_readers.size() &&
-					    gstate.json_readers[gstate.file_index].get()) {
+					    current_reader == gstate.json_readers[gstate.file_index].get()) {
 						gstate.file_index++; // End parallel scan
 					}
 				}
@@ -595,8 +591,10 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			// Try the next reader
 			current_reader = gstate.json_readers[gstate.file_index].get();
 			if (current_reader->IsOpen()) {
+				// Can only be open from auto detection, so these should be known
+				D_ASSERT(current_reader->GetFormat() != JSONFormat::AUTO_DETECT);
+				D_ASSERT(current_reader->GetRecordType() != JSONRecordType::AUTO_DETECT);
 				if (!current_reader->IsParallel()) {
-					// Can only be open from schema detection
 					batch_index = gstate.batch_index++;
 					gstate.file_index++;
 				}
@@ -950,7 +948,7 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 	table_function.serialize = Serialize;
 	table_function.deserialize = Deserialize;
 
-	table_function.projection_pushdown = false;
+	table_function.projection_pushdown = true;
 	table_function.filter_pushdown = false;
 	table_function.filter_prune = false;
 	table_function.pushdown_complex_filter = ComplexFilterPushdown;

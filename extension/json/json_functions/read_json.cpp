@@ -279,8 +279,7 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> f
 	table_function.named_parameters["timestamp_format"] = LogicalType::VARCHAR;
 	table_function.named_parameters["records"] = LogicalType::VARCHAR;
 
-	table_function.projection_pushdown = true;
-	// TODO: might be able to do filter pushdown/prune too
+	// TODO: might be able to do filter pushdown/prune ?
 
 	table_function.function_info = std::move(function_info);
 
