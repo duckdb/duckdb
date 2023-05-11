@@ -660,7 +660,19 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 			// we have to add a cross product; we add it between the two smallest relations
 			optional_ptr<JoinNode> smallest_plans[2];
 			idx_t smallest_index[2];
-			for (idx_t i = 0; i < join_relations.size(); i++) {
+			D_ASSERT(join_relations.size() >= 2);
+
+			// first just add the first two join relations. It doesn't matter the cost as the JOO
+			// will swap them on estimated cardinality anyway.
+			for (idx_t i = 0; i < 2; i++) {
+				auto current_plan = plans[&join_relations[i].get()].get();
+				smallest_plans[i] = current_plan;
+				smallest_index[i] = i;
+			}
+
+			// if there are any other join relations that don't have connections
+			// add them if they have lower estimated cardinality.
+			for (idx_t i = 2; i < join_relations.size(); i++) {
 				// get the plan for this relation
 				auto current_plan = plans[&join_relations[i].get()].get();
 				// check if the cardinality is smaller than the smallest two found so far
