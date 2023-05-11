@@ -39,6 +39,14 @@
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb_python/filesystem_object.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/function/scalar_function.hpp"
+#include "duckdb_python/pandas/pandas_scan.hpp"
+#include "duckdb_python/python_objects.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 
 #include <random>
 
@@ -110,6 +118,15 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("filesystem_is_registered", &DuckDBPyConnection::FileSystemIsRegistered,
 	         "Check if a filesystem with the provided name is currently registered", py::arg("name"));
 
+	m.def("create_function", &DuckDBPyConnection::RegisterScalarUDF,
+	      "Create a DuckDB function out of the passing in python function so it can be used in queries",
+	      py::arg("name"), py::arg("function"), py::arg("return_type") = py::none(), py::arg("parameters") = py::none(),
+	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0,
+	      py::arg("exception_handling") = 0);
+
+	m.def("remove_function", &DuckDBPyConnection::UnregisterUDF, "Remove a previously created function",
+	      py::arg("name"));
+
 	DefineMethod({"sqltype", "dtype", "type"}, m, &DuckDBPyConnection::Type,
 	             "Create a type object by parsing the 'type_str' string", py::arg("type_str"));
 	DefineMethod({"array_type", "list_type"}, m, &DuckDBPyConnection::ArrayType,
@@ -163,8 +180,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("begin", &DuckDBPyConnection::Begin, "Start a new transaction")
 	    .def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction")
 	    .def("rollback", &DuckDBPyConnection::Rollback, "Roll back changes performed within a transaction")
-	    .def("append", &DuckDBPyConnection::Append, "Append the passed Data.Frame to the named table",
-	         py::arg("table_name"), py::arg("df"))
+	    .def("append", &DuckDBPyConnection::Append, "Append the passed DataFrame to the named table",
+	         py::arg("table_name"), py::arg("df"), py::kw_only(), py::arg("by_name") = false)
 	    .def("register", &DuckDBPyConnection::RegisterPythonObject,
 	         "Register the passed Python Object value for querying with a view", py::arg("view_name"),
 	         py::arg("python_object"))
@@ -195,7 +212,8 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	             py::arg("escapechar") = py::none(), py::arg("encoding") = py::none(), py::arg("parallel") = py::none(),
 	             py::arg("date_format") = py::none(), py::arg("timestamp_format") = py::none(),
 	             py::arg("sample_size") = py::none(), py::arg("all_varchar") = py::none(),
-	             py::arg("normalize_names") = py::none(), py::arg("filename") = py::none());
+	             py::arg("normalize_names") = py::none(), py::arg("filename") = py::none(),
+	             py::arg("null_padding") = py::none());
 
 	m.def("from_df", &DuckDBPyConnection::FromDF, "Create a relation object from the Data.Frame in df",
 	      py::arg("df") = py::none())
@@ -275,6 +293,60 @@ py::list DuckDBPyConnection::ListFilesystems() {
 bool DuckDBPyConnection::FileSystemIsRegistered(const string &name) {
 	auto subsystems = database->GetFileSystem().ListSubSystems();
 	return std::find(subsystems.begin(), subsystems.end(), name) != subsystems.end();
+}
+
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterUDF(const string &name) {
+	if (!connection) {
+		throw ConnectionException("Connection already closed!");
+	}
+	auto entry = registered_functions.find(name);
+	if (entry == registered_functions.end()) {
+		// Not registered or already unregistered
+		throw InvalidInputException("No function by the name of '%s' was found in the list of registered functions",
+		                            name);
+	}
+
+	auto &context = *connection->context;
+
+	context.RunFunctionInTransaction([&]() {
+		// create function
+		auto &catalog = Catalog::GetCatalog(context, SYSTEM_CATALOG);
+		DropInfo info;
+		info.type = CatalogType::SCALAR_FUNCTION_ENTRY;
+		info.name = name;
+		info.allow_drop_internal = true;
+		info.cascade = false;
+		info.if_not_found = OnEntryNotFound::THROW_EXCEPTION;
+		catalog.DropEntry(context, info);
+	});
+	registered_functions.erase(entry);
+
+	return shared_from_this();
+}
+
+shared_ptr<DuckDBPyConnection>
+DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &udf, const py::object &parameters_p,
+                                      const shared_ptr<DuckDBPyType> &return_type_p, PythonUDFType type,
+                                      FunctionNullHandling null_handling, PythonExceptionHandling exception_handling) {
+	if (!connection) {
+		throw ConnectionException("Connection already closed!");
+	}
+	auto &context = *connection->context;
+
+	if (registered_functions.find(name) != registered_functions.end()) {
+		throw NotImplementedException("A function by the name of '%s' is already created, creating multiple "
+		                              "functions with the same name is not supported yet, please remove it first",
+		                              name);
+	}
+	auto scalar_function = CreateScalarUDF(name, udf, parameters_p, return_type_p, type == PythonUDFType::ARROW,
+	                                       null_handling, exception_handling);
+	CreateScalarFunctionInfo info(scalar_function);
+
+	context.RegisterFunction(info);
+
+	registered_functions[name] = make_uniq<PythonDependencies>(udf);
+
+	return shared_from_this();
 }
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
@@ -436,9 +508,19 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 	return shared_from_this();
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, const PandasDataFrame &value) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, const PandasDataFrame &value,
+                                                          bool by_name) {
 	RegisterPythonObject("__append_df", value);
-	return Execute("INSERT INTO \"" + name + "\" SELECT * FROM __append_df");
+	string columns = "";
+	if (by_name) {
+		auto df_columns = value.attr("columns");
+		vector<string> column_names;
+		for (auto &column : df_columns) {
+			column_names.push_back(std::string(py::str(column)));
+		}
+		columns = StringUtil::Format("(%s)", StringUtil::Join(column_names, ","));
+	}
+	return Execute(StringUtil::Format("INSERT INTO \"%s\"%s SELECT * FROM __append_df", name, columns));
 }
 
 void DuckDBPyConnection::RegisterArrowObject(const py::object &arrow_object, const string &name) {
@@ -582,7 +664,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
     const py::object &delimiter, const py::object &dtype, const py::object &na_values, const py::object &skiprows,
     const py::object &quotechar, const py::object &escapechar, const py::object &encoding, const py::object &parallel,
     const py::object &date_format, const py::object &timestamp_format, const py::object &sample_size,
-    const py::object &all_varchar, const py::object &normalize_names, const py::object &filename) {
+    const py::object &all_varchar, const py::object &normalize_names, const py::object &filename,
+    const py::object &null_padding) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -773,6 +856,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 			throw InvalidInputException("read_csv only accepts 'filename' as a boolean");
 		}
 		read_csv.AddNamedParameter("filename", Value::INTEGER(py::bool_(filename)));
+	}
+
+	if (!py::none().is(null_padding)) {
+		if (!py::isinstance<py::bool_>(null_padding)) {
+			throw InvalidInputException("read_csv only accepts 'null_padding' as a boolean");
+		}
+		read_csv.AddNamedParameter("null_padding", Value::INTEGER(py::bool_(null_padding)));
 	}
 
 	return make_uniq<DuckDBPyRelation>(read_csv_p->Alias(name));
@@ -1380,11 +1470,26 @@ static shared_ptr<DuckDBPyConnection> FetchOrCreateInstance(const string &databa
 	return res;
 }
 
+bool IsDefaultConnectionString(const string &database, bool read_only, unordered_map<string, string> &config) {
+	bool is_default = StringUtil::CIEquals(database, ":default:");
+	if (!is_default) {
+		return false;
+	}
+	// Only allow fetching the default connection when no options are passed
+	if (read_only == true || !config.empty()) {
+		throw InvalidInputException("Default connection fetching is only allowed without additional options");
+	}
+	return true;
+}
+
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
                                                            const py::dict &config_options) {
 	auto config_dict = TransformPyConfigDict(config_options);
-	DBConfig config(config_dict, read_only);
+	if (IsDefaultConnectionString(database, read_only, config_dict)) {
+		return DuckDBPyConnection::DefaultConnection();
+	}
 
+	DBConfig config(config_dict, read_only);
 	auto res = FetchOrCreateInstance(database, config);
 	auto &client_context = *res->connection->context;
 	SetDefaultConfigArguments(client_context);

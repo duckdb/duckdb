@@ -12,15 +12,15 @@ string JoinRef::ToString() const {
 	result = left->ToString() + " ";
 	switch (ref_type) {
 	case JoinRefType::REGULAR:
-		result += JoinTypeToString(type) + " JOIN ";
+		result += EnumUtil::ToString(type) + " JOIN ";
 		break;
 	case JoinRefType::NATURAL:
 		result += "NATURAL ";
-		result += JoinTypeToString(type) + " JOIN ";
+		result += EnumUtil::ToString(type) + " JOIN ";
 		break;
 	case JoinRefType::ASOF:
 		result += "ASOF ";
-		result += JoinTypeToString(type) + " JOIN ";
+		result += EnumUtil::ToString(type) + " JOIN ";
 		break;
 	case JoinRefType::CROSS:
 		result += ", ";

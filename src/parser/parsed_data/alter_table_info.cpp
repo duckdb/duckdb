@@ -10,9 +10,9 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 ChangeOwnershipInfo::ChangeOwnershipInfo(CatalogType entry_catalog_type, string entry_catalog_p, string entry_schema_p,
                                          string entry_name_p, string owner_schema_p, string owner_name_p,
-                                         bool if_exists)
+                                         OnEntryNotFound if_not_found)
     : AlterInfo(AlterType::CHANGE_OWNERSHIP, std::move(entry_catalog_p), std::move(entry_schema_p),
-                std::move(entry_name_p), if_exists),
+                std::move(entry_name_p), if_not_found),
       entry_catalog_type(entry_catalog_type), owner_schema(std::move(owner_schema_p)),
       owner_name(std::move(owner_name_p)) {
 }
@@ -23,7 +23,7 @@ CatalogType ChangeOwnershipInfo::GetCatalogType() const {
 
 unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
 	return make_uniq_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, catalog, schema, name, owner_schema,
-	                                                      owner_name, if_exists);
+	                                                      owner_name, if_not_found);
 }
 
 void ChangeOwnershipInfo::Serialize(FieldWriter &writer) const {
@@ -35,7 +35,7 @@ void ChangeOwnershipInfo::Serialize(FieldWriter &writer) const {
 //===--------------------------------------------------------------------===//
 AlterTableInfo::AlterTableInfo(AlterTableType type, AlterEntryData data)
     : AlterInfo(AlterType::ALTER_TABLE, std::move(data.catalog), std::move(data.schema), std::move(data.name),
-                data.if_exists),
+                data.if_not_found),
       alter_table_type(type) {
 }
 AlterTableInfo::~AlterTableInfo() {
@@ -50,7 +50,7 @@ void AlterTableInfo::Serialize(FieldWriter &writer) const {
 	writer.WriteString(catalog);
 	writer.WriteString(schema);
 	writer.WriteString(name);
-	writer.WriteField(if_exists);
+	writer.WriteField(if_not_found);
 	SerializeAlterTable(writer);
 }
 
@@ -60,7 +60,7 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(FieldReader &reader) {
 	data.catalog = reader.ReadRequired<string>();
 	data.schema = reader.ReadRequired<string>();
 	data.name = reader.ReadRequired<string>();
-	data.if_exists = reader.ReadRequired<bool>();
+	data.if_not_found = reader.ReadRequired<OnEntryNotFound>();
 
 	unique_ptr<AlterTableInfo> info;
 	switch (type) {
@@ -330,7 +330,7 @@ unique_ptr<AlterInfo> AlterForeignKeyInfo::Deserialize(FieldReader &reader, Alte
 //===--------------------------------------------------------------------===//
 AlterViewInfo::AlterViewInfo(AlterViewType type, AlterEntryData data)
     : AlterInfo(AlterType::ALTER_VIEW, std::move(data.catalog), std::move(data.schema), std::move(data.name),
-                data.if_exists),
+                data.if_not_found),
       alter_view_type(type) {
 }
 AlterViewInfo::~AlterViewInfo() {
@@ -345,7 +345,7 @@ void AlterViewInfo::Serialize(FieldWriter &writer) const {
 	writer.WriteString(catalog);
 	writer.WriteString(schema);
 	writer.WriteString(name);
-	writer.WriteField<bool>(if_exists);
+	writer.WriteField<OnEntryNotFound>(if_not_found);
 	SerializeAlterView(writer);
 }
 
@@ -355,7 +355,7 @@ unique_ptr<AlterInfo> AlterViewInfo::Deserialize(FieldReader &reader) {
 	data.catalog = reader.ReadRequired<string>();
 	data.schema = reader.ReadRequired<string>();
 	data.name = reader.ReadRequired<string>();
-	data.if_exists = reader.ReadRequired<bool>();
+	data.if_not_found = reader.ReadRequired<OnEntryNotFound>();
 	unique_ptr<AlterViewInfo> info;
 	switch (type) {
 	case AlterViewType::RENAME_VIEW:

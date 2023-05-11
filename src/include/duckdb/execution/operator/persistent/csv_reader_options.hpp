@@ -10,7 +10,7 @@
 
 #include "duckdb/execution/operator/persistent/csv_buffer.hpp"
 #include "duckdb/common/map.hpp"
-#include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
@@ -62,6 +62,8 @@ struct BufferedCSVReaderOptions {
 	//! Whether file is compressed or not, and if so which compression type
 	//! AUTO_DETECT (default; infer from file extension)
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
+	//! Option to convert quoted values to NULL values
+	bool allow_quoted_nulls = true;
 
 	//===--------------------------------------------------------------------===//
 	// CSVAutoOptions

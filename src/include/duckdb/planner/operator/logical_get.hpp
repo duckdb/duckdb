@@ -53,7 +53,7 @@ public:
 	string GetName() const override;
 	string ParamsToString() const override;
 	//! Returns the underlying table that is being scanned, or nullptr if there is none
-	TableCatalogEntry *GetTable() const;
+	optional_ptr<TableCatalogEntry> GetTable() const;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;

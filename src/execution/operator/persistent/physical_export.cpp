@@ -27,10 +27,10 @@ static void WriteCatalogEntries(stringstream &ss, vector<reference<CatalogEntry>
 	ss << std::endl;
 }
 
-static void WriteStringStreamToFile(FileSystem &fs, FileOpener *opener, stringstream &ss, const string &path) {
+static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, const string &path) {
 	auto ss_string = ss.str();
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
-	                          FileLockType::WRITE_LOCK, FileSystem::DEFAULT_COMPRESSION, opener);
+	                          FileLockType::WRITE_LOCK);
 	fs.Write(*handle, (void *)ss_string.c_str(), ss_string.size());
 	handle.reset();
 }
@@ -70,6 +70,9 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		}
 	}
 	for (auto &copy_option : info.options) {
+		if (copy_option.first == "force_quote") {
+			continue;
+		}
 		ss << ", " << copy_option.first << " ";
 		if (copy_option.second.size() == 1) {
 			WriteValueAsSQL(ss, copy_option.second[0]);
@@ -96,16 +99,15 @@ unique_ptr<GlobalSourceState> PhysicalExport::GetGlobalSourceState(ClientContext
 	return make_uniq<ExportSourceState>();
 }
 
-void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                             LocalSourceState &lstate) const {
-	auto &state = gstate.Cast<ExportSourceState>();
+SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk,
+                                         OperatorSourceInput &input) const {
+	auto &state = input.global_state.Cast<ExportSourceState>();
 	if (state.finished) {
-		return;
+		return SourceResultType::FINISHED;
 	}
 
 	auto &ccontext = context.client;
 	auto &fs = FileSystem::GetFileSystem(ccontext);
-	auto *opener = FileSystem::GetFileOpener(ccontext);
 
 	// gather all catalog types to export
 	vector<reference<CatalogEntry>> schemas;
@@ -117,31 +119,32 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	vector<reference<CatalogEntry>> macros;
 
 	auto schema_list = Catalog::GetSchemas(ccontext, info->catalog);
-	for (auto &schema : schema_list) {
-		if (!schema->internal) {
-			schemas.push_back(*schema);
+	for (auto &schema_p : schema_list) {
+		auto &schema = schema_p.get();
+		if (!schema.internal) {
+			schemas.push_back(schema);
 		}
-		schema->Scan(context.client, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
-			if (entry->internal) {
+		schema.Scan(context.client, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
 				return;
 			}
-			if (entry->type != CatalogType::TABLE_ENTRY) {
-				views.push_back(*entry);
+			if (entry.type != CatalogType::TABLE_ENTRY) {
+				views.push_back(entry);
 			}
 		});
-		schema->Scan(context.client, CatalogType::SEQUENCE_ENTRY,
-		             [&](CatalogEntry *entry) { sequences.push_back(*entry); });
-		schema->Scan(context.client, CatalogType::TYPE_ENTRY,
-		             [&](CatalogEntry *entry) { custom_types.push_back(*entry); });
-		schema->Scan(context.client, CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) { indexes.push_back(*entry); });
-		schema->Scan(context.client, CatalogType::MACRO_ENTRY, [&](CatalogEntry *entry) {
-			if (!entry->internal && entry->type == CatalogType::MACRO_ENTRY) {
-				macros.push_back(*entry);
+		schema.Scan(context.client, CatalogType::SEQUENCE_ENTRY,
+		            [&](CatalogEntry &entry) { sequences.push_back(entry); });
+		schema.Scan(context.client, CatalogType::TYPE_ENTRY,
+		            [&](CatalogEntry &entry) { custom_types.push_back(entry); });
+		schema.Scan(context.client, CatalogType::INDEX_ENTRY, [&](CatalogEntry &entry) { indexes.push_back(entry); });
+		schema.Scan(context.client, CatalogType::MACRO_ENTRY, [&](CatalogEntry &entry) {
+			if (!entry.internal && entry.type == CatalogType::MACRO_ENTRY) {
+				macros.push_back(entry);
 			}
 		});
-		schema->Scan(context.client, CatalogType::TABLE_MACRO_ENTRY, [&](CatalogEntry *entry) {
-			if (!entry->internal && entry->type == CatalogType::TABLE_MACRO_ENTRY) {
-				macros.push_back(*entry);
+		schema.Scan(context.client, CatalogType::TABLE_MACRO_ENTRY, [&](CatalogEntry &entry) {
+			if (!entry.internal && entry.type == CatalogType::TABLE_MACRO_ENTRY) {
+				macros.push_back(entry);
 			}
 		});
 	}
@@ -168,7 +171,7 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 	WriteCatalogEntries(ss, indexes);
 	WriteCatalogEntries(ss, macros);
 
-	WriteStringStreamToFile(fs, opener, ss, fs.JoinPath(info->file_path, "schema.sql"));
+	WriteStringStreamToFile(fs, ss, fs.JoinPath(info->file_path, "schema.sql"));
 
 	// write the load.sql file
 	// for every table, we write COPY INTO statement with the specified options
@@ -177,15 +180,16 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		auto exported_table_info = exported_tables.data[i].table_data;
 		WriteCopyStatement(fs, load_ss, *info, exported_table_info, function);
 	}
-	WriteStringStreamToFile(fs, opener, load_ss, fs.JoinPath(info->file_path, "load.sql"));
+	WriteStringStreamToFile(fs, load_ss, fs.JoinPath(info->file_path, "load.sql"));
 	state.finished = true;
+
+	return SourceResultType::FINISHED;
 }
 
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-SinkResultType PhysicalExport::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                    DataChunk &input) const {
+SinkResultType PhysicalExport::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	// nop
 	return SinkResultType::NEED_MORE_INPUT;
 }

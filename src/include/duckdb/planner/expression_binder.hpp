@@ -101,6 +101,8 @@ public:
 	static bool ContainsType(const LogicalType &type, LogicalTypeId target);
 	static LogicalType ExchangeType(const LogicalType &type, LogicalTypeId target, LogicalType new_type);
 
+	virtual bool QualifyColumnAlias(const ColumnRefExpression &colref);
+
 	//! Bind the given expresion. Unlike Bind(), this does *not* mute the given ParsedExpression.
 	//! Exposed to be used from sub-binders that aren't subclasses of ExpressionBinder.
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
@@ -134,14 +136,11 @@ protected:
 
 protected:
 	virtual BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth);
-	virtual BindResult BindFunction(FunctionExpression &expr, optional_ptr<ScalarFunctionCatalogEntry> function,
-	                                idx_t depth);
-	virtual BindResult BindLambdaFunction(FunctionExpression &expr, optional_ptr<ScalarFunctionCatalogEntry> function,
-	                                      idx_t depth);
-	virtual BindResult BindAggregate(FunctionExpression &expr, optional_ptr<AggregateFunctionCatalogEntry> function,
-	                                 idx_t depth);
+	virtual BindResult BindFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);
+	virtual BindResult BindLambdaFunction(FunctionExpression &expr, ScalarFunctionCatalogEntry &function, idx_t depth);
+	virtual BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth);
 	virtual BindResult BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression);
-	virtual BindResult BindMacro(FunctionExpression &expr, optional_ptr<ScalarMacroCatalogEntry> macro, idx_t depth,
+	virtual BindResult BindMacro(FunctionExpression &expr, ScalarMacroCatalogEntry &macro, idx_t depth,
 	                             unique_ptr<ParsedExpression> &expr_ptr);
 
 	virtual string UnsupportedAggregateMessage();

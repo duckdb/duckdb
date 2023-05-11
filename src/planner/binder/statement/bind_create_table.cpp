@@ -25,7 +25,7 @@
 namespace duckdb {
 
 static void CreateColumnDependencyManager(BoundCreateTableInfo &info) {
-	auto &base = (CreateTableInfo &)*info.base;
+	auto &base = info.base->Cast<CreateTableInfo>();
 	for (auto &col : base.columns.Logical()) {
 		if (!col.Generated()) {
 			continue;
@@ -35,13 +35,12 @@ static void CreateColumnDependencyManager(BoundCreateTableInfo &info) {
 }
 
 static void BindCheckConstraint(Binder &binder, BoundCreateTableInfo &info, const unique_ptr<Constraint> &cond) {
-	auto &base = (CreateTableInfo &)*info.base;
+	auto &base = info.base->Cast<CreateTableInfo>();
 
 	auto bound_constraint = make_uniq<BoundCheckConstraint>();
 	// check constraint: bind the expression
 	CheckBinder check_binder(binder, binder.context, base.table, base.columns, bound_constraint->bound_columns);
 	auto &check = cond->Cast<CheckConstraint>();
-	;
 	// create a copy of the unbound expression because the binding destroys the constraint
 	auto unbound_expression = check.expression->Copy();
 	// now bind the constraint and create a new BoundCheckConstraint
@@ -52,7 +51,7 @@ static void BindCheckConstraint(Binder &binder, BoundCreateTableInfo &info, cons
 }
 
 static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
-	auto &base = (CreateTableInfo &)*info.base;
+	auto &base = info.base->Cast<CreateTableInfo>();
 
 	bool has_primary_key = false;
 	logical_index_set_t not_null_columns;
@@ -155,7 +154,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 }
 
 void Binder::BindGeneratedColumns(BoundCreateTableInfo &info) {
-	auto &base = (CreateTableInfo &)*info.base;
+	auto &base = info.base->Cast<CreateTableInfo>();
 
 	vector<string> names;
 	vector<LogicalType> types;
@@ -252,7 +251,7 @@ static void ExtractDependencies(BoundCreateTableInfo &info) {
 	}
 }
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info, SchemaCatalogEntry &schema) {
-	auto &base = (CreateTableInfo &)*info;
+	auto &base = info->Cast<CreateTableInfo>();
 	auto result = make_uniq<BoundCreateTableInfo>(schema, std::move(info));
 	if (base.query) {
 		// construct the result object
@@ -291,21 +290,21 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		if (column.Type().id() == LogicalTypeId::VARCHAR) {
 			ExpressionBinder::TestCollation(context, StringType::GetCollation(column.Type()));
 		}
-		BindLogicalType(context, column.TypeMutable(), result->schema.catalog);
+		BindLogicalType(context, column.TypeMutable(), &result->schema.catalog);
 		// We add a catalog dependency
-		auto type_dependency = LogicalType::GetCatalog(column.Type());
+		auto type_dependency = EnumType::GetCatalog(column.Type());
 		if (type_dependency) {
 			// Only if the USER comes from a create type
 			result->dependencies.AddDependency(*type_dependency);
 		}
 	}
-	result->dependencies.VerifyDependencies(*schema.catalog, result->Base().table);
+	result->dependencies.VerifyDependencies(schema.catalog, result->Base().table);
 	properties.allow_stream_result = false;
 	return result;
 }
 
 unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateInfo> info) {
-	auto &base = (CreateTableInfo &)*info;
+	auto &base = info->Cast<CreateTableInfo>();
 	auto &schema = BindCreateSchema(base);
 	return BindCreateTableInfo(std::move(info), schema);
 }

@@ -1,0 +1,16 @@
+# name: test/fuzzer/fuzz_not_operator.test
+# group: [fuzzer]
+
+statement ok
+pragma enable_verification
+
+# Because 2060771621 + -2134619525 becomes bigger than INTEGER (detected type for the constants)
+# previously we would wrongfully strip the where clause and return an empty set.
+query I
+SELECT i FROM (select 1) tbl(i) WHERE ( 2060771621 != i + -2134619525 )
+----
+1
+
+query I
+select i FROM (select 4195391146) tbl(i) WHERE ( 2060771621 != i + -2134619525)
+----

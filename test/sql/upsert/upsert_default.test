@@ -25,3 +25,23 @@ select * from tbl;
 5	6	10
 5	7	10
 5	4	10
+
+statement ok
+create table t (i int primary key, j int);
+
+query I
+insert into t values (1, 1) on conflict do nothing;
+----
+1
+
+# 0 updates/insertions were performed
+query I
+insert into t values (1, 1) on conflict do nothing
+----
+0
+
+# 0 insertions, but one tuple is updated
+query I
+insert into t values (1, 1) on conflict (i) do update set j = excluded.i;
+----
+1

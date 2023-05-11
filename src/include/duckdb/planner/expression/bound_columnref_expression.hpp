@@ -42,6 +42,7 @@ public:
 	}
 
 	string ToString() const override;
+	string GetName() const override;
 
 	bool Equals(const BaseExpression *other) const override;
 	hash_t Hash() const override;

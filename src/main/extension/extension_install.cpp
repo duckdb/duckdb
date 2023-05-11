@@ -38,7 +38,7 @@ const vector<string> ExtensionHelper::PathComponents() {
 	return vector<string> {".duckdb", "extensions", GetVersionDirectoryName(), DuckDB::Platform()};
 }
 
-string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs, FileOpener *opener) {
+string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	static_assertion(0, "ExtensionDirectory functionality is not supported in duckdb-wasm");
 #endif
@@ -49,7 +49,7 @@ string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs, Fil
 		// convert random separators to platform-canonic
 		extension_directory = fs.ConvertSeparators(extension_directory);
 		// expand ~ in extension directory
-		extension_directory = fs.ExpandPath(extension_directory, opener);
+		extension_directory = fs.ExpandPath(extension_directory);
 		if (!fs.DirectoryExists(extension_directory)) {
 			auto sep = fs.PathSeparator();
 			auto splits = StringUtil::Split(extension_directory, sep);
@@ -66,7 +66,7 @@ string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs, Fil
 			}
 		}
 	} else { // otherwise default to home
-		string home_directory = fs.GetHomeDirectory(opener);
+		string home_directory = fs.GetHomeDirectory();
 		// exception if the home directory does not exist, don't create whatever we think is home
 		if (!fs.DirectoryExists(home_directory)) {
 			throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
@@ -90,8 +90,7 @@ string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs, Fil
 string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	auto &fs = FileSystem::GetFileSystem(context);
-	auto opener = FileSystem::GetFileOpener(context);
-	return ExtensionDirectory(config, fs, opener);
+	return ExtensionDirectory(config, fs);
 }
 
 bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &message) {
@@ -118,7 +117,7 @@ void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const s
 	// Install is currently a no-op
 	return;
 #endif
-	string local_path = ExtensionDirectory(config, fs, nullptr);
+	string local_path = ExtensionDirectory(config, fs);
 	InstallExtensionInternal(config, nullptr, fs, local_path, extension, force_install);
 }
 

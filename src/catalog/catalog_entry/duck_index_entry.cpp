@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-DuckIndexEntry::DuckIndexEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info)
+DuckIndexEntry::DuckIndexEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info)
     : IndexCatalogEntry(catalog, schema, info) {
 }
 

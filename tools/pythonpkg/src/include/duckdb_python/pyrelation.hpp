@@ -17,6 +17,7 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb_python/pybind11/conversions/explain_enum.hpp"
+#include "duckdb_python/pybind11/conversions/null_handling_enum.hpp"
 #include "duckdb_python/pybind11/dataframe.hpp"
 
 namespace duckdb {
@@ -25,6 +26,8 @@ struct DuckDBPyConnection;
 
 class PythonDependencies : public ExternalDependency {
 public:
+	explicit PythonDependencies() : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY) {
+	}
 	explicit PythonDependencies(py::function map_function)
 	    : ExternalDependency(ExternalDependenciesType::PYTHON_DEPENDENCY), map_function(std::move(map_function)) {};
 	explicit PythonDependencies(unique_ptr<RegisteredObject> py_object)
@@ -156,7 +159,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Intersect(DuckDBPyRelation *other);
 
-	unique_ptr<DuckDBPyRelation> Map(py::function fun);
+	unique_ptr<DuckDBPyRelation> Map(py::function fun, Optional<py::object> schema);
 
 	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const string &condition, const string &type);
 

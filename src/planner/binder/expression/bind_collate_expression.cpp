@@ -10,17 +10,17 @@ BindResult ExpressionBinder::BindExpression(CollateExpression &expr, idx_t depth
 	if (!error.empty()) {
 		return BindResult(error);
 	}
-	auto &child = expr.child->Cast<BoundExpression>();
-	if (child.expr->HasParameter()) {
+	auto &child = BoundExpression::GetExpression(*expr.child);
+	if (child->HasParameter()) {
 		throw ParameterNotResolvedException();
 	}
-	if (child.expr->return_type.id() != LogicalTypeId::VARCHAR) {
+	if (child->return_type.id() != LogicalTypeId::VARCHAR) {
 		throw BinderException("collations are only supported for type varchar");
 	}
 	// Validate the collation, but don't use it
-	PushCollation(context, child.expr->Copy(), expr.collation, false);
-	child.expr->return_type = LogicalType::VARCHAR_COLLATION(expr.collation);
-	return BindResult(std::move(child.expr));
+	PushCollation(context, child->Copy(), expr.collation, false);
+	child->return_type = LogicalType::VARCHAR_COLLATION(expr.collation);
+	return BindResult(std::move(child));
 }
 
 } // namespace duckdb

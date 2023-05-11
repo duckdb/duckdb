@@ -1,5 +1,7 @@
 #include "duckdb/planner/operator/logical_pivot.hpp"
 
+#include "duckdb/main/config.hpp"
+
 namespace duckdb {
 
 LogicalPivot::LogicalPivot(idx_t pivot_idx, unique_ptr<LogicalOperator> plan, BoundPivotInfo info_p)
@@ -30,6 +32,15 @@ vector<idx_t> LogicalPivot::GetTableIndex() const {
 
 void LogicalPivot::ResolveTypes() {
 	this->types = bound_pivot.types;
+}
+
+string LogicalPivot::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", pivot_index);
+	}
+#endif
+	return LogicalOperator::GetName();
 }
 
 } // namespace duckdb

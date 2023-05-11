@@ -53,7 +53,7 @@ struct DuckDBConstraintsData : public GlobalTableFunctionState {
 	DuckDBConstraintsData() : offset(0), constraint_offset(0), unique_constraint_offset(0) {
 	}
 
-	vector<optional_ptr<CatalogEntry>> entries;
+	vector<reference<CatalogEntry>> entries;
 	idx_t offset;
 	idx_t constraint_offset;
 	idx_t unique_constraint_offset;
@@ -109,15 +109,15 @@ unique_ptr<GlobalTableFunctionState> DuckDBConstraintsInit(ClientContext &contex
 	auto schemas = Catalog::GetAllSchemas(context);
 
 	for (auto &schema : schemas) {
-		vector<CatalogEntry *> entries;
+		vector<reference<CatalogEntry>> entries;
 
-		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
-			if (entry->type == CatalogType::TABLE_ENTRY) {
+		schema.get().Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.type == CatalogType::TABLE_ENTRY) {
 				entries.push_back(entry);
 			}
 		});
 
-		sort(entries.begin(), entries.end(), [&](CatalogEntry *x, CatalogEntry *y) { return (x->name < y->name); });
+		sort(entries.begin(), entries.end(), [&](CatalogEntry &x, CatalogEntry &y) { return (x.name < y.name); });
 
 		result->entries.insert(result->entries.end(), entries.begin(), entries.end());
 	};
@@ -135,7 +135,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = *data.entries[data.offset];
+		auto &entry = data.entries[data.offset].get();
 		D_ASSERT(entry.type == CatalogType::TABLE_ENTRY);
 
 		auto &table = entry.Cast<TableCatalogEntry>();
@@ -178,13 +178,13 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 
 			idx_t col = 0;
 			// database_name, LogicalType::VARCHAR
-			output.SetValue(col++, count, Value(table.schema->catalog->GetName()));
+			output.SetValue(col++, count, Value(table.schema.catalog.GetName()));
 			// database_oid, LogicalType::BIGINT
-			output.SetValue(col++, count, Value::BIGINT(table.schema->catalog->GetOid()));
+			output.SetValue(col++, count, Value::BIGINT(table.schema.catalog.GetOid()));
 			// schema_name, LogicalType::VARCHAR
-			output.SetValue(col++, count, Value(table.schema->name));
+			output.SetValue(col++, count, Value(table.schema.name));
 			// schema_oid, LogicalType::BIGINT
-			output.SetValue(col++, count, Value::BIGINT(table.schema->oid));
+			output.SetValue(col++, count, Value::BIGINT(table.schema.oid));
 			// table_name, LogicalType::VARCHAR
 			output.SetValue(col++, count, Value(table.name));
 			// table_oid, LogicalType::BIGINT
@@ -198,15 +198,15 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 				switch (bound_constraint.type) {
 				case ConstraintType::UNIQUE: {
 					auto &bound_unique = bound_constraint.Cast<BoundUniqueConstraint>();
-					uk_info = {table.schema->name, table.name, bound_unique.keys};
+					uk_info = {table.schema.name, table.name, bound_unique.keys};
 					break;
 				}
 				case ConstraintType::FOREIGN_KEY: {
 					const auto &bound_foreign_key = bound_constraint.Cast<BoundForeignKeyConstraint>();
 					const auto &info = bound_foreign_key.info;
 					// find the other table
-					auto table_entry = Catalog::GetEntry<TableCatalogEntry>(context, table.catalog->GetName(),
-					                                                        info.schema, info.table, true);
+					auto table_entry = Catalog::GetEntry<TableCatalogEntry>(
+					    context, table.catalog.GetName(), info.schema, info.table, OnEntryNotFound::RETURN_NULL);
 					if (!table_entry) {
 						throw InternalException("dukdb_constraints: entry %s.%s referenced in foreign key not found",
 						                        info.schema, info.table);
@@ -215,7 +215,7 @@ void DuckDBConstraintsFunction(ClientContext &context, TableFunctionInput &data_
 					for (auto &key : info.pk_keys) {
 						index.push_back(table_entry->GetColumns().PhysicalToLogical(key));
 					}
-					uk_info = {table_entry->schema->name, table_entry->name, index};
+					uk_info = {table_entry->schema.name, table_entry->name, index};
 					break;
 				}
 				default:

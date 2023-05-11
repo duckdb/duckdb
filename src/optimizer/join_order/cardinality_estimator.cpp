@@ -15,8 +15,7 @@ namespace duckdb {
 static optional_ptr<TableCatalogEntry> GetCatalogTableEntry(LogicalOperator &op) {
 	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_GET);
 	auto &get = op.Cast<LogicalGet>();
-	TableCatalogEntry *entry = get.GetTable();
-	return entry;
+	return get.GetTable();
 }
 
 // The filter was made on top of a logical sample or other projection,
@@ -575,7 +574,7 @@ void CardinalityEstimator::EstimateBaseTableCardinality(JoinNode &node, LogicalO
 	D_ASSERT(node.set.count == 1);
 	auto relation_id = node.set.relations[0];
 
-	double lowest_card_found = NumericLimits<double>::Maximum();
+	double lowest_card_found = node.GetBaseTableCardinality();
 	for (auto &column : relation_attributes[relation_id].columns) {
 		auto card_after_filters = node.GetBaseTableCardinality();
 		ColumnBinding key = ColumnBinding(relation_id, column);

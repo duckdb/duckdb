@@ -15,7 +15,7 @@
 namespace duckdb {
 
 struct DropInfo : public ParseInfo {
-	DropInfo() : catalog(INVALID_CATALOG), schema(INVALID_SCHEMA), if_exists(false), cascade(false) {
+	DropInfo() : catalog(INVALID_CATALOG), schema(INVALID_SCHEMA), cascade(false) {
 	}
 
 	//! The catalog type to drop
@@ -27,7 +27,7 @@ struct DropInfo : public ParseInfo {
 	//! Element name to drop
 	string name;
 	//! Ignore if the entry does not exist instead of failing
-	bool if_exists = false;
+	OnEntryNotFound if_not_found = OnEntryNotFound::THROW_EXCEPTION;
 	//! Cascade drop (drop all dependents instead of throwing an error if there
 	//! are any)
 	bool cascade = false;
@@ -41,7 +41,7 @@ public:
 		result->catalog = catalog;
 		result->schema = schema;
 		result->name = name;
-		result->if_exists = if_exists;
+		result->if_not_found = if_not_found;
 		result->cascade = cascade;
 		result->allow_drop_internal = allow_drop_internal;
 		return result;
@@ -53,7 +53,7 @@ public:
 		writer.WriteString(catalog);
 		writer.WriteString(schema);
 		writer.WriteString(name);
-		writer.WriteField(if_exists);
+		writer.WriteField(if_not_found);
 		writer.WriteField(cascade);
 		writer.WriteField(allow_drop_internal);
 		writer.Finalize();
@@ -66,7 +66,7 @@ public:
 		drop_info->catalog = reader.ReadRequired<string>();
 		drop_info->schema = reader.ReadRequired<string>();
 		drop_info->name = reader.ReadRequired<string>();
-		drop_info->if_exists = reader.ReadRequired<bool>();
+		drop_info->if_not_found = reader.ReadRequired<OnEntryNotFound>();
 		drop_info->cascade = reader.ReadRequired<bool>();
 		drop_info->allow_drop_internal = reader.ReadRequired<bool>();
 		reader.Finalize();

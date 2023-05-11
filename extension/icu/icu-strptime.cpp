@@ -9,7 +9,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -222,9 +222,9 @@ struct ICUStrptime : public ICUDateFunc {
 	static void TailPatch(const string &name, ClientContext &context, const vector<LogicalType> &types) {
 		// Find the old function
 		auto &catalog = Catalog::GetSystemCatalog(context);
-		auto entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
-		D_ASSERT(entry && entry->type == CatalogType::SCALAR_FUNCTION_ENTRY);
-		auto &func = entry->Cast<ScalarFunctionCatalogEntry>();
+		auto &entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
+		D_ASSERT(entry.type == CatalogType::SCALAR_FUNCTION_ENTRY);
+		auto &func = entry.Cast<ScalarFunctionCatalogEntry>();
 		string error;
 
 		FunctionBinder function_binder(context);
@@ -417,7 +417,7 @@ struct ICUStrftime : public ICUDateFunc {
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 
 	static string_t CastOperation(icu::Calendar *calendar, timestamp_t input, Vector &result) {

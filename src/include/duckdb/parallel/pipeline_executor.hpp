@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parallel/thread_context.hpp"
@@ -20,16 +21,27 @@
 namespace duckdb {
 class Executor;
 
+//! The result of executing a PipelineExecutor
+enum class PipelineExecuteResult {
+	//! PipelineExecutor is fully executed: the source is completely exhausted
+	FINISHED,
+	//! PipelineExecutor is not yet fully executed and can be called again immediately
+	NOT_FINISHED,
+	//! The PipelineExecutor was interrupted and should not be called again until the interrupt is handled as specified
+	//! in the InterruptMode
+	INTERRUPTED
+};
+
 //! The Pipeline class represents an execution pipeline
 class PipelineExecutor {
 public:
 	PipelineExecutor(ClientContext &context, Pipeline &pipeline);
 
 	//! Fully execute a pipeline with a source and a sink until the source is completely exhausted
-	void Execute();
-	//! Execute a pipeline with a source and a sink until finished, or until max_chunks have been processed
+	PipelineExecuteResult Execute();
+	//! Execute a pipeline with a source and a sink until finished, or until max_chunks were processed from the source
 	//! Returns true if execution is finished, false if Execute should be called again
-	bool Execute(idx_t max_chunks);
+	PipelineExecuteResult Execute(idx_t max_chunks);
 
 	//! Push a single input DataChunk into the pipeline.
 	//! Returns either OperatorResultType::NEED_MORE_INPUT or OperatorResultType::FINISHED
@@ -48,6 +60,9 @@ public:
 	//! This flushes profiler states
 	void PullFinalize();
 
+	//! Registers the task in the interrupt_state to allow Source/Sink operators to block the task
+	void SetTaskForInterrupts(weak_ptr<Task> current_task);
+
 private:
 	//! The pipeline to process
 	Pipeline &pipeline;
@@ -65,6 +80,8 @@ private:
 	unique_ptr<LocalSourceState> local_source_state;
 	//! The local sink state (if any)
 	unique_ptr<LocalSinkState> local_sink_state;
+	//! The interrupt state, holding required information for sink/source operators to block
+	InterruptState interrupt_state;
 
 	//! The final chunk used for moving data into the sink
 	DataChunk final_chunk;
@@ -79,28 +96,55 @@ private:
 	//! Whether or not this pipeline requires keeping track of the batch index of the source
 	bool requires_batch_index = false;
 
+	//! Source has indicated it is exhausted
+	bool exhausted_source = false;
+	//! Flushing of intermediate operators has started
+	bool started_flushing = false;
+	//! Flushing of caching operators is done
+	bool done_flushing = false;
+
+	//! This flag is set when the pipeline gets interrupted by the Sink -> the final_chunk should be re-sink-ed.
+	bool remaining_sink_chunk = false;
+
+	//! Current operator being flushed
+	idx_t flushing_idx;
+	//! Whether the current flushing_idx should be flushed: this needs to be stored to make flushing code re-entrant
+	bool should_flush_current_idx = true;
+
 private:
 	void StartOperator(PhysicalOperator &op);
 	void EndOperator(PhysicalOperator &op, optional_ptr<DataChunk> chunk);
 
 	//! Reset the operator index to the first operator
 	void GoToSource(idx_t &current_idx, idx_t initial_idx);
-	void FetchFromSource(DataChunk &result);
+	SourceResultType FetchFromSource(DataChunk &result);
 
 	void FinishProcessing(int32_t operator_idx = -1);
 	bool IsFinished();
+
+	//! Wrappers for sink/source calls to respective operators
+	SourceResultType GetData(DataChunk &chunk, OperatorSourceInput &input);
+	SinkResultType Sink(DataChunk &chunk, OperatorSinkInput &input);
 
 	OperatorResultType ExecutePushInternal(DataChunk &input, idx_t initial_idx = 0);
 	//! Pushes a chunk through the pipeline and returns a single result chunk
 	//! Returns whether or not a new input chunk is needed, or whether or not we are finished
 	OperatorResultType Execute(DataChunk &input, DataChunk &result, idx_t initial_index = 0);
 
-	//! FlushCachedOperators methods push/pull any remaining cached results through the pipeline
-	void FlushCachingOperatorsPull(DataChunk &result);
-	void FlushCachingOperatorsPush();
+	//! Tries to flush all state from intermediate operators. Will return true if all state is flushed, false in the
+	//! case of a blocked sink.
+	bool TryFlushCachingOperators();
 
 	static bool CanCacheType(const LogicalType &type);
 	void CacheChunk(DataChunk &input, idx_t operator_idx);
+
+#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
+	//! Debugging state: number of times blocked
+	int debug_blocked_sink_count = 0;
+	int debug_blocked_source_count = 0;
+	//! Number of times the Sink/Source will block before actually returning data
+	int debug_blocked_target_count = 1;
+#endif
 };
 
 } // namespace duckdb

@@ -1,8 +1,8 @@
+#include "duckdb/common/multi_file_reader.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
 #include "json_structure.hpp"
 #include "json_transform.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
 
 namespace duckdb {
 
@@ -223,7 +223,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	transform_options.error_duplicate_key = !bind_data.ignore_errors;
 	transform_options.error_missing_key = false;
 	transform_options.error_unknown_key = bind_data.auto_detect && !bind_data.ignore_errors;
-	transform_options.from_file = true;
+	transform_options.delay_error = true;
 
 	return result;
 }
@@ -262,10 +262,12 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 
 	if (!success) {
-		string hint = gstate.bind_data.auto_detect
-		                  ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns' manually, "
-		                    "specifying 'lines' or 'json_format' manually, or setting 'ignore_errors' to true."
-		                  : "\n Try specifying 'lines' or 'json_format' manually, or setting 'ignore_errors' to true.";
+		string hint =
+		    gstate.bind_data.auto_detect
+		        ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns', 'lines' or "
+		          "'json_format' manually, or setting 'ignore_errors' to true."
+		        : "\nTry setting 'auto_detect' to true, specifying 'lines' or 'json_format' manually, or setting "
+		          "'ignore_errors' to true.";
 		lstate.ThrowTransformError(lstate.transform_options.object_index,
 		                           lstate.transform_options.error_message + hint);
 	}
@@ -293,33 +295,33 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> f
 	return table_function;
 }
 
-CreateTableFunctionInfo CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> info, bool auto_function = false) {
+TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> info, bool auto_function = false) {
 	auto table_function = JSONFunctions::GetReadJSONTableFunction(std::move(info));
 	table_function.name = std::move(name);
 	if (auto_function) {
 		table_function.named_parameters["maximum_depth"] = LogicalType::BIGINT;
 	}
-	return CreateTableFunctionInfo(MultiFileReader::CreateFunctionSet(table_function));
+	return MultiFileReader::CreateFunctionSet(table_function);
 }
 
-CreateTableFunctionInfo JSONFunctions::GetReadJSONFunction() {
+TableFunctionSet JSONFunctions::GetReadJSONFunction() {
 	auto info =
 	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::UNSTRUCTURED, JSONRecordType::RECORDS, false);
 	return CreateJSONFunctionInfo("read_json", std::move(info));
 }
 
-CreateTableFunctionInfo JSONFunctions::GetReadNDJSONFunction() {
+TableFunctionSet JSONFunctions::GetReadNDJSONFunction() {
 	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED,
 	                                      JSONRecordType::RECORDS, false);
 	return CreateJSONFunctionInfo("read_ndjson", std::move(info));
 }
 
-CreateTableFunctionInfo JSONFunctions::GetReadJSONAutoFunction() {
+TableFunctionSet JSONFunctions::GetReadJSONAutoFunction() {
 	auto info = make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::AUTO_DETECT, JSONRecordType::AUTO, true);
 	return CreateJSONFunctionInfo("read_json_auto", std::move(info), true);
 }
 
-CreateTableFunctionInfo JSONFunctions::GetReadNDJSONAutoFunction() {
+TableFunctionSet JSONFunctions::GetReadNDJSONAutoFunction() {
 	auto info =
 	    make_shared<JSONScanInfo>(JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, JSONRecordType::AUTO, true);
 	return CreateJSONFunctionInfo("read_ndjson_auto", std::move(info), true);

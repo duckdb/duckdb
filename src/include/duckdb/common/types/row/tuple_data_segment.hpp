@@ -109,7 +109,7 @@ public:
 	//! The allocator for this segment
 	shared_ptr<TupleDataAllocator> allocator;
 	//! The chunks of this segment
-	vector<TupleDataChunk> chunks;
+	unsafe_vector<TupleDataChunk> chunks;
 	//! The tuple count of this segment
 	idx_t count;
 

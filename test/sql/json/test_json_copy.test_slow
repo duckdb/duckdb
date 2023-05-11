@@ -88,6 +88,23 @@ select * from '__TEST_DIR__/out.json'
 ----
 42	43
 
+statement ok
+create table conclusions (conclusion varchar)
+
+# this doesn't work because we assume NDJSON records
+statement error
+copy conclusions from 'data/json/top_level_array.json'
+
+# but works if we tell it to auto-detect
+statement ok
+copy conclusions from 'data/json/top_level_array.json' (AUTO_DETECT TRUE)
+
+query I
+select * from conclusions
+----
+cancelled
+cancelled
+
 require tpch
 
 statement ok

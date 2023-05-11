@@ -98,9 +98,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 					throw NotImplementedException("Only SELECT statements can be serialized to json!");
 				}
 				auto &select = statement->Cast<SelectStatement>();
-				auto serializer = JsonSerializer(doc, info.skip_if_null, info.skip_if_empty);
-				select.FormatSerialize(serializer);
-				auto json = serializer.GetRootObject();
+				auto json = JsonSerializer::Serialize(select, doc, info.skip_if_null, info.skip_if_empty);
 
 				yyjson_mut_arr_append(statements_arr, json);
 			}
@@ -132,7 +130,7 @@ static void JsonSerializeFunction(DataChunk &args, ExpressionState &state, Vecto
 	});
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetSerializeSqlFunction() {
+ScalarFunctionSet JSONFunctions::GetSerializeSqlFunction() {
 	ScalarFunctionSet set("json_serialize_sql");
 	set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, JSONCommon::JSONType(), JsonSerializeFunction,
 	                               JsonSerializeBind, nullptr, nullptr, JSONFunctionLocalState::Init));
@@ -150,7 +148,7 @@ CreateScalarFunctionInfo JSONFunctions::GetSerializeSqlFunction() {
 	                   JSONCommon::JSONType(), JsonSerializeFunction, JsonSerializeBind, nullptr, nullptr,
 	                   JSONFunctionLocalState::Init));
 
-	return CreateScalarFunctionInfo(set);
+	return set;
 }
 
 //----------------------------------------------------------------------
@@ -204,11 +202,11 @@ static void JsonDeserializeFunction(DataChunk &args, ExpressionState &state, Vec
 	});
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetDeserializeSqlFunction() {
+ScalarFunctionSet JSONFunctions::GetDeserializeSqlFunction() {
 	ScalarFunctionSet set("json_deserialize_sql");
 	set.AddFunction(ScalarFunction({JSONCommon::JSONType()}, LogicalType::VARCHAR, JsonDeserializeFunction, nullptr,
 	                               nullptr, nullptr, JSONFunctionLocalState::Init));
-	return CreateScalarFunctionInfo(set);
+	return set;
 }
 
 //----------------------------------------------------------------------
@@ -223,8 +221,8 @@ static string ExecuteJsonSerializedSqlPragmaFunction(ClientContext &context, con
 	return stmt->ToString();
 }
 
-CreatePragmaFunctionInfo JSONFunctions::GetExecuteJsonSerializedSqlPragmaFunction() {
-	return CreatePragmaFunctionInfo(PragmaFunction::PragmaCall(
+PragmaFunctionSet JSONFunctions::GetExecuteJsonSerializedSqlPragmaFunction() {
+	return PragmaFunctionSet(PragmaFunction::PragmaCall(
 	    "json_execute_serialized_sql", ExecuteJsonSerializedSqlPragmaFunction, {LogicalType::VARCHAR}));
 }
 
@@ -270,10 +268,10 @@ struct ExecuteSqlTableFunction {
 	}
 };
 
-CreateTableFunctionInfo JSONFunctions::GetExecuteJsonSerializedSqlFunction() {
+TableFunctionSet JSONFunctions::GetExecuteJsonSerializedSqlFunction() {
 	TableFunction func("json_execute_serialized_sql", {LogicalType::VARCHAR}, ExecuteSqlTableFunction::Function,
 	                   ExecuteSqlTableFunction::Bind);
-	return CreateTableFunctionInfo(func);
+	return TableFunctionSet(func);
 }
 
 } // namespace duckdb
