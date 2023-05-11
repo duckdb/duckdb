@@ -9,13 +9,13 @@ void LogicalSimple::Serialize(FieldWriter &writer) const {
 	writer.WriteField<LogicalOperatorType>(type);
 	switch (type) {
 	case LogicalOperatorType::LOGICAL_ALTER:
-		static_cast<const AlterInfo &>(*info).Serialize(writer.GetSerializer());
+		info->Cast<AlterInfo>().Serialize(writer.GetSerializer());
 		break;
 	case LogicalOperatorType::LOGICAL_DROP:
-		static_cast<const DropInfo &>(*info).Serialize(writer.GetSerializer());
+		info->Cast<DropInfo>().Serialize(writer.GetSerializer());
 		break;
 	case LogicalOperatorType::LOGICAL_LOAD:
-		static_cast<const LoadInfo &>(*info).Serialize(writer.GetSerializer());
+		info->Cast<LoadInfo>().Serialize(writer.GetSerializer());
 		break;
 	default:
 		throw NotImplementedException(LogicalOperatorToString(type));
