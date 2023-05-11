@@ -745,7 +745,9 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 	unique_ptr<BufferedCSVReader> GetCSVReader(ClientContext &context, ReadCSVData &bind_data, idx_t &file_index,
 	                                           idx_t &total_size) {
 		auto reader = GetCSVReaderInternal(context, bind_data, file_index, total_size);
-		reader->file_handle->DisableReset();
+		if (reader) {
+			reader->file_handle->DisableReset();
+		}
 		return reader;
 	}
 
