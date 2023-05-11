@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/file_buffer.hpp"
 
 namespace duckdb {
 class BlockHandle;
@@ -32,12 +33,12 @@ public:
 	//! Returns a pointer to the buffer data. Handle must be valid.
 	inline data_ptr_t Ptr() const {
 		D_ASSERT(IsValid());
-		return buffer_ptr;
+		return node->buffer;
 	}
 	//! Returns a pointer to the buffer data. Handle must be valid.
 	inline data_ptr_t Ptr() {
 		D_ASSERT(IsValid());
-		return buffer_ptr;
+		return node->buffer;
 	}
 	//! Gets the underlying file buffer. Handle must be valid.
 	DUCKDB_API FileBuffer &GetFileBuffer();
@@ -53,8 +54,6 @@ private:
 	shared_ptr<BlockHandle> handle;
 	//! The managed buffer node
 	FileBuffer *node;
-	//! Pointer to the buffer data
-	data_ptr_t buffer_ptr;
 };
 
 } // namespace duckdb
