@@ -55,7 +55,7 @@ void PreparedStatementVerifier::ConvertConstants(unique_ptr<ParsedExpression> &c
 		idx_t index = values.size();
 		auto identifier = std::to_string(index + 1);
 		auto result = std::find_if(values.begin(), values.end(),
-		                           [&](const std::pair<const string &, unique_ptr<ParsedExpression> &> &pair) {
+		                           [&](const std::pair<const string, unique_ptr<ParsedExpression>> &pair) {
 			                           return pair.second->Equals(child.get());
 		                           });
 		if (result == values.end()) {
