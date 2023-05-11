@@ -215,6 +215,7 @@ unique_ptr<TableRef> duckdb::ArrowScanReplacement(ClientContext &context, const 
 			children.push_back(
 			    make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::GetSchema)));
 			table_function->function = make_uniq<FunctionExpression>("arrow_scan", std::move(children));
+			table_function->alias = table_name;
 			return std::move(table_function);
 		}
 	}
