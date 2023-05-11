@@ -145,7 +145,6 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_PREPARE:
 	case LogicalOperatorType::LOGICAL_EXECUTE:
-	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
 	case LogicalOperatorType::LOGICAL_PRAGMA:
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
