@@ -138,7 +138,7 @@ string FileSystem::GetWorkingDirectory() {
 	if (count == 0) {
 		throw IOException("Could not get working directory!");
 	}
-	auto buffer make_unsafe_array<char>(count);
+	auto buffer = make_unsafe_array<char>(count);
 	idx_t ret = GetCurrentDirectory(count, buffer.get());
 	if (count != ret + 1) {
 		throw IOException("Could not get working directory!");
