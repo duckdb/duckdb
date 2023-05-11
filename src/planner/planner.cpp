@@ -80,7 +80,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 	// set up a map of parameter number -> value entries
 	for (auto &kv : bound_parameters.parameters) {
-		auto parameter_index = kv.first;
+		auto &identifier = kv.first;
 		auto &parameter_data = kv.second;
 		// check if the type of the parameter could be resolved
 		if (!parameter_data->return_type.IsValid()) {
@@ -88,7 +88,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 			continue;
 		}
 		parameter_data->value = Value(parameter_data->return_type);
-		value_map[parameter_index] = parameter_data;
+		value_map[identifier] = parameter_data;
 	}
 }
 

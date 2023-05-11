@@ -34,14 +34,4 @@ using case_insensitive_map_t =
 
 using case_insensitive_set_t = unordered_set<string, CaseInsensitiveStringHashFunction, CaseInsensitiveStringEquality>;
 
-template <class T>
-inline case_insensitive_map_t<reference<T>> make_reference(case_insensitive_map_t<T> &map) {
-	case_insensitive_map_t<reference<T>> result;
-	for (auto &pair : map) {
-		auto &item = pair.second;
-		result.emplace(std::make_pair(pair.first, reference<T>(item)));
-	}
-	return result;
-}
-
 } // namespace duckdb

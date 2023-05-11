@@ -55,6 +55,7 @@ unique_ptr<ParsedExpression> Transformer::TransformParamRef(duckdb_libpgquery::P
 		}
 	}
 
+	expr->identifier = param.identifier;
 	idx_t new_param_count = MaxValue<idx_t>(ParamCount(), known_param_index);
 	SetParamCount(new_param_count);
 	return std::move(expr);

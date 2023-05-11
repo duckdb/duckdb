@@ -127,16 +127,6 @@ static duckdb::unique_ptr<T> make_unique(_Args&&... __args) {
 	return unique_ptr<T>(new T(std::forward<_Args>(__args)...));
 }
 
-template <class T>
-inline vector<reference<T>> make_reference(vector<T> &vec) {
-	vector<reference<T>> result;
-	result.reserve(vec.size());
-	for (auto& item : vec) {
-		result.push_back(item);
-	}
-	return result;
-}
-
 template <typename T>
 T MaxValue(T a, T b) {
 	return a > b ? a : b;

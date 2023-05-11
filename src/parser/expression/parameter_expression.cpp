@@ -11,7 +11,7 @@
 namespace duckdb {
 
 ParameterExpression::ParameterExpression()
-    : ParsedExpression(ExpressionType::VALUE_PARAMETER, ExpressionClass::PARAMETER), identifier("0") {
+    : ParsedExpression(ExpressionType::VALUE_PARAMETER, ExpressionClass::PARAMETER) {
 }
 
 string ParameterExpression::ToString() const {
