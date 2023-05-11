@@ -1,8 +1,10 @@
 #include "json_transform.hpp"
 
-#include "duckdb/common/types.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
@@ -23,7 +25,7 @@ void JSONTransformOptions::Serialize(FieldWriter &writer) {
 	writer.WriteField(error_duplicate_key);
 	writer.WriteField(error_missing_key);
 	writer.WriteField(error_unknown_key);
-	writer.WriteField(from_file);
+	writer.WriteField(delay_error);
 }
 
 void JSONTransformOptions::Deserialize(FieldReader &reader) {
@@ -31,7 +33,7 @@ void JSONTransformOptions::Deserialize(FieldReader &reader) {
 	error_duplicate_key = reader.ReadRequired<bool>();
 	error_missing_key = reader.ReadRequired<bool>();
 	error_unknown_key = reader.ReadRequired<bool>();
-	from_file = reader.ReadRequired<bool>();
+	delay_error = reader.ReadRequired<bool>();
 }
 
 //! Forward declaration for recursion
@@ -78,8 +80,8 @@ static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context
 	}
 }
 
-static duckdb::unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, ScalarFunction &bound_function,
-                                                          vector<duckdb::unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, ScalarFunction &bound_function,
+                                                  vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
@@ -217,19 +219,20 @@ static bool TransformNumerical(yyjson_val *vals[], Vector &result, const idx_t c
 	auto data = (T *)FlatVector::GetData(result);
 	auto &validity = FlatVector::Validity(result);
 
+	bool success = true;
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
 		if (!val || unsafe_yyjson_is_null(val)) {
 			validity.SetInvalid(i);
 		} else if (!GetValueNumerical<T>(val, data[i], options)) {
 			validity.SetInvalid(i);
-			if (options.strict_cast) {
+			if (success && options.strict_cast) {
 				options.object_index = i;
-				return false;
+				success = false;
 			}
 		}
 	}
-	return true;
+	return success;
 }
 
 template <class T>
@@ -238,19 +241,20 @@ static bool TransformDecimal(yyjson_val *vals[], Vector &result, const idx_t cou
 	auto data = (T *)FlatVector::GetData(result);
 	auto &validity = FlatVector::Validity(result);
 
+	bool success = true;
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
 		if (!val || unsafe_yyjson_is_null(val)) {
 			validity.SetInvalid(i);
 		} else if (!GetValueDecimal<T>(val, data[i], width, scale, options)) {
 			validity.SetInvalid(i);
-			if (options.strict_cast) {
+			if (success && options.strict_cast) {
 				options.object_index = i;
-				return false;
+				success = false;
 			}
 		}
 	}
-	return true;
+	return success;
 }
 
 bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const LogicalType &target,
@@ -262,35 +266,46 @@ bool JSONTransform::GetStringVector(yyjson_val *vals[], const idx_t count, const
 	auto &validity = FlatVector::Validity(string_vector);
 	validity.SetAllValid(count);
 
+	bool success = true;
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
 		if (!val || unsafe_yyjson_is_null(val)) {
 			validity.SetInvalid(i);
-		} else if (options.strict_cast && !unsafe_yyjson_is_str(val)) {
-			options.error_message = StringUtil::Format("Unable to cast '%s' to " + EnumUtil::ToString(target.id()),
-			                                           JSONCommon::ValToString(val, 50));
-			options.object_index = i;
-			return false;
-		} else {
-			data[i] = GetString(val);
+			continue;
 		}
+
+		if (!unsafe_yyjson_is_str(val)) {
+			validity.SetInvalid(i);
+			if (success && options.strict_cast && !unsafe_yyjson_is_str(val)) {
+				options.error_message = StringUtil::Format("Unable to cast '%s' to " + EnumUtil::ToString(target.id()),
+				                                           JSONCommon::ValToString(val, 50));
+				options.object_index = i;
+				success = false;
+			}
+			continue;
+		}
+
+		data[i] = GetString(val);
 	}
-	return true;
+	return success;
 }
 
 static bool TransformFromString(yyjson_val *vals[], Vector &result, const idx_t count, JSONTransformOptions &options) {
 	Vector string_vector(LogicalTypeId::VARCHAR, count);
+
+	bool success = true;
 	if (!JSONTransform::GetStringVector(vals, count, result.GetType(), string_vector, options)) {
-		return false;
+		success = false;
 	}
 
 	if (!VectorOperations::DefaultTryCast(string_vector, result, count, &options.error_message) &&
 	    options.strict_cast) {
 		options.object_index = 0; // Can't get line number information here
-		options.error_message += " (line/object number information is approximate)";
-		return false;
+		options.error_message +=
+		    "\n If this error occurred during read_json, line/object number information is approximate";
+		success = false;
 	}
-	return true;
+	return success;
 }
 
 template <class OP, class T>
@@ -302,13 +317,14 @@ static bool TransformStringWithFormat(Vector &string_vector, StrpTimeFormat &for
 	auto target_vals = FlatVector::GetData<T>(result);
 	auto &target_validity = FlatVector::Validity(result);
 
+	bool success = true;
 	if (source_validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			if (!OP::template Operation<T>(format, source_strings[i], target_vals[i], options.error_message)) {
 				target_validity.SetInvalid(i);
-				if (options.strict_cast) {
+				if (success && options.strict_cast) {
 					options.object_index = i;
-					return false;
+					success = false;
 				}
 			}
 		}
@@ -318,21 +334,22 @@ static bool TransformStringWithFormat(Vector &string_vector, StrpTimeFormat &for
 				target_validity.SetInvalid(i);
 			} else if (!OP::template Operation<T>(format, source_strings[i], target_vals[i], options.error_message)) {
 				target_validity.SetInvalid(i);
-				if (options.strict_cast) {
+				if (success && options.strict_cast) {
 					options.object_index = i;
-					return false;
+					success = false;
 				}
 			}
 		}
 	}
-	return true;
+	return success;
 }
 
 static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, const idx_t count,
                                           JSONTransformOptions &options) {
 	Vector string_vector(LogicalTypeId::VARCHAR, count);
+	bool success = true;
 	if (!JSONTransform::GetStringVector(vals, count, result.GetType(), string_vector, options)) {
-		return false;
+		success = false;
 	}
 
 	const auto &result_type = result.GetType().id();
@@ -340,12 +357,19 @@ static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, co
 
 	switch (result_type) {
 	case LogicalTypeId::DATE:
-		return TransformStringWithFormat<TryParseDate, date_t>(string_vector, format, count, result, options);
+		if (!TransformStringWithFormat<TryParseDate, date_t>(string_vector, format, count, result, options)) {
+			success = false;
+		}
+		break;
 	case LogicalTypeId::TIMESTAMP:
-		return TransformStringWithFormat<TryParseTimeStamp, timestamp_t>(string_vector, format, count, result, options);
+		if (!TransformStringWithFormat<TryParseTimeStamp, timestamp_t>(string_vector, format, count, result, options)) {
+			success = false;
+		}
+		break;
 	default:
 		throw InternalException("No date/timestamp formats for %s", EnumUtil::ToString(result.GetType().id()));
 	}
+	return success;
 }
 
 static bool TransformToString(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count) {
@@ -387,89 +411,103 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 	size_t idx, max;
 	yyjson_val *key, *val;
 	for (idx_t i = 0; i < count; i++) {
-		if (objects[i] && !unsafe_yyjson_is_null(objects[i])) {
-			if (!unsafe_yyjson_is_obj(objects[i]) && options.strict_cast) {
+		const auto &obj = objects[i];
+		if (!obj || unsafe_yyjson_is_null(obj)) {
+			// Set nested val to null so the recursion doesn't break
+			for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+				nested_vals[col_idx][i] = nullptr;
+			}
+			continue;
+		}
+
+		if (!unsafe_yyjson_is_obj(obj)) {
+			// Set nested val to null so the recursion doesn't break
+			for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+				nested_vals[col_idx][i] = nullptr;
+			}
+			if (success && options.strict_cast && obj) {
 				options.error_message =
-				    StringUtil::Format("Expected OBJECT, but got %s: %s", JSONCommon::ValTypeToString(objects[i]),
-				                       JSONCommon::ValToString(objects[i], 50));
+				    StringUtil::Format("Expected OBJECT, but got %s: %s", JSONCommon::ValTypeToString(obj),
+				                       JSONCommon::ValToString(obj, 50));
 				options.object_index = i;
 				success = false;
-				break;
 			}
-			found_key_count = 0;
-			memset(found_keys, false, column_count);
-			yyjson_obj_foreach(objects[i], idx, max, key, val) {
-				auto key_ptr = unsafe_yyjson_get_str(key);
-				auto key_len = unsafe_yyjson_get_len(key);
-				auto it = key_map.find({key_ptr, key_len});
-				if (it != key_map.end()) {
-					const auto &col_idx = it->second;
-					if (options.error_duplicate_key && found_keys[col_idx]) {
+			continue;
+		}
+
+		found_key_count = 0;
+		memset(found_keys, false, column_count);
+		yyjson_obj_foreach(objects[i], idx, max, key, val) {
+			auto key_ptr = unsafe_yyjson_get_str(key);
+			auto key_len = unsafe_yyjson_get_len(key);
+			auto it = key_map.find({key_ptr, key_len});
+			if (it != key_map.end()) {
+				const auto &col_idx = it->second;
+				if (found_keys[col_idx]) {
+					if (success && options.error_duplicate_key) {
 						options.error_message =
 						    StringUtil::Format("Duplicate key \"" + string(key_ptr, key_len) + "\" in object %s",
 						                       JSONCommon::ValToString(objects[i], 50));
 						options.object_index = i;
 						success = false;
-						break;
 					}
+				} else {
 					nested_vals[col_idx][i] = val;
 					found_keys[col_idx] = true;
 					found_key_count++;
-				} else if (options.error_unknown_key) {
-					options.error_message =
-					    StringUtil::Format("Object %s has unknown key \"" + string(key_ptr, key_len) + "\"",
-					                       JSONCommon::ValToString(objects[i], 50));
+				}
+			} else if (success && options.error_unknown_key) {
+				options.error_message =
+				    StringUtil::Format("Object %s has unknown key \"" + string(key_ptr, key_len) + "\"",
+				                       JSONCommon::ValToString(objects[i], 50));
+				options.object_index = i;
+				success = false;
+			}
+		}
+
+		if (found_key_count != column_count) {
+			// If 'error_missing_key, we throw an error if one of the keys was not found.
+			// If not, we set the nested val to null so the recursion doesn't break
+			for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+				if (found_keys[col_idx]) {
+					continue;
+				}
+				nested_vals[col_idx][i] = nullptr;
+
+				if (success && options.error_missing_key) {
+					options.error_message = StringUtil::Format("Object %s does not have key \"" + names[col_idx] + "\"",
+					                                           JSONCommon::ValToString(objects[i], 50));
 					options.object_index = i;
 					success = false;
 				}
 			}
-			if (found_key_count != column_count) {
-				// If 'error_missing_key, we throw an error if one of the keys was not found.
-				// If not, we set the nested val to null so the recursion doesn't break
-				for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-					if (!found_keys[col_idx]) {
-						if (options.error_missing_key) {
-							options.error_message =
-							    StringUtil::Format("Object %s does not have key \"" + names[col_idx] + "\"",
-							                       JSONCommon::ValToString(objects[i], 50));
-							options.object_index = i;
-							success = false;
-						} else {
-							nested_vals[col_idx][i] = nullptr;
-						}
-					}
-				}
-			}
-		} else {
-			// Set nested val to null so the recursion doesn't break
-			for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-				nested_vals[col_idx][i] = nullptr;
-			}
 		}
-	}
-
-	if (!success) {
-		if (!options.from_file) {
-			throw InvalidInputException(options.error_message);
-		}
-		return false;
 	}
 
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-		if (JSONTransform::Transform(nested_vals[col_idx], alc, *result_vectors[col_idx], count, options)) {
-			continue;
+		if (!JSONTransform::Transform(nested_vals[col_idx], alc, *result_vectors[col_idx], count, options)) {
+			success = false;
 		}
-		if (!options.from_file) {
-			throw InvalidInputException(options.error_message);
-		}
-		return false;
+	}
+
+	if (!options.delay_error && !success) {
+		throw InvalidInputException(options.error_message);
 	}
 
 	return success;
 }
 
 static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vector &result, const idx_t count,
-                                    const LogicalType &type, JSONTransformOptions &options) {
+                                    JSONTransformOptions &options) {
+	// Set validity first
+	auto &result_validity = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; i++) {
+		const auto &obj = objects[i];
+		if (!obj || unsafe_yyjson_is_null(obj)) {
+			result_validity.SetInvalid(i);
+		}
+	}
+
 	// Get child vectors and names
 	auto &child_vs = StructVector::GetEntries(result);
 	vector<string> child_names;
@@ -477,7 +515,7 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 	child_names.reserve(child_vs.size());
 	child_vectors.reserve(child_vs.size());
 	for (idx_t child_i = 0; child_i < child_vs.size(); child_i++) {
-		child_names.push_back(StructType::GetChildName(type, child_i));
+		child_names.push_back(StructType::GetChildName(result.GetType(), child_i));
 		child_vectors.push_back(child_vs[child_i].get());
 	}
 
@@ -486,29 +524,35 @@ static bool TransformObjectInternal(yyjson_val *objects[], yyjson_alc *alc, Vect
 
 static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result, const idx_t count,
                            JSONTransformOptions &options) {
+	bool success = true;
+
 	// Initialize list vector
 	auto list_entries = FlatVector::GetData<list_entry_t>(result);
 	auto &list_validity = FlatVector::Validity(result);
 	idx_t offset = 0;
 	for (idx_t i = 0; i < count; i++) {
-		if (!arrays[i] || unsafe_yyjson_is_null(arrays[i])) {
+		const auto &arr = arrays[i];
+		if (!arr || unsafe_yyjson_is_null(arr)) {
 			list_validity.SetInvalid(i);
-		} else if (!unsafe_yyjson_is_arr(arrays[i])) {
-			if (options.strict_cast) {
+			continue;
+		}
+
+		if (!unsafe_yyjson_is_arr(arr)) {
+			list_validity.SetInvalid(i);
+			if (success && options.strict_cast) {
 				options.error_message =
 				    StringUtil::Format("Expected ARRAY, but got %s: %s", JSONCommon::ValTypeToString(arrays[i]),
 				                       JSONCommon::ValToString(arrays[i], 50));
 				options.object_index = i;
-				return false;
-			} else {
-				list_validity.SetInvalid(i);
+				success = false;
 			}
-		} else {
-			auto &entry = list_entries[i];
-			entry.offset = offset;
-			entry.length = unsafe_yyjson_get_len(arrays[i]);
-			offset += entry.length;
+			continue;
 		}
+
+		auto &entry = list_entries[i];
+		entry.offset = offset;
+		entry.length = unsafe_yyjson_get_len(arr);
+		offset += entry.length;
 	}
 	ListVector::SetListSize(result, offset);
 	ListVector::Reserve(result, offset);
@@ -522,8 +566,7 @@ static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 	idx_t list_i = 0;
 	for (idx_t i = 0; i < count; i++) {
 		if (!list_validity.RowIsValid(i)) {
-			// We already marked this as invalid
-			continue;
+			continue; // We already marked this as invalid
 		}
 		yyjson_arr_foreach(arrays[i], idx, max, val) {
 			nested_vals[list_i] = val;
@@ -532,9 +575,7 @@ static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 	}
 	D_ASSERT(list_i == offset);
 
-	// Transform array values
-	auto success = JSONTransform::Transform(nested_vals, alc, ListVector::GetEntry(result), offset, options);
-	if (!success && options.from_file) {
+	if (!success) {
 		// Set object index in case of error in nested list so we can get accurate line number information
 		for (idx_t i = 0; i < count; i++) {
 			if (!list_validity.RowIsValid(i)) {
@@ -546,6 +587,89 @@ static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 			}
 		}
 	}
+
+	// Transform array values
+	if (!JSONTransform::Transform(nested_vals, alc, ListVector::GetEntry(result), offset, options)) {
+		success = false;
+	}
+
+	if (!options.delay_error && !success) {
+		throw InvalidInputException(options.error_message);
+	}
+
+	return success;
+}
+
+static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector &result, const idx_t count,
+                                 JSONTransformOptions &options) {
+	// Pre-allocate list vector
+	idx_t list_size = 0;
+	for (idx_t i = 0; i < count; i++) {
+		const auto &obj = objects[i];
+		if (!obj || !unsafe_yyjson_is_obj(obj)) {
+			continue;
+		}
+		list_size += unsafe_yyjson_get_len(obj);
+	}
+	ListVector::Reserve(result, list_size);
+	ListVector::SetListSize(result, list_size);
+
+	auto list_entries = FlatVector::GetData<list_entry_t>(result);
+	auto list_validity = FlatVector::Validity(result);
+
+	auto keys = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * list_size);
+	auto vals = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * list_size);
+
+	bool success = true;
+	idx_t list_offset = 0;
+
+	size_t idx, max;
+	yyjson_val *key, *val;
+	for (idx_t i = 0; i < count; i++) {
+		const auto &obj = objects[i];
+		if (!obj || unsafe_yyjson_is_null(obj)) {
+			list_validity.SetInvalid(i);
+			continue;
+		}
+
+		if (!unsafe_yyjson_is_obj(obj)) {
+			list_validity.SetInvalid(i);
+			if (success && options.strict_cast && !unsafe_yyjson_is_obj(obj)) {
+				options.error_message =
+				    StringUtil::Format("Expected OBJECT, but got %s: %s", JSONCommon::ValTypeToString(obj),
+				                       JSONCommon::ValToString(obj, 50));
+				options.object_index = i;
+				success = false;
+			}
+			continue;
+		}
+
+		auto &list_entry = list_entries[i];
+		list_entry.offset = list_offset;
+		list_entry.length = unsafe_yyjson_get_len(obj);
+
+		yyjson_obj_foreach(obj, idx, max, key, val) {
+			keys[list_offset] = key;
+			vals[list_offset] = val;
+			list_offset++;
+		}
+	}
+
+	// Transform keys
+	if (!JSONTransform::Transform(keys, alc, MapVector::GetKeys(result), list_size, options)) {
+		throw ConversionException(
+		    StringUtil::Format(options.error_message, ". Cannot default to NULL, because map keys cannot be NULL"));
+	}
+
+	// Transform values
+	if (!JSONTransform::Transform(vals, alc, MapVector::GetValues(result), list_size, options)) {
+		success = false;
+	}
+
+	if (!options.delay_error && !success) {
+		throw InvalidInputException(options.error_message);
+	}
+
 	return success;
 }
 
@@ -636,27 +760,25 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 	case LogicalTypeId::BLOB:
 		return TransformToString(vals, alc, result, count);
 	case LogicalTypeId::STRUCT:
-		return TransformObjectInternal(vals, alc, result, count, result_type, options);
+		return TransformObjectInternal(vals, alc, result, count, options);
 	case LogicalTypeId::LIST:
 		return TransformArray(vals, alc, result, count, options);
+	case LogicalTypeId::MAP:
+		return TransformObjectToMap(vals, alc, result, count, options);
 	default:
 		throw InternalException("Unexpected type at JSON Transform %s", result_type.ToString());
 	}
 }
 
-template <bool strict>
-static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = lstate.json_allocator.GetYYJSONAllocator();
-
-	const auto count = args.size();
-	auto &input = args.data[0];
+static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &result, yyjson_alc *alc,
+                                      JSONTransformOptions &options) {
 	UnifiedVectorFormat input_data;
 	input.ToUnifiedFormat(count, input_data);
 	auto inputs = (string_t *)input_data.data;
+
 	// Read documents
-	yyjson_doc *docs[STANDARD_VECTOR_SIZE];
-	yyjson_val *vals[STANDARD_VECTOR_SIZE];
+	auto docs = (yyjson_doc **)alc->malloc(alc->ctx, sizeof(yyjson_doc *) * count);
+	auto vals = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * count);
 	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
@@ -670,14 +792,22 @@ static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &r
 		}
 	}
 
-	JSONTransformOptions options(strict, strict, strict, false);
-
-	if (!JSONTransform::Transform(vals, alc, result, count, options)) {
-		throw InvalidInputException(options.error_message);
+	auto success = JSONTransform::Transform(vals, alc, result, count, options);
+	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 
-	if (args.AllConstant()) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	return success;
+}
+
+template <bool strict>
+static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
+	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+
+	JSONTransformOptions options(strict, strict, strict, false);
+	if (!TransformFunctionInternal(args.data[0], args.size(), result, alc, options)) {
+		throw InvalidInputException(options.error_message);
 	}
 }
 
@@ -703,6 +833,42 @@ ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 	GetTransformStrictFunctionInternal(set, LogicalType::VARCHAR);
 	GetTransformStrictFunctionInternal(set, JSONCommon::JSONType());
 	return set;
+}
+
+static bool JSONToAnyCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
+	lstate.json_allocator.Reset();
+	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+
+	JSONTransformOptions options(true, true, true, true);
+	options.delay_error = true;
+
+	auto success = TransformFunctionInternal(source, count, result, alc, options);
+	if (!success) {
+		HandleCastError::AssignError(options.error_message, parameters.error_message);
+	}
+	return success;
+}
+
+BoundCastInfo JSONToAnyCastBind(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+	return BoundCastInfo(JSONToAnyCast, nullptr, JSONFunctionLocalState::InitCastLocalState);
+}
+
+void JSONFunctions::RegisterJSONTransformCastFunctions(CastFunctionSet &casts) {
+	auto json_to_any_cost = casts.ImplicitCastCost(JSONCommon::JSONType(), LogicalType::ANY);
+	casts.RegisterCastFunction(JSONCommon::JSONType(), LogicalType::ANY, JSONToAnyCastBind, json_to_any_cost);
+
+	const auto struct_type = LogicalType::STRUCT({{"any", LogicalType::ANY}});
+	auto json_to_struct_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, struct_type) - 2;
+	casts.RegisterCastFunction(JSONCommon::JSONType(), struct_type, JSONToAnyCastBind, json_to_struct_cost);
+
+	const auto list_type = LogicalType::LIST(LogicalType::ANY);
+	auto json_to_list_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, list_type) - 2;
+	casts.RegisterCastFunction(JSONCommon::JSONType(), list_type, JSONToAnyCastBind, json_to_list_cost);
+
+	const auto map_type = LogicalType::MAP(LogicalType::ANY, LogicalType::ANY);
+	auto json_to_map_cost = casts.ImplicitCastCost(LogicalType::VARCHAR, map_type) - 2;
+	casts.RegisterCastFunction(JSONCommon::JSONType(), map_type, JSONToAnyCastBind, json_to_map_cost);
 }
 
 } // namespace duckdb

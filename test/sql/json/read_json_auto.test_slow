@@ -145,7 +145,7 @@ select * from read_json_auto('data/json/different_schemas.ndjson', sample_size=-
 statement error
 select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_size=1)
 ----
-Invalid Input Error: JSON transform error in file "data/json/inconsistent_schemas.ndjson", in line 3
+Invalid Input Error: JSON transform error in file "data/json/inconsistent_schemas.ndjson", in line 2
 
 # if we increase the sample size to 2, we can read it just fine
 query II

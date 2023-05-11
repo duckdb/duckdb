@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {

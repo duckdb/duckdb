@@ -32,8 +32,8 @@ public:
 	//! Throws an error if an object has a key we didn't know about
 	bool error_unknown_key = false;
 
-	//! JSON reader for adding line number information to transform errors (can be NULL)
-	bool from_file = false;
+	//! Whether to delay the error when transforming (e.g., when non-strict casting or reading from file)
+	bool delay_error = false;
 	//! Date format used for parsing (can be NULL)
 	DateFormatMap *date_format_map = nullptr;
 	//! String to store errors in

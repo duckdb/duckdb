@@ -621,7 +621,7 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 		auto &dependency_manager = catalog.GetDependencyManager();
 		dependency_manager.EraseObject(to_be_removed_node);
 	}
-	if (entry.name != to_be_removed_node.name) {
+	if (!StringUtil::CIEquals(entry.name, to_be_removed_node.name)) {
 		// rename: clean up the new name when the rename is rolled back
 		auto removed_entry = mapping.find(to_be_removed_node.name);
 		if (removed_entry->second->child) {
