@@ -106,18 +106,10 @@ void WindowConstantAggregate::Sink(DataChunk &payload_chunk, SelectionVector *fi
 		auto end = partition_end - chunk_begin;
 
 		inputs.Reset();
-		if (begin) {
-			for (idx_t c = 0; c < payload_chunk.ColumnCount(); ++c) {
-				inputs.data[c].Slice(payload_chunk.data[c], begin, end);
-			}
-		} else {
-			inputs.Reference(payload_chunk);
-		}
-		inputs.SetCardinality(end - begin);
-
-		// Slice to any filtered rows
-		SelectionVector sel;
 		if (filter_sel) {
+			// 	Slice to any filtered rows in [begin, end)
+			SelectionVector sel;
+
 			//	Find the first value in [begin, end)
 			for (; filter_idx < filtered; ++filter_idx) {
 				auto idx = filter_sel->get_index(filter_idx);
@@ -125,7 +117,9 @@ void WindowConstantAggregate::Sink(DataChunk &payload_chunk, SelectionVector *fi
 					break;
 				}
 			}
-			sel.Initialize(filter_sel->data());
+
+			//	Find the first value in [end, filtered)
+			sel.Initialize(filter_sel->data() + filter_idx);
 			idx_t nsel = 0;
 			for (; filter_idx < filtered; ++filter_idx, ++nsel) {
 				auto idx = filter_sel->get_index(filter_idx);
@@ -135,8 +129,18 @@ void WindowConstantAggregate::Sink(DataChunk &payload_chunk, SelectionVector *fi
 			}
 
 			if (nsel != inputs.size()) {
-				inputs.Slice(sel, nsel);
+				inputs.Slice(payload_chunk, sel, nsel);
 			}
+		} else {
+			//	Slice to [begin, end)
+			if (begin) {
+				for (idx_t c = 0; c < payload_chunk.ColumnCount(); ++c) {
+					inputs.data[c].Slice(payload_chunk.data[c], begin, end);
+				}
+			} else {
+				inputs.Reference(payload_chunk);
+			}
+			inputs.SetCardinality(end - begin);
 		}
 
 		//	Aggregate the filtered rows into a single state

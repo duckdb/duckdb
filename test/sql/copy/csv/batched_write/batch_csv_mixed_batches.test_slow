@@ -26,6 +26,10 @@ CREATE VIEW v2 AS FROM v1 WHERE (i//10000)%2=0;
 statement ok
 CREATE VIEW v3 AS FROM v1 WHERE (i//10000)%2=0 OR (i>200000 AND i < 400000) OR (i>600000 AND i < 800000);
 
+# empty table
+statement ok
+CREATE VIEW v4 AS FROM v1 WHERE i>998 AND i<1000 AND i%2=0
+
 loop i 0 2
 
 query I
@@ -114,6 +118,30 @@ SELECT * FROM ${table} LIMIT 5 OFFSET 9999
 
 endloop
 
+# now with an empty table
+query I
+COPY v4 TO '__TEST_DIR__/mixed_batches_v4.csv' (HEADER)
+----
+0
+
+query I
+CREATE TABLE mixed_batches_v4 AS SELECT i::BIGINT as i FROM read_csv_auto('__TEST_DIR__/mixed_batches_v4.csv', header=True)
+----
+0
+
+foreach table v4 mixed_batches_v4
+
+query IIIII
+SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM ${table}
+----
+NULL	NULL	NULL	0	0
+
+query I
+SELECT * FROM ${table} LIMIT 5
+----
+
+endloop
+
 statement ok
 DROP TABLE mixed_batches_v1
 
@@ -122,6 +150,9 @@ DROP TABLE mixed_batches_v2
 
 statement ok
 DROP TABLE mixed_batches_v3
+
+statement ok
+DROP TABLE mixed_batches_v4
 
 # create views that read the batches using unions
 statement ok
@@ -132,5 +163,8 @@ CREATE OR REPLACE VIEW v2 AS FROM v1 WHERE (i//10000)%2=0;
 
 statement ok
 CREATE OR REPLACE VIEW v3 AS FROM v1 WHERE (i//10000)%2=0 OR (i>200000 AND i < 400000) OR (i>600000 AND i < 800000);
+
+statement ok
+CREATE OR REPLACE VIEW v4 AS FROM v1 WHERE i>998 AND i<1000 AND i%2=0
 
 endloop

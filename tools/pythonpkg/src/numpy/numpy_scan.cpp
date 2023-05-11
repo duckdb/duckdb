@@ -133,7 +133,7 @@ static void SetInvalidRecursive(Vector &out, idx_t index) {
 
 //! 'count' is the amount of rows in the 'out' vector
 //! 'offset' is the current row number within this vector
-void ScanNumpyObject(PandasColumnBindData &bind_data, PyObject *object, idx_t offset, Vector &out) {
+void ScanNumpyObject(PyObject *object, idx_t offset, Vector &out) {
 
 	// handle None
 	if (object == Py_None) {
@@ -173,14 +173,14 @@ void VerifyTypeConstraints(Vector &vec, idx_t count) {
 	}
 }
 
-void ScanNumpyObjectColumn(PandasColumnBindData &bind_data, PyObject **col, idx_t count, idx_t offset, Vector &out) {
+void NumpyScan::ScanObjectColumn(PyObject **col, idx_t count, idx_t offset, Vector &out) {
 	// numpy_col is a sequential list of objects, that make up one "column" (Vector)
 	out.SetVectorType(VectorType::FLAT_VECTOR);
 	{
 		PythonGILWrapper gil; // We're creating python objects here, so we need the GIL
 		for (idx_t i = 0; i < count; i++) {
 			idx_t source_idx = offset + i;
-			ScanNumpyObject(bind_data, col[source_idx], i, out);
+			ScanNumpyObject(col[source_idx], i, out);
 		}
 	}
 	VerifyTypeConstraints(out, count);
@@ -274,7 +274,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		// Get the source pointer of the numpy array
 		auto src_ptr = (PyObject **)array.data();
 		if (out.GetType().id() != LogicalTypeId::VARCHAR) {
-			return ScanNumpyObjectColumn(bind_data, src_ptr, count, offset, out);
+			return NumpyScan::ScanObjectColumn(src_ptr, count, offset, out);
 		}
 
 		// Get the data pointer and the validity mask of the result vector

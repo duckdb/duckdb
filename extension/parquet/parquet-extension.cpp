@@ -239,8 +239,7 @@ public:
 					// missing metadata entry in cache, no usable stats
 					return nullptr;
 				}
-				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
-				                          FileSystem::DEFAULT_COMPRESSION, FileSystem::GetFileOpener(context));
+				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 				// we need to check if the metadata cache entries are current
 				if (fs.GetLastModifiedTime(*handle) >= metadata->read_time) {
 					// missing or invalid metadata entry in cache, no usable stats overall
@@ -627,8 +626,7 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	global_state->writer =
-	    make_uniq<ParquetWriter>(fs, file_path, FileSystem::GetFileOpener(context), parquet_bind.sql_types,
-	                             parquet_bind.column_names, parquet_bind.codec);
+	    make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec);
 	return std::move(global_state);
 }
 
@@ -674,9 +672,48 @@ CopyFunctionExecutionMode ParquetWriteExecutionMode(bool preserve_insertion_orde
 	if (!preserve_insertion_order) {
 		return CopyFunctionExecutionMode::PARALLEL_COPY_TO_FILE;
 	}
+	if (supports_batch_index) {
+		return CopyFunctionExecutionMode::BATCH_COPY_TO_FILE;
+	}
 	return CopyFunctionExecutionMode::REGULAR_COPY_TO_FILE;
 }
+//===--------------------------------------------------------------------===//
+// Prepare Batch
+//===--------------------------------------------------------------------===//
+struct ParquetWriteBatchData : public PreparedBatchData {
+	PreparedRowGroup prepared_row_group;
+};
 
+unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &context, FunctionData &bind_data,
+                                                       GlobalFunctionData &gstate,
+                                                       unique_ptr<ColumnDataCollection> collection) {
+	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
+	auto result = make_uniq<ParquetWriteBatchData>();
+	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group);
+	return std::move(result);
+}
+
+//===--------------------------------------------------------------------===//
+// Flush Batch
+//===--------------------------------------------------------------------===//
+void ParquetWriteFlushBatch(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                            PreparedBatchData &batch_p) {
+	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
+	auto &batch = batch_p.Cast<ParquetWriteBatchData>();
+	global_state.writer->FlushRowGroup(batch.prepared_row_group);
+}
+
+//===--------------------------------------------------------------------===//
+// Desired Batch Size
+//===--------------------------------------------------------------------===//
+idx_t ParquetWriteDesiredBatchSize(ClientContext &context, FunctionData &bind_data_p) {
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
+	return bind_data.row_group_size;
+}
+
+//===--------------------------------------------------------------------===//
+// Scan Replacement
+//===--------------------------------------------------------------------===//
 unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string &table_name,
                                             ReplacementScanData *data) {
 	auto lower_name = StringUtil::Lower(table_name);
@@ -719,6 +756,9 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.execution_mode = ParquetWriteExecutionMode;
 	function.copy_from_bind = ParquetScanFunction::ParquetReadBind;
 	function.copy_from_function = scan_fun.functions[0];
+	function.prepare_batch = ParquetWritePrepareBatch;
+	function.flush_batch = ParquetWriteFlushBatch;
+	function.desired_batch_size = ParquetWriteDesiredBatchSize;
 
 	function.extension = "parquet";
 	ExtensionUtil::RegisterFunction(db_instance, function);

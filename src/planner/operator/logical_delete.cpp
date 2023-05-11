@@ -15,6 +15,7 @@ void LogicalDelete::Serialize(FieldWriter &writer) const {
 	table.Serialize(writer.GetSerializer());
 	writer.WriteField(table_index);
 	writer.WriteField(return_chunk);
+	writer.WriteSerializableList(this->expressions);
 }
 
 unique_ptr<LogicalOperator> LogicalDelete::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
@@ -26,6 +27,7 @@ unique_ptr<LogicalOperator> LogicalDelete::Deserialize(LogicalDeserializationSta
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto result = make_uniq<LogicalDelete>(table_catalog_entry, table_index);
 	result->return_chunk = reader.ReadRequired<bool>();
+	result->expressions = reader.ReadRequiredSerializableList<duckdb::Expression>(state.gstate);
 	return std::move(result);
 }
 

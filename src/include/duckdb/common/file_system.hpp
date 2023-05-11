@@ -15,6 +15,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include <functional>
 
 #undef CreateDirectory
@@ -109,7 +110,6 @@ public:
 	DUCKDB_API static FileSystem &GetFileSystem(ClientContext &context);
 	DUCKDB_API static FileSystem &GetFileSystem(DatabaseInstance &db);
 	DUCKDB_API static FileSystem &Get(AttachedDatabase &db);
-	DUCKDB_API static FileOpener *GetFileOpener(ClientContext &context);
 
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags,
 	                                                   FileLockType lock = DEFAULT_LOCK,
@@ -128,8 +128,6 @@ public:
 	//! Write nr_bytes from the buffer into the file, moving the file pointer forward by nr_bytes.
 	DUCKDB_API virtual int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes);
 
-	//! Returns the extension of the file, or empty string if no extension was found.
-	DUCKDB_API string GetFileExtension(FileHandle &handle);
 	//! Returns the file size of a file handle, returns -1 on error
 	DUCKDB_API virtual int64_t GetFileSize(FileHandle &handle);
 	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
@@ -167,9 +165,13 @@ public:
 	//! Gets the working directory
 	DUCKDB_API static string GetWorkingDirectory();
 	//! Gets the users home directory
-	DUCKDB_API static string GetHomeDirectory(FileOpener *opener);
+	DUCKDB_API static string GetHomeDirectory(optional_ptr<FileOpener> opener);
+	//! Gets the users home directory
+	DUCKDB_API virtual string GetHomeDirectory();
 	//! Expands a given path, including e.g. expanding the home directory of the user
-	DUCKDB_API static string ExpandPath(const string &path, FileOpener *opener);
+	DUCKDB_API static string ExpandPath(const string &path, optional_ptr<FileOpener> opener);
+	//! Expands a given path, including e.g. expanding the home directory of the user
+	DUCKDB_API virtual string ExpandPath(const string &path);
 	//! Returns the system-available memory in bytes. Returns DConstants::INVALID_INDEX if the system function fails.
 	DUCKDB_API static idx_t GetAvailableMemory();
 	//! Path separator for the current file system
@@ -187,7 +189,6 @@ public:
 
 	//! Runs a glob on the file system, returning a list of matching files
 	DUCKDB_API virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr);
-	DUCKDB_API virtual vector<string> Glob(const string &path, ClientContext &context);
 	DUCKDB_API vector<string> GlobFiles(const string &path, ClientContext &context,
 	                                    FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
 

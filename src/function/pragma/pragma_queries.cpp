@@ -22,20 +22,26 @@ string PragmaShowTables(ClientContext &context, const FunctionParameters &parame
 	auto schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
 	schema = (schema == INVALID_SCHEMA) ? DEFAULT_SCHEMA : schema; // NOLINT
 
-	auto where_clause =
-	    StringUtil::Join({"where database_name = '", catalog, "' and schema_name = '", schema, "'"}, "");
+	auto where_clause = StringUtil::Format("where ((database_name = '%s') and (schema_name = '%s'))", catalog, schema);
 	// clang-format off
-	auto pragma_query = StringUtil::Join(
-	    {"with tables as (", 
-						"	SELECT table_name as name FROM duckdb_tables ", where_clause, 
-			 "), views as (",
-						"	SELECT view_name as name FROM duckdb_views ", where_clause, 
-			 "), indexes as (",
-						"	SELECT index_name as name FROM duckdb_indexes ", where_clause, 
-			 "), db_objects as (",
-						"	SELECT name FROM tables UNION ALL SELECT name FROM views UNION ALL SELECT name FROM indexes",
-	     ") SELECT name FROM db_objects ORDER BY name;"
-			}, "");
+	auto pragma_query = StringUtil::Format(R"EOF(
+	with "tables" as
+	(
+		SELECT table_name as "name"
+		FROM duckdb_tables %s
+	), "views" as
+	(
+		SELECT view_name as "name"
+		FROM duckdb_views %s
+	), db_objects as
+	(
+		SELECT "name" FROM "tables"
+		UNION ALL
+		SELECT "name" FROM "views"
+	)
+	SELECT "name"
+	FROM db_objects
+	ORDER BY "name";)EOF", where_clause, where_clause, where_clause);
 	// clang-format on
 
 	return pragma_query;
@@ -124,7 +130,6 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 		throw PermissionException("Import is disabled through configuration");
 	}
 	auto &fs = FileSystem::GetFileSystem(context);
-	auto *opener = FileSystem::GetFileOpener(context);
 
 	string final_query;
 	// read the "shema.sql" and "load.sql" files
@@ -132,7 +137,7 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 	for (auto &file : files) {
 		auto file_path = fs.JoinPath(parameters.values[0].ToString(), file);
 		auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
-		                          FileSystem::DEFAULT_COMPRESSION, opener);
+		                          FileSystem::DEFAULT_COMPRESSION);
 		auto fsize = fs.GetFileSize(*handle);
 		auto buffer = unique_ptr<char[]>(new char[fsize]);
 		fs.Read(*handle, buffer.get(), fsize);

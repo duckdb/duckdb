@@ -21,8 +21,7 @@ public:
 
 	//! Serializes to a buffer allocated by the serializer, will expand when
 	//! writing past the initial threshold
-	DUCKDB_API BufferedFileWriter(FileSystem &fs, const string &path, uint8_t open_flags = DEFAULT_OPEN_FLAGS,
-	                              FileOpener *opener = nullptr);
+	DUCKDB_API BufferedFileWriter(FileSystem &fs, const string &path, uint8_t open_flags = DEFAULT_OPEN_FLAGS);
 
 	FileSystem &fs;
 	string path;
