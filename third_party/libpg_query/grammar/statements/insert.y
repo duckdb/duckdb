@@ -6,25 +6,25 @@
  *****************************************************************************/
 
 InsertStmt:
-			opt_with_clause INSERT opt_or_action INTO insert_target insert_rest
+			opt_with_clause INSERT opt_or_action INTO insert_target opt_by_name_or_position insert_rest
 			opt_on_conflict returning_clause
 				{
-					$6->relation = $5;
-					$6->onConflictAlias = $3;
-					$6->onConflictClause = $7;
-					$6->returningList = $8;
-					$6->withClause = $1;
-					$$ = (PGNode *) $6;
+					$7->relation = $5;
+					$7->onConflictAlias = $3;
+					$7->onConflictClause = $8;
+					$7->returningList = $9;
+					$7->withClause = $1;
+					$7->insert_column_order = $6;
+					$$ = (PGNode *) $7;
 				}
 		;
 
 insert_rest:
-			opt_by_name_or_position SelectStmt
+			SelectStmt
 				{
 					$$ = makeNode(PGInsertStmt);
 					$$->cols = NIL;
-					$$->insert_column_order = $1;
-					$$->selectStmt = $2;
+					$$->selectStmt = $1;
 				}
 			| OVERRIDING override_kind VALUE_P SelectStmt
 				{
@@ -32,14 +32,12 @@ insert_rest:
 					$$->cols = NIL;
 					$$->override = $2;
 					$$->selectStmt = $4;
-					$$->insert_column_order = PG_INSERT_BY_POSITION;
 				}
 			| '(' insert_column_list ')' SelectStmt
 				{
 					$$ = makeNode(PGInsertStmt);
 					$$->cols = $2;
 					$$->selectStmt = $4;
-					$$->insert_column_order = PG_INSERT_BY_POSITION;
 				}
 			| '(' insert_column_list ')' OVERRIDING override_kind VALUE_P SelectStmt
 				{
@@ -47,14 +45,12 @@ insert_rest:
 					$$->cols = $2;
 					$$->override = $5;
 					$$->selectStmt = $7;
-					$$->insert_column_order = PG_INSERT_BY_POSITION;
 				}
 			| DEFAULT VALUES
 				{
 					$$ = makeNode(PGInsertStmt);
 					$$->cols = NIL;
 					$$->selectStmt = NULL;
-					$$->insert_column_order = PG_INSERT_BY_POSITION;
 				}
 		;
 

@@ -77,8 +77,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 	default:
 		throw InternalException("Unrecognized insert column order in TransformInsert");
 	}
-	if (stmt->insert_column_order)
-		result->catalog = qname.catalog;
+	result->catalog = qname.catalog;
 	return result;
 }
 
