@@ -614,6 +614,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			// CREATE TYPE mood AS ENUM (SELECT 'happy')
 			auto query_obj = Bind(*create_type_info.query);
 			auto query = std::move(query_obj.plan);
+			create_type_info.query.reset();
 
 			auto &sql_types = query_obj.types;
 			if (sql_types.size() != 1) {
