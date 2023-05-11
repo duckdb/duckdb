@@ -639,7 +639,7 @@ public:
 		for (auto &csn : const_struct_names) {
 			result->const_struct_names.emplace(csn.first, make_uniq<Vector>(csn.second->GetValue(0)));
 		}
-		return result;
+		return std::move(result);
 	}
 
 public:
