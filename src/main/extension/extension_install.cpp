@@ -151,7 +151,8 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		fs.RemoveFile(temp_path);
 	}
 	auto is_http_url = StringUtil::Contains(extension, "http://");
-	if (!is_http_url && fs.FileExists(extension)) {
+	if (fs.FileExists(extension)) {
+
 		std::ifstream in(extension, std::ios::binary);
 		if (in.bad()) {
 			throw IOException("Failed to read extension from \"%s\"", extension);

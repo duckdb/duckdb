@@ -14,10 +14,6 @@ namespace duckdb {
 
 class LocalFileSystem : public FileSystem {
 public:
-	unique_ptr<FileHandle> TryOpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
-	                                   FileCompressionType compression = FileCompressionType::UNCOMPRESSED,
-	                                   optional_ptr<FileOpener> opener = nullptr,
-	                                   optional_ptr<string> out_error = nullptr) override;
 	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
 	                                FileCompressionType compression = FileCompressionType::UNCOMPRESSED,
 	                                FileOpener *opener = nullptr) override;
@@ -44,6 +40,8 @@ public:
 	//! the file
 	void Truncate(FileHandle &handle, int64_t new_size) override;
 
+	//! Check if a directory exists
+	bool DirectoryExists(const string &directory) override;
 	//! Create a directory if it does not exist
 	void CreateDirectory(const string &directory) override;
 	//! Recursively remove a directory and all files in it
@@ -54,9 +52,11 @@ public:
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	void MoveFile(const string &source, const string &target) override;
-	//! Get the file type of a file
-	FileType GetFileType(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
+	//! Check if a file exists
+	bool FileExists(const string &filename) override;
 
+	//! Check if path is a pipe
+	bool IsPipe(const string &filename) override;
 	//! Remove a file from disk
 	void RemoveFile(const string &filename) override;
 	//! Sync a file handle to disk

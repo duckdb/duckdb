@@ -133,7 +133,7 @@ RunRequestWithRetry(const std::function<duckdb_httplib_openssl::Result(void)> &r
 unique_ptr<ResponseWrapper> HTTPFileSystem::PostRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                         duckdb::unique_ptr<char[]> &buffer_out, idx_t &buffer_out_len,
                                                         char *buffer_in, idx_t buffer_in_len, string params) {
-	auto &hfs = handle.Cast<HTTPFileHandle>();
+	auto &hfs = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
@@ -192,7 +192,7 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                        char *buffer_in, idx_t buffer_in_len, string params) {
-	auto &hfs = handle.Cast<HTTPFileHandle>();
+	auto &hfs = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
@@ -210,7 +210,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::PutRequest(FileHandle &handle, strin
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, string url, HeaderMap header_map) {
-	auto &hfs = handle.Cast<HTTPFileHandle>();
+	auto &hfs = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
@@ -229,7 +229,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::HeadRequest(FileHandle &handle, stri
 }
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, string url, HeaderMap header_map) {
-	auto &hfs = handle.Cast<HTTPFileHandle>();
+	auto &hfs = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
@@ -262,7 +262,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 				    hfs.state->total_bytes_received += data_length;
 			    }
 			    if (!cached_file.data) {
-				    cached_file.data = unique_ptr<data_t[]>(new data_t[data_length]);
+				    cached_file.data = std::shared_ptr<char>(new char[data_length], std::default_delete<char[]>());
 				    hfs.length = data_length;
 				    cached_file.capacity = data_length;
 				    memcpy(cached_file.data.get(), data, data_length);
@@ -273,11 +273,12 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 				    }
 				    // Gotta eat your beans
 				    if (new_capacity != cached_file.capacity) {
-					    auto new_hfs_data = unique_ptr<data_t[]>(new data_t[new_capacity]);
+					    auto new_hfs_data =
+					        std::shared_ptr<char>(new char[new_capacity], std::default_delete<char[]>());
 					    // copy the old data
 					    memcpy(new_hfs_data.get(), cached_file.data.get(), hfs.length);
 					    cached_file.capacity = new_capacity;
-					    cached_file.data = std::move(new_hfs_data);
+					    cached_file.data = new_hfs_data;
 				    }
 				    // We can just copy stuff
 				    memcpy(cached_file.data.get() + hfs.length, data, data_length);
@@ -295,7 +296,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 
 unique_ptr<ResponseWrapper> HTTPFileSystem::GetRangeRequest(FileHandle &handle, string url, HeaderMap header_map,
                                                             idx_t file_offset, char *buffer_out, idx_t buffer_out_len) {
-	auto &hfs = handle.Cast<HTTPFileHandle>();
+	auto &hfs = (HTTPFileHandle &)handle;
 	string path, proto_host_port;
 	ParseUrl(url, path, proto_host_port);
 	auto headers = initialize_http_headers(header_map);
@@ -374,18 +375,14 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flag
 // Buffered read from http file.
 // Note that buffering is disabled when FileFlags::FILE_FLAGS_DIRECT_IO is set
 void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	auto &hfh = handle.Cast<HTTPFileHandle>();
-	if (hfh.state) {
-		auto entry = hfh.state->cached_files.find(hfh.path);
-		if (entry != hfh.state->cached_files.end()) {
-			auto &cached_file = entry->second;
-			if (!cached_file.data) {
-				throw InternalException("HTTPFS Cached entry without data");
-			}
-			memcpy(buffer, cached_file.data.get() + location, nr_bytes);
-			hfh.file_offset = location + nr_bytes;
-			return;
-		}
+	auto &hfh = (HTTPFileHandle &)handle;
+
+	D_ASSERT(hfh.state);
+	auto &cached_file = hfh.state->cached_files[hfh.path];
+	if (cached_file.data) {
+		memcpy(buffer, cached_file.data.get() + location, nr_bytes);
+		hfh.file_offset = location + nr_bytes;
+		return;
 	}
 
 	idx_t to_read = nr_bytes;
@@ -447,7 +444,7 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 }
 
 int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &hfh = handle.Cast<HTTPFileHandle>();
+	auto &hfh = (HTTPFileHandle &)handle;
 	idx_t max_read = hfh.length - hfh.file_offset;
 	nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
 	Read(handle, buffer, nr_bytes, hfh.file_offset);
@@ -459,7 +456,7 @@ void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 }
 
 int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &hfh = handle.Cast<HTTPFileHandle>();
+	auto &hfh = (HTTPFileHandle &)handle;
 	Write(handle, buffer, nr_bytes, hfh.file_offset);
 	return nr_bytes;
 }
@@ -469,38 +466,26 @@ void HTTPFileSystem::FileSync(FileHandle &handle) {
 }
 
 int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
-	auto &sfh = handle.Cast<HTTPFileHandle>();
+	auto &sfh = (HTTPFileHandle &)handle;
 	return sfh.length;
 }
 
 time_t HTTPFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	auto &sfh = handle.Cast<HTTPFileHandle>();
+	auto &sfh = (HTTPFileHandle &)handle;
 	return sfh.last_modified;
 }
 
-FileType HTTPFileSystem::GetFileType(const string &filename, optional_ptr<FileOpener> opener) {
-	auto handle = TryOpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
-	                          FileCompressionType::UNCOMPRESSED, opener.get());
-	if (!handle) {
-		return FileType::FILE_TYPE_INVALID;
-	}
-	auto &sfh = handle->Cast<HTTPFileHandle>();
-	if (sfh.length == 0) {
-		return FileType::FILE_TYPE_INVALID;
-	}
-	return FileType::FILE_TYPE_REGULAR;
-}
-
-FileType HTTPFileSystem::GetFileType(FileHandle &handle) {
-	return FileType::FILE_TYPE_REGULAR;
-}
-
 bool HTTPFileSystem::FileExists(const string &filename) {
-	return GetFileType(filename) == FileType::FILE_TYPE_REGULAR;
-}
-
-bool HTTPFileSystem::DirectoryExists(const string &filename) {
-	throw NotImplementedException("DirectoryExists for HTTP files not implemented");
+	try {
+		auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ);
+		auto &sfh = (HTTPFileHandle &)*handle;
+		if (sfh.length == 0) {
+			return false;
+		}
+		return true;
+	} catch (...) {
+		return false;
+	};
 }
 
 bool HTTPFileSystem::CanHandleFile(const string &fpath) {
@@ -508,7 +493,7 @@ bool HTTPFileSystem::CanHandleFile(const string &fpath) {
 }
 
 void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
-	auto &sfh = handle.Cast<HTTPFileHandle>();
+	auto &sfh = (HTTPFileHandle &)handle;
 	sfh.file_offset = location;
 }
 
@@ -542,6 +527,9 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	InitializeClient();
 	auto &hfs = (HTTPFileSystem &)file_system;
 	state = HTTPState::TryGetState(opener);
+	if (!state) {
+		throw InternalException("State was not defined in this HTTP File Handle");
+	}
 
 	HTTPMetadataCache *current_cache = TryGetMetadataCache(opener, hfs);
 
@@ -628,7 +616,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
 		}
 	}
-	if (state && (length == 0 || http_params.force_download)) {
+	if (length == 0 || http_params.force_download) {
 		lock_guard<mutex> lock(state->cached_files_mutex);
 		auto &cached_file = state->cached_files[path];
 

@@ -52,43 +52,58 @@ static void AssertValidFileFlags(uint8_t flags) {
 }
 
 #ifndef _WIN32
-FileType LocalFileSystem::GetFileType(const string &filename, optional_ptr<FileOpener> /* file_opener */) {
+bool LocalFileSystem::FileExists(const string &filename) {
 	if (!filename.empty()) {
 		if (access(filename.c_str(), 0) == 0) {
 			struct stat status;
 			stat(filename.c_str(), &status);
-			if (status.st_mode & S_IFREG) {
-				return FileType::FILE_TYPE_REGULAR;
-			}
-			if (S_ISFIFO(status.st_mode)) {
-				return FileType::FILE_TYPE_FIFO;
-			}
-			if (status.st_mode & S_IFDIR) {
-				return FileType::FILE_TYPE_DIR;
+			if (S_ISREG(status.st_mode)) {
+				return true;
 			}
 		}
 	}
-	return FileType::FILE_TYPE_INVALID;
+	// if any condition fails
+	return false;
+}
+
+bool LocalFileSystem::IsPipe(const string &filename) {
+	if (!filename.empty()) {
+		if (access(filename.c_str(), 0) == 0) {
+			struct stat status;
+			stat(filename.c_str(), &status);
+			if (S_ISFIFO(status.st_mode)) {
+				return true;
+			}
+		}
+	}
+	// if any condition fails
+	return false;
 }
 
 #else
-FileType LocalFileSystem::GetFileType(const string &filename, optional_ptr<FileOpener> /* file_opener */) {
+bool LocalFileSystem::FileExists(const string &filename) {
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	const wchar_t *wpath = unicode_path.c_str();
 	if (_waccess(wpath, 0) == 0) {
 		struct _stati64 status;
 		_wstati64(wpath, &status);
 		if (status.st_mode & S_IFREG) {
-			return FileType::FILE_TYPE_REGULAR;
-		}
-		if (status.st_mode & _S_IFCHR) {
-			return FileType::FILE_TYPE_FIFO;
-		}
-		if (status.st_mode & S_IFDIR) {
-			return FileType::FILE_TYPE_DIR;
+			return true;
 		}
 	}
-	return FileType::FILE_TYPE_INVALID;
+	return false;
+}
+bool LocalFileSystem::IsPipe(const string &filename) {
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	const wchar_t *wpath = unicode_path.c_str();
+	if (_waccess(wpath, 0) == 0) {
+		struct _stati64 status;
+		_wstati64(wpath, &status);
+		if (status.st_mode & _S_IFCHR) {
+			return true;
+		}
+	}
+	return false;
 }
 #endif
 
@@ -147,11 +162,10 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 	}
 } // LCOV_EXCL_STOP
 
-unique_ptr<FileHandle> LocalFileSystem::TryOpenFile(const string &path, uint8_t flags, FileLockType lock_type,
-                                                    FileCompressionType compression, optional_ptr<FileOpener> opener,
-                                                    optional_ptr<string> out_error) {
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+                                                 FileCompressionType compression, FileOpener *opener) {
 	if (compression != FileCompressionType::UNCOMPRESSED) {
-		throw InternalException("Unsupported compression type for default file system");
+		throw NotImplementedException("Unsupported compression type for default file system");
 	}
 
 	AssertValidFileFlags(flags);
@@ -195,10 +209,7 @@ unique_ptr<FileHandle> LocalFileSystem::TryOpenFile(const string &path, uint8_t 
 	}
 	int fd = open(path.c_str(), open_flags, 0666);
 	if (fd == -1) {
-		if (out_error) {
-			*out_error = StringUtil::Format("Cannot open file \"%s\": %s", path, strerror(errno));
-		}
-		return nullptr;
+		throw IOException("Cannot open file \"%s\": %s", path, strerror(errno));
 	}
 	// #if defined(__DARWIN__) || defined(__APPLE__)
 	// 	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
@@ -222,10 +233,7 @@ unique_ptr<FileHandle> LocalFileSystem::TryOpenFile(const string &path, uint8_t 
 			fl.l_len = 0;
 			rc = fcntl(fd, F_SETLK, &fl);
 			if (rc == -1) {
-				if (out_error) {
-					*out_error = StringUtil::Format("Could not set lock on file \"%s\": %s", path, strerror(errno));
-				}
-				return nullptr;
+				throw IOException("Could not set lock on file \"%s\": %s", path, strerror(errno));
 			}
 		}
 	}
@@ -320,6 +328,20 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	if (ftruncate(fd, new_size) != 0) {
 		throw IOException("Could not truncate file \"%s\": %s", handle.path, strerror(errno));
 	}
+}
+
+bool LocalFileSystem::DirectoryExists(const string &directory) {
+	if (!directory.empty()) {
+		if (access(directory.c_str(), 0) == 0) {
+			struct stat status;
+			stat(directory.c_str(), &status);
+			if (status.st_mode & S_IFDIR) {
+				return true;
+			}
+		}
+	}
+	// if any condition fails
+	return false;
 }
 
 void LocalFileSystem::CreateDirectory(const string &directory) {
@@ -484,11 +506,10 @@ public:
 	};
 };
 
-unique_ptr<FileHandle> LocalFileSystem::TryOpenFile(const string &path, uint8_t flags, FileLockType lock_type,
-                                                    FileCompressionType compression, optional_ptr<FileOpener> opener,
-                                                    optional_ptr<string> out_error) {
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+                                                 FileCompressionType compression, FileOpener *opener) {
 	if (compression != FileCompressionType::UNCOMPRESSED) {
-		throw InternalException("Unsupported compression type for default file system");
+		throw NotImplementedException("Unsupported compression type for default file system");
 	}
 	AssertValidFileFlags(flags);
 
@@ -525,10 +546,7 @@ unique_ptr<FileHandle> LocalFileSystem::TryOpenFile(const string &path, uint8_t 
 	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		auto error = LocalFileSystem::GetLastErrorAsString();
-		if (out_error) {
-			*out_error = StringUtil::Format("Cannot open file \"%s\": %s", path.c_str(), error);
-		}
-		return nullptr;
+		throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
 	}
 	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile);
 	if (flags & FileFlags::FILE_FLAGS_APPEND) {
@@ -664,6 +682,16 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	}
 }
 
+static DWORD WindowsGetFileAttributes(const string &filename) {
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	return GetFileAttributesW(unicode_path.c_str());
+}
+
+bool LocalFileSystem::DirectoryExists(const string &directory) {
+	DWORD attrs = WindowsGetFileAttributes(directory);
+	return (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
+}
+
 void LocalFileSystem::CreateDirectory(const string &directory) {
 	if (DirectoryExists(directory)) {
 		return;
@@ -751,11 +779,6 @@ void LocalFileSystem::MoveFile(const string &source, const string &target) {
 	}
 }
 
-static DWORD WindowsGetFileAttributes(const string &filename) {
-	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
-	return GetFileAttributesW(unicode_path.c_str());
-}
-
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 	auto path = ((WindowsFileHandle &)handle).path;
 	// pipes in windows are just files in '\\.\pipe\' folder
@@ -774,22 +797,12 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 }
 #endif
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
-                                                 FileCompressionType compression, FileOpener *opener) {
-	string error;
-	auto handle = TryOpenFile(path, flags, lock, compression, opener, &error);
-	if (!handle) {
-		throw IOException(error);
-	}
-	return handle;
-}
-
 bool LocalFileSystem::CanSeek() {
 	return true;
 }
 
 bool LocalFileSystem::OnDiskFile(FileHandle &handle) {
-	return GetFileType(handle) == FileType::FILE_TYPE_REGULAR;
+	return true;
 }
 
 void LocalFileSystem::Seek(FileHandle &handle, idx_t location) {
@@ -823,11 +836,9 @@ static bool IsCrawl(const string &glob) {
 	// glob must match exactly
 	return glob == "**";
 }
-
 static bool HasMultipleCrawl(const vector<string> &splits) {
 	return std::count(splits.begin(), splits.end(), "**") > 1;
 }
-
 static bool IsSymbolicLink(const string &path) {
 #ifndef _WIN32
 	struct stat status;
@@ -880,7 +891,7 @@ static void GlobFilesInternal(FileSystem &fs, const string &path, const string &
 
 vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path) {
 	vector<string> result;
-	if (GetFileType(path) != FileType::FILE_TYPE_INVALID) {
+	if (FileExists(path) || IsPipe(path)) {
 		result.push_back(path);
 	} else if (!absolute_path) {
 		Value value;
@@ -889,7 +900,7 @@ vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpe
 			vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
 				auto joined_path = JoinPath(search_path, path);
-				if (GetFileType(joined_path) != FileType::FILE_TYPE_INVALID) {
+				if (FileExists(joined_path) || IsPipe(joined_path)) {
 					result.push_back(joined_path);
 				}
 			}
@@ -980,7 +991,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 				if (is_last_chunk) {
 					for (auto &prev_directory : previous_directories) {
 						const string filename = JoinPath(prev_directory, splits[i]);
-						if (GetFileType(filename) != FileType::FILE_TYPE_INVALID) {
+						if (FileExists(filename) || DirectoryExists(filename)) {
 							result.push_back(filename);
 						}
 					}

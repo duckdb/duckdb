@@ -598,9 +598,6 @@ public:
 
 		// load offset to bitpacking widths pointer
 		auto bitpacking_metadata_offset = Load<idx_t>(dataptr + segment.GetBlockOffset());
-		if (bitpacking_metadata_offset > Storage::BLOCK_SIZE - segment.GetBlockOffset()) {
-			throw InternalException("Bitpacking metadata offset is out of range - corrupt file?");
-		}
 		bitpacking_metadata_ptr =
 		    dataptr + segment.GetBlockOffset() + bitpacking_metadata_offset - sizeof(bitpacking_metadata_encoded_t);
 

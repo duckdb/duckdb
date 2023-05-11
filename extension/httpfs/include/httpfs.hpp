@@ -120,10 +120,7 @@ public:
 	void FileSync(FileHandle &handle) override;
 	int64_t GetFileSize(FileHandle &handle) override;
 	time_t GetLastModifiedTime(FileHandle &handle) override;
-	FileType GetFileType(const string &filename, optional_ptr<FileOpener> opener = nullptr) override;
-	FileType GetFileType(FileHandle &handle) override;
 	bool FileExists(const string &filename) override;
-	bool DirectoryExists(const string &filename) override;
 	void Seek(FileHandle &handle, idx_t location) override;
 	bool CanHandleFile(const string &fpath) override;
 	bool CanSeek() override {

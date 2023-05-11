@@ -80,18 +80,6 @@ public:
 public:
 	FileSystem &file_system;
 	string path;
-
-public:
-	template <class TARGET>
-	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
-	}
-	template <class TARGET>
-	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
-	}
 };
 
 enum class FileLockType : uint8_t { NO_LOCK = 0, READ_LOCK = 1, WRITE_LOCK = 2 };
@@ -123,17 +111,10 @@ public:
 	DUCKDB_API static FileSystem &GetFileSystem(DatabaseInstance &db);
 	DUCKDB_API static FileSystem &Get(AttachedDatabase &db);
 
-	//! Opens a file at the specified path - throws an exception if the file could not be opened
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags,
 	                                                   FileLockType lock = DEFAULT_LOCK,
 	                                                   FileCompressionType compression = DEFAULT_COMPRESSION,
 	                                                   FileOpener *opener = nullptr);
-	//! Tries to open a file at the specified path - returns nullptr if the file could not be opened
-	DUCKDB_API virtual unique_ptr<FileHandle> TryOpenFile(const string &path, uint8_t flags,
-	                                                      FileLockType lock = DEFAULT_LOCK,
-	                                                      FileCompressionType compression = DEFAULT_COMPRESSION,
-	                                                      optional_ptr<FileOpener> opener = nullptr,
-	                                                      optional_ptr<string> out_error = nullptr);
 
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
@@ -157,6 +138,8 @@ public:
 	//! the file
 	DUCKDB_API virtual void Truncate(FileHandle &handle, int64_t new_size);
 
+	//! Check if a directory exists
+	DUCKDB_API virtual bool DirectoryExists(const string &directory);
 	//! Create a directory if it does not exist
 	DUCKDB_API virtual void CreateDirectory(const string &directory);
 	//! Recursively remove a directory and all files in it
@@ -169,14 +152,10 @@ public:
 	//! Move a file from source path to the target, StorageManager relies on this being an atomic action for ACID
 	//! properties
 	DUCKDB_API virtual void MoveFile(const string &source, const string &target);
-	//! Get the file type of a file
-	DUCKDB_API virtual FileType GetFileType(const string &filename, optional_ptr<FileOpener> opener = nullptr);
 	//! Check if a file exists
 	DUCKDB_API virtual bool FileExists(const string &filename);
 	//! Check if path is pipe
 	DUCKDB_API virtual bool IsPipe(const string &filename);
-	//! Check if a directory exists
-	DUCKDB_API virtual bool DirectoryExists(const string &directory);
 	//! Remove a file from disk
 	DUCKDB_API virtual void RemoveFile(const string &filename);
 	//! Sync a file handle to disk
