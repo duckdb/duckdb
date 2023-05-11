@@ -593,7 +593,6 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			if (current_reader->IsOpen()) {
 				// Can only be open from auto detection, so these should be known
 				D_ASSERT(current_reader->GetFormat() != JSONFormat::AUTO_DETECT);
-				D_ASSERT(current_reader->GetRecordType() != JSONRecordType::AUTO_DETECT);
 				if (!current_reader->IsParallel()) {
 					batch_index = gstate.batch_index++;
 					gstate.file_index++;

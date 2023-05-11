@@ -9,8 +9,6 @@ require json
 statement ok
 COPY (SELECT to_json({i:i%4}) as json FROM range(0,20) as tbl(i)) TO '__TEST_DIR__/partitioned_json' (FORMAT csv, quote '', PARTITION_BY json);
 
-mode skip
-
 # some tests for read_json first
 query III
 select * from read_json_auto('data/json/example_*.ndjson', filename=true) order by all
@@ -78,8 +76,6 @@ select * from read_json_objects_auto('data/json/example_*.ndjson', filename=true
 {"id":5,"name":"Raising Arizona"}	data/json/example_n.ndjson
 {"id":5,"name":"Raising Arizona"}	data/json/example_r.ndjson
 {"id":5,"name":"Raising Arizona"}	data/json/example_rn.ndjson
-
-mode unskip
 
 query I
 select * from read_json_objects_auto(['data/json/example_n.ndjson', 'data/json/top_level_array.json'], union_by_name=true) order by all
