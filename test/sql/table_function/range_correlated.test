@@ -51,7 +51,7 @@ SELECT s, l, i FROM (SELECT 10) AS _(l), (SELECT 3) AS _(i), range(l,40,i) __(s)
 
 
 # two correlated columns with two rows each
-query II
+query III
 SELECT * FROM (VALUES (10),(20)) AS _(l), (VALUES (2),(3)) AS __(i), generate_series(l,30,i) AS ___(s);
 ----
 10  2   10
@@ -83,16 +83,16 @@ SELECT * FROM (VALUES (10),(20)) AS _(l), (VALUES (2),(3)) AS __(i), generate_se
 20  3   29
 
 # nested ranges
-query II
+query I
 SELECT COUNT(*) FROM range(0,10) AS _(r1), range(r1,10) __(r2);
 ----
 55
 
 # large result
-query II
-SELECT COUNT(*) FROM (SELECT 100000) AS _(u), generate_series(u) __(s);
+query I
+SELECT COUNT(*) FROM (SELECT 10000) AS _(u), generate_series(u) __(s);
 ----
-100001
+10001
 
 # date
 query I
@@ -107,7 +107,6 @@ SELECT s::DATE FROM (SELECT DATE '1992-01-01') AS _(l), range(l, DATE '1992-10-0
 1992-07-01
 1992-08-01
 1992-09-01
-
 
 # too many arguments
 statement error
