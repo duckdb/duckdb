@@ -1,4 +1,4 @@
-# name: test/sql/function/list/list_has_any_and_has_all.test
+# name: test/sql/function/list/list_has_any_and_all.test_slow
 # description: Test list_has_any and list_has_all functions on Large Lists
 # group: [list]
 

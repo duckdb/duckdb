@@ -1,4 +1,4 @@
-# name: test/sql/types/nested/list/list_intersect.test
+# name: test/sql/function/list/list_intersect.test
 # description: Test list_intersect
 # group: [list]
 
