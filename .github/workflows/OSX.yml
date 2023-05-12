@@ -70,7 +70,7 @@ jobs:
       shell: bash
       run: |
         echo $OSX_CODESIGN_PUBLIC_KEY | base64 -d > duckdb-public-key.pem
-        echo $OSX_CODESIGN_PRIVATE_KEY | base64 -d > duckdb-private-key.p12
+        echo $OSX_CODESIGN_PRIVATE_KEY | base64 -d > duckdb-private-key.p12 -P ""
         echo $OSX_CODESIGN_CERTIFICATE | base64 -d > duckdb-developerid-certificate.cer
         security import duckdb-private-key.p12 -k ~/Library/Keychains/login.keychain
         security import duckdb-public-key.pem -k ~/Library/Keychains/login.keychain
