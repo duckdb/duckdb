@@ -23,9 +23,7 @@
 #include <string.h>
 #include <math.h>
 #ifdef _WIN32
-#include <timezoneapi.h>
-#include <sysinfoapi.h>
-
+#include <windows.h>
 #else
 #include <sys/time.h>
 #endif
