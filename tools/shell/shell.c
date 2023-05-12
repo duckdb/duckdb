@@ -13579,12 +13579,6 @@ static const char *(azHelp[]) = {
   "   See also:",
   "      http://sqlite.org/cli.html#sqlar_archive_support",
 #endif
-#ifndef SQLITE_OMIT_AUTHORIZATION
-  ".auth ON|OFF             Show authorizer callbacks",
-#endif
-  ".backup ?DB? FILE        Backup DB (default \"main\") to FILE",
-  "       --append            Use the appendvfs",
-  "       --async             Write to FILE without journal and fsync()",
   ".bail on|off             Stop after hitting an error.  Default OFF",
   ".binary on|off           Turn binary output on or off.  Default OFF",
   ".cd DIRECTORY            Change the working directory to DIRECTORY",
@@ -13598,8 +13592,6 @@ static const char *(azHelp[]) = {
   "     brightyellow|brightblue|brightmagenta|brightcyan|brightwhite",
   ".constantcode ?CODE?     Sets the syntax highlighting terminal code used for constant values",
   ".databases               List names and files of attached databases",
-  ".dbconfig ?op? ?val?     List or change sqlite3_db_config() options",
-  ".dbinfo ?DB?             Show status information about the database",
   ".dump ?TABLE?            Render database content as SQL",
   "   Options:",
   "     --preserve-rowids      Include ROWID values in the output",
@@ -13617,7 +13609,6 @@ static const char *(azHelp[]) = {
   ".excel                   Display the output of next command in spreadsheet",
   "   --bom                   Put a UTF8 byte-order mark on intermediate file",
   ".exit ?CODE?             Exit this program with return-code CODE",
-  ".expert                  EXPERIMENTAL. Suggest indexes for queries",
   ".explain ?on|off|auto?   Change the EXPLAIN formatting mode.  Default: auto",
   ".filectrl CMD ...        Run various sqlite3_file_control() operations",
   "   --schema SCHEMA         Use SCHEMA instead of \"main\"",
@@ -13653,7 +13644,6 @@ static const char *(azHelp[]) = {
   "     red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen",
   "     brightyellow|brightblue|brightmagenta|brightcyan|brightwhite",
   ".keywordcode ?CODE?      Sets the syntax highlighting terminal code used for keywords",
-  ".limit ?LIMIT? ?VAL?     Display or change the value of an SQLITE_LIMIT",
   ".lint OPTIONS            Report potential schema issues.",
   "     Options:",
   "        fkey-indexes     Find missing foreign key indexes",
@@ -13718,13 +13708,6 @@ static const char *(azHelp[]) = {
   "                           PARAMETER should start with one of: $ : @ ?",
   "   unset PARAMETER         Remove PARAMETER from the binding table",
   ".print STRING...         Print literal STRING",
-#ifndef SQLITE_OMIT_PROGRESS_CALLBACK
-  ".progress N              Invoke progress handler after every N opcodes",
-  "   --limit N                 Interrupt after N progress callbacks",
-  "   --once                    Do no more than one progress interrupt",
-  "   --quiet|-q                No output except at interrupts",
-  "   --reset                   Reset the count for each input and interrupt",
-#endif
   ".prompt MAIN CONTINUE    Replace the standard prompts",
   ".quit                    Exit this program",
   ".read FILE               Read input from FILE",
@@ -13736,7 +13719,6 @@ static const char *(azHelp[]) = {
   "   --no-rowids              Do not attempt to recover rowid values",
   "                            that are not also INTEGER PRIMARY KEYs",
 #endif
-  ".restore ?DB? FILE       Restore content of DB (default \"main\") from FILE",
   ".rows                    Row-wise rendering of query results (default)",
   ".save FILE               Write in-memory database into FILE",
   ".scanstats on|off        Turn sqlite3_stmt_scanstatus() metrics on or off",
@@ -13775,39 +13757,17 @@ static const char *(azHelp[]) = {
   ".shell CMD ARGS...       Run CMD ARGS... in a system shell",
 #endif
   ".show                    Show the current values for various settings",
-  ".stats ?on|off?          Show stats or turn stats on or off",
 #ifndef SQLITE_NOHAVE_SYSTEM
   ".system CMD ARGS...      Run CMD ARGS... in a system shell",
 #endif
   ".tables ?TABLE?          List names of tables matching LIKE pattern TABLE",
   ".testcase NAME           Begin redirecting output to 'testcase-out.txt'",
-  ".testctrl CMD ...        Run various sqlite3_test_control() operations",
-  "                           Run \".testctrl\" with no arguments for details",
-  ".timeout MS              Try opening locked tables for MS milliseconds",
   ".timer on|off            Turn SQL timer on or off",
-#ifndef SQLITE_OMIT_TRACE
-  ".trace ?OPTIONS?         Output each SQL statement as it is run",
-  "    FILE                    Send output to FILE",
-  "    stdout                  Send output to stdout",
-  "    stderr                  Send output to stderr",
-  "    off                     Disable tracing",
-  "    --expanded              Expand query parameters",
-#ifdef SQLITE_ENABLE_NORMALIZE
-  "    --normalized            Normal the SQL statements",
-#endif
-  "    --plain                 Show SQL as it is input",
-  "    --stmt                  Trace statement execution (SQLITE_TRACE_STMT)",
-  "    --profile               Profile statements (SQLITE_TRACE_PROFILE)",
-  "    --row                   Trace each row (SQLITE_TRACE_ROW)",
-  "    --close                 Trace connection close (SQLITE_TRACE_CLOSE)",
-#endif /* SQLITE_OMIT_TRACE */
 #ifdef SQLITE_DEBUG
   ".unmodule NAME ...       Unregister virtual table modules",
   "    --allexcept             Unregister everything except those named",
 #endif
-  ".vfsinfo ?AUX?           Information about the top-level VFS",
   ".vfslist                 List all available VFSes",
-  ".vfsname ?AUX?           Print the name of the VFS stack",
   ".width NUM1 NUM2 ...     Set minimum column widths for columnar output",
   "     Negative values right-justify",
 };
