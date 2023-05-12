@@ -6,8 +6,8 @@
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
 
@@ -115,6 +115,14 @@ unique_ptr<FunctionLocalState> JSONFunctionLocalState::Init(ExpressionState &sta
 	return make_uniq<JSONFunctionLocalState>(state.GetContext());
 }
 
+unique_ptr<FunctionLocalState> JSONFunctionLocalState::InitCastLocalState(CastLocalStateParameters &parameters) {
+	if (parameters.context) {
+		return make_uniq<JSONFunctionLocalState>(*parameters.context);
+	} else {
+		return make_uniq<JSONFunctionLocalState>(Allocator::DefaultAllocator());
+	}
+}
+
 JSONFunctionLocalState &JSONFunctionLocalState::ResetAndGet(ExpressionState &state) {
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
@@ -197,14 +205,6 @@ unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, 
 	return std::move(table_function);
 }
 
-static duckdb::unique_ptr<FunctionLocalState> InitJSONCastLocalState(CastLocalStateParameters &parameters) {
-	if (parameters.context) {
-		return make_uniq<JSONFunctionLocalState>(*parameters.context);
-	} else {
-		return make_uniq<JSONFunctionLocalState>(Allocator::DefaultAllocator());
-	}
-}
-
 static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
@@ -215,15 +215,17 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 	    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
 		    auto data = (char *)(input.GetData());
 		    auto length = input.GetSize();
-		    yyjson_read_err error;
 
+		    yyjson_read_err error;
 		    auto doc = JSONCommon::ReadDocumentUnsafe(data, length, JSONCommon::READ_FLAG, alc, &error);
 
 		    if (!doc) {
-			    HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error),
-			                                 parameters.error_message);
 			    mask.SetInvalid(idx);
-			    success = false;
+			    if (success) {
+				    HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error),
+				                                 parameters.error_message);
+				    success = false;
+			    }
 		    }
 		    return input;
 	    });
@@ -231,13 +233,13 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 	return success;
 }
 
-void JSONFunctions::RegisterCastFunctions(CastFunctionSet &casts) {
+void JSONFunctions::RegisterSimpleCastFunctions(CastFunctionSet &casts) {
 	// JSON to VARCHAR is basically free
 	casts.RegisterCastFunction(JSONCommon::JSONType(), LogicalType::VARCHAR, DefaultCasts::ReinterpretCast, 1);
 
 	// VARCHAR to JSON requires a parse so it's not free. Let's make it 1 more than a cast to STRUCT
 	auto varchar_to_json_cost = casts.ImplicitCastCost(LogicalType::SQLNULL, LogicalTypeId::STRUCT) + 1;
-	BoundCastInfo info(CastVarcharToJSON, nullptr, InitJSONCastLocalState);
+	BoundCastInfo info(CastVarcharToJSON, nullptr, JSONFunctionLocalState::InitCastLocalState);
 	casts.RegisterCastFunction(LogicalType::VARCHAR, JSONCommon::JSONType(), std::move(info), varchar_to_json_cost);
 
 	// Register NULL to JSON with a different cost than NULL to VARCHAR so the binder can disambiguate functions

@@ -17,6 +17,7 @@ class TableRef;
 struct ReplacementScanData;
 class CastFunctionSet;
 struct CastParameters;
+struct CastLocalStateParameters;
 struct JSONScanInfo;
 class BuiltinFunctions;
 
@@ -56,6 +57,7 @@ public:
 	explicit JSONFunctionLocalState(ClientContext &context);
 	static unique_ptr<FunctionLocalState> Init(ExpressionState &state, const BoundFunctionExpression &expr,
 	                                           FunctionData *bind_data);
+	static unique_ptr<FunctionLocalState> InitCastLocalState(CastLocalStateParameters &parameters);
 	static JSONFunctionLocalState &ResetAndGet(ExpressionState &state);
 
 public:
@@ -71,7 +73,9 @@ public:
 	                                                ReplacementScanData *data);
 	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static CopyFunction GetJSONCopyFunction();
-	static void RegisterCastFunctions(CastFunctionSet &casts);
+	static void RegisterSimpleCastFunctions(CastFunctionSet &casts);
+	static void RegisterJSONCreateCastFunctions(CastFunctionSet &casts);
+	static void RegisterJSONTransformCastFunctions(CastFunctionSet &casts);
 
 private:
 	// Scalar functions

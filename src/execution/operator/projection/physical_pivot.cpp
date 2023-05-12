@@ -19,7 +19,7 @@ PhysicalPivot::PhysicalPivot(vector<LogicalType> types_p, unique_ptr<PhysicalOpe
 	for (auto &aggr_expr : bound_pivot.aggregates) {
 		auto &aggr = (BoundAggregateExpression &)*aggr_expr;
 		// for each aggregate, initialize an empty aggregate state and finalize it immediately
-		auto state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
+		auto state = make_unsafe_array<data_t>(aggr.function.state_size());
 		aggr.function.initialize(state.get());
 		Vector state_vector(Value::POINTER((uintptr_t)state.get()));
 		Vector result_vector(aggr_expr->return_type);

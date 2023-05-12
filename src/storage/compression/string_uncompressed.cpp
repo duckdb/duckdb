@@ -292,13 +292,13 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		offset += 2 * sizeof(uint32_t);
 
 		data_ptr_t decompression_ptr;
-		unique_ptr<data_t[]> decompression_buffer;
+		unsafe_array_ptr<data_t> decompression_buffer;
 
 		// If string is in single block we decompress straight from it, else we copy first
 		if (remaining <= Storage::BLOCK_SIZE - sizeof(block_id_t) - offset) {
 			decompression_ptr = handle.Ptr() + offset;
 		} else {
-			decompression_buffer = unique_ptr<data_t[]>(new data_t[compressed_size]);
+			decompression_buffer = make_unsafe_array<data_t>(compressed_size);
 			auto target_ptr = decompression_buffer.get();
 
 			// now append the string to the single buffer

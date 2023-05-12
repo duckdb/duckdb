@@ -39,9 +39,6 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, Bu
 	Initialize(requested_types);
 }
 
-BufferedCSVReader::~BufferedCSVReader() {
-}
-
 enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
 
 static bool StartsWithNumericDate(string &separator, const string &value) {
@@ -1448,7 +1445,7 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start, idx_t &line_start) {
 		                            GetLineNumberStr(linenr, linenr_estimated));
 	}
 
-	buffer = unique_ptr<char[]>(new char[buffer_read_size + remaining + 1]);
+	buffer = make_unsafe_array<char>(buffer_read_size + remaining + 1);
 	buffer_size = remaining + buffer_read_size;
 	if (remaining > 0) {
 		// remaining from last buffer: copy it here

@@ -159,29 +159,29 @@ void Prefix::Concatenate(ART &art, const uint8_t byte, const Prefix &other) {
 		return;
 	}
 
+	auto this_inlined = IsInlined();
 	auto this_count = count;
 	auto this_data = data;
 	Initialize();
 
-	// append the other prefix
+	// append the other prefix and possibly move the data to a segment
 	Append(art, other);
-
 	if (IsInlined()) {
-		// move to a segment
-		reference<PrefixSegment> segment(MoveInlinedToSegment(art));
-		// append the byte
-		segment = segment.get().Append(art, count, byte);
-		// append this prefix
-		for (idx_t i = 0; i < this_count; i++) {
-			segment = segment.get().Append(art, count, this_data.inlined[i]);
-		}
-		return;
+		MoveInlinedToSegment(art);
 	}
 
 	// get the tail
 	reference<PrefixSegment> segment(PrefixSegment::Get(art, data.ptr).GetTail(art));
 	// append the byte
 	segment = segment.get().Append(art, count, byte);
+
+	if (this_inlined) {
+		// append this prefix
+		for (idx_t i = 0; i < this_count; i++) {
+			segment = segment.get().Append(art, count, this_data.inlined[i]);
+		}
+		return;
+	}
 
 	// iterate all segments of this prefix, copy their data, and free them
 	auto this_ptr = this_data.ptr;
