@@ -473,8 +473,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 
 			// insert the new leaf into the Node4
 			Node leaf_node;
-			Prefix::New(*this, leaf_node, key, depth + compare_count + 1,
-			            key.len - (depth + compare_count + 1));
+			Prefix::New(*this, leaf_node, key, depth + compare_count + 1, key.len - (depth + compare_count + 1));
 			Leaf::New(*this, leaf_node, row_id);
 			Node4::InsertChild(*this, node, key[depth + compare_count], leaf_node);
 			return true;

@@ -47,16 +47,10 @@ void Leaf::Free(ART &art, Node &node) {
 	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
 
+	// free leaf segments
 	auto &leaf = Leaf::Get(art, node);
-
-	// delete all leaf segments
 	if (!leaf.IsInlined()) {
-		auto ptr = leaf.row_ids.ptr;
-		while (ptr.IsSet()) {
-			auto next_ptr = LeafSegment::Get(art, ptr).next;
-			Node::Free(art, ptr);
-			ptr = next_ptr;
-		}
+		Node::Free(art, leaf.row_ids.ptr);
 	}
 }
 

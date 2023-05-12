@@ -34,6 +34,7 @@ Node4 &Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
 	auto &n4 = Node4::New(art, node4);
 	auto &n16 = Node16::Get(art, node16);
 
+	D_ASSERT(n16.count <= Node::NODE_4_CAPACITY);
 	n4.count = n16.count;
 	for (idx_t i = 0; i < n16.count; i++) {
 		n4.key[i] = n16.key[i];
@@ -88,7 +89,7 @@ void Node4::InsertChild(ART &art, Node &node, const uint8_t byte, const Node chi
 	}
 }
 
-void Node4::DeleteChild(ART &art, Node &node, const uint8_t byte) {
+void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
 
 	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
@@ -117,17 +118,12 @@ void Node4::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 	// this is a one way node, compress
 	if (n4.count == 1) {
 
-		// get only child
+		// get only child and concatenate prefixes
 		auto child = *n4.GetChild(n4.key[0]);
-
-		// TODO: push the n4.key[0] byte as the first byte into the prefix chain
-		// TODO: leading down to the leaf, or create a new prefix node if there
-		// TODO: is no prefix yet
-//		child.GetPrefix(art).Concatenate(art, n4.key[0], n4.prefix);
+		Prefix::Concatenate(art, prefix, byte, child);
 
 		n4.count--;
 		Node::Free(art, node);
-		node = child;
 	}
 }
 
@@ -191,7 +187,7 @@ BlockPointer Node4::Serialize(ART &art, MetaBlockWriter &writer) {
 	return block_pointer;
 }
 
-void Node4::Deserialize(ART &art, MetaBlockReader &reader) {
+void Node4::Deserialize(MetaBlockReader &reader) {
 
 	count = reader.Read<uint8_t>();
 

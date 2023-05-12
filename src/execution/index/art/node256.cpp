@@ -77,6 +77,7 @@ void Node256::InsertChild(ART &art, Node &node, const uint8_t byte, const Node c
 	D_ASSERT(!n256.children[byte].IsSet());
 
 	n256.count++;
+	D_ASSERT(n256.count <= Node::NODE_256_CAPACITY);
 	n256.children[byte] = child;
 }
 
@@ -130,7 +131,7 @@ BlockPointer Node256::Serialize(ART &art, MetaBlockWriter &writer) {
 	return block_pointer;
 }
 
-void Node256::Deserialize(ART &art, MetaBlockReader &reader) {
+void Node256::Deserialize(MetaBlockReader &reader) {
 
 	count = reader.Read<uint16_t>();
 

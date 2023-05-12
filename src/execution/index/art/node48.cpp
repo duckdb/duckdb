@@ -77,6 +77,7 @@ Node48 &Node48::ShrinkNode256(ART &art, Node &node48, Node &node256) {
 
 	n48.count = 0;
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
+		D_ASSERT(n48.count <= Node::NODE_48_CAPACITY);
 		if (n256.children[i].IsSet()) {
 			n48.child_index[i] = n48.count;
 			n48.children[n48.count] = n256.children[i];
@@ -193,7 +194,7 @@ BlockPointer Node48::Serialize(ART &art, MetaBlockWriter &writer) {
 	return block_pointer;
 }
 
-void Node48::Deserialize(ART &art, MetaBlockReader &reader) {
+void Node48::Deserialize(MetaBlockReader &reader) {
 
 	count = reader.Read<uint8_t>();
 

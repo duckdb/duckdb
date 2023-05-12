@@ -8,8 +8,7 @@
 
 namespace duckdb {
 
-void Prefix::New(ART &art, Node &node, const ARTKey &key, const uint32_t depth,
-                 uint32_t count) {
+void Prefix::New(ART &art, Node &node, const ARTKey &key, const uint32_t depth, uint32_t count) {
 
 	if (count == 0) {
 		return;
@@ -31,8 +30,52 @@ void Prefix::New(ART &art, Node &node, const ARTKey &key, const uint32_t depth,
 	}
 }
 
-bool Prefix::FindMismatchPosition(const ART &art, Node &node, const ARTKey &key,
-                                   const uint32_t depth, idx_t &compare_count) {
+void Prefix::Free(ART &art, Node &node) {
+
+	D_ASSERT(node.IsSet());
+	D_ASSERT(!node.IsSwizzled());
+
+	// free child node
+	auto &child = Prefix::Get(art, node).ptr;
+	Node::Free(art, child);
+}
+
+BlockPointer Prefix::Serialize(ART &art, MetaBlockWriter &writer) {
+
+	// recurse into the child and retrieve its block pointer
+	auto child_block_pointer = ptr.Serialize(art, writer);
+
+	// get pointer and write fields
+	auto block_pointer = writer.GetBlockPointer();
+	writer.Write(NType::PREFIX);
+
+	// write count and prefix bytes
+	for (idx_t i = 0; i <= data[0]; i++) {
+		writer.Write(data[0]);
+	}
+
+	// write child block pointer
+	writer.Write(child_block_pointer.block_id);
+	writer.Write(child_block_pointer.offset);
+
+	return block_pointer;
+}
+
+void Prefix::Deserialize(MetaBlockReader &reader) {
+
+	data[0] = reader.Read<uint8_t>();
+
+	// read bytes
+	for (idx_t i = 0; i < data[0]; i++) {
+		data[i + 1] = reader.Read<uint8_t>();
+	}
+
+	// read child block pointer
+	ptr = Node(reader);
+}
+
+bool Prefix::FindMismatchPosition(const ART &art, Node &node, const ARTKey &key, const uint32_t depth,
+                                  idx_t &mismatch_position) {
 
 	D_ASSERT(node.DecodeARTNodeType() == NType::PREFIX);
 	while (node.DecodeARTNodeType() == NType::PREFIX) {
@@ -40,10 +83,10 @@ bool Prefix::FindMismatchPosition(const ART &art, Node &node, const ARTKey &key,
 		auto &prefix = Prefix::Get(art, node);
 		for (idx_t i = 0; i < prefix.data[0]; i++) {
 			// mismatch position
-			if (prefix.data[i + 1] != key[depth + compare_count]) {
+			if (prefix.data[i + 1] != key[depth + mismatch_position]) {
 				return true;
 			}
-			compare_count++;
+			mismatch_position++;
 		}
 
 		// no mismatch position in this prefix node, compare to next one
@@ -71,11 +114,10 @@ uint8_t Prefix::Split(ART &art, Node &node, Node &remaining_node, const idx_t co
 		reference<Node> current_node(remaining_node);
 
 		while ()
-		if (copy_count)
+			if (copy_count)
 
-		Prefix::New(art, )
+				Prefix::New(art, )
 	}
-
 
 	// if the new count is zero, then we free the prefix (chain) and don't change &node
 	if (split_position == 0) {
@@ -86,10 +128,6 @@ uint8_t Prefix::Split(ART &art, Node &node, Node &remaining_node, const idx_t co
 		prefix.data[0] = split_position;
 		node = prefix.ptr;
 	}
-
-
-
-
 }
 
 void Prefix::Free(ART &art) {
@@ -359,78 +397,6 @@ uint32_t Prefix::MismatchPosition(const ART &art, const Prefix &other) const {
 		other_ptr = other_segment.next;
 	}
 	return count;
-}
-
-void Prefix::Serialize(const ART &art, MetaBlockWriter &writer) const {
-
-	writer.Write(count);
-
-	// write inlined data
-	if (IsInlined()) {
-		writer.WriteData(data.inlined, count);
-		return;
-	}
-
-	D_ASSERT(data.ptr.IsSet());
-	auto ptr = data.ptr;
-	auto remaining = count;
-
-	// iterate all prefix segments and write their bytes
-	while (ptr.IsSet()) {
-		auto &segment = PrefixSegment::Get(art, ptr);
-		auto copy_count = MinValue(Node::PREFIX_SEGMENT_SIZE, remaining);
-
-		// write the bytes
-		writer.WriteData(segment.bytes, copy_count);
-
-		// adjust loop variables
-		remaining -= copy_count;
-		ptr = segment.next;
-	}
-	D_ASSERT(remaining == 0);
-}
-
-void Prefix::Deserialize(ART &art, MetaBlockReader &reader) {
-
-	auto count_p = reader.Read<uint32_t>();
-
-	// copy into inlined data
-	if (count_p <= Node::PREFIX_INLINE_BYTES) {
-		reader.ReadData(data.inlined, count_p);
-		count = count_p;
-		return;
-	}
-
-	// copy into segments
-	count = 0;
-	reference<PrefixSegment> segment(PrefixSegment::New(art, data.ptr));
-	for (idx_t i = 0; i < count_p; i++) {
-		segment = segment.get().Append(art, count, reader.Read<uint8_t>());
-	}
-	D_ASSERT(count_p == count);
-}
-
-void Prefix::Vacuum(ART &art) {
-
-	if (IsInlined()) {
-		return;
-	}
-
-	// first pointer has special treatment because we don't obtain it from a prefix segment
-	auto &allocator = Node::GetAllocator(art, NType::PREFIX_SEGMENT);
-	if (allocator.NeedsVacuum(data.ptr)) {
-		data.ptr.SetPtr(allocator.VacuumPointer(data.ptr));
-	}
-
-	auto ptr = data.ptr;
-	while (ptr.IsSet()) {
-		auto &segment = PrefixSegment::Get(art, ptr);
-		ptr = segment.next;
-		if (ptr.IsSet() && allocator.NeedsVacuum(ptr)) {
-			segment.next.SetPtr(allocator.VacuumPointer(ptr));
-			ptr = segment.next;
-		}
-	}
 }
 
 PrefixSegment &Prefix::MoveInlinedToSegment(ART &art) {

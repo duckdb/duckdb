@@ -77,7 +77,7 @@ public:
 	//! Insert the child node at byte
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
 	//! Delete the child node at the respective byte
-	static void DeleteChild(ART &art, Node &node, const uint8_t byte);
+	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte);
 
 	//! Get the child for the respective byte in the node
 	optional_ptr<Node> GetChild(ART &art, const uint8_t byte) const;

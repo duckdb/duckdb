@@ -60,7 +60,7 @@ public:
 	//! Serialize an ART node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
 	//! Deserialize this node
-	void Deserialize(ART &art, MetaBlockReader &reader);
+	void Deserialize(MetaBlockReader &reader);
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);

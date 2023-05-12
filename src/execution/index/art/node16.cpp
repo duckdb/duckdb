@@ -53,6 +53,7 @@ Node16 &Node16::ShrinkNode48(ART &art, Node &node16, Node &node48) {
 
 	n16.count = 0;
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
+		D_ASSERT(n16.count <= Node::NODE_16_CAPACITY);
 		if (n48.child_index[i] != Node::EMPTY_MARKER) {
 			n16.key[n16.count] = i;
 			n16.children[n16.count] = n48.children[n48.child_index[i]];
@@ -200,7 +201,7 @@ BlockPointer Node16::Serialize(ART &art, MetaBlockWriter &writer) {
 	return block_pointer;
 }
 
-void Node16::Deserialize(ART &art, MetaBlockReader &reader) {
+void Node16::Deserialize(MetaBlockReader &reader) {
 
 	count = reader.Read<uint8_t>();
 
