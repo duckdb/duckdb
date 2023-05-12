@@ -132,17 +132,24 @@ public:
 	}
 
 	template <class PAYLOAD>
-	static void VerifyParameters(case_insensitive_map_t<PAYLOAD> &named,
-	                             const case_insensitive_map_t<idx_t> &named_params) {
-		if (named_params.size() == named.size()) {
+	static void VerifyParameters(case_insensitive_map_t<PAYLOAD> &provided,
+	                             const case_insensitive_map_t<idx_t> &expected) {
+		if (expected.size() == provided.size()) {
+			// Same amount of identifiers, if
+			for (auto &pair : expected) {
+				auto &identifier = pair.first;
+				if (!provided.count(identifier)) {
+					throw InvalidInputException(MissingValuesException(expected, provided));
+				}
+			}
 			return;
 		}
 		// Mismatch in expected and provided parameters/values
-		if (named_params.size() > named.size()) {
-			throw InvalidInputException(MissingValuesException(named_params, named));
+		if (expected.size() > provided.size()) {
+			throw InvalidInputException(MissingValuesException(expected, provided));
 		} else {
-			D_ASSERT(named.size() > named_params.size());
-			throw InvalidInputException(ExcessValuesException(named_params, named));
+			D_ASSERT(provided.size() > expected.size());
+			throw InvalidInputException(ExcessValuesException(expected, provided));
 		}
 	}
 

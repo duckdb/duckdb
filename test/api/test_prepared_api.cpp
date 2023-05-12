@@ -320,7 +320,7 @@ TEST_CASE("Test BLOB with PreparedStatement", "[api]") {
 
 	// Creating a blob buffer with almost ALL ASCII chars
 	uint8_t num_chars = 256 - 5; // skipping: '\0', '\n', '\15', ',', '\32'
-	duckdb::unique_ptr<char[]> blob_chars(new char[num_chars]);
+	auto blob_chars = make_unsafe_array<char>(num_chars);
 	char ch = '\0';
 	idx_t buf_idx = 0;
 	for (idx_t i = 0; i < 255; ++i, ++ch) {

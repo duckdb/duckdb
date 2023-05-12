@@ -97,7 +97,7 @@ public:
 					// no space; first enlarge the buffer
 					buffer_capacity = MaxValue<idx_t>(NextPowerOfTwo(buffer_size + bytes_read), buffer_capacity * 2);
 
-					auto new_buffer = unique_ptr<data_t[]>(new data_t[buffer_capacity]);
+					auto new_buffer = make_unsafe_array<data_t>(buffer_capacity);
 					if (buffer_size > 0) {
 						memcpy(new_buffer.get(), cached_buffer.get(), buffer_size);
 					}
@@ -156,7 +156,7 @@ private:
 	bool plain_file_source = false;
 	idx_t file_size = 0;
 	// reset support
-	unique_ptr<data_t[]> cached_buffer;
+	unsafe_array_ptr<data_t> cached_buffer;
 	idx_t read_position = 0;
 	idx_t buffer_size = 0;
 	idx_t buffer_capacity = 0;

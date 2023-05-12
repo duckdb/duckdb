@@ -68,7 +68,7 @@ private:
 	//! Build and probe statistics
 	PerfectHashJoinStats perfect_join_statistics;
 	//! Stores the occurences of each value in the build side
-	unique_ptr<bool[]> bitmap_build_idx;
+	unsafe_array_ptr<bool> bitmap_build_idx;
 	//! Stores the number of unique keys in the build side
 	idx_t unique_keys = 0;
 };
