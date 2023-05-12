@@ -1,5 +1,5 @@
-# name: test/sql/function/list/list_hasAny_and_hasAll.test
-# description: Test list_has_any and list_hasAll functions
+# name: test/sql/function/list/list_has_any_and_has_all.test
+# description: Test list_has_any and list_has_all functions
 # group: [list]
 
 query I
@@ -37,6 +37,9 @@ INSERT INTO list_data VALUES ([1,2,NULL], [NULL,3,4]);
 
 statement ok
 INSERT INTO list_data VALUES ([1,2,3], [1,2,3]);
+
+statement ok
+INSERT INTO list_data VALUES ([1,2,3], [1,2,NULL]);
 
 query I
 select list_has_any(l1, l2) from list_data;
@@ -162,34 +165,52 @@ select list_has_all([1, 2], 1);
 statement error
 select list_has_any([[1,2], [2,4]], ['abc', 'def']);
 
-# Test Large Lists
+# Test Function in Function
+
+foreach f list_has_all list_has_any
 
 statement ok
-create table large_lists(l1 int[], l2 int[]);
+create table tbl(l1 int[], l2 int[]);
 
 statement ok
-insert into large_lists values (range(1, 3000), range(2000, 3000));
-
-statement ok
-insert into large_lists values (range(3000), range(3000));
+insert into tbl values ([1,2,3], [2,3,4]);
 
 query I
-select list_has_any(l1, l2) from large_lists;
+select ${f}(list_intersect(l1, l2), list_intersect(l2, l1)) from tbl;
+----
+1
+
+statement ok
+drop table tbl;
+
+endloop
+
+# Test Lists of Different Lengths
+
+statement ok
+create table tbl(l1 int[], l2 int[]);
+
+statement ok
+insert into tbl values ([1,2,3,4,5,6], [2,3,4]);
+
+statement ok
+insert into tbl values ([1,2,3], [1,2,3,4,7,8,9]);
+
+query I
+select list_has_any(l1, l2) from tbl;
 ----
 1
 1
 
 query I
-select list_has_all(l1, l2) from large_lists;
+select list_has_all(l1, l2) from tbl;
+----
+1
+0
+
+query I
+select list_has_all(l2, l1) from tbl;
 ----
 0
 1
 
-foreach f list_has_all list_has_any
-
-query I
-select ${f}(list_transform([1,2,3], (x) -> list_contains([2,3,4], x)), list_transform([2,3,4], (x) -> list_contains([1,2,3], x)));
-----
-1
-
-endloop
