@@ -32,9 +32,9 @@ struct NestedCopyValue {
 template <class T, class COPY_FUNCTION>
 static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
-        FlatVector::Validity(result).SetInvalid(0);
-        return;
-    }
+		FlatVector::Validity(result).SetInvalid(0);
+		return;
+	}
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto count = args.size();
 
