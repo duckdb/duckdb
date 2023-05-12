@@ -139,7 +139,7 @@ string PragmaImportDatabase(ClientContext &context, const FunctionParameters &pa
 		auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
 		                          FileSystem::DEFAULT_COMPRESSION);
 		auto fsize = fs.GetFileSize(*handle);
-		auto buffer = unique_ptr<char[]>(new char[fsize]);
+		auto buffer = make_unsafe_array<char>(fsize);
 		fs.Read(*handle, buffer.get(), fsize);
 		auto query = string(buffer.get(), fsize);
 		// Replace the placeholder with the path provided to IMPORT

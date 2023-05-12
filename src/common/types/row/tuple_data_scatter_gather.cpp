@@ -1,7 +1,7 @@
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
-#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -314,6 +314,19 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, c
 	const auto child_list_entries = (list_entry_t *)child_list_data.data;
 	const auto &child_list_validity = child_list_data.validity;
 
+	// Figure out actual child list size (differs from ListVector::GetListSize if dict/const vector)
+	idx_t child_list_child_count = ListVector::GetListSize(source_v);
+	for (idx_t i = 0; i < append_count; i++) {
+		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
+		if (!list_validity.RowIsValid(list_idx)) {
+			continue;
+		}
+		const auto &list_entry = list_entries[list_idx];
+		const auto &list_offset = list_entry.offset;
+		const auto &list_length = list_entry.length;
+		child_list_child_count = MaxValue<idx_t>(child_list_child_count, list_offset + list_length);
+	}
+
 	// Target
 	auto heap_sizes = FlatVector::GetData<idx_t>(heap_sizes_v);
 
@@ -322,7 +335,6 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, c
 	child_format.combined_list_data = make_uniq<CombinedListData>();
 	auto &combined_list_data = *child_format.combined_list_data;
 	auto &combined_list_entries = combined_list_data.combined_list_entries;
-	const auto child_list_child_count = ListVector::GetListSize(source_v);
 	SelectionVector combined_sel(child_list_child_count);
 	for (idx_t i = 0; i < child_list_child_count; i++) {
 		combined_sel.set_index(i, 0);

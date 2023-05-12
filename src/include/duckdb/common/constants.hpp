@@ -21,11 +21,6 @@ namespace duckdb {
 using std::move;
 #endif
 
-// template <class _Tp, class _Dp = std::default_delete<_Tp>>
-// class unique_ptr;
-
-// using data_ptr = unique_ptr<char[]>;
-
 // NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
 #define DEFAULT_SCHEMA  "main"
 #define INVALID_SCHEMA  ""

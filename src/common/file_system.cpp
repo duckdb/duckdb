@@ -78,7 +78,7 @@ idx_t FileSystem::GetAvailableMemory() {
 }
 
 string FileSystem::GetWorkingDirectory() {
-	auto buffer = unique_ptr<char[]>(new char[PATH_MAX]);
+	auto buffer = make_unsafe_array<char>(PATH_MAX);
 	char *ret = getcwd(buffer.get(), PATH_MAX);
 	if (!ret) {
 		throw IOException("Could not get working directory!");
@@ -138,7 +138,7 @@ string FileSystem::GetWorkingDirectory() {
 	if (count == 0) {
 		throw IOException("Could not get working directory!");
 	}
-	auto buffer = unique_ptr<char[]>(new char[count]);
+	auto buffer = make_unsafe_array<char>(count);
 	idx_t ret = GetCurrentDirectory(count, buffer.get());
 	if (count != ret + 1) {
 		throw IOException("Could not get working directory!");

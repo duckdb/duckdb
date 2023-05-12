@@ -19,10 +19,10 @@ void CompressedFile::Initialize(bool write) {
 	this->write = write;
 	stream_data.in_buf_size = compressed_fs.InBufferSize();
 	stream_data.out_buf_size = compressed_fs.OutBufferSize();
-	stream_data.in_buff = unique_ptr<data_t[]>(new data_t[stream_data.in_buf_size]);
+	stream_data.in_buff = make_unsafe_array<data_t>(stream_data.in_buf_size);
 	stream_data.in_buff_start = stream_data.in_buff.get();
 	stream_data.in_buff_end = stream_data.in_buff.get();
-	stream_data.out_buff = unique_ptr<data_t[]>(new data_t[stream_data.out_buf_size]);
+	stream_data.out_buff = make_unsafe_array<data_t>(stream_data.out_buf_size);
 	stream_data.out_buff_start = stream_data.out_buff.get();
 	stream_data.out_buff_end = stream_data.out_buff.get();
 

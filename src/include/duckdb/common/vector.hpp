@@ -12,6 +12,7 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/memory_safety.hpp"
 #include <vector>
 
 namespace duckdb {
@@ -25,6 +26,7 @@ public:
 	using const_reference = typename original::const_reference;
 	using reference = typename original::reference;
 
+private:
 	static inline void AssertIndexInBounds(idx_t index, idx_t size) {
 #if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
 		return;
@@ -35,6 +37,7 @@ public:
 #endif
 	}
 
+public:
 #ifdef DUCKDB_CLANG_TIDY
 	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
 	[[clang::reinitializes]]
@@ -55,7 +58,7 @@ public:
 
 	template <bool _SAFE = false>
 	inline typename original::reference get(typename original::size_type __n) {
-		if (_SAFE) {
+		if (MemorySafety<_SAFE>::enabled) {
 			AssertIndexInBounds(__n, original::size());
 		}
 		return original::operator[](__n);
@@ -63,7 +66,7 @@ public:
 
 	template <bool _SAFE = false>
 	inline typename original::const_reference get(typename original::size_type __n) const {
-		if (_SAFE) {
+		if (MemorySafety<_SAFE>::enabled) {
 			AssertIndexInBounds(__n, original::size());
 		}
 		return original::operator[](__n);
