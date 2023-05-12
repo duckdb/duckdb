@@ -123,12 +123,12 @@ public:
 
 	//! Whether or not we should ignore malformed JSON (default to NULL)
 	bool ignore_errors = false;
-	//! Maximum JSON object size (defaults to 1MB minimum)
-	idx_t maximum_object_size = 1048576;
+	//! Maximum JSON object size (defaults to 16MB minimum)
+	idx_t maximum_object_size = 16777216;
 	//! Whether we auto-detect a schema
 	bool auto_detect = false;
 	//! Sample size for detecting schema
-	idx_t sample_size = STANDARD_VECTOR_SIZE;
+	idx_t sample_size = idx_t(STANDARD_VECTOR_SIZE) * 10;
 	//! Max depth we go to detect nested JSON schema (defaults to unlimited)
 	idx_t max_depth = NumericLimits<idx_t>::Maximum();
 

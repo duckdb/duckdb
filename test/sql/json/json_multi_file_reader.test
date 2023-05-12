@@ -10,7 +10,7 @@ create table test as SELECT to_json([i%4]) as j FROM range(0,20) as tbl(i)
 # FIXME: we can't do partitioned JSON writes yet because the column we partition by is packed into a to_json
 # because we just push an expression and then use the csv writer, this uses the csv writer for now
 statement ok
-COPY test TO '__TEST_DIR__/part' (FORMAT csv, quote '', PARTITION_BY (j));
+COPY test TO '__TEST_DIR__/json_part' (FORMAT csv, quote '', PARTITION_BY (j));
 
 # some tests for read_json first
 query III
@@ -45,7 +45,7 @@ NULL	NULL	cancelled
 
 # despite not being able to do partitioned writes, we can do partitioned json reads already!
 query II
-SELECT j, count(*) FROM read_json_auto('__TEST_DIR__/part/j=*/*.csv', HIVE_PARTITIONING=1) group by j order by j;
+SELECT j, count(*) FROM read_json_auto('__TEST_DIR__/json_part/j=*/*.csv', HIVE_PARTITIONING=1) group by j order by j;
 ----
 [0]	5
 [1]	5
@@ -84,7 +84,7 @@ select * from read_json_objects_auto(['data/json/example_n.ndjson', 'data/json/t
 {"id":5,"name":"Raising Arizona"}
 
 query II
-select j, count(*) from read_json_objects_auto('__TEST_DIR__/part/j=*/*.csv', HIVE_PARTITIONING=1) group by j order by j
+select j, count(*) from read_json_objects_auto('__TEST_DIR__/json_part/j=*/*.csv', HIVE_PARTITIONING=1) group by j order by j
 ----
 [0]	5
 [1]	5
