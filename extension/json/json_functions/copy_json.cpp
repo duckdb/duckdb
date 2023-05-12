@@ -11,6 +11,10 @@
 
 namespace duckdb {
 
+static void ThrowJSONCopyParameterException(const string &loption) {
+	throw BinderException("COPY (FORMAT JSON) parameter %s expects a single argument.");
+}
+
 static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	auto stmt_copy = stmt.Copy();
 	auto &copy = stmt_copy->Cast<CopyStatement>();
@@ -23,14 +27,22 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	for (const auto &kv : info.options) {
 		const auto &loption = StringUtil::Lower(kv.first);
 		if (loption == "dateformat" || loption == "date_format") {
+			if (kv.second.size() != 1) {
+				ThrowJSONCopyParameterException(loption);
+			}
 			date_format = StringValue::Get(kv.second.back());
-		} else if (loption == "timestampformat" || loption == "timtestampformat") {
+		} else if (loption == "timestampformat" || loption == "timestamp_format") {
+			if (kv.second.size() != 1) {
+				ThrowJSONCopyParameterException(loption);
+			}
 			timestamp_format = StringValue::Get(kv.second.back());
 		} else if (loption == "compression") {
 			csv_copy_options.insert(kv);
 		} else if (loption == "array") {
-			auto array = BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
-			if (array) {
+			if (kv.second.size() > 1) {
+				ThrowJSONCopyParameterException(loption);
+			}
+			if (kv.second.empty() || BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN))) {
 				csv_copy_options["prefix"] = {"[\n\t"};
 				csv_copy_options["suffix"] = {"\n]\n"};
 				csv_copy_options["new_line"] = {",\n\t"};
@@ -108,15 +120,34 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
 	for (auto &kv : info.options) {
 		const auto &loption = StringUtil::Lower(kv.first);
 		if (loption == "dateformat" || loption == "date_format") {
+			if (kv.second.size() != 1) {
+				ThrowJSONCopyParameterException(loption);
+			}
 			bind_data->date_format = StringValue::Get(kv.second.back());
-		} else if (loption == "timestampformat" || loption == "timtestampformat") {
+		} else if (loption == "timestampformat" || loption == "timestamp_format") {
+			if (kv.second.size() != 1) {
+				ThrowJSONCopyParameterException(loption);
+			}
 			bind_data->timestamp_format = StringValue::Get(kv.second.back());
 		} else if (loption == "auto_detect") {
-			auto_detect = BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
+			if (kv.second.empty()) {
+				auto_detect = true;
+			} else if (kv.second.size() != 1) {
+				ThrowJSONCopyParameterException(loption);
+			} else {
+				auto_detect = BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
+			}
 		} else if (loption == "compression") {
+			if (kv.second.size() != 1) {
+				ThrowJSONCopyParameterException(loption);
+			}
 			bind_data->SetCompression(StringValue::Get(kv.second.back()));
 		} else if (loption == "array") {
-			if (BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN))) {
+			if (kv.second.empty()) {
+				bind_data->options.format = JSONFormat::ARRAY;
+			} else if (kv.second.size() != 1) {
+				ThrowJSONCopyParameterException(loption);
+			} else if (BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN))) {
 				bind_data->options.format = JSONFormat::ARRAY;
 			}
 		} else {

@@ -185,7 +185,12 @@ select * from read_json_auto('__TEST_DIR__/my.json', format='array')
 8
 9
 
-# compression
+# compression stuff (cannot be empty)
+statement error
+copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (COMPRESSION)
+----
+Binder Error
+
 statement ok
 copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (COMPRESSION GZIP)
 
@@ -218,9 +223,9 @@ start transaction
 statement ok
 call dbgen(sf=1)
 
-# export lineitem as array
+# export lineitem as array (ARRAY does not need TRUE to be passed)
 statement ok
-COPY lineitem TO '__TEST_DIR__/lineitem.json' (ARRAY TRUE)
+COPY lineitem TO '__TEST_DIR__/lineitem.json' (ARRAY)
 
 # also export the whole thing
 statement ok
@@ -241,7 +246,7 @@ statement ok
 set memory_limit='1gb'
 
 statement ok
-COPY lineitem from '__TEST_DIR__/lineitem.json' (ARRAY TRUE)
+COPY lineitem from '__TEST_DIR__/lineitem.json' (ARRAY)
 
 statement ok
 reset memory_limit

@@ -2,10 +2,10 @@
 # description: Read json files - date detection
 # group: [json]
 
+require json
+
 statement ok
 pragma enable_verification
-
-require json
 
 # issue #6774
 query I
@@ -19,6 +19,27 @@ create table date_test as select '1996/03/27'::DATE d
 
 statement ok
 create table timestamp_test as select '1996-03-27 07:42:33'::TIMESTAMP t
+
+# cannot be empty
+statement error
+copy (select d from date_test) to '__TEST_DIR__/my_file.json' (dateformat)
+----
+Binder Error
+
+statement error
+copy (select d from date_test) to '__TEST_DIR__/my_file.json' (timestampformat)
+----
+Binder Error
+
+statement error
+copy date_test from '__TEST_DIR__/my_file.json' (dateformat)
+----
+Binder Error
+
+statement error
+copy date_test from '__TEST_DIR__/my_file.json' (timestampformat)
+----
+Binder Error
 
 # test all supported date formats
 foreach date_format '%m-%d-%Y' '%m-%d-%y' '%d-%m-%Y' '%d-%m-%y' '%Y-%m-%d' '%y-%m-%d'
