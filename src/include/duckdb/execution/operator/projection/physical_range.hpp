@@ -22,6 +22,9 @@ public:
 	PhysicalRange(vector<LogicalType> types, vector<unique_ptr<Expression>> args_list, idx_t estimated_cardinality,
 	               PhysicalOperatorType type = PhysicalOperatorType::RANGE);
 
+	// args_list and generate_series are never instantiated, 
+	// since the PhysicalRange constructor is apparently never called.
+	// They are declared here only to enable implemention of GetOperatorState.
 	vector<unique_ptr<Expression>> args_list;
 	bool generate_series;
 
