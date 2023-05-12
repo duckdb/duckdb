@@ -1,6 +1,9 @@
-# name: test/sql/function/list/list_resize_types.test
+# name: test/sql/function/list/list_resize_types.test_slow
 # description: test for list_resize() that take a long time
 # group: [list]
+
+statement ok
+PRAGMA enable_verification;
 
 query I
 select list_resize(c, 3) from test_vector_types(NULL::INT[], false) t(c);

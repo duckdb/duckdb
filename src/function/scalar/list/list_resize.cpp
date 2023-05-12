@@ -31,6 +31,10 @@ struct NestedCopyValue {
 
 template <class T, class COPY_FUNCTION>
 static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
+	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
+        FlatVector::Validity(result).SetInvalid(0);
+        return;
+    }
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto count = args.size();
 
@@ -200,17 +204,29 @@ void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result)
 static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2 || arguments.size() == 3);
-	bound_function.return_type = arguments[0]->return_type;
 	bound_function.arguments[1] = LogicalType::UBIGINT;
-	if (bound_function.arguments.size() == 3) {
-		if (arguments[0]->return_type == LogicalType::UNKNOWN) {
-			return make_uniq<VariableReturnBindData>(bound_function.return_type);
-		}
-		if (ListType::GetChildType(arguments[0]->return_type) != arguments[2]->return_type &&
-		    arguments[2]->return_type != LogicalTypeId::SQLNULL) {
-			throw InvalidInputException("Default value must be of the same type as the lists or NULL");
-		}
+
+	// first argument is constant NULL
+	if (arguments[0]->return_type == LogicalType::SQLNULL) {
+		bound_function.arguments[0] = LogicalType::SQLNULL;
+		bound_function.return_type = LogicalType::SQLNULL;
+		return make_uniq<VariableReturnBindData>(bound_function.return_type);
 	}
+
+	// prepared statements
+	if (arguments[0]->return_type == LogicalType::UNKNOWN) {
+		bound_function.return_type = arguments[0]->return_type;
+		return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	}
+
+	// default type does not match list type
+	if (bound_function.arguments.size() == 3 &&
+	    ListType::GetChildType(arguments[0]->return_type) != arguments[2]->return_type &&
+	    arguments[2]->return_type != LogicalTypeId::SQLNULL) {
+		throw InvalidInputException("Default value must be of the same type as the lists or NULL");
+	}
+
+	bound_function.return_type = arguments[0]->return_type;
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 

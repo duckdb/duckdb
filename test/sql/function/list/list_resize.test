@@ -2,6 +2,9 @@
 # description: test for list_resize()
 # group: [list]
 
+statement ok
+PRAGMA enable_verification;
+
 query I
 SELECT list_resize([1, 2, 4], 2);
 ----
@@ -61,6 +64,22 @@ select list_resize(a, b) from string_tbl;
 [here is a little story about a duck,, whose name is harold., He is a cool duck who lives in a cool world, NULL, NULL]
 
 # Null Check
+
+query I
+SELECT list_resize(NULL, 1, 1);
+----
+NULL
+
+query I
+SELECT list_resize(NULL, 2, NULL);
+----
+NULL
+
+query I
+SELECT list_resize(NULL, NULL, NULL);
+----
+NULL
+
 statement ok
 SELECT list_resize([1,2,3], NULL);
 
