@@ -526,8 +526,9 @@ void S3FileSystem::GetQueryParam(const string &key, string &param, duckdb_httpli
 }
 
 void S3FileSystem::ReadQueryParams(const string &url_query_param, S3AuthParams &params) {
-	if (url_query_param.empty())
+	if (url_query_param.empty()) {
 		return;
+	}
 
 	duckdb_httplib_openssl::Params query_params;
 	duckdb_httplib_openssl::detail::parse_query_text(url_query_param, query_params);

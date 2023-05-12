@@ -59,7 +59,7 @@ public:
 class CompressedFile : public FileHandle {
 public:
 	DUCKDB_API CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> child_handle_p, const string &path);
-	DUCKDB_API virtual ~CompressedFile() override;
+	DUCKDB_API ~CompressedFile() override;
 
 	CompressedFileSystem &compressed_fs;
 	unique_ptr<FileHandle> child_handle;

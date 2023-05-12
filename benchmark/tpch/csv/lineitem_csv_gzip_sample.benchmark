@@ -1,0 +1,24 @@
+# name: benchmark/tpch/csv/lineitem_csv_gzip_sample.benchmark
+# description: Read Lineitem CSV gzipped with auto-detection sampling the entire file
+# group: [csv]
+
+name Read Lineitem CSV gzipped with auto-detection sampling the entire file
+group csv
+
+require tpch
+
+# create the CSV file
+load
+CREATE SCHEMA tpch_schema;
+CALL dbgen(sf=1, schema='tpch_schema');
+COPY tpch_schema.lineitem TO '${BENCHMARK_DIR}/lineitem.csv.gz' (FORMAT CSV, DELIMITER '|', HEADER);
+DROP SCHEMA tpch_schema CASCADE;
+
+run
+CREATE OR REPLACE TABLE lineitem AS (SELECT * FROM read_csv_auto('${BENCHMARK_DIR}/lineitem.csv.gz', sample_size=-1));
+
+cleanup
+DROP TABLE IF EXISTS lineitem;
+
+result I
+6001215
