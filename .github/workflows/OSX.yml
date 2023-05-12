@@ -75,6 +75,7 @@ jobs:
         security import duckdb-private-key.p12 -k ~/Library/Keychains/login.keychain -P ""
         security import duckdb-public-key.pem -k ~/Library/Keychains/login.keychain
         security import duckdb-developerid-certificate.cer -k ~/Library/Keychains/login.keychain
+        security find-certificate ~/Library/Keychains/login.keychain
         wget https://github.com/duckdb/duckdb/releases/download/v0.7.1/duckdb_cli-osx-universal.zip
         unzip duckdb_cli-osx-universal.zip
         codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" duckdb
