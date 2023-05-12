@@ -131,18 +131,21 @@ unique_ptr<FunctionData> StringAggBind(ClientContext &context, AggregateFunction
 		throw BinderException("Separator argument to StringAgg must be a constant");
 	}
 	auto separator_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
+	string separator_string = ",";
 	if (separator_val.IsNull()) {
 		arguments[0] = make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR));
+	} else {
+		separator_string = separator_val.ToString();
 	}
 	Function::EraseArgument(function, arguments, arguments.size() - 1);
-	return make_uniq<StringAggBindData>(separator_val.ToString());
+	return make_uniq<StringAggBindData>(std::move(separator_string));
 }
 
 static void StringAggSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
                                const AggregateFunction &function) {
 	D_ASSERT(bind_data_p);
-	auto bind_data = (StringAggBindData *)bind_data_p;
-	writer.WriteString(bind_data->sep);
+	auto bind_data = bind_data_p->Cast<StringAggBindData>();
+	writer.WriteString(bind_data.sep);
 }
 
 unique_ptr<FunctionData> StringAggDeserialize(ClientContext &context, FieldReader &reader,
