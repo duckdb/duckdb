@@ -179,7 +179,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 
 	// state_buffer holds the state for each list of this chunk
 	idx_t size = aggr.function.state_size();
-	auto state_buffer = unique_ptr<data_t[]>(new data_t[size * count]);
+	auto state_buffer = make_unsafe_array<data_t>(size * count);
 
 	// state vector for initialize and finalize
 	StateVector state_vector(count, info.aggr_expr->Copy());

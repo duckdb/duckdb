@@ -291,8 +291,8 @@ void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count_
 	}
 }
 
-unique_ptr<UnifiedVectorFormat[]> DataChunk::ToUnifiedFormat() {
-	auto orrified_data = unique_ptr<UnifiedVectorFormat[]>(new UnifiedVectorFormat[ColumnCount()]);
+unsafe_array_ptr<UnifiedVectorFormat> DataChunk::ToUnifiedFormat() {
+	auto orrified_data = make_unsafe_array<UnifiedVectorFormat>(ColumnCount());
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 		data[col_idx].ToUnifiedFormat(size(), orrified_data[col_idx]);
 	}

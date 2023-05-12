@@ -65,12 +65,12 @@ public:
 	//! returned by the JoinHashTable::Scan function and can be used to resume a
 	//! probe.
 	struct ScanStructure {
-		unique_ptr<UnifiedVectorFormat[]> key_data;
+		unsafe_array_ptr<UnifiedVectorFormat> key_data;
 		Vector pointers;
 		idx_t count;
 		SelectionVector sel_vector;
 		// whether or not the given tuple has found a match
-		unique_ptr<bool[]> found_match;
+		unsafe_array_ptr<bool> found_match;
 		JoinHashTable &ht;
 		bool finished;
 
@@ -212,8 +212,8 @@ private:
 	//! Insert the given set of locations into the HT with the given set of hashes
 	void InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[], bool parallel);
 
-	idx_t PrepareKeys(DataChunk &keys, unique_ptr<UnifiedVectorFormat[]> &key_data, const SelectionVector *&current_sel,
-	                  SelectionVector &sel, bool build_side);
+	idx_t PrepareKeys(DataChunk &keys, unsafe_array_ptr<UnifiedVectorFormat> &key_data,
+	                  const SelectionVector *&current_sel, SelectionVector &sel, bool build_side);
 
 	//! Lock for combining data_collection when merging HTs
 	mutex data_lock;

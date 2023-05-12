@@ -78,7 +78,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 	bind_data->is_simple = bind_data->options.delimiter.size() == 1 && bind_data->options.escape.size() == 1 &&
 	                       bind_data->options.quote.size() == 1;
 	if (bind_data->is_simple) {
-		bind_data->requires_quotes = unique_ptr<bool[]>(new bool[256]);
+		bind_data->requires_quotes = make_unsafe_array<bool>(256);
 		memset(bind_data->requires_quotes.get(), 0, sizeof(bool) * 256);
 		bind_data->requires_quotes['\n'] = true;
 		bind_data->requires_quotes['\r'] = true;
