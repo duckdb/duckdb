@@ -280,7 +280,7 @@ void BufferedJSONReader::ThrowParseError(idx_t buf_index, idx_t line_or_object_i
                                          const string &extra) {
 	string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "record/value";
 	auto line = GetLineNumber(buf_index, line_or_object_in_buf);
-	throw InvalidInputException("Malformed JSON in file \"%s\", at byte %llu in %s %llu: %s. %s.", file_name,
+	throw InvalidInputException("Malformed JSON in file \"%s\", at byte %llu in %s %llu: %s. %s", file_name,
 	                            err.pos + 1, unit, line + 1, err.msg, extra);
 }
 

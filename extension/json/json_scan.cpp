@@ -426,7 +426,8 @@ void JSONScanLocalState::ParseJSON(char *const json_start, const idx_t json_size
 		err.code = YYJSON_READ_ERROR_UNEXPECTED_END;
 		err.msg = "unexpected end of data";
 		err.pos = json_size;
-		current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, err);
+		current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, err,
+		                                "Try auto-detecting the JSON format");
 	} else if (!bind_data.ignore_errors && read_size < json_size) {
 		idx_t off = read_size;
 		idx_t rem = json_size;
@@ -435,7 +436,8 @@ void JSONScanLocalState::ParseJSON(char *const json_start, const idx_t json_size
 			err.code = YYJSON_READ_ERROR_UNEXPECTED_CONTENT;
 			err.msg = "unexpected content after document";
 			err.pos = read_size;
-			current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, err);
+			current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, err,
+			                                "Try auto-detecting the JSON format");
 		}
 	}
 
