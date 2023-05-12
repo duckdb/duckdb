@@ -27,12 +27,12 @@ struct SingleJoinRelation {
 
 //! Set of relations, used in the join graph.
 struct JoinRelationSet {
-	JoinRelationSet(unique_ptr<idx_t[]> relations, idx_t count) : relations(std::move(relations)), count(count) {
+	JoinRelationSet(unsafe_array_ptr<idx_t> relations, idx_t count) : relations(std::move(relations)), count(count) {
 	}
 
 	string ToString() const;
 
-	unique_ptr<idx_t[]> relations;
+	unsafe_array_ptr<idx_t> relations;
 	idx_t count;
 
 	static bool IsSubset(JoinRelationSet &super, JoinRelationSet &sub);
@@ -55,7 +55,7 @@ public:
 	//! Create or get a JoinRelationSet from a set of relation bindings
 	JoinRelationSet &GetJoinRelation(unordered_set<idx_t> &bindings);
 	//! Create or get a JoinRelationSet from a (sorted, duplicate-free!) list of relations
-	JoinRelationSet &GetJoinRelation(unique_ptr<idx_t[]> relations, idx_t count);
+	JoinRelationSet &GetJoinRelation(unsafe_array_ptr<idx_t> relations, idx_t count);
 	//! Union two sets of relations together and create a new relation set
 	JoinRelationSet &Union(JoinRelationSet &left, JoinRelationSet &right);
 	// //! Create the set difference of left \ right (i.e. all elements in left that are not in right)

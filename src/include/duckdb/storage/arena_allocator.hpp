@@ -20,7 +20,7 @@ struct ArenaChunk {
 	AllocatedData data;
 	idx_t current_position;
 	idx_t maximum_size;
-	unique_ptr<ArenaChunk> next;
+	unsafe_unique_ptr<ArenaChunk> next;
 	ArenaChunk *prev;
 };
 
@@ -56,7 +56,7 @@ private:
 	//! Internal allocator that is used by the arena allocator
 	Allocator &allocator;
 	idx_t current_capacity;
-	unique_ptr<ArenaChunk> head;
+	unsafe_unique_ptr<ArenaChunk> head;
 	ArenaChunk *tail;
 	//! An allocator wrapper using this arena allocator
 	Allocator arena_allocator;

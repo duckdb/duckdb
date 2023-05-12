@@ -127,3 +127,24 @@ query II
 EXPLAIN select * from (select [42, 43, 44]) t(a), (select unnest(t.a)) t2(b) where b=43;
 ----
 logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# test issue #7444
+
+statement ok
+CREATE TABLE with_array(foo INT, arr DOUBLE[]);
+
+statement ok
+INSERT INTO with_array VALUES(1, [1,2,3]), (2, [4,5,6]);
+
+query IIII
+SELECT foo, arr, u1, u2 FROM with_array,
+(SELECT UNNEST(with_array.arr) AS u1,
+UNNEST(generate_series(1, len(with_array.arr), 1)) AS u2)
+ORDER BY foo, u2;
+----
+1	[1.0, 2.0, 3.0]	1.0	1
+1	[1.0, 2.0, 3.0]	2.0	2
+1	[1.0, 2.0, 3.0]	3.0	3
+2	[4.0, 5.0, 6.0]	4.0	1
+2	[4.0, 5.0, 6.0]	5.0	2
+2	[4.0, 5.0, 6.0]	6.0	3

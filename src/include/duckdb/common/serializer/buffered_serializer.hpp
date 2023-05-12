@@ -9,13 +9,14 @@
 #pragma once
 
 #include "duckdb/common/serializer.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 
 #define SERIALIZER_DEFAULT_SIZE 1024
 
 struct BinaryData {
-	unique_ptr<data_t[]> data;
+	unsafe_array_ptr<data_t> data;
 	idx_t size;
 };
 
@@ -25,7 +26,7 @@ public:
 	//! writing past the initial threshold
 	DUCKDB_API explicit BufferedSerializer(idx_t maximum_size = SERIALIZER_DEFAULT_SIZE);
 	//! Serializes to a provided (owned) data pointer
-	BufferedSerializer(unique_ptr<data_t[]> data, idx_t size);
+	BufferedSerializer(unsafe_array_ptr<data_t> data, idx_t size);
 	BufferedSerializer(data_ptr_t data, idx_t size);
 
 	idx_t maximum_size;
