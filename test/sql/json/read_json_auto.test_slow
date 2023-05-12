@@ -59,9 +59,9 @@ copy (select * from (values ('{"a": 1, "b": 2, "c": null, "d": null, "e": null}'
 query IIIII
 select * from '__TEST_DIR__/my_file.json'
 ----
-1.0	2	NULL	NULL	NULL
-NULL	-5	foo	NULL	true
-4.5	NULL	nan	NULL	false
+1.0	2	NULL	null	NULL
+NULL	-5	foo	null	true
+4.5	NULL	nan	null	false
 
 # mixed types are resolved to DOUBLE here
 statement ok
@@ -157,7 +157,7 @@ select * from read_json_auto('data/json/different_schemas.ndjson', sample_size=-
 statement error
 select * from read_json_auto('data/json/inconsistent_schemas.ndjson', sample_size=1)
 ----
-Invalid Input Error: JSON transform error in file "data/json/inconsistent_schemas.ndjson", in line 2
+Invalid Input Error: JSON transform error in file "data/json/inconsistent_schemas.ndjson", in line 3
 
 # if we increase the sample size to 2, we can read it just fine
 query II
