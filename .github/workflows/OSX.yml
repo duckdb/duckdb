@@ -199,6 +199,12 @@ jobs:
           run_tests: 0
           osx_universal: 1
 
+      - name: Create separate binaries
+        shell: bash
+        run: |
+          ./scripts/extension-lipo-strip.sh x86_64 build/release/extension build/release/extension_arm64
+          ./scripts/extension-lipo-strip.sh arm64 build/release/extension build/release/extension_x64
+
       - name: Deploy
         shell: bash
         env:
@@ -207,13 +213,13 @@ jobs:
         run: |
           if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
-            ./scripts/extension-upload.sh osx_amd64 ${{ github.ref_name }}
-            ./scripts/extension-upload.sh osx_arm64 ${{ github.ref_name }}
+            ./scripts/extension-upload.sh osx_amd64 ${{ github.ref_name }} build/release/extension_x64
+            ./scripts/extension-upload.sh osx_arm64 ${{ github.ref_name }} build/release/extension_arm64
             ./scripts/extension-upload-test.sh
           elif [[ "$GITHUB_REF" =~ ^(refs/heads/master)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
-            ./scripts/extension-upload.sh osx_amd64 `git log -1 --format=%h`
-            ./scripts/extension-upload.sh osx_arm64 `git log -1 --format=%h`
+            ./scripts/extension-upload.sh osx_amd64 `git log -1 --format=%h` build/release/extension_x64
+            ./scripts/extension-upload.sh osx_arm64 `git log -1 --format=%h` build/release/extension_arm64
             ./scripts/extension-upload-test.sh
           else
             ./scripts/extension-upload-test.sh local

@@ -60,11 +60,15 @@ static void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_e
 
 	idx_t true_count = 0;
 	SelectionVector true_sel(elem_cnt);
-	auto lambda_values = FlatVector::GetData<bool>(lambda_vector);
-	auto &lambda_validity = FlatVector::Validity(lambda_vector);
+	UnifiedVectorFormat lambda_data;
+	lambda_vector.ToUnifiedFormat(elem_cnt, lambda_data);
+
+	auto lambda_values = (bool *)lambda_data.data;
+	auto &lambda_validity = lambda_data.validity;
 
 	// compute the new lengths and offsets, and create a selection vector
 	for (idx_t i = 0; i < elem_cnt; i++) {
+		auto entry = lambda_data.sel->get_index(i);
 
 		while (appended_lists_cnt < lists_len.size() && lists_len[appended_lists_cnt] == 0) {
 			result_entries[appended_lists_cnt].offset = curr_list_offset;
@@ -73,12 +77,11 @@ static void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_e
 		}
 
 		// found a true value
-		if (lambda_validity.RowIsValid(i)) {
-			if (lambda_values[i] > 0) {
-				true_sel.set_index(true_count++, i);
-				curr_list_len++;
-			}
+		if (lambda_validity.RowIsValid(entry) && lambda_values[entry] > 0) {
+			true_sel.set_index(true_count++, i);
+			curr_list_len++;
 		}
+
 		curr_original_list_len++;
 
 		if (lists_len[appended_lists_cnt] == curr_original_list_len) {

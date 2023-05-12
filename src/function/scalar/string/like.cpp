@@ -395,11 +395,11 @@ bool ILikeOperatorFunction(string_t &str, string_t &pattern, char escape = '\0')
 
 	// lowercase both the str and the pattern
 	idx_t str_llength = LowerFun::LowerLength(str_data, str_size);
-	auto str_ldata = unique_ptr<char[]>(new char[str_llength]);
+	auto str_ldata = make_unsafe_array<char>(str_llength);
 	LowerFun::LowerCase(str_data, str_size, str_ldata.get());
 
 	idx_t pat_llength = LowerFun::LowerLength(pat_data, pat_size);
-	auto pat_ldata = unique_ptr<char[]>(new char[pat_llength]);
+	auto pat_ldata = make_unsafe_array<char>(pat_llength);
 	LowerFun::LowerCase(pat_data, pat_size, pat_ldata.get());
 	string_t str_lcase(str_ldata.get(), str_llength);
 	string_t pat_lcase(pat_ldata.get(), pat_llength);

@@ -73,7 +73,7 @@ struct AggregateHTAppendState {
 	SelectionVector empty_vector;
 	SelectionVector new_groups;
 	Vector addresses;
-	unique_ptr<UnifiedVectorFormat[]> group_data;
+	unsafe_array_ptr<UnifiedVectorFormat> group_data;
 	DataChunk group_chunk;
 
 	TupleDataChunkState chunk_state;

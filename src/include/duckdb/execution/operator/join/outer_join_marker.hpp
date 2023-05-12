@@ -67,7 +67,7 @@ public:
 
 private:
 	bool enabled;
-	unique_ptr<bool[]> found_match;
+	unsafe_array_ptr<bool> found_match;
 	idx_t count;
 };
 
