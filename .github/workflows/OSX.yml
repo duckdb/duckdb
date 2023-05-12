@@ -81,19 +81,18 @@ jobs:
 #        codesign -d -vvv duckdb
 
 # from https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development
-    - name: Install the Apple certificate and provisioning profile
+    - name: Install the Apple certificate
       env:
         BUILD_CERTIFICATE_BASE64: ${{ secrets.OSX_CODESIGN_BUILD_CERTIFICATE_BASE64 }}
         P12_PASSWORD: ${{ secrets.OSX_CODESIGN_P12_PASSWORD }}
         KEYCHAIN_PASSWORD: ${{ secrets.OSX_CODESIGN_KEYCHAIN_PASSWORD }}
       run: |
         # create variables
-        CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
-        KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+        export CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+        export KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
 
         # import certificate and provisioning profile from secrets
         echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
-        echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
 
         # create temporary keychain
         security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
