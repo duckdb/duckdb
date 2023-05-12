@@ -41,7 +41,7 @@ string PragmaShowTables(ClientContext &context, const FunctionParameters &parame
 	)
 	SELECT "name"
 	FROM db_objects
-	ORDER BY "name";)EOF", where_clause, where_clause, where_clause);
+	ORDER BY "name";)EOF", where_clause, where_clause);
 	// clang-format on
 
 	return pragma_query;
