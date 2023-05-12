@@ -16,7 +16,7 @@ public:
 			owned_data = allocator.Allocate(capacity * GetTypeIdSize(internal_type));
 			// child data of the list
 			auto &child_type = ListType::GetChildType(type);
-			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type));
+			child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type, capacity));
 			auto child_vector = make_uniq<Vector>(child_type, false, false);
 			auxiliary = make_shared<VectorListBuffer>(std::move(child_vector));
 			break;
@@ -24,7 +24,7 @@ public:
 		case PhysicalType::STRUCT: {
 			auto &child_types = StructType::GetChildTypes(type);
 			for (auto &child_type : child_types) {
-				child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type.second));
+				child_caches.push_back(make_buffer<VectorCacheBuffer>(allocator, child_type.second, capacity));
 			}
 			auto struct_buffer = make_shared<VectorStructBuffer>(type);
 			auxiliary = std::move(struct_buffer);
