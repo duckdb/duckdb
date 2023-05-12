@@ -510,6 +510,8 @@ static pair<JSONFormat, JSONRecordType> DetectFormatAndRecordType(const char *co
 	auto doc = JSONCommon::ReadDocumentUnsafe((char *)buffer_ptr + buffer_offset, remaining, JSONCommon::READ_STOP_FLAG,
 	                                          alc, &error);
 	if (error.code == YYJSON_READ_SUCCESS) {
+		D_ASSERT(yyjson_is_arr(doc->root));
+
 		// We successfully read something!
 		buffer_offset += yyjson_doc_get_read_size(doc);
 		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
@@ -520,7 +522,8 @@ static pair<JSONFormat, JSONRecordType> DetectFormatAndRecordType(const char *co
 		}
 
 		// Just one array, check what's in there
-		if (yyjson_is_obj(doc->root)) {
+		if (yyjson_arr_size(doc->root) == 0 || yyjson_is_obj(yyjson_arr_get(doc->root, 0))) {
+			// Either an empty array (assume records), or an array of objects
 			return make_pair(JSONFormat::ARRAY, JSONRecordType::RECORDS);
 		} else {
 			return make_pair(JSONFormat::ARRAY, JSONRecordType::VALUES);
@@ -558,8 +561,10 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 				memcpy(buffer.get(), reconstruct_buffer.get(),
 				       prev_buffer_remainder); // Copy last bit of previous buffer
 			}
-		} else if (gstate.bind_data.type != JSONScanType::SAMPLE) {
-			current_reader->CloseJSONFile(); // Close files that are done if we're not sampling
+		} else {
+			if (gstate.bind_data.type != JSONScanType::SAMPLE) {
+				current_reader->CloseJSONFile(); // Close files that are done if we're not sampling
+			}
 			current_reader = nullptr;
 		}
 	} else {

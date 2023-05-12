@@ -31,7 +31,10 @@ JSONFileHandle::JSONFileHandle(unique_ptr<FileHandle> file_handle_p, Allocator &
 }
 
 void JSONFileHandle::Close() {
-	file_handle->Close();
+	if (file_handle) {
+		file_handle->Close();
+		file_handle = nullptr;
+	}
 	cached_buffers.clear();
 }
 
