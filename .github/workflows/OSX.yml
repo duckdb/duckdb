@@ -125,7 +125,7 @@ jobs:
   xcode-extensions:
     name: OSX Extensions Release
     runs-on: macos-latest
-    needs: xcode-debug
+#    needs: xcode-debug
     env:
       DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
       AWS_DEFAULT_REGION: us-east-1
