@@ -34,6 +34,18 @@ NULL	42
 9	99
 1	10
 
+# column that needs to be quoted
+statement ok
+CREATE TABLE "My Table"("My Column 1" INT, "My Column 2" INT);
+
+statement ok
+INSERT INTO "My Table" BY NAME SELECT 1 AS "My Column 2"
+
+query II
+FROM "My Table"
+----
+NULL	1
+
 # name does not exist
 statement error
 INSERT INTO integers BY NAME SELECT 1 AS xxx
