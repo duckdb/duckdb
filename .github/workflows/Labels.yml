@@ -1,0 +1,26 @@
+name: Labels
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  change-label:
+    runs-on: ubuntu-latest
+
+    env:
+      GOLD_FOUNDATION_MEMBERS: ${{ secrets.GOLD_FOUNDATION_MEMBERS }}
+      SILVER_FOUNDATION_MEMBERS: ${{ secrets.SILVER_FOUNDATION_MEMBERS }}
+
+    steps:
+      - name: Label Issue Gold Foundation Member
+        if: ${{ contains(fromJson(env.GOLD_FOUNDATION_MEMBERS), github.event.issue.user.login) }}
+        uses: andymckay/labeler@master
+        with:
+          add-labels: "Gold Foundation Member"
+
+      - name: Label Issue Silver Foundation Member
+        if: ${{ contains(fromJson(env.SILVER_FOUNDATION_MEMBERS), github.event.issue.user.login) }}
+        uses: andymckay/labeler@master
+        with:
+          add-labels: "Silver Foundation Member"
