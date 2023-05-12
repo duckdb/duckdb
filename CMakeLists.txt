@@ -938,7 +938,7 @@ if(BUILD_PYTHON
               COMMAND
               python3 setup.py install --user --binary-dir=${PROJECT_BINARY_DIR}
               --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
-              DEPENDS duckdb
+              DEPENDS duckdb duckdb_static
               WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
               COMMENT Build
               Python package)
@@ -947,7 +947,7 @@ if(BUILD_PYTHON
               duckdb_python ALL
               COMMAND python3 setup.py install --binary-dir=${PROJECT_BINARY_DIR}
               --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
-              DEPENDS duckdb
+              DEPENDS duckdb duckdb_static
               WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
               COMMENT Build
               Python package)
@@ -961,7 +961,7 @@ if(BUILD_PYTHON
             DUCKDB_R_BINDIR=${PROJECT_BINARY_DIR}
             DUCKDB_R_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
             DUCKDB_R_LIBS=\"${duckdb_libs}\" python3 rconfigure.py
-            DEPENDS duckdb
+            DEPENDS duckdb duckdb_static
             WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/rpkg
             COMMENT Configure
             R package)
@@ -974,7 +974,7 @@ if(BUILD_PYTHON
             DUCKDB_R_BINDIR=${PROJECT_BINARY_DIR}
             DUCKDB_R_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
             DUCKDB_R_LIBS=\"${duckdb_libs}\" DUCKDB_R_DEBUG= R CMD INSTALL .
-            DEPENDS duckdb
+            DEPENDS duckdb duckdb_static
             WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/rpkg
             COMMENT Build
             R package)
@@ -987,7 +987,7 @@ if(BUILD_PYTHON
             make complete_build DUCKDB_NODE_BINDIR=${CMAKE_BINARY_DIR}
             DUCKDB_NODE_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
             DUCKDB_NODE_LIBS=\"${duckdb_libs}\"
-            DEPENDS duckdb
+            DEPENDS duckdb duckdb_static
             WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/nodejs
             COMMENT Build
             Node package)
