@@ -25,7 +25,7 @@ public:
 
 	FileSystem &fs;
 	string path;
-	unsafe_array_ptr<data_t> data;
+	unsafe_unique_array<data_t> data;
 	idx_t offset;
 	idx_t total_written;
 	unique_ptr<FileHandle> handle;

@@ -69,7 +69,7 @@ struct AggregateState {
 	}
 
 	//! The aggregate values
-	vector<unsafe_array_ptr<data_t>> aggregates;
+	vector<unsafe_unique_array<data_t>> aggregates;
 	//! The bind data
 	vector<FunctionData *> bind_data;
 	//! The destructors

@@ -94,7 +94,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 
 		// now gather all the format arguments
 		vector<duckdb_fmt::basic_format_arg<CTX>> format_args;
-		vector<unsafe_array_ptr<data_t>> string_args;
+		vector<unsafe_unique_array<data_t>> string_args;
 
 		for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
 			auto &col = args.data[col_idx];

@@ -85,7 +85,7 @@ struct CSVBufferRead {
 
 	shared_ptr<CSVBuffer> buffer;
 	shared_ptr<CSVBuffer> next_buffer;
-	vector<unsafe_array_ptr<char>> intersections;
+	vector<unsafe_unique_array<char>> intersections;
 	optional_ptr<LineInfo> line_info;
 
 	idx_t buffer_start;

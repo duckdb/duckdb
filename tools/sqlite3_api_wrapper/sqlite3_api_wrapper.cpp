@@ -38,7 +38,7 @@ static char *sqlite3_strdup(const char *str);
 
 struct sqlite3_string_buffer {
 	//! String data
-	duckdb::unsafe_array_ptr<char> data;
+	duckdb::unsafe_unique_array<char> data;
 	//! String length
 	int data_len;
 };

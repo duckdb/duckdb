@@ -156,7 +156,7 @@ private:
 	bool plain_file_source = false;
 	idx_t file_size = 0;
 	// reset support
-	unsafe_array_ptr<data_t> cached_buffer;
+	unsafe_unique_array<data_t> cached_buffer;
 	idx_t read_position = 0;
 	idx_t buffer_size = 0;
 	idx_t buffer_capacity = 0;

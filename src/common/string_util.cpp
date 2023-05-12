@@ -286,7 +286,7 @@ struct LevenshteinArray {
 
 private:
 	idx_t len1;
-	unsafe_array_ptr<idx_t> dist;
+	unsafe_unique_array<idx_t> dist;
 
 	idx_t GetIndex(idx_t i, idx_t j) {
 		return j * len1 + i;

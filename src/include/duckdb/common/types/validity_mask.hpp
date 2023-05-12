@@ -38,7 +38,7 @@ public:
 		}
 	}
 
-	unsafe_array_ptr<V> owned_data;
+	unsafe_unique_array<V> owned_data;
 
 public:
 	static inline idx_t EntryCount(idx_t count) {
