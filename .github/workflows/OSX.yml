@@ -88,29 +88,15 @@ jobs:
 
       #     from https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development
     - name: Sign Binaries
+      shell: bash
       env:
         BUILD_CERTIFICATE_BASE64: ${{ secrets.OSX_CODESIGN_BUILD_CERTIFICATE_BASE64 }}
         P12_PASSWORD: ${{ secrets.OSX_CODESIGN_P12_PASSWORD }}
         KEYCHAIN_PASSWORD: ${{ secrets.OSX_CODESIGN_KEYCHAIN_PASSWORD }}
       run: |
         if [[ "$GITHUB_REPOSITORY" = "hannes/duckdb" ]] ; then
-          # create variables
-          export CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
-          export KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          . scripts/osx_import_codesign_certificate.sh
 
-          # import certificate and provisioning profile from secrets
-          echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
-
-          # create temporary keychain
-          security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-          security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-
-          # import certificate to keychain
-          security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-          security list-keychain -d user -s $KEYCHAIN_PATH
-
-          # actually sign
           codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/duckdb
           codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/src/libduckdb*.dylib
           codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/tools/odbc/libduckdb_odbc.dylib
@@ -198,23 +184,8 @@ jobs:
           KEYCHAIN_PASSWORD: ${{ secrets.OSX_CODESIGN_KEYCHAIN_PASSWORD }}
         run: |
           if [[ "$GITHUB_REPOSITORY" = "hannes/duckdb" ]] ; then
-            # create variables
-            export CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
-            export KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          . scripts/osx_import_codesign_certificate.sh
 
-            # import certificate and provisioning profile from secrets
-            echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
-
-            # create temporary keychain
-            security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-            security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
-            security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
-
-            # import certificate to keychain
-            security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
-            security list-keychain -d user -s $KEYCHAIN_PATH
-
-            # actually sign
             codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/extension_*/*.duckdb_extension
           fi
 
