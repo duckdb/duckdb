@@ -37,6 +37,11 @@ namespace duckdb {
 #define DUCKDB_EXPLICIT_FALLTHROUGH
 #endif
 
+template <class... T>
+struct AlwaysFalse {
+	static constexpr bool value = false;
+};
+
 template<typename T>
 using reference = std::reference_wrapper<T>;
 
