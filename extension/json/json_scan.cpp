@@ -70,14 +70,6 @@ void JSONScanData::InitializeFormats() {
 }
 
 void JSONScanData::InitializeFormats(bool auto_detect_p) {
-	// Set defaults for date/timestamp formats if we need to
-	if (!auto_detect_p && date_format.empty()) {
-		date_format = "%Y-%m-%d";
-	}
-	if (!auto_detect_p && timestamp_format.empty()) {
-		timestamp_format = "%Y-%m-%dT%H:%M:%S.%fZ";
-	}
-
 	// Initialize date_format_map if anything was specified
 	if (!date_format.empty()) {
 		date_format_map.AddFormat(LogicalTypeId::DATE, date_format);
@@ -141,13 +133,17 @@ void JSONScanData::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(names);
 	if (!date_format.empty()) {
 		writer.WriteString(date_format);
-	} else {
+	} else if (date_format_map.HasFormats(LogicalTypeId::DATE)) {
 		writer.WriteString(date_format_map.GetFormat(LogicalTypeId::DATE).format_specifier);
+	} else {
+		writer.WriteString("");
 	}
 	if (!timestamp_format.empty()) {
 		writer.WriteString(timestamp_format);
-	} else {
+	} else if (date_format_map.HasFormats(LogicalTypeId::TIMESTAMP)) {
 		writer.WriteString(date_format_map.GetFormat(LogicalTypeId::TIMESTAMP).format_specifier);
+	} else {
+		writer.WriteString("");
 	}
 }
 

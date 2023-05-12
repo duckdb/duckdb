@@ -59,9 +59,9 @@ copy (select * from (values ('{"a": 1, "b": 2, "c": null, "d": null, "e": null}'
 query IIIII
 select * from '__TEST_DIR__/my_file.json'
 ----
-1.0	2	NULL	null	NULL
-NULL	-5	foo	null	true
-4.5	NULL	nan	null	false
+1.0	2	NULL	NULL	NULL
+NULL	-5	foo	NULL	true
+4.5	NULL	nan	NULL	false
 
 # mixed types are resolved to DOUBLE here
 statement ok

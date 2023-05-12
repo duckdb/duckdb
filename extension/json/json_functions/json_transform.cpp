@@ -678,7 +678,7 @@ bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const 
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
-		if (!val) {
+		if (!val || unsafe_yyjson_is_null(val)) {
 			validity.SetInvalid(i);
 		} else {
 			data[i] = JSONCommon::WriteVal(val, alc);
@@ -691,7 +691,8 @@ bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const 
 bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
                               JSONTransformOptions &options) {
 	auto result_type = result.GetType();
-	if ((result_type == LogicalTypeId::TIMESTAMP || result_type == LogicalTypeId::DATE) && options.date_format_map) {
+	if ((result_type == LogicalTypeId::TIMESTAMP || result_type == LogicalTypeId::DATE) && options.date_format_map &&
+	    options.date_format_map->HasFormats(result_type.id())) {
 		// Auto-detected date/timestamp format during sampling
 		return TransformFromStringWithFormat(vals, result, count, options);
 	}

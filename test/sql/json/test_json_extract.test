@@ -7,6 +7,12 @@ require json
 statement ok
 pragma enable_verification
 
+# should go to our NULL
+query T
+select json_extract('{"foo": null}', '$.foo')
+----
+NULL
+
 query T
 select json_extract('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
 ----

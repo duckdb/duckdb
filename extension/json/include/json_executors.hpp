@@ -46,7 +46,7 @@ public:
 			    inputs, result, args.size(), [&](string_t input, ValidityMask &mask, idx_t idx) {
 				    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, lstate.json_allocator.GetYYAlc());
 				    auto val = JSONCommon::GetPointerUnsafe<yyjson_val>(doc->root, ptr, len);
-				    if (!val) {
+				    if (!val || unsafe_yyjson_is_null(val)) {
 					    mask.SetInvalid(idx);
 					    return T {};
 				    } else {
@@ -59,7 +59,7 @@ public:
 			    inputs, paths, result, args.size(), [&](string_t input, string_t path, ValidityMask &mask, idx_t idx) {
 				    auto doc = JSONCommon::ReadDocument(input, JSONCommon::READ_FLAG, lstate.json_allocator.GetYYAlc());
 				    auto val = JSONCommon::GetPointer<yyjson_val>(doc->root, path);
-				    if (!val) {
+				    if (!val || unsafe_yyjson_is_null(val)) {
 					    mask.SetInvalid(idx);
 					    return T {};
 				    } else {
@@ -112,7 +112,7 @@ public:
 			for (idx_t path_i = 0; path_i < num_paths; path_i++) {
 				auto child_idx = offset + path_i;
 				val = JSONCommon::GetPointerUnsafe<yyjson_val>(doc->root, info.ptrs[path_i], info.lens[path_i]);
-				if (!val) {
+				if (!val || unsafe_yyjson_is_null(val)) {
 					child_validity.SetInvalid(child_idx);
 				} else {
 					child_data[child_idx] = fun(val, alc, child);
