@@ -79,9 +79,11 @@ public:
 	        const py::object &all_varchar = py::none(), const py::object &normalize_names = py::none(),
 	        const py::object &filename = py::none(), const py::object &null_padding = py::none());
 
-	unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, const py::object &columns = py::none(),
-	                                      const py::object &sample_size = py::none(),
-	                                      const py::object &maximum_depth = py::none());
+	unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, const Optional<py::object> &columns = py::none(),
+	                                      const Optional<py::object> &sample_size = py::none(),
+	                                      const Optional<py::object> &maximum_depth = py::none(),
+	                                      const Optional<py::object> &records = py::none(),
+	                                      const Optional<py::object> &format = py::none());
 
 	shared_ptr<DuckDBPyType> MapType(const shared_ptr<DuckDBPyType> &key_type,
 	                                 const shared_ptr<DuckDBPyType> &value_type);

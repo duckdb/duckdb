@@ -161,7 +161,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			StrpTimeFormat format;
 			auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 			if (!error.empty()) {
-				throw InvalidInputException("read_json could not parse \"dateformat\": '%s'.", error.c_str());
+				throw BinderException("read_json could not parse \"dateformat\": '%s'.", error.c_str());
 			}
 		} else if (loption == "timestampformat" || loption == "timestamp_format") {
 			auto format_string = StringValue::Get(kv.second);
@@ -173,7 +173,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			StrpTimeFormat format;
 			auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
 			if (!error.empty()) {
-				throw InvalidInputException("read_json could not parse \"timestampformat\": '%s'.", error.c_str());
+				throw BinderException("read_json could not parse \"timestampformat\": '%s'.", error.c_str());
 			}
 		} else if (loption == "records") {
 			auto arg = StringValue::Get(kv.second);
@@ -184,7 +184,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 			} else if (arg == "false") {
 				bind_data->options.record_type = JSONRecordType::VALUES;
 			} else {
-				throw InvalidInputException("read_json requires \"records\" to be one of ['auto', 'true', 'false'].");
+				throw BinderException("read_json requires \"records\" to be one of ['auto', 'true', 'false'].");
 			}
 		}
 	}

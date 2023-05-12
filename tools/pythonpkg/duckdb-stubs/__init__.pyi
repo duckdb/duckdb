@@ -107,7 +107,9 @@ class DuckDBPyConnection:
         file_name: str,
         columns: Optional[Dict[str,str]] = None,
         sample_size: Optional[int] = None,
-        maximum_depth: Optional[int] = None
+        maximum_depth: Optional[int] = None,
+        records: Optional[str] = None,
+        format: Optional[str] = None
     ) -> DuckDBPyRelation: ...
     def read_csv(
         self,
@@ -435,6 +437,8 @@ def read_json(
     columns: Optional[Dict[str,str]] = None,
     sample_size: Optional[int] = None,
     maximum_depth: Optional[int] = None,
+    format: Optional[str] = None,
+    records: Optional[str] = None,
     connection: DuckDBPyConnection = ...
 ) -> DuckDBPyRelation: ...
 def read_csv(
