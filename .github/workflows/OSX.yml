@@ -215,7 +215,7 @@ jobs:
             security list-keychain -d user -s $KEYCHAIN_PATH
 
             # actually sign
-            codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/extension_*/*/*.duckdb_extension
+            codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/extension_*/*.duckdb_extension
           fi
 
       - name: Deploy
