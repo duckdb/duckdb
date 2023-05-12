@@ -33,8 +33,12 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 	bool complex_options = options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1;
 	bool not_supported_options = options.null_padding;
 
-	if (!options.run_parallel || null_or_empty || not_supported_options || complex_options ||
-	    options.new_line == NewLineIdentifier::MIX) {
+	auto number_of_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+	if (options.parallel_mode != ParallelMode::PARALLEL && int64_t(files.size() * 2) >= number_of_threads) {
+		single_threaded = true;
+	}
+	if (options.parallel_mode == ParallelMode::SINGLE_THREADED || null_or_empty || not_supported_options ||
+	    complex_options || options.new_line == NewLineIdentifier::MIX) {
 		// not supported for parallel CSV reading
 		single_threaded = true;
 	}
@@ -173,7 +177,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		} else if (loption == "normalize_names") {
 			options.normalize_names = BooleanValue::Get(kv.second);
 		} else if (loption == "parallel") {
-			options.run_parallel = BooleanValue::Get(kv.second);
+			options.parallel_mode =
+			    BooleanValue::Get(kv.second) ? ParallelMode::PARALLEL : ParallelMode::SINGLE_THREADED;
 		} else {
 			options.SetReadOption(loption, kv.second, names);
 		}
