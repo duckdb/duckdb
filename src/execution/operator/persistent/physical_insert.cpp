@@ -265,8 +265,7 @@ template <bool GLOBAL>
 static idx_t PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table,
                                      Vector &row_ids, const PhysicalInsert &op) {
 
-	auto &action_type = op.action_type;
-	if (action_type == OnConflictAction::NOTHING) {
+	if (op.action_type == OnConflictAction::NOTHING) {
 		return 0;
 	}
 	auto &set_columns = op.set_columns;
