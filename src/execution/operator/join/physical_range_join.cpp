@@ -72,7 +72,7 @@ void PhysicalRangeJoin::GlobalSortedTable::Combine(LocalSortedTable &ltable) {
 }
 
 void PhysicalRangeJoin::GlobalSortedTable::IntializeMatches() {
-	found_match = make_unsafe_array<bool>(Count());
+	found_match = make_unsafe_uniq_array<bool>(Count());
 	memset(found_match.get(), 0, sizeof(bool) * Count());
 }
 

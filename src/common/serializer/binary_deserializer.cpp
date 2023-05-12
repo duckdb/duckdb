@@ -123,7 +123,7 @@ string BinaryDeserializer::ReadString() {
 	if (size == 0) {
 		return string();
 	}
-	auto buffer = make_unsafe_array<data_t>(size);
+	auto buffer = make_unsafe_uniq_array<data_t>(size);
 	ReadData(buffer.get(), size);
 	return string((char *)buffer.get(), size);
 }

@@ -73,14 +73,14 @@ make_unsafe_uniq(_Args&&... __args)
 
 template<class _Tp>
 inline unique_ptr<_Tp[], std::default_delete<_Tp>, true>
-make_array(size_t __n)
+make_uniq_array(size_t __n)
 {
     return unique_ptr<_Tp[], std::default_delete<_Tp>, true>(new _Tp[__n]());
 }
 
 template<class _Tp>
 inline unique_ptr<_Tp[], std::default_delete<_Tp>, false>
-make_unsafe_array(size_t __n)
+make_unsafe_uniq_array(size_t __n)
 {
     return unique_ptr<_Tp[], std::default_delete<_Tp>, false>(new _Tp[__n]());
 }

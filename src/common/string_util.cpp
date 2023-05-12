@@ -277,7 +277,7 @@ vector<string> StringUtil::TopNStrings(vector<pair<string, idx_t>> scores, idx_t
 
 struct LevenshteinArray {
 	LevenshteinArray(idx_t len1, idx_t len2) : len1(len1) {
-		dist = make_unsafe_array<idx_t>(len1 * len2);
+		dist = make_unsafe_uniq_array<idx_t>(len1 * len2);
 	}
 
 	idx_t &Score(idx_t i, idx_t j) {

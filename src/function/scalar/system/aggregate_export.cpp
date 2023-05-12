@@ -40,8 +40,8 @@ struct CombineState : public FunctionLocalState {
 	Vector state_vector0, state_vector1;
 
 	explicit CombineState(idx_t state_size_p)
-	    : state_size(state_size_p), state_buffer0(make_unsafe_array<data_t>(state_size_p)),
-	      state_buffer1(make_unsafe_array<data_t>(state_size_p)),
+	    : state_size(state_size_p), state_buffer0(make_unsafe_uniq_array<data_t>(state_size_p)),
+	      state_buffer1(make_unsafe_uniq_array<data_t>(state_size_p)),
 	      state_vector0(Value::POINTER((uintptr_t)state_buffer0.get())),
 	      state_vector1(Value::POINTER((uintptr_t)state_buffer1.get())) {
 	}
@@ -60,7 +60,7 @@ struct FinalizeState : public FunctionLocalState {
 
 	explicit FinalizeState(idx_t state_size_p)
 	    : state_size(state_size_p),
-	      state_buffer(make_unsafe_array<data_t>(STANDARD_VECTOR_SIZE * AlignValue(state_size_p))),
+	      state_buffer(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * AlignValue(state_size_p))),
 	      addresses(LogicalType::POINTER) {
 	}
 };

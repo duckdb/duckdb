@@ -309,7 +309,7 @@ void WindowSegmentTree::ConstructTree() {
 		level_nodes = (level_nodes + (TREE_FANOUT - 1)) / TREE_FANOUT;
 		internal_nodes += level_nodes;
 	} while (level_nodes > 1);
-	levels_flat_native = make_unsafe_array<data_t>(internal_nodes * state.size());
+	levels_flat_native = make_unsafe_uniq_array<data_t>(internal_nodes * state.size());
 	levels_flat_start.push_back(0);
 
 	idx_t levels_flat_offset = 0;

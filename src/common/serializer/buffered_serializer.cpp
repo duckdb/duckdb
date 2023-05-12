@@ -5,7 +5,7 @@
 namespace duckdb {
 
 BufferedSerializer::BufferedSerializer(idx_t maximum_size)
-    : BufferedSerializer(make_unsafe_array<data_t>(maximum_size), maximum_size) {
+    : BufferedSerializer(make_unsafe_uniq_array<data_t>(maximum_size), maximum_size) {
 }
 
 BufferedSerializer::BufferedSerializer(unsafe_unique_array<data_t> data, idx_t size)
