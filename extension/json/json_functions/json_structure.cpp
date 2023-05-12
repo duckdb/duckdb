@@ -525,7 +525,7 @@ LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStr
 		return JSONCommon::JSONType();
 	}
 	if (node.descriptions.empty()) {
-		return LogicalTypeId::SQLNULL;
+		return JSONCommon::JSONType();
 	}
 	if (node.descriptions.size() != 1) { // Inconsistent types, so we resort to JSON
 		return JSONCommon::JSONType();
@@ -540,7 +540,7 @@ LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStr
 	case LogicalTypeId::VARCHAR:
 		return StructureToTypeString(node);
 	case LogicalTypeId::SQLNULL:
-		return LogicalTypeId::INTEGER;
+		return JSONCommon::JSONType();
 	case LogicalTypeId::UBIGINT:
 		return LogicalTypeId::BIGINT; // We prefer not to return UBIGINT in our type auto-detection
 	default:
