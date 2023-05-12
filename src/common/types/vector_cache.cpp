@@ -48,13 +48,13 @@ public:
 			// reinitialize the VectorListBuffer
 			AssignSharedPointer(result.auxiliary, auxiliary);
 			// propagate through child
+			auto &child_cache = (VectorCacheBuffer &)*child_caches[0];
 			auto &list_buffer = (VectorListBuffer &)*result.auxiliary;
-			list_buffer.capacity = capacity;
-			list_buffer.size = 0;
+			list_buffer.SetCapacity(child_cache.capacity);
+			list_buffer.SetSize(0);
 			list_buffer.SetAuxiliaryData(nullptr);
 
 			auto &list_child = list_buffer.GetChild();
-			auto &child_cache = (VectorCacheBuffer &)*child_caches[0];
 			child_cache.ResetFromCache(list_child, child_caches[0]);
 			break;
 		}
