@@ -30,7 +30,7 @@ jobs:
   xcode-release:
     name: OSX Release
     runs-on: macos-latest
-    needs: xcode-debug
+#    needs: xcode-debug
     env:
       BUILD_ICU: 1
       BUILD_TPCH: 1
