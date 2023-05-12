@@ -51,7 +51,7 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		ss << KeywordHelper::WriteOptionallyQuoted(exported_table.schema_name) << ".";
 	}
 
-	ss << StringUtil::Format("%s FROM '%s' (", SQLIdentifier(exported_table.table_name),
+	ss << StringUtil::Format("%s FROM %s (", SQLIdentifier(exported_table.table_name),
 	                         SQLString(exported_table.file_path));
 
 	// write the copy options
