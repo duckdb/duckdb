@@ -615,7 +615,7 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 	ListVector::SetListSize(result, list_size);
 
 	auto list_entries = FlatVector::GetData<list_entry_t>(result);
-	auto list_validity = FlatVector::Validity(result);
+	auto &list_validity = FlatVector::Validity(result);
 
 	auto keys = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * list_size);
 	auto vals = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * list_size);
@@ -654,6 +654,7 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 			list_offset++;
 		}
 	}
+	D_ASSERT(list_offset == list_size);
 
 	// Transform keys
 	if (!JSONTransform::Transform(keys, alc, MapVector::GetKeys(result), list_size, options)) {

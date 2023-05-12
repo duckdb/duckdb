@@ -116,7 +116,9 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
 		} else if (loption == "compression") {
 			bind_data->SetCompression(StringValue::Get(kv.second.back()));
 		} else if (loption == "array") {
-			bind_data->options.format = JSONFormat::ARRAY;
+			if (BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN))) {
+				bind_data->options.format = JSONFormat::ARRAY;
+			}
 		} else {
 			throw BinderException("Unknown option for COPY ... FROM ... (FORMAT JSON): \"%s\".", loption);
 		}

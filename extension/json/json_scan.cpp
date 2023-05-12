@@ -1,5 +1,6 @@
 #include "json_scan.hpp"
 
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -101,17 +102,7 @@ void JSONScanData::InitializeFormats(bool auto_detect_p) {
 }
 
 void JSONScanData::SetCompression(const string &compression) {
-	if (compression == "none") {
-		options.compression = FileCompressionType::UNCOMPRESSED;
-	} else if (compression == "gzip") {
-		options.compression = FileCompressionType::GZIP;
-	} else if (compression == "zstd") {
-		options.compression = FileCompressionType::ZSTD;
-	} else if (compression == "auto") {
-		options.compression = FileCompressionType::AUTO_DETECT;
-	} else {
-		throw BinderException("compression must be one of ['none', 'gzip', 'zstd', 'auto']");
-	}
+	options.compression = EnumUtil::FromString<FileCompressionType>(StringUtil::Upper(compression));
 }
 
 void JSONScanData::Serialize(FieldWriter &writer) const {

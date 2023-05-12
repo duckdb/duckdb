@@ -4,6 +4,55 @@
 
 require json
 
+# test writing all types to file
+statement ok
+create type small_enum as enum ('DUCK_DUCK_ENUM', 'GOOSE');
+
+query I nosort q0
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint)
+         replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
+from test_all_types()
+----
+
+statement ok
+copy (
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint)
+         replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
+from test_all_types()
+) to '__TEST_DIR__/all_types.ndjson'
+
+statement ok
+create table roundtrip as
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint)
+         replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
+from test_all_types()
+limit 0
+
+statement ok
+copy roundtrip from '__TEST_DIR__/all_types.ndjson'
+
+query I nosort q0
+select * from roundtrip
+----
+
+statement ok
+delete from roundtrip
+
+statement ok
+copy (
+select * exclude (varchar, blob, bit, medium_enum, large_enum, hugeint)
+         replace (dec_18_6::DOUBLE as dec_18_6, dec38_10::DOUBLE as dec38_10)
+from test_all_types()
+) to '__TEST_DIR__/all_types.json' (array true)
+
+statement ok
+copy roundtrip from '__TEST_DIR__/all_types.json' (array true)
+
+query I nosort q0
+select * from roundtrip
+----
+
+
 # test issue #6305
 statement ok
 copy (
@@ -112,12 +161,42 @@ select * from conclusions
 cancelled
 cancelled
 
+# same with ARRAY FALSE
+statement error
+copy conclusions from 'data/json/top_level_array.json' (ARRAY FALSE)
+----
+Invalid Input Error
+
 # we can also write JSON arrays instead of newline-delimited
 statement ok
 copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (ARRAY TRUE)
 
 query T
 select * from read_json_auto('__TEST_DIR__/my.json', format='array')
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+# compression
+statement ok
+copy (select range as i from range(10)) to '__TEST_DIR__/my.json' (COMPRESSION GZIP)
+
+statement ok
+create table my_range (i bigint)
+
+statement ok
+copy my_range from '__TEST_DIR__/my.json' (COMPRESSION GZIP)
+
+query I
+select * from my_range
 ----
 0
 1
@@ -139,19 +218,38 @@ start transaction
 statement ok
 call dbgen(sf=1)
 
-# first a quick check that ARRAY works properly
+# export lineitem as array
 statement ok
 COPY lineitem TO '__TEST_DIR__/lineitem.json' (ARRAY TRUE)
 
-statement ok
-create table lineitem2 as select * from lineitem limit 0;
-
-statement ok
-COPY lineitem2 from '__TEST_DIR__/lineitem.json' (ARRAY TRUE)
-
-# now we just export the whole thing
+# also export the whole thing
 statement ok
 EXPORT DATABASE '__TEST_DIR__/export_json_test' (FORMAT JSON)
+
+statement ok
+rollback
+
+# test the array first
+statement ok
+start transaction
+
+statement ok
+call dbgen(sf=0)
+
+# lineitem json is ~2GB so this test that we can do streaming reads of json arrays
+statement ok
+set memory_limit='1gb'
+
+statement ok
+COPY lineitem from '__TEST_DIR__/lineitem.json' (ARRAY TRUE)
+
+statement ok
+reset memory_limit
+
+query I
+PRAGMA tpch(1)
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q01.csv
 
 statement ok
 rollback
