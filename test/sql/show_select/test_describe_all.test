@@ -11,10 +11,10 @@ CREATE TABLE integers(i INTEGER, j INTEGER, a INTEGER);
 statement ok
 DESCRIBE;
 
-query IIII
+query IIIIII
 DESCRIBE
 ----
-integers	[i, j, a]	[INTEGER, INTEGER, INTEGER]	false
+memory	main	integers	[i, j, a]	[INTEGER, INTEGER, INTEGER]	false
 
 # issue #6393
 statement ok
@@ -23,7 +23,7 @@ DROP TABLE integers
 statement ok
 create table t(plant text, dt date, mwh bigint);
 
-query IIII
+query IIIIII
 DESCRIBE;
 ----
-t	[plant, dt, mwh]	[VARCHAR, DATE, BIGINT]	false
+memory	main	t	[plant, dt, mwh]	[VARCHAR, DATE, BIGINT]	false
