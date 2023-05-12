@@ -26,50 +26,6 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
-  xcode-debug:
-    name: OSX Debug
-    runs-on: macos-latest
-
-    env:
-      TREAT_WARNINGS_AS_ERRORS: 1
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Install ninja
-      shell: bash
-      run: brew install ninja
-
-    - name: Build
-      shell: bash
-      run: GEN=ninja make debug
-
-    - name: Test
-      shell: bash
-      run: |
-          echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.dylib" | head -n 1)" >> $GITHUB_ENV
-          make unittestci
-
-    - name: Amalgamation
-      shell: bash
-      run: |
-        python scripts/amalgamation.py --extended
-        cd src/amalgamation
-        clang++ -std=c++11 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp
-        clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
-        clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
 
   xcode-release:
     name: OSX Release
@@ -104,6 +60,25 @@ jobs:
       with:
         key: ${{ github.job }}
         save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Test signing
+      env:
+        OSX_CODESIGN_PUBLIC_KEY: ${{secrets.OSX_CODESIGN_PUBLIC_KEY}}
+        OSX_CODESIGN_PRIVATE_KEY: ${{secrets.OSX_CODESIGN_PRIVATE_KEY}}
+        OSX_CODESIGN_CERTIFICATE: ${{secrets.OSX_CODESIGN_CERTIFICATE}}
+
+      shell: bash
+      run: |
+        echo $OSX_CODESIGN_PUBLIC_KEY | base64decode > duckdb-public-key.pem
+        echo $OSX_CODESIGN_PRIVATE_KEY | base64decode > duckdb-private-key.p12
+        echo $OSX_CODESIGN_CERTIFICATE | base64decode > duckdb-developerid-certificate.cer
+        security import duckdb-private-key.p12 -k ~/Library/Keychains/login.keychain
+        security import duckdb-public-key.pem -k ~/Library/Keychains/login.keychain
+        security import duckdb-developerid-certificate.cer -k ~/Library/Keychains/login.keychain
+        wget https://github.com/duckdb/duckdb/releases/download/v0.7.1/duckdb_cli-osx-universal.zip
+        unzip duckdb_cli-osx-universal.zip
+        codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" duckdb
+        codesign -d -vvv duckdb
 
     - name: Install UnixODBC
       shell: bash
