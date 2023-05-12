@@ -404,7 +404,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 		for (idx_t i = 0; i < op.aggregates.size(); i++) {
 			D_ASSERT(op.aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = op.aggregates[i]->Cast<BoundAggregateExpression>();
-			auto aggr_state = make_unsafe_array<data_t>(aggr.function.state_size());
+			auto aggr_state = make_unsafe_uniq_array<data_t>(aggr.function.state_size());
 			aggr.function.initialize(aggr_state.get());
 
 			AggregateInputData aggr_input_data(aggr.bind_info.get(), Allocator::DefaultAllocator());
@@ -433,7 +433,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 		lock_guard<mutex> l(state.lock);
 		if (!state.initialized) {
 			auto &finalized_hts = gstate.finalized_hts;
-			state.ht_scan_states = make_unsafe_array<TupleDataParallelScanState>(finalized_hts.size());
+			state.ht_scan_states = make_unsafe_uniq_array<TupleDataParallelScanState>(finalized_hts.size());
 
 			const auto &layout = gstate.finalized_hts[0]->GetDataCollection().GetLayout();
 			vector<column_t> column_ids;

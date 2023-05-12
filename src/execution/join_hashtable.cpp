@@ -332,7 +332,7 @@ unique_ptr<ScanStructure> JoinHashTable::InitializeScanStructure(DataChunk &keys
 	auto ss = make_uniq<ScanStructure>(*this);
 
 	if (join_type != JoinType::INNER) {
-		ss->found_match = make_unsafe_array<bool>(STANDARD_VECTOR_SIZE);
+		ss->found_match = make_unsafe_uniq_array<bool>(STANDARD_VECTOR_SIZE);
 		memset(ss->found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 	}
 

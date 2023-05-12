@@ -559,7 +559,7 @@ const unsigned char *sqlite3_column_text(sqlite3_stmt *pStmt, int iCol) {
 		if (!entry.data) {
 			// not initialized yet, convert the value and initialize it
 			auto &str_val = StringValue::Get(val);
-			entry.data = duckdb::make_unsafe_array<char>(str_val.size() + 1);
+			entry.data = duckdb::make_unsafe_uniq_array<char>(str_val.size() + 1);
 			memcpy(entry.data.get(), str_val.c_str(), str_val.size() + 1);
 			entry.data_len = str_val.length();
 		}
@@ -584,7 +584,7 @@ const void *sqlite3_column_blob(sqlite3_stmt *pStmt, int iCol) {
 		if (!entry.data) {
 			// not initialized yet, convert the value and initialize it
 			auto &str_val = StringValue::Get(val);
-			entry.data = duckdb::make_unsafe_array<char>(str_val.size() + 1);
+			entry.data = duckdb::make_unsafe_uniq_array<char>(str_val.size() + 1);
 			memcpy(entry.data.get(), str_val.c_str(), str_val.size() + 1);
 			entry.data_len = str_val.length();
 		}

@@ -97,7 +97,7 @@ public:
 					// no space; first enlarge the buffer
 					buffer_capacity = MaxValue<idx_t>(NextPowerOfTwo(buffer_size + bytes_read), buffer_capacity * 2);
 
-					auto new_buffer = make_unsafe_array<data_t>(buffer_capacity);
+					auto new_buffer = make_unsafe_uniq_array<data_t>(buffer_capacity);
 					if (buffer_size > 0) {
 						memcpy(new_buffer.get(), cached_buffer.get(), buffer_size);
 					}
