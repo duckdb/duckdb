@@ -66,19 +66,50 @@ jobs:
         OSX_CODESIGN_PUBLIC_KEY: ${{secrets.OSX_CODESIGN_PUBLIC_KEY}}
         OSX_CODESIGN_PRIVATE_KEY: ${{secrets.OSX_CODESIGN_PRIVATE_KEY}}
         OSX_CODESIGN_CERTIFICATE: ${{secrets.OSX_CODESIGN_CERTIFICATE}}
+#
+#      shell: bash
+#      run: |
+#        echo $OSX_CODESIGN_PUBLIC_KEY | base64 -d > duckdb-public-key.pem
+#        echo $OSX_CODESIGN_PRIVATE_KEY | base64 -d > duckdb-private-key.p12
+#        echo $OSX_CODESIGN_CERTIFICATE | base64 -d > duckdb-developerid-certificate.cer
+#        security import duckdb-private-key.p12 -P ""
+#        security import duckdb-public-key.pem
+#        security import duckdb-developerid-certificate.cer
+#        wget https://github.com/duckdb/duckdb/releases/download/v0.7.1/duckdb_cli-osx-universal.zip
+#        unzip duckdb_cli-osx-universal.zip
+#        codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" duckdb
+#        codesign -d -vvv duckdb
 
-      shell: bash
+# from https://docs.github.com/en/actions/deployment/deploying-xcode-applications/installing-an-apple-certificate-on-macos-runners-for-xcode-development
+    - name: Install the Apple certificate and provisioning profile
+      env:
+        BUILD_CERTIFICATE_BASE64: ${{ secrets.OSX_CODESIGN_BUILD_CERTIFICATE_BASE64 }}
+        P12_PASSWORD: ${{ secrets.OSX_CODESIGN_P12_PASSWORD }}
+        KEYCHAIN_PASSWORD: ${{ secrets.OSX_CODESIGN_KEYCHAIN_PASSWORD }}
       run: |
-        echo $OSX_CODESIGN_PUBLIC_KEY | base64 -d > duckdb-public-key.pem
-        echo $OSX_CODESIGN_PRIVATE_KEY | base64 -d > duckdb-private-key.p12 
-        echo $OSX_CODESIGN_CERTIFICATE | base64 -d > duckdb-developerid-certificate.cer
-        security import duckdb-private-key.p12 -P ""
-        security import duckdb-public-key.pem
-        security import duckdb-developerid-certificate.cer
+        # create variables
+        CERTIFICATE_PATH=$RUNNER_TEMP/build_certificate.p12
+        KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+
+        # import certificate and provisioning profile from secrets
+        echo -n "$BUILD_CERTIFICATE_BASE64" | base64 --decode -o $CERTIFICATE_PATH
+        echo -n "$BUILD_PROVISION_PROFILE_BASE64" | base64 --decode -o $PP_PATH
+
+        # create temporary keychain
+        security create-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+        security set-keychain-settings -lut 21600 $KEYCHAIN_PATH
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
+
+        # import certificate to keychain
+        security import $CERTIFICATE_PATH -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k $KEYCHAIN_PATH
+        security list-keychain -d user -s $KEYCHAIN_PATH
+
+        # try it
         wget https://github.com/duckdb/duckdb/releases/download/v0.7.1/duckdb_cli-osx-universal.zip
         unzip duckdb_cli-osx-universal.zip
         codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" duckdb
         codesign -d -vvv duckdb
+
 
     - name: Install UnixODBC
       shell: bash
