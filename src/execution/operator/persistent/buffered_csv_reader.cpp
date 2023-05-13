@@ -239,18 +239,13 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 		if (return_types.empty()) {
 			throw InvalidInputException("Failed to detect column types from CSV: is the file a valid CSV file?");
 		}
-		if (cached_chunks.empty()) {
-			JumpToBeginning(options.skip_rows, options.header);
-		}
+		JumpToBeginning(options.skip_rows, options.header);
 	} else {
 		return_types = requested_types;
 		ResetBuffer();
 		SkipRowsAndReadHeader(options.skip_rows, options.header);
 	}
 	InitParseChunk(return_types.size());
-	// we only need reset support during the automatic CSV type detection
-	// since reset support might require caching (in the case of streams), we disable it for the remainder
-	file_handle->DisableReset();
 }
 
 void BufferedCSVReader::ResetBuffer() {
@@ -262,13 +257,7 @@ void BufferedCSVReader::ResetBuffer() {
 }
 
 void BufferedCSVReader::ResetStream() {
-	if (!file_handle->CanSeek()) {
-		// seeking to the beginning appears to not be supported in all compiler/os-scenarios,
-		// so we have to create a new stream source here for now
-		file_handle->Reset();
-	} else {
-		file_handle->Seek(0);
-	}
+	file_handle->Reset();
 	linenr = 0;
 	linenr_estimated = false;
 	bytes_per_line_avg = 0;
@@ -332,7 +321,7 @@ bool BufferedCSVReader::JumpToNextSample() {
 
 	// if we deal with any other sources than plaintext files, jumping_samples can be tricky. In that case
 	// we just read x continuous chunks from the stream TODO: make jumps possible for zipfiles.
-	if (!file_handle->PlainFileSource() || !jumping_samples) {
+	if (!file_handle->OnDiskFile() || !jumping_samples) {
 		sample_chunk_idx++;
 		return true;
 	}
@@ -799,21 +788,6 @@ vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalT
 						break;
 					} else {
 						col_type_candidates.pop_back();
-					}
-				}
-			}
-
-			if (!jumping_samples) {
-				if ((sample_chunk_idx)*options.sample_chunk_size <= options.buffer_size) {
-					// cache parse chunk
-					// create a new chunk and fill it with the remainder
-					auto chunk = make_uniq<DataChunk>();
-					auto parse_chunk_types = parse_chunk.GetTypes();
-					chunk->Move(parse_chunk);
-					cached_chunks.push(std::move(chunk));
-				} else {
-					while (!cached_chunks.empty()) {
-						cached_chunks.pop();
 					}
 				}
 			}
@@ -1474,17 +1448,6 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start, idx_t &line_start) {
 }
 
 void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
-	// if no auto-detect or auto-detect with jumping samples, we have nothing cached and start from the beginning
-	if (cached_chunks.empty()) {
-		cached_buffers.clear();
-	} else {
-		auto &chunk = cached_chunks.front();
-		parse_chunk.Move(*chunk);
-		cached_chunks.pop();
-		Flush(insert_chunk);
-		return;
-	}
-
 	string error_message;
 	if (!TryParseCSV(ParserMode::PARSING, insert_chunk, error_message)) {
 		throw InvalidInputException(error_message);

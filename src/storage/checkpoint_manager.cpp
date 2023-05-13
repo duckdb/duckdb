@@ -419,7 +419,7 @@ void CheckpointWriter::WriteMacro(ScalarMacroCatalogEntry &macro) {
 }
 
 void CheckpointReader::ReadMacro(ClientContext &context, MetaBlockReader &reader) {
-	auto info = ScalarMacroCatalogEntry::Deserialize(reader, context);
+	auto info = MacroCatalogEntry::Deserialize(reader, context);
 	catalog.CreateFunction(context, *info);
 }
 
@@ -428,7 +428,7 @@ void CheckpointWriter::WriteTableMacro(TableMacroCatalogEntry &macro) {
 }
 
 void CheckpointReader::ReadTableMacro(ClientContext &context, MetaBlockReader &reader) {
-	auto info = TableMacroCatalogEntry::Deserialize(reader, context);
+	auto info = MacroCatalogEntry::Deserialize(reader, context);
 	catalog.CreateFunction(context, *info);
 }
 

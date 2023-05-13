@@ -15,6 +15,10 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t f
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto detect compression settings based on file name
 		auto lower_path = StringUtil::Lower(path);
+		if (StringUtil::EndsWith(lower_path, ".tmp")) {
+			// strip .tmp
+			lower_path = lower_path.substr(0, lower_path.length() - 4);
+		}
 		if (StringUtil::EndsWith(lower_path, ".gz")) {
 			compression = FileCompressionType::GZIP;
 		} else if (StringUtil::EndsWith(lower_path, ".zst")) {
