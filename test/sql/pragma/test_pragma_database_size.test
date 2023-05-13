@@ -2,6 +2,8 @@
 # description: Test PRAGMA database_size
 # group: [pragma]
 
+require skip_reload
+
 statement ok
 PRAGMA database_size;
 
