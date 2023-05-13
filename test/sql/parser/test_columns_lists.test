@@ -15,35 +15,35 @@ SELECT COLUMNS([x for x in *]) FROM integers
 13	14
 
 query I
-SELECT COLUMNS([x for x in (*) if x <> 'integers.i']) FROM integers
+SELECT COLUMNS([x for x in (*) if x <> 'i']) FROM integers
 ----
 84
 14
 
 # short-hand, allow directly specifying the lambda
 query I
-SELECT COLUMNS(x -> x <> 'integers.i') FROM integers
+SELECT COLUMNS(x -> x <> 'i') FROM integers
 ----
 84
 14
 
 query I
-SELECT COLUMNS([x for x in (*) if x SIMILAR TO '.*i']) FROM integers
+SELECT COLUMNS([x for x in (*) if x SIMILAR TO 'i']) FROM integers
 ----
 42
 13
 
-query II
+query I
 SELECT COLUMNS(['i', 'i']) FROM integers
 ----
-42	42
-13	13
+42
+13
 
-query II
+query I
 SELECT COLUMNS(list_concat(['i'], ['i'])) FROM integers
 ----
-42	42
-13	13
+42
+13
 
 # star with exclude
 query I
@@ -79,7 +79,7 @@ STAR expression is only allowed as the root element of an expression
 
 # empty lambda
 statement error
-SELECT COLUMNS([x for x in (*) if x = 'integers.k']) FROM integers
+SELECT COLUMNS([x for x in (*) if x = 'k']) FROM integers
 ----
 resulted in an empty set of columns
 
@@ -87,22 +87,17 @@ resulted in an empty set of columns
 statement error
 SELECT COLUMNS(['k']) FROM integers
 ----
-not found in FROM clause
-
-statement error
-SELECT COLUMNS(['integers2.i']) FROM integers
-----
-"integers2" not found
+not found in the FROM clause
 
 # COLUMNS and joins
 query I
-SELECT COLUMNS([x for x in (*) if x LIKE '%i']) FROM integers i1 JOIN integers i2 USING (i)
+SELECT COLUMNS([x for x in (*) if x LIKE 'i']) FROM integers i1 JOIN integers i2 USING (i)
 ----
 42
 13
 
 query II
-SELECT COLUMNS([x for x in (*) if x LIKE '%i']) FROM integers i1 JOIN integers i2 ON (i1.i=i2.i)
+SELECT COLUMNS([x for x in (*) if x LIKE 'i']) FROM integers i1 JOIN integers i2 ON (i1.i=i2.i)
 ----
 42	42
 13	13
