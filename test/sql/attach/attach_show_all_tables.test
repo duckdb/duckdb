@@ -2,7 +2,7 @@
 # description: Test various DDL statements on an attached database
 # group: [attach]
 
-require skip_reload
+require noforcestorage
 
 statement ok
 PRAGMA enable_verification
