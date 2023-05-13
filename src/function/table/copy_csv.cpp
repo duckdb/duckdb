@@ -321,7 +321,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	    make_uniq<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path, options.compression);
 
 	if (!options.prefix.empty()) {
-		global_data->WriteData((const_data_ptr_t) options.prefix.c_str(), options.prefix.size());
+		global_data->WriteData((const_data_ptr_t)options.prefix.c_str(), options.prefix.size());
 	}
 
 	if (options.header) {
