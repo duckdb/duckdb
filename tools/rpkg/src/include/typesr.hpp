@@ -3,8 +3,8 @@
 namespace duckdb {
 
 struct DuckDBAltrepStringWrapper {
-	duckdb::unique_ptr<string_t[]> string_data;
-	duckdb::unique_ptr<bool[]> mask_data;
+	duckdb::unsafe_array_ptr<string_t> string_data;
+	duckdb::unsafe_array_ptr<bool> mask_data;
 	StringHeap heap;
 	idx_t length;
 };
@@ -13,7 +13,7 @@ struct DuckDBAltrepListEntryWrapper {
 	DuckDBAltrepListEntryWrapper(idx_t max_length);
 	void Reset(idx_t offset_p, idx_t length_p);
 	idx_t length;
-	duckdb::unique_ptr<data_t[]> data;
+	duckdb::unsafe_array_ptr<data_t> data;
 };
 
 enum class RType {
