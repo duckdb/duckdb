@@ -276,6 +276,7 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info) {
 	TableFunction table_function({LogicalType::VARCHAR}, ReadJSONFunction, ReadJSONBind,
 	                             JSONGlobalTableFunctionState::Init, JSONLocalTableFunctionState::Init);
+	table_function.name = "read_json";
 
 	JSONScan::TableFunctionDefaults(table_function);
 	table_function.named_parameters["columns"] = LogicalType::ANY;

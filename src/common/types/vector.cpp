@@ -1868,7 +1868,7 @@ idx_t ListVector::GetListSize(const Vector &vec) {
 		return ListVector::GetListSize(child);
 	}
 	D_ASSERT(vec.auxiliary);
-	return ((VectorListBuffer &)*vec.auxiliary).size;
+	return ((VectorListBuffer &)*vec.auxiliary).GetSize();
 }
 
 idx_t ListVector::GetListCapacity(const Vector &vec) {
@@ -1877,7 +1877,7 @@ idx_t ListVector::GetListCapacity(const Vector &vec) {
 		return ListVector::GetListSize(child);
 	}
 	D_ASSERT(vec.auxiliary);
-	return ((VectorListBuffer &)*vec.auxiliary).capacity;
+	return ((VectorListBuffer &)*vec.auxiliary).GetCapacity();
 }
 
 void ListVector::ReferenceEntry(Vector &vector, Vector &other) {
@@ -1894,7 +1894,7 @@ void ListVector::SetListSize(Vector &vec, idx_t size) {
 		auto &child = DictionaryVector::Child(vec);
 		ListVector::SetListSize(child, size);
 	}
-	((VectorListBuffer &)*vec.auxiliary).size = size;
+	((VectorListBuffer &)*vec.auxiliary).SetSize(size);
 }
 
 void ListVector::Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset) {

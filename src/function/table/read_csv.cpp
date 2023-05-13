@@ -1055,6 +1055,12 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable(file_options);
 	// write options
 	writer.WriteListNoReference<bool>(force_quote);
+	// FIXME: serialize date_format / has_format
+	vector<string> csv_formats;
+	for (auto &format : date_format) {
+		csv_formats.push_back(format.second.format_specifier);
+	}
+	writer.WriteList<string>(csv_formats);
 }
 
 void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
@@ -1091,6 +1097,17 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	file_options = reader.ReadRequiredSerializable<MultiFileReaderOptions, MultiFileReaderOptions>();
 	// write options
 	force_quote = reader.ReadRequiredList<bool>();
+	auto formats = reader.ReadRequiredList<string>();
+	vector<LogicalTypeId> format_types {LogicalTypeId::DATE, LogicalTypeId::TIMESTAMP};
+	for (idx_t f_idx = 0; f_idx < formats.size(); f_idx++) {
+		auto &format = formats[f_idx];
+		auto &type = format_types[f_idx];
+		if (format.empty()) {
+			continue;
+		}
+		has_format[type] = true;
+		StrTimeFormat::ParseFormatSpecifier(format, date_format[type]);
+	}
 }
 
 static void CSVReaderSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
