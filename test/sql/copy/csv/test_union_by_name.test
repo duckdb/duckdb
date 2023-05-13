@@ -5,6 +5,9 @@
 statement ok
 SET default_null_order='nulls_first';
 
+statement ok
+SET threads=4
+
 # Setup
 
 statement ok
