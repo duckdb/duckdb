@@ -1,0 +1,34 @@
+# name: test/sql/json/read_json_auto.test_slow
+# description: Read json files - schema detection
+# group: [json]
+
+require json
+
+statement ok
+pragma enable_verification
+
+query I
+SELECT * FROM read_json_auto('data/json/empty_array.json')
+----
+
+statement error
+SELECT * FROM read_json_auto('data/json/malformed/empty_array_malformed.json')
+----
+Missing closing brace
+
+statement error
+SELECT * FROM read_json_auto('data/json/malformed/empty_array_trailing.json', format='array')
+----
+Empty array with trailing data when parsing JSON array
+
+statement error
+SELECT * FROM read_json_auto('data/json/malformed/array_comma_malformed.json', format='array')
+----
+Malformed JSON
+
+query I
+SELECT * FROM read_json_auto('data/json/array_of_empty_arrays.json', format='array')
+----
+[]
+[]
+[]

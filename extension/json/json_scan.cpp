@@ -772,6 +772,21 @@ void JSONScanLocalState::SkipOverArrayStart() {
 		    buffer_ptr[buffer_offset], current_reader->GetFileName());
 	}
 	SkipWhitespace(buffer_ptr, ++buffer_offset, buffer_size);
+	if (buffer_offset >= buffer_size) {
+		throw InvalidInputException("Missing closing brace ']' in JSON array with format='array' in file \"%s\"",
+		                            current_reader->GetFileName());
+	}
+	if (buffer_ptr[buffer_offset] == ']') {
+		buffer_offset++;
+		SkipWhitespace(buffer_ptr, ++buffer_offset, buffer_size);
+		if (buffer_offset != buffer_size) {
+			throw InvalidInputException(
+			    "Empty array with trailing data when parsing JSON array with format='array' in file \"%s\"",
+			    current_reader->GetFileName());
+		}
+		buffer_offset = buffer_size;
+		return; // Empty array
+	}
 }
 
 void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
