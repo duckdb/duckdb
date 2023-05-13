@@ -321,9 +321,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	    make_uniq<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path, options.compression);
 
 	if (!options.prefix.empty()) {
-		BufferedSerializer serializer;
-		serializer.WriteBufferData(options.prefix);
-		global_data->WriteData(serializer.blob.data.get(), serializer.blob.size);
+		global_data->WriteData((const_data_ptr_t) options.prefix.c_str(), options.prefix.size());
 	}
 
 	if (options.header) {
@@ -449,15 +447,13 @@ void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFun
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &options = csv_data.options;
 
+	BufferedSerializer serializer;
 	if (!options.suffix.empty()) {
-		BufferedSerializer serializer;
 		serializer.WriteBufferData(options.suffix);
-		global_state.WriteData(serializer.blob.data.get(), serializer.blob.size);
-	} else {
-		BufferedSerializer serializer;
+	} else if (global_state.written_anything) {
 		serializer.WriteBufferData(csv_data.newline);
-		global_state.WriteData(serializer.blob.data.get(), serializer.blob.size);
 	}
+	global_state.WriteData(serializer.blob.data.get(), serializer.blob.size);
 
 	global_state.handle->Close();
 	global_state.handle.reset();
