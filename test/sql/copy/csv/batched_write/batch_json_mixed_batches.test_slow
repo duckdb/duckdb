@@ -120,16 +120,13 @@ SELECT * FROM ${table} LIMIT 5 OFFSET 9999
 
 endloop
 
-# FIXME: empty array of records file is not read in correctly
-mode skip
-
 query I
-COPY v4 TO '__TEST_DIR__/mixed_batches_v4.json' (ARRAY ${ARRAY_SETTING})
+COPY v4 TO 'mixed_batches_v4.json' (ARRAY ${ARRAY_SETTING})
 ----
 0
 
 query I
-CREATE TABLE mixed_batches_v4 AS SELECT i::BIGINT as i FROM '__TEST_DIR__/mixed_batches_v4.json'
+CREATE TABLE mixed_batches_v4 AS SELECT i::BIGINT as i FROM 'mixed_batches_v4.json' t(i)
 ----
 0
 
@@ -146,8 +143,6 @@ SELECT * FROM ${table} LIMIT 5
 
 endloop
 
-mode unskip
-
 statement ok
 DROP TABLE mixed_batches_v1
 
@@ -158,6 +153,6 @@ statement ok
 DROP TABLE mixed_batches_v3
 
 statement ok
-DROP TABLE IF EXISTS mixed_batches_v4
+DROP TABLE mixed_batches_v4
 
 endloop

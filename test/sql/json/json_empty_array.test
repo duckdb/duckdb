@@ -7,6 +7,16 @@ require json
 statement ok
 pragma enable_verification
 
+# empty file
+query I
+select * from 'data/json/empty.ndjson'
+----
+
+query I
+select * from 'data/json/whitespace_only.json'
+----
+
+# empty array
 query I
 SELECT * FROM read_json_auto('data/json/empty_array.json')
 ----
@@ -15,6 +25,7 @@ query I
 SELECT * FROM read_json_auto('data/json/empty_no_newline.json')
 ----
 
+# malformed files
 statement error
 SELECT * FROM read_json_auto('data/json/malformed/empty_array_malformed.json')
 ----
