@@ -777,15 +777,14 @@ void JSONScanLocalState::SkipOverArrayStart() {
 		                            current_reader->GetFileName());
 	}
 	if (buffer_ptr[buffer_offset] == ']') {
-		buffer_offset++;
+		// Empty array
 		SkipWhitespace(buffer_ptr, ++buffer_offset, buffer_size);
 		if (buffer_offset != buffer_size) {
 			throw InvalidInputException(
 			    "Empty array with trailing data when parsing JSON array with format='array' in file \"%s\"",
 			    current_reader->GetFileName());
 		}
-		buffer_offset = buffer_size;
-		return; // Empty array
+		return;
 	}
 }
 
