@@ -1,4 +1,4 @@
-# name: test/sql/json/read_json_auto.test_slow
+# name: test/sql/json/json_empty_array.test
 # description: Read json files - schema detection
 # group: [json]
 
