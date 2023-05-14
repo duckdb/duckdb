@@ -12,6 +12,8 @@ class TestWindowsAbsPath(object):
         con.execute("CREATE OR REPLACE TABLE int AS SELECT * FROM range(10) t(i)")
         res = con.execute("SELECT COUNT(*) FROM int").fetchall()
         assert res[0][0] == 10
+        del res
+        del con
 
         assert dbpath[1] == ':'
         # remove the drive separator and reconnect
@@ -19,9 +21,13 @@ class TestWindowsAbsPath(object):
         con = duckdb.connect(dbpath)
         res = con.execute("SELECT COUNT(*) FROM int").fetchall()
         assert res[0][0] == 10
+        del res
+        del con
 
         # forward slashes work as well
         dbpath = dbpath.replace('\\', '/')
         con = duckdb.connect(dbpath)
         res = con.execute("SELECT COUNT(*) FROM int").fetchall()
         assert res[0][0] == 10
+        del res
+        del con
