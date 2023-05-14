@@ -429,7 +429,7 @@ static void WriteCSVCombine(ExecutionContext &context, FunctionData &bind_data, 
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &writer = local_data.serializer;
 	// flush the local writer
-	if (writer.blob.size > 0) {
+	if (local_data.written_anything) {
 		global_state.WriteRows(writer.blob.data.get(), writer.blob.size, csv_data.newline);
 		writer.Reset();
 	}
