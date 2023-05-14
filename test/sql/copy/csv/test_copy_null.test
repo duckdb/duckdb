@@ -49,9 +49,9 @@ COPY test_null_option FROM 'test/sql/copy/csv/data/test/test_null_option.csv' (N
 query ITTTT
 SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 ----
-0	(empty)	test	null	NULL
-1	(empty)	test	null	NULL
-2	(empty)	test	null	NULL
+0	(empty)	NULL	null	NULL
+1	(empty)	NULL	null	NULL
+2	(empty)	NULL	null	NULL
 
 statement ok
 DELETE FROM test_null_option;
@@ -112,9 +112,9 @@ COPY test_null_option FROM '__TEST_DIR__/test_null_option_2.csv';
 query ITTTT
 SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 ----
-0	(empty)	test	NULL	NULL
-1	(empty)	test	NULL	NULL
-2	(empty)	test	NULL	NULL
+0	NULL	test	NULL	NULL
+1	NULL	test	NULL	NULL
+2	NULL	test	NULL	NULL
 
 # explicitly using default NULL value
 query I
@@ -133,9 +133,9 @@ COPY test_null_option FROM '__TEST_DIR__/test_null_option_3.csv' (NULL '');
 query ITTTT
 SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 ----
-0	(empty)	test	NULL	NULL
-1	(empty)	test	NULL	NULL
-2	(empty)	test	NULL	NULL
+0	NULL	test	NULL	NULL
+1	NULL	test	NULL	NULL
+2	NULL	test	NULL	NULL
 
 # setting specific NULL value
 query I
@@ -154,7 +154,7 @@ COPY test_null_option FROM '__TEST_DIR__/test_null_option_4.csv' (NULL 'null');
 query ITTTT
 SELECT * FROM test_null_option ORDER BY 1 LIMIT 3;
 ----
-0	(empty)	test	NULL	NULL
-1	(empty)	test	NULL	NULL
-2	(empty)	test	NULL	NULL
+0	NULL	test	NULL	NULL
+1	NULL	test	NULL	NULL
+2	NULL	test	NULL	NULL
 

@@ -12,7 +12,7 @@ mutable struct Appender
             if error_ptr == C_NULL
                 error_message = string("Opening of Appender for table \"", table, "\" failed: unknown error")
             else
-                error_message = unsafe_string(error_ptr)
+                error_message = string(error_ptr)
             end
             duckdb_appender_destroy(handle)
             throw(QueryException(error_message))

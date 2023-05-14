@@ -11,13 +11,13 @@ unique_ptr<ParsedExpression> Transformer::TransformCoalesce(duckdb_libpgquery::P
 	auto coalesce_args = reinterpret_cast<duckdb_libpgquery::PGList *>(root->lexpr);
 	D_ASSERT(coalesce_args->length > 0); // parser ensures this already
 
-	auto coalesce_op = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+	auto coalesce_op = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
 	for (auto cell = coalesce_args->head; cell; cell = cell->next) {
 		// get the value of the COALESCE
 		auto value_expr = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(cell->data.ptr_value));
-		coalesce_op->children.push_back(move(value_expr));
+		coalesce_op->children.push_back(std::move(value_expr));
 	}
-	return move(coalesce_op);
+	return std::move(coalesce_op);
 }
 
 } // namespace duckdb

@@ -14,4 +14,16 @@ DESCRIBE;
 query IIII
 DESCRIBE
 ----
-integers	[a, i, j]	[INTEGER, INTEGER, INTEGER]	False
+integers	[i, j, a]	[INTEGER, INTEGER, INTEGER]	false
+
+# issue #6393
+statement ok
+DROP TABLE integers
+
+statement ok
+create table t(plant text, dt date, mwh bigint);
+
+query IIII
+DESCRIBE;
+----
+t	[plant, dt, mwh]	[VARCHAR, DATE, BIGINT]	false

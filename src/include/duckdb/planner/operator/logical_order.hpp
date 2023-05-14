@@ -18,8 +18,11 @@ namespace duckdb {
 //! LogicalOrder represents an ORDER BY clause, sorting the data
 class LogicalOrder : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_ORDER_BY;
+
+public:
 	explicit LogicalOrder(vector<BoundOrderByNode> orders)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_ORDER_BY), orders(move(orders)) {
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_ORDER_BY), orders(std::move(orders)) {
 	}
 
 	vector<BoundOrderByNode> orders;

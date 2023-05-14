@@ -6,38 +6,33 @@
 
 namespace duckdb {
 
-void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                          LocalSourceState &lstate) const {
+void PhysicalSet::SetExtensionVariable(ClientContext &context, ExtensionOption &extension_option, const string &name,
+                                       SetScope scope, const Value &value) {
+	auto &config = DBConfig::GetConfig(context);
+	auto &target_type = extension_option.type;
+	Value target_value = value.CastAs(context, target_type);
+	if (extension_option.set_function) {
+		extension_option.set_function(context, scope, target_value);
+	}
+	if (scope == SetScope::GLOBAL) {
+		config.SetOption(name, std::move(target_value));
+	} else {
+		auto &client_config = ClientConfig::GetConfig(context);
+		client_config.set_variables[name] = std::move(target_value);
+	}
+}
+
+SourceResultType PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto option = DBConfig::GetOptionByName(name);
 	if (!option) {
 		// check if this is an extra extension variable
 		auto &config = DBConfig::GetConfig(context.client);
 		auto entry = config.extension_parameters.find(name);
 		if (entry == config.extension_parameters.end()) {
-			// it is not!
-			// get a list of all options
-			vector<string> potential_names = DBConfig::GetOptionNames();
-			for (auto &entry : config.extension_parameters) {
-				potential_names.push_back(entry.first);
-			}
-
-			throw CatalogException("unrecognized configuration parameter \"%s\"\n%s", name,
-			                       StringUtil::CandidatesErrorMessage(potential_names, name, "Did you mean"));
+			throw Catalog::UnrecognizedConfigurationError(context.client, name);
 		}
-		//! it is!
-		auto &extension_option = entry->second;
-		auto &target_type = extension_option.type;
-		Value target_value = value.CastAs(context.client, target_type);
-		if (extension_option.set_function) {
-			extension_option.set_function(context.client, scope, target_value);
-		}
-		if (scope == SetScope::GLOBAL) {
-			config.SetOption(name, move(target_value));
-		} else {
-			auto &client_config = ClientConfig::GetConfig(context.client);
-			client_config.set_variables[name] = move(target_value);
-		}
-		return;
+		SetExtensionVariable(context.client, entry->second, name, scope, value);
+		return SourceResultType::FINISHED;
 	}
 	SetScope variable_scope = scope;
 	if (variable_scope == SetScope::AUTOMATIC) {
@@ -49,7 +44,7 @@ void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 		}
 	}
 
-	Value input = value.CastAs(context.client, option->parameter_type);
+	Value input_val = value.CastAs(context.client, option->parameter_type);
 	switch (variable_scope) {
 	case SetScope::GLOBAL: {
 		if (!option->set_global) {
@@ -57,18 +52,20 @@ void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 		}
 		auto &db = DatabaseInstance::GetDatabase(context.client);
 		auto &config = DBConfig::GetConfig(context.client);
-		config.SetOption(&db, *option, input);
+		config.SetOption(&db, *option, input_val);
 		break;
 	}
 	case SetScope::SESSION:
 		if (!option->set_local) {
 			throw CatalogException("option \"%s\" cannot be set locally", name);
 		}
-		option->set_local(context.client, input);
+		option->set_local(context.client, input_val);
 		break;
 	default:
 		throw InternalException("Unsupported SetScope for variable");
 	}
+
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

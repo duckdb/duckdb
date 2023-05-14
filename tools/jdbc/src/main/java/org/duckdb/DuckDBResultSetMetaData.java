@@ -1,17 +1,17 @@
 package org.duckdb;
 
-import java.sql.Date;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
-import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
-import java.util.ArrayList;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
-import java.math.BigDecimal;
-
-import org.duckdb.DuckDBResultSet.DuckDBBlobResult;
+import java.time.OffsetTime;
+import java.util.ArrayList;
+import java.util.UUID;
 
 public class DuckDBResultSetMetaData implements ResultSetMetaData {
 
@@ -33,10 +33,8 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		this.column_types = column_types_al.toArray(this.column_types);
 
 		for (String column_type_detail : this.column_types_details) {
-			if (!column_type_detail.equals("")) {
-				String[] split_details = column_type_detail.split(";");
-				column_types_meta.add(new DuckDBColumnTypeMetaData(Short.parseShort(split_details[0].replace("DECIMAL", ""))
-							, Short.parseShort(split_details[1]), Short.parseShort(split_details[2])));
+			if (column_type_detail.startsWith("DECIMAL")) {
+				column_types_meta.add(DuckDBColumnTypeMetaData.parseColumnTypeMetadata(column_type_detail));
 			}
 			else { column_types_meta.add(null); }
 		}
@@ -44,12 +42,25 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 	}
 
 	public static DuckDBColumnType TypeNameToType(String type_name) {
-		if (type_name.startsWith("DECIMAL")) {
+		if (type_name.endsWith("[]")) {
+			return DuckDBColumnType.LIST;
+		} else if (type_name.startsWith("DECIMAL")) {
 			return DuckDBColumnType.DECIMAL;
+		} else if (type_name.equals("TIME WITH TIME ZONE")) {
+			return DuckDBColumnType.TIME_WITH_TIME_ZONE;
 		} else if (type_name.equals("TIMESTAMP WITH TIME ZONE")) {
 			return DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE;
-		} else {
+		} else if (type_name.startsWith("STRUCT")) {
+			return DuckDBColumnType.STRUCT;
+		} else if (type_name.startsWith("MAP")) {
+			return DuckDBColumnType.MAP;
+		} else if (type_name.startsWith("UNION")) {
+			return DuckDBColumnType.UNION;
+		}
+		try {
 			return DuckDBColumnType.valueOf(type_name);
+		} catch (IllegalArgumentException e) {
+			return DuckDBColumnType.UNKNOWN;
 		}
 	}
 
@@ -95,17 +106,6 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Types.BIGINT;
 		case LIST:
 			return Types.ARRAY;
-		case ENUM:
-		case HUGEINT:
-		case UTINYINT:
-		case USMALLINT:
-		case STRUCT:
-		case UUID:
-		case JSON:
-		case UINTEGER:
-		case UBIGINT:
-		case INTERVAL:
-			return Types.JAVA_OBJECT;
 		case FLOAT:
 			return Types.FLOAT;
 		case DOUBLE:
@@ -128,7 +128,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		case BLOB:
 			return Types.BLOB;
 		default:
-			throw new SQLException("Unsupported type " + type);
+			return Types.JAVA_OBJECT;
 		}
 	}
 
@@ -140,37 +140,52 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 	}
 
 	public String getColumnClassName(int column) throws SQLException {
-		switch (getColumnType(column)) {
-		case Types.BOOLEAN:
-			return Boolean.class.toString();
-		case Types.TINYINT:
-			return Byte.class.toString();
-		case Types.SMALLINT:
-			return Short.class.toString();
-		case Types.INTEGER:
-			return Integer.class.toString();
-		case Types.BIGINT:
-			return Long.class.toString();
-		case Types.FLOAT:
-			return Float.class.toString();
-		case Types.DOUBLE:
-			return Double.class.toString();
-		case Types.VARCHAR:
-			return String.class.toString();
-		case Types.TIME:
-			return Time.class.toString();
-		case Types.DATE:
-			return Date.class.toString();
-		case Types.TIMESTAMP:
-			return Timestamp.class.toString();
-		case Types.TIMESTAMP_WITH_TIMEZONE:
-			return OffsetDateTime.class.toString();
-		case Types.BLOB:
-			return DuckDBBlobResult.class.toString();
-		case Types.DECIMAL:
-			return BigDecimal.class.toString();
+		switch (column_types[column - 1]) {
+		case BOOLEAN:
+			return Boolean.class.getName();
+		case TINYINT:
+			return Byte.class.getName();
+		case SMALLINT:
+		case UTINYINT:
+			return Short.class.getName();
+		case INTEGER:
+		case USMALLINT:
+			return Integer.class.getName();
+		case BIGINT:
+		case UINTEGER:
+			return Long.class.getName();
+		case HUGEINT:
+		case UBIGINT:
+			return BigInteger.class.getName();
+		case FLOAT:
+			return Float.class.getName();
+		case DOUBLE:
+			return Double.class.getName();
+		case DECIMAL:
+			return BigDecimal.class.getName();
+		case TIME:
+			return LocalTime.class.getName();
+		case TIME_WITH_TIME_ZONE:
+			return OffsetTime.class.getName();
+		case DATE:
+			return LocalDate.class.getName();
+		case TIMESTAMP:
+		case TIMESTAMP_NS:
+		case TIMESTAMP_S:
+		case TIMESTAMP_MS:
+			return Timestamp.class.getName();
+		case TIMESTAMP_WITH_TIME_ZONE:
+			return OffsetDateTime.class.getName();
+		case JSON:
+			return JsonNode.class.getName();
+		case BLOB:
+			return DuckDBResultSet.DuckDBBlobResult.class.getName();
+		case UUID:
+			return UUID.class.getName();
+		case LIST:
+			return DuckDBArray.class.getName();
 		default:
-			throw new SQLException("Unknown type " + getColumnTypeName(column));
+			return String.class.getName();
 		}
 	}
 
@@ -253,12 +268,14 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		return "";
 	}
 
+	@Override
 	public <T> T unwrap(Class<T> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException("unwrap");
+		return JdbcUtils.unwrap(this, iface);
 	}
 
-	public boolean isWrapperFor(Class<?> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException("isWrapperFor");
+	@Override
+	public boolean isWrapperFor(Class<?> iface) {
+		return iface.isInstance(this);
 	}
 
 	private DuckDBColumnTypeMetaData typeMetadataForColumn(int columnIndex) throws SQLException {

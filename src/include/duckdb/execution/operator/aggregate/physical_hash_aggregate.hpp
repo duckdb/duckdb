@@ -58,13 +58,16 @@ public:
 //! This only contains read-only variables, anything that is stateful instead gets stored in the Global/Local states
 class PhysicalHashAggregate : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::HASH_GROUP_BY;
+
+public:
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      idx_t estimated_cardinality);
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      vector<unique_ptr<Expression>> groups, idx_t estimated_cardinality);
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      vector<unique_ptr<Expression>> groups, vector<GroupingSet> grouping_sets,
-	                      vector<vector<idx_t>> grouping_functions, idx_t estimated_cardinality);
+	                      vector<unsafe_vector<idx_t>> grouping_functions, idx_t estimated_cardinality);
 
 	//! The grouping sets
 	GroupedAggregateData grouped_aggregate_data;
@@ -77,8 +80,8 @@ public:
 	vector<LogicalType> input_group_types;
 
 	// Filters given to Sink and friends
-	vector<idx_t> non_distinct_filter;
-	vector<idx_t> distinct_filter;
+	unsafe_vector<idx_t> non_distinct_filter;
+	unsafe_vector<idx_t> distinct_filter;
 
 	unordered_map<Expression *, size_t> filter_indexes;
 
@@ -87,21 +90,22 @@ public:
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
 	                                                 GlobalSourceState &gstate) const override;
-	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	             LocalSourceState &lstate) const override;
+	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
+	bool IsSource() const override {
+		return true;
+	}
 	bool ParallelSource() const override {
 		return true;
 	}
 
-	bool IsOrderPreserving() const override {
-		return false;
+	OrderPreservationType SourceOrder() const override {
+		return OrderPreservationType::NO_ORDER;
 	}
 
 public:
 	// Sink interface
-	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-	                    DataChunk &input) const override;
+	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          GlobalSinkState &gstate) const override;
@@ -117,6 +121,10 @@ public:
 
 	bool ParallelSink() const override {
 		return true;
+	}
+
+	bool SinkOrderDependent() const override {
+		return false;
 	}
 
 public:
@@ -135,11 +143,10 @@ private:
 	//! Combine the distinct aggregates
 	void CombineDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const;
 	//! Sink the distinct aggregates for a single grouping
-	void SinkDistinctGrouping(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-	                          DataChunk &input, idx_t grouping_idx) const;
+	void SinkDistinctGrouping(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
+	                          idx_t grouping_idx) const;
 	//! Sink the distinct aggregates
-	void SinkDistinct(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-	                  DataChunk &input) const;
+	void SinkDistinct(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const;
 	//! Create groups in the main ht for groups that would otherwise get filtered out completely
 	SinkResultType SinkGroupsOnly(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	                              DataChunk &input) const;

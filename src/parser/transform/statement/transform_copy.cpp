@@ -1,9 +1,9 @@
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/statement/copy_statement.hpp"
-#include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/transformer.hpp"
 
 #include <cstring>
 
@@ -58,7 +58,7 @@ void Transformer::TransformCopyOptions(CopyInfo &info, duckdb_libpgquery::PGList
 unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCopyStmt *>(node);
 	D_ASSERT(stmt);
-	auto result = make_unique<CopyStatement>();
+	auto result = make_uniq<CopyStatement>();
 	auto &info = *result->info;
 
 	// get file_path and is_from
@@ -72,6 +72,8 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGNode *
 	}
 	if (StringUtil::EndsWith(info.file_path, ".parquet")) {
 		info.format = "parquet";
+	} else if (StringUtil::EndsWith(info.file_path, ".json") || StringUtil::EndsWith(info.file_path, ".ndjson")) {
+		info.format = "json";
 	} else {
 		info.format = "csv";
 	}
@@ -91,6 +93,7 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGNode *
 		auto &table = *reinterpret_cast<BaseTableRef *>(ref.get());
 		info.table = table.table_name;
 		info.schema = table.schema_name;
+		info.catalog = table.catalog_name;
 	} else {
 		result->select_statement = TransformSelectNode((duckdb_libpgquery::PGSelectStmt *)stmt->query);
 	}

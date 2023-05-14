@@ -44,11 +44,11 @@ struct TestVectorFlat {
 				auto child_values = GenerateValues(info, child_type.second);
 
 				for (idx_t i = 0; i < child_values.size(); i++) {
-					struct_children[i].push_back(make_pair(child_type.first, move(child_values[i])));
+					struct_children[i].push_back(make_pair(child_type.first, std::move(child_values[i])));
 				}
 			}
 			for (auto &struct_child : struct_children) {
-				result.push_back(Value::STRUCT(move(struct_child)));
+				result.push_back(Value::STRUCT(std::move(struct_child)));
 			}
 			break;
 		}
@@ -78,14 +78,14 @@ struct TestVectorFlat {
 	static void Generate(TestVectorInfo &info) {
 		vector<Value> result_values = GenerateValues(info, info.type);
 		for (idx_t cur_row = 0; cur_row < result_values.size(); cur_row += STANDARD_VECTOR_SIZE) {
-			auto result = make_unique<DataChunk>();
+			auto result = make_uniq<DataChunk>();
 			result->Initialize(Allocator::DefaultAllocator(), {info.type});
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, result_values.size() - cur_row);
 			for (idx_t i = 0; i < cardinality; i++) {
 				result->data[0].SetValue(i, result_values[cur_row + i]);
 			}
 			result->SetCardinality(cardinality);
-			info.entries.push_back(move(result));
+			info.entries.push_back(std::move(result));
 		}
 	}
 };
@@ -94,14 +94,14 @@ struct TestVectorConstant {
 	static void Generate(TestVectorInfo &info) {
 		auto values = TestVectorFlat::GenerateValues(info, info.type);
 		for (idx_t cur_row = 0; cur_row < TestVectorFlat::TEST_VECTOR_CARDINALITY; cur_row += STANDARD_VECTOR_SIZE) {
-			auto result = make_unique<DataChunk>();
+			auto result = make_uniq<DataChunk>();
 			result->Initialize(Allocator::DefaultAllocator(), {info.type});
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, TestVectorFlat::TEST_VECTOR_CARDINALITY - cur_row);
 			result->data[0].SetValue(0, values[0]);
 			result->data[0].SetVectorType(VectorType::CONSTANT_VECTOR);
 			result->SetCardinality(cardinality);
 
-			info.entries.push_back(move(result));
+			info.entries.push_back(std::move(result));
 		}
 	}
 };
@@ -159,12 +159,12 @@ struct TestVectorSequence {
 
 	static void Generate(TestVectorInfo &info) {
 #if STANDARD_VECTOR_SIZE > 2
-		auto result = make_unique<DataChunk>();
+		auto result = make_uniq<DataChunk>();
 		result->Initialize(Allocator::DefaultAllocator(), {info.type});
 
 		GenerateVector(info, info.type, result->data[0]);
 		result->SetCardinality(3);
-		info.entries.push_back(move(result));
+		info.entries.push_back(std::move(result));
 #endif
 	}
 };
@@ -194,25 +194,25 @@ struct TestVectorDictionary {
 
 static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
-	auto result = make_unique<TestVectorBindData>();
+	auto result = make_uniq<TestVectorBindData>();
 	result->type = input.inputs[0].type();
 	result->all_flat = BooleanValue::Get(input.inputs[1]);
 
 	return_types.push_back(result->type);
 	names.emplace_back("test_vector");
-	return move(result);
+	return std::move(result);
 }
 
 unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = (TestVectorBindData &)*input.bind_data;
+	auto &bind_data = input.bind_data->Cast<TestVectorBindData>();
 
-	auto result = make_unique<TestVectorTypesData>();
+	auto result = make_uniq<TestVectorTypesData>();
 
 	auto test_types = TestAllTypesFun::GetTestTypes();
 
 	map<LogicalTypeId, TestType> test_type_map;
 	for (auto &test_type : test_types) {
-		test_type_map.insert(make_pair(test_type.type.id(), move(test_type)));
+		test_type_map.insert(make_pair(test_type.type.id(), std::move(test_type)));
 	}
 
 	TestVectorInfo info(bind_data.type, test_type_map, result->entries);
@@ -229,7 +229,7 @@ unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context,
 			entry->Verify();
 		}
 	}
-	return move(result);
+	return std::move(result);
 }
 
 void TestVectorTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

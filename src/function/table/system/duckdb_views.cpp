@@ -13,12 +13,18 @@ struct DuckDBViewsData : public GlobalTableFunctionState {
 	DuckDBViewsData() : offset(0) {
 	}
 
-	vector<CatalogEntry *> entries;
+	vector<reference<CatalogEntry>> entries;
 	idx_t offset;
 };
 
 static unique_ptr<FunctionData> DuckDBViewsBind(ClientContext &context, TableFunctionBindInput &input,
                                                 vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("database_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("database_oid");
+	return_types.emplace_back(LogicalType::BIGINT);
+
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -47,22 +53,19 @@ static unique_ptr<FunctionData> DuckDBViewsBind(ClientContext &context, TableFun
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBViewsInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBViewsData>();
+	auto result = make_uniq<DuckDBViewsData>();
 
-	// scan all the schemas for tables and collect themand collect them
-	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
+	// scan all the schemas for tables and collect them and collect them
+	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
-		schema->Scan(context, CatalogType::VIEW_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema.get().Scan(context, CatalogType::VIEW_ENTRY,
+		                  [&](CatalogEntry &entry) { result->entries.push_back(entry); });
 	};
-
-	// check the temp schema as well
-	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(
-	    context, CatalogType::VIEW_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
-	return move(result);
+	return std::move(result);
 }
 
 void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBViewsData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBViewsData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -71,30 +74,35 @@ void DuckDBViewsFunction(ClientContext &context, TableFunctionInput &data_p, Dat
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = data.entries[data.offset++];
+		auto &entry = data.entries[data.offset++].get();
 
-		if (entry->type != CatalogType::VIEW_ENTRY) {
+		if (entry.type != CatalogType::VIEW_ENTRY) {
 			continue;
 		}
-		auto &view = (ViewCatalogEntry &)*entry;
+		auto &view = entry.Cast<ViewCatalogEntry>();
 
 		// return values:
+		idx_t col = 0;
+		// database_name, VARCHAR
+		output.SetValue(col++, count, view.catalog.GetName());
+		// database_oid, BIGINT
+		output.SetValue(col++, count, Value::BIGINT(view.catalog.GetOid()));
 		// schema_name, LogicalType::VARCHAR
-		output.SetValue(0, count, Value(view.schema->name));
+		output.SetValue(col++, count, Value(view.schema.name));
 		// schema_oid, LogicalType::BIGINT
-		output.SetValue(1, count, Value::BIGINT(view.schema->oid));
+		output.SetValue(col++, count, Value::BIGINT(view.schema.oid));
 		// view_name, LogicalType::VARCHAR
-		output.SetValue(2, count, Value(view.name));
+		output.SetValue(col++, count, Value(view.name));
 		// view_oid, LogicalType::BIGINT
-		output.SetValue(3, count, Value::BIGINT(view.oid));
+		output.SetValue(col++, count, Value::BIGINT(view.oid));
 		// internal, LogicalType::BOOLEAN
-		output.SetValue(4, count, Value::BOOLEAN(view.internal));
+		output.SetValue(col++, count, Value::BOOLEAN(view.internal));
 		// temporary, LogicalType::BOOLEAN
-		output.SetValue(5, count, Value::BOOLEAN(view.temporary));
+		output.SetValue(col++, count, Value::BOOLEAN(view.temporary));
 		// column_count, LogicalType::BIGINT
-		output.SetValue(6, count, Value::BIGINT(view.types.size()));
+		output.SetValue(col++, count, Value::BIGINT(view.types.size()));
 		// sql, LogicalType::VARCHAR
-		output.SetValue(7, count, Value(view.ToSQL()));
+		output.SetValue(col++, count, Value(view.ToSQL()));
 
 		count++;
 	}

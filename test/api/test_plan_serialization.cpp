@@ -15,7 +15,7 @@
 using namespace duckdb;
 using namespace std;
 
-static void test_helper(string sql, vector<string> fixtures = vector<string>()) {
+static void test_helper(string sql, duckdb::vector<string> fixtures = duckdb::vector<string>()) {
 	DuckDB db;
 	Connection con(db);
 
@@ -25,29 +25,56 @@ static void test_helper(string sql, vector<string> fixtures = vector<string>()) 
 
 	Parser p;
 	p.ParseQuery(sql);
-	//	printf("\nParsed query '%s'\n", sql.c_str());
 
-	int i = 0;
 	for (auto &statement : p.statements) {
 		con.context->transaction.BeginTransaction();
 		// Should that be the default "ToString"?
 		string statement_sql(statement->query.c_str() + statement->stmt_location, statement->stmt_length);
-		//		printf("[%d] Processing statement '%s'\n", i, statement_sql.c_str());
 		Planner planner(*con.context);
-		planner.CreatePlan(move(statement));
-		//		printf("[%d] Created plan\n", i);
-		auto plan = move(planner.plan);
+		planner.CreatePlan(std::move(statement));
+		auto plan = std::move(planner.plan);
 
 		Optimizer optimizer(*planner.binder, *con.context);
 
-		plan = optimizer.Optimize(move(plan));
+		plan = optimizer.Optimize(std::move(plan));
 
 		// LogicalOperator's copy utilizes its serialize and deserialize methods
 		auto new_plan = plan->Copy(*con.context);
 
-		auto optimized_plan = optimizer.Optimize(move(new_plan));
+		auto optimized_plan = optimizer.Optimize(std::move(new_plan));
 		con.context->transaction.Commit();
-		++i;
+	}
+}
+
+static void test_helper_multi_db(string sql, duckdb::vector<string> fixtures = duckdb::vector<string>()) {
+	DuckDB db;
+	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("ATTACH DATABASE ':memory:' AS new_db;"));
+
+	for (const auto &fixture : fixtures) {
+		con.SendQuery(fixture);
+	}
+
+	Parser p;
+	p.ParseQuery(sql);
+
+	for (auto &statement : p.statements) {
+		con.context->transaction.BeginTransaction();
+		// Should that be the default "ToString"?
+		string statement_sql(statement->query.c_str() + statement->stmt_location, statement->stmt_length);
+		Planner planner(*con.context);
+		planner.CreatePlan(std::move(statement));
+		auto plan = std::move(planner.plan);
+
+		Optimizer optimizer(*planner.binder, *con.context);
+
+		plan = optimizer.Optimize(std::move(plan));
+
+		// LogicalOperator's copy utilizes its serialize and deserialize methods
+		auto new_plan = plan->Copy(*con.context);
+
+		auto optimized_plan = optimizer.Optimize(std::move(new_plan));
+		con.context->transaction.Commit();
 	}
 }
 
@@ -105,3 +132,28 @@ TEST_CASE("Test logical_update", "[serialization]") {
 // TEST_CASE("Test logical_prepare", "[serialization]") {
 //	test_helper("PREPARE v1 AS SELECT 42");
 //}
+
+TEST_CASE("Test logical_simple with DROP", "[serialization]") {
+	test_helper("DROP TABLE tbl", {"CREATE TABLE tbl (foo INTEGER)"});
+}
+
+TEST_CASE("Test logical_simple with ALTER", "[serialization]") {
+	test_helper("ALTER TABLE tbl ADD COLUMN bar INTEGER", {"CREATE TABLE tbl (foo INTEGER)"});
+}
+
+TEST_CASE("Test logical_simple with LOAD", "[serialization]") {
+	test_helper("LOAD foo");
+}
+
+// below test cases are oriented towards multi-databases
+TEST_CASE("Test create_table with catalog", "[serialization]") {
+	test_helper_multi_db("CREATE TABLE new_db.main.tbl(i INTEGER);");
+}
+
+TEST_CASE("Test logical_insert with catalog", "[serialization]") {
+	test_helper_multi_db("INSERT INTO new_db.main.tbl VALUES(1)", {"CREATE TABLE new_db.main.tbl (foo INTEGER)"});
+}
+
+TEST_CASE("Test logical_update with catalog", "[serialization]") {
+	test_helper_multi_db("UPDATE new_db.main.tbl SET foo=42", {"CREATE TABLE new_db.main.tbl (foo INTEGER)"});
+}

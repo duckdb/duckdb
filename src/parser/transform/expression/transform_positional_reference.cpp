@@ -8,9 +8,9 @@ unique_ptr<ParsedExpression> Transformer::TransformPositionalReference(duckdb_li
 	if (node->position <= 0) {
 		throw ParserException("Positional reference node needs to be >= 1");
 	}
-	auto result = make_unique<PositionalReferenceExpression>(node->position);
+	auto result = make_uniq<PositionalReferenceExpression>(node->position);
 	result->query_location = node->location;
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

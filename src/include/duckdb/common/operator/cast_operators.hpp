@@ -34,6 +34,13 @@ struct TryCastErrorMessage {
 	}
 };
 
+struct TryCastErrorMessageCommaSeparated {
+	template <class SRC, class DST>
+	DUCKDB_API static inline bool Operation(SRC input, DST &result, string *error_message, bool strict = false) {
+		throw NotImplementedException("Unimplemented type for cast (%s -> %s)", GetTypeId<SRC>(), GetTypeId<DST>());
+	}
+};
+
 template <class SRC, class DST>
 static string CastExceptionText(SRC input) {
 	if (std::is_same<SRC, string_t>()) {
@@ -434,6 +441,16 @@ template <>
 DUCKDB_API bool TryCast::Operation(string_t input, float &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(string_t input, double &result, bool strict);
+template <>
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, float &result, string *error_message, bool strict);
+template <>
+DUCKDB_API bool TryCastErrorMessage::Operation(string_t input, double &result, string *error_message, bool strict);
+template <>
+DUCKDB_API bool TryCastErrorMessageCommaSeparated::Operation(string_t input, float &result, string *error_message,
+                                                             bool strict);
+template <>
+DUCKDB_API bool TryCastErrorMessageCommaSeparated::Operation(string_t input, double &result, string *error_message,
+                                                             bool strict);
 
 //===--------------------------------------------------------------------===//
 // Date Casts
@@ -646,6 +663,30 @@ struct TryCastToBlob {
 template <>
 bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
                               bool strict);
+
+//===--------------------------------------------------------------------===//
+// Bits
+//===--------------------------------------------------------------------===//
+struct CastFromBit {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		throw duckdb::NotImplementedException("Cast from bit could not be performed!");
+	}
+};
+template <>
+duckdb::string_t CastFromBit::Operation(duckdb::string_t input, Vector &vector);
+
+struct TryCastToBit {
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, Vector &result_vector, string *error_message,
+	                             bool strict = false) {
+		throw InternalException("Unsupported type for try cast to bit");
+	}
+};
+
+template <>
+bool TryCastToBit::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
+                             bool strict);
 
 //===--------------------------------------------------------------------===//
 // UUID

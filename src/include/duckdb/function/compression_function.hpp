@@ -42,7 +42,7 @@ struct CompressedSegmentState {
 };
 
 struct CompressionAppendState {
-	CompressionAppendState(BufferHandle handle_p) : handle(move(handle_p)) {
+	CompressionAppendState(BufferHandle handle_p) : handle(std::move(handle_p)) {
 	}
 	virtual ~CompressionAppendState() {
 	}

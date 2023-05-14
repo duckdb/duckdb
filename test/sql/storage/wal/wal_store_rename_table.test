@@ -71,6 +71,7 @@ COMMIT
 restart
 
 # after a restart, the renamed table is still here
+
 query I
 SELECT a FROM new_name ORDER BY 1
 ----

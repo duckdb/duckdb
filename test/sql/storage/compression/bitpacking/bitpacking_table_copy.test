@@ -7,6 +7,11 @@ require tpch
 # load the DB from disk
 load __TEST_DIR__/test_bitpacking_struct_bug.db
 
+foreach bitpacking_mode delta_for for constant_delta
+
+statement ok
+PRAGMA force_bitpacking_mode='${bitpacking_mode}'
+
 statement ok
 PRAGMA force_compression = 'bitpacking'
 
@@ -34,3 +39,11 @@ query I
 select sum(a) from test_2;
 ----
 11249925000
+
+statement ok
+drop table test
+
+statement ok
+drop table test_2
+
+endloop

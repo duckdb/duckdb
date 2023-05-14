@@ -32,6 +32,14 @@ class VectorListBuffer;
 
 struct SelCache;
 
+struct ConsecutiveChildListInfo {
+	ConsecutiveChildListInfo() : is_constant(true), needs_slicing(false), child_list_info(list_entry_t(0, 0)) {
+	}
+	bool is_constant;
+	bool needs_slicing;
+	list_entry_t child_list_info;
+};
+
 //!  Vector of values of a specified PhysicalType.
 class Vector {
 	friend struct ConstantVector;
@@ -108,10 +116,10 @@ public:
 
 	//! Converts this Vector to a printable string representation
 	DUCKDB_API string ToString(idx_t count) const;
-	DUCKDB_API void Print(idx_t count);
+	DUCKDB_API void Print(idx_t count) const;
 
 	DUCKDB_API string ToString() const;
-	DUCKDB_API void Print();
+	DUCKDB_API void Print() const;
 
 	//! Flatten the vector, removing any compression and turning it into a FLAT_VECTOR
 	DUCKDB_API void Flatten(idx_t count);
@@ -153,6 +161,9 @@ public:
 	DUCKDB_API void Serialize(idx_t count, Serializer &serializer);
 	//! Deserializes a blob back into a Vector
 	DUCKDB_API void Deserialize(idx_t count, Deserializer &source);
+
+	DUCKDB_API void FormatSerialize(FormatSerializer &serializer, idx_t count);
+	DUCKDB_API void FormatDeserialize(FormatDeserializer &deserializer, idx_t count);
 
 	// Getters
 	inline VectorType GetVectorType() const {
@@ -203,7 +214,7 @@ protected:
 class VectorChildBuffer : public VectorBuffer {
 public:
 	explicit VectorChildBuffer(Vector vector)
-	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(move(vector)) {
+	    : VectorBuffer(VectorBufferType::VECTOR_CHILD_BUFFER), data(std::move(vector)) {
 	}
 
 public:
@@ -330,8 +341,12 @@ struct ListVector {
 	DUCKDB_API static void Append(Vector &target, const Vector &source, const SelectionVector &sel, idx_t source_size,
 	                              idx_t source_offset = 0);
 	DUCKDB_API static void PushBack(Vector &target, const Value &insert);
-	DUCKDB_API static vector<idx_t> Search(Vector &list, const Value &key, idx_t row);
-	DUCKDB_API static Value GetValuesFromOffsets(Vector &list, vector<idx_t> &offsets);
+	//! Returns the child_vector of list starting at offset until offset + count, and its length
+	DUCKDB_API static idx_t GetConsecutiveChildList(Vector &list, Vector &result, idx_t offset, idx_t count);
+	//! Returns information to only copy a section of a list child vector
+	DUCKDB_API static ConsecutiveChildListInfo GetConsecutiveChildListInfo(Vector &list, idx_t offset, idx_t count);
+	//! Slice and flatten a child vector to only contain a consecutive subsection of the child entries
+	DUCKDB_API static void GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel, idx_t offset, idx_t count);
 	//! Share the entry of the other list vector
 	DUCKDB_API static void ReferenceEntry(Vector &vector, Vector &other);
 };
@@ -404,17 +419,24 @@ struct FSSTVector {
 	DUCKDB_API static idx_t GetCount(Vector &vector);
 };
 
+enum class MapInvalidReason : uint8_t { VALID, NULL_KEY_LIST, NULL_KEY, DUPLICATE_KEY };
+
 struct MapVector {
 	DUCKDB_API static const Vector &GetKeys(const Vector &vector);
 	DUCKDB_API static const Vector &GetValues(const Vector &vector);
 	DUCKDB_API static Vector &GetKeys(Vector &vector);
 	DUCKDB_API static Vector &GetValues(Vector &vector);
+	DUCKDB_API static MapInvalidReason
+	CheckMapValidity(Vector &map, idx_t count, const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
+	DUCKDB_API static void MapConversionVerify(Vector &vector, idx_t count);
 };
 
 struct StructVector {
 	DUCKDB_API static const vector<unique_ptr<Vector>> &GetEntries(const Vector &vector);
 	DUCKDB_API static vector<unique_ptr<Vector>> &GetEntries(Vector &vector);
 };
+
+enum class UnionInvalidReason : uint8_t { VALID, TAG_OUT_OF_RANGE, NO_MEMBERS, VALIDITY_OVERLAP };
 
 struct UnionVector {
 	// Unions are stored as structs, but the first child is always the "tag"
@@ -449,6 +471,10 @@ struct UnionVector {
 	//! This will also handle invalidation of the non-selected members
 	DUCKDB_API static void SetToMember(Vector &vector, union_tag_t tag, Vector &member_vector, idx_t count,
 	                                   bool keep_tags_for_null);
+
+	DUCKDB_API static UnionInvalidReason
+	CheckUnionValidity(Vector &vector, idx_t count,
+	                   const SelectionVector &sel = *FlatVector::IncrementalSelectionVector());
 };
 
 struct SequenceVector {

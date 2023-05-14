@@ -22,7 +22,7 @@ static unique_ptr<FunctionData> PragmaVersionBind(ClientContext &context, TableF
 }
 
 static unique_ptr<GlobalTableFunctionState> PragmaVersionInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<PragmaVersionData>();
+	return make_uniq<PragmaVersionData>();
 }
 
 static void PragmaVersionFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -42,6 +42,10 @@ void PragmaVersion::RegisterFunction(BuiltinFunctions &set) {
 	pragma_version.bind = PragmaVersionBind;
 	pragma_version.init_global = PragmaVersionInit;
 	set.AddFunction(pragma_version);
+}
+
+idx_t DuckDB::StandardVectorSize() {
+	return STANDARD_VECTOR_SIZE;
 }
 
 const char *DuckDB::SourceID() {
@@ -77,7 +81,9 @@ string DuckDB::Platform() {
 		postfix = "_gcc4";
 	}
 #endif
-
+#ifdef __MINGW32__
+	postfix = "_mingw";
+#endif
 	return os + "_" + arch + postfix;
 }
 

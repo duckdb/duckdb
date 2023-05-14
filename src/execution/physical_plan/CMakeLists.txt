@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   plan_aggregate.cpp
   plan_any_join.cpp
+  plan_asof_join.cpp
   plan_column_data_get.cpp
   plan_comparison_join.cpp
   plan_copy_to_file.cpp
@@ -25,11 +26,14 @@ add_library_unity(
   plan_limit.cpp
   plan_limit_percent.cpp
   plan_order.cpp
+  plan_pivot.cpp
+  plan_positional_join.cpp
   plan_pragma.cpp
   plan_prepare.cpp
   plan_projection.cpp
   plan_set_operation.cpp
   plan_set.cpp
+  plan_reset.cpp
   plan_sample.cpp
   plan_show_select.cpp
   plan_simple.cpp

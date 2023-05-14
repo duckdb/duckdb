@@ -1,0 +1,49 @@
+# name: test/sql/copy/csv/parallel/csv_parallel_null_option.test
+# description: Test parallel read CSV function with null option
+# group: [parallel]
+
+# Test read_csv with user defined variable
+
+statement ok
+pragma threads=4
+
+statement ok
+PRAGMA enable_profiling
+
+statement ok
+PRAGMA profiling_output='__TEST_DIR__/test.json'
+
+statement ok
+PRAGMA profiling_mode = detailed
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (3)
+
+statement ok
+SELECT min (i + i) FROM integers
+
+statement ok
+CREATE TABLE exprtest (a INTEGER, b INTEGER)
+
+statement ok
+INSERT INTO exprtest VALUES (42, 10), (43, 100), (NULL, 1), (45, -1)
+
+statement ok
+SELECT min (a + a ) FROM exprtest
+
+statement ok
+SELECT a FROM exprtest WHERE a BETWEEN 43 AND 44
+
+statement ok
+SELECT CASE a WHEN 42 THEN 100 WHEN 43 THEN 200 ELSE 300 END FROM exprtest
+
+# At least one of the lines should contain the word "Optimizer" to verify that we're getting optimizer timings
+query T
+SELECT COUNT(*) > 0
+FROM read_csv('__TEST_DIR__/test.json', columns={'c': 'VARCHAR'}, delim=NULL, header=0, quote=NULL, escape=NULL)
+WHERE contains(c, 'Optimizer');
+----
+true

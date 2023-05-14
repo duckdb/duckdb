@@ -1,9 +1,10 @@
 #include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/radix.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/sort/sorted_block.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
 
+#include <algorithm>
 #include <numeric>
 
 namespace duckdb {
@@ -26,7 +27,6 @@ idx_t GetNestedSortingColSize(idx_t &col_size, const LogicalType &type) {
 			// Lists get 2 bytes (null and empty list)
 			col_size += 2;
 			return GetNestedSortingColSize(col_size, ListType::GetChildType(type));
-		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
 			// Structs get 1 bytes (null)
 			col_size++;
@@ -65,9 +65,8 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 			prefix_lengths.back() = GetNestedSortingColSize(col_size, expr.return_type);
 		} else if (physical_type == PhysicalType::VARCHAR) {
 			idx_t size_before = col_size;
-			if (stats.back()) {
-				auto &str_stats = (StringStatistics &)*stats.back();
-				col_size += str_stats.max_string_length;
+			if (stats.back() && StringStats::HasMaxStringLength(*stats.back())) {
+				col_size += StringStats::MaxStringLength(*stats.back());
 				if (col_size > 12) {
 					col_size = 12;
 				} else {
@@ -94,9 +93,9 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 			if (bytes_to_fill == 0) {
 				break;
 			}
-			if (logical_types[col_idx].InternalType() == PhysicalType::VARCHAR && stats[col_idx]) {
-				auto &str_stats = (StringStatistics &)*stats[col_idx];
-				idx_t diff = str_stats.max_string_length - prefix_lengths[col_idx];
+			if (logical_types[col_idx].InternalType() == PhysicalType::VARCHAR && stats[col_idx] &&
+			    StringStats::HasMaxStringLength(*stats[col_idx])) {
+				idx_t diff = StringStats::MaxStringLength(*stats[col_idx]) - prefix_lengths[col_idx];
 				if (diff > 0) {
 					// Increase all sizes accordingly
 					idx_t increase = MinValue(bytes_to_fill, diff);
@@ -150,6 +149,9 @@ SortLayout SortLayout::GetPrefixComparisonLayout(idx_t num_prefix_cols) const {
 }
 
 LocalSortState::LocalSortState() : initialized(false) {
+	if (!Radix::IsLittleEndian()) {
+		throw NotImplementedException("Sorting is not supported on big endian architectures");
+	}
 }
 
 void LocalSortState::Initialize(GlobalSortState &global_sort_state, BufferManager &buffer_manager_p) {
@@ -157,20 +159,20 @@ void LocalSortState::Initialize(GlobalSortState &global_sort_state, BufferManage
 	payload_layout = &global_sort_state.payload_layout;
 	buffer_manager = &buffer_manager_p;
 	// Radix sorting data
-	radix_sorting_data = make_unique<RowDataCollection>(
+	radix_sorting_data = make_uniq<RowDataCollection>(
 	    *buffer_manager, RowDataCollection::EntriesPerBlock(sort_layout->entry_size), sort_layout->entry_size);
 	// Blob sorting data
 	if (!sort_layout->all_constant) {
 		auto blob_row_width = sort_layout->blob_layout.GetRowWidth();
-		blob_sorting_data = make_unique<RowDataCollection>(
+		blob_sorting_data = make_uniq<RowDataCollection>(
 		    *buffer_manager, RowDataCollection::EntriesPerBlock(blob_row_width), blob_row_width);
-		blob_sorting_heap = make_unique<RowDataCollection>(*buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+		blob_sorting_heap = make_uniq<RowDataCollection>(*buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 	}
 	// Payload data
 	auto payload_row_width = payload_layout->GetRowWidth();
-	payload_data = make_unique<RowDataCollection>(
-	    *buffer_manager, RowDataCollection::EntriesPerBlock(payload_row_width), payload_row_width);
-	payload_heap = make_unique<RowDataCollection>(*buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
+	payload_data = make_uniq<RowDataCollection>(*buffer_manager, RowDataCollection::EntriesPerBlock(payload_row_width),
+	                                            payload_row_width);
+	payload_heap = make_uniq<RowDataCollection>(*buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 	// Init done
 	initialized = true;
 }
@@ -230,20 +232,20 @@ void LocalSortState::Sort(GlobalSortState &global_sort_state, bool reorder_heap)
 		return;
 	}
 	// Move all data to a single SortedBlock
-	sorted_blocks.emplace_back(make_unique<SortedBlock>(*buffer_manager, global_sort_state));
+	sorted_blocks.emplace_back(make_uniq<SortedBlock>(*buffer_manager, global_sort_state));
 	auto &sb = *sorted_blocks.back();
 	// Fixed-size sorting data
 	auto sorting_block = ConcatenateBlocks(*radix_sorting_data);
-	sb.radix_sorting_data.push_back(move(sorting_block));
+	sb.radix_sorting_data.push_back(std::move(sorting_block));
 	// Variable-size sorting data
 	if (!sort_layout->all_constant) {
 		auto &blob_data = *blob_sorting_data;
 		auto new_block = ConcatenateBlocks(blob_data);
-		sb.blob_sorting_data->data_blocks.push_back(move(new_block));
+		sb.blob_sorting_data->data_blocks.push_back(std::move(new_block));
 	}
 	// Payload data
 	auto payload_block = ConcatenateBlocks(*payload_data);
-	sb.payload_data->data_blocks.push_back(move(payload_block));
+	sb.payload_data->data_blocks.push_back(std::move(payload_block));
 	// Now perform the actual sort
 	SortInMemory();
 	// Re-order before the merge sort
@@ -253,7 +255,7 @@ void LocalSortState::Sort(GlobalSortState &global_sort_state, bool reorder_heap)
 unique_ptr<RowDataBlock> LocalSortState::ConcatenateBlocks(RowDataCollection &row_data) {
 	//	Don't copy and delete if there is only one block.
 	if (row_data.blocks.size() == 1) {
-		auto new_block = move(row_data.blocks[0]);
+		auto new_block = std::move(row_data.blocks[0]);
 		row_data.blocks.clear();
 		row_data.count = 0;
 		return new_block;
@@ -262,15 +264,17 @@ unique_ptr<RowDataBlock> LocalSortState::ConcatenateBlocks(RowDataCollection &ro
 	auto buffer_manager = &row_data.buffer_manager;
 	const idx_t &entry_size = row_data.entry_size;
 	idx_t capacity = MaxValue(((idx_t)Storage::BLOCK_SIZE + entry_size - 1) / entry_size, row_data.count);
-	auto new_block = make_unique<RowDataBlock>(*buffer_manager, capacity, entry_size);
+	auto new_block = make_uniq<RowDataBlock>(*buffer_manager, capacity, entry_size);
 	new_block->count = row_data.count;
 	auto new_block_handle = buffer_manager->Pin(new_block->block);
 	data_ptr_t new_block_ptr = new_block_handle.Ptr();
 	// Copy the data of the blocks into a single block
-	for (auto &block : row_data.blocks) {
+	for (idx_t i = 0; i < row_data.blocks.size(); i++) {
+		auto &block = row_data.blocks[i];
 		auto block_handle = buffer_manager->Pin(block->block);
 		memcpy(new_block_ptr, block_handle.Ptr(), block->count * entry_size);
 		new_block_ptr += block->count * entry_size;
+		block.reset();
 	}
 	row_data.blocks.clear();
 	row_data.count = 0;
@@ -286,7 +290,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 	const data_ptr_t unordered_data_ptr = unordered_data_handle.Ptr();
 	// Create new block that will hold re-ordered row data
 	auto ordered_data_block =
-	    make_unique<RowDataBlock>(*buffer_manager, unordered_data_block->capacity, unordered_data_block->entry_size);
+	    make_uniq<RowDataBlock>(*buffer_manager, unordered_data_block->capacity, unordered_data_block->entry_size);
 	ordered_data_block->count = count;
 	auto ordered_data_handle = buffer_manager->Pin(ordered_data_block->block);
 	data_ptr_t ordered_data_ptr = ordered_data_handle.Ptr();
@@ -299,10 +303,11 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 		ordered_data_ptr += row_width;
 		sorting_ptr += sorting_entry_size;
 	}
-	ordered_data_block->block->SetSwizzling(sd.layout.AllConstant() ? nullptr : "LocalSortState::ReOrder.ordered_data");
+	ordered_data_block->block->SetSwizzling(
+	    sd.layout.AllConstant() || !sd.swizzled ? nullptr : "LocalSortState::ReOrder.ordered_data");
 	// Replace the unordered data block with the re-ordered data block
 	sd.data_blocks.clear();
-	sd.data_blocks.push_back(move(ordered_data_block));
+	sd.data_blocks.push_back(std::move(ordered_data_block));
 	// Deal with the heap (if necessary)
 	if (!sd.layout.AllConstant() && reorder_heap) {
 		// Swizzle the column pointers to offsets
@@ -313,7 +318,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 		    std::accumulate(heap.blocks.begin(), heap.blocks.end(), 0,
 		                    [](idx_t a, const unique_ptr<RowDataBlock> &b) { return a + b->byte_offset; });
 		idx_t heap_block_size = MaxValue(total_byte_offset, (idx_t)Storage::BLOCK_SIZE);
-		auto ordered_heap_block = make_unique<RowDataBlock>(*buffer_manager, heap_block_size, 1);
+		auto ordered_heap_block = make_uniq<RowDataBlock>(*buffer_manager, heap_block_size, 1);
 		ordered_heap_block->count = count;
 		ordered_heap_block->byte_offset = total_byte_offset;
 		auto ordered_heap_handle = buffer_manager->Pin(ordered_heap_block->block);
@@ -331,7 +336,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 		// Swizzle the base pointer to the offset of each row in the heap
 		RowOperations::SwizzleHeapPointer(sd.layout, ordered_data_handle.Ptr(), ordered_heap_handle.Ptr(), count);
 		// Move the re-ordered heap to the SortedData, and clear the local heap
-		sd.heap_blocks.push_back(move(ordered_heap_block));
+		sd.heap_blocks.push_back(std::move(ordered_heap_block));
 		heap.pinned_blocks.clear();
 		heap.blocks.clear();
 		heap.count = 0;
@@ -370,18 +375,18 @@ void GlobalSortState::AddLocalState(LocalSortState &local_sort_state) {
 	// Append local state sorted data to this global state
 	lock_guard<mutex> append_guard(lock);
 	for (auto &sb : local_sort_state.sorted_blocks) {
-		sorted_blocks.push_back(move(sb));
+		sorted_blocks.push_back(std::move(sb));
 	}
 	auto &payload_heap = local_sort_state.payload_heap;
 	for (idx_t i = 0; i < payload_heap->blocks.size(); i++) {
-		heap_blocks.push_back(move(payload_heap->blocks[i]));
-		pinned_blocks.push_back(move(payload_heap->pinned_blocks[i]));
+		heap_blocks.push_back(std::move(payload_heap->blocks[i]));
+		pinned_blocks.push_back(std::move(payload_heap->pinned_blocks[i]));
 	}
 	if (!sort_layout.all_constant) {
 		auto &blob_heap = local_sort_state.blob_sorting_heap;
 		for (idx_t i = 0; i < blob_heap->blocks.size(); i++) {
-			heap_blocks.push_back(move(blob_heap->blocks[i]));
-			pinned_blocks.push_back(move(blob_heap->pinned_blocks[i]));
+			heap_blocks.push_back(std::move(blob_heap->blocks[i]));
+			pinned_blocks.push_back(std::move(blob_heap->pinned_blocks[i]));
 		}
 	}
 }
@@ -426,7 +431,7 @@ void GlobalSortState::InitializeMergeRound() {
 	std::reverse(sorted_blocks.begin(), sorted_blocks.end());
 	// Uneven number of blocks - keep one on the side
 	if (sorted_blocks.size() % 2 == 1) {
-		odd_one_out = move(sorted_blocks.back());
+		odd_one_out = std::move(sorted_blocks.back());
 		sorted_blocks.pop_back();
 	}
 	// Init merge path path indices
@@ -443,12 +448,12 @@ void GlobalSortState::InitializeMergeRound() {
 void GlobalSortState::CompleteMergeRound(bool keep_radix_data) {
 	sorted_blocks.clear();
 	for (auto &sorted_block_vector : sorted_blocks_temp) {
-		sorted_blocks.push_back(make_unique<SortedBlock>(buffer_manager, *this));
+		sorted_blocks.push_back(make_uniq<SortedBlock>(buffer_manager, *this));
 		sorted_blocks.back()->AppendSortedBlocks(sorted_block_vector);
 	}
 	sorted_blocks_temp.clear();
 	if (odd_one_out) {
-		sorted_blocks.push_back(move(odd_one_out));
+		sorted_blocks.push_back(std::move(odd_one_out));
 		odd_one_out = nullptr;
 	}
 	// Only one block left: Done!

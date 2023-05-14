@@ -7,7 +7,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test storage that exceeds a single block", "[storage]") {
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 
@@ -57,7 +57,7 @@ TEST_CASE("Test storage that exceeds a single block", "[storage]") {
 }
 
 TEST_CASE("Test storage that exceeds a single block with different types", "[storage]") {
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 
@@ -96,7 +96,7 @@ TEST_CASE("Test storage that exceeds a single block with different types", "[sto
 }
 
 TEST_CASE("Test storing strings that exceed a single block", "[storage]") {
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 
@@ -160,7 +160,7 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage]") {
 }
 
 TEST_CASE("Test storing big strings", "[storage]") {
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 

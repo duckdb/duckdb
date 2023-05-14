@@ -20,7 +20,11 @@ struct CreateCopyFunctionInfo;
 //! A table function in the catalog
 class CopyFunctionCatalogEntry : public StandardEntry {
 public:
-	CopyFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateCopyFunctionInfo *info);
+	static constexpr const CatalogType Type = CatalogType::COPY_FUNCTION_ENTRY;
+	static constexpr const char *Name = "copy function";
+
+public:
+	CopyFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateCopyFunctionInfo &info);
 
 	//! The copy function
 	CopyFunction function;

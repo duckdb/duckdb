@@ -12,7 +12,6 @@ library("duckdb")
 skip_if_not(arrow::arrow_with_parquet(), message = "The installed Arrow is not fully featured, skipping Arrow integration tests")
 
 test_that("round trip arrow stream", {
-
   ds <- open_dataset(rep("data/userdata1.parquet", 4))
 
   to_to <- ds %>%
@@ -29,11 +28,10 @@ test_that("round trip arrow stream", {
 
 
   # The full comparison
-  expect_true(all.equal(to_to,all_arrow))
+  expect_true(all.equal(to_to, all_arrow))
 })
 
 test_that("round trip arrow stream with query", {
-
   ds <- open_dataset(rep("data/userdata1.parquet", 4))
 
 
@@ -45,13 +43,13 @@ test_that("round trip arrow stream with query", {
     collect() %>%
     arrange(id)
 
- all_arrow <- ds %>%
-   select(-registration_dttm) %>% # timestamp[ns] has unrelated error
-   mutate(new_id = id + 1) %>%
-   collect() %>%
-   arrange(id)
+  all_arrow <- ds %>%
+    select(-registration_dttm) %>% # timestamp[ns] has unrelated error
+    mutate(new_id = id + 1) %>%
+    collect() %>%
+    arrange(id)
 
 
   # The full comparison
-  expect_true(all.equal(to_to,all_arrow))
+  expect_true(all.equal(to_to, all_arrow))
 })

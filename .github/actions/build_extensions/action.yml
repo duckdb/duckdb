@@ -66,6 +66,15 @@ inputs:
   excel:
     description: 'Build Excel'
     default: 1
+  sqlsmith:
+    description: 'Build SQLsmith'
+    default: 1
+  inet:
+    description: 'Build INET'
+    default: 1
+  autocomplete:
+    description: 'Build SQL autocomplete extension'
+    default: 1
   out_of_tree_ext:
     description: 'Build Out-Of-Tree Extensions'
     default: 1
@@ -90,9 +99,12 @@ runs:
         BUILD_TPCH: ${{ inputs.tpch }}
         BUILD_TPCDS: ${{ inputs.tpcds }}
         BUILD_FTS: ${{ inputs.fts }}
+        BUILD_INET: ${{ inputs.inet }}
         BUILD_HTTPFS: ${{ inputs.httpfs }}
         BUILD_JSON: ${{ inputs.json }}
         BUILD_EXCEL: ${{ inputs.excel }}
+        BUILD_SQLSMITH: ${{ inputs.sqlsmith }}
+        BUILD_AUTOCOMPLETE: ${{ inputs.autocomplete }}
         FORCE_32_BIT: ${{ inputs.force_32_bit }}
         TREAT_WARNINGS_AS_ERRORS: ${{ inputs.treat_warn_as_error}}
         FORCE_WARN_UNUSED: 1

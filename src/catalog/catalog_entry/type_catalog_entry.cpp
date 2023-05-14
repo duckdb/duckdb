@@ -12,23 +12,29 @@
 
 namespace duckdb {
 
-TypeCatalogEntry::TypeCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTypeInfo *info)
-    : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info->name), user_type(info->type) {
-	this->temporary = info->temporary;
-	this->internal = info->internal;
+TypeCatalogEntry::TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info)
+    : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info.name), user_type(info.type) {
+	this->temporary = info.temporary;
+	this->internal = info.internal;
 }
 
-void TypeCatalogEntry::Serialize(Serializer &serializer) {
+void TypeCatalogEntry::Serialize(Serializer &serializer) const {
 	D_ASSERT(!internal);
 	FieldWriter writer(serializer);
-	writer.WriteString(schema->name);
+	writer.WriteString(schema.name);
 	writer.WriteString(name);
-	writer.WriteSerializable(user_type);
+	if (user_type.id() == LogicalTypeId::ENUM) {
+		// We have to serialize Enum Values
+		writer.AddField();
+		user_type.SerializeEnumType(writer.GetSerializer());
+	} else {
+		writer.WriteSerializable(user_type);
+	}
 	writer.Finalize();
 }
 
 unique_ptr<CreateTypeInfo> TypeCatalogEntry::Deserialize(Deserializer &source) {
-	auto info = make_unique<CreateTypeInfo>();
+	auto info = make_uniq<CreateTypeInfo>();
 
 	FieldReader reader(source);
 	info->schema = reader.ReadRequired<string>();
@@ -39,11 +45,11 @@ unique_ptr<CreateTypeInfo> TypeCatalogEntry::Deserialize(Deserializer &source) {
 	return info;
 }
 
-string TypeCatalogEntry::ToSQL() {
+string TypeCatalogEntry::ToSQL() const {
 	std::stringstream ss;
 	switch (user_type.id()) {
 	case (LogicalTypeId::ENUM): {
-		Vector values_insert_order(EnumType::GetValuesInsertOrder(user_type));
+		auto &values_insert_order = EnumType::GetValuesInsertOrder(user_type);
 		idx_t size = EnumType::GetSize(user_type);
 		ss << "CREATE TYPE ";
 		ss << KeywordHelper::WriteOptionallyQuoted(name);

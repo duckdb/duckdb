@@ -1,0 +1,47 @@
+# name: test/sql/upsert/upsert_distinct_bug.test
+# group: [upsert]
+
+# Create raw data table
+statement ok
+CREATE TABLE test_table_raw(id VARCHAR, name VARCHAR);
+
+# Insert raw data
+statement ok
+INSERT INTO test_table_raw VALUES
+	('abc001','foo'),
+	('abc002','bar'),
+	('abc001','foo2'),
+	('abc002','bar2');
+
+# Create aggregated data table
+statement ok
+CREATE TABLE test_table(id VARCHAR PRIMARY KEY, name VARCHAR);
+
+
+# Insert aggregated data
+statement error
+INSERT INTO test_table
+SELECT
+  DISTINCT(id) as id,
+  name
+FROM test_table_raw;
+
+# Insert aggregated data
+statement error
+INSERT INTO test_table
+SELECT
+  DISTINCT(id) as id,
+  name
+FROM test_table_raw;
+
+# Insert aggregated data second time with "INSERT OR IGNORE" => Segmentation fault
+# This contains conflicts between the to-be-inserted rows, still won't succeed
+statement error
+INSERT OR IGNORE INTO test_table
+SELECT
+  DISTINCT(id) as id,
+  name
+FROM test_table_raw;
+
+statement ok
+SELECT * FROM test_table_raw;

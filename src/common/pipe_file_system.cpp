@@ -1,12 +1,13 @@
 #include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 class PipeFile : public FileHandle {
 public:
 	PipeFile(unique_ptr<FileHandle> child_handle_p, const string &path)
-	    : FileHandle(pipe_fs, path), child_handle(move(child_handle_p)) {
+	    : FileHandle(pipe_fs, path), child_handle(std::move(child_handle_p)) {
 	}
 
 	PipeFileSystem pipe_fs;
@@ -50,7 +51,7 @@ void PipeFileSystem::FileSync(FileHandle &handle) {
 
 unique_ptr<FileHandle> PipeFileSystem::OpenPipe(unique_ptr<FileHandle> handle) {
 	auto path = handle->path;
-	return make_unique<PipeFile>(move(handle), path);
+	return make_uniq<PipeFile>(std::move(handle), path);
 }
 
 } // namespace duckdb

@@ -4,9 +4,10 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/parser/qualified_name.hpp"
-#include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
-#include "duckdb/planner/constraints/bound_unique_constraint.hpp"
+#include "duckdb/parser/constraints/not_null_constraint.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
+#include "duckdb/planner/binder.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
@@ -16,10 +17,10 @@
 namespace duckdb {
 
 struct PragmaTableFunctionData : public TableFunctionData {
-	explicit PragmaTableFunctionData(CatalogEntry *entry_p) : entry(entry_p) {
+	explicit PragmaTableFunctionData(CatalogEntry &entry_p) : entry(entry_p) {
 	}
 
-	CatalogEntry *entry;
+	CatalogEntry &entry;
 };
 
 struct PragmaTableOperatorData : public GlobalTableFunctionState {
@@ -52,34 +53,39 @@ static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, Tabl
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
 
 	// look up the table name in the catalog
-	auto &catalog = Catalog::GetCatalog(context);
-	auto entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, qname.schema, qname.name);
-	return make_unique<PragmaTableFunctionData>(entry);
+	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
+	auto &entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, qname.schema, qname.name);
+	return make_uniq<PragmaTableFunctionData>(entry);
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaTableInfoInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<PragmaTableOperatorData>();
+	return make_uniq<PragmaTableOperatorData>();
 }
 
-static void CheckConstraints(TableCatalogEntry *table, const ColumnDefinition &column, bool &out_not_null,
+static void CheckConstraints(TableCatalogEntry &table, const ColumnDefinition &column, bool &out_not_null,
                              bool &out_pk) {
 	out_not_null = false;
 	out_pk = false;
 	// check all constraints
 	// FIXME: this is pretty inefficient, it probably doesn't matter
-	for (auto &constraint : table->bound_constraints) {
+	for (auto &constraint : table.GetConstraints()) {
 		switch (constraint->type) {
 		case ConstraintType::NOT_NULL: {
-			auto &not_null = (BoundNotNullConstraint &)*constraint;
-			if (not_null.index == column.Physical()) {
+			auto &not_null = constraint->Cast<NotNullConstraint>();
+			if (not_null.index == column.Logical()) {
 				out_not_null = true;
 			}
 			break;
 		}
 		case ConstraintType::UNIQUE: {
-			auto &unique = (BoundUniqueConstraint &)*constraint;
-			if (unique.is_primary_key && unique.key_set.find(column.Logical()) != unique.key_set.end()) {
-				out_pk = true;
+			auto &unique = constraint->Cast<UniqueConstraint>();
+			if (unique.is_primary_key) {
+				if (unique.index == column.Logical()) {
+					out_pk = true;
+				}
+				if (std::find(unique.columns.begin(), unique.columns.end(), column.GetName()) != unique.columns.end()) {
+					out_pk = true;
+				}
 			}
 			break;
 		}
@@ -89,20 +95,20 @@ static void CheckConstraints(TableCatalogEntry *table, const ColumnDefinition &c
 	}
 }
 
-static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntry *table, DataChunk &output) {
-	if (data.offset >= table->columns.LogicalColumnCount()) {
+static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntry &table, DataChunk &output) {
+	if (data.offset >= table.GetColumns().LogicalColumnCount()) {
 		// finished returning values
 		return;
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, table->columns.LogicalColumnCount());
+	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, table.GetColumns().LogicalColumnCount());
 	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {
 		bool not_null, pk;
 		auto index = i - data.offset;
-		auto &column = table->columns.GetColumn(LogicalIndex(i));
+		auto &column = table.GetColumn(LogicalIndex(i));
 		D_ASSERT(column.Oid() < (idx_t)NumericLimits<int32_t>::Maximum());
 		CheckConstraints(table, column, not_null, pk);
 
@@ -124,20 +130,20 @@ static void PragmaTableInfoTable(PragmaTableOperatorData &data, TableCatalogEntr
 	data.offset = next;
 }
 
-static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry *view, DataChunk &output) {
-	if (data.offset >= view->types.size()) {
+static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry &view, DataChunk &output) {
+	if (data.offset >= view.types.size()) {
 		// finished returning values
 		return;
 	}
 	// start returning values
 	// either fill up the chunk or return all the remaining columns
-	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, view->types.size());
+	idx_t next = MinValue<idx_t>(data.offset + STANDARD_VECTOR_SIZE, view.types.size());
 	output.SetCardinality(next - data.offset);
 
 	for (idx_t i = data.offset; i < next; i++) {
 		auto index = i - data.offset;
-		auto type = view->types[i];
-		auto &name = view->aliases[i];
+		auto type = view.types[i];
+		auto &name = view.aliases[i];
 		// return values:
 		// "cid", PhysicalType::INT32
 
@@ -157,14 +163,14 @@ static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry 
 }
 
 static void PragmaTableInfoFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (PragmaTableFunctionData &)*data_p.bind_data;
-	auto &state = (PragmaTableOperatorData &)*data_p.global_state;
-	switch (bind_data.entry->type) {
+	auto &bind_data = data_p.bind_data->Cast<PragmaTableFunctionData>();
+	auto &state = data_p.global_state->Cast<PragmaTableOperatorData>();
+	switch (bind_data.entry.type) {
 	case CatalogType::TABLE_ENTRY:
-		PragmaTableInfoTable(state, (TableCatalogEntry *)bind_data.entry, output);
+		PragmaTableInfoTable(state, bind_data.entry.Cast<TableCatalogEntry>(), output);
 		break;
 	case CatalogType::VIEW_ENTRY:
-		PragmaTableInfoView(state, (ViewCatalogEntry *)bind_data.entry, output);
+		PragmaTableInfoView(state, bind_data.entry.Cast<ViewCatalogEntry>(), output);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented catalog type for pragma_table_info");

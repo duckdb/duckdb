@@ -17,13 +17,14 @@ set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 #    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
 #endif()
 
-if(CMAKE_BUILD_TYPE STREQUAL Release)
-    set_source_files_properties(
-            fsst_avx512.cpp
-            PROPERTIES
-            COMPILE_FLAGS -O1
-    )
-endif()
+# Disabled due to issues on Windows builds
+#if(CMAKE_BUILD_TYPE STREQUAL Release)
+#    set_source_files_properties(
+#            fsst_avx512.cpp
+#            PROPERTIES
+#            COMPILE_FLAGS -O1
+#    )
+#endif()
 
 add_library(duckdb_fsst STATIC libfsst.cpp fsst_avx512.cpp fsst_avx512_unroll1.inc fsst_avx512_unroll2.inc fsst_avx512_unroll3.inc fsst_avx512_unroll4.inc)
 

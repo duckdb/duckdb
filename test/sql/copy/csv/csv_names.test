@@ -1,0 +1,63 @@
+# name: test/sql/copy/csv/csv_names.test
+# description: Read a CSV with names flags
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+# no names provided
+query IIII
+select column00, column01, column02, column03 from 'test/sql/copy/csv/data/real/lineitem_sample.csv' LIMIT 1;
+----
+1	15519	785	1
+
+# override the names partially
+query IIII
+select l_orderkey, l_partkey, column02, column03 from read_csv_auto('test/sql/copy/csv/data/real/lineitem_sample.csv', names=['l_orderkey', 'l_partkey']) LIMIT 1;
+----
+1	15519	785	1
+
+# empty list
+query IIII
+select column00, column01, column02, column03 from read_csv_auto('test/sql/copy/csv/data/real/lineitem_sample.csv', names=[]) LIMIT 1;
+----
+1	15519	785	1
+
+# specify all names
+query IIII
+select l_orderkey, l_partkey, l_commitdate, l_comment from read_csv_auto('test/sql/copy/csv/data/real/lineitem_sample.csv', column_names=['l_orderkey', 'l_partkey', 'l_suppkey', 'l_linenumber', 'l_quantity', 'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_linestatus', 'l_shipdate', 'l_commitdate', 'l_receiptdate', 'l_shipinstruct', 'l_shipmode', 'l_comment']) LIMIT 1;
+----
+1	15519	1996-02-12	egular courts above the
+
+# specify too many names
+query IIII
+select l_orderkey, l_partkey, l_commitdate, l_comment from read_csv_auto('test/sql/copy/csv/data/real/lineitem_sample.csv', names=['l_orderkey', 'l_partkey', 'l_suppkey', 'l_linenumber', 'l_quantity', 'l_extendedprice', 'l_discount', 'l_tax', 'l_returnflag', 'l_linestatus', 'l_shipdate', 'l_commitdate', 'l_receiptdate', 'l_shipinstruct', 'l_shipmode', 'l_comment', 'xx']) LIMIT 1;
+----
+1	15519	1996-02-12	egular courts above the
+
+# specify names on a file with a header
+query II
+select yr, Quarter from read_csv_auto('test/sql/copy/csv/data/real/ontime_sample.csv', names=['yr']) LIMIT 1;
+----
+1988	1
+
+# NULL
+statement error
+select column00, column01, column02, column03 from read_csv_auto('test/sql/copy/csv/data/real/lineitem_sample.csv', names=NULL) LIMIT 1;
+----
+read_csv_auto names cannot be NULL
+
+# specify the names twice
+statement error
+select l_orderkey, l_partkey, column02, column03 from read_csv_auto('test/sql/copy/csv/data/real/lineitem_sample.csv', names=['l_orderkey', 'l_partkey'], column_names=['l_orderkey']) LIMIT 1;
+----
+read_csv_auto column_names/names can only be supplied once
+
+statement error
+select l_orderkey, l_partkey, column02, column03 from read_csv_auto('test/sql/copy/csv/data/real/lineitem_sample.csv', names=42) LIMIT 1;
+
+# duplicate names
+statement error
+select l_orderkey, l_partkey, column02, column03 from read_csv_auto('test/sql/copy/csv/data/real/lineitem_sample.csv', names=['l_orderkey', 'l_orderkey']) LIMIT 1;
+----
+duplicate column name

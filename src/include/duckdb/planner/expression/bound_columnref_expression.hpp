@@ -21,6 +21,9 @@ class FieldWriter;
 //! BoundExpressions, which refer to indexes into the physical chunks that pass through the executor.
 class BoundColumnRefExpression : public Expression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_COLUMN_REF;
+
+public:
 	BoundColumnRefExpression(LogicalType type, ColumnBinding binding, idx_t depth = 0);
 	BoundColumnRefExpression(string alias, LogicalType type, ColumnBinding binding, idx_t depth = 0);
 
@@ -39,6 +42,7 @@ public:
 	}
 
 	string ToString() const override;
+	string GetName() const override;
 
 	bool Equals(const BaseExpression *other) const override;
 	hash_t Hash() const override;

@@ -386,6 +386,8 @@ SELECT * FROM assorted_structs;
 #               JSON format to Struct testing
 # ---------------------------------------------------
 
+require json
+
 statement ok
 CREATE TABLE json_tbl(col1 VARCHAR);
 

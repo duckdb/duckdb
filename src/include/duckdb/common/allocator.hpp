@@ -9,9 +9,11 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 class Allocator;
+class AttachedDatabase;
 class ClientContext;
 class DatabaseInstance;
 class ExecutionContext;
@@ -52,10 +54,13 @@ public:
 	idx_t GetSize() const {
 		return allocated_size;
 	}
+	bool IsSet() {
+		return pointer;
+	}
 	void Reset();
 
 private:
-	Allocator *allocator;
+	optional_ptr<Allocator> allocator;
 	data_ptr_t pointer;
 	idx_t allocated_size;
 };
@@ -91,13 +96,14 @@ public:
 	}
 	static Allocator &Get(ClientContext &context);
 	static Allocator &Get(DatabaseInstance &db);
+	static Allocator &Get(AttachedDatabase &db);
 
 	PrivateAllocatorData *GetPrivateData() {
 		return private_data.get();
 	}
 
-	static Allocator &DefaultAllocator();
-	static shared_ptr<Allocator> &DefaultAllocatorReference();
+	DUCKDB_API static Allocator &DefaultAllocator();
+	DUCKDB_API static shared_ptr<Allocator> &DefaultAllocatorReference();
 
 private:
 	allocate_function_ptr_t allocate_function;
@@ -137,6 +143,7 @@ void DestroyObject(T *ptr) {
 struct BufferAllocator {
 	DUCKDB_API static Allocator &Get(ClientContext &context);
 	DUCKDB_API static Allocator &Get(DatabaseInstance &db);
+	DUCKDB_API static Allocator &Get(AttachedDatabase &db);
 };
 
 } // namespace duckdb

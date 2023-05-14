@@ -1,0 +1,72 @@
+# name: test/sql/pivot/test_multi_pivot.test
+# description: Test pivoting over multiple dimensions
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE OR REPLACE TABLE sales(empid INT, amount INT, month TEXT, year INT);
+
+statement ok
+INSERT INTO sales VALUES
+    (1, 10000, 'JAN', 2020),
+    (1, 400, 'JAN', 2021),
+    (2, 4500, 'JAN', 2021),
+    (2, 35000, 'JAN', 2020),
+    (1, 5000, 'FEB', 2020),
+    (1, 3000, 'FEB', 2021),
+    (2, 200, 'FEB', 2021),
+    (2, 90500, 'FEB', 2020),
+    (1, 6000, 'MAR', 2021),
+    (1, 5000, 'MAR', 2021),
+    (2, 2500, 'MAR', 2021),
+    (2, 9500, 'MAR', 2021),
+    (1, 8000, 'APR', 2020),
+    (1, 10000, 'APR', 2020),
+    (2, 800, 'APR', 2021),
+    (2, 4500, 'APR', 2020);
+
+query IIIIIIIII
+SELECT *
+  FROM sales
+    PIVOT(
+        SUM(amount)
+        FOR YEAR IN (2020, 2021)
+            MONTH IN ('JAN', 'FEB', 'MAR', 'APR')
+    ) AS p
+  ORDER BY EMPID;
+----
+1	10000	5000	NULL	18000	400	3000	11000	NULL
+2	35000	90500	NULL	4500	4500	200	12000	800
+
+query IIIIIIIII
+SELECT *
+  FROM sales
+    PIVOT(
+        SUM(amount + year)
+        FOR YEAR IN (2020, 2021)
+            MONTH IN ('JAN', 'FEB', 'MAR', 'APR')
+    ) AS p
+  ORDER BY EMPID;
+----
+1	12020	7020	NULL	22040	2421	5021	15042	NULL
+2	37020	92520	NULL	6520	6521	2221	16042	2821
+
+statement ok
+SET pivot_limit=10000
+
+# too many pivots
+statement error
+SELECT *
+  FROM sales
+    PIVOT(
+    	SUM(amount)
+    	FOR YEAR IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20)
+    		MONTH IN ('JAN', 'FEB', 'MAR', 'APR')
+    		amount IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20)
+    		empid IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20)
+    ) AS p
+  ORDER BY EMPID;
+----
+Pivot column limit of 10000 exceeded

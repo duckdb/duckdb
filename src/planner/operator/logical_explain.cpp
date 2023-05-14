@@ -17,6 +17,6 @@ unique_ptr<LogicalOperator> LogicalExplain::Deserialize(LogicalDeserializationSt
 	result->physical_plan = reader.ReadRequired<string>();
 	result->logical_plan_unopt = reader.ReadRequired<string>();
 	result->logical_plan_opt = reader.ReadRequired<string>();
-	return move(result);
+	return std::move(result);
 }
 } // namespace duckdb

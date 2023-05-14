@@ -8,19 +8,19 @@
 namespace duckdb {
 
 InsertRelation::InsertRelation(shared_ptr<Relation> child_p, string schema_name, string table_name)
-    : Relation(child_p->context, RelationType::INSERT_RELATION), child(move(child_p)), schema_name(move(schema_name)),
-      table_name(move(table_name)) {
+    : Relation(child_p->context, RelationType::INSERT_RELATION), child(std::move(child_p)),
+      schema_name(std::move(schema_name)), table_name(std::move(table_name)) {
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
 
 BoundStatement InsertRelation::Bind(Binder &binder) {
 	InsertStatement stmt;
-	auto select = make_unique<SelectStatement>();
+	auto select = make_uniq<SelectStatement>();
 	select->node = child->GetQueryNode();
 
 	stmt.schema = schema_name;
 	stmt.table = table_name;
-	stmt.select_statement = move(select);
+	stmt.select_statement = std::move(select);
 	return binder.Bind((SQLStatement &)stmt);
 }
 

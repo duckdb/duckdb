@@ -8,7 +8,7 @@ subgroup sf1
 
 require tpch
 
-cache tpch_sf1
+cache tpch_sf1.duckdb
 
 load benchmark/tpch/sf1/load.sql
 

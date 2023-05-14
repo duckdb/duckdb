@@ -16,24 +16,30 @@ struct DuckDBColumnsData : public GlobalTableFunctionState {
 	DuckDBColumnsData() : offset(0), column_offset(0) {
 	}
 
-	vector<CatalogEntry *> entries;
+	vector<reference<CatalogEntry>> entries;
 	idx_t offset;
 	idx_t column_offset;
 };
 
 static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, TableFunctionBindInput &input,
                                                   vector<LogicalType> &return_types, vector<string> &names) {
-	names.emplace_back("schema_oid");
+	names.emplace_back("database_name");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("database_oid");
 	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("schema_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("table_oid");
+	names.emplace_back("schema_oid");
 	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("table_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
+
+	names.emplace_back("table_oid");
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("column_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -72,28 +78,25 @@ static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, TableF
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBColumnsInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBColumnsData>();
+	auto result = make_uniq<DuckDBColumnsData>();
 
 	// scan all the schemas for tables and views and collect them
-	auto schemas = Catalog::GetCatalog(context).schemas->GetEntries<SchemaCatalogEntry>(context);
+	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
-		schema->Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema.get().Scan(context, CatalogType::TABLE_ENTRY,
+		                  [&](CatalogEntry &entry) { result->entries.push_back(entry); });
 	}
-
-	// check the temp schema as well
-	SchemaCatalogEntry::GetTemporaryObjects(context)->Scan(
-	    context, CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
-	return move(result);
+	return std::move(result);
 }
 
 class ColumnHelper {
 public:
-	static unique_ptr<ColumnHelper> Create(CatalogEntry *entry);
+	static unique_ptr<ColumnHelper> Create(CatalogEntry &entry);
 
 	virtual ~ColumnHelper() {
 	}
 
-	virtual StandardEntry *Entry() = 0;
+	virtual StandardEntry &Entry() = 0;
 	virtual idx_t NumColumns() = 0;
 	virtual const string &ColumnName(idx_t col) = 0;
 	virtual const LogicalType &ColumnType(idx_t col) = 0;
@@ -105,8 +108,8 @@ public:
 
 class TableColumnHelper : public ColumnHelper {
 public:
-	explicit TableColumnHelper(TableCatalogEntry *entry) : entry(entry) {
-		for (auto &constraint : entry->constraints) {
+	explicit TableColumnHelper(TableCatalogEntry &entry) : entry(entry) {
+		for (auto &constraint : entry.GetConstraints()) {
 			if (constraint->type == ConstraintType::NOT_NULL) {
 				auto &not_null = *reinterpret_cast<NotNullConstraint *>(constraint.get());
 				not_null_cols.insert(not_null.index.index);
@@ -114,20 +117,20 @@ public:
 		}
 	}
 
-	StandardEntry *Entry() override {
+	StandardEntry &Entry() override {
 		return entry;
 	}
 	idx_t NumColumns() override {
-		return entry->columns.LogicalColumnCount();
+		return entry.GetColumns().LogicalColumnCount();
 	}
 	const string &ColumnName(idx_t col) override {
-		return entry->columns.GetColumn(LogicalIndex(col)).Name();
+		return entry.GetColumn(LogicalIndex(col)).Name();
 	}
 	const LogicalType &ColumnType(idx_t col) override {
-		return entry->columns.GetColumn(LogicalIndex(col)).Type();
+		return entry.GetColumn(LogicalIndex(col)).Type();
 	}
 	const Value ColumnDefault(idx_t col) override {
-		auto &column = entry->columns.GetColumn(LogicalIndex(col));
+		auto &column = entry.GetColumn(LogicalIndex(col));
 		if (column.DefaultValue()) {
 			return Value(column.DefaultValue()->ToString());
 		}
@@ -138,26 +141,26 @@ public:
 	}
 
 private:
-	TableCatalogEntry *entry;
+	TableCatalogEntry &entry;
 	std::set<idx_t> not_null_cols;
 };
 
 class ViewColumnHelper : public ColumnHelper {
 public:
-	explicit ViewColumnHelper(ViewCatalogEntry *entry) : entry(entry) {
+	explicit ViewColumnHelper(ViewCatalogEntry &entry) : entry(entry) {
 	}
 
-	StandardEntry *Entry() override {
+	StandardEntry &Entry() override {
 		return entry;
 	}
 	idx_t NumColumns() override {
-		return entry->types.size();
+		return entry.types.size();
 	}
 	const string &ColumnName(idx_t col) override {
-		return entry->aliases[col];
+		return entry.aliases[col];
 	}
 	const LogicalType &ColumnType(idx_t col) override {
-		return entry->types[col];
+		return entry.types[col];
 	}
 	const Value ColumnDefault(idx_t col) override {
 		return Value();
@@ -167,15 +170,15 @@ public:
 	}
 
 private:
-	ViewCatalogEntry *entry;
+	ViewCatalogEntry &entry;
 };
 
-unique_ptr<ColumnHelper> ColumnHelper::Create(CatalogEntry *entry) {
-	switch (entry->type) {
+unique_ptr<ColumnHelper> ColumnHelper::Create(CatalogEntry &entry) {
+	switch (entry.type) {
 	case CatalogType::TABLE_ENTRY:
-		return make_unique<TableColumnHelper>((TableCatalogEntry *)entry);
+		return make_uniq<TableColumnHelper>(entry.Cast<TableCatalogEntry>());
 	case CatalogType::VIEW_ENTRY:
-		return make_unique<ViewColumnHelper>((ViewCatalogEntry *)entry);
+		return make_uniq<ViewColumnHelper>(entry.Cast<ViewCatalogEntry>());
 	default:
 		throw NotImplementedException("Unsupported catalog type for duckdb_columns");
 	}
@@ -184,38 +187,43 @@ unique_ptr<ColumnHelper> ColumnHelper::Create(CatalogEntry *entry) {
 void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_col, DataChunk &output) {
 	for (idx_t i = start_col; i < end_col; i++) {
 		auto index = start_index + (i - start_col);
-		auto &entry = *Entry();
+		auto &entry = Entry();
 
-		// schema_oid, BIGINT
-		output.SetValue(0, index, Value::BIGINT(entry.schema->oid));
+		idx_t col = 0;
+		// database_name, VARCHAR
+		output.SetValue(col++, index, entry.catalog.GetName());
+		// database_oid, BIGINT
+		output.SetValue(col++, index, Value::BIGINT(entry.catalog.GetOid()));
 		// schema_name, VARCHAR
-		output.SetValue(1, index, entry.schema->name);
-		// table_oid, BIGINT
-		output.SetValue(2, index, Value::BIGINT(entry.oid));
+		output.SetValue(col++, index, entry.schema.name);
+		// schema_oid, BIGINT
+		output.SetValue(col++, index, Value::BIGINT(entry.schema.oid));
 		// table_name, VARCHAR
-		output.SetValue(3, index, entry.name);
+		output.SetValue(col++, index, entry.name);
+		// table_oid, BIGINT
+		output.SetValue(col++, index, Value::BIGINT(entry.oid));
 		// column_name, VARCHAR
-		output.SetValue(4, index, Value(ColumnName(i)));
+		output.SetValue(col++, index, Value(ColumnName(i)));
 		// column_index, INTEGER
-		output.SetValue(5, index, Value::INTEGER(i + 1));
+		output.SetValue(col++, index, Value::INTEGER(i + 1));
 		// internal, BOOLEAN
-		output.SetValue(6, index, Value::BOOLEAN(entry.internal));
+		output.SetValue(col++, index, Value::BOOLEAN(entry.internal));
 		// column_default, VARCHAR
-		output.SetValue(7, index, Value(ColumnDefault(i)));
+		output.SetValue(col++, index, Value(ColumnDefault(i)));
 		// is_nullable, BOOLEAN
-		output.SetValue(8, index, Value::BOOLEAN(IsNullable(i)));
+		output.SetValue(col++, index, Value::BOOLEAN(IsNullable(i)));
 		// data_type, VARCHAR
 		const LogicalType &type = ColumnType(i);
-		output.SetValue(9, index, Value(type.ToString()));
+		output.SetValue(col++, index, Value(type.ToString()));
 		// data_type_id, BIGINT
-		output.SetValue(10, index, Value::BIGINT(int(type.id())));
+		output.SetValue(col++, index, Value::BIGINT(int(type.id())));
 		if (type == LogicalType::VARCHAR) {
 			// FIXME: need check constraints in place to set this correctly
 			// character_maximum_length, INTEGER
-			output.SetValue(11, index, Value());
+			output.SetValue(col++, index, Value());
 		} else {
 			// "character_maximum_length", PhysicalType::INTEGER
-			output.SetValue(11, index, Value());
+			output.SetValue(col++, index, Value());
 		}
 
 		Value numeric_precision, numeric_scale, numeric_precision_radix;
@@ -268,16 +276,16 @@ void ColumnHelper::WriteColumns(idx_t start_index, idx_t start_col, idx_t end_co
 		}
 
 		// numeric_precision, INTEGER
-		output.SetValue(12, index, numeric_precision);
+		output.SetValue(col++, index, numeric_precision);
 		// numeric_precision_radix, INTEGER
-		output.SetValue(13, index, numeric_precision_radix);
+		output.SetValue(col++, index, numeric_precision_radix);
 		// numeric_scale, INTEGER
-		output.SetValue(14, index, numeric_scale);
+		output.SetValue(col++, index, numeric_scale);
 	}
 }
 
 void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBColumnsData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBColumnsData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -291,7 +299,7 @@ void DuckDBColumnsFunction(ClientContext &context, TableFunctionInput &data_p, D
 	idx_t column_offset = data.column_offset;
 	idx_t index = 0;
 	while (next < data.entries.size() && index < STANDARD_VECTOR_SIZE) {
-		auto column_helper = ColumnHelper::Create(data.entries[next]);
+		auto column_helper = ColumnHelper::Create(data.entries[next].get());
 		idx_t columns = column_helper->NumColumns();
 
 		// Check to see if we are going to exceed the maximum index for a DataChunk

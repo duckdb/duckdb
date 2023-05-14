@@ -1,0 +1,35 @@
+# name: benchmark/micro/join/nary_positional_join.benchmark
+# description: Range self-join between random numbers
+# group: [join]
+
+name N-Ary Positional Join
+group join
+
+require tpch
+
+cache tpch_sf1_positional.duckdb
+
+load
+CALL dbgen(sf=1, suffix='_positional');
+CREATE VIEW lineitem AS (SELECT * FROM
+	(SELECT l_returnflag FROM lineitem_positional)
+	POSITIONAL JOIN
+	(SELECT l_linestatus FROM lineitem_positional)
+	POSITIONAL JOIN
+	(SELECT l_quantity FROM lineitem_positional)
+	POSITIONAL JOIN
+	(SELECT l_extendedprice FROM lineitem_positional)
+	POSITIONAL JOIN
+	(SELECT l_discount FROM lineitem_positional)
+	POSITIONAL JOIN
+	(SELECT l_tax FROM lineitem_positional)
+	POSITIONAL JOIN
+	(SELECT l_shipdate FROM lineitem_positional)
+)
+
+run
+PRAGMA tpch(1)
+
+result extension/tpch/dbgen/answers/sf1/q01.csv
+
+#<FILE>:extension/tpch/dbgen/answers/sf1/q01.csv

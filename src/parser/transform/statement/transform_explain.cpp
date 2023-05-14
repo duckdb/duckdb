@@ -18,7 +18,7 @@ unique_ptr<ExplainStatement> Transformer::TransformExplain(duckdb_libpgquery::PG
 			}
 		}
 	}
-	return make_unique<ExplainStatement>(TransformStatement(stmt->query), explain_type);
+	return make_uniq<ExplainStatement>(TransformStatement(stmt->query), explain_type);
 }
 
 } // namespace duckdb

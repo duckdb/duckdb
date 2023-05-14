@@ -1,10 +1,14 @@
+if(${WASM_LOADABLE_EXTENSIONS})
+  return()
+endif()
+
 cmake_minimum_required(VERSION 2.8.12)
 
 project(HTTPFsExtension)
 
 add_extension_definitions()
 
-include_directories(include ../.. ../../third_party/httplib ../parquet/include)
+include_directories(include ../../third_party/httplib ../parquet/include)
 
 add_library(httpfs_extension STATIC s3fs.cpp httpfs.cpp crypto.cpp
                                     httpfs-extension.cpp)

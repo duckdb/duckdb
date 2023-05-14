@@ -44,37 +44,46 @@ def third_party_sources():
     sources += [os.path.join('third_party', 'mbedtls')]
     return sources
 
+def file_is_lib(fname, libname):
+    libextensions = ['.a', '.lib']
+    libprefixes = ['', 'lib']
+    for ext in libextensions:
+        for prefix in libprefixes:
+            potential_libname = prefix + libname + ext
+            if fname == potential_libname:
+                return True
+    return False
+
 def get_libraries(binary_dir, libraries, extensions):
     result_libs = []
-    def find_library_recursive(search_dir, potential_libnames):
+    def find_library_recursive(search_dir, libname):
         flist = os.listdir(search_dir)
         for fname in flist:
             fpath = os.path.join(search_dir, fname)
             if os.path.isdir(fpath):
-                entry = find_library_recursive(fpath, potential_libnames)
+                entry = find_library_recursive(fpath, libname)
                 if entry != None:
                     return entry
-            elif os.path.isfile(fpath) and fname in potential_libnames:
+            elif os.path.isfile(fpath) and file_is_lib(fname, libname):
                 return search_dir
         return None
 
-    def find_library(search_dir, libname, result_libs):
+    def find_library(search_dir, libname, result_libs, required=False):
         if libname == 'Threads::Threads':
             result_libs += [(None, 'pthread')]
             return
-        libextensions = ['.a', '.lib']
-        libprefixes = ['', 'lib']
-        potential_libnames = []
-        for ext in libextensions:
-            for prefix in libprefixes:
-                potential_libnames.append(prefix + libname + ext)
-        libdir = find_library_recursive(binary_dir, potential_libnames)
+        libdir = find_library_recursive(binary_dir, libname)
+        if libdir is None and required:
+            raise Exception(f"Failed to locate required library {libname} in {binary_dir}")
 
         result_libs += [(libdir, libname)]
 
-    result_libs += [(os.path.join(binary_dir, 'src'), 'duckdb_static')]
+    duckdb_lib_name = 'duckdb_static'
+    if os.name == 'nt':
+        duckdb_lib_name = 'duckdb'
+    find_library(os.path.join(binary_dir, 'src'), duckdb_lib_name, result_libs, True)
     for ext in extensions:
-        result_libs += [(os.path.join(binary_dir, 'extension', ext), ext + '_extension')]
+        find_library(os.path.join(binary_dir, 'extension', ext), ext + '_extension', result_libs, True)
 
     for libname in libraries:
         find_library(binary_dir, libname, result_libs)

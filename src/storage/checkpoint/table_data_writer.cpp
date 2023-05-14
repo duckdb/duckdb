@@ -1,13 +1,16 @@
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
+#include "duckdb/storage/table/table_statistics.hpp"
 
 namespace duckdb {
 
-TableDataWriter::TableDataWriter(TableCatalogEntry &table) : table(table) {
+TableDataWriter::TableDataWriter(TableCatalogEntry &table_p) : table(table_p.Cast<DuckTableEntry>()) {
+	D_ASSERT(table_p.IsDuckTable());
 }
 
 TableDataWriter::~TableDataWriter() {
@@ -15,15 +18,15 @@ TableDataWriter::~TableDataWriter() {
 
 void TableDataWriter::WriteTableData() {
 	// start scanning the table and append the data to the uncompressed segments
-	table.storage->Checkpoint(*this);
+	table.GetStorage().Checkpoint(*this);
 }
 
 CompressionType TableDataWriter::GetColumnCompressionType(idx_t i) {
-	return table.columns.GetColumn(LogicalIndex(i)).CompressionType();
+	return table.GetColumn(LogicalIndex(i)).CompressionType();
 }
 
 void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_ptr<RowGroupWriter> &&writer) {
-	row_group_pointers.push_back(move(row_group_pointer));
+	row_group_pointers.push_back(std::move(row_group_pointer));
 	writer.reset();
 }
 
@@ -35,29 +38,34 @@ SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter 
 }
 
 unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup &row_group) {
-	return make_unique<SingleFileRowGroupWriter>(table, checkpoint_manager.partial_block_manager, table_data_writer);
+	return make_uniq<SingleFileRowGroupWriter>(table, checkpoint_manager.partial_block_manager, table_data_writer);
 }
 
-void SingleFileTableDataWriter::FinalizeTable(vector<unique_ptr<BaseStatistics>> &&global_stats, DataTableInfo *info) {
+void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info) {
 	// store the current position in the metadata writer
 	// this is where the row groups for this table start
 	auto pointer = table_data_writer.GetBlockPointer();
 
-	for (auto &stats : global_stats) {
-		stats->Serialize(table_data_writer);
-	}
+	global_stats.Serialize(table_data_writer);
+
 	// now start writing the row group pointers to disk
 	table_data_writer.Write<uint64_t>(row_group_pointers.size());
+	idx_t total_rows = 0;
 	for (auto &row_group_pointer : row_group_pointers) {
+		auto row_group_count = row_group_pointer.row_start + row_group_pointer.tuple_count;
+		if (row_group_count > total_rows) {
+			total_rows = row_group_count;
+		}
 		RowGroup::Serialize(row_group_pointer, table_data_writer);
 	}
 
 	// Pointer to the table itself goes to the metadata stream.
 	meta_data_writer.Write<block_id_t>(pointer.block_id);
 	meta_data_writer.Write<uint64_t>(pointer.offset);
+	meta_data_writer.Write<idx_t>(total_rows);
 
 	// Now we serialize indexes in the table_metadata_writer
-	std::vector<BlockPointer> index_pointers = info->indexes.SerializeIndexes(table_data_writer);
+	vector<BlockPointer> index_pointers = info->indexes.SerializeIndexes(table_data_writer);
 
 	// Write-off to metadata block ids and offsets of indexes
 	meta_data_writer.Write<idx_t>(index_pointers.size());

@@ -10,76 +10,40 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/single_thread_ptr.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 
 #include <limits>
 
 namespace duckdb {
 
+class FormatSerializer;
+class FormatDeserializer;
 class Serializer;
 class Deserializer;
 class Value;
 class TypeCatalogEntry;
 class Vector;
 class ClientContext;
+class FieldWriter;
 
-struct hugeint_t {
-public:
-	uint64_t lower;
-	int64_t upper;
-
-public:
-	DUCKDB_API hugeint_t() = default;
-	DUCKDB_API hugeint_t(int64_t value); // NOLINT: Allow implicit conversion from `int64_t`
-	DUCKDB_API hugeint_t(const hugeint_t &rhs) = default;
-	DUCKDB_API hugeint_t(hugeint_t &&rhs) = default;
-	DUCKDB_API hugeint_t &operator=(const hugeint_t &rhs) = default;
-	DUCKDB_API hugeint_t &operator=(hugeint_t &&rhs) = default;
-
-	DUCKDB_API string ToString() const;
-
-	// comparison operators
-	DUCKDB_API bool operator==(const hugeint_t &rhs) const;
-	DUCKDB_API bool operator!=(const hugeint_t &rhs) const;
-	DUCKDB_API bool operator<=(const hugeint_t &rhs) const;
-	DUCKDB_API bool operator<(const hugeint_t &rhs) const;
-	DUCKDB_API bool operator>(const hugeint_t &rhs) const;
-	DUCKDB_API bool operator>=(const hugeint_t &rhs) const;
-
-	// arithmetic operators
-	DUCKDB_API hugeint_t operator+(const hugeint_t &rhs) const;
-	DUCKDB_API hugeint_t operator-(const hugeint_t &rhs) const;
-	DUCKDB_API hugeint_t operator*(const hugeint_t &rhs) const;
-	DUCKDB_API hugeint_t operator/(const hugeint_t &rhs) const;
-	DUCKDB_API hugeint_t operator%(const hugeint_t &rhs) const;
-	DUCKDB_API hugeint_t operator-() const;
-
-	// bitwise operators
-	DUCKDB_API hugeint_t operator>>(const hugeint_t &rhs) const;
-	DUCKDB_API hugeint_t operator<<(const hugeint_t &rhs) const;
-	DUCKDB_API hugeint_t operator&(const hugeint_t &rhs) const;
-	DUCKDB_API hugeint_t operator|(const hugeint_t &rhs) const;
-	DUCKDB_API hugeint_t operator^(const hugeint_t &rhs) const;
-	DUCKDB_API hugeint_t operator~() const;
-
-	// in-place operators
-	DUCKDB_API hugeint_t &operator+=(const hugeint_t &rhs);
-	DUCKDB_API hugeint_t &operator-=(const hugeint_t &rhs);
-	DUCKDB_API hugeint_t &operator*=(const hugeint_t &rhs);
-	DUCKDB_API hugeint_t &operator/=(const hugeint_t &rhs);
-	DUCKDB_API hugeint_t &operator%=(const hugeint_t &rhs);
-	DUCKDB_API hugeint_t &operator>>=(const hugeint_t &rhs);
-	DUCKDB_API hugeint_t &operator<<=(const hugeint_t &rhs);
-	DUCKDB_API hugeint_t &operator&=(const hugeint_t &rhs);
-	DUCKDB_API hugeint_t &operator|=(const hugeint_t &rhs);
-	DUCKDB_API hugeint_t &operator^=(const hugeint_t &rhs);
+//! Extra Type Info Type
+enum class ExtraTypeInfoType : uint8_t {
+	INVALID_TYPE_INFO = 0,
+	GENERIC_TYPE_INFO = 1,
+	DECIMAL_TYPE_INFO = 2,
+	STRING_TYPE_INFO = 3,
+	LIST_TYPE_INFO = 4,
+	STRUCT_TYPE_INFO = 5,
+	ENUM_TYPE_INFO = 6,
+	USER_TYPE_INFO = 7,
+	AGGREGATE_STATE_TYPE_INFO = 8
 };
 
 struct string_t;
 
 template <class T>
-using child_list_t = std::vector<std::pair<std::string, T>>;
+using child_list_t = vector<std::pair<std::string, T>>;
 //! FIXME: this should be a single_thread_ptr
 template <class T>
 using buffer_ptr = shared_ptr<T>;
@@ -92,6 +56,12 @@ buffer_ptr<T> make_buffer(Args &&...args) {
 struct list_entry_t {
 	list_entry_t() = default;
 	list_entry_t(uint64_t offset, uint64_t length) : offset(offset), length(length) {
+	}
+	inline constexpr bool operator != (const list_entry_t &other) const {
+		return !(*this == other);
+	}
+	inline constexpr bool operator == (const list_entry_t &other) const {
+		return offset == other.offset && length == other.length;
 	}
 
 	uint64_t offset;
@@ -194,9 +164,6 @@ enum class PhysicalType : uint8_t {
 	///// ArrayData struct
 	//DICTIONARY = 26,
 
-	/// Map, a repeated struct logical type
-	MAP = 27,
-
 	///// Custom data type, implemented by user
 	//EXTENSION = 28,
 
@@ -259,11 +226,10 @@ enum class LogicalTypeId : uint8_t {
 	UBIGINT = 31,
 	TIMESTAMP_TZ = 32,
 	TIME_TZ = 34,
-	JSON = 35,
+	BIT = 36,
 
 	HUGEINT = 50,
 	POINTER = 51,
-	// HASH = 52, // deprecated, uses UBIGINT instead
 	VALIDITY = 53,
 	UUID = 54,
 
@@ -277,8 +243,8 @@ enum class LogicalTypeId : uint8_t {
 	UNION = 107
 };
 
-struct ExtraTypeInfo;
 
+struct ExtraTypeInfo;
 
 struct aggregate_state_t;
 
@@ -300,6 +266,11 @@ struct LogicalType {
 	inline const ExtraTypeInfo *AuxInfo() const {
 		return type_info_.get();
 	}
+
+	inline shared_ptr<ExtraTypeInfo> GetAuxInfoShrPtr() const {
+		return type_info_;
+	}
+
 	inline void CopyAuxInfo(const LogicalType& other) {
 		type_info_ = other.type_info_;
 	}
@@ -316,7 +287,7 @@ struct LogicalType {
 	inline LogicalType& operator=(LogicalType&& other) noexcept {
 		id_ = other.id_;
 		physical_type_ = other.physical_type_;
-		type_info_ = move(other.type_info_);
+		std::swap(type_info_, other.type_info_);
 		return *this;
 	}
 
@@ -327,8 +298,15 @@ struct LogicalType {
 
 	//! Serializes a LogicalType to a stand-alone binary blob
 	DUCKDB_API void Serialize(Serializer &serializer) const;
+
+	DUCKDB_API void SerializeEnumType(Serializer &serializer) const;
+
 	//! Deserializes a blob back into an LogicalType
 	DUCKDB_API static LogicalType Deserialize(Deserializer &source);
+
+	DUCKDB_API void FormatSerialize(FormatSerializer &serializer) const;
+	DUCKDB_API static LogicalType FormatDeserialize(FormatDeserializer &deserializer);
+
 
 	DUCKDB_API static bool TypeIsTimestamp(LogicalTypeId id) {
 		return (id == LogicalTypeId::TIMESTAMP ||
@@ -349,8 +327,8 @@ struct LogicalType {
 	DUCKDB_API string GetAlias() const;
 
 	DUCKDB_API static LogicalType MaxLogicalType(const LogicalType &left, const LogicalType &right);
-	DUCKDB_API static void SetCatalog(LogicalType &type, TypeCatalogEntry* catalog_entry);
-	DUCKDB_API static TypeCatalogEntry* GetCatalog(const LogicalType &type);
+
+	DUCKDB_API static ExtraTypeInfoType GetExtraTypeInfoType(const ExtraTypeInfo &type);
 
 	//! Gets the decimal properties of a numeric type. Fails if the type is not numeric.
 	DUCKDB_API bool GetDecimalProperties(uint8_t &width, uint8_t &scale) const;
@@ -392,7 +370,8 @@ public:
 	static constexpr const LogicalTypeId VARCHAR = LogicalTypeId::VARCHAR;
 	static constexpr const LogicalTypeId ANY = LogicalTypeId::ANY;
 	static constexpr const LogicalTypeId BLOB = LogicalTypeId::BLOB;
-	static constexpr const LogicalTypeId INTERVAL = LogicalTypeId::INTERVAL;
+    static constexpr const LogicalTypeId BIT = LogicalTypeId::BIT;
+    static constexpr const LogicalTypeId INTERVAL = LogicalTypeId::INTERVAL;
 	static constexpr const LogicalTypeId HUGEINT = LogicalTypeId::HUGEINT;
 	static constexpr const LogicalTypeId UUID = LogicalTypeId::UUID;
 	static constexpr const LogicalTypeId HASH = LogicalTypeId::UBIGINT;
@@ -400,20 +379,19 @@ public:
 	static constexpr const LogicalTypeId TABLE = LogicalTypeId::TABLE;
 	static constexpr const LogicalTypeId LAMBDA = LogicalTypeId::LAMBDA;
 	static constexpr const LogicalTypeId INVALID = LogicalTypeId::INVALID;
-	static constexpr const LogicalTypeId JSON = LogicalTypeId::JSON;
 	static constexpr const LogicalTypeId ROW_TYPE = LogicalTypeId::BIGINT;
 
 	// explicitly allowing these functions to be capitalized to be in-line with the remaining functions
 	DUCKDB_API static LogicalType DECIMAL(int width, int scale);                 // NOLINT
 	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);           // NOLINT
-	DUCKDB_API static LogicalType LIST( LogicalType child);                       // NOLINT
-	DUCKDB_API static LogicalType STRUCT( child_list_t<LogicalType> children);    // NOLINT
+	DUCKDB_API static LogicalType LIST(const LogicalType &child);                       // NOLINT
+	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType AGGREGATE_STATE(aggregate_state_t state_type);    // NOLINT
+	DUCKDB_API static LogicalType MAP(const LogicalType &child);				// NOLINT
 	DUCKDB_API static LogicalType MAP( child_list_t<LogicalType> children);       // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
 	DUCKDB_API static LogicalType UNION( child_list_t<LogicalType> members);     // NOLINT
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
-	DUCKDB_API static LogicalType DEDUP_POINTER_ENUM(); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> Numeric();
@@ -444,12 +422,14 @@ struct UserType{
 struct EnumType{
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
 	DUCKDB_API static int64_t GetPos(const LogicalType &type, const string_t& key);
-	DUCKDB_API static Vector &GetValuesInsertOrder(const LogicalType &type);
+	DUCKDB_API static const Vector &GetValuesInsertOrder(const LogicalType &type);
 	DUCKDB_API static idx_t GetSize(const LogicalType &type);
 	DUCKDB_API static const string GetValue(const Value &val);
-	DUCKDB_API static void SetCatalog(LogicalType &type, TypeCatalogEntry* catalog_entry);
-	DUCKDB_API static TypeCatalogEntry* GetCatalog(const LogicalType &type);
+	DUCKDB_API static void SetCatalog(LogicalType &type, optional_ptr<TypeCatalogEntry> catalog_entry);
+	DUCKDB_API static optional_ptr<TypeCatalogEntry> GetCatalog(const LogicalType &type);
+	DUCKDB_API static string GetSchemaName(const LogicalType &type);
 	DUCKDB_API static PhysicalType GetPhysicalType(const LogicalType &type);
+	DUCKDB_API static void Serialize(FieldWriter& writer, const ExtraTypeInfo& type_info, bool serialize_internals);
 };
 
 struct StructType {
@@ -477,27 +457,30 @@ struct AggregateStateType {
 	DUCKDB_API static const aggregate_state_t &GetStateType(const LogicalType &type);
 };
 
+// **DEPRECATED**: Use EnumUtil directly instead.
 DUCKDB_API string LogicalTypeIdToString(LogicalTypeId type);
 
 DUCKDB_API LogicalTypeId TransformStringToLogicalTypeId(const string &str);
 
 DUCKDB_API LogicalType TransformStringToLogicalType(const string &str);
 
+DUCKDB_API LogicalType TransformStringToLogicalType(const string &str, ClientContext &context);
+
 //! The PhysicalType used by the row identifiers column
 extern const PhysicalType ROW_TYPE;
 
 DUCKDB_API string TypeIdToString(PhysicalType type);
-idx_t GetTypeIdSize(PhysicalType type);
-bool TypeIsConstantSize(PhysicalType type);
-bool TypeIsIntegral(PhysicalType type);
-bool TypeIsNumeric(PhysicalType type);
-bool TypeIsInteger(PhysicalType type);
+DUCKDB_API idx_t GetTypeIdSize(PhysicalType type);
+DUCKDB_API bool TypeIsConstantSize(PhysicalType type);
+DUCKDB_API bool TypeIsIntegral(PhysicalType type);
+DUCKDB_API bool TypeIsNumeric(PhysicalType type);
+DUCKDB_API bool TypeIsInteger(PhysicalType type);
 
 bool ApproxEqual(float l, float r);
 bool ApproxEqual(double l, double r);
 
 struct aggregate_state_t {
-	aggregate_state_t(string function_name_p, LogicalType return_type_p, vector<LogicalType> bound_argument_types_p) : function_name(move(function_name_p)), return_type(move(return_type_p)), bound_argument_types(move(bound_argument_types_p)) {
+	aggregate_state_t(string function_name_p, LogicalType return_type_p, vector<LogicalType> bound_argument_types_p) : function_name(std::move(function_name_p)), return_type(std::move(return_type_p)), bound_argument_types(std::move(bound_argument_types_p)) {
 	}
 
 	string function_name;

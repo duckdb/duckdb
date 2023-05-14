@@ -11,8 +11,8 @@
 #include "schema.hh"
 
 struct sqlsmith_duckdb_connection {
-	std::unique_ptr<duckdb::DuckDB> database;
-	std::unique_ptr<duckdb::Connection> connection;
+	duckdb::unique_ptr<duckdb::DuckDB> database;
+	duckdb::unique_ptr<duckdb::Connection> connection;
 	char *zErrMsg = 0;
 	int rc;
 	void q(const char *query);

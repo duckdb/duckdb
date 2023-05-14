@@ -1,7 +1,7 @@
 name: Extension Trigger
 on:
-  push:
-    branches: [ "master" ]
+  workflow_dispatch:
+  repository_dispatch:
 
 jobs:
   build-linux:

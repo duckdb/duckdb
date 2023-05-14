@@ -1,5 +1,6 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/cast/bound_cast_data.hpp"
 
 namespace duckdb {
 
@@ -9,11 +10,20 @@ unique_ptr<BoundCastData> ListBoundCastData::BindListToListCast(BindCastInput &i
 	auto &source_child_type = ListType::GetChildType(source);
 	auto &result_child_type = ListType::GetChildType(target);
 	auto child_cast = input.GetCastFunction(source_child_type, result_child_type);
-	return make_unique<ListBoundCastData>(move(child_cast));
+	return make_uniq<ListBoundCastData>(std::move(child_cast));
 }
 
-static bool ListToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	auto &cast_data = (ListBoundCastData &)*parameters.cast_data;
+unique_ptr<FunctionLocalState> ListBoundCastData::InitListLocalState(CastLocalStateParameters &parameters) {
+	auto &cast_data = parameters.cast_data->Cast<ListBoundCastData>();
+	if (!cast_data.child_cast_info.init_local_state) {
+		return nullptr;
+	}
+	CastLocalStateParameters child_parameters(parameters, cast_data.child_cast_info.cast_data);
+	return cast_data.child_cast_info.init_local_state(child_parameters);
+}
+
+bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	auto &cast_data = parameters.cast_data->Cast<ListBoundCastData>();
 
 	// only handle constant and flat vectors here for now
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -40,7 +50,7 @@ static bool ListToListCast(Vector &source, Vector &result, idx_t count, CastPara
 	ListVector::Reserve(result, source_size);
 	auto &append_vector = ListVector::GetEntry(result);
 
-	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data.get());
+	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
 	if (!cast_data.child_cast_info.function(source_cc, append_vector, source_size, child_parameters)) {
 		return false;
 	}
@@ -53,7 +63,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	// first cast the child vector to varchar
 	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR), count);
-	ListToListCast(source, varchar_list, count, parameters);
+	ListCast::ListToListCast(source, varchar_list, count, parameters);
 
 	// now construct the actual varchar vector
 	varchar_list.Flatten(count);
@@ -96,7 +106,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 			}
 			if (child_validity.RowIsValid(idx)) {
 				auto len = child_data[idx].GetSize();
-				memcpy(dataptr + offset, child_data[idx].GetDataUnsafe(), len);
+				memcpy(dataptr + offset, child_data[idx].GetData(), len);
 				offset += len;
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
@@ -116,11 +126,13 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 BoundCastInfo DefaultCasts::ListCastSwitch(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	switch (target.id()) {
 	case LogicalTypeId::LIST:
-		return BoundCastInfo(ListToListCast, ListBoundCastData::BindListToListCast(input, source, target));
+		return BoundCastInfo(ListCast::ListToListCast, ListBoundCastData::BindListToListCast(input, source, target),
+		                     ListBoundCastData::InitListLocalState);
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::JSON:
-		return BoundCastInfo(ListToVarcharCast, ListBoundCastData::BindListToListCast(
-		                                            input, source, LogicalType::LIST(LogicalType::VARCHAR)));
+		return BoundCastInfo(
+		    ListToVarcharCast,
+		    ListBoundCastData::BindListToListCast(input, source, LogicalType::LIST(LogicalType::VARCHAR)),
+		    ListBoundCastData::InitListLocalState);
 	default:
 		return DefaultCasts::TryVectorNullCast;
 	}

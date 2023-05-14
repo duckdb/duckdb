@@ -28,28 +28,33 @@ import java.sql.Time;
 import java.sql.Timestamp;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 
 public class DuckDBResultSet implements ResultSet {
+	private final DuckDBPreparedStatement stmt;
+	private final DuckDBResultSetMetaData meta;
 
-	// Constant to construct BigDecimals from hugeint_t
-	private final static BigDecimal ULONG_MULTIPLIER = new BigDecimal("18446744073709551616");
-
-	private DuckDBPreparedStatement stmt;
-	private DuckDBResultSetMetaData meta;
-
+	/**
+	 * {@code null} if this result set is closed.
+	 */
 	private ByteBuffer result_ref;
 	private DuckDBVector[] current_chunk = {};
 	private int chunk_idx = 0;
 	private boolean finished = false;
 	private boolean was_null;
+	private ByteBuffer conn_ref;
 
-	public DuckDBResultSet(DuckDBPreparedStatement stmt, DuckDBResultSetMetaData meta, ByteBuffer result_ref)
+	public DuckDBResultSet(DuckDBPreparedStatement stmt, DuckDBResultSetMetaData meta, ByteBuffer result_ref, ByteBuffer conn_ref)
 			throws SQLException {
-		this.stmt = stmt;
-		this.result_ref = result_ref;
-		this.meta = meta;
+		this.stmt = Objects.requireNonNull(stmt);
+		this.result_ref = Objects.requireNonNull(result_ref);
+		this.meta = Objects.requireNonNull(meta);
+		this.conn_ref = Objects.requireNonNull(conn_ref);
 	}
 
 	public Statement getStatement() throws SQLException {
@@ -75,7 +80,7 @@ public class DuckDBResultSet implements ResultSet {
 		}
 		chunk_idx++;
 		if (current_chunk.length == 0 || chunk_idx > current_chunk[0].length) {
-			current_chunk = DuckDBNative.duckdb_jdbc_fetch(result_ref);
+			current_chunk = DuckDBNative.duckdb_jdbc_fetch(result_ref, conn_ref);
 			chunk_idx = 1;
 		}
 		if (current_chunk.length == 0) {
@@ -88,11 +93,15 @@ public class DuckDBResultSet implements ResultSet {
 	public synchronized void close() throws SQLException {
 		if (result_ref != null) {
 			DuckDBNative.duckdb_jdbc_free_result(result_ref);
+			// Nullness is used to determine whether we're closed
 			result_ref = null;
+
+			// isCloseOnCompletion() throws if already closed, and we can't check for isClosed() because it could change between
+			// when we check and call isCloseOnCompletion, so access the field directly.
+			if (stmt.closeOnCompletion) {
+				stmt.close();
+			}
 		}
-		stmt = null;
-		meta = null;
-		current_chunk = null;
 	}
 
 	protected void finalize() throws Throwable {
@@ -146,60 +155,17 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Object getObject(int columnIndex) throws SQLException {
-		check_and_null(columnIndex);
-		if (was_null) {
+		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		switch (meta.column_types[columnIndex - 1]) {
-		case BOOLEAN:
-			return getBoolean(columnIndex);
-		case TINYINT:
-			return getByte(columnIndex);
-		case SMALLINT:
-			return getShort(columnIndex);
-		case INTEGER:
-			return getInt(columnIndex);
-		case BIGINT:
-			return getLong(columnIndex);
-		case HUGEINT:
-			return getHugeint(columnIndex);
-		case UTINYINT:
-			return getUint8(columnIndex);
-		case USMALLINT:
-			return getUint16(columnIndex);
-		case UINTEGER:
-			return getUint32(columnIndex);
-		case UBIGINT:
-			return getUint64(columnIndex);
-		case FLOAT:
-			return getFloat(columnIndex);
-		case DOUBLE:
-			return getDouble(columnIndex);
-		case DECIMAL:
-			return getBigDecimal(columnIndex);
-		case VARCHAR:
-			return getString(columnIndex);
-		case ENUM:
-			return getString(columnIndex);
-		case TIME:
-			return getTime(columnIndex);
-		case DATE:
-			return getDate(columnIndex);
-		case TIMESTAMP:
-		case TIMESTAMP_NS:
-		case TIMESTAMP_S:
-		case TIMESTAMP_MS:
-			return getTimestamp(columnIndex);
-		case TIMESTAMP_WITH_TIME_ZONE:
-			return getOffsetDateTime(columnIndex);
-		case JSON:
-			return getJsonObject(columnIndex);
-		case INTERVAL:
-			return getLazyString(columnIndex);
-		default:
-			throw new SQLException("Not implemented type: " + meta.column_types_string[columnIndex - 1]);
-		}
+		return current_chunk[columnIndex - 1].getObject(chunk_idx - 1);
+	}
 
+	public OffsetTime getOffsetTime(int columnIndex) throws SQLException {
+		if (check_and_null(columnIndex)) {
+			return null;
+		}
+		return current_chunk[columnIndex - 1].getOffsetTime(chunk_idx - 1);
 	}
 
 	public boolean wasNull() throws SQLException {
@@ -211,7 +177,11 @@ public class DuckDBResultSet implements ResultSet {
 
 	private boolean check_and_null(int columnIndex) throws SQLException {
 		check(columnIndex);
-		was_null = current_chunk[columnIndex - 1].nullmask[chunk_idx - 1];
+		try {
+			was_null = current_chunk[columnIndex - 1].nullmask[chunk_idx - 1];
+		} catch (ArrayIndexOutOfBoundsException e) {
+			throw new SQLException("No row in context", e);
+		}
 		return was_null;
 	}
 
@@ -227,8 +197,8 @@ public class DuckDBResultSet implements ResultSet {
 		return (String) current_chunk[columnIndex - 1].varlen_data[chunk_idx - 1];
 	}
 
-	private boolean isType(int columnIndex, DuckDBColumnType type) {
-		return meta.column_types[columnIndex - 1] == type;
+	private boolean isType(int columnIndex, DuckDBColumnType... types) {
+		return Arrays.stream(types).anyMatch(type -> current_chunk[columnIndex - 1].duckdb_type == type);
 	}
 
 	public String getString(int columnIndex) throws SQLException {
@@ -236,9 +206,6 @@ public class DuckDBResultSet implements ResultSet {
 			return null;
 		}
 
-		if (isType(columnIndex, DuckDBColumnType.VARCHAR) || isType(columnIndex, DuckDBColumnType.ENUM)) {
-			return (String) current_chunk[columnIndex - 1].varlen_data[chunk_idx - 1];
-		}
 		Object res = getObject(columnIndex);
 		if (res == null) {
 			return null;
@@ -247,184 +214,88 @@ public class DuckDBResultSet implements ResultSet {
 		}
 	}
 
-	private ByteBuffer getbuf(int columnIndex, int typeWidth) throws SQLException {
-		ByteBuffer buf = current_chunk[columnIndex - 1].constlen_data;
-		buf.order(ByteOrder.LITTLE_ENDIAN);
-		buf.position((chunk_idx - 1) * typeWidth);
-		return buf;
-	}
-
 	public boolean getBoolean(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return false;
 		}
-		if (isType(columnIndex, DuckDBColumnType.BOOLEAN)) {
-			return getbuf(columnIndex, 1).get() == 1;
-		}
-		Object o = getObject(columnIndex);
-		if (o instanceof Number) {
-			return ((Number) o).byteValue() == 1;
-		}
-
-		return Boolean.parseBoolean(getObject(columnIndex).toString());
+		return current_chunk[columnIndex - 1].getBoolean(chunk_idx - 1);
 	}
 
 	public byte getByte(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.TINYINT)) {
-			return getbuf(columnIndex, 1).get();
-		}
-		Object o = getObject(columnIndex);
-		if (o instanceof Number) {
-			return ((Number) o).byteValue();
-		}
-		return Byte.parseByte(o.toString());
+		return current_chunk[columnIndex - 1].getByte(chunk_idx - 1);
 	}
 
 	public short getShort(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.SMALLINT)) {
-			return getbuf(columnIndex, 2).getShort();
-		}
-		Object o = getObject(columnIndex);
-		if (o instanceof Number) {
-			return ((Number) o).shortValue();
-		}
-		return Short.parseShort(o.toString());
+		return current_chunk[columnIndex - 1].getShort(chunk_idx - 1);
 	}
 
 	public int getInt(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.INTEGER)) {
-			return getbuf(columnIndex, 4).getInt();
-		}
-		Object o = getObject(columnIndex);
-		if (o instanceof Number) {
-			return ((Number) o).intValue();
-		}
-		return Integer.parseInt(o.toString());
+		return current_chunk[columnIndex - 1].getInt(chunk_idx - 1);
 	}
 
 	private short getUint8(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.UTINYINT)) {
-			ByteBuffer buf = ByteBuffer.allocate(2);
-			getbuf(columnIndex, 1).get(buf.array(), 1, 1);
-			return buf.getShort();
-
-		}
-		throw new SQLFeatureNotSupportedException("getUint8");
+		return current_chunk[columnIndex - 1].getUint8(chunk_idx - 1);
 	}
 
 	private int getUint16(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.USMALLINT)) {
-			ByteBuffer buf = ByteBuffer.allocate(4);
-			buf.order(ByteOrder.LITTLE_ENDIAN);
-			getbuf(columnIndex, 2).get(buf.array(), 0, 2);
-			return buf.getInt();
-		}
-		throw new SQLFeatureNotSupportedException("getUint16");
-
+		return current_chunk[columnIndex - 1].getUint16(chunk_idx - 1);
 	}
 
 	private long getUint32(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.UINTEGER)) {
-			ByteBuffer buf = ByteBuffer.allocate(8);
-			buf.order(ByteOrder.LITTLE_ENDIAN);
-			getbuf(columnIndex, 4).get(buf.array(), 0, 4);
-			return buf.getLong();
-		}
-		throw new SQLFeatureNotSupportedException("getUint32");
+		return current_chunk[columnIndex - 1].getUint32(chunk_idx - 1);
 	}
 
 	private BigInteger getUint64(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return BigInteger.ZERO;
 		}
-		if (isType(columnIndex, DuckDBColumnType.UBIGINT)) {
-			byte[] buf_res = new byte[16];
-			byte[] buf = new byte[8];
-			getbuf(columnIndex, 8).get(buf);
-			for (int i = 0; i < 8; i++) {
-				buf_res[i + 8] = buf[7 - i];
-			}
-			return new BigInteger(buf_res);
-		}
-		throw new SQLFeatureNotSupportedException("getUint64");
+		return current_chunk[columnIndex - 1].getUint64(chunk_idx - 1);
 	}
 
 	public long getLong(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return 0;
 		}
-		if (isType(columnIndex, DuckDBColumnType.BIGINT)) {
-			return getbuf(columnIndex, 8).getLong();
-		}
-		Object o = getObject(columnIndex);
-		if (o instanceof Number) {
-			return ((Number) o).longValue();
-		}
-		return Long.parseLong(o.toString());
+		return current_chunk[columnIndex - 1].getLong(chunk_idx - 1);
 	}
 
 	public BigInteger getHugeint(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return BigInteger.ZERO;
 		}
-		if (isType(columnIndex, DuckDBColumnType.HUGEINT)) {
-			byte[] buf = new byte[16];
-			getbuf(columnIndex, 16).get(buf);
-			for (int i = 0; i < 8; i++) {
-				byte keep = buf[i];
-				buf[i] = buf[15 - i];
-				buf[15 - i] = keep;
-			}
-			return new BigInteger(buf);
-		}
-		Object o = getObject(columnIndex);
-		return new BigInteger(o.toString());
+		return current_chunk[columnIndex - 1].getHugeint(chunk_idx - 1);
 	}
 
 	public float getFloat(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return Float.NaN;
 		}
-		if (isType(columnIndex, DuckDBColumnType.FLOAT)) {
-			return getbuf(columnIndex, 4).getFloat();
-		}
-		Object o = getObject(columnIndex);
-		if (o instanceof Number) {
-			return ((Number) o).floatValue();
-		}
-		return Float.parseFloat(o.toString());
+		return current_chunk[columnIndex - 1].getFloat(chunk_idx - 1);
 	}
 
 	public double getDouble(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return Double.NaN;
 		}
-		if (isType(columnIndex, DuckDBColumnType.DOUBLE)) {
-			return getbuf(columnIndex, 8).getDouble();
-		}
-		Object o = getObject(columnIndex);
-		if (o instanceof Number) {
-			return ((Number) o).doubleValue();
-		}
-		return Double.parseDouble(o.toString());
+		return current_chunk[columnIndex - 1].getDouble(chunk_idx - 1);
 	}
 
 	public int findColumn(String columnLabel) throws SQLException {
@@ -484,73 +355,42 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Date getDate(int columnIndex) throws SQLException {
-		String string_value = getLazyString(columnIndex);
-		if (string_value == null) {
-			return null;
-		}
-		try {
-			return Date.valueOf(string_value);
-		} catch (Exception e) {
-			return null;
-		}
+		return check_and_null(columnIndex) ? null : current_chunk[columnIndex - 1].getDate(chunk_idx - 1);
 	}
 
 	public Time getTime(int columnIndex) throws SQLException {
-		String string_value = getLazyString(columnIndex);
-		if (string_value == null) {
-			return null;
-		}
-		try {
-
-			return Time.valueOf(getLazyString(columnIndex));
-		} catch (Exception e) {
-			return null;
-		}
+		return check_and_null(columnIndex) ? null : current_chunk[columnIndex - 1].getTime(chunk_idx - 1);
 	}
 
 	public Timestamp getTimestamp(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
-			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong());
-		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_MS)) {
-			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong() * 1000);
-		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_NS)) {
-			return DuckDBTimestamp.toSqlTimestampNanos(getbuf(columnIndex, 8).getLong());
-		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_S)) {
-			return DuckDBTimestamp.toSqlTimestamp(getbuf(columnIndex, 8).getLong() * 1_000_000);
-		}
-		Object o = getObject(columnIndex);
-		return Timestamp.valueOf(o.toString());
+		return current_chunk[columnIndex - 1].getTimestamp(chunk_idx - 1);
 	}
 
 	private LocalDateTime getLocalDateTime(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP)) {
-			return DuckDBTimestamp.toLocalDateTime(getbuf(columnIndex, 8).getLong());
-		}
-		Object o = getObject(columnIndex);
-		return LocalDateTime.parse(o.toString());
+		return current_chunk[columnIndex - 1].getLocalDateTime(chunk_idx - 1);
 	}
 
 	private OffsetDateTime getOffsetDateTime(int columnIndex) throws SQLException {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		if (isType(columnIndex, DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
-			return DuckDBTimestamp.toOffsetDateTime(getbuf(columnIndex, 8).getLong());
-		}
-		Object o = getObject(columnIndex);
-		return OffsetDateTime.parse(o.toString());
+		return current_chunk[columnIndex - 1].getOffsetDateTime(chunk_idx - 1);
 	}
 
-	static class DuckDBBlobResult implements Blob {
+	public UUID getUuid(int columnIndex) throws SQLException {
+		if (check_and_null(columnIndex)) {
+			return null;
+		}
+		return current_chunk[columnIndex - 1].getUuid(chunk_idx - 1);
+	}
+
+	public static class DuckDBBlobResult implements Blob {
 
 		static class ByteBufferBackedInputStream extends InputStream {
 
@@ -633,6 +473,26 @@ public class DuckDBResultSet implements ResultSet {
 
 		}
 
+		@Override
+		public String toString() {
+			return "DuckDBBlobResult{" +
+					"buffer=" + buffer +
+					'}';
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+			DuckDBBlobResult that = (DuckDBBlobResult) o;
+			return Objects.equals(buffer, that.buffer);
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(buffer);
+		}
+
 		private ByteBuffer buffer;
 
 	}
@@ -641,11 +501,7 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		if (isType(columnIndex, DuckDBColumnType.BLOB)) {
-			return new DuckDBBlobResult(((ByteBuffer[]) current_chunk[columnIndex - 1].varlen_data)[chunk_idx - 1]);
-		}
-
-		throw new SQLFeatureNotSupportedException("getBlob");
+		return current_chunk[columnIndex - 1].getBlob(chunk_idx - 1);
 	}
 
 	public Blob getBlob(String columnLabel) throws SQLException {
@@ -720,28 +576,7 @@ public class DuckDBResultSet implements ResultSet {
 		if (check_and_null(columnIndex)) {
 			return null;
 		}
-		if (isType(columnIndex, DuckDBColumnType.DECIMAL)) {
-			switch (meta.column_types_meta[columnIndex - 1].type_size) {
-			case 16:
-				return new BigDecimal((int) getbuf(columnIndex, 2).getShort())
-						.scaleByPowerOfTen(meta.column_types_meta[columnIndex - 1].scale * -1);
-			case 32:
-				return new BigDecimal(getbuf(columnIndex, 4).getInt())
-						.scaleByPowerOfTen(meta.column_types_meta[columnIndex - 1].scale * -1);
-			case 64:
-				return new BigDecimal(getbuf(columnIndex, 8).getLong())
-						.scaleByPowerOfTen(meta.column_types_meta[columnIndex - 1].scale * -1);
-			case 128:
-				ByteBuffer buf = getbuf(columnIndex, 16);
-				long lower = buf.getLong();
-				long upper = buf.getLong();
-				return new BigDecimal(upper).multiply(ULONG_MULTIPLIER)
-						.add(new BigDecimal(Long.toUnsignedString(lower)))
-						.scaleByPowerOfTen(meta.column_types_meta[columnIndex - 1].scale * -1);
-			}
-		}
-		Object o = getObject(columnIndex);
-		return new BigDecimal(o.toString());
+		return current_chunk[columnIndex - 1].getBigDecimal(chunk_idx - 1);
 	}
 
 	public BigDecimal getBigDecimal(String columnLabel) throws SQLException {
@@ -1030,7 +865,10 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Array getArray(int columnIndex) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getArray");
+		if (check_and_null(columnIndex)) {
+			return null;
+		}
+		return current_chunk[columnIndex - 1].getArray(chunk_idx - 1);
 	}
 
 	public Object getObject(String columnLabel, Map<String, Class<?>> map) throws SQLException {
@@ -1046,31 +884,34 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Array getArray(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getArray");
+		return getArray(findColumn(columnLabel));
 	}
 
 	public Date getDate(int columnIndex, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getDate");
+	    return getDate(columnIndex);
 	}
 
 	public Date getDate(String columnLabel, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getDate");
+	    return getDate(findColumn(columnLabel), cal);
 	}
 
 	public Time getTime(int columnIndex, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getTime");
+	    return getTime(columnIndex);
 	}
 
 	public Time getTime(String columnLabel, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getTime");
+	    return getTime(findColumn(columnLabel), cal);
 	}
 
 	public Timestamp getTimestamp(int columnIndex, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getTimestamp");
+		if (check_and_null(columnIndex)) {
+			return null;
+		}
+		return current_chunk[columnIndex - 1].getTimestamp(chunk_idx - 1, cal);
 	}
 
 	public Timestamp getTimestamp(String columnLabel, Calendar cal) throws SQLException {
-		throw new SQLFeatureNotSupportedException("getTimestamp");
+	    return getTimestamp(findColumn(columnLabel), cal);
 	}
 
 	public URL getURL(int columnIndex) throws SQLException {
@@ -1352,7 +1193,8 @@ public class DuckDBResultSet implements ResultSet {
 				throw new SQLException("Can't convert value to integer " + type.toString());
 			}
 		} else if (type == Long.class) {
-			if (sqlType == DuckDBColumnType.BIGINT) {
+			if (sqlType == DuckDBColumnType.BIGINT
+					|| sqlType == DuckDBColumnType.TIMESTAMP) {
 				return type.cast(getLong(columnIndex));
 			} else if (sqlType == DuckDBColumnType.UINTEGER) {
 				throw new SQLException("Can't convert value to long " + type.toString());
@@ -1428,12 +1270,17 @@ public class DuckDBResultSet implements ResultSet {
 		throw new SQLFeatureNotSupportedException("getObject");
 	}
 
+	@Override
 	public <T> T unwrap(Class<T> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException("unwrap");
+		return JdbcUtils.unwrap(this, iface);
 	}
 
-	public boolean isWrapperFor(Class<?> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException("isWrapperFor");
+	@Override
+	public boolean isWrapperFor(Class<?> iface) {
+		return iface.isInstance(this);
 	}
 
+	boolean isFinished() {
+		return finished;
+	}
 }

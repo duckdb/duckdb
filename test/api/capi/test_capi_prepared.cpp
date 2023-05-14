@@ -5,7 +5,7 @@ using namespace std;
 
 TEST_CASE("Test prepared statements in C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 	duckdb_result res;
 	duckdb_prepared_statement stmt = nullptr;
 	duckdb_state status;

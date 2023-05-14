@@ -1,0 +1,15 @@
+# name: benchmark/micro/string/bitstring.benchmark
+# description: String Concat (Long Strings)
+# group: [string]
+
+name Bit string
+group string
+
+load
+CREATE TABLE bits AS SELECT printf('%b',i)::BIT col FROM range(0, 10000000) tbl(i);
+
+run
+SELECT COUNT(get_bit(col, 0)) FROM bits;
+
+result I
+10000000

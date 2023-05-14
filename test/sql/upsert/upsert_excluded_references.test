@@ -1,0 +1,74 @@
+# name: test/sql/upsert/upsert_excluded_references.test
+# group: [upsert]
+
+statement ok
+pragma enable_verification;
+
+# Within the ON CONFLICT clause, we can have special column references that are qualified with 'excluded'
+# These refer to the to-be-inserted tuples that caused the conflict, instead of the existing tuples that were found by the conflict.
+
+statement ok
+create or replace table tbl (
+	a integer primary key,
+	b integer
+);
+
+statement ok
+insert into tbl VALUES (1,2), (2,2);
+
+query II
+select * from tbl;
+----
+1	2
+2	2
+
+# Conflict on '1' in 'a'
+statement error
+insert into tbl VALUES (1,3), (3,4);
+----
+Constraint Error: Duplicate key "a: 1" violates primary key constraint
+
+# Usage of 'excluded' in a SET expression
+statement ok
+insert into tbl VALUES (1,3), (3,4) ON CONFLICT (a) DO UPDATE SET b = excluded.b;
+
+query II
+select * from tbl;
+----
+1	3
+2	2
+3	4
+
+# Usage of 'excluded' in a ON CONFLICT (..) WHERE <expr>
+statement error
+insert into tbl VALUES (4,3), (3,8) ON CONFLICT (a) WHERE excluded.b < 8 DO NOTHING;
+----
+Constraint Error: Duplicate key "a: 3" violates primary key constraint
+
+statement ok
+insert into tbl VALUES (4,3), (3,8) ON CONFLICT (a) WHERE excluded.b >= 8 DO UPDATE SET b = 10;
+
+query II
+select * from tbl;
+----
+1	3
+2	2
+3	10
+4	3
+
+# Usage of 'excluded' in a DO UPDATE SET ... WHERE <expr>
+
+# Both '2' and '3' are conflicts, but only '2' meets the condition
+# When the condition is not met, this turns into a DO NOTHING instead for that tuple
+statement ok
+insert into tbl VALUES (3,8), (2,2), (7,2) ON CONFLICT (a) DO UPDATE SET b = b*2 WHERE b == excluded.b;
+
+# Only '2' is updated
+query II
+select * from tbl;
+----
+1	3
+2	4
+3	10
+4	3
+7	2

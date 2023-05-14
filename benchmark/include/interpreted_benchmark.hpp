@@ -15,6 +15,8 @@ namespace duckdb {
 struct BenchmarkFileReader;
 class MaterializedQueryResult;
 
+const string DEFAULT_DB_PATH = "duckdb_benchmark_db.db";
+
 //! Interpreted benchmarks read the benchmark from a file
 class InterpretedBenchmark : public Benchmark {
 public:
@@ -22,7 +24,7 @@ public:
 
 	void LoadBenchmark();
 	//! Initialize the benchmark state
-	unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) override;
+	duckdb::unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) override;
 	//! Run the benchmark
 	void Run(BenchmarkState *state) override;
 	//! Cleanup the benchmark, called after each Run
@@ -66,8 +68,7 @@ private:
 	string run_query;
 
 	string benchmark_path;
-	string data_cache;
-	string db_path = "";
+	string cache_db = "";
 	std::unordered_set<string> extensions;
 	int64_t result_column_count = 0;
 	vector<vector<string>> result_values;

@@ -1,0 +1,14 @@
+# name: test/sql/attach/attach_same_db.test
+# description: Test attaching of the same database
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/attach_same_db.db' AS db1
+
+statement error
+ATTACH '__TEST_DIR__/attach_same_db.db' AS db2

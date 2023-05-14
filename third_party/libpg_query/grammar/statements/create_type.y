@@ -4,7 +4,7 @@
  *
  *****************************************************************************/
 CreateTypeStmt:
-				CREATE_P TYPE_P any_name AS ENUM_P select_with_parens
+				CREATE_P TYPE_P qualified_name AS ENUM_P select_with_parens
 				{
 					PGCreateTypeStmt *n = makeNode(PGCreateTypeStmt);
 					n->typeName = $3;
@@ -13,7 +13,7 @@ CreateTypeStmt:
 					n->vals = NULL;
 					$$ = (PGNode *)n;
 				}
-				| CREATE_P TYPE_P any_name AS ENUM_P '(' opt_enum_val_list ')'
+				| CREATE_P TYPE_P qualified_name AS ENUM_P '(' opt_enum_val_list ')'
 				{
 					PGCreateTypeStmt *n = makeNode(PGCreateTypeStmt);
 					n->typeName = $3;
@@ -22,7 +22,7 @@ CreateTypeStmt:
 					n->query = NULL;
 					$$ = (PGNode *)n;
 				}
-				| CREATE_P TYPE_P any_name AS Typename
+				| CREATE_P TYPE_P qualified_name AS Typename
 				{
 					PGCreateTypeStmt *n = makeNode(PGCreateTypeStmt);
 					n->typeName = $3;

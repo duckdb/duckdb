@@ -103,7 +103,7 @@ public:
 
 template <class T>
 unique_ptr<AnalyzeState> ChimpInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<ChimpAnalyzeState<T>>();
+	return make_uniq<ChimpAnalyzeState<T>>();
 }
 
 template <class T>

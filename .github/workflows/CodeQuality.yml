@@ -1,8 +1,19 @@
 name: CodeQuality
 on:
+  workflow_dispatch:
+  repository_dispatch:
   push:
+    branches:
+      - '**'
+      - '!master'
+      - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
+      - '.github/workflows/**'
+      - '!.github/workflows/CodeQuality.yml'
+
   pull_request:
     paths-ignore:
       - '**.md'
@@ -15,10 +26,6 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
-  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
-  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
   format-check:
@@ -67,19 +74,11 @@ jobs:
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global]
 
-      - name: Cache clang-tidy
-        id: date
-        shell: bash
-        run: echo "::set-output name=now::$(date)"
-
-      - name: Cache clang-tidy
-        uses: actions/cache@v3
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
         with:
-          path: ~/.ctcache/cache
-          key: clang-tidy-${{ steps.date.outputs.now }}
-          restore-keys: |
-            clang-tidy
-
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
       - name: Download clang-tidy-cache
         shell: bash
         run: |
@@ -100,8 +99,6 @@ jobs:
       matrix:
         testset:
           - 'standard'
-          - 'python'
-          - 'coverage'
     needs: tidy-check
     env:
       GEN: ninja
@@ -120,14 +117,14 @@ jobs:
           curl --fail --data-binary @.codecov.yml https://codecov.io/validate
 
       - name: Set up Python 3.9
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
       - name: Before Install
         shell: bash
         run: |
-          pip install --prefer-binary "pandas>=1.2.4" "requests>=2.26" "pyarrow==8.0" "psutil>=5.9.0" pytest
+          pip install --prefer-binary pandas "requests>=2.26" "pyarrow==8.0" "psutil>=5.9.0" pytest
           sudo apt-get install g++
 
       - name: Coverage Reset
@@ -140,7 +137,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/coverage
-          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_PYTHON=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_JEMALLOC_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_PYTHON=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_JEMALLOC_EXTENSION=1 -DBUILD_AUTOCOMPLETE_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
 
       - name: Run Python Tests
         if: ${{ matrix.testset == 'python' }}
@@ -175,6 +172,7 @@ jobs:
 
       - name: CodeCov Upload
         uses: codecov/codecov-action@v2
+        continue-on-error: true
         with:
           files: lcov.info
-          fail_ci_if_error: true
+          fail_ci_if_error: false

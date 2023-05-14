@@ -46,6 +46,10 @@ var OPEN_PRIVATECACHE = duckdb.OPEN_PRIVATECACHE;
 // some wrappers for compatibilities sake
 /**
  * Main database interface
+ * @arg path - path to database file or :memory: for in-memory database
+ * @arg access_mode - access mode
+ * @arg config - the configuration object
+ * @arg callback - callback function
  */
 var Database = duckdb.Database;
 /**
@@ -185,7 +189,7 @@ Connection.prototype.arrowIPCAll = function (sql) {
  * @arg sql
  * @param {...*} params
  * @param callback
- * @return IpcResultStreamIterator
+ * @return Promise<IpcResultStreamIterator>
  */
 Connection.prototype.arrowIPCStream = async function (sql) {
     const query = "SELECT * FROM to_arrow_ipc((" + sql + "));";
@@ -330,7 +334,6 @@ Connection.prototype.register_udf = function (name, return_type, fun) {
                 desc.ret.validity[i] = res === undefined || res === null ? 0 : 1;
             }
         } catch (error) { // work around recently fixed napi bug https://github.com/nodejs/node-addon-api/issues/912
-            console.log(desc.ret);
             msg = error;
             if (typeof error == 'object' && 'message' in error) {
                 msg = error.message
@@ -610,6 +613,15 @@ Database.prototype.unregister_udf = function () {
 }
 
 /**
+ * Register a table replace scan function
+ * @method
+ * @arg fun Replacement scan function
+ * @return {this}
+ */
+
+Database.prototype.registerReplacementScan;
+
+/**
  * Not implemented
  */
 Database.prototype.get = function () {
@@ -670,3 +682,28 @@ Statement.prototype.finalize
  * @yield callback
  */
 Statement.prototype.stream;
+
+/**
+ * @field
+ * @returns sql contained in statement
+ */
+Statement.prototype.sql;
+
+/**
+ * @typedef DuckDbError
+ * @type {object}
+ * @property {number} errno - -1 for DuckDB errors
+ * @property {string} message - Error message
+ * @property {string} code - 'DUCKDB_NODEJS_ERROR' for DuckDB errors
+ * @property {string} errorType - DuckDB error type code (eg, HTTP, IO, Catalog)
+ */
+
+/**
+ * @typedef HTTPError
+ * @type {object}
+ * @extends {DuckDbError}
+ * @property {number} statusCode - HTTP response status code
+ * @property {string} reason - HTTP response reason
+ * @property {string} response - HTTP response body
+ * @property {object} headers - HTTP headers
+ */

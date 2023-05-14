@@ -11,8 +11,8 @@ namespace duckdb {
 BoundWindowExpression::BoundWindowExpression(ExpressionType type, LogicalType return_type,
                                              unique_ptr<AggregateFunction> aggregate,
                                              unique_ptr<FunctionData> bind_info)
-    : Expression(type, ExpressionClass::BOUND_WINDOW, move(return_type)), aggregate(move(aggregate)),
-      bind_info(move(bind_info)), ignore_nulls(false) {
+    : Expression(type, ExpressionClass::BOUND_WINDOW, std::move(return_type)), aggregate(std::move(aggregate)),
+      bind_info(std::move(bind_info)), ignore_nulls(false) {
 }
 
 string BoundWindowExpression::ToString() const {
@@ -25,59 +25,59 @@ bool BoundWindowExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundWindowExpression *)other_p;
+	auto &other = other_p->Cast<BoundWindowExpression>();
 
-	if (ignore_nulls != other->ignore_nulls) {
+	if (ignore_nulls != other.ignore_nulls) {
 		return false;
 	}
-	if (start != other->start || end != other->end) {
+	if (start != other.start || end != other.end) {
 		return false;
 	}
 	// check if the child expressions are equivalent
-	if (other->children.size() != children.size()) {
+	if (other.children.size() != children.size()) {
 		return false;
 	}
 	for (idx_t i = 0; i < children.size(); i++) {
-		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
+		if (!Expression::Equals(children[i].get(), other.children[i].get())) {
 			return false;
 		}
 	}
 	// check if the filter expressions are equivalent
-	if (!Expression::Equals(filter_expr.get(), other->filter_expr.get())) {
+	if (!Expression::Equals(filter_expr.get(), other.filter_expr.get())) {
 		return false;
 	}
 
 	// check if the framing expressions are equivalent
-	if (!Expression::Equals(start_expr.get(), other->start_expr.get()) ||
-	    !Expression::Equals(end_expr.get(), other->end_expr.get()) ||
-	    !Expression::Equals(offset_expr.get(), other->offset_expr.get()) ||
-	    !Expression::Equals(default_expr.get(), other->default_expr.get())) {
+	if (!Expression::Equals(start_expr.get(), other.start_expr.get()) ||
+	    !Expression::Equals(end_expr.get(), other.end_expr.get()) ||
+	    !Expression::Equals(offset_expr.get(), other.offset_expr.get()) ||
+	    !Expression::Equals(default_expr.get(), other.default_expr.get())) {
 		return false;
 	}
 
 	return KeysAreCompatible(other);
 }
 
-bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression *other) const {
+bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression &other) const {
 	// check if the partitions are equivalent
-	if (partitions.size() != other->partitions.size()) {
+	if (partitions.size() != other.partitions.size()) {
 		return false;
 	}
 	for (idx_t i = 0; i < partitions.size(); i++) {
-		if (!Expression::Equals(partitions[i].get(), other->partitions[i].get())) {
+		if (!Expression::Equals(partitions[i].get(), other.partitions[i].get())) {
 			return false;
 		}
 	}
 	// check if the orderings are equivalent
-	if (orders.size() != other->orders.size()) {
+	if (orders.size() != other.orders.size()) {
 		return false;
 	}
 	for (idx_t i = 0; i < orders.size(); i++) {
-		if (orders[i].type != other->orders[i].type) {
+		if (orders[i].type != other.orders[i].type) {
 			return false;
 		}
 		if (!BaseExpression::Equals((BaseExpression *)orders[i].expression.get(),
-		                            (BaseExpression *)other->orders[i].expression.get())) {
+		                            (BaseExpression *)other.orders[i].expression.get())) {
 			return false;
 		}
 	}
@@ -85,11 +85,11 @@ bool BoundWindowExpression::KeysAreCompatible(const BoundWindowExpression *other
 }
 
 unique_ptr<Expression> BoundWindowExpression::Copy() {
-	auto new_window = make_unique<BoundWindowExpression>(type, return_type, nullptr, nullptr);
+	auto new_window = make_uniq<BoundWindowExpression>(type, return_type, nullptr, nullptr);
 	new_window->CopyProperties(*this);
 
 	if (aggregate) {
-		new_window->aggregate = make_unique<AggregateFunction>(*aggregate);
+		new_window->aggregate = make_uniq<AggregateFunction>(*aggregate);
 	}
 	if (bind_info) {
 		new_window->bind_info = bind_info->Copy();
@@ -102,7 +102,7 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	}
 	for (auto &ps : partitions_stats) {
 		if (ps) {
-			new_window->partitions_stats.push_back(ps->Copy());
+			new_window->partitions_stats.push_back(ps->ToUnique());
 		} else {
 			new_window->partitions_stats.push_back(nullptr);
 		}
@@ -121,7 +121,7 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
 	new_window->ignore_nulls = ignore_nulls;
 
-	return move(new_window);
+	return std::move(new_window);
 }
 
 void BoundWindowExpression::Serialize(FieldWriter &writer) const {
@@ -156,13 +156,13 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(ExpressionDeserializat
 	if (has_aggregate) {
 		auto aggr_function = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
 		    reader, state, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, bind_info);
-		aggregate = make_unique<AggregateFunction>(move(aggr_function));
+		aggregate = make_uniq<AggregateFunction>(std::move(aggr_function));
 		return_type = aggregate->return_type;
 	} else {
 		children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 		return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	}
-	auto result = make_unique<BoundWindowExpression>(state.type, return_type, move(aggregate), move(bind_info));
+	auto result = make_uniq<BoundWindowExpression>(state.type, return_type, std::move(aggregate), std::move(bind_info));
 
 	result->partitions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	result->orders = reader.ReadRequiredSerializableList<BoundOrderByNode, BoundOrderByNode>(state.gstate);
@@ -174,8 +174,8 @@ unique_ptr<Expression> BoundWindowExpression::Deserialize(ExpressionDeserializat
 	result->end_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	result->offset_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	result->default_expr = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	result->children = move(children);
-	return move(result);
+	result->children = std::move(children);
+	return std::move(result);
 }
 
 } // namespace duckdb

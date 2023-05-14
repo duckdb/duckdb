@@ -37,7 +37,6 @@ for line in stdout.splitlines()[1:]:
 	if file_contains is not None:
 		if not os.path.isfile(splits[0]):
 			continue
-		print(splits[0])
 		try:
 			with open(splits[0], 'r') as f:
 				text = f.read()

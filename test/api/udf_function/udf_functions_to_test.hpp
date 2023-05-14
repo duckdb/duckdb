@@ -143,7 +143,7 @@ static void udf_unary_function(DataChunk &input, ExpressionState &state, Vector 
 			auto input_length = ldata[i].GetSize();
 			string_t target = StringVector::EmptyString(result, input_length);
 			auto target_data = target.GetDataWriteable();
-			memcpy(target_data, ldata[i].GetDataUnsafe(), input_length);
+			memcpy(target_data, ldata[i].GetData(), input_length);
 			target.Finalize();
 			result_data[i] = target;
 		}
@@ -183,7 +183,7 @@ static void udf_binary_function(DataChunk &input, ExpressionState &state, Vector
 			auto input_length = ldata[i].GetSize();
 			string_t target = StringVector::EmptyString(result, input_length);
 			auto target_data = target.GetDataWriteable();
-			memcpy(target_data, ldata[i].GetDataUnsafe(), input_length);
+			memcpy(target_data, ldata[i].GetData(), input_length);
 			target.Finalize();
 			result_data[i] = target;
 		}
@@ -223,7 +223,7 @@ static void udf_ternary_function(DataChunk &input, ExpressionState &state, Vecto
 			auto input_length = ldata[i].GetSize();
 			string_t target = StringVector::EmptyString(result, input_length);
 			auto target_data = target.GetDataWriteable();
-			memcpy(target_data, ldata[i].GetDataUnsafe(), input_length);
+			memcpy(target_data, ldata[i].GetData(), input_length);
 			target.Finalize();
 			result_data[i] = target;
 		}
@@ -344,9 +344,7 @@ struct UDFAverageFunction {
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!Value::DoubleIsFinite(double(state->sum))) {
-			throw OutOfRangeException("AVG is out of range!");
-		} else if (state->count == 0) {
+		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
 			target[idx] = state->sum / state->count;
@@ -588,9 +586,6 @@ struct UDFSum {
 		if (!state->isset) {
 			mask.SetInvalid(idx);
 		} else {
-			if (!Value::DoubleIsFinite(state->value)) {
-				throw OutOfRangeException("SUM is out of range!");
-			}
 			target[idx] = state->value;
 		}
 	}

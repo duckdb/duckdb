@@ -14,7 +14,7 @@ unique_ptr<ParsedExpression> Transformer::TransformNullTest(duckdb_libpgquery::P
 	                               ? ExpressionType::OPERATOR_IS_NULL
 	                               : ExpressionType::OPERATOR_IS_NOT_NULL;
 
-	return unique_ptr<ParsedExpression>(new OperatorExpression(expr_type, move(arg)));
+	return unique_ptr<ParsedExpression>(new OperatorExpression(expr_type, std::move(arg)));
 }
 
 } // namespace duckdb

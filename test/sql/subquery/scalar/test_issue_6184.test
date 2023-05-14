@@ -1,0 +1,87 @@
+# name: test/sql/subquery/scalar/test_issue_6184.test
+# description: Issue 6184: INTERNAL Error: Invalid PhysicalType for GetTypeIdSize for certain queries
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t1(fuel_type VARCHAR, location_country VARCHAR);
+
+statement ok
+INSERT INTO t1 VALUES('natural_gas', 'US');
+
+statement ok
+CREATE TABLE t2(__input_row_id BIGINT, "__input.fuel" VARCHAR);
+
+statement ok
+INSERT INTO t2 VALUES(1, 'natural_gas');
+
+query I
+SELECT (
+SELECT NULL
+	FROM
+	(
+		SELECT  fuel_type, location_country
+		FROM "t1"
+		WHERE "fuel_type" IS NOT DISTINCT FROM "__input.fuel"
+		LIMIT 1
+	) t1)
+FROM t2 AS __p;
+----
+NULL
+
+require json
+
+statement ok
+WITH __activity_data AS
+(
+	SELECT  *
+	FROM
+	(
+		VALUES ( 'natural_gas', 'US', 'PGE', 'CA', 'SF', json('{}'))
+	) AS t("fuel", "country", "grid", "state", "city", tags)
+), "fuel_kgco2e_per_mmbtu" AS
+(
+	SELECT  *
+	       ,ROW_NUMBER() over () AS row_id
+	FROM
+	( VALUES ('natural_gas', 'US', NULL, 'CA', 'SF', 2),
+	) AS t( fuel_type, location_country, location_grid, location_state, location_city, kgco2e_per_mmbtu)
+), __input AS
+(
+	SELECT  *
+	       ,ROW_NUMBER() OVER () AS __input_row_id
+	FROM "__activity_data"
+), "fuel_kgco2e_per_mmbtu__1" AS
+(
+	SELECT  *
+	       ,ROW_NUMBER() OVER () AS __row_id
+	FROM "fuel_kgco2e_per_mmbtu"
+), __stage0 AS
+(
+	SELECT  __input_row_id
+	       ,fuel    AS "__input.fuel"
+	       ,country AS "__input.country"
+	       ,grid    AS "__input.grid"
+	       ,state   AS "__input.state"
+	       ,city    AS "__input.city"
+	FROM __input
+)
+SELECT  __p.*
+       ,(
+SELECT  { 'kgco2e_per_mmbtu': FIRST("kgco2e_per_mmbtu")
+       ,__row_id: FIRST(__row_id)
+       ,__candidates: LIST(__row_id) }
+FROM
+(
+	SELECT  *
+	FROM "fuel_kgco2e_per_mmbtu__1"
+	WHERE "fuel_type" IS NOT DISTINCT
+	FROM "__input.fuel"
+	ORDER BY "location_country" IS NOT NULL DESC, "location_grid" IS NOT NULL DESC, "location_state" IS NOT NULL DESC, "location_city" IS NOT NULL DESC
+	LIMIT 1
+)
+GROUP BY  TRUE )            AS __ref1
+         ,CAST(1 AS DOUBLE) AS "__p.__functional_unit__"
+FROM __stage0 AS __p;

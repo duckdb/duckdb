@@ -8,14 +8,14 @@
 #include <memory>
 #include <string>
 #include <utility>
-#include <vector>
+#include "duckdb/common/vector.hpp"
 
+using duckdb::vector;
 using std::make_pair;
 using std::map;
 using std::pair;
 using std::shared_ptr;
 using std::string;
-using std::vector;
 
 struct sqltype {
 	string name;

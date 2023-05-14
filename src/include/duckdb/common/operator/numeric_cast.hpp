@@ -97,6 +97,26 @@ bool TryCastWithOverflowCheck(float value, int64_t &result) {
 }
 
 template <>
+bool TryCastWithOverflowCheck(float value, uint8_t &result) {
+	return TryCastWithOverflowCheckFloat<float, uint8_t>(value, result, 0.0f, 256.0f);
+}
+
+template <>
+bool TryCastWithOverflowCheck(float value, uint16_t &result) {
+	return TryCastWithOverflowCheckFloat<float, uint16_t>(value, result, 0.0f, 65536.0f);
+}
+
+template <>
+bool TryCastWithOverflowCheck(float value, uint32_t &result) {
+	return TryCastWithOverflowCheckFloat<float, uint32_t>(value, result, 0.0f, 4294967296.0f);
+}
+
+template <>
+bool TryCastWithOverflowCheck(float value, uint64_t &result) {
+	return TryCastWithOverflowCheckFloat<float, uint64_t>(value, result, 0.0f, 18446744073709551616.0f);
+}
+
+template <>
 bool TryCastWithOverflowCheck(double value, int8_t &result) {
 	return TryCastWithOverflowCheckFloat<double, int8_t>(value, result, -128.0, 128.0);
 }
@@ -116,6 +136,25 @@ bool TryCastWithOverflowCheck(double value, int64_t &result) {
 	return TryCastWithOverflowCheckFloat<double, int64_t>(value, result, -9223372036854775808.0, 9223372036854775808.0);
 }
 
+template <>
+bool TryCastWithOverflowCheck(double value, uint8_t &result) {
+	return TryCastWithOverflowCheckFloat<double, uint8_t>(value, result, 0.0, 256.0);
+}
+
+template <>
+bool TryCastWithOverflowCheck(double value, uint16_t &result) {
+	return TryCastWithOverflowCheckFloat<double, uint16_t>(value, result, 0.0, 65536.0);
+}
+
+template <>
+bool TryCastWithOverflowCheck(double value, uint32_t &result) {
+	return TryCastWithOverflowCheckFloat<double, uint32_t>(value, result, 0.0, 4294967296.0);
+}
+
+template <>
+bool TryCastWithOverflowCheck(double value, uint64_t &result) {
+	return TryCastWithOverflowCheckFloat<double, uint64_t>(value, result, 0.0, 18446744073709551615.0);
+}
 template <>
 bool TryCastWithOverflowCheck(float input, float &result) {
 	result = input;

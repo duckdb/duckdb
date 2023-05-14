@@ -98,7 +98,7 @@ SELECT * FROM xt(id,1);
 1	tom
 
 # try to create table macro with pre-existing table name "range"
-statement error
+statement ok
 CREATE  MACRO range(a,b) as TABLE select a,b from test_tbl;
 
 # use table macro as a scalar macro

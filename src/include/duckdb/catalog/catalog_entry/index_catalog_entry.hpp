@@ -20,20 +20,25 @@ class Index;
 //! An index catalog entry
 class IndexCatalogEntry : public StandardEntry {
 public:
-	//! Create an IndexCatalogEntry and initialize storage for it
-	IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info);
-	~IndexCatalogEntry() override;
+	static constexpr const CatalogType Type = CatalogType::INDEX_ENTRY;
+	static constexpr const char *Name = "index";
 
-	Index *index;
-	shared_ptr<DataTableInfo> info;
+public:
+	//! Create an IndexCatalogEntry and initialize storage for it
+	IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info);
+
+	optional_ptr<Index> index;
 	string sql;
 	vector<unique_ptr<ParsedExpression>> expressions;
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;
 
 public:
-	string ToSQL() override;
-	void Serialize(duckdb::MetaBlockWriter &serializer);
+	string ToSQL() const override;
+	void Serialize(Serializer &serializer) const;
 	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &source, ClientContext &context);
+
+	virtual string GetSchemaName() const = 0;
+	virtual string GetTableName() const = 0;
 };
 
 } // namespace duckdb

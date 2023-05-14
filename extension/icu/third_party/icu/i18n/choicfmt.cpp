@@ -175,7 +175,9 @@ ChoiceFormat::dtos(double value,
     char *itrPtr = temp;
     char *expPtr;
 
-    sprintf(temp, "%.*g", DBL_DIG, value);
+    int used_buffer = snprintf(temp, DBL_DIG + 16, "%.*g", DBL_DIG, value);
+    (void)used_buffer;
+    U_ASSERT(used_buffer > 0);
 
     /* Find and convert the decimal point.
        Using setlocale on some machines will cause sprintf to use a comma for certain locales.

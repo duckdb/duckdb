@@ -19,6 +19,9 @@ class Serializer;
 //! Represents a generic expression that returns a table.
 class TableRef {
 public:
+	static constexpr const TableReferenceType TYPE = TableReferenceType::INVALID;
+
+public:
 	explicit TableRef(TableReferenceType type) : type(type) {
 	}
 	virtual ~TableRef() {
@@ -48,8 +51,27 @@ public:
 	DUCKDB_API virtual void Serialize(FieldWriter &writer) const = 0;
 	//! Deserializes a blob back into a TableRef
 	DUCKDB_API static unique_ptr<TableRef> Deserialize(Deserializer &source);
-
 	//! Copy the properties of this table ref to the target
 	void CopyProperties(TableRef &target) const;
+
+	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<TableRef> FormatDeserialize(FormatDeserializer &deserializer);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE && TARGET::TYPE != TableReferenceType::INVALID) {
+			throw InternalException("Failed to cast constraint to type - constraint type mismatch");
+		}
+		return (TARGET &)*this;
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE && TARGET::TYPE != TableReferenceType::INVALID) {
+			throw InternalException("Failed to cast constraint to type - constraint type mismatch");
+		}
+		return (const TARGET &)*this;
+	}
 };
 } // namespace duckdb

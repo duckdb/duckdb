@@ -92,10 +92,10 @@ void ChunkConstantInfo::Serialize(Serializer &serializer) {
 unique_ptr<ChunkInfo> ChunkConstantInfo::Deserialize(Deserializer &source) {
 	auto start = source.Read<idx_t>();
 
-	auto info = make_unique<ChunkConstantInfo>(start);
+	auto info = make_uniq<ChunkConstantInfo>(start);
 	info->insert_id = 0;
 	info->delete_id = 0;
-	return move(info);
+	return std::move(info);
 }
 
 //===--------------------------------------------------------------------===//
@@ -247,7 +247,7 @@ void ChunkVectorInfo::Serialize(Serializer &serializer) {
 unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(Deserializer &source) {
 	auto start = source.Read<idx_t>();
 
-	auto result = make_unique<ChunkVectorInfo>(start);
+	auto result = make_uniq<ChunkVectorInfo>(start);
 	result->any_deleted = true;
 	bool deleted_tuples[STANDARD_VECTOR_SIZE];
 	source.ReadData((data_ptr_t)deleted_tuples, sizeof(bool) * STANDARD_VECTOR_SIZE);
@@ -256,7 +256,7 @@ unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(Deserializer &source) {
 			result->deleted[i] = 0;
 		}
 	}
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

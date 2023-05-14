@@ -24,11 +24,11 @@ void StatementSimplifier::Simplification() {
 
 template <class T>
 void StatementSimplifier::SimplifyReplace(T &element, T &other) {
-	auto n = move(element);
-	element = move(other);
+	auto n = std::move(element);
+	element = std::move(other);
 	Simplification();
-	other = move(element);
-	element = move(n);
+	other = std::move(element);
+	element = std::move(n);
 }
 
 template <class T>
@@ -37,17 +37,17 @@ void StatementSimplifier::SimplifyList(vector<T> &list, bool is_optional) {
 		return;
 	}
 	for (idx_t i = 0; i < list.size(); i++) {
-		auto n = move(list[i]);
+		auto n = std::move(list[i]);
 		list.erase(list.begin() + i);
 		Simplification();
-		list.insert(list.begin() + i, move(n));
+		list.insert(list.begin() + i, std::move(n));
 	}
 }
 
 template <class T>
 void StatementSimplifier::SimplifyListReplaceNull(vector<T> &list) {
 	for (idx_t i = 0; i < list.size(); i++) {
-		unique_ptr<ParsedExpression> constant = make_unique<ConstantExpression>(Value());
+		duckdb::unique_ptr<ParsedExpression> constant = make_uniq<ConstantExpression>(Value());
 		SimplifyReplace(list[i], constant);
 	}
 }
@@ -60,36 +60,30 @@ void StatementSimplifier::SimplifyListReplace(T &element, vector<T> &list) {
 }
 
 template <class T>
-void StatementSimplifier::SimplifyOptional(unique_ptr<T> &opt) {
+void StatementSimplifier::SimplifyOptional(duckdb::unique_ptr<T> &opt) {
 	if (!opt) {
 		return;
 	}
-	auto n = move(opt);
+	auto n = std::move(opt);
 	Simplification();
-	opt = move(n);
+	opt = std::move(n);
 }
 
 void StatementSimplifier::Simplify(TableRef &ref) {
 	switch (ref.type) {
 	case TableReferenceType::SUBQUERY: {
-		auto &subquery = (SubqueryRef &)ref;
+		auto &subquery = ref.Cast<SubqueryRef>();
 		Simplify(*subquery.subquery->node);
 		break;
 	}
-	case TableReferenceType::CROSS_PRODUCT: {
-		auto &cp = (CrossProductRef &)ref;
-		Simplify(*cp.left);
-		Simplify(*cp.right);
-		break;
-	}
 	case TableReferenceType::JOIN: {
-		auto &cp = (JoinRef &)ref;
+		auto &cp = ref.Cast<JoinRef>();
 		Simplify(*cp.left);
 		Simplify(*cp.right);
 		break;
 	}
 	case TableReferenceType::EXPRESSION_LIST: {
-		auto &expr_list = (ExpressionListRef &)ref;
+		auto &expr_list = ref.Cast<ExpressionListRef>();
 		if (expr_list.values.size() == 1) {
 			SimplifyList(expr_list.values[0]);
 		} else if (expr_list.values.size() > 1) {
@@ -130,10 +124,10 @@ void StatementSimplifier::Simplify(CommonTableExpressionMap &cte) {
 		cte_keys.push_back(kv.first);
 	}
 	for (idx_t i = 0; i < cte_keys.size(); i++) {
-		auto n = move(cte.map[cte_keys[i]]);
+		auto n = std::move(cte.map[cte_keys[i]]);
 		cte.map.erase(cte_keys[i]);
 		Simplification();
-		cte.map[cte_keys[i]] = move(n);
+		cte.map[cte_keys[i]] = std::move(n);
 
 		// simplify individual ctes
 		Simplify(*cte.map[cte_keys[i]]->query->node);
@@ -144,10 +138,10 @@ void StatementSimplifier::Simplify(QueryNode &node) {
 	Simplify(node.cte_map);
 	switch (node.type) {
 	case QueryNodeType::SELECT_NODE:
-		Simplify((SelectNode &)node);
+		Simplify(node.Cast<SelectNode>());
 		break;
 	case QueryNodeType::SET_OPERATION_NODE:
-		Simplify((SetOperationNode &)node);
+		Simplify(node.Cast<SetOperationNode>());
 		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 	default:
@@ -159,7 +153,7 @@ void StatementSimplifier::Simplify(QueryNode &node) {
 	SimplifyList(node.modifiers);
 }
 
-void StatementSimplifier::SimplifyExpression(unique_ptr<ParsedExpression> &expr) {
+void StatementSimplifier::SimplifyExpression(duckdb::unique_ptr<ParsedExpression> &expr) {
 	if (!expr) {
 		return;
 	}
@@ -171,27 +165,27 @@ void StatementSimplifier::SimplifyExpression(unique_ptr<ParsedExpression> &expr)
 	default:
 		break;
 	}
-	unique_ptr<ParsedExpression> constant = make_unique<ConstantExpression>(Value());
+	duckdb::unique_ptr<ParsedExpression> constant = make_uniq<ConstantExpression>(Value());
 	SimplifyReplace(expr, constant);
 	switch (expr_class) {
 	case ExpressionClass::CONJUNCTION: {
-		auto &conj = (ConjunctionExpression &)*expr;
+		auto &conj = expr->Cast<ConjunctionExpression>();
 		SimplifyListReplace(expr, conj.children);
 		break;
 	}
 	case ExpressionClass::FUNCTION: {
-		auto &func = (FunctionExpression &)*expr;
+		auto &func = expr->Cast<FunctionExpression>();
 		SimplifyListReplace(expr, func.children);
 		SimplifyListReplaceNull(func.children);
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
-		auto &op = (OperatorExpression &)*expr;
+		auto &op = expr->Cast<OperatorExpression>();
 		SimplifyListReplace(expr, op.children);
 		break;
 	}
 	case ExpressionClass::CASE: {
-		auto &op = (CaseExpression &)*expr;
+		auto &op = expr->Cast<CaseExpression>();
 		SimplifyReplace(expr, op.else_expr);
 		for (auto &case_check : op.case_checks) {
 			SimplifyReplace(expr, case_check.then_expr);
@@ -200,12 +194,12 @@ void StatementSimplifier::SimplifyExpression(unique_ptr<ParsedExpression> &expr)
 		break;
 	}
 	case ExpressionClass::CAST: {
-		auto &cast = (CastExpression &)*expr;
+		auto &cast = expr->Cast<CastExpression>();
 		SimplifyReplace(expr, cast.child);
 		break;
 	}
 	case ExpressionClass::COLLATE: {
-		auto &collate = (CollateExpression &)*expr;
+		auto &collate = expr->Cast<CollateExpression>();
 		SimplifyReplace(expr, collate.child);
 		break;
 	}
@@ -234,7 +228,7 @@ void StatementSimplifier::Simplify(OrderModifier &modifier) {
 void StatementSimplifier::Simplify(SelectStatement &stmt) {
 	Simplify(*stmt.node);
 	ParsedExpressionIterator::EnumerateQueryNodeChildren(
-	    *stmt.node, [&](unique_ptr<ParsedExpression> &child) { SimplifyExpression(child); });
+	    *stmt.node, [&](duckdb::unique_ptr<ParsedExpression> &child) { SimplifyExpression(child); });
 }
 
 void StatementSimplifier::Simplify(InsertStatement &stmt) {
@@ -251,43 +245,48 @@ void StatementSimplifier::Simplify(DeleteStatement &stmt) {
 	SimplifyList(stmt.returning_list);
 }
 
+void StatementSimplifier::Simplify(UpdateSetInfo &info) {
+	SimplifyOptional(info.condition);
+	SimplifyExpression(info.condition);
+	if (info.columns.size() > 1) {
+		for (idx_t i = 0; i < info.columns.size(); i++) {
+			auto col = std::move(info.columns[i]);
+			auto expr = std::move(info.expressions[i]);
+			info.columns.erase(info.columns.begin() + i);
+			info.expressions.erase(info.expressions.begin() + i);
+			Simplification();
+			info.columns.insert(info.columns.begin() + i, std::move(col));
+			info.expressions.insert(info.expressions.begin() + i, std::move(expr));
+		}
+	}
+	for (auto &expr : info.expressions) {
+		SimplifyExpression(expr);
+	}
+}
+
 void StatementSimplifier::Simplify(UpdateStatement &stmt) {
 	Simplify(stmt.cte_map);
 	if (stmt.from_table) {
 		Simplify(*stmt.from_table);
 	}
-	SimplifyOptional(stmt.condition);
-	SimplifyExpression(stmt.condition);
-	if (stmt.columns.size() > 1) {
-		for (idx_t i = 0; i < stmt.columns.size(); i++) {
-			auto col = move(stmt.columns[i]);
-			auto expr = move(stmt.expressions[i]);
-			stmt.columns.erase(stmt.columns.begin() + i);
-			stmt.expressions.erase(stmt.expressions.begin() + i);
-			Simplification();
-			stmt.columns.insert(stmt.columns.begin() + i, move(col));
-			stmt.expressions.insert(stmt.expressions.begin() + i, move(expr));
-		}
-	}
-	for (auto &expr : stmt.expressions) {
-		SimplifyExpression(expr);
-	}
+	D_ASSERT(stmt.set_info);
+	Simplify(*stmt.set_info);
 	SimplifyList(stmt.returning_list);
 }
 
 void StatementSimplifier::Simplify(SQLStatement &stmt) {
 	switch (stmt.type) {
 	case StatementType::SELECT_STATEMENT:
-		Simplify((SelectStatement &)stmt);
+		Simplify(stmt.Cast<SelectStatement>());
 		break;
 	case StatementType::INSERT_STATEMENT:
-		Simplify((InsertStatement &)stmt);
+		Simplify(stmt.Cast<InsertStatement>());
 		break;
 	case StatementType::UPDATE_STATEMENT:
-		Simplify((UpdateStatement &)stmt);
+		Simplify(stmt.Cast<UpdateStatement>());
 		break;
 	case StatementType::DELETE_STATEMENT:
-		Simplify((DeleteStatement &)stmt);
+		Simplify(stmt.Cast<DeleteStatement>());
 		break;
 	default:
 		throw InvalidInputException("Expected a single SELECT, INSERT or UPDATE statement");

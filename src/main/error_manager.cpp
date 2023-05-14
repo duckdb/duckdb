@@ -56,7 +56,7 @@ string ErrorManager::InvalidUnicodeError(const string &input, const string &cont
 }
 
 void ErrorManager::AddCustomError(ErrorType type, string new_error) {
-	custom_errors.insert(make_pair(type, move(new_error)));
+	custom_errors.insert(make_pair(type, std::move(new_error)));
 }
 
 ErrorManager &ErrorManager::Get(ClientContext &context) {

@@ -1,0 +1,70 @@
+# name: test/sql/subquery/lateral/lateral_unnest.test
+# description: Test LATERAL UNNEST
+# group: [lateral]
+
+statement ok
+PRAGMA enable_verification
+
+mode skip
+
+# FIXME: this causes an internal exception to be thrown
+statement ok
+PREPARE v1 AS SELECT l, (SELECT SUM(k) FROM UNNEST(l) t(k)) AS sum FROM (SELECT ARRAY [?, ?, ?] UNION ALL SELECT ARRAY[?, ?, ?] UNION ALL SELECT ARRAY[]::INT[]) t(l) ORDER BY sum NULLS LAST
+
+mode unskip
+
+# lateral join with unnest
+query II
+SELECT * FROM (SELECT ARRAY[1, 2, 3]) t(l), UNNEST(l) t2(k) ORDER BY k
+----
+[1, 2, 3]	1
+[1, 2, 3]	2
+[1, 2, 3]	3
+
+# explicit LATERAL
+query II
+SELECT * FROM (SELECT ARRAY[1, 2, 3]) t(l), LATERAL UNNEST(l) t2(k) ORDER BY k
+----
+[1, 2, 3]	1
+[1, 2, 3]	2
+[1, 2, 3]	3
+
+query II
+SELECT * FROM (SELECT ARRAY[1, 2, 3] UNION ALL SELECT ARRAY[]::INT[] UNION ALL SELECT ARRAY[4, NULL, 5] UNION ALL SELECT ARRAY[]::INT[]) t(l), UNNEST(l) t2(k) ORDER BY k NULLS LAST
+----
+[1, 2, 3]	1
+[1, 2, 3]	2
+[1, 2, 3]	3
+[4, NULL, 5]	4
+[4, NULL, 5]	5
+[4, NULL, 5]	NULL
+
+# empty table
+query II
+SELECT * FROM (SELECT ARRAY[]::INT[]) t(l), UNNEST(l) t2(k) ORDER BY k NULLS LAST
+----
+
+# large table
+statement ok
+CREATE TABLE lists AS SELECT ARRAY[i, i + 1, i + 2] l FROM generate_series(0, 999, 1) t(i);
+
+query I
+SELECT SUM(k) FROM lists, UNNEST(l) t(k)
+----
+1501500
+
+# table in-out function in correlated scalar subquery
+query I
+SELECT (SELECT SUM(k) FROM UNNEST(l) t(k)) FROM (SELECT ARRAY [1, 2, 3]) t(l)
+----
+6
+
+statement ok
+PRAGMA disable_verification
+
+query II
+SELECT l, (SELECT SUM(k) FROM UNNEST(l) t(k)) AS sum FROM (SELECT ARRAY [1, 2, 3] UNION ALL SELECT ARRAY[4, 5, NULL] UNION ALL SELECT ARRAY[]::INT[]) t(l) ORDER BY sum NULLS LAST
+----
+[1, 2, 3]	6
+[4, 5, NULL]	9
+[]	NULL

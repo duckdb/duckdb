@@ -100,9 +100,6 @@ public:
     }
   }
 
-  uint32_t read(protocol::TProtocol* iprot);
-  uint32_t write(protocol::TProtocol* oprot) const;
-
 protected:
   /**
    * Error code

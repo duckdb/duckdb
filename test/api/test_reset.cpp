@@ -1,0 +1,180 @@
+#include "catch.hpp"
+#include "test_helpers.hpp"
+
+#include <set>
+#include <map>
+
+#include <iostream>
+
+using namespace duckdb;
+using namespace std;
+
+struct OptionValuePair {
+	OptionValuePair() {
+	}
+	OptionValuePair(Value val) : input(val), output(val) {
+	}
+	OptionValuePair(Value input, Value output) : input(std::move(input)), output(std::move(output)) {
+	}
+
+	Value input;
+	Value output;
+};
+
+void RequireValuDiff(ConfigurationOption *op, const Value &left, const Value &right, int line);
+#define REQUIRE_VALUE_DIFF(op, lhs, rhs) RequireValueDiff(op, lhs, rhs, __LINE__)
+
+void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &right, int line);
+#define REQUIRE_VALUE_EQUAL(op, lhs, rhs) RequireValueEqual(op, lhs, rhs, __LINE__)
+
+OptionValuePair &GetValueForOption(const string &name) {
+	static unordered_map<string, OptionValuePair> value_map = {
+	    {"access_mode", {Value("READ_ONLY"), Value("read_only")}},
+	    {"threads", {Value::BIGINT(42), Value::BIGINT(42)}},
+	    {"checkpoint_threshold", {"4.2GB"}},
+	    {"debug_checkpoint_abort", {"before_header"}},
+	    {"default_collation", {"nocase"}},
+	    {"default_order", {"desc"}},
+	    {"default_null_order", {"nulls_first"}},
+	    {"disabled_optimizers", {"extension"}},
+	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
+	    {"enable_fsst_vectors", {true}},
+	    {"enable_object_cache", {true}},
+	    {"enable_profiling", {"json"}},
+	    {"enable_progress_bar", {true}},
+	    {"explain_output", {true}},
+	    {"external_threads", {8}},
+	    {"file_search_path", {"test"}},
+	    {"force_compression", {"uncompressed", "Uncompressed"}},
+	    {"home_directory", {"test"}},
+	    {"integer_division", {true}},
+	    {"extension_directory", {"test"}},
+	    {"immediate_transaction_mode", {true}},
+	    {"log_query_path", {"test"}},
+	    {"max_expression_depth", {50}},
+	    {"max_memory", {"4.2GB"}},
+	    {"memory_limit", {"4.2GB"}},
+	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
+	    {"null_order", {"nulls_first"}},
+	    {"perfect_ht_threshold", {0}},
+	    {"pivot_limit", {999}},
+	    {"preserve_identifier_case", {false}},
+	    {"preserve_insertion_order", {false}},
+	    {"profiler_history_size", {0}},
+	    {"profile_output", {"test"}},
+	    {"profiling_mode", {"detailed"}},
+	    {"enable_progress_bar_print", {false}},
+	    {"progress_bar_time", {0}},
+	    {"temp_directory", {"tmp"}},
+	    {"wal_autocheckpoint", {"4.2GB"}},
+	    {"worker_threads", {42}},
+	    {"enable_http_metadata_cache", {true}},
+	    {"force_bitpacking_mode", {"constant"}},
+	};
+	// Every option that's not excluded has to be part of this map
+	if (!value_map.count(name)) {
+		REQUIRE(name == "MISSING_FROM_MAP");
+	}
+	return value_map[name];
+}
+
+bool OptionIsExcludedFromTest(const string &name) {
+	static unordered_set<string> excluded_options = {
+	    "schema",
+	    "search_path",
+	    "debug_asof_iejoin",
+	    "debug_force_external",
+	    "debug_force_no_cross_product",
+	    "debug_window_mode",
+	    "enable_external_access",    // cant change this while db is running
+	    "allow_unsigned_extensions", // cant change this while db is running
+	    "password",
+	    "username",
+	    "user",
+	    "profiling_output",         // just an alias
+	    "experimental_parallel_csv" // FIXME:deprecated option, should be removed after next release
+	};
+	return excluded_options.count(name) == 1;
+}
+
+bool ValueEqual(const Value &left, const Value &right) {
+	if (left.IsNull() != right.IsNull()) {
+		// Only one is NULL
+		return false;
+	}
+	if (!left.IsNull() && !right.IsNull()) {
+		// Neither are NULL
+		return left == right;
+	}
+	// Both are NULL
+	return true;
+}
+
+void RequireValueDiff(ConfigurationOption *op, const Value &left, const Value &right, int line) {
+	if (!ValueEqual(left, right)) {
+		return;
+	}
+	auto error = StringUtil::Format("\nLINE[%d] (Option:%s) | Expected left:'%s' and right:'%s' to be different", line,
+	                                op->name, left.ToString(), right.ToString());
+	cerr << error << endl;
+	REQUIRE(false);
+}
+
+void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &right, int line) {
+	if (ValueEqual(left, right)) {
+		return;
+	}
+	auto error = StringUtil::Format("\nLINE[%d] (Option:%s) | Expected left:'%s' and right:'%s' to be equal", line,
+	                                op->name, left.ToString(), right.ToString());
+	cerr << error << endl;
+	REQUIRE(false);
+}
+
+//! New options should be added to the value_map in GetValueForOption
+//! Or added to the 'excluded_options' in OptionIsExcludedFromTest
+TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
+
+	// Create a connection
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	auto &config = DBConfig::GetConfig(*db.instance);
+	// Get all configuration options
+	auto options = config.GetOptions();
+
+	// Test RESET for every option
+	for (auto &option : options) {
+		if (OptionIsExcludedFromTest(option.name)) {
+			continue;
+		}
+
+		auto op = config.GetOptionByName(option.name);
+		REQUIRE(op);
+
+		// Get the current value of the option
+		auto original_value = op->get_setting(*con.context);
+		// Get the new value for the option
+		auto &value_pair = GetValueForOption(option.name);
+
+		// Verify that the new value is different, so we can test RESET
+		REQUIRE_VALUE_DIFF(op, original_value, value_pair.output);
+
+		if (!op->set_global) {
+			// TODO: add testing for local (client-config) settings
+			continue;
+		}
+		// Set the new option
+		auto input = value_pair.input.DefaultCastAs(op->parameter_type);
+		op->set_global(db.instance.get(), config, input);
+
+		// Get the value of the option again
+		auto changed_value = op->get_setting(*con.context);
+		REQUIRE_VALUE_EQUAL(op, changed_value, value_pair.output);
+
+		op->reset_global(db.instance.get(), config);
+
+		// Get the reset value of the option
+		auto reset_value = op->get_setting(*con.context);
+		REQUIRE_VALUE_EQUAL(op, reset_value, original_value);
+	}
+}

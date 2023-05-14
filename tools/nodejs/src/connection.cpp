@@ -1,7 +1,9 @@
 #include "duckdb.hpp"
 #include "duckdb_node.hpp"
 #include "napi.h"
-
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include <iostream>
 #include <thread>
 
@@ -36,14 +38,14 @@ struct ConnectTask : public Task {
 		if (!connection.database_ref || !connection.database_ref->database) {
 			return;
 		}
-		connection.connection = duckdb::make_unique<duckdb::Connection>(*connection.database_ref->database);
+		connection.connection = duckdb::make_uniq<duckdb::Connection>(*connection.database_ref->database);
 		success = true;
 	}
 	void Callback() override {
 		auto &connection = Get<Connection>();
 		Napi::Env env = connection.Env();
 
-		std::vector<napi_value> args;
+		vector<napi_value> args;
 		if (!success) {
 			args.push_back(Utils::CreateError(env, "Invalid database object"));
 		} else {
@@ -78,14 +80,14 @@ Connection::Connection(const Napi::CallbackInfo &info) : Napi::ObjectWrap<Connec
 	// Register replacement scan
 	// TODO: disabled currently, either fix or remove.
 	//	database_ref->database->instance->config.replacement_scans.emplace_back(
-	//	    ScanReplacement, duckdb::make_unique<NodeReplacementScanData>(this));
+	//	    ScanReplacement, duckdb::make_uniq<NodeReplacementScanData>(this));
 
 	Napi::Function callback;
 	if (info.Length() > 0 && info[1].IsFunction()) {
 		callback = info[1].As<Napi::Function>();
 	}
 
-	database_ref->Schedule(env, duckdb::make_unique<ConnectTask>(*this, callback));
+	database_ref->Schedule(env, duckdb::make_uniq<ConnectTask>(*this, callback));
 }
 
 Connection::~Connection() {
@@ -94,7 +96,7 @@ Connection::~Connection() {
 }
 
 Napi::Value Connection::Prepare(const Napi::CallbackInfo &info) {
-	std::vector<napi_value> args;
+	vector<napi_value> args;
 	// push the connection as first argument
 	args.push_back(Value());
 	// we need to pass all the arguments onward to statement
@@ -211,7 +213,8 @@ void DuckDBNodeUDFLauncher(Napi::Env env, Napi::Function jsudf, std::nullptr_t *
 			auto data = ret.Get("data").As<Napi::Array>();
 			auto out = duckdb::FlatVector::GetData<duckdb::string_t>(*jsargs->result);
 			for (size_t i = 0; i < data.Length(); ++i) {
-				out[i] = duckdb::string_t(data.Get(i).ToString());
+				// Use the AddString method to save the memory into the StringHeap if it can't be inlined
+				out[i] = duckdb::StringVector::AddString(*jsargs->result, data.Get(i).ToString());
 			}
 			break;
 		}
@@ -242,6 +245,7 @@ struct RegisterUdfTask : public Task {
 			// here we can do only DuckDB stuff because we do not have a functioning env
 
 			// Flatten all args to simplify udfs
+			bool all_constant = args.AllConstant();
 			args.Flatten();
 
 			JSArgs jsargs;
@@ -257,14 +261,17 @@ struct RegisterUdfTask : public Task {
 			if (jsargs.error) {
 				jsargs.error.Throw();
 			}
+			if (all_constant) {
+				result.SetVectorType(duckdb::VectorType::CONSTANT_VECTOR);
+			}
 		};
 
 		auto expr = duckdb::Parser::ParseExpressionList(duckdb::StringUtil::Format("asdf::%s", return_type_name));
 		auto &cast = (duckdb::CastExpression &)*expr[0];
 		auto return_type = cast.cast_type;
 
-		connection.connection->CreateVectorizedFunction(name, std::vector<duckdb::LogicalType> {}, return_type,
-		                                                udf_function, duckdb::LogicalType::ANY);
+		connection.connection->CreateVectorizedFunction(name, vector<duckdb::LogicalType> {}, return_type, udf_function,
+		                                                duckdb::LogicalType::ANY);
 	}
 	std::string name;
 	std::string return_type_name;
@@ -299,7 +306,7 @@ Napi::Value Connection::RegisterUdf(const Napi::CallbackInfo &info) {
 	udfs[name] = udf;
 
 	database_ref->Schedule(info.Env(),
-	                       duckdb::make_unique<RegisterUdfTask>(*this, name, return_type_name, completion_callback));
+	                       duckdb::make_uniq<RegisterUdfTask>(*this, name, return_type_name, completion_callback));
 
 	return Value();
 }
@@ -320,11 +327,12 @@ struct UnregisterUdfTask : public Task {
 		auto &con = *connection.connection;
 		con.BeginTransaction();
 		auto &context = *con.context;
-		auto &catalog = duckdb::Catalog::GetCatalog(context);
+		auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
 		duckdb::DropInfo info;
 		info.type = duckdb::CatalogType::SCALAR_FUNCTION_ENTRY;
 		info.name = name;
-		catalog.DropEntry(context, &info);
+		info.allow_drop_internal = true;
+		catalog.DropEntry(context, info);
 		con.Commit();
 	}
 	std::string name;
@@ -343,7 +351,7 @@ Napi::Value Connection::UnregisterUdf(const Napi::CallbackInfo &info) {
 		callback = info[1].As<Napi::Function>();
 	}
 
-	database_ref->Schedule(info.Env(), duckdb::make_unique<UnregisterUdfTask>(*this, name, callback));
+	database_ref->Schedule(info.Env(), duckdb::make_uniq<UnregisterUdfTask>(*this, name, callback));
 	return Value();
 }
 
@@ -363,7 +371,7 @@ struct ExecTask : public Task {
 			}
 
 			for (duckdb::idx_t i = 0; i < statements.size(); i++) {
-				auto res = connection.connection->Query(move(statements[i]));
+				auto res = connection.connection->Query(std::move(statements[i]));
 				if (res->HasError()) {
 					success = false;
 					error = res->GetErrorObject();
@@ -380,7 +388,7 @@ struct ExecTask : public Task {
 	void Callback() override {
 		auto env = object.Env();
 		Napi::HandleScope scope(env);
-		callback.Value().MakeCallback(object.Value(), {success ? env.Null() : Napi::String::New(env, error.Message())});
+		callback.Value().MakeCallback(object.Value(), {success ? env.Null() : Utils::CreateError(env, error)});
 	};
 
 	std::string sql;
@@ -417,7 +425,7 @@ Napi::Value Connection::Exec(const Napi::CallbackInfo &info) {
 		callback = info[1].As<Napi::Function>();
 	}
 
-	database_ref->Schedule(info.Env(), duckdb::make_unique<ExecTask>(*this, sql, callback));
+	database_ref->Schedule(info.Env(), duckdb::make_uniq<ExecTask>(*this, sql, callback));
 	return Value();
 }
 
@@ -475,7 +483,7 @@ Napi::Value Connection::RegisterBuffer(const Napi::CallbackInfo &info) {
 		callback = info[3].As<Napi::Function>();
 	}
 
-	database_ref->Schedule(info.Env(), duckdb::make_unique<ExecTask>(*this, final_query, callback));
+	database_ref->Schedule(info.Env(), duckdb::make_uniq<ExecTask>(*this, final_query, callback));
 
 	return Value();
 }
@@ -502,7 +510,7 @@ Napi::Value Connection::UnRegisterBuffer(const Napi::CallbackInfo &info) {
 	};
 
 	database_ref->Schedule(info.Env(),
-	                       duckdb::make_unique<ExecTaskWithCallback>(*this, final_query, callback, cpp_callback));
+	                       duckdb::make_uniq<ExecTaskWithCallback>(*this, final_query, callback, cpp_callback));
 
 	return Value();
 }

@@ -1,0 +1,71 @@
+# name: test/sql/subquery/lateral/lateral_left_join.test
+# description: Test LATERAL left joins
+# group: [lateral]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+query II
+SELECT * FROM integers LEFT JOIN LATERAL (SELECT integers.i + 1) t(b) ON (i=b) ORDER BY i;
+----
+NULL	NULL
+1	NULL
+2	NULL
+3	NULL
+
+query II
+SELECT * FROM integers LEFT JOIN LATERAL (SELECT integers.i) t(b) ON (i=b) ORDER BY i;
+----
+NULL	NULL
+1	1
+2	2
+3	3
+
+query II
+SELECT * FROM integers LEFT JOIN LATERAL (SELECT * FROM integers WHERE i<>integers.i) t(b) ON (i=b) ORDER BY i;
+----
+NULL	NULL
+1	NULL
+2	NULL
+3	NULL
+
+query II
+SELECT * FROM integers INNER JOIN LATERAL (SELECT integers.i WHERE integers.i IN (1, 3)) t(b) ON (i=b) ORDER BY i;
+----
+1	1
+3	3
+
+query II
+SELECT * FROM integers LEFT JOIN LATERAL (SELECT integers.i WHERE integers.i IN (1, 3)) t(b) ON (i=b) ORDER BY i;
+----
+NULL	NULL
+1	1
+2	NULL
+3	3
+
+# left-join on arbitrary expressions not supported
+statement error
+SELECT * FROM integers LEFT JOIN LATERAL (SELECT integers.i WHERE integers.i IN (1, 3)) t(b) ON (i+b<b) ORDER BY i;
+----
+must be a comparison
+
+# full-outer join not supported
+statement error
+SELECT * FROM (SELECT * FROM integers WHERE i=2) t(i) FULL JOIN LATERAL (SELECT t.i WHERE t.i IN (1, 3)) t2(b) ON (i=b) ORDER BY i, b;
+----
+LATERAL
+
+# right-join not supported
+statement error
+SELECT * FROM (SELECT * FROM integers WHERE i=2) t(i) RIGHT JOIN LATERAL (SELECT t.i WHERE t.i IN (1, 3)) t2(b) ON (i=b) ORDER BY i, b;
+----
+LATERAL

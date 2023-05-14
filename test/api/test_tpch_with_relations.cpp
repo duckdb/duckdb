@@ -10,7 +10,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test TPC-H SF0.01 with relations", "[tpch][.]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	double sf = 0.01;

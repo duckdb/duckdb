@@ -18,10 +18,10 @@ void LogicalDelimJoin::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<LogicalOperator> LogicalDelimJoin::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
-	auto result = make_unique<LogicalDelimJoin>(JoinType::INVALID);
+	auto result = make_uniq<LogicalDelimJoin>(JoinType::INVALID);
 	LogicalComparisonJoin::Deserialize(*result, state, reader);
 	result->duplicate_eliminated_columns = reader.ReadRequiredSerializableList<Expression>(state.gstate);
-	return move(result);
+	return std::move(result);
 }
 
 } // namespace duckdb

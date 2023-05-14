@@ -30,9 +30,13 @@ enum class PhysicalOperatorType : uint8_t {
 	FILTER,
 	PROJECTION,
 	COPY_TO_FILE,
+	BATCH_COPY_TO_FILE,
+	FIXED_BATCH_COPY_TO_FILE,
 	RESERVOIR_SAMPLE,
 	STREAMING_SAMPLE,
 	STREAMING_WINDOW,
+	PIVOT,
+
 	// -----------------------------
 	// Scans
 	// -----------------------------
@@ -43,6 +47,7 @@ enum class PhysicalOperatorType : uint8_t {
 	RECURSIVE_CTE_SCAN,
 	DELIM_SCAN,
 	EXPRESSION_SCAN,
+	POSITIONAL_SCAN,
 	// -----------------------------
 	// Joins
 	// -----------------------------
@@ -54,6 +59,8 @@ enum class PhysicalOperatorType : uint8_t {
 	IE_JOIN,
 	DELIM_JOIN,
 	INDEX_JOIN,
+	POSITIONAL_JOIN,
+	ASOF_JOIN,
 	// -----------------------------
 	// SetOps
 	// -----------------------------
@@ -84,6 +91,8 @@ enum class PhysicalOperatorType : uint8_t {
 	PRAGMA,
 	TRANSACTION,
 	CREATE_TYPE,
+	ATTACH,
+	DETACH,
 
 	// -----------------------------
 	// Helpers
@@ -98,7 +107,9 @@ enum class PhysicalOperatorType : uint8_t {
 	SET,
 	LOAD,
 	INOUT_FUNCTION,
-	RESULT_COLLECTOR
+	RESULT_COLLECTOR,
+	RESET,
+	EXTENSION
 };
 
 string PhysicalOperatorToString(PhysicalOperatorType type);

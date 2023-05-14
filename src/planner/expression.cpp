@@ -10,7 +10,7 @@
 namespace duckdb {
 
 Expression::Expression(ExpressionType type, ExpressionClass expression_class, LogicalType return_type)
-    : BaseExpression(type, expression_class), return_type(move(return_type)) {
+    : BaseExpression(type, expression_class), return_type(std::move(return_type)) {
 }
 
 Expression::~Expression() {
@@ -51,7 +51,8 @@ bool Expression::HasSideEffects() const {
 bool Expression::PropagatesNullValues() const {
 	if (type == ExpressionType::OPERATOR_IS_NULL || type == ExpressionType::OPERATOR_IS_NOT_NULL ||
 	    type == ExpressionType::COMPARE_NOT_DISTINCT_FROM || type == ExpressionType::COMPARE_DISTINCT_FROM ||
-	    type == ExpressionType::CONJUNCTION_OR || type == ExpressionType::CONJUNCTION_AND) {
+	    type == ExpressionType::CONJUNCTION_OR || type == ExpressionType::CONJUNCTION_AND ||
+	    type == ExpressionType::OPERATOR_COALESCE) {
 		return false;
 	}
 	bool propagate_null_values = true;

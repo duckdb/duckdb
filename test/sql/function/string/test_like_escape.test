@@ -103,3 +103,8 @@ SELECT s FROM strings WHERE s LIKE pat ESCAPE '*';
 ----
 abab
 
+query I
+select 'a' like 'a' escape NULL;
+----
+NULL
+

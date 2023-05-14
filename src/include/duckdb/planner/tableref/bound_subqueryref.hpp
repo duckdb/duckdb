@@ -17,8 +17,11 @@ namespace duckdb {
 //! Represents a cross product
 class BoundSubqueryRef : public BoundTableRef {
 public:
+	static constexpr const TableReferenceType TYPE = TableReferenceType::SUBQUERY;
+
+public:
 	BoundSubqueryRef(shared_ptr<Binder> binder_p, unique_ptr<BoundQueryNode> subquery)
-	    : BoundTableRef(TableReferenceType::SUBQUERY), binder(move(binder_p)), subquery(move(subquery)) {
+	    : BoundTableRef(TableReferenceType::SUBQUERY), binder(std::move(binder_p)), subquery(std::move(subquery)) {
 	}
 
 	//! The binder used to bind the subquery

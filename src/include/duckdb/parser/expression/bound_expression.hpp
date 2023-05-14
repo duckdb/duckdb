@@ -20,11 +20,16 @@ namespace duckdb {
 //! when dealing with subqueries.
 class BoundExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_EXPRESSION;
+
+public:
 	BoundExpression(unique_ptr<Expression> expr);
 
 	unique_ptr<Expression> expr;
 
 public:
+	static unique_ptr<Expression> &GetExpression(ParsedExpression &expr);
+
 	string ToString() const override;
 
 	bool Equals(const BaseExpression *other) const override;
@@ -33,6 +38,8 @@ public:
 	unique_ptr<ParsedExpression> Copy() const override;
 
 	void Serialize(FieldWriter &writer) const override;
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
 };
 
 } // namespace duckdb

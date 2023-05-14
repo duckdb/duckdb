@@ -12,20 +12,22 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(duckdb_libpgquery::
 	D_ASSERT(stmt);
 	D_ASSERT(stmt->view);
 
-	auto result = make_unique<CreateStatement>();
-	auto info = make_unique<CreateViewInfo>();
+	auto result = make_uniq<CreateStatement>();
+	auto info = make_uniq<CreateViewInfo>();
 
-	if (stmt->view->schemaname) {
-		info->schema = stmt->view->schemaname;
-	}
-	info->view_name = stmt->view->relname;
+	auto qname = TransformQualifiedName(stmt->view);
+	info->catalog = qname.catalog;
+	info->schema = qname.schema;
+	info->view_name = qname.name;
 	info->temporary = !stmt->view->relpersistence;
-	if (info->temporary) {
-		info->schema = TEMP_SCHEMA;
+	if (info->temporary && IsInvalidCatalog(info->catalog)) {
+		info->catalog = TEMP_CATALOG;
 	}
 	info->on_conflict = TransformOnConflict(stmt->onconflict);
 
 	info->query = TransformSelect(stmt->query, false);
+
+	PivotEntryCheck("view");
 
 	if (stmt->aliases && stmt->aliases->length > 0) {
 		for (auto c = stmt->aliases->head; c != nullptr; c = lnext(c)) {
@@ -52,7 +54,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(duckdb_libpgquery::
 	if (stmt->withCheckOption != duckdb_libpgquery::PGViewCheckOption::PG_NO_CHECK_OPTION) {
 		throw NotImplementedException("VIEW CHECK options");
 	}
-	result->info = move(info);
+	result->info = std::move(info);
 	return result;
 }
 

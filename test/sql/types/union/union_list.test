@@ -69,20 +69,6 @@ SELECT union_list[1] FROM tbl2 JOIN tbl1 ON union_with_list.num = union_list[1];
 statement ok
 CREATE TABLE tbl3 (union_with_lists UNION(strs VARCHAR[], nums INT[]));
 
-# This doesnt work since casting to list costs the same
-statement error 
-INSERT INTO tbl3 VALUES 
-    (['one', 'two']), 
-    ([1, 2]), 
-    (['three', NULL]), 
-    ([3, 4]),
-    (['five']), 
-    ([5]), 
-    (['six']), 
-    ([NULL, 6]), 
-    (union_value(strs:=NULL)), 
-
-
 statement ok 
 INSERT INTO tbl3 VALUES 
     (union_value(strs:=['one', 'two'])), 

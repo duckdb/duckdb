@@ -24,7 +24,7 @@ struct TemplatedValidityData {
 public:
 	inline explicit TemplatedValidityData(idx_t count) {
 		auto entry_count = EntryCount(count);
-		owned_data = unique_ptr<V[]>(new V[entry_count]);
+		owned_data = make_unsafe_array<V>(entry_count);
 		for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 			owned_data[entry_idx] = MAX_ENTRY;
 		}
@@ -32,13 +32,13 @@ public:
 	inline TemplatedValidityData(const V *validity_mask, idx_t count) {
 		D_ASSERT(validity_mask);
 		auto entry_count = EntryCount(count);
-		owned_data = unique_ptr<V[]>(new V[entry_count]);
+		owned_data = make_unsafe_array<V>(entry_count);
 		for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 			owned_data[entry_idx] = validity_mask[entry_idx];
 		}
 	}
 
-	unique_ptr<V[]> owned_data;
+	unsafe_array_ptr<V> owned_data;
 
 public:
 	static inline idx_t EntryCount(idx_t count) {
@@ -83,15 +83,7 @@ public:
 		return !validity_mask;
 	}
 	inline bool CheckAllValid(idx_t count) const {
-		if (AllValid()) {
-			return true;
-		}
-		idx_t entry_count = ValidityBuffer::EntryCount(count);
-		idx_t valid_count = 0;
-		for (idx_t i = 0; i < entry_count; i++) {
-			valid_count += validity_mask[i] == ValidityBuffer::MAX_ENTRY;
-		}
-		return valid_count == entry_count;
+		return CountValid(count) == count;
 	}
 
 	inline bool CheckAllValid(idx_t to, idx_t from) const {
@@ -177,6 +169,9 @@ public:
 			return V(0);
 		}
 		return ValidityBuffer::MAX_ENTRY >> (BITS_PER_VALUE - n);
+	}
+	static inline idx_t SizeInBytes(idx_t n) {
+		return (n + BITS_PER_VALUE - 1) / BITS_PER_VALUE;
 	}
 
 	//! RowIsValidUnsafe should only be used if AllValid() is false: it achieves the same as RowIsValid but skips a
@@ -331,9 +326,12 @@ public:
 public:
 	DUCKDB_API void Resize(idx_t old_size, idx_t new_size);
 
-	DUCKDB_API void Slice(const ValidityMask &other, idx_t offset, idx_t end);
+	DUCKDB_API void SliceInPlace(const ValidityMask &other, idx_t target_offset, idx_t source_offset, idx_t count);
+	DUCKDB_API void Slice(const ValidityMask &other, idx_t source_offset, idx_t count);
 	DUCKDB_API void Combine(const ValidityMask &other, idx_t count);
 	DUCKDB_API string ToString(idx_t count) const;
+
+	DUCKDB_API static bool IsAligned(idx_t count);
 };
 
 } // namespace duckdb

@@ -16,6 +16,9 @@ namespace duckdb {
 
 class PragmaStatement : public SQLStatement {
 public:
+	static constexpr const StatementType TYPE = StatementType::PRAGMA_STATEMENT;
+
+public:
 	PragmaStatement();
 
 	unique_ptr<PragmaInfo> info;

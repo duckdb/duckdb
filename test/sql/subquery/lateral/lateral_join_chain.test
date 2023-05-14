@@ -1,0 +1,62 @@
+# name: test/sql/subquery/lateral/lateral_join_chain.test
+# description: Test lateral join
+# group: [lateral]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+# Multiple LATERAL joins in a row
+query III
+SELECT * FROM integers, (SELECT [i + 1]) t(k), (SELECT UNNEST(k)) t2(l) ORDER BY i;
+----
+NULL	[NULL]	NULL
+1	[2]	2
+2	[3]	3
+3	[4]	4
+
+# explicit LATERAL
+query III
+SELECT * FROM integers, LATERAL (SELECT [i + 1]) t(k), LATERAL (SELECT UNNEST(k)) t2(l) ORDER BY i;
+----
+NULL	[NULL]	NULL
+1	[2]	2
+2	[3]	3
+3	[4]	4
+
+# lateral cross join
+query III
+SELECT * FROM integers CROSS JOIN LATERAL (SELECT [i + 1]) t(k) CROSS JOIN LATERAL (SELECT UNNEST(k)) t2(l) ORDER BY i;
+----
+NULL	[NULL]	NULL
+1	[2]	2
+2	[3]	3
+3	[4]	4
+
+# refer to other table in lateral join
+query II
+SELECT * FROM integers, (SELECT integers) ORDER BY i
+----
+NULL	{'i': NULL}
+1	{'i': 1}
+2	{'i': 2}
+3	{'i': 3}
+
+# FIXME: this works as expected in Postgres
+statement error
+SELECT * FROM integers, LATERAL (SELECT integers.*) t2(k) ORDER BY i;
+----
+* expression
+
+statement error
+SELECT * FROM integers, LATERAL (SELECT *) t2(k) ORDER BY i;
+----
+* expression

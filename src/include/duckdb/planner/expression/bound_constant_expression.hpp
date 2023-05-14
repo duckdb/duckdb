@@ -15,6 +15,9 @@ namespace duckdb {
 
 class BoundConstantExpression : public Expression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_CONSTANT;
+
+public:
 	explicit BoundConstantExpression(Value value);
 
 	Value value;

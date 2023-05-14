@@ -18,25 +18,25 @@ namespace duckdb {
 //! returned pointer will remain valid until the StringHeap is destroyed
 class StringHeap {
 public:
-	StringHeap(Allocator &allocator = Allocator::DefaultAllocator());
+	DUCKDB_API StringHeap(Allocator &allocator = Allocator::DefaultAllocator());
 
-	void Destroy();
-	void Move(StringHeap &other);
+	DUCKDB_API void Destroy();
+	DUCKDB_API void Move(StringHeap &other);
 
 	//! Add a string to the string heap, returns a pointer to the string
-	string_t AddString(const char *data, idx_t len);
+	DUCKDB_API string_t AddString(const char *data, idx_t len);
 	//! Add a string to the string heap, returns a pointer to the string
-	string_t AddString(const char *data);
+	DUCKDB_API string_t AddString(const char *data);
 	//! Add a string to the string heap, returns a pointer to the string
-	string_t AddString(const string &data);
+	DUCKDB_API string_t AddString(const string &data);
 	//! Add a string to the string heap, returns a pointer to the string
-	string_t AddString(const string_t &data);
+	DUCKDB_API string_t AddString(const string_t &data);
 	//! Add a blob to the string heap; blobs can be non-valid UTF8
-	string_t AddBlob(const string_t &data);
+	DUCKDB_API string_t AddBlob(const string_t &data);
 	//! Add a blob to the string heap; blobs can be non-valid UTF8
-	string_t AddBlob(const char *data, idx_t len);
+	DUCKDB_API string_t AddBlob(const char *data, idx_t len);
 	//! Allocates space for an empty string of size "len" on the heap
-	string_t EmptyString(idx_t len);
+	DUCKDB_API string_t EmptyString(idx_t len);
 
 private:
 	ArenaAllocator allocator;

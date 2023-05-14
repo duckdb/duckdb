@@ -24,8 +24,8 @@ template<typename T, typename Traits = ConcurrentQueueDefaultTraits>
 class BlockingConcurrentQueue
 {
 private:
-	typedef ::duckdb_moodycamelmoodycamel::ConcurrentQueue<T, Traits> ConcurrentQueue;
-	typedef ::duckdb_moodycamelmoodycamel::LightweightSemaphore LightweightSemaphore;
+	typedef ::duckdb_moodycamel::ConcurrentQueue<T, Traits> ConcurrentQueue;
+	typedef ::duckdb_moodycamel::LightweightSemaphore LightweightSemaphore;
 
 public:
 	typedef typename ConcurrentQueue::producer_token_t producer_token_t;

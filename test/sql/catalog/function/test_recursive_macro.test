@@ -1,0 +1,33 @@
+# name: test/sql/catalog/function/test_recursive_macro.test
+# description: Test recursive macros
+# group: [function]
+
+statement ok
+CREATE MACRO "sum"(x) AS (CASE WHEN sum(x) IS NULL THEN 0 ELSE sum(x) END);
+
+query I
+SELECT sum(1);
+----
+1
+
+query I
+SELECT sum(1) WHERE 42=0
+----
+0
+
+statement ok
+DROP MACRO sum
+
+# recursive macro with explicit qualification
+statement ok
+CREATE MACRO "sum"(x) AS (CASE WHEN system.main.sum(x) IS NULL THEN 0 ELSE system.main.sum(x) END);
+
+query I
+SELECT sum(1);
+----
+1
+
+query I
+SELECT sum(1) WHERE 42=0
+----
+0

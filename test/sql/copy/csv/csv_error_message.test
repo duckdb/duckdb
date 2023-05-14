@@ -13,10 +13,20 @@ SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'},
 ----
 line 105
 
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'}, header=True, parallel = false)
+----
+line 105
+
 statement ok
 COPY (SELECT i::VARCHAR i FROM range(103) tbl(i) UNION ALL SELECT 'hello') TO '__TEST_DIR__/int_parse_error.csv' (HEADER 0, DELIMITER '|')
 
 statement error
 SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'}, header=False)
+----
+line 104
+
+statement error
+SELECT * FROM read_csv('__TEST_DIR__/int_parse_error.csv', columns={'i': 'INT'}, header=False, parallel = false)
 ----
 line 104

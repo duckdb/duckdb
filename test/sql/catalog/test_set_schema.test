@@ -139,13 +139,16 @@ statement ok
 CREATE TEMP TABLE test_temp_table(i INTEGER);
 
 statement error
-SELECT * FROM main.test_temp_table;
+SELECT * FROM memory.main.test_temp_table;
 
 statement error
 SELECT * FROM test.test_temp_table;
 
 statement ok
 SELECT * FROM test_temp_table;
+
+statement ok
+SELECT * FROM temp.test_temp_table;
 
 # Testing functions and aggregates
 query I

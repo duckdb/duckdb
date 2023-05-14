@@ -33,6 +33,7 @@ public:
 
 public:
 	//! Creates a new block inside the block manager
+	virtual unique_ptr<Block> ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) = 0;
 	virtual unique_ptr<Block> CreateBlock(block_id_t block_id, FileBuffer *source_buffer) = 0;
 	//! Return the next free block id
 	virtual block_id_t GetFreeBlockId() = 0;
@@ -65,7 +66,9 @@ public:
 	virtual idx_t FreeBlocks() = 0;
 
 	//! Register a block with the given block id in the base file
-	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id);
+	shared_ptr<BlockHandle> RegisterBlock(block_id_t block_id, bool is_meta_block = false);
+	//! Clear cached handles for meta blocks
+	void ClearMetaBlockHandles();
 	//! Convert an existing in-memory buffer into a persistent disk-backed block
 	shared_ptr<BlockHandle> ConvertToPersistent(block_id_t block_id, shared_ptr<BlockHandle> old_block);
 
@@ -79,5 +82,7 @@ private:
 	mutex blocks_lock;
 	//! A mapping of block id -> BlockHandle
 	unordered_map<block_id_t, weak_ptr<BlockHandle>> blocks;
+	//! A map to cache the BlockHandles of meta blocks
+	unordered_map<block_id_t, shared_ptr<BlockHandle>> meta_blocks;
 };
 } // namespace duckdb

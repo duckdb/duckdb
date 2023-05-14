@@ -22,7 +22,7 @@ static void CheckGroupingSetCubes(idx_t current_count, idx_t cube_count) {
 }
 
 struct GroupingExpressionMap {
-	expression_map_t<idx_t> map;
+	parsed_expression_map_t<idx_t> map;
 };
 
 static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes) {
@@ -41,20 +41,20 @@ static void MergeGroupingSet(GroupingSet &result, GroupingSet &other) {
 void Transformer::AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
                                        GroupByNode &result, vector<idx_t> &result_set) {
 	if (expression->type == ExpressionType::FUNCTION) {
-		auto &func = (FunctionExpression &)*expression;
+		auto &func = expression->Cast<FunctionExpression>();
 		if (func.function_name == "row") {
 			for (auto &child : func.children) {
-				AddGroupByExpression(move(child), map, result, result_set);
+				AddGroupByExpression(std::move(child), map, result, result_set);
 			}
 			return;
 		}
 	}
-	auto entry = map.map.find(expression.get());
+	auto entry = map.map.find(*expression);
 	idx_t result_idx;
 	if (entry == map.map.end()) {
 		result_idx = result.group_expressions.size();
-		map.map[expression.get()] = result_idx;
-		result.group_expressions.push_back(move(expression));
+		map.map[*expression] = result_idx;
+		result.group_expressions.push_back(std::move(expression));
 	} else {
 		result_idx = entry->second;
 	}
@@ -75,7 +75,7 @@ static void AddCubeSets(const GroupingSet &current_set, vector<GroupingSet> &res
 void Transformer::TransformGroupByExpression(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map,
                                              GroupByNode &result, vector<idx_t> &indexes) {
 	auto expression = TransformExpression(n);
-	AddGroupByExpression(move(expression), map, result, indexes);
+	AddGroupByExpression(std::move(expression), map, result, indexes);
 }
 
 // If one GROUPING SETS clause is nested inside another,
@@ -156,7 +156,7 @@ bool Transformer::TransformGroupBy(duckdb_libpgquery::PGList *group, SelectNode 
 		CheckGroupingSetMax(result_sets.size());
 		if (result.grouping_sets.empty()) {
 			// no grouping sets yet: use the current set of grouping sets
-			result.grouping_sets = move(result_sets);
+			result.grouping_sets = std::move(result_sets);
 		} else {
 			// compute the cross product
 			vector<GroupingSet> new_sets;
@@ -170,11 +170,18 @@ bool Transformer::TransformGroupBy(duckdb_libpgquery::PGList *group, SelectNode 
 					GroupingSet set;
 					set.insert(current_set.begin(), current_set.end());
 					set.insert(new_set.begin(), new_set.end());
-					new_sets.push_back(move(set));
+					new_sets.push_back(std::move(set));
 				}
 			}
-			result.grouping_sets = move(new_sets);
+			result.grouping_sets = std::move(new_sets);
 		}
+	}
+	if (result.group_expressions.size() == 1 && result.grouping_sets.size() == 1 &&
+	    ExpressionIsEmptyStar(*result.group_expressions[0])) {
+		// GROUP BY *
+		result.group_expressions.clear();
+		result.grouping_sets.clear();
+		select_node.aggregate_handling = AggregateHandling::FORCE_AGGREGATES;
 	}
 	return true;
 }

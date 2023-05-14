@@ -1,6 +1,6 @@
 # DuckDB Node Bindings
 
-This package provides a node.js API for [DuckDB](https://github.com/cwida/duckdb), the "SQLite for Analytics". The API for this client is somewhat compliant to the SQLite node.js client for easier transition (and transition you must eventually).
+This package provides a node.js API for [DuckDB](https://github.com/duckdb/duckdb), the "SQLite for Analytics". The API for this client is somewhat compliant to the SQLite node.js client for easier transition (and transition you must eventually).
 
 Load the package and create a database object:
 
@@ -99,3 +99,20 @@ var stmt = con.prepare('select ?::INTEGER as fortytwo', function(err, stmt) {
   });
 });
 ```
+
+## Development
+
+### First install:
+
+To install all the dev dependencies of the project, navigate over to `tools/nodejs` and run `npm install` (this uses package.json)
+You might want to add the `--ignore-scripts` option if you don't care about building the package for now and just want to install the dependencies.
+
+### Tests:
+Tests are located in `tools/nodejs/test` and can be run with `npm test`
+To run a single test, you can use `npm test -- --grep "name of test as given in describe"`
+
+### Additional notes:
+To build the NodeJS package from source, when on Windows, requires the following extra steps:
+- Set `OPENSSL_ROOT_DIR` to the root directory of an OpenSSL installation
+- Supply the `STATIC_OPENSSL=1` option when executing `make`, or set `-DOPENSSL_USE_STATIC_LIBS=1` manually when calling `cmake`
+

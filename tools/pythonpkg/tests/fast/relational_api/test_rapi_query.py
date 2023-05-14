@@ -86,3 +86,33 @@ class TestRAPIQuery(object):
         result = rel.execute()
         assert(result.fetchall() == [(5,)])
 
+    def test_query_non_select_result(self):
+        with pytest.raises(duckdb.ParserException, match="syntax error"):
+            duckdb.query('selec 42')
+
+        res = duckdb.query('explain select 42').fetchall()
+        assert len(res) > 0
+
+        res = duckdb.query('describe select 42::INT AS column_name').fetchall()
+        assert res[0][0] == 'column_name'
+
+        res = duckdb.query('create or replace table tbl_non_select_result(i integer)')
+        assert res is None
+
+        res = duckdb.query('insert into tbl_non_select_result values (42)')
+        assert res is None
+
+        res = duckdb.query('insert into tbl_non_select_result values (84) returning *').fetchall()
+        assert res == [(84,)]
+
+        res = duckdb.query('select * from tbl_non_select_result').fetchall()
+        assert res == [(42,), (84,)]
+
+        res = duckdb.query('insert into tbl_non_select_result select * from range(10000) returning *').fetchall()
+        assert len(res) == 10000
+
+        res = duckdb.query('show tables').fetchall()
+        assert len(res) > 0
+
+        res = duckdb.query('drop table tbl_non_select_result')
+        assert res is None

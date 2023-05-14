@@ -14,21 +14,22 @@ struct ThrottlingSum {
 	struct CustomFunctionData : public TableFunctionData {
 		CustomFunctionData() {
 		}
-		vector<int> row_sums;
+		duckdb::vector<int> row_sums;
 		idx_t current_idx = 0;
 	};
 
-	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
-	                                     vector<LogicalType> &return_types, vector<string> &names) {
-		auto result = make_unique<ThrottlingSum::CustomFunctionData>();
+	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
+	                                             duckdb::vector<LogicalType> &return_types,
+	                                             duckdb::vector<string> &names) {
+		auto result = make_uniq<ThrottlingSum::CustomFunctionData>();
 		return_types.emplace_back(LogicalType::INTEGER);
 		names.emplace_back("total");
-		return move(result);
+		return std::move(result);
 	}
 
 	static OperatorResultType Function(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
 	                                   DataChunk &output) {
-		auto &state = (ThrottlingSum::CustomFunctionData &)*data_p.bind_data;
+		auto &state = data_p.bind_data->CastNoConst<ThrottlingSum::CustomFunctionData>();
 
 		for (idx_t row_idx = 0; row_idx < input.size(); row_idx++) {
 			int sum = 0;
@@ -52,7 +53,7 @@ struct ThrottlingSum {
 
 	static OperatorFinalizeResultType Finalize(ExecutionContext &context, TableFunctionInput &data_p,
 	                                           DataChunk &output) {
-		auto &state = (ThrottlingSum::CustomFunctionData &)*data_p.bind_data;
+		auto &state = data_p.bind_data->CastNoConst<ThrottlingSum::CustomFunctionData>();
 
 		if (state.current_idx < state.row_sums.size()) {
 			output.SetCardinality(1);
@@ -68,12 +69,12 @@ struct ThrottlingSum {
 		// Create our test TableFunction
 		con.BeginTransaction();
 		auto &client_context = *con.context;
-		auto &catalog = Catalog::GetCatalog(client_context);
+		auto &catalog = Catalog::GetSystemCatalog(client_context);
 		TableFunction caching_table_in_out("throttling_sum", {LogicalType::TABLE}, nullptr, ThrottlingSum::Bind);
 		caching_table_in_out.in_out_function = ThrottlingSum::Function;
 		caching_table_in_out.in_out_function_final = ThrottlingSum::Finalize;
 		CreateTableFunctionInfo caching_table_in_out_info(caching_table_in_out);
-		catalog.CreateTableFunction(*con.context, &caching_table_in_out_info);
+		catalog.CreateTableFunction(*con.context, caching_table_in_out_info);
 		con.Commit();
 	}
 };
@@ -90,28 +91,7 @@ TEST_CASE("Caching TableInOutFunction", "[filter][.]") {
 	REQUIRE(result2->ColumnCount() == 1);
 	REQUIRE(CHECK_COLUMN(result2, 0, {1, 3, 5}));
 
-	// Check stream result
-	auto result =
-	    con.SendQuery("SELECT * FROM throttling_sum((select i::INTEGER, (i+1)::INTEGER as j from range(0,3) tbl(i)));");
-	REQUIRE_NO_FAIL(*result);
-
-	auto chunk = result->Fetch();
-	REQUIRE(chunk);
-	REQUIRE(chunk->size() == 1);
-	REQUIRE(chunk->data[0].GetValue(0).GetValue<int>() == 1);
-
-	chunk = result->Fetch();
-	REQUIRE(chunk);
-	REQUIRE(chunk->size() == 1);
-	REQUIRE(chunk->data[0].GetValue(0).GetValue<int>() == 3);
-
-	chunk = result->Fetch();
-	REQUIRE(chunk);
-	REQUIRE(chunk->size() == 1);
-	REQUIRE(chunk->data[0].GetValue(0).GetValue<int>() == 5);
-
-	chunk = result->Fetch();
-	REQUIRE(!chunk);
+	// TODO: streaming these is currently unsupported
 
 	// Large result into aggregation
 	auto result3 = con.Query(

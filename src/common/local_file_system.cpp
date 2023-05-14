@@ -120,10 +120,10 @@ bool LocalFileSystem::IsPipe(const string &filename) {
 
 struct UnixFileHandle : public FileHandle {
 public:
-	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, move(path)), fd(fd) {
+	UnixFileHandle(FileSystem &file_system, string path, int fd) : FileHandle(file_system, std::move(path)), fd(fd) {
 	}
 	~UnixFileHandle() override {
-		Close();
+		UnixFileHandle::Close();
 	}
 
 	int fd;
@@ -237,7 +237,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 			}
 		}
 	}
-	return make_unique<UnixFileHandle>(*this, path, fd);
+	return make_uniq<UnixFileHandle>(*this, path, fd);
 }
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
@@ -407,7 +407,8 @@ void LocalFileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
+bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                                FileOpener *opener) {
 	if (!DirectoryExists(directory)) {
 		return false;
 	}
@@ -488,7 +489,7 @@ public:
 	WindowsFileHandle(FileSystem &file_system, string path, HANDLE fd)
 	    : FileHandle(file_system, path), position(0), fd(fd) {
 	}
-	virtual ~WindowsFileHandle() {
+	~WindowsFileHandle() override {
 		Close();
 	}
 
@@ -547,12 +548,12 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 		auto error = LocalFileSystem::GetLastErrorAsString();
 		throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
 	}
-	auto handle = make_unique<WindowsFileHandle>(*this, path.c_str(), hFile);
+	auto handle = make_uniq<WindowsFileHandle>(*this, path.c_str(), hFile);
 	if (flags & FileFlags::FILE_FLAGS_APPEND) {
 		auto file_size = GetFileSize(*handle);
 		SetFilePointer(*handle, file_size);
 	}
-	return move(handle);
+	return std::move(handle);
 }
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
@@ -734,7 +735,8 @@ void LocalFileSystem::RemoveFile(const string &filename) {
 	}
 }
 
-bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
+bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                                FileOpener *opener) {
 	string search_dir = JoinPath(directory, "*");
 
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(search_dir.c_str());
@@ -830,9 +832,49 @@ static bool HasGlob(const string &str) {
 	}
 	return false;
 }
+static bool IsCrawl(const string &glob) {
+	// glob must match exactly
+	return glob == "**";
+}
+static bool HasMultipleCrawl(const vector<string> &splits) {
+	return std::count(splits.begin(), splits.end(), "**") > 1;
+}
+static bool IsSymbolicLink(const string &path) {
+#ifndef _WIN32
+	struct stat status;
+	return (lstat(path.c_str(), &status) != -1 && S_ISLNK(status.st_mode));
+#else
+	auto attributes = WindowsGetFileAttributes(path);
+	if (attributes == INVALID_FILE_ATTRIBUTES)
+		return false;
+	return attributes & FILE_ATTRIBUTE_REPARSE_POINT;
+#endif
+}
 
-static void GlobFiles(FileSystem &fs, const string &path, const string &glob, bool match_directory,
-                      vector<string> &result, bool join_path) {
+static void RecursiveGlobDirectories(FileSystem &fs, const string &path, vector<string> &result, bool match_directory,
+                                     bool join_path) {
+
+	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
+		string concat;
+		if (join_path) {
+			concat = fs.JoinPath(path, fname);
+		} else {
+			concat = fname;
+		}
+		if (IsSymbolicLink(concat)) {
+			return;
+		}
+		if (is_directory == match_directory) {
+			result.push_back(concat);
+		}
+		if (is_directory) {
+			RecursiveGlobDirectories(fs, concat, result, match_directory, true);
+		}
+	});
+}
+
+static void GlobFilesInternal(FileSystem &fs, const string &path, const string &glob, bool match_directory,
+                              vector<string> &result, bool join_path) {
 	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
 		if (is_directory != match_directory) {
 			return;
@@ -855,7 +897,7 @@ vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpe
 		Value value;
 		if (opener && opener->TryGetCurrentSetting("file_search_path", value)) {
 			auto search_paths_str = value.ToString();
-			std::vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
+			vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
 				auto joined_path = JoinPath(search_path, path);
 				if (FileExists(joined_path) || IsPipe(joined_path)) {
@@ -924,11 +966,15 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		Value value;
 		if (opener && opener->TryGetCurrentSetting("file_search_path", value)) {
 			auto search_paths_str = value.ToString();
-			std::vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
+			vector<std::string> search_paths = StringUtil::Split(search_paths_str, ',');
 			for (const auto &search_path : search_paths) {
 				previous_directories.push_back(search_path);
 			}
 		}
+	}
+
+	if (HasMultipleCrawl(splits)) {
+		throw IOException("Cannot use multiple \'**\' in one path");
 	}
 
 	for (idx_t i = absolute_path ? 1 : 0; i < splits.size(); i++) {
@@ -942,19 +988,41 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 			if (previous_directories.empty()) {
 				result.push_back(splits[i]);
 			} else {
-				for (auto &prev_directory : previous_directories) {
-					result.push_back(JoinPath(prev_directory, splits[i]));
+				if (is_last_chunk) {
+					for (auto &prev_directory : previous_directories) {
+						const string filename = JoinPath(prev_directory, splits[i]);
+						if (FileExists(filename) || DirectoryExists(filename)) {
+							result.push_back(filename);
+						}
+					}
+				} else {
+					for (auto &prev_directory : previous_directories) {
+						result.push_back(JoinPath(prev_directory, splits[i]));
+					}
 				}
 			}
 		} else {
-			if (previous_directories.empty()) {
-				// no previous directories: list in the current path
-				GlobFiles(*this, ".", splits[i], !is_last_chunk, result, false);
+			if (IsCrawl(splits[i])) {
+				if (!is_last_chunk) {
+					result = previous_directories;
+				}
+				if (previous_directories.empty()) {
+					RecursiveGlobDirectories(*this, ".", result, !is_last_chunk, false);
+				} else {
+					for (auto &prev_dir : previous_directories) {
+						RecursiveGlobDirectories(*this, prev_dir, result, !is_last_chunk, true);
+					}
+				}
 			} else {
-				// previous directories
-				// we iterate over each of the previous directories, and apply the glob of the current directory
-				for (auto &prev_directory : previous_directories) {
-					GlobFiles(*this, prev_directory, splits[i], !is_last_chunk, result, true);
+				if (previous_directories.empty()) {
+					// no previous directories: list in the current path
+					GlobFilesInternal(*this, ".", splits[i], !is_last_chunk, result, false);
+				} else {
+					// previous directories
+					// we iterate over each of the previous directories, and apply the glob of the current directory
+					for (auto &prev_directory : previous_directories) {
+						GlobFilesInternal(*this, prev_directory, splits[i], !is_last_chunk, result, true);
+					}
 				}
 			}
 		}
@@ -966,13 +1034,13 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		if (is_last_chunk) {
 			return result;
 		}
-		previous_directories = move(result);
+		previous_directories = std::move(result);
 	}
 	return vector<string>();
 }
 
 unique_ptr<FileSystem> FileSystem::CreateLocal() {
-	return make_unique<LocalFileSystem>();
+	return make_uniq<LocalFileSystem>();
 }
 
 } // namespace duckdb

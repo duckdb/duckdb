@@ -5,6 +5,11 @@
 # load the DB from disk
 load __TEST_DIR__/test_bitpacking.db
 
+foreach bitpacking_mode delta_for for constant_delta constant
+
+statement ok
+PRAGMA force_bitpacking_mode='${bitpacking_mode}'
+
 statement ok
 PRAGMA force_compression = 'bitpacking'
 
@@ -28,3 +33,8 @@ Uncompressed
 Uncompressed
 Uncompressed
 Uncompressed
+
+statement ok
+DROP TABLE test;
+
+endloop

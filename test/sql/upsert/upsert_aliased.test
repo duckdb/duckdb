@@ -1,0 +1,90 @@
+# name: test/sql/upsert/upsert_aliased.test
+# group: [upsert]
+
+statement ok
+pragma enable_verification;
+
+statement ok
+create table tbl (
+	i integer,
+	j integer unique
+);
+
+statement ok
+insert into tbl values (5,3), (6,7);
+
+# This works when we don't reference it anywhere
+statement ok
+insert into tbl AS test values (3,5), (8,3), (2,6) on conflict (j) where i <= excluded.i do update set i = excluded.i * 2;
+
+query II
+select * from tbl;
+----
+16	3
+6	7
+3	5
+2	6
+
+# We can use the alias in the expressions
+statement ok
+insert into tbl AS test values (2,3) on conflict do update set i = test.i;
+
+# Essentially a no-op
+query II
+select * from tbl;
+----
+16	3
+6	7
+3	5
+2	6
+
+# We can use the 'test' alias in the conflict target condition
+
+statement error
+insert into tbl as test values (2,3) on conflict (j) where test.i < 5 do update set i = excluded.j;
+----
+Constraint Error: Duplicate key "j: 3" violates unique constraint
+
+statement ok
+insert into tbl as test values (2,3) on conflict (j) where test.i >= 5 do update set i = excluded.j;
+
+query II
+select * from tbl;
+----
+3	3
+6	7
+3	5
+2	6
+
+# We can also use the 'test' alias in the DO UPDATE condition
+
+statement ok
+insert into tbl as test (j, i) values (5,3) on conflict (j) do update set i = 10 where test.j <= 3;
+
+# No-op, do update condition was not met
+query II
+select * from tbl;
+----
+3	3
+6	7
+3	5
+2	6
+
+statement ok
+insert into tbl as test (j, i) values (5,3) on conflict (j) do update set i = 10 where test.j > 3;
+
+# Now 'i' is changed to 10 in the conflicting tuple
+query II
+select * from tbl;
+----
+3	3
+6	7
+10	5
+2	6
+
+# When we alias to 'excluded' we create an ambiguity error
+
+statement error
+insert into tbl as excluded values (8,3) on conflict (j) do update set i = 5;
+----
+Binder Error: Duplicate alias "excluded" in query!

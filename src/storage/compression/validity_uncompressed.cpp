@@ -2,11 +2,11 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/storage/statistics/validity_statistics.hpp"
+
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/function/compression_function.hpp"
-#include "duckdb/main/config.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 
@@ -184,7 +184,7 @@ struct ValidityAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> ValidityInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<ValidityAnalyzeState>();
+	return make_uniq<ValidityAnalyzeState>();
 }
 
 bool ValidityAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
@@ -207,11 +207,11 @@ struct ValidityScanState : public SegmentScanState {
 };
 
 unique_ptr<SegmentScanState> ValidityInitScan(ColumnSegment &segment) {
-	auto result = make_unique<ValidityScanState>();
+	auto result = make_uniq<ValidityScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
 	result->block_id = segment.block->BlockId();
-	return move(result);
+	return std::move(result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -395,7 +395,7 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 static unique_ptr<CompressionAppendState> ValidityInitAppend(ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
-	return make_unique<CompressionAppendState>(move(handle));
+	return make_uniq<CompressionAppendState>(std::move(handle));
 }
 
 unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, block_id_t block_id) {
@@ -410,14 +410,14 @@ unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, b
 idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segment, SegmentStatistics &stats,
                      UnifiedVectorFormat &data, idx_t offset, idx_t vcount) {
 	D_ASSERT(segment.GetBlockOffset() == 0);
-	auto &validity_stats = (ValidityStatistics &)*stats.statistics;
+	auto &validity_stats = stats.statistics;
 
 	auto max_tuples = segment.SegmentSize() / ValidityMask::STANDARD_MASK_SIZE * STANDARD_VECTOR_SIZE;
 	idx_t append_count = MinValue<idx_t>(vcount, max_tuples - segment.count);
 	if (data.validity.AllValid()) {
 		// no null values: skip append
 		segment.count += append_count;
-		validity_stats.has_no_null = true;
+		validity_stats.SetHasNoNull();
 		return append_count;
 	}
 
@@ -426,9 +426,9 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 		auto idx = data.sel->get_index(offset + i);
 		if (!data.validity.RowIsValidUnsafe(idx)) {
 			mask.SetInvalidUnsafe(segment.count + i);
-			validity_stats.has_null = true;
+			validity_stats.SetHasNull();
 		} else {
-			validity_stats.has_no_null = true;
+			validity_stats.SetHasNoNull();
 		}
 	}
 	segment.count += append_count;

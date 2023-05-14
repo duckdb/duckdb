@@ -360,6 +360,39 @@ function duckdb_result_get_chunk(result, chunk_index)
 end
 
 """
+ Checks if the type of the internal result is StreamQueryResult.
+
+ * result: The result object to check.
+ * returns: Whether or not the result object is of the type StreamQueryResult
+"""
+function duckdb_result_is_streaming(result)
+    return ccall((:duckdb_result_is_streaming, libduckdb), Bool, (duckdb_result,), result)
+end
+
+"""
+ Fetches a data chunk from the (streaming) duckdb_result. This function should be called repeatedly until the result is
+ exhausted.
+
+ The result must be destroyed with `duckdb_destroy_data_chunk`.
+
+ This function can only be used on duckdb_results created with 'duckdb_pending_prepared_streaming'
+
+ If this function is used, none of the other result functions can be used and vice versa (i.e. this function cannot be
+ mixed with the legacy result functions or the materialized result functions).
+
+ It is not known beforehand how many chunks will be returned by this result.
+
+ * result: The result object to fetch the data chunk from.
+ * returns: The resulting data chunk. Returns `NULL` if the result has an error.
+"""
+function duckdb_stream_fetch_chunk(result)
+    return ccall((:duckdb_stream_fetch_chunk, libduckdb), duckdb_data_chunk, (duckdb_result,), result)
+end
+
+
+
+
+"""
 Returns the number of data chunks present in the result.
 
 * result: The result object
@@ -654,7 +687,7 @@ Free a value returned from `duckdb_malloc`, `duckdb_value_varchar` or `duckdb_va
 DUCKDB_API void duckdb_free(void *ptr);
 """
 function duckdb_free(ptr)
-    return ccall((:duckdb_malloc, libduckdb), Cvoid, (Ptr{Cvoid},), ptr)
+    return ccall((:duckdb_free, libduckdb), Cvoid, (Ptr{Cvoid},), ptr)
 end
 
 """
@@ -1235,6 +1268,28 @@ function duckdb_pending_prepared(prepared_statement, out_pending)
 end
 
 """
+Executes the prepared statement with the given bound parameters, and returns a pending result.
+This pending result will create a streaming duckdb_result when executed.
+The pending result represents an intermediate structure for a query that is not yet fully executed.
+
+Note that after calling `duckdb_pending_prepared_streaming`, the pending result should always be destroyed using
+`duckdb_destroy_pending`, even if this function returns DuckDBError.
+
+* prepared_statement: The prepared statement to execute.
+* out_result: The pending query result.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_pending_prepared_streaming(prepared_statement, out_pending)
+    return ccall(
+        (:duckdb_pending_prepared_streaming, libduckdb),
+        duckdb_state,
+        (duckdb_prepared_statement, Ref{duckdb_pending_result}),
+        prepared_statement,
+        out_pending
+    )
+end
+
+"""
 Closes the pending result and de-allocates all memory allocated for the result.
 
 * pending_result: The pending result to destroy.
@@ -1496,6 +1551,16 @@ function duckdb_struct_type_child_count(handle)
 end
 
 """
+Returns the number of members of a union type.
+
+* type: The logical type object
+* returns: The number of members of a union type.
+"""
+function duckdb_union_type_member_count(handle)
+    return ccall((:duckdb_union_type_member_count, libduckdb), UInt64, (duckdb_logical_type,), handle)
+end
+
+"""
 Retrieves the name of the struct child.
 
 The result must be freed with `duckdb_free`
@@ -1515,6 +1580,25 @@ function duckdb_struct_type_child_name(handle, index)
 end
 
 """
+Retrieves the name of the union member.
+
+The result must be freed with `duckdb_free`
+
+* type: The logical type object
+* index: The member index
+* returns: The name of the union member. Must be freed with `duckdb_free`.
+"""
+function duckdb_union_type_member_name(handle, index)
+    return ccall(
+        (:duckdb_union_type_member_name, libduckdb),
+        Ptr{UInt8},
+        (duckdb_logical_type, UInt64),
+        handle,
+        index - 1
+    )
+end
+
+"""
 Retrieves the child type of the given struct type at the specified index.
 
 The result must be freed with `duckdb_destroy_logical_type`
@@ -1526,6 +1610,25 @@ The result must be freed with `duckdb_destroy_logical_type`
 function duckdb_struct_type_child_type(handle, index)
     return ccall(
         (:duckdb_struct_type_child_type, libduckdb),
+        duckdb_logical_type,
+        (duckdb_logical_type, UInt64),
+        handle,
+        index - 1
+    )
+end
+
+"""
+Retrieves the member type of the given union type at the specified index.
+
+The result must be freed with `duckdb_destroy_logical_type`
+
+* type: The logical type object
+* index: The member index
+* returns: The member type of the union type. Must be destroyed with `duckdb_destroy_logical_type`.
+"""
+function duckdb_union_type_member_type(handle, index)
+    return ccall(
+        (:duckdb_union_type_member_type, libduckdb),
         duckdb_logical_type,
         (duckdb_logical_type, UInt64),
         handle,
@@ -1736,6 +1839,25 @@ function duckdb_struct_vector_get_child(vector, index)
         (duckdb_vector, UInt64),
         vector,
         index - 1
+    )
+end
+
+"""
+Retrieves the member vector of a union vector.
+
+The resulting vector is valid as long as the parent vector is valid.
+
+* vector: The vector
+* index: The member index
+* returns: The member vector
+"""
+function duckdb_union_vector_get_member(vector, index)
+    return ccall(
+        (:duckdb_struct_vector_get_child, libduckdb),
+        duckdb_vector,
+        (duckdb_vector, UInt64),
+        vector,
+        1 + (index - 1)
     )
 end
 
@@ -2758,4 +2880,13 @@ on the task state.
 """
 function duckdb_destroy_task_state(state)
     return ccall((:duckdb_destroy_task_state, libduckdb), Cvoid, (duckdb_task_state,), state)
+end
+
+"""
+Returns true if execution of the current query is finished.
+
+* con: The connection on which to check
+"""
+function duckdb_execution_is_finished(con)
+    return ccall((:duckdb_execution_is_finished, libduckdb), Bool, (duckdb_connection,), con)
 end

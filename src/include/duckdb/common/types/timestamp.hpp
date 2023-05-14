@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/winapi.hpp"
 
@@ -76,21 +77,23 @@ struct timestamp_t { // NOLINT
 	};
 
 	// special values
-	static timestamp_t infinity() {
+	static timestamp_t infinity() { // NOLINT
 		return timestamp_t(NumericLimits<int64_t>::Maximum());
-	} // NOLINT
-	static timestamp_t ninfinity() {
+	}                                // NOLINT
+	static timestamp_t ninfinity() { // NOLINT
 		return timestamp_t(-NumericLimits<int64_t>::Maximum());
-	} // NOLINT
-	static inline timestamp_t epoch() {
+	}                                   // NOLINT
+	static inline timestamp_t epoch() { // NOLINT
 		return timestamp_t(0);
 	} // NOLINT
 };
 
-struct timestamp_tz_t : public timestamp_t {};
-struct timestamp_ns_t : public timestamp_t {};
-struct timestamp_ms_t : public timestamp_t {};
-struct timestamp_sec_t : public timestamp_t {};
+struct timestamp_tz_t : public timestamp_t {};  // NOLINT
+struct timestamp_ns_t : public timestamp_t {};  // NOLINT
+struct timestamp_ms_t : public timestamp_t {};  // NOLINT
+struct timestamp_sec_t : public timestamp_t {}; // NOLINT
+
+enum class TimestampCastResult : uint8_t { SUCCESS, ERROR_INCORRECT_FORMAT, ERROR_NON_UTC_TIMEZONE };
 
 //! The Timestamp class is a static class that holds helper functions for the Timestamp
 //! type.
@@ -109,7 +112,7 @@ public:
 	//! If the tz is not empty, the result is still an instant, but the parts can be extracted and applied to the TZ
 	DUCKDB_API static bool TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset,
 	                                             string_t &tz);
-	DUCKDB_API static bool TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result);
+	DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result);
 	DUCKDB_API static timestamp_t FromCString(const char *str, idx_t len);
 	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
 	DUCKDB_API static string ToString(timestamp_t timestamp);
@@ -120,6 +123,12 @@ public:
 	//! Create a Timestamp object from a specified (date, time) combination
 	DUCKDB_API static timestamp_t FromDatetime(date_t date, dtime_t time);
 	DUCKDB_API static bool TryFromDatetime(date_t date, dtime_t time, timestamp_t &result);
+
+	//! Is the character a valid part of a time zone name?
+	static inline bool CharacterIsTimeZone(char c) {
+		return StringUtil::CharacterIsAlpha(c) || StringUtil::CharacterIsDigit(c) || c == '_' || c == '/' || c == '+' ||
+		       c == '-';
+	}
 
 	//! Is the timestamp finite or infinite?
 	static inline bool IsFinite(timestamp_t timestamp) {
@@ -154,6 +163,8 @@ public:
 
 	DUCKDB_API static string ConversionError(const string &str);
 	DUCKDB_API static string ConversionError(string_t str);
+	DUCKDB_API static string UnsupportedTimezoneError(const string &str);
+	DUCKDB_API static string UnsupportedTimezoneError(string_t str);
 };
 
 } // namespace duckdb

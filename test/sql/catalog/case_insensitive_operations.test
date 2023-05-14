@@ -2,6 +2,9 @@
 # description: Test case insensitive operations
 # group: [catalog]
 
+statement ok
+SET default_null_order='nulls_first';
+
 require skip_reload
 
 

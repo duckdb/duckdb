@@ -14,6 +14,9 @@ namespace duckdb {
 
 class BoundConjunctionExpression : public Expression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_CONJUNCTION;
+
+public:
 	explicit BoundConjunctionExpression(ExpressionType type);
 	BoundConjunctionExpression(ExpressionType type, unique_ptr<Expression> left, unique_ptr<Expression> right);
 

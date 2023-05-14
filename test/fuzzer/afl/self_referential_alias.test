@@ -7,3 +7,17 @@ PRAGMA enable_verification
 
 statement error
 SELECT x x WHERE x = 0;
+----
+Binder Error
+
+statement ok
+CREATE TABLE integers (a INT);
+
+statement ok
+INSERT INTO integers VALUES (0), (1), (2);
+
+statement error
+SELECT a as b, d as c, c as d from integers;
+----
+Binder Error
+

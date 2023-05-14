@@ -16,7 +16,7 @@ SELECT linenr, mixed_string, mixed_double FROM test LIMIT 3;
 query TTT
 SELECT typeof(linenr), typeof(mixed_string), typeof(mixed_double) FROM test LIMIT 1;
 ----
-INTEGER	VARCHAR	DOUBLE
+BIGINT	VARCHAR	DOUBLE
 
 query ITR
 SELECT linenr, mixed_string, mixed_double FROM test WHERE linenr > 27000 LIMIT 3;
@@ -48,7 +48,7 @@ SELECT a, b, t, d, ts FROM test ORDER BY a;
 query TTTTT
 SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
 ----
-INTEGER	VARCHAR	TIME	DATE	TIMESTAMP
+BIGINT	VARCHAR	TIME	DATE	TIMESTAMP
 
 statement ok
 DROP TABLE test;
@@ -67,7 +67,7 @@ SELECT a, b, t, tf, d, df FROM test ORDER BY a;
 query TTTTTT
 SELECT typeof(a), typeof(b), typeof(t), typeof(tf), typeof(d), typeof(df) FROM test LIMIT 1;
 ----
-INTEGER	VARCHAR	TIME	VARCHAR	DATE	VARCHAR
+BIGINT	VARCHAR	TIME	VARCHAR	DATE	VARCHAR
 
 statement ok
 DROP TABLE test;
@@ -86,7 +86,7 @@ SELECT a, b, t, d, ts FROM test ORDER BY a;
 query TTTTT
 SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
 ----
-INTEGER	VARCHAR	TIME	DATE	TIMESTAMP
+BIGINT	VARCHAR	TIME	DATE	TIMESTAMP
 
 statement ok
 DROP TABLE test;
@@ -105,7 +105,7 @@ SELECT a, b, t, d, ts FROM test ORDER BY a;
 query TTTTT
 SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
 ----
-INTEGER	VARCHAR	TIME	DATE	TIMESTAMP
+BIGINT	VARCHAR	TIME	DATE	TIMESTAMP
 
 statement ok
 DROP TABLE test;
@@ -124,7 +124,7 @@ SELECT a, b, t, d, ts FROM test ORDER BY a;
 query TTTTT
 SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
 ----
-INTEGER	VARCHAR	TIME	DATE	TIMESTAMP
+BIGINT	VARCHAR	TIME	DATE	TIMESTAMP
 
 statement ok
 DROP TABLE test;
@@ -143,7 +143,7 @@ SELECT a, b, t, d, ts FROM test ORDER BY a;
 query TTTTT
 SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
 ----
-INTEGER	VARCHAR	TIME	DATE	TIMESTAMP
+BIGINT	VARCHAR	TIME	DATE	TIMESTAMP
 
 statement ok
 DROP TABLE test;
@@ -163,7 +163,7 @@ SELECT a, b, t, d, ts FROM test ORDER BY a;
 query TTTTT
 SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
 ----
-INTEGER	VARCHAR	TIME	DATE	TIMESTAMP
+BIGINT	VARCHAR	TIME	DATE	TIMESTAMP
 
 statement ok
 DROP TABLE test;
@@ -182,7 +182,7 @@ SELECT a, b, t, d, ts FROM test ORDER BY a;
 query TTTTT
 SELECT typeof(a), typeof(b), typeof(t), typeof(d), typeof(ts) FROM test LIMIT 1;
 ----
-INTEGER	VARCHAR	TIME	DATE	TIMESTAMP
+BIGINT	VARCHAR	TIME	DATE	TIMESTAMP
 
 statement ok
 DROP TABLE test;
@@ -202,7 +202,7 @@ SELECT i FROM test ORDER BY i;
 query TT
 SELECT typeof(i), typeof(b) FROM test LIMIT 1;
 ----
-INTEGER	BOOLEAN
+BIGINT	BOOLEAN
 
 statement ok
 DROP TABLE test;

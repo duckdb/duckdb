@@ -5,6 +5,8 @@
 name Alter Table Add Columns
 group catalog
 
+storage transient
+
 load
 DROP TABLE IF EXISTS integers;
 

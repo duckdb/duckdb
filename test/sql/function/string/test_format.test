@@ -72,6 +72,18 @@ SELECT format('{1} {1} {0} {0}', 1, 2)
 ----
 2 2 1 1
 
+# hexadecimal
+query I
+select format('{:x}', 123456789)
+----
+75bcd15
+
+# binary
+query I
+select format('{:b}', 123456789)
+----
+111010110111100110100010101
+
 # incorrect number of parameters
 # too few parameters
 statement error

@@ -9,8 +9,8 @@
 
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/sort/comparators.hpp"
-#include "duckdb/common/types/row_data_collection_scanner.hpp"
-#include "duckdb/common/types/row_layout.hpp"
+#include "duckdb/common/types/row/row_data_collection_scanner.hpp"
+#include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 
 namespace duckdb {
@@ -134,7 +134,7 @@ public:
 	explicit PayloadScanner(GlobalSortState &global_sort_state, bool flush = true);
 
 	//! Scan a single block
-	PayloadScanner(GlobalSortState &global_sort_state, idx_t block_idx);
+	PayloadScanner(GlobalSortState &global_sort_state, idx_t block_idx, bool flush = false);
 
 	//! The type layout of the payload
 	inline const vector<LogicalType> &GetPayloadTypes() const {

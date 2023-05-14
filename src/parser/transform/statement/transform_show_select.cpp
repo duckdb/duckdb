@@ -9,7 +9,7 @@ unique_ptr<ShowStatement> Transformer::TransformShowSelect(duckdb_libpgquery::PG
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGVariableShowSelectStmt *>(node);
 	auto select_stmt = reinterpret_cast<duckdb_libpgquery::PGSelectStmt *>(stmt->stmt);
 
-	auto result = make_unique<ShowStatement>();
+	auto result = make_uniq<ShowStatement>();
 	auto &info = *result->info;
 	info.is_summary = stmt->is_summary;
 

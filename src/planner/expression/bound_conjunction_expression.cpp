@@ -12,8 +12,8 @@ BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type)
 BoundConjunctionExpression::BoundConjunctionExpression(ExpressionType type, unique_ptr<Expression> left,
                                                        unique_ptr<Expression> right)
     : BoundConjunctionExpression(type) {
-	children.push_back(move(left));
-	children.push_back(move(right));
+	children.push_back(std::move(left));
+	children.push_back(std::move(right));
 }
 
 string BoundConjunctionExpression::ToString() const {
@@ -24,8 +24,8 @@ bool BoundConjunctionExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundConjunctionExpression *)other_p;
-	return ExpressionUtil::SetEquals(children, other->children);
+	auto &other = other_p->Cast<BoundConjunctionExpression>();
+	return ExpressionUtil::SetEquals(children, other.children);
 }
 
 bool BoundConjunctionExpression::PropagatesNullValues() const {
@@ -33,12 +33,12 @@ bool BoundConjunctionExpression::PropagatesNullValues() const {
 }
 
 unique_ptr<Expression> BoundConjunctionExpression::Copy() {
-	auto copy = make_unique<BoundConjunctionExpression>(type);
+	auto copy = make_uniq<BoundConjunctionExpression>(type);
 	for (auto &expr : children) {
 		copy->children.push_back(expr->Copy());
 	}
 	copy->CopyProperties(*this);
-	return move(copy);
+	return std::move(copy);
 }
 
 void BoundConjunctionExpression::Serialize(FieldWriter &writer) const {
@@ -48,9 +48,9 @@ void BoundConjunctionExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<Expression> BoundConjunctionExpression::Deserialize(ExpressionDeserializationState &state,
                                                                FieldReader &reader) {
 	auto children = reader.ReadRequiredSerializableList<Expression>(state.gstate);
-	auto res = make_unique<BoundConjunctionExpression>(state.type);
-	res->children = move(children);
-	return move(res);
+	auto res = make_uniq<BoundConjunctionExpression>(state.type);
+	res->children = std::move(children);
+	return std::move(res);
 }
 
 } // namespace duckdb

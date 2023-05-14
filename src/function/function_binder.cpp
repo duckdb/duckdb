@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/function/aggregate_function.hpp"
 #include "duckdb/function/cast_rules.hpp"
+#include "duckdb/catalog/catalog.hpp"
 
 namespace duckdb {
 
@@ -237,7 +238,7 @@ void FunctionBinder::CastToFunctionArguments(SimpleFunction &function, vector<un
 		// except for one special case: if the function accepts ANY argument
 		// in that case we don't add a cast
 		if (cast_result == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
-			children[i] = BoundCastExpression::AddCastToType(context, move(children[i]), target_type);
+			children[i] = BoundCastExpression::AddCastToType(context, std::move(children[i]), target_type);
 		}
 	}
 }
@@ -246,9 +247,11 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(const string &schema, 
                                                           vector<unique_ptr<Expression>> children, string &error,
                                                           bool is_operator, Binder *binder) {
 	// bind the function
-	auto function = Catalog::GetCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, schema, name);
-	D_ASSERT(function && function->type == CatalogType::SCALAR_FUNCTION_ENTRY);
-	return BindScalarFunction((ScalarFunctionCatalogEntry &)*function, move(children), error, is_operator, binder);
+	auto &function =
+	    Catalog::GetSystemCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, schema, name);
+	D_ASSERT(function.type == CatalogType::SCALAR_FUNCTION_ENTRY);
+	return BindScalarFunction(function.Cast<ScalarFunctionCatalogEntry>(), std::move(children), error, is_operator,
+	                          binder);
 }
 
 unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogEntry &func,
@@ -266,11 +269,11 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunctionCatalogE
 	if (bound_function.null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		for (auto &child : children) {
 			if (child->return_type == LogicalTypeId::SQLNULL) {
-				return make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL));
+				return make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL));
 			}
 		}
 	}
-	return BindScalarFunction(bound_function, move(children), is_operator);
+	return BindScalarFunction(bound_function, std::move(children), is_operator);
 }
 
 unique_ptr<BoundFunctionExpression> FunctionBinder::BindScalarFunction(ScalarFunction bound_function,
@@ -285,15 +288,14 @@ unique_ptr<BoundFunctionExpression> FunctionBinder::BindScalarFunction(ScalarFun
 
 	// now create the function
 	auto return_type = bound_function.return_type;
-	return make_unique<BoundFunctionExpression>(move(return_type), move(bound_function), move(children),
-	                                            move(bind_info), is_operator);
+	return make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(bound_function), std::move(children),
+	                                          std::move(bind_info), is_operator);
 }
 
 unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(AggregateFunction bound_function,
                                                                            vector<unique_ptr<Expression>> children,
                                                                            unique_ptr<Expression> filter,
-                                                                           AggregateType aggr_type,
-                                                                           unique_ptr<BoundOrderModifier> order_bys) {
+                                                                           AggregateType aggr_type) {
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
@@ -304,14 +306,8 @@ unique_ptr<BoundAggregateExpression> FunctionBinder::BindAggregateFunction(Aggre
 	// check if we need to add casts to the children
 	CastToFunctionArguments(bound_function, children);
 
-	// Special case: for ORDER BY aggregates, we wrap the aggregate function in a SortedAggregateFunction
-	// The children are the sort clauses and the binding contains the ordering data.
-	if (order_bys && !order_bys->orders.empty()) {
-		bind_info = BindSortedAggregate(bound_function, children, move(bind_info), move(order_bys));
-	}
-
-	return make_unique<BoundAggregateExpression>(move(bound_function), move(children), move(filter), move(bind_info),
-	                                             aggr_type);
+	return make_uniq<BoundAggregateExpression>(std::move(bound_function), std::move(children), std::move(filter),
+	                                           std::move(bind_info), aggr_type);
 }
 
 } // namespace duckdb

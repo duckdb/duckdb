@@ -68,9 +68,9 @@ struct FirstFunction : public FirstFunctionBase {
 template <bool LAST, bool SKIP_NULLS>
 struct FirstFunctionString : public FirstFunctionBase {
 	template <class STATE>
-	static void SetValue(STATE *state, string_t value, bool is_null) {
+	static void SetValue(STATE *state, AggregateInputData &input_data, string_t value, bool is_null) {
 		if (LAST && state->is_set) {
-			Destroy(state);
+			Destroy(input_data, state);
 		}
 		if (is_null) {
 			if (!SKIP_NULLS) {
@@ -79,13 +79,14 @@ struct FirstFunctionString : public FirstFunctionBase {
 			}
 		} else {
 			state->is_set = true;
+			state->is_null = false;
 			if (value.IsInlined()) {
 				state->value = value;
 			} else {
 				// non-inlined string, need to allocate space for it
 				auto len = value.GetSize();
 				auto ptr = new char[len];
-				memcpy(ptr, value.GetDataUnsafe(), len);
+				memcpy(ptr, value.GetData(), len);
 
 				state->value = string_t(ptr, len);
 			}
@@ -93,9 +94,10 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &input_data, INPUT_TYPE *input, ValidityMask &mask,
+	                      idx_t idx) {
 		if (LAST || !state->is_set) {
-			SetValue(state, input[idx], !mask.RowIsValid(idx));
+			SetValue(state, input_data, input[idx], !mask.RowIsValid(idx));
 		}
 	}
 
@@ -106,9 +108,9 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE *target, AggregateInputData &input_data) {
 		if (source.is_set && (LAST || !target->is_set)) {
-			SetValue(target, source.value, source.is_null);
+			SetValue(target, input_data, source.value, source.is_null);
 		}
 	}
 
@@ -122,9 +124,9 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		if (state->is_set && !state->is_null && !state->value.IsInlined()) {
-			delete[] state->value.GetDataUnsafe();
+			delete[] state->value.GetData();
 		}
 	}
 };
@@ -141,7 +143,7 @@ struct FirstVectorFunction {
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
+	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
 		if (state->value) {
 			delete state->value;
 		}
@@ -321,9 +323,9 @@ template <bool LAST, bool SKIP_NULLS>
 unique_ptr<FunctionData> BindFirst(ClientContext &context, AggregateFunction &function,
                                    vector<unique_ptr<Expression>> &arguments) {
 	auto input_type = arguments[0]->return_type;
-	auto name = move(function.name);
+	auto name = std::move(function.name);
 	function = GetFirstOperator<LAST, SKIP_NULLS>(input_type);
-	function.name = move(name);
+	function.name = std::move(name);
 	if (function.bind) {
 		return function.bind(context, function, arguments);
 	} else {

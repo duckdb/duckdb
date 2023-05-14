@@ -1626,7 +1626,9 @@ int32_t FixedDecimal::decimals(double n) {
 
     // Slow path, convert with sprintf, parse converted output.
     char  buf[30] = {0};
-    sprintf(buf, "%1.15e", n);
+    int used_buffer = snprintf(buf, 30, "%1.15e", n);
+    (void)used_buffer;
+    U_ASSERT(used_buffer > 0);
     // formatted number looks like this: 1.234567890123457e-01
     int exponent = atoi(buf+18);
     int numFractionDigits = 15;

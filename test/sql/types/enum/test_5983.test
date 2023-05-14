@@ -1,0 +1,26 @@
+# name: test/sql/types/enum/test_5983.test
+# description: Test ENUM blowup
+# group: [enum]
+
+require tpch
+
+load __TEST_DIR__/test_enum_blowup.db
+
+
+statement ok
+CALL DBGEN(sf=0.01);
+
+statement ok
+create type orderkey_enum as enum (Select (l_orderkey/4)::VARCHAR from lineitem);
+
+statement ok
+create table t2 (c1 orderkey_enum);
+
+statement ok
+insert into t2 (select (l_orderkey/4)::VARCHAR from lineitem);
+
+statement ok
+CREATE TYPE l_comment_enum as ENUM(select l_comment from lineitem);
+
+statement ok
+CREATE TABLE lineitem2 (comment l_comment_enum);

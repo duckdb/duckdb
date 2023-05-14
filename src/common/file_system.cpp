@@ -10,6 +10,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -39,11 +40,8 @@ FileSystem::~FileSystem() {
 }
 
 FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
-	return *context.db->config.file_system;
-}
-
-FileOpener *FileSystem::GetFileOpener(ClientContext &context) {
-	return ClientData::Get(context).file_opener.get();
+	auto &client_data = ClientData::Get(context);
+	return *client_data.client_file_system;
 }
 
 bool PathMatched(const string &path, const string &sub_path) {
@@ -80,7 +78,7 @@ idx_t FileSystem::GetAvailableMemory() {
 }
 
 string FileSystem::GetWorkingDirectory() {
-	auto buffer = unique_ptr<char[]>(new char[PATH_MAX]);
+	auto buffer = make_unsafe_array<char>(PATH_MAX);
 	char *ret = getcwd(buffer.get(), PATH_MAX);
 	if (!ret) {
 		throw IOException("Could not get working directory!");
@@ -150,7 +148,7 @@ string FileSystem::GetWorkingDirectory() {
 	if (count == 0) {
 		throw IOException("Could not get working directory!");
 	}
-	auto buffer = unique_ptr<char[]>(new char[count]);
+	auto buffer = make_unsafe_array<char>(count);
 	idx_t ret = GetCurrentDirectory(count, buffer.get());
 	if (count != ret + 1) {
 		throw IOException("Could not get working directory!");
@@ -176,7 +174,7 @@ string FileSystem::ConvertSeparators(const string &path) {
 	return StringUtil::Replace(path, "/", separator_str);
 }
 
-string FileSystem::ExtractBaseName(const string &path) {
+string FileSystem::ExtractName(const string &path) {
 	if (path.empty()) {
 		return string();
 	}
@@ -184,12 +182,19 @@ string FileSystem::ExtractBaseName(const string &path) {
 	auto sep = PathSeparator();
 	auto splits = StringUtil::Split(normalized_path, sep);
 	D_ASSERT(!splits.empty());
-	auto vec = StringUtil::Split(splits.back(), ".");
+	return splits.back();
+}
+
+string FileSystem::ExtractBaseName(const string &path) {
+	if (path.empty()) {
+		return string();
+	}
+	auto vec = StringUtil::Split(ExtractName(path), ".");
 	D_ASSERT(!vec.empty());
 	return vec[0];
 }
 
-string FileSystem::GetHomeDirectory(FileOpener *opener) {
+string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 	// read the home_directory setting first, if it is set
 	if (opener) {
 		Value result;
@@ -211,7 +216,11 @@ string FileSystem::GetHomeDirectory(FileOpener *opener) {
 	return string();
 }
 
-string FileSystem::ExpandPath(const string &path, FileOpener *opener) {
+string FileSystem::GetHomeDirectory() {
+	return GetHomeDirectory(nullptr);
+}
+
+string FileSystem::ExpandPath(const string &path, optional_ptr<FileOpener> opener) {
 	if (path.empty()) {
 		return path;
 	}
@@ -219,6 +228,10 @@ string FileSystem::ExpandPath(const string &path, FileOpener *opener) {
 		return GetHomeDirectory(opener) + path.substr(1);
 	}
 	return path;
+}
+
+string FileSystem::ExpandPath(const string &path) {
+	return FileSystem::ExpandPath(path, nullptr);
 }
 
 // LCOV_EXCL_START
@@ -271,7 +284,8 @@ void FileSystem::RemoveDirectory(const string &directory) {
 	throw NotImplementedException("%s: RemoveDirectory is not implemented!", GetName());
 }
 
-bool FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback) {
+bool FileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
+                           FileOpener *opener) {
 	throw NotImplementedException("%s: ListFiles is not implemented!", GetName());
 }
 
@@ -299,10 +313,6 @@ vector<string> FileSystem::Glob(const string &path, FileOpener *opener) {
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
 }
 
-vector<string> FileSystem::Glob(const string &path, ClientContext &context) {
-	return Glob(path, GetFileOpener(context));
-}
-
 void FileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
 	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
 }
@@ -311,8 +321,45 @@ void FileSystem::RegisterSubSystem(FileCompressionType compression_type, unique_
 	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
 }
 
+void FileSystem::UnregisterSubSystem(const string &name) {
+	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
+}
+
+vector<string> FileSystem::ListSubSystems() {
+	throw NotImplementedException("%s: Can't list sub systems on a non-virtual file system", GetName());
+}
+
 bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
+}
+
+vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options) {
+	auto result = Glob(pattern);
+	if (result.empty()) {
+		string required_extension;
+		const string prefixes[] = {"http://", "https://", "s3://"};
+		for (auto &prefix : prefixes) {
+			if (StringUtil::StartsWith(pattern, prefix)) {
+				required_extension = "httpfs";
+				break;
+			}
+		}
+		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
+			// an extension is required to read this file but it is not loaded - try to load it
+			ExtensionHelper::LoadExternalExtension(context, required_extension);
+			// success! glob again
+			// check the extension is loaded just in case to prevent an infinite loop here
+			if (!context.db->ExtensionIsLoaded(required_extension)) {
+				throw InternalException("Extension load \"%s\" did not throw but somehow the extension was not loaded",
+				                        required_extension);
+			}
+			return GlobFiles(pattern, context, options);
+		}
+		if (options == FileGlobOptions::DISALLOW_EMPTY) {
+			throw IOException("No files found that match the pattern \"%s\"", pattern);
+		}
+	}
+	return result;
 }
 
 void FileSystem::Seek(FileHandle &handle, idx_t location) {
@@ -340,7 +387,7 @@ bool FileSystem::OnDiskFile(FileHandle &handle) {
 }
 // LCOV_EXCL_STOP
 
-FileHandle::FileHandle(FileSystem &file_system, string path_p) : file_system(file_system), path(move(path_p)) {
+FileHandle::FileHandle(FileSystem &file_system, string path_p) : file_system(file_system), path(std::move(path_p)) {
 }
 
 FileHandle::~FileHandle() {

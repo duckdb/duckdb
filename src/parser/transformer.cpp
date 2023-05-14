@@ -3,6 +3,8 @@
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/parser_options.hpp"
 
 namespace duckdb {
 
@@ -20,22 +22,34 @@ StackChecker::StackChecker(StackChecker &&other) noexcept
 	other.stack_usage = 0;
 }
 
-Transformer::Transformer(idx_t max_expression_depth_p)
-    : parent(nullptr), max_expression_depth(max_expression_depth_p), stack_depth(DConstants::INVALID_INDEX) {
+Transformer::Transformer(ParserOptions &options)
+    : parent(nullptr), options(options), stack_depth(DConstants::INVALID_INDEX) {
 }
 
-Transformer::Transformer(Transformer *parent)
-    : parent(parent), max_expression_depth(parent->max_expression_depth), stack_depth(DConstants::INVALID_INDEX) {
+Transformer::Transformer(Transformer &parent)
+    : parent(&parent), options(parent.options), stack_depth(DConstants::INVALID_INDEX) {
+}
+
+Transformer::~Transformer() {
+}
+
+void Transformer::Clear() {
+	SetParamCount(0);
+	pivot_entries.clear();
 }
 
 bool Transformer::TransformParseTree(duckdb_libpgquery::PGList *tree, vector<unique_ptr<SQLStatement>> &statements) {
 	InitializeStackCheck();
 	for (auto entry = tree->head; entry != nullptr; entry = entry->next) {
-		SetParamCount(0);
-		auto stmt = TransformStatement((duckdb_libpgquery::PGNode *)entry->data.ptr_value);
+		Clear();
+		auto n = (duckdb_libpgquery::PGNode *)entry->data.ptr_value;
+		auto stmt = TransformStatement(n);
 		D_ASSERT(stmt);
+		if (HasPivotEntries()) {
+			stmt = CreatePivotStatement(std::move(stmt));
+		}
 		stmt->n_param = ParamCount();
-		statements.push_back(move(stmt));
+		statements.push_back(std::move(stmt));
 	}
 	return true;
 }
@@ -45,23 +59,68 @@ void Transformer::InitializeStackCheck() {
 }
 
 StackChecker Transformer::StackCheck(idx_t extra_stack) {
-	auto node = this;
-	while (node->parent) {
-		node = node->parent;
-	}
-	D_ASSERT(node->stack_depth != DConstants::INVALID_INDEX);
-	if (node->stack_depth + extra_stack >= max_expression_depth) {
+	auto &root = RootTransformer();
+	D_ASSERT(root.stack_depth != DConstants::INVALID_INDEX);
+	if (root.stack_depth + extra_stack >= options.max_expression_depth) {
 		throw ParserException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
 		                      "increase the maximum expression depth.",
-		                      max_expression_depth);
+		                      options.max_expression_depth);
 	}
-	return StackChecker(*node, extra_stack);
+	return StackChecker(root, extra_stack);
 }
 
 unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNode *stmt) {
 	auto result = TransformStatementInternal(stmt);
 	result->n_param = ParamCount();
+	if (!named_param_map.empty()) {
+		// Avoid overriding a previous move with nothing
+		result->named_param_map = std::move(named_param_map);
+	}
 	return result;
+}
+
+Transformer &Transformer::RootTransformer() {
+	reference<Transformer> node = *this;
+	while (node.get().parent) {
+		node = *node.get().parent;
+	}
+	return node.get();
+}
+
+const Transformer &Transformer::RootTransformer() const {
+	reference<const Transformer> node = *this;
+	while (node.get().parent) {
+		node = *node.get().parent;
+	}
+	return node.get();
+}
+
+idx_t Transformer::ParamCount() const {
+	auto &root = RootTransformer();
+	return root.prepared_statement_parameter_index;
+}
+
+void Transformer::SetParamCount(idx_t new_count) {
+	auto &root = RootTransformer();
+	root.prepared_statement_parameter_index = new_count;
+}
+void Transformer::SetNamedParam(const string &name, int32_t index) {
+	auto &root = RootTransformer();
+	D_ASSERT(!root.named_param_map.count(name));
+	root.named_param_map[name] = index;
+}
+bool Transformer::GetNamedParam(const string &name, int32_t &index) {
+	auto &root = RootTransformer();
+	auto entry = root.named_param_map.find(name);
+	if (entry == root.named_param_map.end()) {
+		return false;
+	}
+	index = entry->second;
+	return true;
+}
+bool Transformer::HasNamedParameters() const {
+	auto &root = RootTransformer();
+	return !root.named_param_map.empty();
 }
 
 unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgquery::PGNode *stmt) {
@@ -139,10 +198,17 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformCreateType(stmt);
 	case duckdb_libpgquery::T_PGAlterSeqStmt:
 		return TransformAlterSequence(stmt);
+	case duckdb_libpgquery::T_PGAttachStmt:
+		return TransformAttach(stmt);
+	case duckdb_libpgquery::T_PGDetachStmt:
+		return TransformDetach(stmt);
+	case duckdb_libpgquery::T_PGUseStmt:
+		return TransformUse(stmt);
+	case duckdb_libpgquery::T_PGCreateDatabaseStmt:
+		return TransformCreateDatabase(stmt);
 	default:
 		throw NotImplementedException(NodetypeToString(stmt->type));
 	}
-	return nullptr;
 }
 
 } // namespace duckdb

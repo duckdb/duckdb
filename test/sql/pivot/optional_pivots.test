@@ -1,0 +1,65 @@
+# name: test/sql/pivot/optional_pivots.test
+# description: Test pivot syntax with various optional statements
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Cities(Country VARCHAR, Name VARCHAR, Year INT, Population INT);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2000, 1005);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2010, 1065);
+
+statement ok
+INSERT INTO Cities VALUES ('NL', 'Amsterdam', 2020, 1158);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2000, 564);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2010, 608);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'Seattle', 2020, 738);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2000, 8015);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2010, 8175);
+
+statement ok
+INSERT INTO Cities VALUES ('US', 'New York City', 2020, 8772);
+
+query I
+PIVOT Cities USING SUM(Population);
+----
+30100
+
+query II rowsort
+PIVOT Cities USING SUM(Population) GROUP BY Country;
+----
+NL	3228
+US	26872
+
+query I rowsort
+PIVOT Cities GROUP BY Country;
+----
+NL
+US
+
+query IIII rowsort
+PIVOT Cities ON Year GROUP BY Country;
+----
+NL	1	1	1
+US	2	2	2
+
+query IIII rowsort
+PIVOT (SELECT Country, Year FROM Cities) ON Year;
+----
+NL	1	1	1
+US	2	2	2

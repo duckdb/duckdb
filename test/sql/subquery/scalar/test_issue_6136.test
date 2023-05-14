@@ -1,0 +1,48 @@
+# name: test/sql/subquery/scalar/test_issue_6136.test
+# description: Issue 6136: Segfault when running query with correlated subqueries
+# group: [scalar]
+
+statement ok
+create table r as select * from values (1, 1, 'a', 'A'), (1, null, 'b', 'B'), (1, 2, 'c', 'C'), (2, null, 'd', 'D') t(ra, rb, x, y);
+
+statement ok
+create table b as select * from values (1, 1, 1), (2, 1, 2), (3, 1, 3), (4, 1, null), (5, 2, 1), (6, 2, null), (7, 99, 99) t(id, ba, bb);
+
+statement ok
+select
+  (select {'__matches': count(*)} from r where ba = ra and bb = rb group by ra, rb) as ref1,
+from b;
+
+# this is non-deterministic since the subqueries return multiple rows
+statement ok
+select
+  id,
+  ba,
+  bb,
+  coalesce((select {'x': first(x), 'y': first(y), '__matches': count(*)} from r where ba = ra and bb = rb group by ra, rb), {'x': null, 'y': null, '__matches': 0}) as ref1,
+  coalesce((select {'x': first(x), 'y': first(y), '__matches': count(*)} from r where ba = ra and (bb = rb or rb is null) group by ra, rb order by bb = rb), {'x': null, 'y': null, '__matches': 0}) as ref2,
+  coalesce((select {'x': first(x), 'y': first(y), '__matches': count(*)} from r where (ba = ra or ra is null) and (bb = rb or rb is null) group by ra, rb order by ba = ra, bb = rb), {'x': null, 'y': null, '__matches': 0}) as ref3,
+  coalesce((select {'x': first(x), 'y': first(y), '__matches': count(*)} from r where (ba = ra or ra is null) group by ra order by ba = ra), {'x': null, 'y': null, '__matches': 0}) as ref4,
+from b
+
+statement ok
+PRAGMA enable_verification
+
+# postgres compatible variant
+query IIIII
+select
+  id,
+  ba,
+  bb,
+  coalesce((select ROW(min(x), min(y), count(*)) from r where ba = ra and bb = rb group by ra, rb), ROW(null, null, 0)) as ref1,
+  coalesce((select ROW(min(x), min(y), count(*)) from r where (ba = ra or ra is null) group by ra order by ba = ra), ROW(null, null, 0)) as ref4
+from b
+ORDER BY 1, 2, 3;
+----
+1	1	1	{'min(x)': a, 'min(y)': A, 'count_star()': 1}	{'min(x)': a, 'min(y)': A, 'count_star()': 3}
+2	1	2	{'min(x)': c, 'min(y)': C, 'count_star()': 1}	{'min(x)': a, 'min(y)': A, 'count_star()': 3}
+3	1	3	{'min(x)': NULL, 'min(y)': NULL, 'count_star()': 0}	{'min(x)': a, 'min(y)': A, 'count_star()': 3}
+4	1	NULL	{'min(x)': NULL, 'min(y)': NULL, 'count_star()': 0}	{'min(x)': a, 'min(y)': A, 'count_star()': 3}
+5	2	1	{'min(x)': NULL, 'min(y)': NULL, 'count_star()': 0}	{'min(x)': d, 'min(y)': D, 'count_star()': 1}
+6	2	NULL	{'min(x)': NULL, 'min(y)': NULL, 'count_star()': 0}	{'min(x)': d, 'min(y)': D, 'count_star()': 1}
+7	99	99	{'min(x)': NULL, 'min(y)': NULL, 'count_star()': 0}	{'min(x)': NULL, 'min(y)': NULL, 'count_star()': 0}

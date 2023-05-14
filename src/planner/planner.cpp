@@ -8,8 +8,8 @@
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 namespace duckdb {
 
@@ -41,7 +41,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 
 		this->names = bound_statement.names;
 		this->types = bound_statement.types;
-		this->plan = move(bound_statement.plan);
+		this->plan = std::move(bound_statement.plan);
 
 		auto max_tree_depth = ClientConfig::GetConfig(context).max_expression_depth;
 		CheckTreeDepth(*plan, max_tree_depth);
@@ -61,7 +61,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 			if (bound_statement.plan != nullptr) {
 				this->names = bound_statement.names;
 				this->types = bound_statement.types;
-				this->plan = move(bound_statement.plan);
+				this->plan = std::move(bound_statement.plan);
 				break;
 			}
 		}
@@ -95,15 +95,15 @@ void Planner::CreatePlan(SQLStatement &statement) {
 shared_ptr<PreparedStatementData> Planner::PrepareSQLStatement(unique_ptr<SQLStatement> statement) {
 	auto copied_statement = statement->Copy();
 	// create a plan of the underlying statement
-	CreatePlan(move(statement));
+	CreatePlan(std::move(statement));
 	// now create the logical prepare
 	auto prepared_data = make_shared<PreparedStatementData>(copied_statement->type);
-	prepared_data->unbound_statement = move(copied_statement);
+	prepared_data->unbound_statement = std::move(copied_statement);
 	prepared_data->names = names;
 	prepared_data->types = types;
-	prepared_data->value_map = move(value_map);
+	prepared_data->value_map = std::move(value_map);
 	prepared_data->properties = properties;
-	prepared_data->catalog_version = Transaction::GetTransaction(context).catalog_version;
+	prepared_data->catalog_version = MetaTransaction::Get(context).catalog_version;
 	return prepared_data;
 }
 
@@ -132,6 +132,8 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 	case StatementType::PREPARE_STATEMENT:
 	case StatementType::EXECUTE_STATEMENT:
 	case StatementType::LOGICAL_PLAN_STATEMENT:
+	case StatementType::ATTACH_STATEMENT:
+	case StatementType::DETACH_STATEMENT:
 		CreatePlan(*statement);
 		break;
 	default:
@@ -141,26 +143,11 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 
 static bool OperatorSupportsSerialization(LogicalOperator &op) {
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_INSERT:
-	case LogicalOperatorType::LOGICAL_UPDATE:
-	case LogicalOperatorType::LOGICAL_DELETE:
 	case LogicalOperatorType::LOGICAL_PREPARE:
 	case LogicalOperatorType::LOGICAL_EXECUTE:
-	case LogicalOperatorType::LOGICAL_ALTER:
-	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
-	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
-	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
-	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
-	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
-	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
-	case LogicalOperatorType::LOGICAL_DROP:
 	case LogicalOperatorType::LOGICAL_PRAGMA:
-	case LogicalOperatorType::LOGICAL_TRANSACTION:
-	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
-	case LogicalOperatorType::LOGICAL_LOAD:
-	case LogicalOperatorType::LOGICAL_VACUUM:
 		// unsupported (for now)
 		return false;
 	default:
@@ -175,6 +162,10 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 }
 
 void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op, bound_parameter_map_t *map) {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	// if alternate verification is enabled we run the original operator
+	return;
+#endif
 	if (!op || !ClientConfig::GetConfig(context).verify_serializer) {
 		return;
 	}
@@ -184,6 +175,7 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 	}
 
 	BufferedSerializer serializer;
+	serializer.is_query_plan = true;
 	try {
 		op->Serialize(serializer);
 	} catch (NotImplementedException &ex) {
@@ -191,14 +183,14 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 		return;
 	}
 	auto data = serializer.GetData();
-	auto deserializer = BufferedDeserializer(data.data.get(), data.size);
+	auto deserializer = BufferedContextDeserializer(context, data.data.get(), data.size);
 
 	PlanDeserializationState state(context);
 	auto new_plan = LogicalOperator::Deserialize(deserializer, state);
 	if (map) {
-		*map = move(state.parameter_data);
+		*map = std::move(state.parameter_data);
 	}
-	op = move(new_plan);
+	op = std::move(new_plan);
 }
 
 } // namespace duckdb
