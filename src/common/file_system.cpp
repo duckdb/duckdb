@@ -54,6 +54,14 @@ bool PathMatched(const string &path, const string &sub_path) {
 
 #ifndef _WIN32
 
+string FileSystem::GetEnvironmentVariable(const string &name) {
+	const char *env = getenv(name.c_str());
+	if (!env) {
+		return string();
+	}
+	return env;
+}
+
 bool FileSystem::IsPathAbsolute(const string &path) {
 	auto path_separator = FileSystem::PathSeparator();
 	return PathMatched(path, path_separator);
@@ -93,6 +101,18 @@ string FileSystem::NormalizeAbsolutePath(const string &path) {
 }
 
 #else
+
+string FileSystem::GetEnvironmentVariable(const string &name) {
+	// first convert the environment variable name to the correct encoding
+	auto env_w = WindowsUtil::UTF8ToUnicode(env.c_str());
+	// use _wgetenv to get the value
+	auto res_w = _wgetenv(env_w.c_str());
+	if (!res_w) {
+		// no environment variable of this name found
+		return nullptr;
+	}
+	return WindowsUtil::UnicodeToUTF8(res_w);
+}
 
 bool FileSystem::IsPathAbsolute(const string &path) {
 	// 1) A single backslash or forward-slash
@@ -196,18 +216,6 @@ string FileSystem::ExtractBaseName(const string &path) {
 	return vec[0];
 }
 
-string GetWindowsEnvironmentVariable(const string &env) {
-	// first convert the environment variable name to the correct encoding
-	auto env_w = WindowsUtil::UTF8ToUnicode(env.c_str());
-	// use _wgetenv to get the value
-	auto res_w = _wgetenv(env_w.c_str());
-	if (!res_w) {
-		// no environment variable of this name found
-		return nullptr;
-	}
-	return WindowsUtil::UnicodeToUTF8(res_w);
-}
-
 string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 	// read the home_directory setting first, if it is set
 	if (opener) {
@@ -220,14 +228,10 @@ string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 	}
 	// fallback to the default home directories for the specified system
 #ifdef DUCKDB_WINDOWS
-	return GetWindowsEnvironmentVariable("USERPROFILE");
+	return FileSystem::GetEnvironmentVariable("USERPROFILE");
 #else
-	const char *homedir = getenv("HOME");
-	if (homedir) {
-		return homedir;
-	}
+	return FileSystem::GetEnvironmentVariable("HOME");
 #endif
-	return string();
 }
 
 string FileSystem::GetHomeDirectory() {

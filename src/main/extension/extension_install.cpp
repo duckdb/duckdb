@@ -143,7 +143,8 @@ unsafe_array_ptr<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string 
 }
 
 void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, idx_t data_size) {
-	auto target_file = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	auto target_file = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND |
+	                                         FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	target_file->Write(data, data_size);
 	target_file->Close();
 	target_file.reset();
@@ -233,7 +234,7 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 	}
 	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
 
-	WriteExtensionFileToDisk(fs, temp_path, (void *) decompressed_body.data(), decompressed_body.size());
+	WriteExtensionFileToDisk(fs, temp_path, (void *)decompressed_body.data(), decompressed_body.size());
 	fs.MoveFile(temp_path, local_extension_path);
 #endif
 }

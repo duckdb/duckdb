@@ -190,6 +190,9 @@ public:
 	//! Extract the name of a file (e.g if the input is lib/example.dll the name is 'example.dll')
 	DUCKDB_API static string ExtractName(const string &path);
 
+	//! Returns the value of an environment variable - or the empty string if it is not set
+	DUCKDB_API static string GetEnvironmentVariable(const string &name);
+
 	//! Runs a glob on the file system, returning a list of matching files
 	DUCKDB_API virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr);
 	DUCKDB_API vector<string> GlobFiles(const string &path, ClientContext &context,
