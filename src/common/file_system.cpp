@@ -11,6 +11,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/common/windows_util.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -123,8 +124,9 @@ string FileSystem::PathSeparator() {
 }
 
 void FileSystem::SetWorkingDirectory(const string &path) {
-	if (!SetCurrentDirectory(path.c_str())) {
-		throw IOException("Could not change working directory!");
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
+	if (!SetCurrentDirectoryW(unicode_path.c_str())) {
+		throw IOException("Could not change working directory to \"%s\"", path);
 	}
 }
 
@@ -144,16 +146,16 @@ idx_t FileSystem::GetAvailableMemory() {
 }
 
 string FileSystem::GetWorkingDirectory() {
-	idx_t count = GetCurrentDirectory(0, nullptr);
+	idx_t count = GetCurrentDirectoryW(0, nullptr);
 	if (count == 0) {
 		throw IOException("Could not get working directory!");
 	}
-	auto buffer = make_unsafe_array<char>(count);
-	idx_t ret = GetCurrentDirectory(count, buffer.get());
+	auto buffer = make_unsafe_array<wchar_t>(count);
+	idx_t ret = GetCurrentDirectoryW(count, buffer.get());
 	if (count != ret + 1) {
 		throw IOException("Could not get working directory!");
 	}
-	return string(buffer.get(), ret);
+	return WindowsUtil::UnicodeToUTF8(buffer.get());
 }
 
 #endif
