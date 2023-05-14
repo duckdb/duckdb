@@ -415,7 +415,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 	for (auto &entry : unpivot.entries) {
 		if (entry.star_expr) {
 			D_ASSERT(entry.values.empty());
-			vector<unique_ptr<ParsedExpression>> star_columns;
+			unsafe_vector<unique_ptr<ParsedExpression>> star_columns;
 			child_binder.ExpandStarExpression(std::move(entry.star_expr), star_columns);
 
 			for (auto &col : star_columns) {
@@ -549,7 +549,7 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 	star_binder->Bind(*copied_source);
 
 	// figure out the set of column names that are in the source of the pivot
-	vector<unique_ptr<ParsedExpression>> all_columns;
+	unsafe_vector<unique_ptr<ParsedExpression>> all_columns;
 	star_binder->ExpandStarExpression(make_uniq<StarExpression>(), all_columns);
 
 	unique_ptr<SelectNode> select_node;

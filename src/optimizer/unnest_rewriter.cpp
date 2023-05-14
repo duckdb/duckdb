@@ -195,18 +195,24 @@ void UnnestRewriter::UpdateRHSBindings(unique_ptr<LogicalOperator> *plan_ptr, un
 		updater.replace_bindings.push_back(replace_binding);
 	}
 
-	// temporarily remove the BOUND_UNNEST and the child of the LOGICAL_UNNEST from the plan
+	// temporarily remove the BOUND_UNNESTs and the child of the LOGICAL_UNNEST from the plan
 	D_ASSERT(curr_op->get()->type == LogicalOperatorType::LOGICAL_UNNEST);
 	auto &unnest = curr_op->get()->Cast<LogicalUnnest>();
-	auto temp_bound_unnest = std::move(unnest.expressions[0]);
+	vector<unique_ptr<Expression>> temp_bound_unnests;
+	for (auto &temp_bound_unnest : unnest.expressions) {
+		temp_bound_unnests.push_back(std::move(temp_bound_unnest));
+	}
+	D_ASSERT(unnest.children.size() == 1);
 	auto temp_unnest_child = std::move(unnest.children[0]);
 	unnest.expressions.clear();
 	unnest.children.clear();
 	// update the bindings of the plan
 	updater.VisitOperator(*plan_ptr->get());
 	updater.replace_bindings.clear();
-	// add the child again
-	unnest.expressions.push_back(std::move(temp_bound_unnest));
+	// add the children again
+	for (auto &temp_bound_unnest : temp_bound_unnests) {
+		unnest.expressions.push_back(std::move(temp_bound_unnest));
+	}
 	unnest.children.push_back(std::move(temp_unnest_child));
 
 	// add the LHS expressions to each LOGICAL_PROJECTION
@@ -256,6 +262,7 @@ void UnnestRewriter::UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &update
 	D_ASSERT(curr_op->get()->type == LogicalOperatorType::LOGICAL_UNNEST);
 	auto &unnest = curr_op->get()->Cast<LogicalUnnest>();
 
+	D_ASSERT(unnest.children.size() == 1);
 	auto unnest_child_cols = unnest.children[0]->GetColumnBindings();
 	for (idx_t delim_col_idx = 0; delim_col_idx < delim_columns.size(); delim_col_idx++) {
 		for (idx_t child_col_idx = 0; child_col_idx < unnest_child_cols.size(); child_col_idx++) {
@@ -268,8 +275,9 @@ void UnnestRewriter::UpdateBoundUnnestBindings(UnnestRewriterPlanUpdater &update
 	}
 
 	// update bindings
-	D_ASSERT(unnest.expressions.size() == 1);
-	updater.VisitExpression(&unnest.expressions[0]);
+	for (auto &unnest_expr : unnest.expressions) {
+		updater.VisitExpression(&unnest_expr);
+	}
 	updater.replace_bindings.clear();
 }
 

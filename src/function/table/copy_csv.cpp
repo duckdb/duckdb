@@ -324,14 +324,10 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 			csv_data.options.write_date_format[LogicalTypeId::DATE].ConvertDateVector(
 			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
 		} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
-		           csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
+		           (csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP ||
+		            csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP_TZ)) {
 			// use the timestamp format to cast the chunk
 			csv_data.options.write_date_format[LogicalTypeId::TIMESTAMP].ConvertTimestampVector(
-			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
-		} else if (options.has_format[LogicalTypeId::TIMESTAMP_TZ] &&
-		           csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP_TZ) {
-			// use the timestamp format to cast the chunk
-			csv_data.options.write_date_format[LogicalTypeId::TIMESTAMP_TZ].ConvertTimestampVector(
 			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
 		} else {
 			// non varchar column, perform the cast

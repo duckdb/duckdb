@@ -417,6 +417,7 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 	if (format_string.empty()) {
 		return "Empty format string";
 	}
+	format.format_specifier = format_string;
 	format.specifiers.clear();
 	format.literals.clear();
 	format.numeric_width.clear();

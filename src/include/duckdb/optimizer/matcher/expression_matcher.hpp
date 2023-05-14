@@ -70,7 +70,7 @@ public:
 	    : ExpressionMatcher(ExpressionClass::BOUND_COMPARISON), policy(SetMatcher::Policy::INVALID) {
 	}
 	//! The matchers for the child expressions
-	vector<unique_ptr<ExpressionMatcher>> matchers;
+	unsafe_vector<unique_ptr<ExpressionMatcher>> matchers;
 	//! The set matcher matching policy to use
 	SetMatcher::Policy policy;
 
@@ -92,7 +92,7 @@ public:
 	InClauseExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_OPERATOR) {
 	}
 	//! The matchers for the child expressions
-	vector<unique_ptr<ExpressionMatcher>> matchers;
+	unsafe_vector<unique_ptr<ExpressionMatcher>> matchers;
 	//! The set matcher matching policy to use
 	SetMatcher::Policy policy;
 
@@ -105,7 +105,7 @@ public:
 	    : ExpressionMatcher(ExpressionClass::BOUND_CONJUNCTION), policy(SetMatcher::Policy::INVALID) {
 	}
 	//! The matchers for the child expressions
-	vector<unique_ptr<ExpressionMatcher>> matchers;
+	unsafe_vector<unique_ptr<ExpressionMatcher>> matchers;
 	//! The set matcher matching policy to use
 	SetMatcher::Policy policy;
 
@@ -117,7 +117,7 @@ public:
 	FunctionExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_FUNCTION) {
 	}
 	//! The matchers for the child expressions
-	vector<unique_ptr<ExpressionMatcher>> matchers;
+	unsafe_vector<unique_ptr<ExpressionMatcher>> matchers;
 	//! The set matcher matching policy to use
 	SetMatcher::Policy policy;
 	//! The function name to match

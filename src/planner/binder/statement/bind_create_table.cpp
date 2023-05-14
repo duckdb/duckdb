@@ -256,6 +256,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	if (base.query) {
 		// construct the result object
 		auto query_obj = Bind(*base.query);
+		base.query.reset();
 		result->query = std::move(query_obj.plan);
 
 		// construct the set of columns based on the names and types of the query

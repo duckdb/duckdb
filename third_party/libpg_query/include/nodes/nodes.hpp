@@ -814,4 +814,13 @@ typedef enum PGOnConflictActionAlias {
 	PG_ONCONFLICT_ALIAS_IGNORE   /* INSERT OR IGNORE */
 } PGOnConflictActionAlias;
 
+/*
+ * PGInsertByNameOrPosition
+ *    "INSERT BY [POSITION|NAME]
+ */
+typedef enum PGInsertColumnOrder {
+	PG_INSERT_BY_POSITION,    /* INSERT BY POSITION (default behavior) */
+	PG_INSERT_BY_NAME,        /* INSERT BY NAME */
+} PGInsertColumnOrder;
+
 }

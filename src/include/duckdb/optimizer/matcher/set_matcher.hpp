@@ -29,7 +29,7 @@ public:
 
 	/* The double {{}} in the intializer for excluded_entries is intentional, workaround for bug in gcc-4.9 */
 	template <class T, class MATCHER>
-	static bool MatchRecursive(vector<unique_ptr<MATCHER>> &matchers, vector<reference<T>> &entries,
+	static bool MatchRecursive(unsafe_vector<unique_ptr<MATCHER>> &matchers, vector<reference<T>> &entries,
 	                           vector<reference<T>> &bindings, unordered_set<idx_t> excluded_entries, idx_t m_idx = 0) {
 		if (m_idx == matchers.size()) {
 			// matched all matchers!
@@ -65,7 +65,7 @@ public:
 	}
 
 	template <class T, class MATCHER>
-	static bool Match(vector<unique_ptr<MATCHER>> &matchers, vector<reference<T>> &entries,
+	static bool Match(unsafe_vector<unique_ptr<MATCHER>> &matchers, vector<reference<T>> &entries,
 	                  vector<reference<T>> &bindings, Policy policy) {
 		if (policy == Policy::ORDERED) {
 			// ordered policy, count has to match
@@ -100,7 +100,7 @@ public:
 	}
 
 	template <class T, class MATCHER>
-	static bool Match(vector<unique_ptr<MATCHER>> &matchers, vector<unique_ptr<T>> &entries,
+	static bool Match(unsafe_vector<unique_ptr<MATCHER>> &matchers, vector<unique_ptr<T>> &entries,
 	                  vector<reference<T>> &bindings, Policy policy) {
 		// convert vector of unique_ptr to vector of normal pointers
 		vector<reference<T>> ptr_entries;

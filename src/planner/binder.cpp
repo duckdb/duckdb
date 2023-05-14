@@ -464,7 +464,7 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 
 	vector<unique_ptr<Expression>> projection_expressions;
 	LogicalType result_type;
-	vector<unique_ptr<ParsedExpression>> new_returning_list;
+	unsafe_vector<unique_ptr<ParsedExpression>> new_returning_list;
 	binder->ExpandStarExpressions(returning_list, new_returning_list);
 	for (auto &returning_expr : new_returning_list) {
 		VerifyNotExcluded(*returning_expr);

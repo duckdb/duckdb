@@ -145,6 +145,11 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, bool is_set_sc
 			                       is_set_schema ? "schema" : "search_path", path.ToString());
 		}
 	}
+	if (is_set_schema) {
+		if (new_paths[0].catalog == TEMP_CATALOG || new_paths[0].catalog == SYSTEM_CATALOG) {
+			throw CatalogException("SET schema cannot be set to internal schema \"%s\"", new_paths[0].catalog);
+		}
+	}
 	this->set_paths = std::move(new_paths);
 	SetPaths(set_paths);
 }
