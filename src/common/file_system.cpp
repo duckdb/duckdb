@@ -54,7 +54,7 @@ bool PathMatched(const string &path, const string &sub_path) {
 
 #ifndef _WIN32
 
-string FileSystem::GetEnvironmentVariable(const string &name) {
+string FileSystem::GetEnvVariable(const string &name) {
 	const char *env = getenv(name.c_str());
 	if (!env) {
 		return string();
@@ -102,7 +102,7 @@ string FileSystem::NormalizeAbsolutePath(const string &path) {
 
 #else
 
-string FileSystem::GetEnvironmentVariable(const string &name) {
+string FileSystem::GetEnvVariable(const string &env) {
 	// first convert the environment variable name to the correct encoding
 	auto env_w = WindowsUtil::UTF8ToUnicode(env.c_str());
 	// use _wgetenv to get the value
@@ -228,9 +228,9 @@ string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 	}
 	// fallback to the default home directories for the specified system
 #ifdef DUCKDB_WINDOWS
-	return FileSystem::GetEnvironmentVariable("USERPROFILE");
+	return FileSystem::GetEnvVariable("USERPROFILE");
 #else
-	return FileSystem::GetEnvironmentVariable("HOME");
+	return FileSystem::GetEnvVariable("HOME");
 #endif
 }
 

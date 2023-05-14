@@ -191,7 +191,7 @@ public:
 	DUCKDB_API static string ExtractName(const string &path);
 
 	//! Returns the value of an environment variable - or the empty string if it is not set
-	DUCKDB_API static string GetEnvironmentVariable(const string &name);
+	DUCKDB_API static string GetEnvVariable(const string &name);
 
 	//! Runs a glob on the file system, returning a list of matching files
 	DUCKDB_API virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr);
