@@ -321,9 +321,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	    make_uniq<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path, options.compression);
 
 	if (!options.prefix.empty()) {
-		BufferedSerializer serializer;
-		serializer.WriteBufferData(options.prefix);
-		global_data->WriteData(serializer.blob.data.get(), serializer.blob.size);
+		global_data->WriteData((const_data_ptr_t)options.prefix.c_str(), options.prefix.size());
 	}
 
 	if (options.header) {
@@ -361,14 +359,10 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 			csv_data.options.write_date_format[LogicalTypeId::DATE].ConvertDateVector(
 			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
 		} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
-		           csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
+		           (csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP ||
+		            csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP_TZ)) {
 			// use the timestamp format to cast the chunk
 			csv_data.options.write_date_format[LogicalTypeId::TIMESTAMP].ConvertTimestampVector(
-			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
-		} else if (options.has_format[LogicalTypeId::TIMESTAMP_TZ] &&
-		           csv_data.sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP_TZ) {
-			// use the timestamp format to cast the chunk
-			csv_data.options.write_date_format[LogicalTypeId::TIMESTAMP_TZ].ConvertTimestampVector(
 			    input.data[col_idx], cast_chunk.data[col_idx], input.size());
 		} else {
 			// non varchar column, perform the cast
@@ -435,7 +429,7 @@ static void WriteCSVCombine(ExecutionContext &context, FunctionData &bind_data, 
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &writer = local_data.serializer;
 	// flush the local writer
-	if (writer.blob.size > 0) {
+	if (local_data.written_anything) {
 		global_state.WriteRows(writer.blob.data.get(), writer.blob.size, csv_data.newline);
 		writer.Reset();
 	}
@@ -449,15 +443,13 @@ void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFun
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &options = csv_data.options;
 
+	BufferedSerializer serializer;
 	if (!options.suffix.empty()) {
-		BufferedSerializer serializer;
 		serializer.WriteBufferData(options.suffix);
-		global_state.WriteData(serializer.blob.data.get(), serializer.blob.size);
-	} else {
-		BufferedSerializer serializer;
+	} else if (global_state.written_anything) {
 		serializer.WriteBufferData(csv_data.newline);
-		global_state.WriteData(serializer.blob.data.get(), serializer.blob.size);
 	}
+	global_state.WriteData(serializer.blob.data.get(), serializer.blob.size);
 
 	global_state.handle->Close();
 	global_state.handle.reset();

@@ -599,7 +599,6 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			current_reader = gstate.json_readers[gstate.file_index].get();
 			if (current_reader->IsOpen()) {
 				// Can only be open from auto detection, so these should be known
-				D_ASSERT(current_reader->GetFormat() != JSONFormat::AUTO_DETECT);
 				if (!current_reader->IsParallel()) {
 					batch_index = gstate.batch_index++;
 					gstate.file_index++;
@@ -776,6 +775,20 @@ void JSONScanLocalState::SkipOverArrayStart() {
 		    buffer_ptr[buffer_offset], current_reader->GetFileName());
 	}
 	SkipWhitespace(buffer_ptr, ++buffer_offset, buffer_size);
+	if (buffer_offset >= buffer_size) {
+		throw InvalidInputException("Missing closing brace ']' in JSON array with format='array' in file \"%s\"",
+		                            current_reader->GetFileName());
+	}
+	if (buffer_ptr[buffer_offset] == ']') {
+		// Empty array
+		SkipWhitespace(buffer_ptr, ++buffer_offset, buffer_size);
+		if (buffer_offset != buffer_size) {
+			throw InvalidInputException(
+			    "Empty array with trailing data when parsing JSON array with format='array' in file \"%s\"",
+			    current_reader->GetFileName());
+		}
+		return;
+	}
 }
 
 void JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {

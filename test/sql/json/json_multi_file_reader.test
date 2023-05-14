@@ -14,7 +14,7 @@ COPY test TO '__TEST_DIR__/json_part' (FORMAT csv, quote '', PARTITION_BY (j));
 
 # some tests for read_json first
 query III
-select * from read_json_auto('data/json/example_*.ndjson', filename=true) order by all
+select * exclude (filename), replace(filename, '\', '/') as filename from read_json_auto('data/json/example_*.ndjson', filename=true) order by all
 ----
 1	O Brother, Where Art Thou?	data/json/example_n.ndjson
 1	O Brother, Where Art Thou?	data/json/example_r.ndjson
@@ -54,7 +54,7 @@ SELECT j, count(*) FROM read_json_auto('__TEST_DIR__/json_part/j=*/*.csv', HIVE_
 
 # also test read_json_objects
 query II
-select * from read_json_objects_auto('data/json/example_*.ndjson', filename=true) order by all
+select * exclude (filename), replace(filename, '\', '/') as filename from read_json_objects_auto('data/json/example_*.ndjson', filename=true) order by all
 ----
 {"id":1,"name":"O Brother, Where Art Thou?"}	data/json/example_n.ndjson
 {"id":1,"name":"O Brother, Where Art Thou?"}	data/json/example_r.ndjson

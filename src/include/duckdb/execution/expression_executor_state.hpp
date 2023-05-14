@@ -48,7 +48,7 @@ struct ExecuteFunctionState : public ExpressionState {
 	unique_ptr<FunctionLocalState> local_state;
 
 public:
-	DUCKDB_API static FunctionLocalState *GetFunctionState(ExpressionState &state) {
+	static FunctionLocalState *GetFunctionState(ExpressionState &state) {
 		return ((ExecuteFunctionState &)state).local_state.get();
 	}
 };

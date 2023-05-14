@@ -70,6 +70,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {
     {"read_json", "json"},
     {"read_json_auto", "json"},
     {"read_json_objects", "json"},
+    {"read_json_objects_auto", "json"},
     {"read_ndjson", "json"},
     {"read_ndjson_auto", "json"},
     {"read_ndjson_objects", "json"},
