@@ -164,7 +164,7 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
-	auto path = FileSystem::ExpandPath(path_p);
+	auto path = FileSystem::ExpandPath(path_p, opener);
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
