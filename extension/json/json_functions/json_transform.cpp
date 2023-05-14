@@ -20,7 +20,7 @@ JSONTransformOptions::JSONTransformOptions(bool strict_cast_p, bool error_duplic
       error_unknown_key(error_unkown_key_p) {
 }
 
-void JSONTransformOptions::Serialize(FieldWriter &writer) {
+void JSONTransformOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField(strict_cast);
 	writer.WriteField(error_duplicate_key);
 	writer.WriteField(error_missing_key);
@@ -98,8 +98,8 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
 		JSONAllocator json_allocator(Allocator::DefaultAllocator());
 		yyjson_read_err err;
-		auto doc = JSONCommon::ReadDocumentUnsafe(structure_string, JSONCommon::READ_FLAG,
-		                                          json_allocator.GetYYJSONAllocator(), &err);
+		auto doc =
+		    JSONCommon::ReadDocumentUnsafe(structure_string, JSONCommon::READ_FLAG, json_allocator.GetYYAlc(), &err);
 		if (err.code != YYJSON_READ_SUCCESS) {
 			JSONCommon::ThrowParseError(structure_string.GetData(), structure_string.GetSize(), err);
 		}
@@ -615,7 +615,7 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 	ListVector::SetListSize(result, list_size);
 
 	auto list_entries = FlatVector::GetData<list_entry_t>(result);
-	auto list_validity = FlatVector::Validity(result);
+	auto &list_validity = FlatVector::Validity(result);
 
 	auto keys = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * list_size);
 	auto vals = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * list_size);
@@ -654,6 +654,7 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 			list_offset++;
 		}
 	}
+	D_ASSERT(list_offset == list_size);
 
 	// Transform keys
 	if (!JSONTransform::Transform(keys, alc, MapVector::GetKeys(result), list_size, options)) {
@@ -678,7 +679,7 @@ bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const 
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
-		if (!val) {
+		if (!val || unsafe_yyjson_is_null(val)) {
 			validity.SetInvalid(i);
 		} else {
 			data[i] = JSONCommon::WriteVal(val, alc);
@@ -691,7 +692,8 @@ bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const 
 bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
                               JSONTransformOptions &options) {
 	auto result_type = result.GetType();
-	if ((result_type == LogicalTypeId::TIMESTAMP || result_type == LogicalTypeId::DATE) && options.date_format_map) {
+	if ((result_type == LogicalTypeId::TIMESTAMP || result_type == LogicalTypeId::DATE) && options.date_format_map &&
+	    options.date_format_map->HasFormats(result_type.id())) {
 		// Auto-detected date/timestamp format during sampling
 		return TransformFromStringWithFormat(vals, result, count, options);
 	}
@@ -803,7 +805,7 @@ static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &
 template <bool strict>
 static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+	auto alc = lstate.json_allocator.GetYYAlc();
 
 	JSONTransformOptions options(strict, strict, strict, false);
 	if (!TransformFunctionInternal(args.data[0], args.size(), result, alc, options)) {
@@ -838,7 +840,7 @@ ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 static bool JSONToAnyCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
-	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+	auto alc = lstate.json_allocator.GetYYAlc();
 
 	JSONTransformOptions options(true, true, true, true);
 	options.delay_error = true;

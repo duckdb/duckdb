@@ -115,20 +115,19 @@ static void JSONContainsFunction(DataChunk &args, ExpressionState &state, Vector
 
 	if (needles.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		auto &needle_str = *ConstantVector::GetData<string_t>(needles);
-		auto needle_doc =
-		    JSONCommon::ReadDocument(needle_str, JSONCommon::READ_FLAG, lstate.json_allocator.GetYYJSONAllocator());
+		auto needle_doc = JSONCommon::ReadDocument(needle_str, JSONCommon::READ_FLAG, lstate.json_allocator.GetYYAlc());
 		UnaryExecutor::Execute<string_t, bool>(haystacks, result, args.size(), [&](string_t haystack_str) {
-			auto haystack_doc = JSONCommon::ReadDocument(haystack_str, JSONCommon::READ_FLAG,
-			                                             lstate.json_allocator.GetYYJSONAllocator());
+			auto haystack_doc =
+			    JSONCommon::ReadDocument(haystack_str, JSONCommon::READ_FLAG, lstate.json_allocator.GetYYAlc());
 			return JSONContains(haystack_doc->root, needle_doc->root);
 		});
 	} else {
 		BinaryExecutor::Execute<string_t, string_t, bool>(
 		    haystacks, needles, result, args.size(), [&](string_t haystack_str, string_t needle_str) {
-			    auto needle_doc = JSONCommon::ReadDocument(needle_str, JSONCommon::READ_FLAG,
-			                                               lstate.json_allocator.GetYYJSONAllocator());
-			    auto haystack_doc = JSONCommon::ReadDocument(haystack_str, JSONCommon::READ_FLAG,
-			                                                 lstate.json_allocator.GetYYJSONAllocator());
+			    auto needle_doc =
+			        JSONCommon::ReadDocument(needle_str, JSONCommon::READ_FLAG, lstate.json_allocator.GetYYAlc());
+			    auto haystack_doc =
+			        JSONCommon::ReadDocument(haystack_str, JSONCommon::READ_FLAG, lstate.json_allocator.GetYYAlc());
 			    return JSONContains(haystack_doc->root, needle_doc->root);
 		    });
 	}

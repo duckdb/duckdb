@@ -1172,6 +1172,16 @@ void BufferedCSVReader::SkipEmptyLines() {
 	}
 }
 
+void UpdateMaxLineLength(ClientContext &context, idx_t line_length) {
+	if (!context.client_data->debug_set_max_line_length) {
+		return;
+	}
+	if (line_length < context.client_data->debug_max_line_length) {
+		return;
+	}
+	context.client_data->debug_max_line_length = line_length;
+}
+
 bool BufferedCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message) {
 	// used for parsing algorithm
 	bool finished_chunk = false;
@@ -1239,9 +1249,7 @@ add_row : {
 		return false;
 	}
 	finished_chunk = AddRow(insert_chunk, column, error_message);
-	if (context.client_data->max_line_length < position - line_start) {
-		context.client_data->max_line_length = position - line_start;
-	}
+	UpdateMaxLineLength(context, position - line_start);
 	if (!error_message.empty()) {
 		return false;
 	}
@@ -1379,9 +1387,7 @@ final_state:
 		AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
 		finished_chunk = AddRow(insert_chunk, column, error_message);
 		SkipEmptyLines();
-		if (context.client_data->max_line_length < position - line_start) {
-			context.client_data->max_line_length = position - line_start;
-		}
+		UpdateMaxLineLength(context, position - line_start);
 		if (!error_message.empty()) {
 			return false;
 		}

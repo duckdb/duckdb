@@ -328,6 +328,7 @@ ScanReplacement(duckdb::ClientContext &context, const std::string &table_name, d
 			children.push_back(duckdb::make_uniq<duckdb::ConstantExpression>(std::move(param)));
 		}
 		table_function->function = duckdb::make_uniq<duckdb::FunctionExpression>(jsargs.function, std::move(children));
+		table_function->alias = table_name;
 		return std::move(table_function);
 	}
 	return nullptr;
