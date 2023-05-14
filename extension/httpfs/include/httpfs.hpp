@@ -73,7 +73,7 @@ public:
 	duckdb::unique_ptr<data_t[]> read_buffer;
 	constexpr static idx_t READ_BUFFER_LEN = 1000000;
 
-	HTTPState *state;
+	optional_ptr<HTTPState> state;
 
 public:
 	void Close() override {

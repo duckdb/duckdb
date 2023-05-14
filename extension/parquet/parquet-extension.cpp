@@ -724,6 +724,11 @@ unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
 	table_function->function = make_uniq<FunctionExpression>("parquet_scan", std::move(children));
+
+	if (!FileSystem::HasGlob(table_name)) {
+		table_function->alias = FileSystem::ExtractBaseName(table_name);
+	}
+
 	return std::move(table_function);
 }
 

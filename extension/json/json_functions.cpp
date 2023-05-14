@@ -1,5 +1,6 @@
 #include "json_functions.hpp"
 
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
@@ -50,7 +51,7 @@ bool JSONReadFunctionData::Equals(const FunctionData &other_p) const {
 }
 
 unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                                    vector<duckdb::unique_ptr<Expression>> &arguments) {
+                                                    vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	bool constant = false;
 	string path = "";
@@ -80,7 +81,7 @@ bool JSONReadManyFunctionData::Equals(const FunctionData &other_p) const {
 }
 
 unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                                        vector<duckdb::unique_ptr<Expression>> &arguments) {
+                                                        vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
 	if (arguments[1]->HasParameter()) {
 		throw ParameterNotResolvedException();
@@ -173,6 +174,7 @@ vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
 	// Reads JSON as string
 	functions.push_back(GetReadJSONObjectsFunction());
 	functions.push_back(GetReadNDJSONObjectsFunction());
+	functions.push_back(GetReadJSONObjectsAutoFunction());
 
 	// Read JSON as columnar data
 	functions.push_back(GetReadJSONFunction());
@@ -199,16 +201,21 @@ unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, 
 		return nullptr;
 	}
 	auto table_function = make_uniq<TableFunctionRef>();
-	vector<duckdb::unique_ptr<ParsedExpression>> children;
+	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
 	table_function->function = make_uniq<FunctionExpression>("read_json_auto", std::move(children));
+
+	if (!FileSystem::HasGlob(table_name)) {
+		table_function->alias = FileSystem::ExtractBaseName(table_name);
+	}
+
 	return std::move(table_function);
 }
 
 static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
-	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+	auto alc = lstate.json_allocator.GetYYAlc();
 
 	bool success = true;
 	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(

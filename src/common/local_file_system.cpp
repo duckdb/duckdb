@@ -819,19 +819,6 @@ idx_t LocalFileSystem::SeekPosition(FileHandle &handle) {
 	return GetFilePointer(handle);
 }
 
-static bool HasGlob(const string &str) {
-	for (idx_t i = 0; i < str.size(); i++) {
-		switch (str[i]) {
-		case '*':
-		case '?':
-		case '[':
-			return true;
-		default:
-			break;
-		}
-	}
-	return false;
-}
 static bool IsCrawl(const string &glob) {
 	// glob must match exactly
 	return glob == "**";

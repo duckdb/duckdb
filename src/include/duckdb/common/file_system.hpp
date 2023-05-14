@@ -187,6 +187,8 @@ public:
 	//! Extract the name of a file (e.g if the input is lib/example.dll the name is 'example.dll')
 	DUCKDB_API static string ExtractName(const string &path);
 
+	//! Whether there is a glob in the string
+	DUCKDB_API static bool HasGlob(const string &str);
 	//! Runs a glob on the file system, returning a list of matching files
 	DUCKDB_API virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr);
 	DUCKDB_API vector<string> GlobFiles(const string &path, ClientContext &context,
@@ -224,6 +226,9 @@ public:
 
 	//! Return the name of the filesytem. Used for forming diagnosis messages.
 	DUCKDB_API virtual std::string GetName() const = 0;
+
+	//! Whether or not a file is remote or local, based only on file path
+	DUCKDB_API static bool IsRemoteFile(const string &path);
 };
 
 } // namespace duckdb

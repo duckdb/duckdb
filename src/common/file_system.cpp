@@ -305,6 +305,20 @@ void FileSystem::FileSync(FileHandle &handle) {
 	throw NotImplementedException("%s: FileSync is not implemented!", GetName());
 }
 
+bool FileSystem::HasGlob(const string &str) {
+	for (idx_t i = 0; i < str.size(); i++) {
+		switch (str[i]) {
+		case '*':
+		case '?':
+		case '[':
+			return true;
+		default:
+			break;
+		}
+	}
+	return false;
+}
+
 vector<string> FileSystem::Glob(const string &path, FileOpener *opener) {
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
 }
@@ -333,12 +347,8 @@ vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &conte
 	auto result = Glob(pattern);
 	if (result.empty()) {
 		string required_extension;
-		const string prefixes[] = {"http://", "https://", "s3://"};
-		for (auto &prefix : prefixes) {
-			if (StringUtil::StartsWith(pattern, prefix)) {
-				required_extension = "httpfs";
-				break;
-			}
+		if (FileSystem::IsRemoteFile(pattern)) {
+			required_extension = "httpfs";
 		}
 		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
 			// an extension is required to read this file but it is not loaded - try to load it
@@ -453,6 +463,16 @@ void FileHandle::Truncate(int64_t new_size) {
 
 FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
+}
+
+bool FileSystem::IsRemoteFile(const string &path) {
+	const string prefixes[] = {"http://", "https://", "s3://"};
+	for (auto &prefix : prefixes) {
+		if (StringUtil::StartsWith(path, prefix)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 } // namespace duckdb
