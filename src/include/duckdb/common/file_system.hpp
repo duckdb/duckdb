@@ -226,6 +226,9 @@ public:
 
 	//! Return the name of the filesytem. Used for forming diagnosis messages.
 	DUCKDB_API virtual std::string GetName() const = 0;
+
+	//! Whether or not a file is remote or local, based only on file path
+	DUCKDB_API static bool IsRemoteFile(const string &path);
 };
 
 } // namespace duckdb
