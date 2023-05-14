@@ -61,8 +61,6 @@ public:
 
 	DataChunk parse_chunk;
 
-	std::queue<unique_ptr<DataChunk>> cached_chunks;
-
 	ParserMode mode;
 
 public:

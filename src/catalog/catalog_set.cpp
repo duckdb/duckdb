@@ -84,7 +84,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 			throw InternalException("Attempting to create temporary entry \"%s\" in non-temporary catalog", name);
 		}
 		if (!value->temporary && catalog.IsTemporaryCatalog() && name != DEFAULT_SCHEMA) {
-			throw InternalException("Attempting to create non-temporary entry \"%s\" in temporary catalog", name);
+			throw InvalidInputException("Cannot create non-temporary entry \"%s\" in temporary catalog", name);
 		}
 	}
 	// lock the catalog for writing

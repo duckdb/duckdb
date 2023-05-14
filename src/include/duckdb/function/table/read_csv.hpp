@@ -65,7 +65,7 @@ struct ColumnInfo {
 		names = std::move(names_p);
 		types = std::move(types_p);
 	}
-	void Serialize(FieldWriter &writer) {
+	void Serialize(FieldWriter &writer) const {
 		writer.WriteList<string>(names);
 		writer.WriteRegularSerializableList<LogicalType>(types);
 	}
@@ -99,8 +99,6 @@ struct ReadCSVData : public BaseCSVData {
 	bool single_threaded = false;
 	//! Reader bind data
 	MultiFileReaderBindData reader_bind;
-	//! If any file is a pipe
-	bool is_pipe = false;
 	vector<ColumnInfo> column_info;
 
 	void Initialize(unique_ptr<BufferedCSVReader> &reader) {

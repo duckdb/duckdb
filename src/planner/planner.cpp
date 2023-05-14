@@ -143,24 +143,11 @@ void Planner::CreatePlan(unique_ptr<SQLStatement> statement) {
 
 static bool OperatorSupportsSerialization(LogicalOperator &op) {
 	switch (op.type) {
-	case LogicalOperatorType::LOGICAL_INSERT:
-	case LogicalOperatorType::LOGICAL_UPDATE:
-	case LogicalOperatorType::LOGICAL_DELETE:
 	case LogicalOperatorType::LOGICAL_PREPARE:
 	case LogicalOperatorType::LOGICAL_EXECUTE:
-	case LogicalOperatorType::LOGICAL_ALTER:
-	case LogicalOperatorType::LOGICAL_CREATE_TABLE:
-	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
-	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
-	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
-	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
-	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
 	case LogicalOperatorType::LOGICAL_PRAGMA:
-	case LogicalOperatorType::LOGICAL_TRANSACTION:
-	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
 	case LogicalOperatorType::LOGICAL_EXPLAIN:
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
-	case LogicalOperatorType::LOGICAL_VACUUM:
 		// unsupported (for now)
 		return false;
 	default:
@@ -175,6 +162,10 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 }
 
 void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op, bound_parameter_map_t *map) {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	// if alternate verification is enabled we run the original operator
+	return;
+#endif
 	if (!op || !ClientConfig::GetConfig(context).verify_serializer) {
 		return;
 	}

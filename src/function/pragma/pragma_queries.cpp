@@ -50,15 +50,17 @@ string PragmaShowTables(ClientContext &context, const FunctionParameters &parame
 string PragmaShowTablesExpanded(ClientContext &context, const FunctionParameters &parameters) {
 	return R"(
 			SELECT
+				t.database_name AS database,
+				t.schema_name AS schema,
 				t.table_name,
 				LIST(c.column_name order by c.column_index) AS column_names,
 				LIST(c.data_type order by c.column_index) AS column_types,
-				FIRST(t.temporary) AS temporary
+				FIRST(t.temporary) AS temporary,
 			FROM duckdb_tables t
 			JOIN duckdb_columns c
 			USING (table_oid)
-			GROUP BY t.table_name
-			ORDER BY t.table_name;
+			GROUP BY t.database_name, t.schema_name, t.table_name
+			ORDER BY t.database_name, t.schema_name, t.table_name;
 	)";
 }
 
