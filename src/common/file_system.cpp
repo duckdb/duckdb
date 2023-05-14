@@ -109,7 +109,7 @@ string FileSystem::GetEnvVariable(const string &env) {
 	auto res_w = _wgetenv(env_w.c_str());
 	if (!res_w) {
 		// no environment variable of this name found
-		return nullptr;
+		return string();
 	}
 	return WindowsUtil::UnicodeToUTF8(res_w);
 }
