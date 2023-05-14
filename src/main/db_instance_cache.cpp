@@ -1,8 +1,10 @@
 #include "duckdb/main/db_instance_cache.hpp"
 #include "duckdb/main/extension_helper.hpp"
+
 namespace duckdb {
 
-string GetDBAbsolutePath(const string &database) {
+string GetDBAbsolutePath(const string &database_p) {
+	auto database = FileSystem::ExpandPath(database_p, nullptr);
 	if (database.empty()) {
 		return ":memory:";
 	}
