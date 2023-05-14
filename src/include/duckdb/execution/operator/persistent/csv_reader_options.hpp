@@ -19,12 +19,14 @@
 
 namespace duckdb {
 
-enum NewLineIdentifier {
+enum class NewLineIdentifier : uint8_t {
 	SINGLE = 1,   // Either \r or \n
 	CARRY_ON = 2, // \r\n
 	MIX = 3,      // Hippie-Land, can't run it multithreaded
 	NOT_SET = 4
 };
+
+enum class ParallelMode { AUTOMATIC = 0, PARALLEL = 1, SINGLE_THREADED = 2 };
 
 struct BufferedCSVReaderOptions {
 	//===--------------------------------------------------------------------===//
@@ -116,7 +118,7 @@ struct BufferedCSVReaderOptions {
 	//! If we are running the parallel version of the CSV Reader. In general, the system should always auto-detect
 	//! When it can't execute a parallel run before execution. However, there are (rather specific) situations where
 	//! setting up this manually might be important
-	bool run_parallel = true;
+	ParallelMode parallel_mode;
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//
