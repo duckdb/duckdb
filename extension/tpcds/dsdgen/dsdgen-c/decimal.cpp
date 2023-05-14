@@ -244,11 +244,11 @@ int dectostr(char *dest, decimal_t *d) {
 int dectoflt(double *dest, decimal_t *d) {
 	if ((dest == NULL) || (d == NULL))
 		return (-1);
-#ifdef WIN32
+#ifdef _WIN32
 #pragma warning(disable : 4244)
 #endif
 	*dest = d->number;
-#ifdef WIN32
+#ifdef _WIN32
 #pragma warning(default : 4244)
 #endif
 	while (--d->precision > 0)
