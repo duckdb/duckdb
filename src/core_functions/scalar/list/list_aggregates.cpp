@@ -344,19 +344,16 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 }
 
 static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-
-	D_ASSERT(args.ColumnCount() == 2);
+	D_ASSERT(args.ColumnCount() >= 2);
 	ListAggregatesFunction<AggregateFunctor, true>(args, state, result);
 }
 
 static void ListDistinctFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-
 	D_ASSERT(args.ColumnCount() == 1);
 	ListAggregatesFunction<DistinctFunctor>(args, state, result);
 }
 
 static void ListUniqueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-
 	D_ASSERT(args.ColumnCount() == 1);
 	ListAggregatesFunction<UniqueFunctor>(args, state, result);
 }
