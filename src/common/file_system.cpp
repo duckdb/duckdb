@@ -196,6 +196,18 @@ string FileSystem::ExtractBaseName(const string &path) {
 	return vec[0];
 }
 
+string GetWindowsEnvironmentVariable(const string &env) {
+	// first convert the environment variable name to the correct encoding
+	auto env_w = WindowsUtil::UTF8ToUnicode(env.c_str());
+	// use _wgetenv to get the value
+	auto res_w = _wgetenv(env_w.c_str());
+	if (!res_w) {
+		// no environment variable of this name found
+		return nullptr;
+	}
+	return WindowsUtil::UnicodeToUTF8(res_w);
+}
+
 string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 	// read the home_directory setting first, if it is set
 	if (opener) {
@@ -208,13 +220,13 @@ string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 	}
 	// fallback to the default home directories for the specified system
 #ifdef DUCKDB_WINDOWS
-	const char *homedir = getenv("USERPROFILE");
+	return GetWindowsEnvironmentVariable("USERPROFILE");
 #else
 	const char *homedir = getenv("HOME");
-#endif
 	if (homedir) {
 		return homedir;
 	}
+#endif
 	return string();
 }
 
