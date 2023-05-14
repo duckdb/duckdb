@@ -26,28 +26,28 @@ class ColumnDataRowCollection;
 class ColumnDataCollection {
 public:
 	//! Constructs an in-memory column data collection from an allocator
-	DUCKDB_API ColumnDataCollection(Allocator &allocator, vector<LogicalType> types);
+	DUCKDB_API ColumnDataCollection(Allocator &allocator, unsafe_vector<LogicalType> types);
 	//! Constructs an empty (but valid) in-memory column data collection from an allocator
 	DUCKDB_API ColumnDataCollection(Allocator &allocator);
 	//! Constructs a buffer-managed column data collection
-	DUCKDB_API ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types);
+	DUCKDB_API ColumnDataCollection(BufferManager &buffer_manager, unsafe_vector<LogicalType> types);
 	//! Constructs either an in-memory or a buffer-managed column data collection
-	DUCKDB_API ColumnDataCollection(ClientContext &context, vector<LogicalType> types,
+	DUCKDB_API ColumnDataCollection(ClientContext &context, unsafe_vector<LogicalType> types,
 	                                ColumnDataAllocatorType type = ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
 	//! Creates a column data collection that inherits the blocks to write to. This allows blocks to be shared
 	//! between multiple column data collections and prevents wasting space.
 	//! Note that after one CDC inherits blocks from another, the other
 	//! cannot be written to anymore (i.e. we take ownership of the half-written blocks).
 	DUCKDB_API ColumnDataCollection(ColumnDataCollection &parent);
-	DUCKDB_API ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator, vector<LogicalType> types);
+	DUCKDB_API ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator, unsafe_vector<LogicalType> types);
 	DUCKDB_API ~ColumnDataCollection();
 
 public:
 	//! The types of columns in the ColumnDataCollection
-	DUCKDB_API vector<LogicalType> &Types() {
+	DUCKDB_API unsafe_vector<LogicalType> &Types() {
 		return types;
 	}
-	DUCKDB_API const vector<LogicalType> &Types() const {
+	DUCKDB_API const unsafe_vector<LogicalType> &Types() const {
 		return types;
 	}
 
@@ -144,7 +144,7 @@ public:
 	void Initialize(vector<LogicalType> types);
 
 	//! Get a vector of references to every chunk (segment, index in segment), and optionally sort by block id
-	const vector<unique_ptr<ColumnDataCollectionSegment>> &GetSegments() const;
+	const unsafe_vector<unique_ptr<ColumnDataCollectionSegment>> &GetSegments() const;
 
 private:
 	//! Creates a new segment within the ColumnDataCollection
@@ -156,13 +156,13 @@ private:
 	//! The Column Data Allocator
 	buffer_ptr<ColumnDataAllocator> allocator;
 	//! The types of the stored entries
-	vector<LogicalType> types;
+	unsafe_vector<LogicalType> types;
 	//! The number of entries stored in the column data collection
 	idx_t count;
 	//! The data segments of the column data collection
-	vector<unique_ptr<ColumnDataCollectionSegment>> segments;
+	unsafe_vector<unique_ptr<ColumnDataCollectionSegment>> segments;
 	//! The set of copy functions
-	vector<ColumnDataCopyFunction> copy_functions;
+	unsafe_vector<ColumnDataCopyFunction> copy_functions;
 	//! When the column data collection is marked as finished - new tuples can no longer be appended to it
 	bool finished_append;
 };
@@ -187,28 +187,28 @@ public:
 	DUCKDB_API ColumnDataRow &operator[](idx_t i);
 	DUCKDB_API const ColumnDataRow &operator[](idx_t i) const;
 
-	DUCKDB_API vector<ColumnDataRow>::iterator begin() {
+	DUCKDB_API unsafe_vector<ColumnDataRow>::iterator begin() {
 		return rows.begin();
 	}
-	DUCKDB_API vector<ColumnDataRow>::iterator end() {
+	DUCKDB_API unsafe_vector<ColumnDataRow>::iterator end() {
 		return rows.end();
 	}
-	DUCKDB_API vector<ColumnDataRow>::const_iterator cbegin() const {
+	DUCKDB_API unsafe_vector<ColumnDataRow>::const_iterator cbegin() const {
 		return rows.cbegin();
 	}
-	DUCKDB_API vector<ColumnDataRow>::const_iterator cend() const {
+	DUCKDB_API unsafe_vector<ColumnDataRow>::const_iterator cend() const {
 		return rows.cend();
 	}
-	DUCKDB_API vector<ColumnDataRow>::const_iterator begin() const {
+	DUCKDB_API unsafe_vector<ColumnDataRow>::const_iterator begin() const {
 		return rows.begin();
 	}
-	DUCKDB_API vector<ColumnDataRow>::const_iterator end() const {
+	DUCKDB_API unsafe_vector<ColumnDataRow>::const_iterator end() const {
 		return rows.end();
 	}
 
 private:
-	vector<ColumnDataRow> rows;
-	vector<unique_ptr<DataChunk>> chunks;
+	unsafe_vector<ColumnDataRow> rows;
+	unsafe_vector<unique_ptr<DataChunk>> chunks;
 	ColumnDataScanState scan_state;
 };
 

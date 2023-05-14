@@ -63,7 +63,7 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	// IN clause with many constant children
 	// generate a mark join that replaces this IN expression
 	// first generate a ColumnDataCollection from the set of expressions
-	vector<LogicalType> types = {in_type};
+	unsafe_vector<LogicalType> types = {in_type};
 	auto collection = make_uniq<ColumnDataCollection>(context, types);
 	ColumnDataAppendState append_state;
 	collection->InitializeAppend(append_state);

@@ -38,8 +38,8 @@ public:
 
 	ExpressionExecutor executor;
 	DataChunk list_data;
-	vector<UnifiedVectorFormat> list_vector_data;
-	vector<UnifiedVectorFormat> list_child_data;
+	unsafe_vector<UnifiedVectorFormat> list_vector_data;
+	unsafe_vector<UnifiedVectorFormat> list_child_data;
 
 public:
 	//! Reset the fields of the unnest operator state

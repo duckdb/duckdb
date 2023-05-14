@@ -40,7 +40,7 @@ struct ChunkManagementState {
 
 struct ColumnDataAppendState {
 	ChunkManagementState current_chunk_state;
-	vector<UnifiedVectorFormat> vector_data;
+	unsafe_vector<UnifiedVectorFormat> vector_data;
 };
 
 struct ColumnDataScanState {

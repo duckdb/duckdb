@@ -301,7 +301,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 
 	auto bindings = insert.children[0]->GetColumnBindings();
 	idx_t projection_index = DConstants::INVALID_INDEX;
-	vector<unique_ptr<LogicalOperator>> *insert_child_operators;
+	optional_ptr<unsafe_vector<unique_ptr<LogicalOperator>>> insert_child_operators;
 	insert_child_operators = &insert.children;
 	while (projection_index == DConstants::INVALID_INDEX) {
 		if (insert_child_operators->empty()) {

@@ -24,9 +24,9 @@ public:
 	explicit LogicalEmptyResult(unique_ptr<LogicalOperator> op);
 
 	//! The set of return types of the empty result
-	vector<LogicalType> return_types;
+	unsafe_vector<LogicalType> return_types;
 	//! The columns that would be bound at this location (if the subtree was not optimized away)
-	vector<ColumnBinding> bindings;
+	unsafe_vector<ColumnBinding> bindings;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {

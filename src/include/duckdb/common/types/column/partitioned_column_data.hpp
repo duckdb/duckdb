@@ -103,7 +103,7 @@ protected:
 protected:
 	PartitionedColumnDataType type;
 	ClientContext &context;
-	vector<LogicalType> types;
+	unsafe_vector<LogicalType> types;
 
 	mutex lock;
 	shared_ptr<PartitionColumnDataAllocators> allocators;
