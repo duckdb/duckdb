@@ -47,7 +47,7 @@ public:
 	DUCKDB_API ~DataChunk();
 
 	//! The vectors owned by the DataChunk.
-	unsafe_vector<Vector> data;
+	vector<Vector> data;
 
 public:
 	inline idx_t size() const { // NOLINT
@@ -85,19 +85,18 @@ public:
 	//! This will create one vector of the specified type for each LogicalType in the
 	//! types list. The vector will be referencing vector to the data owned by
 	//! the DataChunk.
-	DUCKDB_API void Initialize(Allocator &allocator, const unsafe_vector<LogicalType> &types,
+	DUCKDB_API void Initialize(Allocator &allocator, const vector<LogicalType> &types,
 	                           idx_t capacity = STANDARD_VECTOR_SIZE);
-	DUCKDB_API void Initialize(ClientContext &context, const unsafe_vector<LogicalType> &types,
+	DUCKDB_API void Initialize(ClientContext &context, const vector<LogicalType> &types,
 	                           idx_t capacity = STANDARD_VECTOR_SIZE);
 	//! Initializes an empty DataChunk with the given types. The vectors will *not* have any data allocated for them.
-	DUCKDB_API void InitializeEmpty(const unsafe_vector<LogicalType> &types);
+	DUCKDB_API void InitializeEmpty(const vector<LogicalType> &types);
 
-	DUCKDB_API void InitializeEmpty(unsafe_vector<LogicalType>::const_iterator begin,
-	                                unsafe_vector<LogicalType>::const_iterator end);
-	DUCKDB_API void Initialize(Allocator &allocator, unsafe_vector<LogicalType>::const_iterator begin,
-	                           unsafe_vector<LogicalType>::const_iterator end, idx_t capacity = STANDARD_VECTOR_SIZE);
-	DUCKDB_API void Initialize(ClientContext &context, unsafe_vector<LogicalType>::const_iterator begin,
-	                           unsafe_vector<LogicalType>::const_iterator end, idx_t capacity = STANDARD_VECTOR_SIZE);
+	DUCKDB_API void InitializeEmpty(vector<LogicalType>::const_iterator begin, vector<LogicalType>::const_iterator end);
+	DUCKDB_API void Initialize(Allocator &allocator, vector<LogicalType>::const_iterator begin,
+	                           vector<LogicalType>::const_iterator end, idx_t capacity = STANDARD_VECTOR_SIZE);
+	DUCKDB_API void Initialize(ClientContext &context, vector<LogicalType>::const_iterator begin,
+	                           vector<LogicalType>::const_iterator end, idx_t capacity = STANDARD_VECTOR_SIZE);
 
 	//! Append the other DataChunk to this one. The column count and types of
 	//! the two DataChunks have to match exactly. Throws an exception if there
@@ -168,6 +167,6 @@ private:
 	//! The amount of tuples that can be stored in the data chunk
 	idx_t capacity;
 	//! Vector caches, used to store data when ::Initialize is called
-	unsafe_vector<VectorCache> vector_caches;
+	vector<VectorCache> vector_caches;
 };
 } // namespace duckdb

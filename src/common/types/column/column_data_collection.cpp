@@ -51,23 +51,22 @@ ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p) {
 	allocator = make_shared<ColumnDataAllocator>(allocator_p);
 }
 
-ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, unsafe_vector<LogicalType> types_p) {
+ColumnDataCollection::ColumnDataCollection(Allocator &allocator_p, vector<LogicalType> types_p) {
 	Initialize(std::move(types_p));
 	allocator = make_shared<ColumnDataAllocator>(allocator_p);
 }
 
-ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, unsafe_vector<LogicalType> types_p) {
+ColumnDataCollection::ColumnDataCollection(BufferManager &buffer_manager, vector<LogicalType> types_p) {
 	Initialize(std::move(types_p));
 	allocator = make_shared<ColumnDataAllocator>(buffer_manager);
 }
 
-ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator_p,
-                                           unsafe_vector<LogicalType> types_p) {
+ColumnDataCollection::ColumnDataCollection(shared_ptr<ColumnDataAllocator> allocator_p, vector<LogicalType> types_p) {
 	Initialize(std::move(types_p));
 	this->allocator = std::move(allocator_p);
 }
 
-ColumnDataCollection::ColumnDataCollection(ClientContext &context, unsafe_vector<LogicalType> types_p,
+ColumnDataCollection::ColumnDataCollection(ClientContext &context, vector<LogicalType> types_p,
                                            ColumnDataAllocatorType type)
     : ColumnDataCollection(make_shared<ColumnDataAllocator>(context, type), std::move(types_p)) {
 	D_ASSERT(!types.empty());
@@ -1031,7 +1030,7 @@ bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const 
 	return true;
 }
 
-const unsafe_vector<unique_ptr<ColumnDataCollectionSegment>> &ColumnDataCollection::GetSegments() const {
+const vector<unique_ptr<ColumnDataCollectionSegment>> &ColumnDataCollection::GetSegments() const {
 	return segments;
 }
 

@@ -201,7 +201,7 @@ list<ColumnDataCollection> BoxRenderer::FetchRenderCollections(ClientContext &co
 
 list<ColumnDataCollection> BoxRenderer::PivotCollections(ClientContext &context, list<ColumnDataCollection> input,
                                                          vector<string> &column_names,
-                                                         unsafe_vector<LogicalType> &result_types, idx_t row_count) {
+                                                         vector<LogicalType> &result_types, idx_t row_count) {
 	auto &top = input.front();
 	auto &bottom = input.back();
 

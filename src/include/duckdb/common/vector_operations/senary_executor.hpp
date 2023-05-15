@@ -56,7 +56,7 @@ struct SenaryExecutor {
 			auto &result_validity = FlatVector::Validity(result);
 
 			bool all_valid = true;
-			unsafe_vector<UnifiedVectorFormat> vdata(NCOLS);
+			vector<UnifiedVectorFormat> vdata(NCOLS);
 			for (size_t c = 0; c < NCOLS; ++c) {
 				input.data[c].ToUnifiedFormat(count, vdata[c]);
 				all_valid = all_valid && vdata[c].validity.AllValid();

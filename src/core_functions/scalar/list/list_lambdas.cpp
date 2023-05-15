@@ -189,7 +189,7 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	result_types.push_back(lambda_expr->return_type);
 
 	// non-lambda parameter columns
-	unsafe_vector<UnifiedVectorFormat> columns;
+	vector<UnifiedVectorFormat> columns;
 	vector<idx_t> indexes;
 	vector<SelectionVector> sel_vectors;
 

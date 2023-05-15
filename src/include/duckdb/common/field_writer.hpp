@@ -11,7 +11,6 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
-#include "duckdb/common/serializer/serialization_traits.hpp"
 #include <type_traits>
 
 namespace duckdb {
@@ -95,8 +94,8 @@ public:
 		element.Serialize(*buffer);
 	}
 
-	template <class T, bool SAFETY>
-	void WriteSerializableList(const vector<unique_ptr<T>, SAFETY> &elements) {
+	template <class T>
+	void WriteSerializableList(const vector<unique_ptr<T>> &elements) {
 		AddField();
 		Write<uint32_t>(elements.size());
 		for (idx_t i = 0; i < elements.size(); i++) {
@@ -104,8 +103,8 @@ public:
 		}
 	}
 
-	template <class T, bool SAFETY>
-	void WriteRegularSerializableList(const vector<T, SAFETY> &elements) {
+	template <class T>
+	void WriteRegularSerializableList(const vector<T> &elements) {
 		AddField();
 		Write<uint32_t>(elements.size());
 		for (idx_t i = 0; i < elements.size(); i++) {

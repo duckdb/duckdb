@@ -61,11 +61,11 @@ public:
 	}
 
 private:
-	unsafe_vector<ColumnDefinition> columns;
+	vector<ColumnDefinition> columns;
 	//! A map of column name to column index
 	case_insensitive_map_t<column_t> name_map;
 	//! The set of physical columns
-	unsafe_vector<idx_t> physical_columns;
+	vector<idx_t> physical_columns;
 	//! Allow duplicate names or not
 	bool allow_duplicate_names;
 

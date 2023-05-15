@@ -56,10 +56,6 @@ public:
 	vector(vector<_Tp, _SAFE> &&other) : original(std::move(other)) {
 	}
 
-	template <bool _SAFE>
-	vector(const vector<_Tp, _SAFE> &other) : original(other) {
-	}
-
 	template <bool _SAFE = false>
 	inline typename original::reference get(typename original::size_type __n) {
 		if (MemorySafety<_SAFE>::enabled) {

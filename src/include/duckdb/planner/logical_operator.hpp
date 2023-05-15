@@ -40,11 +40,11 @@ public:
 	//! The type of the logical operator
 	LogicalOperatorType type;
 	//! The set of children of the operator
-	unsafe_vector<unique_ptr<LogicalOperator>> children;
+	vector<unique_ptr<LogicalOperator>> children;
 	//! The set of expressions contained within the operator, if any
 	vector<unique_ptr<Expression>> expressions;
 	//! The types returned by this logical operator. Set by calling LogicalOperator::ResolveTypes.
-	unsafe_vector<LogicalType> types;
+	vector<LogicalType> types;
 	//! Estimated Cardinality
 	idx_t estimated_cardinality;
 	bool has_estimated_cardinality;

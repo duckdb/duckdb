@@ -47,7 +47,7 @@ static void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &r
 	auto count = args.size();
 
 	auto map_count = args.ColumnCount();
-	unsafe_vector<UnifiedVectorFormat> map_formats(map_count);
+	vector<UnifiedVectorFormat> map_formats(map_count);
 	for (idx_t i = 0; i < map_count; i++) {
 		auto &map = args.data[i];
 		map.ToUnifiedFormat(count, map_formats[i]);

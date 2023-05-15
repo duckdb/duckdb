@@ -19,13 +19,12 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_CHUNK_GET;
 
 public:
-	LogicalColumnDataGet(idx_t table_index, unsafe_vector<LogicalType> types,
-	                     unique_ptr<ColumnDataCollection> collection);
+	LogicalColumnDataGet(idx_t table_index, vector<LogicalType> types, unique_ptr<ColumnDataCollection> collection);
 
 	//! The table index in the current bind context
 	idx_t table_index;
 	//! The types of the chunk
-	unsafe_vector<LogicalType> chunk_types;
+	vector<LogicalType> chunk_types;
 	//! The chunk collection to scan
 	unique_ptr<ColumnDataCollection> collection;
 

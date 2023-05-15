@@ -28,15 +28,15 @@ DataChunk::DataChunk() : count(0), capacity(STANDARD_VECTOR_SIZE) {
 DataChunk::~DataChunk() {
 }
 
-void DataChunk::InitializeEmpty(const unsafe_vector<LogicalType> &types) {
+void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
 	InitializeEmpty(types.begin(), types.end());
 }
 
-void DataChunk::Initialize(Allocator &allocator, const unsafe_vector<LogicalType> &types, idx_t capacity_p) {
+void DataChunk::Initialize(Allocator &allocator, const vector<LogicalType> &types, idx_t capacity_p) {
 	Initialize(allocator, types.begin(), types.end(), capacity_p);
 }
 
-void DataChunk::Initialize(ClientContext &context, const unsafe_vector<LogicalType> &types, idx_t capacity_p) {
+void DataChunk::Initialize(ClientContext &context, const vector<LogicalType> &types, idx_t capacity_p) {
 	Initialize(Allocator::Get(context), types, capacity_p);
 }
 
@@ -52,8 +52,8 @@ void DataChunk::Initialize(Allocator &allocator, vector<LogicalType>::const_iter
 	}
 }
 
-void DataChunk::Initialize(ClientContext &context, unsafe_vector<LogicalType>::const_iterator begin,
-                           unsafe_vector<LogicalType>::const_iterator end, idx_t capacity_p) {
+void DataChunk::Initialize(ClientContext &context, vector<LogicalType>::const_iterator begin,
+                           vector<LogicalType>::const_iterator end, idx_t capacity_p) {
 	Initialize(Allocator::Get(context), begin, end, capacity_p);
 }
 
@@ -255,7 +255,7 @@ void DataChunk::Deserialize(Deserializer &source) {
 	auto rows = source.Read<sel_t>();
 	idx_t column_count = source.Read<idx_t>();
 
-	unsafe_vector<LogicalType> types;
+	vector<LogicalType> types;
 	for (idx_t i = 0; i < column_count; i++) {
 		types.push_back(LogicalType::Deserialize(source));
 	}
