@@ -526,7 +526,7 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(FileOpener *opener, H
 void HTTPFileHandle::Initialize(FileOpener *opener) {
 	InitializeClient();
 	auto &hfs = (HTTPFileSystem &)file_system;
-	state = HTTPState::TryGetState(opener).get();
+	state = HTTPState::TryGetState(opener);
 	if (!state) {
 		throw InternalException("State was not defined in this HTTP File Handle");
 	}
