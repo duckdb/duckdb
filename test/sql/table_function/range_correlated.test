@@ -95,6 +95,19 @@ SELECT COUNT(*) FROM (SELECT 10000) AS _(u), generate_series(u) __(s);
 ----
 10001
 
+# subquery as argument 1
+query I
+SELECT 1 FROM range((SELECT 1) - 0);
+----
+1
+
+# subquery as argument 2
+query I
+SELECT (SELECT 1 FROM range((SELECT 1) - 0));
+----
+1
+
+
 # date
 query I
 SELECT s::DATE FROM (SELECT DATE '1992-01-01') AS _(l), range(l, DATE '1992-10-01', INTERVAL (1) MONTH) __(s) ORDER BY s;
