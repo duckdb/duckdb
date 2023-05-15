@@ -735,9 +735,8 @@ void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
 		// empty path: clean up query writer
 		client_data.log_query_writer = nullptr;
 	} else {
-		client_data.log_query_writer =
-		    make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(context), path,
-		                                  BufferedFileWriter::DEFAULT_OPEN_FLAGS, client_data.file_opener.get());
+		client_data.log_query_writer = make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(context), path,
+		                                                             BufferedFileWriter::DEFAULT_OPEN_FLAGS);
 	}
 }
 

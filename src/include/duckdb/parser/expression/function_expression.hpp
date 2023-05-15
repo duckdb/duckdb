@@ -92,7 +92,7 @@ public:
 		result += StringUtil::Join(entry.children, entry.children.size(), ", ", [&](const unique_ptr<BASE> &child) {
 			return child->alias.empty() || !add_alias
 			           ? child->ToString()
-			           : KeywordHelper::WriteOptionallyQuoted(child->alias) + " := " + child->ToString();
+			           : StringUtil::Format("%s := %s", SQLIdentifier(child->alias), child->ToString());
 		});
 		// ordered aggregate
 		if (order_bys && !order_bys->orders.empty()) {

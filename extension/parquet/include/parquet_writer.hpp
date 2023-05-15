@@ -32,8 +32,8 @@ struct PreparedRowGroup {
 
 class ParquetWriter {
 public:
-	ParquetWriter(FileSystem &fs, string file_name, FileOpener *file_opener, vector<LogicalType> types,
-	              vector<string> names, duckdb_parquet::format::CompressionCodec::type codec);
+	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names,
+	              duckdb_parquet::format::CompressionCodec::type codec);
 
 public:
 	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);

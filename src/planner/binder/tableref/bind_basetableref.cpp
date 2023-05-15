@@ -94,7 +94,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			for (auto &scan : config.replacement_scans) {
 				auto replacement_function = scan.function(context, table_name, scan.data.get());
 				if (replacement_function) {
-					replacement_function->alias = ref.alias.empty() ? ref.table_name : ref.alias;
+					replacement_function->alias = ref.alias.empty() ? replacement_function->alias : ref.alias;
 					if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
 						auto &table_function = replacement_function->Cast<TableFunctionRef>();
 						table_function.column_name_alias = ref.column_name_alias;

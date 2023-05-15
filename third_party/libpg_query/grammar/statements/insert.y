@@ -6,18 +6,18 @@
  *****************************************************************************/
 
 InsertStmt:
-			opt_with_clause INSERT opt_or_action INTO insert_target insert_rest
+			opt_with_clause INSERT opt_or_action INTO insert_target opt_by_name_or_position insert_rest
 			opt_on_conflict returning_clause
 				{
-					$6->relation = $5;
-					$6->onConflictAlias = $3;
-					$6->onConflictClause = $7;
-					$6->returningList = $8;
-					$6->withClause = $1;
-					$$ = (PGNode *) $6;
+					$7->relation = $5;
+					$7->onConflictAlias = $3;
+					$7->onConflictClause = $8;
+					$7->returningList = $9;
+					$7->withClause = $1;
+					$7->insert_column_order = $6;
+					$$ = (PGNode *) $7;
 				}
 		;
-
 
 insert_rest:
 			SelectStmt
@@ -67,6 +67,11 @@ insert_target:
 				}
 		;
 
+opt_by_name_or_position:
+		BY NAME_P				{ $$ = PG_INSERT_BY_NAME; }
+		| BY POSITION			{ $$ = PG_INSERT_BY_POSITION; }
+		| /* empty */			{ $$ = PG_INSERT_BY_POSITION; }
+	;
 
 opt_conf_expr:
 			'(' index_params ')' where_clause

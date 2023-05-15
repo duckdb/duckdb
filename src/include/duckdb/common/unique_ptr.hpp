@@ -2,38 +2,45 @@
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/likely.hpp"
+#include "duckdb/common/memory_safety.hpp"
 
 #include <memory>
 #include <type_traits>
 
 namespace duckdb {
 
-namespace {
-struct __unique_ptr_utils {
-	static inline void AssertNotNull(void *ptr) {
-#ifdef DEBUG
-		if (DUCKDB_UNLIKELY(!ptr)) {
-			throw InternalException("Attempted to dereference unique_ptr that is NULL!");
+template <class _Tp, bool SAFE = true>
+class unique_ptr : public std::unique_ptr<_Tp, std::default_delete<_Tp>> {
+public:
+	using original = std::unique_ptr<_Tp, std::default_delete<_Tp>>;
+	using original::original;
+
+private:
+	static inline void AssertNotNull(const bool null) {
+#if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
+		return;
+#else
+		if (DUCKDB_UNLIKELY(null)) {
+			throw duckdb::InternalException("Attempted to dereference unique_ptr that is NULL!");
 		}
 #endif
 	}
-};
-} // namespace
 
-template <class _Tp, class _Dp = std::default_delete<_Tp>>
-class unique_ptr : public std::unique_ptr<_Tp, _Dp> {
 public:
-	using original = std::unique_ptr<_Tp, _Dp>;
-	using original::original;
-
 	typename std::add_lvalue_reference<_Tp>::type operator*() const {
-		__unique_ptr_utils::AssertNotNull((void *)original::get());
-		return *(original::get());
+		const auto ptr = original::get();
+		if (MemorySafety<SAFE>::enabled) {
+			AssertNotNull(!ptr);
+		}
+		return *ptr;
 	}
 
 	typename original::pointer operator->() const {
-		__unique_ptr_utils::AssertNotNull((void *)original::get());
-		return original::get();
+		const auto ptr = original::get();
+		if (MemorySafety<SAFE>::enabled) {
+			AssertNotNull(!ptr);
+		}
+		return ptr;
 	}
 
 #ifdef DUCKDB_CLANG_TIDY
@@ -46,16 +53,40 @@ public:
 	}
 };
 
-template <class _Tp, class _Dp>
-class unique_ptr<_Tp[], _Dp> : public std::unique_ptr<_Tp[], _Dp> {
+template <class _Tp, bool SAFE>
+class unique_ptr<_Tp[], SAFE> : public std::unique_ptr<_Tp[], std::default_delete<_Tp[]>> {
 public:
-	using original = std::unique_ptr<_Tp[], _Dp>;
+	using original = std::unique_ptr<_Tp[], std::default_delete<_Tp[]>>;
 	using original::original;
 
+private:
+	static inline void AssertNotNull(const bool null) {
+#if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
+		return;
+#else
+		if (DUCKDB_UNLIKELY(null)) {
+			throw duckdb::InternalException("Attempted to dereference unique_ptr that is NULL!");
+		}
+#endif
+	}
+
+public:
 	typename std::add_lvalue_reference<_Tp>::type operator[](size_t __i) const {
-		__unique_ptr_utils::AssertNotNull((void *)original::get());
-		return (original::get())[__i];
+		const auto ptr = original::get();
+		if (MemorySafety<SAFE>::enabled) {
+			AssertNotNull(!ptr);
+		}
+		return ptr[__i];
 	}
 };
+
+template <typename T>
+using array_ptr = unique_ptr<T[], true>;
+
+template <typename T>
+using unsafe_array_ptr = unique_ptr<T[], false>;
+
+template <typename T>
+using unsafe_unique_ptr = unique_ptr<T, false>;
 
 } // namespace duckdb

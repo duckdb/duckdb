@@ -7,9 +7,9 @@
 
 namespace duckdb {
 
-PhysicalCreateType::PhysicalCreateType(unique_ptr<CreateTypeInfo> info, idx_t estimated_cardinality)
+PhysicalCreateType::PhysicalCreateType(unique_ptr<CreateTypeInfo> info_p, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::CREATE_TYPE, {LogicalType::BIGINT}, estimated_cardinality),
-      info(std::move(info)) {
+      info(std::move(info_p)) {
 }
 
 //===--------------------------------------------------------------------===//

@@ -455,7 +455,7 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
                                                          TableCatalogEntry &table, unique_ptr<LogicalOperator> plan) {
 	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
-	auto &base = (CreateIndexInfo &)*stmt.info;
+	auto &base = stmt.info->Cast<CreateIndexInfo>();
 
 	auto &get = plan->Cast<LogicalGet>();
 	// bind the index expressions
@@ -614,6 +614,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			// CREATE TYPE mood AS ENUM (SELECT 'happy')
 			auto query_obj = Bind(*create_type_info.query);
 			auto query = std::move(query_obj.plan);
+			create_type_info.query.reset();
 
 			auto &sql_types = query_obj.types;
 			if (sql_types.size() != 1) {

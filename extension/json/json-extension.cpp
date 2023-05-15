@@ -3,12 +3,14 @@
 
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/default/default_functions.hpp"
-#include "duckdb/main/extension_util.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/function/copy_function.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/function/copy_function.hpp"
 #include "json_common.hpp"
 #include "json_functions.hpp"
 
@@ -28,7 +30,9 @@ void JSONExtension::Load(DuckDB &db) {
 	ExtensionUtil::RegisterType(db_instance, JSONCommon::JSON_TYPE_NAME, std::move(json_type));
 
 	// JSON casts
-	JSONFunctions::RegisterCastFunctions(DBConfig::GetConfig(db_instance).GetCastFunctions());
+	JSONFunctions::RegisterSimpleCastFunctions(DBConfig::GetConfig(db_instance).GetCastFunctions());
+	JSONFunctions::RegisterJSONCreateCastFunctions(DBConfig::GetConfig(db_instance).GetCastFunctions());
+	JSONFunctions::RegisterJSONTransformCastFunctions(DBConfig::GetConfig(db_instance).GetCastFunctions());
 
 	// JSON scalar functions
 	for (auto &fun : JSONFunctions::GetScalarFunctions()) {
