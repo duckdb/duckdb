@@ -36,7 +36,7 @@ struct ExportAggregateBindData : public FunctionData {
 struct CombineState : public FunctionLocalState {
 	idx_t state_size;
 
-	unsafe_array_ptr<data_t> state_buffer0, state_buffer1;
+	unsafe_unique_array<data_t> state_buffer0, state_buffer1;
 	Vector state_vector0, state_vector1;
 
 	explicit CombineState(idx_t state_size_p)
@@ -55,7 +55,7 @@ static unique_ptr<FunctionLocalState> InitCombineState(ExpressionState &state, c
 
 struct FinalizeState : public FunctionLocalState {
 	idx_t state_size;
-	unsafe_array_ptr<data_t> state_buffer;
+	unsafe_unique_array<data_t> state_buffer;
 	Vector addresses;
 
 	explicit FinalizeState(idx_t state_size_p)

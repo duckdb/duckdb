@@ -39,8 +39,8 @@ using duckdb::idx_t;
 using duckdb::data_t;
 using duckdb::data_ptr_t;
 using duckdb::unique_ptr;
-using duckdb::array_ptr;
-using duckdb::unsafe_array_ptr;
+using duckdb::unique_array;
+using duckdb::unsafe_unique_array;
 using duckdb::make_array;
 using duckdb::make_unsafe_array;
 using duckdb::FastMemcpy;
@@ -88,13 +88,13 @@ struct PDQConstants {
 	const idx_t comp_offset;
 	const idx_t comp_size;
 
-	unsafe_array_ptr<data_t> tmp_buf_ptr;
+	unsafe_unique_array<data_t> tmp_buf_ptr;
 	const data_ptr_t tmp_buf;
 
-	unsafe_array_ptr<data_t> iter_swap_buf_ptr;
+	unsafe_unique_array<data_t> iter_swap_buf_ptr;
 	const data_ptr_t iter_swap_buf;
 
-	unsafe_array_ptr<data_t> swap_offsets_buf_ptr;
+	unsafe_unique_array<data_t> swap_offsets_buf_ptr;
 	const data_ptr_t swap_offsets_buf;
 
 	const data_ptr_t end;

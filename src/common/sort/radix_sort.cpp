@@ -291,7 +291,7 @@ void LocalSortState::SortInMemory() {
 	// Radix sort and break ties until no more ties, or until all columns are sorted
 	idx_t sorting_size = 0;
 	idx_t col_offset = 0;
-	unsafe_array_ptr<bool> ties_ptr;
+	unsafe_unique_array<bool> ties_ptr;
 	bool *ties = nullptr;
 	bool contains_string = false;
 	for (idx_t i = 0; i < sort_layout->column_count; i++) {

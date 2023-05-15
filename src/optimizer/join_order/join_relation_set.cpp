@@ -35,7 +35,7 @@ bool JoinRelationSet::IsSubset(JoinRelationSet &super, JoinRelationSet &sub) {
 	return false;
 }
 
-JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_array_ptr<idx_t> relations, idx_t count) {
+JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unsafe_unique_array<idx_t> relations, idx_t count) {
 	// now look it up in the tree
 	reference<JoinRelationTreeNode> info(root);
 	for (idx_t i = 0; i < count; i++) {
@@ -67,7 +67,7 @@ JoinRelationSet &JoinRelationSetManager::GetJoinRelation(idx_t index) {
 
 JoinRelationSet &JoinRelationSetManager::GetJoinRelation(unordered_set<idx_t> &bindings) {
 	// create a sorted vector of the relations
-	unsafe_array_ptr<idx_t> relations = bindings.empty() ? nullptr : make_unsafe_array<idx_t>(bindings.size());
+	unsafe_unique_array<idx_t> relations = bindings.empty() ? nullptr : make_unsafe_array<idx_t>(bindings.size());
 	idx_t count = 0;
 	for (auto &entry : bindings) {
 		relations[count++] = entry;
@@ -113,7 +113,7 @@ JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelati
 }
 
 // JoinRelationSet *JoinRelationSetManager::Difference(JoinRelationSet *left, JoinRelationSet *right) {
-// 	auto relations = unsafe_array_ptr<idx_t>(new idx_t[left->count]);
+// 	auto relations = unsafe_unique_array<idx_t>(new idx_t[left->count]);
 // 	idx_t count = 0;
 // 	// move through the left and right relations
 // 	idx_t i = 0, j = 0;

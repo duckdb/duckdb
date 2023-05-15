@@ -33,7 +33,7 @@ struct DuckDBArrowSchemaHolder {
 	std::list<vector<ArrowSchema>> nested_children;
 	std::list<vector<ArrowSchema *>> nested_children_ptr;
 	//! This holds strings created to represent decimal types
-	vector<unsafe_array_ptr<char>> owned_type_names;
+	vector<unsafe_unique_array<char>> owned_type_names;
 };
 
 static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {

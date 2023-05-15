@@ -334,7 +334,7 @@ public:
 	//! The current position to scan the HT for output tuples
 	idx_t ht_index;
 	//! The set of aggregate scan states
-	unsafe_array_ptr<TupleDataParallelScanState> ht_scan_states;
+	unsafe_unique_array<TupleDataParallelScanState> ht_scan_states;
 	atomic<bool> initialized;
 	atomic<bool> finished;
 };
