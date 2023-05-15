@@ -57,7 +57,8 @@ public:
 	                         OperatorSourceInput &input) const;
 
 	static void SetMultiScan(GlobalSinkState &state);
-	bool ForceSingleHT(GlobalSinkState &state) const;
+	static bool ForceSingleHT(GlobalSinkState &state);
+	static bool AnyPartitioned(GlobalSinkState &state);
 
 private:
 	void SetGroupingValues();

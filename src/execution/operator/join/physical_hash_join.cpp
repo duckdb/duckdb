@@ -96,7 +96,7 @@ public:
 class HashJoinLocalSinkState : public LocalSinkState {
 public:
 	HashJoinLocalSinkState(const PhysicalHashJoin &op, ClientContext &context) : build_executor(context) {
-		auto &allocator = Allocator::Get(context);
+		auto &allocator = BufferAllocator::Get(context);
 		if (!op.right_projection_map.empty()) {
 			build_chunk.Initialize(allocator, op.build_types);
 		}
@@ -162,7 +162,7 @@ unique_ptr<JoinHashTable> PhysicalHashJoin::InitializeHashTable(ClientContext &c
 			payload_types.push_back(aggr->return_type);
 			info.correlated_aggregates.push_back(std::move(aggr));
 
-			auto &allocator = Allocator::Get(context);
+			auto &allocator = BufferAllocator::Get(context);
 			info.correlated_counts = make_uniq<GroupedAggregateHashTable>(context, allocator, delim_types,
 			                                                              payload_types, correlated_aggregates);
 			info.correlated_types = delim_types;
@@ -434,7 +434,7 @@ public:
 };
 
 unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ExecutionContext &context) const {
-	auto &allocator = Allocator::Get(context.client);
+	auto &allocator = BufferAllocator::Get(context.client);
 	auto &sink = sink_state->Cast<HashJoinGlobalSinkState>();
 	auto state = make_uniq<HashJoinOperatorState>(context.client);
 	if (sink.perfect_join_executor) {
@@ -611,7 +611,7 @@ unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientConte
 
 unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionContext &context,
                                                                    GlobalSourceState &gstate) const {
-	return make_uniq<HashJoinLocalSourceState>(*this, Allocator::Get(context.client));
+	return make_uniq<HashJoinLocalSourceState>(*this, BufferAllocator::Get(context.client));
 }
 
 HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op, ClientContext &context)

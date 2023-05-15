@@ -70,7 +70,7 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 
 	// we partition when we are asked to or when the unpartitioned ht runs out of space
 	if (!IsPartitioned() && do_partition) {
-		Partition();
+		Partition(false);
 	}
 
 	if (!IsPartitioned()) {
@@ -117,7 +117,7 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 	return group_count;
 }
 
-void PartitionableHashTable::Partition() {
+void PartitionableHashTable::Partition(bool sink_done) {
 	D_ASSERT(!IsPartitioned());
 	D_ASSERT(radix_partitioned_hts.empty());
 	D_ASSERT(partition_info.n_partitions > 1);
@@ -130,7 +130,7 @@ void PartitionableHashTable::Partition() {
 			    context, allocator, group_types, payload_types, bindings, GetHTEntrySize()));
 			partition_hts[r] = radix_partitioned_hts[r].back().get();
 		}
-		unpartitioned_ht->Partition(partition_hts, partition_info.radix_bits);
+		unpartitioned_ht->Partition(partition_hts, partition_info.radix_bits, sink_done);
 		unpartitioned_ht.reset();
 	}
 	unpartitioned_hts.clear();

@@ -591,14 +591,17 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 	Verify();
 }
 
-void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &partition_hts, idx_t radix_bits) {
+void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &partition_hts, idx_t radix_bits,
+                                          bool sink_done) {
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	D_ASSERT(partition_hts.size() == num_partitions);
 
 	// Partition the data
+	auto pin_properties =
+	    sink_done ? TupleDataPinProperties::UNPIN_AFTER_DONE : TupleDataPinProperties::KEEP_EVERYTHING_PINNED;
 	auto partitioned_data =
 	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
-	partitioned_data->Partition(*data_collection, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+	partitioned_data->Partition(*data_collection, pin_properties);
 	D_ASSERT(partitioned_data->GetPartitions().size() == num_partitions);
 
 	// Move the partitioned data collections to the partitioned hash tables and initialize the 1st part of the HT
@@ -607,8 +610,10 @@ void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &p
 		auto &partition_ht = *partition_hts[partition_idx];
 		partition_ht.data_collection = std::move(partitions[partition_idx]);
 		partition_ht.aggregate_allocator = aggregate_allocator;
-		partition_ht.InitializeFirstPart();
-		partition_ht.Verify();
+		if (!sink_done) {
+			partition_ht.InitializeFirstPart();
+			partition_ht.Verify();
+		}
 	}
 }
 

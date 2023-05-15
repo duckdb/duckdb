@@ -145,7 +145,7 @@ public:
 	idx_t MaxCapacity();
 	static idx_t GetMaxCapacity(HtEntryType entry_type, idx_t tuple_size);
 
-	void Partition(vector<GroupedAggregateHashTable *> &partition_hts, idx_t radix_bits);
+	void Partition(vector<GroupedAggregateHashTable *> &partition_hts, idx_t radix_bits, bool sink_done);
 	void InitializeFirstPart();
 
 	void Finalize();
