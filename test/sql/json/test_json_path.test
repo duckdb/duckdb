@@ -179,3 +179,10 @@ query T
 select sum((to_json({duck:range})->'$.*')[1]::int) = sum(range) from range(10000)
 ----
 1
+
+# test some nulls (JSON Path reference implementation returns NULLs in wildcards),
+# if the path is not there, it's not added to the LIST
+query T
+select json_extract('[{"duck":null},{"duck":42},{"duck":null},{}]', '$[*].*')
+----
+[NULL, 42, NULL]

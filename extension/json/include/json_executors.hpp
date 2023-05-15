@@ -70,11 +70,17 @@ public:
 						ListVector::Reserve(result, new_size);
 					}
 
-					auto result_vals = FlatVector::GetData<T>(ListVector::GetEntry(result));
+					auto &child_entry = ListVector::GetEntry(result);
+					auto child_vals = FlatVector::GetData<T>(child_entry);
+					auto &child_validity = FlatVector::Validity(child_entry);
 					for (idx_t i = 0; i < vals.size(); i++) {
 						auto &val = vals[i];
-						D_ASSERT(val && !unsafe_yyjson_is_null(val)); // Handled by
-						result_vals[current_size + i] = fun(val, alc, result);
+						D_ASSERT(val != nullptr); // Wildcard extract shouldn't give back nullptrs
+						if (unsafe_yyjson_is_null(val)) {
+							child_validity.SetInvalid(current_size + i);
+						} else {
+							child_vals[current_size + i] = fun(val, alc, result);
+						}
 					}
 
 					ListVector::SetListSize(result, new_size);

@@ -274,7 +274,9 @@ void GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *const
 			    "Invalid JSON Path encountered in GetWildcardPathInternal, call JSONCommon::ValidatePath first!");
 		}
 	}
-	vals.emplace_back(val);
+	if (val != nullptr) {
+		vals.emplace_back(val);
+	}
 }
 
 void JSONCommon::GetWildcardPath(yyjson_val *val, const char *ptr, const idx_t &len, vector<yyjson_val *> &vals) {
