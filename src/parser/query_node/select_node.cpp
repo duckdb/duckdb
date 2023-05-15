@@ -39,7 +39,7 @@ string SelectNode::ToString() const {
 		}
 		result += select_list[i]->ToString();
 		if (!select_list[i]->alias.empty()) {
-			result += " AS " + KeywordHelper::WriteOptionallyQuoted(select_list[i]->alias);
+			result += StringUtil::Format(" AS %s", SQLIdentifier(select_list[i]->alias));
 		}
 	}
 	if (from_table && from_table->type != TableReferenceType::EMPTY) {

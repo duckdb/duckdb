@@ -22,8 +22,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>
-#ifdef WIN32
-#include "windows.h"
+#ifdef _WIN32
+#include <windows.h>
 #else
 #include <sys/time.h>
 #endif

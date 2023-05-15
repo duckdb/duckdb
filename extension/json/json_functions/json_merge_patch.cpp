@@ -3,8 +3,8 @@
 
 namespace duckdb {
 
-static duckdb::unique_ptr<FunctionData> JSONMergePatchBind(ClientContext &context, ScalarFunction &bound_function,
-                                                           vector<duckdb::unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> JSONMergePatchBind(ClientContext &context, ScalarFunction &bound_function,
+                                                   vector<unique_ptr<Expression>> &arguments) {
 	if (arguments.size() < 2) {
 		throw InvalidInputException("json_merge_patch requires at least two parameters");
 	}
@@ -53,9 +53,9 @@ static inline void ReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_va
 //! Follows MySQL behaviour
 static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+	auto alc = lstate.json_allocator.GetYYAlc();
 
-	auto doc = JSONCommon::CreateDocument(lstate.json_allocator.GetYYJSONAllocator());
+	auto doc = JSONCommon::CreateDocument(lstate.json_allocator.GetYYAlc());
 	const auto count = args.size();
 
 	// Read the first json arg

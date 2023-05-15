@@ -349,7 +349,7 @@ string LogicalType::ToString() const {
 		auto &child_types = StructType::GetChildTypes(*this);
 		string ret = "STRUCT(";
 		for (size_t i = 0; i < child_types.size(); i++) {
-			ret += KeywordHelper::WriteOptionallyQuoted(child_types[i].first) + " " + child_types[i].second.ToString();
+			ret += StringUtil::Format("%s %s", SQLIdentifier(child_types[i].first), child_types[i].second);
 			if (i < child_types.size() - 1) {
 				ret += ", ";
 			}

@@ -180,8 +180,8 @@ public:
 		UDFWrapper::RegisterFunction<TR, Args...>(name, udf_func, *context, std::move(varargs));
 	}
 
-	DUCKDB_API void CreateVectorizedFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
-	                                         scalar_function_t udf_func, LogicalType varargs = LogicalType::INVALID) {
+	void CreateVectorizedFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
+	                              scalar_function_t udf_func, LogicalType varargs = LogicalType::INVALID) {
 		UDFWrapper::RegisterFunction(name, std::move(args), std::move(ret_type), udf_func, *context,
 		                             std::move(varargs));
 	}
@@ -214,13 +214,12 @@ public:
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}
 
-	DUCKDB_API void CreateAggregateFunction(const string &name, vector<LogicalType> arguments, LogicalType return_type,
-	                                        aggregate_size_t state_size, aggregate_initialize_t initialize,
-	                                        aggregate_update_t update, aggregate_combine_t combine,
-	                                        aggregate_finalize_t finalize,
-	                                        aggregate_simple_update_t simple_update = nullptr,
-	                                        bind_aggregate_function_t bind = nullptr,
-	                                        aggregate_destructor_t destructor = nullptr) {
+	void CreateAggregateFunction(const string &name, vector<LogicalType> arguments, LogicalType return_type,
+	                             aggregate_size_t state_size, aggregate_initialize_t initialize,
+	                             aggregate_update_t update, aggregate_combine_t combine, aggregate_finalize_t finalize,
+	                             aggregate_simple_update_t simple_update = nullptr,
+	                             bind_aggregate_function_t bind = nullptr,
+	                             aggregate_destructor_t destructor = nullptr) {
 		AggregateFunction function =
 		    UDFWrapper::CreateAggregateFunction(name, arguments, return_type, state_size, initialize, update, combine,
 		                                        finalize, simple_update, bind, destructor);

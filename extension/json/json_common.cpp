@@ -5,7 +5,7 @@ namespace duckdb {
 string JSONCommon::ValToString(yyjson_val *val, idx_t max_len) {
 	JSONAllocator json_allocator(Allocator::DefaultAllocator());
 	idx_t len;
-	auto data = JSONCommon::WriteVal<yyjson_val>(val, json_allocator.GetYYJSONAllocator(), len);
+	auto data = JSONCommon::WriteVal<yyjson_val>(val, json_allocator.GetYYAlc(), len);
 	if (max_len < len) {
 		return string(data, max_len) + "...";
 	} else {
