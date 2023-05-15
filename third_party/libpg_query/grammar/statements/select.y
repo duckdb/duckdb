@@ -3607,6 +3607,14 @@ indirection_el:
 					ai->uidx = $4;
 					$$ = (PGNode *) ai;
 				}
+            | '[' opt_slice_bound ':' opt_slice_bound ':' opt_slice_bound ']' {
+                    PGAIndices *ai = makeNode(PGAIndices);
+                    ai->is_slice = true;
+                    ai->lidx = $2;
+                    ai->uidx = $4;
+                    ai->step = $6;
+                    $$ = (PGNode *) ai;
+                }
 		;
 
 opt_slice_bound:

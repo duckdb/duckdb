@@ -53,74 +53,128 @@ static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &e
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
-INPUT_TYPE SliceValue(Vector &result, INPUT_TYPE input, INDEX_TYPE begin, INDEX_TYPE end) {
+INPUT_TYPE SliceValue(Vector &result, INPUT_TYPE input, INDEX_TYPE begin, INDEX_TYPE end, idx_t step) {
 	return input;
 }
 
 template <>
-list_entry_t SliceValue(Vector &result, list_entry_t input, int64_t begin, int64_t end) {
+list_entry_t SliceValue(Vector &result, list_entry_t input, int64_t begin, int64_t end, idx_t step) {
 	input.offset += begin;
-	input.length = end - begin;
+	if (step != 1) {
+        input.length = (end - begin) / step;
+    } else {
+	    input.length = end - begin;
+	}
 	return input;
 }
 
 template <>
-string_t SliceValue(Vector &result, string_t input, int32_t begin, int32_t end) {
+string_t SliceValue(Vector &result, string_t input, int32_t begin, int32_t end, idx_t step) {
 	// one-based - zero has strange semantics
 	return SubstringFun::SubstringUnicode(result, input, begin + 1, end - begin);
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
-static void ExecuteSlice(Vector &result, Vector &s, Vector &b, Vector &e, const idx_t count) {
+INPUT_TYPE SliceValueWithSteps(Vector &result, SelectionVector &sel, INPUT_TYPE input, INDEX_TYPE begin, INDEX_TYPE end, idx_t step, idx_t &sel_idx) {
+    return input;
+}
+
+template <>
+list_entry_t SliceValueWithSteps(Vector &result, SelectionVector &sel, list_entry_t input, int64_t begin, int64_t end, idx_t step, idx_t &sel_idx) {
+    input.offset += begin;
+    if (step != 1) {
+        input.length = (end - begin) / step;
+    } else {
+        input.length = end - begin;
+    }
+	idx_t len = (end - begin) / step;
+	auto child_idx = begin;
+    for (; sel_idx < len; ++sel_idx) {
+		sel.set_index(sel_idx, child_idx);
+		child_idx += step;
+	}
+    return input;
+}
+
+template <>
+string_t SliceValueWithSteps(Vector &result, SelectionVector &sel, string_t input, int32_t begin, int32_t end, idx_t step, idx_t &sel_idx) {
+    // one-based - zero has strange semantics
+    return SubstringFun::SubstringUnicode(result, input, begin + 1, end - begin);
+}
+
+template <typename INPUT_TYPE, typename INDEX_TYPE>
+static void ExecuteSlice(Vector &result, Vector &v, Vector &b, Vector &e, const idx_t count, optional_ptr<Vector> s) {
 	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		auto rdata = ConstantVector::GetData<INPUT_TYPE>(result);
-		auto sdata = ConstantVector::GetData<INPUT_TYPE>(s);
+		auto vdata = ConstantVector::GetData<INPUT_TYPE>(v);
 		auto bdata = ConstantVector::GetData<INDEX_TYPE>(b);
 		auto edata = ConstantVector::GetData<INDEX_TYPE>(e);
+		auto sdata = s ? ConstantVector::GetData<INDEX_TYPE>(*s) : nullptr;
 
-		auto sliced = sdata[0];
+		auto sliced = vdata[0];
 		auto begin = bdata[0];
 		auto end = edata[0];
+		auto step = sdata ? sdata[0] : 1;
 
-		auto svalid = !ConstantVector::IsNull(s);
+		auto vvalid = !ConstantVector::IsNull(v);
 		auto bvalid = !ConstantVector::IsNull(b);
 		auto evalid = !ConstantVector::IsNull(e);
+		auto svalid = s && !ConstantVector::IsNull(*s);
 
 		// Try to slice
-		if (!svalid || !ClampSlice(sliced, begin, end, bvalid, evalid)) {
+		if (!vvalid || !ClampSlice(sliced, begin, end, bvalid, evalid)) {
 			ConstantVector::SetNull(result, true);
 		} else {
-			rdata[0] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
+			rdata[0] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end, step);
 		}
 	} else {
-		UnifiedVectorFormat sdata, bdata, edata;
+		UnifiedVectorFormat vdata, bdata, edata, sdata;
 
-		s.ToUnifiedFormat(count, sdata);
+		v.ToUnifiedFormat(count, vdata);
 		b.ToUnifiedFormat(count, bdata);
 		e.ToUnifiedFormat(count, edata);
+		if (s) {
+            s->ToUnifiedFormat(count, sdata);
+        }
 
 		auto rdata = FlatVector::GetData<INPUT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
+		SelectionVector sel;
+		idx_t sel_idx = 0;
+		if (s) {
+		    sel.Initialize(count);
+		}
+
 		for (idx_t i = 0; i < count; ++i) {
-			auto sidx = sdata.sel->get_index(i);
+			auto vidx = vdata.sel->get_index(i);
 			auto bidx = bdata.sel->get_index(i);
 			auto eidx = edata.sel->get_index(i);
+			auto sidx = s ? sdata.sel->get_index(i) : 0;
 
-			auto sliced = ((INPUT_TYPE *)sdata.data)[sidx];
+			auto sliced = ((INPUT_TYPE *)vdata.data)[vidx];
 			auto begin = ((INDEX_TYPE *)bdata.data)[bidx];
 			auto end = ((INDEX_TYPE *)edata.data)[eidx];
+			auto step = s ? ((INDEX_TYPE *)sdata.data)[sidx] : 1;
 
-			auto svalid = sdata.validity.RowIsValid(sidx);
+			auto vvalid = vdata.validity.RowIsValid(vidx);
 			auto bvalid = bdata.validity.RowIsValid(bidx);
 			auto evalid = edata.validity.RowIsValid(eidx);
+			auto svalid = s && sdata.validity.RowIsValid(sidx);
 
-			// Try to slice
-			if (!svalid || !ClampSlice(sliced, begin, end, bvalid, evalid)) {
-				rmask.SetInvalid(i);
-			} else {
-				rdata[i] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
+			if (step == 1) {
+                // Try to slice
+                if (!vvalid || !ClampSlice(sliced, begin, end, bvalid, evalid)) {
+                    rmask.SetInvalid(i);
+                } else {
+                    rdata[i] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end, step);
+                }
+            } else {
+				rdata[i] = SliceValueWithSteps<INPUT_TYPE, INDEX_TYPE>(result,sel, sliced, begin, end, step, sel_idx);
 			}
+		}
+		if (s) {
+			result.Slice(sel, count);
 		}
 	}
 
@@ -128,26 +182,31 @@ static void ExecuteSlice(Vector &result, Vector &s, Vector &b, Vector &e, const 
 }
 
 static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	D_ASSERT(args.ColumnCount() == 3);
-	D_ASSERT(args.data.size() == 3);
+	D_ASSERT(args.ColumnCount() == 3 || args.ColumnCount() == 4);
+	D_ASSERT(args.data.size() == 3 || args.data.size() == 4);
 	auto count = args.size();
 
-	Vector &s = args.data[0];
+	Vector &v = args.data[0];
 	Vector &b = args.data[1];
 	Vector &e = args.data[2];
+
+	optional_ptr<Vector> s;
+	if (args.ColumnCount() == 4) {
+		s = &args.data[3];
+	}
 
 	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	switch (result.GetType().id()) {
 	case LogicalTypeId::LIST:
 		// Share the value dictionary as we are just going to slice it
-		if (s.GetVectorType() != VectorType::FLAT_VECTOR && s.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			s.Flatten(count);
+		if (v.GetVectorType() != VectorType::FLAT_VECTOR && v.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			v.Flatten(count);
 		}
-		ListVector::ReferenceEntry(result, s);
-		ExecuteSlice<list_entry_t, int64_t>(result, s, b, e, count);
+		ListVector::ReferenceEntry(result, v);
+		ExecuteSlice<list_entry_t, int64_t>(result, v, b, e, count, s);
 		break;
 	case LogicalTypeId::VARCHAR:
-		ExecuteSlice<string_t, int32_t>(result, s, b, e, count);
+		ExecuteSlice<string_t, int32_t>(result, v, b, e, count, s);
 		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented");
@@ -156,7 +215,7 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 
 static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-	D_ASSERT(bound_function.arguments.size() == 3);
+	D_ASSERT(bound_function.arguments.size() == 3 || bound_function.arguments.size() == 4);
 	switch (arguments[0]->return_type.id()) {
 	case LogicalTypeId::LIST:
 		// The result is the same type
@@ -167,6 +226,9 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 		bound_function.return_type = arguments[0]->return_type;
 		bound_function.arguments[1] = LogicalType::INTEGER;
 		bound_function.arguments[2] = LogicalType::INTEGER;
+		if (bound_function.arguments.size() == 4) {
+            bound_function.arguments[3] = LogicalType::INTEGER;
+        }
 		break;
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::UNKNOWN:

@@ -31,6 +31,8 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 				                                : TransformExpression(index->lidx));
 				children.push_back(!index->uidx ? make_uniq<ConstantExpression>(Value())
 				                                : TransformExpression(index->uidx));
+				children.push_back(!index->step ? make_uniq<ConstantExpression>(Value())
+                                                : TransformExpression(index->step));
 				result = make_uniq<OperatorExpression>(ExpressionType::ARRAY_SLICE, std::move(children));
 			} else {
 				// array access
