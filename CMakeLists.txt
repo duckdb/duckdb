@@ -649,11 +649,14 @@ function(add_extension_definitions)
   # Include paths for any registered out-of-tree extensions
   foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
     string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
-    if (DEFINED DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_INCLUDE_PATH)
-      include_directories("${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_INCLUDE_PATH}")
-    else()
-      # By default, we assume third-party extensions to by (symlinked) in extensions/ with <name>_clone as path
-      include_directories("${PROJECT_SOURCE_DIR}/extension/${OOTE_NAME}_clone/src/include")
+    if(${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_LINK})
+      if (DEFINED DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_INCLUDE_PATH)
+        include_directories("${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_INCLUDE_PATH}")
+      else()
+        # We try the default locations for headers TODO do we even need include?
+        include_directories("${PROJECT_SOURCE_DIR}/extension_external/${OOTE_NAME}/src/include")
+        include_directories("${PROJECT_SOURCE_DIR}/extension_external/${OOTE_NAME}/include")
+      endif()
     endif()
   endforeach()
 endfunction()
@@ -875,10 +878,40 @@ function(build_loadable_extension NAME PARAMETERS)
   build_loadable_extension_directory(${NAME} "extension/${NAME}" "${PARAMETERS}" ${FILES})
 endfunction()
 
+# Register a duckdb extension to be built
+# For in-tree extensions in './extensions', the PATH and INCLUDE_PATH can be left empty
+# For out-of-tree extensions that are located or symlinked in the './extensions' directory with default config,
+# the PATH and INCLUDE_PATH can also be left empty.
+# For out-of-tree extensions in different locations or non-standard project structures, the PATH and INCLUDE_PATH
+# should be set to the CMakeLists.txt root and extension header respectively.
+function(register_extension NAME SHOULD_LINK PATH INCLUDE_PATH)
+  string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
+  string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
+
+  set(DUCKDB_OOT_EXTENSION_NAMES ${DUCKDB_OOT_EXTENSION_NAMES} ${EXTENSION_NAME_LOWERCASE} PARENT_SCOPE)
+
+  if (${SHOULD_LINK})
+    set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK ${SHOULD_LINK} PARENT_SCOPE)
+  endif()
+
+  if (NOT "${PATH}" STREQUAL "")
+    set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH ${PATH} PARENT_SCOPE)
+  endif()
+
+  if (NOT "${INCLUDE_PATH}" STREQUAL "")
+    set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH ${INCLUDE_PATH} PARENT_SCOPE)
+  endif()
+endfunction()
+
 if(${EXPORT_DLL_SYMBOLS})
   # For Windows DLL export symbols
   add_definitions(-DDUCKDB_BUILD_LIBRARY)
 endif()
+
+
+foreach(DUCKDB_EXTENSION_CONFIG IN LISTS DUCKDB_EXTENSION_CONFIGS)
+  include(${DUCKDB_EXTENSION_CONFIG})
+endforeach()
 
 if (BUILD_MAIN_DUCKDB_LIBRARY)
   add_subdirectory(src)
@@ -891,11 +924,12 @@ add_subdirectory(extension)
 # Add Out-of-tree extensions
 foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
   string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
+
   if (DEFINED DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_PATH)
     add_subdirectory(${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_PATH} extension/${OOTE_NAME})
   else()
     # By default, we assume third-party extensions to by (symlinked) in extensions/ with <name>_clone as path
-    add_subdirectory("extension/${OOTE_NAME}_clone/src" extension/${OOTE_NAME})
+    add_subdirectory("extension/${OOTE_NAME}_clone" extension/${OOTE_NAME})
   endif()
 endforeach()
 

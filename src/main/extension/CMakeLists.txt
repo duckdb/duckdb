@@ -10,9 +10,12 @@ configure_file(extension_oote_headers.hpp.in
                "${PROJECT_BINARY_DIR}/include/extension_oote_headers.hpp")
 if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
   foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
-    set(DUCKDB_EXTENSION_HEADER "${OOTE_NAME}_extension.hpp")
-    file(APPEND "${PROJECT_BINARY_DIR}/include/extension_oote_headers.hpp"
-         "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
+    string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
+    if(${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_LINK})
+      set(DUCKDB_EXTENSION_HEADER "${OOTE_NAME}_extension.hpp")
+      file(APPEND "${PROJECT_BINARY_DIR}/include/extension_oote_headers.hpp"
+              "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
+    endif()
   endforeach()
 endif()
 
@@ -22,24 +25,23 @@ set(OOTE_LOADER_BODY "")
 if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
   foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
     string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
-    if(NOT ${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_LINK})
-      continue()
-    endif()
-    # Assumes lowercase input!
-    set(EXTENSION_CLASS ${OOTE_NAME}Extension)
-    string(SUBSTRING ${OOTE_NAME} 0 1 FIRST_LETTER)
-    string(TOUPPER ${FIRST_LETTER} FIRST_LETTER)
-    string(REGEX REPLACE "^.(.*)" "${FIRST_LETTER}\\1" EXTENSION_CLASS
-                         "${OOTE_NAME}")
+    if(${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_LINK})
+      # Assumes lowercase input!
+      set(EXTENSION_CLASS ${OOTE_NAME}Extension)
+      string(SUBSTRING ${OOTE_NAME} 0 1 FIRST_LETTER)
+      string(TOUPPER ${FIRST_LETTER} FIRST_LETTER)
+      string(REGEX REPLACE "^.(.*)" "${FIRST_LETTER}\\1" EXTENSION_CLASS
+                           "${OOTE_NAME}")
 
-    set(OOTE_LOADER_NAME_LIST "${OOTE_LOADER_NAME_LIST},\"${OOTE_NAME}\"")
-    set(OOTE_LOADER_BODY
-        "${OOTE_LOADER_BODY}\
-      if (extension==\"${OOTE_NAME}\") {
-        db.LoadExtension<${EXTENSION_CLASS}Extension>();
-        return true;
-      }
-      ")
+      set(OOTE_LOADER_NAME_LIST "${OOTE_LOADER_NAME_LIST},\"${OOTE_NAME}\"")
+      set(OOTE_LOADER_BODY
+          "${OOTE_LOADER_BODY}\
+        if (extension==\"${OOTE_NAME}\") {
+          db.LoadExtension<${EXTENSION_CLASS}Extension>();
+          return true;
+        }
+        ")
+    endif()
   endforeach()
 endif()
 
