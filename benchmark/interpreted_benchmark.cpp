@@ -392,7 +392,6 @@ string InterpretedBenchmark::GetQuery() {
 
 void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
-	auto fs = FileSystem::CreateLocal();
 	state.result = state.con.Query(run_query);
 }
 
