@@ -521,9 +521,17 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, co
 		for (auto &column : df_columns) {
 			column_names.push_back(std::string(py::str(column)));
 		}
-		columns = StringUtil::Format("(%s)", StringUtil::Join(column_names, ","));
+		columns += "(";
+		for (idx_t i = 0; i < column_names.size(); i++) {
+			auto &column = column_names[i];
+			if (i != 0) {
+				columns += ", ";
+			}
+			columns += StringUtil::Format("%s", SQLIdentifier(column));
+		}
+		columns += ")";
 	}
-	return Execute(StringUtil::Format("INSERT INTO \"%s\"%s SELECT * FROM __append_df", name, columns));
+	return Execute(StringUtil::Format("INSERT INTO %s %s SELECT * FROM __append_df", SQLIdentifier(name), columns));
 }
 
 void DuckDBPyConnection::RegisterArrowObject(const py::object &arrow_object, const string &name) {

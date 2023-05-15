@@ -15,6 +15,7 @@
 #include <cstring>
 
 namespace duckdb {
+
 /**
  * String Utility Functions
  * Note that these are not the most efficient implementations (i.e., they copy
@@ -83,6 +84,23 @@ public:
 			return true;
 		}
 		return false;
+	}
+
+	template <class TO>
+	static vector<TO> ConvertStrings(const vector<string> &strings) {
+		vector<TO> result;
+		for (auto &string : strings) {
+			result.emplace_back(string);
+		}
+		return result;
+	}
+
+	static vector<SQLIdentifier> ConvertToSQLIdentifiers(const vector<string> &strings) {
+		return ConvertStrings<SQLIdentifier>(strings);
+	}
+
+	static vector<SQLString> ConvertToSQLStrings(const vector<string> &strings) {
+		return ConvertStrings<SQLString>(strings);
 	}
 
 	//! Returns true if the needle string exists in the haystack

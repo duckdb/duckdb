@@ -162,8 +162,9 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 	}
 } // LCOV_EXCL_STOP
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
+	auto path = FileSystem::ExpandPath(path_p, opener);
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
@@ -506,8 +507,9 @@ public:
 	};
 };
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
+	auto path = FileSystem::ExpandPath(path_p, opener);
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
@@ -775,7 +777,7 @@ void LocalFileSystem::MoveFile(const string &source, const string &target) {
 	auto source_unicode = WindowsUtil::UTF8ToUnicode(source.c_str());
 	auto target_unicode = WindowsUtil::UTF8ToUnicode(target.c_str());
 	if (!MoveFileW(source_unicode.c_str(), target_unicode.c_str())) {
-		throw IOException("Could not move file");
+		throw IOException("Could not move file: %s", GetLastErrorAsString());
 	}
 }
 
