@@ -52,14 +52,18 @@ public:
 	}
 };
 
-
+template <bool GENERATE_SERIES>
 static unique_ptr<FunctionData> RangeFunctionBind(ClientContext &context, TableFunctionBindInput &input,
                                                   vector<LogicalType> &return_types, vector<string> &names) {
 
 	LogicalType &first_arg_type = input.input_table_types[0];
 	idx_t num_given_args = input.input_table_types.size();
 
-	names.push_back("range");
+	if (GENERATE_SERIES) {
+		names.push_back("generate_series");
+	} else {
+		names.push_back("range");
+	}
 
 	bool with_timestamps; 
 
@@ -161,13 +165,13 @@ static OperatorResultType RangeFunction(ExecutionContext &context, TableFunction
 void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	
 	TableFunction range_function("range", {LogicalTypeId::TABLE}, nullptr, 
-	                                       RangeFunctionBind, RangeFunctionInit, RangeFunctionLocalInit<false>);
+	                                       RangeFunctionBind<false>, RangeFunctionInit, RangeFunctionLocalInit<false>);
 	range_function.in_out_function = RangeFunction;
 	set.AddFunction(range_function);
 
 	// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 	TableFunction generate_series_function("generate_series", {LogicalTypeId::TABLE}, nullptr, 
-	                                       RangeFunctionBind, RangeFunctionInit, RangeFunctionLocalInit<true>);
+	                                       RangeFunctionBind<true>, RangeFunctionInit, RangeFunctionLocalInit<true>);
 	generate_series_function.in_out_function = RangeFunction;
 	set.AddFunction(generate_series_function);
 }
