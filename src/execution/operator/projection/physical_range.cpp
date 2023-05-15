@@ -74,19 +74,33 @@ void RangeOperatorState::FetchArguments(DataChunk &input, const vector<unique_pt
 
 	first_fetch = false;
 
+	vector<Value> args_values{};
+
+	for (idx_t i = 0; i < args_list.size(); i++) {
+		Value v = args_data.GetValue(i,0);
+		if (v.IsNull()) {
+			// if any argument is NULL, set the range parameters so that no row is produced
+			start = generate_series ? 1 : 0;
+			end = 0;
+			increment = 1;
+			return;
+		}
+		args_values.push_back(v);
+	}
+
 	if(args_list.size() < 3) {
 		// no increment is given, set it to default value
 		increment = DEFAULT_INCREMENT;
 	} else {
-		increment = args_data.GetValue(2,0).GetValue<int64_t>();
+		increment = args_values[2].GetValue<int64_t>();
 	}
 	if(args_list.size() == 1) {
 		// if only one argument is given, use it as end and set start to default value
 		start = DEFAULT_START;
-		end = args_data.GetValue(0,0).GetValue<int64_t>();
+		end = args_values[0].GetValue<int64_t>();
 	} else {
-		start = args_data.GetValue(0,0).GetValue<int64_t>();
-		end = args_data.GetValue(1,0).GetValue<int64_t>();
+		start = args_values[0].GetValue<int64_t>();
+		end = args_values[1].GetValue<int64_t>();
 	}
 	if(generate_series) { // inclusive upper bound for generate_series
 		if (increment < 0) {
