@@ -133,10 +133,10 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 	InstallExtensionInternal(config, &client_config, fs, local_path, extension, force_install);
 }
 
-unsafe_array_ptr<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
+unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
 	auto source_file = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
 	file_size = source_file->GetFileSize();
-	auto in_buffer = make_unsafe_array<data_t>(file_size);
+	auto in_buffer = make_unsafe_uniq_array<data_t>(file_size);
 	source_file->Read(in_buffer.get(), file_size);
 	source_file->Close();
 	return in_buffer;
