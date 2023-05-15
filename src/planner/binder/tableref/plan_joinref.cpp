@@ -10,11 +10,13 @@
 #include "duckdb/planner/operator/logical_asof_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/planner/operator/logical_dependent_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_positional_join.hpp"
 #include "duckdb/planner/tableref/bound_joinref.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression_binder/lateral_binder.hpp"
+#include "duckdb/planner/subquery/recursive_dependent_join_planner.hpp"
 
 namespace duckdb {
 
@@ -229,27 +231,52 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 }
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
+	bool swapped_children = false;
+	// Store the existing flag as we will modify if in the future, but we will also need the old
+	auto old_is_outside_flattened = is_outside_flattened;
+	// Plan laterals from outermost to innermost
+	if (ref.lateral) {
+		// Set the flag to ensure that children do not flatten before the root
+		is_outside_flattened = false;
+	}
 	auto left = CreatePlan(*ref.left);
 	auto right = CreatePlan(*ref.right);
+	is_outside_flattened = old_is_outside_flattened;
+
+	// For joins, depth of the bindings will be one higher on the right because of the lateral binder
+	// If the current join does not have correlations between left and right, then the right bindings
+	// have depth 1 too high and can be reduced by 1 throughout
 	if (!ref.lateral && !ref.correlated_columns.empty()) {
-		// non-lateral join with correlated columns
-		// this happens if there is a join (or cross product) in a correlated subquery
-		// due to the lateral binder the expression depth of all correlated columns in the "ref.correlated_columns" set
-		// is 1 too high
-		// we reduce expression depth of all columns in the "ref.correlated_columns" set by 1
 		LateralBinder::ReduceExpressionDepth(*right, ref.correlated_columns);
 	}
+
 	if (ref.type == JoinType::RIGHT && ref.ref_type != JoinRefType::ASOF &&
 	    ClientConfig::GetConfig(context).enable_optimizer) {
 		// we turn any right outer joins into left outer joins for optimization purposes
 		// they are the same but with sides flipped, so treating them the same simplifies life
 		ref.type = JoinType::LEFT;
 		std::swap(left, right);
+		// Set the flag for the flattener to correctly generate the flattened plan
+		swapped_children = true;
 	}
 	if (ref.lateral) {
-		// lateral join
-		return PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
-		                       std::move(ref.condition));
+		D_ASSERT(swapped_children == false);
+		if (!is_outside_flattened) {
+			// If outer dependent joins is yet to be flattened, only plan the lateral
+			has_unplanned_dependent_joins = true;
+			return LogicalDependentJoin::Create(std::move(left), std::move(right), ref.correlated_columns, ref.type,
+			                                    std::move(ref.condition));
+		} else {
+			// All outer dependent joins have been planned and flattened, so plan and flatten lateral and recursively
+			// plan the children
+			auto new_plan = PlanLateralJoin(std::move(left), std::move(right), ref.correlated_columns, ref.type,
+			                                std::move(ref.condition));
+			if (has_unplanned_dependent_joins) {
+				RecursiveDependentJoinPlanner plan(*this);
+				plan.VisitOperator(*new_plan);
+			}
+			return new_plan;
+		}
 	}
 	switch (ref.ref_type) {
 	case JoinRefType::CROSS:
@@ -261,6 +288,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 	if (ref.type == JoinType::INNER && (ref.condition->HasSubquery() || HasCorrelatedColumns(*ref.condition)) &&
 	    ref.ref_type == JoinRefType::REGULAR) {
+		D_ASSERT(swapped_children == false);
 		// inner join, generate a cross product + filter
 		// this will be later turned into a proper join by the join order optimizer
 		auto root = LogicalCrossProduct::Create(std::move(left), std::move(right));
@@ -277,6 +305,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	// now create the join operator from the join condition
 	auto result = LogicalComparisonJoin::CreateJoin(ref.type, ref.ref_type, std::move(left), std::move(right),
 	                                                std::move(ref.condition));
+	// set the flag on the logical operator about whether its left and right children were swapped
+	result->swapped_children = swapped_children;
 
 	optional_ptr<LogicalOperator> join;
 	if (result->type == LogicalOperatorType::LOGICAL_FILTER) {
