@@ -2738,6 +2738,23 @@ indirection_expr:		'?'
 					PGFuncCall *f = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
 					$$ = (PGNode *) f;
 				}
+			| MAP '{' opt_map_arguments_opt_comma '}'
+				{
+					PGList *key_list = NULL;
+					PGList *value_list = NULL;
+					PGListCell *lc;
+					PGList *entry_list = $3;
+					foreach(lc, entry_list)
+					{
+						PGList *l = (PGList *) lc->data.ptr_value;
+						key_list = lappend(key_list, (PGNode *) l->head->data.ptr_value);
+						value_list = lappend(value_list, (PGNode *) l->tail->data.ptr_value);
+					}
+					PGNode *keys   = (PGNode *) makeFuncCall(SystemFuncName("list_value"), key_list, @3);
+					PGNode *values = (PGNode *) makeFuncCall(SystemFuncName("list_value"), value_list, @3);
+					PGFuncCall *f = makeFuncCall(SystemFuncName("map"), list_make2(keys, values), @3);
+					$$ = (PGNode *) f;
+				}
 			| func_expr
 				{
 					$$ = $1;
@@ -3236,6 +3253,29 @@ dict_arguments_opt_comma:
 			| dict_arguments ','							{ $$ = $1; }
 		;
 
+map_arg:
+			a_expr ':' a_expr
+			{
+				$$ = list_make2($1, $3);
+			}
+	;
+
+map_arguments:
+			map_arg									{ $$ = list_make1($1); }
+			| map_arguments ',' map_arg				{ $$ = lappend($1, $3); }
+	;
+
+
+map_arguments_opt_comma:
+			map_arguments							{ $$ = $1; }
+			| map_arguments ','						{ $$ = $1; }
+		;
+
+
+opt_map_arguments_opt_comma:
+			map_arguments_opt_comma					{ $$ = $1; }
+			| /* empty */							{ $$ = NULL; }
+		;
 
 sub_type:	ANY										{ $$ = PG_ANY_SUBLINK; }
 			| SOME									{ $$ = PG_ANY_SUBLINK; }

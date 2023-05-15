@@ -207,8 +207,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 			fs.CreateDirectory(file_path);
 		} else if (!overwrite_or_ignore) {
 			idx_t n_files = 0;
-			fs.ListFiles(
-			    file_path, [&n_files](const string &path, bool) { n_files++; }, FileOpener::Get(context));
+			fs.ListFiles(file_path, [&n_files](const string &path, bool) { n_files++; });
 			if (n_files > 0) {
 				throw IOException("Directory %s is not empty! Enable OVERWRITE_OR_IGNORE option to force writing",
 				                  file_path);

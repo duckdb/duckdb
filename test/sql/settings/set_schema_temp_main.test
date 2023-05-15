@@ -1,0 +1,25 @@
+# name: test/sql/settings/set_schema_temp_main.test
+# group: [settings]
+
+statement ok
+pragma enable_verification;
+
+statement error
+CREATE SCHEMA temp.s1;
+----
+Cannot create non-temporary entry "s1" in temporary catalog
+
+statement error
+CREATE SCHEMA system.s1;
+----
+Cannot create schema in system catalog
+
+statement error
+set schema = 'temp';
+----
+SET schema cannot be set to internal schema "temp"
+
+statement error
+set schema = 'system';
+----
+SET schema cannot be set to internal schema "system"

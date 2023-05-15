@@ -64,7 +64,7 @@ void Blob::ToString(string_t blob, char *output) {
 
 string Blob::ToString(string_t blob) {
 	auto str_len = GetStringSize(blob);
-	auto buffer = unique_ptr<char[]>(new char[str_len]);
+	auto buffer = make_unsafe_array<char>(str_len);
 	Blob::ToString(blob, buffer.get());
 	return string(buffer.get(), str_len);
 }
@@ -136,7 +136,7 @@ void Blob::ToBlob(string_t str, data_ptr_t output) {
 
 string Blob::ToBlob(string_t str) {
 	auto blob_len = GetBlobSize(str);
-	auto buffer = unique_ptr<char[]>(new char[blob_len]);
+	auto buffer = make_unsafe_array<char>(blob_len);
 	Blob::ToBlob(str, (data_ptr_t)buffer.get());
 	return string(buffer.get(), blob_len);
 }

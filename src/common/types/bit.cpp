@@ -78,7 +78,7 @@ void Bit::ToString(string_t bits, char *output) {
 
 string Bit::ToString(string_t str) {
 	auto len = BitLength(str);
-	auto buffer = unique_ptr<char[]>(new char[len]);
+	auto buffer = make_unsafe_array<char>(len);
 	ToString(str, buffer.get());
 	return string(buffer.get(), len);
 }
@@ -140,7 +140,7 @@ void Bit::ToBit(string_t str, string_t &output_str) {
 
 string Bit::ToBit(string_t str) {
 	auto bit_len = GetBitSize(str);
-	auto buffer = unique_ptr<char[]>(new char[bit_len]);
+	auto buffer = make_unsafe_array<char>(bit_len);
 	string_t output_str(buffer.get(), bit_len);
 	Bit::ToBit(str, output_str);
 	return output_str.GetString();

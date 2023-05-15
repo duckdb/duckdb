@@ -215,6 +215,7 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 
 static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
+	D_ASSERT(arguments.size() == 3 || arguments.size() == 4);
 	D_ASSERT(bound_function.arguments.size() == 3 || bound_function.arguments.size() == 4);
 	switch (arguments[0]->return_type.id()) {
 	case LogicalTypeId::LIST:
@@ -242,13 +243,18 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
-ScalarFunction ListSliceFun::GetFunction() {
+ScalarFunctionSet ListSliceFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun({LogicalType::ANY, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::ANY,
 	                   ArraySliceFunction, ArraySliceBind);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	return fun;
+
+	ScalarFunctionSet set;
+	set.AddFunction(fun);
+	fun.arguments.push_back(LogicalType::BIGINT);
+	set.AddFunction(fun);
+	return set;
 }
 
 } // namespace duckdb
