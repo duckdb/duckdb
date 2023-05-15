@@ -23,22 +23,28 @@ static void ListReverseFunction(DataChunk &args, ExpressionState &state, Vector 
 
 	auto input_list_list_size = ListVector::GetListSize(input_list);
 	auto &input_list_child = ListVector::GetEntry(input_list);
+
 	UnifiedVectorFormat input_list_child_data;
 	input_list_child.ToUnifiedFormat(input_list_list_size, input_list_child_data);
 
 	ListVector::Reserve(result, input_list_list_size);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_entries = FlatVector::GetData<list_entry_t>(result);
+	auto &result_validity = FlatVector::Validity(result);
 
-	// create a reverse selection vector
-	SelectionVector rev(input_list_list_size);
-	for (idx_t i = 0; i < input_list_list_size; i++) {
-		rev.set_index(input_list_list_size - i - 1, i);
-	}
+	// create a reverse selection vector. indidec are set later
+	// a more specific selection vector is needed for multiple rows than just the reverse selection vector.
+	SelectionVector rev_sel(input_list_list_size);
 
 	idx_t offset = 0;
+	idx_t offset_per_new_row = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto input_list_list_index = input_list_data.sel->get_index(i);
+
+		if (!input_list_data.validity.RowIsValid(input_list_list_index)) {
+			result_validity.SetInvalid(i);
+			continue;
+		};
 
 		result_entries[i].offset = offset;
 		result_entries[i].length = 0;
@@ -47,9 +53,16 @@ static void ListReverseFunction(DataChunk &args, ExpressionState &state, Vector 
 		const auto &input_list_entry = input_list_entries[input_list_list_index];
 		result_entries[i].length += input_list_entry.length;
 
-		ListVector::Append(result, input_list_child, rev, input_list_entry.offset + input_list_entry.length,
+		// set reverse selection vector indices
+		// set index of selection vector in a way, that only the entries of the current row are reversed at once
+		for (idx_t j = 0; j < input_list_entry.length; j++) {
+			rev_sel.set_index(j + offset_per_new_row, input_list_entry.length - j - 1 + offset_per_new_row);
+		}
+
+		ListVector::Append(result, input_list_child, rev_sel, input_list_entry.offset + input_list_entry.length,
 		                   input_list_entry.offset);
 
+		offset_per_new_row = offset_per_new_row + input_list_entry.length;
 		offset += result_entries[i].length;
 	}
 	D_ASSERT(ListVector::GetListSize(result) == offset);
