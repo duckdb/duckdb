@@ -96,8 +96,8 @@ public:
 			auto child_string = entry.children[1]->ToString();
 			D_ASSERT(child_string.size() >= 3);
 			D_ASSERT(child_string[0] == '\'' && child_string[child_string.size() - 1] == '\'');
-			return "(" + entry.children[0]->ToString() + ")." +
-			       KeywordHelper::WriteOptionallyQuoted(child_string.substr(1, child_string.size() - 2));
+			return StringUtil::Format("(%s).%s", entry.children[0]->ToString(),
+			                          SQLIdentifier(child_string.substr(1, child_string.size() - 2)));
 		}
 		case ExpressionType::ARRAY_CONSTRUCTOR: {
 			string result = "(ARRAY[";
