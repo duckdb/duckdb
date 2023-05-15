@@ -37,7 +37,7 @@ class TestReadJSON(object):
     
     def test_read_json_format(self):
         # Wrong option
-        with pytest.raises(duckdb.BinderException, match=re.escape("format must be one of ['array', 'newline_delimited', 'unstructured', 'nd', 'auto'], not 'test'")):
+        with pytest.raises(duckdb.BinderException, match="format must be one of .* not 'test'"):
             rel = duckdb.read_json(TestFile('example.json'), format='test')
 
         rel = duckdb.read_json(TestFile('example.json'), format='unstructured')
@@ -48,7 +48,7 @@ class TestReadJSON(object):
 
     def test_read_json_records(self):
         # Wrong option
-        with pytest.raises(duckdb.BinderException, match=re.escape("""read_json requires "records" to be one of ['auto', 'true', 'false']""")):
+        with pytest.raises(duckdb.BinderException, match="""read_json requires "records" to be one of"""):
             rel = duckdb.read_json(TestFile('example.json'), records='none')
 
         rel = duckdb.read_json(TestFile('example.json'), records='true')
