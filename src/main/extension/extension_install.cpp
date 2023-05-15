@@ -133,6 +133,23 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 	InstallExtensionInternal(config, &client_config, fs, local_path, extension, force_install);
 }
 
+unsafe_array_ptr<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
+	auto source_file = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
+	file_size = source_file->GetFileSize();
+	auto in_buffer = make_unsafe_array<data_t>(file_size);
+	source_file->Read(in_buffer.get(), file_size);
+	source_file->Close();
+	return in_buffer;
+}
+
+void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, idx_t data_size) {
+	auto target_file = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND |
+	                                         FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	target_file->Write(data, data_size);
+	target_file->Close();
+	target_file.reset();
+}
+
 void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
                                                const string &local_path, const string &extension, bool force_install) {
 	if (!config.options.enable_external_access) {
@@ -152,18 +169,9 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 	}
 	auto is_http_url = StringUtil::Contains(extension, "http://");
 	if (fs.FileExists(extension)) {
-
-		std::ifstream in(extension, std::ios::binary);
-		if (in.bad()) {
-			throw IOException("Failed to read extension from \"%s\"", extension);
-		}
-		std::ofstream out(temp_path, std::ios::binary);
-		out << in.rdbuf();
-		if (out.bad()) {
-			throw IOException("Failed to write extension to \"%s\"", temp_path);
-		}
-		in.close();
-		out.close();
+		idx_t file_size;
+		auto in_buffer = ReadExtensionFileFromDisk(fs, extension, file_size);
+		WriteExtensionFileToDisk(fs, temp_path, in_buffer.get(), file_size);
 
 		fs.MoveFile(temp_path, local_extension_path);
 		return;
@@ -225,12 +233,8 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		}
 	}
 	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
-	std::ofstream out(temp_path, std::ios::binary);
-	out.write(decompressed_body.data(), decompressed_body.size());
-	if (out.bad()) {
-		throw IOException("Failed to write extension to %s", temp_path);
-	}
-	out.close();
+
+	WriteExtensionFileToDisk(fs, temp_path, (void *)decompressed_body.data(), decompressed_body.size());
 	fs.MoveFile(temp_path, local_extension_path);
 #endif
 }

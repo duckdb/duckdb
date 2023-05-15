@@ -15,7 +15,7 @@ CollateExpression::CollateExpression(string collation_p, unique_ptr<ParsedExpres
 }
 
 string CollateExpression::ToString() const {
-	return child->ToString() + " COLLATE " + KeywordHelper::WriteOptionallyQuoted(collation);
+	return StringUtil::Format("%s COLLATE %s", child->ToString(), SQLIdentifier(collation));
 }
 
 bool CollateExpression::Equal(const CollateExpression *a, const CollateExpression *b) {

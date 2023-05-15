@@ -46,7 +46,7 @@ public:
 	DUCKDB_API void Reset();
 
 	DUCKDB_API const vector<CatalogSearchEntry> &Get();
-	DUCKDB_API const vector<CatalogSearchEntry> &GetSetPaths() {
+	const vector<CatalogSearchEntry> &GetSetPaths() {
 		return set_paths;
 	}
 	DUCKDB_API const CatalogSearchEntry &GetDefault();

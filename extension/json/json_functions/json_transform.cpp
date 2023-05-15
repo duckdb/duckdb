@@ -659,7 +659,7 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 	// Transform keys
 	if (!JSONTransform::Transform(keys, alc, MapVector::GetKeys(result), list_size, options)) {
 		throw ConversionException(
-		    StringUtil::Format(options.error_message, ". Cannot default to NULL, because map keys cannot be NULL"));
+		    StringUtil::Format(options.error_message + ". Cannot default to NULL, because map keys cannot be NULL"));
 	}
 
 	// Transform values
