@@ -16,7 +16,7 @@ string TableRef::BaseToString(string result) const {
 
 string TableRef::BaseToString(string result, const vector<string> &column_name_alias) const {
 	if (!alias.empty()) {
-		result += " AS " + KeywordHelper::WriteOptionallyQuoted(alias);
+		result += StringUtil::Format(" AS %s", SQLIdentifier(alias));
 	}
 	if (!column_name_alias.empty()) {
 		D_ASSERT(!alias.empty());
