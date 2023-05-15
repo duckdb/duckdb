@@ -10,7 +10,7 @@ void OuterJoinMarker::Initialize(idx_t count_p) {
 		return;
 	}
 	this->count = count_p;
-	found_match = unique_ptr<bool[]>(new bool[count]);
+	found_match = make_unsafe_array<bool>(count);
 	Reset();
 }
 

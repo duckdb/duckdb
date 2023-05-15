@@ -241,10 +241,6 @@ void SingleFileBlockManager::Initialize(DatabaseHeader &header) {
 }
 
 void SingleFileBlockManager::LoadFreeList() {
-	if (options.read_only) {
-		// no need to load free list for read only db
-		return;
-	}
 	if (free_list_id == INVALID_BLOCK) {
 		// no free list
 		return;

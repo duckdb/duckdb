@@ -57,12 +57,13 @@ fileprivate struct VectorElementDataDecoder: Decoder {
   }
   
   let codingPath: [CodingKey]
-  let userInfo = [CodingUserInfoKey : Any]()
   let element: Vector.Element
+  let userInfo: [CodingUserInfoKey : Any]
   
   init(element: Vector.Element, codingPath: [CodingKey] = []) {
     self.codingPath = codingPath
     self.element = element
+    self.userInfo = [CodingUserInfoKeys.logicalTypeCodingUserInfoKey: element.logicalType]
   }
   
   func container<Key: CodingKey>(keyedBy type: Key.Type) throws -> KeyedDecodingContainer<Key> {

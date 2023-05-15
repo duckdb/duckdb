@@ -1,0 +1,97 @@
+# name: test/sql/insert/insert_by_name.test
+# description: Test parallel insert from many groups
+# group: [insert]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER);
+
+# partial names
+# i=NULL, j=42
+statement ok
+INSERT INTO integers BY NAME SELECT 42 AS j
+
+# i=84, j=NULL
+statement ok
+INSERT INTO integers BY NAME SELECT 84 AS i
+
+# re-ordered names
+# i=9, j=99
+statement ok
+INSERT INTO integers BY NAME SELECT 99 AS j, 9 AS i
+
+# i=1, j=10
+statement ok
+INSERT INTO integers BY POSITION SELECT 1 AS j, 10 AS i
+
+query II
+FROM integers
+----
+NULL	42
+84	NULL
+9	99
+1	10
+
+# column that needs to be quoted
+statement ok
+CREATE TABLE "My Table"("My Column 1" INT, "My Column 2" INT);
+
+statement ok
+INSERT INTO "My Table" BY NAME SELECT 1 AS "My Column 2"
+
+query II
+FROM "My Table"
+----
+NULL	1
+
+# name does not exist
+statement error
+INSERT INTO integers BY NAME SELECT 1 AS xxx
+----
+xxx
+
+# duplicate names
+statement error
+INSERT INTO integers BY NAME SELECT 1 AS i, 2 AS i
+----
+i
+
+statement error
+INSERT INTO integers (i, i) SELECT 1, 2
+----
+i
+
+# rowid
+statement error
+INSERT INTO integers BY NAME SELECT 1 AS rowid
+----
+rowid
+
+# generated column
+statement ok
+CREATE TABLE tbl (
+	price INTEGER,
+	total_price AS ((price)::DATE)
+);
+
+statement error
+INSERT INTO tbl BY NAME SELECT 1 AS total_price
+----
+generated
+
+# insert by name with values list
+statement error
+INSERT INTO integers BY NAME VALUES (42, 84);
+----
+INSERT BY NAME
+
+# insert by name with columns list
+statement error
+INSERT INTO integers BY NAME (i) SELECT 1 AS j
+----
+explicit column list
+
+statement ok
+INSERT INTO integers BY POSITION VALUES (42, 84);

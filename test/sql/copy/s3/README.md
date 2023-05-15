@@ -24,7 +24,7 @@ Then run the test server in the back-ground using Docker. Note that Docker must 
 
 
 ```bash
- ./scripts/run_s3_test_server.sh
+./scripts/run_s3_test_server.sh
 ```
 
 Now set up the following environment variables to enable running of the tests.

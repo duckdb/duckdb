@@ -67,6 +67,16 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 		result->on_conflict_info = DummyOnConflictClause(stmt->onConflictAlias, result->schema);
 		result->table_ref = TransformRangeVar(stmt->relation);
 	}
+	switch (stmt->insert_column_order) {
+	case duckdb_libpgquery::PG_INSERT_BY_POSITION:
+		result->column_order = InsertColumnOrder::INSERT_BY_POSITION;
+		break;
+	case duckdb_libpgquery::PG_INSERT_BY_NAME:
+		result->column_order = InsertColumnOrder::INSERT_BY_NAME;
+		break;
+	default:
+		throw InternalException("Unrecognized insert column order in TransformInsert");
+	}
 	result->catalog = qname.catalog;
 	return result;
 }
