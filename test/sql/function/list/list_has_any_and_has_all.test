@@ -169,7 +169,7 @@ select list_has_any([[1,2], [2,4]], ['abc', 'def']);
 
 # Test Function in Function
 
-foreach f list_has_all list_has_any
+foreach f list_has_all list_has_any array_has_all array_has_any
 
 statement ok
 create table tbl(l1 int[], l2 int[]);
