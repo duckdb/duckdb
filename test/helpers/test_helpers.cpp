@@ -60,6 +60,10 @@ void TestChangeDirectory(string path) {
 	FileSystem::SetWorkingDirectory(path);
 }
 
+string TestGetCurrentDirectory() {
+	return FileSystem::GetWorkingDirectory();
+}
+
 void DeleteDatabase(string path) {
 	if (!custom_test_directory.empty()) {
 		return;

@@ -990,7 +990,7 @@ bool S3FileSystem::ListFiles(const string &directory, const std::function<void(c
 }
 
 string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
-                                string &continuation_token, HTTPState *state, bool use_delimiter) {
+                                string &continuation_token, optional_ptr<HTTPState> state, bool use_delimiter) {
 	auto parsed_url = S3FileSystem::S3UrlParse(path, s3_auth_params);
 
 	// Construct the ListObjectsV2 call

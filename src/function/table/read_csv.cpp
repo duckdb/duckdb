@@ -33,8 +33,12 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 	bool complex_options = options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1;
 	bool not_supported_options = options.null_padding;
 
-	if (!options.run_parallel || null_or_empty || not_supported_options || complex_options ||
-	    options.new_line == NewLineIdentifier::MIX) {
+	auto number_of_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+	if (options.parallel_mode != ParallelMode::PARALLEL && int64_t(files.size() * 2) >= number_of_threads) {
+		single_threaded = true;
+	}
+	if (options.parallel_mode == ParallelMode::SINGLE_THREADED || null_or_empty || not_supported_options ||
+	    complex_options || options.new_line == NewLineIdentifier::MIX) {
 		// not supported for parallel CSV reading
 		single_threaded = true;
 	}
@@ -173,7 +177,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		} else if (loption == "normalize_names") {
 			options.normalize_names = BooleanValue::Get(kv.second);
 		} else if (loption == "parallel") {
-			options.run_parallel = BooleanValue::Get(kv.second);
+			options.parallel_mode =
+			    BooleanValue::Get(kv.second) ? ParallelMode::PARALLEL : ParallelMode::SINGLE_THREADED;
 		} else {
 			options.SetReadOption(loption, kv.second, names);
 		}
@@ -579,6 +584,9 @@ void ParallelCSVGlobalState::UpdateLinesRead(CSVBufferRead &buffer_read, idx_t f
 bool LineInfo::CanItGetLine(idx_t file_idx, idx_t batch_idx) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (current_batches.empty() || done) {
+		return true;
+	}
+	if (file_idx >= current_batches.size() || current_batches[file_idx].empty()) {
 		return true;
 	}
 	auto min_value = *current_batches[file_idx].begin();
@@ -1055,6 +1063,12 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable(file_options);
 	// write options
 	writer.WriteListNoReference<bool>(force_quote);
+	// FIXME: serialize date_format / has_format
+	vector<string> csv_formats;
+	for (auto &format : date_format) {
+		csv_formats.push_back(format.second.format_specifier);
+	}
+	writer.WriteList<string>(csv_formats);
 }
 
 void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
@@ -1091,6 +1105,17 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	file_options = reader.ReadRequiredSerializable<MultiFileReaderOptions, MultiFileReaderOptions>();
 	// write options
 	force_quote = reader.ReadRequiredList<bool>();
+	auto formats = reader.ReadRequiredList<string>();
+	vector<LogicalTypeId> format_types {LogicalTypeId::DATE, LogicalTypeId::TIMESTAMP};
+	for (idx_t f_idx = 0; f_idx < formats.size(); f_idx++) {
+		auto &format = formats[f_idx];
+		auto &type = format_types[f_idx];
+		if (format.empty()) {
+			continue;
+		}
+		has_format[type] = true;
+		StrTimeFormat::ParseFormatSpecifier(format, date_format[type]);
+	}
 }
 
 static void CSVReaderSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
@@ -1173,6 +1198,11 @@ unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, const string &ta
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
 	table_function->function = make_uniq<FunctionExpression>("read_csv_auto", std::move(children));
+
+	if (!FileSystem::HasGlob(table_name)) {
+		table_function->alias = FileSystem::ExtractBaseName(table_name);
+	}
+
 	return std::move(table_function);
 }
 
