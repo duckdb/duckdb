@@ -209,7 +209,7 @@ PreservedError ClientContext::EndQueryInternal(ClientContextLock &lock, bool suc
 }
 
 void ClientContext::CleanupInternal(ClientContextLock &lock, BaseQueryResult *result, bool invalidate_transaction) {
-	client_data->http_state = make_uniq<HTTPState>();
+	client_data->http_state = make_shared<HTTPState>();
 	if (!active_query) {
 		// no query currently active
 		return;
@@ -491,7 +491,7 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 	}
 
 	unique_ptr<LogicalOperator> plan;
-	client_data->http_state = make_uniq<HTTPState>();
+	client_data->http_state = make_shared<HTTPState>();
 	RunFunctionInTransactionInternal(*lock, [&]() {
 		Planner planner(*this);
 		planner.CreatePlan(std::move(statements[0]));
@@ -1013,7 +1013,7 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 	D_ASSERT(!relation.GetAlias().empty());
 	D_ASSERT(!relation.ToString().empty());
 #endif
-	client_data->http_state = make_uniq<HTTPState>();
+	client_data->http_state = make_shared<HTTPState>();
 	RunFunctionInTransaction([&]() {
 		// bind the expressions
 		auto binder = Binder::CreateBinder(*this);

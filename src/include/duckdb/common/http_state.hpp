@@ -49,10 +49,10 @@ public:
 	}
 
 	//! helper function to get the HTTP
-	static optional_ptr<HTTPState> TryGetState(FileOpener *opener) {
+	static shared_ptr<HTTPState> TryGetState(FileOpener *opener) {
 		auto client_context = FileOpener::TryGetClientContext(opener);
 		if (client_context) {
-			return client_context->client_data->http_state.get();
+			return client_context->client_data->http_state;
 		}
 		return nullptr;
 	}
