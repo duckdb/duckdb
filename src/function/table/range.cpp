@@ -8,7 +8,6 @@
 #include "duckdb/execution/operator/projection/physical_range.hpp"
 #include "duckdb/execution/operator/projection/physical_time_range.hpp"
 
-
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -16,11 +15,11 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 struct RangeFunctionBindData : public FunctionData {
-	explicit RangeFunctionBindData(const idx_t &num_given_args_p, const vector<LogicalType> &input_types_p, 
-								   bool with_timestamps_p) : 
-		num_given_args(num_given_args_p), input_types(std::move(input_types_p)), with_timestamps(with_timestamps_p) {
+	explicit RangeFunctionBindData(const idx_t &num_given_args_p, const vector<LogicalType> &input_types_p,
+	                               bool with_timestamps_p)
+	    : num_given_args(num_given_args_p), input_types(std::move(input_types_p)), with_timestamps(with_timestamps_p) {
 
-			D_ASSERT(num_given_args == input_types.size());
+		D_ASSERT(num_given_args == input_types.size());
 	}
 
 	const idx_t num_given_args;
@@ -65,7 +64,7 @@ static unique_ptr<FunctionData> RangeFunctionBind(ClientContext &context, TableF
 		names.push_back("range");
 	}
 
-	bool with_timestamps; 
+	bool with_timestamps;
 
 	// check whether first argument can be implicitly cast to bigint
 	if (CastFunctionSet::Get(context).ImplicitCastCost(first_arg_type, LogicalType::BIGINT) >= 0) {
@@ -91,7 +90,7 @@ static unique_ptr<FunctionData> RangeFunctionBind(ClientContext &context, TableF
 		    CastFunctionSet::Get(context).ImplicitCastCost(input.input_table_types[2], LogicalType::INTERVAL) < 0) {
 
 			throw BinderException(
-				"GENERATE_SERIES / RANGE (timestamps) requires 3 arguments of types (TIMESTAMP, TIMESTAMP, INTERVAL)");
+			    "GENERATE_SERIES / RANGE (timestamps) requires 3 arguments of types (TIMESTAMP, TIMESTAMP, INTERVAL)");
 		}
 	} else {
 		throw BinderException("First argument of GENERATE_SERIES / RANGE must be either of type BIGINT or TIMESTAMP");
@@ -119,9 +118,9 @@ struct RangeFunctionLocalState : public LocalTableFunctionState {
 };
 
 template <bool GENERATE_SERIES>
-static unique_ptr<LocalTableFunctionState> RangeFunctionLocalInit(ExecutionContext &context, 
+static unique_ptr<LocalTableFunctionState> RangeFunctionLocalInit(ExecutionContext &context,
                                                                   TableFunctionInitInput &input,
-                                                           		  GlobalTableFunctionState *global_state) {
+                                                                  GlobalTableFunctionState *global_state) {
 	auto &gstate = global_state->Cast<RangeFunctionGlobalState>();
 	auto &bind_data = input.bind_data->Cast<RangeFunctionBindData>();
 
@@ -139,12 +138,12 @@ static unique_ptr<GlobalTableFunctionState> RangeFunctionInit(ClientContext &con
 
 	auto &bind_data = input.bind_data->Cast<RangeFunctionBindData>();
 	auto result = make_uniq<RangeFunctionGlobalState>();
-	
+
 	// initialize the global state's args_list with bound expressions referencing the input columns
-	for(idx_t i = 0; i < bind_data.num_given_args; i++) {
+	for (idx_t i = 0; i < bind_data.num_given_args; i++) {
 		auto expr = make_uniq<BoundReferenceExpression>(bind_data.input_types[i], i);
 		result->args_list.push_back(std::move(expr));
-	}	
+	}
 
 	return std::move(result);
 }
@@ -161,17 +160,16 @@ static OperatorResultType RangeFunction(ExecutionContext &context, TableFunction
 	}
 }
 
-
 void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
-	
-	TableFunction range_function("range", {LogicalTypeId::TABLE}, nullptr, 
-	                                       RangeFunctionBind<false>, RangeFunctionInit, RangeFunctionLocalInit<false>);
+
+	TableFunction range_function("range", {LogicalTypeId::TABLE}, nullptr, RangeFunctionBind<false>, RangeFunctionInit,
+	                             RangeFunctionLocalInit<false>);
 	range_function.in_out_function = RangeFunction;
 	set.AddFunction(range_function);
 
 	// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
-	TableFunction generate_series_function("generate_series", {LogicalTypeId::TABLE}, nullptr, 
-	                                       RangeFunctionBind<true>, RangeFunctionInit, RangeFunctionLocalInit<true>);
+	TableFunction generate_series_function("generate_series", {LogicalTypeId::TABLE}, nullptr, RangeFunctionBind<true>,
+	                                       RangeFunctionInit, RangeFunctionLocalInit<true>);
 	generate_series_function.in_out_function = RangeFunction;
 	set.AddFunction(generate_series_function);
 }

@@ -60,7 +60,7 @@ void RangeOperatorState::Reset() {
 }
 
 void RangeOperatorState::FetchArguments(DataChunk &input, const vector<unique_ptr<Expression>> &args_list) {
-	
+
 	args_data.Reset();
 	// execute the argument expressions
 	// execution results (arguments) are kept in args_data chunk
@@ -74,10 +74,10 @@ void RangeOperatorState::FetchArguments(DataChunk &input, const vector<unique_pt
 
 	first_fetch = false;
 
-	vector<Value> args_values{};
+	vector<Value> args_values {};
 
 	for (idx_t i = 0; i < args_list.size(); i++) {
-		Value v = args_data.GetValue(i,0);
+		Value v = args_data.GetValue(i, 0);
 		if (v.IsNull()) {
 			// if any argument is NULL, set the range parameters so that no row is produced
 			start = generate_series ? 1 : 0;
@@ -88,13 +88,13 @@ void RangeOperatorState::FetchArguments(DataChunk &input, const vector<unique_pt
 		args_values.push_back(v);
 	}
 
-	if(args_list.size() < 3) {
+	if (args_list.size() < 3) {
 		// no increment is given, set it to default value
 		increment = DEFAULT_INCREMENT;
 	} else {
 		increment = args_values[2].GetValue<int64_t>();
 	}
-	if(args_list.size() == 1) {
+	if (args_list.size() == 1) {
 		// if only one argument is given, use it as end and set start to default value
 		start = DEFAULT_START;
 		end = args_values[0].GetValue<int64_t>();
@@ -102,7 +102,7 @@ void RangeOperatorState::FetchArguments(DataChunk &input, const vector<unique_pt
 		start = args_values[0].GetValue<int64_t>();
 		end = args_values[1].GetValue<int64_t>();
 	}
-	if(generate_series) { // inclusive upper bound for generate_series
+	if (generate_series) { // inclusive upper bound for generate_series
 		if (increment < 0) {
 			end = end - 1;
 		} else {
@@ -115,10 +115,10 @@ void RangeOperatorState::FetchArguments(DataChunk &input, const vector<unique_pt
 	}
 	if (start > end && increment > 0) {
 		throw InvalidInputException(
-			"start is bigger than end, but increment is positive: cannot generate infinite series");
+		    "start is bigger than end, but increment is positive: cannot generate infinite series");
 	} else if (start < end && increment < 0) {
 		throw InvalidInputException(
-			"start is smaller than end, but increment is negative: cannot generate infinite series");
+		    "start is smaller than end, but increment is negative: cannot generate infinite series");
 	}
 }
 
@@ -127,28 +127,28 @@ unique_ptr<OperatorState> PhysicalRange::GetOperatorState(ExecutionContext &cont
 }
 
 unique_ptr<OperatorState> PhysicalRange::GetState(ExecutionContext &context,
-                                                   const vector<unique_ptr<Expression>> &args_list,
-												   bool generate_series) {
+                                                  const vector<unique_ptr<Expression>> &args_list,
+                                                  bool generate_series) {
 	return make_uniq<RangeOperatorState>(context.client, args_list, generate_series);
 }
 
 OperatorResultType PhysicalRange::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                   OperatorState &state_p,
-                                                   const vector<unique_ptr<Expression>> &args_list) {
+                                                  OperatorState &state_p,
+                                                  const vector<unique_ptr<Expression>> &args_list) {
 
 	auto &state = state_p.Cast<RangeOperatorState>();
 
-	if(state.first_fetch) {
+	if (state.first_fetch) {
 		state.FetchArguments(input, args_list);
 	}
-	
+
 	hugeint_t current_value = state.start + state.increment * state.current_row;
 	int64_t current_value_i64 = Hugeint::Cast<int64_t>(current_value);
 	int64_t offset = state.increment < 0 ? 1 : -1;
-	
+
 	// number of remaining rows to generate
 	idx_t remaining = Hugeint::Cast<idx_t>((state.end - current_value + (state.increment + offset)) / state.increment);
-	 // limit # of generated rows to STANDARD_VECTOR_SIZE
+	// limit # of generated rows to STANDARD_VECTOR_SIZE
 	idx_t num_new_rows = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE);
 
 	int64_t increment_i64 = Hugeint::Cast<int64_t>(state.increment);
@@ -156,8 +156,8 @@ OperatorResultType PhysicalRange::ExecuteInternal(ExecutionContext &context, Dat
 	chunk.SetCardinality(num_new_rows);
 	chunk.Verify();
 
-	if(remaining > num_new_rows) {
-		// there are still rows to be generated 
+	if (remaining > num_new_rows) {
+		// there are still rows to be generated
 		state.current_row += num_new_rows;
 		return OperatorResultType::HAVE_MORE_OUTPUT;
 	} else {
@@ -168,7 +168,7 @@ OperatorResultType PhysicalRange::ExecuteInternal(ExecutionContext &context, Dat
 }
 
 OperatorResultType PhysicalRange::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                           GlobalOperatorState &, OperatorState &state) const {
+                                          GlobalOperatorState &, OperatorState &state) const {
 	return ExecuteInternal(context, input, chunk, state, args_list);
 }
 

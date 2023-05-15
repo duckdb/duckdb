@@ -15,7 +15,7 @@ namespace duckdb {
 
 class TimeRangeOperatorState : public OperatorState {
 public:
-	TimeRangeOperatorState(ClientContext &context, const vector<unique_ptr<Expression>> &args_list, 
+	TimeRangeOperatorState(ClientContext &context, const vector<unique_ptr<Expression>> &args_list,
 	                       bool generate_series_p)
 	    : first_fetch(true), generate_series(generate_series_p), executor(context) {
 
@@ -38,7 +38,7 @@ public:
 	bool first_fetch;
 
 	// indicate whether generate_series is being executed (true) or range (false)
-	bool generate_series; 
+	bool generate_series;
 
 	timestamp_t start;
 	timestamp_t end;
@@ -59,9 +59,8 @@ void TimeRangeOperatorState::Reset() {
 	first_fetch = true;
 }
 
-
 void TimeRangeOperatorState::FetchArguments(DataChunk &input, const vector<unique_ptr<Expression>> &args_list) {
-	
+
 	args_data.Reset();
 	// execute the argument expressions
 	// execution results (arguments) are kept in state.args_data chunk
@@ -75,9 +74,9 @@ void TimeRangeOperatorState::FetchArguments(DataChunk &input, const vector<uniqu
 
 	first_fetch = false;
 
-	start = args_data.GetValue(0,0).GetValue<timestamp_t>();
-	end = args_data.GetValue(1,0).GetValue<timestamp_t>();
-	increment = args_data.GetValue(2,0).GetValue<interval_t>();
+	start = args_data.GetValue(0, 0).GetValue<timestamp_t>();
+	end = args_data.GetValue(1, 0).GetValue<timestamp_t>();
+	increment = args_data.GetValue(2, 0).GetValue<interval_t>();
 
 	current_timestamp = start;
 
@@ -110,18 +109,18 @@ void TimeRangeOperatorState::FetchArguments(DataChunk &input, const vector<uniqu
 
 bool TimeRangeOperatorState::Finished(timestamp_t current_value) {
 	if (positive_increment) {
-			if (generate_series) {
-				return current_value > end;
-			} else {
-				return current_value >= end;
-			}
+		if (generate_series) {
+			return current_value > end;
 		} else {
-			if (generate_series) {
-				return current_value < end;
-			} else {
-				return current_value <= end;
-			}
+			return current_value >= end;
 		}
+	} else {
+		if (generate_series) {
+			return current_value < end;
+		} else {
+			return current_value <= end;
+		}
+	}
 }
 
 unique_ptr<OperatorState> PhysicalTimeRange::GetOperatorState(ExecutionContext &context) const {
@@ -129,18 +128,18 @@ unique_ptr<OperatorState> PhysicalTimeRange::GetOperatorState(ExecutionContext &
 }
 
 unique_ptr<OperatorState> PhysicalTimeRange::GetState(ExecutionContext &context,
-                                                   	  const vector<unique_ptr<Expression>> &args_list,
-													  bool generate_series) {
+                                                      const vector<unique_ptr<Expression>> &args_list,
+                                                      bool generate_series) {
 	return make_uniq<TimeRangeOperatorState>(context.client, args_list, generate_series);
 }
 
 OperatorResultType PhysicalTimeRange::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                   		  OperatorState &state_p,
-                                                   		  const vector<unique_ptr<Expression>> &args_list) {
-	
+                                                      OperatorState &state_p,
+                                                      const vector<unique_ptr<Expression>> &args_list) {
+
 	auto &state = state_p.Cast<TimeRangeOperatorState>();
 
-	if(state.first_fetch) {
+	if (state.first_fetch) {
 		state.FetchArguments(input, args_list);
 	}
 

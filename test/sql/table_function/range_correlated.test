@@ -2,7 +2,6 @@
 # description: Test range function with references to correlated columns in arguments
 # group: [table_function]
 
-
 # one correlated column with one row
 query II
 SELECT s, u FROM (SELECT 10) AS _(u), generate_series(u) __(s) ORDER BY s;
