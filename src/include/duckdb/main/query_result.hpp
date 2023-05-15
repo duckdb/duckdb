@@ -20,7 +20,7 @@ enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDI
 
 //! A set of properties from the client context that can be used to interpret the query result
 struct ClientProperties {
-	string timezone;
+	string time_zone;
 };
 
 class BaseQueryResult {
@@ -108,7 +108,7 @@ public:
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	DUCKDB_API bool Equals(QueryResult &other);
 
-	DUCKDB_API bool TryFetch(unique_ptr<DataChunk> &result, PreservedError &error) {
+	bool TryFetch(unique_ptr<DataChunk> &result, PreservedError &error) {
 		try {
 			result = Fetch();
 			return success;
@@ -191,10 +191,10 @@ private:
 	};
 
 public:
-	DUCKDB_API QueryResultIterator begin() {
+	QueryResultIterator begin() {
 		return QueryResultIterator(this);
 	}
-	DUCKDB_API QueryResultIterator end() {
+	QueryResultIterator end() {
 		return QueryResultIterator(nullptr);
 	}
 

@@ -1,0 +1,69 @@
+# name: test/sql/storage/multiple_clients_checkpoing_dependents.test_slow
+# description: Try to checkpoint within a transaction that depends on another transactions' changes
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/pending_updates.db
+
+statement ok
+SET immediate_transaction_mode=true
+
+statement ok
+CREATE TABLE test (i INTEGER);
+
+statement ok
+INSERT INTO test SELECT * FROM range(1000000);
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+0	999999	1000000
+
+statement ok con2
+BEGIN TRANSACTION;
+
+statement ok con1
+UPDATE test SET i=i+1;
+
+query III con1
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+1	1000000	1000000
+
+query III con2
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+0	999999	1000000
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+1	1000000	1000000
+
+# con2 now refers back to the undo buffer of con1, but we can still checkpoint
+statement ok con2
+FORCE CHECKPOINT
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+1	1000000	1000000
+
+# force checkpoint has cleared our current transaction, so we can't rollback
+statement error con2
+ROLLBACK
+
+statement ok con2
+CHECKPOINT
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+1	1000000	1000000
+
+restart
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+1	1000000	1000000

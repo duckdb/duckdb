@@ -1,8 +1,9 @@
 #include "duckdb_python/pyrelation.hpp"
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/python_objects.hpp"
 
+#include "duckdb_python/arrow/arrow_array_stream.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
@@ -12,8 +13,9 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/uuid.hpp"
-#include "duckdb_python/array_wrapper.hpp"
+#include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb_python/arrow/arrow_export_utils.hpp"
 
 namespace duckdb {
 
@@ -224,7 +226,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 }
 
 // TODO: unify these with an enum/flag to indicate which conversions to do
-void DuckDBPyResult::ChangeToTZType(DataFrame &df) {
+void DuckDBPyResult::ChangeToTZType(PandasDataFrame &df) {
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		if (result->types[i] == LogicalType::TIMESTAMP_TZ) {
 			// first localize to UTC then convert to timezone_config
@@ -235,7 +237,7 @@ void DuckDBPyResult::ChangeToTZType(DataFrame &df) {
 }
 
 // TODO: unify these with an enum/flag to indicate which conversions to perform
-void DuckDBPyResult::ChangeDateToDatetime(DataFrame &df) {
+void DuckDBPyResult::ChangeDateToDatetime(PandasDataFrame &df) {
 	for (idx_t i = 0; i < result->ColumnCount(); i++) {
 		if (result->types[i] == LogicalType::DATE) {
 			df[result->names[i].c_str()] = df[result->names[i].c_str()].attr("dt").attr("date");
@@ -243,8 +245,8 @@ void DuckDBPyResult::ChangeDateToDatetime(DataFrame &df) {
 	}
 }
 
-DataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::handle &o) {
-	auto df = py::cast<DataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
+PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::handle &o) {
+	auto df = py::cast<PandasDataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
 	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
 	ChangeToTZType(df);
 	if (date_as_object) {
@@ -253,12 +255,12 @@ DataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::handle &
 	return df;
 }
 
-DataFrame DuckDBPyResult::FetchDF(bool date_as_object) {
+PandasDataFrame DuckDBPyResult::FetchDF(bool date_as_object) {
 	timezone_config = QueryResult::GetConfigTimezone(*result);
 	return FrameFromNumpy(date_as_object, FetchNumpyInternal());
 }
 
-DataFrame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors, bool date_as_object) {
+PandasDataFrame DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors, bool date_as_object) {
 	if (timezone_config.empty()) {
 		timezone_config = QueryResult::GetConfigTimezone(*result);
 	}
@@ -281,12 +283,6 @@ py::dict DuckDBPyResult::FetchTF() {
 		result_dict[item.first] = convert_to_tensor(item.second);
 	}
 	return result_dict;
-}
-
-void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::list &batches) {
-	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
-	auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
-	batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
 }
 
 bool DuckDBPyResult::FetchArrowChunk(QueryResult *result, py::list &batches, idx_t rows_per_batch) {
@@ -323,23 +319,9 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch) {
 	if (!result) {
 		throw InvalidInputException("There is no query result");
 	}
-	py::gil_scoped_acquire acquire;
-
-	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
-	auto from_batches_func = pyarrow_lib_module.attr("Table").attr("from_batches");
-
-	auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
-	ArrowSchema schema;
-
 	timezone_config = QueryResult::GetConfigTimezone(*result);
-	ArrowConverter::ToArrowSchema(&schema, result->types, result->names, timezone_config);
 
-	auto schema_obj = schema_import_func((uint64_t)&schema);
-
-	py::list batches = FetchAllArrowChunks(rows_per_batch);
-
-	// We return an Arrow Table
-	return py::cast<duckdb::pyarrow::Table>(from_batches_func(batches, schema_obj));
+	return pyarrow::ToArrowTable(result->types, result->names, timezone_config, FetchAllArrowChunks(rows_per_batch));
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t rows_per_batch) {

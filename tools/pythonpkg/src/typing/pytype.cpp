@@ -2,7 +2,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb/main/connection.hpp"
 
 namespace duckdb {
@@ -13,7 +13,7 @@ bool PyGenericAlias::check_(const py::handle &object) {
 		return false;
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	return import_cache.types().GenericAlias.IsInstance(object);
+	return py::isinstance(object, import_cache.types().GenericAlias());
 }
 
 // NOLINTNEXTLINE(readability-identifier-naming)
@@ -26,10 +26,10 @@ bool PyUnionType::check_(const py::handle &object) {
 	}
 
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	if (types_loaded && import_cache.types().UnionType.IsInstance(object)) {
+	if (types_loaded && py::isinstance(object, import_cache.types().UnionType())) {
 		return true;
 	}
-	if (typing_loaded && import_cache.typing()._UnionGenericAlias.IsInstance(object)) {
+	if (typing_loaded && py::isinstance(object, import_cache.typing()._UnionGenericAlias())) {
 		return true;
 	}
 	return false;
@@ -76,13 +76,17 @@ enum class PythonTypeObject : uint8_t {
 	BASE,      // 'builtin' type objects
 	UNION,     // typing.UnionType
 	COMPOSITE, // list|dict types
-	STRUCT     // dictionary
+	STRUCT,    // dictionary
+	STRING,    // string value
 };
 }
 
 static PythonTypeObject GetTypeObjectType(const py::handle &type_object) {
 	if (py::isinstance<py::type>(type_object)) {
 		return PythonTypeObject::BASE;
+	}
+	if (py::isinstance<py::str>(type_object)) {
+		return PythonTypeObject::STRING;
 	}
 	if (py::isinstance<PyGenericAlias>(type_object)) {
 		return PythonTypeObject::COMPOSITE;
@@ -249,6 +253,10 @@ static LogicalType FromObject(const py::object &object) {
 	case PythonTypeObject::UNION: {
 		return FromUnionType(object);
 	}
+	case PythonTypeObject::STRING: {
+		auto string_value = std::string(py::str(object));
+		return FromString(string_value, nullptr);
+	}
 	default: {
 		string actual_type = py::str(object.get_type());
 		throw NotImplementedException("Could not convert from object of type '%s' to DuckDBPyType", actual_type);
@@ -281,7 +289,6 @@ void DuckDBPyType::Initialize(py::handle &m) {
 	connection_module.def("__getattr__", &DuckDBPyType::GetAttribute, "Get the child type by 'name'", py::arg("name"));
 	connection_module.def("__getitem__", &DuckDBPyType::GetAttribute, "Get the child type by 'name'", py::arg("name"));
 
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	py::implicitly_convertible<py::object, DuckDBPyType>();
 	py::implicitly_convertible<py::str, DuckDBPyType>();
 	py::implicitly_convertible<PyGenericAlias, DuckDBPyType>();

@@ -72,7 +72,7 @@ void WriteAheadLog::WriteDropTable(const TableCatalogEntry &entry) {
 		return;
 	}
 	writer->Write<WALType>(WALType::DROP_TABLE);
-	writer->WriteString(entry.schema->name);
+	writer->WriteString(entry.schema.name);
 	writer->WriteString(entry.name);
 }
 
@@ -103,7 +103,7 @@ void WriteAheadLog::WriteDropSequence(const SequenceCatalogEntry &entry) {
 		return;
 	}
 	writer->Write<WALType>(WALType::DROP_SEQUENCE);
-	writer->WriteString(entry.schema->name);
+	writer->WriteString(entry.schema.name);
 	writer->WriteString(entry.name);
 }
 
@@ -112,7 +112,7 @@ void WriteAheadLog::WriteSequenceValue(const SequenceCatalogEntry &entry, Sequen
 		return;
 	}
 	writer->Write<WALType>(WALType::SEQUENCE_VALUE);
-	writer->WriteString(entry.schema->name);
+	writer->WriteString(entry.schema.name);
 	writer->WriteString(entry.name);
 	writer->Write<uint64_t>(val.usage_count);
 	writer->Write<int64_t>(val.counter);
@@ -134,7 +134,7 @@ void WriteAheadLog::WriteDropMacro(const ScalarMacroCatalogEntry &entry) {
 		return;
 	}
 	writer->Write<WALType>(WALType::DROP_MACRO);
-	writer->WriteString(entry.schema->name);
+	writer->WriteString(entry.schema.name);
 	writer->WriteString(entry.name);
 }
 
@@ -151,7 +151,7 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 		return;
 	}
 	writer->Write<WALType>(WALType::DROP_TABLE_MACRO);
-	writer->WriteString(entry.schema->name);
+	writer->WriteString(entry.schema.name);
 	writer->WriteString(entry.name);
 }
 
@@ -171,7 +171,7 @@ void WriteAheadLog::WriteDropIndex(const IndexCatalogEntry &entry) {
 		return;
 	}
 	writer->Write<WALType>(WALType::DROP_INDEX);
-	writer->WriteString(entry.schema->name);
+	writer->WriteString(entry.schema.name);
 	writer->WriteString(entry.name);
 }
 
@@ -191,7 +191,7 @@ void WriteAheadLog::WriteDropType(const TypeCatalogEntry &entry) {
 		return;
 	}
 	writer->Write<WALType>(WALType::DROP_TYPE);
-	writer->WriteString(entry.schema->name);
+	writer->WriteString(entry.schema.name);
 	writer->WriteString(entry.name);
 }
 
@@ -211,7 +211,7 @@ void WriteAheadLog::WriteDropView(const ViewCatalogEntry &entry) {
 		return;
 	}
 	writer->Write<WALType>(WALType::DROP_VIEW);
-	writer->WriteString(entry.schema->name);
+	writer->WriteString(entry.schema.name);
 	writer->WriteString(entry.name);
 }
 

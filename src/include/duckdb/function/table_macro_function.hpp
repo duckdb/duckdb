@@ -20,6 +20,9 @@ namespace duckdb {
 
 class TableMacroFunction : public MacroFunction {
 public:
+	static constexpr const MacroType TYPE = MacroType::TABLE_MACRO;
+
+public:
 	explicit TableMacroFunction(unique_ptr<QueryNode> query_node);
 	TableMacroFunction(void);
 
@@ -30,6 +33,11 @@ public:
 	unique_ptr<MacroFunction> Copy() const override;
 
 	string ToSQL(const string &schema, const string &name) const override;
+
+	static unique_ptr<MacroFunction> Deserialize(FieldReader &reader);
+
+protected:
+	void SerializeInternal(FieldWriter &writer) const override;
 };
 
 } // namespace duckdb

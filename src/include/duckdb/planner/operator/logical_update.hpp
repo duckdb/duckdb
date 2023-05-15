@@ -18,10 +18,10 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_UPDATE;
 
 public:
-	explicit LogicalUpdate(TableCatalogEntry *table);
+	explicit LogicalUpdate(TableCatalogEntry &table);
 
 	//! The base table to update
-	TableCatalogEntry *table;
+	TableCatalogEntry &table;
 	//! table catalog index
 	idx_t table_index;
 	//! if returning option is used, return the update chunk
@@ -34,6 +34,7 @@ public:
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 	idx_t EstimateCardinality(ClientContext &context) override;
+	string GetName() const override;
 
 protected:
 	vector<ColumnBinding> GetColumnBindings() override;

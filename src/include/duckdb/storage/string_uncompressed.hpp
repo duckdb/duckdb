@@ -155,7 +155,7 @@ public:
 				remaining_space -= required_space;
 				auto dict_pos = end - *dictionary_size;
 				// now write the actual string data into the dictionary
-				memcpy(dict_pos, source_data[source_idx].GetDataUnsafe(), string_length);
+				memcpy(dict_pos, source_data[source_idx].GetData(), string_length);
 
 				// place the dictionary offset into the set of vectors
 				result_data[target_idx] = *dictionary_size;

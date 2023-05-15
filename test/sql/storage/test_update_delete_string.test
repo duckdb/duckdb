@@ -15,9 +15,9 @@ INSERT INTO test VALUES (NULL, 'hello'), (13, 'abcdefgh'), (12, NULL)
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	hello
 12	NULL
 13	abcdefgh
+NULL	hello
 
 restart
 
@@ -27,9 +27,9 @@ PRAGMA enable_verification
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	hello
 12	NULL
 13	abcdefgh
+NULL	hello
 
 query II
 SELECT * FROM test WHERE a IS NULL
@@ -49,18 +49,18 @@ NULL	NULL
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	NULL
 12	NULL
 13	abcdefgh
+NULL	NULL
 
 restart
 
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	NULL
 12	NULL
 13	abcdefgh
+NULL	NULL
 
 restart
 
@@ -72,16 +72,16 @@ restart
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	NULL
 13	abcdefgh
+NULL	NULL
 
 restart
 
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	NULL
 13	abcdefgh
+NULL	NULL
 
 statement ok
 INSERT INTO test VALUES (12, NULL)
@@ -89,27 +89,27 @@ INSERT INTO test VALUES (12, NULL)
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	NULL
 12	NULL
 13	abcdefgh
+NULL	NULL
 
 restart
 
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	NULL
 12	NULL
 13	abcdefgh
+NULL	NULL
 
 restart
 
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	NULL
 12	NULL
 13	abcdefgh
+NULL	NULL
 
 statement ok
 UPDATE test SET b='test123' WHERE a=12
@@ -117,18 +117,18 @@ UPDATE test SET b='test123' WHERE a=12
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	NULL
 12	test123
 13	abcdefgh
+NULL	NULL
 
 restart
 
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	NULL
 12	test123
 13	abcdefgh
+NULL	NULL
 
 statement ok
 UPDATE test SET a=a+1
@@ -136,15 +136,15 @@ UPDATE test SET a=a+1
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	NULL
 13	test123
 14	abcdefgh
+NULL	NULL
 
 restart
 
 query II
 SELECT a, b FROM test ORDER BY a
 ----
-NULL	NULL
 13	test123
 14	abcdefgh
+NULL	NULL

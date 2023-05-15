@@ -25,7 +25,7 @@ public:
 
 public:
 	//! INSERT INTO
-	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, physical_index_vector_t<idx_t> column_index_map,
+	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry &table, physical_index_vector_t<idx_t> column_index_map,
 	               vector<unique_ptr<Expression>> bound_defaults, vector<unique_ptr<Expression>> set_expressions,
 	               vector<PhysicalIndex> set_columns, vector<LogicalType> set_types, idx_t estimated_cardinality,
 	               bool return_chunk, bool parallel, OnConflictAction action_type,
@@ -38,7 +38,7 @@ public:
 	//! The map from insert column index to table column index
 	physical_index_vector_t<idx_t> column_index_map;
 	//! The table to insert into
-	TableCatalogEntry *insert_table;
+	optional_ptr<TableCatalogEntry> insert_table;
 	//! The insert types
 	vector<LogicalType> insert_types;
 	//! The default expressions of the columns for which no value is provided
@@ -77,8 +77,7 @@ public:
 public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
-	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	             LocalSourceState &lstate) const override;
+	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
 		return true;
@@ -88,8 +87,7 @@ public:
 	// Sink interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
-	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-	                    DataChunk &input) const override;
+	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          GlobalSinkState &gstate) const override;
@@ -116,9 +114,10 @@ public:
 protected:
 	void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_chunk, DataChunk &input_chunk,
 	                                    ClientContext &client) const;
-	void OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertLocalState &lstate) const;
-	void PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table,
-	                             Vector &row_ids) const;
+	//! Returns the amount of updated tuples
+	idx_t OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertLocalState &lstate) const;
+	idx_t PerformOnConflictAction(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table,
+	                              Vector &row_ids) const;
 	void RegisterUpdatedRows(InsertLocalState &lstate, const Vector &row_ids, idx_t count) const;
 };
 

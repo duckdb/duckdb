@@ -63,6 +63,8 @@ struct ClientConfig {
 	bool verify_serializer = false;
 	//! Enable the running of optimizers
 	bool enable_optimizer = true;
+	//! Enable caching operators
+	bool enable_caching_operators = true;
 	//! Force parallelism of small tables, used for testing
 	bool verify_parallelism = false;
 	//! Force index join independent of table cardinality, used for testing
@@ -71,6 +73,8 @@ struct ClientConfig {
 	bool force_external = false;
 	//! Force disable cross product generation when hyper graph isn't connected, used for testing
 	bool force_no_cross_product = false;
+	//! Force use of IEJoin to implement AsOfJoin, used for testing
+	bool force_asof_iejoin = false;
 	//! If this context should also try to use the available replacement scans
 	//! True by default
 	bool use_replacement_scans = true;

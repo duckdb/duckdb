@@ -105,16 +105,6 @@ public final class DuckDBConnection implements java.sql.Connection {
 		}
 	}
 
-	/**
-	 * This function calls the underlying C++ interrupt function which aborts all pending queries.
-	 * It is not safe to call this function when the connection is already closed.
-	 */
-	public synchronized void interrupt() throws SQLException {
-		if (conn_ref != null) {
-			DuckDBNative.duckdb_jdbc_interrupt(conn_ref);
-		}
-	}
-
 	protected void finalize() throws Throwable {
 		close();
 	}
@@ -206,7 +196,7 @@ public final class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public void setCatalog(String catalog) throws SQLException {
-		// not supported => no-op
+		DuckDBNative.duckdb_jdbc_set_catalog(conn_ref, catalog);
 	}
 
 	public String getCatalog() throws SQLException {
@@ -214,7 +204,7 @@ public final class DuckDBConnection implements java.sql.Connection {
 	}
 
 	public void setSchema(String schema) throws SQLException {
-		throw new SQLFeatureNotSupportedException("setSchema");
+		DuckDBNative.duckdb_jdbc_set_schema(conn_ref, schema);
 	}
 
 	public String getSchema() throws SQLException {

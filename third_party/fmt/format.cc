@@ -128,11 +128,6 @@ int (*instantiate_format_float)(double, int, internal::float_specs,
                                 internal::buffer<char>&) =
     internal::format_float;
 
-#ifndef FMT_STATIC_THOUSANDS_SEPARATOR
-template FMT_API internal::locale_ref::locale_ref(const std::locale& loc);
-template FMT_API std::locale internal::locale_ref::get<std::locale>() const;
-#endif
-
 // Explicit instantiations for char.
 
 template FMT_API std::string internal::grouping_impl<char>(locale_ref);

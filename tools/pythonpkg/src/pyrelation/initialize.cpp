@@ -1,10 +1,9 @@
 #include "duckdb_python/pyrelation.hpp"
-#include "duckdb_python/pyconnection.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb_python/vector_conversion.hpp"
-#include "duckdb_python/pandas_type.hpp"
+#include "duckdb_python/numpy/numpy_type.hpp"
 #include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/relation/view_relation.hpp"
@@ -211,7 +210,8 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	             py::arg("replace") = true);
 
 	relation_module
-	    .def("map", &DuckDBPyRelation::Map, py::arg("map_function"), "Calls the passed function on the relation")
+	    .def("map", &DuckDBPyRelation::Map, py::arg("map_function"), py::kw_only(), py::arg("schema") = py::none(),
+	         "Calls the passed function on the relation")
 	    .def("show", &DuckDBPyRelation::Print, "Display a summary of the data")
 	    .def("__str__", &DuckDBPyRelation::ToString)
 	    .def("__repr__", &DuckDBPyRelation::ToString);

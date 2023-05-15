@@ -1,5 +1,7 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
+
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -30,6 +32,15 @@ unique_ptr<LogicalOperator> LogicalProjection::Deserialize(LogicalDeserializatio
 
 vector<idx_t> LogicalProjection::GetTableIndex() const {
 	return vector<idx_t> {table_index};
+}
+
+string LogicalProjection::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index);
+	}
+#endif
+	return LogicalOperator::GetName();
 }
 
 } // namespace duckdb

@@ -95,8 +95,8 @@ static void GatherNestedVector(Vector &rows, const SelectionVector &row_sel, Vec
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
 	// Build the gather locations
-	auto data_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[count]);
-	auto mask_locations = unique_ptr<data_ptr_t[]>(new data_ptr_t[count]);
+	auto data_locations = make_unsafe_array<data_ptr_t>(count);
+	auto mask_locations = make_unsafe_array<data_ptr_t>(count);
 	for (idx_t i = 0; i < count; i++) {
 		auto row_idx = row_sel.get_index(i);
 		auto row = ptrs[row_idx];

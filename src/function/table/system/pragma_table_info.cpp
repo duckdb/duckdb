@@ -54,8 +54,8 @@ static unique_ptr<FunctionData> PragmaTableInfoBind(ClientContext &context, Tabl
 
 	// look up the table name in the catalog
 	Binder::BindSchemaOrCatalog(context, qname.catalog, qname.schema);
-	auto entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, qname.schema, qname.name);
-	return make_uniq<PragmaTableFunctionData>(*entry);
+	auto &entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, qname.catalog, qname.schema, qname.name);
+	return make_uniq<PragmaTableFunctionData>(entry);
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaTableInfoInit(ClientContext &context, TableFunctionInitInput &input) {
@@ -163,7 +163,7 @@ static void PragmaTableInfoView(PragmaTableOperatorData &data, ViewCatalogEntry 
 }
 
 static void PragmaTableInfoFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (PragmaTableFunctionData &)*data_p.bind_data;
+	auto &bind_data = data_p.bind_data->Cast<PragmaTableFunctionData>();
 	auto &state = data_p.global_state->Cast<PragmaTableOperatorData>();
 	switch (bind_data.entry.type) {
 	case CatalogType::TABLE_ENTRY:

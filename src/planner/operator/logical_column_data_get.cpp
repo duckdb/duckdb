@@ -1,6 +1,8 @@
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
+
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -40,6 +42,15 @@ unique_ptr<LogicalOperator> LogicalColumnDataGet::Deserialize(LogicalDeserializa
 
 vector<idx_t> LogicalColumnDataGet::GetTableIndex() const {
 	return vector<idx_t> {table_index};
+}
+
+string LogicalColumnDataGet::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index);
+	}
+#endif
+	return LogicalOperator::GetName();
 }
 
 } // namespace duckdb

@@ -39,7 +39,7 @@ string SelectNode::ToString() const {
 		}
 		result += select_list[i]->ToString();
 		if (!select_list[i]->alias.empty()) {
-			result += " AS " + KeywordHelper::WriteOptionallyQuoted(select_list[i]->alias);
+			result += StringUtil::Format(" AS %s", SQLIdentifier(select_list[i]->alias));
 		}
 	}
 	if (from_table && from_table->type != TableReferenceType::EMPTY) {
@@ -97,7 +97,7 @@ string SelectNode::ToString() const {
 		if (sample->is_percentage) {
 			result += "%";
 		}
-		result += " (" + SampleMethodToString(sample->method);
+		result += " (" + EnumUtil::ToString(sample->method);
 		if (sample->seed >= 0) {
 			result += ", " + std::to_string(sample->seed);
 		}

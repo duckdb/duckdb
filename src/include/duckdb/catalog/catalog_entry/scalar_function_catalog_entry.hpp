@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/catalog/standard_entry.hpp"
+#include "duckdb/catalog/catalog_entry/function_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -16,18 +16,18 @@
 namespace duckdb {
 
 //! A table function in the catalog
-class ScalarFunctionCatalogEntry : public StandardEntry {
+class ScalarFunctionCatalogEntry : public FunctionEntry {
 public:
 	static constexpr const CatalogType Type = CatalogType::SCALAR_FUNCTION_ENTRY;
 	static constexpr const char *Name = "scalar function";
 
 public:
-	ScalarFunctionCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateScalarFunctionInfo *info);
+	ScalarFunctionCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateScalarFunctionInfo &info);
 
 	//! The scalar functions
 	ScalarFunctionSet functions;
 
 public:
-	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
+	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info) override;
 };
 } // namespace duckdb

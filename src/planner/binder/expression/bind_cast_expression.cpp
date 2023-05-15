@@ -8,7 +8,7 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(CastExpression &expr, idx_t depth) {
 	// first try to bind the child of the cast expression
-	string error = Bind(&expr.child, depth);
+	string error = Bind(expr.child, depth);
 	if (!error.empty()) {
 		return BindResult(error);
 	}
@@ -16,17 +16,17 @@ BindResult ExpressionBinder::BindExpression(CastExpression &expr, idx_t depth) {
 	// Right now just considering its DEFAULT_SCHEMA always
 	Binder::BindLogicalType(context, expr.cast_type);
 	// the children have been successfully resolved
-	auto &child = (BoundExpression &)*expr.child;
+	auto &child = BoundExpression::GetExpression(*expr.child);
 	if (expr.try_cast) {
-		if (child.expr->return_type == expr.cast_type) {
+		if (child->return_type == expr.cast_type) {
 			// no cast required: type matches
-			return BindResult(std::move(child.expr));
+			return BindResult(std::move(child));
 		}
-		child.expr = BoundCastExpression::AddCastToType(context, std::move(child.expr), expr.cast_type, true);
+		child = BoundCastExpression::AddCastToType(context, std::move(child), expr.cast_type, true);
 	} else {
 		// otherwise add a cast to the target type
-		child.expr = BoundCastExpression::AddCastToType(context, std::move(child.expr), expr.cast_type);
+		child = BoundCastExpression::AddCastToType(context, std::move(child), expr.cast_type);
 	}
-	return BindResult(std::move(child.expr));
+	return BindResult(std::move(child));
 }
 } // namespace duckdb

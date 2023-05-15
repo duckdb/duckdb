@@ -105,7 +105,8 @@ public:
 	//! Merge a row group collection into the transaction-local storage
 	void LocalMerge(ClientContext &context, RowGroupCollection &collection);
 	//! Creates an optimistic writer for this table - used for optimistically writing parallel appends
-	OptimisticDataWriter *CreateOptimisticWriter(ClientContext &context);
+	OptimisticDataWriter &CreateOptimisticWriter(ClientContext &context);
+	void FinalizeOptimisticWriter(ClientContext &context, OptimisticDataWriter &writer);
 
 	//! Delete the entries with the specified row identifier from the table
 	idx_t Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, idx_t count);

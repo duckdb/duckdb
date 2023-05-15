@@ -10,11 +10,11 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception_format_value.hpp"
-#include "duckdb/common/vector.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/typedefs.hpp"
 
+#include <vector>
 #include <stdexcept>
 
 namespace duckdb {
@@ -105,14 +105,14 @@ public:
 
 	template <typename... Args>
 	static string ConstructMessage(const string &msg, Args... params) {
-		vector<ExceptionFormatValue> values;
+		std::vector<ExceptionFormatValue> values;
 		return ConstructMessageRecursive(msg, values, params...);
 	}
 
-	DUCKDB_API static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values);
+	DUCKDB_API static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values);
 
 	template <class T, typename... Args>
-	static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values, T param,
+	static string ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values, T param,
 	                                        Args... params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return ConstructMessageRecursive(msg, values, params...);
@@ -121,7 +121,7 @@ public:
 	DUCKDB_API static bool UncaughtException();
 
 	DUCKDB_API static string GetStackTrace(int max_depth = 120);
-	DUCKDB_API static string FormatStackTrace(string message = "") {
+	static string FormatStackTrace(string message = "") {
 		return (message + "\n" + GetStackTrace());
 	}
 
@@ -269,7 +269,7 @@ public:
 class IOException : public Exception {
 public:
 	DUCKDB_API explicit IOException(const string &msg);
-	DUCKDB_API explicit IOException(ExceptionType exception_type, const string &msg) : Exception(exception_type, msg) {
+	explicit IOException(ExceptionType exception_type, const string &msg) : Exception(exception_type, msg) {
 	}
 
 	template <typename... Args>
@@ -371,7 +371,7 @@ public:
 
 class FatalException : public Exception {
 public:
-	DUCKDB_API explicit FatalException(const string &msg) : FatalException(ExceptionType::FATAL, msg) {
+	explicit FatalException(const string &msg) : FatalException(ExceptionType::FATAL, msg) {
 	}
 	template <typename... Args>
 	explicit FatalException(const string &msg, Args... params) : FatalException(ConstructMessage(msg, params...)) {

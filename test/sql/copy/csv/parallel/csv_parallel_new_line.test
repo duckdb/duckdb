@@ -4,9 +4,6 @@
 
 require vector_size 512
 
-statement ok
-SET experimental_parallel_csv=true;
-
 # force parallelism of the queries
 statement ok
 PRAGMA verify_parallelism
@@ -20,7 +17,7 @@ pragma threads=${thr}
 
 # Test read_csv auto with \n
 query IIII
-select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv', buffer_size=${i})
+select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv', buffer_size=${i}, parallel=True)
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -34,7 +31,7 @@ select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv
 
 # Test read_csv auto with \r
 query IIII
-select * from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_r.csv', buffer_size=${i})
+select * from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_r.csv', buffer_size=${i}, parallel=True)
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -48,7 +45,7 @@ select * from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_r.c
 
 # Test read_csv auto with mix \r and \n
 query IIII
-select * from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_mix_r_n.csv', buffer_size=${i})
+select * from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_mix_r_n.csv', buffer_size=${i}, parallel=True)
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -63,7 +60,7 @@ select * from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_mix
 
 # Test read_csv auto with \r\n
 query IIII
-select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string_rn.csv', buffer_size=${i}, header=False)
+select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string_rn.csv', buffer_size=${i}, header=False, parallel=True)
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -81,7 +78,7 @@ endloop
 
 # Test read_csv auto with mix \r, \n and \r\n (This must always run single threaded)
 query IIII
-select * from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_mix.csv')
+select * from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_mix.csv', parallel=True)
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -103,12 +100,12 @@ statement ok
 pragma threads=${thr}
 
 statement error
-select * from read_csv('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='false', delim = '|', new_line = '\r\n')
+select * from read_csv('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='false', delim = '|', new_line = '\r\n', parallel=True)
 
 
 # Test read_csv with user defined variable
 query IIII
-select * from read_csv('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='false', delim = '|', new_line = '\n')
+select * from read_csv('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='false', delim = '|', new_line = '\n', parallel=True)
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -121,10 +118,10 @@ select * from read_csv('test/sql/copy/csv/data/test/multi_column_string.csv',  C
 100000000	15519	785	p9
 
 statement error
-select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  new_line = '\r\n')
+select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  new_line = '\r\n', parallel=True)
 
 query IIII
-select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',   new_line = '\n')
+select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',   new_line = '\n', parallel=True)
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -137,6 +134,6 @@ select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv
 100000000	15519	785	p9
 
 statement error
-select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  new_line = 'not_valid')
+select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  new_line = 'not_valid', parallel=True)
 
 endloop

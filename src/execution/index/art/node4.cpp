@@ -1,164 +1,219 @@
 #include "duckdb/execution/index/art/node4.hpp"
 
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
 
 namespace duckdb {
 
-Node4::Node4() : Node(NodeType::N4) {
-	memset(key, 0, sizeof(key));
+Node4 &Node4::New(ART &art, Node &node) {
+
+	node.SetPtr(Node::GetAllocator(art, NType::NODE_4).New());
+	node.type = (uint8_t)NType::NODE_4;
+	auto &n4 = Node4::Get(art, node);
+
+	n4.count = 0;
+	n4.prefix.Initialize();
+	return n4;
 }
 
-idx_t Node4::MemorySize(ART &art, const bool &recurse) {
-	if (recurse) {
-		return prefix.MemorySize() + sizeof(*this) + RecursiveMemorySize(art);
+void Node4::Free(ART &art, Node &node) {
+
+	D_ASSERT(node.IsSet());
+	D_ASSERT(!node.IsSwizzled());
+
+	auto &n4 = Node4::Get(art, node);
+
+	// free all children
+	for (idx_t i = 0; i < n4.count; i++) {
+		Node::Free(art, n4.children[i]);
 	}
-	return prefix.MemorySize() + sizeof(*this);
 }
 
-idx_t Node4::GetChildPos(uint8_t k) {
-	for (idx_t pos = 0; pos < count; pos++) {
-		if (key[pos] == k) {
-			return pos;
-		}
+Node4 &Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
+
+	auto &n4 = Node4::New(art, node4);
+	auto &n16 = Node16::Get(art, node16);
+
+	n4.count = n16.count;
+	n4.prefix.Move(n16.prefix);
+
+	for (idx_t i = 0; i < n16.count; i++) {
+		n4.key[i] = n16.key[i];
+		n4.children[i] = n16.children[i];
 	}
-	return Node::GetChildPos(k);
+
+	n16.count = 0;
+	Node::Free(art, node16);
+	return n4;
 }
 
-idx_t Node4::GetChildGreaterEqual(uint8_t k, bool &equal) {
-	for (idx_t pos = 0; pos < count; pos++) {
-		if (key[pos] >= k) {
-			if (key[pos] == k) {
-				equal = true;
-			} else {
-				equal = false;
-			}
-			return pos;
-		}
+void Node4::InitializeMerge(ART &art, const ARTFlags &flags) {
+
+	for (idx_t i = 0; i < count; i++) {
+		children[i].InitializeMerge(art, flags);
 	}
-	return DConstants::INVALID_INDEX;
 }
 
-idx_t Node4::GetMin() {
-	return 0;
-}
+void Node4::InsertChild(ART &art, Node &node, const uint8_t byte, const Node child) {
 
-idx_t Node4::GetNextPos(idx_t pos) {
-	if (pos == DConstants::INVALID_INDEX) {
-		return 0;
+	D_ASSERT(node.IsSet());
+	D_ASSERT(!node.IsSwizzled());
+	auto &n4 = Node4::Get(art, node);
+
+	// ensure that there is no other child at the same byte
+	for (idx_t i = 0; i < n4.count; i++) {
+		D_ASSERT(n4.key[i] != byte);
 	}
-	pos++;
-	return pos < count ? pos : DConstants::INVALID_INDEX;
-}
-
-idx_t Node4::GetNextPosAndByte(idx_t pos, uint8_t &byte) {
-	if (pos == DConstants::INVALID_INDEX) {
-		byte = key[0];
-		return 0;
-	}
-	pos++;
-	if (pos < count) {
-		byte = key[pos];
-		return pos;
-	}
-	return DConstants::INVALID_INDEX;
-}
-
-Node *Node4::GetChild(ART &art, idx_t pos) {
-	D_ASSERT(pos < count);
-	return children[pos].Unswizzle(art);
-}
-
-void Node4::ReplaceChildPointer(idx_t pos, Node *node) {
-	children[pos] = node;
-}
-
-bool Node4::ChildIsInMemory(idx_t pos) {
-	return children[pos] && !children[pos].IsSwizzled();
-}
-
-void Node4::InsertChild(ART &art, Node *&node, uint8_t key_byte, Node *new_child) {
-	Node4 *n = (Node4 *)node;
 
 	// insert new child node into node
-	if (node->count < Node4::GetSize()) {
+	if (n4.count < Node::NODE_4_CAPACITY) {
 		// still space, just insert the child
-		idx_t pos = 0;
-		while ((pos < node->count) && (n->key[pos] < key_byte)) {
-			pos++;
+		idx_t child_pos = 0;
+		while (child_pos < n4.count && n4.key[child_pos] < byte) {
+			child_pos++;
 		}
-		if (n->children[pos]) {
-			for (idx_t i = n->count; i > pos; i--) {
-				n->key[i] = n->key[i - 1];
-				n->children[i] = n->children[i - 1];
-			}
+		// move children backwards to make space
+		for (idx_t i = n4.count; i > child_pos; i--) {
+			n4.key[i] = n4.key[i - 1];
+			n4.children[i] = n4.children[i - 1];
 		}
-		n->key[pos] = key_byte;
-		n->children[pos] = new_child;
-		n->count++;
+
+		n4.key[child_pos] = byte;
+		n4.children[child_pos] = child;
+		n4.count++;
 
 	} else {
 		// node is full, grow to Node16
-		auto new_node = Node16::New();
-		art.IncreaseMemorySize(new_node->MemorySize(art, false));
-		new_node->count = n->count;
-		new_node->prefix = std::move(node->prefix);
-
-		for (idx_t i = 0; i < n->count; i++) {
-			new_node->key[i] = n->key[i];
-			new_node->children[i] = n->children[i];
-			n->children[i] = nullptr;
-		}
-		n->count = 0;
-
-		art.DecreaseMemorySize(node->MemorySize(art, false));
-		Node::Delete(node);
-		node = new_node;
-		Node16::InsertChild(art, node, key_byte, new_child);
+		auto node4 = node;
+		Node16::GrowNode4(art, node, node4);
+		Node16::InsertChild(art, node, byte, child);
 	}
 }
 
-void Node4::EraseChild(ART &art, Node *&node, idx_t pos) {
+void Node4::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 
-	Node4 *n = (Node4 *)node;
-	D_ASSERT(pos < n->count);
-	D_ASSERT(n->count > 1);
+	D_ASSERT(node.IsSet());
+	D_ASSERT(!node.IsSwizzled());
+	auto &n4 = Node4::Get(art, node);
 
-	// adjust the ART size
-	if (n->ChildIsInMemory(pos)) {
-		auto child = n->GetChild(art, pos);
-		art.DecreaseMemorySize(child->MemorySize(art, true));
+	idx_t child_pos = 0;
+	for (; child_pos < n4.count; child_pos++) {
+		if (n4.key[child_pos] == byte) {
+			break;
+		}
 	}
 
-	// erase the child and decrease the count
-	n->children[pos].Reset();
-	n->count--;
-	D_ASSERT(n->count >= 1);
+	D_ASSERT(child_pos < n4.count);
+	D_ASSERT(n4.count > 1);
+
+	// free the child and decrease the count
+	Node::Free(art, n4.children[child_pos]);
+	n4.count--;
 
 	// potentially move any children backwards
-	for (; pos < n->count; pos++) {
-		n->key[pos] = n->key[pos + 1];
-		n->children[pos] = n->children[pos + 1];
-	}
-	// set any remaining nodes as nullptr
-	for (; pos < Node4::GetSize(); pos++) {
-		n->children[pos] = nullptr;
+	for (idx_t i = child_pos; i < n4.count; i++) {
+		n4.key[i] = n4.key[i + 1];
+		n4.children[i] = n4.children[i + 1];
 	}
 
 	// this is a one way node, compress
-	if (n->count == 1) {
+	if (n4.count == 1) {
 
 		// get only child and concatenate prefixes
-		auto child_ref = n->GetChild(art, 0);
-		// concatenate prefixes
-		child_ref->prefix.Concatenate(art, n->key[0], node->prefix);
-		// ensure that when deleting the node, we do not delete the child (because we move it)
-		n->children[0] = nullptr;
+		auto child = *n4.GetChild(n4.key[0]);
+		child.GetPrefix(art).Concatenate(art, n4.key[0], n4.prefix);
+		n4.count--;
 
-		art.DecreaseMemorySize(n->MemorySize(art, false));
-		Node::Delete(node);
-		node = child_ref;
+		Node::Free(art, node);
+		node = child;
 	}
 }
+
+void Node4::ReplaceChild(const uint8_t byte, const Node child) {
+	for (idx_t i = 0; i < count; i++) {
+		if (key[i] == byte) {
+			children[i] = child;
+			return;
+		}
+	}
+}
+
+optional_ptr<Node> Node4::GetChild(const uint8_t byte) {
+
+	for (idx_t i = 0; i < count; i++) {
+		if (key[i] == byte) {
+			return &children[i];
+		}
+	}
+	return nullptr;
+}
+
+optional_ptr<Node> Node4::GetNextChild(uint8_t &byte) {
+
+	for (idx_t i = 0; i < count; i++) {
+		if (key[i] >= byte) {
+			byte = key[i];
+			return &children[i];
+		}
+	}
+	return nullptr;
+}
+
+BlockPointer Node4::Serialize(ART &art, MetaBlockWriter &writer) {
+
+	// recurse into children and retrieve child block pointers
+	vector<BlockPointer> child_block_pointers;
+	for (idx_t i = 0; i < count; i++) {
+		child_block_pointers.push_back(children[i].Serialize(art, writer));
+	}
+	for (idx_t i = count; i < Node::NODE_4_CAPACITY; i++) {
+		child_block_pointers.emplace_back((block_id_t)DConstants::INVALID_INDEX, 0);
+	}
+
+	// get pointer and write fields
+	auto block_pointer = writer.GetBlockPointer();
+	writer.Write(NType::NODE_4);
+	writer.Write<uint8_t>(count);
+	prefix.Serialize(art, writer);
+
+	// write key values
+	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
+		writer.Write(key[i]);
+	}
+
+	// write child block pointers
+	for (auto &child_block_pointer : child_block_pointers) {
+		writer.Write(child_block_pointer.block_id);
+		writer.Write(child_block_pointer.offset);
+	}
+
+	return block_pointer;
+}
+
+void Node4::Deserialize(ART &art, MetaBlockReader &reader) {
+
+	count = reader.Read<uint8_t>();
+	prefix.Deserialize(art, reader);
+
+	// read key values
+	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
+		key[i] = reader.Read<uint8_t>();
+	}
+
+	// read child block pointers
+	for (idx_t i = 0; i < Node::NODE_4_CAPACITY; i++) {
+		children[i] = Node(reader);
+	}
+}
+
+void Node4::Vacuum(ART &art, const ARTFlags &flags) {
+
+	for (idx_t i = 0; i < count; i++) {
+		Node::Vacuum(art, children[i], flags);
+	}
+}
+
 } // namespace duckdb

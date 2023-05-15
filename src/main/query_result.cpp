@@ -165,7 +165,7 @@ string QueryResult::HeaderToString() {
 }
 
 string QueryResult::GetConfigTimezone(QueryResult &query_result) {
-	return query_result.client_properties.timezone;
+	return query_result.client_properties.time_zone;
 }
 
 } // namespace duckdb

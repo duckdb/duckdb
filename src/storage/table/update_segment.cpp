@@ -37,31 +37,6 @@ UpdateSegment::UpdateSegment(ColumnData &column_data)
 	this->statistics_update_function = GetStatisticsUpdateFunction(physical_type);
 }
 
-UpdateSegment::UpdateSegment(UpdateSegment &other, ColumnData &owner)
-    : column_data(owner), root(std::move(other.root)), stats(std::move(other.stats)), type_size(other.type_size) {
-
-	this->heap.Move(other.heap);
-	// update the segment links
-	if (root) {
-		for (idx_t i = 0; i < RowGroup::ROW_GROUP_VECTOR_COUNT; i++) {
-			if (!root->info[i]) {
-				continue;
-			}
-			for (auto info = root->info[i]->info.get(); info; info = info->next) {
-				info->segment = this;
-			}
-		}
-	}
-	initialize_update_function = other.initialize_update_function;
-	merge_update_function = other.merge_update_function;
-	fetch_update_function = other.fetch_update_function;
-	fetch_committed_function = other.fetch_committed_function;
-	fetch_committed_range = other.fetch_committed_range;
-	fetch_row_function = other.fetch_row_function;
-	rollback_update_function = other.rollback_update_function;
-	statistics_update_function = other.statistics_update_function;
-}
-
 UpdateSegment::~UpdateSegment() {
 }
 
@@ -461,15 +436,15 @@ void UpdateSegment::FetchRow(TransactionData transaction, idx_t row_id, Vector &
 // Rollback update
 //===--------------------------------------------------------------------===//
 template <class T>
-static void RollbackUpdate(UpdateInfo *base_info, UpdateInfo *rollback_info) {
-	auto base_data = (T *)base_info->tuple_data;
-	auto rollback_data = (T *)rollback_info->tuple_data;
+static void RollbackUpdate(UpdateInfo &base_info, UpdateInfo &rollback_info) {
+	auto base_data = (T *)base_info.tuple_data;
+	auto rollback_data = (T *)rollback_info.tuple_data;
 	idx_t base_offset = 0;
-	for (idx_t i = 0; i < rollback_info->N; i++) {
-		auto id = rollback_info->tuples[i];
-		while (base_info->tuples[base_offset] < id) {
+	for (idx_t i = 0; i < rollback_info.N; i++) {
+		auto id = rollback_info.tuples[i];
+		while (base_info.tuples[base_offset] < id) {
 			base_offset++;
-			D_ASSERT(base_offset < base_info->N);
+			D_ASSERT(base_offset < base_info.N);
 		}
 		base_data[base_offset] = rollback_data[i];
 	}
@@ -511,13 +486,13 @@ static UpdateSegment::rollback_update_function_t GetRollbackUpdateFunction(Physi
 	}
 }
 
-void UpdateSegment::RollbackUpdate(UpdateInfo *info) {
+void UpdateSegment::RollbackUpdate(UpdateInfo &info) {
 	// obtain an exclusive lock
 	auto lock_handle = lock.GetExclusiveLock();
 
 	// move the data from the UpdateInfo back into the base info
-	D_ASSERT(root->info[info->vector_index]);
-	rollback_update_function(root->info[info->vector_index]->info.get(), info);
+	D_ASSERT(root->info[info.vector_index]);
+	rollback_update_function(*root->info[info.vector_index]->info, info);
 
 	// clean up the update chain
 	CleanupUpdateInternal(*lock_handle, info);
@@ -526,16 +501,16 @@ void UpdateSegment::RollbackUpdate(UpdateInfo *info) {
 //===--------------------------------------------------------------------===//
 // Cleanup Update
 //===--------------------------------------------------------------------===//
-void UpdateSegment::CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo *info) {
-	D_ASSERT(info->prev);
-	auto prev = info->prev;
-	prev->next = info->next;
+void UpdateSegment::CleanupUpdateInternal(const StorageLockKey &lock, UpdateInfo &info) {
+	D_ASSERT(info.prev);
+	auto prev = info.prev;
+	prev->next = info.next;
 	if (prev->next) {
 		prev->next->prev = prev;
 	}
 }
 
-void UpdateSegment::CleanupUpdate(UpdateInfo *info) {
+void UpdateSegment::CleanupUpdate(UpdateInfo &info) {
 	// obtain an exclusive lock
 	auto lock_handle = lock.GetExclusiveLock();
 	CleanupUpdateInternal(*lock_handle, info);
@@ -1067,8 +1042,9 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 	return pos;
 }
 
-UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, idx_t count, unique_ptr<char[]> &data) {
-	data = unique_ptr<char[]>(new char[sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE]);
+UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, idx_t count,
+                                  unsafe_array_ptr<char> &data) {
+	data = make_unsafe_array<char>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
 	auto update_info = (UpdateInfo *)data.get();
 	update_info->max = STANDARD_VECTOR_SIZE;
 	update_info->tuples = (sel_t *)(((data_ptr_t)update_info) + sizeof(UpdateInfo));
@@ -1134,11 +1110,11 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 			}
 			node = node->next;
 		}
-		unique_ptr<char[]> update_info_data;
+		unsafe_array_ptr<char> update_info_data;
 		if (!node) {
 			// no updates made yet by this transaction: initially the update info to empty
 			if (transaction.transaction) {
-				auto &dtransaction = (DuckTransaction &)*transaction.transaction;
+				auto &dtransaction = transaction.transaction->Cast<DuckTransaction>();
 				node = dtransaction.CreateUpdateInfo(type_size, count);
 			} else {
 				node = CreateEmptyUpdateInfo(transaction, type_size, count, update_info_data);
@@ -1169,8 +1145,8 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		auto result = make_uniq<UpdateNodeData>();
 
 		result->info = make_uniq<UpdateInfo>();
-		result->tuples = unique_ptr<sel_t[]>(new sel_t[STANDARD_VECTOR_SIZE]);
-		result->tuple_data = unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * type_size]);
+		result->tuples = make_unsafe_array<sel_t>(STANDARD_VECTOR_SIZE);
+		result->tuple_data = make_unsafe_array<data_t>(STANDARD_VECTOR_SIZE * type_size);
 		result->info->tuples = result->tuples.get();
 		result->info->tuple_data = result->tuple_data.get();
 		result->info->version_number = TRANSACTION_ID_START - 1;
@@ -1178,7 +1154,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		InitializeUpdateInfo(*result->info, ids, sel, count, vector_index, vector_offset);
 
 		// now create the transaction level update info in the undo log
-		unique_ptr<char[]> update_info_data;
+		unsafe_array_ptr<char> update_info_data;
 		UpdateInfo *transaction_node;
 		if (transaction.transaction) {
 			transaction_node = transaction.transaction->CreateUpdateInfo(type_size, count);

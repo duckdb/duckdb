@@ -76,7 +76,7 @@ DefaultViewGenerator::DefaultViewGenerator(Catalog &catalog, SchemaCatalogEntry 
 unique_ptr<CatalogEntry> DefaultViewGenerator::CreateDefaultEntry(ClientContext &context, const string &entry_name) {
 	auto info = GetDefaultView(context, schema.name, entry_name);
 	if (info) {
-		return make_uniq_base<CatalogEntry, ViewCatalogEntry>(&catalog, &schema, info.get());
+		return make_uniq_base<CatalogEntry, ViewCatalogEntry>(catalog, schema, *info);
 	}
 	return nullptr;
 }

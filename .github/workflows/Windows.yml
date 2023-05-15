@@ -58,7 +58,9 @@ jobs:
 
     - name: Test
       shell: bash
-      run: test/Release/unittest.exe
+      run: |
+        echo "DUCKDB_INSTALL_LIB=D:\a\duckdb\duckdb\src\Release\duckdb.dll" >> $env:GITHUB_ENV
+        test/Release/unittest.exe
 
     - name: Tools Test
       shell: bash

@@ -68,7 +68,7 @@ protected:
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
-	vector<const PhysicalOperator *> GetSources() const override;
+	vector<const_reference<PhysicalOperator>> GetSources() const override;
 
 private:
 	void GetRHSMatches(ExecutionContext &context, DataChunk &input, OperatorState &state_p) const;

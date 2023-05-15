@@ -1,0 +1,59 @@
+[
+    {
+        "name": "cardinality",
+        "parameters": "map",
+        "description": "Return the size of the map (or the number of entries in the map).",
+        "example": "cardinality( map([4, 2], ['a', 'b']) );",
+        "type": "scalar_function"
+    },
+    {
+        "name": "map",
+        "parameters": "keys,values",
+        "description": "Creates a map from a set of keys and values.",
+        "example": "map(['key1', 'key2'], ['val1', 'val2'])",
+        "type": "scalar_function"
+    },
+    {
+        "name": "map_entries",
+        "parameters": "map",
+        "description": "Returns the map entries as a list of keys/values",
+        "example": "map_entries(map(['key'], ['val']))",
+        "type": "scalar_function"
+    },
+    {
+        "name": "map_extract",
+        "parameters": "map,key",
+        "description": "Return a list containing the value for a given key or an empty list if the key is not contained in the map. The type of the key provided in the second parameter must match the type of the map’s keys else an error is returned.",
+        "example": "map_extract(map(['key'], ['val']), 'key')",
+        "type": "scalar_function",
+        "aliases": ["element_at"]
+    },
+    {
+        "name": "map_from_entries",
+        "parameters": "map",
+        "description": "Returns a map created from the entries of the array",
+        "example": "map_from_entries([{k: 5, v: 'val1'}, {k: 3, v: 'val2'}]);",
+        "type": "scalar_function"
+    },
+    {
+        "name": "map_concat",
+        "parameters": "any,...",
+        "description": "Returns a map created from merging the input maps, on key collision the value is taken from the last map with that key",
+        "example": "map_concat(map([1,2], ['a', 'b']), map([2,3], ['c', 'd']));",
+        "type": "scalar_function"
+    },
+    {
+        "name": "map_keys",
+        "parameters": "map",
+        "description": "Returns the keys of a map as a list",
+        "example": "map_keys(map(['key'], ['val']))",
+        "type": "scalar_function"
+    },
+    {
+        "name": "map_values",
+        "parameters": "map",
+        "description": "Returns the values of a map as a list",
+        "example": "map_values(map(['key'], ['val']))",
+        "type": "scalar_function"
+    }
+]

@@ -1,3 +1,6 @@
+if(NOT CLANG_TIDY)
+  add_subdirectory(adbc)
+endif()
 add_subdirectory(capi)
 add_subdirectory(udf_function)
 
@@ -19,7 +22,8 @@ set(TEST_API_OBJECTS
     test_dbdir.cpp
     test_progress_bar.cpp
     test_threads.cpp
-    test_windows_header_compatibility.cpp)
+    test_windows_header_compatibility.cpp
+    test_windows_unicode_path.cpp)
 
 if(NOT WIN32)
   set(TEST_API_OBJECTS ${TEST_API_OBJECTS} test_read_only.cpp)

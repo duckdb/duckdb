@@ -48,7 +48,7 @@ HtEntryType PartitionableHashTable::GetHTEntrySize() {
 }
 
 idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &groups, Vector &group_hashes,
-                                           DataChunk &payload, const vector<idx_t> &filter) {
+                                           DataChunk &payload, const unsafe_vector<idx_t> &filter) {
 	// If this is false, a single AddChunk would overflow the max capacity
 	D_ASSERT(list.empty() || groups.size() <= list.back()->MaxCapacity());
 	if (list.empty() || list.back()->Count() + groups.size() >= list.back()->MaxCapacity()) {
@@ -65,7 +65,7 @@ idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &group
 }
 
 idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bool do_partition,
-                                       const vector<idx_t> &filter) {
+                                       const unsafe_vector<idx_t> &filter) {
 	groups.Hash(hashes);
 
 	// we partition when we are asked to or when the unpartitioned ht runs out of space

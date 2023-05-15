@@ -18,7 +18,7 @@ public:
 
 public:
 	//! INSERT INTO
-	PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry *table,
+	PhysicalBatchInsert(vector<LogicalType> types, TableCatalogEntry &table,
 	                    physical_index_vector_t<idx_t> column_index_map, vector<unique_ptr<Expression>> bound_defaults,
 	                    idx_t estimated_cardinality);
 	//! CREATE TABLE AS
@@ -28,7 +28,7 @@ public:
 	//! The map from insert column index to table column index
 	physical_index_vector_t<idx_t> column_index_map;
 	//! The table to insert into
-	TableCatalogEntry *insert_table;
+	optional_ptr<TableCatalogEntry> insert_table;
 	//! The insert types
 	vector<LogicalType> insert_types;
 	//! The default expressions of the columns for which no value is provided
@@ -42,9 +42,7 @@ public:
 
 public:
 	// Source interface
-	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
-	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	             LocalSourceState &lstate) const override;
+	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
 		return true;
@@ -54,8 +52,8 @@ public:
 	// Sink interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
-	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-	                    DataChunk &input) const override;
+	void NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const override;
+	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          GlobalSinkState &gstate) const override;

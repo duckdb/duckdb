@@ -589,8 +589,8 @@ StringColumnReader::StringColumnReader(ParquetReader &reader, LogicalType type_p
 	}
 }
 
-uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len) {
-	if (Type() != LogicalTypeId::VARCHAR) {
+uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len, const bool is_varchar) {
+	if (!is_varchar) {
 		return str_len;
 	}
 	// verify if a string is actually UTF8, and if there are no null bytes in the middle of the string
@@ -603,6 +603,10 @@ uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len
 		                            Blob::ToString(string_t(str_data, str_len)) + "\" is not valid UTF8!");
 	}
 	return str_len;
+}
+
+uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len) {
+	return VerifyString(str_data, str_len, Type() == LogicalTypeId::VARCHAR);
 }
 
 void StringColumnReader::Dictionary(shared_ptr<ResizeableBuffer> data, idx_t num_entries) {
@@ -685,7 +689,7 @@ void StringColumnReader::PrepareDeltaByteArray(ResizeableBuffer &buffer) {
 			if (i == 0 || prefix_data[i] > string_data[i - 1].GetSize()) {
 				throw std::runtime_error("DELTA_BYTE_ARRAY - prefix is out of range - corrupt file?");
 			}
-			memcpy(result_data, string_data[i - 1].GetDataUnsafe(), prefix_data[i]);
+			memcpy(result_data, string_data[i - 1].GetData(), prefix_data[i]);
 		}
 		memcpy(result_data + prefix_data[i], buffer.ptr, suffix_data[i]);
 		buffer.inc(suffix_data[i]);

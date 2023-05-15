@@ -45,6 +45,7 @@ class Transformer {
 		string enum_name;
 		unique_ptr<SelectNode> base;
 		unique_ptr<ParsedExpression> column;
+		unique_ptr<QueryNode> subquery;
 	};
 
 public:
@@ -85,10 +86,13 @@ private:
 	bool GetNamedParam(const string &name, int32_t &index);
 	bool HasNamedParameters() const;
 
-	void AddPivotEntry(string enum_name, unique_ptr<SelectNode> source, unique_ptr<ParsedExpression> column);
+	void AddPivotEntry(string enum_name, unique_ptr<SelectNode> source, unique_ptr<ParsedExpression> column,
+	                   unique_ptr<QueryNode> subquery);
 	unique_ptr<SQLStatement> GenerateCreateEnumStmt(unique_ptr<CreatePivotEntry> entry);
 	bool HasPivotEntries();
 	idx_t PivotEntryCount();
+	vector<unique_ptr<CreatePivotEntry>> &GetPivotEntries();
+	void PivotEntryCheck(const string &type);
 	void ExtractCTEsRecursive(CommonTableExpressionMap &cte_map);
 
 private:
@@ -184,6 +188,7 @@ private:
 	//! Transform a Postgres duckdb_libpgquery::T_PGSelectStmt node into a QueryNode
 	unique_ptr<QueryNode> TransformSelectNode(duckdb_libpgquery::PGSelectStmt *node);
 	unique_ptr<QueryNode> TransformSelectInternal(duckdb_libpgquery::PGSelectStmt *node);
+	void TransformModifiers(duckdb_libpgquery::PGSelectStmt &stmt, QueryNode &node);
 
 	//===--------------------------------------------------------------------===//
 	// Expression Transform
@@ -311,13 +316,16 @@ private:
 	void TransformExpressionList(duckdb_libpgquery::PGList &list, vector<unique_ptr<ParsedExpression>> &result);
 
 	//! Transform a Postgres PARTITION BY/ORDER BY specification into lists of expressions
-	void TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr);
+	void TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr,
+	                        const char *window_name = nullptr);
 	//! Transform a Postgres window frame specification into frame expressions
 	void TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr);
 
 	unique_ptr<SampleOptions> TransformSampleOptions(duckdb_libpgquery::PGNode *options);
 	//! Returns true if an expression is only a star (i.e. "*", without any other decorators)
 	bool ExpressionIsEmptyStar(ParsedExpression &expr);
+
+	OnEntryNotFound TransformOnEntryNotFound(bool missing_ok);
 
 private:
 	//! Current stack depth

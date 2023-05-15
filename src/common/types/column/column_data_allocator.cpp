@@ -197,7 +197,7 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 	D_ASSERT(i < end);
 
 	auto base_ptr = (char *)GetDataPointer(state, block_id, offset);
-	if (strings[i].GetDataUnsafe() == base_ptr) {
+	if (strings[i].GetData() == base_ptr) {
 		// pointers are still valid
 		return;
 	}

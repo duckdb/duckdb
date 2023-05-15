@@ -204,13 +204,13 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 		}
 		if (colref.column_names.size() == 2) {
 			auto &qualifier = colref.column_names[0];
-			if (catalog_entry->catalog->GetName() != qualifier && catalog_entry->schema->name != qualifier) {
+			if (catalog_entry->catalog.GetName() != qualifier && catalog_entry->schema.name != qualifier) {
 				return nullptr;
 			}
 		} else if (colref.column_names.size() == 3) {
 			auto &catalog_name = colref.column_names[0];
 			auto &schema_name = colref.column_names[1];
-			if (catalog_entry->catalog->GetName() != catalog_name || catalog_entry->schema->name != schema_name) {
+			if (catalog_entry->catalog.GetName() != catalog_name || catalog_entry->schema.name != schema_name) {
 				return nullptr;
 			}
 		} else {
@@ -340,7 +340,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	// a generated column returns a generated expression, a struct on a column returns a struct extract
 	if (expr->type != ExpressionType::COLUMN_REF) {
 		auto alias = expr->alias;
-		auto result = BindExpression(&expr, depth);
+		auto result = BindExpression(expr, depth);
 		if (result.expression) {
 			result.expression->alias = std::move(alias);
 		}
@@ -386,6 +386,12 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 		result.error = binder.FormatError(colref_p, result.error);
 	}
 	return result;
+}
+
+bool ExpressionBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
+	// Only BaseSelectBinder will have a valid col alias map,
+	// otherwise just return false
+	return false;
 }
 
 } // namespace duckdb
