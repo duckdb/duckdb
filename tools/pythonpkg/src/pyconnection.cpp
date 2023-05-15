@@ -607,8 +607,8 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, const Optional<py::object> &columns,
                                                           const Optional<py::object> &sample_size,
                                                           const Optional<py::object> &maximum_depth,
-                                                          const Optional<py::object> &records,
-                                                          const Optional<py::object> &format) {
+                                                          const Optional<py::str> &records,
+                                                          const Optional<py::str> &format) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -644,7 +644,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 			string actual_type = py::str(records.get_type());
 			throw BinderException("read_json only accepts 'records' as a string, not '%s'", actual_type);
 		}
-		auto records_option = std::string(py::str(records));
+		auto records_s = py::reinterpret_borrow<py::str>(records);
+		auto records_option = std::string(py::str(records_s));
 		options["records"] = Value(records_option);
 	}
 
@@ -653,7 +654,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 			string actual_type = py::str(format.get_type());
 			throw BinderException("read_json only accepts 'format' as a string, not '%s'", actual_type);
 		}
-		auto format_option = std::string(py::str(format));
+		auto format_s = py::reinterpret_borrow<py::str>(format);
+		auto format_option = std::string(py::str(format_s));
 		options["format"] = Value(format_option);
 	}
 

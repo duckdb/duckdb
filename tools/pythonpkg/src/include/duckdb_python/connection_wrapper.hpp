@@ -122,11 +122,11 @@ public:
 	static py::list FetchMany(idx_t size, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, shared_ptr<DuckDBPyConnection> conn = nullptr,
-	                                             const py::object &columns = py::none(),
-	                                             const py::object &sample_size = py::none(),
-	                                             const py::object &maximum_depth = py::none(),
-	                                             const py::object &records = py::none(),
-	                                             const py::object &format = py::none());
+	                                             const Optional<py::object> &columns = py::none(),
+	                                             const Optional<py::object> &sample_size = py::none(),
+	                                             const Optional<py::object> &maximum_depth = py::none(),
+	                                             const Optional<py::str> &records = py::none(),
+	                                             const Optional<py::str> &format = py::none());
 	static unique_ptr<DuckDBPyRelation>
 	ReadCSV(const py::object &name, shared_ptr<DuckDBPyConnection> conn, const py::object &header = py::none(),
 	        const py::object &compression = py::none(), const py::object &sep = py::none(),
