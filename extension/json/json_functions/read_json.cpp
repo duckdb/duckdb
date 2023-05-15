@@ -225,7 +225,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	transform_options.error_unknown_key = bind_data->auto_detect && !bind_data->ignore_errors;
 	transform_options.delay_error = true;
 
-	return bind_data;
+	return std::move(bind_data);
 }
 
 static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
