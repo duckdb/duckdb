@@ -16,7 +16,7 @@ unique_ptr<FunctionData> ReadJSONObjectsBind(ClientContext &context, TableFuncti
 	bind_data->reader_bind =
 	    MultiFileReader::BindOptions(bind_data->options.file_options, bind_data->files, return_types, names);
 
-	return bind_data;
+	return std::move(bind_data);
 }
 
 static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
