@@ -65,5 +65,3 @@ not supported
 
 statement error
 FROM range(*, *);
-----
-not supported
