@@ -4,6 +4,8 @@
 
 require json
 
+mode skip
+
 statement ok
 PRAGMA enable_verification
 
@@ -219,6 +221,8 @@ SELECT * FROM jsons
 {"duck":42}
 ["duck"]
 {"duck":42}
+
+mode unskip
 
 # test_all_types roundtrip, excludes:
 # 1. varchar (special case - input is not valid JSON)

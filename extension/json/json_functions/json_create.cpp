@@ -204,10 +204,10 @@ struct CreateJSONValue<string_t, string_t> {
 };
 
 template <>
-struct CreateJSONValue<hugeint_t, double> {
+struct CreateJSONValue<hugeint_t, string_t> {
 	static inline yyjson_mut_val *Operation(yyjson_mut_doc *doc, const hugeint_t &input) {
 		const auto input_string = input.ToString();
-		return yyjson_mut_real(doc, Hugeint::Cast<double>(input));
+		return yyjson_mut_strncpy(doc, input_string.c_str(), input_string.length());
 	}
 };
 
@@ -427,7 +427,7 @@ static void CreateValues(const StructNames &names, yyjson_mut_doc *doc, yyjson_m
 		TemplatedCreateValues<int64_t, int64_t>(doc, vals, value_v, count);
 		break;
 	case LogicalTypeId::HUGEINT:
-		TemplatedCreateValues<hugeint_t, double>(doc, vals, value_v, count);
+		TemplatedCreateValues<hugeint_t, string_t>(doc, vals, value_v, count);
 		break;
 	case LogicalTypeId::UTINYINT:
 		TemplatedCreateValues<uint8_t, uint64_t>(doc, vals, value_v, count);
