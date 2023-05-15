@@ -26,7 +26,7 @@ public:
 	RowGroup &GetRowGroup();
 	ColumnCheckpointState &GetCheckpointState();
 
-	void Checkpoint(unsafe_vector<SegmentNode<ColumnSegment>> nodes);
+	void Checkpoint(vector<SegmentNode<ColumnSegment>> nodes);
 	CompressionFunction &GetCompressionFunction(CompressionType type);
 
 private:
@@ -42,7 +42,7 @@ private:
 	ColumnCheckpointState &state;
 	bool is_validity;
 	Vector intermediate;
-	unsafe_vector<SegmentNode<ColumnSegment>> nodes;
+	vector<SegmentNode<ColumnSegment>> nodes;
 	vector<optional_ptr<CompressionFunction>> compression_functions;
 	ColumnCheckpointInfo &checkpoint_info;
 };

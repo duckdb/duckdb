@@ -29,7 +29,10 @@ enum class SequenceInfo : uint8_t {
 };
 
 struct CreateSequenceInfo : public CreateInfo {
-	CreateSequenceInfo();
+	CreateSequenceInfo()
+	    : CreateInfo(CatalogType::SEQUENCE_ENTRY, INVALID_SCHEMA), name(string()), usage_count(0), increment(1),
+	      min_value(1), max_value(NumericLimits<int64_t>::Maximum()), start_value(1), cycle(false) {
+	}
 
 	//! Sequence name to create
 	string name;
@@ -47,13 +50,24 @@ struct CreateSequenceInfo : public CreateInfo {
 	bool cycle;
 
 public:
-	unique_ptr<CreateInfo> Copy() const override;
-
-public:
-	DUCKDB_API static unique_ptr<CreateSequenceInfo> Deserialize(Deserializer &deserializer);
+	unique_ptr<CreateInfo> Copy() const override {
+		auto result = make_uniq<CreateSequenceInfo>();
+		CopyProperties(*result);
+		result->name = name;
+		result->schema = schema;
+		result->usage_count = usage_count;
+		result->increment = increment;
+		result->min_value = min_value;
+		result->max_value = max_value;
+		result->start_value = start_value;
+		result->cycle = cycle;
+		return std::move(result);
+	}
 
 protected:
-	void SerializeInternal(Serializer &) const override;
+	void SerializeInternal(Serializer &) const override {
+		throw NotImplementedException("Cannot serialize '%s'", CatalogTypeToString(type));
+	}
 };
 
 } // namespace duckdb

@@ -34,7 +34,7 @@ string BaseCSVReader::GetLineNumberStr(idx_t line_error, bool is_line_estimated,
 
 BaseCSVReader::BaseCSVReader(ClientContext &context_p, BufferedCSVReaderOptions options_p,
                              const vector<LogicalType> &requested_types)
-    : context(context_p), fs(FileSystem::GetFileSystem(context)), allocator(BufferAllocator::Get(context)),
+    : context(context_p), fs(FileSystem::GetFileSystem(context)), allocator(Allocator::Get(context)),
       options(std::move(options_p)) {
 }
 
@@ -42,7 +42,12 @@ BaseCSVReader::~BaseCSVReader() {
 }
 
 unique_ptr<CSVFileHandle> BaseCSVReader::OpenCSV(const BufferedCSVReaderOptions &options_p) {
-	return CSVFileHandle::OpenFile(fs, allocator, options_p.file_path, options_p.compression, true);
+	auto file_handle = fs.OpenFile(options_p.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
+	                               options_p.compression);
+	if (file_handle->CanSeek()) {
+		file_handle->Reset();
+	}
+	return make_uniq<CSVFileHandle>(std::move(file_handle));
 }
 
 void BaseCSVReader::InitParseChunk(idx_t num_cols) {

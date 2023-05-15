@@ -8,15 +8,6 @@
 
 namespace duckdb {
 
-string GetColumnsStringValue(ParsedExpression &expr) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = expr.Cast<ColumnRefExpression>();
-		return colref.GetColumnName();
-	} else {
-		return expr.ToString();
-	}
-}
-
 bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpression **star, bool is_root,
                                 bool in_columns) {
 	bool has_star = false;
@@ -42,7 +33,7 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 			vector<Value> values;
 			values.reserve(star_list.size());
 			for (auto &expr : star_list) {
-				values.emplace_back(GetColumnsStringValue(*expr));
+				values.emplace_back(expr->ToString());
 			}
 			D_ASSERT(!values.empty());
 
@@ -84,7 +75,7 @@ void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_pt
 }
 
 void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
-                                  unsafe_vector<unique_ptr<ParsedExpression>> &new_select_list) {
+                                  vector<unique_ptr<ParsedExpression>> &new_select_list) {
 	StarExpression *star = nullptr;
 	if (!FindStarExpression(expr, &star, true, false)) {
 		// no star expression: add it as-is
@@ -148,26 +139,17 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			}
 			auto &children = ListValue::GetChildren(val);
 			vector<unique_ptr<ParsedExpression>> new_list;
-			// scan the list for all selected columns and construct a lookup table
-			case_insensitive_map_t<bool> selected_set;
 			for (auto &child : children) {
-				selected_set.insert(make_pair(StringValue::Get(child), false));
-			}
-			// now check the list of all possible expressions and select which ones make it in
-			for (auto &expr : star_list) {
-				auto str = GetColumnsStringValue(*expr);
-				auto entry = selected_set.find(str);
-				if (entry != selected_set.end()) {
-					new_list.push_back(std::move(expr));
-					entry->second = true;
+				auto qname = QualifiedName::Parse(StringValue::Get(child));
+				vector<string> names;
+				if (!qname.catalog.empty()) {
+					names.push_back(qname.catalog);
 				}
-			}
-			// check if all expressions found a match
-			for (auto &entry : selected_set) {
-				if (!entry.second) {
-					throw BinderException("Column \"%s\" was selected but was not found in the FROM clause",
-					                      entry.first);
+				if (!qname.schema.empty()) {
+					names.push_back(qname.schema);
 				}
+				names.push_back(qname.name);
+				new_list.push_back(make_uniq<ColumnRefExpression>(std::move(names)));
 			}
 			star_list = std::move(new_list);
 		} else {
@@ -185,7 +167,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 }
 
 void Binder::ExpandStarExpressions(vector<unique_ptr<ParsedExpression>> &select_list,
-                                   unsafe_vector<unique_ptr<ParsedExpression>> &new_select_list) {
+                                   vector<unique_ptr<ParsedExpression>> &new_select_list) {
 	for (auto &select_element : select_list) {
 		ExpandStarExpression(std::move(select_element), new_select_list);
 	}

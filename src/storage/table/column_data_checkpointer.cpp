@@ -242,7 +242,7 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 	}
 }
 
-void ColumnDataCheckpointer::Checkpoint(unsafe_vector<SegmentNode<ColumnSegment>> nodes) {
+void ColumnDataCheckpointer::Checkpoint(vector<SegmentNode<ColumnSegment>> nodes) {
 	D_ASSERT(!nodes.empty());
 	this->nodes = std::move(nodes);
 	// first check if any of the segments have changes

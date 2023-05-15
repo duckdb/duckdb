@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 

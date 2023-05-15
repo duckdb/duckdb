@@ -343,9 +343,8 @@ private:
 	void AddCTEMap(CommonTableExpressionMap &cte_map);
 
 	void ExpandStarExpressions(vector<unique_ptr<ParsedExpression>> &select_list,
-	                           unsafe_vector<unique_ptr<ParsedExpression>> &new_select_list);
-	void ExpandStarExpression(unique_ptr<ParsedExpression> expr,
-	                          unsafe_vector<unique_ptr<ParsedExpression>> &new_select_list);
+	                           vector<unique_ptr<ParsedExpression>> &new_select_list);
+	void ExpandStarExpression(unique_ptr<ParsedExpression> expr, vector<unique_ptr<ParsedExpression>> &new_select_list);
 	bool FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpression **star, bool is_root, bool in_columns);
 	void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
 	void BindWhereStarExpression(unique_ptr<ParsedExpression> &expr);

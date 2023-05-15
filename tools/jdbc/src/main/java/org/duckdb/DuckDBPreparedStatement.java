@@ -338,15 +338,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		logger.log(Level.FINE, "setQueryTimeout not supported");
 	}
 
-	/**
-	 * This function calls the underlying C++ interrupt function which aborts the query running on that connection.
-	 * It is not safe to call this function when the connection is already closed.
-	 */
 	@Override
-	public synchronized void cancel() throws SQLException {
-		if (conn.conn_ref != null) {
-			DuckDBNative.duckdb_jdbc_interrupt(conn.conn_ref);
-		}
+	public void cancel() throws SQLException {
+		throw new SQLFeatureNotSupportedException("cancel");
 	}
 
 	@Override

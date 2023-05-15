@@ -264,15 +264,15 @@ public:
 		return ReadRequiredGenericList<T, idx_t, IndexReadOperation>();
 	}
 
-	template <class T, class CONTAINER_TYPE = set<T>>
-	CONTAINER_TYPE ReadRequiredSet() {
+	template <class T>
+	set<T> ReadRequiredSet() {
 		if (field_count >= max_field_count) {
 			// field is not there, throw an exception
 			throw SerializationException("Attempting to read a required field, but field is missing");
 		}
 		AddField();
 		auto result_count = source.Read<uint32_t>();
-		CONTAINER_TYPE result;
+		set<T> result;
 		for (idx_t i = 0; i < result_count; i++) {
 			result.insert(source.Read<T>());
 		}

@@ -14,7 +14,8 @@
 namespace duckdb {
 
 struct DetachInfo : public ParseInfo {
-	DetachInfo();
+	DetachInfo() {
+	}
 
 	//! The alias of the attached database
 	string name;
@@ -22,8 +23,11 @@ struct DetachInfo : public ParseInfo {
 	OnEntryNotFound if_not_found;
 
 public:
-	unique_ptr<DetachInfo> Copy() const;
-	void Serialize(Serializer &serializer) const;
-	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer);
+	unique_ptr<DetachInfo> Copy() const {
+		auto result = make_uniq<DetachInfo>();
+		result->name = name;
+		result->if_not_found = if_not_found;
+		return result;
+	}
 };
 } // namespace duckdb

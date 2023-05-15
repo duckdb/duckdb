@@ -337,6 +337,7 @@ void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog) {
 }
 
 void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader) {
+
 	// deserialize the index metadata
 	auto info = IndexCatalogEntry::Deserialize(reader, context);
 
@@ -360,17 +361,10 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 	}
 
 	// bind the parsed expressions
-	// add the table to the bind context
 	auto binder = Binder::CreateBinder(context);
-	vector<LogicalType> column_types;
-	vector<string> column_names;
-	for (auto &col : table_catalog.GetColumns().Logical()) {
-		column_types.push_back(col.Type());
-		column_names.push_back(col.Name());
-	}
-	vector<column_t> column_ids;
-	binder->bind_context.AddBaseTable(0, info->table->table_name, column_names, column_types, column_ids,
-	                                  &table_catalog);
+	auto &table_ref = info->table->Cast<TableRef>();
+	auto bound_table = binder->Bind(table_ref);
+	D_ASSERT(bound_table->type == TableReferenceType::BASE_TABLE);
 	IndexBinder idx_binder(*binder, context);
 	unbound_expressions.reserve(parsed_expressions.size());
 	for (auto &expr : parsed_expressions) {
@@ -425,7 +419,7 @@ void CheckpointWriter::WriteMacro(ScalarMacroCatalogEntry &macro) {
 }
 
 void CheckpointReader::ReadMacro(ClientContext &context, MetaBlockReader &reader) {
-	auto info = MacroCatalogEntry::Deserialize(reader, context);
+	auto info = ScalarMacroCatalogEntry::Deserialize(reader, context);
 	catalog.CreateFunction(context, *info);
 }
 
@@ -434,7 +428,7 @@ void CheckpointWriter::WriteTableMacro(TableMacroCatalogEntry &macro) {
 }
 
 void CheckpointReader::ReadTableMacro(ClientContext &context, MetaBlockReader &reader) {
-	auto info = MacroCatalogEntry::Deserialize(reader, context);
+	auto info = TableMacroCatalogEntry::Deserialize(reader, context);
 	catalog.CreateFunction(context, *info);
 }
 

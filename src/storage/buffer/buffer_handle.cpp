@@ -7,8 +7,7 @@ namespace duckdb {
 BufferHandle::BufferHandle() : handle(nullptr), node(nullptr) {
 }
 
-BufferHandle::BufferHandle(shared_ptr<BlockHandle> handle_p, FileBuffer *node_p)
-    : handle(std::move(handle_p)), node(node_p) {
+BufferHandle::BufferHandle(shared_ptr<BlockHandle> handle, FileBuffer *node) : handle(std::move(handle)), node(node) {
 }
 
 BufferHandle::BufferHandle(BufferHandle &&other) noexcept {
@@ -28,6 +27,16 @@ BufferHandle::~BufferHandle() {
 
 bool BufferHandle::IsValid() const {
 	return node != nullptr;
+}
+
+data_ptr_t BufferHandle::Ptr() const {
+	D_ASSERT(IsValid());
+	return node->buffer;
+}
+
+data_ptr_t BufferHandle::Ptr() {
+	D_ASSERT(IsValid());
+	return node->buffer;
 }
 
 void BufferHandle::Destroy() {

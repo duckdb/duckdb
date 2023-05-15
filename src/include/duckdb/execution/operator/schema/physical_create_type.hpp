@@ -38,7 +38,7 @@ public:
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 
 	bool IsSink() const override {
-		return !children.empty();
+		return info->query != nullptr;
 	}
 
 	bool ParallelSink() const override {

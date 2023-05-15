@@ -241,22 +241,12 @@ public:
 
 	void PushBack(const Value &insert);
 
-	idx_t GetSize() {
-		return size;
-	}
-
-	idx_t GetCapacity() {
-		return capacity;
-	}
-
-	void SetCapacity(idx_t new_capacity);
-	void SetSize(idx_t new_size);
+	idx_t capacity = 0;
+	idx_t size = 0;
 
 private:
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
-	idx_t capacity = 0;
-	idx_t size = 0;
 };
 
 //! The ManagedVectorBuffer holds a buffer handle

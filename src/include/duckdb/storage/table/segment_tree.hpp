@@ -275,7 +275,7 @@ protected:
 
 private:
 	//! The nodes in the tree, can be binary searched
-	unsafe_vector<SegmentNode<T>> nodes;
+	vector<SegmentNode<T>> nodes;
 	//! Lock to access or modify the nodes
 	mutex node_lock;
 

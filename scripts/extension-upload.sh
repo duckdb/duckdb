@@ -1,24 +1,16 @@
 #!/bin/bash
 
-# Usage: ./extension-upload.sh <architecture> <commithash or version_tag> <(optionally) base_dir>
-
-if [ -z "$3" ]; then
-    BASE_DIR="build/release/extension/*"
-else
-    BASE_DIR="$3"
-fi
+# Usage: ./extension-upload.sh <architecture> <commithash or version_tag>
 
 set -e
 
-# Ensure we do nothing on failed globs
-shopt -s nullglob
-
 echo "$DUCKDB_EXTENSION_SIGNING_PK" > private.pem
 
-FILES="$BASE_DIR/*.duckdb_extension"
+FILES="build/release/extension/*/*.duckdb_extension"
 for f in $FILES
 do
 	ext=`basename $f .duckdb_extension`
+	echo $ext
 	# calculate SHA256 hash of extension binary
 	scripts/compute-extension-hash.sh $f > $f.hash
 	# encrypt hash with extension signing private key to create signature

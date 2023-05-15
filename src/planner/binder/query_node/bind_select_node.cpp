@@ -155,7 +155,7 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 				}
 			}
 			for (auto &order_node : order.orders) {
-				unsafe_vector<unique_ptr<ParsedExpression>> order_list;
+				vector<unique_ptr<ParsedExpression>> order_list;
 				order_binders[0]->ExpandStarExpression(std::move(order_node.expression), order_list);
 
 				auto type = config.ResolveOrder(order_node.type);
@@ -286,7 +286,7 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 		}
 	}
 	// expand the stars for this expression
-	unsafe_vector<unique_ptr<ParsedExpression>> new_conditions;
+	vector<unique_ptr<ParsedExpression>> new_conditions;
 	ExpandStarExpression(std::move(expr), new_conditions);
 
 	// set up an AND conjunction between the expanded conditions
@@ -316,7 +316,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	}
 
 	// visit the select list and expand any "*" statements
-	unsafe_vector<unique_ptr<ParsedExpression>> new_select_list;
+	vector<unique_ptr<ParsedExpression>> new_select_list;
 	ExpandStarExpressions(statement.select_list, new_select_list);
 
 	if (new_select_list.empty()) {
@@ -356,7 +356,7 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	OrderBinder order_binder({this}, result->projection_index, statement, alias_map, projection_map);
 	BindModifiers(order_binder, statement, *result);
 
-	unsafe_vector<unique_ptr<ParsedExpression>> unbound_groups;
+	vector<unique_ptr<ParsedExpression>> unbound_groups;
 	BoundGroupInformation info;
 	auto &group_expressions = statement.groups.group_expressions;
 	if (!group_expressions.empty()) {
@@ -415,9 +415,9 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 
 	// after that, we bind to the SELECT list
 	SelectBinder select_binder(*this, context, *result, info, alias_map);
-	unsafe_vector<LogicalType> internal_sql_types;
-	unsafe_vector<idx_t> group_by_all_indexes;
-	unsafe_vector<string> new_names;
+	vector<LogicalType> internal_sql_types;
+	vector<idx_t> group_by_all_indexes;
+	vector<string> new_names;
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		bool is_window = statement.select_list[i]->IsWindow();
 		idx_t unnest_count = result->unnests.size();

@@ -63,8 +63,6 @@ elif 'DUCKDB_NODE_BINDIR' in os.environ:
             cflags += ['-g']
         if '-O0' in os.environ['DUCKDB_NODE_CFLAGS']:
             cflags += ['-O0']
-        if '-DNDEBUG' in os.environ['DUCKDB_NODE_CFLAGS']:
-            defines += ['NDEBUG']
 
     if 'DUCKDB_NODE_BUILD_CACHE' in os.environ:
         cache = {
