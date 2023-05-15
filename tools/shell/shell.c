@@ -13599,7 +13599,6 @@ static const char *(azHelp[]) = {
   "   TABLE is a LIKE pattern for the tables to dump",
   "   Additional LIKE patterns can be given in subsequent arguments",
   ".echo on|off             Turn command echo on or off",
-  ".eqp on|off|full|...     Enable or disable automatic EXPLAIN QUERY PLAN",
   "   Other Modes:",
 #ifdef SQLITE_DEBUG
   "      test                  Show raw EXPLAIN QUERY PLAN output",
@@ -13610,9 +13609,6 @@ static const char *(azHelp[]) = {
   "   --bom                   Put a UTF8 byte-order mark on intermediate file",
   ".exit ?CODE?             Exit this program with return-code CODE",
   ".explain ?on|off|auto?   Change the EXPLAIN formatting mode.  Default: auto",
-  ".filectrl CMD ...        Run various sqlite3_file_control() operations",
-  "   --schema SCHEMA         Use SCHEMA instead of \"main\"",
-  "   --help                  Show CMD details",
   ".fullschema ?--indent?   Show schema and the content of sqlite_stat tables",
   ".headers on|off          Turn display of headers on or off",
   ".help ?-all? ?PATTERN?   Show help text for PATTERN",
@@ -13630,9 +13626,6 @@ static const char *(azHelp[]) = {
   "        from the \".mode\" output mode",
   "     *  If FILE begins with \"|\" then it is a command that generates the",
   "        input text.",
-#ifndef SQLITE_OMIT_TEST_CONTROL
-  ".imposter INDEX TABLE    Create imposter table TABLE on index INDEX",
-#endif
   ".indexes ?TABLE?         Show names of indexes",
   "                           If TABLE is specified, only show indexes for",
   "                           tables matching TABLE using the LIKE operator.",
@@ -13720,15 +13713,9 @@ static const char *(azHelp[]) = {
   "                            that are not also INTEGER PRIMARY KEYs",
 #endif
   ".rows                    Row-wise rendering of query results (default)",
-  ".save FILE               Write in-memory database into FILE",
-  ".scanstats on|off        Turn sqlite3_stmt_scanstatus() metrics on or off",
   ".schema ?PATTERN?        Show the CREATE statements matching PATTERN",
   "     Options:",
   "         --indent            Try to pretty-print the schema",
-  ".selftest ?OPTIONS?      Run tests defined in the SELFTEST table",
-  "    Options:",
-  "       --init               Create a new SELFTEST table",
-  "       -v                   Verbose output",
   ".separator COL ?ROW?     Change the column and row separators",
 #if defined(SQLITE_ENABLE_SESSION)
   ".session ?NAME? CMD ...  Create or control sessions",
@@ -13767,9 +13754,6 @@ static const char *(azHelp[]) = {
   ".unmodule NAME ...       Unregister virtual table modules",
   "    --allexcept             Unregister everything except those named",
 #endif
-  ".vfsinfo ?AUX?           Information about the top-level VFS",
-  ".vfslist                 List all available VFSes",
-  ".vfsname ?AUX?           Print the name of the VFS stack",
   ".width NUM1 NUM2 ...     Set minimum column widths for columnar output",
   "     Negative values right-justify",
 };
@@ -20312,13 +20296,10 @@ static const char zOptions[] =
   "   -json                set output mode to 'json'\n"
   "   -line                set output mode to 'line'\n"
   "   -list                set output mode to 'list'\n"
-  "   -lookaside SIZE N    use N entries of SZ bytes for lookaside memory\n"
   "   -markdown            set output mode to 'markdown'\n"
 #if defined(SQLITE_ENABLE_DESERIALIZE)
   "   -maxsize N           maximum size for a --deserialize database\n"
 #endif
-  "   -memtrace            trace all memory allocations and deallocations\n"
-  "   -mmap N              default mmap size set to N\n"
 #ifdef SQLITE_ENABLE_MULTIPLEX
   "   -multiplex           enable the multiplexor VFS\n"
 #endif
@@ -20326,7 +20307,6 @@ static const char zOptions[] =
   "   -nofollow            refuse to open symbolic links to database files\n"
   "   -no-stdin            exit after processing options instead of reading stdin\n"
   "   -nullvalue TEXT      set text string for NULL values. Default ''\n"
-  "   -pagecache SIZE N    use N slots of SZ bytes each for page cache memory\n"
   "   -quote               set output mode to 'quote'\n"
   "   -readonly            open the database read-only\n"
   "   -s COMMAND           run \"COMMAND\" and exit\n"
@@ -20338,10 +20318,6 @@ static const char zOptions[] =
   "   -table               set output mode to 'table'\n"
   "   -unsigned            allow loading of unsigned extensions\n"
   "   -version             show DuckDB version\n"
-  "   -vfs NAME            use NAME as the default VFS\n"
-#ifdef SQLITE_ENABLE_VFSTRACE
-  "   -vfstrace            enable tracing of all VFS calls\n"
-#endif
 #ifdef SQLITE_HAVE_ZLIB
   "   -zip                 open the file as a ZIP Archive\n"
 #endif
