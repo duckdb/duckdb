@@ -586,6 +586,9 @@ bool LineInfo::CanItGetLine(idx_t file_idx, idx_t batch_idx) {
 	if (current_batches.empty() || done) {
 		return true;
 	}
+	if (file_idx >= current_batches.size() || current_batches[file_idx].empty()) {
+		return true;
+	}
 	auto min_value = *current_batches[file_idx].begin();
 	if (min_value >= batch_idx) {
 		return true;
