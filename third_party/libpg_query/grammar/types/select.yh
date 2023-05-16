@@ -75,6 +75,8 @@
 %type <node>	dict_arg
 %type <list>	dict_arguments dict_arguments_opt_comma
 
+%type <list>	map_arg map_arguments map_arguments_opt_comma opt_map_arguments_opt_comma
+
 %type <alias>	alias_clause opt_alias_clause
 %type <list>	func_alias_clause
 %type <sortby>	sortby

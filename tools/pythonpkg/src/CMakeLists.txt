@@ -11,6 +11,7 @@ add_subdirectory(numpy)
 add_subdirectory(native)
 add_subdirectory(jupyter)
 add_subdirectory(typing)
+add_subdirectory(functional)
 add_subdirectory(pyconnection)
 add_subdirectory(common)
 add_subdirectory(pandas)
@@ -18,6 +19,7 @@ add_subdirectory(pandas)
 add_library(
   python_src OBJECT
   path_like.cpp
+  python_udf.cpp
   pyconnection.cpp
   python_import_cache.cpp
   pyrelation.cpp

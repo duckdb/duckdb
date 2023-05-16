@@ -494,6 +494,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				if (TestForceStorage()) {
 					return;
 				}
+			} else if (param == "nothreadsan") {
+#ifdef DUCKDB_THREAD_SANITIZER
+				return;
+#endif
 			} else if (param == "strinline") {
 #ifdef DUCKDB_DEBUG_NO_INLINE
 				return;

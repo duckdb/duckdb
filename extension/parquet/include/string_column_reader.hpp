@@ -39,6 +39,7 @@ public:
 	void PrepareDeltaByteArray(ResizeableBuffer &buffer) override;
 	void DeltaByteArray(uint8_t *defines, idx_t num_values, parquet_filter_t &filter, idx_t result_offset,
 	                    Vector &result) override;
+	static uint32_t VerifyString(const char *str_data, uint32_t str_len, const bool isVarchar);
 	uint32_t VerifyString(const char *str_data, uint32_t str_len);
 
 protected:

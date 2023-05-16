@@ -2,6 +2,7 @@
 #include "duckdb/execution/operator/helper/physical_streaming_sample.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -20,7 +21,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSample &op
 		if (!op.sample_options->is_percentage) {
 			throw ParserException("Sample method %s cannot be used with a discrete sample count, either switch to "
 			                      "reservoir sampling or use a sample_size",
-			                      SampleMethodToString(op.sample_options->method));
+			                      EnumUtil::ToString(op.sample_options->method));
 		}
 		sample = make_uniq<PhysicalStreamingSample>(op.types, op.sample_options->method,
 		                                            op.sample_options->sample_size.GetValue<double>(),

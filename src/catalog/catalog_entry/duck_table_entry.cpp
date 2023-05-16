@@ -40,10 +40,10 @@ void AddDataTableIndex(DataTable &storage, const ColumnList &columns, const vect
 	// create an adaptive radix tree around the expressions
 	if (index_block) {
 		art = make_uniq<ART>(column_ids, TableIOManager::Get(storage), std::move(unbound_expressions), constraint_type,
-		                     storage.db, true, index_block->block_id, index_block->offset);
+		                     storage.db, index_block->block_id, index_block->offset);
 	} else {
 		art = make_uniq<ART>(column_ids, TableIOManager::Get(storage), std::move(unbound_expressions), constraint_type,
-		                     storage.db, true);
+		                     storage.db);
 		if (!storage.IsRoot()) {
 			throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
 		}
@@ -721,9 +721,9 @@ TableStorageInfo DuckTableEntry::GetStorageInfo(ClientContext &context) {
 	storage->info->indexes.Scan([&](Index &index) {
 		IndexInfo info;
 		info.is_primary = index.IsPrimary();
-		info.is_unique = index.IsUnique();
+		info.is_unique = index.IsUnique() || info.is_primary;
 		info.is_foreign = index.IsForeign();
-		index.column_id_set = index.column_id_set;
+		info.column_set = index.column_id_set;
 		result.index_info.push_back(std::move(info));
 		return false;
 	});

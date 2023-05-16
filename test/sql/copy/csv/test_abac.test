@@ -122,7 +122,7 @@ COPY abac_tbl FROM 'test/sql/copy/csv/data/abac/file_ends_in_quoted_value.csv' (
 query T
 SELECT * FROM abac_tbl
 ----
-(empty)
+NULL
 
 statement ok
 DROP TABLE abac_tbl
@@ -140,7 +140,7 @@ COPY abac_tbl FROM 'test/sql/copy/csv/data/abac/file_ends_in_quoted_value.csv' (
 query T
 SELECT * FROM abac_tbl
 ----
-(empty)
+NULL
 
 statement ok
 DROP TABLE abac_tbl
@@ -175,7 +175,7 @@ CREATE TABLE abac_tbl (a VARCHAR);
 statement error
 COPY abac_tbl FROM 'test/sql/copy/csv/data/abac/unterminated_escape.csv' (QUOTE '"', ESCAPE '''', AUTO_DETECT FALSE);
 ----
-1
+0
 
 statement ok
 DROP TABLE abac_tbl
@@ -187,7 +187,7 @@ CREATE TABLE abac_tbl (a VARCHAR);
 statement error
 COPY abac_tbl FROM 'test/sql/copy/csv/data/abac/complex_unterminated_quote.csv' (QUOTE 'ABABAC', AUTO_DETECT FALSE);
 ----
-1
+0
 
 statement ok
 DROP TABLE abac_tbl

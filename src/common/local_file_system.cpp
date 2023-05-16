@@ -162,8 +162,9 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 	}
 } // LCOV_EXCL_STOP
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
+	auto path = FileSystem::ExpandPath(path_p, opener);
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
@@ -506,8 +507,9 @@ public:
 	};
 };
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
+	auto path = FileSystem::ExpandPath(path_p, opener);
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
@@ -775,7 +777,7 @@ void LocalFileSystem::MoveFile(const string &source, const string &target) {
 	auto source_unicode = WindowsUtil::UTF8ToUnicode(source.c_str());
 	auto target_unicode = WindowsUtil::UTF8ToUnicode(target.c_str());
 	if (!MoveFileW(source_unicode.c_str(), target_unicode.c_str())) {
-		throw IOException("Could not move file");
+		throw IOException("Could not move file: %s", GetLastErrorAsString());
 	}
 }
 
@@ -819,19 +821,6 @@ idx_t LocalFileSystem::SeekPosition(FileHandle &handle) {
 	return GetFilePointer(handle);
 }
 
-static bool HasGlob(const string &str) {
-	for (idx_t i = 0; i < str.size(); i++) {
-		switch (str[i]) {
-		case '*':
-		case '?':
-		case '[':
-			return true;
-		default:
-			break;
-		}
-	}
-	return false;
-}
 static bool IsCrawl(const string &glob) {
 	// glob must match exactly
 	return glob == "**";
@@ -977,7 +966,6 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 		throw IOException("Cannot use multiple \'**\' in one path");
 	}
 
-	bool recursive_search = false;
 	for (idx_t i = absolute_path ? 1 : 0; i < splits.size(); i++) {
 		bool is_last_chunk = i + 1 == splits.size();
 		bool has_glob = HasGlob(splits[i]);
@@ -989,7 +977,7 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 			if (previous_directories.empty()) {
 				result.push_back(splits[i]);
 			} else {
-				if (recursive_search && is_last_chunk) {
+				if (is_last_chunk) {
 					for (auto &prev_directory : previous_directories) {
 						const string filename = JoinPath(prev_directory, splits[i]);
 						if (FileExists(filename) || DirectoryExists(filename)) {
@@ -1004,7 +992,6 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 			}
 		} else {
 			if (IsCrawl(splits[i])) {
-				recursive_search = true;
 				if (!is_last_chunk) {
 					result = previous_directories;
 				}

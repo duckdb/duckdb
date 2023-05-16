@@ -1,0 +1,170 @@
+# name: test/sql/copy/csv/batched_write/batch_csv_mixed_batches.test_slow
+# description: Test batch CSV write with mixed batches
+# group: [batched_write]
+
+require parquet
+
+statement ok
+COPY (FROM range(100000) tbl(i)) TO '__TEST_DIR__/mix_batches_small.parquet' (ROW_GROUP_SIZE 5000)
+
+statement ok
+COPY (FROM range(100000, 400000) tbl(i)) TO '__TEST_DIR__/mix_batches_large.parquet' (ROW_GROUP_SIZE 200000)
+
+statement ok
+COPY (FROM range(400000, 700000) tbl(i)) TO '__TEST_DIR__/mix_batches_odd.parquet' (ROW_GROUP_SIZE 999)
+
+statement ok
+COPY (FROM range(700000, 1000000) tbl(i)) TO '__TEST_DIR__/mix_batches_odd_again.parquet' (ROW_GROUP_SIZE 99979)
+
+# create views that read the batches
+statement ok
+CREATE VIEW v1 AS SELECT * FROM parquet_scan(['__TEST_DIR__/mix_batches_small.parquet', '__TEST_DIR__/mix_batches_large.parquet', '__TEST_DIR__/mix_batches_odd.parquet',  '__TEST_DIR__/mix_batches_odd_again.parquet'])
+
+statement ok
+CREATE VIEW v2 AS FROM v1 WHERE (i//10000)%2=0;
+
+statement ok
+CREATE VIEW v3 AS FROM v1 WHERE (i//10000)%2=0 OR (i>200000 AND i < 400000) OR (i>600000 AND i < 800000);
+
+# empty table
+statement ok
+CREATE VIEW v4 AS FROM v1 WHERE i>998 AND i<1000 AND i%2=0
+
+loop i 0 2
+
+query I
+COPY v1 TO '__TEST_DIR__/mixed_batches_v1.csv' (HEADER)
+----
+1000000
+
+query I
+CREATE TABLE mixed_batches_v1 AS FROM '__TEST_DIR__/mixed_batches_v1.csv'
+----
+1000000
+
+foreach table v1 mixed_batches_v1
+
+query IIIII
+SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM ${table}
+----
+499999500000	0	999999	1000000	1000000
+
+query I
+SELECT * FROM ${table} LIMIT 5 OFFSET 99998
+----
+99998
+99999
+100000
+100001
+100002
+
+endloop
+
+# now do the same, but filter out half of the values
+query I
+COPY v2 TO '__TEST_DIR__/mixed_batches_v2.csv' (HEADER)
+----
+500000
+
+query I
+CREATE TABLE mixed_batches_v2 AS FROM '__TEST_DIR__/mixed_batches_v2.csv'
+----
+500000
+
+foreach table v2 mixed_batches_v2
+
+query IIIII
+SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM ${table}
+----
+247499750000	0	989999	500000	500000
+
+query I
+SELECT * FROM ${table} LIMIT 5 OFFSET 99998
+----
+189998
+189999
+200000
+200001
+200002
+
+endloop
+
+# do it again, but this time only filter out SOME small batches
+query I
+COPY v3 TO '__TEST_DIR__/mixed_batches_v3.csv' (HEADER)
+----
+700000
+
+query I
+CREATE TABLE mixed_batches_v3 AS FROM '__TEST_DIR__/mixed_batches_v3.csv'
+----
+700000
+
+foreach table v3 mixed_batches_v3
+
+query IIIII
+SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM ${table}
+----
+348499650000	0	989999	700000	700000
+
+query I
+SELECT * FROM ${table} LIMIT 5 OFFSET 9999
+----
+9999
+20000
+20001
+20002
+20003
+
+endloop
+
+# now with an empty table
+query I
+COPY v4 TO '__TEST_DIR__/mixed_batches_v4.csv' (HEADER)
+----
+0
+
+query I
+CREATE TABLE mixed_batches_v4 AS SELECT i::BIGINT as i FROM read_csv_auto('__TEST_DIR__/mixed_batches_v4.csv', header=True)
+----
+0
+
+foreach table v4 mixed_batches_v4
+
+query IIIII
+SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM ${table}
+----
+NULL	NULL	NULL	0	0
+
+query I
+SELECT * FROM ${table} LIMIT 5
+----
+
+endloop
+
+statement ok
+DROP TABLE mixed_batches_v1
+
+statement ok
+DROP TABLE mixed_batches_v2
+
+statement ok
+DROP TABLE mixed_batches_v3
+
+statement ok
+DROP TABLE mixed_batches_v4
+
+# create views that read the batches using unions
+statement ok
+CREATE OR REPLACE VIEW v1 AS FROM '__TEST_DIR__/mix_batches_small.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_large.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_odd.parquet' UNION ALL FROM '__TEST_DIR__/mix_batches_odd_again.parquet'
+
+statement ok
+CREATE OR REPLACE VIEW v2 AS FROM v1 WHERE (i//10000)%2=0;
+
+statement ok
+CREATE OR REPLACE VIEW v3 AS FROM v1 WHERE (i//10000)%2=0 OR (i>200000 AND i < 400000) OR (i>600000 AND i < 800000);
+
+statement ok
+CREATE OR REPLACE VIEW v4 AS FROM v1 WHERE i>998 AND i<1000 AND i%2=0
+
+endloop

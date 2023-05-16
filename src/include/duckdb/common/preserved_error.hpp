@@ -39,7 +39,7 @@ public:
 	//! Let's us do things like 'if (error)'
 	DUCKDB_API operator bool() const;
 	DUCKDB_API bool operator==(const PreservedError &other) const;
-	DUCKDB_API const shared_ptr<Exception> &GetError() {
+	const shared_ptr<Exception> &GetError() {
 		return exception_instance;
 	}
 

@@ -23,8 +23,8 @@
 #include "compare_result.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types.hpp"
-
 namespace duckdb {
 
 bool TestForceStorage();
@@ -37,6 +37,7 @@ void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);
 void TestDeleteFile(string path);
 void TestChangeDirectory(string path);
+string TestGetCurrentDirectory();
 string TestDirectoryPath();
 string TestCreatePath(string suffix);
 unique_ptr<DBConfig> GetTestConfig();
