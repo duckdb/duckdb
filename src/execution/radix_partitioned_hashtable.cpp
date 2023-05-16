@@ -421,7 +421,7 @@ void RadixPartitionedHashTable::ScheduleRepartitionTasks(Executor &executor, con
 		idx_t ht_idx = 0;
 		for (idx_t task_idx = 0; task_idx < tasks_per_partition; task_idx++) {
 			auto task_data = make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(executor.context), layout);
-			auto ht_idx_to = ht_idx + hts_per_task;
+			auto ht_idx_to = MinValue<idx_t>(ht_idx + hts_per_task, partition_list.size());
 			for (; ht_idx < ht_idx_to; ht_idx++) {
 				auto &ht = partition_list[ht_idx];
 				task_data->Combine(ht->GetDataCollection());
@@ -455,6 +455,7 @@ void RadixPartitionedHashTable::ScheduleRepartitionTasks(Executor &executor, con
 			tasks.push_back(make_uniq<RadixAggregateFinalizeTask>(executor, event, gstate, r, finalize_idx));
 		}
 	}
+	D_ASSERT(tasks.size() == num_partitions_before * tasks_per_partition + new_partition_info->n_partitions);
 
 	gstate.intermediate_hts.clear();
 	gstate.intermediate_hts.resize(num_partitions_before * tasks_per_partition);
@@ -490,7 +491,7 @@ void RadixPartitionedHashTable::GetRepartitionInfo(ClientContext &context, Globa
 	vector<idx_t> partition_sizes(num_partitions, 0);
 	for (const auto &ht : gstate.intermediate_hts) {
 		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
-			partition_counts[partition_idx] += ht->GetPartitionSize(partition_idx);
+			partition_counts[partition_idx] += ht->GetPartitionCount(partition_idx);
 			partition_sizes[partition_idx] += ht->GetPartitionSize(partition_idx);
 		}
 	}
@@ -534,7 +535,6 @@ void RadixPartitionedHashTable::GetRepartitionInfo(ClientContext &context, Globa
 	const auto partition_size = partition_sizes[max_partition_idx];
 
 	const auto max_added_bits = RadixPartitioning::MAX_RADIX_BITS - radix_bits;
-	const auto max_thread_memory = PhysicalOperator::GetMaxThreadMemory(context);
 	idx_t added_bits;
 	for (added_bits = 1; added_bits < max_added_bits; added_bits++) {
 		double partition_multiplier = RadixPartitioning::NumberOfPartitions(added_bits);
@@ -544,7 +544,7 @@ void RadixPartitionedHashTable::GetRepartitionInfo(ClientContext &context, Globa
 		auto new_estimated_ht_size = new_estimated_size + GroupedAggregateHashTable::FirstPartSize(
 		                                                      new_estimated_count, HtEntryType::HT_WIDTH_64);
 
-		if (new_estimated_ht_size <= max_thread_memory) {
+		if (new_estimated_ht_size <= max_ht_size / n_threads) {
 			break; // Max HT size is safe
 		}
 	}

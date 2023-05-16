@@ -153,9 +153,17 @@ HashTableList PartitionableHashTable::GetUnpartitioned() {
 	return std::move(unpartitioned_hts);
 }
 
+idx_t PartitionableHashTable::GetPartitionCount(idx_t partition) const {
+	idx_t total_size = 0;
+	for (const auto &ht : radix_partitioned_hts[partition]) {
+		total_size += ht->Count();
+	}
+	return total_size;
+}
+
 idx_t PartitionableHashTable::GetPartitionSize(idx_t partition) const {
 	idx_t total_size = 0;
-	for (const auto &ht : unpartitioned_hts) {
+	for (const auto &ht : radix_partitioned_hts[partition]) {
 		total_size += ht->SizeInBytes();
 	}
 	return total_size;
