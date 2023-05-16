@@ -86,7 +86,7 @@ string DuckDB::Platform() {
 #endif
 // this is used for the windows R builds which use a separate build environment
 #ifdef DUCKDB_PLATFORM_RTOOLS
-	postfix = "rtools"
+	postfix = "_rtools"
 #endif
 	          return os +
 	          "_" + arch + postfix;
