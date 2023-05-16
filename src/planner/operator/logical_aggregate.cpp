@@ -89,7 +89,7 @@ unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(LogicalDeserialization
 	for (idx_t i = 0; i < grouping_sets_size; i++) {
 		grouping_sets.push_back(reader.ReadRequiredSet<idx_t>());
 	}
-	vector<vector<idx_t>> grouping_functions;
+	vector<unsafe_vector<idx_t>> grouping_functions;
 	auto grouping_functions_size = reader.ReadRequired<idx_t>();
 	for (idx_t i = 0; i < grouping_functions_size; i++) {
 		grouping_functions.push_back(reader.ReadRequiredList<idx_t>());

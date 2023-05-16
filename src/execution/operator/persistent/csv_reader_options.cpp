@@ -183,6 +183,12 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 }
 
 void BufferedCSVReaderOptions::SetWriteOption(const string &loption, const Value &value) {
+	if (loption == "new_line") {
+		// Steal this from SetBaseOption so we can write different newlines (e.g., format JSON ARRAY)
+		write_newline = ParseString(value, loption);
+		return;
+	}
+
 	if (SetBaseOption(loption, value)) {
 		return;
 	}
@@ -199,6 +205,10 @@ void BufferedCSVReaderOptions::SetWriteOption(const string &loption, const Value
 		}
 		SetDateFormat(LogicalTypeId::TIMESTAMP, format, false);
 		SetDateFormat(LogicalTypeId::TIMESTAMP_TZ, format, false);
+	} else if (loption == "prefix") {
+		prefix = ParseString(value, loption);
+	} else if (loption == "suffix") {
+		suffix = ParseString(value, loption);
 	} else {
 		throw BinderException("Unrecognized option CSV writer \"%s\"", loption);
 	}

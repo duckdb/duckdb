@@ -98,13 +98,6 @@ void CompressedMaterialization::CompressInternal(unique_ptr<LogicalOperator> &op
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		CompressAggregate(op);
 		break;
-	case LogicalOperatorType::LOGICAL_ANY_JOIN:
-		CompressAnyJoin(op);
-		break;
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-		CompressComparisonJoin(op);
-		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 		CompressDistinct(op);
 		break;

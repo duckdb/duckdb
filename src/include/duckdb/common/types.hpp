@@ -308,14 +308,14 @@ struct LogicalType {
 	DUCKDB_API static LogicalType FormatDeserialize(FormatDeserializer &deserializer);
 
 
-	DUCKDB_API static bool TypeIsTimestamp(LogicalTypeId id) {
+	static bool TypeIsTimestamp(LogicalTypeId id) {
 		return (id == LogicalTypeId::TIMESTAMP ||
 				id == LogicalTypeId::TIMESTAMP_MS ||
 				id == LogicalTypeId::TIMESTAMP_NS ||
 				id == LogicalTypeId::TIMESTAMP_SEC ||
 				id == LogicalTypeId::TIMESTAMP_TZ);
 	}
-	DUCKDB_API static bool TypeIsTimestamp(const LogicalType& type) {
+	static bool TypeIsTimestamp(const LogicalType& type) {
 		return TypeIsTimestamp(type.id());
 	}
 	DUCKDB_API string ToString() const;
@@ -457,6 +457,7 @@ struct AggregateStateType {
 	DUCKDB_API static const aggregate_state_t &GetStateType(const LogicalType &type);
 };
 
+// **DEPRECATED**: Use EnumUtil directly instead.
 DUCKDB_API string LogicalTypeIdToString(LogicalTypeId type);
 
 DUCKDB_API LogicalTypeId TransformStringToLogicalTypeId(const string &str);

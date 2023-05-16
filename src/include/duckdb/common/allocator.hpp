@@ -54,6 +54,9 @@ public:
 	idx_t GetSize() const {
 		return allocated_size;
 	}
+	bool IsSet() {
+		return pointer;
+	}
 	void Reset();
 
 private:

@@ -7,7 +7,7 @@
 namespace duckdb {
 
 void ListStats::Construct(BaseStatistics &stats) {
-	stats.child_stats = unique_ptr<BaseStatistics[]>(new BaseStatistics[1]);
+	stats.child_stats = unsafe_array_ptr<BaseStatistics>(new BaseStatistics[1]);
 	BaseStatistics::Construct(stats.child_stats[0], ListType::GetChildType(stats.GetType()));
 }
 

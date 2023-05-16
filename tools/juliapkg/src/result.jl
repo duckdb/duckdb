@@ -816,6 +816,8 @@ A `DuckDB.Stmt` object can be closed (resources freed) using `DBInterface.close!
 DBInterface.prepare(con::Connection, sql::AbstractString, result_type::Type) = Stmt(con, sql, result_type)
 DBInterface.prepare(con::Connection, sql::AbstractString) = DBInterface.prepare(con, sql, MaterializedResult)
 DBInterface.prepare(db::DB, sql::AbstractString) = DBInterface.prepare(db.main_connection, sql)
+DBInterface.prepare(db::DB, sql::AbstractString, result_type::Type) =
+    DBInterface.prepare(db.main_connection, sql, result_type)
 
 """
     DBInterface.execute(db::DuckDB.DB, sql::String, [params])

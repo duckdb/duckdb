@@ -265,8 +265,7 @@ public:
 					// missing metadata entry in cache, no usable stats
 					return nullptr;
 				}
-				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
-				                          FileSystem::DEFAULT_COMPRESSION, FileSystem::GetFileOpener(context));
+				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 				// we need to check if the metadata cache entries are current
 				if (fs.GetLastModifiedTime(*handle) >= metadata->read_time) {
 					// missing or invalid metadata entry in cache, no usable stats overall
@@ -335,6 +334,9 @@ public:
 				parquet_options.file_row_number = BooleanValue::Get(kv.second);
 			}
 		}
+		if (parquet_options.file_options.auto_detect_hive_partitioning) {
+			parquet_options.file_options.hive_partitioning = MultiFileReaderOptions::AutoDetectHivePartitioning(files);
+		}
 		return ParquetScanBindInternal(context, std::move(files), return_types, names, parquet_options);
 	}
 
@@ -400,7 +402,8 @@ public:
 				continue;
 			}
 			MultiFileReader::InitializeReader(*reader, bind_data.parquet_options.file_options, bind_data.reader_bind,
-			                                  bind_data.types, bind_data.names, input.column_ids, input.filters);
+			                                  bind_data.types, bind_data.names, input.column_ids, input.filters,
+			                                  bind_data.files[0]);
 		}
 
 		result->column_ids = input.column_ids;
@@ -592,9 +595,9 @@ public:
 				shared_ptr<ParquetReader> reader;
 				try {
 					reader = make_shared<ParquetReader>(context, file, pq_options);
-					MultiFileReader::InitializeReader(*reader, bind_data.parquet_options.file_options,
-					                                  bind_data.reader_bind, bind_data.types, bind_data.names,
-					                                  parallel_state.column_ids, parallel_state.filters);
+					MultiFileReader::InitializeReader(
+					    *reader, bind_data.parquet_options.file_options, bind_data.reader_bind, bind_data.types,
+					    bind_data.names, parallel_state.column_ids, parallel_state.filters, bind_data.files.front());
 				} catch (...) {
 					parallel_lock.lock();
 					parallel_state.error_opening_file = true;
@@ -654,8 +657,7 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	global_state->writer =
-	    make_uniq<ParquetWriter>(fs, file_path, FileSystem::GetFileOpener(context), parquet_bind.sql_types,
-	                             parquet_bind.column_names, parquet_bind.codec);
+	    make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec);
 	return std::move(global_state);
 }
 
@@ -695,16 +697,54 @@ unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &cont
 }
 
 //===--------------------------------------------------------------------===//
-// Parallel
+// Execution Mode
 //===--------------------------------------------------------------------===//
-bool ParquetWriteIsParallel(ClientContext &context, FunctionData &bind_data) {
-	auto &config = DBConfig::GetConfig(context);
-	if (config.options.preserve_insertion_order) {
-		return false;
+CopyFunctionExecutionMode ParquetWriteExecutionMode(bool preserve_insertion_order, bool supports_batch_index) {
+	if (!preserve_insertion_order) {
+		return CopyFunctionExecutionMode::PARALLEL_COPY_TO_FILE;
 	}
-	return true;
+	if (supports_batch_index) {
+		return CopyFunctionExecutionMode::BATCH_COPY_TO_FILE;
+	}
+	return CopyFunctionExecutionMode::REGULAR_COPY_TO_FILE;
+}
+//===--------------------------------------------------------------------===//
+// Prepare Batch
+//===--------------------------------------------------------------------===//
+struct ParquetWriteBatchData : public PreparedBatchData {
+	PreparedRowGroup prepared_row_group;
+};
+
+unique_ptr<PreparedBatchData> ParquetWritePrepareBatch(ClientContext &context, FunctionData &bind_data,
+                                                       GlobalFunctionData &gstate,
+                                                       unique_ptr<ColumnDataCollection> collection) {
+	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
+	auto result = make_uniq<ParquetWriteBatchData>();
+	global_state.writer->PrepareRowGroup(*collection, result->prepared_row_group);
+	return std::move(result);
 }
 
+//===--------------------------------------------------------------------===//
+// Flush Batch
+//===--------------------------------------------------------------------===//
+void ParquetWriteFlushBatch(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                            PreparedBatchData &batch_p) {
+	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
+	auto &batch = batch_p.Cast<ParquetWriteBatchData>();
+	global_state.writer->FlushRowGroup(batch.prepared_row_group);
+}
+
+//===--------------------------------------------------------------------===//
+// Desired Batch Size
+//===--------------------------------------------------------------------===//
+idx_t ParquetWriteDesiredBatchSize(ClientContext &context, FunctionData &bind_data_p) {
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
+	return bind_data.row_group_size;
+}
+
+//===--------------------------------------------------------------------===//
+// Scan Replacement
+//===--------------------------------------------------------------------===//
 unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string &table_name,
                                             ReplacementScanData *data) {
 	auto lower_name = StringUtil::Lower(table_name);
@@ -715,6 +755,11 @@ unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
 	table_function->function = make_uniq<FunctionExpression>("parquet_scan", std::move(children));
+
+	if (!FileSystem::HasGlob(table_name)) {
+		table_function->alias = FileSystem::ExtractBaseName(table_name);
+	}
+
 	return std::move(table_function);
 }
 
@@ -744,9 +789,12 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.copy_to_sink = ParquetWriteSink;
 	function.copy_to_combine = ParquetWriteCombine;
 	function.copy_to_finalize = ParquetWriteFinalize;
-	function.parallel = ParquetWriteIsParallel;
+	function.execution_mode = ParquetWriteExecutionMode;
 	function.copy_from_bind = ParquetScanFunction::ParquetReadBind;
 	function.copy_from_function = scan_fun.functions[0];
+	function.prepare_batch = ParquetWritePrepareBatch;
+	function.flush_batch = ParquetWriteFlushBatch;
+	function.desired_batch_size = ParquetWriteDesiredBatchSize;
 
 	function.extension = "parquet";
 	ExtensionUtil::RegisterFunction(db_instance, function);

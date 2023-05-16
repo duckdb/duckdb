@@ -10,7 +10,7 @@
 
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer.hpp"
-#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -294,8 +294,12 @@ private:
 	// Deserialize a Enum
 	template <typename T = void>
 	inline typename std::enable_if<std::is_enum<T>::value, T>::type Read() {
-		auto str = ReadString();
-		return EnumSerializer::StringToEnum<T>(str.c_str());
+		if (deserialize_enum_from_string) {
+			auto str = ReadString();
+			return EnumUtil::FromString<T>(str.c_str());
+		} else {
+			return (T)Read<typename std::underlying_type<T>::type>();
+		}
 	}
 
 	// Deserialize a interval_t

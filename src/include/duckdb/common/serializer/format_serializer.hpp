@@ -10,7 +10,7 @@
 
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer.hpp"
-#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -39,7 +39,7 @@ public:
 		SetTag(tag);
 		if (serialize_enum_as_string) {
 			// Use the enum serializer to lookup tostring function
-			auto str = EnumSerializer::EnumToString(value);
+			auto str = EnumUtil::ToChars(value);
 			WriteValue(str);
 		} else {
 			// Use the underlying type

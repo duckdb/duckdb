@@ -130,6 +130,9 @@ public extension Column {
   /// the given type and the column's underlying database type, returned
   /// elements will always be equal to `nil`.
   ///
+  /// - Warning: Implicit conversion of a DuckDB integer column value greater
+  ///   than `Int.max` or less than `Int.min` is a programmer error and will
+  ///   result in a runtime precondition failure
   /// - Parameter type: the native Swift type to cast to
   /// - Returns: a typed DuckDB result set ``Column``
   func cast(to type: Int.Type) -> Column<Int> {
@@ -208,6 +211,9 @@ public extension Column {
   /// the given type and the column's underlying database type, returned
   /// elements will always be equal to `nil`.
   ///
+  /// - Warning: Implicit conversion of a DuckDB integer column value greater
+  ///   than `UInt.max` is a programmer error and will result in a runtime
+  ///   precondition failure
   /// - Parameter type: the native Swift type to cast to
   /// - Returns: a typed DuckDB result set ``Column``
   func cast(to type: UInt.Type) -> Column<UInt> {

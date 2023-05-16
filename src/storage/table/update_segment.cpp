@@ -37,31 +37,6 @@ UpdateSegment::UpdateSegment(ColumnData &column_data)
 	this->statistics_update_function = GetStatisticsUpdateFunction(physical_type);
 }
 
-UpdateSegment::UpdateSegment(UpdateSegment &other, ColumnData &owner)
-    : column_data(owner), root(std::move(other.root)), stats(std::move(other.stats)), type_size(other.type_size) {
-
-	this->heap.Move(other.heap);
-	// update the segment links
-	if (root) {
-		for (idx_t i = 0; i < RowGroup::ROW_GROUP_VECTOR_COUNT; i++) {
-			if (!root->info[i]) {
-				continue;
-			}
-			for (auto info = root->info[i]->info.get(); info; info = info->next) {
-				info->segment = this;
-			}
-		}
-	}
-	initialize_update_function = other.initialize_update_function;
-	merge_update_function = other.merge_update_function;
-	fetch_update_function = other.fetch_update_function;
-	fetch_committed_function = other.fetch_committed_function;
-	fetch_committed_range = other.fetch_committed_range;
-	fetch_row_function = other.fetch_row_function;
-	rollback_update_function = other.rollback_update_function;
-	statistics_update_function = other.statistics_update_function;
-}
-
 UpdateSegment::~UpdateSegment() {
 }
 
@@ -1067,8 +1042,9 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 	return pos;
 }
 
-UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, idx_t count, unique_ptr<char[]> &data) {
-	data = unique_ptr<char[]>(new char[sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE]);
+UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, idx_t count,
+                                  unsafe_array_ptr<char> &data) {
+	data = make_unsafe_array<char>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
 	auto update_info = (UpdateInfo *)data.get();
 	update_info->max = STANDARD_VECTOR_SIZE;
 	update_info->tuples = (sel_t *)(((data_ptr_t)update_info) + sizeof(UpdateInfo));
@@ -1134,7 +1110,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 			}
 			node = node->next;
 		}
-		unique_ptr<char[]> update_info_data;
+		unsafe_array_ptr<char> update_info_data;
 		if (!node) {
 			// no updates made yet by this transaction: initially the update info to empty
 			if (transaction.transaction) {
@@ -1169,8 +1145,8 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		auto result = make_uniq<UpdateNodeData>();
 
 		result->info = make_uniq<UpdateInfo>();
-		result->tuples = unique_ptr<sel_t[]>(new sel_t[STANDARD_VECTOR_SIZE]);
-		result->tuple_data = unique_ptr<data_t[]>(new data_t[STANDARD_VECTOR_SIZE * type_size]);
+		result->tuples = make_unsafe_array<sel_t>(STANDARD_VECTOR_SIZE);
+		result->tuple_data = make_unsafe_array<data_t>(STANDARD_VECTOR_SIZE * type_size);
 		result->info->tuples = result->tuples.get();
 		result->info->tuple_data = result->tuple_data.get();
 		result->info->version_number = TRANSACTION_ID_START - 1;
@@ -1178,7 +1154,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		InitializeUpdateInfo(*result->info, ids, sel, count, vector_index, vector_offset);
 
 		// now create the transaction level update info in the undo log
-		unique_ptr<char[]> update_info_data;
+		unsafe_array_ptr<char> update_info_data;
 		UpdateInfo *transaction_node;
 		if (transaction.transaction) {
 			transaction_node = transaction.transaction->CreateUpdateInfo(type_size, count);

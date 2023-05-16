@@ -16,7 +16,7 @@ string TableRef::BaseToString(string result) const {
 
 string TableRef::BaseToString(string result, const vector<string> &column_name_alias) const {
 	if (!alias.empty()) {
-		result += " AS " + KeywordHelper::WriteOptionallyQuoted(alias);
+		result += StringUtil::Format(" AS %s", SQLIdentifier(alias));
 	}
 	if (!column_name_alias.empty()) {
 		D_ASSERT(!alias.empty());
@@ -30,7 +30,7 @@ string TableRef::BaseToString(string result, const vector<string> &column_name_a
 		result += ")";
 	}
 	if (sample) {
-		result += " TABLESAMPLE " + SampleMethodToString(sample->method);
+		result += " TABLESAMPLE " + EnumUtil::ToString(sample->method);
 		result += "(" + sample->sample_size.ToString() + " " + string(sample->is_percentage ? "PERCENT" : "ROWS") + ")";
 		if (sample->seed >= 0) {
 			result += "REPEATABLE (" + to_string(sample->seed) + ")";

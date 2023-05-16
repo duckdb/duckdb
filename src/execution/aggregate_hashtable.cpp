@@ -236,7 +236,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 
 idx_t GroupedAggregateHashTable::AddChunk(AggregateHTAppendState &state, DataChunk &groups, DataChunk &payload,
                                           AggregateType filter) {
-	vector<idx_t> aggregate_filter;
+	unsafe_vector<idx_t> aggregate_filter;
 
 	auto &aggregates = layout.GetAggregates();
 	for (idx_t i = 0; i < aggregates.size(); i++) {
@@ -249,7 +249,7 @@ idx_t GroupedAggregateHashTable::AddChunk(AggregateHTAppendState &state, DataChu
 }
 
 idx_t GroupedAggregateHashTable::AddChunk(AggregateHTAppendState &state, DataChunk &groups, DataChunk &payload,
-                                          const vector<idx_t> &filter) {
+                                          const unsafe_vector<idx_t> &filter) {
 	Vector hashes(LogicalType::HASH);
 	groups.Hash(hashes);
 
@@ -257,7 +257,7 @@ idx_t GroupedAggregateHashTable::AddChunk(AggregateHTAppendState &state, DataChu
 }
 
 idx_t GroupedAggregateHashTable::AddChunk(AggregateHTAppendState &state, DataChunk &groups, Vector &group_hashes,
-                                          DataChunk &payload, const vector<idx_t> &filter) {
+                                          DataChunk &payload, const unsafe_vector<idx_t> &filter) {
 	D_ASSERT(!is_finalized);
 	if (groups.size() == 0) {
 		return 0;
@@ -390,7 +390,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 	}
 	TupleDataCollection::ToUnifiedFormat(state.chunk_state, state.group_chunk);
 	if (!state.group_data) {
-		state.group_data = unique_ptr<UnifiedVectorFormat[]>(new UnifiedVectorFormat[state.group_chunk.ColumnCount()]);
+		state.group_data = make_unsafe_array<UnifiedVectorFormat>(state.group_chunk.ColumnCount());
 	}
 	TupleDataCollection::GetVectorData(state.chunk_state, state.group_data.get());
 

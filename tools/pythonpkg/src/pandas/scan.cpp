@@ -60,6 +60,7 @@ PandasScanFunction::PandasScanFunction()
 	get_batch_index = PandasScanGetBatchIndex;
 	cardinality = PandasScanCardinality;
 	table_scan_progress = PandasProgress;
+	serialize = PandasSerialize;
 	projection_pushdown = true;
 }
 
@@ -231,6 +232,11 @@ py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &origin
 
 	copy_df.attr("columns") = column_name_list;
 	return copy_df;
+}
+
+void PandasScanFunction::PandasSerialize(FieldWriter &writer, const FunctionData *bind_data,
+                                         const TableFunction &function) {
+	throw NotImplementedException("PandasScan function cannot be serialized");
 }
 
 } // namespace duckdb

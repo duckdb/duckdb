@@ -111,11 +111,10 @@ unique_ptr<LocalSinkState> PhysicalAsOfJoin::GetLocalSinkState(ExecutionContext 
 	return make_uniq<AsOfLocalSinkState>(context.client, gsink.global_partition);
 }
 
-SinkResultType PhysicalAsOfJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                      DataChunk &input) const {
-	auto &lstate = lstate_p.Cast<AsOfLocalSinkState>();
+SinkResultType PhysicalAsOfJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &lstate = input.local_state.Cast<AsOfLocalSinkState>();
 
-	lstate.Sink(input);
+	lstate.Sink(chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -629,12 +628,12 @@ unique_ptr<LocalSourceState> PhysicalAsOfJoin::GetLocalSourceState(ExecutionCont
 	return make_uniq<AsOfLocalSourceState>(gsink);
 }
 
-void PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk &result, GlobalSourceState &gstate_p,
-                               LocalSourceState &lstate_p) const {
+SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk &chunk,
+                                           OperatorSourceInput &input) const {
 	D_ASSERT(IsRightOuterJoin(join_type));
 
-	auto &gsource = gstate_p.Cast<AsOfGlobalSourceState>();
-	auto &lsource = lstate_p.Cast<AsOfLocalSourceState>();
+	auto &gsource = input.global_state.Cast<AsOfGlobalSourceState>();
+	auto &lsource = input.local_state.Cast<AsOfLocalSourceState>();
 	auto &gsink = gsource.gsink;
 
 	auto &hash_groups = gsink.hash_groups;
@@ -644,14 +643,14 @@ void PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk &result, Glo
 	rhs_chunk.Initialize(Allocator::Get(context.client), gsink.payload_types);
 	SelectionVector rsel(STANDARD_VECTOR_SIZE);
 
-	while (result.size() == 0) {
+	while (chunk.size() == 0) {
 		//	Move to the next bin if we are done.
 		while (!lsource.scanner || !lsource.scanner->Remaining()) {
 			lsource.scanner.reset();
 			lsource.hash_group.reset();
 			auto hash_bin = gsource.next_bin++;
 			if (hash_bin >= bin_count) {
-				return;
+				return SourceResultType::FINISHED;
 			}
 
 			for (; hash_bin < hash_groups.size(); hash_bin = gsource.next_bin++) {
@@ -666,7 +665,7 @@ void PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk &result, Glo
 
 		const auto count = rhs_chunk.size();
 		if (count == 0) {
-			return;
+			return SourceResultType::FINISHED;
 		}
 
 		// figure out which tuples didn't find a match in the RHS
@@ -682,17 +681,19 @@ void PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk &result, Glo
 			// if there were any tuples that didn't find a match, output them
 			const idx_t left_column_count = children[0]->types.size();
 			for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
-				result.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(result.data[col_idx], true);
+				chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(chunk.data[col_idx], true);
 			}
 			for (idx_t col_idx = 0; col_idx < right_projection_map.size(); ++col_idx) {
 				const auto rhs_idx = right_projection_map[col_idx];
-				result.data[left_column_count + col_idx].Slice(rhs_chunk.data[rhs_idx], rsel, result_count);
+				chunk.data[left_column_count + col_idx].Slice(rhs_chunk.data[rhs_idx], rsel, result_count);
 			}
-			result.SetCardinality(result_count);
-			return;
+			chunk.SetCardinality(result_count);
+			break;
 		}
 	}
+
+	return chunk.size() > 0 ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

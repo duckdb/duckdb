@@ -297,7 +297,7 @@ void Vector::Resize(idx_t cur_size, idx_t new_size) {
 	}
 	for (auto &data_to_resize : to_resize) {
 		if (!data_to_resize.is_nested) {
-			auto new_data = unique_ptr<data_t[]>(new data_t[new_size * data_to_resize.type_size]);
+			auto new_data = make_unsafe_array<data_t>(new_size * data_to_resize.type_size);
 			memcpy(new_data.get(), data_to_resize.data, cur_size * data_to_resize.type_size * sizeof(data_t));
 			data_to_resize.buffer->SetData(std::move(new_data));
 			data_to_resize.vec.data = data_to_resize.buffer->GetData();
@@ -732,6 +732,11 @@ void Vector::Flatten(idx_t count) {
 		auto old_buffer = std::move(buffer);
 		auto old_data = data;
 		buffer = VectorBuffer::CreateStandardVector(type, MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count));
+		if (old_buffer) {
+			D_ASSERT(buffer->GetAuxiliaryData() == nullptr);
+			// The old buffer might be relying on the auxiliary data, keep it alive
+			buffer->MoveAuxiliaryData(*old_buffer);
+		}
 		data = buffer->GetData();
 		vector_type = VectorType::FLAT_VECTOR;
 		if (is_null) {
@@ -915,7 +920,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 	if (TypeIsConstantSize(type.InternalType())) {
 		// constant size type: simple copy
 		idx_t write_size = GetTypeIdSize(type.InternalType()) * count;
-		auto ptr = unique_ptr<data_t[]>(new data_t[write_size]);
+		auto ptr = make_unsafe_array<data_t>(write_size);
 		VectorOperations::WriteToStorage(*this, count, ptr.get());
 		serializer.WriteData(ptr.get(), write_size);
 	} else {
@@ -942,7 +947,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			auto list_size = ListVector::GetListSize(*this);
 
 			// serialize the list entries in a flat array
-			auto data = unique_ptr<list_entry_t[]>(new list_entry_t[count]);
+			auto data = make_unsafe_array<list_entry_t>(count);
 			auto source_array = (list_entry_t *)vdata.data;
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
@@ -983,7 +988,7 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 	if (TypeIsConstantSize(logical_type.InternalType())) {
 		// constant size type: simple copy
 		idx_t write_size = GetTypeIdSize(logical_type.InternalType()) * count;
-		auto ptr = unique_ptr<data_t[]>(new data_t[write_size]);
+		auto ptr = make_unsafe_array<data_t>(write_size);
 		VectorOperations::WriteToStorage(*this, count, ptr.get());
 		serializer.WriteProperty("data", ptr.get(), write_size);
 	} else {
@@ -1022,7 +1027,7 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 			auto list_size = ListVector::GetListSize(*this);
 
 			// serialize the list entries in a flat array
-			auto entries = unique_ptr<list_entry_t[]>(new list_entry_t[count]);
+			auto entries = make_unsafe_array<list_entry_t>(count);
 			auto source_array = (list_entry_t *)vdata.data;
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
@@ -1066,7 +1071,7 @@ void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
 	if (TypeIsConstantSize(logical_type.InternalType())) {
 		// constant size type: read fixed amount of data
 		auto column_size = GetTypeIdSize(logical_type.InternalType()) * count;
-		auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
+		auto ptr = make_unsafe_array<data_t>(column_size);
 		deserializer.ReadProperty("data", ptr.get(), column_size);
 
 		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
@@ -1153,7 +1158,7 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 	if (TypeIsConstantSize(type.InternalType())) {
 		// constant size type: read fixed amount of data from
 		auto column_size = GetTypeIdSize(type.InternalType()) * count;
-		auto ptr = unique_ptr<data_t[]>(new data_t[column_size]);
+		auto ptr = make_unsafe_array<data_t>(column_size);
 		source.ReadData(ptr.get(), column_size);
 
 		VectorOperations::ReadFromStorage(ptr.get(), count, *this);
@@ -1763,15 +1768,14 @@ MapInvalidReason MapVector::CheckMapValidity(Vector &map, idx_t count, const Sel
 
 	for (idx_t row = 0; row < count; row++) {
 		auto mapped_row = sel.get_index(row);
-		auto row_idx = map_vdata.sel->get_index(mapped_row);
+		auto map_idx = map_vdata.sel->get_index(mapped_row);
 		// map is allowed to be NULL
-		if (!map_validity.RowIsValid(row_idx)) {
+		if (!map_validity.RowIsValid(map_idx)) {
 			continue;
 		}
-		row_idx = key_vdata.sel->get_index(row);
 		value_set_t unique_keys;
-		for (idx_t i = 0; i < list_data[row_idx].length; i++) {
-			auto index = list_data[row_idx].offset + i;
+		for (idx_t i = 0; i < list_data[map_idx].length; i++) {
+			auto index = list_data[map_idx].offset + i;
 			index = key_vdata.sel->get_index(index);
 			if (!key_validity.RowIsValid(index)) {
 				return MapInvalidReason::NULL_KEY;
@@ -1864,7 +1868,7 @@ idx_t ListVector::GetListSize(const Vector &vec) {
 		return ListVector::GetListSize(child);
 	}
 	D_ASSERT(vec.auxiliary);
-	return ((VectorListBuffer &)*vec.auxiliary).size;
+	return ((VectorListBuffer &)*vec.auxiliary).GetSize();
 }
 
 idx_t ListVector::GetListCapacity(const Vector &vec) {
@@ -1873,7 +1877,7 @@ idx_t ListVector::GetListCapacity(const Vector &vec) {
 		return ListVector::GetListSize(child);
 	}
 	D_ASSERT(vec.auxiliary);
-	return ((VectorListBuffer &)*vec.auxiliary).capacity;
+	return ((VectorListBuffer &)*vec.auxiliary).GetCapacity();
 }
 
 void ListVector::ReferenceEntry(Vector &vector, Vector &other) {
@@ -1890,7 +1894,7 @@ void ListVector::SetListSize(Vector &vec, idx_t size) {
 		auto &child = DictionaryVector::Child(vec);
 		ListVector::SetListSize(child, size);
 	}
-	((VectorListBuffer &)*vec.auxiliary).size = size;
+	((VectorListBuffer &)*vec.auxiliary).SetSize(size);
 }
 
 void ListVector::Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset) {

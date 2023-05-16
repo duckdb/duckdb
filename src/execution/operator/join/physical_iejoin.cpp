@@ -134,12 +134,11 @@ unique_ptr<LocalSinkState> PhysicalIEJoin::GetLocalSinkState(ExecutionContext &c
 	return make_uniq<IEJoinLocalState>(context.client, *this, sink_child);
 }
 
-SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                    DataChunk &input) const {
-	auto &gstate = gstate_p.Cast<IEJoinGlobalState>();
-	auto &lstate = lstate_p.Cast<IEJoinLocalState>();
+SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<IEJoinGlobalState>();
+	auto &lstate = input.local_state.Cast<IEJoinLocalState>();
 
-	gstate.Sink(input, lstate);
+	gstate.Sink(chunk, lstate);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -931,11 +930,11 @@ unique_ptr<LocalSourceState> PhysicalIEJoin::GetLocalSourceState(ExecutionContex
 	return make_uniq<IEJoinLocalSourceState>(context.client, *this);
 }
 
-void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, GlobalSourceState &gstate,
-                             LocalSourceState &lstate) const {
+SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result,
+                                         OperatorSourceInput &input) const {
 	auto &ie_sink = sink_state->Cast<IEJoinGlobalState>();
-	auto &ie_gstate = gstate.Cast<IEJoinGlobalSourceState>();
-	auto &ie_lstate = lstate.Cast<IEJoinLocalSourceState>();
+	auto &ie_gstate = input.global_state.Cast<IEJoinGlobalSourceState>();
+	auto &ie_lstate = input.local_state.Cast<IEJoinLocalSourceState>();
 
 	ie_gstate.Initialize(ie_sink);
 
@@ -948,7 +947,7 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 		ResolveComplexJoin(context, result, ie_lstate);
 
 		if (result.size()) {
-			return;
+			return SourceResultType::HAVE_MORE_OUTPUT;
 		}
 
 		ie_gstate.PairCompleted(context.client, ie_sink, ie_lstate);
@@ -974,7 +973,7 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 		result.SetCardinality(count);
 		result.Verify();
 
-		return;
+		return result.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
 	// Process RIGHT OUTER results
@@ -997,8 +996,10 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 		result.SetCardinality(count);
 		result.Verify();
 
-		return;
+		break;
 	}
+
+	return result.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 //===--------------------------------------------------------------------===//
