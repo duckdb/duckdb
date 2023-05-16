@@ -1,6 +1,7 @@
 # name: test/sql/copy/hive_types.test
 # description: basic tests hive_types flag
 # group: [copy]
+
 # dir: data/csv/hive-partitioning/hive_types/
 
 require parquet
@@ -12,12 +13,7 @@ statement ok
 copy 'data/csv/hive-partitioning/hive_types/himym.csv' to '__TEST_DIR__/himym_1' (format parquet, partition_by(season,director,aired));
 
 statement error
-select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/himym_1/**/*.parquet', hive_partitioning=0, hive_types={'season':'smallint'}) limit 1;
-----
-Invalid Input Error: cannot disable hive_partitioning
-
-statement error
-select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/himym_1/**/*.parquet', hive_partitioning=0, hive_types={'season':'smallint'}) limit 1;
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/himym_1/**/*.parquet', hive_partitioning=0, hive_types={'season':smallint}) limit 1;
 ----
 Invalid Input Error: cannot disable hive_partitioning
 
@@ -29,14 +25,19 @@ select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_D
 SMALLINT	VARCHAR	DATE
 
 query III
-select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/himym_1/**/*.parquet', hive_types={'season':'smallint','director':'varchar','aired':'date'}) limit 1;
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/himym_1/**/*.parquet', hive_types={'season':smallint,'director':varchar,'aired':date}) limit 1;
 ----
 SMALLINT	VARCHAR	DATE
 
 statement error
-select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/himym_1/**/*.parquet', hive_types={'season':'date'}) limit 1;
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/himym_1/**/*.parquet', hive_types={'season':date}) limit 1;
 ----
 Invalid Input Error: Unable to cast 
+
+statement error
+from read_parquet('__TEST_DIR__/himym_1/**/*.parquet', hive_types={'seasons':smallint});
+----
+Invalid Input Error: Unknown hive_type
 
 
 # basic tests with hive_types_autocast
@@ -59,6 +60,11 @@ query III
 select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/himym_1/**/*.parquet', hive_partitioning=1) limit 1;
 ----
 BIGINT	VARCHAR	DATE
+
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/himym_1/**/*.parquet', hive_types_autocast=0) limit 1;
+----
+VARCHAR	VARCHAR	VARCHAR
 
 query III
 select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/himym_1/**/*.parquet') limit 1;

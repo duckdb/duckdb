@@ -543,7 +543,7 @@ void MultiFileReaderOptions::AutoDetectHivePartitioning(const vector<string> &fi
 void MultiFileReaderOptions::VerifyHiveTypesArePartitions(const std::map<string, string> &partitions) const {
 	for (auto &hive_type : hive_types_schema) {
 		if (partitions.find(hive_type.first) == partitions.end()) {
-			throw InvalidInputException("hive_type: \"%s\" does not exist!", hive_type.first);
+			throw InvalidInputException("Unknown hive_type: \"%s\" does not appear to be a partition", hive_type.first);
 		}
 	}
 }
