@@ -5,13 +5,12 @@
 //	@doc:
 //		Implementation of Memo groups; database agnostic
 //---------------------------------------------------------------------------
-
 #include "duckdb/optimizer/cascade/search/CGroup.h"
 
-#include "gpos/base.h"
-#include "gpos/task/CAutoSuspendAbort.h"
-#include "gpos/task/CAutoTraceFlag.h"
-#include "gpos/task/CWorker.h"
+#include "duckdb/optimizer/cascade/base.h"
+#include "duckdb/optimizer/cascade/task/CAutoSuspendAbort.h"
+#include "duckdb/optimizer/cascade/task/CAutoTraceFlag.h"
+#include "duckdb/optimizer/cascade/task/CWorker.h"
 
 #include "duckdb/optimizer/cascade/base/CDrvdProp.h"
 #include "duckdb/optimizer/cascade/base/CDrvdPropCtxtPlan.h"
@@ -26,13 +25,12 @@
 #include "duckdb/optimizer/cascade/operators/CPhysicalMotionGather.h"
 #include "duckdb/optimizer/cascade/search/CGroupProxy.h"
 #include "duckdb/optimizer/cascade/search/CJobGroup.h"
-#include "naucrates/traceflags/traceflags.h"
+#include "duckdb/optimizer/cascade/traceflags/traceflags.h"
 
 using namespace gpnaucrates;
 using namespace gpopt;
 
 #define GPOPT_OPTCTXT_HT_BUCKETS 100
-
 
 //---------------------------------------------------------------------------
 //	@function:
