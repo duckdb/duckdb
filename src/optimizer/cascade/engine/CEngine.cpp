@@ -7,26 +7,25 @@
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/engine/CEngine.h"
 
-#include "gpos/base.h"
-#include "gpos/common/CAutoTimer.h"
-#include "gpos/common/syslibwrapper.h"
-#include "gpos/io/COstreamString.h"
-#include "gpos/memory/CAutoMemoryPool.h"
-#include "gpos/string/CWStringDynamic.h"
-#include "gpos/task/CAutoTaskProxy.h"
-#include "gpos/task/CAutoTraceFlag.h"
+#include "duckdb/optimizer/cascade/base.h"
+#include "duckdb/optimizer/cascade/common/CAutoTimer.h"
+#include "duckdb/optimizer/cascade/common/syslibwrapper.h"
+#include "duckdb/optimizer/cascade/io/COstreamString.h"
+#include "duckdb/optimizer/cascade/memory/CAutoMemoryPool.h"
+#include "duckdb/optimizer/cascade/string/CWStringDynamic.h"
+#include "duckdb/optimizer/cascade/task/CAutoTaskProxy.h"
+#include "duckdb/optimizer/cascade/task/CAutoTraceFlag.h"
 
-#include "gpopt/base/CCostContext.h"
-#include "gpopt/base/CDrvdPropCtxtPlan.h"
-#include "gpopt/base/COptCtxt.h"
-#include "gpopt/base/COptimizationContext.h"
-#include "gpopt/base/CQueryContext.h"
-#include "gpopt/base/CReqdPropPlan.h"
-#include "gpopt/base/CReqdPropRelational.h"
-#include "gpopt/engine/CEnumeratorConfig.h"
-#include "gpopt/engine/CStatisticsConfig.h"
-#include "gpopt/exception.h"
-#include "duckdb/optimizer/cascade/minidump/CSerializableStackTrace.h"
+#include "duckdb/optimizer/cascade/base/CCostContext.h"
+#include "duckdb/optimizer/cascade/base/CDrvdPropCtxtPlan.h"
+#include "duckdb/optimizer/cascade/base/COptCtxt.h"
+#include "duckdb/optimizer/cascade/base/COptimizationContext.h"
+#include "duckdb/optimizer/cascade/base/CQueryContext.h"
+#include "duckdb/optimizer/cascade/base/CReqdPropPlan.h"
+#include "duckdb/optimizer/cascade/base/CReqdPropRelational.h"
+#include "duckdb/optimizer/cascade/engine/CEnumeratorConfig.h"
+#include "duckdb/optimizer/cascade/engine/CStatisticsConfig.h"
+#include "duckdb/optimizer/cascade/exception.h"
 #include "duckdb/optimizer/cascade/operators/CExpression.h"
 #include "duckdb/optimizer/cascade/operators/CExpressionHandle.h"
 #include "duckdb/optimizer/cascade/operators/CLogical.h"
@@ -45,8 +44,8 @@
 #include "duckdb/optimizer/cascade/search/CScheduler.h"
 #include "duckdb/optimizer/cascade/search/CSchedulerContext.h"
 #include "duckdb/optimizer/cascade/xforms/CXformFactory.h"
-#include "naucrates/traceflags/traceflags.h"
-
+#include "duckdb/optimizer/cascade/traceflags/traceflags.h"
+#include "duckdb/optimizer/cascade/optimizer/COptimizerConfig.h"
 
 #define GPOPT_SAMPLING_MAX_ITERS 30
 #define GPOPT_JOBS_CAP 5000	 // maximum number of initial optimization jobs
@@ -299,8 +298,7 @@ CEngine::PgroupInsert(CGroup *pgroupTarget, CExpression *pexpr,
 	if (NULL != pexpr->Pgexpr())
 	{
 		pgroupOrigin = pexpr->Pgexpr()->Pgroup();
-		GPOS_ASSERT(NULL != pgroupOrigin && NULL == pgroupTarget &&
-					"A valid group is expected");
+		GPOS_ASSERT(NULL != pgroupOrigin && NULL == pgroupTarget && "A valid group is expected");
 
 		// if parent has group pointer, all children must have group pointers;
 		// terminate recursive insertion here
@@ -547,7 +545,6 @@ CEngine::FOptimizeChild(
 		return !CPhysicalMotionGather::PopConvert(popChild)->FOrderPreserving();
 	}
 
-
 	return COptimizationContext::FOptimize(m_mp, pgexprParent, pgexprChild,
 										   pocChild, UlSearchStages());
 }
@@ -684,9 +681,6 @@ CEngine::Pmemotmap()
 		);
 
 		m_pmemo->BuildTreeMap(poc);
-		optimizer_config->GetEnumeratorCfg()->SetPlanSpaceSize(
-			m_pmemo->Pmemotmap()->UllCount());
-
 		poc->Release();
 	}
 
@@ -1670,8 +1664,7 @@ CEngine::ProcessTraceFlags()
 void
 CEngine::Optimize()
 {
-	COptimizerConfig *optimizer_config =
-		COptCtxt::PoctxtFromTLS()->GetOptimizerConfig();
+	COptimizerConfig *optimizer_config = COptCtxt::PoctxtFromTLS()->GetOptimizerConfig();
 
 	CAutoTimer at("\n[OPT]: Total Optimization Time",
 				  GPOS_FTRACE(EopttracePrintOptimizationStatistics));
