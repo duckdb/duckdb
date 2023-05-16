@@ -932,21 +932,28 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, c
 	// FIXME: we should add support for a relation object over a column data collection to make this more efficient
 	vector<vector<Value>> values;
 	vector<string> names = res->names;
-	while (true) {
-		auto chunk = res->Fetch();
-		if (!chunk || chunk->size() == 0) {
-			break;
-		}
-		for (idx_t r = 0; r < chunk->size(); r++) {
-			vector<Value> row;
-			for (idx_t c = 0; c < chunk->ColumnCount(); c++) {
-				row.push_back(chunk->data[c].GetValue(r));
+	{
+		py::gil_scoped_release release;
+
+		while (true) {
+			auto chunk = res->Fetch();
+			if (res->HasError()) {
+				res->ThrowError();
 			}
-			values.push_back(std::move(row));
+			if (!chunk || chunk->size() == 0) {
+				break;
+			}
+			for (idx_t r = 0; r < chunk->size(); r++) {
+				vector<Value> row;
+				for (idx_t c = 0; c < chunk->ColumnCount(); c++) {
+					row.push_back(chunk->data[c].GetValue(r));
+				}
+				values.push_back(std::move(row));
+			}
 		}
-	}
-	if (values.empty()) {
-		return nullptr;
+		if (values.empty()) {
+			return nullptr;
+		}
 	}
 	return make_uniq<DuckDBPyRelation>(make_uniq<ValueRelation>(connection->context, values, names));
 }
