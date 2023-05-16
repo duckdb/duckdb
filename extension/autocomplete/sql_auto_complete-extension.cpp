@@ -11,7 +11,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "sql_auto_complete-extension.hpp"
+#include "sql_auto_complete_extension.hpp"
 #include "duckdb/main/extension_util.hpp"
 
 namespace duckdb {

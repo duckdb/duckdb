@@ -6,83 +6,42 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
-#if defined(BUILD_ICU_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#define ICU_STATICALLY_LOADED true
-#include "icu-extension.hpp"
-#else
-#define ICU_STATICALLY_LOADED false
+// Note that c++ preprocessor doesn't have a nice way to clean this up so we need to set the defines we use to false
+// explicitly when they are undefined
+#ifndef DUCKDB_OOT_EXTENSION_ICU_LINKED
+#define DUCKDB_OOT_EXTENSION_ICU_LINKED false
 #endif
 
-#if defined(BUILD_PARQUET_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#define PARQUET_STATICALLY_LOADED true
-#include "parquet-extension.hpp"
-#else
-#define PARQUET_STATICALLY_LOADED false
+#ifndef DUCKDB_OOT_EXTENSION_PARQUET_LINKED
+#define DUCKDB_OOT_EXTENSION_PARQUET_LINKED false
 #endif
 
-#if defined(BUILD_TPCH_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#define TPCH_STATICALLY_LOADED true
-#include "tpch-extension.hpp"
-#else
-#define TPCH_STATICALLY_LOADED false
+#ifndef DUCKDB_OOT_EXTENSION_TPCH_LINKED
+#define DUCKDB_OOT_EXTENSION_TPCH_LINKED false
 #endif
 
-#if defined(BUILD_TPCDS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#define TPCDS_STATICALLY_LOADED true
-#include "tpcds-extension.hpp"
-#else
-#define TPCDS_STATICALLY_LOADED false
+#ifndef DUCKDB_OOT_EXTENSION_TPCDS_LINKED
+#define DUCKDB_OOT_EXTENSION_TPCDS_LINKED false
 #endif
 
-#if defined(BUILD_FTS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#define FTS_STATICALLY_LOADED true
-#include "fts-extension.hpp"
-#else
-#define FTS_STATICALLY_LOADED false
+#ifndef DUCKDB_OOT_EXTENSION_FTS_LINKED
+#define DUCKDB_OOT_EXTENSION_FTS_LINKED false
 #endif
 
-#if defined(BUILD_HTTPFS_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#define HTTPFS_STATICALLY_LOADED true
-#include "httpfs-extension.hpp"
-#else
-#define HTTPFS_STATICALLY_LOADED false
+#ifndef DUCKDB_OOT_EXTENSION_HTTPFS_LINKED
+#define DUCKDB_OOT_EXTENSION_HTTPFS_LINKED false
 #endif
 
-#if defined(BUILD_VISUALIZER_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#include "visualizer-extension.hpp"
+#ifndef DUCKDB_OOT_EXTENSION_JSON_LINKED
+#define DUCKDB_OOT_EXTENSION_JSON_LINKED false
 #endif
 
-#if defined(BUILD_JSON_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#define JSON_STATICALLY_LOADED true
-#include "json-extension.hpp"
-#else
-#define JSON_STATICALLY_LOADED false
+#ifndef DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED
+#define DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED false
 #endif
 
-#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#define JEMALLOC_STATICALLY_LOADED true
-#include "jemalloc-extension.hpp"
-#else
-#define JEMALLOC_STATICALLY_LOADED false
-#endif
-
-#if defined(BUILD_EXCEL_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#include "excel-extension.hpp"
-#endif
-
-#if defined(BUILD_SQLSMITH_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#include "sqlsmith-extension.hpp"
-#endif
-
-#if defined(BUILD_INET_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#include "inet-extension.hpp"
-#endif
-
-#if defined(BUILD_AUTOCOMPLETE_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-#define AUTOCOMPLETE_STATICALLY_LOADED true
-#include "sql_auto_complete-extension.hpp"
-#else
-#define AUTOCOMPLETE_STATICALLY_LOADED false
+#ifndef DUCKDB_OOT_EXTENSION_AUTOCOMPLETE_LINKED
+#define DUCKDB_OOT_EXTENSION_AUTOCOMPLETE_LINKED false
 #endif
 
 // Load the generated header file containing our list of extension headers
@@ -96,15 +55,15 @@ namespace duckdb {
 // Default Extensions
 //===--------------------------------------------------------------------===//
 static DefaultExtension internal_extensions[] = {
-    {"icu", "Adds support for time zones and collations using the ICU library", ICU_STATICALLY_LOADED},
-    {"parquet", "Adds support for reading and writing parquet files", PARQUET_STATICALLY_LOADED},
-    {"tpch", "Adds TPC-H data generation and query support", TPCH_STATICALLY_LOADED},
-    {"tpcds", "Adds TPC-DS data generation and query support", TPCDS_STATICALLY_LOADED},
-    {"fts", "Adds support for Full-Text Search Indexes", FTS_STATICALLY_LOADED},
-    {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection", HTTPFS_STATICALLY_LOADED},
-    {"json", "Adds support for JSON operations", JSON_STATICALLY_LOADED},
-    {"jemalloc", "Overwrites system allocator with JEMalloc", JEMALLOC_STATICALLY_LOADED},
-    {"autocomplete", "Add supports for autocomplete in the shell", AUTOCOMPLETE_STATICALLY_LOADED},
+    {"icu", "Adds support for time zones and collations using the ICU library", DUCKDB_OOT_EXTENSION_ICU_LINKED},
+    {"parquet", "Adds support for reading and writing parquet files", DUCKDB_OOT_EXTENSION_PARQUET_LINKED},
+    {"tpch", "Adds TPC-H data generation and query support", DUCKDB_OOT_EXTENSION_TPCH_LINKED},
+    {"tpcds", "Adds TPC-DS data generation and query support", DUCKDB_OOT_EXTENSION_TPCDS_LINKED},
+    {"fts", "Adds support for Full-Text Search Indexes", DUCKDB_OOT_EXTENSION_FTS_LINKED},
+    {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection", DUCKDB_OOT_EXTENSION_HTTPFS_LINKED},
+    {"json", "Adds support for JSON operations", DUCKDB_OOT_EXTENSION_JSON_LINKED},
+    {"jemalloc", "Overwrites system allocator with JEMalloc", DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED},
+    {"autocomplete", "Add supports for autocomplete in the shell", DUCKDB_OOT_EXTENSION_AUTOCOMPLETE_LINKED},
     {"motherduck", "Enables motherduck integration with the system", false},
     {"sqlite_scanner", "Adds support for reading SQLite database files", false},
     {"postgres_scanner", "Adds support for reading from a Postgres database", false},
@@ -143,12 +102,6 @@ bool ExtensionHelper::AllowAutoInstall(const string &extension) {
 // Load Statically Compiled Extension
 //===--------------------------------------------------------------------===//
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
-	unordered_set<string> extensions {"parquet", "icu",   "tpch",     "tpcds", "fts",      "httpfs",      "visualizer",
-	                                  "json",    "excel", "sqlsmith", "inet",  "jemalloc", "autocomplete"};
-	for (auto &ext : extensions) {
-		LoadExtensionInternal(db, ext, true);
-	}
-
 #if defined(OOTE_HEADERS_AVAILABLE) && OOTE_HEADERS_AVAILABLE
 	for (auto &ext : OOT_EXTENSIONS) {
 		LoadExtensionInternal(db, ext, true);
@@ -178,105 +131,14 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		return ExtensionLoadResult::LOADED_EXTENSION;
 	}
 #endif
-	if (extension == "parquet") {
-#if PARQUET_STATICALLY_LOADED
-		db.LoadExtension<ParquetExtension>();
-#else
-		// parquet extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "icu") {
-#if ICU_STATICALLY_LOADED
-		db.LoadExtension<ICUExtension>();
-#else
-		// icu extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "tpch") {
-#if TPCH_STATICALLY_LOADED
-		db.LoadExtension<TPCHExtension>();
-#else
-		// icu extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "tpcds") {
-#if TPCDS_STATICALLY_LOADED
-		db.LoadExtension<TPCDSExtension>();
-#else
-		// icu extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "fts") {
-#if FTS_STATICALLY_LOADED
-		db.LoadExtension<FTSExtension>();
-#else
-		// fts extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "httpfs") {
-#if HTTPFS_STATICALLY_LOADED
-		db.LoadExtension<HTTPFsExtension>();
-#else
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "visualizer") {
-#if defined(BUILD_VISUALIZER_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-		db.LoadExtension<VisualizerExtension>();
-#else
-		// visualizer extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "json") {
-#if JSON_STATICALLY_LOADED
-		db.LoadExtension<JSONExtension>();
-#else
-		// json extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "excel") {
-#if defined(BUILD_EXCEL_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-		db.LoadExtension<EXCELExtension>();
-#else
-		// excel extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "sqlsmith") {
-#if defined(BUILD_SQLSMITH_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-		db.LoadExtension<SQLSmithExtension>();
-#else
-		// excel extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "jemalloc") {
-#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-		db.LoadExtension<JEMallocExtension>();
-#else
-		// jemalloc extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "autocomplete") {
-#if defined(BUILD_AUTOCOMPLETE_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-		db.LoadExtension<SQLAutoCompleteExtension>();
-#else
-		// autocomplete extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else if (extension == "inet") {
-#if defined(BUILD_INET_EXTENSION) && !defined(DISABLE_BUILTIN_EXTENSIONS)
-		db.LoadExtension<INETExtension>();
-#else
-		// inet extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
-	} else {
 
 #if defined(OOTE_HEADERS_AVAILABLE) && OOTE_HEADERS_AVAILABLE
-		if (TryLoadLinkedExtension(db, extension)) {
-			return ExtensionLoadResult::LOADED_EXTENSION;
-		}
-#endif
+	if (TryLoadLinkedExtension(db, extension)) {
+		return ExtensionLoadResult::LOADED_EXTENSION;
+	}  else {
 		return ExtensionLoadResult::EXTENSION_UNKNOWN;
 	}
+#endif
 	return ExtensionLoadResult::LOADED_EXTENSION;
 }
 

@@ -1,6 +1,6 @@
 #define DUCKDB_EXTENSION_MAIN
 
-#include "sqlsmith-extension.hpp"
+#include "sqlsmith_extension.hpp"
 #include "sqlsmith.hh"
 #include "statement_simplifier.hpp"
 
@@ -117,7 +117,7 @@ static void ReduceSQLFunction(ClientContext &context, TableFunctionInput &data_p
 	output.SetCardinality(count);
 }
 
-void SQLSmithExtension::Load(DuckDB &db) {
+void SqlsmithExtension::Load(DuckDB &db) {
 	auto &db_instance = *db.instance;
 
 	TableFunction sqlsmith_func("sqlsmith", {}, SQLSmithFunction, SQLSmithBind);
@@ -135,7 +135,7 @@ void SQLSmithExtension::Load(DuckDB &db) {
 	ExtensionUtil::RegisterFunction(db_instance, reduce_sql_function);
 }
 
-std::string SQLSmithExtension::Name() {
+std::string SqlsmithExtension::Name() {
 	return "sqlsmith";
 }
 
@@ -145,7 +145,7 @@ extern "C" {
 
 DUCKDB_EXTENSION_API void sqlsmith_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::SQLSmithExtension>();
+	db_wrapper.LoadExtension<duckdb::SqlsmithExtension>();
 }
 
 DUCKDB_EXTENSION_API const char *sqlsmith_version() {

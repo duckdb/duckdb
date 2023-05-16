@@ -1,0 +1,39 @@
+# name: test/tmp.test
+# description: Copy small csv/parquet files from and to S3.
+# group: [test]
+
+require httpfs
+
+require parquet
+
+statement ok
+SET s3_url_style='vhost';
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL)
+
+statement ok
+COPY integers TO 's3://test-bucket/test-tmp-123.parquet'
+
+statement ok
+COPY integers TO 's3://test-bucket/test-tmp-123.parquet'
+
+
+query I
+SELECT * FROM 's3://test-bucket/test-tmp-123.parquet';
+----
+1
+2
+3
+NULL
+
+query I
+SELECT * FROM 's3://test-bucket/test-*-123.parquet';
+----
+1
+2
+3
+NULL

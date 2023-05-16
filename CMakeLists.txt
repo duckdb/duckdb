@@ -580,71 +580,7 @@ function(add_extension_definitions)
     add_definitions(-DDISABLE_BUILTIN_EXTENSIONS=${DISABLE_BUILTIN_EXTENSIONS})
   endif()
 
-  if(${BUILD_ICU_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/icu/include)
-    add_definitions(-DBUILD_ICU_EXTENSION=${BUILD_ICU_EXTENSION})
-  endif()
-
-  if(${BUILD_PARQUET_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/parquet/include)
-    add_definitions(-DBUILD_PARQUET_EXTENSION=${BUILD_PARQUET_EXTENSION})
-  endif()
-
-  if(${BUILD_TPCH_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/tpch/include)
-    add_definitions(-DBUILD_TPCH_EXTENSION=${BUILD_TPCH_EXTENSION})
-  endif()
-
-  if(${BUILD_TPCDS_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/tpcds/include)
-    add_definitions(-DBUILD_TPCDS_EXTENSION=${BUILD_TPCDS_EXTENSION})
-  endif()
-
-  if(${BUILD_FTS_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/fts/include)
-    add_definitions(-DBUILD_FTS_EXTENSION=${BUILD_FTS_EXTENSION})
-  endif()
-
-  if(${BUILD_HTTPFS_EXTENSION})
-    find_package(OpenSSL REQUIRED)
-    include_directories(${PROJECT_SOURCE_DIR}/extension/httpfs/include ${OPENSSL_INCLUDE_DIR})
-    add_definitions(-DBUILD_HTTPFS_EXTENSION=${BUILD_HTTPFS_EXTENSION})
-  endif()
-
-  if(${BUILD_VISUALIZER_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/visualizer/include)
-    add_definitions(-DBUILD_VISUALIZER_EXTENSION=${BUILD_VISUALIZER_EXTENSION})
-  endif()
-
-  if(${BUILD_JSON_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/json/include)
-    add_definitions(-DBUILD_JSON_EXTENSION=${BUILD_JSON_EXTENSION})
-  endif()
-
-  if(${BUILD_JEMALLOC_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/jemalloc/include)
-    add_definitions(-DBUILD_JEMALLOC_EXTENSION=${BUILD_JEMALLOC_EXTENSION})
-  endif()
-
-  if(${BUILD_EXCEL_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/excel/include)
-    add_definitions(-DBUILD_EXCEL_EXTENSION=${BUILD_EXCEL_EXTENSION})
-  endif()
-
-  if(${BUILD_SQLSMITH_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/sqlsmith/include)
-    add_definitions(-DBUILD_SQLSMITH_EXTENSION=${BUILD_SQLSMITH_EXTENSION})
-  endif()
-
-  if(${BUILD_INET_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/inet/include)
-    add_definitions(-DBUILD_INET_EXTENSION=${BUILD_INET_EXTENSION})
-  endif()
-
-  if(${BUILD_AUTOCOMPLETE_EXTENSION})
-    include_directories(${PROJECT_SOURCE_DIR}/extension/autocomplete/include)
-    add_definitions(-DBUILD_AUTOCOMPLETE_EXTENSION=${BUILD_AUTOCOMPLETE_EXTENSION})
-  endif()
+  # TODO add_definitions to detect installed extensions from C++ automatically?
 
   # Include paths for any registered out-of-tree extensions
   foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
@@ -662,117 +598,19 @@ function(add_extension_definitions)
 endfunction()
 
 function(add_extension_dependencies LIBRARY)
-  if(${BUILD_PARQUET_EXTENSION})
-    add_dependencies(${LIBRARY} parquet_extension)
-  endif()
-
-  if(${BUILD_ICU_EXTENSION})
-    add_dependencies(${LIBRARY} icu_extension)
-  endif()
-
-  if(${BUILD_TPCH_EXTENSION})
-    add_dependencies(${LIBRARY} tpch_extension)
-  endif()
-
-  if(${BUILD_TPCDS_EXTENSION})
-    add_dependencies(${LIBRARY} tpcds_extension)
-  endif()
-
-  if(${BUILD_FTS_EXTENSION})
-    add_dependencies(${LIBRARY} fts_extension)
-  endif()
-
-  if(${BUILD_HTTPFS_EXTENSION})
-    add_dependencies(${LIBRARY} httpfs_extension)
-  endif()
-
-  if(${BUILD_VISUALIZER_EXTENSION})
-    add_dependencies(${LIBRARY} visualizer_extension)
-  endif()
-
-  if(${BUILD_JSON_EXTENSION})
-    add_dependencies(${LIBRARY} json_extension)
-  endif()
-
-  if(${BUILD_JEMALLOC_EXTENSION})
-    add_dependencies(${LIBRARY} jemalloc_extension)
-  endif()
-
-  if(${BUILD_EXCEL_EXTENSION})
-    add_dependencies(${LIBRARY} excel_extension)
-  endif()
-
-  if(${BUILD_SQLSMITH_EXTENSION})
-    add_dependencies(${LIBRARY} sqlsmith_extension)
-  endif()
-
-  if(${BUILD_INET_EXTENSION})
-    add_dependencies(${LIBRARY} inet_extension)
-  endif()
-
   foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
     add_dependencies(${LIBRARY} ${OOTE_NAME}_extension)
   endforeach()
-
 endfunction()
 
 function(link_extension_libraries LIBRARY)
-  # special case for our static-only jemalloc extension
+  # special case for our static-only jemalloc extension TODO: how to nicely handle this?
   if(${BUILD_JEMALLOC_EXTENSION})
     target_link_libraries(${LIBRARY} jemalloc_extension)
   endif()
 
   if(${DISABLE_BUILTIN_EXTENSIONS})
     return()
-  endif()
-
-  if(${BUILD_PARQUET_EXTENSION})
-    target_link_libraries(${LIBRARY} parquet_extension)
-  endif()
-
-  if(${BUILD_ICU_EXTENSION})
-    target_link_libraries(${LIBRARY} icu_extension)
-  endif()
-
-  if(${BUILD_TPCH_EXTENSION})
-    target_link_libraries(${LIBRARY} tpch_extension)
-  endif()
-
-  if(${BUILD_TPCDS_EXTENSION})
-    target_link_libraries(${LIBRARY} tpcds_extension)
-  endif()
-
-  if(${BUILD_FTS_EXTENSION})
-    target_link_libraries(${LIBRARY} fts_extension)
-  endif()
-
-  if(${BUILD_HTTPFS_EXTENSION})
-    find_package(OpenSSL REQUIRED)
-    target_link_libraries(${LIBRARY} httpfs_extension ${OPENSSL_LIBRARIES})
-  endif()
-
-  if(${BUILD_VISUALIZER_EXTENSION})
-    target_link_libraries(${LIBRARY} visualizer_extension)
-  endif()
-
-  if(${BUILD_JSON_EXTENSION})
-    target_link_libraries(${LIBRARY} json_extension)
-  endif()
-
-  if(${BUILD_EXCEL_EXTENSION})
-    target_link_libraries(${LIBRARY} excel_extension)
-  endif()
-
-  if(${BUILD_SQLSMITH_EXTENSION})
-    target_link_libraries(${LIBRARY} sqlsmith_extension)
-  endif()
-
-  if(${BUILD_INET_EXTENSION})
-    target_link_libraries(${LIBRARY} inet_extension)
-  endif()
-
-  if(${BUILD_AUTOCOMPLETE_EXTENSION})
-    target_link_libraries(${LIBRARY} autocomplete_extension)
   endif()
 
   # Now link against any registered out-of-tree extensions
@@ -892,6 +730,7 @@ function(register_extension NAME SHOULD_LINK PATH INCLUDE_PATH)
 
   if (${SHOULD_LINK})
     set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK ${SHOULD_LINK} PARENT_SCOPE)
+    add_definitions(-DDUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED=true)
   endif()
 
   if (NOT "${PATH}" STREQUAL "")
@@ -903,11 +742,52 @@ function(register_extension NAME SHOULD_LINK PATH INCLUDE_PATH)
   endif()
 endfunction()
 
+# Register in tree extensions TODO: we may want to remove these specific cmake vars and use passing an extension_config instead
+set(INTERNAL_EXTENSION_ROOT_DIR ${CMAKE_SOURCE_DIR}/extension)
+if (BUILD_HTTPFS_EXTENSION)
+  register_extension(httpfs TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/httpfs ${INTERNAL_EXTENSION_ROOT_DIR}/httpfs/include)
+endif()
+if (BUILD_ICU_EXTENSION)
+  register_extension(icu TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/icu ${INTERNAL_EXTENSION_ROOT_DIR}/icu/include)
+endif()
+if (BUILD_TPCH_EXTENSION)
+  register_extension(tpch TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/tpch ${INTERNAL_EXTENSION_ROOT_DIR}/tpch/include)
+endif()
+if (BUILD_TPCDS_EXTENSION)
+  register_extension(tpcds TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/tpcds ${INTERNAL_EXTENSION_ROOT_DIR}/tpcds/include)
+endif()
+if (BUILD_FTS_EXTENSION)
+  register_extension(fts TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/fts ${INTERNAL_EXTENSION_ROOT_DIR}/fts/include)
+endif()
+if (BUILD_PARQUET_EXTENSION)
+  register_extension(parquet TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/parquet ${INTERNAL_EXTENSION_ROOT_DIR}/parquet/include)
+endif()
+if (BUILD_JSON_EXTENSION)
+  register_extension(json TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/json ${INTERNAL_EXTENSION_ROOT_DIR}/json/include)
+endif()
+if (BUILD_VISUALIZER_EXTENSION)
+  register_extension(visualizer TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/visualizer ${INTERNAL_EXTENSION_ROOT_DIR}/visualizer/include)
+endif()
+if (BUILD_INET_EXTENSION)
+  register_extension(inet TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/inet ${INTERNAL_EXTENSION_ROOT_DIR}/inet/include)
+endif()
+if (BUILD_SQLSMITH_EXTENSION)
+  register_extension(sqlsmith TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/sqlsmith ${INTERNAL_EXTENSION_ROOT_DIR}/sqlsmith/include)
+endif()
+if (BUILD_EXCEL_EXTENSION)
+  register_extension(excel TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/excel ${INTERNAL_EXTENSION_ROOT_DIR}/excel/include)
+endif()
+if (BUILD_JEMALLOC_EXTENSION)
+  register_extension(jemalloc TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/jemalloc ${INTERNAL_EXTENSION_ROOT_DIR}/jemalloc/include)
+endif()
+if (BUILD_AUTOCOMPLETE_EXTENSION)
+  register_extension(autocomplete TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/autocomplete ${INTERNAL_EXTENSION_ROOT_DIR}/autocomplete/include)
+endif()
+
 if(${EXPORT_DLL_SYMBOLS})
   # For Windows DLL export symbols
   add_definitions(-DDUCKDB_BUILD_LIBRARY)
 endif()
-
 
 foreach(DUCKDB_EXTENSION_CONFIG IN LISTS DUCKDB_EXTENSION_CONFIGS)
   include(${DUCKDB_EXTENSION_CONFIG})
@@ -918,20 +798,26 @@ if (BUILD_MAIN_DUCKDB_LIBRARY)
   add_subdirectory(tools)
 endif()
 
-# Add In-tree extensions
+# Add In-tree extensions TODO deprecated: extensions should be loaded using OOTE mechanism
 add_subdirectory(extension)
 
 # Add Out-of-tree extensions
 foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
   string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
-
   if (DEFINED DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_PATH)
     add_subdirectory(${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_PATH} extension/${OOTE_NAME})
   else()
     # By default, we assume third-party extensions to by (symlinked) in extensions/ with <name>_clone as path
+    # TODO make sensible?
     add_subdirectory("extension/${OOTE_NAME}_clone" extension/${OOTE_NAME})
   endif()
 endforeach()
+
+# Output the extensions that will be built
+if(DUCKDB_OOT_EXTENSION_NAMES)
+  string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${DUCKDB_OOT_EXTENSION_NAMES}")
+  message("Enabled extensions: (${EXT_LIST_DEBUG_MESSAGE})")
+endif()
 
 if(BUILD_PYTHON
         OR BUILD_R

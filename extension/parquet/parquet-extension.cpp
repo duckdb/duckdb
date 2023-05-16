@@ -1,6 +1,6 @@
 #define DUCKDB_EXTENSION_MAIN
 
-#include "parquet-extension.hpp"
+#include "parquet_extension.hpp"
 
 #include "duckdb.hpp"
 #include "parquet_metadata.hpp"
