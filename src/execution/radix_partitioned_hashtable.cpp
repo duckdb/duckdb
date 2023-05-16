@@ -86,7 +86,7 @@ public:
 	//! Repartition info
 	bool repartitioned = false;
 	idx_t tasks_per_partition;
-	array_ptr<atomic<idx_t>> tasks_done_per_partition;
+	unique_array<atomic<idx_t>> tasks_done_per_partition;
 };
 
 class RadixHTLocalState : public LocalSinkState {
@@ -400,7 +400,7 @@ void RadixPartitionedHashTable::ScheduleRepartitionTasks(Executor &executor, con
 	    make_uniq<RadixPartitionInfo>(RadixPartitioning::NumberOfPartitions(repartition_radix_bits));
 	gstate.repartitioned = true;
 	gstate.tasks_per_partition = tasks_per_partition;
-	gstate.tasks_done_per_partition = make_array<atomic<idx_t>>(num_partitions_before);
+	gstate.tasks_done_per_partition = make_uniq_array<atomic<idx_t>>(num_partitions_before);
 	for (idx_t partition_idx = 0; partition_idx < num_partitions_before; partition_idx++) {
 		gstate.tasks_done_per_partition[partition_idx] = 0;
 	}
