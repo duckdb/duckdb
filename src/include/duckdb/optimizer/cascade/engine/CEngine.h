@@ -8,7 +8,7 @@
 #ifndef GPOPT_CEngine_H
 #define GPOPT_CEngine_H
 
-#include "gpos/base.h"
+#include "duckdb/optimizer/cascade/base.h"
 
 #include "duckdb/optimizer/cascade/search/CMemo.h"
 #include "duckdb/optimizer/cascade/search/CSearchStage.h"
@@ -415,7 +415,4 @@ operator<<(IOstream &os, const CEngine &eng)
 }
 }  // namespace gpopt
 
-#endif	// !GPOPT_CEngine_H
-
-
-// EOF
+#endif
