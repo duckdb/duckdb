@@ -230,7 +230,10 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 
 	if (!config.options.database_type.empty()) {
 		// if we are opening an extension database - load the extension
-		ExtensionHelper::LoadExternalExtension(*this, nullptr, config.options.database_type);
+		if (!config.file_system) {
+			throw InternalException("No file system!?");
+		}
+		ExtensionHelper::LoadExternalExtension(*this, *config.file_system, config.options.database_type);
 	}
 
 	if (!config.options.unrecognized_options.empty()) {

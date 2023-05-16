@@ -11,7 +11,7 @@ duckdb::scalar_function_t duckdb::SQLiteUDFWrapper::CreateSQLiteScalarFunction(d
 		CastSQLite::InputVectorsToVarchar(args, cast_chunk);
 
 		// ToUnifiedFormat all input colunms
-		duckdb::unique_ptr<UnifiedVectorFormat[]> vec_data = cast_chunk.ToUnifiedFormat();
+		auto vec_data = cast_chunk.ToUnifiedFormat();
 
 		// Vector of sqlite3_value for all input columns
 		vector<unique_ptr<vector<sqlite3_value>>> vec_sqlite(cast_chunk.ColumnCount());

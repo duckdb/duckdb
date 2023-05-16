@@ -6,6 +6,9 @@
 statement ok
 PRAGMA verify_parallelism
 
+statement ok
+SET threads=4;
+
 # By default runs multi-threaded
 query II
 explain  select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string_rn.csv')

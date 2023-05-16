@@ -147,6 +147,18 @@ bool JoinOrderOptimizer::ExtractJoinRelations(LogicalOperator &input_op,
 			}
 		}
 	}
+	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN && non_reorderable_operation) {
+		auto &join = op->Cast<LogicalAnyJoin>();
+		if (join.join_type == JoinType::LEFT && join.right_projection_map.empty()) {
+			auto lhs_cardinality = join.children[0]->EstimateCardinality(context);
+			auto rhs_cardinality = join.children[1]->EstimateCardinality(context);
+			if (rhs_cardinality > lhs_cardinality * 2) {
+				join.join_type = JoinType::RIGHT;
+				std::swap(join.children[0], join.children[1]);
+			}
+		}
+	}
+
 	if (non_reorderable_operation) {
 		// we encountered a non-reordable operation (setop or non-inner join)
 		// we do not reorder non-inner joins yet, however we do want to expand the potential join graph around them
@@ -648,7 +660,19 @@ void JoinOrderOptimizer::SolveJoinOrderApproximately() {
 			// we have to add a cross product; we add it between the two smallest relations
 			optional_ptr<JoinNode> smallest_plans[2];
 			idx_t smallest_index[2];
-			for (idx_t i = 0; i < join_relations.size(); i++) {
+			D_ASSERT(join_relations.size() >= 2);
+
+			// first just add the first two join relations. It doesn't matter the cost as the JOO
+			// will swap them on estimated cardinality anyway.
+			for (idx_t i = 0; i < 2; i++) {
+				auto current_plan = plans[&join_relations[i].get()].get();
+				smallest_plans[i] = current_plan;
+				smallest_index[i] = i;
+			}
+
+			// if there are any other join relations that don't have connections
+			// add them if they have lower estimated cardinality.
+			for (idx_t i = 2; i < join_relations.size(); i++) {
 				// get the plan for this relation
 				auto current_plan = plans[&join_relations[i].get()].get();
 				// check if the cardinality is smaller than the smallest two found so far
