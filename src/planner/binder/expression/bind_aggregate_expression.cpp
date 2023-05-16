@@ -182,13 +182,20 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	vector<unique_ptr<Expression>> children;
 
 	if (ordered_set_agg) {
+		const bool order_sensitive = (aggr.function_name == "mode");
 		for (auto &order : aggr.order_bys->orders) {
 			auto &child = BoundExpression::GetExpression(*order.expression);
 			types.push_back(child->return_type);
 			arguments.push_back(child->return_type);
-			children.push_back(std::move(child));
+			if (order_sensitive) {
+				children.push_back(child->Copy());
+			} else {
+				children.push_back(std::move(child));
+			}
 		}
-		aggr.order_bys->orders.clear();
+		if (!order_sensitive) {
+			aggr.order_bys->orders.clear();
+		}
 	}
 
 	for (idx_t i = 0; i < aggr.children.size(); i++) {
