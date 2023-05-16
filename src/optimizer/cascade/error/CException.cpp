@@ -5,12 +5,10 @@
 //	@doc:
 //		Implements simplified exception handling.
 //---------------------------------------------------------------------------
-
 #include "duckdb/optimizer/cascade/error/CException.h"
-
-#include "gpos/common/clibwrapper.h"
-#include "gpos/error/CErrorContext.h"
-#include "gpos/task/CTask.h"
+#include "duckdb/optimizer/cascade/common/clibwrapper.h"
+#include "duckdb/optimizer/cascade/error/CErrorContext.h"
+#include "duckdb/optimizer/cascade/task/CTask.h"
 
 using namespace gpos;
 
