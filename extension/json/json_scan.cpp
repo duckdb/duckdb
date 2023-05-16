@@ -28,19 +28,23 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 		} else if (loption == "maximum_object_size") {
 			maximum_object_size = MaxValue<idx_t>(UIntegerValue::Get(kv.second), maximum_object_size);
 		} else if (loption == "format") {
-			auto arg = StringValue::Get(kv.second);
-			if (arg == "auto") {
-				options.format = JSONFormat::AUTO_DETECT;
-			} else if (arg == "unstructured") {
-				options.format = JSONFormat::UNSTRUCTURED;
-			} else if (arg == "newline_delimited" || arg == "nd") {
-				options.format = JSONFormat::NEWLINE_DELIMITED;
-			} else if (arg == "array") {
-				options.format = JSONFormat::ARRAY;
-			} else {
-				throw InvalidInputException(
-				    "format must be one of ['auto', 'unstructured', 'newline_delimited', 'array']");
+			auto arg = StringUtil::Lower(StringValue::Get(kv.second));
+			static const auto format_options =
+			    case_insensitive_map_t<JSONFormat> {{"auto", JSONFormat::AUTO_DETECT},
+			                                        {"unstructured", JSONFormat::UNSTRUCTURED},
+			                                        {"newline_delimited", JSONFormat::NEWLINE_DELIMITED},
+			                                        {"nd", JSONFormat::NEWLINE_DELIMITED},
+			                                        {"array", JSONFormat::ARRAY}};
+			auto lookup = format_options.find(arg);
+			if (lookup == format_options.end()) {
+				vector<string> valid_options;
+				for (auto &pair : format_options) {
+					valid_options.push_back(StringUtil::Format("'%s'", pair.first));
+				}
+				throw BinderException("format must be one of [%s], not '%s'", StringUtil::Join(valid_options, ", "),
+				                      arg);
 			}
+			options.format = lookup->second;
 		} else if (loption == "compression") {
 			SetCompression(StringUtil::Lower(StringValue::Get(kv.second)));
 		}

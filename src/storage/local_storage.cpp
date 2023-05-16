@@ -310,7 +310,7 @@ void LocalStorage::InitializeScan(DataTable &table, CollectionScanState &state,
 	storage->InitializeScan(state, table_filters);
 }
 
-void LocalStorage::Scan(CollectionScanState &state, const vector<column_t> &column_ids, DataChunk &result) {
+void LocalStorage::Scan(CollectionScanState &state, const vector<storage_t> &column_ids, DataChunk &result) {
 	state.Scan(transaction, result);
 }
 
