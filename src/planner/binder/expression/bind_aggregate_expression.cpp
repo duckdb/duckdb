@@ -99,7 +99,8 @@ BindResult BaseSelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFu
 	bool negate_fractions = false;
 	if (aggr.order_bys && aggr.order_bys->orders.size() == 1) {
 		const auto &func_name = aggr.function_name;
-		ordered_set_agg = (func_name == "quantile_cont" || func_name == "quantile_disc" || func_name == "mode");
+		ordered_set_agg = (func_name == "quantile_cont" || func_name == "quantile_disc" ||
+		                   (func_name == "mode" && aggr.children.empty()));
 
 		if (ordered_set_agg) {
 			auto &config = DBConfig::GetConfig(context);
