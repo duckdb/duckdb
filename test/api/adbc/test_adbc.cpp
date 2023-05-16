@@ -15,6 +15,7 @@ const char *duckdb_lib = std::getenv("DUCKDB_INSTALL_LIB");
 class ADBCTestDatabase {
 public:
 	explicit ADBCTestDatabase(const string &path_parameter = "test.db") {
+		duckdb_adbc::InitiliazeADBCError(&adbc_error);
 		path = TestCreatePath(path_parameter);
 		REQUIRE(duckdb_lib);
 		REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
@@ -116,4 +117,46 @@ TEST_CASE("ADBC - Test ingestion - Lineitem", "[adbc]") {
 	db.CreateTable("lineitem", input_data);
 
 	REQUIRE(db.QueryAndCheck("SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber"));
+}
+
+TEST_CASE("Test Null Error/Database", "[adbc]") {
+	duckdb_adbc::AdbcStatusCode adbc_status;
+	duckdb_adbc::AdbcError adbc_error;
+	duckdb_adbc::InitiliazeADBCError(&adbc_error);
+	duckdb_adbc::AdbcDatabase adbc_database;
+	// NULL error
+	adbc_status = duckdb_adbc::DatabaseInit(&adbc_database, nullptr);
+	REQUIRE(adbc_status == ADBC_STATUS_INVALID_ARGUMENT);
+	// NULL database
+	adbc_status = duckdb_adbc::DatabaseInit(nullptr, &adbc_error);
+	REQUIRE(adbc_status == ADBC_STATUS_INVALID_ARGUMENT);
+	REQUIRE(std::strcmp(adbc_error.message, "ADBC Database has an invalid pointer") == 0);
+
+	// We must Release the error (Malloc-ed string)
+	adbc_error.release(&adbc_error);
+
+	// Null Error and Database
+	adbc_status = duckdb_adbc::DatabaseInit(nullptr, nullptr);
+	REQUIRE(adbc_status == ADBC_STATUS_INVALID_ARGUMENT);
+}
+
+TEST_CASE("Test Invalid Path", "[adbc]") {
+	duckdb_adbc::AdbcStatusCode adbc_status;
+	duckdb_adbc::AdbcError adbc_error;
+	duckdb_adbc::InitiliazeADBCError(&adbc_error);
+	duckdb_adbc::AdbcDatabase adbc_database;
+	// NULL error
+	adbc_status = duckdb_adbc::DatabaseInit(&adbc_database, nullptr);
+	REQUIRE(adbc_status == ADBC_STATUS_INVALID_ARGUMENT);
+	// NULL database
+	adbc_status = duckdb_adbc::DatabaseInit(nullptr, &adbc_error);
+	REQUIRE(adbc_status == ADBC_STATUS_INVALID_ARGUMENT);
+	REQUIRE(std::strcmp(adbc_error.message, "ADBC Database has an invalid pointer") == 0);
+
+	// We must Release the error (Malloc-ed string)
+	adbc_error.release(&adbc_error);
+
+	// Null Error and Database
+	adbc_status = duckdb_adbc::DatabaseInit(nullptr, nullptr);
+	REQUIRE(adbc_status == ADBC_STATUS_INVALID_ARGUMENT);
 }

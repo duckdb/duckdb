@@ -61,16 +61,18 @@ void GetWinError(std::string *buffer) {
 
 void ReleaseError(struct AdbcError *error) {
 	if (error) {
-		if (error->message)
+		if (error->message) {
 			delete[] error->message;
+		}
 		error->message = nullptr;
 		error->release = nullptr;
 	}
 }
 
 void SetError(struct AdbcError *error, const std::string &message) {
-	if (!error)
+	if (!error) {
 		return;
+	}
 	if (error->message) {
 		// Append
 		std::string buffer = error->message;

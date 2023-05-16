@@ -12,7 +12,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-// We gotta leak the symbols of the init function
+// We must leak the symbols of the init function
 duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::AdbcDriver *driver,
                                              struct duckdb_adbc::AdbcError *error) {
 	if (!driver) {
@@ -49,16 +49,6 @@ namespace duckdb_adbc {
 		return ADBC_STATUS_INVALID_ARGUMENT;                                                                           \
 	}
 
-#define CHECK_RES(res, e, m)                                                                                           \
-	if (res != DuckDBSuccess) {                                                                                        \
-		if (e) {                                                                                                       \
-			e->message = strdup(m);                                                                                    \
-		}                                                                                                              \
-		return ADBC_STATUS_INTERNAL;                                                                                   \
-	} else {                                                                                                           \
-		return ADBC_STATUS_OK;                                                                                         \
-	}
-
 struct DuckDBAdbcDatabaseWrapper {
 	//! The DuckDB Database Configuration
 	::duckdb_config config;
@@ -67,6 +57,28 @@ struct DuckDBAdbcDatabaseWrapper {
 	//! Path of Disk-Based Database or :memory: database
 	std::string path;
 };
+
+void InitiliazeADBCError(AdbcError *error) {
+	if (!error) {
+		return;
+	}
+	error->message = nullptr;
+	error->release = nullptr;
+	std::memset(error->sqlstate, '\0', sizeof(error->sqlstate));
+	error->vendor_code = -1;
+}
+
+AdbcStatusCode CheckResult(duckdb_state &res, AdbcError *error, const char *error_msg) {
+	if (!error) {
+		// Error should be a non-null pointer
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (res != DuckDBSuccess) {
+		duckdb_adbc::SetError(error, error_msg);
+		return ADBC_STATUS_INTERNAL;
+	}
+	return ADBC_STATUS_OK;
+}
 
 AdbcStatusCode DatabaseNew(struct AdbcDatabase *database, struct AdbcError *error) {
 	CHECK_TRUE(database, error, "Missing database object");
@@ -80,7 +92,7 @@ AdbcStatusCode DatabaseNew(struct AdbcDatabase *database, struct AdbcError *erro
 
 	database->private_data = wrapper;
 	auto res = duckdb_create_config(&wrapper->config);
-	CHECK_RES(res, error, "Failed to allocate");
+	return CheckResult(res, error, "Failed to allocate");
 }
 
 AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key, const char *value,
@@ -95,17 +107,22 @@ AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key,
 	}
 	auto res = duckdb_set_config(wrapper->config, key, value);
 
-	CHECK_RES(res, error, "Failed to set configuration option");
+	return CheckResult(res, error, "Failed to set configuration option");
 }
 
 AdbcStatusCode DatabaseInit(struct AdbcDatabase *database, struct AdbcError *error) {
+	if (!error) {
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (!database) {
+		duckdb_adbc::SetError(error, "ADBC Database has an invalid pointer");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
 	char *errormsg;
 	// TODO can we set the database path via option, too? Does not look like it...
 	auto wrapper = (DuckDBAdbcDatabaseWrapper *)database->private_data;
 	auto res = duckdb_open_ext(wrapper->path.c_str(), &wrapper->database, wrapper->config, &errormsg);
-
-	// TODO this leaks memory because errormsg is malloc-ed
-	CHECK_RES(res, error, errormsg);
+	return CheckResult(res, error, errormsg);
 }
 
 AdbcStatusCode DatabaseRelease(struct AdbcDatabase *database, struct AdbcError *error) {
@@ -143,7 +160,7 @@ AdbcStatusCode ConnectionInit(struct AdbcConnection *connection, struct AdbcData
 
 	connection->private_data = nullptr;
 	auto res = duckdb_connect(database_wrapper->database, (duckdb_connection *)&connection->private_data);
-	CHECK_RES(res, error, "Failed to connect to Database");
+	return CheckResult(res, error, "Failed to connect to Database");
 }
 
 AdbcStatusCode ConnectionRelease(struct AdbcConnection *connection, struct AdbcError *error) {
@@ -344,8 +361,8 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
 	auto res = duckdb_prepare(wrapper->connection, query, &wrapper->statement);
-
-	CHECK_RES(res, error, duckdb_prepare_error(wrapper->statement));
+	auto error_msg = duckdb_prepare_error(wrapper->statement);
+	return CheckResult(res, error, error_msg);
 }
 
 AdbcStatusCode StatementBindStream(struct AdbcStatement *statement, struct ArrowArrayStream *values,
@@ -381,7 +398,7 @@ static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct Ar
 	res = StatementSetSqlQuery(&statement, query, error);
 	CHECK_TRUE(!res, error, "unable to initialize statement");
 
-	res = StatementExecuteQuery(&statement, out, NULL, error);
+	res = StatementExecuteQuery(&statement, out, nullptr, error);
 	CHECK_TRUE(!res, error, "unable to execute statement");
 
 	return ADBC_STATUS_OK;
@@ -404,41 +421,10 @@ SELECT table_schema db_schema_name, LIST(table_schema_list) db_schema_tables FRO
 	return QueryInternal(connection, out, q.c_str(), error);
 }
 
-//
-// AdbcStatusCode ConnectionGetCatalogs(struct AdbcConnection *connection, struct AdbcStatement *statement,
-//                                         struct AdbcError *error) {
-//	const char *q = "SELECT 'duckdb' catalog_name";
-//
-//	return QueryInternal(connection, statement, q, error);
-//}
-//
-// AdbcStatusCode ConnectionGetDbSchemas(struct AdbcConnection *connection, struct AdbcStatement *statement,
-//                                          struct AdbcError *error) {
-//	const char *q = "SELECT 'duckdb' catalog_name, schema_name db_schema_name FROM information_schema.schemata ORDER "
-//	                "BY schema_name";
-//	return QueryInternal(connection, statement, q, error);
-//}
 AdbcStatusCode ConnectionGetTableTypes(struct AdbcConnection *connection, struct ArrowArrayStream *out,
                                        struct AdbcError *error) {
 	const char *q = "SELECT DISTINCT table_type FROM information_schema.tables ORDER BY table_type";
 	return QueryInternal(connection, out, q, error);
 }
-//
-// AdbcStatusCode ConnectionGetTables(struct AdbcConnection *connection, const char *catalog, const char *db_schema,
-//                                       const char *table_name, const char **table_types,
-//                                       struct AdbcStatement *statement, struct AdbcError *error) {
-//
-//	CHECK_TRUE(catalog == nullptr || strcmp(catalog, "duckdb") == 0, error, "catalog must be NULL or 'duckdb'");
-//
-//	// let's wait for https://github.com/lidavidm/arrow/issues/6
-//	CHECK_TRUE(table_types == nullptr, error, "table types parameter not yet supported");
-//	auto q = duckdb::StringUtil::Format(
-//	    "SELECT 'duckdb' catalog_name, table_schema db_schema_name, table_name, table_type FROM "
-//	    "information_schema.tables WHERE table_schema LIKE '%s' AND table_name LIKE '%s' ORDER BY table_schema, "
-//	    "table_name",
-//	    db_schema ? db_schema : "%", table_name ? table_name : "%");
-//
-//	return QueryInternal(connection, statement, q.c_str(), error);
-//}
 
 } // namespace duckdb_adbc
