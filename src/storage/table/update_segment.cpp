@@ -1043,8 +1043,8 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 }
 
 UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, idx_t count,
-                                  unsafe_array_ptr<char> &data) {
-	data = make_unsafe_array<char>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
+                                  unsafe_unique_array<char> &data) {
+	data = make_unsafe_uniq_array<char>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
 	auto update_info = (UpdateInfo *)data.get();
 	update_info->max = STANDARD_VECTOR_SIZE;
 	update_info->tuples = (sel_t *)(((data_ptr_t)update_info) + sizeof(UpdateInfo));
@@ -1110,7 +1110,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 			}
 			node = node->next;
 		}
-		unsafe_array_ptr<char> update_info_data;
+		unsafe_unique_array<char> update_info_data;
 		if (!node) {
 			// no updates made yet by this transaction: initially the update info to empty
 			if (transaction.transaction) {
@@ -1145,8 +1145,8 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		auto result = make_uniq<UpdateNodeData>();
 
 		result->info = make_uniq<UpdateInfo>();
-		result->tuples = make_unsafe_array<sel_t>(STANDARD_VECTOR_SIZE);
-		result->tuple_data = make_unsafe_array<data_t>(STANDARD_VECTOR_SIZE * type_size);
+		result->tuples = make_unsafe_uniq_array<sel_t>(STANDARD_VECTOR_SIZE);
+		result->tuple_data = make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * type_size);
 		result->info->tuples = result->tuples.get();
 		result->info->tuple_data = result->tuple_data.get();
 		result->info->version_number = TRANSACTION_ID_START - 1;
@@ -1154,7 +1154,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		InitializeUpdateInfo(*result->info, ids, sel, count, vector_index, vector_offset);
 
 		// now create the transaction level update info in the undo log
-		unsafe_array_ptr<char> update_info_data;
+		unsafe_unique_array<char> update_info_data;
 		UpdateInfo *transaction_node;
 		if (transaction.transaction) {
 			transaction_node = transaction.transaction->CreateUpdateInfo(type_size, count);

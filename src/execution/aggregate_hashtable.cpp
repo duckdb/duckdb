@@ -390,7 +390,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 	}
 	TupleDataCollection::ToUnifiedFormat(state.chunk_state, state.group_chunk);
 	if (!state.group_data) {
-		state.group_data = make_unsafe_array<UnifiedVectorFormat>(state.group_chunk.ColumnCount());
+		state.group_data = make_unsafe_uniq_array<UnifiedVectorFormat>(state.group_chunk.ColumnCount());
 	}
 	TupleDataCollection::GetVectorData(state.chunk_state, state.group_data.get());
 
