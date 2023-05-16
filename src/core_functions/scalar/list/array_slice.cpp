@@ -61,7 +61,7 @@ template <>
 list_entry_t SliceValue(Vector &result, list_entry_t input, int64_t begin, int64_t end, idx_t step) {
 	input.offset += begin;
 	if (step != 1) {
-        input.length = (end - begin) / step;
+        input.length = (end - begin + 1) / step;
     } else {
 	    input.length = end - begin;
 	}
@@ -83,13 +83,12 @@ template <>
 list_entry_t SliceValueWithSteps(Vector &result, SelectionVector &sel, list_entry_t input, int64_t begin, int64_t end, idx_t step, idx_t &sel_idx) {
     input.offset += begin;
     if (step != 1) {
-        input.length = (end - begin) / step;
+        input.length = (end - begin + 1) / step;
     } else {
         input.length = end - begin;
     }
-	idx_t len = (end - begin) / step;
 	auto child_idx = begin;
-    for (; sel_idx < len; ++sel_idx) {
+    for (; sel_idx < input.length; ++sel_idx) {
 		sel.set_index(sel_idx, child_idx);
 		child_idx += step;
 	}
@@ -121,11 +120,22 @@ static void ExecuteSlice(Vector &result, Vector &v, Vector &b, Vector &e, const 
 		auto evalid = !ConstantVector::IsNull(e);
 		auto svalid = s && !ConstantVector::IsNull(*s);
 
+		SelectionVector sel;
+		idx_t sel_idx = 0;
+		if (s) {
+			sel.Initialize(count);
+		}
+
 		// Try to slice
 		if (!vvalid || !ClampSlice(sliced, begin, end, bvalid, evalid)) {
 			ConstantVector::SetNull(result, true);
-		} else {
+		} else if (step == 1) {
 			rdata[0] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end, step);
+		} else {
+			rdata[0] = SliceValueWithSteps<INPUT_TYPE, INDEX_TYPE>(result, sel, sliced, begin, end, step, sel_idx);
+		}
+		if (s) {
+			result.Slice(sel, count);
 		}
 	} else {
 		UnifiedVectorFormat vdata, bdata, edata, sdata;
@@ -197,17 +207,19 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	switch (result.GetType().id()) {
-	case LogicalTypeId::LIST:
-		// Share the value dictionary as we are just going to slice it
-		if (v.GetVectorType() != VectorType::FLAT_VECTOR && v.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			v.Flatten(count);
-		}
-		ListVector::ReferenceEntry(result, v);
-		ExecuteSlice<list_entry_t, int64_t>(result, v, b, e, count, s);
-		break;
-	case LogicalTypeId::VARCHAR:
-		ExecuteSlice<string_t, int32_t>(result, v, b, e, count, s);
-		break;
+	case LogicalTypeId::LIST: {
+        // Share the value dictionary as we are just going to slice it
+        if (v.GetVectorType() != VectorType::FLAT_VECTOR && v.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+            v.Flatten(count);
+        }
+        ListVector::ReferenceEntry(result, v);
+        ExecuteSlice<list_entry_t, int64_t>(result, v, b, e, count, s);
+        break;
+    }
+	case LogicalTypeId::VARCHAR: {
+        ExecuteSlice<string_t, int32_t>(result, v, b, e, count, s);
+        break;
+    }
 	default:
 		throw NotImplementedException("Specifier type not implemented");
 	}
@@ -247,7 +259,7 @@ ScalarFunctionSet ListSliceFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun({LogicalType::ANY, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::ANY,
 	                   ArraySliceFunction, ArraySliceBind);
-	fun.varargs = LogicalType::ANY;
+//	fun.varargs = LogicalType::ANY; // Do we need this?
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 
 	ScalarFunctionSet set;
@@ -258,3 +270,5 @@ ScalarFunctionSet ListSliceFun::GetFunctions() {
 }
 
 } // namespace duckdb
+
+  // ./build/release/test/unittest
