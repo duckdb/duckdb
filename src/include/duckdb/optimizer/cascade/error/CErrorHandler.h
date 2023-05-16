@@ -1,4 +1,7 @@
 //---------------------------------------------------------------------------
+//	Greenplum Database
+//	Copyright (C) 2008 - 2010 Greenplum, Inc.
+//
 //	@filename:
 //		CErrorHandler.h
 //
