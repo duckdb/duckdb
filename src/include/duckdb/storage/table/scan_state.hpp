@@ -99,7 +99,7 @@ public:
 	//! The maximum row within the row group
 	idx_t max_row_group_row;
 	//! Child column scans
-	unsafe_array_ptr<ColumnScanState> column_scans;
+	unsafe_unique_array<ColumnScanState> column_scans;
 	//! Row group segment tree
 	RowGroupSegmentTree *row_groups;
 	//! The total maximum row index

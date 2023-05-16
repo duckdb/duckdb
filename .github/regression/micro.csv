@@ -1,5 +1,3 @@
-Append100KIntegersINSERT
-Append100KIntegersPREPARED
 benchmark/micro/cast/cast_date_string.benchmark
 benchmark/micro/cast/cast_int_string.benchmark
 benchmark/micro/cast/cast_double_string.benchmark

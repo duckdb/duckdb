@@ -362,7 +362,7 @@ string Date::ToString(date_t date) {
 	Date::Convert(date, date_units[0], date_units[1], date_units[2]);
 
 	auto length = DateToStringCast::Length(date_units, year_length, add_bc);
-	auto buffer = make_unsafe_array<char>(length);
+	auto buffer = make_unsafe_uniq_array<char>(length);
 	DateToStringCast::Format(buffer.get(), date_units, year_length, add_bc);
 	return string(buffer.get(), length);
 }
