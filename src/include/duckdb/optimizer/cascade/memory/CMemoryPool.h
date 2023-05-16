@@ -61,7 +61,6 @@ class IMemoryVisitor;
 //
 //	@doc:
 //		Interface class for memory pool
-//
 //---------------------------------------------------------------------------
 class CMemoryPool
 {
