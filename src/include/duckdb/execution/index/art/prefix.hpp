@@ -43,7 +43,7 @@ public:
 public:
 	//! Get a new chain of prefix nodes, might cause new buffer allocations,
 	//! with the node parameter holding the tail of the chain
-	static void New(ART &art, Node &node, const ARTKey &key, const uint32_t depth, uint32_t count);
+	static void New(ART &art, reference<Node> &node, const ARTKey &key, const uint32_t depth, uint32_t count);
 	//! Free the node (and its subtree)
 	static void Free(ART &art, Node &node);
 	//! Get a reference to the prefix
@@ -64,10 +64,13 @@ public:
 	//! (2) encountering one non-prefix node, (3) encountering a mismatching byte.
 	//! Also frees all fully traversed r_node prefixes
 	static idx_t Traverse(const ART &art, reference<Node> &l_node, reference<Node> &r_node);
+	//! Traverse a prefix and a key until (1) encountering a non-prefix node, or (2) encountering
+	//! a mismatching byte, in which case depth indexes the mismatching byte in the key
+	static idx_t Traverse(const ART &art, reference<Node> &prefix, const ARTKey &key, idx_t &depth);
 	//! Returns the byte at position
 	static uint8_t GetByte(const ART &art, const Node &prefix, const idx_t position);
 	//! Removes the first n bytes from the prefix and shifts all subsequent bytes in the
-	//! prefix node(s) by n
+	//! prefix node(s) by n. Frees empty prefix nodes
 	static void Reduce(ART &art, Node &prefix, const idx_t n);
 	//! Splits the prefix at position. prefix then references the ptr (if any bytes left before
 	//! the split), or stays unchanged (no bytes left before the split). child references
@@ -83,17 +86,6 @@ public:
 	inline void Vacuum(ART &art, const ARTFlags &flags) {
 		Node::Vacuum(art, ptr, flags);
 	}
-
-	//	static bool FindMismatchPosition(const ART &art, Node &node, const ARTKey &key,
-	//	                                const uint32_t depth, idx_t &mismatch_position);
-	//	static uint8_t Split(ART &art, Node &node, Node &remaining_node, const idx_t compare_count);
-	//
-
-	//	//! Returns PrefixSplitInfo and splits a prefix, if necessary. Compares the prefix to bytes of a key.
-	//	static PrefixSplitInfo SplitPrefix(const ART &art, Node &before_node, const ARTKey &key,
-	//	                                   const uint32_t depth);
-	//	//! Returns PrefixSplitInfo and splits a prefix, if necessary. Compares the prefix to bytes of another prefix.
-	//	static PrefixSplitInfo SplitPrefix(const ART &art, Node &before_node, const Prefix &other);
 };
 
 } // namespace duckdb

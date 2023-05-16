@@ -306,11 +306,12 @@ bool Construct(ART &art, vector<ARTKey> &keys, row_t *row_ids, Node &node, KeySe
 			return false;
 		}
 
-		Prefix::New(art, node, start_key, prefix_start, start_key.len - prefix_start);
+		reference<Node> ref_node(node);
+		Prefix::New(art, ref_node, start_key, prefix_start, start_key.len - prefix_start);
 		if (single_row_id) {
-			Leaf::New(art, node, row_ids[key_section.start]);
+			Leaf::New(art, ref_node, row_ids[key_section.start]);
 		} else {
-			Leaf::New(art, node, row_ids + key_section.start, num_row_ids);
+			Leaf::New(art, ref_node, row_ids + key_section.start, num_row_ids);
 		}
 		return true;
 	}
@@ -322,18 +323,19 @@ bool Construct(ART &art, vector<ARTKey> &keys, row_t *row_ids, Node &node, KeySe
 	GetChildSections(child_sections, keys, key_section);
 
 	// set the prefix
+	reference<Node> ref_node(node);
 	auto prefix_length = key_section.depth - prefix_start;
-	Prefix::New(art, node, start_key, prefix_start, prefix_length);
+	Prefix::New(art, ref_node, start_key, prefix_start, prefix_length);
 
 	// set the node
 	auto node_type = Node::GetARTNodeTypeByCount(child_sections.size());
-	Node::New(art, node, node_type);
+	Node::New(art, ref_node, node_type);
 
 	// recurse on each child section
 	for (auto &child_section : child_sections) {
 		Node new_child;
 		auto no_violation = Construct(art, keys, row_ids, new_child, child_section, has_constraint);
-		Node::InsertChild(art, node, child_section.key_byte, new_child);
+		Node::InsertChild(art, ref_node, child_section.key_byte, new_child);
 		if (!no_violation) {
 			return false;
 		}
@@ -443,59 +445,73 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 
 	// node is currently empty, create a leaf here with the key
 	if (!node.IsSet()) {
-		Prefix::New(*this, node, key, depth, key.len - depth);
-		Leaf::New(*this, node, row_id);
+		D_ASSERT(depth <= key.len);
+		reference<Node> ref_node(node);
+		Prefix::New(*this, ref_node, key, depth, key.len - depth);
+		Leaf::New(*this, ref_node, row_id);
 		return true;
 	}
 
+	auto node_type = node.DecodeARTNodeType();
+
 	// insert the row ID into this leaf
-	if (node.DecodeARTNodeType() == NType::LEAF) {
+	if (node_type == NType::LEAF) {
 		return InsertToLeaf(node, row_id);
 	}
 
-	// check if the prefix matches the key
-	if (node.DecodeARTNodeType() == NType::PREFIX) {
+	if (node_type != NType::PREFIX) {
+		D_ASSERT(depth < key.len);
+		auto child = node.GetChild(*this, key[depth]);
 
-		// if the prefix matches the key, then we can recurse into node
-		// otherwise, we need to create a new Node4; this new Node4 has two children,
-		// the remaining part of the prefix, and the new leaf
-
-		idx_t compare_count = 0;
-		if (Prefix::FindMismatchPosition(*this, node, key, depth, compare_count)) {
-
-			// split prefix
-			Node remaining_node;
-			auto split_byte = Prefix::Split(*this, node, remaining_node, compare_count);
-
-			// insert remaining prefix/subtree into a new Node4
-			auto &new_n4 = Node4::New(*this, node);
-			Node4::InsertChild(*this, node, split_byte, remaining_node);
-
-			// insert the new leaf into the Node4
-			Node leaf_node;
-			Prefix::New(*this, leaf_node, key, depth + compare_count + 1, key.len - (depth + compare_count + 1));
-			Leaf::New(*this, leaf_node, row_id);
-			Node4::InsertChild(*this, node, key[depth + compare_count], leaf_node);
-			return true;
+		// recurse, if a child exists at key[depth]
+		if (child) {
+			bool success = Insert(*child, key, depth + 1, row_id);
+			node.ReplaceChild(*this, key[depth], *child);
+			return success;
 		}
 
-		// prefix matches key
-		depth += compare_count;
+		// insert a new leaf node at key[depth]
+		Node leaf_node;
+		if (depth + 1 < key.len) {
+			reference<Node> ref_node(leaf_node);
+			Prefix::New(*this, ref_node, key, depth + 1, key.len - depth - 1);
+			Leaf::New(*this, ref_node, row_id);
+		} else {
+			Leaf::New(*this, leaf_node, row_id);
+		}
+		Node::InsertChild(*this, node, key[depth], leaf_node);
+		return true;
 	}
 
-	// recurse
-	D_ASSERT(depth < key.len);
-	auto child = node.GetChild(*this, key[depth]);
-	if (child) {
-		bool success = Insert(*child, key, depth + 1, row_id);
-		node.ReplaceChild(*this, key[depth], *child);
-		return success;
+	// this is a prefix node, traverse
+	reference<Node> next_node(node);
+	auto mismatch_position = Prefix::Traverse(*this, next_node, key, depth);
+
+	// prefix matches key
+	if (next_node.get().DecodeARTNodeType() != NType::PREFIX) {
+		return Insert(next_node, key, depth, row_id);
 	}
 
+	// prefix does not match the key, we need to create a new Node4; this new Node4 has two children,
+	// the remaining part of the prefix, and the new leaf
+	Node remaining_prefix;
+	auto prefix_byte = Prefix::GetByte(*this, next_node, mismatch_position);
+	Prefix::Split(*this, next_node, remaining_prefix, mismatch_position);
+	Node4::New(*this, next_node);
+
+	// insert remaining prefix
+	Node4::InsertChild(*this, next_node, prefix_byte, remaining_prefix);
+
+	// insert new leaf
 	Node leaf_node;
-	Prefix::New(*this, leaf_node, key, depth + 1, key.len - (depth + 1));
-	Leaf::New(*this, leaf_node, row_id);
-	Node::InsertChild(*this, node, key[depth], leaf_node);
+	if (depth + 1 < key.len) {
+		reference<Node> ref_node(leaf_node);
+		Prefix::New(*this, ref_node, key, depth + 1, key.len - depth - 1);
+		Leaf::New(*this, ref_node, row_id);
+	} else {
+		Leaf::New(*this, leaf_node, row_id);
+	}
+	Node4::InsertChild(*this, next_node, key[depth], leaf_node);
 	return true;
 }
 
@@ -543,7 +559,7 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 		return;
 	}
 
-	// delete a row ID from a leaf
+	// delete a row ID from a leaf (root is leaf)
 	if (node.DecodeARTNodeType() == NType::LEAF) {
 		auto &leaf = Leaf::Get(*this, node);
 		leaf.Remove(*this, row_id);
@@ -556,15 +572,16 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 	}
 
 	// handle prefix
-	auto &node_prefix = node.GetPrefix(*this);
-	if (node_prefix.count) {
-		if (node_prefix.KeyMismatchPosition(*this, key, depth) != node_prefix.count) {
+	reference<Node> next_node(node);
+	if (node.DecodeARTNodeType() == NType::PREFIX) {
+		Prefix::Traverse(*this, next_node, key, depth);
+		if (next_node.get().DecodeARTNodeType() == NType::PREFIX) {
 			return;
 		}
-		depth += node_prefix.count;
 	}
 
-	auto child = node.GetChild(*this, key[depth]);
+	D_ASSERT(depth < key.len);
+	auto child = next_node.get().GetChild(*this, key[depth]);
 	if (child) {
 		D_ASSERT(child->IsSet());
 
@@ -575,14 +592,14 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 
 			if (leaf.count == 0) {
 				// leaf is empty, delete leaf, decrement node counter and maybe shrink node
-				Node::DeleteChild(*this, node, key[depth]);
+				Node::DeleteChild(*this, next_node, node, key[depth]);
 			}
 			return;
 		}
 
 		// recurse
 		Erase(*child, key, depth + 1, row_id);
-		node.ReplaceChild(*this, key[depth], *child);
+		next_node.get().ReplaceChild(*this, key[depth], *child);
 	}
 }
 
@@ -662,31 +679,25 @@ void ART::SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size) {
 Node ART::Lookup(Node node, const ARTKey &key, idx_t depth) {
 
 	while (node.IsSet()) {
-		if (node.DecodeARTNodeType() == NType::LEAF) {
-			auto &leaf = Leaf::Get(*this, node);
 
-			// check if leaf contains key
-			for (idx_t i = 0; i < leaf.prefix.count; i++) {
-				if (leaf.prefix.GetByte(*this, i) != key[i + depth]) {
-					return Node();
-				}
-			}
+		auto node_type = node.DecodeARTNodeType();
+
+		if (node_type == NType::LEAF) {
 			return node;
 		}
-		auto &node_prefix = node.GetPrefix(*this);
-		if (node_prefix.count) {
-			for (idx_t pos = 0; pos < node_prefix.count; pos++) {
-				if (key[depth + pos] != node_prefix.GetByte(*this, pos)) {
-					// prefix mismatch, subtree of node does not contain key
-					return Node();
-				}
+
+		reference<Node> next_node(node);
+		if (node_type == NType::PREFIX) {
+			Prefix::Traverse(*this, next_node, key, depth);
+			if (next_node.get().DecodeARTNodeType() == NType::PREFIX) {
+				return Node();
 			}
-			depth += node_prefix.count;
 		}
 
-		// prefix matches key, but no child at byte, does not contain key
-		auto child = node.GetChild(*this, key[depth]);
+		D_ASSERT(depth < key.len);
+		auto child = next_node.get().GetChild(*this, key[depth]);
 		if (!child) {
+			// prefix matches key, but no child at byte, does not contain key
 			return Node();
 		}
 
@@ -700,21 +711,21 @@ Node ART::Lookup(Node node, const ARTKey &key, idx_t depth) {
 }
 
 //===--------------------------------------------------------------------===//
-// Greater Than
-// Returns: True (If found leaf >= key)
-//          False (Otherwise)
+// Greater Than and Less Than
 //===--------------------------------------------------------------------===//
 
-bool ART::SearchGreater(ARTIndexScanState *state, ARTKey &key, bool inclusive, idx_t max_count,
-                        vector<row_t> &result_ids) {
+bool ART::SearchGreater(ARTIndexScanState *state, ARTKey &key, bool equal, idx_t max_count, vector<row_t> &result_ids) {
 
+	if (!tree->IsSet()) {
+		return true;
+	}
 	Iterator *it = &state->iterator;
 
-	// greater than scan: first set the iterator to the node at which we will start our scan by finding the lowest node
-	// that satisfies our requirement
+	// find the lowest value that satisfies the predicate
 	if (!it->art) {
 		it->art = this;
-		if (!it->LowerBound(*tree, key, inclusive)) {
+		if (!it->LowerBound(*tree, key, equal, 0)) {
+			// early-out, if the maximum value in the ART is lower than the lower bound
 			return true;
 		}
 	}
@@ -725,88 +736,84 @@ bool ART::SearchGreater(ARTIndexScanState *state, ARTKey &key, bool inclusive, i
 	return it->Scan(empty_key, max_count, result_ids, false);
 }
 
-//===--------------------------------------------------------------------===//
-// Less Than
-//===--------------------------------------------------------------------===//
-
-bool ART::SearchLess(ARTIndexScanState *state, ARTKey &upper_bound, bool inclusive, idx_t max_count,
+bool ART::SearchLess(ARTIndexScanState *state, ARTKey &upper_bound, bool equal, idx_t max_count,
                      vector<row_t> &result_ids) {
 
 	if (!tree->IsSet()) {
 		return true;
 	}
-
 	Iterator *it = &state->iterator;
 
 	if (!it->art) {
 		it->art = this;
-		// first find the minimum value in the ART: we start scanning from this value
+		// find the minimum value in the ART: we start scanning from this value
 		it->FindMinimum(*tree);
-		// early out min value higher than upper bound query
-		if (it->cur_key > upper_bound) {
+		// early-out, if the minimum value is higher than the upper bound
+		if (it->current_key > upper_bound) {
 			return true;
 		}
 	}
 
 	// now continue the scan until we reach the upper bound
-	return it->Scan(upper_bound, max_count, result_ids, inclusive);
+	return it->Scan(upper_bound, max_count, result_ids, equal);
 }
 
 //===--------------------------------------------------------------------===//
 // Closed Range Query
 //===--------------------------------------------------------------------===//
 
-bool ART::SearchCloseRange(ARTIndexScanState *state, ARTKey &lower_bound, ARTKey &upper_bound, bool left_inclusive,
-                           bool right_inclusive, idx_t max_count, vector<row_t> &result_ids) {
+bool ART::SearchCloseRange(ARTIndexScanState *state, ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal,
+                           bool right_equal, idx_t max_count, vector<row_t> &result_ids) {
 
 	Iterator *it = &state->iterator;
 
-	// first find the first node that satisfies the left predicate
+	// find the first node that satisfies the left predicate
 	if (!it->art) {
 		it->art = this;
-		if (!it->LowerBound(*tree, lower_bound, left_inclusive)) {
+		if (!it->LowerBound(*tree, lower_bound, left_equal, 0)) {
+			// early-out, if the maximum value in the ART is lower than the lower bound
 			return true;
 		}
 	}
 
 	// now continue the scan until we reach the upper bound
-	return it->Scan(upper_bound, max_count, result_ids, right_inclusive);
+	return it->Scan(upper_bound, max_count, result_ids, right_equal);
 }
 
-bool ART::Scan(const Transaction &transaction, const DataTable &table, IndexScanState &table_state,
-               const idx_t max_count, vector<row_t> &result_ids) {
+bool ART::Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state, const idx_t max_count,
+               vector<row_t> &result_ids) {
 
-	auto state = (ARTIndexScanState *)&table_state;
+	auto scan_state = (ARTIndexScanState *)&state;
 	vector<row_t> row_ids;
 	bool success;
 
 	// FIXME: the key directly owning the data for a single key might be more efficient
-	D_ASSERT(state->values[0].type().InternalType() == types[0]);
+	D_ASSERT(scan_state->values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
-	auto key = CreateKey(arena_allocator, types[0], state->values[0]);
+	auto key = CreateKey(arena_allocator, types[0], scan_state->values[0]);
 
-	if (state->values[1].IsNull()) {
+	if (scan_state->values[1].IsNull()) {
 
 		// single predicate
 		lock_guard<mutex> l(lock);
-		switch (state->expressions[0]) {
+		switch (scan_state->expressions[0]) {
 		case ExpressionType::COMPARE_EQUAL:
 			success = SearchEqual(key, max_count, row_ids);
 			break;
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			success = SearchGreater(state, key, true, max_count, row_ids);
+			success = SearchGreater(scan_state, key, true, max_count, row_ids);
 			break;
 		case ExpressionType::COMPARE_GREATERTHAN:
-			success = SearchGreater(state, key, false, max_count, row_ids);
+			success = SearchGreater(scan_state, key, false, max_count, row_ids);
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			success = SearchLess(state, key, true, max_count, row_ids);
+			success = SearchLess(scan_state, key, true, max_count, row_ids);
 			break;
 		case ExpressionType::COMPARE_LESSTHAN:
-			success = SearchLess(state, key, false, max_count, row_ids);
+			success = SearchLess(scan_state, key, false, max_count, row_ids);
 			break;
 		default:
-			throw InternalException("Operation not implemented");
+			throw InternalException("Index scan type not implemented");
 		}
 
 	} else {
@@ -814,12 +821,12 @@ bool ART::Scan(const Transaction &transaction, const DataTable &table, IndexScan
 		// two predicates
 		lock_guard<mutex> l(lock);
 
-		D_ASSERT(state->values[1].type().InternalType() == types[0]);
-		auto upper_bound = CreateKey(arena_allocator, types[0], state->values[1]);
+		D_ASSERT(scan_state->values[1].type().InternalType() == types[0]);
+		auto upper_bound = CreateKey(arena_allocator, types[0], scan_state->values[1]);
 
-		bool left_inclusive = state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
-		bool right_inclusive = state->expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
-		success = SearchCloseRange(state, key, upper_bound, left_inclusive, right_inclusive, max_count, row_ids);
+		bool left_equal = scan_state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
+		bool right_equal = scan_state->expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
+		success = SearchCloseRange(scan_state, key, upper_bound, left_equal, right_equal, max_count, row_ids);
 	}
 
 	if (!success) {

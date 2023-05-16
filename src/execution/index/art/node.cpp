@@ -404,7 +404,7 @@ bool Node::ResolvePrefixes(ART &art, Node &other) {
 	reference<Node> r_node(other);
 
 	// traverse prefixes
-	idx_t mismatch_position;
+	idx_t mismatch_position = 0;
 	if (l_node.get().DecodeARTNodeType() == NType::PREFIX && r_node.get().DecodeARTNodeType() == NType::PREFIX) {
 		mismatch_position = Prefix::Traverse(art, l_node, r_node);
 	}
