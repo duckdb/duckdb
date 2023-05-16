@@ -16,7 +16,7 @@ typedef void (*append_vector_t)(ArrowAppendData &append_data, Vector &input, idx
 typedef void (*finalize_t)(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result);
 
 struct ArrowAppendData {
-	ArrowAppendData(bool export_large_p) : export_large(export_large_p) {
+	explicit ArrowAppendData(ArrowOptions &options_p) : options(options_p) {
 	}
 	// the buffers of the arrow vector
 	ArrowBuffer validity;
@@ -39,20 +39,24 @@ struct ArrowAppendData {
 	duckdb::array<const void *, 3> buffers = {{nullptr, nullptr, nullptr}};
 	vector<ArrowArray *> child_pointers;
 
-	// If the data is exported using large buffers
-	bool export_large = true;
+	ArrowOptions &options;
 };
 
 //===--------------------------------------------------------------------===//
 // ArrowAppender
 //===--------------------------------------------------------------------===//
-static unique_ptr<ArrowAppendData> InitializeArrowChild(const LogicalType &type, idx_t capacity, bool export_as_large);
+static unique_ptr<ArrowAppendData> InitializeArrowChild(const LogicalType &type, idx_t capacity, ArrowOptions &options);
 static ArrowArray *FinalizeArrowChild(const LogicalType &type, ArrowAppendData &append_data);
 
-ArrowAppender::ArrowAppender(vector<LogicalType> types_p, idx_t initial_capacity, bool export_as_large_p)
-    : types(std::move(types_p)), export_as_large(export_as_large_p) {
+ArrowAppender::ArrowAppender(vector<LogicalType> types_p, idx_t initial_capacity, bool export_as_large)
+    : types(std::move(types_p)) {
+	if (!export_as_large) {
+		options.offset_size = ArrowOffsetSize::REGULAR;
+	} else {
+		options.offset_size = ArrowOffsetSize::LARGE;
+	}
 	for (auto &type : types) {
-		auto entry = InitializeArrowChild(type, initial_capacity, export_as_large_p);
+		auto entry = InitializeArrowChild(type, initial_capacity, options);
 		root_data.push_back(std::move(entry));
 	}
 }
@@ -240,7 +244,7 @@ struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
 		result.main_buffer.reserve(capacity * sizeof(TGT));
 		// construct the enum child data
-		auto enum_data = InitializeArrowChild(LogicalType::VARCHAR, EnumType::GetSize(type), result.export_large);
+		auto enum_data = InitializeArrowChild(LogicalType::VARCHAR, EnumType::GetSize(type), result.options);
 		EnumAppendVector(*enum_data, EnumType::GetValuesInsertOrder(type), EnumType::GetSize(type));
 		result.child_data.push_back(std::move(enum_data));
 	}
@@ -352,8 +356,11 @@ struct ArrowVarcharData {
 		// the auxiliary buffer's length depends on the string lengths, so we resize as required
 		auto last_offset = offset_data[append_data.row_count];
 		idx_t max_offset = append_data.row_count + to - from;
-		if (max_offset > NumericLimits<uint32_t>::Maximum() && !append_data.export_large) {
-			throw InvalidInputException("Arrow Appender: Buffer type is not sufficiently big");
+		if (max_offset > NumericLimits<uint32_t>::Maximum() &&
+		    append_data.options.offset_size == ArrowOffsetSize::REGULAR) {
+			throw InvalidInputException("Arrow Appender: The maximum total string size for regular string buffers is "
+			                            "%u but the offset of %lu exceeds this.",
+			                            NumericLimits<uint32_t>::Maximum(), max_offset);
 		}
 		for (idx_t i = from; i < to; i++) {
 			auto source_idx = format.sel->get_index(i);
@@ -397,7 +404,7 @@ struct ArrowStructData {
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
 		auto &children = StructType::GetChildTypes(type);
 		for (auto &child : children) {
-			auto child_buffer = InitializeArrowChild(child.second, capacity, result.export_large);
+			auto child_buffer = InitializeArrowChild(child.second, capacity, result.options);
 			result.child_data.push_back(std::move(child_buffer));
 		}
 	}
@@ -471,7 +478,7 @@ struct ArrowListData {
 	static void Initialize(ArrowAppendData &result, const LogicalType &type, idx_t capacity) {
 		auto &child_type = ListType::GetChildType(type);
 		result.main_buffer.reserve((capacity + 1) * sizeof(uint32_t));
-		auto child_buffer = InitializeArrowChild(child_type, capacity, result.export_large);
+		auto child_buffer = InitializeArrowChild(child_type, capacity, result.options);
 		result.child_data.push_back(std::move(child_buffer));
 	}
 
@@ -524,9 +531,9 @@ struct ArrowMapData {
 
 		auto &key_type = MapType::KeyType(type);
 		auto &value_type = MapType::ValueType(type);
-		auto internal_struct = make_uniq<ArrowAppendData>(result.export_large);
-		internal_struct->child_data.push_back(InitializeArrowChild(key_type, capacity, result.export_large));
-		internal_struct->child_data.push_back(InitializeArrowChild(value_type, capacity, result.export_large));
+		auto internal_struct = make_uniq<ArrowAppendData>(result.options);
+		internal_struct->child_data.push_back(InitializeArrowChild(key_type, capacity, result.options));
+		internal_struct->child_data.push_back(InitializeArrowChild(value_type, capacity, result.options));
 
 		result.child_data.push_back(std::move(internal_struct));
 	}
@@ -688,14 +695,14 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
-		if (append_data.export_large) {
+		if (append_data.options.offset_size == ArrowOffsetSize::LARGE) {
 			InitializeFunctionPointers<ArrowVarcharData<string_t>>(append_data);
 		} else {
 			InitializeFunctionPointers<ArrowVarcharData<string_t, ArrowVarcharConverter, uint32_t>>(append_data);
 		}
 		break;
 	case LogicalTypeId::UUID:
-		if (append_data.export_large) {
+		if (append_data.options.offset_size == ArrowOffsetSize::LARGE) {
 			InitializeFunctionPointers<ArrowVarcharData<hugeint_t, ArrowUUIDConverter>>(append_data);
 		} else {
 			InitializeFunctionPointers<ArrowVarcharData<hugeint_t, ArrowUUIDConverter, uint32_t>>(append_data);
@@ -733,8 +740,8 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	}
 }
 
-unique_ptr<ArrowAppendData> InitializeArrowChild(const LogicalType &type, idx_t capacity, bool export_large) {
-	auto result = make_uniq<ArrowAppendData>(export_large);
+unique_ptr<ArrowAppendData> InitializeArrowChild(const LogicalType &type, idx_t capacity, ArrowOptions &options) {
+	auto result = make_uniq<ArrowAppendData>(options);
 	InitializeFunctionPointers(*result, type);
 
 	auto byte_count = (capacity + 7) / 8;
@@ -780,7 +787,7 @@ ArrowArray *FinalizeArrowChild(const LogicalType &type, ArrowAppendData &append_
 //! Returns the underlying arrow array
 ArrowArray ArrowAppender::Finalize() {
 	D_ASSERT(root_data.size() == types.size());
-	auto root_holder = make_uniq<ArrowAppendData>(export_as_large);
+	auto root_holder = make_uniq<ArrowAppendData>(options);
 
 	ArrowArray result;
 	root_holder->child_pointers.resize(types.size());
