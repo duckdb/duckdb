@@ -9,7 +9,6 @@
 #define GPNAUCRATES_CStatsPredConj_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/statistics/CPoint.h"
 #include "duckdb/optimizer/cascade/statistics/CStatsPred.h"
 

@@ -5,12 +5,10 @@
 //      @doc:
 //              Upper bound on the number of distinct values for a given set of columns
 //---------------------------------------------------------------------------
-
 #ifndef GPNAUCRATES_CUpperBoundNDVs_H
 #define GPNAUCRATES_CUpperBoundNDVs_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/base/CColRefSet.h"
 
 namespace gpnaucrates

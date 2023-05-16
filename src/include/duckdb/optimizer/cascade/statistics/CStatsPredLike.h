@@ -9,9 +9,9 @@
 #define GPNAUCRATES_CStatsPredLike_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/md/IMDType.h"
 #include "duckdb/optimizer/cascade/statistics/CStatsPred.h"
+#include "duckdb/optimizer/cascade/operators/CExpression.h"
 
 // fwd decl
 namespace gpopt

@@ -5,14 +5,12 @@
 //	@doc:
 //		Bucket in a histogram
 //---------------------------------------------------------------------------
-
 #ifndef GPNAUCRATES_CBucket_H
 #define GPNAUCRATES_CBucket_H
 
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/error/CAutoTrace.h"
 #include "duckdb/optimizer/cascade/task/CTask.h"
-
 #include "duckdb/optimizer/cascade/statistics/CPoint.h"
 #include "duckdb/optimizer/cascade/statistics/IBucket.h"
 

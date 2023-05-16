@@ -13,7 +13,6 @@
 #include "duckdb/optimizer/cascade/common/CHashMapIter.h"
 
 #include "duckdb/optimizer/cascade/base/CColRef.h"
-#include "duckdb/optimizer/cascade/md/CDXLStatsDerivedRelation.h"
 #include "duckdb/optimizer/cascade/statistics/CHistogram.h"
 #include "duckdb/optimizer/cascade/statistics/CStatsPred.h"
 #include "duckdb/optimizer/cascade/statistics/CStatsPredJoin.h"
@@ -183,10 +182,6 @@ public:
 
 	// print function
 	virtual IOstream &OsPrint(IOstream &os) const = 0;
-
-	// generate the DXL representation of the statistics object
-	virtual CDXLStatsDerivedRelation *GetDxlStatsDrvdRelation(
-		CMemoryPool *mp, CMDAccessor *md_accessor) const = 0;
 
 	// is the join type either a left semi join or left anti-semi join
 	static BOOL

@@ -10,8 +10,7 @@
 
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/common/CDouble.h"
-
-#include "naucrates/statistics/CStatsPred.h"
+#include "duckdb/optimizer/cascade/statistics/CStatsPred.h"
 
 namespace gpnaucrates
 {

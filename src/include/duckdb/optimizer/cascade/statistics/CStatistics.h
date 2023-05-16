@@ -11,7 +11,6 @@
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/common/CBitSet.h"
 #include "duckdb/optimizer/cascade/string/CWStringDynamic.h"
-
 #include "duckdb/optimizer/cascade/statistics/CHistogram.h"
 #include "duckdb/optimizer/cascade/statistics/CStatsPredArrayCmp.h"
 #include "duckdb/optimizer/cascade/statistics/CStatsPredConj.h"
@@ -30,7 +29,6 @@ class CColumnFactory;
 namespace gpnaucrates
 {
 using namespace gpos;
-using namespace gpdxl;
 using namespace gpmd;
 using namespace gpopt;
 
@@ -253,10 +251,6 @@ public:
 
 	// return the set of column references we have stats for
 	virtual CColRefSet *GetColRefSet(CMemoryPool *mp) const;
-
-	// generate the DXL representation of the statistics object
-	virtual CDXLStatsDerivedRelation *GetDxlStatsDrvdRelation(
-		CMemoryPool *mp, CMDAccessor *md_accessor) const;
 
 	// print function
 	virtual IOstream &OsPrint(IOstream &os) const;

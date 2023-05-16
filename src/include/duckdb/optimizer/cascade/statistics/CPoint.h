@@ -84,9 +84,6 @@ public:
 		m_datum->Release();
 	}
 
-	// translate the point into its DXL representation
-	CDXLDatum *GetDatumVal(CMemoryPool *mp, CMDAccessor *md_accessor) const;
-
 	// minimum of two points using <=
 	static CPoint *MinPoint(CPoint *point1, CPoint *point2);
 
