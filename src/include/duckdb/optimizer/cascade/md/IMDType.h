@@ -9,7 +9,6 @@
 #define GPMD_IMDCacheType_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/md/IMDCacheObject.h"
 
 namespace gpnaucrates
@@ -101,14 +100,6 @@ public:
 	// type id
 	virtual ETypeInfo GetDatumType() const = 0;
 
-	// transformation function for datums
-	virtual IDatum *GetDatumForDXLConstVal(
-		const CDXLScalarConstValue *dxl_op) const = 0;
-
-	// construct a datum from a DXL datum
-	virtual IDatum *GetDatumForDXLDatum(CMemoryPool *mp,
-										const CDXLDatum *dxl_datum) const = 0;
-
 	// is type fixed length
 	virtual BOOL IsFixedLength() const = 0;
 
@@ -133,33 +124,17 @@ public:
 	// return the null constant for this type
 	virtual IDatum *DatumNull() const = 0;
 
-	// generate the DXL scalar constant from IDatum
-	virtual CDXLScalarConstValue *GetDXLOpScConst(CMemoryPool *mp,
-												  IDatum *datum) const = 0;
-
-	// generate the DXL datum from IDatum
-	virtual CDXLDatum *GetDatumVal(CMemoryPool *mp, IDatum *datum) const = 0;
-
-	// generate the DXL datum representing null value
-	virtual CDXLDatum *GetDXLDatumNull(CMemoryPool *mp) const = 0;
-
 	// is type an ambiguous one? e.g., AnyElement in GPDB
-	virtual BOOL
-	IsAmbiguous() const
+	virtual BOOL IsAmbiguous() const
 	{
 		return false;
 	}
 
-	// string representation of comparison types
-	static const CWStringConst *GetCmpTypeStr(IMDType::ECmpType cmp_type);
-
 	// return true if we can perform statistical comparison between datums of these two types; else return false
-	static BOOL StatsAreComparable(const IMDType *mdtype_first,
-								   const IMDType *mdtype_second);
+	static BOOL StatsAreComparable(const IMDType *mdtype_first, const IMDType *mdtype_second);
 
 	// return true if we can perform statistical comparison between datum of the given type and a given datum; else return false
-	static BOOL StatsAreComparable(const IMDType *mdtype_first,
-								   const IDatum *datum_second);
+	static BOOL StatsAreComparable(const IMDType *mdtype_first, const IDatum *datum_second);
 };
 }  // namespace gpmd
 

@@ -9,7 +9,6 @@
 #define GPMD_IMDColumn_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/md/IMDId.h"
 #include "duckdb/optimizer/cascade/md/IMDInterface.h"
 

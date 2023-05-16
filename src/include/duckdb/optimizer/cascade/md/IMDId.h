@@ -14,20 +14,11 @@
 #include "duckdb/optimizer/cascade/common/CHashSetIter.h"
 #include "duckdb/optimizer/cascade/string/CWStringConst.h"
 
-#include "naucrates/dxl/gpdb_types.h"
-
 #define GPDXL_MDID_LENGTH 100
-
-// fwd decl
-namespace gpdxl
-{
-class CXMLSerializer;
-}
 
 namespace gpmd
 {
 using namespace gpos;
-using namespace gpdxl;
 
 // fwd decl
 class CSystemId;
@@ -172,10 +163,6 @@ public:
 
 	// is the mdid valid
 	virtual BOOL IsValid() const = 0;
-
-	// serialize mdid in DXL as the value for the specified attribute
-	virtual void Serialize(CXMLSerializer *xml_serializer,
-						   const CWStringConst *pstrAttribute) const = 0;
 
 	// safe validity function
 	static BOOL

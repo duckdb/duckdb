@@ -9,7 +9,6 @@
 #define GPMD_CDXLColumn_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/md/CMDName.h"
 #include "duckdb/optimizer/cascade/md/IMDColumn.h"
 
@@ -28,21 +27,15 @@ class CMDColumn : public IMDColumn
 private:
 	// attribute name
 	CMDName *m_mdname;
-
 	// attribute number
 	INT m_attno;
-
 	// column type
 	IMDId *m_mdid_type;
-
 	INT m_type_modifier;
-
 	// is NULL an allowed value for the attribute
 	BOOL m_is_nullable;
-
 	// is column dropped
 	BOOL m_is_dropped;
-
 	// length of the column
 	ULONG m_length;
 
@@ -68,15 +61,13 @@ public:
 	virtual INT AttrNum() const;
 
 	// is this a system column
-	virtual BOOL
-	IsSystemColumn() const
+	virtual BOOL IsSystemColumn() const
 	{
 		return (0 > m_attno);
 	}
 
 	// length of the column
-	ULONG
-	Length() const
+	ULONG Length() const
 	{
 		return m_length;
 	}

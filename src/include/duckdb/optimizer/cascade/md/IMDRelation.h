@@ -5,23 +5,15 @@
 //	@doc:
 //		Interface for relations in the metadata cache
 //---------------------------------------------------------------------------
-
 #ifndef GPMD_IMDRelation_H
 #define GPMD_IMDRelation_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/md/CMDIndexInfo.h"
 #include "duckdb/optimizer/cascade/md/IMDCacheObject.h"
 #include "duckdb/optimizer/cascade/md/IMDColumn.h"
 #include "duckdb/optimizer/cascade/md/IMDPartConstraint.h"
 #include "duckdb/optimizer/cascade/statistics/IStatistics.h"
-
-namespace gpdxl
-{
-//fwd declaration
-class CXMLSerializer;
-}  // namespace gpdxl
 
 namespace gpmd
 {
@@ -72,11 +64,6 @@ public:
 		ErelpartitionRange = 'r',
 		ErelpartitionList = 'l'
 	};
-
-protected:
-	// serialize an array of column ids into a comma-separated string
-	static CWStringDynamic *ColumnsToStr(CMemoryPool *mp,
-										 ULongPtrArray *colid_array);
 
 public:
 	// object type
