@@ -27,10 +27,10 @@ static void WriteCatalogEntries(stringstream &ss, vector<reference<CatalogEntry>
 	ss << std::endl;
 }
 
-static void WriteStringStreamToFile(FileSystem &fs, FileOpener *opener, stringstream &ss, const string &path) {
+static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, const string &path) {
 	auto ss_string = ss.str();
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
-	                          FileLockType::WRITE_LOCK, FileSystem::DEFAULT_COMPRESSION, opener);
+	                          FileLockType::WRITE_LOCK);
 	fs.Write(*handle, (void *)ss_string.c_str(), ss_string.size());
 	handle.reset();
 }
@@ -51,8 +51,8 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		ss << KeywordHelper::WriteOptionallyQuoted(exported_table.schema_name) << ".";
 	}
 
-	ss << KeywordHelper::WriteOptionallyQuoted(exported_table.table_name) << " FROM '" << exported_table.file_path
-	   << "' (";
+	ss << StringUtil::Format("%s FROM %s (", SQLIdentifier(exported_table.table_name),
+	                         SQLString(exported_table.file_path));
 
 	// write the copy options
 	ss << "FORMAT '" << info.format << "'";
@@ -70,6 +70,9 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, CopyInfo &info,
 		}
 	}
 	for (auto &copy_option : info.options) {
+		if (copy_option.first == "force_quote") {
+			continue;
+		}
 		ss << ", " << copy_option.first << " ";
 		if (copy_option.second.size() == 1) {
 			WriteValueAsSQL(ss, copy_option.second[0]);
@@ -105,7 +108,6 @@ SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &c
 
 	auto &ccontext = context.client;
 	auto &fs = FileSystem::GetFileSystem(ccontext);
-	auto *opener = FileSystem::GetFileOpener(ccontext);
 
 	// gather all catalog types to export
 	vector<reference<CatalogEntry>> schemas;
@@ -169,7 +171,7 @@ SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &c
 	WriteCatalogEntries(ss, indexes);
 	WriteCatalogEntries(ss, macros);
 
-	WriteStringStreamToFile(fs, opener, ss, fs.JoinPath(info->file_path, "schema.sql"));
+	WriteStringStreamToFile(fs, ss, fs.JoinPath(info->file_path, "schema.sql"));
 
 	// write the load.sql file
 	// for every table, we write COPY INTO statement with the specified options
@@ -178,7 +180,7 @@ SourceResultType PhysicalExport::GetData(ExecutionContext &context, DataChunk &c
 		auto exported_table_info = exported_tables.data[i].table_data;
 		WriteCopyStatement(fs, load_ss, *info, exported_table_info, function);
 	}
-	WriteStringStreamToFile(fs, opener, load_ss, fs.JoinPath(info->file_path, "load.sql"));
+	WriteStringStreamToFile(fs, load_ss, fs.JoinPath(info->file_path, "load.sql"));
 	state.finished = true;
 
 	return SourceResultType::FINISHED;

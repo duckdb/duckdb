@@ -289,7 +289,6 @@ void DuckDBPyType::Initialize(py::handle &m) {
 	connection_module.def("__getattr__", &DuckDBPyType::GetAttribute, "Get the child type by 'name'", py::arg("name"));
 	connection_module.def("__getitem__", &DuckDBPyType::GetAttribute, "Get the child type by 'name'", py::arg("name"));
 
-	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	py::implicitly_convertible<py::object, DuckDBPyType>();
 	py::implicitly_convertible<py::str, DuckDBPyType>();
 	py::implicitly_convertible<PyGenericAlias, DuckDBPyType>();

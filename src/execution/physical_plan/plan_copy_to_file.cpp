@@ -11,7 +11,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile
 	bool preserve_insertion_order = PhysicalPlanGenerator::PreserveInsertionOrder(context, *plan);
 	bool supports_batch_index = PhysicalPlanGenerator::UseBatchIndex(context, *plan);
 	auto &fs = FileSystem::GetFileSystem(context);
-	op.file_path = fs.ExpandPath(op.file_path, FileSystem::GetFileOpener(context));
+	op.file_path = fs.ExpandPath(op.file_path);
 	if (op.use_tmp_file) {
 		op.file_path += ".tmp";
 	}

@@ -233,7 +233,6 @@ jobs:
           NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
       - name: Node ${{ matrix.node }}
-        if: matrix.target_arch != 'arm64'
         shell: bash
         run: ./scripts/node_build.sh ${{ matrix.node }}
 

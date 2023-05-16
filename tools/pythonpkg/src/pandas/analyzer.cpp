@@ -321,6 +321,8 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 		// Fall back to string for unknown types
 		can_convert = false;
 		return LogicalType::VARCHAR;
+	default:
+		throw InternalException("Unsupported PythonObjectType");
 	}
 }
 

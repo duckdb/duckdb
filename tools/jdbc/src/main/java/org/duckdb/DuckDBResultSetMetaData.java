@@ -1,20 +1,17 @@
 package org.duckdb;
 
-import java.sql.Date;
-import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
-import java.sql.SQLFeatureNotSupportedException;
-import java.sql.Time;
-import java.sql.Timestamp;
-import java.sql.Types;
-import java.util.ArrayList;
-import java.time.OffsetTime;
-import java.time.OffsetDateTime;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.sql.Types;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.OffsetTime;
+import java.util.ArrayList;
 import java.util.UUID;
-
-import org.duckdb.DuckDBResultSet.DuckDBBlobResult;
 
 public class DuckDBResultSetMetaData implements ResultSetMetaData {
 
@@ -36,10 +33,8 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		this.column_types = column_types_al.toArray(this.column_types);
 
 		for (String column_type_detail : this.column_types_details) {
-			if (!column_type_detail.equals("")) {
-				String[] split_details = column_type_detail.split(";");
-				column_types_meta.add(new DuckDBColumnTypeMetaData(Short.parseShort(split_details[0].replace("DECIMAL", ""))
-							, Short.parseShort(split_details[1]), Short.parseShort(split_details[2])));
+			if (column_type_detail.startsWith("DECIMAL")) {
+				column_types_meta.add(DuckDBColumnTypeMetaData.parseColumnTypeMetadata(column_type_detail));
 			}
 			else { column_types_meta.add(null); }
 		}
@@ -47,14 +42,14 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 	}
 
 	public static DuckDBColumnType TypeNameToType(String type_name) {
-		if (type_name.startsWith("DECIMAL")) {
+		if (type_name.endsWith("[]")) {
+			return DuckDBColumnType.LIST;
+		} else if (type_name.startsWith("DECIMAL")) {
 			return DuckDBColumnType.DECIMAL;
 		} else if (type_name.equals("TIME WITH TIME ZONE")) {
 			return DuckDBColumnType.TIME_WITH_TIME_ZONE;
 		} else if (type_name.equals("TIMESTAMP WITH TIME ZONE")) {
 			return DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE;
-		} else if (type_name.endsWith("[]")) {
-			return DuckDBColumnType.LIST;
 		} else if (type_name.startsWith("STRUCT")) {
 			return DuckDBColumnType.STRUCT;
 		} else if (type_name.startsWith("MAP")) {
@@ -151,19 +146,15 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		case TINYINT:
 			return Byte.class.getName();
 		case SMALLINT:
-			return Short.class.getName();
-		case INTEGER:
-			return Integer.class.getName();
-		case BIGINT:
-			return Long.class.getName();
-		case HUGEINT:
-			return BigInteger.class.getName();
 		case UTINYINT:
 			return Short.class.getName();
+		case INTEGER:
 		case USMALLINT:
 			return Integer.class.getName();
+		case BIGINT:
 		case UINTEGER:
 			return Long.class.getName();
+		case HUGEINT:
 		case UBIGINT:
 			return BigInteger.class.getName();
 		case FLOAT:
@@ -173,11 +164,11 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		case DECIMAL:
 			return BigDecimal.class.getName();
 		case TIME:
-			return Time.class.getName();
+			return LocalTime.class.getName();
 		case TIME_WITH_TIME_ZONE:
 			return OffsetTime.class.getName();
 		case DATE:
-			return Date.class.getName();
+			return LocalDate.class.getName();
 		case TIMESTAMP:
 		case TIMESTAMP_NS:
 		case TIMESTAMP_S:
@@ -191,6 +182,8 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return DuckDBResultSet.DuckDBBlobResult.class.getName();
 		case UUID:
 			return UUID.class.getName();
+		case LIST:
+			return DuckDBArray.class.getName();
 		default:
 			return String.class.getName();
 		}

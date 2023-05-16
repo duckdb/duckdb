@@ -23,7 +23,7 @@ struct SimilarCatalogEntry {
 	//! The schema of the entry.
 	optional_ptr<SchemaCatalogEntry> schema;
 
-	DUCKDB_API bool Found() const {
+	bool Found() const {
 		return !name.empty();
 	}
 
