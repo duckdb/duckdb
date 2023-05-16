@@ -9,10 +9,10 @@ RadixPartitionInfo::RadixPartitionInfo(const idx_t n_partitions_upper_bound)
       radix_bits(RadixPartitioning::RadixBits(n_partitions)), radix_mask(RadixPartitioning::Mask(radix_bits)),
       radix_shift(RadixPartitioning::Shift(radix_bits)) {
 
+	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	D_ASSERT(n_partitions > 0);
-	D_ASSERT(n_partitions <= 256);
+	D_ASSERT(n_partitions == RadixPartitioning::NumberOfPartitions(radix_bits));
 	D_ASSERT(IsPowerOfTwo(n_partitions));
-	D_ASSERT(radix_bits <= 8);
 }
 
 PartitionableHashTable::PartitionableHashTable(ClientContext &context, Allocator &allocator,
@@ -153,6 +153,14 @@ HashTableList PartitionableHashTable::GetUnpartitioned() {
 	return std::move(unpartitioned_hts);
 }
 
+idx_t PartitionableHashTable::GetPartitionSize(idx_t partition) const {
+	idx_t total_size = 0;
+	for (const auto &ht : unpartitioned_hts) {
+		total_size += ht->SizeInBytes();
+	}
+	return total_size;
+}
+
 void PartitionableHashTable::Finalize() {
 	if (IsPartitioned()) {
 		for (auto &ht_list : radix_partitioned_hts) {
@@ -167,6 +175,13 @@ void PartitionableHashTable::Finalize() {
 			ht->Finalize();
 		}
 	}
+}
+
+void PartitionableHashTable::AssignData(unique_ptr<TupleDataCollection> data) {
+	unpartitioned_hts.push_back(make_uniq<GroupedAggregateHashTable>(context, allocator, group_types, payload_types,
+	                                                                 bindings, GetHTEntrySize(),
+	                                                                 GroupedAggregateHashTable::InitialCapacity()));
+	unpartitioned_hts.back()->GetDataCollection().Combine(*data);
 }
 
 } // namespace duckdb

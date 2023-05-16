@@ -38,8 +38,11 @@ public:
 
 	HashTableList GetPartition(idx_t partition);
 	HashTableList GetUnpartitioned();
+	idx_t GetPartitionSize(idx_t partition) const;
 
 	void Finalize();
+
+	void AssignData(unique_ptr<TupleDataCollection> data);
 
 private:
 	ClientContext &context;

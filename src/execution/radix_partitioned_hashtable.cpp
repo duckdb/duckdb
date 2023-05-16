@@ -1,5 +1,7 @@
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
 
+#include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -54,13 +56,13 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 // Sink
 //===--------------------------------------------------------------------===//
 class RadixHTGlobalState : public GlobalSinkState {
-	constexpr const static idx_t MAX_RADIX_PARTITIONS = 32;
+	constexpr const static idx_t MAX_RADIX_PARTITIONS = 16;
 
 public:
 	explicit RadixHTGlobalState(ClientContext &context)
 	    : is_empty(true), multi_scan(true), partitioned(false),
-	      partition_info(
-	          MinValue<idx_t>(MAX_RADIX_PARTITIONS, TaskScheduler::GetScheduler(context).NumberOfThreads())) {
+	      partition_info(make_uniq<RadixPartitionInfo>(
+	          MinValue<idx_t>(MAX_RADIX_PARTITIONS, TaskScheduler::GetScheduler(context).NumberOfThreads()))) {
 	}
 
 	vector<unique_ptr<PartitionableHashTable>> intermediate_hts;
@@ -78,8 +80,13 @@ public:
 	bool is_finalized = false;
 	bool is_partitioned = false;
 
-	RadixPartitionInfo partition_info;
+	unique_ptr<RadixPartitionInfo> partition_info;
 	AggregateHTAppendState append_state;
+
+	//! Repartition info
+	bool repartitioned = false;
+	idx_t tasks_per_partition;
+	array_ptr<atomic<idx_t>> tasks_done_per_partition;
 };
 
 class RadixHTLocalState : public LocalSinkState {
@@ -164,11 +171,14 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 	if (!llstate.ht) {
 		llstate.ht =
 		    make_uniq<PartitionableHashTable>(context.client, BufferAllocator::Get(context.client),
-		                                      gstate.partition_info, group_types, op.payload_types, op.bindings);
+		                                      *gstate.partition_info, group_types, op.payload_types, op.bindings);
+		if (context.client.config.force_external) {
+			gstate.partitioned = true;
+		}
 	}
 
 	llstate.total_groups += llstate.ht->AddChunk(group_chunk, payload_input,
-	                                             gstate.partitioned && gstate.partition_info.n_partitions > 1, filter);
+	                                             gstate.partitioned && gstate.partition_info->n_partitions > 1, filter);
 	if (llstate.total_groups >= radix_limit) {
 		gstate.partitioned = true;
 	}
@@ -192,7 +202,7 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 		return; // no data
 	}
 
-	if (!llstate.ht->IsPartitioned() && gstate.partition_info.n_partitions > 1 && gstate.partitioned) {
+	if (!llstate.ht->IsPartitioned() && gstate.partition_info->n_partitions > 1 && gstate.partitioned) {
 		llstate.ht->Partition(true);
 	}
 
@@ -205,6 +215,16 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 	}
 	// at this point we just collect them the PhysicalHashAggregateFinalizeTask (below) will merge them in parallel
 	gstate.intermediate_hts.push_back(std::move(llstate.ht));
+}
+
+void RadixPartitionedHashTable::InitializeFinalizedHTs(ClientContext &context, GlobalSinkState &gstate_p) const {
+	auto &gstate = gstate_p.Cast<RadixHTGlobalState>();
+	auto &allocator = BufferAllocator::Get(context);
+	gstate.finalized_hts.resize(gstate.partition_info->n_partitions);
+	for (idx_t r = 0; r < gstate.partition_info->n_partitions; r++) {
+		gstate.finalized_hts[r] = make_shared<GroupedAggregateHashTable>(
+		    context, allocator, group_types, op.payload_types, op.bindings, HtEntryType::HT_WIDTH_64);
+	}
 }
 
 bool RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState &gstate_p) const {
@@ -231,11 +251,7 @@ bool RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 			}
 		}
 		// schedule additional tasks to combine the partial HTs
-		gstate.finalized_hts.resize(gstate.partition_info.n_partitions);
-		for (idx_t r = 0; r < gstate.partition_info.n_partitions; r++) {
-			gstate.finalized_hts[r] = make_shared<GroupedAggregateHashTable>(
-			    context, allocator, group_types, op.payload_types, op.bindings, HtEntryType::HT_WIDTH_64);
-		}
+		InitializeFinalizedHTs(context, gstate_p);
 		gstate.is_partitioned = true;
 		return true;
 	} else { // in the non-partitioned case we immediately combine all the unpartitioned hts created by the threads.
@@ -264,24 +280,50 @@ bool RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 class RadixAggregateFinalizeTask : public ExecutorTask {
 public:
 	RadixAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p, RadixHTGlobalState &state_p,
-	                           idx_t radix_p)
-	    : ExecutorTask(executor), event(std::move(event_p)), state(state_p), radix(radix_p) {
+	                           idx_t radix_p, idx_t radix_before_p = DConstants::INVALID_INDEX)
+	    : ExecutorTask(executor), event(std::move(event_p)), state(state_p), radix(radix_p),
+	      radix_before(radix_before_p) {
 	}
 
-	static void FinalizeHT(RadixHTGlobalState &gstate, idx_t radix) {
-		D_ASSERT(gstate.partition_info.n_partitions <= gstate.finalized_hts.size());
-		D_ASSERT(gstate.finalized_hts[radix]);
-		for (auto &pht : gstate.intermediate_hts) {
+	void FinalizeHT() {
+		D_ASSERT(state.partition_info->n_partitions <= state.finalized_hts.size());
+		D_ASSERT(state.finalized_hts[radix]);
+		for (auto &pht : state.intermediate_hts) {
 			for (auto &ht : pht->GetPartition(radix)) {
-				gstate.finalized_hts[radix]->Combine(*ht);
+				state.finalized_hts[radix]->Combine(*ht);
 				ht.reset();
 			}
 		}
-		gstate.finalized_hts[radix]->Finalize();
+		state.finalized_hts[radix]->Finalize();
+	}
+
+	void FinalizeRepartitionedHT() {
+		// Spinlock until repartition tasks are done
+		while (true) {
+			if (state.tasks_done_per_partition[radix_before] == state.tasks_per_partition) {
+				break;
+			}
+		}
+		// Now we can finalize
+		const auto pht_idx_from = radix_before * state.tasks_per_partition;
+		const auto pht_idx_to = pht_idx_from + state.tasks_per_partition;
+		for (idx_t pht_idx = pht_idx_from; pht_idx < pht_idx_to; pht_idx++) {
+			auto &pht = state.intermediate_hts[pht_idx];
+			for (auto &ht : pht->GetPartition(radix)) {
+				state.finalized_hts[radix]->Combine(*ht);
+			}
+		}
+		state.finalized_hts[radix]->Finalize();
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		FinalizeHT(state, radix);
+		if (state.repartitioned) {
+			D_ASSERT(radix_before != DConstants::INVALID_INDEX);
+			FinalizeRepartitionedHT();
+		} else {
+			D_ASSERT(radix_before == DConstants::INVALID_INDEX);
+			FinalizeHT();
+		}
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -290,6 +332,32 @@ private:
 	shared_ptr<Event> event;
 	RadixHTGlobalState &state;
 	idx_t radix;
+	idx_t radix_before;
+};
+
+class RadixAggregateRepartitionTask : public ExecutorTask {
+public:
+	RadixAggregateRepartitionTask(Executor &executor, shared_ptr<Event> event_p, RadixHTGlobalState &state_p,
+	                              unique_ptr<PartitionableHashTable> ht_p, idx_t radix_p, idx_t task_idx_p)
+	    : ExecutorTask(executor), event(std::move(event_p)), state(state_p), ht(std::move(ht_p)), radix(radix_p),
+	      task_idx(task_idx_p) {
+	}
+
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		ht->Partition(true);
+		state.intermediate_hts[radix * state.tasks_per_partition + task_idx] = std::move(ht);
+		state.tasks_done_per_partition[radix]++;
+		event->FinishTask();
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+private:
+	shared_ptr<Event> event;
+	RadixHTGlobalState &state;
+
+	unique_ptr<PartitionableHashTable> ht;
+	idx_t radix;
+	idx_t task_idx;
 };
 
 void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_ptr<Event> &event,
@@ -298,16 +366,106 @@ void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_p
 	if (!gstate.is_partitioned) {
 		return;
 	}
-	for (idx_t r = 0; r < gstate.partition_info.n_partitions; r++) {
-		D_ASSERT(gstate.partition_info.n_partitions <= gstate.finalized_hts.size());
-		D_ASSERT(gstate.finalized_hts[r]);
-		tasks.push_back(make_uniq<RadixAggregateFinalizeTask>(executor, event, gstate, r));
+
+	idx_t repartition_radix_bits;
+	idx_t concurrent_repartitions;
+	idx_t tasks_per_partition;
+	GetRepartitionInfo(executor.context, state, repartition_radix_bits, concurrent_repartitions, tasks_per_partition);
+	if (repartition_radix_bits == gstate.partition_info->radix_bits) {
+		// No repartitioning necessary
+		for (idx_t r = 0; r < gstate.partition_info->n_partitions; r++) {
+			D_ASSERT(gstate.partition_info->n_partitions <= gstate.finalized_hts.size());
+			D_ASSERT(gstate.finalized_hts[r]);
+			tasks.push_back(make_uniq<RadixAggregateFinalizeTask>(executor, event, gstate, r));
+		}
+	} else {
+		// Schedule repartition / finalize tasks
+		ScheduleRepartitionTasks(executor, event, state, tasks, repartition_radix_bits, concurrent_repartitions,
+		                         tasks_per_partition);
 	}
+}
+
+void RadixPartitionedHashTable::ScheduleRepartitionTasks(Executor &executor, const shared_ptr<Event> &event,
+                                                         GlobalSinkState &state, vector<shared_ptr<Task>> &tasks,
+                                                         const idx_t repartition_radix_bits,
+                                                         const idx_t concurrent_repartitions,
+                                                         const idx_t tasks_per_partition) const {
+	auto &gstate = state.Cast<RadixHTGlobalState>();
+	D_ASSERT(repartition_radix_bits > gstate.partition_info->radix_bits);
+	const auto num_partitions_before = gstate.partition_info->n_partitions;
+	const auto multiplier = RadixPartitioning::NumberOfPartitions(repartition_radix_bits) / num_partitions_before;
+
+	// Inititialize gstate
+	auto new_partition_info =
+	    make_uniq<RadixPartitionInfo>(RadixPartitioning::NumberOfPartitions(repartition_radix_bits));
+	gstate.repartitioned = true;
+	gstate.tasks_per_partition = tasks_per_partition;
+	gstate.tasks_done_per_partition = make_array<atomic<idx_t>>(num_partitions_before);
+	for (idx_t partition_idx = 0; partition_idx < num_partitions_before; partition_idx++) {
+		gstate.tasks_done_per_partition[partition_idx] = 0;
+	}
+
+	idx_t finalize_idx = 0;
+	const auto &layout = gstate.finalized_hts[0]->GetDataCollection().GetLayout();
+	for (idx_t partition_idx = 0; partition_idx < num_partitions_before; partition_idx++) {
+		// Grab intermediate data from gstate
+		HashTableList partition_list;
+		for (auto &pht : gstate.intermediate_hts) {
+			for (auto &ht : pht->GetPartition(partition_idx)) {
+				partition_list.push_back(std::move(ht));
+			}
+		}
+
+		// Spread the data across the tasks
+		const idx_t hts_per_task = (partition_list.size() + tasks_per_partition - 1) / tasks_per_partition;
+		idx_t ht_idx = 0;
+		for (idx_t task_idx = 0; task_idx < tasks_per_partition; task_idx++) {
+			auto task_data = make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(executor.context), layout);
+			auto ht_idx_to = ht_idx + hts_per_task;
+			for (; ht_idx < ht_idx_to; ht_idx++) {
+				auto &ht = partition_list[ht_idx];
+				task_data->Combine(ht->GetDataCollection());
+				ht.reset();
+			}
+			auto task_ht =
+			    make_uniq<PartitionableHashTable>(executor.context, BufferAllocator::Get(executor.context),
+			                                      *new_partition_info, group_types, op.payload_types, op.bindings);
+			task_ht->AssignData(std::move(task_data));
+			tasks.push_back(make_uniq<RadixAggregateRepartitionTask>(executor, event, gstate, std::move(task_ht),
+			                                                         partition_idx, task_idx));
+		}
+
+		const idx_t finalize_idx_to = partition_idx + 1;
+		if (finalize_idx_to == finalize_idx + concurrent_repartitions) {
+			// Schedule finalizes for the repartitioned data
+			for (; finalize_idx < finalize_idx_to; finalize_idx++) {
+				const auto new_partitions_from = finalize_idx * multiplier;
+				const auto new_partitions_to = (finalize_idx + 1) * multiplier;
+				for (idx_t r = new_partitions_from; r < new_partitions_to; r++) {
+					tasks.push_back(make_uniq<RadixAggregateFinalizeTask>(executor, event, gstate, r, finalize_idx));
+				}
+			}
+		}
+	}
+	// Schedule remaining finalizes (if any)
+	for (; finalize_idx < num_partitions_before; finalize_idx++) {
+		const auto new_partitions_from = finalize_idx * multiplier;
+		const auto new_partitions_to = (finalize_idx + 1) * multiplier;
+		for (idx_t r = new_partitions_from; r < new_partitions_to; r++) {
+			tasks.push_back(make_uniq<RadixAggregateFinalizeTask>(executor, event, gstate, r, finalize_idx));
+		}
+	}
+
+	gstate.intermediate_hts.clear();
+	gstate.intermediate_hts.resize(num_partitions_before * tasks_per_partition);
+
+	gstate.partition_info = std::move(new_partition_info);
+	InitializeFinalizedHTs(executor.context, state);
 }
 
 bool RadixPartitionedHashTable::ForceSingleHT(GlobalSinkState &state) {
 	auto &gstate = state.Cast<RadixHTGlobalState>();
-	return gstate.partition_info.n_partitions < 2;
+	return gstate.partition_info->n_partitions < 2;
 }
 
 bool RadixPartitionedHashTable::AnyPartitioned(GlobalSinkState &state) {
@@ -318,6 +476,81 @@ bool RadixPartitionedHashTable::AnyPartitioned(GlobalSinkState &state) {
 		}
 	}
 	return false;
+}
+
+void RadixPartitionedHashTable::GetRepartitionInfo(ClientContext &context, GlobalSinkState &state,
+                                                   idx_t &repartition_radix_bits, idx_t &concurrent_repartitions,
+                                                   idx_t &tasks_per_partition) {
+	auto &gstate = state.Cast<RadixHTGlobalState>();
+	const auto num_partitions = gstate.partition_info->n_partitions;
+	const auto radix_bits = gstate.partition_info->radix_bits;
+	D_ASSERT(IsPowerOfTwo(num_partitions));
+
+	vector<idx_t> partition_counts(num_partitions, 0);
+	vector<idx_t> partition_sizes(num_partitions, 0);
+	for (const auto &ht : gstate.intermediate_hts) {
+		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
+			partition_counts[partition_idx] += ht->GetPartitionSize(partition_idx);
+			partition_sizes[partition_idx] += ht->GetPartitionSize(partition_idx);
+		}
+	}
+
+	idx_t total_size = 0;
+	idx_t max_partition_idx = 0;
+	idx_t max_partition_size = 0;
+	for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
+		const auto &partition_count = partition_counts[partition_idx];
+		const auto &partition_size = partition_sizes[partition_idx];
+		auto partition_ht_size =
+		    partition_size + GroupedAggregateHashTable::FirstPartSize(partition_count, HtEntryType::HT_WIDTH_64);
+		if (partition_ht_size > max_partition_size) {
+			max_partition_idx = partition_idx;
+			max_partition_size = partition_ht_size;
+		}
+		total_size += partition_ht_size;
+	}
+
+	// Switch to out-of-core finalize at ~60%
+	const auto max_ht_size = double(0.6) * BufferManager::GetBufferManager(context).GetMaxMemory();
+	const idx_t n_threads = PreviousPowerOfTwo(TaskScheduler::GetScheduler(context).NumberOfThreads());
+	D_ASSERT(IsPowerOfTwo(n_threads));
+	if (!context.config.force_external && total_size < max_ht_size) {
+		// In-memory finalize
+		if (num_partitions >= n_threads) {
+			// Can already keep all threads busy
+			repartition_radix_bits = num_partitions;
+			tasks_per_partition = 1;
+		} else {
+			// Repartition to keep all threads busy
+			repartition_radix_bits = n_threads;
+			tasks_per_partition = n_threads / num_partitions;
+		}
+		concurrent_repartitions = num_partitions;
+		return;
+	}
+
+	// Out-of-core finalize
+	const auto partition_count = partition_counts[max_partition_idx];
+	const auto partition_size = partition_sizes[max_partition_idx];
+
+	const auto max_added_bits = RadixPartitioning::MAX_RADIX_BITS - radix_bits;
+	const auto max_thread_memory = PhysicalOperator::GetMaxThreadMemory(context);
+	idx_t added_bits;
+	for (added_bits = 1; added_bits < max_added_bits; added_bits++) {
+		double partition_multiplier = RadixPartitioning::NumberOfPartitions(added_bits);
+
+		auto new_estimated_count = double(partition_count) / partition_multiplier;
+		auto new_estimated_size = double(partition_size) / partition_multiplier;
+		auto new_estimated_ht_size = new_estimated_size + GroupedAggregateHashTable::FirstPartSize(
+		                                                      new_estimated_count, HtEntryType::HT_WIDTH_64);
+
+		if (new_estimated_ht_size <= max_thread_memory) {
+			break; // Max HT size is safe
+		}
+	}
+	repartition_radix_bits = radix_bits + added_bits;
+	concurrent_repartitions = MinValue<idx_t>(MaxValue<idx_t>(1, max_ht_size / max_partition_size), n_threads);
+	tasks_per_partition = NextPowerOfTwo(n_threads / concurrent_repartitions);
 }
 
 //===--------------------------------------------------------------------===//

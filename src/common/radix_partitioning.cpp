@@ -8,6 +8,23 @@
 
 namespace duckdb {
 
+//! Templated radix partitioning constants, can be templated to the number of radix bits
+template <idx_t radix_bits>
+struct RadixPartitioningConstants {
+public:
+	//! Bitmask of the upper bits of the 5th byte
+	static constexpr const idx_t NUM_PARTITIONS = RadixPartitioning::NumberOfPartitions(radix_bits);
+	static constexpr const idx_t SHIFT = RadixPartitioning::Shift(radix_bits);
+	static constexpr const hash_t MASK = RadixPartitioning::Mask(radix_bits);
+
+public:
+	//! Apply bitmask and right shift to get a number between 0 and NUM_PARTITIONS
+	static inline hash_t ApplyMask(hash_t hash) {
+		D_ASSERT((hash & MASK) >> SHIFT < NUM_PARTITIONS);
+		return (hash & MASK) >> SHIFT;
+	}
+};
+
 template <class OP, class RETURN_TYPE, typename... ARGS>
 RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&... args) {
 	D_ASSERT(radix_bits <= sizeof(hash_t) * 8);

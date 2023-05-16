@@ -900,7 +900,7 @@ bool JoinHashTable::RequiresPartitioning(ClientConfig &config, vector<unique_ptr
 		const auto partition_count = partition_counts[max_partition_idx];
 		const auto partition_size = partition_sizes[max_partition_idx];
 
-		const auto max_added_bits = 8 - radix_bits;
+		const auto max_added_bits = RadixPartitioning::MAX_RADIX_BITS - radix_bits;
 		idx_t added_bits;
 		for (added_bits = 1; added_bits < max_added_bits; added_bits++) {
 			double partition_multiplier = RadixPartitioning::NumberOfPartitions(added_bits);
