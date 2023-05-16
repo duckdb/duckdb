@@ -481,8 +481,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			bool target_type_not_varchar = false;
 			if (options.has_format[LogicalTypeId::DATE] && type.id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
-				success = TryCastDateVector(options, parse_vector, result_vector, parse_chunk.size(), error_message,
-				                            line_error);
+				success = TryCastDateVector(options, parse_vector, result_vector, parse_chunk.size(), error_message, line_error);
 			} else if (options.has_format[LogicalTypeId::TIMESTAMP] && type.id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
 				success =
@@ -524,35 +523,43 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 				}
 			}
 
-			idx_t error_line;
+
 			// The line_error must be summed with linenr (All lines emmited from this batch)
 			// But subtracted from the parse_chunk
 			D_ASSERT(line_error + linenr >= parse_chunk.size());
 			line_error += linenr;
 			line_error -= parse_chunk.size();
 
-			error_line = GetLineError(line_error, buffer_idx);
+			idx_t error_line = GetLineError(line_error, buffer_idx);
 
 			if (options.ignore_errors) {
 				conversion_error_ignored = true;
 
-				// Get the row
+				// Get all the failing rows
 				UnifiedVectorFormat inserted_column_data;
 				result_vector.ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
-				idx_t row_idx;
-				for (row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
+				
+				vector<idx_t> failed_rows;
+				for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
 					if (!inserted_column_data.validity.RowIsValid(row_idx) &&
 					    !FlatVector::IsNull(parse_vector, row_idx)) {
-						break;
+						failed_rows.push_back(row_idx);
 					}
 				}
 
-				// Register the error
+				// Register the errors in this chunk
 				auto max_errors = context.config.max_csv_errors;
 				auto &error_log = context.client_data->read_csv_error_log->errors;
-				if (error_log.size() < max_errors) {
+				for(auto row_idx : failed_rows) {
+					if(error_log.size() >= max_errors) {
+						break;
+					}
+
 					auto parsed_str = FlatVector::GetData<string_t>(parse_vector)[row_idx].GetString();
-					error_log.push_back(LoggedCSVError {(error_line + row_idx) - 1, col_idx, col_name, parsed_str,
+					row_idx += linenr;
+					row_idx -= parse_chunk.size();
+					auto row_line = GetLineError(row_idx, buffer_idx); /*row_idx + error_line - 1; */ // TODO: Why does this work?
+					error_log.push_back(LoggedCSVError {row_line, col_idx, col_name, parsed_str,
 					                                    error_message, GetFileName()});
 				}
 			} else if (options.auto_detect) {
