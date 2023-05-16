@@ -16,16 +16,10 @@ namespace duckdb {
 
 struct ArrowAppendData;
 
-enum ArrowOffsetSize { REGULAR, LARGE };
-
-struct ArrowOptions {
-	ArrowOffsetSize offset_size = ArrowOffsetSize::LARGE;
-};
-
 //! The ArrowAppender class can be used to incrementally construct an arrow array by appending data chunks into it
 class ArrowAppender {
 public:
-	DUCKDB_API ArrowAppender(vector<LogicalType> types, idx_t initial_capacity, bool export_as_large = true);
+	DUCKDB_API ArrowAppender(vector<LogicalType> types, idx_t initial_capacity, ArrowOptions options = ArrowOptions());
 	DUCKDB_API ~ArrowAppender();
 
 	//! Append a data chunk to the underlying arrow array

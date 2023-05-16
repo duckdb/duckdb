@@ -39,7 +39,7 @@ struct ArrowAppendData {
 	duckdb::array<const void *, 3> buffers = {{nullptr, nullptr, nullptr}};
 	vector<ArrowArray *> child_pointers;
 
-	ArrowOptions &options;
+	ArrowOptions options;
 };
 
 //===--------------------------------------------------------------------===//
@@ -48,13 +48,8 @@ struct ArrowAppendData {
 static unique_ptr<ArrowAppendData> InitializeArrowChild(const LogicalType &type, idx_t capacity, ArrowOptions &options);
 static ArrowArray *FinalizeArrowChild(const LogicalType &type, ArrowAppendData &append_data);
 
-ArrowAppender::ArrowAppender(vector<LogicalType> types_p, idx_t initial_capacity, bool export_as_large)
+ArrowAppender::ArrowAppender(vector<LogicalType> types_p, idx_t initial_capacity, ArrowOptions options)
     : types(std::move(types_p)) {
-	if (!export_as_large) {
-		options.offset_size = ArrowOffsetSize::REGULAR;
-	} else {
-		options.offset_size = ArrowOffsetSize::LARGE;
-	}
 	for (auto &type : types) {
 		auto entry = InitializeArrowChild(type, initial_capacity, options);
 		root_data.push_back(std::move(entry));

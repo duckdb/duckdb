@@ -26,9 +26,9 @@ namespace duckdb {
 class ArrowTestFactory {
 public:
 	ArrowTestFactory(vector<LogicalType> types_p, vector<string> names_p, string tz_p,
-	                 duckdb::unique_ptr<QueryResult> result_p, bool big_result, bool export_large = true)
+	                 duckdb::unique_ptr<QueryResult> result_p, bool big_result, ArrowOptions options)
 	    : types(std::move(types_p)), names(std::move(names_p)), tz(std::move(tz_p)), result(std::move(result_p)),
-	      big_result(big_result), export_large(export_large) {
+	      big_result(big_result), options(options) {
 	}
 
 	vector<LogicalType> types;
@@ -36,15 +36,15 @@ public:
 	string tz;
 	duckdb::unique_ptr<QueryResult> result;
 	bool big_result;
-	bool export_large;
+	ArrowOptions options;
 
 	struct ArrowArrayStreamData {
-		explicit ArrowArrayStreamData(ArrowTestFactory &factory, bool export_large = true)
-		    : factory(factory), export_large(export_large) {
+		explicit ArrowArrayStreamData(ArrowTestFactory &factory, ArrowOptions options)
+		    : factory(factory), options(options) {
 		}
 
 		ArrowTestFactory &factory;
-		bool export_large;
+		ArrowOptions options;
 	};
 
 	static int ArrowArrayStreamGetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out);
@@ -75,7 +75,7 @@ class ArrowTestHelper {
 public:
 	//! Used in the Arrow Roundtrip Tests
 	static bool RunArrowComparison(Connection &con, const string &query, bool big_result = false,
-	                               bool export_large = true);
+	                               ArrowOptions options = ArrowOptions());
 	//! Used in the ADBC Testing
 	static bool RunArrowComparison(Connection &con, const string &query, ArrowArrayStream &arrow_stream);
 

@@ -21,9 +21,9 @@ int ArrowTestFactory::ArrowArrayStreamGetNext(struct ArrowArrayStream *stream, s
 		if (!chunk || chunk->size() == 0) {
 			return 0;
 		}
-		ArrowConverter::ToArrowArray(*chunk, out, data.export_large);
+		ArrowConverter::ToArrowArray(*chunk, out, data.options);
 	} else {
-		ArrowAppender appender(data.factory.result->types, STANDARD_VECTOR_SIZE, data.export_large);
+		ArrowAppender appender(data.factory.result->types, STANDARD_VECTOR_SIZE, data.options);
 		idx_t count = 0;
 		while (true) {
 			auto chunk = data.factory.result->Fetch();
@@ -63,7 +63,7 @@ duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> ArrowTestFactory::CreateStre
 
 	auto stream_wrapper = make_uniq<ArrowArrayStreamWrapper>();
 	stream_wrapper->number_of_rows = -1;
-	auto private_data = make_uniq<ArrowArrayStreamData>(factory, factory.export_large);
+	auto private_data = make_uniq<ArrowArrayStreamData>(factory, factory.options);
 	stream_wrapper->arrow_array_stream.get_schema = ArrowArrayStreamGetSchema;
 	stream_wrapper->arrow_array_stream.get_next = ArrowArrayStreamGetNext;
 	stream_wrapper->arrow_array_stream.get_last_error = ArrowArrayStreamGetLastError;
@@ -80,7 +80,7 @@ void ArrowTestFactory::GetSchema(uintptr_t factory_ptr, duckdb::ArrowSchemaWrapp
 }
 
 void ArrowTestFactory::ToArrowSchema(struct ArrowSchema *out) {
-	ArrowConverter::ToArrowSchema(out, types, names, tz, export_large);
+	ArrowConverter::ToArrowSchema(out, types, names, tz, options);
 }
 
 duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
@@ -147,7 +147,7 @@ vector<Value> ArrowTestHelper::ConstructArrowScan(uintptr_t arrow_object, bool f
 	return params;
 }
 
-bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, bool big_result, bool export_large) {
+bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, bool big_result, ArrowOptions options) {
 	// run the query
 	auto initial_result = con.Query(query);
 	if (initial_result->HasError()) {
@@ -159,8 +159,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 	auto tz = ClientConfig::GetConfig(*con.context).ExtractTimezone();
 	auto types = initial_result->types;
 	auto names = initial_result->names;
-	ArrowTestFactory factory(std::move(types), std::move(names), tz, std::move(initial_result), big_result,
-	                         export_large);
+	ArrowTestFactory factory(std::move(types), std::move(names), tz, std::move(initial_result), big_result, options);
 
 	// construct the arrow scan
 	auto params = ConstructArrowScan((uintptr_t)&factory, true);
