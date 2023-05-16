@@ -23,11 +23,11 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 	tuple_size = layout.GetRowWidth();
 
 	// allocate and null initialize the data
-	owned_data = make_unsafe_array<data_t>(tuple_size * total_groups);
+	owned_data = make_unsafe_uniq_array<data_t>(tuple_size * total_groups);
 	data = owned_data.get();
 
 	// set up the empty payloads for every tuple, and initialize the "occupied" flag to false
-	group_is_set = make_unsafe_array<bool>(total_groups);
+	group_is_set = make_unsafe_uniq_array<bool>(total_groups);
 	memset(group_is_set.get(), 0, total_groups * sizeof(bool));
 
 	// initialize the hash table for each entry

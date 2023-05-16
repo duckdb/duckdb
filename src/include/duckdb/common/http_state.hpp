@@ -12,6 +12,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
@@ -48,10 +49,10 @@ public:
 	}
 
 	//! helper function to get the HTTP
-	static HTTPState *TryGetState(FileOpener *opener) {
+	static shared_ptr<HTTPState> TryGetState(FileOpener *opener) {
 		auto client_context = FileOpener::TryGetClientContext(opener);
 		if (client_context) {
-			return client_context->client_data->http_state.get();
+			return client_context->client_data->http_state;
 		}
 		return nullptr;
 	}

@@ -29,7 +29,20 @@ class TestAppendDF(object):
         con.append('tbl', df_in, by_name=True)
         res = con.table('tbl').fetchall()
         assert res == [(4, False, 'duck'), (2, True, 'db')]
-    
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_append_by_name_quoted(self, pandas):
+        con = duckdb.connect()
+        con.execute("""
+            create table tbl ("needs to be quoted" integer, other varchar)
+        """)
+        df_in = pandas.DataFrame({
+            "needs to be quoted": [1,2,3]
+        })
+        con.append('tbl', df_in, by_name=True)
+        res = con.table('tbl').fetchall()
+        assert res == [(1, None), (2, None), (3, None)]
+
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_append_by_name_no_exact_match(self, pandas):
         con = duckdb.connect()

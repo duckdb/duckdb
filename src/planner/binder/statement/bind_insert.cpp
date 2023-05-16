@@ -406,6 +406,26 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// Add CTEs as bindable
 	AddCTEMap(stmt.cte_map);
 
+	auto values_list = stmt.GetValuesList();
+
+	// bind the root select node (if any)
+	BoundStatement root_select;
+	if (stmt.column_order == InsertColumnOrder::INSERT_BY_NAME) {
+		if (values_list) {
+			throw BinderException("INSERT BY NAME can only be used when inserting from a SELECT statement");
+		}
+		if (!stmt.columns.empty()) {
+			throw BinderException("INSERT BY NAME cannot be combined with an explicit column list");
+		}
+		D_ASSERT(stmt.select_statement);
+		// INSERT BY NAME - generate the columns from the names of the SELECT statement
+		auto select_binder = Binder::CreateBinder(context, this);
+		root_select = select_binder->Bind(*stmt.select_statement);
+		MoveCorrelatedExpressions(*select_binder);
+
+		stmt.columns = root_select.names;
+	}
+
 	vector<LogicalIndex> named_column_map;
 	if (!stmt.columns.empty() || stmt.default_values) {
 		// insertion statement specifies column list
@@ -413,6 +433,10 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 		// create a mapping of (list index) -> (column index)
 		case_insensitive_map_t<idx_t> column_name_map;
 		for (idx_t i = 0; i < stmt.columns.size(); i++) {
+			auto entry = column_name_map.insert(make_pair(stmt.columns[i], i));
+			if (!entry.second) {
+				throw BinderException("Duplicate column name \"%s\" in INSERT", stmt.columns[i]);
+			}
 			column_name_map[stmt.columns[i]] = i;
 			auto column_index = table.GetColumnIndex(stmt.columns[i]);
 			if (column_index.index == COLUMN_IDENTIFIER_ROW_ID) {
@@ -436,8 +460,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			}
 		}
 	} else {
-		// No columns specified, assume insertion into all columns
-		// Intentionally don't populate 'column_index_map' as an indication of this
+		// insert by position and no columns specified - insertion into all columns of the table
+		// intentionally don't populate 'column_index_map' as an indication of this
 		for (auto &col : table.GetColumns().Physical()) {
 			named_column_map.push_back(col.Logical());
 			insert->expected_types.push_back(col.Type());
@@ -454,7 +478,6 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	idx_t expected_columns = stmt.columns.empty() ? table.GetColumns().PhysicalColumnCount() : stmt.columns.size();
 
 	// special case: check if we are inserting from a VALUES statement
-	auto values_list = stmt.GetValuesList();
 	if (values_list) {
 		auto &expr_list = values_list->Cast<ExpressionListRef>();
 		expr_list.expected_types.resize(expected_columns);
@@ -487,10 +510,12 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	// parse select statement and add to logical plan
 	unique_ptr<LogicalOperator> root;
 	if (stmt.select_statement) {
-		auto select_binder = Binder::CreateBinder(context, this);
-		auto root_select = select_binder->Bind(*stmt.select_statement);
-		MoveCorrelatedExpressions(*select_binder);
-
+		if (stmt.column_order == InsertColumnOrder::INSERT_BY_POSITION) {
+			auto select_binder = Binder::CreateBinder(context, this);
+			root_select = select_binder->Bind(*stmt.select_statement);
+			MoveCorrelatedExpressions(*select_binder);
+		}
+		// inserting from a select - check if the column count matches
 		CheckInsertColumnCountMismatch(expected_columns, root_select.types.size(), !stmt.columns.empty(),
 		                               table.name.c_str());
 

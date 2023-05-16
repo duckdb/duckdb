@@ -11,6 +11,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/common/windows_util.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -53,6 +54,14 @@ bool PathMatched(const string &path, const string &sub_path) {
 
 #ifndef _WIN32
 
+string FileSystem::GetEnvVariable(const string &name) {
+	const char *env = getenv(name.c_str());
+	if (!env) {
+		return string();
+	}
+	return env;
+}
+
 bool FileSystem::IsPathAbsolute(const string &path) {
 	auto path_separator = FileSystem::PathSeparator();
 	return PathMatched(path, path_separator);
@@ -78,34 +87,56 @@ idx_t FileSystem::GetAvailableMemory() {
 }
 
 string FileSystem::GetWorkingDirectory() {
-	auto buffer = make_unsafe_array<char>(PATH_MAX);
+	auto buffer = make_unsafe_uniq_array<char>(PATH_MAX);
 	char *ret = getcwd(buffer.get(), PATH_MAX);
 	if (!ret) {
 		throw IOException("Could not get working directory!");
 	}
 	return string(buffer.get());
 }
+
+string FileSystem::NormalizeAbsolutePath(const string &path) {
+	D_ASSERT(IsPathAbsolute(path));
+	return path;
+}
+
 #else
 
+string FileSystem::GetEnvVariable(const string &env) {
+	// first convert the environment variable name to the correct encoding
+	auto env_w = WindowsUtil::UTF8ToUnicode(env.c_str());
+	// use _wgetenv to get the value
+	auto res_w = _wgetenv(env_w.c_str());
+	if (!res_w) {
+		// no environment variable of this name found
+		return string();
+	}
+	return WindowsUtil::UnicodeToUTF8(res_w);
+}
+
 bool FileSystem::IsPathAbsolute(const string &path) {
-	// 1) A single backslash
-	auto sub_path = FileSystem::PathSeparator();
-	if (PathMatched(path, sub_path)) {
+	// 1) A single backslash or forward-slash
+	if (PathMatched(path, "\\") || PathMatched(path, "/")) {
 		return true;
 	}
-	// 2) check if starts with a double-backslash (i.e., \\)
-	sub_path += FileSystem::PathSeparator();
-	if (PathMatched(path, sub_path)) {
-		return true;
-	}
-	// 3) A disk designator with a backslash (e.g., C:\)
+	// 2) A disk designator with a backslash (e.g., C:\ or C:/)
 	auto path_aux = path;
 	path_aux.erase(0, 1);
-	sub_path = ":" + FileSystem::PathSeparator();
-	if (PathMatched(path_aux, sub_path)) {
+	if (PathMatched(path_aux, ":\\") || PathMatched(path_aux, ":/")) {
 		return true;
 	}
 	return false;
+}
+
+string FileSystem::NormalizeAbsolutePath(const string &path) {
+	D_ASSERT(IsPathAbsolute(path));
+	auto result = StringUtil::Lower(FileSystem::ConvertSeparators(path));
+	if (PathMatched(result, "\\")) {
+		// Path starts with a single backslash or forward slash
+		// prepend drive letter
+		return GetWorkingDirectory().substr(0, 2) + result;
+	}
+	return result;
 }
 
 string FileSystem::PathSeparator() {
@@ -113,8 +144,9 @@ string FileSystem::PathSeparator() {
 }
 
 void FileSystem::SetWorkingDirectory(const string &path) {
-	if (!SetCurrentDirectory(path.c_str())) {
-		throw IOException("Could not change working directory!");
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
+	if (!SetCurrentDirectoryW(unicode_path.c_str())) {
+		throw IOException("Could not change working directory to \"%s\"", path);
 	}
 }
 
@@ -134,16 +166,16 @@ idx_t FileSystem::GetAvailableMemory() {
 }
 
 string FileSystem::GetWorkingDirectory() {
-	idx_t count = GetCurrentDirectory(0, nullptr);
+	idx_t count = GetCurrentDirectoryW(0, nullptr);
 	if (count == 0) {
 		throw IOException("Could not get working directory!");
 	}
-	auto buffer = make_unsafe_array<char>(count);
-	idx_t ret = GetCurrentDirectory(count, buffer.get());
+	auto buffer = make_unsafe_uniq_array<wchar_t>(count);
+	idx_t ret = GetCurrentDirectoryW(count, buffer.get());
 	if (count != ret + 1) {
 		throw IOException("Could not get working directory!");
 	}
-	return string(buffer.get(), ret);
+	return WindowsUtil::UnicodeToUTF8(buffer.get());
 }
 
 #endif
@@ -161,13 +193,7 @@ string FileSystem::ConvertSeparators(const string &path) {
 		return path;
 	}
 	// on windows-based systems we accept both
-	string result = path;
-	for (idx_t i = 0; i < result.size(); i++) {
-		if (result[i] == '/') {
-			result[i] = separator;
-		}
-	}
-	return result;
+	return StringUtil::Replace(path, "/", separator_str);
 }
 
 string FileSystem::ExtractName(const string &path) {
@@ -202,14 +228,10 @@ string FileSystem::GetHomeDirectory(optional_ptr<FileOpener> opener) {
 	}
 	// fallback to the default home directories for the specified system
 #ifdef DUCKDB_WINDOWS
-	const char *homedir = getenv("USERPROFILE");
+	return FileSystem::GetEnvVariable("USERPROFILE");
 #else
-	const char *homedir = getenv("HOME");
+	return FileSystem::GetEnvVariable("HOME");
 #endif
-	if (homedir) {
-		return homedir;
-	}
-	return string();
 }
 
 string FileSystem::GetHomeDirectory() {
@@ -305,6 +327,20 @@ void FileSystem::FileSync(FileHandle &handle) {
 	throw NotImplementedException("%s: FileSync is not implemented!", GetName());
 }
 
+bool FileSystem::HasGlob(const string &str) {
+	for (idx_t i = 0; i < str.size(); i++) {
+		switch (str[i]) {
+		case '*':
+		case '?':
+		case '[':
+			return true;
+		default:
+			break;
+		}
+	}
+	return false;
+}
+
 vector<string> FileSystem::Glob(const string &path, FileOpener *opener) {
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
 }
@@ -333,12 +369,8 @@ vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &conte
 	auto result = Glob(pattern);
 	if (result.empty()) {
 		string required_extension;
-		const string prefixes[] = {"http://", "https://", "s3://"};
-		for (auto &prefix : prefixes) {
-			if (StringUtil::StartsWith(pattern, prefix)) {
-				required_extension = "httpfs";
-				break;
-			}
+		if (FileSystem::IsRemoteFile(pattern)) {
+			required_extension = "httpfs";
 		}
 		if (!required_extension.empty() && !context.db->ExtensionIsLoaded(required_extension)) {
 			// an extension is required to read this file but it is not loaded - try to load it
@@ -453,6 +485,16 @@ void FileHandle::Truncate(int64_t new_size) {
 
 FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
+}
+
+bool FileSystem::IsRemoteFile(const string &path) {
+	const string prefixes[] = {"http://", "https://", "s3://"};
+	for (auto &prefix : prefixes) {
+		if (StringUtil::StartsWith(path, prefix)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 } // namespace duckdb

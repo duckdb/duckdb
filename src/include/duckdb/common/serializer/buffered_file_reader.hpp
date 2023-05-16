@@ -18,7 +18,7 @@ public:
 	                   FileLockType lock_type = FileLockType::READ_LOCK, optional_ptr<FileOpener> opener = nullptr);
 
 	FileSystem &fs;
-	unsafe_array_ptr<data_t> data;
+	unsafe_unique_array<data_t> data;
 	idx_t offset;
 	idx_t read_data;
 	unique_ptr<FileHandle> handle;

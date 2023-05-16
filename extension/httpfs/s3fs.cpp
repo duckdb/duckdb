@@ -526,8 +526,9 @@ void S3FileSystem::GetQueryParam(const string &key, string &param, duckdb_httpli
 }
 
 void S3FileSystem::ReadQueryParams(const string &url_query_param, S3AuthParams &params) {
-	if (url_query_param.empty())
+	if (url_query_param.empty()) {
 		return;
+	}
 
 	duckdb_httplib_openssl::Params query_params;
 	duckdb_httplib_openssl::detail::parse_query_text(url_query_param, query_params);
@@ -916,7 +917,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 	do {
 		// main listobject call, may
 		string response_str = AWSListObjectV2::Request(shared_path, http_params, s3_auth_params,
-		                                               main_continuation_token, HTTPState::TryGetState(opener));
+		                                               main_continuation_token, HTTPState::TryGetState(opener).get());
 		main_continuation_token = AWSListObjectV2::ParseContinuationToken(response_str);
 		AWSListObjectV2::ParseKey(response_str, s3_keys);
 
@@ -932,7 +933,7 @@ vector<string> S3FileSystem::Glob(const string &glob_pattern, FileOpener *opener
 			do {
 				auto prefix_res =
 				    AWSListObjectV2::Request(prefix_path, http_params, s3_auth_params, common_prefix_continuation_token,
-				                             HTTPState::TryGetState(opener));
+				                             HTTPState::TryGetState(opener).get());
 				AWSListObjectV2::ParseKey(prefix_res, s3_keys);
 				auto more_prefixes = AWSListObjectV2::ParseCommonPrefix(prefix_res);
 				common_prefixes.insert(common_prefixes.end(), more_prefixes.begin(), more_prefixes.end());
@@ -989,7 +990,7 @@ bool S3FileSystem::ListFiles(const string &directory, const std::function<void(c
 }
 
 string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
-                                string &continuation_token, HTTPState *state, bool use_delimiter) {
+                                string &continuation_token, optional_ptr<HTTPState> state, bool use_delimiter) {
 	auto parsed_url = S3FileSystem::S3UrlParse(path, s3_auth_params);
 
 	// Construct the ListObjectsV2 call

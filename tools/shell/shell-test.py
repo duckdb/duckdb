@@ -1025,7 +1025,7 @@ select channel,i_brand_id,sum_sales,number_sales from mytable;
           out='''web,8006004,844.21,21''')
 
      test('''create table mytable as select * from
-read_json_objects('/dev/stdin');
+read_ndjson_objects('/dev/stdin');
 select * from mytable;
           ''',
           extra_commands=['-list', ':memory:'],

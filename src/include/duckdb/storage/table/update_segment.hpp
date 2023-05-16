@@ -96,8 +96,8 @@ private:
 
 struct UpdateNodeData {
 	unique_ptr<UpdateInfo> info;
-	unsafe_array_ptr<sel_t> tuples;
-	unsafe_array_ptr<data_t> tuple_data;
+	unsafe_unique_array<sel_t> tuples;
+	unsafe_unique_array<data_t> tuple_data;
 };
 
 struct UpdateNode {

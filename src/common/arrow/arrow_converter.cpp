@@ -33,7 +33,7 @@ struct DuckDBArrowSchemaHolder {
 	std::list<vector<ArrowSchema>> nested_children;
 	std::list<vector<ArrowSchema *>> nested_children_ptr;
 	//! This holds strings created to represent decimal types
-	vector<unsafe_array_ptr<char>> owned_type_names;
+	vector<unsafe_unique_array<char>> owned_type_names;
 };
 
 static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
@@ -131,7 +131,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::TIMESTAMP_TZ: {
 		string format = "tsu:" + config_timezone;
-		auto format_ptr = make_unsafe_array<char>(format.size() + 1);
+		auto format_ptr = make_unsafe_uniq_array<char>(format.size() + 1);
 		for (size_t i = 0; i < format.size(); i++) {
 			format_ptr[i] = format[i];
 		}
@@ -156,7 +156,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		uint8_t width, scale;
 		type.GetDecimalProperties(width, scale);
 		string format = "d:" + to_string(width) + "," + to_string(scale);
-		auto format_ptr = make_unsafe_array<char>(format.size() + 1);
+		auto format_ptr = make_unsafe_uniq_array<char>(format.size() + 1);
 		for (size_t i = 0; i < format.size(); i++) {
 			format_ptr[i] = format[i];
 		}
@@ -204,7 +204,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 			InitializeChild(*child.children[type_idx]);
 
 			auto &struct_col_name = child_types[type_idx].first;
-			auto name_ptr = make_unsafe_array<char>(struct_col_name.size() + 1);
+			auto name_ptr = make_unsafe_uniq_array<char>(struct_col_name.size() + 1);
 			for (size_t i = 0; i < struct_col_name.size(); i++) {
 				name_ptr[i] = struct_col_name[i];
 			}
