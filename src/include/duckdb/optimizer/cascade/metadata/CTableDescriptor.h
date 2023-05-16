@@ -12,10 +12,8 @@
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/common/CBitSet.h"
 #include "duckdb/optimizer/cascade/common/CDynamicPtrArray.h"
-
 #include "duckdb/optimizer/cascade/base/CColRef.h"
 #include "duckdb/optimizer/cascade/metadata/CColumnDescriptor.h"
-#include "duckdb/optimizer/cascade/md/CMDRelationGPDB.h"
 #include "duckdb/optimizer/cascade/md/IMDId.h"
 
 namespace gpopt

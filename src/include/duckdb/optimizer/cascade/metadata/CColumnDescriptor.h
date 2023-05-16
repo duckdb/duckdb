@@ -10,7 +10,6 @@
 
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/common/CRefCount.h"
-
 #include "duckdb/optimizer/cascade/metadata/CName.h"
 #include "duckdb/optimizer/cascade/md/IMDType.h"
 
