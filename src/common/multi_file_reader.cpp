@@ -16,7 +16,9 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
+	table_function.named_parameters["hive_type"] = LogicalType::ANY;
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["hive_type_autocast"] = LogicalType::BOOLEAN;
 }
 
 vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value &input, const string &name,
@@ -62,7 +64,7 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		options.union_by_name = BooleanValue::Get(val);
 	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
 		options.hive_types_autocast = BooleanValue::Get(val);
-	} else if (loption == "hive_types") {
+	} else if (loption == "hive_types" || loption == "hive_type") {
 		// using 'hive_types' implies 'hive_partitioning'
 		options.hive_partitioning = true;
 
@@ -165,6 +167,12 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 				throw BinderException("Hive partition mismatch between file \"%s\" and \"%s\"", files[0], f);
 			}
 		}
+
+		if (!options.hive_types_schema.empty()) {
+			// verify that all hive_types are existing partitions
+			options.VerifyHiveTypesArePartitions(partitions);
+		}
+
 		for (auto &part : partitions) {
 			idx_t hive_partitioning_index = DConstants::INVALID_INDEX;
 			auto lookup = std::find(names.begin(), names.end(), part.first);
@@ -222,10 +230,9 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 						auto it = file_options.hive_types_schema.find(entry.value);
 						if (it != file_options.hive_types_schema.end()) {
 							if (!value.TryCastAs(context, it->second)) {
-								const string errormsg(StringUtil::Format(
+								throw InvalidInputException(
 								    "Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(),
-								    StringUtil::Upper(it->first), it->second.ToString()));
-								throw InvalidInputException(errormsg.c_str());
+								    StringUtil::Upper(it->first), it->second.ToString());
 							}
 						}
 					}
@@ -531,6 +538,13 @@ void MultiFileReaderOptions::AutoDetectHivePartitioning(const vector<string> &fi
 	}
 	if (hive_partitioning && hive_types_autocast) {
 		AutoDetectHiveTypesInternal(files.front(), context);
+	}
+}
+void MultiFileReaderOptions::VerifyHiveTypesArePartitions(const std::map<string, string> &partitions) const {
+	for (auto &hive_type : hive_types_schema) {
+		if (partitions.find(hive_type.first) == partitions.end()) {
+			throw InvalidInputException("hive_type: \"%s\" does not exist!", hive_type.first);
+		}
 	}
 }
 LogicalType MultiFileReaderOptions::GetHiveLogicalType(const string &hive_partition_column) const {
