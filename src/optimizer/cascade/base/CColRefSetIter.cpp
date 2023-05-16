@@ -5,7 +5,6 @@
 //	@doc:
 //		Implementation of bitset iterator
 //---------------------------------------------------------------------------
-
 #include "duckdb/optimizer/cascade/base/CColRefSetIter.h"
 
 #include "duckdb/optimizer/cascade/base.h"

@@ -9,15 +9,15 @@
 //		Implementation of optimization context
 //---------------------------------------------------------------------------
 
-#include "gpopt/base/CQueryContext.h"
+#include "duckdb/optimizer/cascade/base/CQueryContext.h"
 
-#include "gpos/base.h"
+#include "duckdb/optimizer/cascade/base.h"
 
-#include "gpopt/base/CColRefSetIter.h"
-#include "gpopt/base/CColumnFactory.h"
-#include "gpopt/base/CDistributionSpecAny.h"
-#include "gpopt/base/COptCtxt.h"
-#include "gpopt/operators/CLogicalLimit.h"
+#include "duckdb/optimizer/cascade/base/CColRefSetIter.h"
+#include "duckdb/optimizer/cascade/base/CColumnFactory.h"
+#include "duckdb/optimizer/cascade/base/CDistributionSpecAny.h"
+#include "duckdb/optimizer/cascade/base/COptCtxt.h"
+#include "duckdb/optimizer/cascade/operators/CLogicalLimit.h"
 
 using namespace gpopt;
 //---------------------------------------------------------------------------

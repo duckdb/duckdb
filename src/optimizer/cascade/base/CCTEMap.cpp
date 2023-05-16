@@ -5,7 +5,6 @@
 //	@doc:
 //		Implementation of CTE map
 //---------------------------------------------------------------------------
-
 #include "duckdb/optimizer/cascade/base/CCTEMap.h"
 
 #include "duckdb/optimizer/cascade/base.h"

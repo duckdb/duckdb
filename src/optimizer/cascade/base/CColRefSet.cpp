@@ -10,7 +10,6 @@
 
 #include "duckdb/optimizer/cascade/base.h"
 
-#include "duckdb/optimizer/cascade/base/CAutoOptCtxt.h"
 #include "duckdb/optimizer/cascade/base/CColRefSetIter.h"
 #include "duckdb/optimizer/cascade/base/CColumnFactory.h"
 
