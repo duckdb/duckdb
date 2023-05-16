@@ -1,6 +1,7 @@
 
 import duckdb
 import pytest
+from conftest import NumpyPandas, ArrowPandas
 
 class TestDuckDBQuery(object):
     def test_duckdb_query(self, duckdb_cursor):
@@ -17,6 +18,19 @@ class TestDuckDBQuery(object):
         # we can run multiple select statements - we get only the last result
         res = duckdb.query('select 42; select 84;').fetchall()
         assert res == [(84,)]
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_duckdb_from_query_multiple_statements(self, pandas):
+        tst_df = pandas.DataFrame({'a':[1,23,3,5]})
+
+        res = duckdb.sql('''
+        select 42; select *
+        from tst_df
+        union all
+        select *
+        from tst_df;
+        ''').fetchall()
+        assert res == [(1,), (23,), (3,), (5,), (1,), (23,), (3,), (5,)]
 
     def test_duckdb_from_query(self, duckdb_cursor):
         # duckdb.from_query cannot be used to run arbitrary queries

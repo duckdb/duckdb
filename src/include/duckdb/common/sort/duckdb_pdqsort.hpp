@@ -39,10 +39,10 @@ using duckdb::idx_t;
 using duckdb::data_t;
 using duckdb::data_ptr_t;
 using duckdb::unique_ptr;
-using duckdb::array_ptr;
-using duckdb::unsafe_array_ptr;
-using duckdb::make_array;
-using duckdb::make_unsafe_array;
+using duckdb::unique_array;
+using duckdb::unsafe_unique_array;
+using duckdb::make_uniq_array;
+using duckdb::make_unsafe_uniq_array;
 using duckdb::FastMemcpy;
 using duckdb::FastMemcmp;
 
@@ -78,9 +78,9 @@ inline int log2(T n) {
 struct PDQConstants {
 	PDQConstants(idx_t entry_size, idx_t comp_offset, idx_t comp_size, data_ptr_t end)
 	    : entry_size(entry_size), comp_offset(comp_offset), comp_size(comp_size),
-	      tmp_buf_ptr(make_unsafe_array<data_t>(entry_size)), tmp_buf(tmp_buf_ptr.get()),
-	      iter_swap_buf_ptr(make_unsafe_array<data_t>(entry_size)), iter_swap_buf(iter_swap_buf_ptr.get()),
-	      swap_offsets_buf_ptr(make_unsafe_array<data_t>(entry_size)),
+	      tmp_buf_ptr(make_unsafe_uniq_array<data_t>(entry_size)), tmp_buf(tmp_buf_ptr.get()),
+	      iter_swap_buf_ptr(make_unsafe_uniq_array<data_t>(entry_size)), iter_swap_buf(iter_swap_buf_ptr.get()),
+	      swap_offsets_buf_ptr(make_unsafe_uniq_array<data_t>(entry_size)),
 	      swap_offsets_buf(swap_offsets_buf_ptr.get()), end(end) {
 	}
 
@@ -88,13 +88,13 @@ struct PDQConstants {
 	const idx_t comp_offset;
 	const idx_t comp_size;
 
-	unsafe_array_ptr<data_t> tmp_buf_ptr;
+	unsafe_unique_array<data_t> tmp_buf_ptr;
 	const data_ptr_t tmp_buf;
 
-	unsafe_array_ptr<data_t> iter_swap_buf_ptr;
+	unsafe_unique_array<data_t> iter_swap_buf_ptr;
 	const data_ptr_t iter_swap_buf;
 
-	unsafe_array_ptr<data_t> swap_offsets_buf_ptr;
+	unsafe_unique_array<data_t> swap_offsets_buf_ptr;
 	const data_ptr_t swap_offsets_buf;
 
 	const data_ptr_t end;

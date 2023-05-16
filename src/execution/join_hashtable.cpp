@@ -142,7 +142,7 @@ static idx_t FilterNullValues(UnifiedVectorFormat &vdata, const SelectionVector 
 	return result_count;
 }
 
-idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unsafe_array_ptr<UnifiedVectorFormat> &key_data,
+idx_t JoinHashTable::PrepareKeys(DataChunk &keys, unsafe_unique_array<UnifiedVectorFormat> &key_data,
                                  const SelectionVector *&current_sel, SelectionVector &sel, bool build_side) {
 	key_data = keys.ToUnifiedFormat();
 
@@ -197,7 +197,7 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	}
 
 	// prepare the keys for processing
-	unsafe_array_ptr<UnifiedVectorFormat> key_data;
+	unsafe_unique_array<UnifiedVectorFormat> key_data;
 	const SelectionVector *current_sel;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	idx_t added_count = PrepareKeys(keys, key_data, current_sel, sel, true);
@@ -332,7 +332,7 @@ unique_ptr<ScanStructure> JoinHashTable::InitializeScanStructure(DataChunk &keys
 	auto ss = make_uniq<ScanStructure>(*this);
 
 	if (join_type != JoinType::INNER) {
-		ss->found_match = make_unsafe_array<bool>(STANDARD_VECTOR_SIZE);
+		ss->found_match = make_unsafe_uniq_array<bool>(STANDARD_VECTOR_SIZE);
 		memset(ss->found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 	}
 

@@ -36,12 +36,12 @@ struct ExportAggregateBindData : public FunctionData {
 struct CombineState : public FunctionLocalState {
 	idx_t state_size;
 
-	unsafe_array_ptr<data_t> state_buffer0, state_buffer1;
+	unsafe_unique_array<data_t> state_buffer0, state_buffer1;
 	Vector state_vector0, state_vector1;
 
 	explicit CombineState(idx_t state_size_p)
-	    : state_size(state_size_p), state_buffer0(make_unsafe_array<data_t>(state_size_p)),
-	      state_buffer1(make_unsafe_array<data_t>(state_size_p)),
+	    : state_size(state_size_p), state_buffer0(make_unsafe_uniq_array<data_t>(state_size_p)),
+	      state_buffer1(make_unsafe_uniq_array<data_t>(state_size_p)),
 	      state_vector0(Value::POINTER((uintptr_t)state_buffer0.get())),
 	      state_vector1(Value::POINTER((uintptr_t)state_buffer1.get())) {
 	}
@@ -55,12 +55,12 @@ static unique_ptr<FunctionLocalState> InitCombineState(ExpressionState &state, c
 
 struct FinalizeState : public FunctionLocalState {
 	idx_t state_size;
-	unsafe_array_ptr<data_t> state_buffer;
+	unsafe_unique_array<data_t> state_buffer;
 	Vector addresses;
 
 	explicit FinalizeState(idx_t state_size_p)
 	    : state_size(state_size_p),
-	      state_buffer(make_unsafe_array<data_t>(STANDARD_VECTOR_SIZE * AlignValue(state_size_p))),
+	      state_buffer(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * AlignValue(state_size_p))),
 	      addresses(LogicalType::POINTER) {
 	}
 };
