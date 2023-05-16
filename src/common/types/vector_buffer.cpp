@@ -58,12 +58,12 @@ VectorStructBuffer::~VectorStructBuffer() {
 }
 
 VectorListBuffer::VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER), capacity(initial_capacity), child(std::move(vector)) {
+    : VectorBuffer(VectorBufferType::LIST_BUFFER), child(std::move(vector)), capacity(initial_capacity) {
 }
 
 VectorListBuffer::VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER), capacity(initial_capacity),
-      child(make_uniq<Vector>(ListType::GetChildType(list_type), initial_capacity)) {
+    : VectorBuffer(VectorBufferType::LIST_BUFFER),
+      child(make_uniq<Vector>(ListType::GetChildType(list_type), initial_capacity)), capacity(initial_capacity) {
 }
 
 void VectorListBuffer::Reserve(idx_t to_reserve) {
@@ -94,6 +94,14 @@ void VectorListBuffer::PushBack(const Value &insert) {
 		capacity *= 2;
 	}
 	child->SetValue(size++, insert);
+}
+
+void VectorListBuffer::SetCapacity(idx_t new_capacity) {
+	this->capacity = new_capacity;
+}
+
+void VectorListBuffer::SetSize(idx_t new_size) {
+	this->size = new_size;
 }
 
 VectorListBuffer::~VectorListBuffer() {

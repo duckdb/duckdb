@@ -23,41 +23,41 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 struct Equals {
 	template <class T>
-	DUCKDB_API static inline bool Operation(const T &left, const T &right) {
+	static inline bool Operation(const T &left, const T &right) {
 		return left == right;
 	}
 };
 struct NotEquals {
 	template <class T>
-	DUCKDB_API static inline bool Operation(const T &left, const T &right) {
+	static inline bool Operation(const T &left, const T &right) {
 		return !Equals::Operation(left, right);
 	}
 };
 
 struct GreaterThan {
 	template <class T>
-	DUCKDB_API static inline bool Operation(const T &left, const T &right) {
+	static inline bool Operation(const T &left, const T &right) {
 		return left > right;
 	}
 };
 
 struct GreaterThanEquals {
 	template <class T>
-	DUCKDB_API static inline bool Operation(const T &left, const T &right) {
+	static inline bool Operation(const T &left, const T &right) {
 		return !GreaterThan::Operation(right, left);
 	}
 };
 
 struct LessThan {
 	template <class T>
-	DUCKDB_API static inline bool Operation(const T &left, const T &right) {
+	static inline bool Operation(const T &left, const T &right) {
 		return GreaterThan::Operation(right, left);
 	}
 };
 
 struct LessThanEquals {
 	template <class T>
-	DUCKDB_API static inline bool Operation(const T &left, const T &right) {
+	static inline bool Operation(const T &left, const T &right) {
 		return !GreaterThan::Operation(left, right);
 	}
 };
