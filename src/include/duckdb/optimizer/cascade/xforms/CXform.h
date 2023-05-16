@@ -1,7 +1,4 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
-//	Copyright (C) 2009 Greenplum, Inc.
-//
 //	@filename:
 //		CXform.h
 //
@@ -16,11 +13,9 @@
 #include "duckdb/optimizer/cascade/common/CEnumSet.h"
 #include "duckdb/optimizer/cascade/common/CEnumSetIter.h"
 #include "duckdb/optimizer/cascade/common/CRefCount.h"
-
 #include "duckdb/optimizer/cascade/base/CUtils.h"
 #include "duckdb/optimizer/cascade/operators/CExpression.h"
 #include "duckdb/optimizer/cascade/operators/CPhysicalHashJoin.h"
-#include "duckdb/optimizer/cascade/xforms/CXform.h"
 #include "duckdb/optimizer/cascade/xforms/CXformContext.h"
 #include "duckdb/optimizer/cascade/xforms/CXformResult.h"
 #include "duckdb/optimizer/cascade/traceflags/traceflags.h"
@@ -245,33 +240,28 @@ public:
 	// the following functions check xform type
 
 	// is xform substitution?
-	virtual BOOL
-	FSubstitution() const
+	virtual BOOL FSubstitution() const
 	{
 		return false;
 	}
 
 	// is xform exploration?
-	virtual BOOL
-	FExploration() const
+	virtual BOOL FExploration() const
 	{
 		return false;
 	}
 
 	// is xform implementation?
-	virtual BOOL
-	FImplementation() const
+	virtual BOOL FImplementation() const
 	{
 		return false;
 	}
 
 	// actual transformation
-	virtual void Transform(CXformContext *pxfctxt, CXformResult *pxfres,
-						   CExpression *pexpr) const = 0;
+	virtual void Transform(CXformContext *pxfctxt, CXformResult *pxfres, CExpression *pexpr) const = 0;
 
 	// accessor
-	CExpression *
-	PexprPattern() const
+	CExpression* PexprPattern() const
 	{
 		return m_pexpr;
 	}
@@ -294,14 +284,12 @@ public:
 	BOOL FCheckPattern(CExpression *pexpr) const;
 
 	// verify xform promise on the given expression
-	static BOOL FPromising(CMemoryPool *mp, const CXform *pxform,
-						   CExpression *pexpr);
+	static BOOL FPromising(CMemoryPool *mp, const CXform *pxform, CExpression *pexpr);
 
 #endif	// GPOS_DEBUG
 
 	// equality function over xform ids
 	static BOOL FEqualIds(const CHAR *szIdOne, const CHAR *szIdTwo);
-
 
 	// returns a set containing all xforms related to index join
 	// caller takes ownership of the returned set
@@ -343,8 +331,7 @@ public:
 };	// class CXform
 
 // shorthand for printing
-inline IOstream &
-operator<<(IOstream &os, CXform &xform)
+inline IOstream& operator<<(IOstream &os, CXform &xform)
 {
 	return xform.OsPrint(os);
 }
@@ -354,7 +341,4 @@ typedef CEnumSet<CXform::EXformId, CXform::ExfSentinel> CXformSet;
 typedef CEnumSetIter<CXform::EXformId, CXform::ExfSentinel> CXformSetIter;
 }  // namespace gpopt
 
-
-#endif	// !GPOPT_CXform_H
-
-// EOF
+#endif

@@ -9,7 +9,6 @@
 #define GPOPT_CXformResult_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/operators/CExpression.h"
 
 namespace gpopt
