@@ -10,16 +10,16 @@
 #ifndef GPOPT_CExpressionHandle_H
 #define GPOPT_CExpressionHandle_H
 
-#include "gpos/base.h"
-#include "gpos/common/CDynamicPtrArray.h"
-#include "gpos/common/CRefCount.h"
+#include "duckdb/optimizer/cascade/base.h"
+#include "duckdb/optimizer/cascade/common/CDynamicPtrArray.h"
+#include "duckdb/optimizer/cascade/common/CRefCount.h"
 
-#include "gpopt/base/CDrvdProp.h"
-#include "gpopt/base/CDrvdPropRelational.h"
-#include "gpopt/base/CReqdProp.h"
-#include "gpopt/operators/CExpression.h"
-#include "gpopt/search/CGroupExpression.h"
-#include "naucrates/statistics/CStatistics.h"
+#include "duckdb/optimizer/cascade/base/CDrvdProp.h"
+#include "duckdb/optimizer/cascade/base/CDrvdPropRelational.h"
+#include "duckdb/optimizer/cascade/base/CReqdProp.h"
+#include "duckdb/optimizer/cascade/operators/CExpression.h"
+#include "duckdb/optimizer/cascade/search/CGroupExpression.h"
+#include "duckdb/optimizer/cascade/statistics/CStatistics.h"
 
 
 namespace gpopt

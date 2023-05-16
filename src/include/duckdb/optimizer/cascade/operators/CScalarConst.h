@@ -14,7 +14,6 @@
 #include "duckdb/optimizer/cascade/base/CDrvdProp.h"
 #include "duckdb/optimizer/cascade/operators/CScalar.h"
 #include "duckdb/optimizer/cascade/base/IDatum.h"
-#include "duckdb/optimizer/cascade/md/CMDTypeBoolGPDB.h"
 
 namespace gpopt
 {
