@@ -87,8 +87,7 @@ public:
 	}
 
 	// print
-	IOstream &
-	OsPrint(IOstream &os) const
+	IOstream& OsPrint(IOstream &os) const
 	{
 		if (GPOPT_MAX_CARD == m_ull)
 		{
@@ -101,15 +100,13 @@ public:
 
 
 // shorthand for printing
-inline IOstream &
-operator<<(IOstream &os, const CMaxCard &mc)
+inline IOstream& operator<<(IOstream &os, const CMaxCard &mc)
 {
 	return mc.OsPrint(os);
 }
 
 // shorthand for less-than equal
-inline BOOL
-operator<=(const CMaxCard &mcLHS, const CMaxCard &mcRHS)
+inline BOOL operator<=(const CMaxCard &mcLHS, const CMaxCard &mcRHS)
 {
 	if (mcLHS.Ull() <= mcRHS.Ull())
 	{
@@ -127,8 +124,7 @@ operator==(const CMaxCard &mcLHS, const CMaxCard &mcRHS)
 }
 
 // shorthand for equality
-inline BOOL
-operator==(ULLONG ull, const CMaxCard &mc)
+inline BOOL operator==(ULLONG ull, const CMaxCard &mc)
 {
 	return mc.operator==(ull);
 }

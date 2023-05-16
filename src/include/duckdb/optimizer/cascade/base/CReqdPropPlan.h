@@ -8,10 +8,10 @@
 #ifndef GPOPT_CReqdPropPlan_H
 #define GPOPT_CReqdPropPlan_H
 
-#include "gpos/base.h"
+#include "duckdb/optimizer/cascade/base.h"
 
-#include "gpopt/base/CColRef.h"
-#include "gpopt/base/CReqdProp.h"
+#include "duckdb/optimizer/cascade/base/CColRef.h"
+#include "duckdb/optimizer/cascade/base/CReqdProp.h"
 
 namespace gpopt
 {

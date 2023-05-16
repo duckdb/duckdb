@@ -9,7 +9,6 @@
 #define GPOPT_CEnfdPartitionPropagation_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/base/CEnfdProp.h"
 #include "duckdb/optimizer/cascade/base/CPartIndexMap.h"
 #include "duckdb/optimizer/cascade/base/CPartitionPropagationSpec.h"

@@ -9,10 +9,8 @@
 #define GPOPT_CEnfdOrder_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/base/CEnfdProp.h"
 #include "duckdb/optimizer/cascade/base/COrderSpec.h"
-
 
 namespace gpopt
 {
@@ -20,7 +18,6 @@ using namespace gpos;
 
 // prototypes
 class CPhysical;
-
 
 //---------------------------------------------------------------------------
 //	@class:
