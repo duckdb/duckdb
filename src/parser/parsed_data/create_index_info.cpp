@@ -5,7 +5,6 @@
 namespace duckdb {
 
 unique_ptr<CreateInfo> CreateIndexInfo::Copy() const {
-
 	auto result = make_uniq<CreateIndexInfo>();
 	CopyProperties(*result);
 
@@ -27,24 +26,20 @@ unique_ptr<CreateInfo> CreateIndexInfo::Copy() const {
 }
 
 void CreateIndexInfo::SerializeInternal(Serializer &serializer) const {
-
 	FieldWriter writer(serializer);
 	writer.WriteField(index_type);
 	writer.WriteString(index_name);
 	writer.WriteField(constraint_type);
 
-	writer.WriteSerializableList<ParsedExpression>(expressions);
 	writer.WriteSerializableList<ParsedExpression>(parsed_expressions);
 
 	writer.WriteRegularSerializableList(scan_types);
 	writer.WriteList<string>(names);
 	writer.WriteList<column_t>(column_ids);
-
 	writer.Finalize();
 }
 
 unique_ptr<CreateIndexInfo> CreateIndexInfo::Deserialize(Deserializer &deserializer) {
-
 	auto result = make_uniq<CreateIndexInfo>();
 	result->DeserializeBase(deserializer);
 
@@ -53,13 +48,11 @@ unique_ptr<CreateIndexInfo> CreateIndexInfo::Deserialize(Deserializer &deseriali
 	result->index_name = reader.ReadRequired<string>();
 	result->constraint_type = reader.ReadRequired<IndexConstraintType>();
 
-	result->expressions = reader.ReadRequiredSerializableList<ParsedExpression>();
 	result->parsed_expressions = reader.ReadRequiredSerializableList<ParsedExpression>();
 
 	result->scan_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	result->names = reader.ReadRequiredList<string>();
 	result->column_ids = reader.ReadRequiredList<column_t>();
-
 	reader.Finalize();
 	return result;
 }

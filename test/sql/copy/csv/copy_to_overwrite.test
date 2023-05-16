@@ -1,0 +1,67 @@
+# name: test/sql/copy/csv/copy_to_overwrite.test
+# description: Test copy to overwriting behavior
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET threads=1;
+
+# run with and without preservation of insertion order
+loop i 0 2
+
+statement ok
+COPY (SELECT * FROM range(5) t(i)) TO '__TEST_DIR__/copy_to_overwrite.csv' (HEADER)
+
+query I
+SELECT * FROM '__TEST_DIR__/copy_to_overwrite.csv'
+----
+0
+1
+2
+3
+4
+
+statement ok
+COPY (SELECT * FROM range(5, 10) t(i)) TO '__TEST_DIR__/copy_to_overwrite.csv' (HEADER)
+
+query I
+SELECT * FROM '__TEST_DIR__/copy_to_overwrite.csv'
+----
+5
+6
+7
+8
+9
+
+# gzip
+statement ok
+COPY (SELECT * FROM range(5) t(i)) TO '__TEST_DIR__/copy_to_overwrite.csv.gz' (HEADER)
+
+query I
+SELECT * FROM '__TEST_DIR__/copy_to_overwrite.csv.gz'
+----
+0
+1
+2
+3
+4
+
+statement ok
+COPY (SELECT * FROM range(5, 10) t(i)) TO '__TEST_DIR__/copy_to_overwrite.csv.gz' (HEADER)
+
+query I
+SELECT * FROM '__TEST_DIR__/copy_to_overwrite.csv.gz'
+----
+5
+6
+7
+8
+9
+
+statement ok
+SET preserve_insertion_order=false
+
+endloop
+

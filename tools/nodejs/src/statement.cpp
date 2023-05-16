@@ -354,24 +354,21 @@ struct RunPreparedTask : public Task {
 			auto deleter = [](Napi::Env, void *finalizeData, void *hint) {
 				delete static_cast<std::shared_ptr<duckdb::QueryResult> *>(hint);
 			};
-
 			std::shared_ptr<duckdb::QueryResult> result_ptr = std::move(result);
 
 			duckdb::idx_t out_idx = 1;
-			while (true) {
-				auto chunk = result_ptr->Fetch();
-
-				if (!chunk || chunk->size() == 0) {
-					break;
+			for (auto &chunk : materialized_result->Collection().Chunks()) {
+				if (chunk.size() == 0) {
+					continue;
 				}
 
-				D_ASSERT(chunk->ColumnCount() == 2);
-				D_ASSERT(chunk->data[0].GetType() == duckdb::LogicalType::BLOB);
-				D_ASSERT(chunk->data[1].GetType() == duckdb::LogicalType::BOOLEAN);
+				D_ASSERT(chunk.ColumnCount() == 2);
+				D_ASSERT(chunk.data[0].GetType() == duckdb::LogicalType::BLOB);
+				D_ASSERT(chunk.data[1].GetType() == duckdb::LogicalType::BOOLEAN);
 
-				for (duckdb::idx_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					duckdb::string_t blob = ((duckdb::string_t *)(chunk->data[0].GetData()))[row_idx];
-					bool is_header = chunk->data[1].GetData()[row_idx];
+				for (duckdb::idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {
+					duckdb::string_t blob = duckdb::FlatVector::GetData<duckdb::string_t>(chunk.data[0])[row_idx];
+					bool is_header = chunk.data[1].GetData()[row_idx];
 
 					// Create shared pointer to give (shared) ownership to ArrayBuffer, not that for these materialized
 					// query results, the string data is owned by the QueryResult
@@ -398,7 +395,12 @@ struct RunPreparedTask : public Task {
 			result_arr.Set(out_idx++, null_arr);
 
 			// Confirm all rows are set
-			D_ASSERT(out_idx == materialized_result->RowCount() + 1);
+			if (materialized_result->RowCount() > 0) {
+				// Non empty results should have their
+				D_ASSERT(out_idx == materialized_result->RowCount() + 1);
+			} else {
+				D_ASSERT(out_idx == 2);
+			}
 
 			cb.MakeCallback(statement.Value(), {env.Null(), result_arr});
 		} break;

@@ -77,7 +77,7 @@ static void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_e
 		}
 
 		// found a true value
-		if (lambda_validity.RowIsValid(entry) && lambda_values[entry] > 0) {
+		if (lambda_validity.RowIsValid(entry) && lambda_values[entry]) {
 			true_sel.set_index(true_count++, i);
 			curr_list_len++;
 		}

@@ -48,7 +48,7 @@ public:
 public:
 	DUCKDB_API virtual ~GlobalTableFunctionState();
 
-	DUCKDB_API virtual idx_t MaxThreads() const {
+	virtual idx_t MaxThreads() const {
 		return 1;
 	}
 

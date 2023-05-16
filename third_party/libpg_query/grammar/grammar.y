@@ -55,6 +55,7 @@
 	PGLockWaitPolicy lockwaitpolicy;
 	PGSubLinkType subquerytype;
 	PGViewCheckOption viewcheckoption;
+	PGInsertColumnOrder bynameorposition;
 }
 
 %type <node> stmt

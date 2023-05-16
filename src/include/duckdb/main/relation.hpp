@@ -32,12 +32,11 @@ class TableRef;
 
 class Relation : public std::enable_shared_from_this<Relation> {
 public:
-	DUCKDB_API Relation(const std::shared_ptr<ClientContext> &context, RelationType type)
-	    : context(context), type(type) {
+	Relation(const std::shared_ptr<ClientContext> &context, RelationType type) : context(context), type(type) {
 	}
-	DUCKDB_API Relation(ClientContextWrapper &context, RelationType type) : context(context.GetContext()), type(type) {
+	Relation(ClientContextWrapper &context, RelationType type) : context(context.GetContext()), type(type) {
 	}
-	DUCKDB_API virtual ~Relation() {
+	virtual ~Relation() {
 	}
 
 	ClientContextWrapper context;
@@ -70,7 +69,7 @@ public:
 	DUCKDB_API unique_ptr<QueryResult> Explain(ExplainType type = ExplainType::EXPLAIN_STANDARD);
 
 	DUCKDB_API virtual unique_ptr<TableRef> GetTableRef();
-	DUCKDB_API virtual bool IsReadOnly() {
+	virtual bool IsReadOnly() {
 		return true;
 	}
 
@@ -154,10 +153,10 @@ public:
 
 public:
 	//! Whether or not the relation inherits column bindings from its child or not, only relevant for binding
-	DUCKDB_API virtual bool InheritsColumnBindings() {
+	virtual bool InheritsColumnBindings() {
 		return false;
 	}
-	DUCKDB_API virtual Relation *ChildRelation() {
+	virtual Relation *ChildRelation() {
 		return nullptr;
 	}
 	DUCKDB_API vector<shared_ptr<ExternalDependency>> GetAllDependencies();

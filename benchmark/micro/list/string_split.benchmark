@@ -17,4 +17,4 @@ run
 SELECT SUM(LENGTH(str_split(l_comment, ' '))) FROM lineitem
 
 result I
-27124176
+27116609

@@ -9,7 +9,10 @@
 #pragma once
 
 #include "buffered_json_reader.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/pair.hpp"
+#include "duckdb/common/types/type_map.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "json_transform.hpp"
@@ -26,29 +29,29 @@ enum class JSONScanType : uint8_t {
 	SAMPLE = 3,
 };
 
-enum class JSONRecordType : uint8_t {
-	//! Sequential values
-	RECORDS = 0,
-	//! Array of values
-	ARRAY_OF_RECORDS = 1,
-	//! Sequential non-object JSON
-	JSON = 2,
-	//! Array of non-object JSON
-	ARRAY_OF_JSON = 3,
-	//! Auto-detect
-	AUTO = 4,
-};
+struct JSONString {
+public:
+	JSONString() {
+	}
+	JSONString(const char *pointer_p, idx_t size_p) : pointer(pointer_p), size(size_p) {
+	}
 
-//! Even though LogicalTypeId is just a uint8_t, this is still needed ...
-struct LogicalTypeIdHash {
-	inline std::size_t operator()(const LogicalTypeId &id) const {
-		return (size_t)id;
+	const char *pointer;
+	idx_t size;
+
+public:
+	string ToString() {
+		return string(pointer, size);
+	}
+
+	const char &operator[](size_t i) const {
+		return pointer[i];
 	}
 };
 
 struct DateFormatMap {
 public:
-	void Initialize(const unordered_map<LogicalTypeId, vector<const char *>, LogicalTypeIdHash> &format_templates) {
+	void Initialize(const type_id_map_t<vector<const char *>> &format_templates) {
 		for (const auto &entry : format_templates) {
 			const auto &type = entry.first;
 			for (const auto &format_string : entry.second) {
@@ -74,65 +77,79 @@ public:
 	}
 
 	StrpTimeFormat &GetFormat(LogicalTypeId type) {
-		return candidate_formats[type].back();
+		D_ASSERT(candidate_formats.find(type) != candidate_formats.end());
+		return candidate_formats.find(type)->second.back();
+	}
+
+	const StrpTimeFormat &GetFormat(LogicalTypeId type) const {
+		D_ASSERT(candidate_formats.find(type) != candidate_formats.end());
+		return candidate_formats.find(type)->second.back();
 	}
 
 private:
-	unordered_map<LogicalTypeId, vector<StrpTimeFormat>, LogicalTypeIdHash> candidate_formats;
+	type_id_map_t<vector<StrpTimeFormat>> candidate_formats;
 };
 
 struct JSONScanData : public TableFunctionData {
 public:
 	JSONScanData();
 
-	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input);
+	void Bind(ClientContext &context, TableFunctionBindInput &input);
+
+	void InitializeReaders(ClientContext &context);
 	void InitializeFormats();
 	void InitializeFormats(bool auto_detect);
+	void SetCompression(const string &compression);
 
-	void Serialize(FieldWriter &writer);
-	void Deserialize(FieldReader &reader);
+	void Serialize(FieldWriter &writer) const;
+	void Deserialize(ClientContext &context, FieldReader &reader);
 
 public:
 	//! Scan type
 	JSONScanType type;
+
 	//! File-specific options
 	BufferedJSONReaderOptions options;
+
+	//! Multi-file reader stuff
+	MultiFileReaderBindData reader_bind;
+
 	//! The files we're reading
-	vector<string> file_paths;
+	vector<string> files;
+	//! Initial file reader
+	unique_ptr<BufferedJSONReader> initial_reader;
+	//! The readers
+	vector<unique_ptr<BufferedJSONReader>> union_readers;
 
 	//! Whether or not we should ignore malformed JSON (default to NULL)
 	bool ignore_errors = false;
-	//! Maximum JSON object size (defaults to 1MB minimum)
-	idx_t maximum_object_size = 1048576;
-	//! Options when transforming the JSON to columnar data
-	JSONTransformOptions transform_options;
-
+	//! Maximum JSON object size (defaults to 16MB minimum)
+	idx_t maximum_object_size = 16777216;
 	//! Whether we auto-detect a schema
 	bool auto_detect = false;
 	//! Sample size for detecting schema
-	idx_t sample_size = STANDARD_VECTOR_SIZE;
-	//! Column names (in order)
-	vector<string> names;
-	//! Valid cols (ROW_TYPE cols are considered invalid)
-	vector<idx_t> valid_cols;
+	idx_t sample_size = idx_t(STANDARD_VECTOR_SIZE) * 10;
 	//! Max depth we go to detect nested JSON schema (defaults to unlimited)
 	idx_t max_depth = NumericLimits<idx_t>::Maximum();
-	//! Whether we're parsing values (usually), or something else
-	JSONRecordType record_type = JSONRecordType::RECORDS;
+
+	//! All column names (in order)
+	vector<string> names;
+	//! Options when transforming the JSON to columnar data
+	JSONTransformOptions transform_options;
 	//! Forced date/timestamp formats
 	string date_format;
 	string timestamp_format;
-
-	//! Stored readers for when we're detecting the schema
-	vector<duckdb::unique_ptr<BufferedJSONReader>> stored_readers;
 	//! Candidate date formats
 	DateFormatMap date_format_map;
+
+	//! The inferred avg tuple size
+	idx_t avg_tuple_size = 420;
 };
 
 struct JSONScanInfo : public TableFunctionInfo {
 public:
 	explicit JSONScanInfo(JSONScanType type_p = JSONScanType::INVALID, JSONFormat format_p = JSONFormat::AUTO_DETECT,
-	                      JSONRecordType record_type_p = JSONRecordType::AUTO, bool auto_detect_p = false)
+	                      JSONRecordType record_type_p = JSONRecordType::AUTO_DETECT, bool auto_detect_p = false)
 	    : type(type_p), format(format_p), record_type(record_type_p), auto_detect(auto_detect_p) {
 	}
 
@@ -144,11 +161,17 @@ public:
 
 struct JSONScanGlobalState {
 public:
-	JSONScanGlobalState(ClientContext &context, JSONScanData &bind_data);
+	JSONScanGlobalState(ClientContext &context, const JSONScanData &bind_data);
 
 public:
 	//! Bound data
-	JSONScanData &bind_data;
+	const JSONScanData &bind_data;
+	//! Options when transforming the JSON to columnar data
+	JSONTransformOptions transform_options;
+
+	//! Column names that we're actually reading (after projection pushdown)
+	vector<string> names;
+	vector<column_t> column_indices;
 
 	//! Buffer manager allocator
 	Allocator &allocator;
@@ -157,7 +180,7 @@ public:
 
 	mutex lock;
 	//! One JSON reader per file
-	vector<duckdb::unique_ptr<BufferedJSONReader>> json_readers;
+	vector<optional_ptr<BufferedJSONReader>> json_readers;
 	//! Current file/batch index
 	idx_t file_index;
 	atomic<idx_t> batch_index;
@@ -166,62 +189,58 @@ public:
 	idx_t system_threads;
 };
 
-struct JSONLine {
-public:
-	JSONLine() {
-	}
-	JSONLine(const char *pointer_p, idx_t size_p) : pointer(pointer_p), size(size_p) {
-	}
-
-	const char *pointer;
-	idx_t size;
-
-public:
-	string ToString() {
-		return string(pointer, size);
-	}
-
-	const char &operator[](size_t i) const {
-		return pointer[i];
-	}
-};
-
 struct JSONScanLocalState {
 public:
 	JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate);
 
 public:
 	idx_t ReadNext(JSONScanGlobalState &gstate);
-	yyjson_alc *GetAllocator();
 	void ThrowTransformError(idx_t object_index, const string &error_message);
 
+	yyjson_alc *GetAllocator();
+	const MultiFileReaderData &GetReaderData() const;
+
+public:
+	//! Current scan data
 	idx_t scan_count;
-	JSONLine lines[STANDARD_VECTOR_SIZE];
+	JSONString units[STANDARD_VECTOR_SIZE];
 	yyjson_val *values[STANDARD_VECTOR_SIZE];
 
-	idx_t array_idx;
-	idx_t array_offset;
-	yyjson_val *array_values[STANDARD_VECTOR_SIZE];
-
+	//! Batch index for order-preserving parallelism
 	idx_t batch_index;
 
 	//! Options when transforming the JSON to columnar data
 	DateFormatMap date_format_map;
 	JSONTransformOptions transform_options;
 
+	//! For determining average tuple size
+	idx_t total_read_size;
+	idx_t total_tuple_count;
+
 private:
-	yyjson_val *ParseLine(char *line_start, idx_t line_size, idx_t remaining, JSONLine &line);
-	idx_t GetObjectsFromArray(JSONScanGlobalState &gstate);
+	bool ReadNextBuffer(JSONScanGlobalState &gstate);
+	void ReadNextBufferInternal(JSONScanGlobalState &gstate, idx_t &buffer_index);
+	void ReadNextBufferSeek(JSONScanGlobalState &gstate, idx_t &buffer_index);
+	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, idx_t &buffer_index);
+	void SkipOverArrayStart();
+
+	bool ReadAndAutoDetect(JSONScanGlobalState &gstate, idx_t &buffer_index, const bool already_incremented_file_idx);
+	void ReconstructFirstObject(JSONScanGlobalState &gstate);
+	void ParseNextChunk();
+
+	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);
+	void ThrowObjectSizeError(const idx_t object_size);
+	void ThrowInvalidAtEndError();
 
 private:
 	//! Bind data
-	JSONScanData &bind_data;
+	const JSONScanData &bind_data;
 	//! Thread-local allocator
-	JSONAllocator json_allocator;
+	JSONAllocator allocator;
 
 	//! Current reader and buffer handle
-	BufferedJSONReader *current_reader;
-	JSONBufferHandle *current_buffer_handle;
+	optional_ptr<BufferedJSONReader> current_reader;
+	optional_ptr<JSONBufferHandle> current_buffer_handle;
 	//! Whether this is the last batch of the file
 	bool is_last;
 
@@ -234,26 +253,12 @@ private:
 
 	//! Buffer to reconstruct split values
 	AllocatedData reconstruct_buffer;
-	//! Copy of current buffer for YYJSON_READ_INSITU
-	AllocatedData current_buffer_copy;
-	const char *buffer_copy_ptr;
-
-private:
-	bool ReadNextBuffer(JSONScanGlobalState &gstate);
-	void ReadNextBuffer(JSONScanGlobalState &gstate, idx_t &buffer_index);
-	void ReadNextBufferSeek(JSONScanGlobalState &gstate, idx_t &buffer_index);
-	void ReadNextBufferNoSeek(JSONScanGlobalState &gstate, idx_t &buffer_index);
-
-	void ReconstructFirstObject(JSONScanGlobalState &gstate);
-
-	void ReadUnstructured(idx_t &count);
-	void ReadNewlineDelimited(idx_t &count);
 };
 
 struct JSONGlobalTableFunctionState : public GlobalTableFunctionState {
 public:
 	JSONGlobalTableFunctionState(ClientContext &context, TableFunctionInitInput &input);
-	static duckdb::unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionInitInput &input);
+	static unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionInitInput &input);
 	idx_t MaxThreads() const override;
 
 public:
@@ -263,8 +268,8 @@ public:
 struct JSONLocalTableFunctionState : public LocalTableFunctionState {
 public:
 	JSONLocalTableFunctionState(ClientContext &context, JSONScanGlobalState &gstate);
-	static duckdb::unique_ptr<LocalTableFunctionState> Init(ExecutionContext &context, TableFunctionInitInput &input,
-	                                                        GlobalTableFunctionState *global_state);
+	static unique_ptr<LocalTableFunctionState> Init(ExecutionContext &context, TableFunctionInitInput &input,
+	                                                GlobalTableFunctionState *global_state);
 	idx_t GetBatchIndex() const;
 
 public:
@@ -276,70 +281,18 @@ public:
 	static void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalType> &return_types,
 	                       vector<string> &names);
 
-	static void InitializeBindData(ClientContext &context, JSONScanData &bind_data,
-	                               const named_parameter_map_t &named_parameters, vector<string> &names,
-	                               vector<LogicalType> &return_types);
+	static double ScanProgress(ClientContext &context, const FunctionData *bind_data_p,
+	                           const GlobalTableFunctionState *global_state);
+	static idx_t GetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
+	                           LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state);
+	static unique_ptr<NodeStatistics> Cardinality(ClientContext &context, const FunctionData *bind_data);
+	static void ComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
+	                                  vector<unique_ptr<Expression>> &filters);
 
-	static double JSONScanProgress(ClientContext &context, const FunctionData *bind_data_p,
-	                               const GlobalTableFunctionState *global_state) {
-		auto &gstate = ((JSONGlobalTableFunctionState &)*global_state).state;
-		double progress = 0;
-		for (auto &reader : gstate.json_readers) {
-			progress += reader->GetProgress();
-		}
-		return progress / double(gstate.json_readers.size());
-	}
+	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function);
+	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader, TableFunction &function);
 
-	static idx_t JSONScanGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
-	                                   LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state) {
-		auto &lstate = (JSONLocalTableFunctionState &)*local_state;
-		return lstate.GetBatchIndex();
-	}
-
-	static unique_ptr<NodeStatistics> JSONScanCardinality(ClientContext &context, const FunctionData *bind_data) {
-		auto &data = (JSONScanData &)*bind_data;
-		idx_t per_file_cardinality;
-		if (data.stored_readers.empty()) {
-			// The cardinality of an unknown JSON file is the almighty number 42 except when it's not
-			per_file_cardinality = 42;
-		} else {
-			// If we multiply the almighty number 42 by 10, we get the exact average size of a JSON
-			// Not really, but the average size of a lineitem row in JSON is around 360 bytes
-			per_file_cardinality = data.stored_readers[0]->GetFileHandle().FileSize() / 420;
-		}
-		// Obviously this can be improved but this is better than defaulting to 0
-		return make_uniq<NodeStatistics>(per_file_cardinality * data.file_paths.size());
-	}
-
-	static void JSONScanSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
-		auto &bind_data = (JSONScanData &)*bind_data_p;
-		bind_data.Serialize(writer);
-	}
-
-	static duckdb::unique_ptr<FunctionData> JSONScanDeserialize(ClientContext &context, FieldReader &reader,
-	                                                            TableFunction &function) {
-		auto result = make_uniq<JSONScanData>();
-		result->Deserialize(reader);
-		return std::move(result);
-	}
-
-	static void TableFunctionDefaults(TableFunction &table_function) {
-		table_function.named_parameters["maximum_object_size"] = LogicalType::UINTEGER;
-		table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
-		table_function.named_parameters["lines"] = LogicalType::VARCHAR;
-		table_function.named_parameters["compression"] = LogicalType::VARCHAR;
-
-		table_function.table_scan_progress = JSONScanProgress;
-		table_function.get_batch_index = JSONScanGetBatchIndex;
-		table_function.cardinality = JSONScanCardinality;
-
-		table_function.serialize = JSONScanSerialize;
-		table_function.deserialize = JSONScanDeserialize;
-
-		table_function.projection_pushdown = false;
-		table_function.filter_pushdown = false;
-		table_function.filter_prune = false;
-	}
+	static void TableFunctionDefaults(TableFunction &table_function);
 };
 
 } // namespace duckdb
