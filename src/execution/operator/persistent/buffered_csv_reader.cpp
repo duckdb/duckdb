@@ -1425,7 +1425,7 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start, idx_t &line_start) {
 		                            GetLineNumberStr(linenr, linenr_estimated));
 	}
 
-	buffer = make_unsafe_array<char>(buffer_read_size + remaining + 1);
+	buffer = make_unsafe_uniq_array<char>(buffer_read_size + remaining + 1);
 	buffer_size = remaining + buffer_read_size;
 	if (remaining > 0) {
 		// remaining from last buffer: copy it here

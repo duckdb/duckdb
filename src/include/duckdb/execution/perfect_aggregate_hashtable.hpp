@@ -46,9 +46,9 @@ protected:
 	// The actual pointer to the data
 	data_ptr_t data;
 	//! The owned data of the HT
-	unsafe_array_ptr<data_t> owned_data;
+	unsafe_unique_array<data_t> owned_data;
 	//! Information on whether or not a specific group has any entries
-	unsafe_array_ptr<bool> group_is_set;
+	unsafe_unique_array<bool> group_is_set;
 
 	//! The minimum values for each of the group columns
 	vector<Value> group_minima;

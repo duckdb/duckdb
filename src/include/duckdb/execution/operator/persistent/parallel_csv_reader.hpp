@@ -67,7 +67,7 @@ struct CSVBufferRead {
 		} else {
 			// 3) It starts in the current buffer and ends in the next buffer
 			D_ASSERT(next_buffer);
-			auto intersection = make_unsafe_array<char>(length);
+			auto intersection = make_unsafe_uniq_array<char>(length);
 			idx_t cur_pos = 0;
 			auto buffer_ptr = buffer->Ptr();
 			for (idx_t i = start_buffer; i < buffer->GetBufferSize(); i++) {
@@ -85,7 +85,7 @@ struct CSVBufferRead {
 
 	shared_ptr<CSVBuffer> buffer;
 	shared_ptr<CSVBuffer> next_buffer;
-	vector<unsafe_array_ptr<char>> intersections;
+	vector<unsafe_unique_array<char>> intersections;
 	optional_ptr<LineInfo> line_info;
 
 	idx_t buffer_start;

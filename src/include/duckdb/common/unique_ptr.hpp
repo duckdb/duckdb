@@ -9,10 +9,10 @@
 
 namespace duckdb {
 
-template <class _Tp, bool SAFE = true>
-class unique_ptr : public std::unique_ptr<_Tp, std::default_delete<_Tp>> {
+template <class _Tp, class _Dp = std::default_delete<_Tp>, bool SAFE = true>
+class unique_ptr : public std::unique_ptr<_Tp, _Dp> {
 public:
-	using original = std::unique_ptr<_Tp, std::default_delete<_Tp>>;
+	using original = std::unique_ptr<_Tp, _Dp>;
 	using original::original;
 
 private:
@@ -53,8 +53,8 @@ public:
 	}
 };
 
-template <class _Tp, bool SAFE>
-class unique_ptr<_Tp[], SAFE> : public std::unique_ptr<_Tp[], std::default_delete<_Tp[]>> {
+template <class _Tp, class _Dp, bool SAFE>
+class unique_ptr<_Tp[], _Dp, SAFE> : public std::unique_ptr<_Tp[], std::default_delete<_Tp[]>> {
 public:
 	using original = std::unique_ptr<_Tp[], std::default_delete<_Tp[]>>;
 	using original::original;
@@ -81,12 +81,12 @@ public:
 };
 
 template <typename T>
-using array_ptr = unique_ptr<T[], true>;
+using unique_array = unique_ptr<T[], std::default_delete<T>, true>;
 
 template <typename T>
-using unsafe_array_ptr = unique_ptr<T[], false>;
+using unsafe_unique_array = unique_ptr<T[], std::default_delete<T>, false>;
 
 template <typename T>
-using unsafe_unique_ptr = unique_ptr<T, false>;
+using unsafe_unique_ptr = unique_ptr<T, std::default_delete<T>, false>;
 
 } // namespace duckdb

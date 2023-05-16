@@ -83,7 +83,7 @@ public:
 		//! The total number of rows in the RHS
 		atomic<idx_t> count;
 		//! A bool indicating for each tuple in the RHS if they found a match (only used in FULL OUTER JOIN)
-		unsafe_array_ptr<bool> found_match;
+		unsafe_unique_array<bool> found_match;
 		//! Memory usage per thread
 		idx_t memory_per_thread;
 	};
