@@ -155,7 +155,7 @@ void ColumnScanState::Initialize(const LogicalType &type) {
 
 void CollectionScanState::Initialize(const vector<LogicalType> &types) {
 	auto &column_ids = GetColumnIds();
-	column_scans = make_unsafe_array<ColumnScanState>(column_ids.size());
+	column_scans = make_unsafe_uniq_array<ColumnScanState>(column_ids.size());
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		if (column_ids[i] == COLUMN_IDENTIFIER_ROW_ID) {
 			continue;
@@ -695,7 +695,7 @@ void RowGroup::InitializeAppend(RowGroupAppendState &append_state) {
 	append_state.row_group = this;
 	append_state.offset_in_row_group = this->count;
 	// for each column, initialize the append state
-	append_state.states = make_unsafe_array<ColumnAppendState>(GetColumnCount());
+	append_state.states = make_unsafe_uniq_array<ColumnAppendState>(GetColumnCount());
 	for (idx_t i = 0; i < GetColumnCount(); i++) {
 		auto &col_data = GetColumn(i);
 		col_data.InitializeAppend(append_state.states[i]);
