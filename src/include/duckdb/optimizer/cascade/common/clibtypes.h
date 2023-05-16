@@ -16,7 +16,7 @@
 #include <sys/time.h>
 #include <time.h>
 
-#include "gpos/types.h"
+#include "duckdb/optimizer/cascade/types.h"
 
 namespace gpos
 {

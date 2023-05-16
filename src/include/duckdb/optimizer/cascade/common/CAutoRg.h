@@ -10,8 +10,8 @@
 #ifndef GPOS_CAutoRg_H
 #define GPOS_CAutoRg_H
 
-#include "gpos/base.h"
-#include "gpos/common/CStackObject.h"
+#include "duckdb/optimizer/cascade/base.h"
+#include "duckdb/optimizer/cascade/common/CStackObject.h"
 
 namespace gpos
 {
