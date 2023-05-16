@@ -64,6 +64,63 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, unique_ptr<Physica
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
+class AsOfProbeSpill {
+public:
+	using Orders = vector<BoundOrderByNode>;
+	using Match = std::pair<hash_t, idx_t>;
+
+	AsOfProbeSpill(ClientContext &context, const PhysicalAsOfJoin &op, bool force_external);
+
+public:
+	void ResolveJoin(bool *found_matches, Match *matches = nullptr);
+	bool Sink(DataChunk &input);
+	void Sort();
+	void BeginScan();
+	void EndScan();
+
+	// resolve joins that output max N elements (SEMI, ANTI, MARK)
+	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk);
+	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
+	void ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk);
+	// local join execution
+	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk);
+
+	ClientContext &context;
+	Allocator &allocator;
+	const PhysicalAsOfJoin &op;
+	BufferManager &buffer_manager;
+	const bool force_external;
+	Orders lhs_orders;
+
+	//	LHS sorting
+	ExpressionExecutor lhs_executor;
+	DataChunk lhs_payload;
+	DataChunk lhs_keys;
+	DataChunk lhs_sorted;
+	ValidityMask lhs_valid_mask;
+	SelectionVector lhs_sel;
+	RowLayout lhs_layout;
+	unique_ptr<GlobalSortState> lhs_global_sort;
+	unique_ptr<LocalSortState> lhs_local_sort;
+	unique_ptr<PayloadScanner> lhs_scanner;
+
+	// LHS binning
+	Vector hash_vector;
+
+	//	Output
+	hash_t prev_bin;
+	optional_ptr<PartitionGlobalHashGroup> hash_group;
+	optional_ptr<OuterJoinMarker> right_outer;
+	unique_ptr<SBIterator> left_itr;
+	unique_ptr<SBIterator> right_itr;
+
+	idx_t lhs_match_count;
+	SelectionVector lhs_matched;
+	OuterJoinMarker left_outer;
+	bool fetch_next_left;
+	DataChunk rhs_payload;
+};
+
 class AsOfGlobalSinkState : public GlobalSinkState {
 public:
 	AsOfGlobalSinkState(ClientContext &context, const PhysicalAsOfJoin &op)
@@ -76,12 +133,21 @@ public:
 		return global_partition.count;
 	}
 
+	AsOfProbeSpill *RegisterThread(ClientContext &context, const PhysicalAsOfJoin &op, bool force_external) {
+		lock_guard<mutex> guard(lock);
+		local_spills.emplace_back(make_uniq<AsOfProbeSpill>(context, op, force_external));
+		return local_spills.back().get();
+	}
+
 	PartitionGlobalSinkState global_partition;
 
 	//	One per partition
 	const bool is_outer;
 	vector<OuterJoinMarker> right_outers;
 	bool has_null;
+
+	mutex lock;
+	vector<unique_ptr<AsOfProbeSpill>> local_spills;
 };
 
 class AsOfLocalSinkState : public LocalSinkState {
@@ -169,62 +235,17 @@ unique_ptr<GlobalOperatorState> PhysicalAsOfJoin::GetGlobalOperatorState(ClientC
 
 class AsOfLocalState : public CachingOperatorState {
 public:
-	using Orders = vector<BoundOrderByNode>;
-	using Match = std::pair<hash_t, idx_t>;
+	AsOfLocalState(ClientContext &context, const PhysicalAsOfJoin &op, bool force_external) {
+		if (!spill_state) {
+			auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
+			spill_state = gsink.RegisterThread(context, op, force_external);
+		}
+	}
 
-	AsOfLocalState(ClientContext &context, const PhysicalAsOfJoin &op, bool force_external);
-
-public:
-	void ResolveJoin(bool *found_matches, Match *matches = nullptr);
-	bool Sink(DataChunk &input);
-	void Sort();
-	void BeginScan();
-	void EndScan();
-
-	// resolve joins that output max N elements (SEMI, ANTI, MARK)
-	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk);
-	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
-	void ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk);
-	// local join execution
-	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk);
-
-	ClientContext &context;
-	Allocator &allocator;
-	const PhysicalAsOfJoin &op;
-	BufferManager &buffer_manager;
-	const bool force_external;
-	Orders lhs_orders;
-
-	//	LHS sorting
-	ExpressionExecutor lhs_executor;
-	DataChunk lhs_payload;
-	DataChunk lhs_keys;
-	DataChunk lhs_sorted;
-	ValidityMask lhs_valid_mask;
-	SelectionVector lhs_sel;
-	RowLayout lhs_layout;
-	unique_ptr<GlobalSortState> lhs_global_sort;
-	unique_ptr<LocalSortState> lhs_local_sort;
-	unique_ptr<PayloadScanner> lhs_scanner;
-
-	// LHS binning
-	Vector hash_vector;
-
-	//	Output
-	hash_t prev_bin;
-	optional_ptr<PartitionGlobalHashGroup> hash_group;
-	optional_ptr<OuterJoinMarker> right_outer;
-	unique_ptr<SBIterator> left_itr;
-	unique_ptr<SBIterator> right_itr;
-
-	idx_t lhs_match_count;
-	SelectionVector lhs_matched;
-	OuterJoinMarker left_outer;
-	bool fetch_next_left;
-	DataChunk rhs_payload;
+	optional_ptr<AsOfProbeSpill> spill_state;
 };
 
-AsOfLocalState::AsOfLocalState(ClientContext &context, const PhysicalAsOfJoin &op, bool force_external)
+AsOfProbeSpill::AsOfProbeSpill(ClientContext &context, const PhysicalAsOfJoin &op, bool force_external)
     : context(context), allocator(Allocator::Get(context)), op(op),
       buffer_manager(BufferManager::GetBufferManager(context)), force_external(force_external), lhs_executor(context),
       hash_vector(LogicalType::HASH), left_outer(IsLeftOuterJoin(op.join_type)), fetch_next_left(true) {
@@ -252,7 +273,7 @@ AsOfLocalState::AsOfLocalState(ClientContext &context, const PhysicalAsOfJoin &o
 	left_outer.Initialize(STANDARD_VECTOR_SIZE);
 }
 
-bool AsOfLocalState::Sink(DataChunk &input) {
+bool AsOfProbeSpill::Sink(DataChunk &input) {
 	//	Compute the join keys
 	lhs_keys.Reset();
 	lhs_executor.Execute(input, lhs_keys);
@@ -364,7 +385,7 @@ bool AsOfLocalState::Sink(DataChunk &input) {
 	return true;
 }
 
-void AsOfLocalState::Sort() {
+void AsOfProbeSpill::Sort() {
 	// Set external (can be forced with the PRAGMA)
 	auto &global_state = *lhs_global_sort;
 	global_state.external = force_external;
@@ -382,7 +403,7 @@ void AsOfLocalState::Sort() {
 	lhs_scanner = make_uniq<PayloadScanner>(*global_state.sorted_blocks[0]->payload_data, global_state, false);
 }
 
-void AsOfLocalState::BeginScan() {
+void AsOfProbeSpill::BeginScan() {
 	//	Scan the next sorted chunk
 	lhs_sorted.Reset();
 	lhs_scanner->Scan(lhs_sorted);
@@ -399,7 +420,7 @@ void AsOfLocalState::BeginScan() {
 	left_itr = make_uniq<SBIterator>(*lhs_global_sort, ExpressionType::COMPARE_LESSTHANOREQUALTO);
 }
 
-void AsOfLocalState::EndScan() {
+void AsOfProbeSpill::EndScan() {
 	hash_group = nullptr;
 	right_outer = nullptr;
 	left_itr.reset();
@@ -410,7 +431,7 @@ void AsOfLocalState::EndScan() {
 	lhs_global_sort.reset();
 }
 
-void AsOfLocalState::ResolveJoin(bool *found_match, std::pair<hash_t, idx_t> *matches) {
+void AsOfProbeSpill::ResolveJoin(bool *found_match, std::pair<hash_t, idx_t> *matches) {
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
 	auto &global_partition = gsink.global_partition;
 
@@ -510,7 +531,7 @@ unique_ptr<OperatorState> PhysicalAsOfJoin::GetOperatorState(ExecutionContext &c
 	return make_uniq<AsOfLocalState>(context.client, *this, config.force_external);
 }
 
-void AsOfLocalState::ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk) {
+void AsOfProbeSpill::ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk) {
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
 
 	// perform the actual join
@@ -537,9 +558,9 @@ void AsOfLocalState::ResolveSimpleJoin(ExecutionContext &context, DataChunk &chu
 	}
 }
 
-void AsOfLocalState::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk) {
+void AsOfProbeSpill::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk) {
 	// perform the actual join
-	AsOfLocalState::Match matches[STANDARD_VECTOR_SIZE];
+	Match matches[STANDARD_VECTOR_SIZE];
 	ResolveJoin(nullptr, matches);
 	rhs_payload.Reset();
 
@@ -586,7 +607,7 @@ void AsOfLocalState::ResolveComplexJoin(ExecutionContext &context, DataChunk &ch
 	fetch_next_left = !left_outer.Enabled();
 }
 
-OperatorResultType AsOfLocalState::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk) {
+OperatorResultType AsOfProbeSpill::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk) {
 	if (!fetch_next_left) {
 		fetch_next_left = true;
 		if (left_outer.Enabled()) {
@@ -646,7 +667,7 @@ OperatorResultType PhysicalAsOfJoin::ExecuteInternal(ExecutionContext &context, 
 		}
 	}
 
-	return lstate.ExecuteInternal(context, input, chunk);
+	return lstate.spill_state->ExecuteInternal(context, input, chunk);
 }
 
 //===--------------------------------------------------------------------===//
