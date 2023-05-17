@@ -99,7 +99,7 @@ public:
 	//! The maximum row within the row group
 	idx_t max_row_group_row;
 	//! Child column scans
-	unsafe_array_ptr<ColumnScanState> column_scans;
+	unsafe_unique_array<ColumnScanState> column_scans;
 	//! Row group segment tree
 	RowGroupSegmentTree *row_groups;
 	//! The total maximum row index
@@ -109,7 +109,7 @@ public:
 
 public:
 	void Initialize(const vector<LogicalType> &types);
-	const vector<column_t> &GetColumnIds();
+	const vector<storage_t> &GetColumnIds();
 	TableFilterSet *GetFilters();
 	AdaptiveFilter *GetAdaptiveFilter();
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
@@ -130,15 +130,15 @@ public:
 	CollectionScanState local_state;
 
 public:
-	void Initialize(vector<column_t> column_ids, TableFilterSet *table_filters = nullptr);
+	void Initialize(vector<storage_t> column_ids, TableFilterSet *table_filters = nullptr);
 
-	const vector<column_t> &GetColumnIds();
+	const vector<storage_t> &GetColumnIds();
 	TableFilterSet *GetFilters();
 	AdaptiveFilter *GetAdaptiveFilter();
 
 private:
 	//! The column identifiers of the scan
-	vector<column_t> column_ids;
+	vector<storage_t> column_ids;
 	//! The table filters (if any)
 	TableFilterSet *table_filters;
 	//! Adaptive filter info (if any)

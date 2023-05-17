@@ -144,7 +144,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("connection") = py::none())
 	    .def("read_json", &PyConnectionWrapper::ReadJSON, "Create a relation object from the JSON file in 'name'",
 	         py::arg("name"), py::arg("connection") = py::none(), py::arg("columns") = py::none(),
-	         py::arg("sample_size") = py::none(), py::arg("maximum_depth") = py::none());
+	         py::arg("sample_size") = py::none(), py::arg("maximum_depth") = py::none(),
+	         py::arg("records") = py::none(), py::arg("format") = py::none());
 
 	m.def("values", &PyConnectionWrapper::Values, "Create a relation object from the passed values", py::arg("values"),
 	      py::arg("connection") = py::none());
