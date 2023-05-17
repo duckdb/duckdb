@@ -25,7 +25,7 @@ namespace duckdb {
 //! Returns true if A and B are disjoint, false otherwise
 template <class T>
 static bool Disjoint(const unordered_set<T> &a, const unordered_set<T> &b) {
-	return all_of(begin(a), end(a), [&b](const auto& entry) { return b.find(entry) == end(b); });
+	return std::all_of(a.begin(), a.end(), [&b](const auto& entry) { return b.find(entry) == b.end(); });
 }
 
 //! Extract the set of relations referred to inside an expression
