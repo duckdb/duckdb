@@ -215,7 +215,7 @@ yyjson_val *JSONCommon::GetPath(yyjson_val *val, const char *ptr, const idx_t &l
 #else
 			ReadArrayIndex(ptr, end, array_index, from_back);
 #endif
-			if (from_back) {
+			if (from_back && array_index != 0) {
 				array_index = unsafe_yyjson_get_len(val) - array_index;
 			}
 			val = yyjson_arr_get(val, array_index);
@@ -279,7 +279,7 @@ void GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *const
 				}
 				return;
 			}
-			if (from_back) {
+			if (from_back && array_index != 0) {
 				array_index = unsafe_yyjson_get_len(val) - array_index;
 			}
 			val = yyjson_arr_get(val, array_index);
