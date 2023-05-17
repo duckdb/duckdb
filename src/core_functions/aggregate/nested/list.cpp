@@ -63,9 +63,7 @@ struct ListFunction {
 
 	template <class STATE>
 	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
-		D_ASSERT(state);
-		auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
-		list_bind_data.functions.Destroy(aggr_input_data.allocator, state->linked_list);
+		// nop
 	}
 	static bool IgnoreNull() {
 		return false;
@@ -100,15 +98,16 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 
 	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
 	for (idx_t i = 0; i < count; i++) {
-		auto state = states_ptr[sdata.sel->get_index(i)];
-		if (state->linked_list.total_capacity == 0) {
+		auto list_agg_state = states_ptr[sdata.sel->get_index(i)];
+		if (list_agg_state->linked_list.total_capacity == 0) {
 			// NULL, no need to append.
 			continue;
 		}
 
 		// copy the linked list of the state
-		auto copied_linked_list = LinkedList(state->linked_list.total_capacity, nullptr, nullptr);
-		list_bind_data.functions.CopyLinkedList(state->linked_list, copied_linked_list, aggr_input_data.allocator);
+		auto copied_linked_list = LinkedList(list_agg_state->linked_list.total_capacity, nullptr, nullptr);
+		list_bind_data.functions.CopyLinkedList(list_agg_state->linked_list, copied_linked_list,
+		                                        aggr_input_data.allocator);
 
 		// append the copied linked list to the combined state
 		if (combined_ptr[i]->linked_list.last_segment) {

@@ -12,8 +12,8 @@ static idx_t GetAllocationSize(uint16_t capacity) {
 }
 
 template <class T>
-static data_ptr_t AllocatePrimitiveData(Allocator &allocator, uint16_t capacity) {
-	return allocator.AllocateData(GetAllocationSize<T>(capacity));
+static data_ptr_t AllocatePrimitiveData(ArenaAllocator &allocator, uint16_t capacity) {
+	return allocator.Allocate(GetAllocationSize<T>(capacity));
 }
 
 template <class T>
@@ -28,8 +28,8 @@ static idx_t GetAllocationSizeList(uint16_t capacity) {
 	return AlignValue(sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(uint64_t)) + sizeof(LinkedList));
 }
 
-static data_ptr_t AllocateListData(Allocator &allocator, uint16_t capacity) {
-	return allocator.AllocateData(GetAllocationSizeList(capacity));
+static data_ptr_t AllocateListData(ArenaAllocator &allocator, uint16_t capacity) {
+	return allocator.Allocate(GetAllocationSizeList(capacity));
 }
 
 static uint64_t *GetListLengthData(const ListSegment *segment) {
@@ -48,8 +48,8 @@ static idx_t GetAllocationSizeStruct(uint16_t capacity, idx_t child_count) {
 	return AlignValue(sizeof(ListSegment) + capacity * sizeof(bool) + child_count * sizeof(ListSegment *));
 }
 
-static data_ptr_t AllocateStructData(Allocator &allocator, uint16_t capacity, idx_t child_count) {
-	return allocator.AllocateData(GetAllocationSizeStruct(capacity, child_count));
+static data_ptr_t AllocateStructData(ArenaAllocator &allocator, uint16_t capacity, idx_t child_count) {
+	return allocator.Allocate(GetAllocationSizeStruct(capacity, child_count));
 }
 
 static ListSegment **GetStructData(const ListSegment *segment) {
@@ -71,20 +71,8 @@ static uint16_t GetCapacityForNewSegment(uint16_t capacity) {
 //===--------------------------------------------------------------------===//
 // Create & Destroy
 //===--------------------------------------------------------------------===//
-static void DestroyLinkedList(const ListSegmentFunctions &functions, Allocator &allocator, LinkedList &list) {
-	auto segment = list.first_segment;
-	while (segment) {
-		auto next_segment = segment->next;
-		functions.destroy(functions, segment, allocator);
-		segment = next_segment;
-	}
-	list.first_segment = nullptr;
-	list.last_segment = nullptr;
-	list.total_capacity = 0;
-}
-
 template <class T>
-static ListSegment *CreatePrimitiveSegment(const ListSegmentFunctions &, Allocator &allocator, uint16_t capacity) {
+static ListSegment *CreatePrimitiveSegment(const ListSegmentFunctions &, ArenaAllocator &allocator, uint16_t capacity) {
 	// allocate data and set the header
 	auto segment = (ListSegment *)AllocatePrimitiveData<T>(allocator, capacity);
 	segment->capacity = capacity;
@@ -93,13 +81,7 @@ static ListSegment *CreatePrimitiveSegment(const ListSegmentFunctions &, Allocat
 	return segment;
 }
 
-template <class T>
-void DestroyPrimitiveSegment(const ListSegmentFunctions &, ListSegment *segment, Allocator &allocator) {
-	D_ASSERT(segment);
-	allocator.FreeData((data_ptr_t)segment, GetAllocationSize<T>(segment->capacity));
-}
-
-static ListSegment *CreateListSegment(const ListSegmentFunctions &, Allocator &allocator, uint16_t capacity) {
+static ListSegment *CreateListSegment(const ListSegmentFunctions &, ArenaAllocator &allocator, uint16_t capacity) {
 	// allocate data and set the header
 	auto segment = (ListSegment *)AllocateListData(allocator, capacity);
 	segment->capacity = capacity;
@@ -114,16 +96,7 @@ static ListSegment *CreateListSegment(const ListSegmentFunctions &, Allocator &a
 	return segment;
 }
 
-void DestroyListSegment(const ListSegmentFunctions &functions, ListSegment *segment, Allocator &allocator) {
-	// destroy the child list
-	auto linked_child_list = Load<LinkedList>((data_ptr_t)GetListChildData(segment));
-	DestroyLinkedList(functions.child_functions[0], allocator, linked_child_list);
-
-	// destroy the list segment itself
-	allocator.FreeData((data_ptr_t)segment, GetAllocationSizeList(segment->capacity));
-}
-
-static ListSegment *CreateStructSegment(const ListSegmentFunctions &functions, Allocator &allocator,
+static ListSegment *CreateStructSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
                                         uint16_t capacity) {
 	// allocate data and set header
 	auto segment = (ListSegment *)AllocateStructData(allocator, capacity, functions.child_functions.size());
@@ -142,21 +115,8 @@ static ListSegment *CreateStructSegment(const ListSegmentFunctions &functions, A
 	return segment;
 }
 
-void DestroyStructSegment(const ListSegmentFunctions &functions, ListSegment *segment, Allocator &allocator) {
-	// destroy the child entries
-	auto child_segments = GetStructData(segment);
-	for (idx_t i = 0; i < functions.child_functions.size(); i++) {
-		auto child_function = functions.child_functions[i];
-		auto child_segment = Load<ListSegment *>((data_ptr_t)(child_segments + i));
-		child_function.destroy(child_function, child_segment, allocator);
-	}
-
-	// destroy the struct segment itself
-	allocator.FreeData((data_ptr_t)segment,
-	                   GetAllocationSizeStruct(segment->capacity, functions.child_functions.size()));
-}
-
-static ListSegment *GetSegment(const ListSegmentFunctions &functions, Allocator &allocator, LinkedList &linked_list) {
+static ListSegment *GetSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
+                               LinkedList &linked_list) {
 	ListSegment *segment;
 
 	// determine segment
@@ -186,7 +146,7 @@ static ListSegment *GetSegment(const ListSegmentFunctions &functions, Allocator 
 // Append
 //===--------------------------------------------------------------------===//
 template <class T>
-static void WriteDataToPrimitiveSegment(const ListSegmentFunctions &functions, Allocator &allocator,
+static void WriteDataToPrimitiveSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
                                         ListSegment *segment, Vector &input, idx_t &entry_idx, idx_t &count) {
 
 	// get the vector data and the source index of the entry that we want to write
@@ -204,8 +164,8 @@ static void WriteDataToPrimitiveSegment(const ListSegmentFunctions &functions, A
 	}
 }
 
-static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, Allocator &allocator, ListSegment *segment,
-                                      Vector &input, idx_t &entry_idx, idx_t &count) {
+static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
+                                      ListSegment *segment, Vector &input, idx_t &entry_idx, idx_t &count) {
 
 	// get the vector data and the source index of the entry that we want to write
 	auto input_data = FlatVector::GetData(input);
@@ -247,8 +207,8 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, All
 	Store<LinkedList>(child_segments, (data_ptr_t)GetListChildData(segment));
 }
 
-static void WriteDataToListSegment(const ListSegmentFunctions &functions, Allocator &allocator, ListSegment *segment,
-                                   Vector &input, idx_t &entry_idx, idx_t &count) {
+static void WriteDataToListSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
+                                   ListSegment *segment, Vector &input, idx_t &entry_idx, idx_t &count) {
 
 	// get the vector data and the source index of the entry that we want to write
 	auto input_data = FlatVector::GetData(input);
@@ -287,8 +247,8 @@ static void WriteDataToListSegment(const ListSegmentFunctions &functions, Alloca
 	Store<uint64_t>(list_length, (data_ptr_t)(list_length_data + segment->count));
 }
 
-static void WriteDataToStructSegment(const ListSegmentFunctions &functions, Allocator &allocator, ListSegment *segment,
-                                     Vector &input, idx_t &entry_idx, idx_t &count) {
+static void WriteDataToStructSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
+                                     ListSegment *segment, Vector &input, idx_t &entry_idx, idx_t &count) {
 
 	// write null validity
 	auto null_mask = GetNullMask(segment);
@@ -310,8 +270,8 @@ static void WriteDataToStructSegment(const ListSegmentFunctions &functions, Allo
 	}
 }
 
-void ListSegmentFunctions::AppendRow(Allocator &allocator, LinkedList &linked_list, Vector &input, idx_t &entry_idx,
-                                     idx_t &count) const {
+void ListSegmentFunctions::AppendRow(ArenaAllocator &allocator, LinkedList &linked_list, Vector &input,
+                                     idx_t &entry_idx, idx_t &count) const {
 
 	D_ASSERT(input.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto &write_data_to_segment = *this;
@@ -475,7 +435,7 @@ void ListSegmentFunctions::BuildListVector(const LinkedList &linked_list, Vector
 //===--------------------------------------------------------------------===//
 template <class T>
 static ListSegment *CopyDataFromPrimitiveSegment(const ListSegmentFunctions &, const ListSegment *source,
-                                                 Allocator &allocator) {
+                                                 ArenaAllocator &allocator) {
 
 	auto target = (ListSegment *)AllocatePrimitiveData<T>(allocator, source->capacity);
 	memcpy(target, source, sizeof(ListSegment) + source->capacity * (sizeof(bool) + sizeof(T)));
@@ -484,7 +444,7 @@ static ListSegment *CopyDataFromPrimitiveSegment(const ListSegmentFunctions &, c
 }
 
 static ListSegment *CopyDataFromListSegment(const ListSegmentFunctions &functions, const ListSegment *source,
-                                            Allocator &allocator) {
+                                            ArenaAllocator &allocator) {
 
 	// create an empty linked list for the child vector of target
 	auto source_linked_child_list = Load<LinkedList>((data_ptr_t)GetListChildData(source));
@@ -510,7 +470,7 @@ static ListSegment *CopyDataFromListSegment(const ListSegmentFunctions &function
 }
 
 static ListSegment *CopyDataFromStructSegment(const ListSegmentFunctions &functions, const ListSegment *source,
-                                              Allocator &allocator) {
+                                              ArenaAllocator &allocator) {
 
 	auto source_child_count = functions.child_functions.size();
 	auto target = (ListSegment *)AllocateStructData(allocator, source->capacity, source_child_count);
@@ -532,7 +492,7 @@ static ListSegment *CopyDataFromStructSegment(const ListSegmentFunctions &functi
 }
 
 void ListSegmentFunctions::CopyLinkedList(const LinkedList &source_list, LinkedList &target_list,
-                                          Allocator &allocator) const {
+                                          ArenaAllocator &allocator) const {
 	auto &copy_data_from_segment = *this;
 	auto source_segment = source_list.first_segment;
 
@@ -551,12 +511,6 @@ void ListSegmentFunctions::CopyLinkedList(const LinkedList &source_list, LinkedL
 }
 
 //===--------------------------------------------------------------------===//
-// Destroy
-//===--------------------------------------------------------------------===//
-void ListSegmentFunctions::Destroy(Allocator &allocator, LinkedList &linked_list) const {
-	DestroyLinkedList(*this, allocator, linked_list);
-}
-//===--------------------------------------------------------------------===//
 // Functions
 //===--------------------------------------------------------------------===//
 template <class T>
@@ -565,7 +519,6 @@ void SegmentPrimitiveFunction(ListSegmentFunctions &functions) {
 	functions.write_data = WriteDataToPrimitiveSegment<T>;
 	functions.read_data = ReadDataFromPrimitiveSegment<T>;
 	functions.copy_data = CopyDataFromPrimitiveSegment<T>;
-	functions.destroy = DestroyPrimitiveSegment<T>;
 }
 
 void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType &type) {
@@ -617,7 +570,6 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 		functions.write_data = WriteDataToVarcharSegment;
 		functions.read_data = ReadDataFromVarcharSegment;
 		functions.copy_data = CopyDataFromListSegment;
-		functions.destroy = DestroyListSegment;
 
 		functions.child_functions.emplace_back();
 		SegmentPrimitiveFunction<char>(functions.child_functions.back());
@@ -628,7 +580,6 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 		functions.write_data = WriteDataToListSegment;
 		functions.read_data = ReadDataFromListSegment;
 		functions.copy_data = CopyDataFromListSegment;
-		functions.destroy = DestroyListSegment;
 
 		// recurse
 		functions.child_functions.emplace_back();
@@ -640,7 +591,6 @@ void GetSegmentDataFunctions(ListSegmentFunctions &functions, const LogicalType 
 		functions.write_data = WriteDataToStructSegment;
 		functions.read_data = ReadDataFromStructSegment;
 		functions.copy_data = CopyDataFromStructSegment;
-		functions.destroy = DestroyStructSegment;
 
 		// recurse
 		auto child_types = StructType::GetChildTypes(type);

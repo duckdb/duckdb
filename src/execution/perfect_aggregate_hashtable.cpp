@@ -243,7 +243,7 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	}
 	// then construct the payloads
 	result.SetCardinality(entry_count);
-	RowOperationsState row_state(aggregate_allocator.GetAllocator());
+	RowOperationsState row_state(aggregate_allocator);
 	RowOperations::FinalizeStates(row_state, layout, addresses, result, grouping_columns);
 }
 
@@ -264,7 +264,7 @@ void PerfectAggregateHashTable::Destroy() {
 	idx_t count = 0;
 
 	// iterate over all initialised slots of the hash table
-	RowOperationsState row_state(aggregate_allocator.GetAllocator());
+	RowOperationsState row_state(aggregate_allocator);
 	data_ptr_t payload_ptr = data;
 	for (idx_t i = 0; i < total_groups; i++) {
 		if (group_is_set[i]) {

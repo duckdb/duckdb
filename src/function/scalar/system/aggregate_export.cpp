@@ -1,11 +1,11 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -39,11 +39,13 @@ struct CombineState : public FunctionLocalState {
 	unsafe_unique_array<data_t> state_buffer0, state_buffer1;
 	Vector state_vector0, state_vector1;
 
+	ArenaAllocator allocator;
+
 	explicit CombineState(idx_t state_size_p)
 	    : state_size(state_size_p), state_buffer0(make_unsafe_uniq_array<data_t>(state_size_p)),
 	      state_buffer1(make_unsafe_uniq_array<data_t>(state_size_p)),
 	      state_vector0(Value::POINTER((uintptr_t)state_buffer0.get())),
-	      state_vector1(Value::POINTER((uintptr_t)state_buffer1.get())) {
+	      state_vector1(Value::POINTER((uintptr_t)state_buffer1.get())), allocator(Allocator::DefaultAllocator()) {
 	}
 };
 
@@ -58,10 +60,12 @@ struct FinalizeState : public FunctionLocalState {
 	unsafe_unique_array<data_t> state_buffer;
 	Vector addresses;
 
+	ArenaAllocator allocator;
+
 	explicit FinalizeState(idx_t state_size_p)
 	    : state_size(state_size_p),
 	      state_buffer(make_unsafe_uniq_array<data_t>(STANDARD_VECTOR_SIZE * AlignValue(state_size_p))),
-	      addresses(LogicalType::POINTER) {
+	      addresses(LogicalType::POINTER), allocator(Allocator::DefaultAllocator()) {
 	}
 };
 
@@ -73,7 +77,8 @@ static unique_ptr<FunctionLocalState> InitFinalizeState(ExpressionState &state, 
 
 static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &result) {
 	auto &bind_data = ExportAggregateBindData::GetFrom(state_p);
-	auto &local_state = (FinalizeState &)*((ExecuteFunctionState &)state_p).local_state;
+	auto &local_state = ExecuteFunctionState::GetFunctionState(state_p)->Cast<FinalizeState>();
+	local_state.allocator.Reset();
 
 	D_ASSERT(bind_data.state_size == bind_data.aggr.state_size());
 	D_ASSERT(input.data.size() == 1);
@@ -100,7 +105,7 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 		state_vec_ptr[i] = (data_ptr_t)target_ptr;
 	}
 
-	AggregateInputData aggr_input_data(nullptr, Allocator::DefaultAllocator());
+	AggregateInputData aggr_input_data(nullptr, local_state.allocator);
 	bind_data.aggr.finalize(local_state.addresses, aggr_input_data, result, input.size(), 0);
 
 	for (idx_t i = 0; i < input.size(); i++) {
@@ -113,7 +118,8 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 
 static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &result) {
 	auto &bind_data = ExportAggregateBindData::GetFrom(state_p);
-	auto &local_state = (CombineState &)*((ExecuteFunctionState &)state_p).local_state;
+	auto &local_state = ExecuteFunctionState::GetFunctionState(state_p)->Cast<CombineState>();
+	local_state.allocator.Reset();
 
 	D_ASSERT(bind_data.state_size == bind_data.aggr.state_size());
 
@@ -162,7 +168,7 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 		memcpy(local_state.state_buffer0.get(), state0.GetData(), bind_data.state_size);
 		memcpy(local_state.state_buffer1.get(), state1.GetData(), bind_data.state_size);
 
-		AggregateInputData aggr_input_data(nullptr, Allocator::DefaultAllocator());
+		AggregateInputData aggr_input_data(nullptr, local_state.allocator);
 		bind_data.aggr.combine(local_state.state_vector0, local_state.state_vector1, aggr_input_data, 1);
 
 		result_ptr[i] =

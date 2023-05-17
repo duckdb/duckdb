@@ -41,6 +41,9 @@ protected:
 	Vector statep;
 	//! Input data chunk, used for intermediate window segment aggregation
 	DataChunk inputs;
+
+	//! Allocator for aggregates
+	ArenaAllocator allocator;
 };
 
 class WindowConstantAggregate : public WindowAggregateState {
@@ -128,6 +131,9 @@ private:
 
 	//! Use the window API, if available
 	WindowAggregationMode mode;
+
+	//! Aggregate allocator
+	ArenaAllocator allocator;
 
 	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
 	static constexpr idx_t TREE_FANOUT = 64;

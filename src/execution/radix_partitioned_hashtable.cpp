@@ -632,13 +632,14 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 			chunk.data[null_group].SetVectorType(VectorType::CONSTANT_VECTOR);
 			ConstantVector::SetNull(chunk.data[null_group], true);
 		}
+		ArenaAllocator allocator(BufferAllocator::Get(context.client));
 		for (idx_t i = 0; i < op.aggregates.size(); i++) {
 			D_ASSERT(op.aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = op.aggregates[i]->Cast<BoundAggregateExpression>();
 			auto aggr_state = make_unsafe_uniq_array<data_t>(aggr.function.state_size());
 			aggr.function.initialize(aggr_state.get());
 
-			AggregateInputData aggr_input_data(aggr.bind_info.get(), BufferAllocator::Get(context.client));
+			AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
 			Vector state_vector(Value::POINTER((uintptr_t)aggr_state.get()));
 			aggr.function.finalize(state_vector, aggr_input_data, chunk.data[null_groups.size() + i], 1, 0);
 			if (aggr.function.destructor) {

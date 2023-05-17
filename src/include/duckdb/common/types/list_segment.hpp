@@ -50,7 +50,8 @@ struct ListSegmentFunctions {
 	copy_data_from_segment_t copy_data;
 	vector<ListSegmentFunctions> child_functions;
 
-	void AppendRow(ArenaAllocator &allocator, LinkedList &linked_list, Vector &input, idx_t &entry_idx, idx_t &count) const;
+	void AppendRow(ArenaAllocator &allocator, LinkedList &linked_list, Vector &input, idx_t &entry_idx,
+	               idx_t &count) const;
 	void BuildListVector(const LinkedList &linked_list, Vector &result, idx_t &initial_total_count) const;
 	void CopyLinkedList(const LinkedList &source_list, LinkedList &target_list, ArenaAllocator &allocator) const;
 };
