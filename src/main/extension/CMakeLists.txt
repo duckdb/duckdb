@@ -35,11 +35,11 @@ if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
 
       set(OOTE_LOADER_NAME_LIST "${OOTE_LOADER_NAME_LIST},\"${OOTE_NAME}\"")
       set(OOTE_LOADER_BODY "${OOTE_LOADER_BODY}\
-        if (extension==\"${OOTE_NAME}\") {
-          db.LoadExtension<${EXTENSION_CLASS}Extension>();
-          return true;
-        }
-        ")
+    if (extension==\"${OOTE_NAME}\") {
+        db.LoadExtension<${EXTENSION_CLASS}Extension>();
+        return true;
+    }
+")
     endif()
   endforeach()
 endif()

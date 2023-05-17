@@ -716,72 +716,123 @@ function(build_loadable_extension NAME PARAMETERS)
   build_loadable_extension_directory(${NAME} "extension/${NAME}" "${PARAMETERS}" ${FILES})
 endfunction()
 
-# Register a duckdb extension to be built
-# For in-tree extensions in './extensions', the PATH and INCLUDE_PATH can be left empty
-# For out-of-tree extensions that are located or symlinked in the './extensions' directory with default config,
-# the PATH and INCLUDE_PATH can also be left empty.
-# For out-of-tree extensions in different locations or non-standard project structures, the PATH and INCLUDE_PATH
-# should be set to the CMakeLists.txt root and extension header respectively.
-function(register_extension NAME SHOULD_LINK PATH INCLUDE_PATH)
+function(register_extension NAME DONT_LINK PATH INCLUDE_PATH)
   string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
   string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
 
   set(DUCKDB_OOT_EXTENSION_NAMES ${DUCKDB_OOT_EXTENSION_NAMES} ${EXTENSION_NAME_LOWERCASE} PARENT_SCOPE)
 
-  if (${SHOULD_LINK})
-    set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK ${SHOULD_LINK} PARENT_SCOPE)
+  if (NOT ${DONT_LINK} AND NOT DISABLE_BUILTIN_EXTENSIONS)
+    set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK TRUE PARENT_SCOPE)
     add_definitions(-DDUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED=true)
   endif()
 
-  if (NOT "${PATH}" STREQUAL "")
-    set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH ${PATH} PARENT_SCOPE)
+  if ("${PATH}" STREQUAL "")
+    message(FATAL_ERROR "Invalid path set for extension '${NAME}' : '${INCLUDE}'")
+  endif()
+  if ("${INCLUDE_PATH}" STREQUAL "")
+    message(FATAL_ERROR "Invalid include path for extension '${NAME}' : '${INCLUDE_PATH}'")
   endif()
 
-  if (NOT "${INCLUDE_PATH}" STREQUAL "")
-    set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH ${INCLUDE_PATH} PARENT_SCOPE)
-  endif()
+  set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH ${PATH} PARENT_SCOPE)
+  set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH ${INCLUDE_PATH} PARENT_SCOPE)
 endfunction()
 
-# Register in tree extensions TODO: we may want to remove these specific cmake vars and use passing an extension_config instead
+# Similar to register_extension but for a remote git repo.
+macro(register_external_extension NAME URL COMMIT DONT_LINK PATH INCLUDE_PATH)
+  include(FetchContent)
+  FETCHCONTENT_DECLARE(
+          ${NAME}_extension_fc
+          GIT_REPOSITORY ${URL}
+          GIT_TAG ${COMMIT}
+  )
+  message(STATUS "Building extension '${NAME}' from ${URL} @ ${COMMIT}")
+  FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
+
+  if ("${INCLUDE_PATH}" STREQUAL "")
+    set(INCLUDE_PATH_DEFAULT "src/include")
+  else()
+    set(INCLUDE_PATH_DEFAULT ${INCLUDE_PATH})
+  endif()
+
+  register_extension(${NAME} ${DONT_LINK} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} ${${NAME}_extension_fc_SOURCE_DIR}/${INCLUDE_PATH_DEFAULT})
+endmacro()
+
+macro(duckdb_extension_load NAME)
+  # Parameter parsing
+  set(options DONT_LINK)
+  set(oneValueArgs SOURCE_DIR INCLUDE_DIR GIT_URL GIT_TAG)
+  cmake_parse_arguments(duckdb_extension_load "${options}" "${oneValueArgs}" "" ${ARGN})
+
+  # Remote Git extension
+  if (NOT "${duckdb_extension_load_GIT_URL}" STREQUAL "")
+    if (NOT "${duckdb_extension_load_GIT_COMMIT}" STREQUAL "")
+      error("Git URL specified but no valid git commit was found for ${NAME} extension")
+    endif()
+    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}")
+  elseif (NOT "${duckdb_extension_load_SOURCE_DIR}" STREQUAL "")
+    # Local extension, custom path
+    message(STATUS "Building extension '${NAME}' from '${duckdb_extension_load_SOURCE_DIR}'")
+
+    # If no include path specified, use default
+    if ("${duckdb_extension_load_INCLUDE_DIR}" STREQUAL "")
+      set(INCLUDE_PATH_DEFAULT "${duckdb_extension_load_SOURCE_DIR}/src/include")
+    else()
+      set(INCLUDE_PATH_DEFAULT ${duckdb_extension_load_INCLUDE_DIR})
+    endif()
+
+    register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_SOURCE_DIR}" "${INCLUDE_PATH_DEFAULT}")
+  elseif(EXISTS ${CMAKE_SOURCE_DIR}/extension_external/${NAME})
+    # Local extension, default path
+    message(STATUS "Building extension '${NAME}' from '${CMAKE_SOURCE_DIR}/extension_external'")
+    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK}  "${CMAKE_SOURCE_DIR}/extension_external/${NAME}" "${CMAKE_SOURCE_DIR}/extension_external/${NAME}/src/include")
+  else()
+    # Local extension, default path
+    message(STATUS "Building extension '${NAME}' from '${CMAKE_SOURCE_DIR}/extensions'")
+    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK}  "${CMAKE_SOURCE_DIR}/extension/${NAME}" "${CMAKE_SOURCE_DIR}/extension/${NAME}/include")
+  endif()
+endmacro()
+
+# Register in tree extensions TODO: we may want to remove these specific cmake vars and use passing an extension_config instead.
 set(INTERNAL_EXTENSION_ROOT_DIR ${CMAKE_SOURCE_DIR}/extension)
 if (BUILD_HTTPFS_EXTENSION)
-  register_extension(httpfs TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/httpfs ${INTERNAL_EXTENSION_ROOT_DIR}/httpfs/include)
+  duckdb_extension_load(httpfs)
 endif()
 if (BUILD_ICU_EXTENSION)
-  register_extension(icu TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/icu ${INTERNAL_EXTENSION_ROOT_DIR}/icu/include)
+  duckdb_extension_load(icu)
 endif()
 if (BUILD_TPCH_EXTENSION)
-  register_extension(tpch TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/tpch ${INTERNAL_EXTENSION_ROOT_DIR}/tpch/include)
+  duckdb_extension_load(tpch)
 endif()
 if (BUILD_TPCDS_EXTENSION)
-  register_extension(tpcds TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/tpcds ${INTERNAL_EXTENSION_ROOT_DIR}/tpcds/include)
+  duckdb_extension_load(tpcds)
 endif()
 if (BUILD_FTS_EXTENSION)
-  register_extension(fts TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/fts ${INTERNAL_EXTENSION_ROOT_DIR}/fts/include)
+  duckdb_extension_load(fts)
 endif()
 if (BUILD_PARQUET_EXTENSION)
-  register_extension(parquet TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/parquet ${INTERNAL_EXTENSION_ROOT_DIR}/parquet/include)
+  duckdb_extension_load(parquet)
 endif()
 if (BUILD_JSON_EXTENSION)
-  register_extension(json TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/json ${INTERNAL_EXTENSION_ROOT_DIR}/json/include)
+  duckdb_extension_load(json)
 endif()
 if (BUILD_VISUALIZER_EXTENSION)
-  register_extension(visualizer TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/visualizer ${INTERNAL_EXTENSION_ROOT_DIR}/visualizer/include)
+  duckdb_extension_load(visualizer)
 endif()
 if (BUILD_INET_EXTENSION)
-  register_extension(inet TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/inet ${INTERNAL_EXTENSION_ROOT_DIR}/inet/include)
+  duckdb_extension_load(inet)
 endif()
 if (BUILD_SQLSMITH_EXTENSION)
-  register_extension(sqlsmith TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/sqlsmith ${INTERNAL_EXTENSION_ROOT_DIR}/sqlsmith/include)
+  duckdb_extension_load(sqlsmith)
 endif()
 if (BUILD_EXCEL_EXTENSION)
-  register_extension(excel TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/excel ${INTERNAL_EXTENSION_ROOT_DIR}/excel/include)
+  duckdb_extension_load(excel)
 endif()
 if (BUILD_JEMALLOC_EXTENSION)
-  register_extension(jemalloc TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/jemalloc ${INTERNAL_EXTENSION_ROOT_DIR}/jemalloc/include)
+  duckdb_extension_load(jemalloc)
 endif()
 if (BUILD_AUTOCOMPLETE_EXTENSION)
-  register_extension(autocomplete TRUE ${INTERNAL_EXTENSION_ROOT_DIR}/autocomplete ${INTERNAL_EXTENSION_ROOT_DIR}/autocomplete/include)
+  duckdb_extension_load(autocomplete)
 endif()
 
 if(${EXPORT_DLL_SYMBOLS})
@@ -813,10 +864,25 @@ foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
   endif()
 endforeach()
 
-# Output the extensions that will be built
-if(DUCKDB_OOT_EXTENSION_NAMES)
-  string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${DUCKDB_OOT_EXTENSION_NAMES}")
-  message("Enabled extensions: (${EXT_LIST_DEBUG_MESSAGE})")
+# Output the extensions that we linked into DuckDB for some nice build logs
+set(LINKED_EXTENSIONS "")
+set(NONLINKED_EXTENSIONS "")
+foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
+  string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
+  if (${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_LINK})
+    list(APPEND LINKED_EXTENSIONS ${OOTE_NAME})
+  else()
+    list(APPEND NONLINKED_EXTENSIONS ${OOTE_NAME})
+  endif()
+endforeach()
+
+if(NOT "${LINKED_EXTENSIONS}" STREQUAL "")
+  string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${LINKED_EXTENSIONS}")
+  message(STATUS "Extensions linked into DuckDB: ${EXT_LIST_DEBUG_MESSAGE}")
+endif()
+if(NOT "${NONLINKED_EXTENSIONS}" STREQUAL "")
+  string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${NONLINKED_EXTENSIONS}")
+  message(STATUS "Extensions built but not linked: ${EXT_LIST_DEBUG_MESSAGE}")
 endif()
 
 if(BUILD_PYTHON
