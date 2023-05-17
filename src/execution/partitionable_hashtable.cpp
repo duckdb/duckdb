@@ -185,11 +185,13 @@ void PartitionableHashTable::Finalize() {
 	}
 }
 
-void PartitionableHashTable::AssignData(unique_ptr<TupleDataCollection> data) {
-	unpartitioned_hts.push_back(make_uniq<GroupedAggregateHashTable>(context, allocator, group_types, payload_types,
-	                                                                 bindings, GetHTEntrySize(),
-	                                                                 GroupedAggregateHashTable::InitialCapacity()));
-	unpartitioned_hts.back()->GetDataCollection().Combine(*data);
+void PartitionableHashTable::Append(GroupedAggregateHashTable &ht) {
+	if (unpartitioned_hts.empty()) {
+		unpartitioned_hts.push_back(make_uniq<GroupedAggregateHashTable>(context, allocator, group_types, payload_types,
+		                                                                 bindings, GetHTEntrySize(),
+		                                                                 GroupedAggregateHashTable::InitialCapacity()));
+	}
+	unpartitioned_hts.back()->Append(ht);
 }
 
 } // namespace duckdb

@@ -43,7 +43,7 @@ public:
 
 	void Finalize();
 
-	void AssignData(unique_ptr<TupleDataCollection> data);
+	void Append(GroupedAggregateHashTable &ht);
 
 private:
 	ClientContext &context;

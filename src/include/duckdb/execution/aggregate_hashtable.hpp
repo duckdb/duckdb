@@ -128,6 +128,9 @@ public:
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
 
+	//! Appends the data in the other HT to this one
+	void Append(GroupedAggregateHashTable &other);
+
 	TupleDataCollection &GetDataCollection() {
 		return *data_collection;
 	}
@@ -184,7 +187,7 @@ private:
 	vector<data_ptr_t> payload_hds_ptrs;
 
 	//! The hashes of the HT
-	BufferHandle hashes_hdl;
+	AllocatedData hashes_hdl;
 	data_ptr_t hashes_hdl_ptr;
 	idx_t hash_offset; // Offset into the layout of the hash column
 
@@ -197,8 +200,10 @@ private:
 
 	vector<ExpressionType> predicates;
 
-	//! The arena allocator used by the aggregates for their internal state
+	//! The active arena allocator used by the aggregates for their internal state
 	shared_ptr<ArenaAllocator> aggregate_allocator;
+	//! Owning arena allocators that this HT has data from
+	vector<shared_ptr<ArenaAllocator>> stored_allocators;
 
 private:
 	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;

@@ -1,5 +1,6 @@
 #include "duckdb/execution/radix_partitioned_hashtable.hpp"
 
+#include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
@@ -406,7 +407,6 @@ void RadixPartitionedHashTable::ScheduleRepartitionTasks(Executor &executor, con
 	}
 
 	idx_t finalize_idx = 0;
-	const auto &layout = gstate.finalized_hts[0]->GetDataCollection().GetLayout();
 	for (idx_t partition_idx = 0; partition_idx < num_partitions_before; partition_idx++) {
 		// Grab intermediate data from gstate
 		HashTableList partition_list;
@@ -420,17 +420,15 @@ void RadixPartitionedHashTable::ScheduleRepartitionTasks(Executor &executor, con
 		const idx_t hts_per_task = (partition_list.size() + tasks_per_partition - 1) / tasks_per_partition;
 		idx_t ht_idx = 0;
 		for (idx_t task_idx = 0; task_idx < tasks_per_partition; task_idx++) {
-			auto task_data = make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(executor.context), layout);
-			auto ht_idx_to = MinValue<idx_t>(ht_idx + hts_per_task, partition_list.size());
-			for (; ht_idx < ht_idx_to; ht_idx++) {
-				auto &ht = partition_list[ht_idx];
-				task_data->Combine(ht->GetDataCollection());
-				ht.reset();
-			}
 			auto task_ht =
 			    make_uniq<PartitionableHashTable>(executor.context, BufferAllocator::Get(executor.context),
 			                                      *new_partition_info, group_types, op.payload_types, op.bindings);
-			task_ht->AssignData(std::move(task_data));
+			auto ht_idx_to = MinValue<idx_t>(ht_idx + hts_per_task, partition_list.size());
+			for (; ht_idx < ht_idx_to; ht_idx++) {
+				auto &ht = partition_list[ht_idx];
+				task_ht->Append(*ht);
+				ht.reset();
+			}
 			tasks.push_back(make_uniq<RadixAggregateRepartitionTask>(executor, event, gstate, std::move(task_ht),
 			                                                         partition_idx, task_idx));
 		}

@@ -12,7 +12,7 @@ namespace duckdb {
 template <idx_t radix_bits>
 struct RadixPartitioningConstants {
 public:
-	//! Bitmask of the upper bits of the 5th byte
+	//! Bitmask of the upper bits starting at the 5th byte
 	static constexpr const idx_t NUM_PARTITIONS = RadixPartitioning::NumberOfPartitions(radix_bits);
 	static constexpr const idx_t SHIFT = RadixPartitioning::Shift(radix_bits);
 	static constexpr const hash_t MASK = RadixPartitioning::Mask(radix_bits);
@@ -26,8 +26,8 @@ public:
 };
 
 template <class OP, class RETURN_TYPE, typename... ARGS>
-RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&... args) {
-	D_ASSERT(radix_bits <= sizeof(hash_t) * 8);
+RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&...args) {
+	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	switch (radix_bits) {
 	case 1:
 		return OP::template Operation<1>(std::forward<ARGS>(args)...);
@@ -49,8 +49,13 @@ RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&... args) {
 		return OP::template Operation<9>(std::forward<ARGS>(args)...);
 	case 10:
 		return OP::template Operation<10>(std::forward<ARGS>(args)...);
+	case 11:
+		return OP::template Operation<10>(std::forward<ARGS>(args)...);
+	case 12:
+		return OP::template Operation<10>(std::forward<ARGS>(args)...);
 	default:
-		throw InternalException("TODO");
+		throw InternalException(
+		    "radix_bits higher than RadixPartitioning::MAX_RADIX_BITS encountered in RadixBitsSwitch");
 	}
 }
 

@@ -852,7 +852,7 @@ bool JoinHashTable::RequiresExternalJoin(ClientConfig &config, vector<unique_ptr
 		// Do ~3 rounds if forcing external join to test all code paths
 		auto data_size_per_round = (data_size + 2) / 3;
 		auto count_per_round = (total_count + 2) / 3;
-		max_ht_size = data_size_per_round + PointerTableSize(count_per_round);
+		max_ht_size = (data_size_per_round + PointerTableSize(count_per_round)) * 4;
 		external = true;
 	} else {
 		auto ht_size = data_size + PointerTableSize(total_count);

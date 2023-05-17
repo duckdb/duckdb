@@ -26,10 +26,10 @@ class Vector;
 struct UnifiedVectorFormat;
 
 struct RowOperationsState {
-	RowOperationsState(Allocator &allocator) : allocator(allocator) {
+	RowOperationsState(ArenaAllocator &allocator) : allocator(allocator) {
 	}
 
-	Allocator &allocator;
+	ArenaAllocator &allocator;
 };
 
 // RowOperations contains a set of operations that operate on data using a RowLayout
