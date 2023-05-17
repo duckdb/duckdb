@@ -120,6 +120,9 @@ TEST_CASE("ADBC - Test ingestion - Lineitem", "[adbc]") {
 }
 
 TEST_CASE("Test Null Error/Database", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
 	duckdb_adbc::AdbcStatusCode adbc_status;
 	duckdb_adbc::AdbcError adbc_error;
 	duckdb_adbc::InitiliazeADBCError(&adbc_error);
@@ -141,22 +144,21 @@ TEST_CASE("Test Null Error/Database", "[adbc]") {
 }
 
 TEST_CASE("Test Invalid Path", "[adbc]") {
-	duckdb_adbc::AdbcStatusCode adbc_status;
+	if (!duckdb_lib) {
+		return;
+	}
 	duckdb_adbc::AdbcError adbc_error;
 	duckdb_adbc::InitiliazeADBCError(&adbc_error);
 	duckdb_adbc::AdbcDatabase adbc_database;
-	// NULL error
-	adbc_status = duckdb_adbc::DatabaseInit(&adbc_database, nullptr);
-	REQUIRE(adbc_status == ADBC_STATUS_INVALID_ARGUMENT);
-	// NULL database
-	adbc_status = duckdb_adbc::DatabaseInit(nullptr, &adbc_error);
-	REQUIRE(adbc_status == ADBC_STATUS_INVALID_ARGUMENT);
-	REQUIRE(std::strcmp(adbc_error.message, "ADBC Database has an invalid pointer") == 0);
 
-	// We must Release the error (Malloc-ed string)
-	adbc_error.release(&adbc_error);
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", "/this/path/is/imaginary/hopefully/", &adbc_error)));
 
-	// Null Error and Database
-	adbc_status = duckdb_adbc::DatabaseInit(nullptr, nullptr);
-	REQUIRE(adbc_status == ADBC_STATUS_INVALID_ARGUMENT);
+	REQUIRE(!SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	REQUIRE(std::strcmp(adbc_error.message, "IO Error: Cannot open file \"/this/path/is/imaginary/hopefully/\": No such file or directory") == 0);
+
+
 }
