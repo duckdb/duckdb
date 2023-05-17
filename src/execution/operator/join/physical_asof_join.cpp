@@ -13,6 +13,8 @@
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 
+#include <thread>
+
 namespace duckdb {
 
 PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> left,
@@ -64,18 +66,22 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, unique_ptr<Physica
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-class AsOfProbeSpill {
+class AsOfProbeBuffer {
 public:
 	using Orders = vector<BoundOrderByNode>;
 	using Match = std::pair<hash_t, idx_t>;
 
-	AsOfProbeSpill(ClientContext &context, const PhysicalAsOfJoin &op, bool force_external);
+	static bool IsExternal(ClientContext &context) {
+		return ClientConfig::GetConfig(context).force_external;
+	}
+
+	AsOfProbeBuffer(ClientContext &context, const PhysicalAsOfJoin &op);
 
 public:
 	void ResolveJoin(bool *found_matches, Match *matches = nullptr);
 	bool Sink(DataChunk &input);
 	void Sort();
-	void BeginScan();
+	bool NextLeft();
 	void EndScan();
 
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)
@@ -84,12 +90,18 @@ public:
 	void ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk);
 	// local join execution
 	OperatorResultType ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk);
+	//	Chunk may be empty
+	void GetData(ExecutionContext &context, DataChunk &chunk);
+	bool HasMoreData() const {
+		return !fetch_next_left || (lhs_scanner && lhs_scanner->Remaining());
+	}
 
 	ClientContext &context;
 	Allocator &allocator;
 	const PhysicalAsOfJoin &op;
 	BufferManager &buffer_manager;
 	const bool force_external;
+	const idx_t memory_per_thread;
 	Orders lhs_orders;
 
 	//	LHS sorting
@@ -103,6 +115,7 @@ public:
 	unique_ptr<GlobalSortState> lhs_global_sort;
 	unique_ptr<LocalSortState> lhs_local_sort;
 	unique_ptr<PayloadScanner> lhs_scanner;
+	idx_t sunk;
 
 	// LHS binning
 	Vector hash_vector;
@@ -133,10 +146,10 @@ public:
 		return global_partition.count;
 	}
 
-	AsOfProbeSpill *RegisterThread(ClientContext &context, const PhysicalAsOfJoin &op, bool force_external) {
+	AsOfProbeBuffer *RegisterBuffer(ClientContext &context, const PhysicalAsOfJoin &op) {
 		lock_guard<mutex> guard(lock);
-		local_spills.emplace_back(make_uniq<AsOfProbeSpill>(context, op, force_external));
-		return local_spills.back().get();
+		local_buffers.emplace_back(make_uniq<AsOfProbeBuffer>(context, op));
+		return local_buffers.back().get();
 	}
 
 	PartitionGlobalSinkState global_partition;
@@ -147,7 +160,7 @@ public:
 	bool has_null;
 
 	mutex lock;
-	vector<unique_ptr<AsOfProbeSpill>> local_spills;
+	vector<unique_ptr<AsOfProbeBuffer>> local_buffers;
 };
 
 class AsOfLocalSinkState : public LocalSinkState {
@@ -235,20 +248,21 @@ unique_ptr<GlobalOperatorState> PhysicalAsOfJoin::GetGlobalOperatorState(ClientC
 
 class AsOfLocalState : public CachingOperatorState {
 public:
-	AsOfLocalState(ClientContext &context, const PhysicalAsOfJoin &op, bool force_external) {
-		if (!spill_state) {
+	AsOfLocalState(ClientContext &context, const PhysicalAsOfJoin &op) {
+		if (!probe_buffer) {
 			auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
-			spill_state = gsink.RegisterThread(context, op, force_external);
+			probe_buffer = gsink.RegisterBuffer(context, op);
 		}
 	}
 
-	optional_ptr<AsOfProbeSpill> spill_state;
+	optional_ptr<AsOfProbeBuffer> probe_buffer;
 };
 
-AsOfProbeSpill::AsOfProbeSpill(ClientContext &context, const PhysicalAsOfJoin &op, bool force_external)
+AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &context, const PhysicalAsOfJoin &op)
     : context(context), allocator(Allocator::Get(context)), op(op),
-      buffer_manager(BufferManager::GetBufferManager(context)), force_external(force_external), lhs_executor(context),
-      hash_vector(LogicalType::HASH), left_outer(IsLeftOuterJoin(op.join_type)), fetch_next_left(true) {
+      buffer_manager(BufferManager::GetBufferManager(context)), force_external(IsExternal(context)),
+      memory_per_thread(op.GetMaxThreadMemory(context)), lhs_executor(context), sunk(0), hash_vector(LogicalType::HASH),
+      left_outer(IsLeftOuterJoin(op.join_type)), fetch_next_left(true) {
 	vector<unique_ptr<BaseStatistics>> partition_stats;
 	Orders partitions; // Not used.
 	PartitionGlobalSinkState::GenerateOrderings(partitions, lhs_orders, op.lhs_partitions, op.lhs_orders,
@@ -273,7 +287,7 @@ AsOfProbeSpill::AsOfProbeSpill(ClientContext &context, const PhysicalAsOfJoin &o
 	left_outer.Initialize(STANDARD_VECTOR_SIZE);
 }
 
-bool AsOfProbeSpill::Sink(DataChunk &input) {
+bool AsOfProbeBuffer::Sink(DataChunk &input) {
 	//	Compute the join keys
 	lhs_keys.Reset();
 	lhs_executor.Execute(input, lhs_keys);
@@ -381,11 +395,13 @@ bool AsOfProbeSpill::Sink(DataChunk &input) {
 		lhs_local_sort->Initialize(*lhs_global_sort, buffer_manager);
 	}
 	lhs_local_sort->SinkChunk(lhs_keys, lhs_sorted);
+	sunk += lhs_sorted.size();
 
-	return true;
+	return lhs_local_sort->SizeInBytes() >= memory_per_thread;
+	// return sunk >= STANDARD_ROW_GROUPS_SIZE;
 }
 
-void AsOfProbeSpill::Sort() {
+void AsOfProbeBuffer::Sort() {
 	// Set external (can be forced with the PRAGMA)
 	auto &global_state = *lhs_global_sort;
 	global_state.external = force_external;
@@ -401,11 +417,21 @@ void AsOfProbeSpill::Sort() {
 	D_ASSERT(global_state.sorted_blocks.size() == 1);
 
 	lhs_scanner = make_uniq<PayloadScanner>(*global_state.sorted_blocks[0]->payload_data, global_state, false);
+	left_itr = make_uniq<SBIterator>(*lhs_global_sort, ExpressionType::COMPARE_LESSTHANOREQUALTO);
 }
 
-void AsOfProbeSpill::BeginScan() {
+bool AsOfProbeBuffer::NextLeft() {
+	if (!lhs_scanner) {
+		Sort();
+	}
+
+	if (!lhs_scanner->Remaining()) {
+		return false;
+	}
+
 	//	Scan the next sorted chunk
 	lhs_sorted.Reset();
+	left_itr->SetIndex(lhs_scanner->Scanned());
 	lhs_scanner->Scan(lhs_sorted);
 
 	//	Remove the bin column
@@ -417,10 +443,11 @@ void AsOfProbeSpill::BeginScan() {
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
 	auto &global_partition = gsink.global_partition;
 	prev_bin = global_partition.bin_groups.size();
-	left_itr = make_uniq<SBIterator>(*lhs_global_sort, ExpressionType::COMPARE_LESSTHANOREQUALTO);
+
+	return true;
 }
 
-void AsOfProbeSpill::EndScan() {
+void AsOfProbeBuffer::EndScan() {
 	hash_group = nullptr;
 	right_outer = nullptr;
 	left_itr.reset();
@@ -429,9 +456,11 @@ void AsOfProbeSpill::EndScan() {
 	lhs_scanner.reset();
 	lhs_local_sort.reset();
 	lhs_global_sort.reset();
+
+	sunk = 0;
 }
 
-void AsOfProbeSpill::ResolveJoin(bool *found_match, std::pair<hash_t, idx_t> *matches) {
+void AsOfProbeBuffer::ResolveJoin(bool *found_match, std::pair<hash_t, idx_t> *matches) {
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
 	auto &global_partition = gsink.global_partition;
 
@@ -513,7 +542,7 @@ void AsOfProbeSpill::ResolveJoin(bool *found_match, std::pair<hash_t, idx_t> *ma
 
 		// Emit match data
 		right_outer->SetMatch(first);
-		left_outer.SetMatch(i);
+		left_outer.SetMatch(left_base + i);
 		if (found_match) {
 			found_match[i] = true;
 		}
@@ -522,16 +551,13 @@ void AsOfProbeSpill::ResolveJoin(bool *found_match, std::pair<hash_t, idx_t> *ma
 		}
 		lhs_matched.set_index(lhs_match_count++, i);
 	}
-
-	left_itr->SetIndex(left_base + count);
 }
 
 unique_ptr<OperatorState> PhysicalAsOfJoin::GetOperatorState(ExecutionContext &context) const {
-	auto &config = ClientConfig::GetConfig(context.client);
-	return make_uniq<AsOfLocalState>(context.client, *this, config.force_external);
+	return make_uniq<AsOfLocalState>(context.client, *this);
 }
 
-void AsOfProbeSpill::ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk) {
+void AsOfProbeBuffer::ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk) {
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
 
 	// perform the actual join
@@ -558,7 +584,7 @@ void AsOfProbeSpill::ResolveSimpleJoin(ExecutionContext &context, DataChunk &chu
 	}
 }
 
-void AsOfProbeSpill::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk) {
+void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk) {
 	// perform the actual join
 	Match matches[STANDARD_VECTOR_SIZE];
 	ResolveJoin(nullptr, matches);
@@ -607,7 +633,8 @@ void AsOfProbeSpill::ResolveComplexJoin(ExecutionContext &context, DataChunk &ch
 	fetch_next_left = !left_outer.Enabled();
 }
 
-OperatorResultType AsOfProbeSpill::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk) {
+void AsOfProbeBuffer::GetData(ExecutionContext &context, DataChunk &chunk) {
+	//	Handle dangling left join results from current chunk
 	if (!fetch_next_left) {
 		fetch_next_left = true;
 		if (left_outer.Enabled()) {
@@ -616,23 +643,13 @@ OperatorResultType AsOfProbeSpill::ExecuteInternal(ExecutionContext &context, Da
 			left_outer.ConstructLeftJoinResult(lhs_payload, chunk);
 			left_outer.Reset();
 		}
-		return OperatorResultType::NEED_MORE_INPUT;
+		return;
 	}
 
-	//	Get rid of completed scans
-	if (lhs_scanner && !lhs_scanner->Remaining()) {
-		EndScan();
+	//	Stop if there is no more data
+	if (!NextLeft()) {
+		return;
 	}
-
-	//	Buffer the data and ask for more
-	input.Verify();
-	if (!Sink(input)) {
-		return OperatorResultType::NEED_MORE_INPUT;
-	}
-
-	//	We have enough data to process, so sort and start emitting
-	Sort();
-	BeginScan();
 
 	switch (op.join_type) {
 	case JoinType::SEMI:
@@ -640,16 +657,43 @@ OperatorResultType AsOfProbeSpill::ExecuteInternal(ExecutionContext &context, Da
 	case JoinType::MARK:
 		// simple joins can have max STANDARD_VECTOR_SIZE matches per chunk
 		ResolveSimpleJoin(context, chunk);
-		return OperatorResultType::NEED_MORE_INPUT;
+		break;
 	case JoinType::LEFT:
 	case JoinType::INNER:
 	case JoinType::RIGHT:
 	case JoinType::OUTER:
 		ResolveComplexJoin(context, chunk);
-		return fetch_next_left ? OperatorResultType::NEED_MORE_INPUT : OperatorResultType::HAVE_MORE_OUTPUT;
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type for as-of join!");
 	}
+}
+
+OperatorResultType AsOfProbeBuffer::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk) {
+	//	Flush any buffered data first
+	while (HasMoreData()) {
+		GetData(context, chunk);
+		if (chunk.size()) {
+			return OperatorResultType::HAVE_MORE_OUTPUT;
+		}
+	}
+
+	//	Buffer the new chunk
+	input.Verify();
+	if (!Sink(input)) {
+		return OperatorResultType::NEED_MORE_INPUT;
+	}
+
+	//	Overflow, so start flushing
+	while (HasMoreData()) {
+		GetData(context, chunk);
+		if (chunk.size()) {
+			return OperatorResultType::HAVE_MORE_OUTPUT;
+		}
+	}
+
+	//	Entire buffer generated no output so ask for more.
+	return OperatorResultType::NEED_MORE_INPUT;
 }
 
 OperatorResultType PhysicalAsOfJoin::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -667,7 +711,7 @@ OperatorResultType PhysicalAsOfJoin::ExecuteInternal(ExecutionContext &context, 
 		}
 	}
 
-	return lstate.spill_state->ExecuteInternal(context, input, chunk);
+	return lstate.probe_buffer->ExecuteInternal(context, input, chunk);
 }
 
 //===--------------------------------------------------------------------===//
@@ -675,32 +719,27 @@ OperatorResultType PhysicalAsOfJoin::ExecuteInternal(ExecutionContext &context, 
 //===--------------------------------------------------------------------===//
 class AsOfGlobalSourceState : public GlobalSourceState {
 public:
-	explicit AsOfGlobalSourceState(PartitionGlobalSinkState &gsink_p) : gsink(gsink_p), next_bin(0) {
+	explicit AsOfGlobalSourceState(AsOfGlobalSinkState &gsink_p)
+	    : gsink(gsink_p), next_buffer(0), flushed(0), next_bin(0) {
 	}
 
-	PartitionGlobalSinkState &gsink;
-	//! The output read position.
+	AsOfGlobalSinkState &gsink;
+	//! The next buffer to flush
+	atomic<size_t> next_buffer;
+	//! The number of flushed buffers
+	atomic<size_t> flushed;
+	//! The right outer output read position.
 	atomic<idx_t> next_bin;
 
 public:
 	idx_t MaxThreads() override {
-		// If there is only one partition, we have to process it on one thread.
-		if (!gsink.grouping_data) {
-			return 1;
-		}
-
-		// If there is not a lot of data, process serially.
-		if (gsink.count < STANDARD_ROW_GROUPS_SIZE) {
-			return 1;
-		}
-
-		return gsink.hash_groups.size();
+		return gsink.local_buffers.size();
 	}
 };
 
 unique_ptr<GlobalSourceState> PhysicalAsOfJoin::GetGlobalSourceState(ClientContext &context) const {
 	auto &gsink = sink_state->Cast<AsOfGlobalSinkState>();
-	return make_uniq<AsOfGlobalSourceState>(gsink.global_partition);
+	return make_uniq<AsOfGlobalSourceState>(gsink);
 }
 
 class AsOfLocalSourceState : public LocalSourceState {
@@ -712,6 +751,9 @@ public:
 	idx_t GeneratePartition(const idx_t hash_bin);
 
 	AsOfGlobalSinkState &gstate;
+
+	//! The buffer being flushed
+	optional_ptr<AsOfProbeBuffer> buffer;
 
 	//! The read partition
 	idx_t hash_bin;
@@ -748,17 +790,51 @@ unique_ptr<LocalSourceState> PhysicalAsOfJoin::GetLocalSourceState(ExecutionCont
 
 SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk &chunk,
                                            OperatorSourceInput &input) const {
-	D_ASSERT(IsRightOuterJoin(join_type));
-
 	auto &gsource = input.global_state.Cast<AsOfGlobalSourceState>();
 	auto &lsource = input.local_state.Cast<AsOfLocalSourceState>();
-	auto &gsink = gsource.gsink;
+	auto &gpartition = gsource.gsink.global_partition;
 
-	auto &hash_groups = gsink.hash_groups;
+	//	Still flushing buffers?
+	const auto buffer_count = lsource.gstate.local_buffers.size();
+	while (gsource.flushed < buffer_count) {
+		//	Make sure we have something to flush
+		if (!lsource.buffer) {
+			const auto next_buffer = gsource.next_buffer++;
+			if (next_buffer < buffer_count) {
+				//	More to flush
+				lsource.buffer = lsource.gstate.local_buffers[next_buffer].get();
+			} else {
+				//	Wait for all threads to finish
+				//	TODO: How to implement a spin wait correctly?
+				//	Returning BLOCKED seems to hang the system.
+				std::this_thread::yield();
+				continue;
+			}
+		}
+
+		lsource.buffer->GetData(context, chunk);
+		if (chunk.size()) {
+			return SourceResultType::HAVE_MORE_OUTPUT;
+		} else if (lsource.buffer->HasMoreData()) {
+			//	Flush the next buffered chunk
+			continue;
+		} else {
+			lsource.buffer->EndScan();
+			lsource.buffer = nullptr;
+			gsource.flushed++;
+		}
+	}
+
+	//	Done flushing
+	if (!IsRightOuterJoin(join_type)) {
+		return SourceResultType::FINISHED;
+	}
+
+	auto &hash_groups = gpartition.hash_groups;
 	const auto bin_count = hash_groups.size();
 
 	DataChunk rhs_chunk;
-	rhs_chunk.Initialize(Allocator::Get(context.client), gsink.payload_types);
+	rhs_chunk.Initialize(Allocator::Get(context.client), gpartition.payload_types);
 	SelectionVector rsel(STANDARD_VECTOR_SIZE);
 
 	while (chunk.size() == 0) {

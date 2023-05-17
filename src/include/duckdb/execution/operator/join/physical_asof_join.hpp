@@ -13,8 +13,7 @@
 
 namespace duckdb {
 
-//! PhysicalAsOfJoin represents a piecewise merge loop join between
-//! two tables
+//! PhysicalAsOfJoin represents an as-of join between two tables
 class PhysicalAsOfJoin : public PhysicalComparisonJoin {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::ASOF_JOIN;
@@ -58,7 +57,7 @@ public:
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
-		return IsRightOuterJoin(join_type);
+		return true;
 	}
 	bool ParallelSource() const override {
 		return true;
