@@ -28,4 +28,16 @@ typedef idx_t column_t;
 //! Type used for storage (column) identifiers
 typedef idx_t storage_t;
 
+template <class DEST, class SRC>
+DEST *data_ptr_cast(SRC *src) {
+	static_assert(sizeof(DEST) == 1, "data_ptr_cast should only be used to cast to char, data_t, unsigned char");
+	return (DEST *)src;
+}
+
+template <class DEST, class SRC>
+const DEST *const_data_ptr_cast(SRC *src) {
+	static_assert(sizeof(DEST) == 1, "data_ptr_cast should only be used to cast to char, data_t, unsigned char");
+	return (DEST *)src;
+}
+
 } // namespace duckdb

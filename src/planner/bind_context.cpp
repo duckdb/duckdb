@@ -161,7 +161,7 @@ unique_ptr<ParsedExpression> BindContext::ExpandGeneratedColumn(const string &ta
 
 	auto binding = GetBinding(table_name, error_message);
 	D_ASSERT(binding);
-	auto &table_binding = (TableBinding &)*binding;
+	auto &table_binding = binding->Cast<TableBinding>();
 	auto result = table_binding.ExpandGeneratedColumn(column_name);
 	result->alias = column_name;
 	return result;
@@ -176,7 +176,7 @@ static bool ColumnIsGenerated(Binding &binding, column_t index) {
 	if (binding.binding_type != BindingType::TABLE) {
 		return false;
 	}
-	auto &table_binding = (TableBinding &)binding;
+	auto &table_binding = binding.Cast<TableBinding>();
 	auto catalog_entry = table_binding.GetStandardEntry();
 	if (!catalog_entry) {
 		return false;
@@ -483,15 +483,14 @@ void BindContext::AddSubquery(idx_t index, const string &alias, SubqueryRef &ref
 }
 
 void BindContext::AddEntryBinding(idx_t index, const string &alias, const vector<string> &names,
-                                  const vector<LogicalType> &types, StandardEntry *entry) {
-	D_ASSERT(entry);
-	AddBinding(alias, make_uniq<EntryBinding>(alias, types, names, index, *entry));
+                                  const vector<LogicalType> &types, StandardEntry &entry) {
+	AddBinding(alias, make_uniq<EntryBinding>(alias, types, names, index, entry));
 }
 
 void BindContext::AddView(idx_t index, const string &alias, SubqueryRef &ref, BoundQueryNode &subquery,
                           ViewCatalogEntry *view) {
 	auto names = AliasColumnNames(alias, subquery.names, ref.column_name_alias);
-	AddEntryBinding(index, alias, names, subquery.types, (StandardEntry *)view);
+	AddEntryBinding(index, alias, names, subquery.types, view->Cast<StandardEntry>());
 }
 
 void BindContext::AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery) {

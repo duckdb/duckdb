@@ -40,7 +40,7 @@ unique_ptr<FunctionData> ListLambdaBindData::Copy() const {
 
 bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<ListLambdaBindData>();
-	return lambda_expr->Equals(other.lambda_expr.get()) && stype == other.stype;
+	return lambda_expr->Equals(*other.lambda_expr) && stype == other.stype;
 }
 
 ListLambdaBindData::~ListLambdaBindData() {

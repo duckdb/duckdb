@@ -27,8 +27,8 @@ struct ListAggregatesBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const ListAggregatesBindData &)other_p;
-		return stype == other.stype && aggr_expr->Equals(other.aggr_expr.get());
+		auto &other = other_p.Cast<ListAggregatesBindData>();
+		return stype == other.stype && aggr_expr->Equals(*other.aggr_expr);
 	}
 	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
 		throw NotImplementedException("FIXME: list aggr serialize");

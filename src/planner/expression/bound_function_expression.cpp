@@ -2,7 +2,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/parser/expression_util.hpp"
 #include "duckdb/function/function_serialization.hpp"
 
 namespace duckdb {
@@ -39,15 +38,15 @@ hash_t BoundFunctionExpression::Hash() const {
 	return CombineHash(result, function.Hash());
 }
 
-bool BoundFunctionExpression::Equals(const BaseExpression *other_p) const {
+bool BoundFunctionExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto &other = other_p->Cast<BoundFunctionExpression>();
+	auto &other = other_p.Cast<BoundFunctionExpression>();
 	if (other.function != function) {
 		return false;
 	}
-	if (!ExpressionUtil::ListEquals(children, other.children)) {
+	if (!Expression::ListEquals(children, other.children)) {
 		return false;
 	}
 	if (!FunctionData::Equals(bind_info.get(), other.bind_info.get())) {

@@ -71,19 +71,13 @@ public:
 	//! Expression::Equals() returns true), that their hash value is identical as well.
 	virtual hash_t Hash() const = 0;
 	//! Returns true if this expression is equal to another expression
-	virtual bool Equals(const BaseExpression *other) const;
+	virtual bool Equals(const BaseExpression &other) const;
 
-	static bool Equals(const BaseExpression *left, const BaseExpression *right) {
-		if (left == right) {
-			return true;
-		}
-		if (!left || !right) {
-			return false;
-		}
-		return left->Equals(right);
+	static bool Equals(const BaseExpression &left, const BaseExpression &right) {
+		return left.Equals(right);
 	}
 	bool operator==(const BaseExpression &rhs) {
-		return this->Equals(&rhs);
+		return Equals(rhs);
 	}
 
 	virtual void Verify() const;

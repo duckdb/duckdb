@@ -27,12 +27,12 @@ string OperatorExpression::ToString() const {
 	return ToString<OperatorExpression, ParsedExpression>(*this);
 }
 
-bool OperatorExpression::Equal(const OperatorExpression *a, const OperatorExpression *b) {
-	if (a->children.size() != b->children.size()) {
+bool OperatorExpression::Equal(const OperatorExpression &a, const OperatorExpression &b) {
+	if (a.children.size() != b.children.size()) {
 		return false;
 	}
-	for (idx_t i = 0; i < a->children.size(); i++) {
-		if (!a->children[i]->Equals(b->children[i].get())) {
+	for (idx_t i = 0; i < a.children.size(); i++) {
+		if (!a.children[i]->Equals(*b.children[i])) {
 			return false;
 		}
 	}

@@ -304,7 +304,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		}
 		auto arg_expr = children[0].get();
 		auto &order_by = order_bys->orders[0];
-		if (arg_expr->Equals(order_by.expression.get())) {
+		if (arg_expr->Equals(*order_by.expression)) {
 			auto sense = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.type));
 			auto nulls = make_uniq<ConstantExpression>(EnumUtil::ToChars(order_by.null_order));
 			order_bys = nullptr;

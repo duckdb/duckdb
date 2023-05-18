@@ -350,7 +350,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			} else if (expr.type == ExpressionType::COMPARE_BETWEEN) {
 				// BETWEEN expression
 				auto &between = expr.Cast<BoundBetweenExpression>();
-				if (!between.input->Equals(index_expression.get())) {
+				if (!between.input->Equals(*index_expression)) {
 					// expression doesn't match the current index expression
 					continue;
 				}

@@ -28,7 +28,7 @@ struct SortedAggregateBindData : public FunctionData {
 		}
 		sorted_on_args = (children.size() == order_bys.orders.size());
 		for (size_t i = 0; sorted_on_args && i < children.size(); ++i) {
-			sorted_on_args = children[i]->Equals(order_bys.orders[i].expression.get());
+			sorted_on_args = children[i]->Equals(*order_bys.orders[i].expression);
 		}
 	}
 
