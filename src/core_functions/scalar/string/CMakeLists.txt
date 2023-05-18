@@ -19,6 +19,7 @@ add_library_unity(
   repeat.cpp
   replace.cpp
   reverse.cpp
+  sha512.cpp
   starts_with.cpp
   string_split.cpp
   translate.cpp

@@ -173,6 +173,14 @@
         "type": "scalar_function",
         "struct": "MD5NumberUpperFun"
     },
+        {
+        "name": "sha512",
+        "parameters": "value",
+        "description": "Returns the SHA512 hash of the value as a string",
+        "example": "sha512('123')",
+        "type": "scalar_function",
+        "struct": "SHA512Fun"
+    },
     {
         "name": "printf",
         "parameters": "format,parameters...",
