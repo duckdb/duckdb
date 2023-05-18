@@ -128,7 +128,6 @@ public:
 	unique_ptr<SBIterator> right_itr;
 
 	idx_t lhs_match_count;
-	SelectionVector lhs_matched;
 	OuterJoinMarker left_outer;
 	bool fetch_next_left;
 	DataChunk rhs_payload;
@@ -282,7 +281,6 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &context, const PhysicalAsOfJoin 
 
 	rhs_payload.Initialize(allocator, op.children[1]->types);
 
-	lhs_matched.Initialize();
 	lhs_sel.Initialize();
 	left_outer.Initialize(STANDARD_VECTOR_SIZE);
 }
@@ -292,7 +290,7 @@ bool AsOfProbeBuffer::Sink(DataChunk &input) {
 	lhs_keys.Reset();
 	lhs_executor.Execute(input, lhs_keys);
 
-	//	Extract the NULLs
+	//	Combine the NULLs
 	const auto count = input.size();
 	lhs_valid_mask.Reset();
 	for (auto col_idx : op.null_sensitive) {
@@ -302,17 +300,19 @@ bool AsOfProbeBuffer::Sink(DataChunk &input) {
 		lhs_valid_mask.Combine(unified.validity, count);
 	}
 
-	//	Convert the mask to a selection vector.
-	//	We need this anyway for sorting
+	//	Convert the mask to a selection vector
+	//	and mark all the rows that cannot match for early return.
 	idx_t lhs_valid = 0;
 	const auto entry_count = lhs_valid_mask.EntryCount(count);
 	idx_t base_idx = 0;
+	left_outer.Reset();
 	for (idx_t entry_idx = 0; entry_idx < entry_count;) {
 		const auto validity_entry = lhs_valid_mask.GetValidityEntry(entry_idx++);
 		const auto next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
 		if (ValidityMask::AllValid(validity_entry)) {
 			for (; base_idx < next; ++base_idx) {
 				lhs_sel.set_index(lhs_valid++, base_idx);
+				left_outer.SetMatch(base_idx);
 			}
 		} else if (ValidityMask::NoneValid(validity_entry)) {
 			base_idx = next;
@@ -321,17 +321,14 @@ bool AsOfProbeBuffer::Sink(DataChunk &input) {
 			for (; base_idx < next; ++base_idx) {
 				if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
 					lhs_sel.set_index(lhs_valid++, base_idx);
+					left_outer.SetMatch(base_idx);
 				}
 			}
 		}
 	}
 
-	// 	For a left join, we need to sort ALL the rows -
-	//	including the ones we already know don't match.
-	//	We mark the failures with an invalid bin number
-	//	below so they won't match.
 	lhs_sorted.Reset();
-	if (left_outer.Enabled() || lhs_valid == count) {
+	if (lhs_valid == count) {
 		lhs_sorted.Reference(input);
 		lhs_sorted.SetCardinality(input);
 	} else {
@@ -339,27 +336,17 @@ bool AsOfProbeBuffer::Sink(DataChunk &input) {
 		lhs_keys.Slice(lhs_sel, lhs_valid);
 		lhs_sorted.Slice(input, lhs_sel, lhs_valid);
 		lhs_sorted.SetCardinality(lhs_valid);
+
+		//	Flush the ones that can't match
+		fetch_next_left = false;
 	}
 	auto &bin_vector = lhs_sorted.data.back();
 
 	//	Hash to assign the partitions
 	auto &global_partition = op.sink_state->Cast<AsOfGlobalSinkState>().global_partition;
-	const hash_t invalid_bin = global_partition.bin_groups.size();
 	if (op.lhs_partitions.empty()) {
-		// Only one hash group
-		if (left_outer.Enabled() && lhs_valid < count) {
-			//	Left join: Unselected rows are invalid
-			bin_vector.Reference(Value::HASH(invalid_bin));
-			bin_vector.Flatten(count);
-			auto bins = FlatVector::GetData<hash_t>(bin_vector);
-			for (idx_t i = 0; i < lhs_valid; ++i) {
-				const auto idx = lhs_sel.get_index(i);
-				bins[idx] = 0;
-			}
-		} else {
-			//	All remaining rows are valid
-			bin_vector.Reference(Value::HASH(0));
-		}
+		//	All remaining rows are valid
+		bin_vector.Reference(Value::HASH(0));
 	} else {
 		//	Hash the valid keys
 		VectorOperations::Hash(lhs_keys.data[0], hash_vector, lhs_valid);
@@ -369,23 +356,7 @@ bool AsOfProbeBuffer::Sink(DataChunk &input) {
 
 		// Convert hashes to hash groups
 		const auto radix_bits = global_partition.grouping_data->GetRadixBits();
-		if (left_outer.Enabled() && lhs_valid < count) {
-			//	Left join: Unselected rows are invalid
-			bin_vector.Reference(Value::HASH(invalid_bin));
-			bin_vector.Flatten(count);
-			Vector valid_vector(LogicalType::HASH);
-			RadixPartitioning::HashesToBins(hash_vector, radix_bits, valid_vector, lhs_valid);
-			//	Scatter the valid bins
-			auto valid_bins = FlatVector::GetData<hash_t>(valid_vector);
-			auto bins = FlatVector::GetData<hash_t>(bin_vector);
-			for (idx_t i = 0; i < lhs_valid; ++i) {
-				const auto idx = lhs_sel.get_index(i);
-				bins[idx] = valid_bins[i];
-			}
-		} else {
-			//	All remaining rows are valid
-			RadixPartitioning::HashesToBins(hash_vector, radix_bits, bin_vector, lhs_valid);
-		}
+		RadixPartitioning::HashesToBins(hash_vector, radix_bits, bin_vector, lhs_valid);
 	}
 
 	// 	Sort the selection vector on the valid keys
@@ -471,6 +442,7 @@ void AsOfProbeBuffer::ResolveJoin(bool *found_match, std::pair<hash_t, idx_t> *m
 	UnifiedVectorFormat bin_unified;
 	bin_vector.ToUnifiedFormat(count, bin_unified);
 	const auto bins = (hash_t *)bin_unified.data;
+	left_outer.Reset();
 
 	const hash_t invalid_bin = global_partition.bin_groups.size();
 	const auto left_base = left_itr->GetIndex();
@@ -549,7 +521,7 @@ void AsOfProbeBuffer::ResolveJoin(bool *found_match, std::pair<hash_t, idx_t> *m
 		if (matches) {
 			matches[i] = Match(curr_bin, first);
 		}
-		lhs_matched.set_index(lhs_match_count++, i);
+		lhs_sel.set_index(lhs_match_count++, i);
 	}
 }
 
@@ -596,7 +568,7 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 	optional_ptr<PartitionGlobalHashGroup> hash_group;
 	unique_ptr<PayloadScanner> rhs_scanner;
 	for (idx_t i = 0; i < lhs_match_count; ++i) {
-		const auto idx = lhs_matched[i];
+		const auto idx = lhs_sel[i];
 		const auto match_bin = matches[idx].first;
 		const auto match_pos = matches[idx].second;
 		if (match_bin != scan_bin) {
@@ -625,7 +597,7 @@ void AsOfProbeBuffer::ResolveComplexJoin(ExecutionContext &context, DataChunk &c
 
 	//	Slice the sorted input into the left side
 	for (column_t i = 0; i < lhs_payload.ColumnCount(); ++i) {
-		chunk.data[i].Slice(lhs_sorted.data[i], lhs_matched, lhs_match_count);
+		chunk.data[i].Slice(lhs_sorted.data[i], lhs_sel, lhs_match_count);
 	}
 	chunk.SetCardinality(lhs_match_count);
 
@@ -680,7 +652,17 @@ OperatorResultType AsOfProbeBuffer::ExecuteInternal(ExecutionContext &context, D
 
 	//	Buffer the new chunk
 	input.Verify();
-	if (!Sink(input)) {
+	const auto overflowed = Sink(input);
+
+	//	If there were any unmatchable rows, return them now so we can forget about them.
+	if (!fetch_next_left) {
+		fetch_next_left = true;
+		left_outer.ConstructLeftJoinResult(input, chunk);
+		left_outer.Reset();
+		return OperatorResultType::NEED_MORE_INPUT;
+	}
+
+	if (!overflowed) {
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
@@ -803,6 +785,8 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 			if (next_buffer < buffer_count) {
 				//	More to flush
 				lsource.buffer = lsource.gstate.local_buffers[next_buffer].get();
+			} else if (!IsRightOuterJoin(join_type)) {
+				return SourceResultType::FINISHED;
 			} else {
 				//	Wait for all threads to finish
 				//	TODO: How to implement a spin wait correctly?
