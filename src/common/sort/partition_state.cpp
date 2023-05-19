@@ -494,18 +494,29 @@ public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 
 private:
+	struct ExecutorCallback : public PartitionGlobalMergeStates::Callback {
+		explicit ExecutorCallback(Executor &executor) : executor(executor) {
+		}
+
+		bool HasError() const override {
+			return executor.HasError();
+		}
+
+		Executor &executor;
+	};
+
 	shared_ptr<Event> event;
 	PartitionLocalMergeState local_state;
 	PartitionGlobalMergeStates &hash_groups;
 };
 
-TaskExecutionResult PartitionMergeTask::ExecuteTask(TaskExecutionMode mode) {
+bool PartitionGlobalMergeStates::ExecuteTask(PartitionLocalMergeState &local_state, Callback &callback) {
 	// Loop until all hash groups are done
 	size_t sorted = 0;
-	while (sorted < hash_groups.states.size()) {
+	while (sorted < states.size()) {
 		// First check if there is an unfinished task for this thread
-		if (executor.HasError()) {
-			return TaskExecutionResult::TASK_ERROR;
+		if (callback.HasError()) {
+			return false;
 		}
 		if (!local_state.TaskFinished()) {
 			local_state.ExecuteTask();
@@ -513,8 +524,8 @@ TaskExecutionResult PartitionMergeTask::ExecuteTask(TaskExecutionMode mode) {
 		}
 
 		// Thread is done with its assigned task, try to fetch new work
-		for (auto group = sorted; group < hash_groups.states.size(); ++group) {
-			auto &global_state = hash_groups.states[group];
+		for (auto group = sorted; group < states.size(); ++group) {
+			auto &global_state = states[group];
 			if (global_state->IsSorted()) {
 				// This hash group is done
 				// Update the high water mark of densely completed groups
@@ -553,6 +564,16 @@ TaskExecutionResult PartitionMergeTask::ExecuteTask(TaskExecutionMode mode) {
 			// The tasks were assigned to other threads while this thread waited for the lock
 			// Go to the next iteration to see if another hash group has a task
 		}
+	}
+
+	return true;
+}
+
+TaskExecutionResult PartitionMergeTask::ExecuteTask(TaskExecutionMode mode) {
+	ExecutorCallback callback(executor);
+
+	if (!hash_groups.ExecuteTask(local_state, callback)) {
+		return TaskExecutionResult::TASK_ERROR;
 	}
 
 	event->FinishTask();

@@ -336,7 +336,7 @@ public:
 	bool Scanning() const {
 		return lhs_scanner.get();
 	}
-	void BeginScan(hash_t scan_bin);
+	void BeginLeftScan(hash_t scan_bin);
 	bool NextLeft();
 	void EndScan();
 
@@ -361,22 +361,21 @@ public:
 	//	LHS scanning
 	ExpressionExecutor lhs_executor;
 	DataChunk lhs_keys;
-	DataChunk lhs_payload;
 	SelectionVector lhs_sel;
-	unique_ptr<GlobalSortState> lhs_global_sort;
-	unique_ptr<LocalSortState> lhs_local_sort;
-	unique_ptr<PayloadScanner> lhs_scanner;
-
-	//	Joining
-	optional_ptr<PartitionGlobalHashGroup> hash_group;
-	optional_ptr<OuterJoinMarker> right_outer;
+	optional_ptr<PartitionGlobalHashGroup> left_hash;
+	OuterJoinMarker left_outer;
 	unique_ptr<SBIterator> left_itr;
+	unique_ptr<PayloadScanner> lhs_scanner;
+	DataChunk lhs_payload;
+
+	//	RHS scanning
+	optional_ptr<PartitionGlobalHashGroup> right_hash;
+	optional_ptr<OuterJoinMarker> right_outer;
 	unique_ptr<SBIterator> right_itr;
 	unique_ptr<PayloadScanner> rhs_scanner;
 	DataChunk rhs_payload;
 
 	idx_t lhs_match_count;
-	OuterJoinMarker left_outer;
 	bool fetch_next_left;
 };
 
@@ -403,52 +402,29 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &context, const PhysicalAsOfJoin 
 	}
 }
 
-void AsOfProbeBuffer::BeginScan(hash_t scan_bin) {
-	// Pull out the left hash group and sort it
+void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
 	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
 	auto &lhs_sink = *gsink.lhs_sink;
-	auto &partitions = lhs_sink.grouping_data->GetPartitions();
-	auto &group_data = partitions[scan_bin];
-	if (!group_data->Count()) {
-		//	Empty group so nothing to do.
+	const auto left_group = lhs_sink.bin_groups[scan_bin];
+	if (left_group >= lhs_sink.bin_groups.size()) {
 		return;
 	}
 
-	RowLayout lhs_layout;
-	lhs_layout.Initialize(lhs_sink.payload_types);
-	lhs_global_sort = make_uniq<GlobalSortState>(buffer_manager, lhs_orders, lhs_layout);
-	auto &global_sort = *lhs_global_sort;
-	// Set external (can be forced with the PRAGMA)
-	global_sort.external = force_external;
-
-	//	Copy all the data in and release it
-	lhs_sink.BuildSortState(*group_data, global_sort);
-
-	//	Sort the data
-	// 	TODO: run the sorting state machine at the top of GetData
-	global_sort.PrepareMergePhase();
-	while (global_sort.sorted_blocks.size() > 1) {
-		MergeSorter merge_sorter(global_sort, buffer_manager);
-		merge_sorter.PerformInMergeRound();
-		global_sort.CompleteMergeRound();
-	}
-
-	// Scan the sorted selection
-	D_ASSERT(global_sort.sorted_blocks.size() == 1);
-
-	lhs_scanner = make_uniq<PayloadScanner>(global_sort, false);
-	left_itr = make_uniq<SBIterator>(global_sort, ExpressionType::COMPARE_LESSTHANOREQUALTO);
+	left_hash = lhs_sink.hash_groups[left_group].get();
+	auto &left_sort = *(left_hash->global_sort);
+	lhs_scanner = make_uniq<PayloadScanner>(left_sort, false);
+	left_itr = make_uniq<SBIterator>(left_sort, ExpressionType::COMPARE_LESSTHANOREQUALTO);
 
 	// We are only probing the corresponding right side bin, which may be empty
 	// If they are empty, we leave the iterator as null so we can emit left matches
 	auto &rhs_sink = gsink.rhs_sink;
-	const hash_t invalid_bin = rhs_sink.bin_groups.size();
 	const auto right_group = rhs_sink.bin_groups[scan_bin];
-	if (right_group < invalid_bin) {
-		hash_group = rhs_sink.hash_groups[right_group].get();
+	if (right_group < rhs_sink.bin_groups.size()) {
+		right_hash = rhs_sink.hash_groups[right_group].get();
 		right_outer = gsink.right_outers.data() + right_group;
-		right_itr = make_uniq<SBIterator>(*(hash_group->global_sort), ExpressionType::COMPARE_LESSTHANOREQUALTO);
-		rhs_scanner = make_uniq<PayloadScanner>(*hash_group->global_sort, false);
+		auto &right_sort = *(right_hash->global_sort);
+		right_itr = make_uniq<SBIterator>(right_sort, ExpressionType::COMPARE_LESSTHANOREQUALTO);
+		rhs_scanner = make_uniq<PayloadScanner>(right_sort, false);
 	}
 }
 
@@ -466,14 +442,14 @@ bool AsOfProbeBuffer::NextLeft() {
 }
 
 void AsOfProbeBuffer::EndScan() {
-	hash_group = nullptr;
-	right_outer = nullptr;
-	left_itr.reset();
+	right_hash = nullptr;
 	right_itr.reset();
+	rhs_scanner.reset();
+	right_outer = nullptr;
 
+	left_hash = nullptr;
+	left_itr.reset();
 	lhs_scanner.reset();
-	lhs_local_sort.reset();
-	lhs_global_sort.reset();
 }
 
 void AsOfProbeBuffer::ResolveJoin(bool *found_match, idx_t *matches) {
@@ -500,7 +476,7 @@ void AsOfProbeBuffer::ResolveJoin(bool *found_match, idx_t *matches) {
 		idx_t bound = 1;
 		idx_t begin = right_itr->GetIndex();
 		right_itr->SetIndex(begin + bound);
-		while (right_itr->GetIndex() < hash_group->count) {
+		while (right_itr->GetIndex() < right_hash->count) {
 			if (right_itr->Compare(*left_itr)) {
 				//	If right <= left, jump ahead
 				bound *= 2;
@@ -513,7 +489,7 @@ void AsOfProbeBuffer::ResolveJoin(bool *found_match, idx_t *matches) {
 		//	Binary search for the first non-matching value using radix iterators
 		//	The previous value (which we know exists) is the match
 		auto first = begin + bound / 2;
-		auto last = MinValue<idx_t>(begin + bound, hash_group->count);
+		auto last = MinValue<idx_t>(begin + bound, right_hash->count);
 		while (first < last) {
 			const auto mid = first + (last - first) / 2;
 			right_itr->SetIndex(mid);
@@ -527,7 +503,7 @@ void AsOfProbeBuffer::ResolveJoin(bool *found_match, idx_t *matches) {
 		right_itr->SetIndex(--first);
 
 		//	Check partitions for strict equality
-		if (hash_group->ComparePartitions(*left_itr, *right_itr)) {
+		if (right_hash->ComparePartitions(*left_itr, *right_itr)) {
 			continue;
 		}
 
@@ -648,7 +624,15 @@ void AsOfProbeBuffer::GetData(ExecutionContext &context, DataChunk &chunk) {
 class AsOfGlobalSourceState : public GlobalSourceState {
 public:
 	explicit AsOfGlobalSourceState(AsOfGlobalSinkState &gsink_p)
-	    : gsink(gsink_p), next_combine(0), combined(0), next_left(0), flushed(0), next_right(0) {
+	    : gsink(gsink_p), next_combine(0), combined(0), merged(0), mergers(0), next_left(0), flushed(0), next_right(0) {
+	}
+
+	PartitionGlobalMergeStates &GetMergeStates() {
+		lock_guard<mutex> guard(lock);
+		if (!merge_states) {
+			merge_states = make_uniq<PartitionGlobalMergeStates>(*gsink.lhs_sink);
+		}
+		return *merge_states;
 	}
 
 	AsOfGlobalSinkState &gsink;
@@ -656,12 +640,19 @@ public:
 	atomic<size_t> next_combine;
 	//! The number of combined buffers
 	atomic<size_t> combined;
+	//! The number of combined buffers
+	atomic<size_t> merged;
+	//! The number of combined buffers
+	atomic<size_t> mergers;
 	//! The next buffer to flush
 	atomic<size_t> next_left;
 	//! The number of flushed buffers
 	atomic<size_t> flushed;
 	//! The right outer output read position.
 	atomic<idx_t> next_right;
+	//! The merge handler
+	mutex lock;
+	unique_ptr<PartitionGlobalMergeStates> merge_states;
 
 public:
 	idx_t MaxThreads() override {
@@ -678,11 +669,14 @@ class AsOfLocalSourceState : public LocalSourceState {
 public:
 	using HashGroupPtr = unique_ptr<PartitionGlobalHashGroup>;
 
-	explicit AsOfLocalSourceState(AsOfGlobalSinkState &gstate_p, const PhysicalAsOfJoin &op);
+	AsOfLocalSourceState(AsOfGlobalSourceState &gsource, const PhysicalAsOfJoin &op);
+
+	void CombineLeftPartitions();
+	void MergeLeftPartitions();
 
 	idx_t BeginRightScan(const idx_t hash_bin);
 
-	AsOfGlobalSinkState &gstate;
+	AsOfGlobalSourceState &gsource;
 
 	//! The left side partition being probed
 	AsOfProbeBuffer probe_buffer;
@@ -696,24 +690,48 @@ public:
 	const bool *found_match;
 };
 
-AsOfLocalSourceState::AsOfLocalSourceState(AsOfGlobalSinkState &gstate_p, const PhysicalAsOfJoin &op)
-    : gstate(gstate_p), probe_buffer(gstate.lhs_sink->context, op) {
+AsOfLocalSourceState::AsOfLocalSourceState(AsOfGlobalSourceState &gsource, const PhysicalAsOfJoin &op)
+    : gsource(gsource), probe_buffer(gsource.gsink.lhs_sink->context, op) {
+	gsource.mergers++;
+}
+
+void AsOfLocalSourceState::CombineLeftPartitions() {
+	const auto buffer_count = gsource.gsink.lhs_buffers.size();
+	while (gsource.combined < buffer_count) {
+		const auto next_combine = gsource.next_combine++;
+		if (next_combine < buffer_count) {
+			gsource.gsink.lhs_buffers[next_combine]->Combine();
+			++gsource.combined;
+		} else {
+			std::this_thread::yield();
+		}
+	}
+}
+
+void AsOfLocalSourceState::MergeLeftPartitions() {
+	PartitionGlobalMergeStates::Callback local_callback;
+	PartitionLocalMergeState local_merge;
+	gsource.GetMergeStates().ExecuteTask(local_merge, local_callback);
+	gsource.merged++;
+	while (gsource.merged < gsource.mergers) {
+		std::this_thread::yield();
+	}
 }
 
 idx_t AsOfLocalSourceState::BeginRightScan(const idx_t hash_bin_p) {
 	hash_bin = hash_bin_p;
 
-	hash_group = std::move(gstate.rhs_sink.hash_groups[hash_bin]);
+	hash_group = std::move(gsource.gsink.rhs_sink.hash_groups[hash_bin]);
 	scanner = make_uniq<PayloadScanner>(*hash_group->global_sort);
-	found_match = gstate.right_outers[hash_bin].GetMatches();
+	found_match = gsource.gsink.right_outers[hash_bin].GetMatches();
 
 	return scanner->Remaining();
 }
 
 unique_ptr<LocalSourceState> PhysicalAsOfJoin::GetLocalSourceState(ExecutionContext &context,
                                                                    GlobalSourceState &gstate) const {
-	auto &gsink = sink_state->Cast<AsOfGlobalSinkState>();
-	return make_uniq<AsOfLocalSourceState>(gsink, *this);
+	auto &gsource = gstate.Cast<AsOfGlobalSourceState>();
+	return make_uniq<AsOfLocalSourceState>(gsource, *this);
 }
 
 SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk &chunk,
@@ -723,18 +741,12 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 	auto &rhs_sink = gsource.gsink.rhs_sink;
 
 	//	Step 1: Combine the partitions
-	const auto buffer_count = lsource.gstate.lhs_buffers.size();
-	while (gsource.combined < buffer_count) {
-		const auto next_combine = gsource.next_combine++;
-		if (next_combine < buffer_count) {
-			lsource.gstate.lhs_buffers[next_combine]->Combine();
-			++gsource.combined;
-		} else {
-			std::this_thread::yield();
-		}
-	}
+	lsource.CombineLeftPartitions();
 
-	//	Step 2: Flush the partitions
+	//	Step 2: Sort on all threads
+	lsource.MergeLeftPartitions();
+
+	//	Step 3: Join the partitions
 	auto &lhs_sink = *gsource.gsink.lhs_sink;
 	auto &partitions = lhs_sink.grouping_data->GetPartitions();
 	const auto left_bins = partitions.size();
@@ -744,7 +756,7 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 			const auto left_bin = gsource.next_left++;
 			if (left_bin < left_bins) {
 				//	More to flush
-				lsource.probe_buffer.BeginScan(left_bin);
+				lsource.probe_buffer.BeginLeftScan(left_bin);
 			} else if (!IsRightOuterJoin(join_type)) {
 				return SourceResultType::FINISHED;
 			} else {
@@ -760,7 +772,7 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 		if (chunk.size()) {
 			return SourceResultType::HAVE_MORE_OUTPUT;
 		} else if (lsource.probe_buffer.HasMoreData()) {
-			//	Flush the next buffered chunk
+			//	Join the next partition
 			continue;
 		} else {
 			lsource.probe_buffer.EndScan();
@@ -768,7 +780,7 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 		}
 	}
 
-	//	Step 3: Emit right join matches
+	//	Step 4: Emit right join matches
 	if (!IsRightOuterJoin(join_type)) {
 		return SourceResultType::FINISHED;
 	}

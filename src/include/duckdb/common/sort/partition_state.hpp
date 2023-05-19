@@ -180,9 +180,17 @@ public:
 
 class PartitionGlobalMergeStates {
 public:
+	struct Callback {
+		virtual bool HasError() const {
+			return false;
+		}
+	};
+
 	using PartitionGlobalMergeStatePtr = unique_ptr<PartitionGlobalMergeState>;
 
 	explicit PartitionGlobalMergeStates(PartitionGlobalSinkState &sink);
+
+	bool ExecuteTask(PartitionLocalMergeState &local_state, Callback &callback);
 
 	vector<PartitionGlobalMergeStatePtr> states;
 };
