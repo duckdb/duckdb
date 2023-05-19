@@ -16,10 +16,11 @@ namespace duckdb {
 
 class SHA512Context {
 public:
-	static constexpr idx_t SHA512_HASH_LENGTH_BINARY = 512;
+	static constexpr idx_t SHA512_HASH_LENGTH_BINARY = 64;
 
 public:
 	SHA512Context();
+	~SHA512Context();
 
 	void Add(string_t str);
 

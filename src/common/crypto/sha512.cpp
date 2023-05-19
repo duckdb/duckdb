@@ -8,6 +8,10 @@ SHA512Context::SHA512Context() {
 	mbedtls_sha512_starts(&sha_context, false);
 }
 
+SHA512Context::~SHA512Context() {
+	mbedtls_sha512_free(&sha_context);
+}
+
 void SHA512Context::Add(string_t str) {
 	mbedtls_sha512_update(&sha_context, (const unsigned char *)str.GetData(), str.GetSize());
 }
