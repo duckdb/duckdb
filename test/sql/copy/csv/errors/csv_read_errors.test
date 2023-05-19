@@ -1,27 +1,46 @@
 # name: test/sql/copy/csv/errors/csv_read_errors.test
 # group: [errors]
 
+foreach PARALLEL true false
+
+# Basic test
 query III
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/bad.csv', 
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'}, 
-    ignore_errors=true) ORDER BY ALL;
+    ignore_errors=true, parallel=${PARALLEL}) ORDER BY ALL;
 ----
 1	2	AAA
 6	7	CCC
 
+query IIIIII
+FROM csv_rejects_table ORDER BY ALL;
+----
+2	1	"col1"	BBB	Could not convert string 'BBB' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad.csv
+
+# Test with multiple columns on the same row
+query III
+SELECT * FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/bad2.csv', 
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'INTEGER'}, 
+    ignore_errors=true, parallel=${PARALLEL}) ORDER BY ALL;
+----
+4	5	9
 
 query IIIIII
-FROM read_csv_error_log() ORDER BY ALL;
+FROM csv_rejects_table ORDER BY ALL;
 ----
-2	1	"col1"	BBB	Could not convert string 'BBB' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv
+1	2	"col2"	DDD	Could not convert string 'DDD' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad2.csv
+3	0	"col0"	EEE	Could not convert string 'EEE' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad2.csv
+3	2	"col2"	FFF	Could not convert string 'FFF' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad2.csv
+
 
 # Test with multiple files
 query III
 SELECT * FROM read_csv(
-    'test/sql/copy/csv/data/error/mismatch/*.csv', 
+    'test/sql/copy/csv/data/error/mismatch/bad*.csv', 
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'}, 
-    ignore_errors=true) ORDER BY ALL;
+    ignore_errors=true, parallel=${PARALLEL}) ORDER BY ALL;
 ----
 1	2	AAA
 1	2	DDD
@@ -30,10 +49,10 @@ SELECT * FROM read_csv(
 
 
 query IIIIII
-FROM read_csv_error_log() ORDER BY ALL;
+FROM csv_rejects_table ORDER BY ALL;
 ----
-2	1	"col1"	BBB	Could not convert string 'BBB' to INT32	test/sql/copy/csv/data/error/mismatch/bad.csv
-3	0	"col0"	EEE	Could not convert string 'EEE' to INT32	test/sql/copy/csv/data/error/mismatch/bad2.csv
+2	1	"col1"	BBB	Could not convert string 'BBB' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad.csv
+3	0	"col0"	EEE	Could not convert string 'EEE' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad2.csv
 
 # Set limit
 statement ok
@@ -41,9 +60,9 @@ SET csv_error_log_size = 1;
 
 query III
 SELECT * FROM read_csv(
-    'test/sql/copy/csv/data/error/mismatch/*.csv', 
+    'test/sql/copy/csv/data/error/mismatch/bad*.csv', 
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'}, 
-    ignore_errors=true) ORDER BY ALL;
+    ignore_errors=true, parallel=${PARALLEL}) ORDER BY ALL;
 ----
 1	2	AAA
 1	2	DDD
@@ -52,6 +71,55 @@ SELECT * FROM read_csv(
 
 # We should now have only one error logged
 query I
-SELECT COUNT(*) FROM read_csv_error_log()
+SELECT COUNT(*) FROM csv_rejects_table
 ----
-1
+2
+
+# Try with bigger files
+query I
+SELECT SUM(num) FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/big_bad.csv', 
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'}, 
+    ignore_errors=true, parallel=${PARALLEL}) ORDER BY ALL;
+----
+4094
+
+query  IIIIII
+SELECT * FROM csv_rejects_table ORDER BY ALL;
+----
+2000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
+4000	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
+
+query I
+SELECT SUM(num) FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/big_bad2.csv', 
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'}, 
+    ignore_errors=true, parallel=${PARALLEL}) ORDER BY ALL;
+----
+4094
+
+query  IIIIII
+SELECT * FROM csv_rejects_table ORDER BY ALL;
+----
+1000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
+3000	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
+
+# Test with multiple big files
+query I
+SELECT SUM(num) FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/big_*.csv', 
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'}, 
+    ignore_errors=true, parallel=${PARALLEL}) ORDER BY ALL;
+----
+8188
+
+query  IIIIII
+SELECT * FROM csv_rejects_table ORDER BY ALL;
+----
+1000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
+2000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
+3000	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
+4000	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
+
+
+endloop

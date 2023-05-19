@@ -68,9 +68,6 @@ struct ClientData {
 	bool debug_set_max_line_length = false;
 	idx_t debug_max_line_length = 0;
 
-	//! The error log of the last read_csv query.
-	unique_ptr<ReadCSVErrorLog> read_csv_error_log;
-
 public:
 	DUCKDB_API static ClientData &Get(ClientContext &context);
 };

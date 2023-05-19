@@ -9,6 +9,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/main/appender.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -18,7 +19,6 @@
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/function/table/read_csv_error_log.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -481,7 +481,8 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			bool target_type_not_varchar = false;
 			if (options.has_format[LogicalTypeId::DATE] && type.id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
-				success = TryCastDateVector(options, parse_vector, result_vector, parse_chunk.size(), error_message, line_error);
+				success = TryCastDateVector(options, parse_vector, result_vector, parse_chunk.size(), error_message,
+				                            line_error);
 			} else if (options.has_format[LogicalTypeId::TIMESTAMP] && type.id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
 				success =
@@ -523,13 +524,14 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 				}
 			}
 
-
 			// The line_error must be summed with linenr (All lines emmited from this batch)
 			// But subtracted from the parse_chunk
 			D_ASSERT(line_error + linenr >= parse_chunk.size());
 			line_error += linenr;
 			line_error -= parse_chunk.size();
 
+			// TODO: This doesnt work in the parallel case. The GetLineError will return the line number of the first
+			// error even if it is another file.
 			idx_t error_line = GetLineError(line_error, buffer_idx);
 
 			if (options.ignore_errors) {
@@ -538,7 +540,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 				// Get all the failing rows
 				UnifiedVectorFormat inserted_column_data;
 				result_vector.ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
-				
+
 				vector<idx_t> failed_rows;
 				for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
 					if (!inserted_column_data.validity.RowIsValid(row_idx) &&
@@ -547,21 +549,38 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 					}
 				}
 
+				// Get appender to csv rejects table
+				// TODO: Keep this in the global state
+				auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
+				auto &table_entry =
+				    catalog.GetEntry<TableCatalogEntry>(context, TEMP_CATALOG, DEFAULT_SCHEMA, "csv_rejects_table");
+
+				// TODO: lmao this is a hack, access it through global ObjectCache or something
+				static mutex rejects_lock;
+				lock_guard<mutex> lock(rejects_lock);
+				InternalAppender appender(context, table_entry);
+
 				// Register the errors in this chunk
-				auto max_errors = context.config.max_csv_errors;
-				auto &error_log = context.client_data->read_csv_error_log->errors;
-				for(auto row_idx : failed_rows) {
-					if(error_log.size() >= max_errors) {
-						break;
-					}
+				for (auto row_idx : failed_rows) {
 
 					auto parsed_str = FlatVector::GetData<string_t>(parse_vector)[row_idx].GetString();
 					row_idx += linenr;
 					row_idx -= parse_chunk.size();
-					auto row_line = GetLineError(row_idx, buffer_idx); /*row_idx + error_line - 1; */ // TODO: Why does this work?
-					error_log.push_back(LoggedCSVError {row_line, col_idx, col_name, parsed_str,
-					                                    error_message, GetFileName()});
+					auto row_line = GetLineError(row_idx, buffer_idx, false);
+					// We have to patch the error message to include the value, not jus the first
+					auto row_error_msg =
+					    StringUtil::Format("Could not convert string '%s' to '%s'", parsed_str, type.ToString());
+					// Add the row to the rejects table
+					appender.BeginRow();
+					appender.Append(row_line);
+					appender.Append(col_idx);
+					appender.Append(Value(col_name));
+					appender.Append(Value(parsed_str));
+					appender.Append(Value(row_error_msg));
+					appender.Append(Value(GetFileName()));
+					appender.EndRow();
 				}
+				appender.Close();
 			} else if (options.auto_detect) {
 				throw InvalidInputException("%s in column %s, at line %llu.\n\nParser "
 				                            "options:\n%s.\n\nConsider either increasing the sample size "

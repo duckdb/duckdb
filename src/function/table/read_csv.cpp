@@ -1,5 +1,4 @@
 #include "duckdb/function/table/read_csv.hpp"
-#include "duckdb/function/table/read_csv_error_log.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -16,6 +15,8 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/operator/persistent/csv_line_info.hpp"
 #include <limits>
+
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 
 namespace duckdb {
 
@@ -599,12 +600,27 @@ bool LineInfo::CanItGetLine(idx_t file_idx, idx_t batch_idx) {
 }
 
 // Returns the 1-indexed line number
-idx_t LineInfo::GetLine(idx_t batch_idx, idx_t line_error, idx_t file_idx, idx_t cur_start, bool verify) {
+idx_t LineInfo::GetLine(idx_t batch_idx, idx_t line_error, idx_t file_idx, idx_t cur_start, bool verify,
+                        bool stop_at_first) {
 	unique_ptr<lock_guard<mutex>> parallel_lock;
 	if (!verify) {
 		parallel_lock = duckdb::make_uniq<lock_guard<mutex>>(main_mutex);
 	}
 	idx_t line_count = 0;
+
+	if (!stop_at_first) {
+		// Figure out the amount of lines read in the current file
+		auto &file_batches = current_batches[file_idx];
+		for (auto &batch : file_batches) {
+			if (batch >= batch_idx) {
+				break;
+			}
+			line_count += lines_read[batch];
+		}
+		return line_count + line_error + 1;
+	}
+
+	// Otherwise, check if we already have an error on another thread
 	if (done) {
 		// line count is 0-indexed, but we want to return 1-indexed
 		return first_line + 1;
@@ -924,7 +940,19 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<ReadCSVData>();
 
-	context.client_data->read_csv_error_log->errors.clear();
+	// (Re)Create the temporary rejects table
+	auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
+	auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, "csv_rejects_table");
+	info->temporary = true;
+	info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+	info->columns.AddColumn(ColumnDefinition("line", LogicalType::BIGINT));
+	info->columns.AddColumn(ColumnDefinition("column", LogicalType::BIGINT));
+	info->columns.AddColumn(ColumnDefinition("column_name", LogicalType::VARCHAR));
+	info->columns.AddColumn(ColumnDefinition("parsed_value", LogicalType::VARCHAR));
+	info->columns.AddColumn(ColumnDefinition("error", LogicalType::VARCHAR));
+	info->columns.AddColumn(ColumnDefinition("file", LogicalType::VARCHAR));
+
+	auto reject_table_entry = catalog.CreateTable(context, std::move(info));
 
 	if (bind_data.single_threaded) {
 		return SingleThreadedCSVInit(context, input);
@@ -1214,7 +1242,6 @@ unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, const string &ta
 void BuiltinFunctions::RegisterReadFunctions() {
 	CSVCopyFunction::RegisterFunction(*this);
 	ReadCSVTableFunction::RegisterFunction(*this);
-	ReadCSVErrorLogTableFunction::RegisterFunction(*this);
 	auto &config = DBConfig::GetConfig(*transaction.db);
 	config.replacement_scans.emplace_back(ReadCSVReplacement);
 }

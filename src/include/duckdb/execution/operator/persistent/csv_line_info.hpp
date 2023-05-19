@@ -18,7 +18,8 @@ public:
 	bool CanItGetLine(idx_t file_idx, idx_t batch_idx);
 
 	//! Return the 1-indexed line number
-	idx_t GetLine(idx_t batch_idx, idx_t line_error = 0, idx_t file_idx = 0, idx_t cur_start = 0, bool verify = true);
+	idx_t GetLine(idx_t batch_idx, idx_t line_error = 0, idx_t file_idx = 0, idx_t cur_start = 0, bool verify = true,
+	              bool stop_at_first = true);
 	//! Verify if the CSV File was read correctly from [0,batch_idx] batches.
 	void Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos);
 	//! Lines read per batch, <batch_index,count>
