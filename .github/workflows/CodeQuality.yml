@@ -96,7 +96,6 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
-    needs: tidy-check
     env:
       GEN: ninja
     steps:
