@@ -98,3 +98,11 @@ duckdb_extension_load(postgres_scanner
     GIT_TAG cd043b49cdc9e0d3752535b8333c9433e1007a48
 )
 ```
+
+### Explicitly disabling extensions
+Because the sometimes you may want to override extensions set by other configurations, explicitly disabling extensions is 
+also possible using the `DONT_BUILD flag`. This will disable the extension from being built alltogether. For example, to 
+build DuckDB without the parquet extension which is enabled by default, in `extension/extension_config_local.cmake` specify:
+```cmake
+duckdb_extension_load(parquet DONT_BUILD)
+```

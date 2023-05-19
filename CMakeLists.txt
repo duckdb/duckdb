@@ -717,11 +717,20 @@ function(build_loadable_extension NAME PARAMETERS)
 endfunction()
 
 # Internal extension register function
-function(register_extension NAME DONT_LINK PATH INCLUDE_PATH)
+function(register_extension NAME DONT_LINK DONT_BUILD PATH INCLUDE_PATH)
   string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
   string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
 
   set(DUCKDB_OOT_EXTENSION_NAMES ${DUCKDB_OOT_EXTENSION_NAMES} ${EXTENSION_NAME_LOWERCASE} PARENT_SCOPE)
+
+  # Allows explicitly disabling extensions that may be specified in other configurations
+  if (NOT ${DONT_BUILD})
+    set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD TRUE PARENT_SCOPE)
+  else()
+    set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD FALSE PARENT_SCOPE)
+    set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK FALSE PARENT_SCOPE)
+    return()
+  endif()
 
   if (NOT ${DONT_LINK} AND NOT DISABLE_BUILTIN_EXTENSIONS)
     set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK TRUE PARENT_SCOPE)
@@ -741,7 +750,7 @@ function(register_extension NAME DONT_LINK PATH INCLUDE_PATH)
 endfunction()
 
 # Downloads the external extension repo at the specified commit and calls register_extension
-macro(register_external_extension NAME URL COMMIT DONT_LINK PATH INCLUDE_PATH)
+macro([register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD PATH INCLUDE_PATH)
   include(FetchContent)
   FETCHCONTENT_DECLARE(
           ${NAME}_extension_fc
@@ -752,15 +761,15 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK PATH INCLUDE_PATH)
   FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
 
   if ("${INCLUDE_PATH}" STREQUAL "")
-    register_extension(${NAME} ${DONT_LINK} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} "${${NAME}_extension_fc_SOURCE_DIR}/src/include")
+    register_extension(${NAME} ${DONT_LINK} ${DONT_BUILD} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} "${${NAME}_extension_fc_SOURCE_DIR}/src/include")
   else()
-    register_extension(${NAME} ${DONT_LINK} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} "${${NAME}_extension_fc_SOURCE_DIR}/${INCLUDE_PATH}")
+    register_extension(${NAME} ${DONT_LINK} ${DONT_BUILD} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} "${${NAME}_extension_fc_SOURCE_DIR}/${INCLUDE_PATH}")
   endif()
 endmacro()
 
 function(duckdb_extension_load NAME)
   # Parameter parsing
-  set(options DONT_LINK)
+  set(options DONT_LINK DONT_BUILD)
   set(oneValueArgs SOURCE_DIR INCLUDE_DIR GIT_URL GIT_TAG)
   cmake_parse_arguments(duckdb_extension_load "${options}" "${oneValueArgs}" "" ${ARGN})
 
@@ -774,11 +783,13 @@ function(duckdb_extension_load NAME)
   endif()
 
   # Remote Git extension
-  if (NOT "${duckdb_extension_load_GIT_URL}" STREQUAL "")
+  if (${duckdb_extension_load_DONT_BUILD})
+    register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "" "")
+  elseif (NOT "${duckdb_extension_load_GIT_URL}" STREQUAL "")
     if (NOT "${duckdb_extension_load_GIT_COMMIT}" STREQUAL "")
       error("Git URL specified but no valid git commit was found for ${NAME} extension")
     endif()
-    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}")
+    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}")
   elseif (NOT "${duckdb_extension_load_SOURCE_DIR}" STREQUAL "")
     # Local extension, custom path
     message(STATUS "Building extension '${NAME}' from '${duckdb_extension_load_SOURCE_DIR}'")
@@ -790,19 +801,20 @@ function(duckdb_extension_load NAME)
       set(INCLUDE_PATH_DEFAULT ${duckdb_extension_load_INCLUDE_DIR})
     endif()
 
-    register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_SOURCE_DIR}" "${INCLUDE_PATH_DEFAULT}")
+    register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_SOURCE_DIR}" "${INCLUDE_PATH_DEFAULT}")
   elseif(EXISTS ${CMAKE_SOURCE_DIR}/extension_external/${NAME})
     # Local extension, default path
     message(STATUS "Building extension '${NAME}' from '${CMAKE_SOURCE_DIR}/extension_external'")
-    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK}  "${CMAKE_SOURCE_DIR}/extension_external/${NAME}" "${CMAKE_SOURCE_DIR}/extension_external/${NAME}/src/include")
+    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}"  "${CMAKE_SOURCE_DIR}/extension_external/${NAME}" "${CMAKE_SOURCE_DIR}/extension_external/${NAME}/src/include")
   else()
     # Local extension, default path
     message(STATUS "Building extension '${NAME}' from '${CMAKE_SOURCE_DIR}/extensions'")
-    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK}  "${CMAKE_SOURCE_DIR}/extension/${NAME}" "${CMAKE_SOURCE_DIR}/extension/${NAME}/include")
+    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}"  "${CMAKE_SOURCE_DIR}/extension/${NAME}" "${CMAKE_SOURCE_DIR}/extension/${NAME}/include")
   endif()
 
   # Propagate variables set by register_extension
   set(DUCKDB_OOT_EXTENSION_NAMES ${DUCKDB_OOT_EXTENSION_NAMES} PARENT_SCOPE)
+  set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD ${DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD} PARENT_SCOPE)
   set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK ${DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK} PARENT_SCOPE)
   set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH ${DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH} PARENT_SCOPE)
   set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH ${DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH} PARENT_SCOPE)
@@ -878,6 +890,12 @@ add_subdirectory(extension)
 # Add Out-of-tree extensions
 foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
   string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
+
+  # Skip explicitly disabled extensions
+  if (NOT ${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_BUILD})
+    continue()
+  endif()
+
   if (DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_LINK)
     add_definitions(-DDUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_LINKED=true)
   else()
@@ -896,9 +914,12 @@ endforeach()
 # Output the extensions that we linked into DuckDB for some nice build logs
 set(LINKED_EXTENSIONS "")
 set(NONLINKED_EXTENSIONS "")
+set(SKIPPED_EXTENSIONS "")
 foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
   string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
-  if (${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_LINK})
+  if (NOT ${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_BUILD})
+    list(APPEND SKIPPED_EXTENSIONS ${OOTE_NAME})
+  elseif (${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_LINK})
     list(APPEND LINKED_EXTENSIONS ${OOTE_NAME})
   else()
     list(APPEND NONLINKED_EXTENSIONS ${OOTE_NAME})
@@ -912,6 +933,10 @@ endif()
 if(NOT "${NONLINKED_EXTENSIONS}" STREQUAL "")
   string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${NONLINKED_EXTENSIONS}")
   message(STATUS "Extensions built but not linked: ${EXT_LIST_DEBUG_MESSAGE}")
+endif()
+if(NOT "${SKIPPED_EXTENSIONS}" STREQUAL "")
+  string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${SKIPPED_EXTENSIONS}")
+  message(STATUS "Extensions explicitly skipped: ${EXT_LIST_DEBUG_MESSAGE}")
 endif()
 
 if(BUILD_PYTHON
