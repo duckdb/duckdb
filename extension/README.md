@@ -62,7 +62,8 @@ Now when we run `make` cmake will output:
 
 ## Loading extensions with config files
 The `duckdb_extension_load` function is used in the configuration files to specify how an extension should
-be loaded. There are 3 different ways this can be done. For some examples, check out `.github/config/extension_config.cmake`
+be loaded. There are 3 different ways this can be done. For some examples, check out `.github/config/*.cmake`. These are
+the configurations used in DuckDBs CI to select which extensions are built.
 
 ### Automatic loading
 The simplest way to load an extension is just passing the extension name. This will automatically try to load the extension.
