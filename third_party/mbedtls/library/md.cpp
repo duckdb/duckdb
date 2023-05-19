@@ -278,13 +278,13 @@ void mbedtls_md_free( mbedtls_md_context_t *ctx )
 #endif
 #if defined(MBEDTLS_SHA384_C)
             case MBEDTLS_MD_SHA384:
-                mbedtls_sha512_free( ctx->md_ctx );
+			    mbedtls_sha512_free((mbedtls_sha512_context *)ctx->md_ctx);
                 break;
 #endif
 #if defined(MBEDTLS_SHA512_C)
             case MBEDTLS_MD_SHA512:
-                mbedtls_sha512_free( ctx->md_ctx );
-                break;
+			    mbedtls_sha512_free((mbedtls_sha512_context *)ctx->md_ctx);
+			    break;
 #endif
             default:
                 /* Shouldn't happen */
@@ -342,12 +342,12 @@ int mbedtls_md_clone( mbedtls_md_context_t *dst,
 #endif
 #if defined(MBEDTLS_SHA384_C)
         case MBEDTLS_MD_SHA384:
-            mbedtls_sha512_clone( dst->md_ctx, src->md_ctx );
+            mbedtls_sha512_clone((mbedtls_sha512_context *) dst->md_ctx, (mbedtls_sha512_context *) src->md_ctx );
             break;
 #endif
 #if defined(MBEDTLS_SHA512_C)
         case MBEDTLS_MD_SHA512:
-            mbedtls_sha512_clone( dst->md_ctx, src->md_ctx );
+            mbedtls_sha512_clone((mbedtls_sha512_context *) dst->md_ctx, (mbedtls_sha512_context *) src->md_ctx );
             break;
 #endif
         default:
@@ -459,11 +459,11 @@ int mbedtls_md_starts( mbedtls_md_context_t *ctx )
 #endif
 #if defined(MBEDTLS_SHA384_C)
         case MBEDTLS_MD_SHA384:
-            return( mbedtls_sha512_starts( ctx->md_ctx, 1 ) );
+            return( mbedtls_sha512_starts((mbedtls_sha512_context *) ctx->md_ctx, 1 ) );
 #endif
 #if defined(MBEDTLS_SHA512_C)
         case MBEDTLS_MD_SHA512:
-            return( mbedtls_sha512_starts( ctx->md_ctx, 0 ) );
+            return( mbedtls_sha512_starts((mbedtls_sha512_context *) ctx->md_ctx, 0 ) );
 #endif
         default:
             return( MBEDTLS_ERR_MD_BAD_INPUT_DATA );
@@ -499,11 +499,11 @@ int mbedtls_md_update( mbedtls_md_context_t *ctx, const unsigned char *input, si
 #endif
 #if defined(MBEDTLS_SHA384_C)
         case MBEDTLS_MD_SHA384:
-            return( mbedtls_sha512_update( ctx->md_ctx, input, ilen ) );
+            return( mbedtls_sha512_update((mbedtls_sha512_context *) ctx->md_ctx, input, ilen ) );
 #endif
 #if defined(MBEDTLS_SHA512_C)
         case MBEDTLS_MD_SHA512:
-            return( mbedtls_sha512_update( ctx->md_ctx, input, ilen ) );
+            return( mbedtls_sha512_update((mbedtls_sha512_context *) ctx->md_ctx, input, ilen ) );
 #endif
         default:
             return( MBEDTLS_ERR_MD_BAD_INPUT_DATA );
@@ -539,11 +539,11 @@ int mbedtls_md_finish( mbedtls_md_context_t *ctx, unsigned char *output )
 #endif
 #if defined(MBEDTLS_SHA384_C)
         case MBEDTLS_MD_SHA384:
-            return( mbedtls_sha512_finish( ctx->md_ctx, output ) );
+            return( mbedtls_sha512_finish((mbedtls_sha512_context *) ctx->md_ctx, output ) );
 #endif
 #if defined(MBEDTLS_SHA512_C)
         case MBEDTLS_MD_SHA512:
-            return( mbedtls_sha512_finish( ctx->md_ctx, output ) );
+		    return (mbedtls_sha512_finish((mbedtls_sha512_context *) ctx->md_ctx, output));
 #endif
         default:
             return( MBEDTLS_ERR_MD_BAD_INPUT_DATA );
@@ -784,11 +784,11 @@ int mbedtls_md_process( mbedtls_md_context_t *ctx, const unsigned char *data )
 #endif
 #if defined(MBEDTLS_SHA384_C)
         case MBEDTLS_MD_SHA384:
-            return( mbedtls_internal_sha512_process( ctx->md_ctx, data ) );
+		    return (mbedtls_internal_sha512_process((mbedtls_sha512_context *) ctx->md_ctx, data));
 #endif
 #if defined(MBEDTLS_SHA512_C)
         case MBEDTLS_MD_SHA512:
-            return( mbedtls_internal_sha512_process( ctx->md_ctx, data ) );
+            return( mbedtls_internal_sha512_process((mbedtls_sha512_context *) ctx->md_ctx, data ) );
 #endif
         default:
             return( MBEDTLS_ERR_MD_BAD_INPUT_DATA );
