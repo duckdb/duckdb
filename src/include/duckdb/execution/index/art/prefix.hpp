@@ -15,32 +15,21 @@ namespace duckdb {
 // classes
 class ARTKey;
 
-// TODO: remove
-//// structs
-////! This struct contains all information for splitting prefixes. If match is true, then we don't
-////! need to split: after_node is not set, and neither are the bytes. Otherwise, before_node is a
-////! reference to the first node that follows the split (usually a Node4), and after_node is the
-////! start of all remaining prefix bytes and their next node(s). prefix_split_byte holds the mismatching
-////! byte of the prefix, and other_split_byte holds the mismatching byte of the key/other prefix.
-// struct PrefixSplitInfo {
-//	Node &before_node;
-//	Node &after_node;
-//	uint8_t prefix_split_byte;
-//	uint8_t other_split_byte;
-//	bool match;
-// };
-
-//! The Prefix is a special node type that contains eight bytes (1 byte count,
-//! 7 bytes of prefix data) and a Node pointer. This pointer either points to another prefix
+//! The Prefix is a special node type that contains up to PREFIX_SIZE bytes, one byte for the count,
+//! and a Node pointer. This pointer either points to another prefix
 //! node or the 'actual' ART node.
 class Prefix {
 public:
-	//! A count and up to seven bytes of prefix data
-	uint8_t data[Node::PREFIX_SIZE];
+	//! Up to seven bytes of prefix data and the count
+	uint8_t data[Node::PREFIX_SIZE + 1];
 	//! A pointer to the next ART node
 	Node ptr;
 
 public:
+	//! Get a new empty prefix node, might cause a new buffer allocation
+	static Prefix &New(ART &art, Node &node);
+	//! Create a new prefix node containing a single byte and a pointer to a next node
+	static Prefix &New(ART &art, Node &node, uint8_t byte, Node next);
 	//! Get a new chain of prefix nodes, might cause new buffer allocations,
 	//! with the node parameter holding the tail of the chain
 	static void New(ART &art, reference<Node> &node, const ARTKey &key, const uint32_t depth, uint32_t count);
@@ -59,23 +48,28 @@ public:
 	//! Appends a byte and a child_prefix to prefix. If there is no prefix, than it pushes the
 	//! byte on top of child_prefix. If there is no child_prefix, then it creates a new
 	//! prefix node containing that byte
-	static void Concatenate(ART &art, Node &prefix, const uint8_t byte, Node &child_prefix);
+	static void Concatenate(ART &art, Node &prefix_node, const uint8_t byte, Node &child_prefix_node);
 	//! Traverse prefixes until (1) encountering two non-prefix nodes,
 	//! (2) encountering one non-prefix node, (3) encountering a mismatching byte.
 	//! Also frees all fully traversed r_node prefixes
-	static idx_t Traverse(const ART &art, reference<Node> &l_node, reference<Node> &r_node);
+	static idx_t Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node);
 	//! Traverse a prefix and a key until (1) encountering a non-prefix node, or (2) encountering
 	//! a mismatching byte, in which case depth indexes the mismatching byte in the key
-	static idx_t Traverse(const ART &art, reference<Node> &prefix, const ARTKey &key, idx_t &depth);
+	static idx_t Traverse(const ART &art, reference<Node> &prefix_node, const ARTKey &key, idx_t &depth);
 	//! Returns the byte at position
-	static uint8_t GetByte(const ART &art, const Node &prefix, const idx_t position);
+	static inline uint8_t GetByte(const ART &art, const Node &prefix_node, const idx_t position) {
+		auto prefix = Prefix::Get(art, prefix_node);
+		D_ASSERT(position < Node::PREFIX_SIZE);
+		D_ASSERT(position < prefix.data[Node::PREFIX_SIZE]);
+		return prefix.data[position];
+	}
 	//! Removes the first n bytes from the prefix and shifts all subsequent bytes in the
 	//! prefix node(s) by n. Frees empty prefix nodes
-	static void Reduce(ART &art, Node &prefix, const idx_t n);
+	static void Reduce(ART &art, Node &prefix_node, const idx_t n);
 	//! Splits the prefix at position. prefix then references the ptr (if any bytes left before
 	//! the split), or stays unchanged (no bytes left before the split). child references
 	//! the node after the split, which is either a new Prefix node, or ptr
-	static void Split(ART &art, reference<Node> &prefix, Node &child, idx_t position);
+	static void Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx_t position);
 
 	//! Serialize this node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
@@ -86,6 +80,10 @@ public:
 	inline void Vacuum(ART &art, const ARTFlags &flags) {
 		Node::Vacuum(art, ptr, flags);
 	}
+
+private:
+	Prefix &Append(ART &art, const uint8_t byte);
+	Prefix &Append(ART &art, Node &other_prefix_node);
 };
 
 } // namespace duckdb

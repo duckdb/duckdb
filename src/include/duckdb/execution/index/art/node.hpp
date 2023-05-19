@@ -49,7 +49,7 @@ public:
 	//! Other constants
 	static constexpr uint8_t EMPTY_MARKER = 48;
 	static constexpr uint32_t LEAF_SEGMENT_SIZE = 8;
-	static constexpr uint8_t PREFIX_SIZE = 8;
+	static constexpr uint8_t PREFIX_SIZE = 7;
 
 public:
 	//! Constructs an empty ARTNode
