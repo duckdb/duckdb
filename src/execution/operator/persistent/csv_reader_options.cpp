@@ -177,12 +177,20 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		null_padding = ParseBoolean(value, loption);
 	} else if (loption == "allow_quoted_nulls") {
 		allow_quoted_nulls = ParseBoolean(value, loption);
+	} else if (loption == "parallel") {
+		parallel_mode = ParseBoolean(value, loption) ? ParallelMode::PARALLEL : ParallelMode::SINGLE_THREADED;
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}
 }
 
 void BufferedCSVReaderOptions::SetWriteOption(const string &loption, const Value &value) {
+	if (loption == "new_line") {
+		// Steal this from SetBaseOption so we can write different newlines (e.g., format JSON ARRAY)
+		write_newline = ParseString(value, loption);
+		return;
+	}
+
 	if (SetBaseOption(loption, value)) {
 		return;
 	}
@@ -199,6 +207,10 @@ void BufferedCSVReaderOptions::SetWriteOption(const string &loption, const Value
 		}
 		SetDateFormat(LogicalTypeId::TIMESTAMP, format, false);
 		SetDateFormat(LogicalTypeId::TIMESTAMP_TZ, format, false);
+	} else if (loption == "prefix") {
+		prefix = ParseString(value, loption);
+	} else if (loption == "suffix") {
+		suffix = ParseString(value, loption);
 	} else {
 		throw BinderException("Unrecognized option CSV writer \"%s\"", loption);
 	}

@@ -106,6 +106,7 @@ public:
 	void LocalMerge(ClientContext &context, RowGroupCollection &collection);
 	//! Creates an optimistic writer for this table - used for optimistically writing parallel appends
 	OptimisticDataWriter &CreateOptimisticWriter(ClientContext &context);
+	void FinalizeOptimisticWriter(ClientContext &context, OptimisticDataWriter &writer);
 
 	//! Delete the entries with the specified row identifier from the table
 	idx_t Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, idx_t count);
@@ -191,6 +192,10 @@ public:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
 	                             ConflictManager *conflict_manager = nullptr);
+
+public:
+	static void VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &context, DataChunk &chunk,
+	                                ConflictManager *conflict_manager);
 
 private:
 	//! Verify the new added constraints against current persistent&local data

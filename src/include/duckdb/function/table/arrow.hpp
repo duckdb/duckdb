@@ -127,7 +127,7 @@ struct ArrowTableFunction {
 public:
 	static void RegisterFunction(BuiltinFunctions &set);
 
-protected:
+public:
 	//! Binds an arrow table
 	static unique_ptr<FunctionData> ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
 	                                              vector<LogicalType> &return_types, vector<string> &names);
@@ -145,6 +145,9 @@ protected:
 	                                                                TableFunctionInitInput &input);
 
 	//! Initialize Local State
+	static unique_ptr<LocalTableFunctionState> ArrowScanInitLocalInternal(ClientContext &context,
+	                                                                      TableFunctionInitInput &input,
+	                                                                      GlobalTableFunctionState *global_state);
 	static unique_ptr<LocalTableFunctionState> ArrowScanInitLocal(ExecutionContext &context,
 	                                                              TableFunctionInitInput &input,
 	                                                              GlobalTableFunctionState *global_state);
@@ -152,6 +155,7 @@ protected:
 	//! Scan Function
 	static void ArrowScanFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output);
 
+protected:
 	//! Defines Maximum Number of Threads
 	static idx_t ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data);
 

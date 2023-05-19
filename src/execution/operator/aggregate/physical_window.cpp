@@ -1036,11 +1036,10 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-SinkResultType PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                    DataChunk &input) const {
-	auto &lstate = lstate_p.Cast<WindowLocalSinkState>();
+SinkResultType PhysicalWindow::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &lstate = input.local_state.Cast<WindowLocalSinkState>();
 
-	lstate.Sink(input);
+	lstate.Sink(chunk);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -1339,10 +1338,10 @@ unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext
 	return make_uniq<WindowGlobalSourceState>(gsink);
 }
 
-void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                             LocalSourceState &lstate_p) const {
-	auto &lsource = lstate_p.Cast<WindowLocalSourceState>();
-	auto &gsource = gstate_p.Cast<WindowGlobalSourceState>();
+SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk,
+                                         OperatorSourceInput &input) const {
+	auto &lsource = input.local_state.Cast<WindowLocalSourceState>();
+	auto &gsource = input.global_state.Cast<WindowGlobalSourceState>();
 	auto &gsink = sink_state->Cast<WindowGlobalSinkState>();
 
 	auto &hash_groups = gsink.global_partition->hash_groups;
@@ -1357,7 +1356,7 @@ void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, Global
 			lsource.hash_group.reset();
 			auto hash_bin = gsource.next_bin++;
 			if (hash_bin >= bin_count) {
-				return;
+				return chunk.size() > 0 ? SourceResultType::HAVE_MORE_OUTPUT : SourceResultType::FINISHED;
 			}
 
 			for (; hash_bin < hash_groups.size(); hash_bin = gsource.next_bin++) {
@@ -1370,6 +1369,8 @@ void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, Global
 
 		lsource.Scan(chunk);
 	}
+
+	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 string PhysicalWindow::ParamsToString() const {

@@ -212,6 +212,7 @@ if (OSX_BUILD_UNIVERSAL)
     error("This only makes sense on OSX")
   endif()
   SET(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures for Mac OS X" FORCE)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "Minimum OS X deployment version" FORCE)
 endif()
 
 set(SUN FALSE)
@@ -291,6 +292,7 @@ if(NOT CLANG_TIDY AND OS_NAME STREQUAL "linux")
   set(JEMALLOC_DEFAULT_BUILD TRUE)
 endif()
 
+option(BUILD_CORE_FUNCTIONS_EXTENSION "Build the core functions." TRUE)
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
 option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)
@@ -316,8 +318,10 @@ option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified 
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
+option(DISABLE_MEMORY_SAFETY "Debug setting: disable memory access checks at runtime" FALSE)
 option(ALTERNATIVE_VERIFY "Debug setting: use alternative verify mode" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
+option(FORCE_ASYNC_SINK_SOURCE "Debug setting: forces sinks/sources to block the first 2 times they're called" FALSE)
 option(DEBUG_STACKTRACE "Debug setting: print a stracktrace on asserts and when testing crashes" FALSE)
 option(DEBUG_MOVE "Debug setting: Ensure std::move is being used" FALSE)
 option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
@@ -381,10 +385,16 @@ if(DISABLE_STR_INLINE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_NO_INLINE")
 endif()
 
+if(DISABLE_MEMORY_SAFETY)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_NO_SAFETY")
+endif()
+
 if(DESTROY_UNPINNED_BLOCKS)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_DESTROY_BLOCKS")
 endif()
-
+if(FORCE_ASYNC_SINK_SOURCE)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_ASYNC_SINK_SOURCE")
+endif()
 
 if(ALTERNATIVE_VERIFY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ALTERNATIVE_VERIFY")
@@ -783,10 +793,6 @@ function(link_threads LIBRARY)
 endfunction()
 
 function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
-  #  skip building extensions on mingw because its weird
-  if(WIN32 AND NOT MSVC)
-    return()
-  endif()
   set(TARGET_NAME ${NAME}_loadable_extension)
   # all parameters after output_directory
   set(FILES ${ARGV})
@@ -893,6 +899,98 @@ foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
     add_subdirectory("extension/${OOTE_NAME}_clone/src" extension/${OOTE_NAME})
   endif()
 endforeach()
+
+if(BUILD_PYTHON
+        OR BUILD_R
+        OR BUILD_NODE
+        OR CONFIGURE_R)
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
+  elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+    set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE}")
+  elseif(CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+    set(ALL_COMPILE_FLAGS
+            "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+  else()
+    set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS}")
+  endif()
+
+  get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
+
+  # This searches all Out-of-tree (OOT) extensions that we have linked into duckdb for their direct dependencies and
+  # adds them to the duckdb_libs to ensure they also get linked. This allows linking OOT extensions with dependencies
+  # for the Python/R/Node builds
+  foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
+    string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
+    if (${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_LINK})
+      get_target_property(OOTE_LINKED_LIBS ${OOTE_NAME}_extension LINK_LIBRARIES)
+      set(duckdb_libs ${OOTE_LINKED_LIBS} ${duckdb_libs})
+    endif()
+  endforeach()
+
+  if(BUILD_PYTHON)
+    if(USER_SPACE)
+      add_custom_target(
+              duckdb_python ALL
+              COMMAND
+              python3 setup.py install --user --binary-dir=${PROJECT_BINARY_DIR}
+              --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
+              DEPENDS duckdb duckdb_static
+              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
+              COMMENT Build
+              Python package)
+    else()
+      add_custom_target(
+              duckdb_python ALL
+              COMMAND python3 setup.py install --binary-dir=${PROJECT_BINARY_DIR}
+              --compile-flags=${ALL_COMPILE_FLAGS} --libs="${duckdb_libs}"
+              DEPENDS duckdb duckdb_static
+              WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/pythonpkg
+              COMMENT Build
+              Python package)
+    endif()
+    add_extension_dependencies(duckdb_python)
+  endif()
+  if(CONFIGURE_R)
+    add_custom_target(
+            duckdb_configure_r ALL
+            COMMAND
+            DUCKDB_R_BINDIR=${PROJECT_BINARY_DIR}
+            DUCKDB_R_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
+            DUCKDB_R_LIBS=\"${duckdb_libs}\" python3 rconfigure.py
+            DEPENDS duckdb duckdb_static
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/rpkg
+            COMMENT Configure
+            R package)
+    add_extension_dependencies(duckdb_configure_r)
+  endif()
+  if(BUILD_R)
+    add_custom_target(
+            duckdb_r ALL
+            COMMAND
+            DUCKDB_R_BINDIR=${PROJECT_BINARY_DIR}
+            DUCKDB_R_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
+            DUCKDB_R_LIBS=\"${duckdb_libs}\" DUCKDB_R_DEBUG= R CMD INSTALL .
+            DEPENDS duckdb duckdb_static
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/rpkg
+            COMMENT Build
+            R package)
+    add_extension_dependencies(duckdb_r)
+  endif()
+  if(BUILD_NODE)
+    add_custom_target(
+            duckdb_node ALL
+            COMMAND
+            make complete_build DUCKDB_NODE_BINDIR=${CMAKE_BINARY_DIR}
+            DUCKDB_NODE_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
+            DUCKDB_NODE_LIBS=\"${duckdb_libs}\"
+            DEPENDS duckdb duckdb_static
+            WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/nodejs
+            COMMENT Build
+            Node package)
+    add_extension_dependencies(duckdb_node)
+  endif()
+endif()
 
 if(NOT CLANG_TIDY)
   if(${BUILD_UNITTESTS})

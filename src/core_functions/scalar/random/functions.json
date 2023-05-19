@@ -1,0 +1,22 @@
+[
+    {
+        "name": "random",
+        "description": "returns a random number between 0 and 1",
+        "example": "random()",
+        "type": "scalar_function"
+    },
+    {
+        "name": "setseed",
+        "description": "sets the seed to be used for the random function",
+        "example": "setseed(0.42)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "uuid",
+        "description": "Return a random uuid similar to this: eeccb8c5-9943-b2bb-bb5e-222f4e14b687",
+        "example": "uuid()",
+        "type": "scalar_function",
+        "struct": "UUIDFun",
+        "aliases": ["gen_random_uuid"]
+    }
+]

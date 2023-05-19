@@ -23,8 +23,6 @@ struct UpdateNode;
 class UpdateSegment {
 public:
 	UpdateSegment(ColumnData &column_data);
-	// Construct a duplicate of 'other' with 'new_owner' as it's column data
-	UpdateSegment(UpdateSegment &other, ColumnData &new_owner);
 	~UpdateSegment();
 
 	ColumnData &column_data;
@@ -98,8 +96,8 @@ private:
 
 struct UpdateNodeData {
 	unique_ptr<UpdateInfo> info;
-	unique_ptr<sel_t[]> tuples;
-	unique_ptr<data_t[]> tuple_data;
+	unsafe_unique_array<sel_t> tuples;
+	unsafe_unique_array<data_t> tuple_data;
 };
 
 struct UpdateNode {

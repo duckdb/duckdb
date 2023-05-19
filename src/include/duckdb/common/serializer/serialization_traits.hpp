@@ -65,10 +65,9 @@ struct is_unordered_map<typename std::unordered_map<Args...>> : std::true_type {
 template <typename T>
 struct is_unique_ptr : std::false_type {};
 
-template <typename T, typename D>
-struct is_unique_ptr<unique_ptr<T, D>> : std::true_type {
+template <typename T>
+struct is_unique_ptr<unique_ptr<T>> : std::true_type {
 	typedef T ELEMENT_TYPE;
-	typedef D DELETER_TYPE;
 };
 
 template <typename T>

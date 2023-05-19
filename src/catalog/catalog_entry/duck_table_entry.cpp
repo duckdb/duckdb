@@ -721,9 +721,9 @@ TableStorageInfo DuckTableEntry::GetStorageInfo(ClientContext &context) {
 	storage->info->indexes.Scan([&](Index &index) {
 		IndexInfo info;
 		info.is_primary = index.IsPrimary();
-		info.is_unique = index.IsUnique();
+		info.is_unique = index.IsUnique() || info.is_primary;
 		info.is_foreign = index.IsForeign();
-		index.column_id_set = index.column_id_set;
+		info.column_set = index.column_id_set;
 		result.index_info.push_back(std::move(info));
 		return false;
 	});

@@ -163,6 +163,11 @@ string StringUtil::BytesToHumanReadableString(idx_t bytes) {
 	megabytes -= gigabytes * 1000;
 	auto terabytes = gigabytes / 1000;
 	gigabytes -= terabytes * 1000;
+	auto petabytes = terabytes / 1000;
+	terabytes -= petabytes * 1000;
+	if (petabytes > 0) {
+		return to_string(petabytes) + "." + to_string(terabytes / 100) + "PB";
+	}
 	if (terabytes > 0) {
 		return to_string(terabytes) + "." + to_string(gigabytes / 100) + "TB";
 	} else if (gigabytes > 0) {
@@ -172,7 +177,7 @@ string StringUtil::BytesToHumanReadableString(idx_t bytes) {
 	} else if (kilobytes > 0) {
 		return to_string(kilobytes) + "KB";
 	} else {
-		return to_string(bytes) + " bytes";
+		return to_string(bytes) + (bytes == 1 ? " byte" : " bytes");
 	}
 }
 
@@ -186,6 +191,10 @@ string StringUtil::Lower(const string &str) {
 	string copy(str);
 	transform(copy.begin(), copy.end(), copy.begin(), [](unsigned char c) { return StringUtil::CharacterToLower(c); });
 	return (copy);
+}
+
+bool StringUtil::IsLower(const string &str) {
+	return str == Lower(str);
 }
 
 // Jenkins hash function: https://en.wikipedia.org/wiki/Jenkins_hash_function
@@ -272,7 +281,7 @@ vector<string> StringUtil::TopNStrings(vector<pair<string, idx_t>> scores, idx_t
 
 struct LevenshteinArray {
 	LevenshteinArray(idx_t len1, idx_t len2) : len1(len1) {
-		dist = unique_ptr<idx_t[]>(new idx_t[len1 * len2]);
+		dist = make_unsafe_uniq_array<idx_t>(len1 * len2);
 	}
 
 	idx_t &Score(idx_t i, idx_t j) {
@@ -281,7 +290,7 @@ struct LevenshteinArray {
 
 private:
 	idx_t len1;
-	unique_ptr<idx_t[]> dist;
+	unsafe_unique_array<idx_t> dist;
 
 	idx_t GetIndex(idx_t i, idx_t j) {
 		return j * len1 + i;

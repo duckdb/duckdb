@@ -6,11 +6,14 @@
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
 #include "duckdb_python/pandas/pandas_scan.hpp"
 #include "duckdb_python/pybind11/dataframe.hpp"
+#include "duckdb_python/pytype.hpp"
+#include "duckdb_python/pybind11/dataframe.hpp"
 
 namespace duckdb {
 
 MapFunction::MapFunction()
-    : TableFunction("python_map_function", {LogicalType::TABLE, LogicalType::POINTER}, nullptr, MapFunctionBind) {
+    : TableFunction("python_map_function", {LogicalType::TABLE, LogicalType::POINTER, LogicalType::POINTER}, nullptr,
+                    MapFunctionBind) {
 	in_out_function = MapFunctionExec;
 }
 
@@ -42,6 +45,11 @@ static py::handle FunctionCall(NumpyResultConversion &conversion, vector<string>
 		throw InvalidInputException("No return value from Python function");
 	}
 
+	if (!py::isinstance<PandasDataFrame>(df)) {
+		throw InvalidInputException(
+		    "Expected the UDF to return an object of type 'pandas.DataFrame', found '%s' instead",
+		    std::string(py::str(df.attr("__class__"))));
+	}
 	if (PandasDataFrame::IsPyArrowBacked(df)) {
 		throw InvalidInputException(
 		    "Produced DataFrame has columns that are backed by PyArrow, which is not supported yet in 'map'");
@@ -86,6 +94,35 @@ static void OverrideNullType(vector<LogicalType> &return_types, const vector<str
 	}
 }
 
+unique_ptr<FunctionData> BindExplicitSchema(unique_ptr<MapFunctionData> function_data, PyObject *schema_p,
+                                            vector<LogicalType> &types, vector<string> &names) {
+	D_ASSERT(schema_p != Py_None);
+
+	auto schema_object = py::reinterpret_borrow<py::dict>(schema_p);
+	if (!py::isinstance<py::dict>(schema_object)) {
+		throw InvalidInputException("'schema' should be given as a Dict[str, DuckDBType]");
+	}
+	auto schema = py::dict(schema_object);
+
+	auto column_count = schema.size();
+
+	types.reserve(column_count);
+	names.reserve(column_count);
+	for (auto &item : schema) {
+		auto name = item.first;
+		auto type_p = item.second;
+		names.push_back(std::string(py::str(name)));
+		// TODO: replace with py::try_cast so we can catch the error and throw a better exception
+		auto type = py::cast<shared_ptr<DuckDBPyType>>(type_p);
+		types.push_back(type->Type());
+	}
+
+	function_data->out_names = names;
+	function_data->out_types = types;
+
+	return std::move(function_data);
+}
+
 // we call the passed function with a zero-row data frame to infer the output columns and their names.
 // they better not change in the actual execution ^^
 unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, TableFunctionBindInput &input,
@@ -95,8 +132,14 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, Ta
 	auto data_uptr = make_uniq<MapFunctionData>();
 	auto &data = *data_uptr;
 	data.function = (PyObject *)input.inputs[0].GetPointer();
+	auto explicit_schema = (PyObject *)input.inputs[1].GetPointer();
+
 	data.in_names = input.input_table_names;
 	data.in_types = input.input_table_types;
+
+	if (explicit_schema != Py_None) {
+		return BindExplicitSchema(std::move(data_uptr), explicit_schema, return_types, names);
+	}
 
 	NumpyResultConversion conversion(data.in_types, 0);
 	auto df = FunctionCall(conversion, data.in_names, data.function);

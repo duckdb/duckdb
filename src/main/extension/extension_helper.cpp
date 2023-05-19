@@ -109,6 +109,7 @@ static DefaultExtension internal_extensions[] = {
     {"sqlite_scanner", "Adds support for reading SQLite database files", false},
     {"postgres_scanner", "Adds support for reading from a Postgres database", false},
     {"inet", "Adds support for IP-related data types and functions", false},
+    {"spatial", "Geospatial extension that adds support for working with spatial data and functions", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {

@@ -17,7 +17,6 @@ PhysicalCreateIndex::PhysicalCreateIndex(LogicalOperator &op, TableCatalogEntry 
     : PhysicalOperator(PhysicalOperatorType::CREATE_INDEX, op.types, estimated_cardinality),
       table(table_p.Cast<DuckTableEntry>()), info(std::move(info)),
       unbound_expressions(std::move(unbound_expressions)) {
-	D_ASSERT(table_p.IsDuckTable());
 	// convert virtual column ids to storage column ids
 	for (auto &column_id : column_ids) {
 		storage_ids.push_back(table.GetColumns().LogicalToPhysical(LogicalIndex(column_id)).index);
@@ -85,15 +84,14 @@ unique_ptr<LocalSinkState> PhysicalCreateIndex::GetLocalSinkState(ExecutionConte
 	return std::move(state);
 }
 
-SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                         DataChunk &input) const {
+SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 
-	D_ASSERT(input.ColumnCount() >= 2);
-	auto &lstate = lstate_p.Cast<CreateIndexLocalSinkState>();
-	auto &row_identifiers = input.data[input.ColumnCount() - 1];
+	D_ASSERT(chunk.ColumnCount() >= 2);
+	auto &lstate = input.local_state.Cast<CreateIndexLocalSinkState>();
+	auto &row_identifiers = chunk.data[chunk.ColumnCount() - 1];
 
 	// generate the keys for the given input
-	lstate.key_chunk.ReferenceColumns(input, lstate.key_column_ids);
+	lstate.key_chunk.ReferenceColumns(chunk, lstate.key_column_ids);
 	lstate.arena_allocator.Reset();
 	ART::GenerateKeys(lstate.arena_allocator, lstate.key_chunk, lstate.keys);
 
@@ -137,6 +135,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	auto &schema = table.schema;
 	auto index_entry = schema.CreateIndex(context, *info, table).get();
 	if (!index_entry) {
+		D_ASSERT(info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT);
 		// index already exists, but error ignored because of IF NOT EXISTS
 		return SinkFinalizeType::READY;
 	}
@@ -160,9 +159,9 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 // Source
 //===--------------------------------------------------------------------===//
 
-void PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                  LocalSourceState &lstate) const {
-	// NOP
+SourceResultType PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk,
+                                              OperatorSourceInput &input) const {
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

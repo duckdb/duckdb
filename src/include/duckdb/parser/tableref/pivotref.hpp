@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/tableref.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 namespace duckdb {
 
@@ -43,6 +44,8 @@ struct PivotColumn {
 	vector<PivotColumnEntry> entries;
 	//! The enum to read pivot values from (if any)
 	string pivot_enum;
+	//! Subquery (if any) - used during transform only
+	unique_ptr<QueryNode> subquery;
 
 	string ToString() const;
 	bool Equals(const PivotColumn &other) const;
