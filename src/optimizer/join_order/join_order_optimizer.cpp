@@ -442,7 +442,8 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelati
 		auto &neighbor = set_manager.GetJoinRelation(neighbors[i]);
 		// emit the combinations of this node and its neighbors
 		auto &combined_set = set_manager.Union(right, neighbor);
-
+		// If combined_set.count == right.count, This means we found a neighbor that has been present before
+		// This means we didn't set exclusion_set correctly.
 		D_ASSERT(combined_set.count > right.count);
 		if (plans.find(&combined_set) != plans.end()) {
 			auto connections = query_graph.GetConnections(left, combined_set);
@@ -491,15 +492,6 @@ bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet &node, unordered_
 		// Reset the exclusion set so that the algorithm considers all combinations
 		// of the exclusion_set with a subset of neighbors.
 
-		// FIXME(lokax): This looks like there is a problem with duplicated enumeration?
-		// eg. S1 = {R0}, neighbors = {R1, R2}
-		// First, S1 = {R0} ==> {R0, R1} ==> {R0, R1, R2}
-		// Then, S1 = {R0} ==> {R0, R2} ==> {R0, R1, R2}
-		// S1 = {R0, R1, R2} will be duplicated enumerated.
-		// Although this is necessary for correctness, since {R0, R1, R2} may be updated. But we do have duplicated
-		// enumeration. Maybe we should get all subsets of neighbors and traverse from small to large subsets And
-		// new_exclusion_set will be (exclusion_set U all neighbors) eg. S1 = {R0} ==> {R0, R1} ==> {R0, R2} ==> {R0,
-		// R1, R2}
 		new_exclusion_set = exclusion_set;
 		new_exclusion_set.insert(neighbors[i]);
 		// updated the set of excluded entries with this neighbor
