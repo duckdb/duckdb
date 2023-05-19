@@ -12,6 +12,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 //! Represents a built-in operator expression
@@ -86,9 +87,24 @@ public:
 			return "(" + entry.children[0]->ToString() + " IS NOT NULL)";
 		case ExpressionType::ARRAY_EXTRACT:
 			return entry.children[0]->ToString() + "[" + entry.children[1]->ToString() + "]";
-		case ExpressionType::ARRAY_SLICE:
-			return entry.children[0]->ToString() + "[" + entry.children[1]->ToString() + ":" +
-			       entry.children[2]->ToString() + "]";
+		case ExpressionType::ARRAY_SLICE: {
+//			auto &const_expr = entry.children[1]->template Cast<ConstantExpression>();
+//			D_ASSERT(const_expr.value == Value::BIGINT(NumericLimits<int64_t>::Maximum()));
+//			entry.children[1]->ToString();
+//			auto &const_expr = entry.children[1]->Cast<ConstantExpression>();
+//			return string();
+			string begin = entry.children[1]->ToString();
+//			entry.children[1]
+//			if (static_cast<long long>(entry.children[1]) == NumericLimits<int64_t>::Maximum()) {
+//				begin = "";
+//			}
+			string end = entry.children[2]->ToString();
+//			if (static_cast<long long>(entry.children[2]) == NumericLimits<int64_t>::Maximum()) {
+//                end = "";
+//            }sel
+			return entry.children[0]->ToString() + "[" + begin + ":" +
+			       end + "]";
+		}
 		case ExpressionType::STRUCT_EXTRACT: {
 			if (entry.children[1]->type != ExpressionType::VALUE_CONSTANT) {
 				return string();
