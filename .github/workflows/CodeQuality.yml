@@ -105,17 +105,12 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov curl
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov curl g++ zip
 
       - name: Set up Python 3.9
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-
-      - name: Before Install
-        shell: bash
-        run: |
-          sudo apt-get install g++
 
       - name: Coverage Reset
         shell: bash
@@ -151,3 +146,16 @@ jobs:
         shell: bash
         run: |
           python3 scripts/check_coverage.py
+
+      - name: Create Archive
+        if: always()
+        shell: bash
+        run: |
+          zip -r coverage.zip coverage_html
+
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: coverage
+          path: coverage.zip
+          if-no-files-found: error
