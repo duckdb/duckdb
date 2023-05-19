@@ -532,10 +532,6 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 	reference_set_t<SchemaCatalogEntry> schemas;
 	if (IsInvalidSchema(schema)) {
 		// try all schemas for this catalog
-		auto catalog_name = GetName();
-		if (catalog_name == DatabaseManager::GetDefaultDatabase(context)) {
-			catalog_name = INVALID_CATALOG;
-		}
 		auto entries = GetCatalogEntries(context, GetName(), INVALID_SCHEMA);
 		for (auto &entry : entries) {
 			auto &candidate_schema = entry.schema;
