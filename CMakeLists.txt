@@ -121,9 +121,9 @@ endif()
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
 option(WASM_LOADABLE_EXTENSIONS "WebAssembly build with loadable extensions." FALSE)
-option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
+option(ENABLE_SANITIZER "Enable address sanitizer." FALSE)
 option(ENABLE_THREAD_SANITIZER "Enable thread sanitizer." FALSE)
-option(ENABLE_UBSAN "Enable undefined behavior sanitizer." TRUE)
+option(ENABLE_UBSAN "Enable undefined behavior sanitizer." FALSE)
 option(DISABLE_VPTR_SANITIZER "Disable vptr sanitizer; work-around for sanitizer false positive on Macbook M1" FALSE)
 option(
   FORCE_SANITIZER
