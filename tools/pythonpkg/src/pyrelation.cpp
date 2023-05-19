@@ -416,41 +416,15 @@ void DuckDBPyRelation::ExecuteOrThrow(bool stream_result) {
 }
 
 PandasDataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
-	if (!result || result->IsClosed()) {
-		// If the result is already consumed, execute it again
-		if (!rel) {
-			return py::none();
-		}
-		ExecuteOrThrow();
-	}
-	return result->FetchDF(date_as_object);
+	return ConsumeAll<PandasDataFrame>([&](DuckDBPyResult &res) { return res.FetchDF(date_as_object); }, py::none());
 }
 
 Optional<py::tuple> DuckDBPyRelation::FetchOne() {
-	if (!result) {
-		if (!rel) {
-			return py::none();
-		}
-		ExecuteOrThrow(true);
-	}
-	if (result->IsClosed()) {
-		return py::none();
-	}
-	return result->Fetchone();
+	return ConsumePartial<Optional<py::tuple>>([&](DuckDBPyResult &res) { return res.Fetchone(); }, py::none());
 }
 
 py::list DuckDBPyRelation::FetchMany(idx_t size) {
-	if (!result) {
-		if (!rel) {
-			return py::list();
-		}
-		ExecuteOrThrow(true);
-		D_ASSERT(result);
-	}
-	if (result->IsClosed()) {
-		return py::list();
-	}
-	return result->Fetchmany(size);
+	return ConsumePartial<py::list>([&](DuckDBPyResult &res) { return res.Fetchmany(size); }, py::list());
 }
 
 py::list DuckDBPyRelation::FetchAll() {
@@ -469,50 +443,20 @@ py::list DuckDBPyRelation::FetchAll() {
 }
 
 py::dict DuckDBPyRelation::FetchNumpy() {
-	if (!result || result->IsClosed()) {
-		if (!rel) {
-			return py::none();
-		}
-		ExecuteOrThrow();
-	}
-	if (result->IsClosed()) {
-		return py::none();
-	}
-	return result->FetchNumpy();
+	return ConsumeAll<py::object>([&](DuckDBPyResult &res) { return res.FetchNumpy(); }, py::none());
 }
 
 py::dict DuckDBPyRelation::FetchPyTorch() {
-	if (!result || result->IsClosed()) {
-		if (!rel) {
-			return py::none();
-		}
-		ExecuteOrThrow();
-	}
-	return result->FetchPyTorch();
+	return ConsumeAll<py::object>([&](DuckDBPyResult &res) { return res.FetchPyTorch(); }, py::none());
 }
 
 py::dict DuckDBPyRelation::FetchTF() {
-	if (!result || result->IsClosed()) {
-		if (!rel) {
-			return py::none();
-		}
-		ExecuteOrThrow();
-	}
-	if (result->IsClosed()) {
-		return py::none();
-	}
-	return result->FetchTF();
+	return ConsumeAll<py::object>([&](DuckDBPyResult &res) { return res.FetchTF(); }, py::none());
 }
 
 py::dict DuckDBPyRelation::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
-	if (!result || result->IsClosed()) {
-		if (!rel) {
-			return py::none();
-		}
-		ExecuteOrThrow();
-	}
-	AssertResultOpen();
-	return result->FetchNumpyInternal(stream, vectors_per_chunk);
+	return ConsumePartial<py::object>(
+	    [&](DuckDBPyResult &res) { return res.FetchNumpyInternal(stream, vectors_per_chunk); }, py::none(), stream);
 }
 
 //! Should this also keep track of when the result is empty and set result->result_open accordingly?
@@ -545,14 +489,8 @@ PolarsDataFrame DuckDBPyRelation::ToPolars(idx_t batch_size) {
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_size) {
-	if (!result) {
-		if (!rel) {
-			return py::none();
-		}
-		ExecuteOrThrow(true);
-	}
-	AssertResultOpen();
-	return result->FetchRecordBatchReader(batch_size);
+	return ConsumeAll<duckdb::pyarrow::RecordBatchReader, false>(
+	    [&](DuckDBPyResult &res) { return res.FetchRecordBatchReader(batch_size); }, py::none(), true);
 }
 
 void DuckDBPyRelation::Close() {

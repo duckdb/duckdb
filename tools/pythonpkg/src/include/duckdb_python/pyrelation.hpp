@@ -198,6 +198,40 @@ public:
 
 	Relation &GetRel();
 
+	template <class RESULT_TYPE, bool RE_EXECUTE_CLOSED = true>
+	RESULT_TYPE ConsumeAll(std::function<RESULT_TYPE(DuckDBPyResult &)> func,
+	                       const RESULT_TYPE &default_value = RESULT_TYPE(), bool stream_result = false) {
+		if (!result || (RE_EXECUTE_CLOSED && result->IsClosed())) {
+			if (!rel) {
+				return default_value;
+			}
+			ExecuteOrThrow(stream_result);
+		}
+		if (!RE_EXECUTE_CLOSED) {
+			if (result->IsClosed()) {
+				return default_value;
+			}
+		}
+		D_ASSERT(result);
+		return func(*result);
+	}
+
+	template <class RESULT_TYPE>
+	RESULT_TYPE ConsumePartial(std::function<RESULT_TYPE(DuckDBPyResult &)> func,
+	                           const RESULT_TYPE &default_value = RESULT_TYPE(), bool stream_result = true) {
+		if (!result) {
+			if (!rel) {
+				return default_value;
+			}
+			ExecuteOrThrow();
+		}
+		if (result->IsClosed()) {
+			return default_value;
+		}
+		D_ASSERT(result);
+		return func(*result);
+	}
+
 private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
