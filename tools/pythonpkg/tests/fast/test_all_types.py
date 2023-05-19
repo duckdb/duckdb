@@ -82,7 +82,7 @@ class TestAllTypes(object):
                 result = conn.execute("select "+replacement_values[cur_type]).fetchall()
                 print(cur_type, result)
             else:
-                result = conn.execute("select "+cur_type+" from test_all_types()").fetchall()
+                result = conn.execute(f'select "{cur_type}" from test_all_types()').fetchall()
             correct_result = correct_answer_map[cur_type]
             assert recursive_equality(result, correct_result)
 
@@ -350,7 +350,7 @@ class TestAllTypes(object):
             if cur_type in replacement_values:
                 arrow_table = conn.execute("select "+replacement_values[cur_type]).arrow()
             else:
-                arrow_table = conn.execute("select "+cur_type+" from test_all_types()").arrow()
+                arrow_table = conn.execute(f'select "{cur_type}" from test_all_types()').arrow()
             if cur_type in enum_types:
                 round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
                 result_arrow = conn.execute("select * from arrow_table").fetchall()
@@ -378,7 +378,7 @@ class TestAllTypes(object):
             if cur_type in replacement_values:
                 dataframe = conn.execute("select "+replacement_values[cur_type]).df()
             else:
-                dataframe = conn.execute("select "+cur_type+" from test_all_types()").df()
+                dataframe = conn.execute(f'select "{cur_type}" from test_all_types()').df()
             print(cur_type)
             round_trip_dataframe = conn.execute("select * from dataframe").df()
             result_dataframe = conn.execute("select * from dataframe").fetchall()
