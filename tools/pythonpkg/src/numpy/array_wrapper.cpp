@@ -527,6 +527,7 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UNION:
 	case LogicalTypeId::UUID:
 		type_width = sizeof(PyObject *);
 		break;
@@ -578,6 +579,7 @@ string RawArrayWrapper::DuckDBToNumpyDtype(const LogicalType &type) {
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UNION:
 	case LogicalTypeId::UUID:
 		return "object";
 	case LogicalTypeId::ENUM: {

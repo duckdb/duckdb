@@ -378,6 +378,10 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 	}
 	case LogicalTypeId::ENUM:
 		return py::cast(EnumType::GetValue(val));
+	case LogicalTypeId::UNION: {
+		const auto &members = UnionType::CopyMemberTypes(val.type());
+		return PythonObject::FromValue(UnionValue::GetValue(val), members[UnionValue::GetTag(val)].second);
+	}
 	case LogicalTypeId::VARCHAR:
 		return py::cast(StringValue::Get(val));
 	case LogicalTypeId::BLOB:
