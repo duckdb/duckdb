@@ -180,6 +180,11 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 	if (count == 0) {
 		return;
 	}
+	if (result.GetType().id() != expr.return_type.id()) {
+		throw InternalException(
+		    "ExpressionExecutor::Execute called with a result vector of type %s that does not match expression type %s",
+		    result.GetType(), expr.return_type);
+	}
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
 		Execute((const BoundBetweenExpression &)expr, state, sel, count, result);
