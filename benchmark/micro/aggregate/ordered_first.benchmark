@@ -10,7 +10,7 @@ group aggregate
 
 run
 SELECT SUM(agg) FROM (
-	SELECT i / 2048 AS grp, FIRST(i ORDER BY i DESC) AS agg
+	SELECT i // 2048 AS grp, FIRST(i ORDER BY i DESC) AS agg
 	FROM range(10000000) tbl(i)
 	GROUP BY ALL
 )
