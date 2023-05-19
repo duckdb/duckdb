@@ -47,8 +47,8 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchChunk() {
 }
 
 unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &result) {
-	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !((StreamQueryResult &)result).IsOpen()) {
-		result_closed = true;
+	if (result_open && result.type == QueryResultType::STREAM_RESULT && !((StreamQueryResult &)result).IsOpen()) {
+		result_open = false;
 		return nullptr;
 	}
 	auto chunk = result.Fetch();
@@ -59,8 +59,8 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &result) {
 }
 
 unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &result) {
-	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !((StreamQueryResult &)result).IsOpen()) {
-		result_closed = true;
+	if (result_open && result.type == QueryResultType::STREAM_RESULT && !((StreamQueryResult &)result).IsOpen()) {
+		result_open = false;
 		return nullptr;
 	}
 	auto chunk = result.FetchRaw();
@@ -188,13 +188,14 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 		}
 		auto stream_result = (StreamQueryResult *)result.get();
 		for (idx_t count_vec = 0; count_vec < vectors_per_chunk; count_vec++) {
-			if (!stream_result->IsOpen()) {
-				break;
-			}
 			unique_ptr<DataChunk> chunk;
 			{
 				py::gil_scoped_release release;
-				chunk = FetchNextRaw(*stream_result);
+				if (stream_result->IsOpen()) {
+					chunk = FetchNextRaw(*stream_result);
+				} else {
+					result_open = false;
+				}
 			}
 			if (!chunk || chunk->size() == 0) {
 				//! finished
@@ -222,6 +223,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 			FillNumpy(res, col_idx, conversion, name.c_str());
 		}
 	}
+	result_open = false;
 	return res;
 }
 
@@ -411,7 +413,7 @@ void DuckDBPyResult::Close() {
 }
 
 bool DuckDBPyResult::IsClosed() const {
-	return result_closed;
+	return !result_open;
 }
 
 } // namespace duckdb

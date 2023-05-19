@@ -416,18 +416,14 @@ void DuckDBPyRelation::ExecuteOrThrow(bool stream_result) {
 }
 
 PandasDataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
-	if (!result) {
+	if (!result || result->IsClosed()) {
+		// If the result is already consumed, execute it again
 		if (!rel) {
 			return py::none();
 		}
 		ExecuteOrThrow();
 	}
-	if (result->IsClosed()) {
-		return py::none();
-	}
-	auto df = result->FetchDF(date_as_object);
-	result = nullptr;
-	return df;
+	return result->FetchDF(date_as_object);
 }
 
 Optional<py::tuple> DuckDBPyRelation::FetchOne() {
@@ -473,7 +469,7 @@ py::list DuckDBPyRelation::FetchAll() {
 }
 
 py::dict DuckDBPyRelation::FetchNumpy() {
-	if (!result) {
+	if (!result || result->IsClosed()) {
 		if (!rel) {
 			return py::none();
 		}
@@ -482,28 +478,21 @@ py::dict DuckDBPyRelation::FetchNumpy() {
 	if (result->IsClosed()) {
 		return py::none();
 	}
-	auto res = result->FetchNumpy();
-	result = nullptr;
-	return res;
+	return result->FetchNumpy();
 }
 
 py::dict DuckDBPyRelation::FetchPyTorch() {
-	if (!result) {
+	if (!result || result->IsClosed()) {
 		if (!rel) {
 			return py::none();
 		}
 		ExecuteOrThrow();
 	}
-	if (result->IsClosed()) {
-		return py::none();
-	}
-	auto res = result->FetchPyTorch();
-	result = nullptr;
-	return res;
+	return result->FetchPyTorch();
 }
 
 py::dict DuckDBPyRelation::FetchTF() {
-	if (!result) {
+	if (!result || result->IsClosed()) {
 		if (!rel) {
 			return py::none();
 		}
@@ -512,25 +501,21 @@ py::dict DuckDBPyRelation::FetchTF() {
 	if (result->IsClosed()) {
 		return py::none();
 	}
-	auto res = result->FetchTF();
-	result = nullptr;
-	return res;
+	return result->FetchTF();
 }
 
 py::dict DuckDBPyRelation::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
-	if (!result) {
+	if (!result || result->IsClosed()) {
 		if (!rel) {
 			return py::none();
 		}
 		ExecuteOrThrow();
 	}
 	AssertResultOpen();
-	auto res = result->FetchNumpyInternal(stream, vectors_per_chunk);
-	result = nullptr;
-	return res;
+	return result->FetchNumpyInternal(stream, vectors_per_chunk);
 }
 
-//! Should this also keep track of when the result is empty and set result->result_closed accordingly?
+//! Should this also keep track of when the result is empty and set result->result_open accordingly?
 PandasDataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object) {
 	if (!result) {
 		if (!rel) {
@@ -538,12 +523,11 @@ PandasDataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool dat
 		}
 		ExecuteOrThrow(true);
 	}
-	AssertResultOpen();
 	return result->FetchDFChunk(vectors_per_chunk, date_as_object);
 }
 
 duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
-	if (!result) {
+	if (!result || result->IsClosed()) {
 		if (!rel) {
 			return py::none();
 		}
@@ -578,7 +562,6 @@ void DuckDBPyRelation::Close() {
 		}
 		ExecuteOrThrow();
 	}
-	AssertResultOpen();
 	result->Close();
 }
 

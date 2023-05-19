@@ -25,8 +25,10 @@ public:
 		bool serialize = function.serialize;
 		writer.WriteField(serialize);
 		if (serialize) {
-			D_ASSERT(function.deserialize);
+			// Call the serialize function first to see if this throws a NotImplementedException, only then check for
+			// the existence of the 'deserialize' function.
 			function.serialize(writer, bind_info, function);
+			D_ASSERT(function.deserialize);
 		}
 	}
 

@@ -80,7 +80,7 @@ private:
 
 	string timezone_config;
 
-	bool result_closed = false;
+	bool result_open = true;
 };
 
 } // namespace duckdb
