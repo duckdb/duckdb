@@ -428,18 +428,15 @@ py::list DuckDBPyRelation::FetchMany(idx_t size) {
 }
 
 py::list DuckDBPyRelation::FetchAll() {
-	if (!result) {
-		if (!rel) {
-			return py::list();
-		}
-		ExecuteOrThrow();
-	}
-	if (result->IsClosed()) {
-		return py::list();
-	}
-	auto res = result->Fetchall();
-	result = nullptr;
-	return res;
+	return ConsumeAll<py::list, false>(
+	    [&](DuckDBPyResult &res) {
+		    auto temp = res.Fetchall();
+		    // A call to fetchall should close the result, so a subsequent call to a fetch method should re-execute the
+		    // relation.
+		    result = nullptr;
+		    return temp;
+	    },
+	    py::list());
 }
 
 py::dict DuckDBPyRelation::FetchNumpy() {
@@ -467,16 +464,14 @@ PandasDataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool dat
 }
 
 duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
-	if (!result || result->IsClosed()) {
-		if (!rel) {
-			return py::none();
-		}
-		ExecuteOrThrow();
-	}
-	AssertResultOpen();
-	auto res = result->FetchArrowTable(batch_size);
-	result = nullptr;
-	return res;
+	return ConsumeAll<duckdb::pyarrow::Table>(
+	    [&](DuckDBPyResult &res) {
+		    auto temp = res.FetchArrowTable(batch_size);
+		    // FIXME: this is necessary, but it's unclear to me why
+		    result = nullptr;
+		    return temp;
+	    },
+	    py::none());
 }
 
 PolarsDataFrame DuckDBPyRelation::ToPolars(idx_t batch_size) {
