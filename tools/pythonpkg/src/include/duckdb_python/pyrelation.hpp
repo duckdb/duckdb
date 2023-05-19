@@ -216,7 +216,7 @@ public:
 		return func(*result);
 	}
 
-	template <class RESULT_TYPE>
+	template <class RESULT_TYPE, bool INTERCEPT_CLOSED = true>
 	RESULT_TYPE ConsumePartial(std::function<RESULT_TYPE(DuckDBPyResult &)> func,
 	                           const RESULT_TYPE &default_value = RESULT_TYPE(), bool stream_result = true) {
 		if (!result) {
@@ -225,8 +225,10 @@ public:
 			}
 			ExecuteOrThrow();
 		}
-		if (result->IsClosed()) {
-			return default_value;
+		if (INTERCEPT_CLOSED) {
+			if (result->IsClosed()) {
+				return default_value;
+			}
 		}
 		D_ASSERT(result);
 		return func(*result);

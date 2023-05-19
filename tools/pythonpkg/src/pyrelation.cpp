@@ -386,8 +386,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Distinct() {
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::FetchRecordBatchReader(idx_t rows_per_batch) {
-	AssertResult();
-	return result->FetchRecordBatchReader(rows_per_batch);
+	return ConsumeAll<duckdb::pyarrow::RecordBatchReader>(
+	    [&](DuckDBPyResult &res) { return res.FetchRecordBatchReader(rows_per_batch); }, py::none());
 }
 
 static unique_ptr<QueryResult> PyExecuteRelation(const shared_ptr<Relation> &rel, bool stream_result = false) {
@@ -461,13 +461,9 @@ py::dict DuckDBPyRelation::FetchNumpyInternal(bool stream, idx_t vectors_per_chu
 
 //! Should this also keep track of when the result is empty and set result->result_open accordingly?
 PandasDataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object) {
-	if (!result) {
-		if (!rel) {
-			return py::none();
-		}
-		ExecuteOrThrow(true);
-	}
-	return result->FetchDFChunk(vectors_per_chunk, date_as_object);
+	return ConsumePartial<PandasDataFrame, false>(
+	    [&](DuckDBPyResult &res) { return res.FetchDFChunk(vectors_per_chunk, date_as_object); }, PandasDataFrame(),
+	    true);
 }
 
 duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
