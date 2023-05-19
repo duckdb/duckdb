@@ -7,6 +7,8 @@ int main() {
 
 	Connection con(db);
 
-	auto result = con.Query("SELECT sha512('123')");
+	auto result = con.Query("SELECT md5('123')");
+	result->Print();
+	result = con.Query("SELECT sha512('123')");
 	result->Print();
 }
