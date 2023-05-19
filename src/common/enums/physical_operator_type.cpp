@@ -35,10 +35,6 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "STREAMING_WINDOW";
 	case PhysicalOperatorType::UNNEST:
 		return "UNNEST";
-	case PhysicalOperatorType::RANGE:
-		return "RANGE";
-	case PhysicalOperatorType::TIME_RANGE:
-		return "TIME_RANGE";
 	case PhysicalOperatorType::UNGROUPED_AGGREGATE:
 		return "UNGROUPED_AGGREGATE";
 	case PhysicalOperatorType::HASH_GROUP_BY:
