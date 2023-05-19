@@ -716,6 +716,7 @@ function(build_loadable_extension NAME PARAMETERS)
   build_loadable_extension_directory(${NAME} "extension/${NAME}" "${PARAMETERS}" ${FILES})
 endfunction()
 
+# Internal extension register function
 function(register_extension NAME DONT_LINK PATH INCLUDE_PATH)
   string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
   string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
@@ -724,7 +725,8 @@ function(register_extension NAME DONT_LINK PATH INCLUDE_PATH)
 
   if (NOT ${DONT_LINK} AND NOT DISABLE_BUILTIN_EXTENSIONS)
     set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK TRUE PARENT_SCOPE)
-    add_definitions(-DDUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED=true)
+  else()
+    set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK FALSE PARENT_SCOPE)
   endif()
 
   if ("${PATH}" STREQUAL "")
@@ -738,7 +740,7 @@ function(register_extension NAME DONT_LINK PATH INCLUDE_PATH)
   set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH ${INCLUDE_PATH} PARENT_SCOPE)
 endfunction()
 
-# Similar to register_extension but for a remote git repo.
+# Downloads the external extension repo at the specified commit and calls register_extension
 macro(register_external_extension NAME URL COMMIT DONT_LINK PATH INCLUDE_PATH)
   include(FetchContent)
   FETCHCONTENT_DECLARE(
@@ -750,19 +752,26 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK PATH INCLUDE_PATH)
   FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
 
   if ("${INCLUDE_PATH}" STREQUAL "")
-    set(INCLUDE_PATH_DEFAULT "src/include")
+    register_extension(${NAME} ${DONT_LINK} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} "${${NAME}_extension_fc_SOURCE_DIR}/src/include")
   else()
-    set(INCLUDE_PATH_DEFAULT ${INCLUDE_PATH})
+    register_extension(${NAME} ${DONT_LINK} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} "${${NAME}_extension_fc_SOURCE_DIR}/${INCLUDE_PATH}")
   endif()
-
-  register_extension(${NAME} ${DONT_LINK} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} ${${NAME}_extension_fc_SOURCE_DIR}/${INCLUDE_PATH_DEFAULT})
 endmacro()
 
-macro(duckdb_extension_load NAME)
+function(duckdb_extension_load NAME)
   # Parameter parsing
   set(options DONT_LINK)
   set(oneValueArgs SOURCE_DIR INCLUDE_DIR GIT_URL GIT_TAG)
   cmake_parse_arguments(duckdb_extension_load "${options}" "${oneValueArgs}" "" ${ARGN})
+
+  string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
+  string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
+
+  # If extension was set already, we ignore subsequent calls
+  list (FIND DUCKDB_OOT_EXTENSION_NAMES ${EXTENSION_NAME_LOWERCASE} _index)
+  if (${_index} GREATER -1)
+    return()
+  endif()
 
   # Remote Git extension
   if (NOT "${duckdb_extension_load_GIT_URL}" STREQUAL "")
@@ -791,10 +800,33 @@ macro(duckdb_extension_load NAME)
     message(STATUS "Building extension '${NAME}' from '${CMAKE_SOURCE_DIR}/extensions'")
     register_extension(${NAME} ${duckdb_extension_load_DONT_LINK}  "${CMAKE_SOURCE_DIR}/extension/${NAME}" "${CMAKE_SOURCE_DIR}/extension/${NAME}/include")
   endif()
-endmacro()
 
-# Register in tree extensions TODO: we may want to remove these specific cmake vars and use passing an extension_config instead.
-set(INTERNAL_EXTENSION_ROOT_DIR ${CMAKE_SOURCE_DIR}/extension)
+  # Propagate variables set by register_extension
+  set(DUCKDB_OOT_EXTENSION_NAMES ${DUCKDB_OOT_EXTENSION_NAMES} PARENT_SCOPE)
+  set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK ${DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK} PARENT_SCOPE)
+  set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH ${DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH} PARENT_SCOPE)
+  set(DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH ${DUCKDB_OOT_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH} PARENT_SCOPE)
+endfunction()
+
+if(${EXPORT_DLL_SYMBOLS})
+  # For Windows DLL export symbols
+  add_definitions(-DDUCKDB_BUILD_LIBRARY)
+endif()
+
+# Custom extension configs passed in DUCKDB_EXTENSION_CONFIGS parameter
+foreach(DUCKDB_EXTENSION_CONFIG IN LISTS DUCKDB_EXTENSION_CONFIGS)
+  include(${DUCKDB_EXTENSION_CONFIG})
+endforeach()
+
+# Local extension config
+if (EXISTS ${CMAKE_SOURCE_DIR}/extension/extension_config_local.cmake)
+  include(${CMAKE_SOURCE_DIR}/extension/extension_config_local.cmake)
+endif()
+
+# Load base extension config
+include(${CMAKE_SOURCE_DIR}/extension/extension_config.cmake)
+
+# Load extensions passed through cmake config var TODO: make nicer
 if (BUILD_HTTPFS_EXTENSION)
   duckdb_extension_load(httpfs)
 endif()
@@ -835,15 +867,6 @@ if (BUILD_AUTOCOMPLETE_EXTENSION)
   duckdb_extension_load(autocomplete)
 endif()
 
-if(${EXPORT_DLL_SYMBOLS})
-  # For Windows DLL export symbols
-  add_definitions(-DDUCKDB_BUILD_LIBRARY)
-endif()
-
-foreach(DUCKDB_EXTENSION_CONFIG IN LISTS DUCKDB_EXTENSION_CONFIGS)
-  include(${DUCKDB_EXTENSION_CONFIG})
-endforeach()
-
 if (BUILD_MAIN_DUCKDB_LIBRARY)
   add_subdirectory(src)
   add_subdirectory(tools)
@@ -855,6 +878,12 @@ add_subdirectory(extension)
 # Add Out-of-tree extensions
 foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
   string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
+  if (DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_LINK)
+    add_definitions(-DDUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_LINKED=true)
+  else()
+    add_definitions(-DDUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_LINKED=false)
+  endif()
+
   if (DEFINED DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_PATH)
     add_subdirectory(${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_PATH} extension/${OOTE_NAME})
   else()
@@ -1025,17 +1054,4 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
 
-endif()
-
-# TODO: This is the old way of Loading OOTEs can be removed after all OOTES in extensions.csv play ball with the new way
-# build out-of-tree extensions on demand
-if(NOT "${EXTERNAL_EXTENSION_DIRECTORIES}" STREQUAL "")
-  separate_arguments(EXTERNAL_EXTENSION_DIRECTORIES)
-
-  foreach(EXTERNAL_EXTENSION_DIRECTORY IN LISTS EXTERNAL_EXTENSION_DIRECTORIES)
-
-    # the build path seems to get ignored on windows in just the right way. no idea why.
-    get_filename_component(EXTERNAL_EXTENSION_NAME ${EXTERNAL_EXTENSION_DIRECTORY} NAME)
-    add_subdirectory(${EXTERNAL_EXTENSION_DIRECTORY} "extension/${EXTERNAL_EXTENSION_NAME}")
-  endforeach()
 endif()

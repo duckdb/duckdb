@@ -138,6 +138,7 @@ runs:
         ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
         cd  ${{ inputs.build_dir}}
         mkdir -p build/release/extension/out_of_tree
+        EXTENSION_CONFIGS=.github/config/extension_config.cmake make
         ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py ${{ inputs.aarch64_cross_compile == 1 && '--aarch64-cc' || '' }} --github-ref=$GITHUB_REF
 
     - name: Run post-install scripts
