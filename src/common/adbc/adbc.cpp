@@ -8,6 +8,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/main/connection.hpp"
 
 #include <string.h>
 #include <stdlib.h>
@@ -37,6 +38,10 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 	driver->StatementSetOption = duckdb_adbc::StatementSetOption;
 	driver->StatementSetSqlQuery = duckdb_adbc::StatementSetSqlQuery;
 	driver->ConnectionGetObjects = duckdb_adbc::ConnectionGetObjects;
+	driver->ConnectionCommit = duckdb_adbc::ConnectionCommit;
+	driver->ConnectionRollback = duckdb_adbc::ConnectionRollback;
+	driver->ConnectionReadPartition = duckdb_adbc::ConnectionReadPartition;
+	driver->StatementExecutePartitions = duckdb_adbc::StatementExecutePartitions;
 	return ADBC_STATUS_OK;
 }
 
@@ -162,10 +167,104 @@ AdbcStatusCode ConnectionNew(struct AdbcConnection *connection, struct AdbcError
 	return ADBC_STATUS_OK;
 }
 
+AdbcStatusCode ExecuteQuery(duckdb::Connection *conn, const char *query, struct AdbcError *error) {
+	auto res = conn->Query(query);
+	if (res->HasError()) {
+		auto error_message = "Failed to execute query \"" + std::string(query) + "\": " + res->GetError();
+		SetError(error, error_message);
+		return ADBC_STATUS_INTERNAL;
+	}
+	return ADBC_STATUS_OK;
+}
+
 AdbcStatusCode ConnectionSetOption(struct AdbcConnection *connection, const char *key, const char *value,
                                    struct AdbcError *error) {
-	// there are no connection-level options that need to be set before connecting
-	return ADBC_STATUS_OK;
+	if (!connection) {
+		SetError(error, "Connection is not set");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	auto conn = (duckdb::Connection *)connection->private_data;
+	if (strcmp(key, ADBC_CONNECTION_OPTION_AUTOCOMMIT) == 0) {
+		if (strcmp(value, ADBC_OPTION_VALUE_ENABLED) == 0) {
+			if (conn->HasActiveTransaction()) {
+				AdbcStatusCode status = ExecuteQuery(conn, "COMMIT", error);
+				if (status != ADBC_STATUS_OK) {
+					return status;
+				}
+			} else {
+				// no-op
+			}
+		} else if (strcmp(value, ADBC_OPTION_VALUE_DISABLED) == 0) {
+			if (conn->HasActiveTransaction()) {
+				// no-op
+			} else {
+				// begin
+				AdbcStatusCode status = ExecuteQuery(conn, "BEGIN", error);
+				if (status != ADBC_STATUS_OK) {
+					return status;
+				}
+			}
+		} else {
+			auto error_message = "Invalid connection option value " + std::string(key) + "=" + std::string(value);
+			SetError(error, error_message);
+			return ADBC_STATUS_INVALID_ARGUMENT;
+		}
+		return ADBC_STATUS_OK;
+	}
+	auto error_message =
+	    "Unknown connection option " + std::string(key) + "=" + (value ? std::string(value) : "(NULL)");
+	SetError(error, error_message);
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode ConnectionReadPartition(struct AdbcConnection *connection, const uint8_t *serialized_partition,
+                                       size_t serialized_length, struct ArrowArrayStream *out,
+                                       struct AdbcError *error) {
+	SetError(error, "Read Partitions are not supported in DuckDB");
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode StatementExecutePartitions(struct AdbcStatement *statement, struct ArrowSchema *schema,
+                                          struct AdbcPartitions *partitions, int64_t *rows_affected,
+                                          struct AdbcError *error) {
+	SetError(error, "Execute Partitions are not supported in DuckDB");
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode ConnectionCommit(struct AdbcConnection *connection, struct AdbcError *error) {
+	if (!connection) {
+		SetError(error, "Connection is not set");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	auto conn = (duckdb::Connection *)connection->private_data;
+	if (!conn->HasActiveTransaction()) {
+		SetError(error, "No active transaction, cannot commit");
+		return ADBC_STATUS_INVALID_STATE;
+	}
+
+	AdbcStatusCode status = ExecuteQuery(conn, "COMMIT", error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	return ExecuteQuery(conn, "BEGIN", error);
+}
+
+AdbcStatusCode ConnectionRollback(struct AdbcConnection *connection, struct AdbcError *error) {
+	if (!connection) {
+		SetError(error, "Connection is not set");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	auto conn = (duckdb::Connection *)connection->private_data;
+	if (!conn->HasActiveTransaction()) {
+		SetError(error, "No active transaction, cannot rollback");
+		return ADBC_STATUS_INVALID_STATE;
+	}
+
+	AdbcStatusCode status = ExecuteQuery(conn, "ROLLBACK", error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	return ExecuteQuery(conn, "BEGIN", error);
 }
 
 AdbcStatusCode ConnectionInit(struct AdbcConnection *connection, struct AdbcDatabase *database,
@@ -219,11 +318,11 @@ void release(struct ArrowArrayStream *stream) {
 	if (!stream || !stream->release) {
 		return;
 	}
-	stream->release = nullptr;
 	if (stream->private_data) {
 		duckdb_destroy_arrow((duckdb_arrow *)&stream->private_data);
 		stream->private_data = nullptr;
 	}
+	stream->release = nullptr;
 }
 
 const char *get_last_error(struct ArrowArrayStream *stream) {
