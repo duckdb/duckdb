@@ -33,6 +33,7 @@ DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result_p) : rel(nu
 	if (!result) {
 		throw InternalException("DuckDBPyRelation created without a result");
 	}
+	this->executed = true;
 	this->types = result->GetTypes();
 	this->names = result->GetNames();
 }
@@ -405,6 +406,7 @@ unique_ptr<QueryResult> DuckDBPyRelation::ExecuteInternal(bool stream_result) {
 }
 
 void DuckDBPyRelation::ExecuteOrThrow(bool stream_result) {
+	executed = true;
 	auto query_result = ExecuteInternal(stream_result);
 	if (!query_result) {
 		throw InternalException("ExecuteOrThrow - no query available to execute");
@@ -485,13 +487,17 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_s
 }
 
 void DuckDBPyRelation::Close() {
-	if (!result) {
+	// We always want to execute the query at least once, for side-effect purposes.
+	// if it has already been executed, we don't need to do it again.
+	if (!executed && !result) {
 		if (!rel) {
 			return;
 		}
 		ExecuteOrThrow();
 	}
-	result->Close();
+	if (result) {
+		result->Close();
+	}
 }
 
 bool DuckDBPyRelation::ContainsColumnByName(const string &name) const {

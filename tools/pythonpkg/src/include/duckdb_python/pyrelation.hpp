@@ -254,6 +254,8 @@ private:
 	vector<string> names;
 	unique_ptr<DuckDBPyResult> result;
 	std::string rendered_result;
+	//! Whether the relation has already been executed at least once
+	bool executed = false;
 };
 
 } // namespace duckdb
