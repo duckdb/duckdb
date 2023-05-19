@@ -243,18 +243,26 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		type = LogicalType::UNION(member_types);
 		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::USER) {
-		auto &user_type_name = UserType::GetTypeName(type);
+		auto user_type_name = UserType::GetTypeName(type);
 		if (catalog) {
+			// The search order is:
+			// 1) In the same schema as the table
+			// 2) In the same catalog
+			// 3) System catalog
 			type = catalog->GetType(context, schema, user_type_name, OnEntryNotFound::RETURN_NULL);
+
 			if (type.id() == LogicalTypeId::INVALID) {
-				// look in the system catalog if the type was not found
-				type = Catalog::GetType(context, SYSTEM_CATALOG, schema, user_type_name);
+				type = catalog->GetType(context, INVALID_SCHEMA, user_type_name, OnEntryNotFound::RETURN_NULL);
+			}
+
+			if (type.id() == LogicalTypeId::INVALID) {
+				type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
 			}
 		} else {
 			type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
 		}
 	} else if (type.id() == LogicalTypeId::ENUM) {
-		auto &enum_type_name = EnumType::GetTypeName(type);
+		auto enum_type_name = EnumType::GetTypeName(type);
 		optional_ptr<TypeCatalogEntry> enum_type_catalog;
 		if (catalog) {
 			enum_type_catalog =
