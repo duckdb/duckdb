@@ -296,6 +296,11 @@ class TestAllTypes(object):
                 mask=[0, 0, 1],
                 dtype=object,
             ),
+            'union': np.ma.array(
+                ['Frank', 5, None],
+                mask=[0, 0, 1],
+                dtype=object
+            ),
         }
 
         # The following types don't have a numpy equivalent, and are coerced to
@@ -324,7 +329,7 @@ class TestAllTypes(object):
         for cur_type in all_types:
             if cur_type not in correct_answer_map:
                 continue
-            result = rel.project(cur_type).fetchnumpy()
+            result = rel.project(f'"{cur_type}"').fetchnumpy()
             result = result[cur_type]
             correct_answer = correct_answer_map[cur_type]
             if isinstance(result, pd.Categorical) or result.dtype == object:
