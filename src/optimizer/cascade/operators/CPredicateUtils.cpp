@@ -2757,59 +2757,15 @@ CPredicateUtils::FBitmapLookupSupportedPredicateOrConjunct(
 	return false;
 }
 
-BOOL
-CPredicateUtils::FBuiltInComparisonIsVeryStrict(IMDId *mdid)
+BOOL CPredicateUtils::FBuiltInComparisonIsVeryStrict(IMDId *mdid)
 {
 	const CMDIdGPDB *const pmdidGPDB = CMDIdGPDB::CastMdid(mdid);
-
 	GPOS_ASSERT(NULL != pmdidGPDB);
-
-	switch (pmdidGPDB->Oid())
-	{
-		case GPDB_INT2_EQ_OP:
-		case GPDB_INT2_NEQ_OP:
-		case GPDB_INT2_LT_OP:
-		case GPDB_INT2_LEQ_OP:
-		case GPDB_INT2_GT_OP:
-		case GPDB_INT2_GEQ_OP:
-		case GPDB_INT4_EQ_OP:
-		case GPDB_INT4_NEQ_OP:
-		case GPDB_INT4_LT_OP:
-		case GPDB_INT4_LEQ_OP:
-		case GPDB_INT4_GT_OP:
-		case GPDB_INT4_GEQ_OP:
-		case GPDB_INT8_EQ_OP:
-		case GPDB_INT8_NEQ_OP:
-		case GPDB_INT8_LT_OP:
-		case GPDB_INT8_LEQ_OP:
-		case GPDB_INT8_GT_OP:
-		case GPDB_INT8_GEQ_OP:
-		case GPDB_BOOL_EQ_OP:
-		case GPDB_BOOL_NEQ_OP:
-		case GPDB_BOOL_LT_OP:
-		case GPDB_BOOL_LEQ_OP:
-		case GPDB_BOOL_GT_OP:
-		case GPDB_BOOL_GEQ_OP:
-		case GPDB_TEXT_EQ_OP:
-		case GPDB_TEXT_NEQ_OP:
-		case GPDB_TEXT_LT_OP:
-		case GPDB_TEXT_LEQ_OP:
-		case GPDB_TEXT_GT_OP:
-		case GPDB_TEXT_GEQ_OP:
-			// these built-in operators have well-known behavior, they always
-			// return NULL when one of the operands is NULL and they
-			// never return NULL when both operands are not NULL
-			return true;
-
-		default:
-			// this operator might also qualify but unfortunately we can't be sure
-			return false;
-	}
+	return true;
 }
 
 BOOL
-CPredicateUtils::ExprContainsOnlyStrictComparisons(CMemoryPool *mp,
-												   CExpression *expr)
+CPredicateUtils::ExprContainsOnlyStrictComparisons(CMemoryPool *mp, CExpression *expr)
 {
 	CExpressionArray *conjuncts = PdrgpexprConjuncts(mp, expr);
 	BOOL result = ExprsContainsOnlyStrictComparisons(conjuncts);
