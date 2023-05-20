@@ -9,7 +9,6 @@
 #define GPOPT_CScalarCmp_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/base/CDrvdProp.h"
 #include "duckdb/optimizer/cascade/operators/CScalar.h"
 #include "duckdb/optimizer/cascade/md/IMDId.h"

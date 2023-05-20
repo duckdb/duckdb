@@ -11,7 +11,6 @@
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/common/CDynamicPtrArray.h"
 #include "duckdb/optimizer/cascade/common/CRefCount.h"
-
 #include "duckdb/optimizer/cascade/base/CColRef.h"
 #include "duckdb/optimizer/cascade/base/CCostContext.h"
 #include "duckdb/optimizer/cascade/base/CDrvdPropRelational.h"
@@ -25,6 +24,11 @@
 #include "duckdb/optimizer/cascade/operators/COperator.h"
 #include "duckdb/optimizer/cascade/statistics/CStatistics.h"
 
+// infinite plan cost
+#define GPOPT_INFINITE_COST CCost(1e+100)
+
+// invalid cost value
+#define GPOPT_INVALID_COST CCost(-0.5)
 
 namespace gpopt
 {

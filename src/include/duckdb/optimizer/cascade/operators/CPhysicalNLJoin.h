@@ -9,7 +9,6 @@
 #define GPOPT_CPhysicalNLJoin_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/base/CUtils.h"
 #include "duckdb/optimizer/cascade/operators/CPhysicalJoin.h"
 
