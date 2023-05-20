@@ -439,74 +439,6 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet &node) {
 	return true;
 }
 
-class NeighborSubset {
-public:
-	class const_iterator {
-	private:
-		idx_t index;
-		const NeighborSubset &subset;
-
-	public:
-		const_iterator(const NeighborSubset &subset, idx_t index) : index(index), subset(subset) {
-		}
-
-		bool operator==(const const_iterator &other) const {
-			D_ASSERT(&subset == &other.subset);
-			return index == other.index;
-		}
-
-		bool operator!=(const const_iterator &other) const {
-			return !(*this == other);
-		}
-
-		const unordered_set<idx_t> &operator*() const {
-			D_ASSERT(index < subset.size());
-			return subset.all_subsets[index].first;
-		}
-
-		const_iterator &operator++() {
-			index++;
-			return *this;
-		}
-	};
-
-	explicit NeighborSubset(const vector<idx_t> &neighbors) {
-
-		for (idx_t i = 0; i < neighbors.size(); ++i) {
-			unordered_set<idx_t> rel_set = {neighbors[i]};
-			all_subsets.push_back(make_pair(std::move(rel_set), i));
-		}
-
-		idx_t index = 0;
-
-		while (index < all_subsets.size()) {
-			auto rel_set_pair = all_subsets[index];
-
-			for (idx_t i = rel_set_pair.second + 1; i < neighbors.size(); ++i) {
-				rel_set_pair.first.insert(neighbors[i]);
-				all_subsets.push_back(make_pair(rel_set_pair.first, i));
-				rel_set_pair.first.erase(neighbors[i]);
-			}
-			index++;
-		}
-	}
-
-	const_iterator begin() const {
-		return const_iterator(*this, 0);
-	}
-
-	const_iterator end() const {
-		return const_iterator(*this, all_subsets.size());
-	}
-
-	idx_t size() const {
-		return all_subsets.size();
-	}
-
-private:
-	vector<pair<unordered_set<idx_t>, idx_t>> all_subsets;
-};
-
 bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right,
                                                unordered_set<idx_t> &exclusion_set) {
 	// get the neighbors of the second relation under the exclusion set
@@ -517,9 +449,9 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelati
 
 	NeighborSubset all_subset(neighbors);
 	vector<reference<JoinRelationSet>> union_sets;
-	union_sets.reserve(all_subset.size());
-	for (const auto &rel_set : all_subset) {
-		auto &neighbor = set_manager.GetJoinRelation(rel_set);
+	union_sets.reserve(all_subset.Size());
+	for (auto rel_set = all_subset.Begin(); rel_set != all_subset.End(); ++rel_set) {
+		auto &neighbor = set_manager.GetJoinRelation(*rel_set);
 		// emit the combinations of this node and its neighbors
 		auto &combined_set = set_manager.Union(right, neighbor);
 		// If combined_set.count == right.count, This means we found a neighbor that has been present before
@@ -560,9 +492,9 @@ bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet &node, unordered_
 
 	NeighborSubset all_subset(neighbors);
 	vector<reference<JoinRelationSet>> union_sets;
-	union_sets.reserve(all_subset.size());
-	for (const auto &rel_set : all_subset) {
-		auto &neighbor = set_manager.GetJoinRelation(rel_set);
+	union_sets.reserve(all_subset.Size());
+	for (auto rel_set = all_subset.Begin(); rel_set != all_subset.End(); ++rel_set) {
+		auto &neighbor = set_manager.GetJoinRelation(*rel_set);
 		// emit the combinations of this node and its neighbors
 		auto &new_set = set_manager.Union(node, neighbor);
 		D_ASSERT(new_set.count > node.count);
@@ -683,7 +615,7 @@ void JoinOrderOptimizer::UpdateDPTree(JoinNode &new_plan) {
 	}
 	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
 	auto all_neighbors = GetAllNeighborSets(exclusion_set, neighbors);
-	for (auto neighbor : all_neighbors) {
+	for (const auto &neighbor : all_neighbors) {
 		auto &neighbor_relation = set_manager.GetJoinRelation(neighbor);
 		auto &combined_set = set_manager.Union(new_set, neighbor_relation);
 
