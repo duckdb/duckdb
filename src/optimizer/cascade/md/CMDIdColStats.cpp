@@ -6,6 +6,7 @@
 //		Implementation of mdids for column statistics
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/md/CMDIdColStats.h"
+#include "duckdb/optimizer/cascade/md/CMDIdGPDB.h"
 
 using namespace gpos;
 using namespace gpmd;
@@ -36,7 +37,22 @@ CMDIdColStats::CMDIdColStats(CMDIdGPDB *rel_mdid, ULONG pos)
 //---------------------------------------------------------------------------
 CMDIdColStats::~CMDIdColStats()
 {
-	m_rel_mdid->Release();
+	this->m_rel_mdid->Release();
+}
+
+CSystemId CMDIdColStats::Sysid() const
+{
+	return m_rel_mdid->Sysid();
+}
+
+ULONG CMDIdColStats::HashValue() const
+{
+	return gpos::CombineHashes(m_rel_mdid->HashValue(), gpos::HashValue(&this->m_attr_pos));
+}
+
+BOOL CMDIdColStats::IsValid() const
+{
+	return IMDId::IsValid(m_rel_mdid);
 }
 
 //---------------------------------------------------------------------------
