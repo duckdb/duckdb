@@ -26,7 +26,7 @@ public:
 	void Add(string_t str);
 
 	//! Write the 512-byte (binary) digest to the specified location
-	void Finish(char* out);
+	void Finish(char *out);
 
 private:
 	void DigestToBase16(const_data_ptr_t digest, char *zbuf);
