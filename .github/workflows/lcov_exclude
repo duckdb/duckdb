@@ -21,3 +21,5 @@
 */extension/json/yyjson/*
 src/main/extension_helper.cpp
 *extension_oote*
+*/adbc/*
+common/enum_util.cpp

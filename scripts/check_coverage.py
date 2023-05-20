@@ -27,7 +27,7 @@ else:
     with open(args.uncovered_files, 'r') as f:
         for line in f.readlines():
             splits = line.split('\t')
-            partial_coverage_dict[splits[0]] = [x.strip() for x in splits[1].split(',')]
+            partial_coverage_dict[splits[0]] = int(splits[1].strip())
 
 any_failed = False
 def check_file(path, partial_coverage_dict):
@@ -49,24 +49,13 @@ def check_file(path, partial_coverage_dict):
         return
 
     coverage_percentage = round(len(covered_lines) / (total_lines) * 100, 2)
-    expected_uncovered_lines = []
+    expected_uncovered_lines = 0
     if original_path in partial_coverage_dict:
         expected_uncovered_lines = partial_coverage_dict[original_path]
 
-    all_covered = True
-    for line in uncovered_lines:
-        if line[0] not in expected_uncovered_lines:
-            all_covered = False
-
-
-    if not all_covered:
+    if len(uncovered_lines) > expected_uncovered_lines:
         if args.fix:
-            all_uncovered = ''
-            for e in uncovered_lines:
-                if len(all_uncovered) > 0:
-                    all_uncovered += ','
-                all_uncovered += e[0]
-            uncovered_file.write(f'{original_path}\t{all_uncovered}\n')
+            uncovered_file.write(f'{original_path}\t{len(uncovered_lines)}\n')
             return
         DASH_COUNT = 80
         print("-" * DASH_COUNT)
@@ -75,9 +64,8 @@ def check_file(path, partial_coverage_dict):
         print(f"Coverage percentage: {coverage_percentage}%")
         print(f"Uncovered lines: {len(uncovered_lines)}")
         print(f"Covered lines: {len(covered_lines)}")
-        if len(expected_uncovered_lines) > 0:
-            print("-" * DASH_COUNT)
-            print(f"Expected uncovered lines: {','.join(expected_uncovered_lines)}")
+        print("-" * DASH_COUNT)
+        print(f"Expected uncovered lines: {expected_uncovered_lines}")
         print("-" * DASH_COUNT)
         print("Uncovered lines")
         print("-" * DASH_COUNT)
