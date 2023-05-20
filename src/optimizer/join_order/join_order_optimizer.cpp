@@ -474,7 +474,7 @@ public:
 
 		for (idx_t i = 0; i < neighbors.size(); ++i) {
 			unordered_set<idx_t> rel_set = {neighbors[i]};
-			all_subsets.push_back(make_pair(move(rel_set), i));
+			all_subsets.push_back(make_pair(std::move(rel_set), i));
 		}
 
 		idx_t index = 0;
