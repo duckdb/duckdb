@@ -125,7 +125,7 @@ private:
 
 public:
     // return true if stats derivation is needed for this xform
-    static BOOL CXformUtils::FDeriveStatsBeforeXform(CXform *pxform);
+    static BOOL FDeriveStatsBeforeXform(CXform *pxform);
 
     // return true if xform is a subquery decorrelation xform
 	static BOOL FSubqueryDecorrelation(CXform *pxform);
@@ -150,8 +150,6 @@ public:
 
 	// Create a map from the argument of each Distinct Agg to the array of project elements that define Distinct Aggs on the same argument
 	static void MapPrjElemsWithDistinctAggs(CMemoryPool *mp, CExpression *pexprPrjList, ExprToExprArrayMap **pphmexprdrgpexpr, ULONG *pulDifferentDQAs);
-	
-	static INT ICmpPrjElemsArr(const void *pvFst, const void *pvSnd);
 	
 	// Create a map from the argument of each Distinct Agg to the array of project elements that define Distinct Aggs on the same argument
 	static CExpressionArrays* PdrgpdrgpexprSortedPrjElemsArray(CMemoryPool *mp, ExprToExprArrayMap *phmexprdrgpexpr);
