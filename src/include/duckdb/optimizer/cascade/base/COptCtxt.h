@@ -185,8 +185,7 @@ public:
 		return m_direct_dispatchable_filters;
 	}
 
-	BOOL
-	OptimizeDMLQueryWithSingletonSegment() const
+	BOOL OptimizeDMLQueryWithSingletonSegment() const
 	{
 		// A DML statement can be optimized by enforcing a gather motion on segment instead of master,
 		// whenever a singleton execution is needed.
@@ -196,87 +195,72 @@ public:
 		// (3). a function SQL dataaccess: EfdaContainsSQL or EfdaReadsSQLData or EfdaModifiesSQLData
 		//      In such cases, it is safe to *always* enforce gather motion on master as there is no way to determine
 		//      if the SQL contains any master-only tables.
-		return !GPOS_FTRACE(EopttraceDisableNonMasterGatherForDML) &&
-			   FDMLQuery() && !HasMasterOnlyTables() && !HasVolatileOrSQLFunc();
+		return !GPOS_FTRACE(EopttraceDisableNonMasterGatherForDML) && FDMLQuery() && !HasMasterOnlyTables() && !HasVolatileOrSQLFunc();
 	}
 
 	// column factory accessor
-	CColumnFactory *
-	Pcf() const
+	CColumnFactory* Pcf() const
 	{
 		return m_pcf;
 	}
 
 	// metadata accessor
-	CMDAccessor *
-	Pmda() const
+	CMDAccessor* Pmda() const
 	{
 		return m_pmda;
 	}
 
 	// cost model accessor
-	ICostModel *
-	GetCostModel() const
+	ICostModel* GetCostModel() const
 	{
 		return m_cost_model;
 	}
 
 	// constant expression evaluator
-	IConstExprEvaluator *
-	Pceeval()
+	IConstExprEvaluator* Pceeval()
 	{
 		return m_pceeval;
 	}
 
 	// comparator
-	const IComparator *
-	Pcomp()
+	const IComparator* Pcomp()
 	{
 		return m_pcomp;
 	}
 
 	// cte info
-	CCTEInfo *
-	Pcteinfo()
+	CCTEInfo* Pcteinfo()
 	{
 		return m_pcteinfo;
 	}
 
 	// return a new part index id
-	ULONG
-	UlPartIndexNextVal()
+	ULONG UlPartIndexNextVal()
 	{
 		return m_auPartId++;
 	}
 
 	// required system columns
-	CColRefArray *
-	PdrgpcrSystemCols() const
+	CColRefArray* PdrgpcrSystemCols() const
 	{
 		return m_pdrgpcrSystemCols;
 	}
 
 	// set required system columns
-	void
-	SetReqdSystemCols(CColRefArray *pdrgpcrSystemCols)
+	void SetReqdSystemCols(CColRefArray *pdrgpcrSystemCols)
 	{
 		GPOS_ASSERT(NULL != pdrgpcrSystemCols);
-
 		CRefCount::SafeRelease(m_pdrgpcrSystemCols);
 		m_pdrgpcrSystemCols = pdrgpcrSystemCols;
 	}
 
 	// factory method
-	static COptCtxt *PoctxtCreate(CMemoryPool *mp, CMDAccessor *md_accessor,
-								  IConstExprEvaluator *pceeval,
-								  COptimizerConfig *optimizer_config);
+	static COptCtxt *PoctxtCreate(CMemoryPool *mp, CMDAccessor *md_accessor, IConstExprEvaluator *pceeval, COptimizerConfig *optimizer_config);
 
 	// shorthand to retrieve opt context from TLS
-	inline static COptCtxt *
-	PoctxtFromTLS()
+	inline static COptCtxt* PoctxtFromTLS()
 	{
-		return reinterpret_cast<COptCtxt *>(
-			ITask::Self()->GetTls().Get(CTaskLocalStorage::EtlsidxOptCtxt));
+		return reinterpret_cast<COptCtxt *>(ITask::Self()->GetTls().Get(CTaskLocalStorage::EtlsidxOptCtxt));
 	}
 
 	// return true if all enforcers are enabled

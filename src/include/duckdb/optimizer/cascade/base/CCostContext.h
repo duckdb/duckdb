@@ -11,7 +11,6 @@
 
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/common/CRefCount.h"
-
 #include "duckdb/optimizer/cascade/base/COptimizationContext.h"
 #include "duckdb/optimizer/cascade/cost/CCost.h"
 #include "duckdb/optimizer/cascade/cost/ICostModel.h"

@@ -42,13 +42,10 @@ private:
 
 public:
 	// ctor
-	CAutoOptCtxt(CMemoryPool *mp, CMDAccessor *md_accessor,
-				 IConstExprEvaluator *pceeval,
-				 COptimizerConfig *optimizer_config);
+	CAutoOptCtxt(CMemoryPool *mp, CMDAccessor *md_accessor, IConstExprEvaluator *pceeval, COptimizerConfig *optimizer_config);
 
 	// ctor
-	CAutoOptCtxt(CMemoryPool *mp, CMDAccessor *md_accessor,
-				 IConstExprEvaluator *pceeval, ICostModel *pcm);
+	CAutoOptCtxt(CMemoryPool *mp, CMDAccessor *md_accessor, IConstExprEvaluator *pceeval, ICostModel *pcm);
 
 	// dtor
 	~CAutoOptCtxt();

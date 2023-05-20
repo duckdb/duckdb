@@ -12,7 +12,6 @@
 #include "duckdb/optimizer/cascade/common/CHashMap.h"
 #include "duckdb/optimizer/cascade/common/CHashMapIter.h"
 #include "duckdb/optimizer/cascade/common/CRefCount.h"
-
 #include "duckdb/optimizer/cascade/base/CColRef.h"
 #include "duckdb/optimizer/cascade/base/CPartKeys.h"
 #include "duckdb/optimizer/cascade/metadata/CPartConstraint.h"
@@ -257,10 +256,7 @@ public:
 	virtual ~CPartIndexMap();
 
 	// inserting a new map entry
-	void Insert(ULONG scan_id, UlongToPartConstraintMap *ppartcnstrmap,
-				EPartIndexManipulator epim, ULONG ulExpectedPropagators,
-				IMDId *mdid, CPartKeysArray *pdrgppartkeys,
-				CPartConstraint *ppartcnstrRel);
+	void Insert(ULONG scan_id, UlongToPartConstraintMap *ppartcnstrmap, EPartIndexManipulator epim, ULONG ulExpectedPropagators, IMDId *mdid, CPartKeysArray *pdrgppartkeys, CPartConstraint *ppartcnstrRel);
 
 	// does map contain unresolved entries?
 	BOOL FContainsUnresolved() const;
@@ -269,8 +265,7 @@ public:
 	BOOL FContainsUnresolvedZeroPropagators() const;
 
 	// extract scan ids in the given memory pool
-	ULongPtrArray *PdrgpulScanIds(CMemoryPool *mp,
-								  BOOL fConsumersOnly = false) const;
+	ULongPtrArray *PdrgpulScanIds(CMemoryPool *mp, BOOL fConsumersOnly = false) const;
 
 	// check if two part index maps are equal
 	BOOL

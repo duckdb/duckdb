@@ -9,7 +9,6 @@
 #define GPOPT_CPartKeys_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/base/CColRef.h"
 
 namespace gpopt

@@ -26,6 +26,7 @@
 #include "duckdb/optimizer/cascade/statistics/IStatistics.h"
 
 typedef ULONG OID;
+
 #define GPDB_INT2 OID(21)
 #define GPDB_INT4 OID(23)
 #define GPDB_INT8 OID(20)
@@ -74,6 +75,7 @@ typedef ULONG OID;
 #define GPDB_COUNT_ANY OID(2147)   // count(Any)
 #define GPDB_UUID OID(2950)
 #define GPDB_ANY OID(2283)
+
 // fwd declarations
 namespace gpmd
 {

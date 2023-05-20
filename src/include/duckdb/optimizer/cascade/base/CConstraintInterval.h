@@ -166,9 +166,7 @@ public:
 	virtual BOOL
 	FConstraintOnSegmentId() const
 	{
-		return m_pcr->FSystemCol() &&
-			   m_pcr->Name().Equals(
-				   CDXLTokens::GetDXLTokenStr(EdxltokenGpSegmentIdColName));
+		return m_pcr->FSystemCol();
 	}
 
 	// return a copy of the constraint with remapped columns
