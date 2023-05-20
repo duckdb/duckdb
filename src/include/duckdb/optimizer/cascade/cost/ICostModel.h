@@ -10,13 +10,12 @@
 
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/common/CRefCount.h"
-
 #include "duckdb/optimizer/cascade/operators/COperator.h"
 #include "duckdb/optimizer/cascade/md/IMDRelation.h"
 #include "duckdb/optimizer/cascade/statistics/IStatistics.h"
-
-#include "CCost.h"
-#include "ICostModelParams.h"
+#include "duckdb/optimizer/cascade/cost/CCost.h"
+#include "duckdb/optimizer/cascade/cost/ICostModelParams.h"
+#include "duckdb/optimizer/cascade/common/CDynamicPtrArray.h"
 
 // default number of rebinds (number of times a plan is executed due to rebinding to external parameters)
 #define GPOPT_DEFAULT_REBINDS 1
@@ -31,8 +30,7 @@ using namespace gpmd;
 using namespace gpnaucrates;
 
 // dynamic array of cost model params
-typedef CDynamicPtrArray<ICostModelParams::SCostParam, CleanupDelete>
-	ICostModelParamsArray;
+typedef CDynamicPtrArray<ICostModelParams::SCostParam, CleanupDelete> ICostModelParamsArray;
 
 //---------------------------------------------------------------------------
 //	@class:
@@ -223,15 +221,13 @@ public:
 		}
 
 		// rebinds accessor
-		DOUBLE
-		NumRebinds() const
+		DOUBLE NumRebinds() const
 		{
 			return m_num_rebinds;
 		}
 
 		// rebinds setter
-		void
-		SetRebinds(DOUBLE num_rebinds)
+		void SetRebinds(DOUBLE num_rebinds)
 		{
 			GPOS_ASSERT(GPOPT_DEFAULT_REBINDS <= num_rebinds);
 
@@ -239,15 +235,13 @@ public:
 		}
 
 		// children rows accessor
-		DOUBLE *
-		PdRows() const
+		DOUBLE* PdRows() const
 		{
 			return m_pdRowsChildren;
 		}
 
 		// child rows setter
-		void
-		SetChildRows(ULONG ulPos, DOUBLE dRowsChild)
+		void SetChildRows(ULONG ulPos, DOUBLE dRowsChild)
 		{
 			GPOS_ASSERT(0 <= dRowsChild);
 			GPOS_ASSERT(ulPos < m_ulChildren);
@@ -256,73 +250,61 @@ public:
 		}
 
 		// children width accessor
-		DOUBLE *
-		GetWidth() const
+		DOUBLE* GetWidth() const
 		{
 			return m_pdWidthChildren;
 		}
 
 		// child width setter
-		void
-		SetChildWidth(ULONG ulPos, DOUBLE dWidthChild)
+		void SetChildWidth(ULONG ulPos, DOUBLE dWidthChild)
 		{
 			GPOS_ASSERT(0 <= dWidthChild);
 			GPOS_ASSERT(ulPos < m_ulChildren);
-
 			m_pdWidthChildren[ulPos] = dWidthChild;
 		}
 
 		// children rebinds accessor
-		DOUBLE *
-		PdRebinds() const
+		DOUBLE* PdRebinds() const
 		{
 			return m_pdRebindsChildren;
 		}
 
 		// child rebinds setter
-		void
-		SetChildRebinds(ULONG ulPos, DOUBLE dRebindsChild)
+		void SetChildRebinds(ULONG ulPos, DOUBLE dRebindsChild)
 		{
 			GPOS_ASSERT(GPOPT_DEFAULT_REBINDS <= dRebindsChild);
 			GPOS_ASSERT(ulPos < m_ulChildren);
-
 			m_pdRebindsChildren[ulPos] = dRebindsChild;
 		}
 
 		// children cost accessor
-		DOUBLE *
-		PdCost() const
+		DOUBLE* PdCost() const
 		{
 			return m_pdCostChildren;
 		}
 
 		// child cost setter
-		void
-		SetChildCost(ULONG ulPos, DOUBLE dCostChild)
+		void SetChildCost(ULONG ulPos, DOUBLE dCostChild)
 		{
 			GPOS_ASSERT(0 <= dCostChild);
 			GPOS_ASSERT(ulPos < m_ulChildren);
-
 			m_pdCostChildren[ulPos] = dCostChild;
 		}
 
 		// child stats setter
-		void
-		SetChildStats(ULONG ulPos, CCostingStats *child_stats)
+		void SetChildStats(ULONG ulPos, CCostingStats *child_stats)
 		{
 			m_pdrgstatsChildren[ulPos] = child_stats;
 		}
 
 		// return additional cost statistics
-		CCostingStats *
-		Pcstats() const
+		CCostingStats* Pcstats() const
 		{
 			return m_pcstats;
 		}
 
 		// return additional child statistics
-		CCostingStats *
-		Pcstats(ULONG child_index) const
+		CCostingStats* Pcstats(ULONG child_index) const
 		{
 			return m_pdrgstatsChildren[child_index];
 		}
@@ -339,8 +321,7 @@ public:
 	virtual ICostModelParams *GetCostModelParams() const = 0;
 
 	// main driver for cost computation
-	virtual CCost Cost(CExpressionHandle &exprhdl,
-					   const SCostingInfo *pci) const = 0;
+	virtual CCost Cost(CExpressionHandle &exprhdl, const SCostingInfo *pci) const = 0;
 
 	// cost model type
 	virtual ECostModelType Ecmt() const = 0;
