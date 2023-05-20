@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/operator/logical_cte.hpp
+// duckdb/planner/operator/logical_materialized_cte.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,18 +12,19 @@
 
 namespace duckdb {
 
-class LogicalCTE : public LogicalOperator {
-	LogicalCTE(idx_t table_index) : LogicalOperator(LogicalOperatorType::LOGICAL_CTE), table_index(table_index) {
+class LogicalMaterializedCTE : public LogicalOperator {
+	LogicalMaterializedCTE(idx_t table_index)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_MATERIALIZED_CTE), table_index(table_index) {
 	}
 
 public:
-	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_CTE;
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_MATERIALIZED_CTE;
 
 public:
-	LogicalCTE(string ctename, idx_t table_index, idx_t column_count, unique_ptr<LogicalOperator> cte,
-	           unique_ptr<LogicalOperator> child)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_CTE), table_index(table_index), column_count(column_count),
-	      ctename(ctename) {
+	LogicalMaterializedCTE(string ctename, idx_t table_index, idx_t column_count, unique_ptr<LogicalOperator> cte,
+	                       unique_ptr<LogicalOperator> child)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_MATERIALIZED_CTE), table_index(table_index),
+	      column_count(column_count), ctename(ctename) {
 		children.push_back(std::move(cte));
 		children.push_back(std::move(child));
 	}

@@ -284,8 +284,8 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		result = LogicalRecursiveCTE::Deserialize(state, reader);
 		break;
-	case LogicalOperatorType::LOGICAL_CTE:
-		result = LogicalCTE::Deserialize(state, reader);
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		result = LogicalMaterializedCTE::Deserialize(state, reader);
 		break;
 	case LogicalOperatorType::LOGICAL_INSERT:
 		result = LogicalInsert::Deserialize(state, reader);

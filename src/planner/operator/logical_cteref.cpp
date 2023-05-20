@@ -18,7 +18,7 @@ unique_ptr<LogicalOperator> LogicalCTERef::Deserialize(LogicalDeserializationSta
 	auto cte_index = reader.ReadRequired<idx_t>();
 	auto chunk_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	auto bound_columns = reader.ReadRequiredList<string>();
-	auto materialized_cte = reader.ReadRequired<bool>();
+	auto materialized_cte = reader.ReadField<CTEMaterialize>(CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 	return make_uniq<LogicalCTERef>(table_index, cte_index, chunk_types, bound_columns, materialized_cte);
 }
 

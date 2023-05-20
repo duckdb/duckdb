@@ -46,7 +46,7 @@ class LogicalPragma;
 class LogicalPrepare;
 class LogicalProjection;
 class LogicalRecursiveCTE;
-class LogicalCTE;
+class LogicalMaterializedCTE;
 class LogicalSetOperation;
 class LogicalSample;
 class LogicalShow;

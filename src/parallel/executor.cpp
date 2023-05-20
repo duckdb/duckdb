@@ -325,7 +325,7 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 			rec_cte.recursive_meta_pipeline->Ready();
 		}
 
-		// ready recursive cte pipelines too
+		// ready materialized cte pipelines too
 		for (auto &mat_cte_ref : materialized_ctes) {
 			auto &mat_cte = mat_cte_ref.get().Cast<PhysicalCTE>();
 			mat_cte.recursive_meta_pipeline->Ready();
