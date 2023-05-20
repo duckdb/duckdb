@@ -52,7 +52,7 @@ using namespace gpopt;
 // +-----------------------+
 //
 const CJobGroupExpressionExploration::EEvent
-	rgeev[CJobGroupExpressionExploration::estSentinel]
+	rgeev3[CJobGroupExpressionExploration::estSentinel]
 		 [CJobGroupExpressionExploration::estSentinel] = {
 			 {// estInitialized
 			  CJobGroupExpressionExploration::eevExploringChildren,
@@ -139,7 +139,7 @@ CJobGroupExpressionExploration::Init(CGroupExpression *pgexpr)
 	GPOS_ASSERT(pgexpr->Pop()->FLogical());
 
 
-	m_jsm.Init(rgeev
+	m_jsm.Init(rgeev3
 #ifdef GPOS_DEBUG
 			   ,
 			   rgwszStates, rgwszEvents

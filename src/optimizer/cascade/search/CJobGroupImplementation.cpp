@@ -47,7 +47,7 @@ using namespace gpopt;
 // +---------------------------+
 //
 const CJobGroupImplementation::EEvent
-	rgeev[CJobGroupImplementation::estSentinel]
+	rgeev4[CJobGroupImplementation::estSentinel]
 		 [CJobGroupImplementation::estSentinel] = {
 			 {// estInitialized
 			  CJobGroupImplementation::eevExploring,
@@ -114,24 +114,19 @@ CJobGroupImplementation::~CJobGroupImplementation()
 //		Initialize job
 //
 //---------------------------------------------------------------------------
-void
-CJobGroupImplementation::Init(CGroup *pgroup)
+void CJobGroupImplementation::Init(CGroup *pgroup)
 {
 	CJobGroup::Init(pgroup);
-
-	m_jsm.Init(rgeev
+	m_jsm.Init(rgeev4
 #ifdef GPOS_DEBUG
 			   ,
 			   rgwszStates, rgwszEvents
 #endif	// GPOS_DEBUG
 	);
-
 	// set job actions
 	m_jsm.SetAction(estInitialized, EevtStartImplementation);
 	m_jsm.SetAction(estImplementingChildren, EevtImplementChildren);
-
 	SetJobQueue(pgroup->PjqImplementation());
-
 	CJob::SetInit();
 }
 
@@ -145,8 +140,7 @@ CJobGroupImplementation::Init(CGroup *pgroup)
 //		the function returns true if it could schedule any new jobs
 //
 //---------------------------------------------------------------------------
-BOOL
-CJobGroupImplementation::FScheduleGroupExpressions(CSchedulerContext *psc)
+BOOL CJobGroupImplementation::FScheduleGroupExpressions(CSchedulerContext *psc)
 {
 	CGroupExpression *pgexprLast = m_pgexprLastScheduled;
 

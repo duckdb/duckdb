@@ -1,0 +1,26 @@
+add_library_unity(
+    search
+    OBJECT
+    CBinding.cpp
+    CGroupProxy.cpp
+    CJobGroup.cpp
+    CJobGroupExpressionExploration.cpp
+    CJobGroupOptimization.cpp
+    CSchedulerContext.cpp
+    CGroup.cpp
+    CJob.cpp
+    CJobGroupExploration.cpp
+    CJobGroupExpressionOptimization.cpp
+    CJobQueue.cpp
+    CMemo.cpp
+    CSearchStage.cpp
+    CGroupExpression.cpp
+    CJobFactory.cpp
+    CJobGroupExpression.cpp
+    CJobGroupImplementation.cpp
+    CJobTransformation.cpp
+    CScheduler.cpp
+    CJobGroupExpressionImplementation.cpp)
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:search>
+    PARENT_SCOPE)

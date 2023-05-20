@@ -5,9 +5,7 @@
 //	@doc:
 //		Implementation of group optimization job
 //---------------------------------------------------------------------------
-
 #include "duckdb/optimizer/cascade/search/CJobGroupOptimization.h"
-
 #include "duckdb/optimizer/cascade/engine/CEngine.h"
 #include "duckdb/optimizer/cascade/search/CGroup.h"
 #include "duckdb/optimizer/cascade/search/CGroupExpression.h"
@@ -21,7 +19,6 @@
 #include "duckdb/optimizer/cascade/traceflags/traceflags.h"
 
 using namespace gpopt;
-
 
 // State transition diagram for group optimization job state machine:
 //
@@ -55,9 +52,7 @@ using namespace gpopt;
 //                      |         estCompleted         | <+
 //                      +------------------------------+
 //
-const CJobGroupOptimization::EEvent
-	rgeev[CJobGroupOptimization::estSentinel]
-		 [CJobGroupOptimization::estSentinel] = {
+const CJobGroupOptimization::EEvent rgeev1[CJobGroupOptimization::estSentinel][CJobGroupOptimization::estSentinel] = {
 			 {// estInitialized
 			  CJobGroupOptimization::eevImplementing,
 			  CJobGroupOptimization::eevImplemented,
@@ -134,19 +129,13 @@ CJobGroupOptimization::~CJobGroupOptimization()
 //		Initialize job
 //
 //---------------------------------------------------------------------------
-void
-CJobGroupOptimization::Init(
-	CGroup *pgroup,
-	CGroupExpression
-		*pgexprOrigin,	// group expression that triggered optimization job,
-						// NULL if this is the Root group
-	COptimizationContext *poc)
+void CJobGroupOptimization::Init(CGroup* pgroup, CGroupExpression* pgexprOrigin, COptimizationContext* poc)
 {
 	GPOS_ASSERT(NULL != poc);
 	GPOS_ASSERT(pgroup == poc->Pgroup());
 
 	CJobGroup::Init(pgroup);
-	m_jsm.Init(rgeev
+	m_jsm.Init(rgeev1
 #ifdef GPOS_DEBUG
 			   ,
 			   rgwszStates, rgwszEvents

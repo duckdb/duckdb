@@ -31,7 +31,7 @@ using namespace gpopt;
 // +-----------------+
 //
 const CJobTransformation::EEvent
-	rgeev[CJobTransformation::estSentinel][CJobTransformation::estSentinel] = {
+	rgeev5[CJobTransformation::estSentinel][CJobTransformation::estSentinel] = {
 		{// estInitialized
 		 CJobTransformation::eevSentinel, CJobTransformation::eevCompleted},
 		{// estCompleted
@@ -95,7 +95,7 @@ CJobTransformation::Init(CGroupExpression *pgexpr, CXform *pxform)
 	m_pgexpr = pgexpr;
 	m_xform = pxform;
 
-	m_jsm.Init(rgeev
+	m_jsm.Init(rgeev5
 #ifdef GPOS_DEBUG
 			   ,
 			   rgwszStates, rgwszEvents

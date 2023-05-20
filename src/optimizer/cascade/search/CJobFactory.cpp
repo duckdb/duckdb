@@ -6,12 +6,10 @@
 //		Implementation of optimizer job base class
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/search/CJobFactory.h"
-
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/task/CAutoSuspendAbort.h"
 #include "duckdb/optimizer/cascade/task/CWorker.h"
-
-#include "duckdb/optimizer/cascadesearch/CGroupExpression.h"
+#include "duckdb/optimizer/cascade/search/CGroupExpression.h"
 
 using namespace gpopt;
 using namespace gpos;
@@ -27,7 +25,6 @@ using namespace gpos;
 CJobFactory::CJobFactory(CMemoryPool *mp, ULONG ulJobs)
 	: m_mp(mp),
 	  m_ulJobs(ulJobs),
-	  m_pspjTest(NULL),
 	  m_pspjGroupOptimization(NULL),
 	  m_pspjGroupImplementation(NULL),
 	  m_pspjGroupExploration(NULL),
@@ -82,7 +79,6 @@ CJobFactory::PjCreate(CJob::EJobType ejt)
 	switch (ejt)
 	{
 		case CJob::EjtTest:
-			pj = PtRetrieve<CJobTest>(m_pspjTest);
 			break;
 
 		case CJob::EjtGroupOptimization:
@@ -145,7 +141,6 @@ CJobFactory::Release(CJob *pj)
 	switch (pj->Ejt())
 	{
 		case CJob::EjtTest:
-			Release(CJobTest::PjConvert(pj), m_pspjTest);
 			break;
 
 		case CJob::EjtGroupOptimization:
@@ -206,7 +201,6 @@ CJobFactory::Truncate(CJob::EJobType ejt)
 		switch (ejt)
 		{
 			case CJob::EjtTest:
-				TruncatePool(m_pspjTest);
 				break;
 
 			case CJob::EjtGroupOptimization:

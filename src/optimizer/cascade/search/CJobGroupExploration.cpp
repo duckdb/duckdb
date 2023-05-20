@@ -44,7 +44,7 @@ using namespace gpopt;
 // +------------------------+
 //
 const CJobGroupExploration::EEvent
-	rgeev[CJobGroupExploration::estSentinel]
+	rgeev2[CJobGroupExploration::estSentinel]
 		 [CJobGroupExploration::estSentinel] = {
 			 {// estInitialized
 			  CJobGroupExploration::eevSentinel,
@@ -116,7 +116,7 @@ CJobGroupExploration::Init(CGroup *pgroup)
 {
 	CJobGroup::Init(pgroup);
 
-	m_jsm.Init(rgeev
+	m_jsm.Init(rgeev2
 #ifdef GPOS_DEBUG
 			   ,
 			   rgwszStates, rgwszEvents
