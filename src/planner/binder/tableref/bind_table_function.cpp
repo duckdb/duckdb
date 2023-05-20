@@ -61,7 +61,6 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		arguments.emplace_back(LogicalTypeId::TABLE);
 		return BindTableInTableOutFunction(expressions, subquery, error);
 	}
-	bool seen_subquery = false;
 	for (auto &child : expressions) {
 		string parameter_name;
 
@@ -78,17 +77,9 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			}
 		}
 		if (child->type == ExpressionType::SUBQUERY) {
-			if (seen_subquery) {
-				error = "Table function can have at most one subquery parameter ";
-				return false;
-			}
-			auto binder = Binder::CreateBinder(this->context, this, true);
-			auto &se = child->Cast<SubqueryExpression>();
-			auto node = binder->BindNode(*se.subquery->node);
-			subquery = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(node));
-			seen_subquery = true;
-			arguments.emplace_back(LogicalTypeId::TABLE);
-			continue;
+			throw BinderException(
+			    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
+			    table_function.name);
 		}
 
 		TableFunctionBinder binder(*this, context);
@@ -98,8 +89,8 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			throw ParameterNotResolvedException();
 		}
 		if (!expr->IsScalar()) {
-			error = "Table function requires a constant parameter";
-			return false;
+			// should have been eliminated before
+			throw InternalException("Table function requires a constant parameter");
 		}
 		auto constant = ExpressionExecutor::EvaluateScalar(context, *expr, true);
 		if (parameter_name.empty()) {
@@ -154,9 +145,7 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 		}
 	}
 	if (return_types.size() != return_names.size()) {
-		throw InternalException(
-		    "Failed to bind \"%s\": Table function return_types and return_names must be of the same size",
-		    table_function.name);
+		throw InternalException("Failed to bind \"%s\": return_types/names must have same size", table_function.name);
 	}
 	if (return_types.empty()) {
 		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
