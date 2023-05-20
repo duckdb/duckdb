@@ -6,127 +6,83 @@
 //		Statistics helper routines for processing limit operations
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/statistics/CFilterStatsProcessor.h"
-#include "duckdb/optimizer/cascade/operators/ops.h"
-#include "duckdb/optimizer/cascade/optimizer/COptimizerConfig.h"
 #include "duckdb/optimizer/cascade/statistics/CBucket.h"
-#include "duckdb/optimizer/cascade/statistics/CJoinStatsProcessor.h"
-#include "duckdb/optimizer/cascade/statistics/CScaleFactorUtils.h"
-#include "duckdb/optimizer/cascade/statistics/CStatistics.h"
+#include "duckdb/optimizer/cascade/statistics/CStatsPredUtils.h"
 #include "duckdb/optimizer/cascade/statistics/CStatisticsUtils.h"
 
 using namespace gpopt;
 
 // derive statistics for filter operation based on given scalar expression
-IStatistics *
-CFilterStatsProcessor::MakeStatsFilterForScalarExpr(
-	CMemoryPool *mp, CExpressionHandle &exprhdl, IStatistics *child_stats,
-	CExpression *local_scalar_expr,	 // filter expression on local columns only
-	CExpression *
-		outer_refs_scalar_expr,	 // filter expression involving outer references
-	IStatisticsArray *all_outer_stats)
+IStatistics* CFilterStatsProcessor::MakeStatsFilterForScalarExpr(CMemoryPool *mp, CExpressionHandle &exprhdl, IStatistics *child_stats, CExpression *local_scalar_expr,	CExpression* outer_refs_scalar_expr, IStatisticsArray *all_outer_stats)
 {
 	GPOS_ASSERT(NULL != child_stats);
 	GPOS_ASSERT(NULL != local_scalar_expr);
 	GPOS_ASSERT(NULL != outer_refs_scalar_expr);
 	GPOS_ASSERT(NULL != all_outer_stats);
-
 	CColRefSet *outer_refs = exprhdl.DeriveOuterReferences();
-
-	// TODO  June 13 2014, we currently only cap ndvs when we have a filter
-	// immediately on top of tables
 	BOOL do_cap_NDVs = (1 == exprhdl.DeriveJoinDepth());
-
 	// extract local filter
-	CStatsPred *pred_stats =
-		CStatsPredUtils::ExtractPredStats(mp, local_scalar_expr, outer_refs);
-
+	CStatsPred *pred_stats = CStatsPredUtils::ExtractPredStats(mp, local_scalar_expr, outer_refs);
 	// derive stats based on local filter
-	IStatistics *result_stats = CFilterStatsProcessor::MakeStatsFilter(
-		mp, dynamic_cast<CStatistics *>(child_stats), pred_stats, do_cap_NDVs);
+	IStatistics *result_stats = CFilterStatsProcessor::MakeStatsFilter(mp, dynamic_cast<CStatistics *>(child_stats), pred_stats, do_cap_NDVs);
 	pred_stats->Release();
-
 	if (exprhdl.HasOuterRefs() && 0 < all_outer_stats->Size())
 	{
 		// derive stats based on outer references
-		IStatistics *stats = CJoinStatsProcessor::DeriveStatsWithOuterRefs(
-			mp, exprhdl, outer_refs_scalar_expr, result_stats, all_outer_stats);
+		IStatistics *stats = CJoinStatsProcessor::DeriveStatsWithOuterRefs(mp, exprhdl, outer_refs_scalar_expr, result_stats, all_outer_stats);
 		result_stats->Release();
 		result_stats = stats;
 	}
-
 	return result_stats;
 }
 
 // compute the selectivity of a predicate, applied to a base table,
 // making some simple default assumptions about outer refs
-CDouble
-CFilterStatsProcessor::SelectivityOfPredicate(CMemoryPool *mp,
-											  CExpression *pred,
-											  CTableDescriptor *ptabdesc,
-											  CColRefSet *outer_refs)
+CDouble CFilterStatsProcessor::SelectivityOfPredicate(CMemoryPool *mp, CExpression *pred, CTableDescriptor *ptabdesc, CColRefSet *outer_refs)
 {
 	// separate the outer refs
 	CExpression *local_expr = NULL;
 	CExpression *expr_with_outer_refs = NULL;
-
 	CColRefSet *used_col_refs = pred->DeriveUsedColumns();
-	CColRefSet *used_local_col_refs =
-		GPOS_NEW(mp) CColRefSet(mp, *used_col_refs);
+	CColRefSet *used_local_col_refs = GPOS_NEW(mp) CColRefSet(mp, *used_col_refs);
 	ULONG num_outer_ref_preds = 0;
-
 	if (NULL != outer_refs)
 	{
 		used_local_col_refs->Exclude(outer_refs);
-		CPredicateUtils::SeparateOuterRefs(mp, pred, outer_refs, &local_expr,
-										   &expr_with_outer_refs);
+		CPredicateUtils::SeparateOuterRefs(mp, pred, outer_refs, &local_expr, &expr_with_outer_refs);
 	}
 	else
 	{
 		pred->AddRef();
 		local_expr = pred;
 	}
-
 	// extract local filter
-	CStatsPred *pred_stats =
-		CStatsPredUtils::ExtractPredStats(mp, local_expr, outer_refs);
-
+	CStatsPred *pred_stats = CStatsPredUtils::ExtractPredStats(mp, local_expr, outer_refs);
 	const COptCtxt *poctxt = COptCtxt::PoctxtFromTLS();
 	CMDAccessor *md_accessor = poctxt->Pmda();
 	// grab default stats config
-	CStatisticsConfig *stats_config =
-		poctxt->GetOptimizerConfig()->GetStatsConf();
+	CStatisticsConfig *stats_config = poctxt->GetOptimizerConfig()->GetStatsConf();
 	// we don't care about the width of the columns, just the row count
 	CColRefSet *dummy_width_set = GPOS_NEW(mp) CColRefSet(mp);
-
-	IStatistics *base_table_stats =
-		md_accessor->Pstats(mp, ptabdesc->MDId(), used_local_col_refs,
-							dummy_width_set, stats_config);
-
+	IStatistics *base_table_stats = md_accessor->Pstats(mp, ptabdesc->MDId(), used_local_col_refs, dummy_width_set, stats_config);
 	// derive stats based on local filter
-	IStatistics *result_stats = CFilterStatsProcessor::MakeStatsFilter(
-		mp, dynamic_cast<CStatistics *>(base_table_stats), pred_stats, false);
-
+	IStatistics *result_stats = CFilterStatsProcessor::MakeStatsFilter(mp, dynamic_cast<CStatistics *>(base_table_stats), pred_stats, false);
 	CDouble result = result_stats->Rows() / base_table_stats->Rows();
 	BOOL have_local_preds = (result < 1.0);
 	pred_stats->Release();
 	used_local_col_refs->Release();
 	base_table_stats->Release();
 	dummy_width_set->Release();
-
 	// handle outer_refs
 	if (NULL != expr_with_outer_refs)
 	{
-		CExpressionArray *outer_ref_exprs =
-			CPredicateUtils::PdrgpexprConjuncts(mp, expr_with_outer_refs);
-
+		CExpressionArray *outer_ref_exprs = CPredicateUtils::PdrgpexprConjuncts(mp, expr_with_outer_refs);
 		const ULONG size = outer_ref_exprs->Size();
 		for (ULONG ul = 0; ul < size; ul++)
 		{
 			CExpression *pexpr = (*outer_ref_exprs)[ul];
 			CColRef *local_col_ref = NULL;
-
-			if (CPredicateUtils::FIdentCompareOuterRefExprIgnoreCast(
-					pexpr, outer_refs, &local_col_ref))
+			if (CPredicateUtils::FIdentCompareOuterRefExprIgnoreCast(pexpr, outer_refs, &local_col_ref))
 			{
 				CScalarCmp *sc_cmp = CScalarCmp::PopConvert(pexpr->Pop());
 				// Use more accurate NDV calculation if the comparison is an equality type
@@ -134,7 +90,6 @@ CFilterStatsProcessor::SelectivityOfPredicate(CMemoryPool *mp,
 				{
 					GPOS_ASSERT(NULL != local_col_ref);
 					CDouble ndv = result_stats->GetNDVs(local_col_ref);
-
 					if (ndv < 1.0)
 					{
 						// An NDV of less than 1 means that we have no stats on this column
@@ -164,11 +119,9 @@ CFilterStatsProcessor::SelectivityOfPredicate(CMemoryPool *mp,
 				}
 			}
 		}
-
 		expr_with_outer_refs->Release();
 		outer_ref_exprs->Release();
 	}
-
 	// apply damping factor to the outer ref predicates whose selectivities we multiplied above
 	if (have_local_preds)
 	{
@@ -178,41 +131,25 @@ CFilterStatsProcessor::SelectivityOfPredicate(CMemoryPool *mp,
 	}
 	if (1 < num_outer_ref_preds)
 	{
-		CStatisticsConfig *stats_config =
-			CStatisticsConfig::PstatsconfDefault(mp);
-
-		result =
-			std::min(result.Get() / CScaleFactorUtils::DampedFilterScaleFactor(
-										stats_config, num_outer_ref_preds)
-										.Get(),
-					 1.0);
-
+		CStatisticsConfig *stats_config = CStatisticsConfig::PstatsconfDefault(mp);
+		result = std::min(result.Get() / CScaleFactorUtils::DampedFilterScaleFactor(stats_config, num_outer_ref_preds).Get(), 1.0);
 		stats_config->Release();
 	}
 	result_stats->Release();
 	local_expr->Release();
-
 	return result;
 }
 
 // create new structure from a list of statistics filters
-CStatistics *
-CFilterStatsProcessor::MakeStatsFilter(CMemoryPool *mp,
-									   const CStatistics *input_stats,
-									   CStatsPred *base_pred_stats,
-									   BOOL do_cap_NDVs)
+CStatistics* CFilterStatsProcessor::MakeStatsFilter(CMemoryPool *mp, const CStatistics *input_stats, CStatsPred *base_pred_stats, BOOL do_cap_NDVs)
 {
 	GPOS_ASSERT(NULL != base_pred_stats);
-
-	CDouble input_rows =
-		std::max(CStatistics::MinRows.Get(), input_stats->Rows().Get());
+	CDouble input_rows = std::max(CStatistics::MinRows.Get(), input_stats->Rows().Get());
 	CDouble scale_factor(1.0);
 	ULONG num_predicates = 1;
 	CDouble rows_filter = CStatistics::MinRows;
 	UlongToHistogramMap *histograms_new = NULL;
-
 	UlongToHistogramMap *histograms_copy = input_stats->CopyHistograms(mp);
-
 	CStatisticsConfig *stats_config = input_stats->GetStatsConfig();
 	if (input_stats->IsEmpty())
 	{
@@ -223,50 +160,31 @@ CFilterStatsProcessor::MakeStatsFilter(CMemoryPool *mp,
 	{
 		if (CStatsPred::EsptDisj == base_pred_stats->GetPredStatsType())
 		{
-			CStatsPredDisj *pred_stats =
-				CStatsPredDisj::ConvertPredStats(base_pred_stats);
-
-			histograms_new = MakeHistHashMapDisjFilter(
-				mp, stats_config, histograms_copy, input_rows, pred_stats,
-				&scale_factor);
+			CStatsPredDisj *pred_stats = CStatsPredDisj::ConvertPredStats(base_pred_stats);
+			histograms_new = MakeHistHashMapDisjFilter(mp, stats_config, histograms_copy, input_rows, pred_stats, &scale_factor);
 		}
 		else
 		{
-			GPOS_ASSERT(CStatsPred::EsptConj ==
-						base_pred_stats->GetPredStatsType());
-			CStatsPredConj *pred_stats =
-				CStatsPredConj::ConvertPredStats(base_pred_stats);
+			GPOS_ASSERT(CStatsPred::EsptConj == base_pred_stats->GetPredStatsType());
+			CStatsPredConj *pred_stats = CStatsPredConj::ConvertPredStats(base_pred_stats);
 			num_predicates = pred_stats->GetNumPreds();
-			histograms_new = MakeHistHashMapConjFilter(
-				mp, stats_config, histograms_copy, input_rows, pred_stats,
-				&scale_factor);
+			histograms_new = MakeHistHashMapConjFilter(mp, stats_config, histograms_copy, input_rows, pred_stats, &scale_factor);
 		}
 		GPOS_ASSERT(CStatistics::MinRows.Get() <= scale_factor.Get());
 		rows_filter = input_rows / scale_factor;
 		rows_filter = std::max(CStatistics::MinRows.Get(), rows_filter.Get());
 	}
-
 	histograms_copy->Release();
-
 	GPOS_ASSERT(rows_filter.Get() <= input_rows.Get());
-
 	if (do_cap_NDVs)
 	{
 		CStatistics::CapNDVs(rows_filter, histograms_new);
 	}
-
-	CStatistics *filter_stats = GPOS_NEW(mp)
-		CStatistics(mp, histograms_new, input_stats->CopyWidths(mp),
-					rows_filter, input_stats->IsEmpty(),
-					input_stats->GetNumberOfPredicates() + num_predicates);
-
+	CStatistics *filter_stats = GPOS_NEW(mp) CStatistics(mp, histograms_new, input_stats->CopyWidths(mp), rows_filter, input_stats->IsEmpty(), input_stats->GetNumberOfPredicates() + num_predicates);
 	// since the filter operation is reductive, we choose the bounding method that takes
 	// the minimum of the cardinality upper bound of the source column (in the input hash map)
 	// and estimated output cardinality
-	CStatisticsUtils::ComputeCardUpperBounds(
-		mp, input_stats, filter_stats, rows_filter,
-		CStatistics::EcbmMin /* card_bounding_method */);
-
+	CStatisticsUtils::ComputeCardUpperBounds(mp, input_stats, filter_stats, rows_filter, CStatistics::EcbmMin);
 	return filter_stats;
 }
 

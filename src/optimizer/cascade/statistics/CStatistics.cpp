@@ -25,7 +25,6 @@
 #include "duckdb/optimizer/cascade/statistics/CStatisticsUtils.h"
 
 using namespace gpmd;
-using namespace gpdxl;
 using namespace gpopt;
 
 // default number of rows in relation
@@ -68,8 +67,7 @@ CStatistics::CStatistics(CMemoryPool *mp,
 	// hash map for source id -> max source cardinality mapping
 	m_src_upper_bound_NDVs = GPOS_NEW(mp) CUpperBoundNDVPtrArray(mp);
 
-	m_stats_conf =
-		COptCtxt::PoctxtFromTLS()->GetOptimizerConfig()->GetStatsConf();
+	m_stats_conf = COptCtxt::PoctxtFromTLS()->GetOptimizerConfig()->GetStatsConf();
 }
 
 // Dtor

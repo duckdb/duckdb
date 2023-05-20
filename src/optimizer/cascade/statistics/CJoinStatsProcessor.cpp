@@ -109,10 +109,7 @@ CJoinStatsProcessor::JoinHistograms(
 }
 
 //	derive statistics for the given join's predicate(s)
-IStatistics *
-CJoinStatsProcessor::CalcAllJoinStats(CMemoryPool *mp,
-									  IStatisticsArray *statistics_array,
-									  CExpression *expr, COperator *pop)
+IStatistics* CJoinStatsProcessor::CalcAllJoinStats(CMemoryPool *mp, IStatisticsArray *statistics_array, CExpression *expr, COperator *pop)
 {
 	GPOS_ASSERT(NULL != expr);
 	GPOS_ASSERT(NULL != statistics_array);
@@ -134,11 +131,6 @@ CJoinStatsProcessor::CalcAllJoinStats(CMemoryPool *mp,
 
 	switch (pop->Eopid())
 	{
-		case COperator::EopLogicalIndexApply:
-			left_outer_2_way_join =
-				CLogicalIndexApply::PopConvert(pop)->FouterJoin();
-			break;
-
 		case COperator::EopLogicalLeftOuterJoin:
 			left_outer_2_way_join = true;
 			break;
@@ -148,10 +140,8 @@ CJoinStatsProcessor::CalcAllJoinStats(CMemoryPool *mp,
 				CLogicalNAryJoin::PopConvert(pop)->GetLojChildPredIndexes();
 			if (NULL != predIndexes)
 			{
-				GPOS_ASSERT(COperator::EopScalarNAryJoinPredList ==
-							expr->Pop()->Eopid());
-				inner_or_simple_2_way_loj_preds =
-					(*expr)[GPOPT_ZERO_INNER_JOIN_PRED_INDEX];
+				GPOS_ASSERT(COperator::EopScalarNAryJoinPredList == expr->Pop()->Eopid());
+				inner_or_simple_2_way_loj_preds = (*expr)[GPOPT_ZERO_INNER_JOIN_PRED_INDEX];
 			}
 			break;
 
