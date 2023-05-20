@@ -186,8 +186,7 @@ public:
 	static GPOS_RESULT Init();
 
 	// global accessor
-	static CMemoryPoolManager *
-	GetMemoryPoolMgr()
+	static CMemoryPoolManager* GetMemoryPoolMgr()
 	{
 		return m_memory_pool_mgr;
 	}
