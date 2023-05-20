@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/common/queue.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -438,6 +439,73 @@ bool JoinOrderOptimizer::EmitCSG(JoinRelationSet &node) {
 	return true;
 }
 
+class NeighborSubset {
+public:
+	class const_iterator {
+	private:
+		idx_t index;
+		const NeighborSubset &subset;
+
+	public:
+		const_iterator(const NeighborSubset &subset, idx_t index) : index(index), subset(subset) {
+		}
+
+		bool operator==(const const_iterator &other) const {
+			assert(&subset == &other.subset);
+			return index == other.index;
+		}
+
+		bool operator!=(const const_iterator &other) const {
+			return !(*this == other);
+		}
+
+		const unordered_set<idx_t> &operator*() const {
+			return subset.all_subsets[index].first;
+		}
+
+		const_iterator &operator++() {
+			index++;
+			return *this;
+		}
+	};
+
+	explicit NeighborSubset(vector<idx_t> neighbors) {
+
+		for (idx_t i = 0; i < neighbors.size(); ++i) {
+			unordered_set<idx_t> rel_set = {neighbors[i]};
+			all_subsets.push_back(make_pair(move(rel_set), i));
+		}
+
+		idx_t index = 0;
+
+		while (index < all_subsets.size()) {
+			auto rel_set_pair = all_subsets[index];
+
+			for (idx_t i = rel_set_pair.second + 1; i < neighbors.size(); ++i) {
+				rel_set_pair.first.insert(neighbors[i]);
+				all_subsets.push_back(make_pair(rel_set_pair.first, i));
+				rel_set_pair.first.erase(neighbors[i]);
+			}
+			index++;
+		}
+	}
+
+	const_iterator begin() const {
+		return const_iterator(*this, 0);
+	}
+
+	const_iterator end() const {
+		return const_iterator(*this, all_subsets.size());
+	}
+
+	idx_t size() const {
+		return all_subsets.size();
+	}
+
+private:
+	vector<pair<unordered_set<idx_t>, idx_t>> all_subsets;
+};
+
 bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelationSet &right,
                                                unordered_set<idx_t> &exclusion_set) {
 	// get the neighbors of the second relation under the exclusion set
@@ -445,10 +513,12 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelati
 	if (neighbors.empty()) {
 		return true;
 	}
+
+	NeighborSubset all_subset(neighbors);
 	vector<reference<JoinRelationSet>> union_sets;
-	union_sets.reserve(neighbors.size());
-	for (idx_t i = 0; i < neighbors.size(); i++) {
-		auto &neighbor = set_manager.GetJoinRelation(neighbors[i]);
+	union_sets.reserve(all_subset.size());
+	for (const auto &rel_set : all_subset) {
+		auto &neighbor = set_manager.GetJoinRelation(rel_set);
 		// emit the combinations of this node and its neighbors
 		auto &combined_set = set_manager.Union(right, neighbor);
 		// If combined_set.count == right.count, This means we found a neighbor that has been present before
@@ -464,11 +534,15 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelati
 		}
 		union_sets.push_back(combined_set);
 	}
-	// recursively enumerate the sets
+
 	unordered_set<idx_t> new_exclusion_set = exclusion_set;
-	for (idx_t i = 0; i < neighbors.size(); i++) {
+	for (const auto &neighbor : neighbors) {
+		new_exclusion_set.insert(neighbor);
+	}
+
+	// recursively enumerate the sets
+	for (idx_t i = 0; i < union_sets.size(); i++) {
 		// updated the set of excluded entries with this neighbor
-		new_exclusion_set.insert(neighbors[i]);
 		if (!EnumerateCmpRecursive(left, union_sets[i], new_exclusion_set)) {
 			return false;
 		}
@@ -482,27 +556,30 @@ bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet &node, unordered_
 	if (neighbors.empty()) {
 		return true;
 	}
+
+	NeighborSubset all_subset(neighbors);
 	vector<reference<JoinRelationSet>> union_sets;
-	union_sets.reserve(neighbors.size());
-	for (idx_t i = 0; i < neighbors.size(); i++) {
-		auto &neighbor = set_manager.GetJoinRelation(neighbors[i]);
+	union_sets.reserve(all_subset.size());
+	for (const auto &rel_set : all_subset) {
+		auto &neighbor = set_manager.GetJoinRelation(rel_set);
 		// emit the combinations of this node and its neighbors
 		auto &new_set = set_manager.Union(node, neighbor);
-		if (new_set.count > node.count && plans.find(&new_set) != plans.end()) {
+		D_ASSERT(new_set.count > node.count);
+		if (plans.find(&new_set) != plans.end()) {
 			if (!EmitCSG(new_set)) {
 				return false;
 			}
 		}
 		union_sets.push_back(new_set);
 	}
-	// recursively enumerate the sets
-	unordered_set<idx_t> new_exclusion_set = exclusion_set;
-	for (idx_t i = 0; i < neighbors.size(); i++) {
-		// Reset the exclusion set so that the algorithm considers all combinations
-		// of the exclusion_set with a subset of neighbors.
 
-		new_exclusion_set = exclusion_set;
-		new_exclusion_set.insert(neighbors[i]);
+	unordered_set<idx_t> new_exclusion_set = exclusion_set;
+	for (const auto &neighbor : neighbors) {
+		new_exclusion_set.insert(neighbor);
+	}
+
+	// recursively enumerate the sets
+	for (idx_t i = 0; i < union_sets.size(); i++) {
 		// updated the set of excluded entries with this neighbor
 		if (!EnumerateCSGRecursive(union_sets[i], new_exclusion_set)) {
 			return false;
