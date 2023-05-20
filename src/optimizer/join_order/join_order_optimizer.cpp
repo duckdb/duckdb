@@ -451,7 +451,7 @@ public:
 		}
 
 		bool operator==(const const_iterator &other) const {
-			assert(&subset == &other.subset);
+			D_ASSERT(&subset == &other.subset);
 			return index == other.index;
 		}
 
@@ -460,6 +460,7 @@ public:
 		}
 
 		const unordered_set<idx_t> &operator*() const {
+			D_ASSERT(index < subset.size());
 			return subset.all_subsets[index].first;
 		}
 
@@ -469,7 +470,7 @@ public:
 		}
 	};
 
-	explicit NeighborSubset(vector<idx_t> neighbors) {
+	explicit NeighborSubset(const vector<idx_t> &neighbors) {
 
 		for (idx_t i = 0; i < neighbors.size(); ++i) {
 			unordered_set<idx_t> rel_set = {neighbors[i]};
