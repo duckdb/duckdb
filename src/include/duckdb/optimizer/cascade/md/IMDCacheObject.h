@@ -23,10 +23,6 @@ namespace gpos
 {
 class CWStringDynamic;
 }
-namespace gpdxl
-{
-class CXMLSerializer;
-}
 
 namespace gpmd
 {

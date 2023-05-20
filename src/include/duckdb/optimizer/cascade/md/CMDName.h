@@ -5,7 +5,6 @@
 //	@doc:
 //		Class for representing metadata names.
 //---------------------------------------------------------------------------
-
 #ifndef GPMD_CMDName_H
 #define GPMD_CMDName_H
 

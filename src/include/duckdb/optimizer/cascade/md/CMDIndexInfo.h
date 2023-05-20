@@ -16,7 +16,6 @@
 namespace gpmd
 {
 using namespace gpos;
-using namespace gpdxl;
 
 // class for indexinfo in relation metadata
 class CMDIndexInfo : public IMDInterface
@@ -40,9 +39,6 @@ public:
 
 	// is the index partial
 	BOOL IsPartial() const;
-
-	// serialize indexinfo in DXL format given a serializer object
-	virtual void Serialize(CXMLSerializer *) const;
 
 #ifdef GPOS_DEBUG
 	// debug print of the index info

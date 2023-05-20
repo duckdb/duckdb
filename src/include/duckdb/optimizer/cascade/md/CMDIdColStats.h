@@ -18,6 +18,8 @@ namespace gpmd
 {
 using namespace gpos;
 
+class CMDIdGPDB;
+
 //---------------------------------------------------------------------------
 //	@class:
 //		CMDIdColStats
@@ -30,7 +32,7 @@ class CMDIdColStats : public IMDId
 {
 private:
 	// mdid of base relation
-	CMDIdGPDB *m_rel_mdid;
+	CMDIdGPDB* m_rel_mdid;
 
 	// position of the attribute in the base relation
 	ULONG m_attr_pos;
@@ -49,7 +51,7 @@ private:
 
 public:
 	// ctor
-	CMDIdColStats(CMDIdGPDB *rel_mdid, ULONG attno);
+	CMDIdColStats(CMDIdGPDB* rel_mdid, ULONG attno);
 
 	// dtor
 	virtual ~CMDIdColStats();
@@ -64,11 +66,7 @@ public:
 	virtual const WCHAR *GetBuffer() const;
 
 	// source system id
-	virtual CSystemId
-	Sysid() const
-	{
-		return m_rel_mdid->Sysid();
-	}
+	virtual CSystemId Sysid() const;
 
 	// accessors
 	IMDId *GetRelMdId() const;
@@ -78,19 +76,10 @@ public:
 	virtual BOOL Equals(const IMDId *mdid) const;
 
 	// computes the hash value for the metadata id
-	virtual ULONG
-	HashValue() const
-	{
-		return gpos::CombineHashes(m_rel_mdid->HashValue(),
-								   gpos::HashValue(&m_attr_pos));
-	}
+	virtual ULONG HashValue() const;
 
 	// is the mdid valid
-	virtual BOOL
-	IsValid() const
-	{
-		return IMDId::IsValid(m_rel_mdid);
-	}
+	virtual BOOL IsValid() const;
 
 	// debug print of the metadata id
 	virtual IOstream &OsPrint(IOstream &os) const;

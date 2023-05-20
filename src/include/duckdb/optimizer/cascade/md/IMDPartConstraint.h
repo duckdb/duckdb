@@ -9,7 +9,7 @@
 #define GPMD_IMDPartConstraint_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
+#include "duckdb/optimizer/cascade/operators/CExpression.h"
 #include "duckdb/optimizer/cascade/base/CColRef.h"
 #include "duckdb/optimizer/cascade/md/IMDInterface.h"
 
@@ -46,9 +46,6 @@ public:
 
 	// is constraint unbounded
 	virtual BOOL IsConstraintUnbounded() const = 0;
-
-	// serialize constraint in DXL format
-	virtual void Serialize(CXMLSerializer *xml_serializer) const = 0;
 };
 }  // namespace gpmd
 

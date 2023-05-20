@@ -1,7 +1,4 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
-//	Copyright (C) 2011 Greenplum, Inc.
-//
 //	@filename:
 //		CMDIdGPDB.h
 //
@@ -19,6 +16,7 @@
 #include "duckdb/optimizer/cascade/base/CUtils.h"
 
 #define GPMD_GPDB_SYSID GPOS_WSZ_LIT("GPDB")
+typedef ULONG OID;
 
 namespace gpmd
 {
