@@ -509,7 +509,7 @@ void AsOfProbeBuffer::ResolveJoin(bool *found_match, idx_t *matches) {
 
 		// Emit match data
 		right_outer->SetMatch(first);
-		left_outer.SetMatch(left_base + i);
+		left_outer.SetMatch(i);
 		if (found_match) {
 			found_match[i] = true;
 		}
