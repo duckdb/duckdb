@@ -82,11 +82,9 @@ CTask::~CTask()
 //		Bind task to function and arguments
 //
 //---------------------------------------------------------------------------
-void
-CTask::Bind(void *(*func)(void *), void *arg)
+void CTask::Bind(void *(*func)(void *), void *arg)
 {
 	GPOS_ASSERT(NULL != func);
-
 	m_func = func;
 	m_arg = arg;
 }

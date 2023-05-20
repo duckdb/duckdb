@@ -113,16 +113,13 @@ CAutoTaskProxy::Destroy(CTask *task)
 //		If caller is a task, its task context is cloned and used by the new task;
 //
 //---------------------------------------------------------------------------
-CTask *
-CAutoTaskProxy::Create(void *(*pfunc)(void *), void *arg, BOOL *cancel)
+CTask* CAutoTaskProxy::Create(void *(*pfunc)(void *), void *arg, BOOL *cancel)
 {
 	// create memory pool for task
 	CAutoMemoryPool amp(CAutoMemoryPool::ElcStrict);
 	CMemoryPool *mp = amp.Pmp();
-
 	// auto pointer to hold new task context
 	CAutoP<CTaskContext> task_ctxt;
-
 	// check if caller is a task
 	ITask *task_parent = CWorker::Self()->GetTask();
 	if (NULL == task_parent)
@@ -144,33 +141,24 @@ CAutoTaskProxy::Create(void *(*pfunc)(void *), void *arg, BOOL *cancel)
 	{
 		err_ctxt.Value()->Register(task->ConvertErrCtxt()->GetMiniDumper());
 	}
-
 	// auto pointer to hold new task
 	// task is created inside ATP's memory pool
 	CAutoP<CTask> new_task;
-	new_task =
-		GPOS_NEW(m_mp) CTask(mp, task_ctxt.Value(), err_ctxt.Value(), cancel);
-
+	new_task = GPOS_NEW(m_mp) CTask(mp, task_ctxt.Value(), err_ctxt.Value(), cancel);
 	// reset auto pointers - task now handles task and error context
 	(void) task_ctxt.Reset();
 	(void) err_ctxt.Reset();
-
 	// detach task's memory pool from auto memory pool
 	amp.Detach();
-
 	// bind function and argument
 	task = new_task.Value();
 	task->Bind(pfunc, arg);
-
 	// add to task list
 	m_list.Append(task);
-
 	// reset auto pointer - ATP now handles task
 	new_task.Reset();
-
 	// register task to worker pool
 	m_pwpm->RegisterTask(task);
-
 	return task;
 }
 
@@ -273,9 +261,10 @@ CAutoTaskProxy::Execute(CTask *task)
 		// get worker of current thread
 		CWorker *worker = CWorker::Self();
 		GPOS_ASSERT(NULL != worker);
-
+		worker->m_task = task;
+		return;
 		// execute task
-		worker->Execute(task);
+		//worker->Execute(task);
 	}
 	GPOS_CATCH_EX(ex)
 	{
