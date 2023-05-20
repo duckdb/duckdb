@@ -78,8 +78,7 @@ public:
 	}
 
 	// finds the first bucket's element with a matching key
-	T *
-	Find() const
+	T* Find() const
 	{
 		return NextMatch(Base::First());
 	}

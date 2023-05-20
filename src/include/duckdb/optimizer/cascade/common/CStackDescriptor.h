@@ -5,7 +5,6 @@
 //	@doc:
 //		Class for stack descriptor.
 //---------------------------------------------------------------------------
-
 #ifndef CStackDescriptor_H
 #define CStackDescriptor_H
 
@@ -16,7 +15,7 @@
 #define GPOS_STACK_TRACE_BUFFER_SIZE 4096
 #define GPOS_STACK_TRACE_DEPTH 32
 #define GPOS_STACK_SYMBOL_SIZE 16384
-
+#define GPOS_x86_64 1
 #define GPOS_STACK_TRACE_FORMAT_SIZE 192
 
 namespace gpos
