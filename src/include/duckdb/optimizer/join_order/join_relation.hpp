@@ -111,7 +111,7 @@ public:
 	}
 
 private:
-	vector<pair<unordered_set<idx_t>, idx_t>> all_subsets;
+	vector<std::pair<unordered_set<idx_t>, idx_t>> all_subsets;
 };
 
 } // namespace duckdb
