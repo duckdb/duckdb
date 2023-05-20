@@ -49,8 +49,7 @@
 
 #define GPOPT_SAMPLING_MAX_ITERS 30
 #define GPOPT_JOBS_CAP 5000	 // maximum number of initial optimization jobs
-#define GPOPT_JOBS_PER_GROUP \
-	20	// estimated number of needed optimization jobs per memo group
+#define GPOPT_JOBS_PER_GROUP 20	// estimated number of needed optimization jobs per memo group
 
 // memory consumption unit in bytes -- currently MB
 #define GPOPT_MEM_UNIT (1024 * 1024)
