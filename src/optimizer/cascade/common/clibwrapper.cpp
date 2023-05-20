@@ -37,8 +37,7 @@ using namespace gpos;
 //		Get current user context
 //
 //---------------------------------------------------------------------------
-INT
-gpos::clib::GetContext(ucontext_t *user_ctxt)
+INT clib::GetContext(ucontext_t *user_ctxt)
 {
 	INT res = getcontext(user_ctxt);
 

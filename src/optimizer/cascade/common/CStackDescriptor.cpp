@@ -49,8 +49,7 @@ CStackDescriptor::GetStackFrames(ULONG_PTR func_ptr,
 //		Store current stack
 //
 //---------------------------------------------------------------------------
-void
-CStackDescriptor::BackTrace(ULONG top_frames_to_skip)
+void CStackDescriptor::BackTrace(ULONG top_frames_to_skip)
 {
 	// reset stack depth
 	Reset();
