@@ -10,7 +10,6 @@
 
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/common/CDouble.h"
-
 #include "duckdb/optimizer/cascade/base/IDatum.h"
 
 namespace gpopt

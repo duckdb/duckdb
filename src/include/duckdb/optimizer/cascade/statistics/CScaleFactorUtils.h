@@ -11,7 +11,6 @@
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/engine/CStatisticsConfig.h"
 #include "duckdb/optimizer/cascade/statistics/CHistogram.h"
-#include "duckdb/optimizer/cascade/statistics/CStatisticsUtils.h"
 
 namespace gpnaucrates
 {

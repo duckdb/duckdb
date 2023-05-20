@@ -13,7 +13,6 @@
 #include "duckdb/optimizer/cascade/statistics/CGroupByStatsProcessor.h"
 #include "duckdb/optimizer/cascade/statistics/CScaleFactorUtils.h"
 #include "duckdb/optimizer/cascade/statistics/CStatistics.h"
-#include "duckdb/optimizer/cascade/statistics/CStatisticsUtils.h"
 
 namespace gpnaucrates
 {

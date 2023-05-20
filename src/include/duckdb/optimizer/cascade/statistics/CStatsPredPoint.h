@@ -9,6 +9,7 @@
 #define GPNAUCRATES_CStatsPredPoint_H
 
 #include "duckdb/optimizer/cascade/base.h"
+#include "duckdb/optimizer/cascade/types.h"
 #include "duckdb/optimizer/cascade/md/IMDType.h"
 #include "duckdb/optimizer/cascade/statistics/CPoint.h"
 #include "duckdb/optimizer/cascade/statistics/CStatsPred.h"
@@ -48,17 +49,14 @@ private:
 	CPoint *m_pred_point;
 
 	// add padding to datums when needed
-	static IDatum *PreprocessDatum(CMemoryPool *mp, const CColRef *colref,
-								   IDatum *datum);
+	static IDatum* PreprocessDatum(CMemoryPool* mp, const CColRef* colref, IDatum* datum);
 
 public:
 	// ctor
-	CStatsPredPoint(ULONG colid, CStatsPred::EStatsCmpType stats_cmp_type,
-					CPoint *point);
+	CStatsPredPoint(ULONG colid, CStatsPred::EStatsCmpType stats_cmp_type, CPoint* point);
 
 	// ctor
-	CStatsPredPoint(CMemoryPool *mp, const CColRef *colref,
-					CStatsPred::EStatsCmpType stats_cmp_type, IDatum *datum);
+	CStatsPredPoint(CMemoryPool* mp, const CColRef* colref, CStatsPred::EStatsCmpType stats_cmp_type, IDatum* datum);
 
 	// dtor
 	virtual ~CStatsPredPoint()
@@ -67,33 +65,28 @@ public:
 	}
 
 	// comparison types for stats computation
-	virtual CStatsPred::EStatsCmpType
-	GetCmpType() const
+	virtual CStatsPred::EStatsCmpType GetCmpType() const
 	{
 		return m_stats_cmp_type;
 	}
 
 	// filter point
-	virtual CPoint *
-	GetPredPoint() const
+	virtual CPoint* GetPredPoint() const
 	{
 		return m_pred_point;
 	}
 
 	// filter type id
-	virtual EStatsPredType
-	GetPredStatsType() const
+	virtual EStatsPredType GetPredStatsType() const
 	{
 		return CStatsPred::EsptPoint;
 	}
 
 	// conversion function
-	static CStatsPredPoint *
-	ConvertPredStats(CStatsPred *pred_stats)
+	static CStatsPredPoint* ConvertPredStats(CStatsPred *pred_stats)
 	{
 		GPOS_ASSERT(NULL != pred_stats);
 		GPOS_ASSERT(CStatsPred::EsptPoint == pred_stats->GetPredStatsType());
-
 		return dynamic_cast<CStatsPredPoint *>(pred_stats);
 	}
 

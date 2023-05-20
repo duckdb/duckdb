@@ -341,10 +341,6 @@ public:
 	// is histogram normalized
 	BOOL IsNormalized() const;
 
-	// translate the histogram into a derived column stats
-	CDXLStatsDerivedColumn *TranslateToDXLDerivedColumnStats(
-		CMDAccessor *md_accessor, ULONG colid, CDouble width) const;
-
 	// randomly pick a bucket index
 	ULONG GetRandomBucketIndex(ULONG *seed) const;
 
