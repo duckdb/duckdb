@@ -11,17 +11,15 @@
 //	@test:
 //
 //---------------------------------------------------------------------------
-
 #include "duckdb/optimizer/cascade/memory/CAutoMemoryPool.h"
-
 #include "duckdb/optimizer/cascade/assert.h"
-#include "duckdb/optimizer/error/CErrorContext.h"
-#include "gpos/error/CErrorHandler.h"
-#include "gpos/memory/CMemoryPoolManager.h"
-#include "gpos/task/CAutoSuspendAbort.h"
-#include "gpos/task/ITask.h"
-#include "gpos/types.h"
-#include "gpos/utils.h"
+#include "duckdb/optimizer/cascade/error/CErrorContext.h"
+#include "duckdb/optimizer/cascade/error/CErrorHandler.h"
+#include "duckdb/optimizer/cascade/memory/CMemoryPoolManager.h"
+#include "duckdb/optimizer/cascade/task/CAutoSuspendAbort.h"
+#include "duckdb/optimizer/cascade/task/ITask.h"
+#include "duckdb/optimizer/cascade/types.h"
+#include "duckdb/optimizer/cascade/utils.h"
 
 using namespace gpos;
 
@@ -40,8 +38,6 @@ CAutoMemoryPool::CAutoMemoryPool(ELeakCheck leak_check_type)
 	m_mp = CMemoryPoolManager::GetMemoryPoolMgr()->CreateMemoryPool();
 }
 
-
-
 //---------------------------------------------------------------------------
 //	@function:
 //		CAutoMemoryPool::Detach
@@ -51,15 +47,13 @@ CAutoMemoryPool::CAutoMemoryPool(ELeakCheck leak_check_type)
 //		created pool until it is safe, e.g., in constructors
 //
 //---------------------------------------------------------------------------
-CMemoryPool *
-CAutoMemoryPool::Detach()
+CMemoryPool* CAutoMemoryPool::Detach()
 {
 	CMemoryPool *mp = m_mp;
 	m_mp = NULL;
 
 	return mp;
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
