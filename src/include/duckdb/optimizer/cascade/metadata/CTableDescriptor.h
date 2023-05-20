@@ -15,6 +15,7 @@
 #include "duckdb/optimizer/cascade/base/CColRef.h"
 #include "duckdb/optimizer/cascade/metadata/CColumnDescriptor.h"
 #include "duckdb/optimizer/cascade/md/IMDId.h"
+#include "duckdb/optimizer/cascade/md/IMDRelation.h"
 
 namespace gpopt
 {
@@ -22,8 +23,7 @@ using namespace gpos;
 using namespace gpmd;
 
 // dynamic array of columns -- array owns columns
-typedef CDynamicPtrArray<CColumnDescriptor, CleanupRelease>
-	CColumnDescriptorArray;
+typedef CDynamicPtrArray<CColumnDescriptor, CleanupRelease> CColumnDescriptorArray;
 
 // dynamic array of bitsets
 typedef CDynamicPtrArray<CBitSet, CleanupRelease> CBitSetArray;
