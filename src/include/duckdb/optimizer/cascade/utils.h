@@ -17,6 +17,9 @@
 #include "duckdb/optimizer/cascade/io/COstreamBasic.h"
 #include "duckdb/optimizer/cascade/types.h"
 
+#define GPOS_x86_64 1
+#define GPOS_64BIT 1
+
 #if (GPOS_i386 || GPOS_i686 || GPOS_x86_64) && (GPOS_32BIT)
 #define GPOS_ASMFP asm volatile("movl %%ebp, %0" : "=g"(ulp));
 #define GPOS_ASMSP asm volatile("movl %%esp, %0" : "=g"(ulp));

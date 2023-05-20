@@ -14,7 +14,10 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
+#include "duckdb/optimizer/cascade/search/CSearchStage.h"
+#include "duckdb/optimizer/cascade/operators/CExpression.h"
 
 namespace duckdb {
         class Cascade {
@@ -27,6 +30,12 @@ namespace duckdb {
         private:
                 ClientContext &context;
                 CardinalityEstimator cardinality_estimator;
+
+                gpopt::CSearchStageArray* LoadSearchStrategy(CMemoryPool* mp);
+
+                gpopt::CExpression* Orca2Duck(unique_ptr<LogicalOperator> plan);
+
+                unique_ptr<PhysicalOperator> Duck2Orca(gpopt::CExpression* Plan);
         };
 }
 
