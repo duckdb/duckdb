@@ -122,7 +122,7 @@ NeighborSubset::NeighborSubset(const vector<idx_t> &neighbors) {
 	idx_t index = 0;
 
 	while (index < all_subsets.size()) {
-		auto &rel_set_pair = all_subsets[index];
+		auto rel_set_pair = all_subsets[index];
 
 		for (idx_t i = rel_set_pair.second + 1; i < neighbors.size(); ++i) {
 			rel_set_pair.first.insert(neighbors[i]);
