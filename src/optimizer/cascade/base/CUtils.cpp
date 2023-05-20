@@ -6,7 +6,6 @@
 //		Implementation of general utility functions
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/base/CUtils.h"
-
 #include "duckdb/optimizer/cascade/common/clibwrapper.h"
 #include "duckdb/optimizer/cascade/common/syslibwrapper.h"
 #include "duckdb/optimizer/cascade/io/CFileDescriptor.h"
@@ -14,7 +13,6 @@
 #include "duckdb/optimizer/cascade/memory/CAutoMemoryPool.h"
 #include "duckdb/optimizer/cascade/string/CWStringDynamic.h"
 #include "duckdb/optimizer/cascade/task/CWorker.h"
-
 #include "duckdb/optimizer/cascade/base/CCastUtils.h"
 #include "duckdb/optimizer/cascade/base/CColRefSetIter.h"
 #include "duckdb/optimizer/cascade/base/CColRefTable.h"
@@ -35,12 +33,15 @@
 #include "duckdb/optimizer/cascade/base/IDatumInt4.h"
 #include "duckdb/optimizer/cascade/base/IDatumInt8.h"
 #include "duckdb/optimizer/cascade/base/IDatumOid.h"
+#include "duckdb/optimizer/cascade/base/IDatumBool.h"
 #include "duckdb/optimizer/cascade/exception.h"
 #include "duckdb/optimizer/cascade/md/CMDIdGPDB.h"
+#include "duckdb/optimizer/cascade/md/IMDAggregate.h"
 #include "duckdb/optimizer/cascade/md/IMDCast.h"
 #include "duckdb/optimizer/cascade/md/IMDType.h"
 #include "duckdb/optimizer/cascade/md/IMDTypeBool.h"
 #include "duckdb/optimizer/cascade/md/IMDTypeInt4.h"
+#include "duckdb/optimizer/cascade/md/IMDTypeInt8.h"
 #include "duckdb/optimizer/cascade/md/IMDScalarOp.h"
 #include "duckdb/optimizer/cascade/traceflags/traceflags.h"
 
@@ -650,84 +651,48 @@ CUtils::PexprScalarArrayCmp(CMemoryPool *mp,
 }
 
 // generate a comparison against Zero
-CExpression *
-CUtils::PexprCmpWithZero(CMemoryPool *mp, CExpression *pexprLeft,
-						 IMDId *mdid_type_left, IMDType::ECmpType ecmptype)
+CExpression* CUtils::PexprCmpWithZero(CMemoryPool *mp, CExpression *pexprLeft, IMDId *mdid_type_left, IMDType::ECmpType ecmptype)
 {
 	GPOS_ASSERT(pexprLeft->Pop()->FScalar());
-
 	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
 	const IMDType *pmdtype = md_accessor->RetrieveType(mdid_type_left);
-	GPOS_ASSERT(pmdtype->GetDatumType() == IMDType::EtiInt8 &&
-				"left expression must be of type int8");
-
+	GPOS_ASSERT(pmdtype->GetDatumType() == IMDType::EtiInt8 && "left expression must be of type int8");
 	IMDId *mdid_op = pmdtype->GetMdidForCmpType(ecmptype);
 	mdid_op->AddRef();
 	const CMDName mdname = md_accessor->RetrieveScOp(mdid_op)->Mdname();
 	CWStringConst strOpName(mdname.GetMDName()->GetBuffer());
-
-	return GPOS_NEW(mp) CExpression(
-		mp,
-		GPOS_NEW(mp) CScalarCmp(
-			mp, mdid_op, GPOS_NEW(mp) CWStringConst(mp, strOpName.GetBuffer()),
-			ecmptype),
-		pexprLeft, CUtils::PexprScalarConstInt8(mp, 0 /*val*/));
+	return GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CScalarCmp(mp, mdid_op, GPOS_NEW(mp) CWStringConst(mp, strOpName.GetBuffer()), ecmptype), pexprLeft, CUtils::PexprScalarConstInt8(mp, 0));
 }
 
 // generate an Is Distinct From expression
-CExpression *
-CUtils::PexprIDF(CMemoryPool *mp, CExpression *pexprLeft,
-				 CExpression *pexprRight)
+CExpression* CUtils::PexprIDF(CMemoryPool *mp, CExpression *pexprLeft, CExpression *pexprRight)
 {
 	GPOS_ASSERT(NULL != pexprLeft);
 	GPOS_ASSERT(NULL != pexprRight);
-
 	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
-
 	CExpression *pexprNewLeft = pexprLeft;
 	CExpression *pexprNewRight = pexprRight;
-
-	IMDId *pmdidEqOp = CMDAccessorUtils::GetScCmpMdIdConsiderCasts(
-		md_accessor, pexprNewLeft, pexprNewRight, IMDType::EcmptEq);
-	CMDAccessorUtils::ApplyCastsForScCmp(mp, md_accessor, pexprNewLeft,
-										 pexprNewRight, pmdidEqOp);
+	IMDId *pmdidEqOp = CMDAccessorUtils::GetScCmpMdIdConsiderCasts(md_accessor, pexprNewLeft, pexprNewRight, IMDType::EcmptEq);
+	CMDAccessorUtils::ApplyCastsForScCmp(mp, md_accessor, pexprNewLeft, pexprNewRight, pmdidEqOp);
 	pmdidEqOp->AddRef();
 	const CMDName mdname = md_accessor->RetrieveScOp(pmdidEqOp)->Mdname();
 	CWStringConst strEqOpName(mdname.GetMDName()->GetBuffer());
-
-	return GPOS_NEW(mp) CExpression(
-		mp,
-		GPOS_NEW(mp) CScalarIsDistinctFrom(
-			mp, pmdidEqOp,
-			GPOS_NEW(mp) CWStringConst(mp, strEqOpName.GetBuffer())),
-		pexprNewLeft, pexprNewRight);
+	return GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CScalarIsDistinctFrom(mp, pmdidEqOp, GPOS_NEW(mp) CWStringConst(mp, strEqOpName.GetBuffer())), pexprNewLeft, pexprNewRight);
 }
 
 // generate an Is Distinct From expression
-CExpression *
-CUtils::PexprIDF(CMemoryPool *mp, CExpression *pexprLeft,
-				 CExpression *pexprRight, IMDId *mdid_scop)
+CExpression* CUtils::PexprIDF(CMemoryPool *mp, CExpression *pexprLeft, CExpression *pexprRight, IMDId *mdid_scop)
 {
 	GPOS_ASSERT(NULL != pexprLeft);
 	GPOS_ASSERT(NULL != pexprRight);
-
 	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
-
 	CExpression *pexprNewLeft = pexprLeft;
 	CExpression *pexprNewRight = pexprRight;
-
-	CMDAccessorUtils::ApplyCastsForScCmp(mp, md_accessor, pexprNewLeft,
-										 pexprNewRight, mdid_scop);
+	CMDAccessorUtils::ApplyCastsForScCmp(mp, md_accessor, pexprNewLeft, pexprNewRight, mdid_scop);
 	mdid_scop->AddRef();
 	const CMDName mdname = md_accessor->RetrieveScOp(mdid_scop)->Mdname();
 	CWStringConst strEqOpName(mdname.GetMDName()->GetBuffer());
-
-	return GPOS_NEW(mp) CExpression(
-		mp,
-		GPOS_NEW(mp) CScalarIsDistinctFrom(
-			mp, mdid_scop,
-			GPOS_NEW(mp) CWStringConst(mp, strEqOpName.GetBuffer())),
-		pexprNewLeft, pexprNewRight);
+	return GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CScalarIsDistinctFrom(mp, mdid_scop, GPOS_NEW(mp) CWStringConst(mp, strEqOpName.GetBuffer())), pexprNewLeft, pexprNewRight);
 }
 
 // generate an Is NOT Distinct From expression for two columns; the two columns must have the same type
@@ -768,7 +733,6 @@ CUtils::PexprINDF(CMemoryPool *mp, CExpression *pexprLeft,
 CExpression* CUtils::PexprIsNull(CMemoryPool *mp, CExpression *pexpr)
 {
 	GPOS_ASSERT(NULL != pexpr);
-
 	return GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CScalarNullTest(mp), pexpr);
 }
 
@@ -776,7 +740,6 @@ CExpression* CUtils::PexprIsNull(CMemoryPool *mp, CExpression *pexpr)
 CExpression* CUtils::PexprIsNotNull(CMemoryPool *mp, CExpression *pexpr)
 {
 	GPOS_ASSERT(NULL != pexpr);
-
 	return PexprNegate(mp, PexprIsNull(mp, pexpr));
 }
 
@@ -785,7 +748,6 @@ CExpression *
 CUtils::PexprIsNotFalse(CMemoryPool *mp, CExpression *pexpr)
 {
 	GPOS_ASSERT(NULL != pexpr);
-
 	return PexprIDF(mp, pexpr, PexprScalarConstBool(mp, false /*value*/));
 }
 
@@ -1003,8 +965,7 @@ CUtils::FHashJoin(COperator *pop)
 }
 
 // check if a given operator is a correlated nested loops join
-BOOL
-CUtils::FCorrelatedNLJoin(COperator *pop)
+BOOL CUtils::FCorrelatedNLJoin(COperator *pop)
 {
 	GPOS_ASSERT(NULL != pop);
 
@@ -1018,8 +979,7 @@ CUtils::FCorrelatedNLJoin(COperator *pop)
 }
 
 // check if a given operator is a nested loops join
-BOOL
-CUtils::FNLJoin(COperator *pop)
+BOOL CUtils::FNLJoin(COperator *pop)
 {
 	GPOS_ASSERT(NULL != pop);
 
@@ -1105,8 +1065,7 @@ CUtils::FPhysicalMotion(COperator *pop)
 }
 
 // check if a given operator is an FEnforcer
-BOOL
-CUtils::FEnforcer(COperator *pop)
+BOOL CUtils::FEnforcer(COperator *pop)
 {
 	GPOS_ASSERT(NULL != pop);
 
@@ -1115,69 +1074,6 @@ CUtils::FEnforcer(COperator *pop)
 		   COperator::EopPhysicalSpool == op_id ||
 		   COperator::EopPhysicalPartitionSelector == op_id ||
 		   FPhysicalMotion(pop);
-}
-
-// check if a given operator is an Apply
-BOOL
-CUtils::FApply(COperator *pop)
-{
-	GPOS_ASSERT(NULL != pop);
-
-	CLogicalApply *popApply = NULL;
-	if (pop->FLogical())
-	{
-		// attempt casting to logical apply,
-		// dynamic cast returns NULL if operator is not an Apply operator
-		popApply = dynamic_cast<CLogicalApply *>(pop);
-	}
-
-	return (NULL != popApply);
-}
-
-// check if a given operator is a correlated Apply
-BOOL
-CUtils::FCorrelatedApply(COperator *pop)
-{
-	GPOS_ASSERT(NULL != pop);
-
-	BOOL fCorrelatedApply = false;
-	if (FApply(pop))
-	{
-		fCorrelatedApply = CLogicalApply::PopConvert(pop)->FCorrelated();
-	}
-
-	return fCorrelatedApply;
-}
-
-// check if a given operator is left semi apply
-BOOL
-CUtils::FLeftSemiApply(COperator *pop)
-{
-	GPOS_ASSERT(NULL != pop);
-
-	BOOL fLeftSemiApply = false;
-	if (FApply(pop))
-	{
-		fLeftSemiApply = CLogicalApply::PopConvert(pop)->FLeftSemiApply();
-	}
-
-	return fLeftSemiApply;
-}
-
-// check if a given operator is left anti semi apply
-BOOL
-CUtils::FLeftAntiSemiApply(COperator *pop)
-{
-	GPOS_ASSERT(NULL != pop);
-
-	BOOL fLeftAntiSemiApply = false;
-	if (FApply(pop))
-	{
-		fLeftAntiSemiApply =
-			CLogicalApply::PopConvert(pop)->FLeftAntiSemiApply();
-	}
-
-	return fLeftAntiSemiApply;
 }
 
 // check if a given operator is a subquery
@@ -1218,61 +1114,97 @@ CUtils::FQuantifiedSubquery(COperator *pop)
 
 // check if given expression is a Project on ConstTable with one
 // scalar subquery in Project List
-BOOL
-CUtils::FProjectConstTableWithOneScalarSubq(CExpression *pexpr)
+BOOL CUtils::FProjectConstTableWithOneScalarSubq(CExpression *pexpr)
 {
 	GPOS_ASSERT(NULL != pexpr);
-
-	if (COperator::EopLogicalProject == pexpr->Pop()->Eopid() &&
-		COperator::EopLogicalConstTableGet == (*pexpr)[0]->Pop()->Eopid())
+	if (COperator::EopLogicalProject == pexpr->Pop()->Eopid() && COperator::EopLogicalConstTableGet == (*pexpr)[0]->Pop()->Eopid())
 	{
 		CExpression *pexprScalar = (*pexpr)[1];
-		GPOS_ASSERT(COperator::EopScalarProjectList ==
-					pexprScalar->Pop()->Eopid());
-
-		if (1 == pexprScalar->Arity() &&
-			FProjElemWithScalarSubq((*pexprScalar)[0]))
+		GPOS_ASSERT(COperator::EopScalarProjectList == pexprScalar->Pop()->Eopid());
+		if (1 == pexprScalar->Arity() && FProjElemWithScalarSubq((*pexprScalar)[0]))
 		{
 			return true;
 		}
 	}
-
 	return false;
 }
 
+BOOL CUtils::FApply(COperator *pop)
+{
+	GPOS_ASSERT(NULL != pop);
+
+	CLogicalApply *popApply = NULL;
+	if (pop->FLogical())
+	{
+		// attempt casting to logical apply,
+		// dynamic cast returns NULL if operator is not an Apply operator
+		popApply = dynamic_cast<CLogicalApply *>(pop);
+	}
+
+	return (NULL != popApply);
+}
+
+// check if a given operator is a correlated Apply
+BOOL CUtils::FCorrelatedApply(COperator *pop)
+{
+	GPOS_ASSERT(NULL != pop);
+	BOOL fCorrelatedApply = false;
+	if (FApply(pop))
+	{
+		fCorrelatedApply = CLogicalApply::PopConvert(pop)->FCorrelated();
+	}
+	return fCorrelatedApply;
+}
+
+// check if a given operator is left semi apply
+BOOL CUtils::FLeftSemiApply(COperator *pop)
+{
+	GPOS_ASSERT(NULL != pop);
+	BOOL fLeftSemiApply = false;
+	if (FApply(pop))
+	{
+		fLeftSemiApply = CLogicalApply::PopConvert(pop)->FLeftSemiApply();
+	}
+	return fLeftSemiApply;
+}
+
+// check if a given operator is left anti semi apply
+BOOL CUtils::FLeftAntiSemiApply(COperator *pop)
+{
+	GPOS_ASSERT(NULL != pop);
+
+	BOOL fLeftAntiSemiApply = false;
+	if (FApply(pop))
+	{
+		fLeftAntiSemiApply =
+			CLogicalApply::PopConvert(pop)->FLeftAntiSemiApply();
+	}
+
+	return fLeftAntiSemiApply;
+}
+
 // check if given expression is a Project Element with scalar subquery
-BOOL
-CUtils::FProjElemWithScalarSubq(CExpression *pexpr)
+BOOL CUtils::FProjElemWithScalarSubq(CExpression *pexpr)
 {
 	GPOS_ASSERT(NULL != pexpr);
-
-	return (COperator::EopScalarProjectElement == pexpr->Pop()->Eopid() &&
-			COperator::EopScalarSubquery == (*pexpr)[0]->Pop()->Eopid());
+	return (COperator::EopScalarProjectElement == pexpr->Pop()->Eopid() && COperator::EopScalarSubquery == (*pexpr)[0]->Pop()->Eopid());
 }
 
 // check if given expression is a scalar subquery with a ConstTableGet as the only child
-BOOL
-CUtils::FScalarSubqWithConstTblGet(CExpression *pexpr)
+BOOL CUtils::FScalarSubqWithConstTblGet(CExpression *pexpr)
 {
 	GPOS_ASSERT(NULL != pexpr);
-
-	if (COperator::EopScalarSubquery == pexpr->Pop()->Eopid() &&
-		COperator::EopLogicalConstTableGet == (*pexpr)[0]->Pop()->Eopid() &&
-		1 == pexpr->Arity())
+	if (COperator::EopScalarSubquery == pexpr->Pop()->Eopid() && COperator::EopLogicalConstTableGet == (*pexpr)[0]->Pop()->Eopid() && 1 == pexpr->Arity())
 	{
 		return true;
 	}
-
 	return false;
 }
 
 // check if a limit expression has 0 offset
-BOOL
-CUtils::FHasZeroOffset(CExpression *pexpr)
+BOOL CUtils::FHasZeroOffset(CExpression *pexpr)
 {
-	GPOS_ASSERT(COperator::EopLogicalLimit == pexpr->Pop()->Eopid() ||
-				COperator::EopPhysicalLimit == pexpr->Pop()->Eopid());
-
+	GPOS_ASSERT(COperator::EopLogicalLimit == pexpr->Pop()->Eopid() || COperator::EopPhysicalLimit == pexpr->Pop()->Eopid());
 	return FScalarConstIntZero((*pexpr)[1]);
 }
 
@@ -1549,50 +1481,24 @@ CUtils::PexprScalarConstBool(CMemoryPool *mp, BOOL fval, BOOL is_null)
 }
 
 // generate an int4 scalar constant expression
-CExpression *
-CUtils::PexprScalarConstInt4(CMemoryPool *mp, INT val)
+CExpression* CUtils::PexprScalarConstInt4(CMemoryPool *mp, INT val)
 {
 	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
-
 	// create a int4 datum
 	const IMDTypeInt4 *pmdtypeint4 = md_accessor->PtMDType<IMDTypeInt4>();
 	IDatumInt4 *datum = pmdtypeint4->CreateInt4Datum(mp, val, false);
-
-	CExpression *pexpr = GPOS_NEW(mp)
-		CExpression(mp, GPOS_NEW(mp) CScalarConst(mp, (IDatum *) datum));
-
+	CExpression *pexpr = GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CScalarConst(mp, (IDatum *) datum));
 	return pexpr;
 }
 
 // generate an int8 scalar constant expression
-CExpression *
-CUtils::PexprScalarConstInt8(CMemoryPool *mp, LINT val, BOOL is_null)
+CExpression* CUtils::PexprScalarConstInt8(CMemoryPool *mp, LINT val, BOOL is_null)
 {
 	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
-
 	// create a int8 datum
 	const IMDTypeInt8 *pmdtypeint8 = md_accessor->PtMDType<IMDTypeInt8>();
 	IDatumInt8 *datum = pmdtypeint8->CreateInt8Datum(mp, val, is_null);
-
-	CExpression *pexpr = GPOS_NEW(mp)
-		CExpression(mp, GPOS_NEW(mp) CScalarConst(mp, (IDatum *) datum));
-
-	return pexpr;
-}
-
-// generate an oid scalar constant expression
-CExpression *
-CUtils::PexprScalarConstOid(CMemoryPool *mp, OID oid_val)
-{
-	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
-
-	// create a oid datum
-	const IMDTypeOid *pmdtype = md_accessor->PtMDType<IMDTypeOid>();
-	IDatumOid *datum = pmdtype->CreateOidDatum(mp, oid_val, false /*is_null*/);
-
-	CExpression *pexpr = GPOS_NEW(mp)
-		CExpression(mp, GPOS_NEW(mp) CScalarConst(mp, (IDatum *) datum));
-
+	CExpression *pexpr = GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CScalarConst(mp, (IDatum *) datum));
 	return pexpr;
 }
 
@@ -1938,24 +1844,17 @@ CUtils::PexprMin(CMemoryPool *mp, CMDAccessor *md_accessor,
 }
 
 // generate an aggregate expression of the specified type
-CExpression *
-CUtils::PexprAgg(CMemoryPool *mp, CMDAccessor *md_accessor,
-				 IMDType::EAggType agg_type, const CColRef *colref,
-				 BOOL is_distinct)
+CExpression* CUtils::PexprAgg(CMemoryPool *mp, CMDAccessor *md_accessor, IMDType::EAggType agg_type, const CColRef *colref, BOOL is_distinct)
 {
 	GPOS_ASSERT(IMDType::EaggGeneric > agg_type);
 	GPOS_ASSERT(colref->RetrieveType()->GetMdidForAggType(agg_type)->IsValid());
 
-	const IMDAggregate *pmdagg = md_accessor->RetrieveAgg(
-		colref->RetrieveType()->GetMdidForAggType(agg_type));
+	const IMDAggregate *pmdagg = md_accessor->RetrieveAgg(colref->RetrieveType()->GetMdidForAggType(agg_type));
 
 	IMDId *agg_mdid = pmdagg->MDId();
 	agg_mdid->AddRef();
-	CWStringConst *str = GPOS_NEW(mp)
-		CWStringConst(mp, pmdagg->Mdname().GetMDName()->GetBuffer());
-
-	return PexprAggFunc(mp, agg_mdid, str, colref, is_distinct,
-						EaggfuncstageGlobal /*fGlobal*/, false /*fSplit*/);
+	CWStringConst *str = GPOS_NEW(mp) CWStringConst(mp, pmdagg->Mdname().GetMDName()->GetBuffer());
+	return PexprAggFunc(mp, agg_mdid, str, colref, is_distinct, EaggfuncstageGlobal /*fGlobal*/, false /*fSplit*/);
 }
 
 // generate a select expression
@@ -2078,19 +1977,22 @@ CUtils::PexprLogicalSequenceProject(CMemoryPool *mp, CDistributionSpec *pds,
 
 // construct a projection of NULL constants using the given column
 // names and types on top of the given expression
-CExpression *
-CUtils::PexprLogicalProjectNulls(CMemoryPool *mp, CColRefArray *colref_array,
-								 CExpression *pexpr,
-								 UlongToColRefMap *colref_mapping)
+CExpression* CUtils::PexprLogicalProjectNulls(CMemoryPool *mp, CColRefArray *colref_array, CExpression *pexpr, UlongToColRefMap *colref_mapping)
 {
-	IDatumArray *pdrgpdatum =
-		CTranslatorExprToDXLUtils::PdrgpdatumNulls(mp, colref_array);
-	CExpression *pexprProjList =
-		PexprScalarProjListConst(mp, colref_array, pdrgpdatum, colref_mapping);
+	IDatumArray *pdrgpdatum = GPOS_NEW(mp) IDatumArray(mp);
+	const ULONG size = colref_array->Size();
+	for (ULONG ul = 0; ul < size; ul++)
+	{
+		CColRef *colref = (*colref_array)[ul];
+		const IMDType *pmdtype = colref->RetrieveType();
+		IDatum *datum = pmdtype->DatumNull();
+		datum->AddRef();
+		pdrgpdatum->Append(datum);
+	}
+	CExpression *pexprProjList = PexprScalarProjListConst(mp, colref_array, pdrgpdatum, colref_mapping);
 	pdrgpdatum->Release();
 
-	return PexprLogicalProject(mp, pexpr, pexprProjList,
-							   false /*fNewComputedCol*/);
+	return PexprLogicalProject(mp, pexpr, pexprProjList, false /*fNewComputedCol*/);
 }
 
 // construct a project list using the column names and types of the given
@@ -4279,9 +4181,7 @@ CUtils::ExecLocalityType(CDistributionSpec *pds)
 }
 
 // generate a limit expression on top of the given relational child with the given offset and limit count
-CExpression *
-CUtils::PexprLimit(CMemoryPool *mp, CExpression *pexpr, ULONG ulOffSet,
-				   ULONG count)
+CExpression* CUtils::PexprLimit(CMemoryPool *mp, CExpression *pexpr, ULONG ulOffSet, ULONG count)
 {
 	GPOS_ASSERT(pexpr);
 
@@ -4292,8 +4192,7 @@ CUtils::PexprLimit(CMemoryPool *mp, CExpression *pexpr, ULONG ulOffSet,
 	CExpression *pexprLimitOffset = CUtils::PexprScalarConstInt8(mp, ulOffSet);
 	CExpression *pexprLimitCount = CUtils::PexprScalarConstInt8(mp, count);
 
-	return GPOS_NEW(mp)
-		CExpression(mp, popLimit, pexpr, pexprLimitOffset, pexprLimitCount);
+	return GPOS_NEW(mp) CExpression(mp, popLimit, pexpr, pexprLimitOffset, pexprLimitCount);
 }
 
 // generate part oid

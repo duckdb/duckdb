@@ -158,33 +158,26 @@ CQueryContext::SetSystemCols(CMemoryPool *mp)
 //		output column ref ids
 //
 //---------------------------------------------------------------------------
-CQueryContext* CQueryContext::PqcGenerate(CMemoryPool *mp, CExpression *pexpr, ULongPtrArray *pdrgpulQueryOutputColRefId, CMDNameArray *pdrgpmdname, BOOL fDeriveStats)
+CQueryContext* CQueryContext::PqcGenerate(CMemoryPool *mp, CExpression *pexpr, ULongPtrArray* pdrgpulQueryOutputColRefId, CMDNameArray *pdrgpmdname, BOOL fDeriveStats)
 {
 	GPOS_ASSERT(NULL != pexpr && NULL != pdrgpulQueryOutputColRefId);
-
 	CColRefSet *pcrs = GPOS_NEW(mp) CColRefSet(mp);
 	CColRefArray *colref_array = GPOS_NEW(mp) CColRefArray(mp);
-
 	COptCtxt *poptctxt = COptCtxt::PoctxtFromTLS();
 	CColumnFactory *col_factory = poptctxt->Pcf();
 	GPOS_ASSERT(NULL != col_factory);
-
 	// Collect required column references (colref_array)
 	const ULONG length = pdrgpulQueryOutputColRefId->Size();
 	for (ULONG ul = 0; ul < length; ul++)
 	{
-		ULONG *pul = (*pdrgpulQueryOutputColRefId)[ul];
+		ULONG pul = (*pdrgpulQueryOutputColRefId)[ul];
 		GPOS_ASSERT(NULL != pul);
-
-		CColRef *colref = col_factory->LookupColRef(*pul);
+		CColRef *colref = col_factory->LookupColRef(pul);
 		GPOS_ASSERT(NULL != colref);
-
 		pcrs->Include(colref);
 		colref_array->Append(colref);
 	}
-
 	// Collect required properties (prpp) at the top level:
-
 	// By default no sort order requirement is added, unless the root operator in
 	// the input logical expression is a LIMIT. This is because Orca always
 	// attaches top level Sort to a LIMIT node.
@@ -202,9 +195,7 @@ CQueryContext* CQueryContext::PqcGenerate(CMemoryPool *mp, CExpression *pexpr, U
 		// no order required
 		pos = GPOS_NEW(mp) COrderSpec(mp);
 	}
-
 	CDistributionSpec *pds = NULL;
-
 	BOOL fDML = CUtils::FLogicalDML(pexpr->Pop());
 	poptctxt->MarkDMLQuery(fDML);
 
@@ -216,20 +207,16 @@ CQueryContext* CQueryContext::PqcGenerate(CMemoryPool *mp, CExpression *pexpr, U
 	}
 	else
 	{
-		pds = GPOS_NEW(mp)
-			CDistributionSpecSingleton(CDistributionSpecSingleton::EstMaster);
+		pds = GPOS_NEW(mp) CDistributionSpecSingleton(CDistributionSpecSingleton::EstMaster);
 	}
 
 	// By default, no rewindability requirement needs to be satisfied at the top level
-	CRewindabilitySpec *prs = GPOS_NEW(mp) CRewindabilitySpec(
-		CRewindabilitySpec::ErtNone, CRewindabilitySpec::EmhtNoMotion);
+	CRewindabilitySpec *prs = GPOS_NEW(mp) CRewindabilitySpec(CRewindabilitySpec::ErtNone, CRewindabilitySpec::EmhtNoMotion);
 
 	// Ensure order, distribution and rewindability meet 'satisfy' matching at the top level
 	CEnfdOrder *peo = GPOS_NEW(mp) CEnfdOrder(pos, CEnfdOrder::EomSatisfy);
-	CEnfdDistribution *ped =
-		GPOS_NEW(mp) CEnfdDistribution(pds, CEnfdDistribution::EdmSatisfy);
-	CEnfdRewindability *per =
-		GPOS_NEW(mp) CEnfdRewindability(prs, CEnfdRewindability::ErmSatisfy);
+	CEnfdDistribution *ped = GPOS_NEW(mp) CEnfdDistribution(pds, CEnfdDistribution::EdmSatisfy);
+	CEnfdRewindability *per = GPOS_NEW(mp) CEnfdRewindability(prs, CEnfdRewindability::ErmSatisfy);
 
 	// Required CTEs are obtained from the CTEInfo global information in the optimizer context
 	CCTEReq *pcter = poptctxt->Pcteinfo()->PcterProducers(mp);
@@ -237,14 +224,11 @@ CQueryContext* CQueryContext::PqcGenerate(CMemoryPool *mp, CExpression *pexpr, U
 	// NB: Partition propagation requirements are not initialized here.  They are
 	// constructed later based on derived relation properties (CPartInfo) by
 	// CReqdPropPlan::InitReqdPartitionPropagation().
-
-	CReqdPropPlan *prpp =
-		GPOS_NEW(mp) CReqdPropPlan(pcrs, peo, ped, per, pcter);
+	CReqdPropPlan *prpp = GPOS_NEW(mp) CReqdPropPlan(pcrs, peo, ped, per, pcter);
 
 	// Finally, create the CQueryContext
 	pdrgpmdname->AddRef();
-	return GPOS_NEW(mp) CQueryContext(mp, pexprResult, prpp, colref_array,
-									  pdrgpmdname, fDeriveStats);
+	return GPOS_NEW(mp) CQueryContext(mp, pexprResult, prpp, colref_array, pdrgpmdname, fDeriveStats);
 }
 
 #ifdef GPOS_DEBUG

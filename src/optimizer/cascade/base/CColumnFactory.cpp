@@ -281,13 +281,10 @@ CColumnFactory::PcrCopy(const CColRef *colref)
 //		Lookup by id
 //
 //---------------------------------------------------------------------------
-CColRef *
-CColumnFactory::LookupColRef(ULONG id)
+CColRef* CColumnFactory::LookupColRef(ULONG id)
 {
 	CSyncHashtableAccessByKey<CColRef, ULONG> shtacc(m_sht, id);
-
-	CColRef *colref = shtacc.Find();
-
+	CColRef* colref = shtacc.Find();
 	return colref;
 }
 

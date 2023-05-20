@@ -15,6 +15,7 @@
 #include "duckdb/optimizer/cascade/memory/CAutoMemoryPool.h"
 #include "duckdb/optimizer/cascade/base/COptCtxt.h"
 #include "duckdb/optimizer/cascade/base/CUtils.h"
+#include "duckdb/optimizer/cascade/base/IDatumBool.h"
 #include "duckdb/optimizer/cascade/eval/IConstExprEvaluator.h"
 #include "duckdb/optimizer/cascade/exception.h"
 #include "duckdb/optimizer/cascade/mdcache/CMDAccessor.h"
@@ -50,8 +51,7 @@ CDefaultComparator::CDefaultComparator(IConstExprEvaluator *pceeval)
 //		data and evaluates it.
 //
 //---------------------------------------------------------------------------
-BOOL
-CDefaultComparator::FEvalComparison(CMemoryPool *mp, const IDatum *datum1,
+BOOL CDefaultComparator::FEvalComparison(CMemoryPool *mp, const IDatum *datum1,
 									const IDatum *datum2,
 									IMDType::ECmpType cmp_type) const
 {

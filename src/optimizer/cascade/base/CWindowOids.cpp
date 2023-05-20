@@ -5,7 +5,7 @@
 //	@doc:
 //		System specific oids for window operations
 //---------------------------------------------------------------------------
-#include "gpopt/base/CWindowOids.h"
+#include "duckdb/optimizer/cascade/base/CWindowOids.h"
 
 using namespace gpopt;
 
