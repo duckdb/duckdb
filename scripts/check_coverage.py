@@ -15,7 +15,7 @@ args = parser.parse_args()
 covered_regex = '<a name="(\d+)">[ \t\n]*<span class="lineNum">[ \t\n0-9]+</span><span class="{COVERED_CLASS}">[ \t\n0-9]+:([^<]+)'
 
 def get_original_path(path):
-    return path.replace('.gcov.html', '').replace(os.getcwd(), '').replace('coverage_html' + os.path.sep, '')
+    return path.replace('.gcov.html', '').replace(os.getcwd(), '').replace('coverage_html' + os.path.sep, '').replace('home/runner/work/duckdb/duckdb/', '')
 
 def cleanup_line(line):
     return line.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"')
@@ -55,7 +55,7 @@ def check_file(path, partial_coverage_dict):
 
     if len(uncovered_lines) > expected_uncovered_lines:
         if args.fix:
-            uncovered_file.write(f'{original_path}\t{len(uncovered_lines)}\n')
+            uncovered_file.write(f'{original_path}\t{len(uncovered_lines) + 1}\n')
             return
         DASH_COUNT = 80
         print("-" * DASH_COUNT)
