@@ -103,6 +103,7 @@ core_functions/aggregate/distributive/bitagg.cpp	8
 core_functions/aggregate/distributive/bitstring_agg.cpp	5
 core_functions/aggregate/distributive/entropy.cpp	9
 core_functions/aggregate/distributive/kurtosis.cpp	3
+core_functions/aggregate/distributive/minmax.cpp	1
 core_functions/aggregate/distributive/skew.cpp	2
 core_functions/aggregate/distributive/sum.cpp	10
 core_functions/aggregate/holistic/approximate_quantile.cpp	29
@@ -153,10 +154,11 @@ execution/index/art/art_key.cpp	14
 execution/index/art/iterator.cpp	8
 execution/index/art/leaf.cpp	38
 execution/index/art/node.cpp	40
+execution/index/art/node48.cpp	8
 execution/index/art/node256.cpp	4
 execution/index/art/prefix.cpp	78
 execution/index/art/prefix_segment.cpp	2
-execution/join_hashtable.cpp	21
+execution/join_hashtable.cpp	22
 execution/nested_loop_join/nested_loop_join_inner.cpp	24
 execution/nested_loop_join/nested_loop_join_mark.cpp	30
 execution/operator/aggregate/aggregate_object.cpp	2
@@ -416,7 +418,7 @@ include/duckdb/planner/expression/bound_subquery_expression.hpp	5
 include/duckdb/planner/filter/conjunction_filter.hpp	3
 include/duckdb/planner/table_filter.hpp	3
 include/duckdb/storage/buffer/block_handle.hpp	7
-include/duckdb/storage/compression/chimp/algorithm/byte_reader.hpp	16
+include/duckdb/storage/compression/chimp/algorithm/byte_reader.hpp	19
 include/duckdb/storage/compression/chimp/algorithm/chimp128.hpp	10
 include/duckdb/storage/compression/chimp/algorithm/leading_zero_buffer.hpp	3
 include/duckdb/storage/compression/chimp/algorithm/output_bit_stream.hpp	2
@@ -733,7 +735,7 @@ storage/magic_bytes.cpp	2
 storage/optimistic_data_writer.cpp	4
 storage/partial_block_manager.cpp	26
 storage/single_file_block_manager.cpp	15
-storage/standard_buffer_manager.cpp	125
+storage/standard_buffer_manager.cpp	127
 storage/statistics/base_statistics.cpp	11
 storage/statistics/distinct_statistics.cpp	3
 storage/statistics/list_stats.cpp	2
