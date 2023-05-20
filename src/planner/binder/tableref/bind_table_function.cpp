@@ -61,6 +61,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		arguments.emplace_back(LogicalTypeId::TABLE);
 		return BindTableInTableOutFunction(expressions, subquery, error);
 	}
+	bool seen_subquery = false;
 	for (auto &child : expressions) {
 		string parameter_name;
 
@@ -77,9 +78,26 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			}
 		}
 		if (child->type == ExpressionType::SUBQUERY) {
-			throw BinderException(
-			    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
-			    table_function.name);
+			auto fun = table_function.functions.GetFunctionByOffset(0);
+			if (table_function.functions.Size() != 1 || fun.arguments.size() < 1 ||
+			    fun.arguments[0].id() != LogicalTypeId::TABLE) {
+				throw BinderException(
+				    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
+				    fun.name);
+			}
+			// this separate subquery binding path is only used by python_map
+			// FIXME: this should be unified with `BindTableInTableOutFunction` above
+			if (seen_subquery) {
+				error = "Table function can have at most one subquery parameter ";
+				return false;
+			}
+			auto binder = Binder::CreateBinder(this->context, this, true);
+			auto &se = child->Cast<SubqueryExpression>();
+			auto node = binder->BindNode(*se.subquery->node);
+			subquery = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(node));
+			seen_subquery = true;
+			arguments.emplace_back(LogicalTypeId::TABLE);
+			continue;
 		}
 
 		TableFunctionBinder binder(*this, context);
