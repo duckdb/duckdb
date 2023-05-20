@@ -71,9 +71,7 @@ class CSchedulerContext;
 //		state 1 → state 2 → state 1).
 //
 //---------------------------------------------------------------------------
-template <class TEnumState, TEnumState estSentinel, class TEnumEvent,
-		  TEnumEvent eevSentinel>
-class CJobStateMachine
+template <class TEnumState, TEnumState estSentinel, class TEnumEvent, TEnumEvent eevSentinel> class CJobStateMachine
 {
 private:
 	// pointer to job action function

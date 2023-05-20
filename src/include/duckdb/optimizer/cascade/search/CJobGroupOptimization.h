@@ -9,10 +9,8 @@
 #define GPOPT_CJobGroupOptimization_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/search/CJobGroup.h"
 #include "duckdb/optimizer/cascade/search/CJobStateMachine.h"
-
 
 namespace gpopt
 {

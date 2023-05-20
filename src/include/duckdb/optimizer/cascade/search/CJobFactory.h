@@ -12,7 +12,6 @@
 
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/common/CSyncPool.h"
-
 #include "duckdb/optimizer/cascade/search/CJob.h"
 #include "duckdb/optimizer/cascade/search/CJobGroupExploration.h"
 #include "duckdb/optimizer/cascade/search/CJobGroupExpressionExploration.h"

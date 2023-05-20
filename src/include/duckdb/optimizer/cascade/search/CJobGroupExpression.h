@@ -9,10 +9,8 @@
 #define GPOPT_CJobGroupExpression_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/search/CJob.h"
 #include "duckdb/optimizer/cascade/xforms/CXform.h"
-
 
 namespace gpopt
 {
