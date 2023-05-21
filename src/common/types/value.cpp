@@ -1479,6 +1479,10 @@ uint8_t UnionValue::GetTag(const Value &value) {
 	return tag;
 }
 
+const LogicalType &UnionValue::GetType(const Value &value) {
+	return UnionType::GetMemberType(value.type(), UnionValue::GetTag(value));
+}
+
 hugeint_t IntegralValue::Get(const Value &value) {
 	switch (value.type().InternalType()) {
 	case PhysicalType::INT8:

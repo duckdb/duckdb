@@ -280,7 +280,7 @@ struct UnionConvert {
 		auto val = input.GetValue(chunk_offset);
 		auto value = UnionValue::GetValue(val);
 
-		return PythonObject::FromValue(value, UnionType::CopyMemberTypes(val.type())[UnionValue::GetTag(val)].second);
+		return PythonObject::FromValue(value, UnionValue::GetType(val));
 	}
 };
 
