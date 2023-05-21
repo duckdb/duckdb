@@ -34,43 +34,40 @@ Vector ReadPgListToVector(duckdb_libpgquery::PGList *column_list, idx_t &size) {
 	return result;
 }
 
-unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::PGNode *node) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateTypeStmt *>(node);
-	D_ASSERT(stmt);
+unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::PGCreateTypeStmt &stmt) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateTypeInfo>();
 
-	auto qualified_name = TransformQualifiedName(stmt->typeName);
+	auto qualified_name = TransformQualifiedName(*stmt.typeName);
 	info->catalog = qualified_name.catalog;
 	info->schema = qualified_name.schema;
 	info->name = qualified_name.name;
 
-	switch (stmt->kind) {
+	switch (stmt.kind) {
 	case duckdb_libpgquery::PG_NEWTYPE_ENUM: {
 		info->internal = false;
-		if (stmt->query) {
+		if (stmt.query) {
 			// CREATE TYPE mood AS ENUM (SELECT ...)
-			D_ASSERT(stmt->vals == nullptr);
-			auto query = TransformSelect(stmt->query, false);
+			D_ASSERT(stmt.vals == nullptr);
+			auto query = TransformSelect(stmt.query, false);
 			info->query = std::move(query);
 			info->type = LogicalType::INVALID;
 		} else {
-			D_ASSERT(stmt->query == nullptr);
+			D_ASSERT(stmt.query == nullptr);
 			idx_t size = 0;
-			auto ordered_array = ReadPgListToVector(stmt->vals, size);
+			auto ordered_array = ReadPgListToVector(stmt.vals, size);
 			info->type = LogicalType::ENUM(info->name, ordered_array, size);
 		}
 	} break;
 
 	case duckdb_libpgquery::PG_NEWTYPE_ALIAS: {
-		LogicalType target_type = TransformTypeName(stmt->ofType);
+		LogicalType target_type = TransformTypeName(stmt.ofType);
 		info->type = target_type;
 	} break;
 
 	default:
 		throw InternalException("Unknown kind of new type");
 	}
-
 	result->info = std::move(info);
 	return result;
 }

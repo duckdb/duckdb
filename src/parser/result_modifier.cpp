@@ -277,10 +277,10 @@ bool LimitPercentModifier::Equals(const ResultModifier &other_p) const {
 		return false;
 	}
 	auto &other = other_p.Cast<LimitPercentModifier>();
-	if (!BaseExpression::Equals(*limit, *other.limit)) {
+	if (!ParsedExpression::Equals(limit, other.limit)) {
 		return false;
 	}
-	if (!BaseExpression::Equals(*offset, *other.offset)) {
+	if (!ParsedExpression::Equals(offset, other.offset)) {
 		return false;
 	}
 	return true;
