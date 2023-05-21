@@ -254,7 +254,7 @@ private:
 	//===--------------------------------------------------------------------===//
 	// Index transform
 	//===--------------------------------------------------------------------===//
-	vector<unique_ptr<ParsedExpression>> TransformIndexParameters(duckdb_libpgquery::PGList *list,
+	vector<unique_ptr<ParsedExpression>> TransformIndexParameters(duckdb_libpgquery::PGList &list,
 	                                                              const string &relation_name);
 
 	//===--------------------------------------------------------------------===//
@@ -302,15 +302,15 @@ private:
 	QualifiedName TransformQualifiedName(duckdb_libpgquery::PGRangeVar &root);
 
 	//! Transform a Postgres TypeName string into a LogicalType
-	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName *name);
+	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName &name);
 
 	//! Transform a Postgres GROUP BY expression into a list of Expression
-	bool TransformGroupBy(duckdb_libpgquery::PGList *group, SelectNode &result);
-	void TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map, SelectNode &result,
+	bool TransformGroupBy(optional_ptr<duckdb_libpgquery::PGList> group, SelectNode &result);
+	void TransformGroupByNode(duckdb_libpgquery::PGNode &n, GroupingExpressionMap &map, SelectNode &result,
 	                          vector<GroupingSet> &result_sets);
 	void AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map, GroupByNode &result,
 	                          vector<idx_t> &result_set);
-	void TransformGroupByExpression(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map, GroupByNode &result,
+	void TransformGroupByExpression(duckdb_libpgquery::PGNode &n, GroupingExpressionMap &map, GroupByNode &result,
 	                                vector<idx_t> &result_set);
 	//! Transform a Postgres ORDER BY expression into an OrderByDescription
 	bool TransformOrderBy(duckdb_libpgquery::PGList *order, vector<OrderByNode> &result);
@@ -324,11 +324,14 @@ private:
 	//! Transform a Postgres window frame specification into frame expressions
 	void TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_spec, WindowExpression &expr);
 
-	unique_ptr<SampleOptions> TransformSampleOptions(duckdb_libpgquery::PGNode *options);
+	unique_ptr<SampleOptions> TransformSampleOptions(optional_ptr<duckdb_libpgquery::PGNode> options);
 	//! Returns true if an expression is only a star (i.e. "*", without any other decorators)
 	bool ExpressionIsEmptyStar(ParsedExpression &expr);
 
 	OnEntryNotFound TransformOnEntryNotFound(bool missing_ok);
+
+	Vector PGListToVector(optional_ptr<duckdb_libpgquery::PGList> column_list, idx_t &size);
+	vector<string> TransformConflictTarget(duckdb_libpgquery::PGList &list);
 
 private:
 	//! Current stack depth

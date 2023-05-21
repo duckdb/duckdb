@@ -9,7 +9,7 @@ namespace duckdb {
 unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::PGTypeCast &root) {
 	// get the type to cast to
 	auto type_name = root.typeName;
-	LogicalType target_type = TransformTypeName(type_name);
+	LogicalType target_type = TransformTypeName(*type_name);
 
 	// check for a constant BLOB value, then return ConstantExpression with BLOB
 	if (!root.tryCast && target_type == LogicalType::BLOB && root.arg->type == duckdb_libpgquery::T_PGAConst) {

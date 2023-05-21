@@ -171,7 +171,7 @@ struct FirstVectorFunction {
 		UnifiedVectorFormat sdata;
 		state_vector.ToUnifiedFormat(count, sdata);
 
-		auto states = (FirstStateVector **)sdata.data;
+		auto states = UnifiedVectorFormat::GetData<FirstStateVector *>(sdata);
 		for (idx_t i = 0; i < count; i++) {
 			const auto idx = idata.sel->get_index(i);
 			if (SKIP_NULLS && !idata.validity.RowIsValid(idx)) {

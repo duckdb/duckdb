@@ -19,11 +19,11 @@ static IndexType StringToIndexType(const string &str) {
 	return IndexType::INVALID;
 }
 
-vector<unique_ptr<ParsedExpression>> Transformer::TransformIndexParameters(duckdb_libpgquery::PGList *list,
+vector<unique_ptr<ParsedExpression>> Transformer::TransformIndexParameters(duckdb_libpgquery::PGList &list,
                                                                            const string &relation_name) {
 	vector<unique_ptr<ParsedExpression>> expressions;
-	for (auto cell = list->head; cell != nullptr; cell = cell->next) {
-		auto index_element = (duckdb_libpgquery::PGIndexElem *)cell->data.ptr_value;
+	for (auto cell = list.head; cell != nullptr; cell = cell->next) {
+		auto index_element = PGPointerCast<duckdb_libpgquery::PGIndexElem>(cell->data.ptr_value);
 		if (index_element->collation) {
 			throw NotImplementedException("Index with collation not supported yet!");
 		}
@@ -54,7 +54,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 
 	info->on_conflict = TransformOnConflict(stmt.onconflict);
 
-	info->expressions = TransformIndexParameters(stmt.indexParams, stmt.relation->relname);
+	info->expressions = TransformIndexParameters(*stmt.indexParams, stmt.relation->relname);
 
 	info->index_type = StringToIndexType(string(stmt.accessMethod));
 	auto tableref = make_uniq<BaseTableRef>();

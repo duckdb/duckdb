@@ -59,8 +59,8 @@ bool ScalarFunction::Equal(const ScalarFunction &rhs) const {
 bool ScalarFunction::CompareScalarFunctionT(const scalar_function_t &other) const {
 	typedef void(scalar_function_ptr_t)(DataChunk &, ExpressionState &, Vector &);
 
-	auto func_ptr = (scalar_function_ptr_t **)function.template target<scalar_function_ptr_t *>();
-	auto other_ptr = (scalar_function_ptr_t **)other.template target<scalar_function_ptr_t *>();
+	auto func_ptr = (scalar_function_ptr_t **)function.template target<scalar_function_ptr_t *>(); // NOLINT
+	auto other_ptr = (scalar_function_ptr_t **)other.template target<scalar_function_ptr_t *>(); // NOLINT
 
 	// Case the functions were created from lambdas the target will return a nullptr
 	if (!func_ptr && !other_ptr) {

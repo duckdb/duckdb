@@ -341,8 +341,8 @@ static bool TemplatedOptimumList(Vector &left, idx_t lidx, idx_t lcount, Vector 
 	auto &lchild = ListVector::GetEntry(left);
 	auto &rchild = ListVector::GetEntry(right);
 
-	auto ldata = (const list_entry_t *)lvdata.data;
-	auto rdata = (const list_entry_t *)rvdata.data;
+	auto ldata = UnifiedVectorFormat::GetData<list_entry_t>(lvdata);
+	auto rdata = UnifiedVectorFormat::GetData<list_entry_t>(rvdata);
 
 	auto &lval = ldata[lidx];
 	auto &rval = rdata[ridx];

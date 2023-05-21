@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-Vector ReadPgListToVector(duckdb_libpgquery::PGList *column_list, idx_t &size) {
+Vector Transformer::PGListToVector(optional_ptr<duckdb_libpgquery::PGList> column_list, idx_t &size) {
 	if (!column_list) {
 		Vector result(LogicalType::VARCHAR);
 		return result;
@@ -21,8 +21,8 @@ Vector ReadPgListToVector(duckdb_libpgquery::PGList *column_list, idx_t &size) {
 
 	size = 0;
 	for (auto c = column_list->head; c != nullptr; c = lnext(c)) {
-		auto &type_val = *((duckdb_libpgquery::PGAConst *)c->data.ptr_value);
-		auto entry_value_node = (duckdb_libpgquery::PGValue)(type_val.val);
+		auto &type_val = *PGPointerCast<duckdb_libpgquery::PGAConst>(c->data.ptr_value);
+		auto &entry_value_node = type_val.val;
 		if (entry_value_node.type != duckdb_libpgquery::T_PGString) {
 			throw ParserException("Expected a string constant as value");
 		}
@@ -55,13 +55,13 @@ unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::
 		} else {
 			D_ASSERT(stmt.query == nullptr);
 			idx_t size = 0;
-			auto ordered_array = ReadPgListToVector(stmt.vals, size);
+			auto ordered_array = PGListToVector(stmt.vals, size);
 			info->type = LogicalType::ENUM(info->name, ordered_array, size);
 		}
 	} break;
 
 	case duckdb_libpgquery::PG_NEWTYPE_ALIAS: {
-		LogicalType target_type = TransformTypeName(stmt.ofType);
+		LogicalType target_type = TransformTypeName(*stmt.ofType);
 		info->type = target_type;
 	} break;
 

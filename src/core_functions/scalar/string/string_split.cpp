@@ -36,7 +36,7 @@ struct RegularStringSplit {
 		if (delim_size == 0) {
 			return 0;
 		}
-		return ContainsFun::Find((const unsigned char *)input_data, input_size, (const unsigned char *)delim_data,
+		return ContainsFun::Find(data_ptr_cast<const unsigned char>(input_data), input_size, data_ptr_cast<const unsigned char>(delim_data),
 		                         delim_size);
 	}
 };
@@ -109,11 +109,11 @@ template <class OP>
 static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector &result, void *data = nullptr) {
 	UnifiedVectorFormat input_data;
 	args.data[0].ToUnifiedFormat(args.size(), input_data);
-	auto inputs = (string_t *)input_data.data;
+	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	UnifiedVectorFormat delim_data;
 	args.data[1].ToUnifiedFormat(args.size(), delim_data);
-	auto delims = (string_t *)delim_data.data;
+	auto delims = UnifiedVectorFormat::GetData<string_t>(delim_data);
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 

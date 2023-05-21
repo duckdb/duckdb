@@ -1264,7 +1264,7 @@ struct StructDatePart {
 	template <typename INPUT_TYPE>
 	static void Function(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		D_ASSERT(args.ColumnCount() == 1);
 
 		const auto count = args.size();
@@ -1372,7 +1372,7 @@ struct StructDatePart {
 	static void SerializeFunction(FieldWriter &writer, const FunctionData *bind_data_p,
 	                              const ScalarFunction &function) {
 		D_ASSERT(bind_data_p);
-		auto &info = (BindData &)*bind_data_p;
+		auto &info = bind_data_p->Cast<BindData>();
 		writer.WriteSerializable(info.stype);
 		writer.WriteList<DatePartSpecifier>(info.part_codes);
 	}
