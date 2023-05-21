@@ -212,6 +212,7 @@ if (OSX_BUILD_UNIVERSAL)
     error("This only makes sense on OSX")
   endif()
   SET(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures for Mac OS X" FORCE)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "Minimum OS X deployment version" FORCE)
 endif()
 
 set(SUN FALSE)

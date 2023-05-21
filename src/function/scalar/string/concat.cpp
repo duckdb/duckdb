@@ -118,7 +118,7 @@ static void TemplatedConcatWS(DataChunk &args, string_t *sep_data, const Selecti
                               const SelectionVector &rsel, idx_t count, Vector &result) {
 	vector<idx_t> result_lengths(args.size(), 0);
 	vector<bool> has_results(args.size(), false);
-	auto orrified_data = make_unsafe_array<UnifiedVectorFormat>(args.ColumnCount() - 1);
+	auto orrified_data = make_unsafe_uniq_array<UnifiedVectorFormat>(args.ColumnCount() - 1);
 	for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
 		args.data[col_idx].ToUnifiedFormat(args.size(), orrified_data[col_idx - 1]);
 	}

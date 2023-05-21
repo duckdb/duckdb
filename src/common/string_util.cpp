@@ -193,6 +193,10 @@ string StringUtil::Lower(const string &str) {
 	return (copy);
 }
 
+bool StringUtil::IsLower(const string &str) {
+	return str == Lower(str);
+}
+
 // Jenkins hash function: https://en.wikipedia.org/wiki/Jenkins_hash_function
 uint64_t StringUtil::CIHash(const string &str) {
 	uint32_t hash = 0;
@@ -277,7 +281,7 @@ vector<string> StringUtil::TopNStrings(vector<pair<string, idx_t>> scores, idx_t
 
 struct LevenshteinArray {
 	LevenshteinArray(idx_t len1, idx_t len2) : len1(len1) {
-		dist = make_unsafe_array<idx_t>(len1 * len2);
+		dist = make_unsafe_uniq_array<idx_t>(len1 * len2);
 	}
 
 	idx_t &Score(idx_t i, idx_t j) {
@@ -286,7 +290,7 @@ struct LevenshteinArray {
 
 private:
 	idx_t len1;
-	unsafe_array_ptr<idx_t> dist;
+	unsafe_unique_array<idx_t> dist;
 
 	idx_t GetIndex(idx_t i, idx_t j) {
 		return j * len1 + i;

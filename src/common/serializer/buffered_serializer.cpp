@@ -5,10 +5,10 @@
 namespace duckdb {
 
 BufferedSerializer::BufferedSerializer(idx_t maximum_size)
-    : BufferedSerializer(make_unsafe_array<data_t>(maximum_size), maximum_size) {
+    : BufferedSerializer(make_unsafe_uniq_array<data_t>(maximum_size), maximum_size) {
 }
 
-BufferedSerializer::BufferedSerializer(unsafe_array_ptr<data_t> data, idx_t size)
+BufferedSerializer::BufferedSerializer(unsafe_unique_array<data_t> data, idx_t size)
     : maximum_size(size), data(data.get()) {
 	blob.size = 0;
 	blob.data = std::move(data);
@@ -26,7 +26,7 @@ void BufferedSerializer::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 		auto new_data = new data_t[maximum_size];
 		memcpy(new_data, data, blob.size);
 		data = new_data;
-		blob.data = unsafe_array_ptr<data_t>(new_data);
+		blob.data = unsafe_unique_array<data_t>(new_data);
 	}
 
 	memcpy(data + blob.size, buffer, write_size);
