@@ -1466,15 +1466,15 @@ const vector<Value> &ListValue::GetChildren(const Value &value) {
 const Value &UnionValue::GetValue(const Value &value) {
 	D_ASSERT(value.type().id() == LogicalTypeId::UNION);
 	auto &children = StructValue::GetChildren(value);
-	auto tag = children[0].GetValueUnsafe<uint8_t>();
+	auto tag = children[0].GetValueUnsafe<union_tag_t>();
 	D_ASSERT(tag < children.size() - 1);
 	return children[tag + 1];
 }
 
-uint8_t UnionValue::GetTag(const Value &value) {
+union_tag_t UnionValue::GetTag(const Value &value) {
 	D_ASSERT(value.type().id() == LogicalTypeId::UNION);
 	auto children = StructValue::GetChildren(value);
-	auto tag = children[0].GetValueUnsafe<uint8_t>();
+	auto tag = children[0].GetValueUnsafe<union_tag_t>();
 	D_ASSERT(tag < children.size() - 1);
 	return tag;
 }
