@@ -21,33 +21,20 @@ RewriteCorrelatedExpressions::RewriteCorrelatedExpressions(ColumnBinding base_bi
 
 void RewriteCorrelatedExpressions::VisitOperator(LogicalOperator &op) {
 	if (recursive_rewrite) {
-		// recursively visit all the nodes and update column bindings
-		switch (op.type) {
-		case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
-			// Need to specially handle depths for dependendent joins
+		// Update column bindings from left child of lateral to right child
+		if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 			D_ASSERT(op.children.size() == 2);
-
-			if (op.swapped_children) {
-				lateral_depth++;
-				VisitOperator(*op.children[0]);
-				lateral_depth--;
-				VisitOperator(*op.children[1]);
-			} else {
-				VisitOperator(*op.children[0]);
-				// Increment the lateral depth so that relevant correlated columns can be identified correctly
-				lateral_depth++;
-				VisitOperator(*op.children[1]);
-				// Reset depth to original state
-				lateral_depth--;
-			}
-			break;
-		default:
+			VisitOperator(*op.children[0]);
+			lateral_depth++;
+			VisitOperator(*op.children[1]);
+			lateral_depth--;
+		} else {
 			VisitOperatorChildren(op);
 		}
 	}
 	// update the bindings in the correlated columns of the dependendent join
 	if (op.type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
-		auto &plan = (LogicalDependentJoin &)op;
+		auto &plan = op.Cast<LogicalDependentJoin>();
 		for (auto &corr : plan.correlated_columns) {
 			auto entry = correlated_map.find(corr.binding);
 			if (entry != correlated_map.end()) {

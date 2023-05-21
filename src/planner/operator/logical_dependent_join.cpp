@@ -20,15 +20,7 @@ unique_ptr<LogicalOperator> LogicalDependentJoin::Create(unique_ptr<LogicalOpera
 }
 
 void LogicalDependentJoin::Serialize(FieldWriter &writer) const {
-	LogicalComparisonJoin::Serialize(writer);
-	if (type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		// if the delim join has no delim columns anymore it is turned into a regular comparison join
-		return;
-	}
-	if (join_condition) {
-		writer.WriteString(join_condition->ToString());
-	}
-	writer.WriteRegularSerializableList(conditions);
+	throw InternalException("LogicalDependentJoin should not exist in any plan");
 }
 
 } // namespace duckdb

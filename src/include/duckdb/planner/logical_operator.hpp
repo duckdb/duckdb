@@ -48,9 +48,6 @@ public:
 	//! Estimated Cardinality
 	idx_t estimated_cardinality;
 	bool has_estimated_cardinality;
-	//! Flag to track if left and right child have been swapped in a join
-	//! Needed so that lateral_depth can be tracked and updated correctly during flattening and planning
-	bool swapped_children = false;
 
 	unique_ptr<EstimatedProperties> estimated_props;
 

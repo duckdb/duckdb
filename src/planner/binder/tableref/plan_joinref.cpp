@@ -231,8 +231,6 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(JoinType type, Joi
 }
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
-	bool swapped_children = false;
-	// Store the existing flag as we will modify if in the future, but we will also need the old
 	auto old_is_outside_flattened = is_outside_flattened;
 	// Plan laterals from outermost to innermost
 	if (ref.lateral) {
@@ -256,11 +254,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 		// they are the same but with sides flipped, so treating them the same simplifies life
 		ref.type = JoinType::LEFT;
 		std::swap(left, right);
-		// Set the flag for the flattener to correctly generate the flattened plan
-		swapped_children = true;
 	}
 	if (ref.lateral) {
-		D_ASSERT(swapped_children == false);
 		if (!is_outside_flattened) {
 			// If outer dependent joins is yet to be flattened, only plan the lateral
 			has_unplanned_dependent_joins = true;
@@ -288,7 +283,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	}
 	if (ref.type == JoinType::INNER && (ref.condition->HasSubquery() || HasCorrelatedColumns(*ref.condition)) &&
 	    ref.ref_type == JoinRefType::REGULAR) {
-		D_ASSERT(swapped_children == false);
 		// inner join, generate a cross product + filter
 		// this will be later turned into a proper join by the join order optimizer
 		auto root = LogicalCrossProduct::Create(std::move(left), std::move(right));
@@ -305,8 +299,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	// now create the join operator from the join condition
 	auto result = LogicalComparisonJoin::CreateJoin(ref.type, ref.ref_type, std::move(left), std::move(right),
 	                                                std::move(ref.condition));
-	// set the flag on the logical operator about whether its left and right children were swapped
-	result->swapped_children = swapped_children;
 
 	optional_ptr<LogicalOperator> join;
 	if (result->type == LogicalOperatorType::LOGICAL_FILTER) {

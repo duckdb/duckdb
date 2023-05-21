@@ -41,7 +41,7 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator *op, boo
 	// now visit the children of this entry and check if they have correlated expressions
 	for (auto &child : op->children) {
 		auto new_lateral_depth = lateral_depth;
-		if ((is_lateral_join) && (child_idx == (op->swapped_children ? 0 : 1))) {
+		if (is_lateral_join && child_idx == 1) {
 			new_lateral_depth = lateral_depth + 1;
 		}
 		// we OR the property with its children such that has_correlation is true if either
@@ -87,9 +87,6 @@ bool SubqueryDependentFilter(Expression *expr) {
 unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan,
                                                                                  bool &parent_propagate_null_values,
                                                                                  idx_t lateral_depth) {
-	auto left_depth = (plan->swapped_children ? lateral_depth + 1 : lateral_depth);
-	auto right_depth = (plan->swapped_children ? lateral_depth : lateral_depth + 1);
-
 	// first check if the logical operator has correlated expressions
 	auto entry = has_correlated_expressions.find(plan.get());
 	D_ASSERT(entry != has_correlated_expressions.end());
@@ -294,12 +291,12 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		plan->children[0] =
 		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 
-		// Left side uses depth like the other operators
-		RewriteCorrelatedExpressions rewriter(this->base_binding, correlated_map, left_depth);
+		// Normal rewriter like in other joins
+		RewriteCorrelatedExpressions rewriter(this->base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
 
 		// Recursive rewriter to visit right side of lateral join and update bindings from left
-		RewriteCorrelatedExpressions recursive_rewriter(this->base_binding, correlated_map, right_depth, true);
+		RewriteCorrelatedExpressions recursive_rewriter(this->base_binding, correlated_map, lateral_depth + 1, true);
 		recursive_rewriter.VisitOperator(*plan->children[1]);
 
 		return plan;

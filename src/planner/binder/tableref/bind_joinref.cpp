@@ -131,7 +131,6 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		LateralBinder binder(left_binder, context);
 		result->right = right_binder.Bind(*ref.right);
 		bool is_lateral = false;
-		auto all_correlated_columns = vector<CorrelatedColumnInfo>();
 		// Store the correlated columns in the right binder in bound ref for planning of LATERALs
 		// Ignore the correlated columns in the left binder, flattening handles those correlations
 		result->correlated_columns = right_binder.correlated_columns;
