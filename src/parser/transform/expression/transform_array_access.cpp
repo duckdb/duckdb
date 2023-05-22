@@ -27,11 +27,14 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 			children.push_back(std::move(result));
 			if (index->is_slice) {
 				// slice
-				// if either the lower or upper bound is not specified, we use the maximum value so that we can handle it in the excution
-				children.push_back(!index->lidx ? make_uniq<ConstantExpression>(Value::BIGINT(NumericLimits<int64_t>::Maximum()))
-				                                : TransformExpression(index->lidx));
-				children.push_back(!index->uidx ? make_uniq<ConstantExpression>(Value::BIGINT(NumericLimits<int64_t>::Maximum()))
-				                                : TransformExpression(index->uidx));
+				// if either the lower or upper bound is not specified, we use the maximum value so that we can handle
+				// it in the execution
+				children.push_back(!index->lidx
+				                       ? make_uniq<ConstantExpression>(Value::BIGINT(NumericLimits<int64_t>::Maximum()))
+				                       : TransformExpression(index->lidx));
+				children.push_back(!index->uidx
+				                       ? make_uniq<ConstantExpression>(Value::BIGINT(NumericLimits<int64_t>::Maximum()))
+				                       : TransformExpression(index->uidx));
 				if (index->step) {
 					children.push_back(TransformExpression(index->step));
 				}

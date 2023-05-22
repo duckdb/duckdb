@@ -88,22 +88,23 @@ public:
 		case ExpressionType::ARRAY_EXTRACT:
 			return entry.children[0]->ToString() + "[" + entry.children[1]->ToString() + "]";
 		case ExpressionType::ARRAY_SLICE: {
-//			auto &const_expr = entry.children[1]->template Cast<ConstantExpression>();
-//			D_ASSERT(const_expr.value == Value::BIGINT(NumericLimits<int64_t>::Maximum()));
-//			entry.children[1]->ToString();
-//			auto &const_expr = entry.children[1]->Cast<ConstantExpression>();
-//			return string();
+			auto &const_expr = entry.children[1]->template Cast<ConstantExpression>();
 			string begin = entry.children[1]->ToString();
-//			entry.children[1]
-//			if (static_cast<long long>(entry.children[1]) == NumericLimits<int64_t>::Maximum()) {
-//				begin = "";
-//			}
+			if (const_expr.value.type() == LogicalType::BIGINT &&
+			    const_expr.value.template GetValue<int64_t>() == NumericLimits<int64_t>::Maximum()) {
+				begin = "";
+			}
+			const_expr = entry.children[2]->template Cast<ConstantExpression>();
 			string end = entry.children[2]->ToString();
-//			if (static_cast<long long>(entry.children[2]) == NumericLimits<int64_t>::Maximum()) {
-//                end = "";
-//            }sel
-			return entry.children[0]->ToString() + "[" + begin + ":" +
-			       end + "]";
+			if (const_expr.value.type() == LogicalType::BIGINT &&
+			    const_expr.value.template GetValue<int64_t>() == NumericLimits<int64_t>::Maximum()) {
+				end = "";
+			}
+			if (entry.children[3]) {
+				return entry.children[0]->ToString() + "[" + begin + ":" + end + ":" + entry.children[3]->ToString() +
+				       "]";
+			}
+			return entry.children[0]->ToString() + "[" + begin + ":" + end + "]";
 		}
 		case ExpressionType::STRUCT_EXTRACT: {
 			if (entry.children[1]->type != ExpressionType::VALUE_CONSTANT) {

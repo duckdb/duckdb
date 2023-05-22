@@ -3655,13 +3655,13 @@ indirection_el:
 				    	ai->step = $6;
 				    	$$ = (PGNode *) ai;
 				}
-//			| '[' opt_slice_bound ':-:' opt_slice_bound ']' {
-//					PGAIndices *ai = makeNode(PGAIndices);
-//					ai->is_slice = true;
-//					ai->lidx = $2;
-//					ai->step = $4;
-//					$$ = (PGNode *) ai;
-//				}
+			| '[' opt_slice_bound ':' '-' ':' opt_slice_bound ']' {
+					PGAIndices *ai = makeNode(PGAIndices);
+					ai->is_slice = true;
+					ai->lidx = $2;
+					ai->step = $6;
+					$$ = (PGNode *) ai;
+				}
 				;
 
 opt_slice_bound:
@@ -3720,13 +3720,13 @@ extended_indirection_el:
                  			$$ = (PGNode *) ai;
                 		}
 
-//			| '[' opt_slice_bound ':-:' opt_slice_bound ']' {
-//					PGAIndices *ai = makeNode(PGAIndices);
-//					ai->is_slice = true;
-//					ai->lidx = $2;
-//					ai->step = $4;
-//					$$ = (PGNode *) ai;
-//				}
+			| '[' opt_slice_bound ':' '-' ':' opt_slice_bound ']' {
+					PGAIndices *ai = makeNode(PGAIndices);
+					ai->is_slice = true;
+					ai->lidx = $2;
+					ai->step = $6;
+					$$ = (PGNode *) ai;
+				}
 		;
 
 extended_indirection:

@@ -42,9 +42,9 @@ template <typename INPUT_TYPE, typename INDEX_TYPE>
 static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &end, bool begin_valid, bool end_valid) {
 	// Clamp offsets
 
-//	begin = begin_valid ? begin : 0;
+	//	begin = begin_valid ? begin : 0;
 	begin = (begin > 0) ? begin - 1 : begin;
-//	end = end_valid ? end : ValueLength<INPUT_TYPE, INDEX_TYPE>(value);
+	//	end = end_valid ? end : ValueLength<INPUT_TYPE, INDEX_TYPE>(value);
 	if (!ClampIndex(begin, value) || !ClampIndex(end, value)) {
 		return false;
 	}
@@ -107,17 +107,17 @@ string_t SliceValueWithSteps(Vector &result, SelectionVector &sel, string_t inpu
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
 INDEX_TYPE SliceLength(const INPUT_TYPE &value) {
-    return 0;
+	return 0;
 }
 
 template <>
 int64_t SliceLength(const list_entry_t &value) {
-    return value.length;
+	return value.length;
 }
 
 template <>
 int32_t SliceLength(const string_t &value) {
-    return value.GetSize();
+	return value.GetSize();
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
@@ -146,9 +146,9 @@ static void ExecuteSlice(Vector &result, Vector &v, Vector &b, Vector &e, const 
 			begin = 0;
 		}
 
-		if (end == (INDEX_TYPE)NumericLimits<int64_t>::Maximum() ) {
-            end = SliceLength<INPUT_TYPE, INDEX_TYPE>(sliced);
-        }
+		if (end == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
+			end = SliceLength<INPUT_TYPE, INDEX_TYPE>(sliced);
+		}
 
 		auto vvalid = !ConstantVector::IsNull(v);
 		auto bvalid = !ConstantVector::IsNull(b);
@@ -156,15 +156,16 @@ static void ExecuteSlice(Vector &result, Vector &v, Vector &b, Vector &e, const 
 		auto svalid = s && !ConstantVector::IsNull(*s);
 
 		if (step == 0) {
-            throw ValueOutOfRangeException("Slice step cannot be zero");
-        }
+			throw ValueOutOfRangeException("Slice step cannot be zero");
+		}
 
 		if (s && svalid && step > 0) {
 			sel.Initialize((end - begin + step) / step);
 		}
 
 		// Try to slice
-		if (!vvalid || !bvalid || !evalid || (s && !svalid) || step < 0 || !ClampSlice(sliced, begin, end, bvalid, evalid)) {
+		if (!vvalid || !bvalid || !evalid || (s && !svalid) || step < 0 ||
+		    !ClampSlice(sliced, begin, end, bvalid, evalid)) {
 			ConstantVector::SetNull(result, true);
 		} else if (step == 1) {
 			rdata[0] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
@@ -247,7 +248,8 @@ static void ExecuteSlice(Vector &result, Vector &v, Vector &b, Vector &e, const 
 			auto evalid = edata.validity.RowIsValid(eidx);
 			auto svalid = s && sdata.validity.RowIsValid(sidx);
 
-			if (!vvalid || !bvalid || !evalid || !svalid || step < 0 || !ClampSlice(sliced, begin, end, bvalid, evalid)) {
+			if (!vvalid || !bvalid || !evalid || !svalid || step < 0 ||
+			    !ClampSlice(sliced, begin, end, bvalid, evalid)) {
 				rmask.SetInvalid(i);
 			} else if (step == 1) {
 				rdata[i] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
@@ -302,15 +304,17 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 	D_ASSERT(arguments.size() == 3 || arguments.size() == 4);
 	D_ASSERT(bound_function.arguments.size() == 3 || bound_function.arguments.size() == 4);
 
-//	if (arguments[1]->expression_class == ExpressionClass::BOUND_CONSTANT && arguments[2]->expression_class == ExpressionClass::BOUND_CONSTANT) {
-//		auto &first_bound_const_expr = arguments[1]->Cast<BoundConstantExpression>();
-//		auto &second_bound_const_expr = arguments[2]->Cast<BoundConstantExpression>();
-//		if (first_bound_const_expr.value.GetValue<uint64_t>() == NumericLimits<int64_t>::Maximum() && second_bound_const_expr.value.GetValue<uint64_t>() == NumericLimits<int64_t>::Maximum()) {
-//            // If both begin and end are invalid, we can return the original list
-//            bound_function.return_type = LogicalType::LIST(arguments[0]->return_type);
-//            return ;
-//        }
-//	}
+	//	if (arguments[1]->expression_class == ExpressionClass::BOUND_CONSTANT && arguments[2]->expression_class ==
+	// ExpressionClass::BOUND_CONSTANT) { 		auto &first_bound_const_expr =
+	// arguments[1]->Cast<BoundConstantExpression>(); 		auto &second_bound_const_expr =
+	//arguments[2]->Cast<BoundConstantExpression>(); 		if (first_bound_const_expr.value.GetValue<uint64_t>() ==
+	//NumericLimits<int64_t>::Maximum() && second_bound_const_expr.value.GetValue<uint64_t>() ==
+	// NumericLimits<int64_t>::Maximum()) {
+	//            // If both begin and end are invalid, we can return the original list
+	//            bound_function.return_type = LogicalType::LIST(arguments[0]->return_type);
+	//            return ;
+	//        }
+	//	}
 
 	switch (arguments[0]->return_type.id()) {
 	case LogicalTypeId::LIST:
@@ -319,9 +323,14 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 		break;
 	case LogicalTypeId::VARCHAR:
 		// string slice returns a string, but can only accept 32 bit integers
+		if (bound_function.arguments.size() == 4) {
+			throw NotImplementedException(
+			    "Slice with steps has not been implemented for string types, you can consider rewriting your query as "
+			    "follows:\n SELECT array_to_string((str_split(string, '')[begin:end:step], '');");
+		}
 		bound_function.return_type = arguments[0]->return_type;
 		for (idx_t i = 1; i < 3; i++) {
-            if (arguments[i]->expression_class == ExpressionClass::BOUND_CONSTANT) {
+			if (arguments[i]->expression_class == ExpressionClass::BOUND_CONSTANT) {
 				auto &bound_const_expr = arguments[i]->Cast<BoundConstantExpression>();
 				if (bound_const_expr.value.GetValue<uint64_t>() == NumericLimits<int64_t>::Maximum()) {
 					// If begin or end is empty cast to bigint
@@ -330,11 +339,6 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 					bound_function.arguments[i] = LogicalType::INTEGER;
 				}
 			}
-        }
-		if (bound_function.arguments.size() == 4) {
-			throw NotImplementedException(
-			    "Slice with steps has not been implemented for string types, you can consider rewriting your query as "
-			    "follows:\n SELECT array_to_string((str_split(string, '')[begin:end:step], '');");
 		}
 		break;
 	case LogicalTypeId::SQLNULL:
