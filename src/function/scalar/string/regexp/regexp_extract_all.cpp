@@ -119,7 +119,7 @@ int32_t GetGroupIndex(DataChunk &args, idx_t row, int32_t &result) {
 	if (!format.validity.RowIsValid(index)) {
 		return false;
 	}
-	result = ((int32_t *)format.data)[index];
+	result = UnifiedVectorFormat::GetData<int32_t>(format)[index];
 	return true;
 }
 
@@ -188,7 +188,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 			if (!pattern_data.validity.RowIsValid(pattern_idx)) {
 				pattern_valid = false;
 			} else {
-				auto &pattern_p = ((string_t *)pattern_data.data)[pattern_idx];
+				auto &pattern_p = UnifiedVectorFormat::GetData<string_t>(pattern_data)[pattern_idx];
 				auto pattern_strpiece = CreateStringPiece(pattern_p);
 				stored_re = make_uniq<duckdb_re2::RE2>(pattern_strpiece, info.options);
 
@@ -216,7 +216,7 @@ void RegexpExtractAll::Execute(DataChunk &args, ExpressionState &state, Vector &
 
 		auto &re = GetPattern(info, state, stored_re);
 		auto &groups = GetGroupsBuffer(info, state, non_const_args);
-		auto &string = ((string_t *)strings_data.data)[string_idx];
+		auto &string = UnifiedVectorFormat::GetData<string_t>(strings_data)[string_idx];
 		ExtractSingleTuple(string, re, group_index, groups, result, row);
 	}
 

@@ -70,7 +70,7 @@ bool ScalarFunction::CompareScalarFunctionT(const scalar_function_t &other) cons
 		// scalar_function_t (std::functions) from lambdas cannot be compared
 		return false;
 	}
-	return ((size_t)*func_ptr == (size_t)*other_ptr);
+	return CastPointerToValue(*func_ptr) == CastPointerToValue(*other_ptr);
 }
 
 void ScalarFunction::NopFunction(DataChunk &input, ExpressionState &state, Vector &result) {

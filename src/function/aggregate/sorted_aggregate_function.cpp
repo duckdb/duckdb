@@ -370,7 +370,7 @@ struct SortedAggregateFunction {
 
 		//	 Reusable inner state
 		vector<data_t> agg_state(order_bind.function.state_size());
-		Vector agg_state_vec(Value::POINTER((idx_t)agg_state.data()));
+		Vector agg_state_vec(Value::POINTER(CastPointerToValue(agg_state.data())));
 
 		// State variables
 		auto bind_info = order_bind.bind_info.get();

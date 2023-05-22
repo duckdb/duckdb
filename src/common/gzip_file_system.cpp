@@ -193,7 +193,7 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 		throw IOException("Failed to decode gzip stream: %s", duckdb_miniz::mz_error(ret));
 	}
 	// update pointers following inflate()
-	sd.in_buff_start = (data_ptr_t)mz_stream_ptr->next_in;
+	sd.in_buff_start = data_ptr_cast<data_t>(mz_stream_ptr->next_in);
 	sd.in_buff_end = sd.in_buff_start + mz_stream_ptr->avail_in;
 	sd.out_buff_end = (data_ptr_t)mz_stream_ptr->next_out;
 	D_ASSERT(sd.out_buff_end + mz_stream_ptr->avail_out == sd.out_buff.get() + sd.out_buf_size);
@@ -360,7 +360,7 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 	}
 
 	auto bytes_remaining = in.size() - (body_ptr - in.data());
-	mz_stream_ptr->next_in = (unsigned char *)body_ptr;
+	mz_stream_ptr->next_in = data_ptr_cast<unsigned char>(body_ptr);
 	mz_stream_ptr->avail_in = bytes_remaining;
 
 	unsigned char decompress_buffer[BUFSIZ];
@@ -373,7 +373,7 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 		if (status != duckdb_miniz::MZ_STREAM_END && status != duckdb_miniz::MZ_OK) {
 			throw IOException("Failed to uncompress");
 		}
-		decompressed.append((char *)decompress_buffer, mz_stream_ptr->total_out - decompressed.size());
+		decompressed.append(data_ptr_cast<char>(decompress_buffer), mz_stream_ptr->total_out - decompressed.size());
 	}
 	duckdb_miniz::mz_inflateEnd(mz_stream_ptr);
 	if (decompressed.empty()) {

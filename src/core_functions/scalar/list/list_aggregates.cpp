@@ -175,7 +175,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 
 	UnifiedVectorFormat lists_data;
 	lists.ToUnifiedFormat(count, lists_data);
-	auto list_entries = (list_entry_t *)lists_data.data;
+	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
 	// state_buffer holds the state for each list of this chunk
 	idx_t size = aggr.function.state_size();

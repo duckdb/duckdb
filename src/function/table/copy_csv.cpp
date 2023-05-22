@@ -187,13 +187,13 @@ static bool RequiresQuotes(WriteCSVData &csv_data, const char *str, idx_t len) {
 
 		// check for delimiter
 		if (options.delimiter.length() != 0 &&
-		    ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.delimiter.c_str(),
+		    ContainsFun::Find(data_ptr_cast<const unsigned char>(str), len, data_ptr_cast<const unsigned char>(options.delimiter.c_str()),
 		                      options.delimiter.size()) != DConstants::INVALID_INDEX) {
 			return true;
 		}
 		// check for quote
 		if (options.quote.length() != 0 &&
-		    ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
+		    ContainsFun::Find(data_ptr_cast<const unsigned char>(str), len, data_ptr_cast<const unsigned char>(options.quote.c_str()),
 		                      options.quote.size()) != DConstants::INVALID_INDEX) {
 			return true;
 		}
@@ -224,11 +224,11 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 			// complex CSV
 			// check for quote or escape separately
 			if (options.quote.length() != 0 &&
-			    ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
+			    ContainsFun::Find(data_ptr_cast<const unsigned char>(str), len, data_ptr_cast<const unsigned char>(options.quote.c_str()),
 			                      options.quote.size()) != DConstants::INVALID_INDEX) {
 				requires_escape = true;
 			} else if (options.escape.length() != 0 &&
-			           ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.escape.c_str(),
+			           ContainsFun::Find(data_ptr_cast<const unsigned char>(str), len, data_ptr_cast<const unsigned char>(options.escape.c_str()),
 			                             options.escape.size()) != DConstants::INVALID_INDEX) {
 				requires_escape = true;
 			}
@@ -236,7 +236,7 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 		if (!requires_escape) {
 			// fast path: no need to escape anything
 			serializer.WriteBufferData(options.quote);
-			serializer.WriteData((const_data_ptr_t)str, len);
+			serializer.WriteData(data_ptr_cast<data_t>(str), len);
 			serializer.WriteBufferData(options.quote);
 			return;
 		}
@@ -252,7 +252,7 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 		serializer.WriteBufferData(new_val);
 		serializer.WriteBufferData(options.quote);
 	} else {
-		serializer.WriteData((const_data_ptr_t)str, len);
+		serializer.WriteData(data_ptr_cast<data_t>(str), len);
 	}
 }
 

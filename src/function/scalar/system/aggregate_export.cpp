@@ -42,8 +42,8 @@ struct CombineState : public FunctionLocalState {
 	explicit CombineState(idx_t state_size_p)
 	    : state_size(state_size_p), state_buffer0(make_unsafe_uniq_array<data_t>(state_size_p)),
 	      state_buffer1(make_unsafe_uniq_array<data_t>(state_size_p)),
-	      state_vector0(Value::POINTER((uintptr_t)state_buffer0.get())),
-	      state_vector1(Value::POINTER((uintptr_t)state_buffer1.get())) {
+	      state_vector0(Value::POINTER(CastPointerToValue(state_buffer0.get()))),
+	      state_vector1(Value::POINTER(CastPointerToValue(state_buffer1.get()))) {
 	}
 };
 
@@ -86,8 +86,8 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 	input.data[0].ToUnifiedFormat(input.size(), state_data);
 	for (idx_t i = 0; i < input.size(); i++) {
 		auto state_idx = state_data.sel->get_index(i);
-		auto state_entry = &(UnifiedVectorFormat::GetData<string_t>(state_data))[state_idx];
-		auto target_ptr = (const char *)local_state.state_buffer.get() + aligned_state_size * i;
+		auto state_entry = UnifiedVectorFormat::GetData<string_t>(state_data) + state_idx;
+		auto target_ptr = data_ptr_cast<const char>(local_state.state_buffer.get()) + aligned_state_size * i;
 
 		if (state_data.validity.RowIsValid(state_idx)) {
 			D_ASSERT(state_entry->GetSize() == bind_data.state_size);
@@ -136,8 +136,8 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 		auto state0_idx = state0_data.sel->get_index(i);
 		auto state1_idx = state1_data.sel->get_index(i);
 
-		auto &state0 = ((string_t *)state0_data.data)[state0_idx];
-		auto &state1 = ((string_t *)state1_data.data)[state1_idx];
+		auto &state0 = UnifiedVectorFormat::GetData<string_t>(state0_data)[state0_idx];
+		auto &state1 = UnifiedVectorFormat::GetData<string_t>(state1_data)[state1_idx];
 
 		// if both are NULL, we return NULL. If either of them is not, the result is that one
 		if (!state0_data.validity.RowIsValid(state0_idx) && !state1_data.validity.RowIsValid(state1_idx)) {
@@ -250,7 +250,7 @@ static void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_inpu
 	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(state);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto data_ptr = addresses_ptr[row_idx];
-		blob_ptr[row_idx] = StringVector::AddStringOrBlob(result, (const char *)data_ptr, state_size);
+		blob_ptr[row_idx] = StringVector::AddStringOrBlob(result, data_ptr_cast<const char>(data_ptr), state_size);
 	}
 }
 
