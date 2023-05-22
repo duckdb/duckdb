@@ -1400,7 +1400,7 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		UnifiedVectorFormat vdata;
 		values_insert_order.ToUnifiedFormat(size_p, vdata);
 
-		auto data = (string_t *)vdata.data;
+		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 		for (idx_t i = 0; i < size_p; i++) {
 			auto idx = vdata.sel->get_index(i);
 			if (!vdata.validity.RowIsValid(idx)) {

@@ -926,7 +926,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 	} else {
 		switch (type.InternalType()) {
 		case PhysicalType::VARCHAR: {
-			auto strings = (string_t *)vdata.data;
+			auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
@@ -948,7 +948,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 
 			// serialize the list entries in a flat array
 			auto data = make_unsafe_uniq_array<list_entry_t>(count);
-			auto source_array = (list_entry_t *)vdata.data;
+			auto source_array = UnifiedVectorFormat::GetData<list_entry_t>(vdata);
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = source_array[idx];
@@ -994,7 +994,7 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 	} else {
 		switch (logical_type.InternalType()) {
 		case PhysicalType::VARCHAR: {
-			auto strings = (string_t *)vdata.data;
+			auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
 
 			// Serialize data as a list
 			serializer.SetTag("data");
@@ -1028,7 +1028,7 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 
 			// serialize the list entries in a flat array
 			auto entries = make_unsafe_uniq_array<list_entry_t>(count);
-			auto source_array = (list_entry_t *)vdata.data;
+			auto source_array = UnifiedVectorFormat::GetData<list_entry_t>(vdata);
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = source_array[idx];
@@ -1503,7 +1503,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 			break;
 		}
 
-		auto list_data = (list_entry_t *)vdata.data;
+		auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(vdata);
 		auto list_entry = list_data[list_index];
 
 		// add the list entry as the first element of "vector"
@@ -1939,7 +1939,7 @@ ConsecutiveChildListInfo ListVector::GetConsecutiveChildListInfo(Vector &list, i
 	ConsecutiveChildListInfo info;
 	UnifiedVectorFormat unified_list_data;
 	list.ToUnifiedFormat(offset + count, unified_list_data);
-	auto list_data = (list_entry_t *)unified_list_data.data;
+	auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(unified_list_data);
 
 	// find the first non-NULL entry
 	idx_t first_length = 0;
@@ -1992,7 +1992,7 @@ void ListVector::GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel
 
 	UnifiedVectorFormat unified_list_data;
 	list.ToUnifiedFormat(offset + count, unified_list_data);
-	auto list_data = (list_entry_t *)unified_list_data.data;
+	auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(unified_list_data);
 
 	//	SelectionVector child_sel(info.second.length);
 	idx_t entry = 0;
@@ -2127,7 +2127,7 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector, idx_t count, 
 			continue;
 		}
 
-		auto tag = ((union_tag_t *)tags_vdata.data)[tag_mapped_row_idx];
+		auto tag = (UnifiedVectorFormat::GetData<union_tag_t>(tags_vdata))[tag_mapped_row_idx];
 		if (tag >= member_count) {
 			return UnionInvalidReason::TAG_OUT_OF_RANGE;
 		}

@@ -162,7 +162,7 @@ struct ArrowScalarBaseData {
 
 		// append the main data
 		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(TGT) * size);
-		auto data = (SRC *)format.data;
+		auto data = UnifiedVectorFormat::GetData<SRC>(format);
 		auto result_data = (TGT *)append_data.main_buffer.data();
 
 		for (idx_t i = from; i < to; i++) {
@@ -269,7 +269,7 @@ struct ArrowBoolData {
 		// we initialize both the validity and the bit set to 1's
 		ResizeValidity(append_data.validity, append_data.row_count + size);
 		ResizeValidity(append_data.main_buffer, append_data.row_count + size);
-		auto data = (bool *)format.data;
+		auto data = UnifiedVectorFormat::GetData<bool>(format);
 
 		auto result_data = (uint8_t *)append_data.main_buffer.data();
 		auto validity_data = (uint8_t *)append_data.validity.data();
@@ -341,7 +341,7 @@ struct ArrowVarcharData {
 
 		// resize the offset buffer - the offset buffer holds the offsets into the child array
 		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(BUFTYPE) * (size + 1));
-		auto data = (SRC *)format.data;
+		auto data = UnifiedVectorFormat::GetData<SRC>(format);
 		auto offset_data = (BUFTYPE *)append_data.main_buffer.data();
 		if (append_data.row_count == 0) {
 			// first entry
@@ -441,7 +441,7 @@ void AppendListOffsets(ArrowAppendData &append_data, UnifiedVectorFormat &format
 	// resize the offset buffer - the offset buffer holds the offsets into the child array
 	idx_t size = to - from;
 	append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(uint32_t) * (size + 1));
-	auto data = (list_entry_t *)format.data;
+	auto data = UnifiedVectorFormat::GetData<list_entry_t>(format);
 	auto offset_data = (uint32_t *)append_data.main_buffer.data();
 	if (append_data.row_count == 0) {
 		// first entry

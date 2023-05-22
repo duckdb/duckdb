@@ -99,7 +99,7 @@ bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 	input.ToUnifiedFormat(count, vdata);
 
 	state.count += count;
-	auto data = (string_t *)vdata.data;
+	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 
 	// Note that we ignore the sampling in case we have not found any valid strings yet, this solves the issue of
 	// not having seen any valid strings here leading to an empty fsst symbol table.
@@ -413,7 +413,7 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 	// Get vector data
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
-	auto data = (string_t *)vdata.data;
+	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 
 	// Collect pointers to strings to compress
 	vector<size_t> sizes_in;

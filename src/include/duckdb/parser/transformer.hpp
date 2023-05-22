@@ -341,11 +341,11 @@ private:
 	StackChecker StackCheck(idx_t extra_stack = 1);
 
 public:
-	template<class T>
+	template <class T>
 	static T &PGCast(duckdb_libpgquery::PGNode &node) {
 		return reinterpret_cast<T &>(node);
 	}
-	template<class T>
+	template <class T>
 	static optional_ptr<T> PGPointerCast(void *ptr) {
 		return optional_ptr<T>(reinterpret_cast<T *>(ptr));
 	}

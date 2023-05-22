@@ -58,9 +58,7 @@ HyperLogLog *HyperLogLog::MergePointer(HyperLogLog &other) {
 }
 
 unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog logs[], idx_t count) {
-	auto hlls_uptr = unique_ptr<duckdb_hll::robj *[]> {
-		new duckdb_hll::robj *[count]
-	};
+	auto hlls_uptr = unique_ptr<duckdb_hll::robj *[]> {new duckdb_hll::robj *[count]};
 	auto hlls = hlls_uptr.get();
 	for (idx_t i = 0; i < count; i++) {
 		hlls[i] = (duckdb_hll::robj *)logs[i].hll;
@@ -194,7 +192,7 @@ inline uint64_t TemplatedHash(const string_t &elem) {
 
 template <class T>
 void TemplatedComputeHashes(UnifiedVectorFormat &vdata, const idx_t &count, uint64_t hashes[]) {
-	T *data = (T *)vdata.data;
+	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (vdata.validity.RowIsValid(idx)) {

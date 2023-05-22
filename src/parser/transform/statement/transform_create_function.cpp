@@ -22,13 +22,13 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 		auto expression = TransformExpression(stmt.function);
 		macro_func = make_uniq<ScalarMacroFunction>(std::move(expression));
 	} else if (stmt.query) {
-		auto query_node = TransformSelect(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.query), true)->node->Copy();
+		auto query_node =
+		    TransformSelect(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.query), true)->node->Copy();
 		macro_func = make_uniq<TableMacroFunction>(std::move(query_node));
 	}
 	PivotEntryCheck("macro");
 
-	auto info =
-	    make_uniq<CreateMacroInfo>(stmt.function ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY);
+	auto info = make_uniq<CreateMacroInfo>(stmt.function ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY);
 	info->catalog = qname.catalog;
 	info->schema = qname.schema;
 	info->name = qname.name;

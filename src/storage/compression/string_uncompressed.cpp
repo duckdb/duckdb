@@ -38,7 +38,7 @@ bool UncompressedStringStorage::StringAnalyze(AnalyzeState &state_p, Vector &inp
 	input.ToUnifiedFormat(count, vdata);
 
 	state.count += count;
-	auto data = (string_t *)vdata.data;
+	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (vdata.validity.RowIsValid(idx)) {

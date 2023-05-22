@@ -185,7 +185,7 @@ struct StandardFixedSizeAppend {
 	template <class T>
 	static void Append(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, UnifiedVectorFormat &adata,
 	                   idx_t offset, idx_t count) {
-		auto sdata = (T *)adata.data;
+		auto sdata = UnifiedVectorFormat::GetData<T>(adata);
 		auto tdata = (T *)target;
 		if (!adata.validity.AllValid()) {
 			for (idx_t i = 0; i < count; i++) {
@@ -216,7 +216,7 @@ struct ListFixedSizeAppend {
 	template <class T>
 	static void Append(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, UnifiedVectorFormat &adata,
 	                   idx_t offset, idx_t count) {
-		auto sdata = (uint64_t *)adata.data;
+		auto sdata = UnifiedVectorFormat::GetData<uint64_t>(adata);
 		auto tdata = (uint64_t *)target;
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = adata.sel->get_index(offset + i);

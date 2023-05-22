@@ -102,7 +102,7 @@ void JoinHashTable::ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx
 	UnifiedVectorFormat hdata;
 	hashes.ToUnifiedFormat(count, hdata);
 
-	auto hash_data = (hash_t *)hdata.data;
+	auto hash_data = UnifiedVectorFormat::GetData<hash_t>(hdata);
 	auto result_data = FlatVector::GetData<data_ptr_t *>(pointers);
 	auto main_ht = (data_ptr_t *)hash_map.get();
 	for (idx_t i = 0; i < count; i++) {

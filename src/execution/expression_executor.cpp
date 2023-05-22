@@ -237,7 +237,7 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 }
 
 template <bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
-static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, uint8_t *__restrict bdata, ValidityMask &mask,
+static inline idx_t DefaultSelectLoop(const SelectionVector *bsel, const uint8_t *__restrict bdata, ValidityMask &mask,
                                       const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
                                       SelectionVector *false_sel) {
 	idx_t true_count = 0, false_count = 0;
@@ -265,15 +265,15 @@ template <bool NO_NULL>
 static inline idx_t DefaultSelectSwitch(UnifiedVectorFormat &idata, const SelectionVector *sel, idx_t count,
                                         SelectionVector *true_sel, SelectionVector *false_sel) {
 	if (true_sel && false_sel) {
-		return DefaultSelectLoop<NO_NULL, true, true>(idata.sel, (uint8_t *)idata.data, idata.validity, sel, count,
-		                                              true_sel, false_sel);
+		return DefaultSelectLoop<NO_NULL, true, true>(idata.sel, UnifiedVectorFormat::GetData<uint8_t>(idata),
+		                                              idata.validity, sel, count, true_sel, false_sel);
 	} else if (true_sel) {
-		return DefaultSelectLoop<NO_NULL, true, false>(idata.sel, (uint8_t *)idata.data, idata.validity, sel, count,
-		                                               true_sel, false_sel);
+		return DefaultSelectLoop<NO_NULL, true, false>(idata.sel, UnifiedVectorFormat::GetData<uint8_t>(idata),
+		                                               idata.validity, sel, count, true_sel, false_sel);
 	} else {
 		D_ASSERT(false_sel);
-		return DefaultSelectLoop<NO_NULL, false, true>(idata.sel, (uint8_t *)idata.data, idata.validity, sel, count,
-		                                               true_sel, false_sel);
+		return DefaultSelectLoop<NO_NULL, false, true>(idata.sel, UnifiedVectorFormat::GetData<uint8_t>(idata),
+		                                               idata.validity, sel, count, true_sel, false_sel);
 	}
 }
 

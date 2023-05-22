@@ -11,7 +11,7 @@ struct DistinctBinaryLambdaWrapper {
 };
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class RESULT_TYPE, class OP>
-static void DistinctExecuteGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+static void DistinctExecuteGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
                                        RESULT_TYPE *__restrict result_data, const SelectionVector *__restrict lsel,
                                        const SelectionVector *__restrict rsel, idx_t count, ValidityMask &lmask,
                                        ValidityMask &rmask, ValidityMask &result_mask) {
@@ -49,8 +49,8 @@ static void DistinctExecuteGeneric(Vector &left, Vector &right, Vector &result, 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 		DistinctExecuteGenericLoop<LEFT_TYPE, RIGHT_TYPE, RESULT_TYPE, OP>(
-		    (LEFT_TYPE *)ldata.data, (RIGHT_TYPE *)rdata.data, result_data, ldata.sel, rdata.sel, count, ldata.validity,
-		    rdata.validity, FlatVector::Validity(result));
+		    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata),
+		    result_data, ldata.sel, rdata.sel, count, ldata.validity, rdata.validity, FlatVector::Validity(result));
 	}
 }
 
@@ -66,7 +66,7 @@ static void DistinctExecute(Vector &left, Vector &right, Vector &result, idx_t c
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL, bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>
 static inline idx_t
-DistinctSelectGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+DistinctSelectGenericLoop(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
                           const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
                           const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
                           ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -105,7 +105,7 @@ DistinctSelectGenericLoop(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rd
 }
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool NO_NULL>
 static inline idx_t
-DistinctSelectGenericLoopSelSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+DistinctSelectGenericLoopSelSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
                                    const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
                                    const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
                                    ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -124,7 +124,7 @@ DistinctSelectGenericLoopSelSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__re
 
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP>
 static inline idx_t
-DistinctSelectGenericLoopSwitch(LEFT_TYPE *__restrict ldata, RIGHT_TYPE *__restrict rdata,
+DistinctSelectGenericLoopSwitch(const LEFT_TYPE *__restrict ldata, const RIGHT_TYPE *__restrict rdata,
                                 const SelectionVector *__restrict lsel, const SelectionVector *__restrict rsel,
                                 const SelectionVector *__restrict result_sel, idx_t count, ValidityMask &lmask,
                                 ValidityMask &rmask, SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -145,9 +145,9 @@ static idx_t DistinctSelectGeneric(Vector &left, Vector &right, const SelectionV
 	left.ToUnifiedFormat(count, ldata);
 	right.ToUnifiedFormat(count, rdata);
 
-	return DistinctSelectGenericLoopSwitch<LEFT_TYPE, RIGHT_TYPE, OP>((LEFT_TYPE *)ldata.data, (RIGHT_TYPE *)rdata.data,
-	                                                                  ldata.sel, rdata.sel, sel, count, ldata.validity,
-	                                                                  rdata.validity, true_sel, false_sel);
+	return DistinctSelectGenericLoopSwitch<LEFT_TYPE, RIGHT_TYPE, OP>(
+	    UnifiedVectorFormat::GetData<LEFT_TYPE>(ldata), UnifiedVectorFormat::GetData<RIGHT_TYPE>(rdata), ldata.sel,
+	    rdata.sel, sel, count, ldata.validity, rdata.validity, true_sel, false_sel);
 }
 template <class LEFT_TYPE, class RIGHT_TYPE, class OP, bool LEFT_CONSTANT, bool RIGHT_CONSTANT, bool NO_NULL,
           bool HAS_TRUE_SEL, bool HAS_FALSE_SEL>

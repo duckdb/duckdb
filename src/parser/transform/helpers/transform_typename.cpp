@@ -58,8 +58,10 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 		if (!type_name.typmods || type_name.typmods->length != 2) {
 			throw ParserException("Map type needs exactly two entries, key and value type");
 		}
-		auto key_type = TransformTypeName(*PGPointerCast<duckdb_libpgquery::PGTypeName>(type_name.typmods->head->data.ptr_value));
-		auto value_type = TransformTypeName(*PGPointerCast<duckdb_libpgquery::PGTypeName>(type_name.typmods->tail->data.ptr_value));
+		auto key_type =
+		    TransformTypeName(*PGPointerCast<duckdb_libpgquery::PGTypeName>(type_name.typmods->head->data.ptr_value));
+		auto value_type =
+		    TransformTypeName(*PGPointerCast<duckdb_libpgquery::PGTypeName>(type_name.typmods->tail->data.ptr_value));
 
 		result_type = LogicalType::MAP(std::move(key_type), std::move(value_type));
 	} else if (base_type == LogicalTypeId::UNION) {

@@ -18,7 +18,7 @@ public:
 	bool UpdateState(Vector &scan_vector, idx_t count) {
 		UnifiedVectorFormat vdata;
 		scan_vector.ToUnifiedFormat(count, vdata);
-		auto data = (string_t *)vdata.data;
+		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 		Verify();
 
 		for (idx_t i = 0; i < count; i++) {

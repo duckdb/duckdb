@@ -105,7 +105,7 @@ void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &se
 	} else {
 		UnifiedVectorFormat vdata;
 		vector.ToUnifiedFormat(count, vdata);
-		auto data = (T *)vdata.data;
+		auto data = UnifiedVectorFormat::GetData<T>(vdata);
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = vdata.sel->get_index(i);
 			auto res_idx = sel.get_index(i);

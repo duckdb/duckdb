@@ -32,7 +32,8 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(duckdb_libpgquery::PGRa
 		break;
 	}
 	case duckdb_libpgquery::T_PGSQLValueFunction:
-		result->function = TransformSQLValueFunction(*PGPointerCast<duckdb_libpgquery::PGSQLValueFunction>(call_tree.get()));
+		result->function =
+		    TransformSQLValueFunction(*PGPointerCast<duckdb_libpgquery::PGSQLValueFunction>(call_tree.get()));
 		break;
 	default:
 		throw ParserException("Not a function call or value function");

@@ -302,7 +302,7 @@ static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &tab
 	UnifiedVectorFormat vdata;
 	result.ToUnifiedFormat(chunk.size(), vdata);
 
-	auto dataptr = (int32_t *)vdata.data;
+	auto dataptr = UnifiedVectorFormat::GetData<int32_t>(vdata);
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (vdata.validity.RowIsValid(idx) && dataptr[idx] == 0) {

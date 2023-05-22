@@ -166,7 +166,7 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 	auto &list_validity = list_data.validity;
 
 	// construct the list_entry_t entries to append to the column data
-	auto input_offsets = (list_entry_t *)list_data.data;
+	auto input_offsets = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	auto start_offset = child_column->GetMaxEntry();
 	idx_t child_count = 0;
 

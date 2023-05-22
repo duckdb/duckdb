@@ -86,7 +86,7 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 	input.data[0].ToUnifiedFormat(input.size(), state_data);
 	for (idx_t i = 0; i < input.size(); i++) {
 		auto state_idx = state_data.sel->get_index(i);
-		auto state_entry = &((string_t *)state_data.data)[state_idx];
+		auto state_entry = &(UnifiedVectorFormat::GetData<string_t>(state_data))[state_idx];
 		auto target_ptr = (const char *)local_state.state_buffer.get() + aligned_state_size * i;
 
 		if (state_data.validity.RowIsValid(state_idx)) {

@@ -40,7 +40,7 @@ struct CBlobConverter {
 		result.data = (char *)duckdb_malloc(input.GetSize());
 		result.size = input.GetSize();
 		assert(result.data);
-		memcpy((void *)result.data, input.GetData(), input.GetSize());
+		memcpy(result.data, input.GetData(), input.GetSize());
 		return result;
 	}
 

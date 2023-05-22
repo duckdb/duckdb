@@ -20,7 +20,7 @@ using ValidityBytes = RowLayout::ValidityBytes;
 template <class T>
 static void TemplatedScatter(UnifiedVectorFormat &col, Vector &rows, const SelectionVector &sel, const idx_t count,
                              const idx_t col_offset, const idx_t col_no) {
-	auto data = (T *)col.data;
+	auto data = UnifiedVectorFormat::GetData<T>(col);
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
 	if (!col.validity.AllValid()) {
@@ -64,7 +64,7 @@ static void ComputeStringEntrySizes(const UnifiedVectorFormat &col, idx_t entry_
 static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr_t str_locations[],
                                 const SelectionVector &sel, const idx_t count, const idx_t col_offset,
                                 const idx_t col_no) {
-	auto string_data = (string_t *)col.data;
+	auto string_data = UnifiedVectorFormat::GetData<string_t>(col);
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
 	// Write out zero length to avoid swizzling problems.
