@@ -192,15 +192,12 @@ void Leaf::Remove(ART &art, const row_t row_id) {
 	reference<LeafSegment> prev_segment(LeafSegment::Get(art, ptr));
 	while (copy_idx < count) {
 
-		// calculate the copy count
-		auto copy_count = count - copy_idx;
-		if (Node::LEAF_SEGMENT_SIZE - 1 < copy_count) {
-			copy_count = Node::LEAF_SEGMENT_SIZE - 1;
-		}
+		auto copy_start = copy_idx % Node::LEAF_SEGMENT_SIZE;
+		D_ASSERT(copy_start != 0);
+		auto copy_end = MinValue(copy_start + count - copy_idx, Node::LEAF_SEGMENT_SIZE);
 
 		// copy row IDs
-		D_ASSERT((copy_idx % Node::LEAF_SEGMENT_SIZE) != 0);
-		for (idx_t i = copy_idx % Node::LEAF_SEGMENT_SIZE; i <= copy_count; i++) {
+		for (idx_t i = copy_start; i < copy_end; i++) {
 			segment.get().row_ids[i - 1] = segment.get().row_ids[i];
 			copy_idx++;
 		}
