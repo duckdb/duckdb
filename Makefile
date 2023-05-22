@@ -52,10 +52,12 @@ ifeq (${STATIC_LIBCPP}, 1)
 endif
 
 CMAKE_VARS ?=
-CMAKE_VARS += -DBUILD_PARQUET_EXTENSION=TRUE
+SKIP_EXTENSIONS ?=
 
 BUILD_EXTENSIONS ?=
-SKIP_EXTENSIONS ?=
+ifneq (${DUCKDB_EXTENSIONS}, )
+	BUILD_EXTENSIONS:=${DUCKDB_EXTENSIONS}
+endif
 ifeq (${DISABLE_PARQUET}, 1)
 	SKIP_EXTENSIONS:=${SKIP_EXTENSIONS};parquet
 endif
@@ -111,7 +113,7 @@ ifeq (${BUILD_SQLSMITH}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};sqlsmith
 endif
 ifeq (${BUILD_TPCE}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};tpce
+	CMAKE_VARS:=${EXTENSIONS} -DBUILD_TPCE=1
 endif
 ifeq (${BUILD_JDBC}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DJDBC_DRIVER=1
@@ -276,13 +278,13 @@ amaldebug:
 tidy-check:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
-	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_PARQUET_EXTENSION=TRUE -DBUILD_PYTHON_PKG=TRUE ${EXTRA_CMAKE_VARIABLES} -DBUILD_SHELL=0 ../.. && \
+	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet -DBUILD_PYTHON_PKG=TRUE ${EXTRA_CMAKE_VARIABLES} -DBUILD_SHELL=0 ../.. && \
 	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER} ${TIDY_BINARY_PARAMETER}
 
 tidy-fix:
 	mkdir -p ./build/tidy && \
 	cd build/tidy && \
-	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_PARQUET_EXTENSION=TRUE ${EXTRA_CMAKE_VARIABLES} -DBUILD_SHELL=0 ../.. && \
+	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_EXTENSIONS=parquet ${EXTRA_CMAKE_VARIABLES} -DBUILD_SHELL=0 ../.. && \
 	python3 ../../scripts/run-clang-tidy.py -fix
 
 test_compile: # test compilation of individual cpp files

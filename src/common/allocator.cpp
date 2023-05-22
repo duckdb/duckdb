@@ -89,7 +89,7 @@ PrivateAllocatorData::~PrivateAllocatorData() {
 //===--------------------------------------------------------------------===//
 // Allocator
 //===--------------------------------------------------------------------===//
-#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(WIN32)
+#if defined(DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED) && DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED && !defined(WIN32)
 Allocator::Allocator()
     : Allocator(JemallocExtension::Allocate, JemallocExtension::Free, JemallocExtension::Reallocate, nullptr) {
 }

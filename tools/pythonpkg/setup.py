@@ -142,8 +142,7 @@ if 'BUILD_HTTPFS' in os.environ:
     libraries += ['crypto', 'ssl']
     extensions += ['httpfs']
 
-for ext in extensions:
-    toolchain_args.extend(['-DBUILD_{}_EXTENSION'.format(ext.upper())])
+toolchain_args.extend(['-DBUILD_EXTENSIONS={}'.format(';'.join(extensions).lower())])
 
 class get_pybind_include(object):
     def __init__(self, user=False):

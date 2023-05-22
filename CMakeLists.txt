@@ -285,28 +285,9 @@ if(WIN32)
   set(EXTENSION_STATIC_BUILD TRUE)
 endif()
 
-set(JEMALLOC_DEFAULT_BUILD FALSE)
-if(NOT CLANG_TIDY AND OS_NAME STREQUAL "linux")
-  # build jemalloc by default for linux
-  set(JEMALLOC_DEFAULT_BUILD TRUE)
-endif()
-
 option(BUILD_CORE_FUNCTIONS_EXTENSION "Build the core functions." TRUE)
-option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
-option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
-option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)
-option(BUILD_TPCDS_EXTENSION "Build the TPC-DS extension." FALSE)
-option(BUILD_FTS_EXTENSION "Build the FTS extension." FALSE)
-option(BUILD_HTTPFS_EXTENSION "Build the HTTP File System extension." FALSE)
-option(BUILD_VISUALIZER_EXTENSION "Build the profiler-output visualizer extension." FALSE)
-option(BUILD_JSON_EXTENSION "Build the JSON extension." FALSE)
-option(BUILD_JEMALLOC_EXTENSION "Build the JEMalloc extension." ${JEMALLOC_DEFAULT_BUILD})
-option(BUILD_EXCEL_EXTENSION "Build the excel extension." FALSE)
-option(BUILD_INET_EXTENSION "Build the inet extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
-option(BUILD_SQLSMITH_EXTENSION "Enable building of the SQLSmith extension." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
-option(BUILD_AUTOCOMPLETE_EXTENSION "Enable building of the autocomplete extension" FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
 option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_ODBC_DRIVER "Build the DuckDB ODBC driver" FALSE)
@@ -340,35 +321,15 @@ if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
 endif()
 
+# TODO: how to handle these extension dependencies? Should we register here already?
+# The thing is there are so many places now where we specify which extensions are loaded..
+# setup.py, Makefile, CmakeLists, workflow CI.
+# I would kindof like to have only 1: the extension configs. CI should be able to overwrite these, but i think the others
+# can be removed?
 if (NOT BUILD_MAIN_DUCKDB_LIBRARY)
   set(BUILD_UNITTESTS FALSE)
   set(BUILD_SHELL FALSE)
   set(DISABLE_BUILTIN_EXTENSIONS TRUE)
-endif()
-
-if(BUILD_PYTHON
-   OR BUILD_R
-   OR BUILD_NODE
-   OR CONFIGURE_R
-   OR JDBC_DRIVER)
-  set(BUILD_ICU_EXTENSION TRUE)
-  set(BUILD_VISUALIZER_EXTENSION TRUE)
-  set(BUILD_PARQUET_EXTENSION TRUE)
-endif()
-
-if(BUILD_PYTHON)
-  set(BUILD_TPCH_EXTENSION TRUE)
-  set(BUILD_TPCDS_EXTENSION TRUE)
-  set(BUILD_FTS_EXTENSION TRUE)
-  set(BUILD_EXCEL_EXTENSION TRUE)
-endif()
-
-if (BUILD_BENCHMARKS)
-  set(BUILD_PARQUET_EXTENSION TRUE)
-endif()
-
-if(BUILD_SQLSMITH)
-  set(BUILD_SQLSMITH_EXTENSION TRUE)
 endif()
 
 if(TREAT_WARNINGS_AS_ERRORS)
@@ -470,7 +431,8 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 if(OS_NAME STREQUAL "windows")
-  if(BUILD_JEMALLOC_EXTENSION EQUAL 1)
+  list (FIND DUCKDB_OOT_EXTENSION_NAMES jemalloc _index)
+  if (${_index} GREATER -1)
     # have to throw an error because this will crash at runtime
     message(FATAL_ERROR "The jemalloc extension is not supported on Windows")
   endif()
@@ -604,12 +566,8 @@ function(add_extension_dependencies LIBRARY)
 endfunction()
 
 function(link_extension_libraries LIBRARY)
-  # special case for our static-only jemalloc extension TODO: how to nicely handle this?
-  if(${BUILD_JEMALLOC_EXTENSION})
-    target_link_libraries(${LIBRARY} jemalloc_extension)
-  endif()
-
   if(${DISABLE_BUILTIN_EXTENSIONS})
+    message(STATUS "No extensions linked into DuckDB because of `DISABLE_BUILTIN_EXTENSIONS` flag")
     return()
   endif()
 
@@ -827,7 +785,16 @@ endif()
 
 # Load extensions passed through cmake config var
 foreach(EXT IN LISTS SKIP_EXTENSIONS)
-  duckdb_extension_load(${EXT} DONT_BUILD)
+  if (NOT "${EXT}" STREQUAL "")
+    duckdb_extension_load(${EXT} DONT_BUILD)
+  endif()
+endforeach()
+
+# Load extensions passed through cmake config var
+foreach(EXT IN LISTS BUILD_EXTENSIONS)
+  if(NOT "${EXT}" STREQUAL "")
+    duckdb_extension_load(${EXT})
+  endif()
 endforeach()
 
 # Custom extension configs passed in DUCKDB_EXTENSION_CONFIGS parameter
@@ -842,23 +809,27 @@ if (EXISTS ${CMAKE_SOURCE_DIR}/extension/extension_config_local.cmake)
   include(${CMAKE_SOURCE_DIR}/extension/extension_config_local.cmake)
 endif()
 
+# Load client specific config
+if(BUILD_PYTHON)
+  include(${CMAKE_SOURCE_DIR}/tools/pythonpkg/duckdb_extension_config.cmake)
+endif()
+if(BUILD_R OR CONFIGURE_R)
+  include(${CMAKE_SOURCE_DIR}/tools/rpkg/duckdb_extension_config.cmake)
+endif()
+if(BUILD_NODE)
+  include(${CMAKE_SOURCE_DIR}/tools/nodejs/duckdb_extension_config.cmake)
+endif()
+if (JDBC_DRIVER)
+  include(${CMAKE_SOURCE_DIR}/tools/jdbc/duckdb_extension_config.cmake)
+endif()
+
 # Load base extension config
 include(${CMAKE_SOURCE_DIR}/extension/extension_config.cmake)
-
-# Load extensions passed through cmake config var
-foreach(EXT IN LISTS BUILD_EXTENSIONS)
-  if(NOT "${EXT}" STREQUAL "")
-    duckdb_extension_load(${EXT})
-  endif()
-endforeach()
 
 if (BUILD_MAIN_DUCKDB_LIBRARY)
   add_subdirectory(src)
   add_subdirectory(tools)
 endif()
-
-# Add In-tree extensions TODO deprecated: extensions should be loaded using OOTE mechanism
-add_subdirectory(extension)
 
 # Add Out-of-tree extensions
 foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)

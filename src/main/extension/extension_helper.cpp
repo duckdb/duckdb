@@ -54,6 +54,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Default Extensions
 //===--------------------------------------------------------------------===//
+// TODO: Test this after adding OOTEs
 static DefaultExtension internal_extensions[] = {
     {"icu", "Adds support for time zones and collations using the ICU library", DUCKDB_OOT_EXTENSION_ICU_LINKED},
     {"parquet", "Adds support for reading and writing parquet files", DUCKDB_OOT_EXTENSION_PARQUET_LINKED},
