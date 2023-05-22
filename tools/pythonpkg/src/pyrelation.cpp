@@ -226,7 +226,7 @@ string DuckDBPyRelation::ToSQL() {
 	}
 	try {
 		return rel->GetQueryNode()->ToString();
-	} catch (const std::exception &e) {
+	} catch (const std::exception &) {
 		return "";
 	}
 }
@@ -461,8 +461,7 @@ py::dict DuckDBPyRelation::FetchNumpyInternal(bool stream, idx_t vectors_per_chu
 //! Should this also keep track of when the result is empty and set result->result_open accordingly?
 PandasDataFrame DuckDBPyRelation::FetchDFChunk(idx_t vectors_per_chunk, bool date_as_object) {
 	return ConsumePartial<PandasDataFrame, false>(
-	    [&](DuckDBPyResult &res) { return res.FetchDFChunk(vectors_per_chunk, date_as_object); }, PandasDataFrame(),
-	    true);
+	    [&](DuckDBPyResult &res) { return res.FetchDFChunk(vectors_per_chunk, date_as_object); }, py::none(), true);
 }
 
 duckdb::pyarrow::Table DuckDBPyRelation::ToArrowTable(idx_t batch_size) {
