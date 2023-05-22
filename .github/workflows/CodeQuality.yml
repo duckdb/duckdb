@@ -137,7 +137,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/coverage
-          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_PYTHON=1 -DBUILD_EXTENSIONS=parquet;json;jemalloc;autocomplete -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_PYTHON=1 -DBUILD_EXTENSIONS="parquet;json;jemalloc;autocomplete" -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
 
       - name: Run Python Tests
         if: ${{ matrix.testset == 'python' }}
