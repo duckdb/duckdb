@@ -30,6 +30,9 @@ private:
 		data.insert(data.end(), buffer, buffer + write_size);
 		stack.back().size += write_size;
 	}
+	void WriteData(const char *ptr, idx_t write_size) {
+		WriteData((const_data_ptr_t)ptr, write_size);
+	}
 
 	explicit BinarySerializer() {
 		serialize_enum_as_string = false;

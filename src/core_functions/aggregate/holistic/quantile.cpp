@@ -464,7 +464,7 @@ struct QuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
 		state->v.emplace_back(data[idx]);
 	}
 

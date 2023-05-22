@@ -298,7 +298,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 
 	UnifiedVectorFormat new_heap_data;
 	new_heap_ptrs.ToUnifiedFormat(offset + count, new_heap_data);
-	const auto new_heap_locations = (data_ptr_t *)new_heap_data.data;
+	const auto new_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(new_heap_data);
 	const auto new_heap_sel = *new_heap_data.sel;
 
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {

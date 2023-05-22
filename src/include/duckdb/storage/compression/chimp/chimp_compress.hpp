@@ -127,7 +127,7 @@ public:
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		auto data = (CHIMP_TYPE *)vdata.data;
+		auto data = UnifiedVectorFormat::GetData<CHIMP_TYPE>(vdata);
 
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);

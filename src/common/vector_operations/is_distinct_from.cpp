@@ -543,7 +543,7 @@ static idx_t DistinctSelectStruct(Vector &left, Vector &right, idx_t count, cons
 
 static void PositionListCursor(SelectionVector &cursor, UnifiedVectorFormat &vdata, const idx_t pos,
                                const SelectionVector &slice_sel, const idx_t count) {
-	const auto data = (const list_entry_t *)vdata.data;
+	const auto data = UnifiedVectorFormat::GetData<list_entry_t>(vdata);
 	for (idx_t i = 0; i < count; ++i) {
 		const auto slice_idx = slice_sel.get_index(i);
 
@@ -586,11 +586,11 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t count, const 
 	// Get pointers to the list entries
 	UnifiedVectorFormat lvdata;
 	left.ToUnifiedFormat(count, lvdata);
-	const auto ldata = (const list_entry_t *)lvdata.data;
+	const auto ldata = UnifiedVectorFormat::GetData<list_entry_t>(lvdata);
 
 	UnifiedVectorFormat rvdata;
 	right.ToUnifiedFormat(count, rvdata);
-	const auto rdata = (const list_entry_t *)rvdata.data;
+	const auto rdata = UnifiedVectorFormat::GetData<list_entry_t>(rvdata);
 
 	// In order to reuse the comparators, we have to track what passed and failed internally.
 	// To do that, we need local SVs that we then merge back into the real ones after every pass.

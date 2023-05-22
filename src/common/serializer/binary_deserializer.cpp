@@ -125,7 +125,7 @@ string BinaryDeserializer::ReadString() {
 	}
 	auto buffer = make_unsafe_uniq_array<data_t>(size);
 	ReadData(buffer.get(), size);
-	return string((char *)buffer.get(), size);
+	return string(data_ptr_cast<const char>(buffer.get()), size);
 }
 
 interval_t BinaryDeserializer::ReadInterval() {

@@ -54,8 +54,8 @@ struct MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &input_data, INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &input_data, const INPUT_TYPE *input,
+	                              ValidityMask &mask, idx_t count) {
 		D_ASSERT(mask.RowIsValid(0));
 		if (!state->isset) {
 			OP::template Assign<INPUT_TYPE, STATE>(state, input_data, input[0]);
@@ -66,7 +66,7 @@ struct MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &input_data, INPUT_TYPE *input, ValidityMask &mask,
+	static void Operation(STATE *state, AggregateInputData &input_data, const INPUT_TYPE *input, ValidityMask &mask,
 	                      idx_t idx) {
 		if (!state->isset) {
 			OP::template Assign<INPUT_TYPE, STATE>(state, input_data, input[idx]);
@@ -215,8 +215,8 @@ static bool TemplatedOptimumType(Vector &left, idx_t lidx, idx_t lcount, Vector 
 	lidx = lvdata.sel->get_index(lidx);
 	ridx = rvdata.sel->get_index(ridx);
 
-	auto ldata = (const T *)lvdata.data;
-	auto rdata = (const T *)rvdata.data;
+	auto ldata = UnifiedVectorFormat::GetData<T>(lvdata);
+	auto rdata = UnifiedVectorFormat::GetData<T>(rvdata);
 
 	auto &lval = ldata[lidx];
 	auto &rval = rdata[ridx];

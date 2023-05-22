@@ -40,7 +40,7 @@ const DEST *const_data_ptr_cast(SRC *src) {
 	return (DEST *)src;
 }
 
-template<class SRC>
+template <class SRC>
 uintptr_t CastPointerToValue(SRC *src) {
 	return uintptr_t(src);
 }

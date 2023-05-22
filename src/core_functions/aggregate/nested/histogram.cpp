@@ -18,7 +18,7 @@ struct HistogramFunctor {
 				if (!state->hist) {
 					state->hist = new MAP_TYPE();
 				}
-				auto value = (T *)input_data.data;
+				auto value = UnifiedVectorFormat::GetData<T>(input_data);
 				(*state->hist)[value[input_data.sel->get_index(i)]]++;
 			}
 		}

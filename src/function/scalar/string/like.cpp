@@ -105,8 +105,8 @@ struct LikeMatcher : public FunctionData {
 		for (; segment_idx < end_idx; segment_idx++) {
 			auto &segment = segments[segment_idx];
 			// find the pattern of the current segment
-			idx_t next_offset = ContainsFun::Find(str_data, str_len, data_ptr_cast<const unsigned char>(segment.pattern.c_str()),
-			                                      segment.pattern.size());
+			idx_t next_offset = ContainsFun::Find(
+			    str_data, str_len, data_ptr_cast<const unsigned char>(segment.pattern.c_str()), segment.pattern.size());
 			if (next_offset == DConstants::INVALID_INDEX) {
 				// could not find this pattern in the string: no match
 				return false;
@@ -130,8 +130,8 @@ struct LikeMatcher : public FunctionData {
 		} else {
 			auto &segment = segments.back();
 			// find the pattern of the current segment
-			idx_t next_offset = ContainsFun::Find(str_data, str_len, data_ptr_cast<const unsigned char>(segment.pattern.c_str()),
-			                                      segment.pattern.size());
+			idx_t next_offset = ContainsFun::Find(
+			    str_data, str_len, data_ptr_cast<const unsigned char>(segment.pattern.c_str()), segment.pattern.size());
 			return next_offset != DConstants::INVALID_INDEX;
 		}
 	}

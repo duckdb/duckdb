@@ -193,7 +193,7 @@ void ArrowTableFunction::RenameArrowColumns(vector<string> &names) {
 unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
 	auto stream_factory_ptr = input.inputs[0].GetPointer();
-	auto stream_factory_produce = (stream_factory_produce_t)input.inputs[1].GetPointer(); // NOLINT
+	auto stream_factory_produce = (stream_factory_produce_t)input.inputs[1].GetPointer();       // NOLINT
 	auto stream_factory_get_schema = (stream_factory_get_schema_t)input.inputs[2].GetPointer(); // NOLINT
 
 	auto res = make_uniq<ArrowScanFunctionData>(stream_factory_produce, stream_factory_ptr);

@@ -56,12 +56,12 @@ struct CountStarFunction : public BaseCountFunction {
 
 struct CountFunction : public BaseCountFunction {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		*state += 1;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask,
+	static void ConstantOperation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		*state += count;
 	}

@@ -117,7 +117,7 @@ bool PatasAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
-	auto data = (T *)vdata.data;
+	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		analyze_state.state.template Update<EmptyPatasWriter>(data[idx], vdata.validity.RowIsValid(idx));

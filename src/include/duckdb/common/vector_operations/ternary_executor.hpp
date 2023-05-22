@@ -159,17 +159,20 @@ private:
 	                                        SelectionVector *true_sel, SelectionVector *false_sel) {
 		if (true_sel && false_sel) {
 			return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, NO_NULL, true, true>(
-			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
-			    *cdata.sel, adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
+			    UnifiedVectorFormat::GetData<A_TYPE>(adata), UnifiedVectorFormat::GetData<B_TYPE>(bdata),
+			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), sel, count, *adata.sel, *bdata.sel, *cdata.sel,
+			    adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
 		} else if (true_sel) {
 			return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, NO_NULL, true, false>(
-			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
-			    *cdata.sel, adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
+			    UnifiedVectorFormat::GetData<A_TYPE>(adata), UnifiedVectorFormat::GetData<B_TYPE>(bdata),
+			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), sel, count, *adata.sel, *bdata.sel, *cdata.sel,
+			    adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
 		} else {
 			D_ASSERT(false_sel);
 			return SelectLoop<A_TYPE, B_TYPE, C_TYPE, OP, NO_NULL, false, true>(
-			    (A_TYPE *)adata.data, (B_TYPE *)bdata.data, (C_TYPE *)cdata.data, sel, count, *adata.sel, *bdata.sel,
-			    *cdata.sel, adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
+			    UnifiedVectorFormat::GetData<A_TYPE>(adata), UnifiedVectorFormat::GetData<B_TYPE>(bdata),
+			    UnifiedVectorFormat::GetData<C_TYPE>(cdata), sel, count, *adata.sel, *bdata.sel, *cdata.sel,
+			    adata.validity, bdata.validity, cdata.validity, true_sel, false_sel);
 		}
 	}
 

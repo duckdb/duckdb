@@ -73,11 +73,10 @@ struct ArrowBuffer {
 		return dataptr;
 	}
 
-	template<class T>
+	template <class T>
 	T *GetData() {
-		return reinterpret_cast<T *> (data());
+		return reinterpret_cast<T *>(data());
 	}
-
 
 private:
 	void ReserveInternal(idx_t bytes) {

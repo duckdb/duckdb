@@ -20,7 +20,7 @@ idx_t Bit::ComputeBitstringLen(idx_t len) {
 }
 
 static inline idx_t GetBitPadding(const string_t &bit_string) {
-	auto data = (const_data_ptr_t)bit_string.GetData();
+	auto data = data_ptr_cast<data_t>(bit_string.GetData());
 	D_ASSERT(idx_t(data[0]) <= 8);
 	return data[0];
 }
@@ -61,7 +61,7 @@ void Bit::SetEmptyBitString(string_t &target, idx_t len) {
 
 // **** casting functions ****
 void Bit::ToString(string_t bits, char *output) {
-	auto data = (const_data_ptr_t)bits.GetData();
+	auto data = data_ptr_cast<data_t>(bits.GetData());
 	auto len = bits.GetSize();
 
 	idx_t padding = GetBitPadding(bits);
@@ -84,7 +84,7 @@ string Bit::ToString(string_t str) {
 }
 
 bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_message) {
-	auto data = (const_data_ptr_t)str.GetData();
+	auto data = data_ptr_cast<data_t>(str.GetData());
 	auto len = str.GetSize();
 	str_len = 0;
 	for (idx_t i = 0; i < len; i++) {
@@ -107,7 +107,7 @@ bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_messag
 }
 
 void Bit::ToBit(string_t str, string_t &output_str) {
-	auto data = (const_data_ptr_t)str.GetData();
+	auto data = data_ptr_cast<data_t>(str.GetData());
 	auto len = str.GetSize();
 	auto output = output_str.GetDataWriteable();
 

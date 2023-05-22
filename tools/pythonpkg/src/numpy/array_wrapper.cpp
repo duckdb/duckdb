@@ -322,7 +322,7 @@ double IntegralConvert::ConvertValue(hugeint_t val) {
 template <class DUCKDB_T, class NUMPY_T, class CONVERT>
 static bool ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *target_mask, UnifiedVectorFormat &idata,
                           idx_t count) {
-	auto src_ptr = (DUCKDB_T *)idata.data;
+	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = (NUMPY_T *)target_data;
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
@@ -351,7 +351,7 @@ static bool ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *tar
 template <class DUCKDB_T, class NUMPY_T>
 static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t target_data, UnifiedVectorFormat &idata,
                                              idx_t count) {
-	auto src_ptr = (DUCKDB_T *)idata.data;
+	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = (NUMPY_T *)target_data;
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
@@ -427,7 +427,7 @@ static bool ConvertColumnRegular(idx_t target_offset, data_ptr_t target_data, bo
 template <class DUCKDB_T>
 static bool ConvertDecimalInternal(idx_t target_offset, data_ptr_t target_data, bool *target_mask,
                                    UnifiedVectorFormat &idata, idx_t count, double division) {
-	auto src_ptr = (DUCKDB_T *)idata.data;
+	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
 	auto out_ptr = (double *)target_data;
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {

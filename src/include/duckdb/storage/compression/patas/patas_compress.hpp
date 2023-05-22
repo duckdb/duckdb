@@ -138,7 +138,7 @@ public:
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		auto data = (T *)vdata.data;
+		auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);

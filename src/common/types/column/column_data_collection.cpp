@@ -454,7 +454,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 		// 'append_count' is less if we cannot fit that amount of non-inlined strings on one buffer-managed block
 		idx_t append_count;
 		idx_t heap_size = 0;
-		const auto source_entries = (string_t *)source_data.data;
+		const auto source_entries = UnifiedVectorFormat::GetData<string_t>(source_data);
 		for (append_count = 0; append_count < vector_remaining; append_count++) {
 			auto source_idx = source_data.sel->get_index(offset + append_count);
 			if (!source_data.validity.RowIsValid(source_idx)) {

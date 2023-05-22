@@ -94,7 +94,7 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 
 	UnifiedVectorFormat idata;
 	input.ToUnifiedFormat(count, idata);
-	const auto ldata = (const list_entry_t *)idata.data;
+	const auto ldata = UnifiedVectorFormat::GetData<list_entry_t>(idata);
 
 	// Hash the children into a temporary
 	auto &child = ListVector::GetEntry(input);

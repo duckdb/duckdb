@@ -28,9 +28,9 @@ static void ShiftRight(unsigned char *ar, int size, int shift) {
 	}
 }
 
-template<class T>
+template <class T>
 T *ArrowBufferData(ArrowArray &array, idx_t buffer_idx) {
-	return (T *) array.buffers[buffer_idx]; // NOLINT
+	return (T *)array.buffers[buffer_idx]; // NOLINT
 }
 
 static void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
@@ -598,8 +598,9 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLoca
 			break;
 		}
 		case PhysicalType::INT128: {
-			FlatVector::SetData(vector, ArrowBufferData<data_t>(array, 1) + GetTypeIdSize(vector.GetType().InternalType()) *
-			                                                               (scan_state.chunk_offset + array.offset));
+			FlatVector::SetData(vector,
+			                    ArrowBufferData<data_t>(array, 1) + GetTypeIdSize(vector.GetType().InternalType()) *
+			                                                            (scan_state.chunk_offset + array.offset));
 			break;
 		}
 		default:

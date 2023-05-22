@@ -1313,7 +1313,7 @@ struct StructDatePart {
 			input.ToUnifiedFormat(count, rdata);
 
 			const auto &arg_valid = rdata.validity;
-			auto tdata = (const INPUT_TYPE *)rdata.data;
+			auto tdata = UnifiedVectorFormat::GetData<INPUT_TYPE>(rdata);
 
 			// Start with a valid flat vector
 			result.SetVectorType(VectorType::FLAT_VECTOR);

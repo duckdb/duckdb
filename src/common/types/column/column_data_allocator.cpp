@@ -71,7 +71,7 @@ BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
 void ColumnDataAllocator::AllocateEmptyBlock(idx_t size) {
 	auto allocation_amount = MaxValue<idx_t>(NextPowerOfTwo(size), 4096);
 	if (!blocks.empty()) {
-		auto last_capacity = blocks.back().capacity;
+		idx_t last_capacity = blocks.back().capacity;
 		auto next_capacity = MinValue<idx_t>(last_capacity * 2, last_capacity + Storage::BLOCK_SIZE);
 		allocation_amount = MaxValue<idx_t>(next_capacity, allocation_amount);
 	}

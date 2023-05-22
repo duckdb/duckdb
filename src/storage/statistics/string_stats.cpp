@@ -230,7 +230,7 @@ void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 
 	UnifiedVectorFormat vdata;
 	vector.ToUnifiedFormat(count, vdata);
-	auto data = (string_t *)vdata.data;
+	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto index = vdata.sel->get_index(idx);
