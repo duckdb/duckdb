@@ -252,7 +252,7 @@ shared_ptr<LocalTableStorage> LocalTableManager::MoveEntry(DataTable &table) {
 		return nullptr;
 	}
 	auto storage_entry = std::move(entry->second);
-	table_storage.erase(table);
+	table_storage.erase(entry);
 	return storage_entry;
 }
 
