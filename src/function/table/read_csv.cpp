@@ -559,15 +559,13 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 }
 void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions, idx_t file_number_p, idx_t batch_idx) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	if (positions.beginning_of_first_line <= positions.end_of_last_line) {
-		if (positions.end_of_last_line > max_tuple_end) {
-			max_tuple_end = positions.end_of_last_line;
-		}
-		tuple_end_to_batch[file_number_p][positions.end_of_last_line] = batch_idx;
-		batch_to_tuple_end[file_number_p][batch_idx] = tuple_end[file_number_p].size();
-		tuple_start[file_number_p].insert(positions.beginning_of_first_line);
-		tuple_end[file_number_p].push_back(positions.end_of_last_line);
+	if (positions.end_of_last_line > max_tuple_end) {
+		max_tuple_end = positions.end_of_last_line;
 	}
+	tuple_end_to_batch[file_number_p][positions.end_of_last_line] = batch_idx;
+	batch_to_tuple_end[file_number_p][batch_idx] = tuple_end[file_number_p].size();
+	tuple_start[file_number_p].insert(positions.beginning_of_first_line);
+	tuple_end[file_number_p].push_back(positions.end_of_last_line);
 }
 
 void ParallelCSVGlobalState::UpdateLinesRead(CSVBufferRead &buffer_read, idx_t file_idx) {
@@ -698,7 +696,6 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 			if (csv_local_state.csv_reader) {
 				csv_local_state.csv_reader->linenr = 0;
 			}
-
 			if (!has_next) {
 				csv_global_state.DecrementThread();
 				break;

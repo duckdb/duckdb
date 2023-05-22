@@ -35,7 +35,6 @@ endloop
 statement ok
 pragma threads=2
 
-
 statement error
 select *
 from  read_csv('data/csv/bug_7578.csv', delim='\t', header=true, columns={
