@@ -369,16 +369,23 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, stru
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
+	auto cconn = (duckdb::Connection *)connection;
 
-	try {
-		// TODO evil cast, do we need a way to do this from the C api?
-		auto cconn = (duckdb::Connection *)connection;
-		cconn
+	auto has_table = cconn->TableInfo(table_name);
+	auto arrow_scan = cconn
 		    ->TableFunction("arrow_scan",
 		                    {duckdb::Value::POINTER((uintptr_t)input),
 		                     duckdb::Value::POINTER((uintptr_t)stream_produce),
-		                     duckdb::Value::POINTER((uintptr_t)get_schema)}) // TODO make this a parameter somewhere
-		    ->Create(table_name); // TODO this should probably be a temp table
+		                     duckdb::Value::POINTER((uintptr_t)get_schema)});
+	try {
+		if (!has_table){
+			// We create the table based on an Arrow Scanner
+			arrow_scan->Create(table_name);
+		} else{
+			arrow_scan->CreateView("temp_adbc_view", true, true);
+			auto query = "insert into " + std::string(table_name) + " select * from temp_adbc_view";
+			auto result = cconn->Query(query);
+		}
 		// After creating a table, the arrow array stream is released. Hence we must set it as released to avoid
 		// double-releasing it
 		input->release = nullptr;
