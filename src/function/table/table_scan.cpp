@@ -207,7 +207,7 @@ struct IndexScanGlobalState : public GlobalTableFunctionState {
 	Vector row_ids;
 	ColumnFetchState fetch_state;
 	TableScanState local_storage_state;
-	vector<column_t> column_ids;
+	vector<storage_t> column_ids;
 	bool finished;
 };
 
@@ -219,8 +219,12 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 	}
 	auto result = make_uniq<IndexScanGlobalState>(row_id_data);
 	auto &local_storage = LocalStorage::Get(context, bind_data.table.catalog);
-	result->column_ids = input.column_ids;
-	result->local_storage_state.Initialize(input.column_ids, input.filters.get());
+
+	result->column_ids.reserve(input.column_ids.size());
+	for (auto &id : input.column_ids) {
+		result->column_ids.push_back(GetStorageIndex(bind_data.table, id));
+	}
+	result->local_storage_state.Initialize(result->column_ids, input.filters.get());
 	local_storage.InitializeScan(bind_data.table.GetStorage(), result->local_storage_state.local_state, input.filters);
 
 	result->finished = false;
