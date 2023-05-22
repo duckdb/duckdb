@@ -23,7 +23,7 @@ struct FlattenDependentJoins {
 
 	//! Detects which Logical Operators have correlated expressions that they are dependent upon, filling the
 	//! has_correlated_expressions map.
-	bool DetectCorrelatedExpressions(LogicalOperator *op, bool lateral = false);
+	bool DetectCorrelatedExpressions(LogicalOperator *op, bool lateral = false, idx_t lateral_depth = 0);
 
 	//! Push the dependent join down a LogicalOperator
 	unique_ptr<LogicalOperator> PushDownDependentJoin(unique_ptr<LogicalOperator> plan);
@@ -43,7 +43,7 @@ struct FlattenDependentJoins {
 
 private:
 	unique_ptr<LogicalOperator> PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan,
-	                                                          bool &parent_propagate_null_values);
+	                                                          bool &parent_propagate_null_values, idx_t lateral_depth);
 };
 
 } // namespace duckdb

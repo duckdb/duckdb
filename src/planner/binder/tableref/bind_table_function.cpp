@@ -78,6 +78,15 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			}
 		}
 		if (child->type == ExpressionType::SUBQUERY) {
+			auto fun = table_function.functions.GetFunctionByOffset(0);
+			if (table_function.functions.Size() != 1 || fun.arguments.empty() ||
+			    fun.arguments[0].id() != LogicalTypeId::TABLE) {
+				throw BinderException(
+				    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
+				    fun.name);
+			}
+			// this separate subquery binding path is only used by python_map
+			// FIXME: this should be unified with `BindTableInTableOutFunction` above
 			if (seen_subquery) {
 				error = "Table function can have at most one subquery parameter ";
 				return false;
@@ -98,8 +107,8 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			throw ParameterNotResolvedException();
 		}
 		if (!expr->IsScalar()) {
-			error = "Table function requires a constant parameter";
-			return false;
+			// should have been eliminated before
+			throw InternalException("Table function requires a constant parameter");
 		}
 		auto constant = ExpressionExecutor::EvaluateScalar(context, *expr, true);
 		if (parameter_name.empty()) {
@@ -154,9 +163,7 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 		}
 	}
 	if (return_types.size() != return_names.size()) {
-		throw InternalException(
-		    "Failed to bind \"%s\": Table function return_types and return_names must be of the same size",
-		    table_function.name);
+		throw InternalException("Failed to bind \"%s\": return_types/names must have same size", table_function.name);
 	}
 	if (return_types.empty()) {
 		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
