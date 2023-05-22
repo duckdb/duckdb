@@ -9,11 +9,19 @@ import sys
 from python_helpers import open_utf8
 
 flex_bin = 'flex'
-for arg in sys.argv[1:]:
-    if arg.startswith("--flex="):
-        flex_bin = arg.replace("--flex=", "")
-
 pg_path = os.path.join('third_party', 'libpg_query')
+namespace = 'duckdb_libpgquery'
+
+for arg in sys.argv[1:]:
+	if arg.startswith("--flex="):
+		flex_bin = arg.replace("--flex=", "")
+	elif arg.startswith("--custom_dir_prefix"):
+		pg_path = arg.split("=")[1] + pg_path
+	elif arg.startswith("--namespace"):
+		namespace = arg.split("=")[1]
+	else:
+		raise Exception("Unrecognized argument: " + arg + ", expected --flex, --custom_dir_prefix, --namespace")
+
 flex_file_path = os.path.join(pg_path, 'scan.l')
 target_file = os.path.join(pg_path, 'src_backend_parser_scan.cpp')
 
@@ -39,11 +47,11 @@ text = text.replace('''
 ''', '''
 #ifndef FLEXINT_H
 #define FLEXINT_H
-namespace duckdb_libpgquery {
+namespace ''' + namespace + ''' {
 ''')
 text = text.replace('register ', '')
 
-text = text + "\n} /* duckdb_libpgquery */\n"
+text = text + "\n} /* " + namespace + " */\n"
 
 text = re.sub('(?:[(]void[)][ ]*)?fprintf', '//', text)
 text = re.sub('exit[(]', 'throw std::runtime_error(msg); //', text)
