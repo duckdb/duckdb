@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
+
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 
@@ -40,7 +41,7 @@ AggregateFilterData::AggregateFilterData(ClientContext &context, Expression &fil
 	if (payload_types.empty()) {
 		return;
 	}
-	filtered_payload.Initialize(Allocator::Get(context), payload_types);
+	filtered_payload.Initialize(BufferAllocator::Get(context), payload_types);
 }
 
 idx_t AggregateFilterData::ApplyFilter(DataChunk &payload) {
