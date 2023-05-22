@@ -29,7 +29,7 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 		if (art.constraint_type != IndexConstraintType::NONE) {
 			// unique index: create a local ART index that maintains the same unique constraint
 			vector<unique_ptr<Expression>> unbound_expressions;
-			unbound_expressions.reserve(art.unbound_expressions);
+			unbound_expressions.reserve(art.unbound_expressions.size());
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
