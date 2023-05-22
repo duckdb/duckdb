@@ -41,10 +41,6 @@ public:
 	                    Vector &result) override;
 	static uint32_t VerifyString(const char *str_data, uint32_t str_len, const bool isVarchar);
 	uint32_t VerifyString(const char *str_data, uint32_t str_len);
-
-protected:
-	void DictReference(Vector &result) override;
-	void PlainReference(shared_ptr<ByteBuffer> plain_data, Vector &result) override;
 };
 
 } // namespace duckdb

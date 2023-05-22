@@ -306,15 +306,11 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 }
 
 void ColumnReader::AllocateBlock(idx_t size) {
-	if (!block) {
-		block = make_shared<ResizeableBuffer>(GetBlockAllocator().GetAllocator(), size);
-	} else {
-		block->resize(GetAllocator(), size);
-	}
+	block = make_shared<ResizeableBuffer>(GetBlockAllocator().GetAllocator(), size, false);
 }
 
 void ColumnReader::AllocateCompressed(idx_t size) {
-	compressed_buffer.resize(GetBlockAllocator().GetAllocator(), size);
+	compressed_buffer.resize(GetBlockAllocator().GetAllocator(), size, false);
 }
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
@@ -726,23 +722,6 @@ void StringColumnReader::DeltaByteArray(uint8_t *defines, idx_t num_values, parq
 		}
 	}
 	StringVector::AddHeapReference(result, *byte_array_data);
-}
-
-class ParquetStringVectorBuffer : public VectorBuffer {
-public:
-	explicit ParquetStringVectorBuffer(shared_ptr<ByteBuffer> buffer_p)
-	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), buffer(std::move(buffer_p)) {
-	}
-
-private:
-	shared_ptr<ByteBuffer> buffer;
-};
-
-void StringColumnReader::DictReference(Vector &result) {
-	//	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(dict));
-}
-void StringColumnReader::PlainReference(shared_ptr<ByteBuffer> plain_data, Vector &result) {
-	//	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(std::move(plain_data)));
 }
 
 string_t StringParquetValueConversion::DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
