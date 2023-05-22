@@ -847,7 +847,9 @@ include(${CMAKE_SOURCE_DIR}/extension/extension_config.cmake)
 
 # Load extensions passed through cmake config var
 foreach(EXT IN LISTS BUILD_EXTENSIONS)
-  duckdb_extension_load(${EXT})
+  if(NOT "${EXT}" STREQUAL "")
+    duckdb_extension_load(${EXT})
+  endif()
 endforeach()
 
 if (BUILD_MAIN_DUCKDB_LIBRARY)
