@@ -19,6 +19,9 @@ StorageManager::StorageManager(AttachedDatabase &db, string path_p, bool read_on
     : db(db), path(std::move(path_p)), read_only(read_only) {
 	if (path.empty()) {
 		path = ":memory:";
+	} else {
+		auto &fs = FileSystem::Get(db);
+		this->path = fs.ExpandPath(path);
 	}
 }
 

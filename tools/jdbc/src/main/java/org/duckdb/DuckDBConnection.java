@@ -105,16 +105,6 @@ public final class DuckDBConnection implements java.sql.Connection {
 		}
 	}
 
-	/**
-	 * This function calls the underlying C++ interrupt function which aborts all pending queries.
-	 * It is not safe to call this function when the connection is already closed.
-	 */
-	public synchronized void interrupt() throws SQLException {
-		if (conn_ref != null) {
-			DuckDBNative.duckdb_jdbc_interrupt(conn_ref);
-		}
-	}
-
 	protected void finalize() throws Throwable {
 		close();
 	}

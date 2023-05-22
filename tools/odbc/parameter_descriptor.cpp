@@ -171,7 +171,7 @@ SQLRETURN ParameterDescriptor::FillParamCharDataBuffer(DescRecord &apd_record, D
 	size_t offset = 0;
 	auto sql_ind_ptr = GetSQLDescIndicatorPtr(apd_record);
 	if (*sql_ind_ptr == SQL_DATA_AT_EXEC) {
-		pool_allocated_ptr.emplace_back(duckdb::unique_ptr<char[]>(new char[ipd_record.sql_desc_length]));
+		pool_allocated_ptr.emplace_back(duckdb::make_unsafe_uniq_array<char>(ipd_record.sql_desc_length));
 		SetSQLDescDataPtr(apd_record, pool_allocated_ptr.back().get());
 		*sql_ind_ptr = 0;
 	} else {
@@ -203,7 +203,7 @@ SQLRETURN ParameterDescriptor::FillCurParamCharSet(DescRecord &apd_record, DescR
 
 	if (*len_ptr == SQL_DATA_AT_EXEC && pool_allocated_ptr.empty()) {
 		auto alloc_size = col_size * cur_apd->header.sql_desc_array_size;
-		pool_allocated_ptr.emplace_back(duckdb::unique_ptr<char[]>(new char[alloc_size]));
+		pool_allocated_ptr.emplace_back(duckdb::make_unsafe_uniq_array<char>(alloc_size));
 		SetSQLDescDataPtr(apd_record, pool_allocated_ptr.back().get());
 	}
 

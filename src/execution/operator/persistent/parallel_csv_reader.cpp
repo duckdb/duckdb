@@ -636,10 +636,10 @@ void ParallelCSVReader::ParseCSV(DataChunk &insert_chunk) {
 }
 
 idx_t ParallelCSVReader::GetLineError(idx_t line_error, idx_t buffer_idx) {
-
 	while (true) {
 		if (buffer->line_info->CanItGetLine(file_idx, buffer_idx)) {
 			auto cur_start = verification_positions.beginning_of_first_line + buffer->buffer->GetCSVGlobalStart();
+			// line errors are 1-indexed
 			return buffer->line_info->GetLine(buffer_idx, line_error, file_idx, cur_start, false);
 		}
 	}
