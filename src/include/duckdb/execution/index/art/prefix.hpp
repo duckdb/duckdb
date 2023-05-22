@@ -82,7 +82,11 @@ public:
 	}
 
 private:
+	//! Appends the byte to this prefix node, or creates a subsequent prefix node,
+	//! if this node is full
 	Prefix &Append(ART &art, const uint8_t byte);
+	//! Appends the other_prefix_node and all its subsequent prefix nodes to this prefix node.
+	//! Also frees all copied/appended nodes
 	Prefix &Append(ART &art, Node &other_prefix_node);
 };
 

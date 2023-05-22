@@ -205,36 +205,39 @@ void Prefix::Reduce(ART &art, Node &prefix_node, const idx_t n) {
 
 void Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx_t position) {
 
-	// TODO
+	auto &prefix = Prefix::Get(art, prefix_node);
+	if (position == Node::PREFIX_SIZE - 1) {
+		prefix.data[Node::PREFIX_SIZE]--;
+		prefix_node = prefix.ptr;
+		child_node = prefix.ptr;
+		return;
+	}
 
-	//	auto &prefix = Prefix::Get(art, prefix_node);
-	//	if (position == Node::PREFIX_SIZE - 1) {
-	//		prefix.data[Node::PREFIX_SIZE]--;
-	//		prefix_node = prefix.ptr;
-	//		child_node = prefix.ptr;
-	//		return;
-	//	}
-	//
-	//	// append the remaining bytes after the split
-	//	if (position + 1 < prefix.data[Node::PREFIX_SIZE]) {
-	//		reference<Prefix> child_prefix = Prefix::New(art, child_node);
-	//		for (idx_t i = position + 1; i < prefix.data[Node::PREFIX_SIZE]; i++) {
-	//			child_prefix = child_prefix.get().Append(art, prefix.data[i]);
-	//		}
-	//
-	//		if (prefix.ptr.DecodeARTNodeType() == NType::PREFIX) {
-	//			child_prefix.get().Append(art, prefix.ptr);
-	//		}
-	//	}
-	//
-	//	prefix.data[Node::PREFIX_SIZE] = position;
-	//	return;
+	// append the remaining bytes after the split
+	if (position + 1 < prefix.data[Node::PREFIX_SIZE]) {
+		reference<Prefix> child_prefix = Prefix::New(art, child_node);
+		for (idx_t i = position + 1; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+			child_prefix = child_prefix.get().Append(art, prefix.data[i]);
+		}
 
-	// TODO
+		if (prefix.ptr.DecodeARTNodeType() == NType::PREFIX) {
+			child_prefix.get().Append(art, prefix.ptr);
+		}
+	}
 
-	//! Splits the prefix at position. prefix then references the ptr (if any bytes left before
-	//! the split), or stays unchanged (no bytes left before the split). child references
-	//! the node after the split, which is either a new Prefix node, or ptr
+	// set the new size of this node
+	prefix.data[Node::PREFIX_SIZE] = position;
+
+	if (position == 0) {
+		// no bytes left before the split, free this node
+		prefix.ptr.Reset();
+		Node::Free(art, prefix_node.get());
+		return;
+	}
+
+	// bytes left before the split, reference subsequent node
+	prefix_node = prefix.ptr;
+	return;
 }
 
 BlockPointer Prefix::Serialize(ART &art, MetaBlockWriter &writer) {
