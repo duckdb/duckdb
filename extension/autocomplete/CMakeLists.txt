@@ -4,7 +4,7 @@ project(AutoCompleteExtension)
 
 include_directories(include)
 
-set(AUTOCOMPLETE_EXTENSION_FILES sql_auto_complete-extension.cpp)
+set(AUTOCOMPLETE_EXTENSION_FILES autocomplete-extension.cpp)
 
 add_library(autocomplete_extension STATIC ${AUTOCOMPLETE_EXTENSION_FILES})
 set(PARAMETERS "-warnings")

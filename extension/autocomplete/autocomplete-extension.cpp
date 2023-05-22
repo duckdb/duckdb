@@ -11,7 +11,7 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "sql_auto_complete_extension.hpp"
+#include "autocomplete_extension.hpp"
 #include "duckdb/main/extension_util.hpp"
 
 namespace duckdb {
@@ -403,11 +403,11 @@ static void LoadInternal(DatabaseInstance &db) {
 	                                SQLAutoCompleteBind, SQLAutoCompleteInit);
 	ExtensionUtil::RegisterFunction(db, auto_complete_fun);
 }
-void SQLAutoCompleteExtension::Load(DuckDB &db) {
+void AutocompleteExtension::Load(DuckDB &db) {
 	LoadInternal(*db.instance);
 }
 
-std::string SQLAutoCompleteExtension::Name() {
+std::string AutocompleteExtension::Name() {
 	return "sql_auto_complete";
 }
 
