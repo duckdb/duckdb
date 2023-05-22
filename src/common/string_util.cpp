@@ -193,6 +193,10 @@ string StringUtil::Lower(const string &str) {
 	return (copy);
 }
 
+bool StringUtil::IsLower(const string &str) {
+	return str == Lower(str);
+}
+
 // Jenkins hash function: https://en.wikipedia.org/wiki/Jenkins_hash_function
 uint64_t StringUtil::CIHash(const string &str) {
 	uint32_t hash = 0;
