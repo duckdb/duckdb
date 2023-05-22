@@ -144,18 +144,18 @@ SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, Cl
                                             GlobalSinkState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<AsOfGlobalSinkState>();
 
+	// The data is all in so we can initialise the left partitioning.
+	const vector<unique_ptr<BaseStatistics>> partitions_stats;
+	gstate.lhs_sink = make_uniq<PartitionGlobalSinkState>(context, lhs_partitions, lhs_orders, children[0]->types,
+	                                                      partitions_stats, 0);
+	gstate.lhs_sink->SyncPartitioning(gstate.rhs_sink);
+
 	// Find the first group to sort
 	auto &groups = gstate.rhs_sink.grouping_data->GetPartitions();
 	if (groups.empty() && EmptyResultIfRHSIsEmpty()) {
 		// Empty input!
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
-
-	// The data is all in so we can initialise the left partitioning.
-	const vector<unique_ptr<BaseStatistics>> partitions_stats;
-	gstate.lhs_sink = make_uniq<PartitionGlobalSinkState>(context, lhs_partitions, lhs_orders, children[0]->types,
-	                                                      partitions_stats, 0);
-	gstate.lhs_sink->SyncPartitioning(gstate.rhs_sink);
 
 	// Schedule all the sorts for maximum thread utilisation
 	auto new_event = make_shared<PartitionMergeEvent>(gstate.rhs_sink, pipeline);
@@ -200,10 +200,8 @@ public:
 		lhs_sel.Initialize();
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 
-		if (!lhs_partition_sink) {
-			auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
-			lhs_partition_sink = gsink.RegisterBuffer(context);
-		}
+		auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
+		lhs_partition_sink = gsink.RegisterBuffer(context);
 	}
 
 	bool Sink(DataChunk &input);
@@ -359,8 +357,6 @@ public:
 	Orders lhs_orders;
 
 	//	LHS scanning
-	ExpressionExecutor lhs_executor;
-	DataChunk lhs_keys;
 	SelectionVector lhs_sel;
 	optional_ptr<PartitionGlobalHashGroup> left_hash;
 	OuterJoinMarker left_outer;
@@ -382,8 +378,8 @@ public:
 AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &context, const PhysicalAsOfJoin &op)
     : context(context), allocator(Allocator::Get(context)), op(op),
       buffer_manager(BufferManager::GetBufferManager(context)), force_external(IsExternal(context)),
-      memory_per_thread(op.GetMaxThreadMemory(context)), lhs_executor(context),
-      left_outer(IsLeftOuterJoin(op.join_type)), fetch_next_left(true) {
+      memory_per_thread(op.GetMaxThreadMemory(context)), left_outer(IsLeftOuterJoin(op.join_type)),
+      fetch_next_left(true) {
 	vector<unique_ptr<BaseStatistics>> partition_stats;
 	Orders partitions; // Not used.
 	PartitionGlobalSinkState::GenerateOrderings(partitions, lhs_orders, op.lhs_partitions, op.lhs_orders,
@@ -395,11 +391,6 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &context, const PhysicalAsOfJoin 
 
 	lhs_sel.Initialize();
 	left_outer.Initialize(STANDARD_VECTOR_SIZE);
-
-	lhs_keys.Initialize(allocator, op.join_key_types);
-	for (const auto &cond : op.conditions) {
-		lhs_executor.AddExpression(*cond.left);
-	}
 }
 
 void AsOfProbeBuffer::BeginLeftScan(hash_t scan_bin) {
@@ -525,21 +516,12 @@ unique_ptr<OperatorState> PhysicalAsOfJoin::GetOperatorState(ExecutionContext &c
 }
 
 void AsOfProbeBuffer::ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk) {
-	auto &gsink = op.sink_state->Cast<AsOfGlobalSinkState>();
-
 	// perform the actual join
 	bool found_match[STANDARD_VECTOR_SIZE] = {false};
 	ResolveJoin(found_match);
 
 	// now construct the result based on the join result
 	switch (op.join_type) {
-	case JoinType::MARK: {
-		//	Recompute sorted keys
-		lhs_keys.Reset();
-		lhs_executor.Execute(lhs_payload, lhs_keys);
-		PhysicalJoin::ConstructMarkJoinResult(lhs_keys, lhs_payload, chunk, found_match, gsink.has_null);
-		break;
-	}
 	case JoinType::SEMI:
 		PhysicalJoin::ConstructSemiJoinResult(lhs_payload, chunk, found_match);
 		break;
