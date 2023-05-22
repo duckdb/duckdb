@@ -76,9 +76,38 @@ TEST_CASE("Alter", "[odbc]") {
 	SQLHANDLE dbc;
 	SQLHANDLE stmt;
 	HSTMT hstmt = SQL_NULL_HSTMT;
-	SQLHDBC conn;
 	auto dsn = "DuckDB";
 
-	ret = SQLAllocHandle(SQL_HANDLE_STMT, conn, &hstmt);
+
+	// Connect to the database
+	ret = SQLAllocHandle(SQL_HANDLE_ENV, nullptr, &env);
+	REQUIRE(ret == SQL_SUCCESS);
+
+	ret = SQLSetEnvAttr(env, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)(uintptr_t)SQL_OV_ODBC3, 0);
+	ODBC_CHECK(ret, SQL_HANDLE_ENV, env, "SQLSetEnvAttr (SQL_ATTR_ODBC_VERSION ODBC3)");
+
+	ret = SQLAllocHandle(SQL_HANDLE_DBC, env, &dbc);
+	ODBC_CHECK(ret, SQL_HANDLE_ENV, env, "SQLAllocHandle (DBC)");
+
+	ret = SQLConnect(dbc, (SQLCHAR *)dsn, SQL_NTS, nullptr, SQL_NTS, nullptr, SQL_NTS);
+	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLConnect");
+
+	ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc, &hstmt);
 	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLAllocHandle (STMT)");
+
+	// Create a table to test with
+	ret = SQLExecDirect(hstmt, (SQLCHAR *)"CREATE TABLE testtbl(t varchar(40))", SQL_NTS);
+	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLExecDirect (CREATE TABLE)");
+
+	// A simple query against the table, fetch column info
+	ret = SQLExecDirect(hstmt, (SQLCHAR *)"SELECT * FROM testtbl", SQL_NTS);
+	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLExecDirect (SELECT)");
+
+    // Get column metadata
+    SQLSMALLINT num_cols;
+    ret = SQLNumResultCols(hstmt, &num_cols);
+    ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLNumResultCols");
+
+	ret = SQLFreeStmt(hstmt, SQL_CLOSE);
+	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFreeStmt (SQL_CLOSE)");
 }
