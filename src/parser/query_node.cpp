@@ -243,7 +243,7 @@ unique_ptr<QueryNode> QueryNode::Deserialize(Deserializer &main_source) {
 		auto info = make_uniq<CommonTableExpressionInfo>();
 		source.ReadStringVector(info->aliases);
 		info->query = SelectStatement::Deserialize(source);
-		info->materialized = reader.ReadRequired<CTEMaterialize>();
+		info->materialized = reader.ReadField<CTEMaterialize>(CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
 		new_map[name] = std::move(info);
 	}
 	unique_ptr<QueryNode> result;
