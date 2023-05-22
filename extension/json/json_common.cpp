@@ -113,22 +113,24 @@ static inline bool ReadArrayIndex(const char *&ptr, const char *const end, idx_t
 		array_index = DConstants::INVALID_INDEX;
 	} else {
 		if (*ptr == '#') { // SQLite syntax to index from back of array
-			from_back = true;
-			ptr++; // Skip over '#'
+			ptr++;         // Skip over '#'
 			if (ptr == end) {
 				return false;
 			}
 			if (*ptr == ']') {
+				// [#] always returns NULL in SQLite, so we return an array index that will do the same
+				array_index = NumericLimits<uint32_t>::Maximum();
 				ptr++;
 				return true;
 			}
 			if (*ptr != '-') {
 				return false;
 			}
+			from_back = true;
 		}
 		if (*ptr == '-') {
-			from_back = true;
 			ptr++; // Skip over '-'
+			from_back = true;
 		}
 		auto idx_len = ReadInteger(ptr, end, array_index);
 		if (idx_len == 0) {
@@ -195,10 +197,11 @@ yyjson_val *JSONCommon::GetPath(yyjson_val *val, const char *ptr, const idx_t &l
 			const char *key_ptr;
 			idx_t key_len;
 #ifdef DEBUG
-			bool success = ReadKey(ptr, end, key_ptr, key_len);
+			bool success =
+#endif
+			    ReadKey(ptr, end, key_ptr, key_len);
+#ifdef DEBUG
 			D_ASSERT(success);
-#else
-			ReadKey(ptr, end, key_ptr, key_len);
 #endif
 			val = yyjson_obj_getn(val, key_ptr, key_len);
 			break;
@@ -210,10 +213,11 @@ yyjson_val *JSONCommon::GetPath(yyjson_val *val, const char *ptr, const idx_t &l
 			idx_t array_index;
 			bool from_back;
 #ifdef DEBUG
-			bool success = ReadArrayIndex(ptr, end, array_index, from_back);
+			bool success =
+#endif
+			    ReadArrayIndex(ptr, end, array_index, from_back);
+#ifdef DEBUG
 			D_ASSERT(success);
-#else
-			ReadArrayIndex(ptr, end, array_index, from_back);
 #endif
 			if (from_back && array_index != 0) {
 				array_index = unsafe_yyjson_get_len(val) - array_index;
@@ -241,12 +245,12 @@ void GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *const
 			const char *key_ptr;
 			idx_t key_len;
 #ifdef DEBUG
-			bool success = ReadKey(ptr, end, key_ptr, key_len);
-			D_ASSERT(success);
-#else
-			ReadKey(ptr, end, key_ptr, key_len);
+			bool success =
 #endif
-
+			    ReadKey(ptr, end, key_ptr, key_len);
+#ifdef DEBUG
+			D_ASSERT(success);
+#endif
 			if (key_len == DConstants::INVALID_INDEX) { // Wildcard
 				size_t idx, max;
 				yyjson_val *key, *obj_val;
@@ -265,10 +269,11 @@ void GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *const
 			idx_t array_index;
 			bool from_back;
 #ifdef DEBUG
-			bool success = ReadArrayIndex(ptr, end, array_index, from_back);
+			bool success =
+#endif
+			    ReadArrayIndex(ptr, end, array_index, from_back);
+#ifdef DEBUG
 			D_ASSERT(success);
-#else
-			ReadArrayIndex(ptr, end, array_index, from_back);
 #endif
 
 			if (array_index == DConstants::INVALID_INDEX) { // Wildcard
