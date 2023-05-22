@@ -127,6 +127,25 @@ LogicalType ArrowTableFunction::GetArrowLogicalType(
 		}
 		return LogicalType::STRUCT(child_types);
 
+	} else if (format[0] == '+' && format[1] == 'u') {
+		if (format[2] != 's') {
+			throw NotImplementedException("Unsupported Internal Arrow Type: \"%c\" Union", format[2]);
+		}
+		D_ASSERT(format[3] == ':');
+
+		std::string prefix = "+us:";
+		// TODO: what are these type ids actually for?
+		auto type_ids = StringUtil::Split(format.substr(prefix.size()), ',');
+
+		child_list_t<LogicalType> members;
+		for (idx_t type_idx = 0; type_idx < (idx_t)schema.n_children; type_idx++) {
+			auto type = schema.children[type_idx];
+
+			members.emplace_back(type->name, GetArrowLogicalType(*type, arrow_convert_data, col_idx));
+		}
+
+		return LogicalType::UNION(members);
+
 	} else if (format == "+m") {
 		convert_data.variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
 

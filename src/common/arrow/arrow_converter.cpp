@@ -229,6 +229,43 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		SetArrowMapFormat(root_holder, child, type, config_timezone, options);
 		break;
 	}
+	case LogicalTypeId::UNION: {
+		std::string format = "+us:";
+
+		auto &child_types = UnionType::CopyMemberTypes(type);
+		child.n_children = child_types.size();
+		root_holder.nested_children.emplace_back();
+		root_holder.nested_children.back().resize(child_types.size());
+		root_holder.nested_children_ptr.emplace_back();
+		root_holder.nested_children_ptr.back().resize(child_types.size());
+		for (idx_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
+			root_holder.nested_children_ptr.back()[type_idx] = &root_holder.nested_children.back()[type_idx];
+		}
+		child.children = &root_holder.nested_children_ptr.back()[0];
+		for (size_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
+
+			InitializeChild(*child.children[type_idx]);
+
+			auto &struct_col_name = child_types[type_idx].first;
+			auto name_ptr = make_unsafe_uniq_array<char>(struct_col_name.size() + 1);
+			for (size_t i = 0; i < struct_col_name.size(); i++) {
+				name_ptr[i] = struct_col_name[i];
+			}
+			name_ptr[struct_col_name.size()] = '\0';
+			root_holder.owned_type_names.push_back(std::move(name_ptr));
+
+			child.children[type_idx]->name = root_holder.owned_type_names.back().get();
+			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, config_timezone,
+			               options);
+
+			format += to_string(type_idx) + ",";
+		}
+
+		format.pop_back();
+		child.format = strdup(format.c_str());
+
+		break;
+	}
 	case LogicalTypeId::ENUM: {
 		// TODO what do we do with pointer enums here?
 		switch (EnumType::GetPhysicalType(type)) {
