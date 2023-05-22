@@ -48,7 +48,15 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			// This can only be the case if there is a recursive CTE,
 			// or a materialized CTE present.
 			auto index = GenerateTableIndex();
-			auto result = make_uniq<BoundCTERef>(index, ctebinding->index, cte.materialized);
+			auto materialized = cte.materialized;
+			if (materialized == CTEMaterialize::CTE_MATERIALIZE_DEFAULT) {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+				materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+#else
+				materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
+#endif
+			}
+			auto result = make_uniq<BoundCTERef>(index, ctebinding->index, materialized);
 			auto b = ctebinding;
 			auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
 			auto names = BindContext::AliasColumnNames(alias, b->names, ref.column_name_alias);

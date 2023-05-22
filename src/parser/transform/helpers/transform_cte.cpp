@@ -88,7 +88,11 @@ void Transformer::TransformCTEInternal(duckdb_libpgquery::PGWithClause *de_with_
 			throw ParserException("Duplicate CTE name \"%s\"", cte_name);
 		}
 
+		#ifdef DUCKDB_ALTERNATIVE_VERIFY
+		if (materialized_ctes && cte->ctematerialized == duckdb_libpgquery::PGCTEMaterializeDefault) {
+		#else
 		if (materialized_ctes && cte->ctematerialized == duckdb_libpgquery::PGCTEMaterializeAlways) {
+		#endif
 			auto materialize = make_uniq<CTENode>();
 			materialize->query = info->query->node->Copy();
 			materialize->ctename = cte_name;
