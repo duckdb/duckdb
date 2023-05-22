@@ -34,18 +34,19 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::INVALID;
 
 public:
-	TemplatedColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
-	                      idx_t max_define_p, idx_t max_repeat_p)
-	    : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {};
+	TemplatedColumnReader(ParquetReader &reader, ArenaAllocator &block_allocator, LogicalType type_p,
+	                      const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p)
+	    : ColumnReader(reader, block_allocator, std::move(type_p), schema_p, schema_idx_p, max_define_p,
+	                   max_repeat_p) {};
 
 	shared_ptr<ResizeableBuffer> dict;
 
 public:
 	void AllocateDict(idx_t size) {
 		if (!dict) {
-			dict = make_shared<ResizeableBuffer>(GetAllocator(), size);
+			dict = make_shared<ResizeableBuffer>(GetBlockAllocator().GetAllocator(), size);
 		} else {
-			dict->resize(GetAllocator(), size);
+			dict->resize(GetBlockAllocator().GetAllocator(), size);
 		}
 	}
 

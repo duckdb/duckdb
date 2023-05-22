@@ -1,27 +1,26 @@
 #include "column_reader.hpp"
-#include "parquet_timestamp.hpp"
-#include "utf8proc_wrapper.hpp"
-#include "parquet_reader.hpp"
 
 #include "boolean_column_reader.hpp"
-#include "cast_column_reader.hpp"
-#include "row_number_column_reader.hpp"
 #include "callback_column_reader.hpp"
-#include "parquet_decimal_utils.hpp"
+#include "cast_column_reader.hpp"
+#include "duckdb.hpp"
 #include "list_column_reader.hpp"
+#include "miniz_wrapper.hpp"
+#include "parquet_decimal_utils.hpp"
+#include "parquet_reader.hpp"
+#include "parquet_timestamp.hpp"
+#include "row_number_column_reader.hpp"
+#include "snappy.h"
 #include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"
 #include "templated_column_reader.hpp"
-
-#include "snappy.h"
-#include "miniz_wrapper.hpp"
+#include "utf8proc_wrapper.hpp"
 #include "zstd.h"
-#include <iostream>
 
-#include "duckdb.hpp"
+#include <iostream>
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/bit.hpp"
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #endif
 
@@ -99,14 +98,14 @@ const uint64_t ParquetDecodeUtils::BITPACK_MASKS[] = {0,
 
 const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 
-ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
-                           idx_t max_define_p, idx_t max_repeat_p)
+ColumnReader::ColumnReader(ParquetReader &reader, ArenaAllocator &block_allocator_p, LogicalType type_p,
+                           const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p, idx_t max_repeat_p)
     : schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), reader(reader),
-      type(std::move(type_p)), page_rows_available(0) {
+      block_allocator(block_allocator_p), type(std::move(type_p)), page_rows_available(0) {
 
 	// dummies for Skip()
-	dummy_define.resize(reader.allocator, STANDARD_VECTOR_SIZE);
-	dummy_repeat.resize(reader.allocator, STANDARD_VECTOR_SIZE);
+	dummy_define.resize(GetAllocator(), STANDARD_VECTOR_SIZE);
+	dummy_repeat.resize(GetAllocator(), STANDARD_VECTOR_SIZE);
 }
 
 ColumnReader::~ColumnReader() {
@@ -114,6 +113,10 @@ ColumnReader::~ColumnReader() {
 
 Allocator &ColumnReader::GetAllocator() {
 	return reader.allocator;
+}
+
+ArenaAllocator &ColumnReader::GetBlockAllocator() {
+	return block_allocator;
 }
 
 ParquetReader &ColumnReader::Reader() {
@@ -304,14 +307,14 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 
 void ColumnReader::AllocateBlock(idx_t size) {
 	if (!block) {
-		block = make_shared<ResizeableBuffer>(GetAllocator(), size);
+		block = make_shared<ResizeableBuffer>(GetBlockAllocator().GetAllocator(), size);
 	} else {
 		block->resize(GetAllocator(), size);
 	}
 }
 
 void ColumnReader::AllocateCompressed(idx_t size) {
-	compressed_buffer.resize(GetAllocator(), size);
+	compressed_buffer.resize(GetBlockAllocator().GetAllocator(), size);
 }
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
@@ -498,7 +501,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 		}
 
 		if (dict_decoder) {
-			offset_buffer.resize(reader.allocator, sizeof(uint32_t) * (read_now - null_count));
+			offset_buffer.resize(GetAllocator(), sizeof(uint32_t) * (read_now - null_count));
 			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, read_now - null_count);
 			DictReference(result);
 			Offsets((uint32_t *)offset_buffer.ptr, define_out, read_now, filter, result_offset, result);
@@ -508,12 +511,12 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 
 			switch (type.InternalType()) {
 			case PhysicalType::INT32:
-				read_buf->resize(reader.allocator, sizeof(int32_t) * (read_now - null_count));
+				read_buf->resize(GetAllocator(), sizeof(int32_t) * (read_now - null_count));
 				dbp_decoder->GetBatch<int32_t>(read_buf->ptr, read_now - null_count);
 
 				break;
 			case PhysicalType::INT64:
-				read_buf->resize(reader.allocator, sizeof(int64_t) * (read_now - null_count));
+				read_buf->resize(GetAllocator(), sizeof(int64_t) * (read_now - null_count));
 				dbp_decoder->GetBatch<int64_t>(read_buf->ptr, read_now - null_count);
 				break;
 
@@ -526,7 +529,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 			// RLE encoding for boolean
 			D_ASSERT(type.id() == LogicalTypeId::BOOLEAN);
 			auto read_buf = make_shared<ResizeableBuffer>();
-			read_buf->resize(reader.allocator, sizeof(bool) * (read_now - null_count));
+			read_buf->resize(GetAllocator(), sizeof(bool) * (read_now - null_count));
 			rle_decoder->GetBatch<uint8_t>(read_buf->ptr, read_now - null_count);
 			PlainTemplated<bool, TemplatedParquetValueConversion<bool>>(read_buf, define_out, read_now, filter,
 			                                                            result_offset, result);
@@ -578,10 +581,11 @@ void ColumnReader::ApplyPendingSkips(idx_t num_values) {
 //===--------------------------------------------------------------------===//
 // String Column Reader
 //===--------------------------------------------------------------------===//
-StringColumnReader::StringColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
-                                       idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p)
-    : TemplatedColumnReader<string_t, StringParquetValueConversion>(reader, std::move(type_p), schema_p, schema_idx_p,
-                                                                    max_define_p, max_repeat_p) {
+StringColumnReader::StringColumnReader(ParquetReader &reader, ArenaAllocator &block_allocator, LogicalType type_p,
+                                       const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p,
+                                       idx_t max_repeat_p)
+    : TemplatedColumnReader<string_t, StringParquetValueConversion>(
+          reader, block_allocator, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {
 	fixed_width_string_length = 0;
 	if (schema_p.type == Type::FIXED_LEN_BYTE_ARRAY) {
 		D_ASSERT(schema_p.__isset.type_length);
@@ -611,7 +615,7 @@ uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len
 
 void StringColumnReader::Dictionary(shared_ptr<ResizeableBuffer> data, idx_t num_entries) {
 	dict = std::move(data);
-	dict_strings = duckdb::unique_ptr<string_t[]>(new string_t[num_entries]);
+	dict_strings = unique_ptr<string_t[]>(new string_t[num_entries]);
 	for (idx_t dict_idx = 0; dict_idx < num_entries; dict_idx++) {
 		uint32_t str_len;
 		if (fixed_width_string_length == 0) {
@@ -642,7 +646,7 @@ static shared_ptr<ResizeableBuffer> ReadDbpData(Allocator &allocator, Resizeable
 
 void StringColumnReader::PrepareDeltaLengthByteArray(ResizeableBuffer &buffer) {
 	idx_t value_count;
-	auto length_buffer = ReadDbpData(reader.allocator, buffer, value_count);
+	auto length_buffer = ReadDbpData(GetAllocator(), buffer, value_count);
 	if (value_count == 0) {
 		// no values
 		byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, nullptr);
@@ -665,8 +669,8 @@ void StringColumnReader::PrepareDeltaLengthByteArray(ResizeableBuffer &buffer) {
 
 void StringColumnReader::PrepareDeltaByteArray(ResizeableBuffer &buffer) {
 	idx_t prefix_count, suffix_count;
-	auto prefix_buffer = ReadDbpData(reader.allocator, buffer, prefix_count);
-	auto suffix_buffer = ReadDbpData(reader.allocator, buffer, suffix_count);
+	auto prefix_buffer = ReadDbpData(GetAllocator(), buffer, prefix_count);
+	auto suffix_buffer = ReadDbpData(GetAllocator(), buffer, suffix_count);
 	if (prefix_count != suffix_count) {
 		throw std::runtime_error("DELTA_BYTE_ARRAY - prefix and suffix counts are different - corrupt file?");
 	}
@@ -735,10 +739,10 @@ private:
 };
 
 void StringColumnReader::DictReference(Vector &result) {
-	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(dict));
+	//	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(dict));
 }
 void StringColumnReader::PlainReference(shared_ptr<ByteBuffer> plain_data, Vector &result) {
-	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(std::move(plain_data)));
+	//	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(std::move(plain_data)));
 }
 
 string_t StringParquetValueConversion::DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
@@ -866,15 +870,15 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 	return result_offset;
 }
 
-ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
-                                   idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
-                                   duckdb::unique_ptr<ColumnReader> child_column_reader_p)
-    : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
-      child_column_reader(std::move(child_column_reader_p)),
-      read_cache(reader.allocator, ListType::GetChildType(Type())), read_vector(read_cache), overflow_child_count(0) {
+ListColumnReader::ListColumnReader(ParquetReader &reader, ArenaAllocator &block_allocator, LogicalType type_p,
+                                   const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p,
+                                   idx_t max_repeat_p, unique_ptr<ColumnReader> child_column_reader_p)
+    : ColumnReader(reader, block_allocator, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
+      child_column_reader(std::move(child_column_reader_p)), read_cache(GetAllocator(), ListType::GetChildType(Type())),
+      read_vector(read_cache), overflow_child_count(0) {
 
-	child_defines.resize(reader.allocator, STANDARD_VECTOR_SIZE);
-	child_repeats.resize(reader.allocator, STANDARD_VECTOR_SIZE);
+	child_defines.resize(GetAllocator(), STANDARD_VECTOR_SIZE);
+	child_repeats.resize(GetAllocator(), STANDARD_VECTOR_SIZE);
 	child_defines_ptr = (uint8_t *)child_defines.ptr;
 	child_repeats_ptr = (uint8_t *)child_repeats.ptr;
 
@@ -884,8 +888,8 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 void ListColumnReader::ApplyPendingSkips(idx_t num_values) {
 	pending_skips -= num_values;
 
-	auto define_out = duckdb::unique_ptr<uint8_t[]>(new uint8_t[num_values]);
-	auto repeat_out = duckdb::unique_ptr<uint8_t[]>(new uint8_t[num_values]);
+	auto define_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
+	auto repeat_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
 
 	idx_t remaining = num_values;
 	idx_t read = 0;
@@ -906,9 +910,10 @@ void ListColumnReader::ApplyPendingSkips(idx_t num_values) {
 //===--------------------------------------------------------------------===//
 // Row NumberColumn Reader
 //===--------------------------------------------------------------------===//
-RowNumberColumnReader::RowNumberColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
-                                             idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p)
-    : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {
+RowNumberColumnReader::RowNumberColumnReader(ParquetReader &reader, ArenaAllocator &block_allocator, LogicalType type_p,
+                                             const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p,
+                                             idx_t max_repeat_p)
+    : ColumnReader(reader, block_allocator, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {
 }
 
 unique_ptr<BaseStatistics> RowNumberColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
@@ -948,12 +953,13 @@ idx_t RowNumberColumnReader::Read(uint64_t num_values, parquet_filter_t &filter,
 //===--------------------------------------------------------------------===//
 // Cast Column Reader
 //===--------------------------------------------------------------------===//
-CastColumnReader::CastColumnReader(duckdb::unique_ptr<ColumnReader> child_reader_p, LogicalType target_type_p)
-    : ColumnReader(child_reader_p->Reader(), std::move(target_type_p), child_reader_p->Schema(),
-                   child_reader_p->FileIdx(), child_reader_p->MaxDefine(), child_reader_p->MaxRepeat()),
+CastColumnReader::CastColumnReader(unique_ptr<ColumnReader> child_reader_p, LogicalType target_type_p)
+    : ColumnReader(child_reader_p->Reader(), child_reader_p->GetBlockAllocator(), std::move(target_type_p),
+                   child_reader_p->Schema(), child_reader_p->FileIdx(), child_reader_p->MaxDefine(),
+                   child_reader_p->MaxRepeat()),
       child_reader(std::move(child_reader_p)) {
 	vector<LogicalType> intermediate_types {child_reader->Type()};
-	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
+	intermediate_chunk.Initialize(GetAllocator(), intermediate_types);
 }
 
 unique_ptr<BaseStatistics> CastColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
@@ -998,10 +1004,10 @@ idx_t CastColumnReader::GroupRowsAvailable() {
 //===--------------------------------------------------------------------===//
 // Struct Column Reader
 //===--------------------------------------------------------------------===//
-StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
-                                       idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
-                                       vector<duckdb::unique_ptr<ColumnReader>> child_readers_p)
-    : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
+StructColumnReader::StructColumnReader(ParquetReader &reader, ArenaAllocator &block_allocator, LogicalType type_p,
+                                       const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p,
+                                       idx_t max_repeat_p, vector<unique_ptr<ColumnReader>> child_readers_p)
+    : ColumnReader(reader, block_allocator, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
       child_readers(std::move(child_readers_p)) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 }
@@ -1132,11 +1138,12 @@ class DecimalColumnReader
 	    TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE, DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>>;
 
 public:
-	DecimalColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, // NOLINT
+	DecimalColumnReader(ParquetReader &reader, ArenaAllocator &block_allocator, LogicalType type_p,
+	                    const SchemaElement &schema_p, // NOLINT
 	                    idx_t file_idx_p, idx_t max_define_p, idx_t max_repeat_p)
 	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,
 	                            DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>>(
-	          reader, std::move(type_p), schema_p, file_idx_p, max_define_p, max_repeat_p) {};
+	          reader, block_allocator, std::move(type_p), schema_p, file_idx_p, max_define_p, max_repeat_p) {};
 
 protected:
 	void Dictionary(shared_ptr<ResizeableBuffer> dictionary_data, idx_t num_entries) { // NOLINT
@@ -1150,34 +1157,36 @@ protected:
 };
 
 template <bool FIXED_LENGTH>
-static duckdb::unique_ptr<ColumnReader> CreateDecimalReaderInternal(ParquetReader &reader, const LogicalType &type_p,
-                                                                    const SchemaElement &schema_p, idx_t file_idx_p,
-                                                                    idx_t max_define, idx_t max_repeat) {
+static unique_ptr<ColumnReader> CreateDecimalReaderInternal(ParquetReader &reader, ArenaAllocator &block_allocator,
+                                                            const LogicalType &type_p, const SchemaElement &schema_p,
+                                                            idx_t file_idx_p, idx_t max_define, idx_t max_repeat) {
 	switch (type_p.InternalType()) {
 	case PhysicalType::INT16:
-		return make_uniq<DecimalColumnReader<int16_t, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p, max_define,
-		                                                             max_repeat);
+		return make_uniq<DecimalColumnReader<int16_t, FIXED_LENGTH>>(reader, block_allocator, type_p, schema_p,
+		                                                             file_idx_p, max_define, max_repeat);
 	case PhysicalType::INT32:
-		return make_uniq<DecimalColumnReader<int32_t, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p, max_define,
-		                                                             max_repeat);
+		return make_uniq<DecimalColumnReader<int32_t, FIXED_LENGTH>>(reader, block_allocator, type_p, schema_p,
+		                                                             file_idx_p, max_define, max_repeat);
 	case PhysicalType::INT64:
-		return make_uniq<DecimalColumnReader<int64_t, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p, max_define,
-		                                                             max_repeat);
+		return make_uniq<DecimalColumnReader<int64_t, FIXED_LENGTH>>(reader, block_allocator, type_p, schema_p,
+		                                                             file_idx_p, max_define, max_repeat);
 	case PhysicalType::INT128:
-		return make_uniq<DecimalColumnReader<hugeint_t, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p, max_define,
-		                                                               max_repeat);
+		return make_uniq<DecimalColumnReader<hugeint_t, FIXED_LENGTH>>(reader, block_allocator, type_p, schema_p,
+		                                                               file_idx_p, max_define, max_repeat);
 	default:
 		throw InternalException("Unrecognized type for Decimal");
 	}
 }
 
-unique_ptr<ColumnReader> ParquetDecimalUtils::CreateReader(ParquetReader &reader, const LogicalType &type_p,
-                                                           const SchemaElement &schema_p, idx_t file_idx_p,
-                                                           idx_t max_define, idx_t max_repeat) {
+unique_ptr<ColumnReader> ParquetDecimalUtils::CreateReader(ParquetReader &reader, ArenaAllocator &block_allocator,
+                                                           const LogicalType &type_p, const SchemaElement &schema_p,
+                                                           idx_t file_idx_p, idx_t max_define, idx_t max_repeat) {
 	if (schema_p.__isset.type_length) {
-		return CreateDecimalReaderInternal<true>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return CreateDecimalReaderInternal<true>(reader, block_allocator, type_p, schema_p, file_idx_p, max_define,
+		                                         max_repeat);
 	} else {
-		return CreateDecimalReaderInternal<false>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return CreateDecimalReaderInternal<false>(reader, block_allocator, type_p, schema_p, file_idx_p, max_define,
+		                                          max_repeat);
 	}
 }
 
@@ -1224,10 +1233,10 @@ struct UUIDValueConversion {
 class UUIDColumnReader : public TemplatedColumnReader<hugeint_t, UUIDValueConversion> {
 
 public:
-	UUIDColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
-	                 idx_t max_define_p, idx_t max_repeat_p)
-	    : TemplatedColumnReader<hugeint_t, UUIDValueConversion>(reader, std::move(type_p), schema_p, file_idx_p,
-	                                                            max_define_p, max_repeat_p) {};
+	UUIDColumnReader(ParquetReader &reader, ArenaAllocator &block_allocator, LogicalType type_p,
+	                 const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p, idx_t max_repeat_p)
+	    : TemplatedColumnReader<hugeint_t, UUIDValueConversion>(reader, block_allocator, std::move(type_p), schema_p,
+	                                                            file_idx_p, max_define_p, max_repeat_p) {};
 
 protected:
 	void Dictionary(shared_ptr<ResizeableBuffer> dictionary_data, idx_t num_entries) { // NOLINT
@@ -1275,10 +1284,10 @@ struct IntervalValueConversion {
 class IntervalColumnReader : public TemplatedColumnReader<interval_t, IntervalValueConversion> {
 
 public:
-	IntervalColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
-	                     idx_t max_define_p, idx_t max_repeat_p)
-	    : TemplatedColumnReader<interval_t, IntervalValueConversion>(reader, std::move(type_p), schema_p, file_idx_p,
-	                                                                 max_define_p, max_repeat_p) {};
+	IntervalColumnReader(ParquetReader &reader, ArenaAllocator &block_allocator, LogicalType type_p,
+	                     const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p, idx_t max_repeat_p)
+	    : TemplatedColumnReader<interval_t, IntervalValueConversion>(
+	          reader, block_allocator, std::move(type_p), schema_p, file_idx_p, max_define_p, max_repeat_p) {};
 
 protected:
 	void Dictionary(shared_ptr<ResizeableBuffer> dictionary_data, idx_t num_entries) override { // NOLINT
@@ -1294,86 +1303,87 @@ protected:
 // Create Column Reader
 //===--------------------------------------------------------------------===//
 template <class T>
-unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const LogicalType &type_p,
-                                             const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define,
-                                             idx_t max_repeat) {
+unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, ArenaAllocator &block_allocator,
+                                             const LogicalType &type_p, const SchemaElement &schema_p, idx_t file_idx_p,
+                                             idx_t max_define, idx_t max_repeat) {
 	switch (type_p.InternalType()) {
 	case PhysicalType::INT16:
 		return make_uniq<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<T>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case PhysicalType::INT32:
 		return make_uniq<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<T>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case PhysicalType::INT64:
 		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<T>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	default:
 		throw NotImplementedException("Unimplemented internal type for CreateDecimalReader");
 	}
 }
 
-unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const LogicalType &type_p,
-                                                    const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define,
-                                                    idx_t max_repeat) {
+unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, ArenaAllocator &block_allocator,
+                                                    const LogicalType &type_p, const SchemaElement &schema_p,
+                                                    idx_t file_idx_p, idx_t max_define, idx_t max_repeat) {
 	switch (type_p.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return make_uniq<BooleanColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_uniq<BooleanColumnReader>(reader, block_allocator, type_p, schema_p, file_idx_p, max_define,
+		                                      max_repeat);
 	case LogicalTypeId::UTINYINT:
 		return make_uniq<TemplatedColumnReader<uint8_t, TemplatedParquetValueConversion<uint32_t>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::USMALLINT:
 		return make_uniq<TemplatedColumnReader<uint16_t, TemplatedParquetValueConversion<uint32_t>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::UINTEGER:
 		return make_uniq<TemplatedColumnReader<uint32_t, TemplatedParquetValueConversion<uint32_t>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::UBIGINT:
 		return make_uniq<TemplatedColumnReader<uint64_t, TemplatedParquetValueConversion<uint64_t>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::TINYINT:
 		return make_uniq<TemplatedColumnReader<int8_t, TemplatedParquetValueConversion<int32_t>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::SMALLINT:
 		return make_uniq<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<int32_t>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::INTEGER:
 		return make_uniq<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<int32_t>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::BIGINT:
 		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<int64_t>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::FLOAT:
 		return make_uniq<TemplatedColumnReader<float, TemplatedParquetValueConversion<float>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::DOUBLE:
 		return make_uniq<TemplatedColumnReader<double, TemplatedParquetValueConversion<double>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
 		switch (schema_p.type) {
 		case Type::INT96:
 			return make_uniq<CallbackColumnReader<Int96, timestamp_t, ImpalaTimestampToTimestamp>>(
-			    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 		case Type::INT64:
 			if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIMESTAMP) {
 				if (schema_p.logicalType.TIMESTAMP.unit.__isset.MILLIS) {
 					return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
-					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+					    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 				} else if (schema_p.logicalType.TIMESTAMP.unit.__isset.MICROS) {
 					return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
-					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+					    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 				} else if (schema_p.logicalType.TIMESTAMP.unit.__isset.NANOS) {
 					return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampNsToTimestamp>>(
-					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+					    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 				}
 			} else if (schema_p.__isset.converted_type) {
 				switch (schema_p.converted_type) {
 				case ConvertedType::TIMESTAMP_MICROS:
 					return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
-					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+					    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 				case ConvertedType::TIMESTAMP_MILLIS:
 					return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
-					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+					    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 				default:
 					break;
 				}
@@ -1383,54 +1393,60 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		}
 		break;
 	case LogicalTypeId::DATE:
-		return make_uniq<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(reader, type_p, schema_p, file_idx_p,
-		                                                                          max_define, max_repeat);
+		return make_uniq<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(
+		    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 		if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIME) {
 			if (schema_p.logicalType.TIME.unit.__isset.MILLIS) {
 				return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			} else if (schema_p.logicalType.TIME.unit.__isset.MICROS) {
 				return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			} else if (schema_p.logicalType.TIME.unit.__isset.NANOS) {
 				return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTimeNs>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			}
 		} else if (schema_p.__isset.converted_type) {
 			switch (schema_p.converted_type) {
 			case ConvertedType::TIME_MICROS:
 				return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			case ConvertedType::TIME_MILLIS:
 				return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+				    reader, block_allocator, type_p, schema_p, file_idx_p, max_define, max_repeat);
 			default:
 				break;
 			}
 		}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-		return make_uniq<StringColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_uniq<StringColumnReader>(reader, block_allocator, type_p, schema_p, file_idx_p, max_define,
+		                                     max_repeat);
 	case LogicalTypeId::DECIMAL:
 		// we have to figure out what kind of int we need
 		switch (schema_p.type) {
 		case Type::INT32:
-			return CreateDecimalReader<int32_t>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			return CreateDecimalReader<int32_t>(reader, block_allocator, type_p, schema_p, file_idx_p, max_define,
+			                                    max_repeat);
 		case Type::INT64:
-			return CreateDecimalReader<int64_t>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			return CreateDecimalReader<int64_t>(reader, block_allocator, type_p, schema_p, file_idx_p, max_define,
+			                                    max_repeat);
 		case Type::BYTE_ARRAY:
 		case Type::FIXED_LEN_BYTE_ARRAY:
-			return ParquetDecimalUtils::CreateReader(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+			return ParquetDecimalUtils::CreateReader(reader, block_allocator, type_p, schema_p, file_idx_p, max_define,
+			                                         max_repeat);
 		default:
 			throw NotImplementedException("Unrecognized Parquet type for Decimal");
 		}
 		break;
 	case LogicalTypeId::UUID:
-		return make_uniq<UUIDColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_uniq<UUIDColumnReader>(reader, block_allocator, type_p, schema_p, file_idx_p, max_define,
+		                                   max_repeat);
 	case LogicalTypeId::INTERVAL:
-		return make_uniq<IntervalColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_uniq<IntervalColumnReader>(reader, block_allocator, type_p, schema_p, file_idx_p, max_define,
+		                                       max_repeat);
 	default:
 		break;
 	}

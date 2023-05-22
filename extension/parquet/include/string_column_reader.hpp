@@ -25,10 +25,10 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::VARCHAR;
 
 public:
-	StringColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
-	                   idx_t max_define_p, idx_t max_repeat_p);
+	StringColumnReader(ParquetReader &reader, ArenaAllocator &block_allocator, LogicalType type_p,
+	                   const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p);
 
-	duckdb::unique_ptr<string_t[]> dict_strings;
+	unique_ptr<string_t[]> dict_strings;
 	idx_t fixed_width_string_length;
 	idx_t delta_offset = 0;
 

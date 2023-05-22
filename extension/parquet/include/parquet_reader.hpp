@@ -10,16 +10,16 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/planner/table_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/table_filter.hpp"
 #endif
 #include "column_reader.hpp"
 #include "parquet_file_metadata_cache.hpp"
@@ -47,6 +47,13 @@ struct ParquetReaderPrefetchConfig {
 };
 
 struct ParquetReaderScanState {
+	explicit ParquetReaderScanState(Allocator &allocator_p) : allocator(allocator_p, Storage::BLOCK_ALLOC_SIZE) {
+	}
+
+	~ParquetReaderScanState() {
+		root_reader.reset();
+	}
+
 	vector<idx_t> group_idx_list;
 	int64_t current_group;
 	idx_t group_offset;
@@ -62,6 +69,8 @@ struct ParquetReaderScanState {
 
 	bool prefetch_mode = false;
 	bool current_group_prefetched = false;
+
+	ArenaAllocator allocator;
 };
 
 struct ParquetOptions {
@@ -123,10 +132,10 @@ public:
 private:
 	void InitializeSchema();
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
-	unique_ptr<ColumnReader> CreateReader();
+	unique_ptr<ColumnReader> CreateReader(ArenaAllocator &block_allocator);
 
-	unique_ptr<ColumnReader> CreateReaderRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
-	                                               idx_t &next_schema_idx, idx_t &next_file_idx);
+	unique_ptr<ColumnReader> CreateReaderRecursive(ArenaAllocator &block_allocator, idx_t depth, idx_t max_define,
+	                                               idx_t max_repeat, idx_t &next_schema_idx, idx_t &next_file_idx);
 	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);
 	idx_t GetGroupOffset(ParquetReaderScanState &state);

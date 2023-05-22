@@ -15,15 +15,18 @@
 #include <vector>
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
@@ -31,10 +34,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/main/extension_util.hpp"
 #endif
 
 namespace duckdb {
@@ -66,6 +66,8 @@ struct ParquetReadBindData : public TableFunctionData {
 };
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
+	explicit ParquetReadLocalState(Allocator &allocator) : scan_state(allocator) {
+	}
 	shared_ptr<ParquetReader> reader;
 	ParquetReaderScanState scan_state;
 	bool is_parallel;
@@ -124,7 +126,7 @@ struct ParquetWriteGlobalState : public GlobalFunctionData {
 
 struct ParquetWriteLocalState : public LocalFunctionData {
 	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
-	    : buffer(Allocator::Get(context), types) {
+	    : buffer(BufferAllocator::Get(context), types) {
 	}
 
 	ColumnDataCollection buffer;
@@ -329,7 +331,7 @@ public:
 		auto &bind_data = input.bind_data->Cast<ParquetReadBindData>();
 		auto &gstate = gstate_p->Cast<ParquetReadGlobalState>();
 
-		auto result = make_uniq<ParquetReadLocalState>();
+		auto result = make_uniq<ParquetReadLocalState>(BufferAllocator::Get(context.client));
 		result->is_parallel = true;
 		result->batch_index = 0;
 		if (input.CanRemoveFilterColumns()) {

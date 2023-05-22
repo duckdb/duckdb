@@ -22,8 +22,8 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::INT64;
 
 public:
-	RowNumberColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
-	                      idx_t max_define_p, idx_t max_repeat_p);
+	RowNumberColumnReader(ParquetReader &reader, ArenaAllocator &block_allocator, LogicalType type_p,
+	                      const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p);
 
 public:
 	idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,

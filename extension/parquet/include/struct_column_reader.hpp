@@ -18,11 +18,11 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::STRUCT;
 
 public:
-	StructColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
-	                   idx_t max_define_p, idx_t max_repeat_p,
-	                   vector<duckdb::unique_ptr<ColumnReader>> child_readers_p);
+	StructColumnReader(ParquetReader &reader, ArenaAllocator &block_allocator, LogicalType type_p,
+	                   const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
+	                   vector<unique_ptr<ColumnReader>> child_readers_p);
 
-	vector<duckdb::unique_ptr<ColumnReader>> child_readers;
+	vector<unique_ptr<ColumnReader>> child_readers;
 
 public:
 	ColumnReader *GetChildReader(idx_t child_idx);

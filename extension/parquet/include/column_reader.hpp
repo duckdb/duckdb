@@ -8,21 +8,19 @@
 
 #pragma once
 
-#include "parquet_types.h"
-#include "thrift_tools.hpp"
-#include "resizable_buffer.hpp"
-
-#include "parquet_rle_bp_decoder.hpp"
-#include "parquet_dbp_decoder.hpp"
-#include "parquet_statistics.hpp"
-
 #include "duckdb.hpp"
+#include "parquet_dbp_decoder.hpp"
+#include "parquet_rle_bp_decoder.hpp"
+#include "parquet_statistics.hpp"
+#include "parquet_types.h"
+#include "resizable_buffer.hpp"
+#include "thrift_tools.hpp"
 #ifndef DUCKDB_AMALGAMATION
 
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/common/types/string_type.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 #endif
 
@@ -42,14 +40,14 @@ typedef std::bitset<STANDARD_VECTOR_SIZE> parquet_filter_t;
 
 class ColumnReader {
 public:
-	ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
-	             idx_t max_define_p, idx_t max_repeat_p);
+	ColumnReader(ParquetReader &reader, ArenaAllocator &block_allocator, LogicalType type_p,
+	             const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define_p, idx_t max_repeat_p);
 	virtual ~ColumnReader();
 
 public:
-	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const LogicalType &type_p,
-	                                             const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define,
-	                                             idx_t max_repeat);
+	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, ArenaAllocator &block_allocator,
+	                                             const LogicalType &type_p, const SchemaElement &schema_p,
+	                                             idx_t schema_idx_p, idx_t max_define, idx_t max_repeat);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
 	virtual idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 	                   Vector &result_out);
@@ -57,6 +55,7 @@ public:
 	virtual void Skip(idx_t num_values);
 
 	ParquetReader &Reader();
+	ArenaAllocator &GetBlockAllocator();
 	const LogicalType &Type() const;
 	const SchemaElement &Schema() const;
 	idx_t FileIdx() const;
@@ -128,8 +127,9 @@ protected:
 	idx_t max_repeat;
 
 	ParquetReader &reader;
+	ArenaAllocator &block_allocator;
 	LogicalType type;
-	duckdb::unique_ptr<Vector> byte_array_data;
+	unique_ptr<Vector> byte_array_data;
 	idx_t byte_array_count = 0;
 
 	idx_t pending_skips = 0;
@@ -157,11 +157,11 @@ private:
 	ResizeableBuffer compressed_buffer;
 	ResizeableBuffer offset_buffer;
 
-	duckdb::unique_ptr<RleBpDecoder> dict_decoder;
-	duckdb::unique_ptr<RleBpDecoder> defined_decoder;
-	duckdb::unique_ptr<RleBpDecoder> repeated_decoder;
-	duckdb::unique_ptr<DbpDecoder> dbp_decoder;
-	duckdb::unique_ptr<RleBpDecoder> rle_decoder;
+	unique_ptr<RleBpDecoder> dict_decoder;
+	unique_ptr<RleBpDecoder> defined_decoder;
+	unique_ptr<RleBpDecoder> repeated_decoder;
+	unique_ptr<DbpDecoder> dbp_decoder;
+	unique_ptr<RleBpDecoder> rle_decoder;
 
 	// dummies for Skip()
 	parquet_filter_t none_filter;
