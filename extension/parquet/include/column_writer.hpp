@@ -16,6 +16,7 @@ class BufferedSerializer;
 class ParquetWriter;
 class ColumnWriterPageState;
 class BasicColumnWriterState;
+struct FieldID;
 
 class ColumnWriterState {
 public:
@@ -56,7 +57,8 @@ public:
 	//! Create the column writer for a specific type recursively
 	static duckdb::unique_ptr<ColumnWriter>
 	CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement> &schemas, ParquetWriter &writer,
-	                      const LogicalType &type, const string &name, vector<string> schema_path, idx_t max_repeat = 0,
+	                      const LogicalType &type, const string &name, vector<string> schema_path,
+	                      optional_ptr<const unordered_map<string, FieldID>> field_ids, idx_t max_repeat = 0,
 	                      idx_t max_define = 1, bool can_have_nulls = true);
 
 	virtual duckdb::unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,

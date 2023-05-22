@@ -17,8 +17,8 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #endif
 
-#include "parquet_types.h"
 #include "column_writer.hpp"
+#include "parquet_types.h"
 #include "thrift/protocol/TCompactProtocol.h"
 
 namespace duckdb {
@@ -30,10 +30,18 @@ struct PreparedRowGroup {
 	vector<duckdb::unique_ptr<ColumnWriterState>> states;
 };
 
+struct FieldID {
+	explicit FieldID(int32_t field_id_p) : field_id(field_id_p) {
+	}
+	int32_t field_id;
+	// TODO: current unused, implement at some point
+	unordered_map<string, FieldID> child_field_ids;
+};
+
 class ParquetWriter {
 public:
 	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names,
-	              duckdb_parquet::format::CompressionCodec::type codec);
+	              duckdb_parquet::format::CompressionCodec::type codec, unordered_map<string, FieldID> field_ids);
 
 public:
 	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
@@ -62,6 +70,7 @@ private:
 	vector<LogicalType> sql_types;
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec;
+	unordered_map<string, FieldID> field_ids;
 
 	duckdb::unique_ptr<BufferedFileWriter> writer;
 	shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;

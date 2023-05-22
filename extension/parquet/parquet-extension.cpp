@@ -15,15 +15,18 @@
 #include <vector>
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
@@ -31,10 +34,7 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/storage/table/row_group.hpp"
-#include "duckdb/main/extension_util.hpp"
 #endif
 
 namespace duckdb {
@@ -116,6 +116,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
 	idx_t row_group_size = RowGroup::ROW_GROUP_SIZE;
+	unordered_map<string, FieldID> field_ids;
 };
 
 struct ParquetWriteGlobalState : public GlobalFunctionData {
@@ -585,6 +586,22 @@ public:
 	}
 };
 
+static void GetFieldIDs(const Value &field_id_map, unordered_map<string, FieldID> &field_ids,
+                        const vector<string> &names) {
+	for (auto &entry : ListValue::GetChildren(field_id_map)) {
+		auto &kv = StructValue::GetChildren(entry);
+		D_ASSERT(kv.size() == 2);
+		const auto &col_name = StringValue::Get(kv[0]);
+		if (std::find(names.begin(), names.end(), col_name) == names.end()) {
+			throw BinderException("Column name \"%s\" in FIELD_IDS not found in columns", col_name);
+		}
+		if (field_ids.find(col_name) != field_ids.end()) {
+			throw BinderException("Duplicate column name name \"%s\" found in FIELD_IDS");
+		}
+		field_ids.emplace(col_name, IntegerValue::Get(kv[1]));
+	}
+}
+
 unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info, vector<string> &names,
                                           vector<LogicalType> &sql_types) {
 	auto bind_data = make_uniq<ParquetWriteBindData>();
@@ -609,7 +626,15 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 					continue;
 				}
 			}
-			throw ParserException("Expected %s argument to be either [uncompressed, snappy, gzip or zstd]", loption);
+			throw BinderException("Expected %s argument to be either [uncompressed, snappy, gzip or zstd]", loption);
+		} else if (loption == "field_ids") {
+			if (option.second.empty() ||
+			    !option.second[0].TryCastAs(context, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::INTEGER))) {
+				throw BinderException(
+				    "Expected %s argument to be a MAP(VARCHAR, INTEGER) as a string, e.g., '{col1=42, col2=43}'",
+				    loption);
+			}
+			GetFieldIDs(option.second[0], bind_data->field_ids, names);
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
@@ -625,8 +650,8 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	auto &parquet_bind = bind_data.Cast<ParquetWriteBindData>();
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	global_state->writer =
-	    make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec);
+	global_state->writer = make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names,
+	                                                parquet_bind.codec, parquet_bind.field_ids);
 	return std::move(global_state);
 }
 

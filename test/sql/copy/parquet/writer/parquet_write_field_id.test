@@ -1,0 +1,69 @@
+# name: test/sql/copy/parquet/writer/parquet_write_field_id.test
+# description: FIELD_ID tests
+# group: [writer]
+
+require parquet
+
+statement ok
+pragma enable_verification
+
+# need to supply an argument
+statement error
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS)
+----
+Binder Error
+
+# j is not present so we can't have a field id
+statement error
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{j=42}')
+----
+Binder Error
+
+# this should work
+statement ok
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42}')
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+42
+
+# we don't have to supply a field_id for all columns
+statement ok
+copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42}')
+
+#
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+42
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'j'
+----
+NULL
+
+# we tested a non-nested type, now do all the nested types so we test all the code paths
+statement ok
+copy (select NULL::INT[] as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42}')
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+42
+
+statement ok
+copy (select NULL::STRUCT(i INTEGER) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42}')
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i' and num_children > 0
+----
+42
+
+statement ok
+copy (select NULL::MAP(INTEGER, INTEGER) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42}')
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i' and num_children > 0
+----
+42

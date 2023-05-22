@@ -1803,15 +1803,27 @@ void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 //===--------------------------------------------------------------------===//
 // Create Column Writer
 //===--------------------------------------------------------------------===//
-unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement> &schemas,
-                                                             ParquetWriter &writer, const LogicalType &type,
-                                                             const string &name, vector<string> schema_path,
-                                                             idx_t max_repeat, idx_t max_define, bool can_have_nulls) {
+unique_ptr<ColumnWriter>
+ColumnWriter::CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement> &schemas, ParquetWriter &writer,
+                                    const LogicalType &type, const string &name, vector<string> schema_path,
+                                    optional_ptr<const unordered_map<string, FieldID>> field_ids, idx_t max_repeat,
+                                    idx_t max_define, bool can_have_nulls) {
 	auto null_type = can_have_nulls ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
 	if (!can_have_nulls) {
 		max_define--;
 	}
 	idx_t schema_idx = schemas.size();
+
+	optional_ptr<const FieldID> field_id;
+	optional_ptr<const unordered_map<string, FieldID>> child_field_ids;
+	if (field_ids) {
+		auto field_id_it = field_ids->find(name);
+		if (field_id_it != field_ids->end()) {
+			field_id = &field_id_it->second;
+			child_field_ids = &field_id->child_field_ids;
+		}
+	}
+
 	if (type.id() == LogicalTypeId::STRUCT) {
 		auto &child_types = StructType::GetChildTypes(type);
 		// set up the schema element for this struct
@@ -1822,6 +1834,10 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		schema_element.__isset.type = false;
 		schema_element.__isset.repetition_type = true;
 		schema_element.name = name;
+		if (field_id) {
+			schema_element.__isset.field_id = true;
+			schema_element.field_id = field_id->field_id;
+		}
 		schemas.push_back(std::move(schema_element));
 		schema_path.push_back(name);
 
@@ -1830,7 +1846,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		child_writers.reserve(child_types.size());
 		for (auto &child_type : child_types) {
 			child_writers.push_back(CreateWriterRecursive(schemas, writer, child_type.second, child_type.first,
-			                                              schema_path, max_repeat, max_define + 1));
+			                                              schema_path, child_field_ids, max_repeat, max_define + 1));
 		}
 		return make_uniq<StructColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
 		                                     std::move(child_writers), can_have_nulls);
@@ -1849,6 +1865,10 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		optional_element.__isset.repetition_type = true;
 		optional_element.__isset.converted_type = true;
 		optional_element.name = name;
+		if (field_id) {
+			optional_element.__isset.field_id = true;
+			optional_element.field_id = field_id->field_id;
+		}
 		schemas.push_back(std::move(optional_element));
 		schema_path.push_back(name);
 
@@ -1863,8 +1883,8 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		schemas.push_back(std::move(repeated_element));
 		schema_path.emplace_back("list");
 
-		auto child_writer =
-		    CreateWriterRecursive(schemas, writer, child_type, "element", schema_path, max_repeat + 1, max_define + 2);
+		auto child_writer = CreateWriterRecursive(schemas, writer, child_type, "element", schema_path, child_field_ids,
+		                                          max_repeat + 1, max_define + 2);
 		return make_uniq<ListColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
 		                                   std::move(child_writer), can_have_nulls);
 	}
@@ -1887,6 +1907,10 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		top_element.__isset.converted_type = true;
 		top_element.__isset.type = false;
 		top_element.name = name;
+		if (field_id) {
+			top_element.__isset.field_id = true;
+			top_element.field_id = field_id->field_id;
+		}
 		schemas.push_back(std::move(top_element));
 		schema_path.push_back(name);
 
@@ -1910,7 +1934,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 			// key needs to be marked as REQUIRED
 			bool is_key = i == 0;
 			auto child_writer = CreateWriterRecursive(schemas, writer, kv_types[i], kv_names[i], schema_path,
-			                                          max_repeat + 1, max_define + 2, !is_key);
+			                                          child_field_ids, max_repeat + 1, max_define + 2, !is_key);
 
 			child_writers.push_back(std::move(child_writer));
 		}
@@ -1926,6 +1950,10 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 	schema_element.__isset.type = true;
 	schema_element.__isset.repetition_type = true;
 	schema_element.name = name;
+	if (field_id) {
+		schema_element.__isset.field_id = true;
+		schema_element.field_id = field_id->field_id;
+	}
 	ParquetWriter::SetSchemaProperties(type, schema_element);
 	schemas.push_back(std::move(schema_element));
 	schema_path.push_back(name);
