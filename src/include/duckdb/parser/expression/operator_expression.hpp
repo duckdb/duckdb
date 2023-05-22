@@ -100,10 +100,10 @@ public:
 			    const_expr_end.value.template GetValue<int64_t>() == NumericLimits<int64_t>::Maximum()) {
 				end = "";
 			}
-//end			if (entry.children[3]) {
-//				return entry.children[0]->ToString() + "[" + begin + ":" + end + ":" + entry.children[3]->ToString() +
-//				       "]";
-//			}
+			if (entry.children.size() == 4) {
+				return entry.children[0]->ToString() + "[" + begin + ":" + end + ":" + entry.children[3]->ToString() +
+				       "]";
+			}
 			return entry.children[0]->ToString() + "[" + begin + ":" + end + "]";
 		}
 		case ExpressionType::STRUCT_EXTRACT: {
