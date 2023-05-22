@@ -9,16 +9,11 @@
 #pragma once
 
 #include "duckdb/parser/statement/select_statement.hpp"
+#include "duckdb/common/enums/cte_materialize.hpp"
 
 namespace duckdb {
 
 class SelectStatement;
-
-enum class CTEMaterialize : uint8_t {
-	CTE_MATERIALIZE_DEFAULT = 1, /* no option specified */
-	CTE_MATERIALIZE_ALWAYS = 2,  /* MATERIALIZED */
-	CTE_MATERIALIZE_NEVER = 3    /* NOT MATERIALIZED */
-};
 
 struct CommonTableExpressionInfo {
 	vector<string> aliases;
