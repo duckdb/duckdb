@@ -8,6 +8,7 @@
 #include <sql.h>
 #include <sqlext.h>
 
+
 using namespace std;
 
 static void ODBC_CHECK(SQLRETURN ret, SQLSMALLINT tpe, SQLHANDLE hnd, const char *func) {
@@ -67,4 +68,17 @@ TEST_CASE("Basic ODBC usage", "[odbc]") {
 
 	ret = SQLFreeHandle(SQL_HANDLE_ENV, env);
 	ODBC_CHECK(ret, SQL_HANDLE_ENV, env, "SQLFreeHandle (ENV)");
+}
+
+TEST_CASE("Alter", "[odbc]") {
+	SQLRETURN ret;
+	SQLHANDLE env;
+	SQLHANDLE dbc;
+	SQLHANDLE stmt;
+	HSTMT hstmt = SQL_NULL_HSTMT;
+	SQLHDBC conn;
+	auto dsn = "DuckDB";
+
+	ret = SQLAllocHandle(SQL_HANDLE_STMT, conn, &hstmt);
+	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLAllocHandle (STMT)");
 }
