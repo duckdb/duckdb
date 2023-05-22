@@ -142,7 +142,8 @@ if 'BUILD_HTTPFS' in os.environ:
     libraries += ['crypto', 'ssl']
     extensions += ['httpfs']
 
-toolchain_args.extend(['-DBUILD_EXTENSIONS={}'.format(';'.join(extensions).lower())])
+for ext in extensions:
+    toolchain_args.extend(['-DDUCKDB_OOT_EXTENSION_{}_LINKED'.format(ext.upper())])
 
 class get_pybind_include(object):
     def __init__(self, user=False):

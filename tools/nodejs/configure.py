@@ -20,7 +20,7 @@ scripts_dir = 'scripts'
 sys.path.append(scripts_dir)
 import package_build
 
-defines = ['BUILD_EXTENSIONS={}'.format(';'.join(extensions).lower())]
+defines = ['DUCKDB_OOT_EXTENSION_{}_LINKED'.format(ext.upper()) for ext in extensions]
 
 if os.environ.get('DUCKDB_NODE_BUILD_CACHE') == '1' and os.path.isfile(cache_file):
     with open(cache_file, 'rb') as f:
