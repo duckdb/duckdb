@@ -88,22 +88,22 @@ public:
 		case ExpressionType::ARRAY_EXTRACT:
 			return entry.children[0]->ToString() + "[" + entry.children[1]->ToString() + "]";
 		case ExpressionType::ARRAY_SLICE: {
-			auto &const_expr = entry.children[1]->template Cast<ConstantExpression>();
+			auto &const_expr_begin = entry.children[1]->template Cast<ConstantExpression>();
 			string begin = entry.children[1]->ToString();
-			if (const_expr.value.type() == LogicalType::BIGINT &&
-			    const_expr.value.template GetValue<int64_t>() == NumericLimits<int64_t>::Maximum()) {
+			if (const_expr_begin.value.type() == LogicalType::BIGINT &&
+			    const_expr_begin.value.template GetValue<int64_t>() == NumericLimits<int64_t>::Maximum()) {
 				begin = "";
 			}
-			const_expr = entry.children[2]->template Cast<ConstantExpression>();
+			auto &const_expr_end = entry.children[2]->template Cast<ConstantExpression>();
 			string end = entry.children[2]->ToString();
-			if (const_expr.value.type() == LogicalType::BIGINT &&
-			    const_expr.value.template GetValue<int64_t>() == NumericLimits<int64_t>::Maximum()) {
+			if (const_expr_end.value.type() == LogicalType::BIGINT &&
+			    const_expr_end.value.template GetValue<int64_t>() == NumericLimits<int64_t>::Maximum()) {
 				end = "";
 			}
-			if (entry.children[3]) {
-				return entry.children[0]->ToString() + "[" + begin + ":" + end + ":" + entry.children[3]->ToString() +
-				       "]";
-			}
+//end			if (entry.children[3]) {
+//				return entry.children[0]->ToString() + "[" + begin + ":" + end + ":" + entry.children[3]->ToString() +
+//				       "]";
+//			}
 			return entry.children[0]->ToString() + "[" + begin + ":" + end + "]";
 		}
 		case ExpressionType::STRUCT_EXTRACT: {
