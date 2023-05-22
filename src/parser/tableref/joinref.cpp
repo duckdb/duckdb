@@ -28,6 +28,9 @@ string JoinRef::ToString() const {
 	case JoinRefType::POSITIONAL:
 		result += "POSITIONAL JOIN ";
 		break;
+	case JoinRefType::DEPENDENT:
+		result += "DEPENDENT JOIN ";
+		break;
 	}
 	result += right->ToString();
 	if (condition) {
