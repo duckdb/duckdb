@@ -56,7 +56,7 @@ FROM csv_rejects_table ORDER BY ALL;
 
 # Set limit
 statement ok
-SET csv_error_log_size = 1;
+SET csv_rejects_table_capacity = 1;
 
 query III
 SELECT * FROM read_csv(
@@ -69,11 +69,14 @@ SELECT * FROM read_csv(
 4	5	9
 6	7	CCC
 
-# We should now have only one error logged
+# We should now only have two errors logged
 query I
 SELECT COUNT(*) FROM csv_rejects_table
 ----
 2
+
+statement ok
+SET csv_rejects_table_capacity = 2048;
 
 # Try with bigger files
 query I

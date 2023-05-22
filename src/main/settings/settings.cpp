@@ -1081,15 +1081,15 @@ Value UsernameSetting::GetSetting(ClientContext &context) {
 // Ignored CSV Errors Limit
 //===--------------------------------------------------------------------===//
 
-void CSVErrorLogSizeSetting::ResetLocal(ClientContext &context) {
+void CSVRejectsTableCapacitySetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).max_csv_errors = ClientConfig().max_csv_errors;
 }
 
-void CSVErrorLogSizeSetting::SetLocal(ClientContext &context, const Value &input) {
+void CSVRejectsTableCapacitySetting::SetLocal(ClientContext &context, const Value &input) {
 	ClientConfig::GetConfig(context).max_csv_errors = input.GetValue<uint64_t>();
 }
 
-Value CSVErrorLogSizeSetting::GetSetting(ClientContext &context) {
+Value CSVRejectsTableCapacitySetting::GetSetting(ClientContext &context) {
 	return Value::BIGINT(ClientConfig::GetConfig(context).max_csv_errors);
 }
 

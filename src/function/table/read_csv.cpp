@@ -14,9 +14,9 @@
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/operator/persistent/csv_line_info.hpp"
-#include <limits>
+#include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include <limits>
 
 namespace duckdb {
 
@@ -938,18 +938,7 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 	auto &bind_data = input.bind_data->Cast<ReadCSVData>();
 
 	// (Re)Create the temporary rejects table
-	auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
-	auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, "csv_rejects_table");
-	info->temporary = true;
-	info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
-	info->columns.AddColumn(ColumnDefinition("line", LogicalType::BIGINT));
-	info->columns.AddColumn(ColumnDefinition("column", LogicalType::BIGINT));
-	info->columns.AddColumn(ColumnDefinition("column_name", LogicalType::VARCHAR));
-	info->columns.AddColumn(ColumnDefinition("parsed_value", LogicalType::VARCHAR));
-	info->columns.AddColumn(ColumnDefinition("error", LogicalType::VARCHAR));
-	info->columns.AddColumn(ColumnDefinition("file", LogicalType::VARCHAR));
-
-	auto reject_table_entry = catalog.CreateTable(context, std::move(info));
+	CSVRejectsTable::GetOrCreate(context)->ResetTable(context);
 
 	if (bind_data.single_threaded) {
 		return SingleThreadedCSVInit(context, input);

@@ -18,6 +18,7 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/main/client_data.hpp"
 #include <algorithm>
 #include <cctype>
@@ -551,17 +552,18 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 
 				// Get appender to csv rejects table
 				// TODO: Keep this in the global state
-				auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
-				auto &table_entry =
-				    catalog.GetEntry<TableCatalogEntry>(context, TEMP_CATALOG, DEFAULT_SCHEMA, "csv_rejects_table");
+				auto rejects = CSVRejectsTable::GetOrCreate(context);
+				auto max_errors = context.config.max_csv_errors;
 
-				// TODO: lmao this is a hack, access it through global ObjectCache or something
-				static mutex rejects_lock;
-				lock_guard<mutex> lock(rejects_lock);
-				InternalAppender appender(context, table_entry);
+				lock_guard<mutex> lock(rejects->write_lock);
+				InternalAppender appender(context, rejects->GetTable(context));
 
 				// Register the errors in this chunk
 				for (auto row_idx : failed_rows) {
+					if (rejects->count > max_errors) {
+						break;
+					}
+					rejects->count++;
 
 					auto parsed_str = FlatVector::GetData<string_t>(parse_vector)[row_idx].GetString();
 					row_idx += linenr;

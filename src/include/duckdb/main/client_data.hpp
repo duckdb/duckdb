@@ -27,7 +27,6 @@ class QueryProfilerHistory;
 class PreparedStatementData;
 class SchemaCatalogEntry;
 struct RandomEngine;
-struct ReadCSVErrorLog;
 
 struct ClientData {
 	ClientData(ClientContext &context);
