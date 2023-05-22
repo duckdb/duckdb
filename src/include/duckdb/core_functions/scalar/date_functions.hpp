@@ -273,11 +273,11 @@ struct MakeTimeFun {
 
 struct MakeTimestampFun {
 	static constexpr const char *Name = "make_timestamp";
-	static constexpr const char *Parameters = "year,month,day,hour,minute,seconds";
+	static constexpr const char *Parameters = "year,month,day,hour,minute,seconds; or just microseconds since the epoch";
 	static constexpr const char *Description = "The timestamp for the given parts";
 	static constexpr const char *Example = "make_timestamp(1992, 9, 20, 13, 34, 27.123456)";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct MicrosecondsFun {
