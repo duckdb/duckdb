@@ -376,17 +376,17 @@ select * from generate_series(100,200) g(g),
 123	123	4567890123456789
 123	4567890123456789	123
 
-statement error
+query I
 select count(*) from tenk1 a,
   tenk1 b join lateral (values(a.unique1)) ss(x) on b.unique2 = ss.x;
 ----
-Nested lateral joins
+10000
 
-statement error
+query I
 select count(*) from tenk1 a,
   tenk1 b join lateral (values(a.unique1),(-1)) ss(x) on b.unique2 = ss.x;
 ----
-Nested lateral joins
+10000
 
 query III
 select * from (select f1/2 as x from int4_tbl) ss1 join int4_tbl i4 on x = f1,
