@@ -177,45 +177,7 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection* connection,
     SetError(error, "[SQLite] AdbcConnectionGetTableSchema: must provide table_name");
     return ADBC_STATUS_INVALID_ARGUMENT;
   }
-  conn.
-
-
-//  struct StringBuilder query = {0};
-//  if (StringBuilderInit(&query, /*initial_size=*/64) != 0) {
-//    SetError(error, "[SQLite] Could not initiate StringBuilder");
-//    return ADBC_STATUS_INTERNAL;
-//  }
-//
-//  if (StringBuilderAppend(&query, "%s%s", "SELECT * FROM ", table_name) != 0) {
-//    StringBuilderReset(&query);
-//    SetError(error, "[SQLite] Call to StringBuilderAppend failed");
-//    return ADBC_STATUS_INTERNAL;
-//  }
-//
-//  sqlite3_stmt* stmt = NULL;
-//  int rc =
-//      sqlite3_prepare_v2(conn->conn, query.buffer, query.size, &stmt, /*pzTail=*/NULL);
-//  StringBuilderReset(&query);
-//  if (rc != SQLITE_OK) {
-//    SetError(error, "[SQLite] Failed to prepare query: %s", sqlite3_errmsg(conn->conn));
-//    return ADBC_STATUS_INTERNAL;
-//  }
-//
-//  struct ArrowArrayStream stream = {0};
-//  AdbcStatusCode status = AdbcSqliteExportReader(conn->conn, stmt, /*binder=*/NULL,
-//                                                 /*batch_size=*/64, &stream, error);
-//  if (status == ADBC_STATUS_OK) {
-//    int code = stream.get_schema(&stream, schema);
-//    if (code != 0) {
-//      SetError(error, "[SQLite] Failed to get schema: (%d) %s", code, strerror(code));
-//      status = ADBC_STATUS_IO;
-//    }
-//  }
-//  if (stream.release) {
-//    stream.release(&stream);
-//  }
-//  (void)sqlite3_finalize(stmt);
-//  return status;
+//  conn.
 }
 
 
