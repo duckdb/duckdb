@@ -26,7 +26,7 @@ void BatchedDataCollection::Append(DataChunk &input, idx_t batch_index) {
 		} else if (buffer_managed) {
 			new_collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), types);
 		} else {
-			new_collection = make_uniq<ColumnDataCollection>(BufferAllocator::Get(context), types);
+			new_collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 		}
 		last_collection.collection = new_collection.get();
 		last_collection.batch_index = batch_index;
