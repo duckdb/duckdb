@@ -55,7 +55,7 @@ public:
 #else
 			memset(value.pointer.prefix, 0, PREFIX_BYTES);
 #endif
-			value.pointer.ptr = (char *)data;
+			value.pointer.ptr = (char *) data; // NOLINT
 		}
 	}
 	string_t(const char *data) : string_t(data, strlen(data)) { // NOLINT: Allow implicit conversion from `const char*`
@@ -69,14 +69,14 @@ public:
 	}
 
 	const char *GetData() const {
-		return IsInlined() ? (const char *)value.inlined.inlined : value.pointer.ptr;
+		return IsInlined() ? const_char_ptr_cast(value.inlined.inlined) : value.pointer.ptr;
 	}
 	const char *GetDataUnsafe() const {
 		return GetData();
 	}
 
 	char *GetDataWriteable() const {
-		return IsInlined() ? (char *)value.inlined.inlined : value.pointer.ptr;
+		return IsInlined() ? (char *) value.inlined.inlined : value.pointer.ptr; // NOLINT
 	}
 
 	const char *GetPrefix() const {
@@ -110,7 +110,7 @@ public:
 		} else {
 			// copy the data into the prefix
 #ifndef DUCKDB_DEBUG_NO_INLINE
-			auto dataptr = (char *)GetData();
+			auto dataptr = GetData();
 			memcpy(value.pointer.prefix, dataptr, PREFIX_LENGTH);
 #else
 			memset(value.pointer.prefix, 0, PREFIX_BYTES);

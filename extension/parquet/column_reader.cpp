@@ -284,22 +284,22 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		uncompressed = true;
 	}
 	if (uncompressed) {
-		trans.read((uint8_t *)block->ptr, page_hdr.compressed_page_size);
+		trans.read(reinterpret_cast<uint8_t *>(block->ptr), page_hdr.compressed_page_size);
 		return;
 	}
 
 	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed
 	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
 	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
-	trans.read((uint8_t *)block->ptr, uncompressed_bytes);
+	trans.read(reinterpret_cast<uint8_t *>(block->ptr), uncompressed_bytes);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 
 	AllocateCompressed(compressed_bytes);
-	trans.read((uint8_t *)compressed_buffer.ptr, compressed_bytes);
+	trans.read(reinterpret_cast<uint8_t *>(compressed_buffer.ptr), compressed_bytes);
 
-	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_buffer.ptr, compressed_bytes,
-	                   (char *)block->ptr + uncompressed_bytes, page_hdr.uncompressed_page_size - uncompressed_bytes);
+	DecompressInternal(chunk->meta_data.codec, const_char_ptr_cast(compressed_buffer.ptr), compressed_bytes,
+	                   char_ptr_cast(block->ptr) + uncompressed_bytes, page_hdr.uncompressed_page_size - uncompressed_bytes);
 }
 
 void ColumnReader::AllocateBlock(idx_t size) {

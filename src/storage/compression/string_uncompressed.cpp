@@ -325,7 +325,7 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		    buffer_manager.Allocate(MaxValue<idx_t>(Storage::BLOCK_SIZE, uncompressed_size));
 		auto decompressed_target_ptr = decompressed_target_handle.Ptr();
 		MiniZStream s;
-		s.Decompress((const char *)decompression_ptr, compressed_size, (char *)decompressed_target_ptr,
+		s.Decompress(const_char_ptr_cast(decompression_ptr), compressed_size, char_ptr_cast(decompressed_target_ptr),
 		             uncompressed_size);
 
 		auto final_buffer = decompressed_target_handle.Ptr();

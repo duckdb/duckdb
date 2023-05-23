@@ -196,7 +196,7 @@ void ColumnDataAllocator::UnswizzlePointers(ChunkManagementState &state, Vector 
 	// at least one string must be non-inlined, otherwise this function should not be called
 	D_ASSERT(i < end);
 
-	auto base_ptr = (char *)GetDataPointer(state, block_id, offset);
+	auto base_ptr = char_ptr_cast(GetDataPointer(state, block_id, offset));
 	if (strings[i].GetData() == base_ptr) {
 		// pointers are still valid
 		return;

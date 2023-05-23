@@ -30,7 +30,7 @@ inline void TupleDataValueStore(const string_t &source, const data_ptr_t &row_lo
 		Store<string_t>(source, row_location + offset_in_row);
 	} else {
 		memcpy(heap_location, source.GetData(), source.GetSize());
-		Store<string_t>(string_t((const char *)heap_location, source.GetSize()), row_location + offset_in_row);
+		Store<string_t>(string_t(const_char_ptr_cast(heap_location), source.GetSize()), row_location + offset_in_row);
 		heap_location += source.GetSize();
 	}
 }
@@ -57,7 +57,7 @@ static inline T TupleDataWithinListValueLoad(const data_ptr_t &location, data_pt
 template <>
 inline string_t TupleDataWithinListValueLoad(const data_ptr_t &location, data_ptr_t &heap_location) {
 	const auto size = Load<uint32_t>(location);
-	string_t result((const char *)heap_location, size);
+	string_t result(const_char_ptr_cast(heap_location), size);
 	heap_location += size;
 	return result;
 }

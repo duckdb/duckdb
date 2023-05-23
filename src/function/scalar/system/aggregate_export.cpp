@@ -145,11 +145,11 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 			continue;
 		}
 		if (state0_data.validity.RowIsValid(state0_idx) && !state1_data.validity.RowIsValid(state1_idx)) {
-			result_ptr[i] = StringVector::AddStringOrBlob(result, (const char *)state0.GetData(), bind_data.state_size);
+			result_ptr[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(state0.GetData()), bind_data.state_size);
 			continue;
 		}
 		if (!state0_data.validity.RowIsValid(state0_idx) && state1_data.validity.RowIsValid(state1_idx)) {
-			result_ptr[i] = StringVector::AddStringOrBlob(result, (const char *)state1.GetData(), bind_data.state_size);
+			result_ptr[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(state1.GetData()), bind_data.state_size);
 			continue;
 		}
 

@@ -36,7 +36,7 @@ struct Radix {
 public:
 	static inline bool IsLittleEndian() {
 		int n = 1;
-		if (*(char *)&n == 1) {
+		if (*char_ptr_cast(&n) == 1) {
 			return true;
 		} else {
 			return false;
