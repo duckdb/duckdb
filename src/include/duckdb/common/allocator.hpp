@@ -96,14 +96,14 @@ public:
 		return AllocatedData(*this, AllocateData(size), size);
 	}
 	static data_ptr_t DefaultAllocate(PrivateAllocatorData *private_data, idx_t size) {
-		return (data_ptr_t)malloc(size);
+		return data_ptr_cast(malloc(size));
 	}
 	static void DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
 		free(pointer);
 	}
 	static data_ptr_t DefaultReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
 	                                    idx_t size) {
-		return (data_ptr_t)realloc(pointer, size);
+		return data_ptr_cast(realloc(pointer, size));
 	}
 	static Allocator &Get(ClientContext &context);
 	static Allocator &Get(DatabaseInstance &db);
@@ -131,7 +131,7 @@ T *AllocateArray(idx_t size) {
 
 template <class T>
 void DeleteArray(T *ptr, idx_t size) {
-	Allocator::DefaultAllocator().FreeData((data_ptr_t)ptr, size * sizeof(T));
+	Allocator::DefaultAllocator().FreeData(data_ptr_cast(ptr), size * sizeof(T));
 }
 
 template <typename T, typename... ARGS>
@@ -143,7 +143,7 @@ T *AllocateObject(ARGS &&... args) {
 template <typename T>
 void DestroyObject(T *ptr) {
 	ptr->~T();
-	Allocator::DefaultAllocator().FreeData((data_ptr_t)ptr, sizeof(T));
+	Allocator::DefaultAllocator().FreeData(data_ptr_cast(ptr), sizeof(T));
 }
 
 //! The BufferAllocator is a wrapper around the global allocator class that sends any allocations made through the

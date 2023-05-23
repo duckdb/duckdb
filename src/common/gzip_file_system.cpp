@@ -183,19 +183,19 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 	}
 
 	// actually decompress
-	mz_stream_ptr->next_in = (data_ptr_t)sd.in_buff_start;
+	mz_stream_ptr->next_in = sd.in_buff_start;
 	D_ASSERT(sd.in_buff_end - sd.in_buff_start < NumericLimits<int32_t>::Maximum());
 	mz_stream_ptr->avail_in = (uint32_t)(sd.in_buff_end - sd.in_buff_start);
-	mz_stream_ptr->next_out = (data_ptr_t)sd.out_buff_end;
+	mz_stream_ptr->next_out = data_ptr_cast(sd.out_buff_end);
 	mz_stream_ptr->avail_out = (uint32_t)((sd.out_buff.get() + sd.out_buf_size) - sd.out_buff_end);
 	auto ret = duckdb_miniz::mz_inflate(mz_stream_ptr, duckdb_miniz::MZ_NO_FLUSH);
 	if (ret != duckdb_miniz::MZ_OK && ret != duckdb_miniz::MZ_STREAM_END) {
 		throw IOException("Failed to decode gzip stream: %s", duckdb_miniz::mz_error(ret));
 	}
 	// update pointers following inflate()
-	sd.in_buff_start = data_ptr_cast<data_t>(mz_stream_ptr->next_in);
+	sd.in_buff_start = (data_ptr_t) mz_stream_ptr->next_in;      // NOLINT
 	sd.in_buff_end = sd.in_buff_start + mz_stream_ptr->avail_in;
-	sd.out_buff_end = (data_ptr_t)mz_stream_ptr->next_out;
+	sd.out_buff_end = data_ptr_cast(mz_stream_ptr->next_out);
 	D_ASSERT(sd.out_buff_end + mz_stream_ptr->avail_out == sd.out_buff.get() + sd.out_buf_size);
 
 	// if stream ended, deallocate inflator
@@ -360,7 +360,7 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 	}
 
 	auto bytes_remaining = in.size() - (body_ptr - in.data());
-	mz_stream_ptr->next_in = data_ptr_cast<unsigned char>(body_ptr);
+	mz_stream_ptr->next_in = const_uchar_ptr_cast(body_ptr);
 	mz_stream_ptr->avail_in = bytes_remaining;
 
 	unsigned char decompress_buffer[BUFSIZ];
@@ -373,7 +373,7 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 		if (status != duckdb_miniz::MZ_STREAM_END && status != duckdb_miniz::MZ_OK) {
 			throw IOException("Failed to uncompress");
 		}
-		decompressed.append(data_ptr_cast<char>(decompress_buffer), mz_stream_ptr->total_out - decompressed.size());
+		decompressed.append(char_ptr_cast(decompress_buffer), mz_stream_ptr->total_out - decompressed.size());
 	}
 	duckdb_miniz::mz_inflateEnd(mz_stream_ptr);
 	if (decompressed.empty()) {

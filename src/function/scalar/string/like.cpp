@@ -78,7 +78,7 @@ struct LikeMatcher : public FunctionData {
 	}
 
 	bool Match(string_t &str) {
-		auto str_data = data_ptr_cast<const unsigned char>(str.GetData());
+		auto str_data = const_uchar_ptr_cast(str.GetData());
 		auto str_len = str.GetSize();
 		idx_t segment_idx = 0;
 		idx_t end_idx = segments.size() - 1;
@@ -106,7 +106,7 @@ struct LikeMatcher : public FunctionData {
 			auto &segment = segments[segment_idx];
 			// find the pattern of the current segment
 			idx_t next_offset = ContainsFun::Find(
-			    str_data, str_len, data_ptr_cast<const unsigned char>(segment.pattern.c_str()), segment.pattern.size());
+			    str_data, str_len, const_uchar_ptr_cast(segment.pattern.c_str()), segment.pattern.size());
 			if (next_offset == DConstants::INVALID_INDEX) {
 				// could not find this pattern in the string: no match
 				return false;
@@ -131,7 +131,7 @@ struct LikeMatcher : public FunctionData {
 			auto &segment = segments.back();
 			// find the pattern of the current segment
 			idx_t next_offset = ContainsFun::Find(
-			    str_data, str_len, data_ptr_cast<const unsigned char>(segment.pattern.c_str()), segment.pattern.size());
+			    str_data, str_len, const_uchar_ptr_cast(segment.pattern.c_str()), segment.pattern.size());
 			return next_offset != DConstants::INVALID_INDEX;
 		}
 	}

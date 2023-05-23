@@ -116,7 +116,7 @@ static void ConstructValue(const_data_ptr_t data, idx_t size, data_t target[]) {
 }
 
 void StringStats::Update(BaseStatistics &stats, const string_t &value) {
-	auto data = data_ptr_cast<data_t>(value.GetData());
+	auto data = const_data_ptr_cast(value.GetData());
 	auto size = value.GetSize();
 
 	//! we can only fit 8 bytes, so we might need to trim our string
@@ -136,12 +136,12 @@ void StringStats::Update(BaseStatistics &stats, const string_t &value) {
 		string_data.max_string_length = size;
 	}
 	if (stats.GetType().id() == LogicalTypeId::VARCHAR && !string_data.has_unicode) {
-		auto unicode = Utf8Proc::Analyze(data_ptr_cast<const char>(data), size);
+		auto unicode = Utf8Proc::Analyze(const_char_ptr_cast(data), size);
 		if (unicode == UnicodeType::UNICODE) {
 			string_data.has_unicode = true;
 		} else if (unicode == UnicodeType::INVALID) {
 			throw InvalidInputException(
-			    ErrorManager::InvalidUnicodeError(string(data_ptr_cast<const char>(data), size), "segment statistics update"));
+			    ErrorManager::InvalidUnicodeError(string(const_char_ptr_cast(data), size), "segment statistics update"));
 		}
 	}
 }
@@ -220,8 +220,8 @@ string StringStats::ToString(const BaseStatistics &stats) {
 	idx_t min_len = GetValidMinMaxSubstring(string_data.min);
 	idx_t max_len = GetValidMinMaxSubstring(string_data.max);
 	return StringUtil::Format(
-	    "[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %s]", string(data_ptr_cast<const char>(string_data.min), min_len),
-	    string(data_ptr_cast<const char>(string_data.max), max_len), string_data.has_unicode ? "true" : "false",
+	    "[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %s]", string(const_char_ptr_cast(string_data.min), min_len),
+	    string(const_char_ptr_cast(string_data.max), max_len), string_data.has_unicode ? "true" : "false",
 	    string_data.has_max_string_length ? to_string(string_data.max_string_length) : "?");
 }
 

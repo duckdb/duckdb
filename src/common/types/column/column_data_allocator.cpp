@@ -162,10 +162,10 @@ data_ptr_t ColumnDataAllocator::GetDataPointer(ChunkManagementState &state, uint
 		// in-memory allocator: construct pointer from block_id and offset
 		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
 			uintptr_t pointer_value = uintptr_t(block_id);
-			return (data_ptr_t)pointer_value;
+			return (data_ptr_t) pointer_value; // NOLINT - convert from pointer value back to pointer
 		} else if (sizeof(uintptr_t) == sizeof(uint64_t)) {
 			uintptr_t pointer_value = (uintptr_t(offset) << 32) | uintptr_t(block_id);
-			return (data_ptr_t)pointer_value;
+			return (data_ptr_t) pointer_value; // NOLINT - convert from pointer value back to pointer
 		} else {
 			throw InternalException("ColumnDataCollection: Architecture not supported!?");
 		}

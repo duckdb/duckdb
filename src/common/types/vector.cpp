@@ -958,7 +958,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 
 			// write the list size
 			serializer.Write<idx_t>(list_size);
-			serializer.WriteData((data_ptr_t)data.get(), count * sizeof(list_entry_t));
+			serializer.WriteData(const_data_ptr_cast(data.get()), count * sizeof(list_entry_t));
 
 			child.Serialize(list_size, serializer);
 			break;
@@ -983,7 +983,7 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 			auto row_idx = vdata.sel->get_index(i);
 			flat_mask.Set(i, vdata.validity.RowIsValid(row_idx));
 		}
-		serializer.WriteProperty("validity", (data_ptr_t)flat_mask.GetData(), flat_mask.ValidityMaskSize(count));
+		serializer.WriteProperty("validity", const_data_ptr_cast(flat_mask.GetData()), flat_mask.ValidityMaskSize(count));
 	}
 	if (TypeIsConstantSize(logical_type.InternalType())) {
 		// constant size type: simple copy
@@ -1065,7 +1065,7 @@ void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
 	const auto has_validity = deserializer.ReadProperty<bool>("all_valid");
 	if (has_validity) {
 		validity.Initialize(count);
-		deserializer.ReadProperty("validity", (data_ptr_t)validity.GetData(), validity.ValidityMaskSize(count));
+		deserializer.ReadProperty("validity", data_ptr_cast(validity.GetData()), validity.ValidityMaskSize(count));
 	}
 
 	if (TypeIsConstantSize(logical_type.InternalType())) {
@@ -1152,7 +1152,7 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 	const auto has_validity = source.Read<bool>();
 	if (has_validity) {
 		validity.Initialize(count);
-		source.ReadData((data_ptr_t)validity.GetData(), validity.ValidityMaskSize(count));
+		source.ReadData(data_ptr_cast(validity.GetData()), validity.ValidityMaskSize(count));
 	}
 
 	if (TypeIsConstantSize(type.InternalType())) {

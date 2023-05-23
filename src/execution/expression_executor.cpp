@@ -283,7 +283,7 @@ idx_t ExpressionExecutor::DefaultSelect(const Expression &expr, ExpressionState 
 	// resolve the true/false expression first
 	// then use that to generate the selection vector
 	bool intermediate_bools[STANDARD_VECTOR_SIZE];
-	Vector intermediate(LogicalType::BOOLEAN, data_ptr_cast<data_t>(intermediate_bools));
+	Vector intermediate(LogicalType::BOOLEAN, data_ptr_cast(intermediate_bools));
 	Execute(expr, state, sel, count, intermediate);
 
 	UnifiedVectorFormat idata;

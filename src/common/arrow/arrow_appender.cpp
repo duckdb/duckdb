@@ -318,7 +318,7 @@ struct ArrowUUIDConverter {
 
 	template <class SRC>
 	static void WriteData(data_ptr_t target, SRC input) {
-		UUID::ToString(input, data_ptr_cast<char>(target));
+		UUID::ToString(input, char_ptr_cast(target));
 	}
 };
 

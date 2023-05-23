@@ -81,7 +81,7 @@ static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr
 			Store<string_t>(string_data[col_idx], row + col_offset);
 		} else {
 			const auto &str = string_data[col_idx];
-			string_t inserted(data_ptr_cast<const char>(str_locations[i]), str.GetSize());
+			string_t inserted(const_char_ptr_cast(str_locations[i]), str.GetSize());
 			memcpy(inserted.GetDataWriteable(), str.GetData(), str.GetSize());
 			str_locations[i] += str.GetSize();
 			inserted.Finalize();

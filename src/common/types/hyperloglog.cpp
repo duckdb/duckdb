@@ -75,7 +75,7 @@ idx_t HyperLogLog::GetSize() {
 }
 
 data_ptr_t HyperLogLog::GetPtr() const {
-	return (data_ptr_t)(hll)->ptr;
+	return data_ptr_cast((hll)->ptr);
 }
 
 unique_ptr<HyperLogLog> HyperLogLog::Copy() {
@@ -121,21 +121,21 @@ inline uint64_t TemplatedHash(const T &elem) {
 
 template <>
 inline uint64_t TemplatedHash(const hugeint_t &elem) {
-	return TemplatedHash<uint64_t>(Load<uint64_t>((data_ptr_t)&elem.upper)) ^ TemplatedHash<uint64_t>(elem.lower);
+	return TemplatedHash<uint64_t>(Load<uint64_t>(const_data_ptr_cast(&elem.upper))) ^ TemplatedHash<uint64_t>(elem.lower);
 }
 
 template <idx_t rest>
-inline void CreateIntegerRecursive(const data_ptr_t &data, uint64_t &x) {
+inline void CreateIntegerRecursive(const_data_ptr_t &data, uint64_t &x) {
 	x ^= (uint64_t)data[rest - 1] << ((rest - 1) * 8);
 	return CreateIntegerRecursive<rest - 1>(data, x);
 }
 
 template <>
-inline void CreateIntegerRecursive<1>(const data_ptr_t &data, uint64_t &x) {
+inline void CreateIntegerRecursive<1>(const_data_ptr_t &data, uint64_t &x) {
 	x ^= (uint64_t)data[0];
 }
 
-inline uint64_t HashOtherSize(const data_ptr_t &data, const idx_t &len) {
+inline uint64_t HashOtherSize(const_data_ptr_t &data, const idx_t &len) {
 	uint64_t x = 0;
 	switch (len & 7) {
 	case 7:
@@ -167,7 +167,7 @@ inline uint64_t HashOtherSize(const data_ptr_t &data, const idx_t &len) {
 
 template <>
 inline uint64_t TemplatedHash(const string_t &elem) {
-	data_ptr_t data = (data_ptr_t)elem.GetData();
+	auto data = const_data_ptr_cast(elem.GetData());
 	const auto &len = elem.GetSize();
 	uint64_t h = 0;
 	for (idx_t i = 0; i + sizeof(uint64_t) <= len; i += sizeof(uint64_t)) {

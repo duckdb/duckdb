@@ -345,14 +345,14 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 
 string_t UncompressedStringStorage::ReadString(data_ptr_t target, int32_t offset, uint32_t string_length) {
 	auto ptr = target + offset;
-	auto str_ptr = data_ptr_cast<char>(ptr);
+	auto str_ptr = char_ptr_cast(ptr);
 	return string_t(str_ptr, string_length);
 }
 
 string_t UncompressedStringStorage::ReadStringWithLength(data_ptr_t target, int32_t offset) {
 	auto ptr = target + offset;
 	auto str_length = Load<uint32_t>(ptr);
-	auto str_ptr = data_ptr_cast<char>(ptr + sizeof(uint32_t));
+	auto str_ptr = char_ptr_cast(ptr + sizeof(uint32_t));
 	return string_t(str_ptr, str_length);
 }
 
@@ -403,7 +403,7 @@ string_t UncompressedStringStorage::FetchString(ColumnSegment &segment, StringDi
 		auto dict_end = baseptr + dict.end;
 		auto dict_pos = dict_end - location.offset;
 
-		auto str_ptr = data_ptr_cast<char>(dict_pos);
+		auto str_ptr = char_ptr_cast(dict_pos);
 		return string_t(str_ptr, string_length);
 	}
 }

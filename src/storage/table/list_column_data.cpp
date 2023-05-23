@@ -209,7 +209,7 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 
 	UnifiedVectorFormat vdata;
 	vdata.sel = FlatVector::IncrementalSelectionVector();
-	vdata.data = (data_ptr_t)append_offsets.get();
+	vdata.data = data_ptr_cast(append_offsets.get());
 
 	// append the list offsets
 	ColumnData::AppendData(stats, state, vdata, count);

@@ -123,7 +123,7 @@ static void TemplatedHeapScatter(UnifiedVectorFormat &vdata, const SelectionVect
 			auto source_idx = vdata.sel->get_index(idx + offset);
 
 			auto target = (T *)key_locations[i];
-			Store<T>(source[source_idx], (data_ptr_t)target);
+			Store<T>(source[source_idx], data_ptr_cast(target));
 			key_locations[i] += sizeof(T);
 		}
 	} else {
@@ -136,7 +136,7 @@ static void TemplatedHeapScatter(UnifiedVectorFormat &vdata, const SelectionVect
 			auto source_idx = vdata.sel->get_index(idx + offset);
 
 			auto target = (T *)key_locations[i];
-			Store<T>(source[source_idx], (data_ptr_t)target);
+			Store<T>(source[source_idx], data_ptr_cast(target));
 			key_locations[i] += sizeof(T);
 
 			// set the validitymask

@@ -41,7 +41,7 @@ public:
 	template <class T>
 	T get() {
 		available(sizeof(T));
-		T val = Load<T>((data_ptr_t)ptr);
+		T val = Load<T>(data_ptr_cast(ptr));
 		return val;
 	}
 

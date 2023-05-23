@@ -28,16 +28,30 @@ typedef idx_t column_t;
 //! Type used for storage (column) identifiers
 typedef idx_t storage_t;
 
-template <class DEST, class SRC>
-DEST *data_ptr_cast(SRC *src) {
-	static_assert(sizeof(DEST) == 1, "data_ptr_cast should only be used to cast to char, data_t, unsigned char");
-	return (DEST *)src;
+template <class SRC>
+data_ptr_t data_ptr_cast(SRC *src) {
+	return reinterpret_cast<data_ptr_t>(src);
 }
 
-template <class DEST, class SRC>
-const DEST *const_data_ptr_cast(SRC *src) {
-	static_assert(sizeof(DEST) == 1, "data_ptr_cast should only be used to cast to char, data_t, unsigned char");
-	return (DEST *)src;
+template <class SRC>
+const_data_ptr_t const_data_ptr_cast(const SRC *src) {
+	return reinterpret_cast<const_data_ptr_t>(src);
+}
+
+template <class SRC>
+char *char_ptr_cast(SRC *src) {
+	return reinterpret_cast<char *>(src);
+}
+
+template <class SRC>
+const char *const_char_ptr_cast(const SRC *src) {
+	return reinterpret_cast<const char *>(src);
+}
+
+
+template <class SRC>
+const unsigned char *const_uchar_ptr_cast(const SRC *src) {
+	return reinterpret_cast<const unsigned char *>(src);
 }
 
 template <class SRC>

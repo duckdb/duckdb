@@ -13,7 +13,7 @@ string_t FSSTPrimitives::DecompressValue(void *duckdb_fsst_decoder, Vector &resu
 	                           StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
 	D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
 
-	return StringVector::AddStringOrBlob(result, data_ptr_cast<const char>(decompress_buffer), decompressed_string_size);
+	return StringVector::AddStringOrBlob(result, const_char_ptr_cast(decompress_buffer), decompressed_string_size);
 }
 
 Value FSSTPrimitives::DecompressValue(void *duckdb_fsst_decoder, unsigned char *compressed_string,
@@ -24,7 +24,7 @@ Value FSSTPrimitives::DecompressValue(void *duckdb_fsst_decoder, unsigned char *
 	                           StringUncompressed::STRING_BLOCK_LIMIT + 1, &decompress_buffer[0]);
 	D_ASSERT(decompressed_string_size <= StringUncompressed::STRING_BLOCK_LIMIT);
 
-	return Value(string(data_ptr_cast<char>(decompress_buffer), decompressed_string_size));
+	return Value(string(char_ptr_cast(decompress_buffer), decompressed_string_size));
 }
 
 } // namespace duckdb

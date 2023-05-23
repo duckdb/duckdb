@@ -45,7 +45,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 			D_ASSERT(table_entry.IsDuckTable());
 			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
-			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
+			auto extra_data = data_ptr_cast(dataptr + sizeof(idx_t));
 
 			BufferedDeserializer source(extra_data, extra_data_size);
 			string column_name = source.Read<string>();
@@ -72,7 +72,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry &entry, data_ptr_t dataptr) {
 		if (entry.type == CatalogType::VIEW_ENTRY) {
 			// ALTER TABLE statement, read the extra data after the entry
 			auto extra_data_size = Load<idx_t>(dataptr);
-			auto extra_data = (data_ptr_t)(dataptr + sizeof(idx_t));
+			auto extra_data = data_ptr_cast(dataptr + sizeof(idx_t));
 			// deserialize it
 			BufferedDeserializer source(extra_data, extra_data_size);
 			string column_name = source.Read<string>();

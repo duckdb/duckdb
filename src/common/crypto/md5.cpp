@@ -232,7 +232,7 @@ void MD5Context::Finish(data_ptr_t out_digest) {
 	(reinterpret_cast<uint32_t *>(in))[15] = bits[1];
 
 	MD5Transform(buf, reinterpret_cast<uint32_t *>(in));
-	ByteReverse(data_ptr_cast<unsigned char>(buf), 4);
+	ByteReverse(reinterpret_cast<unsigned char *>(buf), 4);
 	memcpy(out_digest, buf, 16);
 }
 
@@ -260,7 +260,7 @@ string MD5Context::FinishHex() {
 }
 
 void MD5Context::Add(const char *data) {
-	MD5Update(data_ptr_cast<data_t>(data), strlen(data));
+	MD5Update(const_data_ptr_cast(data), strlen(data));
 }
 
 } // namespace duckdb

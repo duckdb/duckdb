@@ -36,8 +36,8 @@ struct RegularStringSplit {
 		if (delim_size == 0) {
 			return 0;
 		}
-		return ContainsFun::Find(data_ptr_cast<const unsigned char>(input_data), input_size,
-		                         data_ptr_cast<const unsigned char>(delim_data), delim_size);
+		return ContainsFun::Find(const_uchar_ptr_cast(input_data), input_size,
+		                         const_uchar_ptr_cast(delim_data), delim_size);
 	}
 };
 

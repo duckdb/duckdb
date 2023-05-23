@@ -58,7 +58,7 @@ static void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanLoca
 			memcpy(temp_nullmask.data(), ArrowBufferData<uint8_t>(array, 0) + bit_offset / 8, n_bitmask_bytes + 1);
 			ShiftRight(temp_nullmask.data(), n_bitmask_bytes + 1,
 			           bit_offset % 8); //! why this has to be a right shift is a mystery to me
-			memcpy((void *)mask.GetData(), data_ptr_cast<data_t>(temp_nullmask.data()), n_bitmask_bytes);
+			memcpy((void *)mask.GetData(), data_ptr_cast(temp_nullmask.data()), n_bitmask_bytes);
 		}
 #else
 		auto byte_offset = bit_offset / 8;

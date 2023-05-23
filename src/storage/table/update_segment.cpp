@@ -1047,8 +1047,8 @@ UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, 
 	data = make_unsafe_uniq_array<char>(sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE);
 	auto update_info = (UpdateInfo *)data.get();
 	update_info->max = STANDARD_VECTOR_SIZE;
-	update_info->tuples = (sel_t *)(((data_ptr_t)update_info) + sizeof(UpdateInfo));
-	update_info->tuple_data = ((data_ptr_t)update_info) + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
+	update_info->tuples = (sel_t *)((data_ptr_cast(update_info)) + sizeof(UpdateInfo));
+	update_info->tuple_data = (data_ptr_cast(update_info)) + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
 	update_info->version_number = transaction.transaction_id;
 	return update_info;
 }

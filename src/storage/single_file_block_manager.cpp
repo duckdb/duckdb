@@ -19,7 +19,7 @@ namespace duckdb {
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
 
 void MainHeader::Serialize(Serializer &ser) {
-	ser.WriteData((data_ptr_t)MAGIC_BYTES, MAGIC_BYTE_SIZE);
+	ser.WriteData(const_data_ptr_cast(MAGIC_BYTES), MAGIC_BYTE_SIZE);
 	ser.Write<uint64_t>(version_number);
 	FieldWriter writer(ser);
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {

@@ -87,7 +87,7 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 	for (idx_t i = 0; i < input.size(); i++) {
 		auto state_idx = state_data.sel->get_index(i);
 		auto state_entry = UnifiedVectorFormat::GetData<string_t>(state_data) + state_idx;
-		auto target_ptr = data_ptr_cast<const char>(local_state.state_buffer.get()) + aligned_state_size * i;
+		auto target_ptr = char_ptr_cast(local_state.state_buffer.get()) + aligned_state_size * i;
 
 		if (state_data.validity.RowIsValid(state_idx)) {
 			D_ASSERT(state_entry->GetSize() == bind_data.state_size);
@@ -95,9 +95,9 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 		} else {
 			// create a dummy state because finalize does not understand NULLs in its input
 			// we put the NULL back in explicitly below
-			bind_data.aggr.initialize(data_ptr_cast<data_t>(target_ptr));
+			bind_data.aggr.initialize(data_ptr_cast(target_ptr));
 		}
-		state_vec_ptr[i] = data_ptr_cast<data_t>(target_ptr);
+		state_vec_ptr[i] = data_ptr_cast(target_ptr);
 	}
 
 	AggregateInputData aggr_input_data(nullptr, Allocator::DefaultAllocator());
@@ -166,7 +166,7 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 		bind_data.aggr.combine(local_state.state_vector0, local_state.state_vector1, aggr_input_data, 1);
 
 		result_ptr[i] =
-		    StringVector::AddStringOrBlob(result, data_ptr_cast<const char>(local_state.state_buffer1.get()), bind_data.state_size);
+		    StringVector::AddStringOrBlob(result, const_char_ptr_cast(local_state.state_buffer1.get()), bind_data.state_size);
 	}
 }
 
@@ -250,7 +250,7 @@ static void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_inpu
 	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(state);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto data_ptr = addresses_ptr[row_idx];
-		blob_ptr[row_idx] = StringVector::AddStringOrBlob(result, data_ptr_cast<const char>(data_ptr), state_size);
+		blob_ptr[row_idx] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(data_ptr), state_size);
 	}
 }
 

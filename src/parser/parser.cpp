@@ -51,7 +51,7 @@ static bool StripUnicodeSpaces(const string &query_str, string &new_query) {
 	idx_t pos = 0;
 	unsigned char quote;
 	vector<UnicodeSpace> unicode_spaces;
-	auto query = data_ptr_cast<unsigned char>(query_str.c_str());
+	auto query = const_uchar_ptr_cast(query_str.c_str());
 	auto qsize = query_str.size();
 
 regular:

@@ -384,7 +384,7 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, c
 	// Create a combined child_list_data to be used as list_data in the recursion
 	auto &combined_child_list_data = combined_list_data.combined_data;
 	combined_child_list_data.sel = list_data.sel;
-	combined_child_list_data.data = (data_ptr_t)combined_list_entries;
+	combined_child_list_data.data = data_ptr_cast(combined_list_entries);
 	combined_child_list_data.validity = list_data.validity;
 
 	// Combine the selection vectors

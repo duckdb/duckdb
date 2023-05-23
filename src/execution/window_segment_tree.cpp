@@ -212,7 +212,7 @@ WindowSegmentTree::~WindowSegmentTree() {
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
 	// call the destructor for all the intermediate states
 	data_ptr_t address_data[STANDARD_VECTOR_SIZE];
-	Vector addresses(LogicalType::POINTER, data_ptr_cast<data_t>(address_data));
+	Vector addresses(LogicalType::POINTER, data_ptr_cast(address_data));
 	idx_t count = 0;
 	for (idx_t i = 0; i < internal_nodes; i++) {
 		address_data[count++] = data_ptr_t(levels_flat_native.get() + i * state.size());

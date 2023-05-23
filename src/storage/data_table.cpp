@@ -834,7 +834,7 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 	if (!info->indexes.Empty()) {
 		idx_t current_row_base = start_row;
 		row_t row_data[STANDARD_VECTOR_SIZE];
-		Vector row_identifiers(LogicalType::ROW_TYPE, (data_ptr_t)row_data);
+		Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_data));
 		ScanTableSegment(start_row, count, [&](DataChunk &chunk) {
 			for (idx_t i = 0; i < chunk.size(); i++) {
 				row_data[i] = current_row_base + i;

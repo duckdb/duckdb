@@ -207,7 +207,7 @@ SEXP ToRString(const string_t &input) {
 
 void duckdb_r_transform(Vector &src_vec, const SEXP dest, idx_t dest_offset, idx_t n, bool integer64) {
 	if (src_vec.GetType().GetAlias() == R_STRING_TYPE_NAME) {
-		ptrdiff_t sexp_header_size = (data_ptr_t)DATAPTR(R_BlankString) - (data_ptr_t)R_BlankString;
+		ptrdiff_t sexp_header_size = data_ptr_cast(DATAPTR(R_BlankString)) - data_ptr_cast(R_BlankString);
 
 		auto child_ptr = FlatVector::GetData<uintptr_t>(src_vec);
 		auto &mask = FlatVector::Validity(src_vec);
@@ -216,7 +216,7 @@ void duckdb_r_transform(Vector &src_vec, const SEXP dest, idx_t dest_offset, idx
 			if (!mask.RowIsValid(row_idx)) {
 				SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
 			} else {
-				SET_STRING_ELT(dest, dest_offset + row_idx, (SEXP)((data_ptr_t)child_ptr[row_idx] - sexp_header_size));
+				SET_STRING_ELT(dest, dest_offset + row_idx, (SEXP)(data_ptr_cast(child_ptr[row_idx]) - sexp_header_size));
 			}
 		}
 		return;

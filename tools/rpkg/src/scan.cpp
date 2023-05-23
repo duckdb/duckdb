@@ -85,23 +85,23 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 		switch (rtypes[col_idx]) {
 		case RType::LOGICAL:
 			duckdb_col_type = LogicalType::BOOLEAN;
-			coldata_ptr = (data_ptr_t)LOGICAL_POINTER(coldata);
+			coldata_ptr = data_ptr_cast(LOGICAL_POINTER(coldata));
 			break;
 		case RType::INTEGER:
 			duckdb_col_type = LogicalType::INTEGER;
-			coldata_ptr = (data_ptr_t)INTEGER_POINTER(coldata);
+			coldata_ptr = data_ptr_cast(INTEGER_POINTER(coldata));
 			break;
 		case RType::NUMERIC:
 			duckdb_col_type = LogicalType::DOUBLE;
-			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
+			coldata_ptr = data_ptr_cast(NUMERIC_POINTER(coldata));
 			break;
 		case RType::INTEGER64:
 			duckdb_col_type = LogicalType::BIGINT;
-			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
+			coldata_ptr = data_ptr_cast(NUMERIC_POINTER(coldata));
 			break;
 		case RType::FACTOR: {
 			// TODO What about factors that use numeric?
-			coldata_ptr = (data_ptr_t)INTEGER_POINTER(coldata);
+			coldata_ptr = data_ptr_cast(INTEGER_POINTER(coldata));
 			strings levels = GET_LEVELS(coldata);
 			Vector duckdb_levels(LogicalType::VARCHAR, levels.size());
 			auto levels_ptr = FlatVector::GetData<string_t>(duckdb_levels);
@@ -112,7 +112,7 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 			break;
 		}
 		case RType::STRING:
-			coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
+			coldata_ptr = data_ptr_cast(DATAPTR_RO(coldata));
 			if (experimental) {
 				duckdb_col_type = RStringsType::Get();
 			} else {
@@ -121,7 +121,7 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 			break;
 		case RType::TIMESTAMP:
 			duckdb_col_type = LogicalType::TIMESTAMP;
-			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
+			coldata_ptr = data_ptr_cast(NUMERIC_POINTER(coldata));
 			break;
 		case RType::TIME_SECONDS:
 		case RType::TIME_MINUTES:
@@ -129,7 +129,7 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 		case RType::TIME_DAYS:
 		case RType::TIME_WEEKS:
 			duckdb_col_type = LogicalType::TIME;
-			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
+			coldata_ptr = data_ptr_cast(NUMERIC_POINTER(coldata));
 			break;
 		case RType::TIME_SECONDS_INTEGER:
 		case RType::TIME_MINUTES_INTEGER:
@@ -137,24 +137,24 @@ static duckdb::unique_ptr<FunctionData> DataFrameScanBind(ClientContext &context
 		case RType::TIME_DAYS_INTEGER:
 		case RType::TIME_WEEKS_INTEGER:
 			duckdb_col_type = LogicalType::TIME;
-			coldata_ptr = (data_ptr_t)INTEGER_POINTER(coldata);
+			coldata_ptr = data_ptr_cast(INTEGER_POINTER(coldata));
 			break;
 		case RType::DATE:
 			if (!IS_NUMERIC(coldata)) {
 				cpp11::stop("DATE should really be integer");
 			}
-			coldata_ptr = (data_ptr_t)NUMERIC_POINTER(coldata);
+			coldata_ptr = data_ptr_cast(NUMERIC_POINTER(coldata));
 			duckdb_col_type = LogicalType::DATE;
 			break;
 		case RType::DATE_INTEGER:
 			if (!IS_INTEGER(coldata)) {
 				cpp11::stop("DATE_INTEGER should really be integer");
 			}
-			coldata_ptr = (data_ptr_t)INTEGER_POINTER(coldata);
+			coldata_ptr = data_ptr_cast(INTEGER_POINTER(coldata));
 			duckdb_col_type = LogicalType::DATE;
 			break;
 		case RType::BLOB:
-			coldata_ptr = (data_ptr_t)DATAPTR_RO(coldata);
+			coldata_ptr = data_ptr_cast(DATAPTR_RO(coldata));
 			duckdb_col_type = LogicalType::BLOB;
 			break;
 		default:

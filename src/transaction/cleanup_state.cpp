@@ -80,7 +80,7 @@ void CleanupState::Flush() {
 	}
 
 	// set up the row identifiers vector
-	Vector row_identifiers(LogicalType::ROW_TYPE, (data_ptr_t)row_numbers);
+	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_numbers));
 
 	// delete the tuples from all the indexes
 	try {

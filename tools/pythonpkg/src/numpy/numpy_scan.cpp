@@ -20,7 +20,7 @@ template <class T>
 void ScanNumpyColumn(py::array &numpy_col, idx_t stride, idx_t offset, Vector &out, idx_t count) {
 	auto src_ptr = (T *)numpy_col.data();
 	if (stride == sizeof(T)) {
-		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
+		FlatVector::SetData(out, data_ptr_cast(src_ptr + offset));
 	} else {
 		auto tgt_ptr = (T *)FlatVector::GetData(out);
 		for (idx_t i = 0; i < count; i++) {
@@ -80,7 +80,7 @@ template <class T>
 void ScanNumpyFpColumn(T *src_ptr, idx_t stride, idx_t count, idx_t offset, Vector &out) {
 	auto &mask = FlatVector::Validity(out);
 	if (stride == sizeof(T)) {
-		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
+		FlatVector::SetData(out, data_ptr_cast(src_ptr + offset));
 		// Turn NaN values into NULL
 		auto tgt_ptr = FlatVector::GetData<T>(out);
 		for (idx_t i = 0; i < count; i++) {
