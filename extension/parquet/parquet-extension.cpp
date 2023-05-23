@@ -207,7 +207,7 @@ public:
 	static inline unique_ptr<BaseStatistics> GetPartitionColumnStats(const BaseStatistics &orig_stats,
 	                                                                 const LogicalType &actual_type) {
 		D_ASSERT(actual_type == LogicalType::VARCHAR);
-		auto correct_type_stats = BaseStatistics::CreateEmpty(LogicalType::VARCHAR);
+		auto correct_type_stats = StringStats::CreateUnknown(LogicalType::VARCHAR);
 		correct_type_stats.CopyBase(orig_stats);
 		// We don't know min/max or max length
 		return correct_type_stats.ToUnique();
