@@ -96,9 +96,9 @@ runs:
         ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
         cd  ${{ inputs.build_dir}}
         mkdir -p build/release/extension/out_of_tree
-        EXTENSION_CONFIGS=""
-        EXTENSION_CONFIGS="$EXTENSION_CONFIGS${{ inputs.build_in_tree_extensions == 1 && '.github/config/in_tree_extensions.cmake' || ''}}"
-        EXTENSION_CONFIGS="$EXTENSION_CONFIGS${{ inputs.build_in_tree_extensions == 1 && '.github/config/out_tree_extensions.cmake' || '' }}"
+        export EXTENSION_CONFIGS=""
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS${{ inputs.build_in_tree_extensions == 1 && '.github/config/in_tree_extensions.cmake' || ''}}"
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS${{ inputs.build_in_tree_extensions == 1 && '.github/config/out_tree_extensions.cmake' || '' }}"
         make
 
     - name: Run post-install scripts
