@@ -219,6 +219,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->csv_types = return_types;
 	result->csv_names = names;
 
+	options.SetRejectsOptions(input.named_parameters, names, return_types);
+
 	if (options.file_options.union_by_name) {
 		result->reader_bind =
 		    MultiFileReader::BindUnionReader<BufferedCSVReader>(context, return_types, names, *result, options);
@@ -937,9 +939,11 @@ static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput
 static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<ReadCSVData>();
 
-	// (Re)Create the temporary rejects table
-	CSVRejectsTable::GetOrCreate(context)->ResetTable(context, bind_data);
-
+	// Create the temporary rejects table
+	auto rejects_table = bind_data.options.rejects_table_name;
+	if (!rejects_table.empty()) {
+		CSVRejectsTable::GetOrCreate(context)->InitializeTable(context, bind_data, rejects_table);
+	}
 	if (bind_data.single_threaded) {
 		return SingleThreadedCSVInit(context, input);
 	} else {
@@ -1000,7 +1004,8 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["max_line_size"] = LogicalType::VARCHAR;
 	table_function.named_parameters["maximum_line_size"] = LogicalType::VARCHAR;
 	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["recovery_key_columns"] = LogicalType::LIST(LogicalType::UBIGINT);
+	table_function.named_parameters["rejects_table"] = LogicalType::VARCHAR;
+	table_function.named_parameters["rejects_recovery_columns"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;
 	table_function.named_parameters["parallel"] = LogicalType::BOOLEAN;
@@ -1060,7 +1065,6 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField<bool>(has_header);
 	writer.WriteField<bool>(header);
 	writer.WriteField<bool>(ignore_errors);
-	writer.WriteList<idx_t>(recovery_key_columns);
 	writer.WriteField<idx_t>(num_cols);
 	writer.WriteField<idx_t>(buffer_sample_size);
 	writer.WriteString(null_str);
@@ -1090,6 +1094,8 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 		csv_formats.push_back(format.second.format_specifier);
 	}
 	writer.WriteList<string>(csv_formats);
+	writer.WriteString(rejects_table_name);
+	writer.WriteList<idx_t>(rejects_recovery_columns);
 }
 
 void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
@@ -1103,7 +1109,6 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	has_header = reader.ReadRequired<bool>();
 	header = reader.ReadRequired<bool>();
 	ignore_errors = reader.ReadRequired<bool>();
-	recovery_key_columns = reader.ReadRequiredList<idx_t>();
 	num_cols = reader.ReadRequired<idx_t>();
 	buffer_sample_size = reader.ReadRequired<idx_t>();
 	null_str = reader.ReadRequired<string>();
@@ -1138,6 +1143,8 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 		has_format[type] = true;
 		StrTimeFormat::ParseFormatSpecifier(format, date_format[type]);
 	}
+	rejects_table_name = reader.ReadRequired<string>();
+	rejects_recovery_columns = reader.ReadRequiredList<idx_t>();
 }
 
 static void CSVReaderSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {

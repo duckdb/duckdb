@@ -19,8 +19,8 @@ public:
 
 	static shared_ptr<CSVRejectsTable> GetOrCreate(ClientContext &context);
 
-	void ResetTable(ClientContext &context, const ReadCSVData &options);
-	TableCatalogEntry &GetTable(ClientContext &context);
+	void InitializeTable(ClientContext &context, const ReadCSVData &options, const string &name);
+	TableCatalogEntry &GetTable(ClientContext &context, const string &name);
 
 public:
 	static string ObjectType() {

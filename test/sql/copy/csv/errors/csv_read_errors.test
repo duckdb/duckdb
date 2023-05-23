@@ -7,7 +7,8 @@ foreach PARALLEL true false
 query III
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/bad.csv', 
-    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'}, 
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    rejects_table='csv_rejects_table',
     ignore_errors=true, parallel=${PARALLEL}) ORDER BY ALL;
 ----
 1	2	AAA
@@ -18,11 +19,15 @@ FROM csv_rejects_table ORDER BY ALL;
 ----
 2	1	"col1"	BBB	Could not convert string 'BBB' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad.csv
 
+statement ok
+DROP TABLE csv_rejects_table;
+
 # Test with multiple columns on the same row
 query III
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/bad2.csv', 
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'INTEGER'}, 
+    rejects_table='csv_rejects_table',
     ignore_errors=true, parallel=${PARALLEL}) ORDER BY ALL;
 ----
 4	5	9
@@ -34,12 +39,15 @@ FROM csv_rejects_table ORDER BY ALL;
 3	0	"col0"	EEE	Could not convert string 'EEE' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad2.csv
 3	2	"col2"	FFF	Could not convert string 'FFF' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad2.csv
 
+statement ok
+DROP TABLE csv_rejects_table;
 
 # Test with multiple files
 query III
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/bad*.csv', 
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'}, 
+    rejects_table='csv_rejects_table',
     ignore_errors=true, parallel=${PARALLEL}) ORDER BY ALL;
 ----
 1	2	AAA
@@ -54,6 +62,9 @@ FROM csv_rejects_table ORDER BY ALL;
 2	1	"col1"	BBB	Could not convert string 'BBB' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad.csv
 3	0	"col0"	EEE	Could not convert string 'EEE' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad2.csv
 
+statement ok
+DROP TABLE csv_rejects_table;
+
 # Set limit
 statement ok
 SET csv_rejects_table_capacity = 1;
@@ -61,7 +72,8 @@ SET csv_rejects_table_capacity = 1;
 query III
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/bad*.csv', 
-    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'}, 
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    rejects_table='csv_rejects_table',
     ignore_errors=true, parallel=${PARALLEL}) ORDER BY ALL;
 ----
 1	2	AAA
@@ -76,13 +88,17 @@ SELECT COUNT(*) FROM csv_rejects_table
 2
 
 statement ok
+DROP TABLE csv_rejects_table;
+
+statement ok
 SET csv_rejects_table_capacity = 2048;
 
 # Try with bigger files
 query I
 SELECT SUM(num) FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/big_bad.csv', 
-    columns = {'num': 'INTEGER', 'str': 'VARCHAR'}, 
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
+    rejects_table='csv_rejects_table',
     ignore_errors=true, parallel=${PARALLEL}) ORDER BY ALL;
 ----
 4094
@@ -93,10 +109,14 @@ SELECT * FROM csv_rejects_table ORDER BY ALL;
 2000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
 4000	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
 
+statement ok
+DROP TABLE csv_rejects_table;
+
 query I
 SELECT SUM(num) FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/big_bad2.csv', 
-    columns = {'num': 'INTEGER', 'str': 'VARCHAR'}, 
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
+    rejects_table='csv_rejects_table',
     ignore_errors=true, parallel=${PARALLEL}) ORDER BY ALL;
 ----
 4094
@@ -107,11 +127,15 @@ SELECT * FROM csv_rejects_table ORDER BY ALL;
 1000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
 3000	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
 
+statement ok
+DROP TABLE csv_rejects_table;
+
 # Test with multiple big files
 query I
 SELECT SUM(num) FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/big_*.csv', 
-    columns = {'num': 'INTEGER', 'str': 'VARCHAR'}, 
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
+    rejects_table='csv_rejects_table',
     ignore_errors=true, parallel=${PARALLEL}) ORDER BY ALL;
 ----
 8188
@@ -124,5 +148,7 @@ SELECT * FROM csv_rejects_table ORDER BY ALL;
 3000	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
 4000	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
 
+statement ok
+DROP TABLE csv_rejects_table;
 
 endloop

@@ -55,8 +55,10 @@ struct BufferedCSVReaderOptions {
 	bool header = false;
 	//! Whether or not we should ignore InvalidInput errors
 	bool ignore_errors = false;
-	//! Columns to use as recovery keys for rejected rows when reading with ignore_errors = true 
-	vector<idx_t> recovery_key_columns;
+	//! Rejects table name
+	string rejects_table_name;
+	//! Columns to use as recovery key for rejected rows when reading with ignore_errors = true
+	vector<idx_t> rejects_recovery_columns;
 	//! Expected number of columns
 	idx_t num_cols = 0;
 	//! Number of samples to buffer
@@ -157,6 +159,9 @@ struct BufferedCSVReaderOptions {
 	//! set - argument(s) to the option
 	//! expected_names - names expected if the option is "columns"
 	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
+	// Set the options for the rejects, after all other options have been set
+	void SetRejectsOptions(const named_parameter_map_t &params, const vector<string> &names,
+	                       const vector<LogicalType> &types);
 
 	void SetWriteOption(const string &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
