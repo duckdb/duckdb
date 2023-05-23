@@ -11,6 +11,21 @@
 
 #include "datetime.h" //from python
 
+/* Backport for Python < 3.10 */
+#if PY_VERSION_HEX < 0x030a00a1
+#ifndef PyDateTime_TIME_GET_TZINFO
+#define PyDateTime_TIME_GET_TZINFO(o) ((((PyDateTime_Time *)o)->hastzinfo) ? ((PyDateTime_Time *)o)->tzinfo : Py_None)
+#endif
+#ifndef PyDateTime_DATE_GET_TZINFO
+#define PyDateTime_DATE_GET_TZINFO(o)                                                                                  \
+	((((PyDateTime_DateTime *)o)->hastzinfo) ? ((PyDateTime_DateTime *)o)->tzinfo : Py_None)
+#endif
+#endif
+
+#define PyDateTime_TIMEDELTA_GET_DAYS(o)         (((PyDateTime_Delta *)(o))->days)
+#define PyDateTime_TIMEDELTA_GET_SECONDS(o)      (((PyDateTime_Delta *)(o))->seconds)
+#define PyDateTime_TIMEDELTA_GET_MICROSECONDS(o) (((PyDateTime_Delta *)(o))->microseconds)
+
 namespace duckdb {
 
 struct PyDictionary {
