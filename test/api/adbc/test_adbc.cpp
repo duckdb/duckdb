@@ -532,9 +532,6 @@ TEST_CASE("Test ADBC Transaction Errors", "[adbc]") {
 	duckdb_adbc::AdbcError adbc_error;
 	duckdb_adbc::InitiliazeADBCError(&adbc_error);
 
-	ArrowArrayStream arrow_stream;
-	ArrowArray arrow_array;
-
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
