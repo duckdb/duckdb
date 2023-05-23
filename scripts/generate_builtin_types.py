@@ -34,11 +34,19 @@ def get_struct_name(function_name):
 def sanitize_string(text):
     return text.replace('"', '\\"')
 
-categories = ['numeric', 'floating_point', 'fixed_point', 'time']
+categories = [
+    'numeric',
+    'floating_point',
+    'fixed_point',
+    'time',
+    'text',
+    'misc',
+    'nested'
+]
 
 new_text = header
 new_text += '''
-LogicalTypeId GetBuiltinType(const string &type) {
+const case_insensitive_map_t<LogicalTypeId> &GetInternalTypes() {
 \tstatic const std::pair<std::string, LogicalTypeId> types[] = {
 '''
 
@@ -62,11 +70,7 @@ new_text += type_text
 new_text += '''
 \t};
 \tstatic const case_insensitive_map_t<LogicalTypeId> type_map(types, types + (sizeof(types) / sizeof(std::pair<std::string, LogicalTypeId>)));
-	auto entry = type_map.find(type);
-	if (entry == type_map.end()) {
-		return LogicalType::INVALID;
-	}
-	return entry->second;
+	return type_map;
 }
 
 '''

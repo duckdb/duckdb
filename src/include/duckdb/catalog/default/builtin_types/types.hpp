@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-LogicalTypeId GetBuiltinType(const string &type) {
+const case_insensitive_map_t<LogicalTypeId> &GetInternalTypes() {
 	static const std::pair<std::string, LogicalTypeId> types[] = {
 		{"hugeint", LogicalTypeId::HUGEINT},
 		{"int128", LogicalTypeId::HUGEINT},
@@ -57,14 +57,38 @@ LogicalTypeId GetBuiltinType(const string &type) {
 		{"datetime", LogicalTypeId::TIMESTAMP},
 		{"timestamp_us", LogicalTypeId::TIMESTAMP},
 		{"timestamp_ms", LogicalTypeId::TIMESTAMP_MS},
-		{"timestamp_ns", LogicalTypeId::TIMESTAMP_NS}
+		{"timestamp_ns", LogicalTypeId::TIMESTAMP_NS},
+		{"timestamp_s", LogicalTypeId::TIMESTAMP_SEC},
+		{"timestamptz", LogicalTypeId::TIMESTAMP_TZ},
+		{"timetz", LogicalTypeId::TIME_TZ},
+		{"interval", LogicalTypeId::INTERVAL},
+		{"varchar", LogicalTypeId::VARCHAR},
+		{"bpchar", LogicalTypeId::VARCHAR},
+		{"string", LogicalTypeId::VARCHAR},
+		{"char", LogicalTypeId::VARCHAR},
+		{"nvarchar", LogicalTypeId::VARCHAR},
+		{"text", LogicalTypeId::VARCHAR},
+		{"blob", LogicalTypeId::BLOB},
+		{"bytea", LogicalTypeId::BLOB},
+		{"varbinary", LogicalTypeId::BLOB},
+		{"binary", LogicalTypeId::BLOB},
+		{"bit", LogicalTypeId::BIT},
+		{"bitstring", LogicalTypeId::BIT},
+		{"boolean", LogicalTypeId::BOOLEAN},
+		{"bool", LogicalTypeId::BOOLEAN},
+		{"logical", LogicalTypeId::BOOLEAN},
+		{"uuid", LogicalTypeId::UUID},
+		{"guid", LogicalTypeId::UUID},
+		{"enum", LogicalTypeId::ENUM},
+		{"null", LogicalTypeId::SQLNULL},
+		{"struct", LogicalTypeId::STRUCT},
+		{"row", LogicalTypeId::STRUCT},
+		{"list", LogicalTypeId::LIST},
+		{"map", LogicalTypeId::MAP},
+		{"union", LogicalTypeId::UNION}
 	};
 	static const case_insensitive_map_t<LogicalTypeId> type_map(types, types + (sizeof(types) / sizeof(std::pair<std::string, LogicalTypeId>)));
-	auto entry = type_map.find(type);
-	if (entry == type_map.end()) {
-		return LogicalType::INVALID;
-	}
-	return entry->second;
+	return type_map;
 }
 
 } // namespace duckdb

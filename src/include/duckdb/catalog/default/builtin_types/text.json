@@ -1,0 +1,28 @@
+[
+    {
+        "id": "VARCHAR",
+        "names": [
+            "varchar",
+            "bpchar",
+            "string",
+            "char",
+            "nvarchar",
+            "text"
+        ],
+        "description": "variable-length character string (UTF8 encoded)",
+        "min": null,
+        "max": null
+    },
+    {
+        "id": "BLOB",
+        "names": [
+            "blob",
+            "bytea",
+            "varbinary",
+            "binary"
+        ],
+        "description": "variable-length binary data (not UTF8 encoded)",
+        "min": null,
+        "max": null
+    }
+]

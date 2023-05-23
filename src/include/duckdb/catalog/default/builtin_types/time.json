@@ -24,7 +24,7 @@
             "datetime",
             "timestamp_us"
         ],
-        "description": "combination of time and date (nanosecond precision)",
+        "description": "combination of time and date (microsecond precision)",
         "min": null,
         "max": null
     },
@@ -33,7 +33,7 @@
         "names": [
             "timestamp_ms"
         ],
-        "description": "combination of time and date",
+        "description": "combination of time and date (milisecond precision)",
         "min": null,
         "max": null
     },
@@ -42,7 +42,43 @@
         "names": [
             "timestamp_ns"
         ],
-        "description": "combination of time and date",
+        "description": "combination of time and date (nanosecond precision)",
+        "min": null,
+        "max": null
+    },
+    {
+        "id": "TIMESTAMP_SEC",
+        "names": [
+            "timestamp_s"
+        ],
+        "description": "combination of time and date (second precision)",
+        "min": null,
+        "max": null
+    },
+    {
+        "id": "TIMESTAMP_TZ",
+        "names": [
+            "timestamptz"
+        ],
+        "description": "combination of time and date (microsecond precision) that uses the current timezone",
+        "min": null,
+        "max": null
+    },
+    {
+        "id": "TIME_TZ",
+        "names": [
+            "timetz"
+        ],
+        "description": "time of day that uses the current timezone",
+        "min": null,
+        "max": null
+    },
+    {
+        "id": "INTERVAL",
+        "names": [
+            "interval"
+        ],
+        "description": "a period of time",
         "min": null,
         "max": null
     }
