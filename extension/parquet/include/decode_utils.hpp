@@ -12,10 +12,12 @@ public:
 	}
 
 	static const uint64_t BITPACK_MASKS[];
+	static const uint64_t BITPACK_MASKS_SIZE;
 	static const uint8_t BITPACK_DLEN;
 
 	template <typename T>
 	static uint32_t BitUnpack(ByteBuffer &buffer, uint8_t &bitpack_pos, T *dest, uint32_t count, uint8_t width) {
+		D_ASSERT(width < ParquetDecodeUtils::BITPACK_MASKS_SIZE);
 		auto mask = BITPACK_MASKS[width];
 
 		for (uint32_t i = 0; i < count; i++) {
