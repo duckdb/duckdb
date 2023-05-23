@@ -10,6 +10,13 @@ add_definitions(-DUSE_DUCKDB_SHELL_WRAPPER)
 
 include_directories(../../third_party/utf8proc/include)
 
+if(NOT BUILD_AUTOCOMPLETE_EXTENSION)
+  include_directories(../../extension/autocomplete/include)
+  set(ALL_OBJECT_FILES
+      ${ALL_OBJECT_FILES}
+      ../../extension/autocomplete/sql_auto_complete-extension.cpp)
+  add_definitions(-DSHELL_INLINE_AUTOCOMPLETE)
+endif()
 set(SQLITE_API_WRAPPER_FILES sqlite3_api_wrapper.cpp ${ALL_OBJECT_FILES})
 
 add_library(sqlite3_api_wrapper_static STATIC ${SQLITE_API_WRAPPER_FILES})

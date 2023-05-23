@@ -10,6 +10,8 @@
 
 #include "duckdb/common/adbc/adbc.h"
 
+#include <string>
+
 namespace duckdb_adbc {
 
 AdbcStatusCode DatabaseNew(struct AdbcDatabase *database, struct AdbcError *error);
@@ -82,4 +84,7 @@ AdbcStatusCode StatementExecutePartitions(struct AdbcStatement *statement, struc
                                           struct AdbcPartitions *partitions, int64_t *rows_affected,
                                           struct AdbcError *error);
 
+void SetError(struct AdbcError *error, const std::string &message);
+
+void InitiliazeADBCError(AdbcError *error);
 } // namespace duckdb_adbc
