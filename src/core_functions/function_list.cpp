@@ -137,6 +137,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(EnumRangeFun),
 	DUCKDB_SCALAR_FUNCTION(EnumRangeBoundaryFun),
 	DUCKDB_SCALAR_FUNCTION_SET(EpochFun),
+	DUCKDB_SCALAR_FUNCTION_SET(EpochMicrosecondsFun),
 	DUCKDB_SCALAR_FUNCTION(EpochMsFun),
 	DUCKDB_SCALAR_FUNCTION_SET(EraFun),
 	DUCKDB_SCALAR_FUNCTION(ErrorFun),
