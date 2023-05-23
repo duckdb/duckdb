@@ -118,12 +118,18 @@ void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) 
 	// this is a one way node, compress
 	if (n4.count == 1) {
 
+		// we need to keep track of the old node pointer
+		// because concatenate might overwrite it while appending bytes to
+		// the prefix (and by doing so overwriting the subsequent node with
+		// new prefix nodes)
+		auto old_n4_node = node;
+
 		// get only child and concatenate prefixes
 		auto child = *n4.GetChild(n4.key[0]);
-		Prefix::Concatenate(art, prefix, byte, child);
+		Prefix::Concatenate(art, prefix, n4.key[0], child);
 
 		n4.count--;
-		Node::Free(art, node);
+		Node::Free(art, old_n4_node);
 	}
 }
 

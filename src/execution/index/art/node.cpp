@@ -285,7 +285,7 @@ string Node::ToString(ART &art) const {
 		return Leaf::Get(art, *this).ToString(art);
 	}
 	if (type == NType::PREFIX) {
-		return Prefix::Get(art, *this).ptr.ToString(art);
+		return Prefix::Get(art, *this).ToString(art);
 	}
 
 	string str = "Node" + to_string(GetCapacity()) + ": [";

@@ -63,6 +63,9 @@ public:
 
 	//! Retrieve the node type from the leftmost byte
 	inline NType DecodeARTNodeType() const {
+		D_ASSERT(!IsSwizzled());
+		D_ASSERT(type >= (uint8_t)NType::PREFIX);
+		D_ASSERT(type <= (uint8_t)NType::NODE_256);
 		return NType(type);
 	}
 

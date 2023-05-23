@@ -55,7 +55,7 @@ public:
 	static idx_t Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node);
 	//! Traverse a prefix and a key until (1) encountering a non-prefix node, or (2) encountering
 	//! a mismatching byte, in which case depth indexes the mismatching byte in the key
-	static idx_t Traverse(const ART &art, reference<Node> &prefix_node, const ARTKey &key, idx_t &depth);
+	static idx_t Traverse(ART &art, reference<Node> &prefix_node, const ARTKey &key, idx_t &depth);
 	//! Returns the byte at position
 	static inline uint8_t GetByte(const ART &art, const Node &prefix_node, const idx_t position) {
 		auto prefix = Prefix::Get(art, prefix_node);
@@ -70,6 +70,9 @@ public:
 	//! the split), or stays unchanged (no bytes left before the split). child references
 	//! the node after the split, which is either a new Prefix node, or ptr
 	static void Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx_t position);
+
+	//! Returns the string representation of a prefix node
+	string ToString(ART &art) const;
 
 	//! Serialize this node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);

@@ -559,9 +559,18 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 		return;
 	}
 
-	// delete a row ID from a leaf (root is leaf)
-	if (node.DecodeARTNodeType() == NType::LEAF) {
-		auto &leaf = Leaf::Get(*this, node);
+	// handle prefix
+	reference<Node> next_node(node);
+	if (next_node.get().DecodeARTNodeType() == NType::PREFIX) {
+		Prefix::Traverse(*this, next_node, key, depth);
+		if (next_node.get().DecodeARTNodeType() == NType::PREFIX) {
+			return;
+		}
+	}
+
+	// delete a row ID from a leaf (root is leaf with possible prefix nodes)
+	if (next_node.get().DecodeARTNodeType() == NType::LEAF) {
+		auto &leaf = Leaf::Get(*this, next_node.get());
 		leaf.Remove(*this, row_id);
 
 		if (leaf.count == 0) {
@@ -571,23 +580,23 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 		return;
 	}
 
-	// handle prefix
-	reference<Node> next_node(node);
-	if (node.DecodeARTNodeType() == NType::PREFIX) {
-		Prefix::Traverse(*this, next_node, key, depth);
-		if (next_node.get().DecodeARTNodeType() == NType::PREFIX) {
-			return;
-		}
-	}
-
 	D_ASSERT(depth < key.len);
 	auto child = next_node.get().GetChild(*this, key[depth]);
 	if (child) {
 		D_ASSERT(child->IsSet());
 
-		if (child->DecodeARTNodeType() == NType::LEAF) {
+		auto temp_depth = depth + 1;
+		reference<Node> child_node(*child);
+		if (child_node.get().DecodeARTNodeType() == NType::PREFIX) {
+			Prefix::Traverse(*this, child_node, key, temp_depth);
+			if (child_node.get().DecodeARTNodeType() == NType::PREFIX) {
+				return;
+			}
+		}
+
+		if (child_node.get().DecodeARTNodeType() == NType::LEAF) {
 			// leaf found, remove entry
-			auto &leaf = Leaf::Get(*this, *child);
+			auto &leaf = Leaf::Get(*this, child_node.get());
 			leaf.Remove(*this, row_id);
 
 			if (leaf.count == 0) {
@@ -680,18 +689,17 @@ Node ART::Lookup(Node node, const ARTKey &key, idx_t depth) {
 
 	while (node.IsSet()) {
 
-		auto node_type = node.DecodeARTNodeType();
-
-		if (node_type == NType::LEAF) {
-			return node;
-		}
-
+		// traverse prefix, if exists
 		reference<Node> next_node(node);
-		if (node_type == NType::PREFIX) {
+		if (next_node.get().DecodeARTNodeType() == NType::PREFIX) {
 			Prefix::Traverse(*this, next_node, key, depth);
 			if (next_node.get().DecodeARTNodeType() == NType::PREFIX) {
 				return Node();
 			}
+		}
+
+		if (next_node.get().DecodeARTNodeType() == NType::LEAF) {
+			return next_node.get();
 		}
 
 		D_ASSERT(depth < key.len);

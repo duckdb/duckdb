@@ -90,8 +90,8 @@ void Iterator::FindMinimum(Node &node) {
 	// traverse the prefix
 	if (node.DecodeARTNodeType() == NType::PREFIX) {
 		auto prefix = Prefix::Get(*art, node);
-		for (idx_t i = 0; i < prefix.data[0]; i++) {
-			current_key.Push(prefix.data[i + 1]);
+		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+			current_key.Push(prefix.data[i]);
 		}
 		nodes.emplace(node, 0);
 		return FindMinimum(prefix.ptr);
@@ -125,8 +125,8 @@ bool Iterator::LowerBound(Node node, const ARTKey &key, const bool equal, idx_t 
 		auto next_byte = key[depth];
 		auto child = node.GetNextChild(*art, next_byte);
 		if (!child) {
-			// all values in the ART are less than the lower bound
-			return false;
+			// the key is greater than any key in this subtree
+			return Next();
 		}
 
 		current_key.Push(next_byte);
@@ -145,27 +145,27 @@ bool Iterator::LowerBound(Node node, const ARTKey &key, const bool equal, idx_t 
 
 	// resolve the prefix
 	auto prefix = Prefix::Get(*art, node);
-	for (idx_t i = 0; i < prefix.data[0]; i++) {
-		current_key.Push(prefix.data[i + 1]);
+	for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+		current_key.Push(prefix.data[i]);
 	}
 	nodes.emplace(node, 0);
 
-	for (idx_t i = 0; i < prefix.data[0]; i++) {
+	for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 		// the key down to this node is less than the lower bound, the next key will be
 		// greater than the lower bound
-		if (prefix.data[i + 1] < key[depth + i]) {
+		if (prefix.data[i] < key[depth + i]) {
 			return Next();
 		}
 		// we only need to find the minimum from here
 		// because all keys will be greater than the lower bound
-		if (prefix.data[i + 1] > key[depth + i]) {
+		if (prefix.data[i] > key[depth + i]) {
 			FindMinimum(prefix.ptr);
 			return true;
 		}
 	}
 
 	// recurse into the child
-	depth += prefix.data[0];
+	depth += prefix.data[Node::PREFIX_SIZE];
 	return LowerBound(prefix.ptr, key, equal, depth);
 }
 
@@ -205,7 +205,7 @@ bool Iterator::Next() {
 
 void Iterator::PopNode() {
 	if (nodes.top().node.DecodeARTNodeType() == NType::PREFIX) {
-		auto prefix_byte_count = Prefix::Get(*art, nodes.top().node).data[0];
+		auto prefix_byte_count = Prefix::Get(*art, nodes.top().node).data[Node::PREFIX_SIZE];
 		current_key.Pop(prefix_byte_count);
 	} else {
 		current_key.Pop(1);
