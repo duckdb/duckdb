@@ -43,7 +43,7 @@ void duckdb_destroy_pending(duckdb_pending_result *pending_result) {
 	if (!pending_result || !*pending_result) {
 		return;
 	}
-	auto wrapper = reinterpret_cast<PendingStatementWrapper *>(pending_result);
+	auto wrapper = reinterpret_cast<PendingStatementWrapper *>(*pending_result);
 	if (wrapper->statement) {
 		wrapper->statement->Close();
 	}
