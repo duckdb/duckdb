@@ -164,7 +164,7 @@ void PandasScanFunction::PandasBackendScanSwitch(PandasColumnBindData &bind_data
 //! The main pandas scan function: note that this can be called in parallel without the GIL
 //! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
 void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = data_p.bind_data->Cast<PandasScanFunctionData>();
+	auto &data = data_p.bind_data->CastNoConst<PandasScanFunctionData>();
 	auto &state = data_p.local_state->Cast<PandasScanLocalState>();
 
 	if (state.start >= state.end) {
