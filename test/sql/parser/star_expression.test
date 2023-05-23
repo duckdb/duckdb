@@ -65,3 +65,5 @@ not supported
 
 statement error
 FROM range(*, *);
+----
+without FROM clause
