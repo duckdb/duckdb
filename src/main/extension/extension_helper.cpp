@@ -48,43 +48,43 @@
 #if defined(OOTE_HEADERS_AVAILABLE) && OOTE_HEADERS_AVAILABLE
 #include "extension_oote_loader.hpp"
 #else
-	// TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
-	//		 these can be removed
-	#if DUCKDB_OOT_EXTENSION_ICU_LINKED
-	#include "icu_extension.hpp"
-	#endif
+// TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
+//		 these can be removed
+#if DUCKDB_OOT_EXTENSION_ICU_LINKED
+#include "icu_extension.hpp"
+#endif
 
-	#if DUCKDB_OOT_EXTENSION_PARQUET_LINKED
-	#include "parquet_extension.hpp"
-	#endif
+#if DUCKDB_OOT_EXTENSION_PARQUET_LINKED
+#include "parquet_extension.hpp"
+#endif
 
-	#if DUCKDB_OOT_EXTENSION_TPCH_LINKED
-	#include "tpch_extension.hpp"
-	#endif
+#if DUCKDB_OOT_EXTENSION_TPCH_LINKED
+#include "tpch_extension.hpp"
+#endif
 
-	#if DUCKDB_OOT_EXTENSION_TPCDS_LINKED
-	#include "tpcds_extension.hpp"
-	#endif
+#if DUCKDB_OOT_EXTENSION_TPCDS_LINKED
+#include "tpcds_extension.hpp"
+#endif
 
-	#if DUCKDB_OOT_EXTENSION_FTS_LINKED
-	#include "fts_extension.hpp"
-	#endif
+#if DUCKDB_OOT_EXTENSION_FTS_LINKED
+#include "fts_extension.hpp"
+#endif
 
-	#if DUCKDB_OOT_EXTENSION_HTTPFS_LINKED
-	#include "httpfs_extension.hpp"
-	#endif
+#if DUCKDB_OOT_EXTENSION_HTTPFS_LINKED
+#include "httpfs_extension.hpp"
+#endif
 
-	#if DUCKDB_OOT_EXTENSION_JSON_LINKED
-	#include "json_extension.hpp"
-	#endif
+#if DUCKDB_OOT_EXTENSION_JSON_LINKED
+#include "json_extension.hpp"
+#endif
 
-	#if DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED
-	#include "jemalloc_extension.hpp"
-	#endif
+#if DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED
+#include "jemalloc_extension.hpp"
+#endif
 
-	#if DUCKDB_OOT_EXTENSION_AUTOCOMPLETE_LINKED
-	#include "automalloc_extension.hpp"
-	#endif
+#if DUCKDB_OOT_EXTENSION_AUTOCOMPLETE_LINKED
+#include "automalloc_extension.hpp"
+#endif
 #endif
 
 namespace duckdb {
@@ -99,7 +99,8 @@ static DefaultExtension internal_extensions[] = {
     {"tpch", "Adds TPC-H data generation and query support", DUCKDB_OOT_EXTENSION_TPCH_LINKED},
     {"tpcds", "Adds TPC-DS data generation and query support", DUCKDB_OOT_EXTENSION_TPCDS_LINKED},
     {"fts", "Adds support for Full-Text Search Indexes", DUCKDB_OOT_EXTENSION_FTS_LINKED},
-    {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection", DUCKDB_OOT_EXTENSION_HTTPFS_LINKED},
+    {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection",
+     DUCKDB_OOT_EXTENSION_HTTPFS_LINKED},
     {"json", "Adds support for JSON operations", DUCKDB_OOT_EXTENSION_JSON_LINKED},
     {"jemalloc", "Overwrites system allocator with JEMalloc", DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED},
     {"autocomplete", "Add supports for autocomplete in the shell", DUCKDB_OOT_EXTENSION_AUTOCOMPLETE_LINKED},
@@ -186,7 +187,7 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 #if defined(OOTE_HEADERS_AVAILABLE) && OOTE_HEADERS_AVAILABLE
 	if (TryLoadLinkedExtension(db, extension)) {
 		return ExtensionLoadResult::LOADED_EXTENSION;
-	}  else {
+	} else {
 		return ExtensionLoadResult::NOT_LOADED;
 	}
 #endif

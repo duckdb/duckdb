@@ -14,7 +14,7 @@ if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
     if(${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_LINK})
       set(DUCKDB_EXTENSION_HEADER "${OOTE_NAME}_extension.hpp")
       file(APPEND "${PROJECT_BINARY_DIR}/include/extension_oote_headers.hpp"
-              "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
+           "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
     endif()
   endforeach()
 endif()
@@ -34,7 +34,8 @@ if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
                            "${OOTE_NAME}")
 
       set(OOTE_LOADER_NAME_LIST "${OOTE_LOADER_NAME_LIST},\"${OOTE_NAME}\"")
-      set(OOTE_LOADER_BODY "${OOTE_LOADER_BODY}\
+      set(OOTE_LOADER_BODY
+          "${OOTE_LOADER_BODY}\
     if (extension==\"${OOTE_NAME}\") {
         db.LoadExtension<${EXTENSION_CLASS}Extension>();
         return true;
