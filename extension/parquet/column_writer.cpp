@@ -343,8 +343,7 @@ public:
 	static constexpr const idx_t STRING_LENGTH_SIZE = sizeof(uint32_t);
 
 public:
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-	                                                   Allocator &allocator) override;
+	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override;
 	void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
 	void BeginWrite(ColumnWriterState &state) override;
 	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
@@ -386,8 +385,7 @@ protected:
 	void RegisterToRowGroup(duckdb_parquet::format::RowGroup &row_group);
 };
 
-unique_ptr<ColumnWriterState> BasicColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-                                                                      Allocator &allocator) {
+unique_ptr<ColumnWriterState> BasicColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) {
 	auto result = make_uniq<BasicColumnWriterState>(row_group, row_group.columns.size());
 	RegisterToRowGroup(row_group);
 	return std::move(result);
@@ -1183,8 +1181,8 @@ public:
 
 class StringColumnWriterState : public BasicColumnWriterState {
 public:
-	StringColumnWriterState(duckdb_parquet::format::RowGroup &row_group, Allocator &allocator, idx_t col_idx)
-	    : BasicColumnWriterState(row_group, col_idx), dictionary_heap(allocator) {
+	StringColumnWriterState(duckdb_parquet::format::RowGroup &row_group, idx_t col_idx)
+	    : BasicColumnWriterState(row_group, col_idx) {
 	}
 	~StringColumnWriterState() override = default;
 
@@ -1195,7 +1193,6 @@ public:
 
 	// Dictionary and accompanying string heap
 	string_map_t<uint32_t> dictionary;
-	StringHeap dictionary_heap;
 	// key_bit_width== 0 signifies the chunk is written in plain encoding
 	uint32_t key_bit_width;
 
@@ -1234,9 +1231,8 @@ public:
 		return make_uniq<StringStatisticsState>();
 	}
 
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-	                                                   Allocator &allocator) override {
-		auto result = make_uniq<StringColumnWriterState>(row_group, allocator, row_group.columns.size());
+	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override {
+		auto result = make_uniq<StringColumnWriterState>(row_group, row_group.columns.size());
 		RegisterToRowGroup(row_group);
 		return std::move(result);
 	}
@@ -1266,11 +1262,8 @@ public:
 			if (validity.RowIsValid(vector_index)) {
 				run_length++;
 				const auto &value = strings[vector_index];
-				// If the value did not yet exist in the dictionary we add it to the StringHeap
-				auto found = !value.IsInlined() && state.dictionary.find(value) == state.dictionary.end()
-				                 ? state.dictionary.insert(string_map_t<uint32_t>::value_type(
-				                       state.dictionary_heap.AddBlob(value), new_value_index))
-				                 : state.dictionary.insert(string_map_t<uint32_t>::value_type(value, new_value_index));
+				// Try to insert into the dictionary. If it's already there, we get back the value index
+				auto found = state.dictionary.insert(string_map_t<uint32_t>::value_type(value, new_value_index));
 				state.estimated_plain_size += value.GetSize() + STRING_LENGTH_SIZE;
 				if (found.second) {
 					// string didn't exist yet in the dictionary
@@ -1553,8 +1546,7 @@ public:
 	vector<unique_ptr<ColumnWriter>> child_writers;
 
 public:
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-	                                                   Allocator &allocator) override;
+	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override;
 	bool HasAnalyze() override;
 	void Analyze(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
 	void FinalizeAnalyze(ColumnWriterState &state) override;
@@ -1577,13 +1569,12 @@ public:
 	vector<unique_ptr<ColumnWriterState>> child_states;
 };
 
-unique_ptr<ColumnWriterState> StructColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-                                                                       Allocator &allocator) {
+unique_ptr<ColumnWriterState> StructColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) {
 	auto result = make_uniq<StructColumnWriterState>(row_group, row_group.columns.size());
 
 	result->child_states.reserve(child_writers.size());
 	for (auto &child_writer : child_writers) {
-		result->child_states.push_back(child_writer->InitializeWriteState(row_group, allocator));
+		result->child_states.push_back(child_writer->InitializeWriteState(row_group));
 	}
 	return std::move(result);
 }
@@ -1676,8 +1667,7 @@ public:
 	unique_ptr<ColumnWriter> child_writer;
 
 public:
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-	                                                   Allocator &allocator) override;
+	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) override;
 	bool HasAnalyze() override;
 	void Analyze(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
 	void FinalizeAnalyze(ColumnWriterState &state) override;
@@ -1701,10 +1691,9 @@ public:
 	idx_t parent_index = 0;
 };
 
-unique_ptr<ColumnWriterState> ListColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group,
-                                                                     Allocator &allocator) {
+unique_ptr<ColumnWriterState> ListColumnWriter::InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) {
 	auto result = make_uniq<ListColumnWriterState>(row_group, row_group.columns.size());
-	result->child_state = child_writer->InitializeWriteState(row_group, allocator);
+	result->child_state = child_writer->InitializeWriteState(row_group);
 	return std::move(result);
 }
 

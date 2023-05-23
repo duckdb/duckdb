@@ -272,7 +272,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 	D_ASSERT(buffer.ColumnCount() == column_writers.size());
 	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
 		const auto &col_writer = column_writers[col_idx];
-		auto write_state = col_writer->InitializeWriteState(row_group, buffer.GetAllocator());
+		auto write_state = col_writer->InitializeWriteState(row_group);
 		if (col_writer->HasAnalyze()) {
 			for (auto &chunk : buffer.Chunks()) {
 				col_writer->Analyze(*write_state, nullptr, chunk.data[col_idx], chunk.size());
