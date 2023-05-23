@@ -71,7 +71,8 @@ idx_t CurrentChunk::RemainingSize() {
 	return data_chunk->size() - position;
 }
 
-QueryResult::QueryResult(QueryResultType type, PreservedError error) : BaseQueryResult(type, std::move(error)) {
+QueryResult::QueryResult(QueryResultType type, PreservedError error)
+    : BaseQueryResult(type, std::move(error)), client_properties("UTC", ArrowOffsetSize::LARGE) {
 }
 
 QueryResult::~QueryResult() {

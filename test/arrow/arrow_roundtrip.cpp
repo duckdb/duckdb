@@ -4,7 +4,7 @@
 
 using namespace duckdb;
 
-static void TestArrowRoundtrip(const string &query, ArrowOptions options = ArrowOptions()) {
+static void TestArrowRoundtrip(const string &query, ArrowOptions options) {
 	DuckDB db;
 	Connection con(db);
 
