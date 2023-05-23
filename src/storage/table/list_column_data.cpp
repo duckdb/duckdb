@@ -62,11 +62,11 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 
 	// we need to read the list at position row_idx to get the correct row offset of the child
 	auto child_offset = row_idx == start ? 0 : FetchListOffset(row_idx - 1);
-
 	D_ASSERT(child_offset <= child_column->GetMaxEntry());
 	if (child_offset < child_column->GetMaxEntry()) {
 		child_column->InitializeScanWithOffset(state.child_states[1], start + child_offset);
 	}
+	state.last_offset = child_offset;
 }
 
 idx_t ListColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
@@ -108,9 +108,10 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 
 	if (child_scan_count > 0) {
 		auto &child_entry = ListVector::GetEntry(result);
-		D_ASSERT(child_entry.GetType().InternalType() == PhysicalType::STRUCT ||
-		         state.child_states[1].row_index + child_scan_count <=
-		             child_column->start + child_column->GetMaxEntry());
+		if (child_entry.GetType().InternalType() != PhysicalType::STRUCT &&
+		    state.child_states[1].row_index + child_scan_count > child_column->start + child_column->GetMaxEntry()) {
+			throw InternalException("ListColumnData::ScanCount - internal list scan offset is out of range");
+		}
 		child_column->ScanCount(state.child_states[1], child_entry, child_scan_count);
 	}
 	state.last_offset = last_entry;

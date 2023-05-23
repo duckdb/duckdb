@@ -100,6 +100,9 @@ void Vector::Reference(const Value &value) {
 }
 
 void Vector::Reference(Vector &other) {
+	if (other.GetType().id() != GetType().id()) {
+		throw InternalException("Vector::Reference used on vector of different type");
+	}
 	D_ASSERT(other.GetType() == GetType());
 	Reinterpret(other);
 }
