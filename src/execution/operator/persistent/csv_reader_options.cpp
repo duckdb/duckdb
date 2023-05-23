@@ -188,25 +188,28 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 
 void BufferedCSVReaderOptions::SetRejectsOptions(const named_parameter_map_t &params, const vector<string> &names,
                                                  const vector<LogicalType> &types) {
-	if (!ignore_errors) {
-		throw BinderException("REJECTS_RECOVERY_COLUMNS option is only supported when IGNORE_ERRORS is set to true");
-	}
+
 	for (auto &kv : params) {
 		auto loption = StringUtil::Lower(kv.first);
 		auto &value = kv.second;
 		if (loption == "rejects_table") {
+			if (!ignore_errors) {
+				throw BinderException("REJECTS_TABLE option is only supported when IGNORE_ERRORS is set to true");
+			}
 			rejects_table_name = ParseString(value, loption);
 		}
 	}
 
-	if (rejects_table_name.empty()) {
-		throw BinderException(
-		    "REJECTS_RECOVERY_COLUMNS option is only supported when REJECTS_TABLE is set to a table name");
-	}
 	for (auto &kv : params) {
 		auto loption = StringUtil::Lower(kv.first);
 		auto &value = kv.second;
 		if (loption == "rejects_recovery_columns") {
+
+			if (rejects_table_name.empty()) {
+				throw BinderException(
+				    "REJECTS_RECOVERY_COLUMNS option is only supported when REJECTS_TABLE is set to a table name");
+			}
+
 			if (value.type().id() != LogicalTypeId::LIST) {
 				throw BinderException(
 				    "Unsupported parameter for REJECTS_RECOVERY_COLUMNS: expected a list of column indices");

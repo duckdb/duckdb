@@ -584,63 +584,66 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 		}
 
 		// Now do a second pass to produce the reject table entries
-		auto rejects = CSVRejectsTable::GetOrCreate(context);
-		auto max_errors = context.config.max_csv_errors;
-		lock_guard<mutex> lock(rejects->write_lock);
-		InternalAppender appender(context, rejects->GetTable(context, options.rejects_table_name));
-		auto file_name = GetFileName();
+		if (!options.rejects_table_name.empty()) {
+			auto rejects = CSVRejectsTable::GetOrCreate(context);
+			auto max_errors = context.config.max_csv_errors;
+			lock_guard<mutex> lock(rejects->write_lock);
+			InternalAppender appender(context, rejects->GetTable(context, options.rejects_table_name));
+			auto file_name = GetFileName();
 
-		for (auto &cell : failed_cells) {
-			if (rejects->count > max_errors) {
-				break;
-			}
-			rejects->count++;
-
-			auto row_idx = std::get<0>(cell);
-			auto col_idx = std::get<1>(cell);
-			auto row_line = std::get<2>(cell);
-
-			auto col_name = to_string(col_idx);
-			if (col_idx < names.size()) {
-				col_name = "\"" + names[col_idx] + "\"";
-			}
-			auto parsed_str = FlatVector::GetData<string_t>(parse_chunk.data[col_idx])[row_idx].GetString();
-			auto &type = insert_chunk.data[reader_data.column_mapping[col_idx]].GetType();
-			auto row_error_msg =
-			    StringUtil::Format("Could not convert string '%s' to '%s'", parsed_str, type.ToString());
-			auto &parse_vector = parse_chunk.data[col_idx];
-
-			// Add the row to the rejects table
-			appender.BeginRow();
-			appender.Append(row_line);
-			appender.Append(col_idx);
-			appender.Append(Value(col_name));
-			appender.Append(Value(parsed_str));
-
-			if (!options.rejects_recovery_columns.empty()) {
-				child_list_t<Value> recovery_key;
-				for (auto &key_idx : options.rejects_recovery_columns) {
-					// Figure out if the recovery key is valid.
-					// If not, error out for real.
-					auto &component_vector = insert_chunk.data[key_idx];
-					UnifiedVectorFormat component_data;
-					component_vector.ToUnifiedFormat(parse_chunk.size(), component_data);
-					if (!component_data.validity.RowIsValid(row_idx) && !FlatVector::IsNull(parse_vector, row_idx)) {
-						throw InvalidInputException("%s at line %llu in column %s. Parser options:\n%s ",
-						                            "Could not parse recovery key", row_line, col_name,
-						                            options.ToString());
-					}
-					auto component = component_vector.GetValue(row_idx);
-					recovery_key.emplace_back(names[key_idx], component);
+			for (auto &cell : failed_cells) {
+				if (rejects->count > max_errors) {
+					break;
 				}
-				appender.Append(Value::STRUCT(recovery_key));
-			}
+				rejects->count++;
 
-			appender.Append(Value(row_error_msg));
-			appender.Append(Value(GetFileName()));
-			appender.EndRow();
+				auto row_idx = std::get<0>(cell);
+				auto col_idx = std::get<1>(cell);
+				auto row_line = std::get<2>(cell);
+
+				auto col_name = to_string(col_idx);
+				if (col_idx < names.size()) {
+					col_name = "\"" + names[col_idx] + "\"";
+				}
+				auto parsed_str = FlatVector::GetData<string_t>(parse_chunk.data[col_idx])[row_idx];
+				auto &type = insert_chunk.data[reader_data.column_mapping[col_idx]].GetType();
+				auto row_error_msg = StringUtil::Format("Could not convert string '%s' to '%s'", parsed_str.GetString(),
+				                                        type.ToString());
+				auto &parse_vector = parse_chunk.data[col_idx];
+
+				// Add the row to the rejects table
+				appender.BeginRow();
+				appender.Append(row_line);
+				appender.Append(col_idx);
+				appender.Append(Value(col_name));
+				appender.Append(parsed_str);
+
+				if (!options.rejects_recovery_columns.empty()) {
+					child_list_t<Value> recovery_key;
+					for (auto &key_idx : options.rejects_recovery_columns) {
+						// Figure out if the recovery key is valid.
+						// If not, error out for real.
+						auto &component_vector = insert_chunk.data[key_idx];
+						UnifiedVectorFormat component_data;
+						component_vector.ToUnifiedFormat(parse_chunk.size(), component_data);
+						if (!component_data.validity.RowIsValid(row_idx) &&
+						    !FlatVector::IsNull(parse_vector, row_idx)) {
+							throw InvalidInputException("%s at line %llu in column %s. Parser options:\n%s ",
+							                            "Could not parse recovery key", row_line, col_name,
+							                            options.ToString());
+						}
+						auto component = component_vector.GetValue(row_idx);
+						recovery_key.emplace_back(names[key_idx], component);
+					}
+					appender.Append(Value::STRUCT(recovery_key));
+				}
+
+				appender.Append(Value(row_error_msg));
+				appender.Append(Value(file_name));
+				appender.EndRow();
+			}
+			appender.Close();
 		}
-		appender.Close();
 
 		// Now slice the insert chunk to only include the succesful rows
 		insert_chunk.Slice(succesful_rows, sel_size);
