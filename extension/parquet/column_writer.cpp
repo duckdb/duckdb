@@ -203,8 +203,8 @@ void ColumnWriter::CompressPage(BufferedSerializer &temp_writer, size_t &compres
 		MiniZStream s;
 		compressed_size = s.MaxCompressedLength(temp_writer.blob.size);
 		compressed_buf = duckdb::unique_ptr<data_t[]>(new data_t[compressed_size]);
-		s.Compress(const_char_ptr_cast(temp_writer.blob.data.get()), temp_writer.blob.size, char_ptr_cast(compressed_buf.get()),
-		           &compressed_size);
+		s.Compress(const_char_ptr_cast(temp_writer.blob.data.get()), temp_writer.blob.size,
+		           char_ptr_cast(compressed_buf.get()), &compressed_size);
 		compressed_data = compressed_buf.get();
 		break;
 	}

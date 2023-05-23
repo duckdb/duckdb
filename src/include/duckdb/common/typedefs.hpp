@@ -48,7 +48,6 @@ const char *const_char_ptr_cast(const SRC *src) {
 	return reinterpret_cast<const char *>(src);
 }
 
-
 template <class SRC>
 const unsigned char *const_uchar_ptr_cast(const SRC *src) {
 	return reinterpret_cast<const unsigned char *>(src);

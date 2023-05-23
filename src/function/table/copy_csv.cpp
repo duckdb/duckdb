@@ -187,15 +187,14 @@ static bool RequiresQuotes(WriteCSVData &csv_data, const char *str, idx_t len) {
 
 		// check for delimiter
 		if (options.delimiter.length() != 0 &&
-		    ContainsFun::Find(const_uchar_ptr_cast(str), len,
-		                      const_uchar_ptr_cast(options.delimiter.c_str()),
+		    ContainsFun::Find(const_uchar_ptr_cast(str), len, const_uchar_ptr_cast(options.delimiter.c_str()),
 		                      options.delimiter.size()) != DConstants::INVALID_INDEX) {
 			return true;
 		}
 		// check for quote
-		if (options.quote.length() != 0 && ContainsFun::Find(const_uchar_ptr_cast(str), len,
-		                                                     const_uchar_ptr_cast(options.quote.c_str()),
-		                                                     options.quote.size()) != DConstants::INVALID_INDEX) {
+		if (options.quote.length() != 0 &&
+		    ContainsFun::Find(const_uchar_ptr_cast(str), len, const_uchar_ptr_cast(options.quote.c_str()),
+		                      options.quote.size()) != DConstants::INVALID_INDEX) {
 			return true;
 		}
 		return false;
@@ -225,13 +224,11 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 			// complex CSV
 			// check for quote or escape separately
 			if (options.quote.length() != 0 &&
-			    ContainsFun::Find(const_uchar_ptr_cast(str), len,
-			                      const_uchar_ptr_cast(options.quote.c_str()),
+			    ContainsFun::Find(const_uchar_ptr_cast(str), len, const_uchar_ptr_cast(options.quote.c_str()),
 			                      options.quote.size()) != DConstants::INVALID_INDEX) {
 				requires_escape = true;
 			} else if (options.escape.length() != 0 &&
-			           ContainsFun::Find(const_uchar_ptr_cast(str), len,
-			                             const_uchar_ptr_cast(options.escape.c_str()),
+			           ContainsFun::Find(const_uchar_ptr_cast(str), len, const_uchar_ptr_cast(options.escape.c_str()),
 			                             options.escape.size()) != DConstants::INVALID_INDEX) {
 				requires_escape = true;
 			}

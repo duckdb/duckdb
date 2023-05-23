@@ -140,8 +140,8 @@ void StringStats::Update(BaseStatistics &stats, const string_t &value) {
 		if (unicode == UnicodeType::UNICODE) {
 			string_data.has_unicode = true;
 		} else if (unicode == UnicodeType::INVALID) {
-			throw InvalidInputException(
-			    ErrorManager::InvalidUnicodeError(string(const_char_ptr_cast(data), size), "segment statistics update"));
+			throw InvalidInputException(ErrorManager::InvalidUnicodeError(string(const_char_ptr_cast(data), size),
+			                                                              "segment statistics update"));
 		}
 	}
 }
@@ -219,10 +219,11 @@ string StringStats::ToString(const BaseStatistics &stats) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
 	idx_t min_len = GetValidMinMaxSubstring(string_data.min);
 	idx_t max_len = GetValidMinMaxSubstring(string_data.max);
-	return StringUtil::Format(
-	    "[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %s]", string(const_char_ptr_cast(string_data.min), min_len),
-	    string(const_char_ptr_cast(string_data.max), max_len), string_data.has_unicode ? "true" : "false",
-	    string_data.has_max_string_length ? to_string(string_data.max_string_length) : "?");
+	return StringUtil::Format("[Min: %s, Max: %s, Has Unicode: %s, Max String Length: %s]",
+	                          string(const_char_ptr_cast(string_data.min), min_len),
+	                          string(const_char_ptr_cast(string_data.max), max_len),
+	                          string_data.has_unicode ? "true" : "false",
+	                          string_data.has_max_string_length ? to_string(string_data.max_string_length) : "?");
 }
 
 void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const SelectionVector &sel, idx_t count) {
@@ -256,13 +257,13 @@ void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 				throw InternalException("Invalid unicode detected in vector: %s", vector.ToString(count));
 			}
 		}
-		if (StringValueComparison(const_data_ptr_cast(data), MinValue<idx_t>(len, StringStatsData::MAX_STRING_MINMAX_SIZE),
-		                          string_data.min) < 0) {
+		if (StringValueComparison(const_data_ptr_cast(data),
+		                          MinValue<idx_t>(len, StringStatsData::MAX_STRING_MINMAX_SIZE), string_data.min) < 0) {
 			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
 			                        stats.ToString(), vector.ToString(count));
 		}
-		if (StringValueComparison(const_data_ptr_cast(data), MinValue<idx_t>(len, StringStatsData::MAX_STRING_MINMAX_SIZE),
-		                          string_data.max) > 0) {
+		if (StringValueComparison(const_data_ptr_cast(data),
+		                          MinValue<idx_t>(len, StringStatsData::MAX_STRING_MINMAX_SIZE), string_data.max) > 0) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
 			                        stats.ToString(), vector.ToString(count));
 		}

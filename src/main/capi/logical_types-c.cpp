@@ -56,7 +56,8 @@ duckdb_logical_type duckdb_create_map_type(duckdb_logical_type key_type, duckdb_
 		return nullptr;
 	}
 	duckdb::LogicalType *mtype = new duckdb::LogicalType;
-	*mtype = duckdb::LogicalType::MAP(*reinterpret_cast<duckdb::LogicalType *>(key_type), *reinterpret_cast<duckdb::LogicalType *>(value_type));
+	*mtype = duckdb::LogicalType::MAP(*reinterpret_cast<duckdb::LogicalType *>(key_type),
+	                                  *reinterpret_cast<duckdb::LogicalType *>(value_type));
 	return reinterpret_cast<duckdb_logical_type>(mtype);
 }
 

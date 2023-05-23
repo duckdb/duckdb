@@ -12,7 +12,8 @@ namespace duckdb {
 
 WindowAggregateState::WindowAggregateState(AggregateObject aggr, const LogicalType &result_type_p)
     : aggr(std::move(aggr)), result_type(result_type_p), state(aggr.function.state_size()),
-      statev(Value::POINTER(CastPointerToValue(state.data()))), statep(Value::POINTER(CastPointerToValue(state.data()))) {
+      statev(Value::POINTER(CastPointerToValue(state.data()))),
+      statep(Value::POINTER(CastPointerToValue(state.data()))) {
 	statev.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
 }
 
@@ -183,8 +184,9 @@ void WindowConstantAggregate::Compute(Vector &target, idx_t rid, idx_t start, id
 WindowSegmentTree::WindowSegmentTree(AggregateObject aggr_p, const LogicalType &result_type_p, DataChunk *input,
                                      const ValidityMask &filter_mask_p, WindowAggregationMode mode_p)
     : aggr(std::move(aggr_p)), result_type(result_type_p), state(aggr.function.state_size()),
-      statep(Value::POINTER(CastPointerToValue(state.data()))), frame(0, 0), statev(Value::POINTER(CastPointerToValue(state.data()))),
-      internal_nodes(0), input_ref(input), filter_mask(filter_mask_p), mode(mode_p) {
+      statep(Value::POINTER(CastPointerToValue(state.data()))), frame(0, 0),
+      statev(Value::POINTER(CastPointerToValue(state.data()))), internal_nodes(0), input_ref(input),
+      filter_mask(filter_mask_p), mode(mode_p) {
 	statep.Flatten(input->size());
 	statev.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
 

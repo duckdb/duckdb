@@ -241,8 +241,10 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 				lock_guard<mutex> guard(part->lock);
 				const auto old_base_heap_ptr = part->base_heap_ptr;
 				if (old_base_heap_ptr != new_base_heap_ptr) {
-					Vector old_heap_ptrs(Value::POINTER(CastPointerToValue(old_base_heap_ptr + part->heap_block_offset)));
-					Vector new_heap_ptrs(Value::POINTER(CastPointerToValue(new_base_heap_ptr + part->heap_block_offset)));
+					Vector old_heap_ptrs(
+					    Value::POINTER(CastPointerToValue(old_base_heap_ptr + part->heap_block_offset)));
+					Vector new_heap_ptrs(
+					    Value::POINTER(CastPointerToValue(new_base_heap_ptr + part->heap_block_offset)));
 					RecomputeHeapPointers(old_heap_ptrs, *ConstantVector::ZeroSelectionVector(), row_locations,
 					                      new_heap_ptrs, offset, next, layout, 0);
 					part->base_heap_ptr = new_base_heap_ptr;

@@ -36,8 +36,8 @@ struct RegularStringSplit {
 		if (delim_size == 0) {
 			return 0;
 		}
-		return ContainsFun::Find(const_uchar_ptr_cast(input_data), input_size,
-		                         const_uchar_ptr_cast(delim_data), delim_size);
+		return ContainsFun::Find(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(delim_data),
+		                         delim_size);
 	}
 };
 
@@ -45,7 +45,7 @@ struct ConstantRegexpStringSplit {
 	static idx_t Find(const char *input_data, idx_t input_size, const char *delim_data, idx_t delim_size,
 	                  idx_t &match_size, void *data) {
 		D_ASSERT(data);
-		auto regex =  reinterpret_cast<duckdb_re2::RE2 *>(data);
+		auto regex = reinterpret_cast<duckdb_re2::RE2 *>(data);
 		duckdb_re2::StringPiece match;
 		if (!regex->Match(duckdb_re2::StringPiece(input_data, input_size), 0, input_size, RE2::UNANCHORED, &match, 1)) {
 			return DConstants::INVALID_INDEX;

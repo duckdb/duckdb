@@ -216,7 +216,8 @@ void duckdb_r_transform(Vector &src_vec, const SEXP dest, idx_t dest_offset, idx
 			if (!mask.RowIsValid(row_idx)) {
 				SET_STRING_ELT(dest, dest_offset + row_idx, NA_STRING);
 			} else {
-				SET_STRING_ELT(dest, dest_offset + row_idx, (SEXP)(data_ptr_cast(child_ptr[row_idx]) - sexp_header_size));
+				SET_STRING_ELT(dest, dest_offset + row_idx,
+				               (SEXP)(data_ptr_cast(child_ptr[row_idx]) - sexp_header_size));
 			}
 		}
 		return;

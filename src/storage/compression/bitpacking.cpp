@@ -860,8 +860,8 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	D_ASSERT(scan_state.current_group.mode == BitpackingMode::FOR ||
 	         scan_state.current_group.mode == BitpackingMode::DELTA_FOR);
 
-	BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(scan_state.decompression_buffer), decompression_group_start_pointer,
-	                                     scan_state.current_width, skip_sign_extend);
+	BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(scan_state.decompression_buffer),
+	                                     decompression_group_start_pointer, scan_state.current_width, skip_sign_extend);
 
 	*current_result_ptr = *(T *)(scan_state.decompression_buffer + offset_in_compression_group);
 	*current_result_ptr += scan_state.current_frame_of_reference;

@@ -23,7 +23,8 @@ static T *GetPrimitiveData(ListSegment *segment) {
 
 template <class T>
 static const T *GetPrimitiveData(const ListSegment *segment) {
-	return reinterpret_cast<const T *>(const_data_ptr_cast(segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
+	return reinterpret_cast<const T *>(const_data_ptr_cast(segment) + sizeof(ListSegment) +
+	                                   segment->capacity * sizeof(bool));
 }
 
 //===--------------------------------------------------------------------===//
@@ -38,21 +39,23 @@ static data_ptr_t AllocateListData(Allocator &allocator, uint16_t capacity) {
 }
 
 static uint64_t *GetListLengthData(ListSegment *segment) {
-	return reinterpret_cast<uint64_t *>(data_ptr_cast(segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
+	return reinterpret_cast<uint64_t *>(data_ptr_cast(segment) + sizeof(ListSegment) +
+	                                    segment->capacity * sizeof(bool));
 }
 
 static const uint64_t *GetListLengthData(const ListSegment *segment) {
-	return reinterpret_cast<const uint64_t *>(const_data_ptr_cast(segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
+	return reinterpret_cast<const uint64_t *>(const_data_ptr_cast(segment) + sizeof(ListSegment) +
+	                                          segment->capacity * sizeof(bool));
 }
 
 static const LinkedList *GetListChildData(const ListSegment *segment) {
 	return reinterpret_cast<const LinkedList *>(const_data_ptr_cast(segment) + sizeof(ListSegment) +
-	                      segment->capacity * (sizeof(bool) + sizeof(uint64_t)));
+	                                            segment->capacity * (sizeof(bool) + sizeof(uint64_t)));
 }
 
 static LinkedList *GetListChildData(ListSegment *segment) {
 	return reinterpret_cast<LinkedList *>(data_ptr_cast(segment) + sizeof(ListSegment) +
-	                      segment->capacity * (sizeof(bool) + sizeof(uint64_t)));
+	                                      segment->capacity * (sizeof(bool) + sizeof(uint64_t)));
 }
 
 //===--------------------------------------------------------------------===//
@@ -67,11 +70,13 @@ static data_ptr_t AllocateStructData(Allocator &allocator, uint16_t capacity, id
 }
 
 static ListSegment **GetStructData(ListSegment *segment) {
-	return reinterpret_cast<ListSegment **>(data_ptr_cast(segment) + + sizeof(ListSegment) + segment->capacity * sizeof(bool));
+	return reinterpret_cast<ListSegment **>(data_ptr_cast(segment) + +sizeof(ListSegment) +
+	                                        segment->capacity * sizeof(bool));
 }
 
-static const ListSegment * const * GetStructData(const ListSegment *segment) {
-	return reinterpret_cast<const ListSegment * const *>(const_data_ptr_cast(segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
+static const ListSegment *const *GetStructData(const ListSegment *segment) {
+	return reinterpret_cast<const ListSegment *const *>(const_data_ptr_cast(segment) + sizeof(ListSegment) +
+	                                                    segment->capacity * sizeof(bool));
 }
 
 static bool *GetNullMask(ListSegment *segment) {
@@ -148,7 +153,8 @@ void DestroyListSegment(const ListSegmentFunctions &functions, ListSegment *segm
 static ListSegment *CreateStructSegment(const ListSegmentFunctions &functions, Allocator &allocator,
                                         uint16_t capacity) {
 	// allocate data and set header
-	auto segment = reinterpret_cast<ListSegment *>(AllocateStructData(allocator, capacity, functions.child_functions.size()));
+	auto segment =
+	    reinterpret_cast<ListSegment *>(AllocateStructData(allocator, capacity, functions.child_functions.size()));
 	segment->capacity = capacity;
 	segment->count = 0;
 	segment->next = nullptr;

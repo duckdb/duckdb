@@ -338,8 +338,8 @@ public:
 
 		D_ASSERT(current_segment->count == index_buffer.size());
 		BitpackingPrimitives::PackBuffer<sel_t, false>(base_ptr + compressed_index_buffer_offset,
-		                                               reinterpret_cast<uint32_t *>(index_buffer.data()), current_segment->count,
-		                                               current_width);
+		                                               reinterpret_cast<uint32_t *>(index_buffer.data()),
+		                                               current_segment->count, current_width);
 
 		// Write the fsst symbol table or nothing
 		if (fsst_encoder != nullptr) {
@@ -522,8 +522,8 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment)
 	auto base_ptr = state->handle.Ptr() + segment.GetBlockOffset();
 
 	state->duckdb_fsst_decoder = make_buffer<duckdb_fsst_decoder_t>();
-	auto retval = ParseFSSTSegmentHeader(base_ptr, reinterpret_cast<duckdb_fsst_decoder_t *>(state->duckdb_fsst_decoder.get()),
-	                                     &state->current_width);
+	auto retval = ParseFSSTSegmentHeader(
+	    base_ptr, reinterpret_cast<duckdb_fsst_decoder_t *>(state->duckdb_fsst_decoder.get()), &state->current_width);
 	if (!retval) {
 		state->duckdb_fsst_decoder = nullptr;
 	}
@@ -617,8 +617,8 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 			    dict, baseptr, delta_decode_buffer[i + offsets.unused_delta_decoded_values]);
 
 			if (str_len > 0) {
-				result_data[i + result_offset] = FSSTPrimitives::DecompressValue(
-				    scan_state.duckdb_fsst_decoder.get(), result, str_ptr, str_len);
+				result_data[i + result_offset] =
+				    FSSTPrimitives::DecompressValue(scan_state.duckdb_fsst_decoder.get(), result, str_ptr, str_len);
 			} else {
 				result_data[i + result_offset] = string_t(nullptr, 0);
 			}
@@ -668,8 +668,8 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 		string_t compressed_string = UncompressedStringStorage::FetchStringFromDict(
 		    segment, dict, result, base_ptr, delta_decode_buffer[offsets.unused_delta_decoded_values], string_length);
 
-		result_data[result_idx] = FSSTPrimitives::DecompressValue(
-		    (void *)&decoder, result, compressed_string.GetData(), compressed_string.GetSize());
+		result_data[result_idx] = FSSTPrimitives::DecompressValue((void *)&decoder, result, compressed_string.GetData(),
+		                                                          compressed_string.GetSize());
 	} else {
 		// There's no fsst symtable, this only happens for empty strings or nulls, we can just emit an empty string
 		result_data[result_idx] = string_t(nullptr, 0);

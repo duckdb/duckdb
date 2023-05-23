@@ -55,7 +55,7 @@ public:
 #else
 			memset(value.pointer.prefix, 0, PREFIX_BYTES);
 #endif
-			value.pointer.ptr = (char *) data; // NOLINT
+			value.pointer.ptr = (char *)data; // NOLINT
 		}
 	}
 	string_t(const char *data) : string_t(data, strlen(data)) { // NOLINT: Allow implicit conversion from `const char*`
@@ -76,7 +76,7 @@ public:
 	}
 
 	char *GetDataWriteable() const {
-		return IsInlined() ? (char *) value.inlined.inlined : value.pointer.ptr; // NOLINT
+		return IsInlined() ? (char *)value.inlined.inlined : value.pointer.ptr; // NOLINT
 	}
 
 	const char *GetPrefix() const {

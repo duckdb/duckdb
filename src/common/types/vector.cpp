@@ -455,9 +455,8 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			throw InternalException("FSST Vector with non-string datatype found!");
 		}
 		auto str_compressed = reinterpret_cast<string_t *>(data)[index];
-		Value result =
-		    FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
-		                                   str_compressed.GetData(), str_compressed.GetSize());
+		Value result = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
+		                                               str_compressed.GetData(), str_compressed.GetSize());
 		return result;
 	}
 
@@ -638,8 +637,7 @@ string Vector::ToString(idx_t count) const {
 		for (idx_t i = 0; i < count; i++) {
 			string_t compressed_string = reinterpret_cast<string_t *>(data)[i];
 			Value val = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(const_cast<Vector &>(*this)),
-			                                            compressed_string.GetData(),
-			                                            compressed_string.GetSize());
+			                                            compressed_string.GetData(), compressed_string.GetSize());
 			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
 		}
 	} break;
@@ -983,7 +981,8 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 			auto row_idx = vdata.sel->get_index(i);
 			flat_mask.Set(i, vdata.validity.RowIsValid(row_idx));
 		}
-		serializer.WriteProperty("validity", const_data_ptr_cast(flat_mask.GetData()), flat_mask.ValidityMaskSize(count));
+		serializer.WriteProperty("validity", const_data_ptr_cast(flat_mask.GetData()),
+		                         flat_mask.ValidityMaskSize(count));
 	}
 	if (TypeIsConstantSize(logical_type.InternalType())) {
 		// constant size type: simple copy
@@ -1723,9 +1722,8 @@ void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offs
 		auto target_idx = dst_offset + i;
 		string_t compressed_string = ldata[source_idx];
 		if (dst_mask.RowIsValid(target_idx) && compressed_string.GetSize() > 0) {
-			tdata[target_idx] = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(src), dst,
-			                                                   compressed_string.GetData(),
-			                                                    compressed_string.GetSize());
+			tdata[target_idx] = FSSTPrimitives::DecompressValue(
+			    FSSTVector::GetDecoder(src), dst, compressed_string.GetData(), compressed_string.GetSize());
 		} else {
 			tdata[target_idx] = string_t(nullptr, 0);
 		}

@@ -51,7 +51,7 @@ public:
 	                                             const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define,
 	                                             idx_t max_repeat);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
-	virtual idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
+	virtual idx_t Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out, data_ptr_t repeat_out,
 	                   Vector &result_out);
 
 	virtual void Skip(idx_t num_values);

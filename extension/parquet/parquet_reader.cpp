@@ -58,7 +58,7 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
 	auto proto = CreateThriftProtocol(allocator, file_handle, false);
-	auto &transport = ((ThriftFileTransport &)*proto->getTransport());
+	auto &transport = reinterpret_cast<ThriftFileTransport &>(*proto->getTransport());
 	auto file_size = transport.GetSize();
 	if (file_size < 12) {
 		throw InvalidInputException("File '%s' too small to be a Parquet file", file_handle.path);
@@ -71,11 +71,11 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	transport.SetLocation(file_size - 8);
 	transport.read((uint8_t *)buf.ptr, 8);
 
-	if (strncmp(buf.ptr + 4, "PAR1", 4) != 0) {
+	if (memcmp(buf.ptr + 4, "PAR1", 4) != 0) {
 		throw InvalidInputException("No magic bytes found at end of file '%s'", file_handle.path);
 	}
 	// read four-byte footer length from just before the end magic bytes
-	auto footer_len = *(uint32_t *)buf.ptr;
+	auto footer_len = *reinterpret_cast<uint32_t *>(buf.ptr);
 	if (footer_len <= 0 || file_size < 12 + footer_len) {
 		throw InvalidInputException("Footer length error in file '%s'", file_handle.path);
 	}

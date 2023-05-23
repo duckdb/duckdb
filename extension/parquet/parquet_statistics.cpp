@@ -123,21 +123,17 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 			}
 			switch (type.InternalType()) {
 			case PhysicalType::INT16:
-				return Value::DECIMAL(
-				    ParquetDecimalUtils::ReadDecimalValue<int16_t>(stats_data, stats.size()),
-				    width, scale);
+				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<int16_t>(stats_data, stats.size()), width,
+				                      scale);
 			case PhysicalType::INT32:
-				return Value::DECIMAL(
-				    ParquetDecimalUtils::ReadDecimalValue<int32_t>(stats_data, stats.size()),
-				    width, scale);
+				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<int32_t>(stats_data, stats.size()), width,
+				                      scale);
 			case PhysicalType::INT64:
-				return Value::DECIMAL(
-				    ParquetDecimalUtils::ReadDecimalValue<int64_t>(stats_data, stats.size()),
-				    width, scale);
+				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<int64_t>(stats_data, stats.size()), width,
+				                      scale);
 			case PhysicalType::INT128:
-				return Value::DECIMAL(
-				    ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size()),
-				    width, scale);
+				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size()), width,
+				                      scale);
 			default:
 				throw InternalException("Unsupported internal type for decimal");
 			}

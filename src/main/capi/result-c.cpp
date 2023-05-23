@@ -266,7 +266,7 @@ duckdb_state duckdb_translate_result(unique_ptr<QueryResult> result_p, duckdb_re
 
 	if (result.HasError()) {
 		// write the error message
-		out->__deprecated_error_message = (char *) result.GetError().c_str(); // NOLINT
+		out->__deprecated_error_message = (char *)result.GetError().c_str(); // NOLINT
 		return DuckDBError;
 	}
 	// copy the data
@@ -317,7 +317,7 @@ bool deprecated_materialize_result(duckdb_result *result) {
 	memset(result->__deprecated_columns, 0, sizeof(duckdb_column) * column_count);
 	for (idx_t i = 0; i < column_count; i++) {
 		result->__deprecated_columns[i].__deprecated_type = ConvertCPPTypeToC(result_data->result->types[i]);
-		result->__deprecated_columns[i].__deprecated_name = (char *) result_data->result->names[i].c_str(); // NOLINT
+		result->__deprecated_columns[i].__deprecated_name = (char *)result_data->result->names[i].c_str(); // NOLINT
 	}
 	result->__deprecated_row_count = materialized.RowCount();
 	if (result->__deprecated_row_count > 0 &&

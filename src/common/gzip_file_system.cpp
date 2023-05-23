@@ -193,7 +193,7 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 		throw IOException("Failed to decode gzip stream: %s", duckdb_miniz::mz_error(ret));
 	}
 	// update pointers following inflate()
-	sd.in_buff_start = (data_ptr_t) mz_stream_ptr->next_in;      // NOLINT
+	sd.in_buff_start = (data_ptr_t)mz_stream_ptr->next_in; // NOLINT
 	sd.in_buff_end = sd.in_buff_start + mz_stream_ptr->avail_in;
 	sd.out_buff_end = data_ptr_cast(mz_stream_ptr->next_out);
 	D_ASSERT(sd.out_buff_end + mz_stream_ptr->avail_out == sd.out_buff.get() + sd.out_buf_size);

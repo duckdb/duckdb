@@ -554,7 +554,7 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);
 	auto dict = DictionaryCompressionStorage::GetDictionary(segment, handle);
 	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_offset));
-	auto width = (bitpacking_width_t) Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width));
+	auto width = (bitpacking_width_t)Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width));
 	auto index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
 	auto base_data = data_ptr_cast(baseptr + DICTIONARY_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);

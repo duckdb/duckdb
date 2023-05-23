@@ -121,7 +121,8 @@ inline uint64_t TemplatedHash(const T &elem) {
 
 template <>
 inline uint64_t TemplatedHash(const hugeint_t &elem) {
-	return TemplatedHash<uint64_t>(Load<uint64_t>(const_data_ptr_cast(&elem.upper))) ^ TemplatedHash<uint64_t>(elem.lower);
+	return TemplatedHash<uint64_t>(Load<uint64_t>(const_data_ptr_cast(&elem.upper))) ^
+	       TemplatedHash<uint64_t>(elem.lower);
 }
 
 template <idx_t rest>

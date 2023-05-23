@@ -19,9 +19,9 @@ namespace duckdb {
 class ByteBuffer { // on to the 10 thousandth impl
 public:
 	ByteBuffer() {};
-	ByteBuffer(char *ptr, uint64_t len) : ptr(ptr), len(len) {};
+	ByteBuffer(data_ptr_t ptr, uint64_t len) : ptr(ptr), len(len) {};
 
-	char *ptr = nullptr;
+	data_ptr_t ptr = nullptr;
 	uint64_t len = 0;
 
 public:
@@ -41,7 +41,7 @@ public:
 	template <class T>
 	T get() {
 		available(sizeof(T));
-		T val = Load<T>(data_ptr_cast(ptr));
+		T val = Load<T>(ptr);
 		return val;
 	}
 
@@ -58,10 +58,6 @@ public:
 		if (req_len > len) {
 			throw std::runtime_error("Out of buffer");
 		}
-	}
-
-	uint8_t *Uint8Ptr() {
-		return reinterpret_cast<uint8_t *>(ptr);
 	}
 };
 
@@ -80,7 +76,7 @@ public:
 		if (new_size > alloc_len) {
 			alloc_len = NextPowerOfTwo(new_size);
 			allocated_data = allocator.Allocate(alloc_len);
-			ptr = (char *)allocated_data.get();
+			ptr = allocated_data.get();
 		}
 	}
 

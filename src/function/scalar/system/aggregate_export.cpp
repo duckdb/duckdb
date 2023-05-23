@@ -145,11 +145,13 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 			continue;
 		}
 		if (state0_data.validity.RowIsValid(state0_idx) && !state1_data.validity.RowIsValid(state1_idx)) {
-			result_ptr[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(state0.GetData()), bind_data.state_size);
+			result_ptr[i] =
+			    StringVector::AddStringOrBlob(result, const_char_ptr_cast(state0.GetData()), bind_data.state_size);
 			continue;
 		}
 		if (!state0_data.validity.RowIsValid(state0_idx) && state1_data.validity.RowIsValid(state1_idx)) {
-			result_ptr[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(state1.GetData()), bind_data.state_size);
+			result_ptr[i] =
+			    StringVector::AddStringOrBlob(result, const_char_ptr_cast(state1.GetData()), bind_data.state_size);
 			continue;
 		}
 
@@ -165,8 +167,8 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 		AggregateInputData aggr_input_data(nullptr, Allocator::DefaultAllocator());
 		bind_data.aggr.combine(local_state.state_vector0, local_state.state_vector1, aggr_input_data, 1);
 
-		result_ptr[i] =
-		    StringVector::AddStringOrBlob(result, const_char_ptr_cast(local_state.state_buffer1.get()), bind_data.state_size);
+		result_ptr[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(local_state.state_buffer1.get()),
+		                                              bind_data.state_size);
 	}
 }
 
