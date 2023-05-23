@@ -27,7 +27,7 @@ class FileOpener;
 
 struct PreparedRowGroup {
 	duckdb_parquet::format::RowGroup row_group;
-	vector<duckdb::unique_ptr<ColumnWriterState>> states;
+	vector<unique_ptr<ColumnWriterState>> states;
 };
 
 class ParquetWriter {
@@ -63,12 +63,12 @@ private:
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec;
 
-	duckdb::unique_ptr<BufferedFileWriter> writer;
+	unique_ptr<BufferedFileWriter> writer;
 	shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
 	duckdb_parquet::format::FileMetaData file_meta_data;
 	std::mutex lock;
 
-	vector<duckdb::unique_ptr<ColumnWriter>> column_writers;
+	vector<unique_ptr<ColumnWriter>> column_writers;
 };
 
 } // namespace duckdb

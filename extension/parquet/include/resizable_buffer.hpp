@@ -65,16 +65,16 @@ class ResizeableBuffer : public ByteBuffer {
 public:
 	ResizeableBuffer() {
 	}
-	ResizeableBuffer(Allocator &allocator, uint64_t new_size, bool next_power_of_two = true) {
-		resize(allocator, new_size, next_power_of_two);
+	ResizeableBuffer(Allocator &allocator, uint64_t new_size) {
+		resize(allocator, new_size);
 	}
-	void resize(Allocator &allocator, uint64_t new_size, bool next_power_of_two = true) {
+	void resize(Allocator &allocator, uint64_t new_size) {
 		len = new_size;
 		if (new_size == 0) {
 			return;
 		}
 		if (new_size > alloc_len) {
-			alloc_len = next_power_of_two ? NextPowerOfTwo(new_size) : AlignValue(new_size);
+			alloc_len = NextPowerOfTwo(new_size);
 			allocated_data = allocator.Allocate(alloc_len);
 			ptr = (char *)allocated_data.get();
 		}

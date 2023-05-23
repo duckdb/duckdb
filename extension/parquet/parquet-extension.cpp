@@ -66,8 +66,6 @@ struct ParquetReadBindData : public TableFunctionData {
 };
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
-	explicit ParquetReadLocalState(Allocator &allocator) : scan_state(allocator) {
-	}
 	shared_ptr<ParquetReader> reader;
 	ParquetReaderScanState scan_state;
 	bool is_parallel;
@@ -331,7 +329,7 @@ public:
 		auto &bind_data = input.bind_data->Cast<ParquetReadBindData>();
 		auto &gstate = gstate_p->Cast<ParquetReadGlobalState>();
 
-		auto result = make_uniq<ParquetReadLocalState>(BufferAllocator::Get(context.client));
+		auto result = make_uniq<ParquetReadLocalState>();
 		result->is_parallel = true;
 		result->batch_index = 0;
 		if (input.CanRemoveFilterColumns()) {
