@@ -1155,9 +1155,8 @@ ParserOptions ClientContext::GetParserOptions() const {
 }
 
 ClientProperties ClientContext::GetClientProperties() const {
-	ClientProperties properties;
-	properties.time_zone = ClientConfig::GetConfig(*this).ExtractTimezone();
-	return properties;
+	auto client_context = ClientConfig::GetConfig(*this);
+	return {client_context.ExtractTimezone(), client_context.GetArrowBufferSizeConfig()};
 }
 
 bool ClientContext::ExecutionIsFinished() {
