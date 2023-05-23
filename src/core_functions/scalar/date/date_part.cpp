@@ -354,6 +354,18 @@ struct DatePart {
 		}
 	};
 
+	struct EpochMicrosecondsOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			return input.micros;
+		}
+
+		template <class T>
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateDatePartStatistics<T, EpochMicrosecondsOperator>(input.child_stats);
+		}
+	};
+
 	struct MicrosecondsOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
@@ -795,6 +807,22 @@ int64_t DatePart::YearWeekOperator::Operation(interval_t input) {
 template <>
 int64_t DatePart::YearWeekOperator::Operation(dtime_t input) {
 	throw NotImplementedException("\"time\" units \"yearweek\" not recognized");
+}
+
+template <>
+int64_t DatePart::EpochMicrosecondsOperator::Operation(timestamp_t input) {
+	return input.value;
+}
+
+template <>
+int64_t DatePart::EpochMicrosecondsOperator::Operation(date_t input) {
+	return input.days * Interval::MICROS_PER_DAY;
+}
+
+template <>
+int64_t DatePart::EpochMicrosecondsOperator::Operation(interval_t input) {
+	//	This is a bit cheesy but we often produce intervals with only µs
+	return (input.months * Interval::DAYS_PER_MONTH + input.days) * Interval::MICROS_PER_DAY + input.micros;
 }
 
 template <>
@@ -1464,6 +1492,18 @@ ScalarFunctionSet TimezoneMinuteFun::GetFunctions() {
 
 ScalarFunctionSet EpochFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::EpochOperator>();
+}
+
+ScalarFunctionSet EpochMicrosecondsFun::GetFunctions() {
+	using OP = DatePart::EpochMicrosecondsOperator;
+	auto operator_set = GetTimePartFunction<OP>();
+
+	//	TIMESTAMP WITH TIME ZONE has the same representation as TIMESTAMP so no need to defer to ICU
+	auto tstz_func = DatePart::UnaryFunction<timestamp_t, int64_t, OP>;
+	auto tstz_stats = OP::template PropagateStatistics<timestamp_t>;
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, tstz_func, nullptr, nullptr, tstz_stats));
+	return operator_set;
 }
 
 ScalarFunctionSet MicrosecondsFun::GetFunctions() {

@@ -20,7 +20,8 @@ enum class JoinRefType : uint8_t {
 	NATURAL,    // Implied conditions
 	CROSS,      // No condition
 	POSITIONAL, // Positional condition
-	ASOF        // AsOf conditions
+	ASOF,       // AsOf conditions
+	DEPENDENT,  // Dependent join conditions
 };
 
 const char *ToString(JoinRefType value);

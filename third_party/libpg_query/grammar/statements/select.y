@@ -2632,7 +2632,7 @@ d_expr:		columnref								{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *) n;
 				}
-			| '$' named_param
+			| '$' ColLabel
 				{
 					$$ = makeNamedParamRef($2, @1);
 				}
@@ -4003,5 +4003,3 @@ param_name:	type_function_name
 ColLabelOrString:	ColLabel						{ $$ = $1; }
 					| SCONST						{ $$ = $1; }
 		;
-
-named_param: IDENT { $$ = $1; }

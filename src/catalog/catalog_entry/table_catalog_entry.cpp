@@ -206,6 +206,7 @@ const vector<unique_ptr<Constraint>> &TableCatalogEntry::GetConstraints() {
 	return constraints;
 }
 
+// LCOV_EXCL_START
 DataTable &TableCatalogEntry::GetStorage() {
 	throw InternalException("Calling GetStorage on a TableCatalogEntry that is not a DuckTableEntry");
 }
@@ -213,4 +214,6 @@ DataTable &TableCatalogEntry::GetStorage() {
 const vector<unique_ptr<BoundConstraint>> &TableCatalogEntry::GetBoundConstraints() {
 	throw InternalException("Calling GetBoundConstraints on a TableCatalogEntry that is not a DuckTableEntry");
 }
+// LCOV_EXCL_STOP
+
 } // namespace duckdb
