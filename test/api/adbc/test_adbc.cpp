@@ -48,10 +48,10 @@ public:
 	}
 
 	ArrowArrayStream &Query(const string &query) {
-		//		if (arrow_stream.release) {
-		//			arrow_stream.release(&arrow_stream);
-		//			arrow_stream.release = nullptr;
-		//		}
+		if (arrow_stream.release) {
+			arrow_stream.release(&arrow_stream);
+			arrow_stream.release = nullptr;
+		}
 		REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 		REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error)));
 		int64_t rows_affected;
@@ -309,7 +309,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	ADBCTestDatabase db;
 
 	// Create Arrow Result
-	auto input_data = db.Query("SELECT 42");
+	auto &input_data = db.Query("SELECT 42");
 	string table_name = "test";
 	string query = "select count(*) from test";
 
@@ -357,7 +357,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement_2, &arrow_stream, &rows_affected, &adbc_error)));
 
 	arrow_stream.get_next(&arrow_stream, &arrow_array);
-	REQUIRE(((int64_t *)arrow_array.children[0])[0] == 1);
+	REQUIRE(((int64_t *)arrow_array.children[0]->buffers[1])[0] == 1);
 	// Release the boys
 	arrow_array.release(&arrow_array);
 	arrow_stream.release(&arrow_stream);
@@ -365,7 +365,7 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	// Now lets insert with Auto-Commit Off
 	REQUIRE(SUCCESS(AdbcConnectionSetOption(&adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
 	                                        ADBC_OPTION_VALUE_DISABLED, &adbc_error)));
-	input_data = db.Query("SELECT 42");
+	input_data = db.Query("SELECT 42;");
 
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 
@@ -381,12 +381,22 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement_2, &arrow_stream, &rows_affected, &adbc_error)));
 
 	arrow_stream.get_next(&arrow_stream, &arrow_array);
-	REQUIRE(((int64_t *)arrow_array.children[0])[0] == 1);
+	REQUIRE(((int64_t *)arrow_array.children[0]->buffers[1])[0] == 1);
 	arrow_array.release(&arrow_array);
 	arrow_stream.release(&arrow_stream);
 
-	// Now if we do a commit on the first connection this should be 2
+	// If we check from con1, we should have 2
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream, &rows_affected, &adbc_error)));
 
+	arrow_stream.get_next(&arrow_stream, &arrow_array);
+	REQUIRE(((int64_t *)arrow_array.children[0]->buffers[1])[0] == 2);
+	arrow_array.release(&arrow_array);
+	arrow_stream.release(&arrow_stream);
+
+	// Now if we do a commit on the first connection this should be 2 on the second connection
 	REQUIRE(SUCCESS(AdbcConnectionCommit(&adbc_connection, &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
@@ -394,18 +404,90 @@ TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement_2, &arrow_stream, &rows_affected, &adbc_error)));
 
 	arrow_stream.get_next(&arrow_stream, &arrow_array);
-	REQUIRE(((int64_t *)arrow_array.children[0])[0] == 2);
+	REQUIRE(((int64_t *)arrow_array.children[0]->buffers[1])[0] == 2);
 	arrow_array.release(&arrow_array);
 	arrow_stream.release(&arrow_stream);
 
 	// Lets do a rollback
+	input_data = db.Query("SELECT 42;");
+
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+
+	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE,
+	                                                table_name.c_str(), &adbc_error)));
+
+	REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+
+	REQUIRE(SUCCESS(duckdb_adbc::StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
+
+	// If we check from con1, we should have 3
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream, &rows_affected, &adbc_error)));
+
+	arrow_stream.get_next(&arrow_stream, &arrow_array);
+	REQUIRE(((int64_t *)arrow_array.children[0]->buffers[1])[0] == 3);
+	arrow_array.release(&arrow_array);
+	arrow_stream.release(&arrow_stream);
+
+	// If we check from con2 we should 2
+
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement_2, query.c_str(), &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement_2, &arrow_stream, &rows_affected, &adbc_error)));
+
+	arrow_stream.get_next(&arrow_stream, &arrow_array);
+	REQUIRE(((int64_t *)arrow_array.children[0]->buffers[1])[0] == 2);
+	arrow_array.release(&arrow_array);
+	arrow_stream.release(&arrow_stream);
+
+	// If we rollback con1, we should now have two again on con1
+	REQUIRE(SUCCESS(AdbcConnectionRollback(&adbc_connection, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream, &rows_affected, &adbc_error)));
+
+	arrow_stream.get_next(&arrow_stream, &arrow_array);
+	REQUIRE(((int64_t *)arrow_array.children[0]->buffers[1])[0] == 2);
+	arrow_array.release(&arrow_array);
+	arrow_stream.release(&arrow_stream);
 
 	// Let's change the Auto commit config mid-transaction
+	input_data = db.Query("SELECT 42;");
 
-	//
-	//
-	//
-	//
-	//
-	//
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+
+	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE,
+	                                                table_name.c_str(), &adbc_error)));
+
+	REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+
+	REQUIRE(SUCCESS(duckdb_adbc::StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionSetOption(&adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+	                                        ADBC_OPTION_VALUE_ENABLED, &adbc_error)));
+
+	// Now Both con1 and con2 should have 3
+
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection_2, &adbc_statement_2, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement_2, query.c_str(), &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement_2, &arrow_stream, &rows_affected, &adbc_error)));
+
+	arrow_stream.get_next(&arrow_stream, &arrow_array);
+	REQUIRE(((int64_t *)arrow_array.children[0]->buffers[1])[0] == 3);
+	arrow_array.release(&arrow_array);
+	arrow_stream.release(&arrow_stream);
+
+	REQUIRE(SUCCESS(AdbcStatementRelease(&adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream, &rows_affected, &adbc_error)));
+
+	arrow_stream.get_next(&arrow_stream, &arrow_array);
+	REQUIRE(((int64_t *)arrow_array.children[0]->buffers[1])[0] == 3);
+	arrow_array.release(&arrow_array);
+	arrow_stream.release(&arrow_stream);
 }

@@ -199,7 +199,7 @@ AdbcStatusCode ConnectionSetOption(struct AdbcConnection *connection, const char
 				// no-op
 			} else {
 				// begin
-				AdbcStatusCode status = ExecuteQuery(conn, "BEGIN", error);
+				AdbcStatusCode status = ExecuteQuery(conn, "START TRANSACTION", error);
 				if (status != ADBC_STATUS_OK) {
 					return status;
 				}
@@ -246,7 +246,7 @@ AdbcStatusCode ConnectionCommit(struct AdbcConnection *connection, struct AdbcEr
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
-	return ExecuteQuery(conn, "BEGIN", error);
+	return ExecuteQuery(conn, "START TRANSACTION", error);
 }
 
 AdbcStatusCode ConnectionRollback(struct AdbcConnection *connection, struct AdbcError *error) {
@@ -264,7 +264,7 @@ AdbcStatusCode ConnectionRollback(struct AdbcConnection *connection, struct Adbc
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
-	return ExecuteQuery(conn, "BEGIN", error);
+	return ExecuteQuery(conn, "START TRANSACTION", error);
 }
 
 AdbcStatusCode ConnectionInit(struct AdbcConnection *connection, struct AdbcDatabase *database,
@@ -372,16 +372,14 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, stru
 	auto cconn = (duckdb::Connection *)connection;
 
 	auto has_table = cconn->TableInfo(table_name);
-	auto arrow_scan = cconn
-		    ->TableFunction("arrow_scan",
-		                    {duckdb::Value::POINTER((uintptr_t)input),
-		                     duckdb::Value::POINTER((uintptr_t)stream_produce),
-		                     duckdb::Value::POINTER((uintptr_t)get_schema)});
+	auto arrow_scan = cconn->TableFunction("arrow_scan", {duckdb::Value::POINTER((uintptr_t)input),
+	                                                      duckdb::Value::POINTER((uintptr_t)stream_produce),
+	                                                      duckdb::Value::POINTER((uintptr_t)get_schema)});
 	try {
-		if (!has_table){
+		if (!has_table) {
 			// We create the table based on an Arrow Scanner
 			arrow_scan->Create(table_name);
-		} else{
+		} else {
 			arrow_scan->CreateView("temp_adbc_view", true, true);
 			auto query = "insert into " + std::string(table_name) + " select * from temp_adbc_view";
 			auto result = cconn->Query(query);
