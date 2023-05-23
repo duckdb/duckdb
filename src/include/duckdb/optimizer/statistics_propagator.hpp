@@ -99,8 +99,6 @@ private:
 	unique_ptr<BaseStatistics> PropagateExpression(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr);
 
-	void PropagateAndCompress(unique_ptr<Expression> &expr, unique_ptr<BaseStatistics> &stats);
-
 	void ReplaceWithEmptyResult(unique_ptr<LogicalOperator> &node);
 
 	bool ExpressionIsConstant(Expression &expr, const Value &val);
