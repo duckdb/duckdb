@@ -4,6 +4,7 @@
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/catalog/default/builtin_types/types.hpp"
 
 namespace duckdb {
 
@@ -85,13 +86,7 @@ static DefaultType internal_types[] = {{"int", LogicalTypeId::INTEGER},
                                        {nullptr, LogicalTypeId::INVALID}};
 
 LogicalTypeId DefaultTypeGenerator::GetDefaultType(const string &name) {
-	auto lower_str = StringUtil::Lower(name);
-	for (idx_t index = 0; internal_types[index].name != nullptr; index++) {
-		if (internal_types[index].name == lower_str) {
-			return internal_types[index].type;
-		}
-	}
-	return LogicalTypeId::INVALID;
+	return GetBuiltinType(name);
 }
 
 DefaultTypeGenerator::DefaultTypeGenerator(Catalog &catalog, SchemaCatalogEntry &schema)

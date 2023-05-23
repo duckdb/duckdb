@@ -10,7 +10,11 @@ parser.add_argument('--uncovered_files', action='store',
 parser.add_argument('--directory', help='Directory of generated HTML files', action='store', default='coverage_html')
 parser.add_argument('--fix', help='Fill up the uncovered_files.csv with all files', action='store_true', default=False)
 
+
 args = parser.parse_args()
+if not os.path.exists(args.directory):
+	print(f"The provided directory ({args.directory}) does not exist, please create it first")
+	exit(1)
 
 covered_regex = '<a name="(\d+)">[ \t\n]*<span class="lineNum">[ \t\n0-9]+</span><span class="{COVERED_CLASS}">[ \t\n0-9]+:([^<]+)'
 

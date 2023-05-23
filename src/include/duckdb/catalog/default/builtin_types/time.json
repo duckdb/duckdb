@@ -1,0 +1,49 @@
+[
+    {
+        "id": "TIME",
+        "names": [
+            "time"
+        ],
+        "description": "time of day (no time zone)",
+        "min": null,
+        "max": null
+    },
+    {
+        "id": "DATE",
+        "names": [
+            "date"
+        ],
+        "description": "calendar date (year, month day)",
+        "min": null,
+        "max": null
+    },
+    {
+        "id": "TIMESTAMP",
+        "names": [
+            "timestamp",
+            "datetime",
+            "timestamp_us"
+        ],
+        "description": "combination of time and date (nanosecond precision)",
+        "min": null,
+        "max": null
+    },
+    {
+        "id": "TIMESTAMP_MS",
+        "names": [
+            "timestamp_ms"
+        ],
+        "description": "combination of time and date",
+        "min": null,
+        "max": null
+    },
+    {
+        "id": "TIMESTAMP_NS",
+        "names": [
+            "timestamp_ns"
+        ],
+        "description": "combination of time and date",
+        "min": null,
+        "max": null
+    }
+]

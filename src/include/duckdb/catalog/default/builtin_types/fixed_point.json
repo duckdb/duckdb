@@ -1,0 +1,13 @@
+[
+    {
+        "id": "DECIMAL",
+        "names": [
+			"decimal",
+            "dec",
+            "numeric"
+        ],
+        "description": "exact fixed-point decimal value",
+        "min": null,
+        "max": null
+    }
+]

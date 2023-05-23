@@ -1,0 +1,101 @@
+[
+    {
+        "id": "HUGEINT",
+        "names": [
+            "hugeint",
+            "int128"
+        ],
+        "description": "signed sixteen-byte integer",
+        "min": -170141183460469231731687303715884105727,
+        "max": 170141183460469231731687303715884105727
+    },
+    {
+        "id": "BIGINT",
+        "names": [
+            "bigint",
+            "oid",
+            "long",
+            "int8",
+            "int64"
+        ],
+        "description": "signed eight-byte integer",
+        "min": -9223372036854775808,
+        "max": 9223372036854775807
+    },
+    {
+        "id": "UBIGINT",
+        "names": [
+            "ubigint",
+            "uint64"
+        ],
+        "description": "unsigned eight-byte integer",
+        "min": 0,
+        "max": 18446744073709551615
+    },
+    {
+        "id": "INTEGER",
+        "names": [
+            "integer",
+            "int",
+            "int4",
+            "signed",
+            "integral",
+            "int32"
+        ],
+        "description": "signed four-byte integer",
+        "min": -2147483648,
+        "max": 2147483647
+    },
+    {
+        "id": "UINTEGER",
+        "names": [
+            "uinteger",
+            "uint32"
+        ],
+        "description": "unsigned four-byte integer",
+        "min": 0,
+        "max": 4294967295
+    },
+    {
+        "id": "SMALLINT",
+        "names": [
+            "smallint",
+            "int2",
+            "short",
+            "int16"
+        ],
+        "description": "signed two-byte integer",
+        "min": -32768,
+        "max": 32767
+    },
+    {
+        "id": "USMALLINT",
+        "names": [
+            "usmallint",
+            "uint16"
+        ],
+        "description": "unsigned two-byte integer",
+        "min": 0,
+        "max": 65535
+    },
+    {
+        "id": "TINYINT",
+        "names": [
+            "tinyint",
+            "int1"
+        ],
+        "description": "signed one-byte integer",
+        "min": -128,
+        "max": 127
+    },
+    {
+        "id": "UTINYINT",
+        "names": [
+            "utinyint",
+            "uint8"
+        ],
+        "description": "unsigned one-byte integer",
+        "min": 0,
+        "max": 255
+    }
+]
