@@ -162,18 +162,18 @@ struct StringConvert {
 		// based on the max codepoint, we construct the result string
 		auto result = PyUnicode_New(start_pos + codepoint_count, max_codepoint);
 		// based on the resulting unicode kind, we fill in the code points
-		auto kind = PyUnicode_KIND(result);
+		auto kind = PyUtil::PyUnicodeKind(result);
 		switch (kind) {
 		case PyUnicode_1BYTE_KIND:
-			ConvertUnicodeValueTemplated<Py_UCS1>(PyUnicode_1BYTE_DATA(result), codepoints, codepoint_count, data,
+			ConvertUnicodeValueTemplated<Py_UCS1>(PyUtil::PyUnicode1ByteData(result), codepoints, codepoint_count, data,
 			                                      start_pos);
 			break;
 		case PyUnicode_2BYTE_KIND:
-			ConvertUnicodeValueTemplated<Py_UCS2>(PyUnicode_2BYTE_DATA(result), codepoints, codepoint_count, data,
+			ConvertUnicodeValueTemplated<Py_UCS2>(PyUtil::PyUnicode2ByteData(result), codepoints, codepoint_count, data,
 			                                      start_pos);
 			break;
 		case PyUnicode_4BYTE_KIND:
-			ConvertUnicodeValueTemplated<Py_UCS4>(PyUnicode_4BYTE_DATA(result), codepoints, codepoint_count, data,
+			ConvertUnicodeValueTemplated<Py_UCS4>(PyUtil::PyUnicode4ByteData(result), codepoints, codepoint_count, data,
 			                                      start_pos);
 			break;
 		default:
@@ -186,7 +186,7 @@ struct StringConvert {
 	static PyObject *ConvertValue(string_t val) {
 		// we could use PyUnicode_FromStringAndSize here, but it does a lot of verification that we don't need
 		// because of that it is a lot slower than it needs to be
-		auto data = (uint8_t *)val.GetData();
+		auto data = const_data_ptr_cast(val.GetData());
 		auto len = val.GetSize();
 		// check if there are any non-ascii characters in there
 		for (idx_t i = 0; i < len; i++) {
@@ -198,7 +198,7 @@ struct StringConvert {
 		// no unicode: fast path
 		// directly construct the string and memcpy it
 		auto result = PyUnicode_New(len, 127);
-		auto target_data = PyUnicode_DATA(result);
+		auto target_data = PyUtil::PyUnicodeDataMutable(result);
 		memcpy(target_data, data, len);
 		return result;
 	}

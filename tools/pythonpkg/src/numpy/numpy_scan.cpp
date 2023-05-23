@@ -229,7 +229,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		break;
 	case NumpyNullableType::DATETIME:
 	case NumpyNullableType::DATETIME_TZ: {
-		auto src_ptr = (int64_t *)array.data();
+		auto src_ptr = reinterpret_cast<const int64_t *>(array.data());
 		auto tgt_ptr = FlatVector::GetData<timestamp_t>(out);
 		auto &mask = FlatVector::Validity(out);
 
@@ -318,7 +318,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 						    obj = py::str(object_handle);
 					    },
 					    *val, *gil);
-					val = (PyObject *)bind_data.object_str_val.GetPointerTop()->ptr();
+					val = reinterpret_cast<PyObject *>(bind_data.object_str_val.GetPointerTop()->ptr());
 				}
 			}
 			// Python 3 string representation:
@@ -327,9 +327,9 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 				out_mask.SetInvalid(row);
 				continue;
 			}
-			if (PyUnicode_IS_COMPACT_ASCII(val)) {
+			if (PyUtil::PyUnicodeIsCompactASCII(val)) {
 				// ascii string: we can zero copy
-				tgt_ptr[row] = string_t(const_char_ptr_cast(PyUnicode_DATA(val)), PyUnicode_GET_LENGTH(val));
+				tgt_ptr[row] = string_t(PyUtil::PyUnicodeData(val), PyUtil::PyUnicodeGetLength(val));
 			} else {
 				// unicode gunk
 				auto ascii_obj = reinterpret_cast<PyASCIIObject *>(val);
@@ -338,20 +338,21 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 				if (unicode_obj->utf8) {
 					// there is! zero copy
 					tgt_ptr[row] = string_t(const_char_ptr_cast(unicode_obj->utf8), unicode_obj->utf8_length);
-				} else if (PyUnicode_IS_COMPACT(unicode_obj) && !PyUnicode_IS_ASCII(unicode_obj)) { // NOLINT
-					auto kind = PyUnicode_KIND(val);
+				} else if (PyUtil::PyUnicodeIsCompact(unicode_obj) &&
+				           !PyUtil::PyUnicodeIsASCII(unicode_obj)) { // NOLINT
+					auto kind = PyUtil::PyUnicodeKind(val);
 					switch (kind) {
 					case PyUnicode_1BYTE_KIND:
-						tgt_ptr[row] =
-						    DecodePythonUnicode<Py_UCS1>(PyUnicode_1BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
+						tgt_ptr[row] = DecodePythonUnicode<Py_UCS1>(PyUtil::PyUnicode1ByteData(val),
+						                                            PyUtil::PyUnicodeGetLength(val), out);
 						break;
 					case PyUnicode_2BYTE_KIND:
-						tgt_ptr[row] =
-						    DecodePythonUnicode<Py_UCS2>(PyUnicode_2BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
+						tgt_ptr[row] = DecodePythonUnicode<Py_UCS2>(PyUtil::PyUnicode2ByteData(val),
+						                                            PyUtil::PyUnicodeGetLength(val), out);
 						break;
 					case PyUnicode_4BYTE_KIND:
-						tgt_ptr[row] =
-						    DecodePythonUnicode<Py_UCS4>(PyUnicode_4BYTE_DATA(val), PyUnicode_GET_LENGTH(val), out);
+						tgt_ptr[row] = DecodePythonUnicode<Py_UCS4>(PyUtil::PyUnicode4ByteData(val),
+						                                            PyUtil::PyUnicodeGetLength(val), out);
 						break;
 					default:
 						throw NotImplementedException(
@@ -359,7 +360,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 					}
 				} else if (ascii_obj->state.kind == PyUnicode_WCHAR_KIND) {
 					throw InvalidInputException("Unsupported: decode not ready legacy string");
-				} else if (!PyUnicode_IS_COMPACT(unicode_obj) && ascii_obj->state.kind != PyUnicode_WCHAR_KIND) {
+				} else if (!PyUtil::PyUnicodeIsCompact(unicode_obj) && ascii_obj->state.kind != PyUnicode_WCHAR_KIND) {
 					throw InvalidInputException("Unsupported: decode ready legacy string");
 				} else {
 					throw InvalidInputException("Unsupported string type: no clue what this string is");

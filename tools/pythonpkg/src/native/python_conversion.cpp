@@ -359,14 +359,14 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		return ele.cast<string>();
 	case PythonObjectType::ByteArray: {
 		auto byte_array = ele.ptr();
-		const_data_ptr_t bytes = const_data_ptr_cast(PyByteArray_AsString(byte_array));
-		idx_t byte_length = PyByteArray_GET_SIZE(byte_array);
+		const_data_ptr_t bytes = const_data_ptr_cast(PyByteArray_AsString(byte_array)); // NOLINT
+		idx_t byte_length = PyUtil::PyByteArrayGetSize(byte_array);                     // NOLINT
 		return Value::BLOB(bytes, byte_length);
 	}
 	case PythonObjectType::MemoryView: {
 		py::memoryview py_view = ele.cast<py::memoryview>();
 		PyObject *py_view_ptr = py_view.ptr();
-		Py_buffer *py_buf = PyMemoryView_GET_BUFFER(py_view_ptr);
+		Py_buffer *py_buf = PyUtil::PyMemoryViewGetBuffer(py_view_ptr); // NOLINT
 		return Value::BLOB(const_data_ptr_t(py_buf->buf), idx_t(py_buf->len));
 	}
 	case PythonObjectType::Bytes: {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
+#include "duckdb_python/pyutil.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -11,21 +12,6 @@
 #include "datetime.h" //from python
 
 namespace duckdb {
-
-/* Backport for Python < 3.10 */
-#if PY_VERSION_HEX < 0x030a00a1
-#ifndef PyDateTime_TIME_GET_TZINFO
-#define PyDateTime_TIME_GET_TZINFO(o) ((((PyDateTime_Time *)o)->hastzinfo) ? ((PyDateTime_Time *)o)->tzinfo : Py_None)
-#endif
-#ifndef PyDateTime_DATE_GET_TZINFO
-#define PyDateTime_DATE_GET_TZINFO(o)                                                                                  \
-	((((PyDateTime_DateTime *)o)->hastzinfo) ? ((PyDateTime_DateTime *)o)->tzinfo : Py_None)
-#endif
-#endif
-
-#define PyDateTime_TIMEDELTA_GET_DAYS(o)         (((PyDateTime_Delta *)(o))->days)
-#define PyDateTime_TIMEDELTA_GET_SECONDS(o)      (((PyDateTime_Delta *)(o))->seconds)
-#define PyDateTime_TIMEDELTA_GET_MICROSECONDS(o) (((PyDateTime_Delta *)(o))->microseconds)
 
 struct PyDictionary {
 public:
@@ -114,6 +100,11 @@ public:
 
 public:
 	interval_t ToInterval();
+
+private:
+	static int64_t GetDays(PyObject *obj);
+	static int64_t GetSeconds(PyObject *obj);
+	static int64_t GetMicros(PyObject *obj);
 };
 
 struct PyTime {
@@ -129,6 +120,13 @@ public:
 public:
 	dtime_t ToDuckTime();
 	Value ToDuckValue();
+
+private:
+	static int32_t GetHours(PyObject *obj);
+	static int32_t GetMinutes(PyObject *obj);
+	static int32_t GetSeconds(PyObject *obj);
+	static int32_t GetMicros(PyObject *obj);
+	static PyObject *GetTZInfo(PyObject *obj);
 };
 
 struct PyDateTime {
@@ -149,6 +147,16 @@ public:
 	date_t ToDate();
 	dtime_t ToDuckTime();
 	Value ToDuckValue();
+
+public:
+	static int32_t GetYears(PyObject *obj);
+	static int32_t GetMonths(PyObject *obj);
+	static int32_t GetDays(PyObject *obj);
+	static int32_t GetHours(PyObject *obj);
+	static int32_t GetMinutes(PyObject *obj);
+	static int32_t GetSeconds(PyObject *obj);
+	static int32_t GetMicros(PyObject *obj);
+	static PyObject *GetTZInfo(PyObject *obj);
 };
 
 struct PyDate {
