@@ -221,14 +221,14 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 void MiniZStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t uncompressed_data,
                                int64_t uncompressed_size) {
 	// update the src and the total size
-	crc = duckdb_miniz::mz_crc32(crc, (const unsigned char *)uncompressed_data, uncompressed_size);
+	crc = duckdb_miniz::mz_crc32(crc, reinterpret_cast<const unsigned char *>(uncompressed_data), uncompressed_size);
 	total_size += uncompressed_size;
 
 	auto remaining = uncompressed_size;
 	while (remaining > 0) {
 		idx_t output_remaining = (sd.out_buff.get() + sd.out_buf_size) - sd.out_buff_start;
 
-		mz_stream_ptr->next_in = (const unsigned char *)uncompressed_data;
+		mz_stream_ptr->next_in = reinterpret_cast<const unsigned char *>(uncompressed_data);
 		mz_stream_ptr->avail_in = remaining;
 		mz_stream_ptr->next_out = sd.out_buff_start;
 		mz_stream_ptr->avail_out = output_remaining;

@@ -62,7 +62,7 @@ public:
 		if (binding_type != TARGET::TYPE) {
 			throw InternalException("Failed to cast binding to type - binding type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -70,7 +70,7 @@ public:
 		if (binding_type != TARGET::TYPE) {
 			throw InternalException("Failed to cast binding to type - binding type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 

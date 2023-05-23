@@ -47,7 +47,7 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchChunk() {
 }
 
 unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &result) {
-	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !((StreamQueryResult &)result).IsOpen()) {
+	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !result.Cast<StreamQueryResult>().IsOpen()) {
 		result_closed = true;
 		return nullptr;
 	}
@@ -59,7 +59,7 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchNext(QueryResult &result) {
 }
 
 unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &result) {
-	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !((StreamQueryResult &)result).IsOpen()) {
+	if (!result_closed && result.type == QueryResultType::STREAM_RESULT && !result.Cast<StreamQueryResult>().IsOpen()) {
 		result_closed = true;
 		return nullptr;
 	}
@@ -169,13 +169,13 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	idx_t initial_capacity = STANDARD_VECTOR_SIZE * 2ULL;
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		// materialized query result: we know exactly how much space we need
-		auto &materialized = (MaterializedQueryResult &)*result;
+		auto &materialized = result->Cast<MaterializedQueryResult>();
 		initial_capacity = materialized.RowCount();
 	}
 
 	NumpyResultConversion conversion(result->types, initial_capacity);
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
-		auto &materialized = (MaterializedQueryResult &)*result;
+		auto &materialized = result->Cast<MaterializedQueryResult>();
 		for (auto &chunk : materialized.Collection().Chunks()) {
 			conversion.Append(chunk);
 		}
@@ -186,22 +186,22 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 		if (!stream) {
 			vectors_per_chunk = NumericLimits<idx_t>::Maximum();
 		}
-		auto stream_result = (StreamQueryResult *)result.get();
+		auto &stream_result = result->Cast<StreamQueryResult>();
 		for (idx_t count_vec = 0; count_vec < vectors_per_chunk; count_vec++) {
-			if (!stream_result->IsOpen()) {
+			if (!stream_result.IsOpen()) {
 				break;
 			}
 			unique_ptr<DataChunk> chunk;
 			{
 				py::gil_scoped_release release;
-				chunk = FetchNextRaw(*stream_result);
+				chunk = FetchNextRaw(stream_result);
 			}
 			if (!chunk || chunk->size() == 0) {
 				//! finished
 				break;
 			}
 			conversion.Append(*chunk);
-			InsertCategory(*stream_result, categories);
+			InsertCategory(stream_result, categories);
 		}
 	}
 

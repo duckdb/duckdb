@@ -175,7 +175,7 @@ public:
 		if (TARGET::TYPE != PhysicalType::INVALID && type.InternalType() != TARGET::TYPE) {
 			throw InternalException("Failed to cast column reader to type - type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -183,7 +183,7 @@ public:
 		if (TARGET::TYPE != PhysicalType::INVALID && type.InternalType() != TARGET::TYPE) {
 			throw InternalException("Failed to cast column reader to type - type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 

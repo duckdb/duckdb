@@ -52,7 +52,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast vector auxiliary data to type - type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -60,7 +60,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast vector auxiliary data to type - type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -126,12 +126,12 @@ public:
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 

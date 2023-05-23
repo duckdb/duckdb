@@ -44,7 +44,7 @@ DuckTransaction &DuckTransaction::Get(ClientContext &context, Catalog &catalog) 
 	if (!transaction.IsDuckTransaction()) {
 		throw InternalException("DuckTransaction::Get called on non-DuckDB transaction");
 	}
-	return (DuckTransaction &)transaction;
+	return transaction.Cast<DuckTransaction>();
 }
 
 LocalStorage &DuckTransaction::GetLocalStorage() {

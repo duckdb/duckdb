@@ -192,7 +192,7 @@ struct StringConvert {
 		for (idx_t i = 0; i < len; i++) {
 			if (data[i] > 127) {
 				// there are! fallback to slower case
-				return ConvertUnicodeValue((const char *)data, len, i);
+				return ConvertUnicodeValue(const_char_ptr_cast(data), len, i);
 			}
 		}
 		// no unicode: fast path
@@ -323,7 +323,7 @@ template <class DUCKDB_T, class NUMPY_T, class CONVERT>
 static bool ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *target_mask, UnifiedVectorFormat &idata,
                           idx_t count) {
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
-	auto out_ptr = (NUMPY_T *)target_data;
+	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i);
@@ -352,7 +352,7 @@ template <class DUCKDB_T, class NUMPY_T>
 static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t target_data, UnifiedVectorFormat &idata,
                                              idx_t count) {
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
-	auto out_ptr = (NUMPY_T *)target_data;
+	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i);
@@ -379,7 +379,7 @@ static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t tar
 template <class NUMPY_T, class CONVERT>
 static bool ConvertNested(idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &input,
                           UnifiedVectorFormat &idata, idx_t count) {
-	auto out_ptr = (NUMPY_T *)target_data;
+	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i);
@@ -428,7 +428,7 @@ template <class DUCKDB_T>
 static bool ConvertDecimalInternal(idx_t target_offset, data_ptr_t target_data, bool *target_mask,
                                    UnifiedVectorFormat &idata, idx_t count, double division) {
 	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
-	auto out_ptr = (double *)target_data;
+	auto out_ptr = reinterpret_cast<double *>(target_data);
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i);
@@ -627,7 +627,7 @@ void ArrayWrapper::Resize(idx_t new_capacity) {
 
 void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	auto dataptr = data->data;
-	auto maskptr = (bool *)mask->data;
+	auto maskptr = reinterpret_cast<bool *>(mask->data);
 	D_ASSERT(dataptr);
 	D_ASSERT(maskptr);
 	D_ASSERT(input.GetType() == data->type);
@@ -774,7 +774,7 @@ py::object ArrayWrapper::ToArray(idx_t count) const {
 	return masked_array;
 }
 
-NumpyResultConversion::NumpyResultConversion(vector<LogicalType> &types, idx_t initial_capacity)
+NumpyResultConversion::NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity)
     : count(0), capacity(0) {
 	owned_data.reserve(types.size());
 	for (auto &type : types) {

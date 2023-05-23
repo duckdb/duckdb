@@ -187,7 +187,7 @@ public:
 		if (TARGET::TYPE != PhysicalOperatorType::INVALID && type != TARGET::TYPE) {
 			throw InternalException("Failed to cast physical operator to type - physical operator type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -195,7 +195,7 @@ public:
 		if (TARGET::TYPE != PhysicalOperatorType::INVALID && type != TARGET::TYPE) {
 			throw InternalException("Failed to cast physical operator to type - physical operator type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 

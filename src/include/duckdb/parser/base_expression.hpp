@@ -88,7 +88,7 @@ public:
 		if (expression_class != TARGET::TYPE) {
 			throw InternalException("Failed to cast expression to type - expression type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -96,7 +96,7 @@ public:
 		if (expression_class != TARGET::TYPE) {
 			throw InternalException("Failed to cast expression to type - expression type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 

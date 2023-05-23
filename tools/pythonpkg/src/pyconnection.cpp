@@ -357,7 +357,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"));
 
 	InitializeConnectionMethods(connection_module);
-	PyDateTime_IMPORT;
+	PyDateTime_IMPORT; // NOLINT
 	DuckDBPyConnection::ImportCache();
 }
 
@@ -543,9 +543,9 @@ void DuckDBPyConnection::RegisterArrowObject(const py::object &arrow_object, con
 		py::gil_scoped_release release;
 		temporary_views[name] =
 		    connection
-		        ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
-		                                       Value::POINTER((uintptr_t)stream_factory_produce),
-		                                       Value::POINTER((uintptr_t)stream_factory_get_schema)})
+		        ->TableFunction("arrow_scan", {Value::POINTER(CastPointerToValue(stream_factory.get())),
+		                                       Value::POINTER(CastPointerToValue(stream_factory_produce)),
+		                                       Value::POINTER(CastPointerToValue(stream_factory_get_schema))})
 		        ->CreateView(name, true, true);
 	}
 	vector<shared_ptr<ExternalDependency>> dependencies;
@@ -569,7 +569,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 			{
 				py::gil_scoped_release release;
 				temporary_views[name] =
-				    connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)new_df.ptr())})
+				    connection->TableFunction("pandas_scan", {Value::POINTER(CastPointerToValue(new_df.ptr()))})
 				        ->CreateView(name, true, true);
 			}
 
@@ -736,7 +736,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	}
 
 	auto read_csv_p = connection->ReadCSV(name, options);
-	auto &read_csv = (ReadCSVRelation &)*read_csv_p;
+	auto &read_csv = read_csv_p->Cast<ReadCSVRelation>();
 	if (file_like_object_wrapper) {
 		D_ASSERT(!read_csv.extra_dependencies);
 		read_csv.extra_dependencies = std::move(file_like_object_wrapper);
@@ -1098,9 +1098,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
 	auto rel = connection
-	               ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
-	                                              Value::POINTER((uintptr_t)stream_factory_produce),
-	                                              Value::POINTER((uintptr_t)stream_factory_get_schema)})
+	               ->TableFunction("arrow_scan", {Value::POINTER(CastPointerToValue(stream_factory.get())),
+	                                              Value::POINTER(CastPointerToValue(stream_factory_produce)),
+	                                              Value::POINTER(CastPointerToValue(stream_factory_get_schema))})
 	               ->Alias(name);
 	rel->extra_dependencies =
 	    make_uniq<PythonDependencies>(make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object));
@@ -1330,7 +1330,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 		} else {
 			string name = "df_" + StringUtil::GenerateRandomName();
 			auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
-			children.push_back(make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)new_df.ptr())));
+			children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(new_df.ptr()))));
 			table_function->function = make_uniq<FunctionExpression>("pandas_scan", std::move(children));
 			table_function->external_dependency =
 			    make_uniq<PythonDependencies>(make_uniq<RegisteredObject>(entry), make_uniq<RegisteredObject>(new_df));
@@ -1382,7 +1382,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 			throw NotImplementedException("Unsupported Numpy object");
 			break;
 		}
-		children.push_back(make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)data.ptr())));
+		children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(data.ptr()))));
 		table_function->function = make_uniq<FunctionExpression>("pandas_scan", std::move(children));
 		table_function->external_dependency =
 		    make_uniq<PythonDependencies>(make_uniq<RegisteredObject>(entry), make_uniq<RegisteredObject>(data));
@@ -1571,7 +1571,7 @@ ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
 			    "This operation could not be completed because required module 'fsspec' is not installed");
 		}
 		internal_object_filesystem = make_shared<ModifiedMemoryFileSystem>(modified_memory_fs());
-		auto &abstract_fs = (AbstractFileSystem &)*internal_object_filesystem;
+		auto &abstract_fs = reinterpret_cast<AbstractFileSystem &>(*internal_object_filesystem);
 		RegisterFilesystem(abstract_fs);
 	}
 	return *internal_object_filesystem;
