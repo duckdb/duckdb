@@ -124,8 +124,8 @@ void PartitionGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
 
 void PartitionGlobalSinkState::SyncLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append) {
 	// We are done if the local_partition is right sized.
-	auto local_radix = (RadixPartitionedColumnData *)local_partition.get();
-	if (local_radix->GetRadixBits() == grouping_data->GetRadixBits()) {
+	auto &local_radix = local_partition->Cast<RadixPartitionedColumnData>();
+	if (local_radix.GetRadixBits() == grouping_data->GetRadixBits()) {
 		return;
 	}
 

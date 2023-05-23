@@ -774,8 +774,8 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 #endif
 	}
 	// log query path is set: log the query
-	client_data->log_query_writer->WriteData((const_data_ptr_t)query.c_str(), query.size());
-	client_data->log_query_writer->WriteData((const_data_ptr_t) "\n", 1);
+	client_data->log_query_writer->WriteData(const_data_ptr_cast(query.c_str()), query.size());
+	client_data->log_query_writer->WriteData(const_data_ptr_cast("\n"), 1);
 	client_data->log_query_writer->Flush();
 	client_data->log_query_writer->Sync();
 }

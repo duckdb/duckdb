@@ -121,6 +121,18 @@ protected:
 	VectorBufferType buffer_type;
 	unique_ptr<VectorAuxiliaryData> aux_data;
 	unsafe_unique_array<data_t> data;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return (TARGET &)*this;
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return (const TARGET &)*this;
+	}
 };
 
 //! The DictionaryBuffer holds a selection vector

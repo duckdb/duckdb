@@ -1112,7 +1112,7 @@ struct DecimalParquetValueConversion {
 		}
 		plain_data.available(byte_len);
 		auto res =
-		    ParquetDecimalUtils::ReadDecimalValue<DUCKDB_PHYSICAL_TYPE>((const_data_ptr_t)plain_data.ptr, byte_len);
+		    ParquetDecimalUtils::ReadDecimalValue<DUCKDB_PHYSICAL_TYPE>(const_data_ptr_cast(plain_data.ptr), byte_len);
 
 		plain_data.inc(byte_len);
 		return res;
@@ -1210,7 +1210,7 @@ struct UUIDValueConversion {
 	static hugeint_t PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
 		idx_t byte_len = sizeof(hugeint_t);
 		plain_data.available(byte_len);
-		auto res = ReadParquetUUID((const_data_ptr_t)plain_data.ptr);
+		auto res = ReadParquetUUID(const_data_ptr_cast(plain_data.ptr));
 
 		plain_data.inc(byte_len);
 		return res;
@@ -1261,7 +1261,7 @@ struct IntervalValueConversion {
 	static interval_t PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
 		idx_t byte_len = PARQUET_INTERVAL_SIZE;
 		plain_data.available(byte_len);
-		auto res = ReadParquetInterval((const_data_ptr_t)plain_data.ptr);
+		auto res = ReadParquetInterval(const_data_ptr_cast(plain_data.ptr));
 
 		plain_data.inc(byte_len);
 		return res;

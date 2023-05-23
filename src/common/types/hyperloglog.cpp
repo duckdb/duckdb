@@ -260,7 +260,7 @@ void HyperLogLog::ProcessEntries(UnifiedVectorFormat &vdata, const LogicalType &
 
 void HyperLogLog::AddToLogs(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[],
                             HyperLogLog **logs[], const SelectionVector *log_sel) {
-	AddToLogsInternal(vdata, count, indices, counts, (void ****)logs, log_sel);
+	AddToLogsInternal(vdata, count, indices, counts, reinterpret_cast<void ****>(logs), log_sel);
 }
 
 void HyperLogLog::AddToLog(UnifiedVectorFormat &vdata, idx_t count, uint64_t indices[], uint8_t counts[]) {

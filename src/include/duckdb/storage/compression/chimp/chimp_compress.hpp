@@ -145,7 +145,7 @@ public:
 		current_segment->count++;
 
 		if (is_valid) {
-			T floating_point_value = Load<T>((const_data_ptr_t)&value);
+			T floating_point_value = Load<T>(const_data_ptr_cast(&value));
 			NumericStats::Update<T>(current_segment->stats.statistics, floating_point_value);
 		} else {
 			//! FIXME: find a cheaper alternative to storing a NULL

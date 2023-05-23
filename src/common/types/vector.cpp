@@ -544,11 +544,11 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::BLOB: {
 		auto str = ((string_t *)data)[index];
-		return Value::BLOB((const_data_ptr_t)str.GetData(), str.GetSize());
+		return Value::BLOB(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	case LogicalTypeId::BIT: {
 		auto str = ((string_t *)data)[index];
-		return Value::BIT((const_data_ptr_t)str.GetData(), str.GetSize());
+		return Value::BIT(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	case LogicalTypeId::MAP: {
 		auto offlen = ((list_entry_t *)data)[index];
@@ -915,7 +915,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			auto row_idx = vdata.sel->get_index(i);
 			flat_mask.Set(i, vdata.validity.RowIsValid(row_idx));
 		}
-		serializer.WriteData((const_data_ptr_t)flat_mask.GetData(), flat_mask.ValidityMaskSize(count));
+		serializer.WriteData(const_data_ptr_cast(flat_mask.GetData()), flat_mask.ValidityMaskSize(count));
 	}
 	if (TypeIsConstantSize(type.InternalType())) {
 		// constant size type: simple copy
@@ -930,7 +930,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
-				serializer.WriteStringLen((const_data_ptr_t)source.GetData(), source.GetSize());
+				serializer.WriteStringLen(const_data_ptr_cast(source.GetData()), source.GetSize());
 			}
 			break;
 		}

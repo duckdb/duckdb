@@ -18,7 +18,7 @@ static data_ptr_t AllocatePrimitiveData(Allocator &allocator, uint16_t capacity)
 
 template <class T>
 static T *GetPrimitiveData(const ListSegment *segment) {
-	return (T *)(((char *)segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
+	return reinterpret_cast<T *>(data_ptr_cast(segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
 }
 
 //===--------------------------------------------------------------------===//
@@ -33,11 +33,11 @@ static data_ptr_t AllocateListData(Allocator &allocator, uint16_t capacity) {
 }
 
 static uint64_t *GetListLengthData(const ListSegment *segment) {
-	return (uint64_t *)(((char *)segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
+	return reinterpret_cast<uint64_t *>(data_ptr_cast(segment) + + sizeof(ListSegment) + segment->capacity * sizeof(bool));
 }
 
 static LinkedList *GetListChildData(const ListSegment *segment) {
-	return (LinkedList *)(((char *)segment) + sizeof(ListSegment) +
+	return reinterpret_cast<LinkedList *>(data_ptr_cast(segment) + + sizeof(ListSegment) +
 	                      segment->capacity * (sizeof(bool) + sizeof(uint64_t)));
 }
 
@@ -53,11 +53,11 @@ static data_ptr_t AllocateStructData(Allocator &allocator, uint16_t capacity, id
 }
 
 static ListSegment **GetStructData(const ListSegment *segment) {
-	return (ListSegment **)(((char *)segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
+	return reinterpret_cast<ListSegment **>(data_ptr_cast(segment) + + sizeof(ListSegment) + segment->capacity * sizeof(bool));
 }
 
 static bool *GetNullMask(const ListSegment *segment) {
-	return (bool *)(((char *)segment) + sizeof(ListSegment));
+	return reinterpret_cast<bool *>(data_ptr_cast(segment) + + sizeof(ListSegment));
 }
 
 static uint16_t GetCapacityForNewSegment(uint16_t capacity) {
@@ -101,7 +101,7 @@ void DestroyPrimitiveSegment(const ListSegmentFunctions &, ListSegment *segment,
 
 static ListSegment *CreateListSegment(const ListSegmentFunctions &, Allocator &allocator, uint16_t capacity) {
 	// allocate data and set the header
-	auto segment = (ListSegment *)AllocateListData(allocator, capacity);
+	auto segment = reinterpret_cast<ListSegment *>(AllocateListData(allocator, capacity));
 	segment->capacity = capacity;
 	segment->count = 0;
 	segment->next = nullptr;

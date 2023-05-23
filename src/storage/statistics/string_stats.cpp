@@ -166,7 +166,7 @@ void StringStats::Merge(BaseStatistics &stats, const BaseStatistics &other) {
 FilterPropagateResult StringStats::CheckZonemap(const BaseStatistics &stats, ExpressionType comparison_type,
                                                 const string &constant) {
 	auto &string_data = StringStats::GetDataUnsafe(stats);
-	auto data = (const_data_ptr_t)constant.c_str();
+	auto data = const_data_ptr_cast(constant.c_str());
 	auto size = constant.size();
 
 	idx_t value_size = size > StringStatsData::MAX_STRING_MINMAX_SIZE ? StringStatsData::MAX_STRING_MINMAX_SIZE : size;
@@ -256,12 +256,12 @@ void StringStats::Verify(const BaseStatistics &stats, Vector &vector, const Sele
 				throw InternalException("Invalid unicode detected in vector: %s", vector.ToString(count));
 			}
 		}
-		if (StringValueComparison((const_data_ptr_t)data, MinValue<idx_t>(len, StringStatsData::MAX_STRING_MINMAX_SIZE),
+		if (StringValueComparison(const_data_ptr_cast(data), MinValue<idx_t>(len, StringStatsData::MAX_STRING_MINMAX_SIZE),
 		                          string_data.min) < 0) {
 			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
 			                        stats.ToString(), vector.ToString(count));
 		}
-		if (StringValueComparison((const_data_ptr_t)data, MinValue<idx_t>(len, StringStatsData::MAX_STRING_MINMAX_SIZE),
+		if (StringValueComparison(const_data_ptr_cast(data), MinValue<idx_t>(len, StringStatsData::MAX_STRING_MINMAX_SIZE),
 		                          string_data.max) > 0) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
 			                        stats.ToString(), vector.ToString(count));
