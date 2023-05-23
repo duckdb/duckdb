@@ -54,7 +54,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 		auto &result = node->Cast<SelectNode>();
 		if (stmt->withClause) {
 			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), node->cte_map,
-			                     &materialized_ctes);
+			             &materialized_ctes);
 		}
 		if (stmt->windowClause) {
 			for (auto window_ele = stmt->windowClause->head; window_ele != nullptr; window_ele = window_ele->next) {
@@ -118,7 +118,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 		auto &result = node->Cast<SetOperationNode>();
 		if (stmt->withClause) {
 			TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), node->cte_map,
-			                     &materialized_ctes);
+			             &materialized_ctes);
 		}
 		result.left = TransformSelectNode(stmt->larg);
 		result.right = TransformSelectNode(stmt->rarg);

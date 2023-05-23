@@ -131,8 +131,8 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 	vector<unique_ptr<CTENode>> materialized_ctes;
 	// handle the CTEs
 	if (stmt->withClause) {
-		TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause),
-		                     select_node->cte_map, &materialized_ctes);
+		TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), select_node->cte_map,
+		             &materialized_ctes);
 		if (!materialized_ctes.empty()) {
 			throw NotImplementedException("Materialized CTEs are not implemented for pivot statements.");
 		}
