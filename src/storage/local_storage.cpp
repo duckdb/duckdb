@@ -29,6 +29,7 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 		if (art.constraint_type != IndexConstraintType::NONE) {
 			// unique index: create a local ART index that maintains the same unique constraint
 			vector<unique_ptr<Expression>> unbound_expressions;
+			unbound_expressions.reserve(art.unbound_expressions.size());
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
@@ -252,7 +253,7 @@ shared_ptr<LocalTableStorage> LocalTableManager::MoveEntry(DataTable &table) {
 		return nullptr;
 	}
 	auto storage_entry = std::move(entry->second);
-	table_storage.erase(table);
+	table_storage.erase(entry);
 	return storage_entry;
 }
 
