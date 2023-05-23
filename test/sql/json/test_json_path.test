@@ -7,6 +7,11 @@ require json
 statement ok
 pragma enable_verification
 
+statement error
+select json_extract('{"my_field": "duck"}', '')
+----
+Binder Error
+
 query T
 select json_extract('{"my_field": "duck"}', '$.my_field')
 ----
@@ -92,15 +97,26 @@ select json_extract('{"my_field": [{"my_nested_field": ["duck", "goose"]}]}', '$
 "goose"
 
 # some NULLs
-
 query T
 select json_extract(j, '$.my_field.my_nested_field.3') from test
 ----
 NULL
 
+# invalid path error that happens during execution, not binding
+statement error
+with tbl as (
+    select '[{"duck":42},{"duck":43}]' j, '$duck' p
+)
+select json_extract(j, p) from tbl
+----
+Invalid Input Error
+
 # path error
 statement error
 select json_extract('{"a": {"b": "c"}}', '$[]');
+
+statement error
+select json_extract('{"a": {"b": "c"}}', '$[#');
 
 statement error
 select json_extract(j, '$.my_field[my_nested_field[#-3]') from test
@@ -152,6 +168,11 @@ query T
 select json_extract('[{"duck":42},{"duck":43}]', '$.*')
 ----
 []
+
+query T
+select json_extract('{"duck":[42,43]}', '$.*[-1]')
+----
+[43]
 
 # can have multiple wildcards
 query T

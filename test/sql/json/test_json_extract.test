@@ -120,6 +120,15 @@ SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', '$.x');
 ----
 NULL
 
+# list of paths must be constant
+statement error
+with tbl as (
+    select '{"a":2,"c":[4,5],"f":7}' j, ['$.c','$.a'] p
+)
+SELECT json_extract(j, p);
+----
+Binder Error
+
 query T
 SELECT json_extract('{"a":2,"c":[4,5],"f":7}', ['$.c','$.a']);
 ----

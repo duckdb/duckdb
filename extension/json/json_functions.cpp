@@ -15,11 +15,7 @@ namespace duckdb {
 using JSONPathType = JSONCommon::JSONPathType;
 
 static JSONPathType CheckPath(const Value &path_val, string &path, size_t &len) {
-	string error;
-	Value path_str_val;
-	if (!path_val.DefaultTryCastAs(LogicalType::VARCHAR, path_str_val, &error)) {
-		throw BinderException(error);
-	}
+	const auto path_str_val = path_val.DefaultCastAs(LogicalType::VARCHAR);
 	auto path_str = path_str_val.GetValueUnsafe<string_t>();
 	len = path_str.GetSize();
 	auto ptr = path_str.GetData();
@@ -97,9 +93,6 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("List of paths must be constant");
 	}
-	if (arguments[1]->return_type.id() == LogicalTypeId::SQLNULL) {
-		return make_uniq<JSONReadManyFunctionData>(vector<string>(), vector<size_t>());
-	}
 
 	vector<string> paths;
 	vector<size_t> lens;
@@ -127,11 +120,8 @@ unique_ptr<FunctionLocalState> JSONFunctionLocalState::Init(ExpressionState &sta
 }
 
 unique_ptr<FunctionLocalState> JSONFunctionLocalState::InitCastLocalState(CastLocalStateParameters &parameters) {
-	if (parameters.context) {
-		return make_uniq<JSONFunctionLocalState>(*parameters.context);
-	} else {
-		return make_uniq<JSONFunctionLocalState>(Allocator::DefaultAllocator());
-	}
+	return parameters.context ? make_uniq<JSONFunctionLocalState>(*parameters.context)
+	                          : make_uniq<JSONFunctionLocalState>(Allocator::DefaultAllocator());
 }
 
 JSONFunctionLocalState &JSONFunctionLocalState::ResetAndGet(ExpressionState &state) {
@@ -230,8 +220,8 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 	bool success = true;
 	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
 	    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
-		    auto data = (char *)(input.GetData());
-		    auto length = input.GetSize();
+		    auto data = input.GetDataWriteable();
+		    const auto length = input.GetSize();
 
 		    yyjson_read_err error;
 		    auto doc = JSONCommon::ReadDocumentUnsafe(data, length, JSONCommon::READ_FLAG, alc, &error);
@@ -246,7 +236,7 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 		    }
 		    return input;
 	    });
-	result.Reinterpret(source);
+	StringVector::AddHeapReference(result, source);
 	return success;
 }
 

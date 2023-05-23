@@ -225,10 +225,10 @@ yyjson_val *JSONCommon::GetPath(yyjson_val *val, const char *ptr, const idx_t &l
 			val = yyjson_arr_get(val, array_index);
 			break;
 		}
-		default:
+		default: // LCOV_EXCL_START
 			throw InternalException(
 			    "Invalid JSON Path encountered in JSONCommon::GetPath, call JSONCommon::ValidatePath first!");
-		}
+		} // LCOV_EXCL_STOP
 	}
 	return val;
 }
@@ -290,10 +290,10 @@ void GetWildcardPathInternal(yyjson_val *val, const char *ptr, const char *const
 			val = yyjson_arr_get(val, array_index);
 			break;
 		}
-		default:
+		default: // LCOV_EXCL_START
 			throw InternalException(
 			    "Invalid JSON Path encountered in GetWildcardPathInternal, call JSONCommon::ValidatePath first!");
-		}
+		} // LCOV_EXCL_STOP
 	}
 	if (val != nullptr) {
 		vals.emplace_back(val);

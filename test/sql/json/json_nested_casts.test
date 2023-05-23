@@ -4,8 +4,6 @@
 
 require json
 
-mode skip
-
 statement ok
 PRAGMA enable_verification
 
@@ -97,6 +95,12 @@ query I
 SELECT '42'::UNION(u VARCHAR)::JSON
 ----
 42
+
+# try_cast works too
+query I
+SELECT TRY_CAST('{"duck":42' AS JSON)
+----
+NULL
 
 # we support our nested to and from JSON (just calls to_json and from_json - well tested)
 query I
@@ -221,8 +225,6 @@ SELECT * FROM jsons
 {"duck":42}
 ["duck"]
 {"duck":42}
-
-mode unskip
 
 # test_all_types roundtrip, excludes:
 # 1. varchar (special case - input is not valid JSON)
