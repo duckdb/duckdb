@@ -44,9 +44,9 @@ INSERT INTO list_data VALUES ([1,2,3], [1,2,NULL]);
 query I
 select list_has_any(l1, l2) from list_data;
 ----
-0
-0
-0
+NULL
+NULL
+NULL
 1
 1
 0
@@ -56,9 +56,9 @@ select list_has_any(l1, l2) from list_data;
 query I
 select list_has_all(l1, l2) from list_data;
 ----
-0
-0
-0
+NULL
+NULL
+NULL
 1
 0
 0
@@ -88,7 +88,7 @@ insert into list_of_list values ([[1 , 2, 3], NULL, [8, 8, 8]], [[8, 8, 8], NULL
 query I
 select list_has_any(l1, l2) from list_of_list;
 ----
-0
+NULL
 1
 0
 1
@@ -96,7 +96,7 @@ select list_has_any(l1, l2) from list_of_list;
 query I
 select list_has_all(l1, l2) from list_of_list;
 ----
-0
+NULL
 0
 0
 1
@@ -130,7 +130,7 @@ insert into list_of_strings values (['here is a very long long string that is de
 query I
 select list_has_any(l1, l2) from list_of_strings;
 ----
-0
+NULL
 1
 1
 1
@@ -140,7 +140,7 @@ select list_has_any(l1, l2) from list_of_strings;
 query I
 select list_has_all(l1, l2) from list_of_strings;
 ----
-0
+NULL
 0
 1
 0
@@ -229,13 +229,13 @@ select 'hello' && l1 from tbl;
 query I
 select NULL && [NULL];
 ----
-false
+NULL
 
 query I
 select l1 && NULL from tbl;
 ----
-false
-false
+NULL
+NULL
 
 query I
 select l1 @> l2 from tbl;
@@ -258,12 +258,12 @@ select 'hello' <@ l1 from tbl;
 query I
 select l1 @> NULL from tbl;
 ----
-false
-false
+NULL
+NULL
 
 query I
 select l1 <@ NULL from tbl;
 ----
-false
-false
+NULL
+NULL
 
