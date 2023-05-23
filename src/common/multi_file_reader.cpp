@@ -7,7 +7,6 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
