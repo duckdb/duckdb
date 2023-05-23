@@ -15019,127 +15019,6 @@ static void output_reset(ShellState *p){
 }
 
 /*
-** Run an SQL command and return the single integer result.
-*/
-static int db_int(ShellState *p, const char *zSql){
-  sqlite3_stmt *pStmt;
-  int res = 0;
-  sqlite3_prepare_v2(p->db, zSql, -1, &pStmt, 0);
-  if( pStmt && sqlite3_step(pStmt)==SQLITE_ROW ){
-    res = sqlite3_column_int(pStmt,0);
-  }
-  sqlite3_finalize(pStmt);
-  return res;
-}
-
-/*
-** Convert a 2-byte or 4-byte big-endian integer into a native integer
-*/
-static unsigned int get2byteInt(unsigned char *a){
-  return (a[0]<<8) + a[1];
-}
-static unsigned int get4byteInt(unsigned char *a){
-  return (a[0]<<24) + (a[1]<<16) + (a[2]<<8) + a[3];
-}
-
-/*
-** Implementation of the ".dbinfo" command.
-**
-** Return 1 on error, 2 to exit, and 0 otherwise.
-*/
-static int shell_dbinfo_command(ShellState *p, int nArg, char **azArg){
-  static const struct { const char *zName; int ofst; } aField[] = {
-     { "file change counter:",  24  },
-     { "database page count:",  28  },
-     { "freelist page count:",  36  },
-     { "schema cookie:",        40  },
-     { "schema format:",        44  },
-     { "default cache size:",   48  },
-     { "autovacuum top root:",  52  },
-     { "incremental vacuum:",   64  },
-     { "text encoding:",        56  },
-     { "user version:",         60  },
-     { "application id:",       68  },
-     { "software version:",     96  },
-  };
-  static const struct { const char *zName; const char *zSql; } aQuery[] = {
-     { "number of tables:",
-       "SELECT count(*) FROM %s WHERE type='table'" },
-     { "number of indexes:",
-       "SELECT count(*) FROM %s WHERE type='index'" },
-     { "number of triggers:",
-       "SELECT count(*) FROM %s WHERE type='trigger'" },
-     { "number of views:",
-       "SELECT count(*) FROM %s WHERE type='view'" },
-     { "schema size:",
-       "SELECT total(length(sql)) FROM %s" },
-  };
-  int i, rc;
-  unsigned iDataVersion;
-  char *zSchemaTab;
-  char *zDb = nArg>=2 ? azArg[1] : "main";
-  sqlite3_stmt *pStmt = 0;
-  unsigned char aHdr[100];
-  open_db(p, 0);
-  if( p->db==0 ) return 1;
-  rc = sqlite3_prepare_v2(p->db,
-             "SELECT data FROM sqlite_dbpage(?1) WHERE pgno=1",
-             -1, &pStmt, 0);
-  if( rc ){
-    utf8_printf(stderr, "error: %s\n", sqlite3_errmsg(p->db));
-    sqlite3_finalize(pStmt);
-    return 1;
-  }
-  sqlite3_bind_text(pStmt, 1, zDb, -1, SQLITE_STATIC);
-  if( sqlite3_step(pStmt)==SQLITE_ROW
-   && sqlite3_column_bytes(pStmt,0)>100
-  ){
-    memcpy(aHdr, sqlite3_column_blob(pStmt,0), 100);
-    sqlite3_finalize(pStmt);
-  }else{
-    raw_printf(stderr, "unable to read database header\n");
-    sqlite3_finalize(pStmt);
-    return 1;
-  }
-  i = get2byteInt(aHdr+16);
-  if( i==1 ) i = 65536;
-  utf8_printf(p->out, "%-20s %d\n", "database page size:", i);
-  utf8_printf(p->out, "%-20s %d\n", "write format:", aHdr[18]);
-  utf8_printf(p->out, "%-20s %d\n", "read format:", aHdr[19]);
-  utf8_printf(p->out, "%-20s %d\n", "reserved bytes:", aHdr[20]);
-  for(i=0; i<ArraySize(aField); i++){
-    int ofst = aField[i].ofst;
-    unsigned int val = get4byteInt(aHdr + ofst);
-    utf8_printf(p->out, "%-20s %u", aField[i].zName, val);
-    switch( ofst ){
-      case 56: {
-        if( val==1 ) raw_printf(p->out, " (utf8)");
-        if( val==2 ) raw_printf(p->out, " (utf16le)");
-        if( val==3 ) raw_printf(p->out, " (utf16be)");
-      }
-    }
-    raw_printf(p->out, "\n");
-  }
-  if( zDb==0 ){
-    zSchemaTab = sqlite3_mprintf("main.sqlite_schema");
-  }else if( strcmp(zDb,"temp")==0 ){
-    zSchemaTab = sqlite3_mprintf("%s", "sqlite_temp_schema");
-  }else{
-    zSchemaTab = sqlite3_mprintf("\"%w\".sqlite_schema", zDb);
-  }
-  for(i=0; i<ArraySize(aQuery); i++){
-    char *zSql = sqlite3_mprintf(aQuery[i].zSql, zSchemaTab);
-    int val = db_int(p, zSql);
-    sqlite3_free(zSql);
-    utf8_printf(p->out, "%-20s %d\n", aQuery[i].zName, val);
-  }
-  sqlite3_free(zSchemaTab);
-  sqlite3_file_control(p->db, zDb, SQLITE_FCNTL_DATA_VERSION, &iDataVersion);
-  utf8_printf(p->out, "%-20s %u\n", "data version", iDataVersion);
-  return 0;
-}
-
-/*
 ** Print the current sqlite3_errmsg() value to stderr and return 1.
 */
 static int shellDatabaseError(sqlite3 *db){
@@ -17319,10 +17198,6 @@ static int do_meta_command(char *zLine, ShellState *p){
       utf8_printf(stderr, "Error: unknown dbconfig \"%s\"\n", azArg[1]);
       utf8_printf(stderr, "Enter \".dbconfig\" with no arguments for a list\n");
     }
-  }else
-
-  if( c=='d' && n>=3 && strncmp(azArg[0], "dbinfo", n)==0 ){
-    rc = shell_dbinfo_command(p, nArg, azArg);
   }else
 
 #if !defined(SQLITE_OMIT_VIRTUALTABLE) && defined(SQLITE_ENABLE_DBPAGE_VTAB)

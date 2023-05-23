@@ -35,7 +35,13 @@ using FrameBounds = std::pair<idx_t, idx_t>;
 
 template <class KEY_TYPE>
 struct ModeState {
-	using Counts = unordered_map<KEY_TYPE, size_t>;
+	struct ModeAttr {
+		ModeAttr() : count(0), first_row(std::numeric_limits<idx_t>::max()) {
+		}
+		size_t count;
+		idx_t first_row;
+	};
+	using Counts = unordered_map<KEY_TYPE, ModeAttr>;
 
 	Counts *frequency_map;
 	KEY_TYPE *mode;
@@ -68,10 +74,14 @@ struct ModeState {
 		valid = false;
 	}
 
-	void ModeAdd(const KEY_TYPE &key) {
-		auto new_count = ((*frequency_map)[key] += 1);
+	void ModeAdd(const KEY_TYPE &key, idx_t row) {
+		auto &attr = (*frequency_map)[key];
+		auto new_count = (attr.count += 1);
 		if (new_count == 1) {
 			++nonzero;
+			attr.first_row = row;
+		} else {
+			attr.first_row = MinValue(row, attr.first_row);
 		}
 		if (new_count > count) {
 			valid = true;
@@ -84,12 +94,12 @@ struct ModeState {
 		}
 	}
 
-	void ModeRm(const KEY_TYPE &key) {
-		auto i = frequency_map->find(key);
-		auto old_count = i->second;
+	void ModeRm(const KEY_TYPE &key, idx_t frame) {
+		auto &attr = (*frequency_map)[key];
+		auto old_count = attr.count;
 		nonzero -= int(old_count == 1);
 
-		i->second -= 1;
+		attr.count -= 1;
 		if (count == old_count && key == *mode) {
 			valid = false;
 		}
@@ -99,9 +109,10 @@ struct ModeState {
 		//! Initialize control variables to first variable of the frequency map
 		auto highest_frequency = frequency_map->begin();
 		for (auto i = highest_frequency; i != frequency_map->end(); ++i) {
-			// Tie break with the lowest
-			if (i->second > highest_frequency->second ||
-			    (i->second == highest_frequency->second && i->first < highest_frequency->first)) {
+			// Tie break with the lowest insert position
+			if (i->second.count > highest_frequency->second.count ||
+			    (i->second.count == highest_frequency->second.count &&
+			     i->second.first_row < highest_frequency->second.first_row)) {
 				highest_frequency = i;
 			}
 		}
@@ -146,10 +157,13 @@ struct ModeFunction {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->frequency_map) {
-			state->frequency_map = new unordered_map<KEY_TYPE, size_t>();
+			state->frequency_map = new typename STATE::Counts();
 		}
 		auto key = KEY_TYPE(input[idx]);
-		(*state->frequency_map)[key]++;
+		auto &i = (*state->frequency_map)[key];
+		i.count++;
+		i.first_row = MinValue<idx_t>(i.first_row, state->count);
+		state->count++;
 	}
 
 	template <class STATE, class OP>
@@ -159,12 +173,15 @@ struct ModeFunction {
 		}
 		if (!target->frequency_map) {
 			// Copy - don't destroy! Otherwise windowing will break.
-			target->frequency_map = new unordered_map<KEY_TYPE, size_t>(*source.frequency_map);
+			target->frequency_map = new typename STATE::Counts(*source.frequency_map);
 			return;
 		}
 		for (auto &val : *source.frequency_map) {
-			(*target->frequency_map)[val.first] += val.second;
+			auto &i = (*target->frequency_map)[val.first];
+			i.count += val.second.count;
+			i.first_row = MinValue(i.first_row, val.second.first_row);
 		}
+		target->count += source.count;
 	}
 
 	template <class INPUT_TYPE, class STATE>
@@ -185,10 +202,13 @@ struct ModeFunction {
 	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		if (!state->frequency_map) {
-			state->frequency_map = new unordered_map<KEY_TYPE, size_t>();
+			state->frequency_map = new typename STATE::Counts();
 		}
 		auto key = KEY_TYPE(input[0]);
-		(*state->frequency_map)[key] += count;
+		auto &i = (*state->frequency_map)[key];
+		i.count += count;
+		i.first_row = MinValue<idx_t>(i.first_row, state->count);
+		state->count += count;
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
@@ -201,7 +221,7 @@ struct ModeFunction {
 		ModeIncluded included(fmask, dmask, bias);
 
 		if (!state->frequency_map) {
-			state->frequency_map = new unordered_map<KEY_TYPE, size_t>();
+			state->frequency_map = new typename STATE::Counts;
 		}
 		const double tau = .25;
 		if (state->nonzero <= tau * state->frequency_map->size()) {
@@ -209,31 +229,31 @@ struct ModeFunction {
 			// for f ∈ F do
 			for (auto f = frame.first; f < frame.second; ++f) {
 				if (included(f)) {
-					state->ModeAdd(KEY_TYPE(data[f]));
+					state->ModeAdd(KEY_TYPE(data[f]), f);
 				}
 			}
 		} else {
 			// for f ∈ P \ F do
 			for (auto p = prev.first; p < frame.first; ++p) {
 				if (included(p)) {
-					state->ModeRm(KEY_TYPE(data[p]));
+					state->ModeRm(KEY_TYPE(data[p]), p);
 				}
 			}
 			for (auto p = frame.second; p < prev.second; ++p) {
 				if (included(p)) {
-					state->ModeRm(KEY_TYPE(data[p]));
+					state->ModeRm(KEY_TYPE(data[p]), p);
 				}
 			}
 
 			// for f ∈ F \ P do
 			for (auto f = frame.first; f < prev.first; ++f) {
 				if (included(f)) {
-					state->ModeAdd(KEY_TYPE(data[f]));
+					state->ModeAdd(KEY_TYPE(data[f]), f);
 				}
 			}
 			for (auto f = prev.second; f < frame.second; ++f) {
 				if (included(f)) {
-					state->ModeAdd(KEY_TYPE(data[f]));
+					state->ModeAdd(KEY_TYPE(data[f]), f);
 				}
 			}
 		}
@@ -243,7 +263,7 @@ struct ModeFunction {
 			auto highest_frequency = state->Scan();
 			if (highest_frequency != state->frequency_map->end()) {
 				*(state->mode) = highest_frequency->first;
-				state->count = highest_frequency->second;
+				state->count = highest_frequency->second.count;
 				state->valid = (state->count > 0);
 			}
 		}

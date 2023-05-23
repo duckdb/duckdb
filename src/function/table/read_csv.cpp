@@ -176,9 +176,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			options.all_varchar = BooleanValue::Get(kv.second);
 		} else if (loption == "normalize_names") {
 			options.normalize_names = BooleanValue::Get(kv.second);
-		} else if (loption == "parallel") {
-			options.parallel_mode =
-			    BooleanValue::Get(kv.second) ? ParallelMode::PARALLEL : ParallelMode::SINGLE_THREADED;
 		} else {
 			options.SetReadOption(loption, kv.second, names);
 		}
