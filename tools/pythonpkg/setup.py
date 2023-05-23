@@ -7,7 +7,8 @@ import platform
 import multiprocessing.pool
 from glob import glob
 
-from setuptools import setup, Extension
+import subprocess
+from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext as _build_ext
 
 
@@ -299,6 +300,7 @@ setup(
     long_description = 'See here for an introduction: https://duckdb.org/docs/api/python/overview',
     license='MIT',
     data_files = data_files,
+	# NOTE: might need to be find_packages() ?
     packages=packages,
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'pybind11>=2.6.0'],
@@ -320,3 +322,10 @@ setup(
         "Changelog": "https://github.com/duckdb/duckdb/releases",
     },
 )
+
+from pathlib import Path
+source_root = Path(__file__).parent
+adbc_driver_duckdb = source_root.joinpath('adbc_driver_duckdb/setup.py')
+
+# Execute the setup.py of adbc_driver_duckdb submodule
+subprocess.check_call(['python3', adbc_driver_duckdb, 'install'])

@@ -24,13 +24,13 @@ from pathlib import Path
 from setuptools import setup
 
 source_root = Path(__file__).parent
-repo_root = source_root.joinpath("../../")
 
 # ------------------------------------------------------------
 # Resolve Shared Library
 
 library = os.environ.get("DUCKDB_INSTALL_LIB")
-target = source_root.joinpath("./adbc_driver_duckdb/libduckdb.dylib").resolve()
+target = source_root.joinpath("libduckdb.dylib").resolve()
+print("adbc_driver_lib target", target)
 if not library:
     if os.environ.get("_ADBC_IS_SDIST", "").strip().lower() in ("1", "true"):
         print("Building sdist, not requiring DUCKDB_INSTALL_LIB")
@@ -67,6 +67,7 @@ version, cmdclass = get_version_and_cmdclass("adbc_driver_duckdb")
 # Setup
 
 setup(
+    name='duckdb.adbc_driver_duckdb',
     cmdclass=cmdclass,
     version=version,
 )
