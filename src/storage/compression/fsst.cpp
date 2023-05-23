@@ -618,7 +618,7 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 
 			if (str_len > 0) {
 				result_data[i + result_offset] = FSSTPrimitives::DecompressValue(
-				    scan_state.duckdb_fsst_decoder.get(), result, (unsigned char *)str_ptr, str_len);
+				    scan_state.duckdb_fsst_decoder.get(), result, str_ptr, str_len);
 			} else {
 				result_data[i + result_offset] = string_t(nullptr, 0);
 			}
@@ -669,7 +669,7 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 		    segment, dict, result, base_ptr, delta_decode_buffer[offsets.unused_delta_decoded_values], string_length);
 
 		result_data[result_idx] = FSSTPrimitives::DecompressValue(
-		    (void *)&decoder, result, (unsigned char *)compressed_string.GetData(), compressed_string.GetSize());
+		    (void *)&decoder, result, compressed_string.GetData(), compressed_string.GetSize());
 	} else {
 		// There's no fsst symtable, this only happens for empty strings or nulls, we can just emit an empty string
 		result_data[result_idx] = string_t(nullptr, 0);
