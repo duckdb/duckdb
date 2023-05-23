@@ -144,25 +144,25 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
                                                                 ExpressionExecutorState &state) {
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_REF:
-		return InitializeState((const BoundReferenceExpression &)expr, state);
+		return InitializeState(expr.Cast<BoundReferenceExpression>(), state);
 	case ExpressionClass::BOUND_BETWEEN:
-		return InitializeState((const BoundBetweenExpression &)expr, state);
+		return InitializeState(expr.Cast<BoundBetweenExpression>(), state);
 	case ExpressionClass::BOUND_CASE:
-		return InitializeState((const BoundCaseExpression &)expr, state);
+		return InitializeState(expr.Cast<BoundCaseExpression>(), state);
 	case ExpressionClass::BOUND_CAST:
-		return InitializeState((const BoundCastExpression &)expr, state);
+		return InitializeState(expr.Cast<BoundCastExpression>(), state);
 	case ExpressionClass::BOUND_COMPARISON:
-		return InitializeState((const BoundComparisonExpression &)expr, state);
+		return InitializeState(expr.Cast<BoundComparisonExpression>(), state);
 	case ExpressionClass::BOUND_CONJUNCTION:
-		return InitializeState((const BoundConjunctionExpression &)expr, state);
+		return InitializeState(expr.Cast<BoundConjunctionExpression>(), state);
 	case ExpressionClass::BOUND_CONSTANT:
-		return InitializeState((const BoundConstantExpression &)expr, state);
+		return InitializeState(expr.Cast<BoundConstantExpression>(), state);
 	case ExpressionClass::BOUND_FUNCTION:
-		return InitializeState((const BoundFunctionExpression &)expr, state);
+		return InitializeState(expr.Cast<BoundFunctionExpression>(), state);
 	case ExpressionClass::BOUND_OPERATOR:
-		return InitializeState((const BoundOperatorExpression &)expr, state);
+		return InitializeState(expr.Cast<BoundOperatorExpression>(), state);
 	case ExpressionClass::BOUND_PARAMETER:
-		return InitializeState((const BoundParameterExpression &)expr, state);
+		return InitializeState(expr.Cast<BoundParameterExpression>(), state);
 	default:
 		throw InternalException("Attempting to initialize state of expression of unknown type!");
 	}
@@ -182,34 +182,34 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 	}
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
-		Execute((const BoundBetweenExpression &)expr, state, sel, count, result);
+		Execute(expr.Cast<BoundBetweenExpression>(), state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_REF:
-		Execute((const BoundReferenceExpression &)expr, state, sel, count, result);
+		Execute(expr.Cast<BoundReferenceExpression>(), state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_CASE:
-		Execute((const BoundCaseExpression &)expr, state, sel, count, result);
+		Execute(expr.Cast<BoundCaseExpression>(), state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_CAST:
-		Execute((const BoundCastExpression &)expr, state, sel, count, result);
+		Execute(expr.Cast<BoundCastExpression>(), state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_COMPARISON:
-		Execute((const BoundComparisonExpression &)expr, state, sel, count, result);
+		Execute(expr.Cast<BoundComparisonExpression>(), state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_CONJUNCTION:
-		Execute((const BoundConjunctionExpression &)expr, state, sel, count, result);
+		Execute(expr.Cast<BoundConjunctionExpression>(), state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_CONSTANT:
-		Execute((const BoundConstantExpression &)expr, state, sel, count, result);
+		Execute(expr.Cast<BoundConstantExpression>(), state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_FUNCTION:
-		Execute((const BoundFunctionExpression &)expr, state, sel, count, result);
+		Execute(expr.Cast<BoundFunctionExpression>(), state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_OPERATOR:
-		Execute((const BoundOperatorExpression &)expr, state, sel, count, result);
+		Execute(expr.Cast<BoundOperatorExpression>(), state, sel, count, result);
 		break;
 	case ExpressionClass::BOUND_PARAMETER:
-		Execute((const BoundParameterExpression &)expr, state, sel, count, result);
+		Execute(expr.Cast<BoundParameterExpression>(), state, sel, count, result);
 		break;
 	default:
 		throw InternalException("Attempting to execute expression of unknown type!");
@@ -283,7 +283,7 @@ idx_t ExpressionExecutor::DefaultSelect(const Expression &expr, ExpressionState 
 	// resolve the true/false expression first
 	// then use that to generate the selection vector
 	bool intermediate_bools[STANDARD_VECTOR_SIZE];
-	Vector intermediate(LogicalType::BOOLEAN, (data_ptr_t)intermediate_bools);
+	Vector intermediate(LogicalType::BOOLEAN, data_ptr_cast<data_t>(intermediate_bools));
 	Execute(expr, state, sel, count, intermediate);
 
 	UnifiedVectorFormat idata;

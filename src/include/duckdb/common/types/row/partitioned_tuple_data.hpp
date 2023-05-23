@@ -135,6 +135,18 @@ protected:
 	mutex lock;
 	shared_ptr<PartitionTupleDataAllocators> allocators;
 	vector<unique_ptr<TupleDataCollection>> partitions;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return (TARGET &)*this;
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return (const TARGET &)*this;
+	}
 };
 
 } // namespace duckdb

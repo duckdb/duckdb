@@ -1439,7 +1439,7 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		return make_shared<EnumTypeInfoTemplated>(std::move(enum_name), values_insert_order, size);
 	}
 
-	string_map_t<T> &GetValues() {
+	const string_map_t<T> &GetValues() const {
 		return values;
 	}
 
@@ -1491,7 +1491,7 @@ LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx
 }
 
 template <class T>
-int64_t TemplatedGetPos(string_map_t<T> &map, const string_t &key) {
+int64_t TemplatedGetPos(const string_map_t<T> &map, const string_t &key) {
 	auto it = map.find(key);
 	if (it == map.end()) {
 		return -1;
@@ -1503,11 +1503,11 @@ int64_t EnumType::GetPos(const LogicalType &type, const string_t &key) {
 	auto info = type.AuxInfo();
 	switch (type.InternalType()) {
 	case PhysicalType::UINT8:
-		return TemplatedGetPos(((EnumTypeInfoTemplated<uint8_t> &)*info).GetValues(), key);
+		return TemplatedGetPos(info->Cast<EnumTypeInfoTemplated<uint8_t>>().GetValues(), key);
 	case PhysicalType::UINT16:
-		return TemplatedGetPos(((EnumTypeInfoTemplated<uint16_t> &)*info).GetValues(), key);
+		return TemplatedGetPos(info->Cast<EnumTypeInfoTemplated<uint16_t>>().GetValues(), key);
 	case PhysicalType::UINT32:
-		return TemplatedGetPos(((EnumTypeInfoTemplated<uint32_t> &)*info).GetValues(), key);
+		return TemplatedGetPos(info->Cast<EnumTypeInfoTemplated<uint32_t>>().GetValues(), key);
 	default:
 		throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 	}

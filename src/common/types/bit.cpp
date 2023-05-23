@@ -92,7 +92,7 @@ bool Bit::TryGetBitStringSize(string_t str, idx_t &str_len, string *error_messag
 			str_len++;
 		} else {
 			string error = StringUtil::Format("Invalid character encountered in string -> bit conversion: '%s'",
-			                                  string((char *)data + i, 1));
+			                                  string(data_ptr_cast<char>(data) + i, 1));
 			HandleCastError::AssignError(error, error_message);
 			return false;
 		}

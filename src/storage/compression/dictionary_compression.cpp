@@ -391,12 +391,12 @@ unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnD
 }
 
 bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
-	auto &state = (DictionaryCompressionAnalyzeState &)state_p;
+	auto &state = state_p.Cast<DictionaryCompressionAnalyzeState>();
 	return state.analyze_state->UpdateState(input, count);
 }
 
 idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
-	auto &analyze_state = (DictionaryCompressionAnalyzeState &)state_p;
+	auto &analyze_state = state_p.Cast<DictionaryCompressionAnalyzeState>();
 	auto &state = *analyze_state.analyze_state;
 
 	auto width = BitpackingPrimitives::MinimumBitWidth(state.current_unique_count + 1);
@@ -415,12 +415,12 @@ unique_ptr<CompressionState> DictionaryCompressionStorage::InitCompression(Colum
 }
 
 void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = (DictionaryCompressionCompressState &)state_p;
+	auto &state = state_p.Cast<DictionaryCompressionCompressState>();
 	state.UpdateState(scan_vector, count);
 }
 
 void DictionaryCompressionStorage::FinalizeCompress(CompressionState &state_p) {
-	auto &state = (DictionaryCompressionCompressState &)state_p;
+	auto &state = state_p.Cast<DictionaryCompressionCompressState>();
 	state.Flush(true);
 }
 
@@ -551,10 +551,10 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 	auto &handle = state.GetOrInsertHandle(segment);
 
 	auto baseptr = handle.Ptr() + segment.GetBlockOffset();
-	auto header_ptr = (dictionary_compression_header_t *)baseptr;
+	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);
 	auto dict = DictionaryCompressionStorage::GetDictionary(segment, handle);
-	auto index_buffer_offset = Load<uint32_t>((data_ptr_t)&header_ptr->index_buffer_offset);
-	auto width = (bitpacking_width_t)(Load<uint32_t>((data_ptr_t)&header_ptr->bitpacking_width));
+	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast<data_t>(&header_ptr->index_buffer_offset));
+	auto width = (bitpacking_width_t) Load<uint32_t>(data_ptr_cast<data_t>(&header_ptr->bitpacking_width));
 	auto index_buffer_ptr = (uint32_t *)(baseptr + index_buffer_offset);
 	auto base_data = (data_ptr_t)(baseptr + DICTIONARY_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
@@ -595,18 +595,18 @@ idx_t DictionaryCompressionStorage::RequiredSpace(idx_t current_count, idx_t ind
 }
 
 StringDictionaryContainer DictionaryCompressionStorage::GetDictionary(ColumnSegment &segment, BufferHandle &handle) {
-	auto header_ptr = (dictionary_compression_header_t *)(handle.Ptr() + segment.GetBlockOffset());
+	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
 	StringDictionaryContainer container;
-	container.size = Load<uint32_t>((data_ptr_t)&header_ptr->dict_size);
-	container.end = Load<uint32_t>((data_ptr_t)&header_ptr->dict_end);
+	container.size = Load<uint32_t>(data_ptr_cast<data_t>(&header_ptr->dict_size));
+	container.end = Load<uint32_t>(data_ptr_cast<data_t>(&header_ptr->dict_end));
 	return container;
 }
 
 void DictionaryCompressionStorage::SetDictionary(ColumnSegment &segment, BufferHandle &handle,
                                                  StringDictionaryContainer container) {
-	auto header_ptr = (dictionary_compression_header_t *)(handle.Ptr() + segment.GetBlockOffset());
-	Store<uint32_t>(container.size, (data_ptr_t)&header_ptr->dict_size);
-	Store<uint32_t>(container.end, (data_ptr_t)&header_ptr->dict_end);
+	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
+	Store<uint32_t>(container.size, data_ptr_cast<data_t>(&header_ptr->dict_size));
+	Store<uint32_t>(container.end, data_ptr_cast<data_t>(&header_ptr->dict_end));
 }
 
 string_t DictionaryCompressionStorage::FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict,
@@ -621,7 +621,7 @@ string_t DictionaryCompressionStorage::FetchStringFromDict(ColumnSegment &segmen
 	auto dict_end = baseptr + dict.end;
 	auto dict_pos = dict_end - dict_offset;
 
-	auto str_ptr = (char *)(dict_pos);
+	auto str_ptr = data_ptr_cast<char>(dict_pos);
 	return string_t(str_ptr, string_len);
 }
 

@@ -84,7 +84,7 @@ bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, string *error_message) {
 			if (data[i + 1] != 'x' || Blob::HEX_MAP[data[i + 2]] < 0 || Blob::HEX_MAP[data[i + 3]] < 0) {
 				string error =
 				    StringUtil::Format("Invalid hex escape code encountered in string -> blob conversion: %s",
-				                       string((char *)data + i, 4));
+				                       string(data_ptr_cast<char>(data) + i, 4));
 				HandleCastError::AssignError(error, error_message);
 				return false;
 			}

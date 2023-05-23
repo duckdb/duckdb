@@ -305,7 +305,7 @@ void AsOfLocalState::ResolveJoinKeys(DataChunk &input) {
 
 	DataChunk payload_chunk;
 	payload_chunk.InitializeEmpty({LogicalType::UINTEGER});
-	FlatVector::SetData(payload_chunk.data[0], (data_ptr_t)lhs_sel.data());
+	FlatVector::SetData(payload_chunk.data[0], data_ptr_cast<data_t>(lhs_sel.data()));
 	payload_chunk.SetCardinality(lhs_valid);
 	local_sort.SinkChunk(lhs_keys, payload_chunk);
 

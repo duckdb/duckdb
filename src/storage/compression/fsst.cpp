@@ -94,7 +94,7 @@ unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, Ph
 }
 
 bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
-	auto &state = (FSSTAnalyzeState &)state_p;
+	auto &state = state_p.Cast<FSSTAnalyzeState>();
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
@@ -138,7 +138,7 @@ bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t coun
 }
 
 idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
-	auto &state = (FSSTAnalyzeState &)state_p;
+	auto &state = state_p.Cast<FSSTAnalyzeState>();
 
 	size_t compressed_dict_size = 0;
 	size_t max_compressed_string_length = 0;
@@ -408,7 +408,7 @@ unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointer
 }
 
 void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = (FSSTCompressionState &)state_p;
+	auto &state = state_p.Cast<FSSTCompressionState>();
 
 	// Get vector data
 	UnifiedVectorFormat vdata;
@@ -486,7 +486,7 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 }
 
 void FSSTStorage::FinalizeCompress(CompressionState &state_p) {
-	auto &state = (FSSTCompressionState &)state_p;
+	auto &state = state_p.Cast<FSSTCompressionState>();
 	state.Flush(true);
 }
 
@@ -551,7 +551,7 @@ template <bool ALLOW_FSST_VECTORS>
 void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                                     idx_t result_offset) {
 
-	auto &scan_state = (FSSTScanState &)*state.scan_state;
+	auto &scan_state = state.scan_state->Cast<FSSTScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	bool enable_fsst_vectors;
@@ -696,16 +696,16 @@ bool FSSTFun::TypeIsSupported(PhysicalType type) {
 // Helper Functions
 //===--------------------------------------------------------------------===//
 void FSSTStorage::SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container) {
-	auto header_ptr = (fsst_compression_header_t *)(handle.Ptr() + segment.GetBlockOffset());
-	Store<uint32_t>(container.size, (data_ptr_t)&header_ptr->dict_size);
-	Store<uint32_t>(container.end, (data_ptr_t)&header_ptr->dict_end);
+	auto header_ptr = reinterpret_cast<fsst_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
+	Store<uint32_t>(container.size, data_ptr_cast<data_t>(&header_ptr->dict_size));
+	Store<uint32_t>(container.end, data_ptr_cast<data_t>(&header_ptr->dict_end));
 }
 
 StringDictionaryContainer FSSTStorage::GetDictionary(ColumnSegment &segment, BufferHandle &handle) {
-	auto header_ptr = (fsst_compression_header_t *)(handle.Ptr() + segment.GetBlockOffset());
+	auto header_ptr = reinterpret_cast<fsst_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
 	StringDictionaryContainer container;
-	container.size = Load<uint32_t>((data_ptr_t)&header_ptr->dict_size);
-	container.end = Load<uint32_t>((data_ptr_t)&header_ptr->dict_end);
+	container.size = Load<uint32_t>(data_ptr_cast<data_t>(&header_ptr->dict_size));
+	container.end = Load<uint32_t>(data_ptr_cast<data_t>(&header_ptr->dict_end));
 	return container;
 }
 
@@ -716,15 +716,15 @@ char *FSSTStorage::FetchStringPointer(StringDictionaryContainer dict, data_ptr_t
 
 	auto dict_end = baseptr + dict.end;
 	auto dict_pos = dict_end - dict_offset;
-	return (char *)(dict_pos);
+	return data_ptr_cast<char>(dict_pos);
 }
 
 // Returns false if no symbol table was found. This means all strings are either empty or null
 bool FSSTStorage::ParseFSSTSegmentHeader(data_ptr_t base_ptr, duckdb_fsst_decoder_t *decoder_out,
                                          bitpacking_width_t *width_out) {
-	auto header_ptr = (fsst_compression_header_t *)base_ptr;
-	auto fsst_symbol_table_offset = Load<uint32_t>((data_ptr_t)&header_ptr->fsst_symbol_table_offset);
-	*width_out = (bitpacking_width_t)(Load<uint32_t>((data_ptr_t)&header_ptr->bitpacking_width));
+	auto header_ptr = reinterpret_cast<fsst_compression_header_t *>(base_ptr);
+	auto fsst_symbol_table_offset = Load<uint32_t>(data_ptr_cast<data_t>(&header_ptr->fsst_symbol_table_offset));
+	*width_out = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast<data_t>(&header_ptr->bitpacking_width)));
 	return duckdb_fsst_import(decoder_out, base_ptr + fsst_symbol_table_offset);
 }
 

@@ -95,9 +95,9 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 		} else {
 			// create a dummy state because finalize does not understand NULLs in its input
 			// we put the NULL back in explicitly below
-			bind_data.aggr.initialize((data_ptr_t)target_ptr);
+			bind_data.aggr.initialize(data_ptr_cast<data_t>(target_ptr));
 		}
-		state_vec_ptr[i] = (data_ptr_t)target_ptr;
+		state_vec_ptr[i] = data_ptr_cast<data_t>(target_ptr);
 	}
 
 	AggregateInputData aggr_input_data(nullptr, Allocator::DefaultAllocator());
@@ -166,7 +166,7 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 		bind_data.aggr.combine(local_state.state_vector0, local_state.state_vector1, aggr_input_data, 1);
 
 		result_ptr[i] =
-		    StringVector::AddStringOrBlob(result, (const char *)local_state.state_buffer1.get(), bind_data.state_size);
+		    StringVector::AddStringOrBlob(result, data_ptr_cast<const char>(local_state.state_buffer1.get()), bind_data.state_size);
 	}
 }
 

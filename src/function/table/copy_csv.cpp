@@ -284,6 +284,10 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 		handle->Write((void *)data, size);
 	}
 
+	void WriteData(const char *data, idx_t size) {
+		WriteData(data_ptr_cast<data_t>(data), size);
+	}
+
 	//! Write rows
 	void WriteRows(const_data_ptr_t data, idx_t size, const string &newline) {
 		lock_guard<mutex> flock(lock);
@@ -324,7 +328,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	    make_uniq<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path, options.compression);
 
 	if (!options.prefix.empty()) {
-		global_data->WriteData((const_data_ptr_t)options.prefix.c_str(), options.prefix.size());
+		global_data->WriteData(options.prefix.c_str(), options.prefix.size());
 	}
 
 	if (options.header) {

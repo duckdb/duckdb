@@ -121,7 +121,7 @@ int64_t CompressedFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_
 
 int64_t CompressedFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &compressed_file = handle.Cast<CompressedFile>();
-	return compressed_file.WriteData((data_ptr_t)buffer, nr_bytes);
+	return compressed_file.WriteData(data_ptr_cast<data_t>(buffer), nr_bytes);
 }
 
 void CompressedFileSystem::Reset(FileHandle &handle) {

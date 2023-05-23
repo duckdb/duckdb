@@ -17,7 +17,7 @@ PhysicalPivot::PhysicalPivot(vector<LogicalType> types_p, unique_ptr<PhysicalOpe
 	}
 	// extract the empty aggregate expressions
 	for (auto &aggr_expr : bound_pivot.aggregates) {
-		auto &aggr = (BoundAggregateExpression &)*aggr_expr;
+		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
 		// for each aggregate, initialize an empty aggregate state and finalize it immediately
 		auto state = make_unsafe_uniq_array<data_t>(aggr.function.state_size());
 		aggr.function.initialize(state.get());

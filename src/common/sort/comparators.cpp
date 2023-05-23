@@ -167,7 +167,7 @@ int Comparators::CompareStringAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right
 	uint32_t right_string_size = Load<uint32_t>(right_ptr);
 	left_ptr += sizeof(uint32_t);
 	right_ptr += sizeof(uint32_t);
-	auto memcmp_res = memcmp((const char *)left_ptr, (const char *)right_ptr,
+	auto memcmp_res = memcmp(data_ptr_cast<const char>(left_ptr), data_ptr_cast<const char>(right_ptr),
 	                         std::min<uint32_t>(left_string_size, right_string_size));
 
 	left_ptr += left_string_size;

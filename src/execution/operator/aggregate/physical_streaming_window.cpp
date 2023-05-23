@@ -26,7 +26,7 @@ class StreamingWindowState : public OperatorState {
 public:
 	using StateBuffer = vector<data_t>;
 
-	StreamingWindowState() : initialized(false), statev(LogicalType::POINTER, (data_ptr_t)&state_ptr) {
+	StreamingWindowState() : initialized(false), statev(LogicalType::POINTER, data_ptr_cast<data_t>(&state_ptr)) {
 	}
 
 	~StreamingWindowState() override {

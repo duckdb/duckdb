@@ -111,7 +111,7 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
                                                             DataChunk &chunk, GlobalOperatorState &gstate_p,
                                                             OperatorState &state_p) const {
 	D_ASSERT(input.size() > 0);
-	auto &state = (BlockwiseNLJoinState &)state_p;
+	auto &state = state_p.Cast<BlockwiseNLJoinState>();
 	auto &gstate = sink_state->Cast<BlockwiseNLJoinGlobalState>();
 
 	if (gstate.right_chunks.Count() == 0) {
@@ -252,8 +252,8 @@ SourceResultType PhysicalBlockwiseNLJoin::GetData(ExecutionContext &context, Dat
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = sink_state->Cast<BlockwiseNLJoinGlobalState>();
-	auto &gstate = (BlockwiseNLJoinGlobalScanState &)input.global_state;
-	auto &lstate = (BlockwiseNLJoinLocalScanState &)input.local_state;
+	auto &gstate = input.global_state.Cast<BlockwiseNLJoinGlobalScanState>();
+	auto &lstate = input.local_state.Cast<BlockwiseNLJoinLocalScanState>();
 
 	// if the LHS is exhausted in a FULL/RIGHT OUTER JOIN, we scan chunks we still need to output
 	sink.right_outer.Scan(gstate.scan_state, lstate.scan_state, chunk);

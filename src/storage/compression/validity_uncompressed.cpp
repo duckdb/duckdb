@@ -188,13 +188,13 @@ unique_ptr<AnalyzeState> ValidityInitAnalyze(ColumnData &col_data, PhysicalType 
 }
 
 bool ValidityAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
-	auto &state = (ValidityAnalyzeState &)state_p;
+	auto &state = state_p.Cast<ValidityAnalyzeState>();
 	state.count += count;
 	return true;
 }
 
 idx_t ValidityFinalAnalyze(AnalyzeState &state_p) {
-	auto &state = (ValidityAnalyzeState &)state_p;
+	auto &state = state_p.Cast<ValidityAnalyzeState>();
 	return (state.count + 7) / 8;
 }
 
@@ -222,7 +222,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	static_assert(sizeof(validity_t) == sizeof(uint64_t), "validity_t should be 64-bit");
-	auto &scan_state = (ValidityScanState &)*state.scan_state;
+	auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 
 	auto &result_mask = FlatVector::Validity(result);
 	auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
@@ -345,7 +345,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 
 	auto start = segment.GetRelativeIndex(state.row_index);
 	if (start % ValidityMask::BITS_PER_VALUE == 0) {
-		auto &scan_state = (ValidityScanState &)*state.scan_state;
+		auto &scan_state = state.scan_state->Cast<ValidityScanState>();
 
 		// aligned scan: no need to do anything fancy
 		// note: this is only an optimization which avoids having to do messy bitshifting in the common case

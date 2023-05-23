@@ -61,7 +61,7 @@ DuckTransactionManager &DuckTransactionManager::Get(AttachedDatabase &db) {
 	if (!transaction_manager.IsDuckTransactionManager()) {
 		throw InternalException("Calling DuckTransactionManager::Get on non-DuckDB transaction manager");
 	}
-	return (DuckTransactionManager &)transaction_manager;
+	return reinterpret_cast<DuckTransactionManager &>(transaction_manager);
 }
 
 Transaction *DuckTransactionManager::StartTransaction(ClientContext &context) {

@@ -451,8 +451,8 @@ SourceResultType PhysicalNestedLoopJoin::GetData(ExecutionContext &context, Data
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = sink_state->Cast<NestedLoopJoinGlobalState>();
-	auto &gstate = (NestedLoopJoinGlobalScanState &)input.global_state;
-	auto &lstate = (NestedLoopJoinLocalScanState &)input.local_state;
+	auto &gstate = input.global_state.Cast<NestedLoopJoinGlobalScanState>();
+	auto &lstate = input.local_state.Cast<NestedLoopJoinLocalScanState>();
 
 	// if the LHS is exhausted in a FULL/RIGHT OUTER JOIN, we scan chunks we still need to output
 	sink.right_outer.Scan(gstate.scan_state, lstate.scan_state, chunk);

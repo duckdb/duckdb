@@ -210,7 +210,7 @@ static void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanLocalS
 		}
 	} else {
 		//! Check if last offset is higher than max uint32
-		if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
+		if (ArrowBufferData<uint64_t>(array, 1)[array.length] > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
 			throw ConversionException("DuckDB does not support Blobs over 4GB");
 		} // LCOV_EXCL_STOP
 		auto offsets = ArrowBufferData<uint64_t>(array, 1) + array.offset + scan_state.chunk_offset;
@@ -437,11 +437,11 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLoca
 		}
 		case ArrowDateTimeType::MILLISECONDS: {
 			//! convert date from nanoseconds to days
-			auto src_ptr = (uint64_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+			auto src_ptr = ArrowBufferData<uint64_t>(array, 1) + scan_state.chunk_offset + array.offset;
 			if (nested_offset != -1) {
-				src_ptr = (uint64_t *)array.buffers[1] + nested_offset + array.offset;
+				src_ptr = ArrowBufferData<uint64_t>(array, 1) + nested_offset + array.offset;
 			}
-			auto tgt_ptr = (date_t *)FlatVector::GetData(vector);
+			auto tgt_ptr = FlatVector::GetData<date_t>(vector);
 			for (idx_t row = 0; row < size; row++) {
 				tgt_ptr[row] = date_t(int64_t(src_ptr[row]) / static_cast<int64_t>(1000 * 60 * 60 * 24));
 			}
@@ -468,10 +468,10 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLoca
 			break;
 		}
 		case ArrowDateTimeType::NANOSECONDS: {
-			auto tgt_ptr = (dtime_t *)FlatVector::GetData(vector);
-			auto src_ptr = (int64_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+			auto tgt_ptr = FlatVector::GetData<dtime_t>(vector);
+			auto src_ptr = ArrowBufferData<int64_t>(array, 1) + scan_state.chunk_offset + array.offset;
 			if (nested_offset != -1) {
-				src_ptr = (int64_t *)array.buffers[1] + nested_offset + array.offset;
+				src_ptr = ArrowBufferData<int64_t>(array, 1) + nested_offset + array.offset;
 			}
 			for (idx_t row = 0; row < size; row++) {
 				tgt_ptr[row].micros = src_ptr[row] / 1000;
@@ -499,10 +499,10 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLoca
 			break;
 		}
 		case ArrowDateTimeType::NANOSECONDS: {
-			auto tgt_ptr = (timestamp_t *)FlatVector::GetData(vector);
-			auto src_ptr = (int64_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+			auto tgt_ptr = FlatVector::GetData<timestamp_t>(vector);
+			auto src_ptr = ArrowBufferData<int64_t>(array, 1) + scan_state.chunk_offset + array.offset;
 			if (nested_offset != -1) {
-				src_ptr = (int64_t *)array.buffers[1] + nested_offset + array.offset;
+				src_ptr = ArrowBufferData<int64_t>(array, 1) + nested_offset + array.offset;
 			}
 			for (idx_t row = 0; row < size; row++) {
 				tgt_ptr[row].value = src_ptr[row] / 1000;
@@ -531,10 +531,10 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLoca
 			break;
 		}
 		case ArrowDateTimeType::NANOSECONDS: {
-			auto tgt_ptr = (interval_t *)FlatVector::GetData(vector);
-			auto src_ptr = (int64_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+			auto tgt_ptr = FlatVector::GetData<interval_t>(vector);
+			auto src_ptr = ArrowBufferData<int64_t>(array, 1) + scan_state.chunk_offset + array.offset;
 			if (nested_offset != -1) {
-				src_ptr = (int64_t *)array.buffers[1] + nested_offset + array.offset;
+				src_ptr = ArrowBufferData<int64_t>(array, 1) + nested_offset + array.offset;
 			}
 			for (idx_t row = 0; row < size; row++) {
 				tgt_ptr[row].micros = src_ptr[row] / 1000;
@@ -651,7 +651,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLoca
 
 template <class T>
 static void SetSelectionVectorLoop(SelectionVector &sel, data_ptr_t indices_p, idx_t size) {
-	auto indices = (T *)indices_p;
+	auto indices = reinterpret_cast<T *>(indices_p);
 	for (idx_t row = 0; row < size; row++) {
 		sel.set_index(row, indices[row]);
 	}
@@ -660,7 +660,7 @@ static void SetSelectionVectorLoop(SelectionVector &sel, data_ptr_t indices_p, i
 template <class T>
 static void SetSelectionVectorLoopWithChecks(SelectionVector &sel, data_ptr_t indices_p, idx_t size) {
 
-	auto indices = (T *)indices_p;
+	auto indices = reinterpret_cast<T *>(indices_p);
 	for (idx_t row = 0; row < size; row++) {
 		if (indices[row] > NumericLimits<uint32_t>::Maximum()) {
 			throw ConversionException("DuckDB only supports indices that fit on an uint32");
@@ -672,7 +672,7 @@ static void SetSelectionVectorLoopWithChecks(SelectionVector &sel, data_ptr_t in
 template <class T>
 static void SetMaskedSelectionVectorLoop(SelectionVector &sel, data_ptr_t indices_p, idx_t size, ValidityMask &mask,
                                          idx_t last_element_pos) {
-	auto indices = (T *)indices_p;
+	auto indices = reinterpret_cast<T *>(indices_p);
 	for (idx_t row = 0; row < size; row++) {
 		if (mask.RowIsValid(row)) {
 			sel.set_index(row, indices[row]);
@@ -788,7 +788,7 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 	}
 	auto dictionary_type = arrow_convert_data[col_idx]->dictionary_type;
 	//! Get Pointer to Indices of Dictionary
-	auto indices = (data_ptr_t)array.buffers[1] +
+	auto indices = ArrowBufferData<data_t>(array, 1) +
 	               GetTypeIdSize(dictionary_type.InternalType()) * (scan_state.chunk_offset + array.offset);
 	if (array.null_count > 0) {
 		ValidityMask indices_validity;
