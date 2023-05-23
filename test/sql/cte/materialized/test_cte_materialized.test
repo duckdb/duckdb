@@ -147,3 +147,9 @@ WITH RECURSIVE t(x,v) AS (
 3	[1]
 4	[1]
 5	[1]
+
+query I
+SELECT * FROM (WITH t(x) AS MATERIALIZED (SELECT * FROM generate_series(1,10) LIMIT 75%) SELECT * FROM t LIMIT 80%) AS _(x) ORDER BY x LIMIT 50%;
+----
+1
+2
