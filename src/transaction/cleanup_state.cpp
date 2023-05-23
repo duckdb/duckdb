@@ -28,12 +28,12 @@ void CleanupState::CleanupEntry(UndoFlags type, data_ptr_t data) {
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
-		auto info = (DeleteInfo *)data;
+		auto info = reinterpret_cast<DeleteInfo *>(data);
 		CleanupDelete(*info);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
-		auto info = (UpdateInfo *)data;
+		auto info = reinterpret_cast<UpdateInfo *>(data);
 		CleanupUpdate(*info);
 		break;
 	}

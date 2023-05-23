@@ -148,7 +148,7 @@ void DestroyListSegment(const ListSegmentFunctions &functions, ListSegment *segm
 static ListSegment *CreateStructSegment(const ListSegmentFunctions &functions, Allocator &allocator,
                                         uint16_t capacity) {
 	// allocate data and set header
-	auto segment = (ListSegment *)AllocateStructData(allocator, capacity, functions.child_functions.size());
+	auto segment = reinterpret_cast<ListSegment *>(AllocateStructData(allocator, capacity, functions.child_functions.size()));
 	segment->capacity = capacity;
 	segment->count = 0;
 	segment->next = nullptr;

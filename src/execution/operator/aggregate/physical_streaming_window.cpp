@@ -109,7 +109,7 @@ unique_ptr<OperatorState> PhysicalStreamingWindow::GetOperatorState(ExecutionCon
 OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                     GlobalOperatorState &gstate_p, OperatorState &state_p) const {
 	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
-	auto &state = (StreamingWindowState &)state_p;
+	auto &state = state_p.Cast<StreamingWindowState>();
 	if (!state.initialized) {
 		state.Initialize(context.client, input, select_list);
 	}

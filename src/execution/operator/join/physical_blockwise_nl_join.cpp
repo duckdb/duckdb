@@ -244,7 +244,7 @@ unique_ptr<GlobalSourceState> PhysicalBlockwiseNLJoin::GetGlobalSourceState(Clie
 
 unique_ptr<LocalSourceState> PhysicalBlockwiseNLJoin::GetLocalSourceState(ExecutionContext &context,
                                                                           GlobalSourceState &gstate) const {
-	return make_uniq<BlockwiseNLJoinLocalScanState>(*this, (BlockwiseNLJoinGlobalScanState &)gstate);
+	return make_uniq<BlockwiseNLJoinLocalScanState>(*this, gstate.Cast<BlockwiseNLJoinGlobalScanState>());
 }
 
 SourceResultType PhysicalBlockwiseNLJoin::GetData(ExecutionContext &context, DataChunk &chunk,

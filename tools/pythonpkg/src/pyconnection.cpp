@@ -1017,7 +1017,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const PandasDataFrame &v
 	}
 	auto new_df = PandasScanFunction::PandasReplaceCopiedNames(value);
 	vector<Value> params;
-	params.emplace_back(Value::POINTER((uintptr_t)new_df.ptr()));
+	params.emplace_back(Value::POINTER(CastPointerToValue(new_df.ptr())));
 	auto rel = connection->TableFunction("pandas_scan", params)->Alias(name);
 	rel->extra_dependencies =
 	    make_uniq<PythonDependencies>(make_uniq<RegisteredObject>(value), make_uniq<RegisteredObject>(new_df));
@@ -1304,9 +1304,9 @@ static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
-	children.push_back(make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory.get())));
-	children.push_back(make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_produce)));
-	children.push_back(make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_get_schema)));
+	children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory.get()))));
+	children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory_produce))));
+	children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory_get_schema))));
 
 	table_function.function = make_uniq<FunctionExpression>("arrow_scan", std::move(children));
 	table_function.external_dependency =

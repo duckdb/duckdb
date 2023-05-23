@@ -918,7 +918,7 @@ void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 		auto existing_function = Catalog::GetEntry<ScalarFunctionCatalogEntry>(*this, INVALID_CATALOG, info.schema,
 		                                                                       info.name, OnEntryNotFound::RETURN_NULL);
 		if (existing_function) {
-			auto &new_info = (CreateScalarFunctionInfo &)info;
+			auto &new_info = info.Cast<CreateScalarFunctionInfo>();
 			if (new_info.functions.MergeFunctionSet(existing_function->functions)) {
 				// function info was updated from catalog entry, rewrite is needed
 				info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;

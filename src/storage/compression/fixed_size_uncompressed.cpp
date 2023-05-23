@@ -35,7 +35,7 @@ bool FixedSizeAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
 
 template <class T>
 idx_t FixedSizeFinalAnalyze(AnalyzeState &state_p) {
-	auto &state = (FixedSizeAnalyzeState &)state_p;
+	auto &state = state_p.template Cast<FixedSizeAnalyzeState>();
 	return sizeof(T) * state.count;
 }
 
@@ -134,7 +134,7 @@ unique_ptr<SegmentScanState> FixedSizeInitScan(ColumnSegment &segment) {
 template <class T>
 void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                           idx_t result_offset) {
-	auto &scan_state = (FixedSizeScanState &)*state.scan_state;
+	auto &scan_state = state.scan_state->Cast<FixedSizeScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();

@@ -270,7 +270,7 @@ void ColumnReader::ResetPage() {
 void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
 
-	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
 	bool uncompressed = false;
@@ -315,7 +315,7 @@ void ColumnReader::AllocateCompressed(idx_t size) {
 }
 
 void ColumnReader::PreparePage(PageHeader &page_hdr) {
-	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
 	if (chunk->meta_data.codec == CompressionCodec::UNCOMPRESSED) {
@@ -396,7 +396,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		uint32_t rep_length = is_v1 ? block->read<uint32_t>() : v2_header.repetition_levels_byte_length;
 		block->available(rep_length);
 		repeated_decoder =
-		    make_uniq<RleBpDecoder>((const uint8_t *)block->ptr, rep_length, RleBpDecoder::ComputeBitWidth(max_repeat));
+		    make_uniq<RleBpDecoder>(block->Uint8Ptr(), rep_length, RleBpDecoder::ComputeBitWidth(max_repeat));
 		block->inc(rep_length);
 	} else if (is_v2 && v2_header.repetition_levels_byte_length > 0) {
 		block->inc(v2_header.repetition_levels_byte_length);
@@ -406,7 +406,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		uint32_t def_length = is_v1 ? block->read<uint32_t>() : v2_header.definition_levels_byte_length;
 		block->available(def_length);
 		defined_decoder =
-		    make_uniq<RleBpDecoder>((const uint8_t *)block->ptr, def_length, RleBpDecoder::ComputeBitWidth(max_define));
+		    make_uniq<RleBpDecoder>(block->Uint8Ptr(), def_length, RleBpDecoder::ComputeBitWidth(max_define));
 		block->inc(def_length);
 	} else if (is_v2 && v2_header.definition_levels_byte_length > 0) {
 		block->inc(v2_header.definition_levels_byte_length);
@@ -418,7 +418,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		// where is it otherwise??
 		auto dict_width = block->read<uint8_t>();
 		// TODO somehow dict_width can be 0 ?
-		dict_decoder = make_uniq<RleBpDecoder>((const uint8_t *)block->ptr, block->len, dict_width);
+		dict_decoder = make_uniq<RleBpDecoder>(block->Uint8Ptr(), block->len, dict_width);
 		block->inc(block->len);
 		break;
 	}
@@ -427,11 +427,11 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 			throw std::runtime_error("RLE encoding is only supported for boolean data");
 		}
 		block->inc(sizeof(uint32_t));
-		rle_decoder = make_uniq<RleBpDecoder>((const uint8_t *)block->ptr, block->len, 1);
+		rle_decoder = make_uniq<RleBpDecoder>(block->Uint8Ptr(), block->len, 1);
 		break;
 	}
 	case Encoding::DELTA_BINARY_PACKED: {
-		dbp_decoder = make_uniq<DbpDecoder>((const uint8_t *)block->ptr, block->len);
+		dbp_decoder = make_uniq<DbpDecoder>(block->Uint8Ptr(), block->len);
 		block->inc(block->len);
 		break;
 	}
@@ -478,12 +478,12 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 
 		if (HasRepeats()) {
 			D_ASSERT(repeated_decoder);
-			repeated_decoder->GetBatch<uint8_t>((char *)repeat_out + result_offset, read_now);
+			repeated_decoder->GetBatch<uint8_t>(repeat_out + result_offset, read_now);
 		}
 
 		if (HasDefines()) {
 			D_ASSERT(defined_decoder);
-			defined_decoder->GetBatch<uint8_t>((char *)define_out + result_offset, read_now);
+			defined_decoder->GetBatch<uint8_t>(define_out + result_offset, read_now);
 		}
 
 		idx_t null_count = 0;
@@ -566,7 +566,7 @@ void ColumnReader::ApplyPendingSkips(idx_t num_values) {
 
 	while (remaining) {
 		idx_t to_read = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE);
-		read += Read(to_read, none_filter, (uint8_t *)dummy_define.ptr, (uint8_t *)dummy_repeat.ptr, dummy_result);
+		read += Read(to_read, none_filter, dummy_define.Uint8Ptr(), (uint8_t *)dummy_repeat.ptr, dummy_result);
 		remaining -= to_read;
 	}
 
@@ -630,7 +630,7 @@ void StringColumnReader::Dictionary(shared_ptr<ResizeableBuffer> data, idx_t num
 }
 
 static shared_ptr<ResizeableBuffer> ReadDbpData(Allocator &allocator, ResizeableBuffer &buffer, idx_t &value_count) {
-	auto decoder = make_uniq<DbpDecoder>((const uint8_t *)buffer.ptr, buffer.len);
+	auto decoder = make_uniq<DbpDecoder>(buffer.Uint8Ptr(), buffer.len);
 	value_count = decoder->TotalValues();
 	auto result = make_shared<ResizeableBuffer>();
 	result->resize(allocator, sizeof(uint32_t) * value_count);
@@ -1186,7 +1186,7 @@ unique_ptr<ColumnReader> ParquetDecimalUtils::CreateReader(ParquetReader &reader
 //===--------------------------------------------------------------------===//
 struct UUIDValueConversion {
 	static hugeint_t DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
-		auto dict_ptr = (hugeint_t *)dict.ptr;
+		auto dict_ptr = reinterpret_cast<hugeint_t *>(dict.ptr);
 		return dict_ptr[offset];
 	}
 
@@ -1232,7 +1232,7 @@ public:
 protected:
 	void Dictionary(shared_ptr<ResizeableBuffer> dictionary_data, idx_t num_entries) { // NOLINT
 		AllocateDict(num_entries * sizeof(hugeint_t));
-		auto dict_ptr = (hugeint_t *)this->dict->ptr;
+		auto dict_ptr = reinterpret_cast<hugeint_t *>(this->dict->ptr);
 		for (idx_t i = 0; i < num_entries; i++) {
 			dict_ptr[i] = UUIDValueConversion::PlainRead(*dictionary_data, *this);
 		}
@@ -1246,7 +1246,7 @@ struct IntervalValueConversion {
 	static constexpr const idx_t PARQUET_INTERVAL_SIZE = 12;
 
 	static interval_t DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
-		auto dict_ptr = (interval_t *)dict.ptr;
+		auto dict_ptr = reinterpret_cast<interval_t *>(dict.ptr);
 		return dict_ptr[offset];
 	}
 

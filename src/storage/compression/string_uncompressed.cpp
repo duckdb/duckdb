@@ -73,12 +73,12 @@ unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSeg
 void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
                                                   Vector &result, idx_t result_offset) {
 	// clear any previously locked buffers and get the primary buffer handle
-	auto &scan_state = (StringScanState &)*state.scan_state;
+	auto &scan_state = state.scan_state->Cast<StringScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto dict = GetDictionary(segment, scan_state.handle);
-	auto base_data = (int32_t *)(baseptr + DICTIONARY_HEADER_SIZE);
+	auto base_data = reinterpret_cast<int32_t *>(baseptr + DICTIONARY_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	int32_t previous_offset = start > 0 ? base_data[start - 1] : 0;

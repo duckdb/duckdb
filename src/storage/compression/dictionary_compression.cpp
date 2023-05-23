@@ -274,7 +274,7 @@ public:
 
 		// calculate ptr and offsets
 		auto base_ptr = handle.Ptr();
-		auto header_ptr = (dictionary_compression_header_t *)base_ptr;
+		auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(base_ptr);
 		auto compressed_selection_buffer_offset = DictionaryCompressionStorage::DICTIONARY_HEADER_SIZE;
 		auto index_buffer_offset = compressed_selection_buffer_offset + compressed_selection_buffer_size;
 
@@ -444,12 +444,12 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 
 	// Load header values
 	auto dict = DictionaryCompressionStorage::GetDictionary(segment, state->handle);
-	auto header_ptr = (dictionary_compression_header_t *)baseptr;
+	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);
 	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_offset));
 	auto index_buffer_count = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_count));
 	state->current_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width)));
 
-	auto index_buffer_ptr = (uint32_t *)(baseptr + index_buffer_offset);
+	auto index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
 
 	state->dictionary = make_buffer<Vector>(segment.type, index_buffer_count);
 	auto dict_child_data = FlatVector::GetData<string_t>(*(state->dictionary));
@@ -470,7 +470,7 @@ template <bool ALLOW_DICT_VECTORS>
 void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
                                                      Vector &result, idx_t result_offset) {
 	// clear any previously locked buffers and get the primary buffer handle
-	auto &scan_state = (CompressedStringScanState &)*state.scan_state;
+	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();

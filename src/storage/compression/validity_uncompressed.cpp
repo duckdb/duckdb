@@ -227,7 +227,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 	auto &result_mask = FlatVector::Validity(result);
 	auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	D_ASSERT(scan_state.block_id == segment.block->BlockId());
-	auto input_data = (validity_t *)buffer_ptr;
+	auto input_data = reinterpret_cast<validity_t *>(buffer_ptr);
 
 #ifdef DEBUG
 	// this method relies on all the bits we are going to write to being set to valid
@@ -353,8 +353,8 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 		auto &result_mask = FlatVector::Validity(result);
 		auto buffer_ptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 		D_ASSERT(scan_state.block_id == segment.block->BlockId());
-		auto input_data = (validity_t *)buffer_ptr;
-		auto result_data = (validity_t *)result_mask.GetData();
+		auto input_data = reinterpret_cast<validity_t *>(buffer_ptr);
+		auto result_data = result_mask.GetData();
 		idx_t start_offset = start / ValidityMask::BITS_PER_VALUE;
 		idx_t entry_scan_count = (scan_count + ValidityMask::BITS_PER_VALUE - 1) / ValidityMask::BITS_PER_VALUE;
 		for (idx_t i = 0; i < entry_scan_count; i++) {
@@ -364,7 +364,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 			}
 			if (!result_data) {
 				result_mask.Initialize(MaxValue<idx_t>(STANDARD_VECTOR_SIZE, scan_count));
-				result_data = (validity_t *)result_mask.GetData();
+				result_data = result_mask.GetData();
 			}
 			result_data[i] = input_entry;
 		}
@@ -450,7 +450,7 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t start_row) {
 		idx_t byte_pos = start_bit / 8;
 		idx_t bit_start = byte_pos * 8;
 		idx_t bit_end = (byte_pos + 1) * 8;
-		ValidityMask mask((validity_t *)handle.Ptr() + byte_pos);
+		ValidityMask mask(reinterpret_cast<validity_t *>(handle.Ptr() + byte_pos));
 		for (idx_t i = start_bit; i < bit_end; i++) {
 			mask.SetValid(i - bit_start);
 		}

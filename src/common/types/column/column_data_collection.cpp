@@ -505,7 +505,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			target_validity.SetAllValid(STANDARD_VECTOR_SIZE);
 		}
 
-		auto target_entries = (string_t *)base_ptr;
+		auto target_entries = reinterpret_cast<string_t *>(base_ptr);
 		for (idx_t i = 0; i < append_count; i++) {
 			auto source_idx = source_data.sel->get_index(offset + i);
 			auto target_idx = current_segment.count + i;

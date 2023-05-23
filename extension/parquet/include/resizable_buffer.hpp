@@ -59,6 +59,10 @@ public:
 			throw std::runtime_error("Out of buffer");
 		}
 	}
+
+	uint8_t *Uint8Ptr() {
+		return reinterpret_cast<uint8_t *>(ptr);
+	}
 };
 
 class ResizeableBuffer : public ByteBuffer {

@@ -30,7 +30,7 @@ public:
 
 	template <typename T>
 	void GetBatch(char *values_target_ptr, uint32_t batch_size) {
-		auto values = (T *)values_target_ptr;
+		auto values = reinterpret_cast<T *>(values_target_ptr);
 		uint32_t values_read = 0;
 
 		while (values_read < batch_size) {
@@ -60,6 +60,11 @@ public:
 		if (values_read != batch_size) {
 			throw std::runtime_error("RLE decode did not find enough values");
 		}
+	}
+
+	template <typename T>
+	void GetBatch(uint8_t *values_target_ptr, uint32_t batch_size) {
+		return GetBatch<T>(reinterpret_cast<char *>(values_target_ptr), batch_size);
 	}
 
 	static uint8_t ComputeBitWidth(idx_t val) {

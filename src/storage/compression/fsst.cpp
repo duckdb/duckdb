@@ -155,7 +155,7 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	vector<unsigned char *> fsst_string_ptrs;
 	for (auto &str : state.fsst_strings) {
 		fsst_string_sizes.push_back(str.GetSize());
-		fsst_string_ptrs.push_back((unsigned char *)str.GetData());
+		fsst_string_ptrs.push_back((unsigned char *)str.GetData()); // NOLINT
 	}
 
 	state.fsst_encoder = duckdb_fsst_create(string_count, &fsst_string_sizes[0], &fsst_string_ptrs[0], 0);
@@ -332,13 +332,13 @@ public:
 
 		// calculate ptr and offsets
 		auto base_ptr = handle.Ptr();
-		auto header_ptr = (fsst_compression_header_t *)base_ptr;
+		auto header_ptr = reinterpret_cast<fsst_compression_header_t *>(base_ptr);
 		auto compressed_index_buffer_offset = sizeof(fsst_compression_header_t);
 		auto symbol_table_offset = compressed_index_buffer_offset + compressed_index_buffer_size;
 
 		D_ASSERT(current_segment->count == index_buffer.size());
 		BitpackingPrimitives::PackBuffer<sel_t, false>(base_ptr + compressed_index_buffer_offset,
-		                                               (uint32_t *)(index_buffer.data()), current_segment->count,
+		                                               reinterpret_cast<uint32_t *>(index_buffer.data()), current_segment->count,
 		                                               current_width);
 
 		// Write the fsst symbol table or nothing
@@ -522,7 +522,7 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment)
 	auto base_ptr = state->handle.Ptr() + segment.GetBlockOffset();
 
 	state->duckdb_fsst_decoder = make_buffer<duckdb_fsst_decoder_t>();
-	auto retval = ParseFSSTSegmentHeader(base_ptr, (duckdb_fsst_decoder_t *)state->duckdb_fsst_decoder.get(),
+	auto retval = ParseFSSTSegmentHeader(base_ptr, reinterpret_cast<duckdb_fsst_decoder_t *>(state->duckdb_fsst_decoder.get()),
 	                                     &state->current_width);
 	if (!retval) {
 		state->duckdb_fsst_decoder = nullptr;

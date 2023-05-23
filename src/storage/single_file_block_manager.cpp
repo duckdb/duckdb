@@ -170,7 +170,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	h2.free_list = INVALID_BLOCK;
 	h2.block_count = 0;
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
-	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE * 2);
+	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 	// ensure that writing to disk is completed before returning
 	handle->Sync();
 	// we start with h2 as active_header, this way our initial write will be in h1
@@ -197,7 +197,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	DatabaseHeader h1, h2;
 	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE);
 	h1 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
-	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2);
+	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 	h2 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
 	// check the header with the highest iteration count
 	if (h1.iteration > h2.iteration) {
