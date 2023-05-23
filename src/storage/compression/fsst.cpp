@@ -431,7 +431,7 @@ void FSSTStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t
 		total_count++;
 		total_size += data[idx].GetSize();
 		sizes_in.push_back(data[idx].GetSize());
-		strings_in.push_back((unsigned char *)data[idx].GetData());
+		strings_in.push_back((unsigned char *)data[idx].GetData()); // NOLINT
 	}
 
 	// Only Nulls or empty strings in this vector, nothing to compress

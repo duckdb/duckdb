@@ -983,7 +983,7 @@ public:
 	string GetStats(hugeint_t &input) {
 		data_t buffer[16];
 		WriteParquetDecimal(input, buffer);
-		return string((char *)buffer, 16);
+		return string(const_char_ptr_cast(buffer), 16);
 	}
 
 	bool HasStats() {

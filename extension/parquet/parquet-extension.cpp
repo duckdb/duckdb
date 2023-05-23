@@ -343,7 +343,7 @@ public:
 
 	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
 	                                                                  TableFunctionInitInput &input) {
-		auto &bind_data = input.bind_data->Cast<ParquetReadBindData>();
+		auto &bind_data = input.bind_data->CastNoConst<ParquetReadBindData>();
 		auto result = make_uniq<ParquetReadGlobalState>();
 
 		result->file_opening = vector<bool>(bind_data.files.size(), false);

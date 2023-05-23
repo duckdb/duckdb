@@ -284,22 +284,21 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		uncompressed = true;
 	}
 	if (uncompressed) {
-		trans.read(reinterpret_cast<uint8_t *>(block->ptr), page_hdr.compressed_page_size);
+		trans.read(block->ptr, page_hdr.compressed_page_size);
 		return;
 	}
 
 	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed
 	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
 	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
-	trans.read(reinterpret_cast<uint8_t *>(block->ptr), uncompressed_bytes);
+	trans.read(block->ptr, uncompressed_bytes);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 
 	AllocateCompressed(compressed_bytes);
-	trans.read(reinterpret_cast<uint8_t *>(compressed_buffer.ptr), compressed_bytes);
+	trans.read(compressed_buffer.ptr, compressed_bytes);
 
-	DecompressInternal(chunk->meta_data.codec, const_char_ptr_cast(compressed_buffer.ptr), compressed_bytes,
-	                   char_ptr_cast(block->ptr) + uncompressed_bytes,
+	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_bytes, block->ptr + uncompressed_bytes,
 	                   page_hdr.uncompressed_page_size - uncompressed_bytes);
 }
 
@@ -330,24 +329,24 @@ void ColumnReader::PreparePage(PageHeader &page_hdr) {
 	AllocateCompressed(page_hdr.compressed_page_size + 1);
 	trans.read((uint8_t *)compressed_buffer.ptr, page_hdr.compressed_page_size);
 
-	DecompressInternal(chunk->meta_data.codec, (const char *)compressed_buffer.ptr, page_hdr.compressed_page_size,
-	                   (char *)block->ptr, page_hdr.uncompressed_page_size);
+	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, page_hdr.compressed_page_size, block->ptr,
+	                   page_hdr.uncompressed_page_size);
 }
 
-void ColumnReader::DecompressInternal(CompressionCodec::type codec, const char *src, idx_t src_size, char *dst,
-                                      idx_t dst_size) {
+void ColumnReader::DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size,
+                                      data_ptr_t dst, idx_t dst_size) {
 	switch (codec) {
 	case CompressionCodec::UNCOMPRESSED:
 		throw InternalException("Parquet data unexpectedly uncompressed");
 	case CompressionCodec::GZIP: {
 		MiniZStream s;
-		s.Decompress(src, src_size, dst, dst_size);
+		s.Decompress(const_char_ptr_cast(src), src_size, char_ptr_cast(dst), dst_size);
 		break;
 	}
 	case CompressionCodec::SNAPPY: {
 		{
 			size_t uncompressed_size = 0;
-			auto res = duckdb_snappy::GetUncompressedLength(src, src_size, &uncompressed_size);
+			auto res = duckdb_snappy::GetUncompressedLength(const_char_ptr_cast(src), src_size, &uncompressed_size);
 			if (!res) {
 				throw std::runtime_error("Snappy decompression failure");
 			}
@@ -355,7 +354,7 @@ void ColumnReader::DecompressInternal(CompressionCodec::type codec, const char *
 				throw std::runtime_error("Snappy decompression failure: Uncompressed data size mismatch");
 			}
 		}
-		auto res = duckdb_snappy::RawUncompress(src, src_size, dst);
+		auto res = duckdb_snappy::RawUncompress(const_char_ptr_cast(src), src_size, char_ptr_cast(dst));
 		if (!res) {
 			throw std::runtime_error("Snappy decompression failure");
 		}
@@ -454,7 +453,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out, data_ptr_t repeat_out,
                          Vector &result) {
 	// we need to reset the location because multiple column readers share the same protocol
-	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 	trans.SetLocation(chunk_read_offset);
 
 	// Perform any skips that were not applied yet.
@@ -500,7 +499,8 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			offset_buffer.resize(reader.allocator, sizeof(uint32_t) * (read_now - null_count));
 			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, read_now - null_count);
 			DictReference(result);
-			Offsets((uint32_t *)offset_buffer.ptr, define_out, read_now, filter, result_offset, result);
+			Offsets(reinterpret_cast<uint32_t *>(offset_buffer.ptr), define_out, read_now, filter, result_offset,
+			        result);
 		} else if (dbp_decoder) {
 			// TODO keep this in the state
 			auto read_buf = make_shared<ResizeableBuffer>();
@@ -648,7 +648,7 @@ void StringColumnReader::PrepareDeltaLengthByteArray(ResizeableBuffer &buffer) {
 		byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, nullptr);
 		return;
 	}
-	auto length_data = (uint32_t *)length_buffer->ptr;
+	auto length_data = reinterpret_cast<uint32_t *>(length_buffer->ptr);
 	byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, value_count);
 	byte_array_count = value_count;
 	delta_offset = 0;
@@ -675,8 +675,8 @@ void StringColumnReader::PrepareDeltaByteArray(ResizeableBuffer &buffer) {
 		byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, nullptr);
 		return;
 	}
-	auto prefix_data = (uint32_t *)prefix_buffer->ptr;
-	auto suffix_data = (uint32_t *)suffix_buffer->ptr;
+	auto prefix_data = reinterpret_cast<uint32_t *>(prefix_buffer->ptr);
+	auto suffix_data = reinterpret_cast<uint32_t *>(suffix_buffer->ptr);
 	byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, prefix_count);
 	byte_array_count = prefix_count;
 	delta_offset = 0;
@@ -1100,7 +1100,7 @@ idx_t StructColumnReader::GroupRowsAvailable() {
 template <class DUCKDB_PHYSICAL_TYPE, bool FIXED_LENGTH>
 struct DecimalParquetValueConversion {
 	static DUCKDB_PHYSICAL_TYPE DictRead(ByteBuffer &dict, uint32_t &offset, ColumnReader &reader) {
-		auto dict_ptr = (DUCKDB_PHYSICAL_TYPE *)dict.ptr;
+		auto dict_ptr = reinterpret_cast<DUCKDB_PHYSICAL_TYPE *>(dict.ptr);
 		return dict_ptr[offset];
 	}
 
@@ -1284,7 +1284,7 @@ public:
 protected:
 	void Dictionary(shared_ptr<ResizeableBuffer> dictionary_data, idx_t num_entries) override { // NOLINT
 		AllocateDict(num_entries * sizeof(interval_t));
-		auto dict_ptr = (interval_t *)this->dict->ptr;
+		auto dict_ptr = reinterpret_cast<interval_t *>(this->dict->ptr);
 		for (idx_t i = 0; i < num_entries; i++) {
 			dict_ptr[i] = IntervalValueConversion::PlainRead(*dictionary_data, *this);
 		}

@@ -166,7 +166,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	}
 
 	// iterate over the result to materialize the data needed for the NumPy arrays
-	idx_t initial_capacity = STANDARD_VECTOR_SIZE * 2;
+	idx_t initial_capacity = STANDARD_VECTOR_SIZE * 2ULL;
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		// materialized query result: we know exactly how much space we need
 		auto &materialized = (MaterializedQueryResult &)*result;
@@ -333,7 +333,7 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t 
 	auto record_batch_reader_func = pyarrow_lib_module.attr("RecordBatchReader").attr("_import_from_c");
 	//! We have to construct an Arrow Array Stream
 	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(std::move(result), rows_per_batch);
-	py::object record_batch_reader = record_batch_reader_func((uint64_t)&result_stream->stream);
+	py::object record_batch_reader = record_batch_reader_func((uint64_t)&result_stream->stream); // NOLINT
 	return py::cast<duckdb::pyarrow::RecordBatchReader>(record_batch_reader);
 }
 

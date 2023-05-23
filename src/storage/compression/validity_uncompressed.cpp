@@ -382,7 +382,7 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 	auto dataptr = handle.Ptr() + segment.GetBlockOffset();
-	ValidityMask mask((validity_t *)dataptr);
+	ValidityMask mask(reinterpret_cast<validity_t *>(dataptr));
 	auto &result_mask = FlatVector::Validity(result);
 	if (!mask.RowIsValidUnsafe(row_id)) {
 		result_mask.SetInvalid(result_idx);
@@ -421,7 +421,7 @@ idx_t ValidityAppend(CompressionAppendState &append_state, ColumnSegment &segmen
 		return append_count;
 	}
 
-	ValidityMask mask((validity_t *)append_state.handle.Ptr());
+	ValidityMask mask(reinterpret_cast<validity_t *>(append_state.handle.Ptr()));
 	for (idx_t i = 0; i < append_count; i++) {
 		auto idx = data.sel->get_index(offset + i);
 		if (!data.validity.RowIsValidUnsafe(idx)) {
