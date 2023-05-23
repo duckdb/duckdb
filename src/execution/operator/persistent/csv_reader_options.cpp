@@ -163,6 +163,22 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		SetDateFormat(LogicalTypeId::TIMESTAMP, format, true);
 	} else if (loption == "ignore_errors") {
 		ignore_errors = ParseBoolean(value, loption);
+	} else if (loption == "recovery_key_columns") {
+		if(value.type().id() != LogicalTypeId::LIST) {
+			throw BinderException("Unsupported parameter for recovery_key_columns: expected a list of column indices");
+		}
+		if(expected_names.empty()) {
+			throw BinderException("Unsupported parameter for recovery_key_columns: no 'columns' parameter provided");
+		}
+		// Get the list of columns to use as a recovery key
+		auto &children = ListValue::GetChildren(value);
+		for (auto &child : children) {
+			auto col_idx = child.GetValue<idx_t>();
+			if(col_idx >= expected_names.size()) {
+				throw BinderException("Unsupported parameter for recovery_key_columns: column index out of range");
+			}
+			recovery_key_columns.push_back(child.GetValue<idx_t>());
+		}
 	} else if (loption == "buffer_size") {
 		buffer_size = ParseInteger(value, loption);
 		if (buffer_size == 0) {

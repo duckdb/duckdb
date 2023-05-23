@@ -55,6 +55,8 @@ struct BufferedCSVReaderOptions {
 	bool header = false;
 	//! Whether or not we should ignore InvalidInput errors
 	bool ignore_errors = false;
+	//! Columns to use as recovery keys for rejected rows when reading with ignore_errors = true 
+	vector<idx_t> recovery_key_columns;
 	//! Expected number of columns
 	idx_t num_cols = 0;
 	//! Number of samples to buffer

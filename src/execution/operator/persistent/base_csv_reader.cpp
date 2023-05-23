@@ -578,6 +578,26 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 					appender.Append(col_idx);
 					appender.Append(Value(col_name));
 					appender.Append(Value(parsed_str));
+					if(options.recovery_key_columns.empty()) {
+						//appender.Append(Value(nullptr));
+						// No op
+					} else {
+						child_list_t<Value> recovery_key;
+						for(auto &key_idx : options.recovery_key_columns) {
+							
+							// Figure out if the recovery key is valid.
+							// If not, error out for real.
+							auto &component_vector = insert_chunk.data[key_idx];
+							UnifiedVectorFormat component_data;
+							component_vector.ToUnifiedFormat(parse_chunk.size(), component_data);
+							if(!component_data.validity.RowIsValid(row_idx) && !FlatVector::IsNull(parse_vector, row_idx)) {
+								throw InvalidInputException("Could not parse recovery key");
+							}
+							auto component = component_vector.GetValue(component_data.sel->get_index(row_idx));
+							recovery_key.emplace_back(names[key_idx], component);
+						}
+						appender.Append(Value::STRUCT(recovery_key));
+					}
 					appender.Append(Value(row_error_msg));
 					appender.Append(Value(GetFileName()));
 					appender.EndRow();
@@ -601,7 +621,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 		idx_t sel_size = 0;
 
 		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
-			bool failed = false;
+			bool row_failed = false;
 			for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
 				auto col_idx = reader_data.column_ids[c];
 				auto result_idx = reader_data.column_mapping[c];
@@ -611,11 +631,11 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 
 				bool was_already_null = FlatVector::IsNull(parse_vector, row_idx);
 				if (!was_already_null && FlatVector::IsNull(result_vector, row_idx)) {
-					failed = true;
+					row_failed = true;
 					break;
 				}
 			}
-			if (!failed) {
+			if (!row_failed) {
 				succesful_rows.set_index(sel_size++, row_idx);
 			}
 		}

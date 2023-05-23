@@ -7,6 +7,8 @@
 
 namespace duckdb {
 
+struct ReadCSVData;
+
 class CSVRejectsTable : public ObjectCacheEntry {
 public:
 	CSVRejectsTable() {
@@ -17,7 +19,7 @@ public:
 
 	static shared_ptr<CSVRejectsTable> GetOrCreate(ClientContext &context);
 
-	void ResetTable(ClientContext &context);
+	void ResetTable(ClientContext &context, const ReadCSVData &options);
 	TableCatalogEntry &GetTable(ClientContext &context);
 
 public:
