@@ -12,6 +12,10 @@ set(PARAMETERS "-warnings")
 build_loadable_extension(httpfs ${PARAMETERS} s3fs.cpp httpfs.cpp crypto.cpp
                          httpfs-extension.cpp)
 
+if(MINGW)
+  set(OPENSSL_USE_STATIC_LIBS TRUE)
+endif()
+
 find_package(OpenSSL REQUIRED)
 include_directories(${OPENSSL_INCLUDE_DIR})
 target_link_libraries(httpfs_loadable_extension duckdb_mbedtls ${OPENSSL_LIBRARIES})

@@ -185,6 +185,11 @@ jobs:
       with:
         openssl: 1
 
+    - name: Configure OpenSSL path
+      shell: bash
+      run: |
+        echo "OPENSSL_ROOT_DIR=/usr/local/ssl" >> $GITHUB_ENV
+  
     - uses: ./.github/actions/build_extensions
       with:
         post_install: rm build/release/src/libduckdb*

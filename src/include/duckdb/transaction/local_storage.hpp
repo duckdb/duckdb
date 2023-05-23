@@ -108,7 +108,7 @@ public:
 	//! Initialize a scan of the local storage
 	void InitializeScan(DataTable &table, CollectionScanState &state, optional_ptr<TableFilterSet> table_filters);
 	//! Scan
-	void Scan(CollectionScanState &state, const vector<column_t> &column_ids, DataChunk &result);
+	void Scan(CollectionScanState &state, const vector<storage_t> &column_ids, DataChunk &result);
 
 	void InitializeParallelScan(DataTable &table, ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,

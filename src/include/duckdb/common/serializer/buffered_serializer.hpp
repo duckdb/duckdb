@@ -16,7 +16,7 @@ namespace duckdb {
 #define SERIALIZER_DEFAULT_SIZE 1024
 
 struct BinaryData {
-	unsafe_array_ptr<data_t> data;
+	unsafe_unique_array<data_t> data;
 	idx_t size;
 };
 
@@ -26,7 +26,7 @@ public:
 	//! writing past the initial threshold
 	DUCKDB_API explicit BufferedSerializer(idx_t maximum_size = SERIALIZER_DEFAULT_SIZE);
 	//! Serializes to a provided (owned) data pointer
-	BufferedSerializer(unsafe_array_ptr<data_t> data, idx_t size);
+	BufferedSerializer(unsafe_unique_array<data_t> data, idx_t size);
 	BufferedSerializer(data_ptr_t data, idx_t size);
 
 	idx_t maximum_size;

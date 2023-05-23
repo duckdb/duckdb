@@ -5,7 +5,7 @@
 #' @param sql A SQL string
 #' @param conn An optional connection, defaults to built-in default
 #' @return A data frame with the query result
-#' @export
+#' @noRd
 #' @examples
 #' print(duckdb::sql("SELECT 42"))
 
@@ -21,7 +21,7 @@ default_duckdb_connection <- new.env(parent=emptyenv())
 #' `default_connection()` returns a default, built-in connection
 #'
 #' @return A DuckDB connection object
-#' @export
+#' @noRd
 #' @examples
 #' conn <- default_connection()
 #' print(duckdb::sql("SELECT 42", conn=conn))

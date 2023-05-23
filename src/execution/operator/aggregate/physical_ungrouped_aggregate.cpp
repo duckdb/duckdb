@@ -39,7 +39,7 @@ struct AggregateState {
 		for (auto &aggregate : aggregate_expressions) {
 			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-			auto state = make_unsafe_array<data_t>(aggr.function.state_size());
+			auto state = make_unsafe_uniq_array<data_t>(aggr.function.state_size());
 			aggr.function.initialize(state.get());
 			aggregates.push_back(std::move(state));
 			bind_data.push_back(aggr.bind_info.get());
@@ -69,7 +69,7 @@ struct AggregateState {
 	}
 
 	//! The aggregate values
-	vector<unsafe_array_ptr<data_t>> aggregates;
+	vector<unsafe_unique_array<data_t>> aggregates;
 	//! The bind data
 	vector<FunctionData *> bind_data;
 	//! The destructors
