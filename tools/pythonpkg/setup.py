@@ -286,6 +286,7 @@ setup(
     license='MIT',
     data_files = data_files,
     packages=[
+        'adbc_driver_duckdb',
         'pyduckdb',
         'duckdb-stubs'
     ],
