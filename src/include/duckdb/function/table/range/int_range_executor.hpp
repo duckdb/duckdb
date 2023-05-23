@@ -18,7 +18,7 @@ public:
 	    : RangeExecutor(context, args_list, generate_series_p), current_row(0) {
 	}
 
-	~IntRangeExecutor() {
+	virtual ~IntRangeExecutor() {
 	}
 
 public:

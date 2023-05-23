@@ -18,7 +18,7 @@ public:
 	    : RangeExecutor(context, args_list, generate_series_p) {
 	}
 
-	~TimeRangeExecutor() {
+	virtual ~TimeRangeExecutor() {
 	}
 
 public:
@@ -34,7 +34,7 @@ private:
 	timestamp_t current_timestamp;
 
 private:
-	void FetchArguments(DataChunk &input, const vector<unique_ptr<Expression>> &args_list);
+	void FetchArguments(DataChunk &input, const vector<unique_ptr<Expression>> &args_list) override;
 	//! determines if are there are still rows to be emitted
 	bool Finished(timestamp_t current_value);
 	//! set current_timestamp one timestep forward

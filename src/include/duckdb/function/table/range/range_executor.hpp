@@ -32,7 +32,7 @@ protected:
 	}
 
 public:
-	~RangeExecutor() {
+	virtual ~RangeExecutor() {
 	}
 
 	//! execute the Range function
