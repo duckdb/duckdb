@@ -137,7 +137,7 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 	if (TryLoadLinkedExtension(db, extension)) {
 		return ExtensionLoadResult::LOADED_EXTENSION;
 	}  else {
-		return ExtensionLoadResult::EXTENSION_UNKNOWN;
+		return ExtensionLoadResult::NOT_LOADED;
 	}
 #endif
 	return ExtensionLoadResult::LOADED_EXTENSION;
