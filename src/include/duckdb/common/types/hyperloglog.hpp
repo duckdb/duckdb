@@ -14,7 +14,7 @@
 
 namespace duckdb_hll {
 struct robj;
-};
+}
 
 namespace duckdb {
 
