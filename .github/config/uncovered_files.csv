@@ -205,6 +205,7 @@ execution/operator/scan/physical_positional_scan.cpp	20
 execution/operator/schema/physical_attach.cpp	6
 execution/operator/schema/physical_create_index.cpp	3
 execution/operator/schema/physical_create_type.cpp	2
+execution/operator/set/physical_cte.cpp	1
 execution/partitionable_hashtable.cpp	5
 execution/perfect_aggregate_hashtable.cpp	4
 execution/physical_operator.cpp	2
@@ -553,6 +554,7 @@ parser/parsed_expression.cpp	15
 parser/parsed_expression_iterator.cpp	3
 parser/parser.cpp	5
 parser/query_node.cpp	8
+parser/query_node/cte_node.cpp	4
 parser/query_node/recursive_cte_node.cpp	6
 parser/query_node/select_node.cpp	18
 parser/query_node/set_operation_node.cpp	6
@@ -614,6 +616,7 @@ planner/binder/expression/bind_between_expression.cpp	2
 planner/binder/expression/bind_collate_expression.cpp	2
 planner/binder/expression/bind_columnref_expression.cpp	5
 planner/binder/expression/bind_comparison_expression.cpp	2
+planner/binder/query_node/bind_cte_node.cpp	1
 planner/binder/expression/bind_function_expression.cpp	5
 planner/binder/expression/bind_operator_expression.cpp	3
 planner/binder/expression/bind_star_expression.cpp	3
