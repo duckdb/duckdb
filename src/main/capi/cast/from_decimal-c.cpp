@@ -34,7 +34,7 @@ bool CastDecimalCInternal(duckdb_result *source, duckdb_string &result, idx_t co
 	default:
 		throw duckdb::InternalException("Unimplemented internal type for decimal");
 	}
-	result.data = (char *)duckdb_malloc(sizeof(char) * (result_string.GetSize() + 1));
+	result.data = reinterpret_cast<char *>(duckdb_malloc(sizeof(char) * (result_string.GetSize() + 1)));
 	memcpy(result.data, result_string.GetData(), result_string.GetSize());
 	result.data[result_string.GetSize()] = '\0';
 	result.size = result_string.GetSize();

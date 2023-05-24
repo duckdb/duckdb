@@ -187,13 +187,13 @@ static bool RequiresQuotes(WriteCSVData &csv_data, const char *str, idx_t len) {
 
 		// check for delimiter
 		if (options.delimiter.length() != 0 &&
-		    ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.delimiter.c_str(),
+		    ContainsFun::Find(const_uchar_ptr_cast(str), len, const_uchar_ptr_cast(options.delimiter.c_str()),
 		                      options.delimiter.size()) != DConstants::INVALID_INDEX) {
 			return true;
 		}
 		// check for quote
 		if (options.quote.length() != 0 &&
-		    ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
+		    ContainsFun::Find(const_uchar_ptr_cast(str), len, const_uchar_ptr_cast(options.quote.c_str()),
 		                      options.quote.size()) != DConstants::INVALID_INDEX) {
 			return true;
 		}
@@ -224,11 +224,11 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 			// complex CSV
 			// check for quote or escape separately
 			if (options.quote.length() != 0 &&
-			    ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.quote.c_str(),
+			    ContainsFun::Find(const_uchar_ptr_cast(str), len, const_uchar_ptr_cast(options.quote.c_str()),
 			                      options.quote.size()) != DConstants::INVALID_INDEX) {
 				requires_escape = true;
 			} else if (options.escape.length() != 0 &&
-			           ContainsFun::Find((const unsigned char *)str, len, (const unsigned char *)options.escape.c_str(),
+			           ContainsFun::Find(const_uchar_ptr_cast(str), len, const_uchar_ptr_cast(options.escape.c_str()),
 			                             options.escape.size()) != DConstants::INVALID_INDEX) {
 				requires_escape = true;
 			}
@@ -236,7 +236,7 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 		if (!requires_escape) {
 			// fast path: no need to escape anything
 			serializer.WriteBufferData(options.quote);
-			serializer.WriteData((const_data_ptr_t)str, len);
+			serializer.WriteData(const_data_ptr_cast(str), len);
 			serializer.WriteBufferData(options.quote);
 			return;
 		}
@@ -252,7 +252,7 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 		serializer.WriteBufferData(new_val);
 		serializer.WriteBufferData(options.quote);
 	} else {
-		serializer.WriteData((const_data_ptr_t)str, len);
+		serializer.WriteData(const_data_ptr_cast(str), len);
 	}
 }
 
@@ -279,6 +279,10 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 	void WriteData(const_data_ptr_t data, idx_t size) {
 		lock_guard<mutex> flock(lock);
 		handle->Write((void *)data, size);
+	}
+
+	void WriteData(const char *data, idx_t size) {
+		WriteData(const_data_ptr_cast(data), size);
 	}
 
 	//! Write rows
@@ -321,7 +325,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	    make_uniq<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path, options.compression);
 
 	if (!options.prefix.empty()) {
-		global_data->WriteData((const_data_ptr_t)options.prefix.c_str(), options.prefix.size());
+		global_data->WriteData(options.prefix.c_str(), options.prefix.size());
 	}
 
 	if (options.header) {

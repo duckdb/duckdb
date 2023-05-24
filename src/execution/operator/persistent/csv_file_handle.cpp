@@ -99,7 +99,7 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	}
 	// we have data left to read from the file
 	// read directly into the buffer
-	auto bytes_read = file_handle->Read((char *)buffer + result_offset, nr_bytes - result_offset);
+	auto bytes_read = file_handle->Read(char_ptr_cast(buffer) + result_offset, nr_bytes - result_offset);
 	file_size = file_handle->GetFileSize();
 	read_position += bytes_read;
 	if (reset_enabled) {
@@ -114,7 +114,7 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 			}
 			cached_buffer = std::move(new_buffer);
 		}
-		memcpy(cached_buffer.get() + buffer_size, (char *)buffer + result_offset, bytes_read);
+		memcpy(cached_buffer.get() + buffer_size, char_ptr_cast(buffer) + result_offset, bytes_read);
 		buffer_size += bytes_read;
 	}
 

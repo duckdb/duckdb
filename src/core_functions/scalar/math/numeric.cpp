@@ -563,7 +563,7 @@ struct RoundPrecisionFunctionData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const RoundPrecisionFunctionData &)other_p;
+		auto &other = other_p.Cast<RoundPrecisionFunctionData>();
 		return target_scale == other.target_scale;
 	}
 };
@@ -571,7 +571,7 @@ struct RoundPrecisionFunctionData : public FunctionData {
 template <class T, class POWERS_OF_TEN_CLASS>
 static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = (RoundPrecisionFunctionData &)*func_expr.bind_info;
+	auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
 	auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
 	auto width = DecimalType::GetWidth(func_expr.children[0]->return_type);
 	if (-info.target_scale >= width) {
@@ -597,7 +597,7 @@ static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionSt
 template <class T, class POWERS_OF_TEN_CLASS>
 static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-	auto &info = (RoundPrecisionFunctionData &)*func_expr.bind_info;
+	auto &info = func_expr.bind_info->Cast<RoundPrecisionFunctionData>();
 	auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
 	T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale];
 	T addition = power_of_ten / 2;

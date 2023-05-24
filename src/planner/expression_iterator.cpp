@@ -230,12 +230,12 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 	for (idx_t i = 0; i < node.modifiers.size(); i++) {
 		switch (node.modifiers[i]->type) {
 		case ResultModifierType::DISTINCT_MODIFIER:
-			for (auto &expr : ((BoundDistinctModifier &)*node.modifiers[i]).target_distincts) {
+			for (auto &expr : node.modifiers[i]->Cast<BoundDistinctModifier>().target_distincts) {
 				EnumerateExpression(expr, callback);
 			}
 			break;
 		case ResultModifierType::ORDER_MODIFIER:
-			for (auto &order : ((BoundOrderModifier &)*node.modifiers[i]).orders) {
+			for (auto &order : node.modifiers[i]->Cast<BoundOrderModifier>().orders) {
 				EnumerateExpression(order.expression, callback);
 			}
 			break;

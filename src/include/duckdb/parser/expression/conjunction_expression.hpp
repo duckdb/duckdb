@@ -31,7 +31,7 @@ public:
 
 	string ToString() const override;
 
-	static bool Equal(const ConjunctionExpression *a, const ConjunctionExpression *b);
+	static bool Equal(const ConjunctionExpression &a, const ConjunctionExpression &b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 

@@ -23,7 +23,7 @@ struct RegrInterceptOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &aggr_input_data, A_TYPE *x_data, B_TYPE *y_data,
+	static void Operation(STATE *state, AggregateInputData &aggr_input_data, const A_TYPE *x_data, const B_TYPE *y_data,
 	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
 		state->count++;
 		state->sum_x += y_data[yidx];

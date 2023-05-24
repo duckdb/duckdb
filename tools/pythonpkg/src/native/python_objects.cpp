@@ -21,9 +21,9 @@ PyDictionary::PyDictionary(py::object dict) {
 
 PyTimeDelta::PyTimeDelta(py::handle &obj) {
 	auto ptr = obj.ptr();
-	days = PyDateTime_TIMEDELTA_GET_DAYS(ptr);
-	seconds = PyDateTime_TIMEDELTA_GET_SECONDS(ptr);
-	microseconds = PyDateTime_TIMEDELTA_GET_MICROSECONDS(ptr);
+	days = PyTimeDelta::GetDays(ptr);
+	seconds = PyTimeDelta::GetSeconds(ptr);
+	microseconds = PyTimeDelta::GetMicros(ptr);
 }
 
 interval_t PyTimeDelta::ToInterval() {
@@ -40,6 +40,18 @@ interval_t PyTimeDelta::ToInterval() {
 	interval.days = days;
 	interval.micros = microseconds;
 	return interval;
+}
+
+int64_t PyTimeDelta::GetDays(PyObject *obj) {
+	return PyDateTime_TIMEDELTA_GET_DAYS(obj); // NOLINT
+}
+
+int64_t PyTimeDelta::GetSeconds(PyObject *obj) {
+	return PyDateTime_TIMEDELTA_GET_SECONDS(obj); // NOLINT
+}
+
+int64_t PyTimeDelta::GetMicros(PyObject *obj) {
+	return PyDateTime_TIMEDELTA_GET_MICROSECONDS(obj); // NOLINT
 }
 
 PyDecimal::PyDecimal(py::handle &obj) : obj(obj) {
@@ -198,15 +210,16 @@ Value PyDecimal::ToDuckValue() {
 
 PyTime::PyTime(py::handle &obj) : obj(obj) {
 	auto ptr = obj.ptr();
-	hour = PyDateTime_TIME_GET_HOUR(ptr);
-	minute = PyDateTime_TIME_GET_MINUTE(ptr);
-	second = PyDateTime_TIME_GET_SECOND(ptr);
-	microsecond = PyDateTime_TIME_GET_MICROSECOND(ptr);
-	timezone_obj = PyDateTime_TIME_GET_TZINFO(ptr);
+	hour = PyTime::GetHours(ptr);          // NOLINT
+	minute = PyTime::GetMinutes(ptr);      // NOLINT
+	second = PyTime::GetSeconds(ptr);      // NOLINT
+	microsecond = PyTime::GetMicros(ptr);  // NOLINT
+	timezone_obj = PyTime::GetTZInfo(ptr); // NOLINT
 }
 dtime_t PyTime::ToDuckTime() {
 	return Time::FromTime(hour, minute, second, microsecond);
 }
+
 Value PyTime::ToDuckValue() {
 	auto duckdb_time = this->ToDuckTime();
 	if (this->timezone_obj != Py_None) {
@@ -219,6 +232,26 @@ Value PyTime::ToDuckValue() {
 	return Value::TIME(duckdb_time);
 }
 
+int32_t PyTime::GetHours(PyObject *obj) {
+	return PyDateTime_TIME_GET_HOUR(obj); // NOLINT
+}
+
+int32_t PyTime::GetMinutes(PyObject *obj) {
+	return PyDateTime_TIME_GET_MINUTE(obj); // NOLINT
+}
+
+int32_t PyTime::GetSeconds(PyObject *obj) {
+	return PyDateTime_TIME_GET_SECOND(obj); // NOLINT
+}
+
+int32_t PyTime::GetMicros(PyObject *obj) {
+	return PyDateTime_TIME_GET_MICROSECOND(obj); // NOLINT
+}
+
+PyObject *PyTime::GetTZInfo(PyObject *obj) {
+	return PyDateTime_TIME_GET_TZINFO(obj); // NOLINT
+}
+
 interval_t PyTimezone::GetUTCOffset(PyObject *tzone_obj) {
 	auto tzinfo = py::reinterpret_borrow<py::object>(tzone_obj);
 	auto res = tzinfo.attr("utcoffset")(py::none());
@@ -228,14 +261,14 @@ interval_t PyTimezone::GetUTCOffset(PyObject *tzone_obj) {
 
 PyDateTime::PyDateTime(py::handle &obj) : obj(obj) {
 	auto ptr = obj.ptr();
-	year = PyDateTime_GET_YEAR(ptr);
-	month = PyDateTime_GET_MONTH(ptr);
-	day = PyDateTime_GET_DAY(ptr);
-	hour = PyDateTime_DATE_GET_HOUR(ptr);
-	minute = PyDateTime_DATE_GET_MINUTE(ptr);
-	second = PyDateTime_DATE_GET_SECOND(ptr);
-	micros = PyDateTime_DATE_GET_MICROSECOND(ptr);
-	tzone_obj = PyDateTime_DATE_GET_TZINFO(ptr);
+	year = PyDateTime::GetYears(ptr);
+	month = PyDateTime::GetMonths(ptr);
+	day = PyDateTime::GetDays(ptr);
+	hour = PyDateTime::GetHours(ptr);
+	minute = PyDateTime::GetMinutes(ptr);
+	second = PyDateTime::GetSeconds(ptr);
+	micros = PyDateTime::GetMicros(ptr);
+	tzone_obj = PyDateTime::GetTZInfo(ptr);
 }
 
 timestamp_t PyDateTime::ToTimestamp() {
@@ -263,11 +296,43 @@ dtime_t PyDateTime::ToDuckTime() {
 	return Time::FromTime(hour, minute, second, micros);
 }
 
+int32_t PyDateTime::GetYears(PyObject *obj) {
+	return PyDateTime_GET_YEAR(obj); // NOLINT
+}
+
+int32_t PyDateTime::GetMonths(PyObject *obj) {
+	return PyDateTime_GET_MONTH(obj); // NOLINT
+}
+
+int32_t PyDateTime::GetDays(PyObject *obj) {
+	return PyDateTime_GET_DAY(obj); // NOLINT
+}
+
+int32_t PyDateTime::GetHours(PyObject *obj) {
+	return PyDateTime_DATE_GET_HOUR(obj); // NOLINT
+}
+
+int32_t PyDateTime::GetMinutes(PyObject *obj) {
+	return PyDateTime_DATE_GET_MINUTE(obj); // NOLINT
+}
+
+int32_t PyDateTime::GetSeconds(PyObject *obj) {
+	return PyDateTime_DATE_GET_SECOND(obj); // NOLINT
+}
+
+int32_t PyDateTime::GetMicros(PyObject *obj) {
+	return PyDateTime_DATE_GET_MICROSECOND(obj); // NOLINT
+}
+
+PyObject *PyDateTime::GetTZInfo(PyObject *obj) {
+	return PyDateTime_DATE_GET_TZINFO(obj); // NOLINT
+}
+
 PyDate::PyDate(py::handle &ele) {
 	auto ptr = ele.ptr();
-	year = PyDateTime_GET_YEAR(ptr);
-	month = PyDateTime_GET_MONTH(ptr);
-	day = PyDateTime_GET_DAY(ptr);
+	year = PyDateTime::GetYears(ptr);
+	month = PyDateTime::GetMonths(ptr);
+	day = PyDateTime::GetDays(ptr);
 }
 
 Value PyDate::ToDuckValue() {
@@ -275,7 +340,7 @@ Value PyDate::ToDuckValue() {
 }
 
 void PythonObject::Initialize() {
-	PyDateTime_IMPORT; // Python datetime initialize #2
+	PyDateTime_IMPORT; // NOLINT: Python datetime initialize #2
 }
 
 py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
@@ -303,8 +368,7 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 	case LogicalTypeId::UBIGINT:
 		return py::cast(val.GetValue<uint64_t>());
 	case LogicalTypeId::HUGEINT:
-		return py::reinterpret_steal<py::object>(
-		    PyLong_FromString((char *)val.GetValue<string>().c_str(), nullptr, 10));
+		return py::reinterpret_steal<py::object>(PyLong_FromString(val.GetValue<string>().c_str(), nullptr, 10));
 	case LogicalTypeId::FLOAT:
 		return py::cast(val.GetValue<float>());
 	case LogicalTypeId::DOUBLE:

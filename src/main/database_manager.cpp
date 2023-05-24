@@ -27,7 +27,7 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 	if (StringUtil::Lower(name) == TEMP_CATALOG) {
 		return context.client_data->temporary_objects.get();
 	}
-	return (AttachedDatabase *)databases->GetEntry(context, name).get();
+	return reinterpret_cast<AttachedDatabase *>(databases->GetEntry(context, name).get());
 }
 
 void DatabaseManager::AddDatabase(ClientContext &context, unique_ptr<AttachedDatabase> db_instance) {

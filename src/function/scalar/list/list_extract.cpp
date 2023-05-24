@@ -32,7 +32,7 @@ void ListExtractTemplate(idx_t count, UnifiedVectorFormat &list_data, UnifiedVec
 
 	// this is lifted from ExecuteGenericLoop because we can't push the list child data into this otherwise
 	// should have gone with GetValue perhaps
-	auto child_data = (T *)child_format.data;
+	auto child_data = UnifiedVectorFormat::GetData<T>(child_format);
 	for (idx_t i = 0; i < count; i++) {
 		auto list_index = list_data.sel->get_index(i);
 		auto offsets_index = offsets_data.sel->get_index(i);
@@ -44,8 +44,8 @@ void ListExtractTemplate(idx_t count, UnifiedVectorFormat &list_data, UnifiedVec
 			result_mask.SetInvalid(i);
 			continue;
 		}
-		auto list_entry = ((list_entry_t *)list_data.data)[list_index];
-		auto offsets_entry = ((int64_t *)offsets_data.data)[offsets_index];
+		auto list_entry = (UnifiedVectorFormat::GetData<list_entry_t>(list_data))[list_index];
+		auto offsets_entry = (UnifiedVectorFormat::GetData<int64_t>(offsets_data))[offsets_index];
 
 		// 1-based indexing
 		if (offsets_entry == 0) {
