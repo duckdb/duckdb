@@ -635,7 +635,7 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		// get the LHS and RHS nodes
 		auto &left_node = GetNode(*comparison.left);
 		auto &right_node = GetNode(*comparison.right);
-		if (left_node.Equals(&right_node)) {
+		if (left_node.Equals(right_node)) {
 			return FilterResult::UNSUPPORTED;
 		}
 		// get the equivalence sets of the LHS and RHS
@@ -806,7 +806,7 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 		}
 	}
 
-	if (left_node.Equals(&right_node.get())) {
+	if (left_node.Equals(right_node)) {
 		return FilterResult::UNSUPPORTED;
 	}
 	// get the equivalence sets of the LHS and RHS
@@ -903,7 +903,7 @@ unique_ptr<Expression> FilterCombiner::FindTransitiveFilter(Expression &expr) {
 	for (idx_t i = 0; i < remaining_filters.size(); i++) {
 		if (remaining_filters[i]->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 			auto &comparison = remaining_filters[i]->Cast<BoundComparisonExpression>();
-			if (expr.Equals(comparison.right.get()) && comparison.type != ExpressionType::COMPARE_NOTEQUAL) {
+			if (expr.Equals(*comparison.right) && comparison.type != ExpressionType::COMPARE_NOTEQUAL) {
 				auto filter = std::move(remaining_filters[i]);
 				remaining_filters.erase(remaining_filters.begin() + i);
 				return filter;

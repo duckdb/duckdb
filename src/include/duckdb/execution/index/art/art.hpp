@@ -112,12 +112,12 @@ private:
 	Node Lookup(Node node, const ARTKey &key, idx_t depth);
 
 	//! Returns all row IDs belonging to a key greater (or equal) than the search key
-	bool SearchGreater(ARTIndexScanState *state, ARTKey &key, bool equal, idx_t max_count, vector<row_t> &result_ids);
+	bool SearchGreater(ARTIndexScanState &state, ARTKey &key, bool equal, idx_t max_count, vector<row_t> &result_ids);
 	//! Returns all row IDs belonging to a key less (or equal) than the upper_bound
-	bool SearchLess(ARTIndexScanState *state, ARTKey &upper_bound, bool equal, idx_t max_count,
+	bool SearchLess(ARTIndexScanState &state, ARTKey &upper_bound, bool equal, idx_t max_count,
 	                vector<row_t> &result_ids);
 	//! Returns all row IDs belonging to a key within the range of lower_bound and upper_bound
-	bool SearchCloseRange(ARTIndexScanState *state, ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal,
+	bool SearchCloseRange(ARTIndexScanState &state, ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal,
 	                      bool right_equal, idx_t max_count, vector<row_t> &result_ids);
 
 	//! Initializes a merge operation by returning a set containing the buffer count of each fixed-size allocator

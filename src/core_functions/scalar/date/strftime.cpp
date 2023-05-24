@@ -25,7 +25,7 @@ struct StrfTimeBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const StrfTimeBindData &)other_p;
+		auto &other = other_p.Cast<StrfTimeBindData>();
 		return format_string == other.format_string;
 	}
 };
@@ -111,7 +111,7 @@ struct StrpTimeBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const StrpTimeBindData &)other_p;
+		auto &other = other_p.Cast<StrpTimeBindData>();
 		return format_strings == other.format_strings;
 	}
 };

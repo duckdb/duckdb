@@ -113,7 +113,7 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 		unique_ptr<BoundResultModifier> bound_modifier;
 		switch (mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
-			auto &distinct = (DistinctModifier &)*mod;
+			auto &distinct = mod->Cast<DistinctModifier>();
 			auto bound_distinct = make_uniq<BoundDistinctModifier>();
 			bound_distinct->distinct_type =
 			    distinct.distinct_on_targets.empty() ? DistinctType::DISTINCT : DistinctType::DISTINCT_ON;
@@ -133,7 +133,7 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
-			auto &order = (OrderModifier &)*mod;
+			auto &order = mod->Cast<OrderModifier>();
 			auto bound_order = make_uniq<BoundOrderModifier>();
 			auto &config = DBConfig::GetConfig(context);
 			D_ASSERT(!order.orders.empty());
@@ -174,10 +174,10 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			break;
 		}
 		case ResultModifierType::LIMIT_MODIFIER:
-			bound_modifier = BindLimit(order_binder, (LimitModifier &)*mod);
+			bound_modifier = BindLimit(order_binder, mod->Cast<LimitModifier>());
 			break;
 		case ResultModifierType::LIMIT_PERCENT_MODIFIER:
-			bound_modifier = BindLimitPercent(order_binder, (LimitPercentModifier &)*mod);
+			bound_modifier = BindLimitPercent(order_binder, mod->Cast<LimitPercentModifier>());
 			break;
 		default:
 			throw Exception("Unsupported result modifier");
@@ -203,7 +203,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 	for (auto &bound_mod : result.modifiers) {
 		switch (bound_mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
-			auto &distinct = (BoundDistinctModifier &)*bound_mod;
+			auto &distinct = bound_mod->Cast<BoundDistinctModifier>();
 			D_ASSERT(!distinct.target_distincts.empty());
 			// set types of distinct targets
 			for (auto &expr : distinct.target_distincts) {
@@ -226,19 +226,19 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 			break;
 		}
 		case ResultModifierType::LIMIT_MODIFIER: {
-			auto &limit = (BoundLimitModifier &)*bound_mod;
+			auto &limit = bound_mod->Cast<BoundLimitModifier>();
 			AssignReturnType(limit.limit, sql_types);
 			AssignReturnType(limit.offset, sql_types);
 			break;
 		}
 		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-			auto &limit = (BoundLimitPercentModifier &)*bound_mod;
+			auto &limit = bound_mod->Cast<BoundLimitPercentModifier>();
 			AssignReturnType(limit.limit, sql_types);
 			AssignReturnType(limit.offset, sql_types);
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
-			auto &order = (BoundOrderModifier &)*bound_mod;
+			auto &order = bound_mod->Cast<BoundOrderModifier>();
 			for (auto &order_node : order.orders) {
 				auto &expr = order_node.expression;
 				D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);

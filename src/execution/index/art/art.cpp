@@ -608,7 +608,7 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 
 		// recurse
 		Erase(*child, key, depth + 1, row_id);
-		next_node.get().ReplaceChild(*this, key[depth], *child);
+		node.ReplaceChild(*this, key[depth], *child);
 	}
 }
 
@@ -722,17 +722,18 @@ Node ART::Lookup(Node node, const ARTKey &key, idx_t depth) {
 // Greater Than and Less Than
 //===--------------------------------------------------------------------===//
 
-bool ART::SearchGreater(ARTIndexScanState *state, ARTKey &key, bool equal, idx_t max_count, vector<row_t> &result_ids) {
+bool ART::SearchGreater(ARTIndexScanState &state, ARTKey &key, bool equal, idx_t max_count,
+                        vector<row_t> &result_ids) {
 
 	if (!tree->IsSet()) {
 		return true;
 	}
-	Iterator *it = &state->iterator;
+	Iterator &it = state.iterator;
 
 	// find the lowest value that satisfies the predicate
-	if (!it->art) {
-		it->art = this;
-		if (!it->LowerBound(*tree, key, equal, 0)) {
+	if (!it.art) {
+		it.art = this;
+		if (!it.LowerBound(*tree, key, equal, 0)) {
 			// early-out, if the maximum value in the ART is lower than the lower bound
 			return true;
 		}
@@ -741,70 +742,70 @@ bool ART::SearchGreater(ARTIndexScanState *state, ARTKey &key, bool equal, idx_t
 	// after that we continue the scan; we don't need to check the bounds as any value following this value is
 	// automatically bigger and hence satisfies our predicate
 	ARTKey empty_key = ARTKey();
-	return it->Scan(empty_key, max_count, result_ids, false);
+	return it.Scan(empty_key, max_count, result_ids, false);
 }
 
-bool ART::SearchLess(ARTIndexScanState *state, ARTKey &upper_bound, bool equal, idx_t max_count,
+bool ART::SearchLess(ARTIndexScanState &state, ARTKey &upper_bound, bool equal, idx_t max_count,
                      vector<row_t> &result_ids) {
 
 	if (!tree->IsSet()) {
 		return true;
 	}
-	Iterator *it = &state->iterator;
+	Iterator &it = state.iterator;
 
-	if (!it->art) {
-		it->art = this;
+	if (!it.art) {
+		it.art = this;
 		// find the minimum value in the ART: we start scanning from this value
-		it->FindMinimum(*tree);
+		it.FindMinimum(*tree);
 		// early-out, if the minimum value is higher than the upper bound
-		if (it->current_key > upper_bound) {
+		if (it.current_key > upper_bound) {
 			return true;
 		}
 	}
 
 	// now continue the scan until we reach the upper bound
-	return it->Scan(upper_bound, max_count, result_ids, equal);
+	return it.Scan(upper_bound, max_count, result_ids, equal);
 }
 
 //===--------------------------------------------------------------------===//
 // Closed Range Query
 //===--------------------------------------------------------------------===//
 
-bool ART::SearchCloseRange(ARTIndexScanState *state, ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal,
+bool ART::SearchCloseRange(ARTIndexScanState &state, ARTKey &lower_bound, ARTKey &upper_bound, bool left_equal,
                            bool right_equal, idx_t max_count, vector<row_t> &result_ids) {
 
-	Iterator *it = &state->iterator;
+	Iterator &it = state.iterator;
 
 	// find the first node that satisfies the left predicate
-	if (!it->art) {
-		it->art = this;
-		if (!it->LowerBound(*tree, lower_bound, left_equal, 0)) {
+	if (!it.art) {
+		it.art = this;
+		if (!it.LowerBound(*tree, lower_bound, left_equal, 0)) {
 			// early-out, if the maximum value in the ART is lower than the lower bound
 			return true;
 		}
 	}
 
 	// now continue the scan until we reach the upper bound
-	return it->Scan(upper_bound, max_count, result_ids, right_equal);
+	return it.Scan(upper_bound, max_count, result_ids, right_equal);
 }
 
 bool ART::Scan(const Transaction &transaction, const DataTable &table, IndexScanState &state, const idx_t max_count,
                vector<row_t> &result_ids) {
 
-	auto scan_state = (ARTIndexScanState *)&state;
+	auto &scan_state = state.Cast<ARTIndexScanState>();
 	vector<row_t> row_ids;
 	bool success;
 
 	// FIXME: the key directly owning the data for a single key might be more efficient
-	D_ASSERT(scan_state->values[0].type().InternalType() == types[0]);
+	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
-	auto key = CreateKey(arena_allocator, types[0], scan_state->values[0]);
+	auto key = CreateKey(arena_allocator, types[0], scan_state.values[0]);
 
-	if (scan_state->values[1].IsNull()) {
+	if (scan_state.values[1].IsNull()) {
 
 		// single predicate
 		lock_guard<mutex> l(lock);
-		switch (scan_state->expressions[0]) {
+		switch (scan_state.expressions[0]) {
 		case ExpressionType::COMPARE_EQUAL:
 			success = SearchEqual(key, max_count, row_ids);
 			break;
@@ -829,11 +830,11 @@ bool ART::Scan(const Transaction &transaction, const DataTable &table, IndexScan
 		// two predicates
 		lock_guard<mutex> l(lock);
 
-		D_ASSERT(scan_state->values[1].type().InternalType() == types[0]);
-		auto upper_bound = CreateKey(arena_allocator, types[0], scan_state->values[1]);
+		D_ASSERT(scan_state.values[1].type().InternalType() == types[0]);
+		auto upper_bound = CreateKey(arena_allocator, types[0], scan_state.values[1]);
 
-		bool left_equal = scan_state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
-		bool right_equal = scan_state->expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
+		bool left_equal = scan_state.expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
+		bool right_equal = scan_state.expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
 		success = SearchCloseRange(scan_state, key, upper_bound, left_equal, right_equal, max_count, row_ids);
 	}
 

@@ -155,7 +155,7 @@ struct ModeFunction {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->frequency_map) {
 			state->frequency_map = new typename STATE::Counts();
 		}
@@ -199,7 +199,7 @@ struct ModeFunction {
 		}
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask,
+	static void ConstantOperation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		if (!state->frequency_map) {
 			state->frequency_map = new typename STATE::Counts();
