@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+class LogicalCopyToFile;
+
 class FilenamePattern {
 
 public:
@@ -29,6 +31,7 @@ private:
 	string _base;
 	idx_t _pos;
 	bool _uuid;
+	friend class LogicalCopyToFile;
 };
 
 } // namespace duckdb
