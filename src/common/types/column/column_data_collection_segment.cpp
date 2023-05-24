@@ -14,7 +14,7 @@ idx_t ColumnDataCollectionSegment::GetDataSize(idx_t type_size) {
 }
 
 validity_t *ColumnDataCollectionSegment::GetValidityPointer(data_ptr_t base_ptr, idx_t type_size) {
-	return (validity_t *)(base_ptr + GetDataSize(type_size));
+	return reinterpret_cast<validity_t *>(base_ptr + GetDataSize(type_size));
 }
 
 VectorDataIndex ColumnDataCollectionSegment::AllocateVectorInternal(const LogicalType &type, ChunkMetaData &chunk_meta,

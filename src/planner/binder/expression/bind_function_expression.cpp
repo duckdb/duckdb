@@ -189,7 +189,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// capture the (lambda) columns
-	auto &bound_lambda_expr = (BoundLambdaExpression &)*children.back();
+	auto &bound_lambda_expr = children.back()->Cast<BoundLambdaExpression>();
 	CaptureLambdaColumns(bound_lambda_expr.captures, list_child_type, bound_lambda_expr.lambda_expr);
 
 	FunctionBinder function_binder(context);

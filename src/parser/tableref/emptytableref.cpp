@@ -8,7 +8,7 @@ string EmptyTableRef::ToString() const {
 	return "";
 }
 
-bool EmptyTableRef::Equals(const TableRef *other) const {
+bool EmptyTableRef::Equals(const TableRef &other) const {
 	return TableRef::Equals(other);
 }
 
