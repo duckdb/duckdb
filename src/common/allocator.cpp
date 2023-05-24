@@ -16,13 +16,13 @@
 
 #ifndef USE_JEMALLOC
 #if defined(BUILD_JEMALLOC_EXTENSION) && !defined(WIN32)
-#define USE_JEMALLOC 1
+#define USE_JEMALLOC
 #else
 #define USE JEMALLOC 0
 #endif
 #endif
 
-#if USE_JEMALLOC
+#ifdef USE_JEMALLOC
 #include "jemalloc-extension.hpp"
 #endif
 
@@ -97,7 +97,7 @@ PrivateAllocatorData::~PrivateAllocatorData() {
 //===--------------------------------------------------------------------===//
 // Allocator
 //===--------------------------------------------------------------------===//
-#if USE_JEMALLOC
+#ifdef USE_JEMALLOC
 Allocator::Allocator()
     : Allocator(JEMallocExtension::Allocate, JEMallocExtension::Free, JEMallocExtension::Reallocate, nullptr) {
 }
@@ -176,15 +176,8 @@ data_ptr_t Allocator::ReallocateData(data_ptr_t pointer, idx_t old_size, idx_t s
 	return new_pointer;
 }
 
-static shared_ptr<Allocator> CreateDefaultAllocator() {
-#if USE_JEMALLOC
-	JEMallocExtension::Configure();
-#endif
-	return make_shared<Allocator>();
-}
-
 shared_ptr<Allocator> &Allocator::DefaultAllocatorReference() {
-	static shared_ptr<Allocator> DEFAULT_ALLOCATOR = CreateDefaultAllocator();
+	static shared_ptr<Allocator> DEFAULT_ALLOCATOR = make_shared<Allocator>();
 	return DEFAULT_ALLOCATOR;
 }
 
@@ -192,8 +185,12 @@ Allocator &Allocator::DefaultAllocator() {
 	return *DefaultAllocatorReference();
 }
 
-void Allocator::SetThreadIdle() {
-#if USE_JEMALLOC
+void Allocator::ThreadCleanup() {
+	JEMallocExtension::ThreadCleanup();
+}
+
+void Allocator::ThreadIdle() {
+#ifdef USE_JEMALLOC
 	JEMallocExtension::ThreadIdle();
 #endif
 }

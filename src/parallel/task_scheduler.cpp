@@ -150,8 +150,9 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 			}
 		} else if (!idle) {
 			idle = true;
-			Allocator::SetThreadIdle();
+			Allocator::ThreadIdle();
 		}
+		Allocator::ThreadCleanup();
 	}
 #else
 	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");

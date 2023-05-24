@@ -54,40 +54,10 @@ static T GetJemallocCTL(const char *name) {
 	return result;
 }
 
-template <>
-string GetJemallocCTL(const char *name) {
-	const char *data;
-	size_t len = sizeof(data);
-	JemallocCTL(name, &data, &len, nullptr, 0);
-	return string(data, len);
-}
-
-void JEMallocExtension::Configure() {
-	if (duckdb_jemalloc::je_malloc_conf != nullptr) {
-		throw InternalException("oops");
-	}
-	duckdb_jemalloc::je_malloc_conf = "oversize_threshold:0";
-
-	auto a = Allocate(nullptr, 4);
-	Free(nullptr, a, 4);
-
-	if (GetJemallocCTL<size_t>("opt.oversize_threshold") != 0) {
-		throw InternalException("couldn't set");
-	}
-
-	// First we try the percpu option
-	//	duckdb_jemalloc::je_malloc_conf = "percpu_arena:percpu,oversize_threshold:0";
-	//	if (GetJemallocCTL<string>("opt.percpu_arena") == "percpu") {
-	//		return;
-	//	}
-
-	// We weren't successful, just set the number of arenas to the number of threads
-	//	const idx_t physical_cores = std::thread::hardware_concurrency();
-	//	const auto conf_str = StringUtil::Format("narenas:%llu,oversize_threshold:0", physical_cores);
-	//	duckdb_jemalloc::je_malloc_conf = conf_str.c_str();
-	//	if (GetJemallocCTL<unsigned>("opt.narenas") != physical_cores) {
-	//		throw InternalException("oops");
-	//	}
+void JEMallocExtension::ThreadCleanup() {
+	SetJemallocCTL("thread.tcache.flush");
+	const auto name = StringUtil::Format("arena.%lld.purge", idx_t(MALLCTL_ARENAS_ALL));
+	SetJemallocCTL(name.c_str());
 }
 
 void JEMallocExtension::ThreadIdle() {
