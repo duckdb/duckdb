@@ -737,11 +737,11 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 	auto type_str = env->NewStringUTF(type_to_jduckdb_type(vec.GetType()).c_str());
 	// construct nullmask
 	auto null_array = env->NewBooleanArray(row_count);
-	jboolean *null_array_ptr = env->GetBooleanArrayElements(null_array, nullptr);
+	jboolean *null_unique_array = env->GetBooleanArrayElements(null_array, nullptr);
 	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-		null_array_ptr[row_idx] = FlatVector::IsNull(vec, row_idx);
+		null_unique_array[row_idx] = FlatVector::IsNull(vec, row_idx);
 	}
-	env->ReleaseBooleanArrayElements(null_array, null_array_ptr, 0);
+	env->ReleaseBooleanArrayElements(null_array, null_unique_array, 0);
 
 	auto jvec = env->NewObject(J_DuckVector, J_DuckVector_init, type_str, (int)row_count, null_array);
 

@@ -36,7 +36,7 @@ struct Radix {
 public:
 	static inline bool IsLittleEndian() {
 		int n = 1;
-		if (*(char *)&n == 1) {
+		if (*char_ptr_cast(&n) == 1) {
 			return true;
 		} else {
 			return false;
@@ -81,7 +81,7 @@ public:
 		if (x < -FLT_MAX) {
 			return 0;
 		}
-		buff = Load<uint32_t>((const_data_ptr_t)&x);
+		buff = Load<uint32_t>(const_data_ptr_cast(&x));
 		if ((buff & (1u << 31)) == 0) { //! +0 and positive numbers
 			buff |= (1u << 31);
 		} else {          //! negative numbers
@@ -111,7 +111,7 @@ public:
 		if (x < -DBL_MAX) {
 			return 0;
 		}
-		buff = Load<uint64_t>((const_data_ptr_t)&x);
+		buff = Load<uint64_t>(const_data_ptr_cast(&x));
 		if (buff < (1ull << 63)) { //! +0 and positive numbers
 			buff += (1ull << 63);
 		} else {          //! negative numbers

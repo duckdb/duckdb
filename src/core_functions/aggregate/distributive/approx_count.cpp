@@ -69,7 +69,7 @@ static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], AggregateIn
                                                     data_ptr_t state, idx_t count) {
 	D_ASSERT(input_count == 1);
 
-	auto agg_state = (ApproxDistinctCountState *)state;
+	auto agg_state = reinterpret_cast<ApproxDistinctCountState *>(state);
 	if (!agg_state->log) {
 		agg_state->log = new HyperLogLog();
 	}
@@ -91,7 +91,7 @@ static void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputDat
 
 	UnifiedVectorFormat sdata;
 	state_vector.ToUnifiedFormat(count, sdata);
-	auto states = (ApproxDistinctCountState **)sdata.data;
+	auto states = UnifiedVectorFormat::GetDataNoConst<ApproxDistinctCountState *>(sdata);
 
 	uint64_t *indices = nullptr;
 	uint8_t *counts = nullptr;
@@ -111,7 +111,7 @@ static void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputDat
 	inputs[0].ToUnifiedFormat(count, vdata);
 
 	HyperLogLog::ProcessEntries(vdata, inputs[0].GetType(), indices, counts, count);
-	HyperLogLog::AddToLogs(vdata, count, indices, counts, (HyperLogLog ***)states, sdata.sel);
+	HyperLogLog::AddToLogs(vdata, count, indices, counts, reinterpret_cast<HyperLogLog ***>(states), sdata.sel);
 }
 
 AggregateFunction GetApproxCountDistinctFunction(const LogicalType &input_type) {

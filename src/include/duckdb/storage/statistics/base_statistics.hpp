@@ -138,7 +138,7 @@ private:
 		StringStatsData string_data;
 	} stats_union;
 	//! Child stats (for LIST and STRUCT)
-	unsafe_array_ptr<BaseStatistics> child_stats;
+	unsafe_unique_array<BaseStatistics> child_stats;
 };
 
 } // namespace duckdb

@@ -39,7 +39,7 @@ struct AggregateState {
 		for (auto &aggregate : aggregate_expressions) {
 			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = aggregate->Cast<BoundAggregateExpression>();
-			auto state = make_unsafe_array<data_t>(aggr.function.state_size());
+			auto state = make_unsafe_uniq_array<data_t>(aggr.function.state_size());
 			aggr.function.initialize(state.get());
 			aggregates.push_back(std::move(state));
 			bind_data.push_back(aggr.bind_info.get());
@@ -55,7 +55,7 @@ struct AggregateState {
 			if (!destructors[i]) {
 				continue;
 			}
-			Vector state_vector(Value::POINTER((uintptr_t)aggregates[i].get()));
+			Vector state_vector(Value::POINTER(CastPointerToValue(aggregates[i].get())));
 			state_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
 			AggregateInputData aggr_input_data(bind_data[i], Allocator::DefaultAllocator());
@@ -69,7 +69,7 @@ struct AggregateState {
 	}
 
 	//! The aggregate values
-	vector<unsafe_array_ptr<data_t>> aggregates;
+	vector<unsafe_unique_array<data_t>> aggregates;
 	//! The bind data
 	vector<FunctionData *> bind_data;
 	//! The destructors
@@ -332,8 +332,8 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 			continue;
 		}
 
-		Vector source_state(Value::POINTER((uintptr_t)source.state.aggregates[aggr_idx].get()));
-		Vector dest_state(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
+		Vector source_state(Value::POINTER(CastPointerToValue(source.state.aggregates[aggr_idx].get())));
+		Vector dest_state(Value::POINTER(CastPointerToValue(gstate.state.aggregates[aggr_idx].get())));
 
 		AggregateInputData aggr_input_data(aggregate.bind_info.get(), Allocator::DefaultAllocator());
 		aggregate.function.combine(source_state, dest_state, aggr_input_data, 1);
@@ -565,7 +565,7 @@ SourceResultType PhysicalUngroupedAggregate::GetData(ExecutionContext &context, 
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = aggregates[aggr_idx]->Cast<BoundAggregateExpression>();
 
-		Vector state_vector(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
+		Vector state_vector(Value::POINTER(CastPointerToValue(gstate.state.aggregates[aggr_idx].get())));
 		AggregateInputData aggr_input_data(aggregate.bind_info.get(), Allocator::DefaultAllocator());
 		aggregate.function.finalize(state_vector, aggr_input_data, chunk.data[aggr_idx], 1, 0);
 	}

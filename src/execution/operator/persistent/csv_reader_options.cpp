@@ -177,6 +177,8 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		null_padding = ParseBoolean(value, loption);
 	} else if (loption == "allow_quoted_nulls") {
 		allow_quoted_nulls = ParseBoolean(value, loption);
+	} else if (loption == "parallel") {
+		parallel_mode = ParseBoolean(value, loption) ? ParallelMode::PARALLEL : ParallelMode::SINGLE_THREADED;
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}

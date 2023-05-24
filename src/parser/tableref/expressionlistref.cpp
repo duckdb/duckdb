@@ -27,20 +27,20 @@ string ExpressionListRef::ToString() const {
 	return BaseToString(result, expected_names);
 }
 
-bool ExpressionListRef::Equals(const TableRef *other_p) const {
+bool ExpressionListRef::Equals(const TableRef &other_p) const {
 	if (!TableRef::Equals(other_p)) {
 		return false;
 	}
-	auto other = (ExpressionListRef *)other_p;
-	if (values.size() != other->values.size()) {
+	auto &other = other_p.Cast<ExpressionListRef>();
+	if (values.size() != other.values.size()) {
 		return false;
 	}
 	for (idx_t i = 0; i < values.size(); i++) {
-		if (values[i].size() != other->values[i].size()) {
+		if (values[i].size() != other.values[i].size()) {
 			return false;
 		}
 		for (idx_t j = 0; j < values[i].size(); j++) {
-			if (!values[i][j]->Equals(other->values[i][j].get())) {
+			if (!values[i][j]->Equals(*other.values[i][j])) {
 				return false;
 			}
 		}

@@ -186,8 +186,8 @@ static string TrimWhitespace(const string &col_name) {
 
 static string NormalizeColumnName(const string &col_name) {
 	// normalize UTF8 characters to NFKD
-	auto nfkd = utf8proc_NFKD((const utf8proc_uint8_t *)col_name.c_str(), col_name.size());
-	const string col_name_nfkd = string((const char *)nfkd, strlen((const char *)nfkd));
+	auto nfkd = utf8proc_NFKD(reinterpret_cast<const utf8proc_uint8_t *>(col_name.c_str()), col_name.size());
+	const string col_name_nfkd = string(const_char_ptr_cast(nfkd), strlen(const_char_ptr_cast(nfkd)));
 	free(nfkd);
 
 	// only keep ASCII characters 0-9 a-z A-Z and replace spaces with regular whitespace
@@ -1425,7 +1425,7 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start, idx_t &line_start) {
 		                            GetLineNumberStr(linenr, linenr_estimated));
 	}
 
-	buffer = make_unsafe_array<char>(buffer_read_size + remaining + 1);
+	buffer = make_unsafe_uniq_array<char>(buffer_read_size + remaining + 1);
 	buffer_size = remaining + buffer_read_size;
 	if (remaining > 0) {
 		// remaining from last buffer: copy it here

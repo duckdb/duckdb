@@ -12,7 +12,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-// We gotta leak the symbols of the init function
+// We must leak the symbols of the init function
 duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::AdbcDriver *driver,
                                              struct duckdb_adbc::AdbcError *error) {
 	if (!driver) {
@@ -41,23 +41,16 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 }
 
 namespace duckdb_adbc {
-#define CHECK_TRUE(p, e, m)                                                                                            \
-	if (!(p)) {                                                                                                        \
-		if (e) {                                                                                                       \
-			e->message = strdup(m); /* TODO Set cleanup callback */                                                    \
-		}                                                                                                              \
-		return ADBC_STATUS_INVALID_ARGUMENT;                                                                           \
+AdbcStatusCode SetErrorMaybe(const void *result, AdbcError *error, const std::string &error_message) {
+	if (!error) {
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-
-#define CHECK_RES(res, e, m)                                                                                           \
-	if (res != DuckDBSuccess) {                                                                                        \
-		if (e) {                                                                                                       \
-			e->message = strdup(m);                                                                                    \
-		}                                                                                                              \
-		return ADBC_STATUS_INTERNAL;                                                                                   \
-	} else {                                                                                                           \
-		return ADBC_STATUS_OK;                                                                                         \
+	if (!result) {
+		SetError(error, error_message);
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
+	return ADBC_STATUS_OK;
+}
 
 struct DuckDBAdbcDatabaseWrapper {
 	//! The DuckDB Database Configuration
@@ -68,25 +61,58 @@ struct DuckDBAdbcDatabaseWrapper {
 	std::string path;
 };
 
-AdbcStatusCode DatabaseNew(struct AdbcDatabase *database, struct AdbcError *error) {
-	CHECK_TRUE(database, error, "Missing database object");
+void InitiliazeADBCError(AdbcError *error) {
+	if (!error) {
+		return;
+	}
+	error->message = nullptr;
+	error->release = nullptr;
+	std::memset(error->sqlstate, '\0', sizeof(error->sqlstate));
+	error->vendor_code = -1;
+}
 
+AdbcStatusCode CheckResult(duckdb_state &res, AdbcError *error, const char *error_msg) {
+	if (!error) {
+		// Error should be a non-null pointer
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (res != DuckDBSuccess) {
+		duckdb_adbc::SetError(error, error_msg);
+		return ADBC_STATUS_INTERNAL;
+	}
+	return ADBC_STATUS_OK;
+}
+
+AdbcStatusCode DatabaseNew(struct AdbcDatabase *database, struct AdbcError *error) {
+	auto status = SetErrorMaybe(database, error, "Missing database object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
 	database->private_data = nullptr;
 	// you can't malloc a struct with a non-trivial C++ constructor
 	// and std::string has a non-trivial constructor. so we need
 	// to use new and delete rather than malloc and free.
 	auto wrapper = new DuckDBAdbcDatabaseWrapper;
-	CHECK_TRUE(wrapper, error, "Allocation error");
-
+	status = SetErrorMaybe(wrapper, error, "Allocation error");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
 	database->private_data = wrapper;
 	auto res = duckdb_create_config(&wrapper->config);
-	CHECK_RES(res, error, "Failed to allocate");
+	return CheckResult(res, error, "Failed to allocate");
 }
 
 AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key, const char *value,
                                  struct AdbcError *error) {
-	CHECK_TRUE(database, error, "Missing database object");
-	CHECK_TRUE(key, error, "Missing key");
+	auto status = SetErrorMaybe(database, error, "Missing database object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+
+	status = SetErrorMaybe(key, error, "Missing key");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
 
 	auto wrapper = (DuckDBAdbcDatabaseWrapper *)database->private_data;
 	if (strcmp(key, "path") == 0) {
@@ -95,17 +121,22 @@ AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key,
 	}
 	auto res = duckdb_set_config(wrapper->config, key, value);
 
-	CHECK_RES(res, error, "Failed to set configuration option");
+	return CheckResult(res, error, "Failed to set configuration option");
 }
 
 AdbcStatusCode DatabaseInit(struct AdbcDatabase *database, struct AdbcError *error) {
+	if (!error) {
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (!database) {
+		duckdb_adbc::SetError(error, "ADBC Database has an invalid pointer");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
 	char *errormsg;
 	// TODO can we set the database path via option, too? Does not look like it...
 	auto wrapper = (DuckDBAdbcDatabaseWrapper *)database->private_data;
 	auto res = duckdb_open_ext(wrapper->path.c_str(), &wrapper->database, wrapper->config, &errormsg);
-
-	// TODO this leaks memory because errormsg is malloc-ed
-	CHECK_RES(res, error, errormsg);
+	return CheckResult(res, error, errormsg);
 }
 
 AdbcStatusCode DatabaseRelease(struct AdbcDatabase *database, struct AdbcError *error) {
@@ -122,8 +153,11 @@ AdbcStatusCode DatabaseRelease(struct AdbcDatabase *database, struct AdbcError *
 }
 
 AdbcStatusCode ConnectionNew(struct AdbcConnection *connection, struct AdbcError *error) {
+	auto status = SetErrorMaybe(connection, error, "Missing connection object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
 
-	CHECK_TRUE(connection, error, "Missing connection object");
 	connection->private_data = nullptr;
 	return ADBC_STATUS_OK;
 }
@@ -136,14 +170,23 @@ AdbcStatusCode ConnectionSetOption(struct AdbcConnection *connection, const char
 
 AdbcStatusCode ConnectionInit(struct AdbcConnection *connection, struct AdbcDatabase *database,
                               struct AdbcError *error) {
-	CHECK_TRUE(database, error, "Missing database");
-	CHECK_TRUE(database->private_data, error, "Invalid database");
-	CHECK_TRUE(connection, error, "Missing connection");
+	auto status = SetErrorMaybe(database, error, "Missing database");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	status = SetErrorMaybe(database->private_data, error, "Invalid database");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	status = SetErrorMaybe(connection, error, "Missing connection");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
 	auto database_wrapper = (DuckDBAdbcDatabaseWrapper *)database->private_data;
 
 	connection->private_data = nullptr;
 	auto res = duckdb_connect(database_wrapper->database, (duckdb_connection *)&connection->private_data);
-	CHECK_RES(res, error, "Failed to connect to Database");
+	return CheckResult(res, error, "Failed to connect to Database");
 }
 
 AdbcStatusCode ConnectionRelease(struct AdbcConnection *connection, struct AdbcError *error) {
@@ -213,9 +256,20 @@ void stream_schema(uintptr_t factory_ptr, duckdb::ArrowSchemaWrapper &schema) {
 AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, struct ArrowArrayStream *input,
                       struct AdbcError *error) {
 
-	CHECK_TRUE(connection, error, "Invalid connection");
-	CHECK_TRUE(input, error, "Missing input arrow stream pointer");
-	CHECK_TRUE(table_name, error, "Missing database object name");
+	auto status = SetErrorMaybe(connection, error, "Invalid connection");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+
+	status = SetErrorMaybe(input, error, "Missing input arrow stream pointer");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+
+	status = SetErrorMaybe(table_name, error, "Missing database object name");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
 
 	try {
 		// TODO evil cast, do we need a way to do this from the C api?
@@ -251,14 +305,28 @@ struct DuckDBAdbcStatementWrapper {
 AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatement *statement,
                             struct AdbcError *error) {
 
-	CHECK_TRUE(connection, error, "Missing connection object");
-	CHECK_TRUE(connection->private_data, error, "Invalid connection object");
-	CHECK_TRUE(statement, error, "Missing statement object");
+	auto status = SetErrorMaybe(connection, error, "Missing connection object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+
+	status = SetErrorMaybe(connection->private_data, error, "Invalid connection object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+
+	status = SetErrorMaybe(statement, error, "Missing statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
 
 	statement->private_data = nullptr;
 
 	auto statement_wrapper = (DuckDBAdbcStatementWrapper *)malloc(sizeof(DuckDBAdbcStatementWrapper));
-	CHECK_TRUE(statement_wrapper, error, "Allocation error");
+	status = SetErrorMaybe(statement_wrapper, error, "Allocation error");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
 
 	statement->private_data = statement_wrapper;
 	statement_wrapper->connection = (duckdb_connection)connection->private_data;
@@ -298,8 +366,16 @@ AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcErro
 
 AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct ArrowArrayStream *out,
                                      int64_t *rows_affected, struct AdbcError *error) {
-	CHECK_TRUE(statement, error, "Missing statement object");
-	CHECK_TRUE(statement->private_data, error, "Invalid statement object");
+	auto status = SetErrorMaybe(statement, error, "Missing statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+
+	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
 
 	// TODO: Set affected rows, careful with early return
@@ -314,7 +390,10 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	}
 
 	auto res = duckdb_execute_prepared_arrow(wrapper->statement, &wrapper->result);
-	CHECK_TRUE(res == DuckDBSuccess, error, duckdb_query_arrow_error(wrapper->result));
+	if (res != DuckDBSuccess) {
+		SetError(error, duckdb_query_arrow_error(wrapper->result));
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
 
 	if (out) {
 		out->private_data = wrapper->result;
@@ -333,25 +412,45 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 
 // this is a nop for us
 AdbcStatusCode StatementPrepare(struct AdbcStatement *statement, struct AdbcError *error) {
-	CHECK_TRUE(statement, error, "Missing statement object");
-	CHECK_TRUE(statement->private_data, error, "Invalid statement object");
+	auto status = SetErrorMaybe(statement, error, "Missing statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+
+	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+
 	return ADBC_STATUS_OK;
 }
 
 AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char *query, struct AdbcError *error) {
-	CHECK_TRUE(statement, error, "Missing statement object");
-	CHECK_TRUE(query, error, "Missing query");
+	auto status = SetErrorMaybe(statement, error, "Missing statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	status = SetErrorMaybe(query, error, "Missing query");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
 
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
 	auto res = duckdb_prepare(wrapper->connection, query, &wrapper->statement);
-
-	CHECK_RES(res, error, duckdb_prepare_error(wrapper->statement));
+	auto error_msg = duckdb_prepare_error(wrapper->statement);
+	return CheckResult(res, error, error_msg);
 }
 
 AdbcStatusCode StatementBindStream(struct AdbcStatement *statement, struct ArrowArrayStream *values,
                                    struct AdbcError *error) {
-	CHECK_TRUE(statement, error, "Missing statement object");
-	CHECK_TRUE(values, error, "Missing stream object");
+	auto status = SetErrorMaybe(statement, error, "Missing statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	status = SetErrorMaybe(values, error, "Missing stream object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
 	wrapper->ingestion_stream = values;
 	return ADBC_STATUS_OK;
@@ -359,8 +458,14 @@ AdbcStatusCode StatementBindStream(struct AdbcStatement *statement, struct Arrow
 
 AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *key, const char *value,
                                   struct AdbcError *error) {
-	CHECK_TRUE(statement, error, "Missing statement object");
-	CHECK_TRUE(key, error, "Missing key object");
+	auto status = SetErrorMaybe(statement, error, "Missing statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	status = SetErrorMaybe(key, error, "Missing key object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
 
 	if (strcmp(key, ADBC_INGEST_OPTION_TARGET_TABLE) == 0) {
@@ -372,17 +477,23 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 
 static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
                                     struct AdbcError *error) {
-	AdbcStatusCode res;
 	AdbcStatement statement;
 
-	res = StatementNew(connection, &statement, error);
-	CHECK_TRUE(!res, error, "unable to initialize statement");
-
-	res = StatementSetSqlQuery(&statement, query, error);
-	CHECK_TRUE(!res, error, "unable to initialize statement");
-
-	res = StatementExecuteQuery(&statement, out, NULL, error);
-	CHECK_TRUE(!res, error, "unable to execute statement");
+	auto status = StatementNew(connection, &statement, error);
+	if (status != ADBC_STATUS_OK) {
+		SetError(error, "unable to initialize statement");
+		return status;
+	}
+	status = StatementSetSqlQuery(&statement, query, error);
+	if (status != ADBC_STATUS_OK) {
+		SetError(error, "unable to initialize statement");
+		return status;
+	}
+	status = StatementExecuteQuery(&statement, out, nullptr, error);
+	if (status != ADBC_STATUS_OK) {
+		SetError(error, "unable to initialize statement");
+		return status;
+	}
 
 	return ADBC_STATUS_OK;
 }
@@ -390,8 +501,17 @@ static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct Ar
 AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth, const char *catalog,
                                     const char *db_schema, const char *table_name, const char **table_type,
                                     const char *column_name, struct ArrowArrayStream *out, struct AdbcError *error) {
-	CHECK_TRUE(catalog == nullptr || strcmp(catalog, "duckdb") == 0, error, "catalog must be NULL or 'duckdb'");
-	CHECK_TRUE(table_type == nullptr, error, "table types parameter not yet supported");
+	if (catalog != nullptr) {
+		if (strcmp(catalog, "duckdb") == 0) {
+			SetError(error, "catalog must be NULL or 'duckdb'");
+			return ADBC_STATUS_INVALID_ARGUMENT;
+		}
+	}
+
+	if (table_type != nullptr) {
+		SetError(error, "Table types parameter not yet supported");
+		return ADBC_STATUS_NOT_IMPLEMENTED;
+	}
 
 	auto q = duckdb::StringUtil::Format(R"(
 SELECT table_schema db_schema_name, LIST(table_schema_list) db_schema_tables FROM (
@@ -404,41 +524,10 @@ SELECT table_schema db_schema_name, LIST(table_schema_list) db_schema_tables FRO
 	return QueryInternal(connection, out, q.c_str(), error);
 }
 
-//
-// AdbcStatusCode ConnectionGetCatalogs(struct AdbcConnection *connection, struct AdbcStatement *statement,
-//                                         struct AdbcError *error) {
-//	const char *q = "SELECT 'duckdb' catalog_name";
-//
-//	return QueryInternal(connection, statement, q, error);
-//}
-//
-// AdbcStatusCode ConnectionGetDbSchemas(struct AdbcConnection *connection, struct AdbcStatement *statement,
-//                                          struct AdbcError *error) {
-//	const char *q = "SELECT 'duckdb' catalog_name, schema_name db_schema_name FROM information_schema.schemata ORDER "
-//	                "BY schema_name";
-//	return QueryInternal(connection, statement, q, error);
-//}
 AdbcStatusCode ConnectionGetTableTypes(struct AdbcConnection *connection, struct ArrowArrayStream *out,
                                        struct AdbcError *error) {
 	const char *q = "SELECT DISTINCT table_type FROM information_schema.tables ORDER BY table_type";
 	return QueryInternal(connection, out, q, error);
 }
-//
-// AdbcStatusCode ConnectionGetTables(struct AdbcConnection *connection, const char *catalog, const char *db_schema,
-//                                       const char *table_name, const char **table_types,
-//                                       struct AdbcStatement *statement, struct AdbcError *error) {
-//
-//	CHECK_TRUE(catalog == nullptr || strcmp(catalog, "duckdb") == 0, error, "catalog must be NULL or 'duckdb'");
-//
-//	// let's wait for https://github.com/lidavidm/arrow/issues/6
-//	CHECK_TRUE(table_types == nullptr, error, "table types parameter not yet supported");
-//	auto q = duckdb::StringUtil::Format(
-//	    "SELECT 'duckdb' catalog_name, table_schema db_schema_name, table_name, table_type FROM "
-//	    "information_schema.tables WHERE table_schema LIKE '%s' AND table_name LIKE '%s' ORDER BY table_schema, "
-//	    "table_name",
-//	    db_schema ? db_schema : "%", table_name ? table_name : "%");
-//
-//	return QueryInternal(connection, statement, q.c_str(), error);
-//}
 
 } // namespace duckdb_adbc

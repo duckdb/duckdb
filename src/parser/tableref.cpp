@@ -40,9 +40,8 @@ string TableRef::BaseToString(string result, const vector<string> &column_name_a
 	return result;
 }
 
-bool TableRef::Equals(const TableRef *other) const {
-	return other && type == other->type && alias == other->alias &&
-	       SampleOptions::Equals(sample.get(), other->sample.get());
+bool TableRef::Equals(const TableRef &other) const {
+	return type == other.type && alias == other.alias && SampleOptions::Equals(sample.get(), other.sample.get());
 }
 
 void TableRef::Serialize(Serializer &serializer) const {
@@ -147,6 +146,16 @@ void TableRef::CopyProperties(TableRef &target) const {
 
 void TableRef::Print() {
 	Printer::Print(ToString());
+}
+
+bool TableRef::Equals(const unique_ptr<TableRef> &left, const unique_ptr<TableRef> &right) {
+	if (left.get() == right.get()) {
+		return true;
+	}
+	if (!left || !right) {
+		return false;
+	}
+	return left->Equals(*right);
 }
 
 } // namespace duckdb

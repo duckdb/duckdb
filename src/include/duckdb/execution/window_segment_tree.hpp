@@ -113,7 +113,7 @@ private:
 	Vector statev;
 
 	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
-	unsafe_array_ptr<data_t> levels_flat_native;
+	unsafe_unique_array<data_t> levels_flat_native;
 	//! For each level, the starting location in the levels_flat_native array
 	vector<idx_t> levels_flat_start;
 

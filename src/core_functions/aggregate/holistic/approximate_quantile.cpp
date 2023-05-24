@@ -38,8 +38,8 @@ struct ApproximateQuantileBindData : public FunctionData {
 
 	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const AggregateFunction &function) {
 		D_ASSERT(bind_data_p);
-		auto bind_data = (ApproximateQuantileBindData *)bind_data_p;
-		writer.WriteList<float>(bind_data->quantiles);
+		auto &bind_data = bind_data_p->Cast<ApproximateQuantileBindData>();
+		writer.WriteList<float>(bind_data.quantiles);
 	}
 
 	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
@@ -61,7 +61,7 @@ struct ApproxQuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
 	                              ValidityMask &mask, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
@@ -69,7 +69,7 @@ struct ApproxQuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
 		auto val = Cast::template Operation<INPUT_TYPE, SAVE_TYPE>(data[idx]);
 		if (!Value::DoubleIsFinite(val)) {
 			return;
@@ -119,9 +119,9 @@ struct ApproxQuantileScalarOperation : public ApproxQuantileOperation {
 		D_ASSERT(state->h);
 		D_ASSERT(aggr_input_data.bind_data);
 		state->h->compress();
-		auto bind_data = (ApproximateQuantileBindData *)aggr_input_data.bind_data;
-		D_ASSERT(bind_data->quantiles.size() == 1);
-		target[idx] = Cast::template Operation<SAVE_TYPE, TARGET_TYPE>(state->h->quantile(bind_data->quantiles[0]));
+		auto &bind_data = aggr_input_data.bind_data->template Cast<ApproximateQuantileBindData>();
+		D_ASSERT(bind_data.quantiles.size() == 1);
+		target[idx] = Cast::template Operation<SAVE_TYPE, TARGET_TYPE>(state->h->quantile(bind_data.quantiles[0]));
 	}
 };
 
@@ -220,11 +220,11 @@ struct ApproxQuantileListOperation : public ApproxQuantileOperation {
 		}
 
 		D_ASSERT(aggr_input_data.bind_data);
-		auto bind_data = (ApproximateQuantileBindData *)aggr_input_data.bind_data;
+		auto &bind_data = aggr_input_data.bind_data->template Cast<ApproximateQuantileBindData>();
 
 		auto &result = ListVector::GetEntry(result_list);
 		auto ridx = ListVector::GetListSize(result_list);
-		ListVector::Reserve(result_list, ridx + bind_data->quantiles.size());
+		ListVector::Reserve(result_list, ridx + bind_data.quantiles.size());
 		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
 
 		D_ASSERT(state->h);
@@ -232,9 +232,9 @@ struct ApproxQuantileListOperation : public ApproxQuantileOperation {
 
 		auto &entry = target[idx];
 		entry.offset = ridx;
-		entry.length = bind_data->quantiles.size();
+		entry.length = bind_data.quantiles.size();
 		for (size_t q = 0; q < entry.length; ++q) {
-			const auto &quantile = bind_data->quantiles[q];
+			const auto &quantile = bind_data.quantiles[q];
 			rdata[ridx + q] = Cast::template Operation<SAVE_TYPE, CHILD_TYPE>(state->h->quantile(quantile));
 		}
 
@@ -247,11 +247,11 @@ struct ApproxQuantileListOperation : public ApproxQuantileOperation {
 		D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 		D_ASSERT(aggr_input_data.bind_data);
-		auto bind_data = (ApproximateQuantileBindData *)aggr_input_data.bind_data;
+		auto &bind_data = aggr_input_data.bind_data->template Cast<ApproximateQuantileBindData>();
 
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ListVector::Reserve(result, bind_data->quantiles.size());
+			ListVector::Reserve(result, bind_data.quantiles.size());
 
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
@@ -260,7 +260,7 @@ struct ApproxQuantileListOperation : public ApproxQuantileOperation {
 		} else {
 			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			ListVector::Reserve(result, (offset + count) * bind_data->quantiles.size());
+			ListVector::Reserve(result, (offset + count) * bind_data.quantiles.size());
 
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
