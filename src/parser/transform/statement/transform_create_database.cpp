@@ -6,14 +6,13 @@
 
 namespace duckdb {
 
-unique_ptr<CreateStatement> Transformer::TransformCreateDatabase(duckdb_libpgquery::PGNode *node) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateDatabaseStmt *>(node);
+unique_ptr<CreateStatement> Transformer::TransformCreateDatabase(duckdb_libpgquery::PGCreateDatabaseStmt &stmt) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateDatabaseInfo>();
 
-	info->path = stmt->path ? stmt->path : string();
+	info->path = stmt.path ? stmt.path : string();
 
-	auto qualified_name = TransformQualifiedName(stmt->name);
+	auto qualified_name = TransformQualifiedName(*stmt.name);
 	if (!IsInvalidCatalog(qualified_name.catalog)) {
 		throw ParserException("Expected \"CREATE DATABASE database\" ");
 	}

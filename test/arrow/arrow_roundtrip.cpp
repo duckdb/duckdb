@@ -4,12 +4,12 @@
 
 using namespace duckdb;
 
-static void TestArrowRoundtrip(const string &query) {
+static void TestArrowRoundtrip(const string &query, ArrowOptions options = ArrowOptions()) {
 	DuckDB db;
 	Connection con(db);
 
-	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, true));
-	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, true, options));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, false, options));
 }
 
 static void TestParquetRoundtrip(const string &path) {
@@ -25,6 +25,22 @@ static void TestParquetRoundtrip(const string &path) {
 	auto query = "SELECT * FROM parquet_scan('" + path + "')";
 	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, true));
 	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query));
+}
+
+TEST_CASE("Test Export Large", "[arrow]") {
+	ArrowOptions options;
+	options.offset_size = ArrowOffsetSize::REGULAR;
+	TestArrowRoundtrip("SELECT 'bla' FROM range(10000)");
+
+	TestArrowRoundtrip("SELECT 'bla' FROM range(10000)", options);
+
+	TestArrowRoundtrip("SELECT 'bla'::BLOB FROM range(10000)");
+
+	TestArrowRoundtrip("SELECT 'bla'::BLOB FROM range(10000)", options);
+
+	TestArrowRoundtrip("SELECT '3d038406-6275-4aae-bec1-1235ccdeaade'::UUID FROM range(10000) tbl(i)");
+
+	TestArrowRoundtrip("SELECT '3d038406-6275-4aae-bec1-1235ccdeaade'::UUID FROM range(10000) tbl(i)", options);
 }
 
 TEST_CASE("Test arrow roundtrip", "[arrow]") {

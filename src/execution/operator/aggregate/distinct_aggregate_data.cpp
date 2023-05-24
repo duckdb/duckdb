@@ -124,7 +124,7 @@ struct FindMatchingAggregate {
 		if (other.children.size() != aggr.children.size()) {
 			return false;
 		}
-		if (!Expression::Equals(aggr.filter.get(), other.filter.get())) {
+		if (!Expression::Equals(aggr.filter, other.filter)) {
 			return false;
 		}
 		for (idx_t i = 0; i < aggr.children.size(); i++) {

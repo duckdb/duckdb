@@ -186,7 +186,7 @@ void BaseReservoirSampling::InitializeReservoir(idx_t cur_size, idx_t sample_siz
 		//! we use a priority queue to extract the minimum key in O(1) time
 		for (idx_t i = 0; i < sample_size; i++) {
 			double k_i = random.NextRandom();
-			reservoir_weights.push(std::make_pair(-k_i, i));
+			reservoir_weights.emplace(-k_i, i);
 		}
 		SetNextEntry();
 	}
@@ -217,7 +217,7 @@ void BaseReservoirSampling::ReplaceElement() {
 	//! we generate a random number between (min_threshold, 1)
 	double r2 = random.NextRandom(min_threshold, 1);
 	//! now we insert the new weight into the reservoir
-	reservoir_weights.push(std::make_pair(-r2, min_entry));
+	reservoir_weights.emplace(-r2, min_entry);
 	//! we update the min entry with the new min entry in the reservoir
 	SetNextEntry();
 }

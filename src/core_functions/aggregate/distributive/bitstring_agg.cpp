@@ -53,18 +53,19 @@ struct BitStringAggOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
-		auto bind_agg_data = (BitstringAggBindData *)data.bind_data;
+	static void Operation(STATE *state, AggregateInputData &data, const INPUT_TYPE *input, ValidityMask &mask,
+	                      idx_t idx) {
+		auto &bind_agg_data = data.bind_data->template Cast<BitstringAggBindData>();
 		if (!state->is_set) {
-			if (bind_agg_data->min.IsNull() || bind_agg_data->max.IsNull()) {
+			if (bind_agg_data.min.IsNull() || bind_agg_data.max.IsNull()) {
 				throw BinderException(
 				    "Could not retrieve required statistics. Alternatively, try by providing the statistics "
 				    "explicitly: BITSTRING_AGG(col, min, max) ");
 			}
-			state->min = bind_agg_data->min.GetValue<INPUT_TYPE>();
-			state->max = bind_agg_data->max.GetValue<INPUT_TYPE>();
+			state->min = bind_agg_data.min.GetValue<INPUT_TYPE>();
+			state->max = bind_agg_data.max.GetValue<INPUT_TYPE>();
 			idx_t bit_range =
-			    GetRange(bind_agg_data->min.GetValue<INPUT_TYPE>(), bind_agg_data->max.GetValue<INPUT_TYPE>());
+			    GetRange(bind_agg_data.min.GetValue<INPUT_TYPE>(), bind_agg_data.max.GetValue<INPUT_TYPE>());
 			if (bit_range > MAX_BIT_RANGE) {
 				throw OutOfRangeException(
 				    "The range between min and max value (%s <-> %s) is too large for bitstring aggregation",
@@ -78,7 +79,7 @@ struct BitStringAggOperation {
 			state->is_set = true;
 		}
 		if (input[idx] >= state->min && input[idx] <= state->max) {
-			Execute(state, input[idx], bind_agg_data->min.GetValue<INPUT_TYPE>());
+			Execute(state, input[idx], bind_agg_data.min.GetValue<INPUT_TYPE>());
 		} else {
 			throw OutOfRangeException("Value %s is outside of provided min and max range (%s <-> %s)",
 			                          NumericHelper::ToString(input[idx]), NumericHelper::ToString(state->min),
@@ -87,7 +88,7 @@ struct BitStringAggOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
 	                              ValidityMask &mask, idx_t count) {
 		OP::template Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 	}
@@ -190,9 +191,9 @@ unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, Bound
 		throw BinderException("Could not retrieve required statistics. Alternatively, try by providing the statistics "
 		                      "explicitly: BITSTRING_AGG(col, min, max) ");
 	}
-	auto bind_agg_data = (BitstringAggBindData *)input.bind_data;
-	bind_agg_data->min = NumericStats::Min(input.child_stats[0]);
-	bind_agg_data->max = NumericStats::Max(input.child_stats[0]);
+	auto &bind_agg_data = input.bind_data->Cast<BitstringAggBindData>();
+	bind_agg_data.min = NumericStats::Min(input.child_stats[0]);
+	bind_agg_data.max = NumericStats::Max(input.child_stats[0]);
 	return nullptr;
 }
 
