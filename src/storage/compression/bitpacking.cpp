@@ -68,7 +68,7 @@ static bitpacking_metadata_encoded_t EncodeMeta(bitpacking_metadata_t metadata) 
 }
 static bitpacking_metadata_t DecodeMeta(bitpacking_metadata_encoded_t *metadata_encoded) {
 	bitpacking_metadata_t metadata;
-	metadata.mode = Load<BitpackingMode>((data_ptr_t)(metadata_encoded) + 3);
+	metadata.mode = Load<BitpackingMode>(data_ptr_cast(metadata_encoded) + 3);
 	metadata.offset = *metadata_encoded & 0x00FFFFFF;
 	return metadata;
 }
@@ -324,7 +324,7 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
-	auto data = (T *)vdata.data;
+	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(data[idx], vdata.validity.RowIsValid(idx))) {
@@ -482,7 +482,7 @@ public:
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		auto data = (T *)vdata.data;
+		auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
@@ -690,7 +690,7 @@ public:
 					idx_t decompress_offset = current_group_offset - extra_count;
 					bool skip_sign_extension = true;
 
-					BitpackingPrimitives::UnPackBuffer<T>((data_ptr_t)decompression_buffer,
+					BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(decompression_buffer),
 					                                      current_group_ptr + decompress_offset, decompress_count,
 					                                      current_width, skip_sign_extension);
 
@@ -795,11 +795,11 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 		if (to_scan == BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE && offset_in_compression_group == 0) {
 			// Decompress directly into result vector
-			BitpackingPrimitives::UnPackBlock<T>((data_ptr_t)current_result_ptr, decompression_group_start_pointer,
+			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(current_result_ptr), decompression_group_start_pointer,
 			                                     scan_state.current_width, skip_sign_extend);
 		} else {
 			// Decompress compression algorithm to buffer
-			BitpackingPrimitives::UnPackBlock<T>((data_ptr_t)scan_state.decompression_buffer,
+			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(scan_state.decompression_buffer),
 			                                     decompression_group_start_pointer, scan_state.current_width,
 			                                     skip_sign_extend);
 
@@ -860,8 +860,8 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	D_ASSERT(scan_state.current_group.mode == BitpackingMode::FOR ||
 	         scan_state.current_group.mode == BitpackingMode::DELTA_FOR);
 
-	BitpackingPrimitives::UnPackBlock<T>((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
-	                                     scan_state.current_width, skip_sign_extend);
+	BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(scan_state.decompression_buffer),
+	                                     decompression_group_start_pointer, scan_state.current_width, skip_sign_extend);
 
 	*current_result_ptr = *(T *)(scan_state.decompression_buffer + offset_in_compression_group);
 	*current_result_ptr += scan_state.current_frame_of_reference;

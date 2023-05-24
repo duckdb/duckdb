@@ -90,6 +90,23 @@ public:
 	CurrentChunk current_chunk;
 
 public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast query result to type - query result type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast query result to type - query result type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
+public:
 	//! Returns the name of the column for the given index
 	DUCKDB_API const string &ColumnName(idx_t index) const;
 	//! Fetches a DataChunk of normalized (flat) vectors from the query result.

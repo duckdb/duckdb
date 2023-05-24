@@ -19,7 +19,7 @@ PartitionedTupleData::PartitionedTupleData(const PartitionedTupleData &other)
 unique_ptr<PartitionedTupleData> PartitionedTupleData::CreateShared() {
 	switch (type) {
 	case PartitionedTupleDataType::RADIX:
-		return make_uniq<RadixPartitionedTupleData>((RadixPartitionedTupleData &)*this);
+		return make_uniq<RadixPartitionedTupleData>(Cast<RadixPartitionedTupleData>());
 	default:
 		throw NotImplementedException("CreateShared for this type of PartitionedTupleData");
 	}

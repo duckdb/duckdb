@@ -30,7 +30,7 @@ common/exception_format_value.cpp	8
 common/field_writer.cpp	3
 common/file_buffer.cpp	5
 common/file_system.cpp	19
-common/fsst.cpp	5
+common/fsst.cpp	6
 common/gzip_file_system.cpp	40
 common/hive_partitioning.cpp	54
 common/local_file_system.cpp	16
@@ -53,7 +53,7 @@ common/serializer/buffered_deserializer.cpp	3
 common/serializer/buffered_file_reader.cpp	9
 common/serializer/buffered_file_writer.cpp	2
 common/sort/comparators.cpp	72
-common/sort/merge_sorter.cpp	99
+common/sort/merge_sorter.cpp	100
 common/sort/partition_state.cpp	43
 common/sort/sort_state.cpp	10
 common/sort/sorted_block.cpp	20
@@ -258,7 +258,7 @@ function/scalar_function.cpp	7
 function/table/arrow.cpp	61
 function/table/arrow_conversion.cpp	225
 function/table/checkpoint.cpp	7
-function/table/copy_csv.cpp	14
+function/table/copy_csv.cpp	16
 function/table/pragma_detailed_profiling_output.cpp	86
 function/table/pragma_last_profiling_output.cpp	51
 function/table/range.cpp	5
@@ -390,7 +390,7 @@ include/duckdb/main/connection_manager.hpp	3
 include/duckdb/main/database.hpp	2
 include/duckdb/main/prepared_statement.hpp	9
 include/duckdb/main/query_profiler.hpp	9
-include/duckdb/main/query_result.hpp	9
+include/duckdb/main/query_result.hpp	11
 include/duckdb/main/relation.hpp	3
 include/duckdb/main/relation/subquery_relation.hpp	3
 include/duckdb/main/relation/write_parquet_relation.hpp	3
@@ -564,7 +564,7 @@ parser/statement/multi_statement.cpp	7
 parser/statement/select_statement.cpp	2
 parser/statement/set_statement.cpp	3
 parser/statement/update_statement.cpp	2
-parser/tableref.cpp	8
+parser/tableref.cpp	9
 parser/tableref/basetableref.cpp	2
 parser/tableref/emptytableref.cpp	3
 parser/tableref/expressionlistref.cpp	5

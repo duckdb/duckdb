@@ -35,7 +35,7 @@ private:
 	template <class T>
 	T ReadPrimitive() {
 		T value;
-		ReadData((data_ptr_t)&value, sizeof(T));
+		ReadData(data_ptr_cast(&value), sizeof(T));
 		return value;
 	}
 

@@ -35,7 +35,7 @@ struct ListBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const ListBindData &)other_p;
+		auto &other = other_p.Cast<ListBindData>();
 		return stype == other.stype;
 	}
 };
@@ -80,7 +80,7 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 	UnifiedVectorFormat sdata;
 	state_vector.ToUnifiedFormat(count, sdata);
 
-	auto states = (ListAggState **)sdata.data;
+	auto states = UnifiedVectorFormat::GetData<ListAggState *>(sdata);
 	RecursiveFlatten(input, count);
 
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
@@ -94,7 +94,7 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputData &aggr_input_data, idx_t count) {
 	UnifiedVectorFormat sdata;
 	state.ToUnifiedFormat(count, sdata);
-	auto states_ptr = (ListAggState **)sdata.data;
+	auto states_ptr = UnifiedVectorFormat::GetData<ListAggState *>(sdata);
 
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 
@@ -125,7 +125,7 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &aggr_input_da
                          idx_t offset) {
 	UnifiedVectorFormat sdata;
 	state_vector.ToUnifiedFormat(count, sdata);
-	auto states = (ListAggState **)sdata.data;
+	auto states = UnifiedVectorFormat::GetData<ListAggState *>(sdata);
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
