@@ -48,8 +48,8 @@ public:
 			// reinitialize the VectorListBuffer
 			AssignSharedPointer(result.auxiliary, auxiliary);
 			// propagate through child
-			auto &child_cache = (VectorCacheBuffer &)*child_caches[0];
-			auto &list_buffer = (VectorListBuffer &)*result.auxiliary;
+			auto &child_cache = child_caches[0]->Cast<VectorCacheBuffer>();
+			auto &list_buffer = result.auxiliary->Cast<VectorListBuffer>();
 			list_buffer.SetCapacity(child_cache.capacity);
 			list_buffer.SetSize(0);
 			list_buffer.SetAuxiliaryData(nullptr);
@@ -65,9 +65,9 @@ public:
 			auxiliary->SetAuxiliaryData(nullptr);
 			AssignSharedPointer(result.auxiliary, auxiliary);
 			// propagate through children
-			auto &children = ((VectorStructBuffer &)*result.auxiliary).GetChildren();
+			auto &children = result.auxiliary->Cast<VectorStructBuffer>().GetChildren();
 			for (idx_t i = 0; i < children.size(); i++) {
-				auto &child_cache = (VectorCacheBuffer &)*child_caches[i];
+				auto &child_cache = child_caches[i]->Cast<VectorCacheBuffer>();
 				child_cache.ResetFromCache(*children[i], child_caches[i]);
 			}
 			break;
@@ -103,12 +103,12 @@ VectorCache::VectorCache(Allocator &allocator, const LogicalType &type_p, idx_t 
 
 void VectorCache::ResetFromCache(Vector &result) const {
 	D_ASSERT(buffer);
-	auto &vcache = (VectorCacheBuffer &)*buffer;
+	auto &vcache = buffer->Cast<VectorCacheBuffer>();
 	vcache.ResetFromCache(result, buffer);
 }
 
 const LogicalType &VectorCache::GetType() const {
-	auto &vcache = (VectorCacheBuffer &)*buffer;
+	auto &vcache = buffer->Cast<VectorCacheBuffer>();
 	return vcache.GetType();
 }
 

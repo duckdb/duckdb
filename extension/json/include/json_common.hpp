@@ -38,7 +38,7 @@ private:
 
 	static inline void *Reallocate(void *ctx, void *ptr, size_t old_size, size_t size) {
 		auto alloc = (ArenaAllocator *)ctx;
-		return alloc->ReallocateAligned((data_ptr_t)ptr, old_size, size);
+		return alloc->ReallocateAligned(data_ptr_cast(ptr), old_size, size);
 	}
 
 	static inline void Free(void *ctx, void *ptr) {

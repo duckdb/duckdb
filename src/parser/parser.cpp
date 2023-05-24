@@ -51,7 +51,7 @@ static bool StripUnicodeSpaces(const string &query_str, string &new_query) {
 	idx_t pos = 0;
 	unsigned char quote;
 	vector<UnicodeSpace> unicode_spaces;
-	auto query = (unsigned char *)query_str.c_str();
+	auto query = const_uchar_ptr_cast(query_str.c_str());
 	auto qsize = query_str.size();
 
 regular:
@@ -288,7 +288,7 @@ vector<OrderByNode> Parser::ParseOrderList(const string &select_list, ParserOpti
 	    select_node.modifiers.size() != 1) {
 		throw ParserException("Expected a single ORDER clause");
 	}
-	auto &order = (OrderModifier &)*select_node.modifiers[0];
+	auto &order = select_node.modifiers[0]->Cast<OrderModifier>();
 	return std::move(order.orders);
 }
 
@@ -341,7 +341,7 @@ ColumnList Parser::ParseColumnList(const string &column_list, ParserOptions opti
 	if (create.info->type != CatalogType::TABLE_ENTRY) {
 		throw InternalException("Expected a single CREATE TABLE statement");
 	}
-	auto &info = ((CreateTableInfo &)*create.info);
+	auto &info = create.info->Cast<CreateTableInfo>();
 	return std::move(info.columns);
 }
 

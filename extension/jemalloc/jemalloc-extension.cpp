@@ -19,7 +19,7 @@ std::string JEMallocExtension::Name() {
 }
 
 data_ptr_t JEMallocExtension::Allocate(PrivateAllocatorData *private_data, idx_t size) {
-	return (data_ptr_t)duckdb_jemalloc::je_malloc(size);
+	return data_ptr_cast(duckdb_jemalloc::je_malloc(size));
 }
 
 void JEMallocExtension::Free(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
@@ -28,7 +28,7 @@ void JEMallocExtension::Free(PrivateAllocatorData *private_data, data_ptr_t poin
 
 data_ptr_t JEMallocExtension::Reallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
                                          idx_t size) {
-	return (data_ptr_t)duckdb_jemalloc::je_realloc(pointer, size);
+	return data_ptr_cast(duckdb_jemalloc::je_realloc(pointer, size));
 }
 
 static void JemallocCTL(const char *name, void *old_ptr, size_t *old_len, void *new_ptr, size_t new_len) {

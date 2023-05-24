@@ -66,9 +66,9 @@ struct ReservoirQuantileBindData : public FunctionData {
 
 	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const AggregateFunction &function) {
 		D_ASSERT(bind_data_p);
-		auto bind_data = (ReservoirQuantileBindData *)bind_data_p;
-		writer.WriteList<double>(bind_data->quantiles);
-		writer.WriteField<int32_t>(bind_data->sample_size);
+		auto &bind_data = bind_data_p->Cast<ReservoirQuantileBindData>();
+		writer.WriteList<double>(bind_data.quantiles);
+		writer.WriteField<int32_t>(bind_data.sample_size);
 	}
 
 	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
@@ -92,7 +92,7 @@ struct ReservoirQuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
 	                              ValidityMask &mask, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
@@ -100,18 +100,17 @@ struct ReservoirQuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *data, ValidityMask &mask,
+	static void Operation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *data, ValidityMask &mask,
 	                      idx_t idx) {
-		auto bind_data = (ReservoirQuantileBindData *)aggr_input_data.bind_data;
-		D_ASSERT(bind_data);
+		auto &bind_data = aggr_input_data.bind_data->template Cast<ReservoirQuantileBindData>();
 		if (state->pos == 0) {
-			state->Resize(bind_data->sample_size);
+			state->Resize(bind_data.sample_size);
 		}
 		if (!state->r_samp) {
 			state->r_samp = new BaseReservoirSampling();
 		}
 		D_ASSERT(state->v);
-		state->FillReservoir(bind_data->sample_size, data[idx]);
+		state->FillReservoir(bind_data.sample_size, data[idx]);
 	}
 
 	template <class STATE, class OP>
@@ -157,10 +156,10 @@ struct ReservoirQuantileScalarOperation : public ReservoirQuantileOperation {
 		}
 		D_ASSERT(state->v);
 		D_ASSERT(aggr_input_data.bind_data);
-		auto bind_data = (ReservoirQuantileBindData *)aggr_input_data.bind_data;
+		auto &bind_data = aggr_input_data.bind_data->template Cast<ReservoirQuantileBindData>();
 		auto v_t = state->v;
-		D_ASSERT(bind_data->quantiles.size() == 1);
-		auto offset = (idx_t)((double)(state->pos - 1) * bind_data->quantiles[0]);
+		D_ASSERT(bind_data.quantiles.size() == 1);
+		auto offset = (idx_t)((double)(state->pos - 1) * bind_data.quantiles[0]);
 		std::nth_element(v_t, v_t + offset, v_t + state->pos);
 		target[idx] = v_t[offset];
 	}
@@ -217,11 +216,11 @@ struct ReservoirQuantileListOperation : public ReservoirQuantileOperation {
 		}
 
 		D_ASSERT(aggr_input_data.bind_data);
-		auto bind_data = (ReservoirQuantileBindData *)aggr_input_data.bind_data;
+		auto &bind_data = aggr_input_data.bind_data->template Cast<ReservoirQuantileBindData>();
 
 		auto &result = ListVector::GetEntry(result_list);
 		auto ridx = ListVector::GetListSize(result_list);
-		ListVector::Reserve(result_list, ridx + bind_data->quantiles.size());
+		ListVector::Reserve(result_list, ridx + bind_data.quantiles.size());
 		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
 
 		auto v_t = state->v;
@@ -229,9 +228,9 @@ struct ReservoirQuantileListOperation : public ReservoirQuantileOperation {
 
 		auto &entry = target[idx];
 		entry.offset = ridx;
-		entry.length = bind_data->quantiles.size();
+		entry.length = bind_data.quantiles.size();
 		for (size_t q = 0; q < entry.length; ++q) {
-			const auto &quantile = bind_data->quantiles[q];
+			const auto &quantile = bind_data.quantiles[q];
 			auto offset = (idx_t)((double)(state->pos - 1) * quantile);
 			std::nth_element(v_t, v_t + offset, v_t + state->pos);
 			rdata[ridx + q] = v_t[offset];
@@ -246,11 +245,11 @@ struct ReservoirQuantileListOperation : public ReservoirQuantileOperation {
 		D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 		D_ASSERT(aggr_input_data.bind_data);
-		auto bind_data = (ReservoirQuantileBindData *)aggr_input_data.bind_data;
+		auto &bind_data = aggr_input_data.bind_data->Cast<ReservoirQuantileBindData>();
 
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ListVector::Reserve(result, bind_data->quantiles.size());
+			ListVector::Reserve(result, bind_data.quantiles.size());
 
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
@@ -259,7 +258,7 @@ struct ReservoirQuantileListOperation : public ReservoirQuantileOperation {
 		} else {
 			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			ListVector::Reserve(result, (offset + count) * bind_data->quantiles.size());
+			ListVector::Reserve(result, (offset + count) * bind_data.quantiles.size());
 
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);

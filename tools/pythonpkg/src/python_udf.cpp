@@ -59,9 +59,9 @@ static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, Clie
 	// Prepare the inputs for the bind
 	vector<Value> children;
 	children.reserve(3);
-	children.push_back(Value::POINTER((uintptr_t)stream_factory.get()));
-	children.push_back(Value::POINTER((uintptr_t)stream_factory_produce));
-	children.push_back(Value::POINTER((uintptr_t)stream_factory_get_schema));
+	children.push_back(Value::POINTER(CastPointerToValue(stream_factory.get())));
+	children.push_back(Value::POINTER(CastPointerToValue(stream_factory_produce)));
+	children.push_back(Value::POINTER(CastPointerToValue(stream_factory_get_schema)));
 	named_parameter_map_t named_params;
 	vector<LogicalType> input_types;
 	vector<string> input_names;

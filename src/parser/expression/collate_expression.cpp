@@ -18,11 +18,11 @@ string CollateExpression::ToString() const {
 	return StringUtil::Format("%s COLLATE %s", child->ToString(), SQLIdentifier(collation));
 }
 
-bool CollateExpression::Equal(const CollateExpression *a, const CollateExpression *b) {
-	if (!a->child->Equals(b->child.get())) {
+bool CollateExpression::Equal(const CollateExpression &a, const CollateExpression &b) {
+	if (!a.child->Equals(*b.child)) {
 		return false;
 	}
-	if (a->collation != b->collation) {
+	if (a.collation != b.collation) {
 		return false;
 	}
 	return true;

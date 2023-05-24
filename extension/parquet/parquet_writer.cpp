@@ -45,7 +45,7 @@ public:
 	}
 
 	void write_virt(const uint8_t *buf, uint32_t len) override {
-		serializer.WriteData((const_data_ptr_t)buf, len);
+		serializer.WriteData(const_data_ptr_cast(buf), len);
 	}
 
 private:
@@ -232,7 +232,7 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	// parquet files start with the string "PAR1"
-	writer->WriteData((const_data_ptr_t) "PAR1", 4);
+	writer->WriteData(const_data_ptr_cast("PAR1"), 4);
 	TCompactProtocolFactoryT<MyTransport> tproto_factory;
 	protocol = tproto_factory.getProtocol(make_shared<MyTransport>(*writer));
 
@@ -327,7 +327,7 @@ void ParquetWriter::Finalize() {
 	writer->Write<uint32_t>(writer->GetTotalWritten() - start_offset);
 
 	// parquet files also end with the string "PAR1"
-	writer->WriteData((const_data_ptr_t) "PAR1", 4);
+	writer->WriteData(const_data_ptr_cast("PAR1"), 4);
 
 	// flush to disk
 	writer->Sync();

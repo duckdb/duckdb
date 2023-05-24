@@ -189,7 +189,7 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
                                                                  ColumnCheckpointInfo &checkpoint_info) {
 	auto validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
 	auto base_state = ColumnData::Checkpoint(row_group, partial_block_manager, checkpoint_info);
-	auto &checkpoint_state = (StandardColumnCheckpointState &)*base_state;
+	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
 	checkpoint_state.validity_state = std::move(validity_state);
 	return base_state;
 }

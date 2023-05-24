@@ -99,7 +99,7 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT: {
-		auto &limit = (LogicalLimitPercent &)op;
+		auto &limit = op.Cast<LogicalLimitPercent>();
 		if (limit.limit) {
 			callback(&limit.limit);
 		}

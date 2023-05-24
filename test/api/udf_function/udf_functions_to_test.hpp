@@ -324,13 +324,13 @@ struct UDFAverageFunction {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		state->sum += input[idx];
 		state->count++;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask,
+	static void ConstantOperation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
 		state->count += count;
 		state->sum += input[0] * count;
@@ -376,8 +376,8 @@ struct UDFCovarOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
-	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
+	static void Operation(STATE *state, AggregateInputData &, const A_TYPE *x_data, const B_TYPE *y_data,
+	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
 		// update running mean and d^2
 		const uint64_t n = ++(state->count);
 
@@ -453,13 +453,13 @@ struct UDFSum {
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, idx_t idx) {
 		state->isset = true;
 		state->value += input[idx];
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void ConstantOperation(STATE *state, AggregateInputData &, INPUT_TYPE *input, idx_t count) {
+	static void ConstantOperation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, idx_t count) {
 		state->isset = true;
 		state->value += (INPUT_TYPE)input[0] * (INPUT_TYPE)count;
 	}
