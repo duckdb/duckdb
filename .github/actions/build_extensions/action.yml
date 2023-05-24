@@ -79,26 +79,18 @@ runs:
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
-
       run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
         cd  ${{ inputs.build_dir}}
         ls -al
         pwd
         echo "$USER"
         git config --global --add safe.directory '*'
-        make
-
-    - name: Build External Extensions
-      if: ${{ inputs.out_of_tree_ext != 0 }}
-      shell: bash
-      run: |
-        mkdir -p ~/.ssh
-        ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
-        cd  ${{ inputs.build_dir}}
-        mkdir -p build/release/extension/out_of_tree
         export EXTENSION_CONFIGS=""
-        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS${{ inputs.build_in_tree_extensions == 1 && '.github/config/in_tree_extensions.cmake' || ''}}"
-        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS${{ inputs.build_in_tree_extensions == 1 && '.github/config/out_tree_extensions.cmake' || '' }}"
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_in_tree_extensions == 1 && '.github/config/in_tree_extensions.cmake' || ''}}"
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_in_tree_extensions == 1 && '.github/config/out_tree_extensions.cmake' || '' }}"
+        echo "EXTENSION_CONFIGS"
         make
 
     - name: Run post-install scripts
