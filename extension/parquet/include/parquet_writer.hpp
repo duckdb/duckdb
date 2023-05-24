@@ -30,12 +30,17 @@ struct PreparedRowGroup {
 	vector<duckdb::unique_ptr<ColumnWriterState>> states;
 };
 
+struct FieldID;
+struct ChildFieldIDs {
+	unordered_map<string, FieldID> ids;
+};
+
 struct FieldID {
 	explicit FieldID(int32_t field_id_p) : field_id(field_id_p) {
 	}
 	int32_t field_id;
 	// TODO: current unused, implement at some point
-	unordered_map<string, FieldID> child_field_ids;
+	ChildFieldIDs child_field_ids;
 };
 
 class ParquetWriter {

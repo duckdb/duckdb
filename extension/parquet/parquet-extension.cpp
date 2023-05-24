@@ -586,19 +586,99 @@ public:
 	}
 };
 
-static void GetFieldIDs(const Value &field_id_map, unordered_map<string, FieldID> &field_ids,
-                        const vector<string> &names) {
+static void GetFieldIDs(const Value &field_id_string_value, unordered_map<string, FieldID> &field_ids,
+                        unordered_set<uint32_t> &unique_field_ids, const vector<string> &names,
+                        const vector<LogicalType> &sql_types) {
+	Value field_id_map;
+	string error_message;
+	if (!field_id_string_value.DefaultTryCastAs(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR),
+	                                            field_id_map, &error_message)) {
+		throw BinderException("Expected FIELD_IDS to be a MAP, e.g., '{col1=42, col2=43:{nested_col=44}}'");
+	}
+
+	D_ASSERT(names.size() == sql_types.size());
 	for (auto &entry : ListValue::GetChildren(field_id_map)) {
 		auto &kv = StructValue::GetChildren(entry);
 		D_ASSERT(kv.size() == 2);
 		const auto &col_name = StringValue::Get(kv[0]);
-		if (std::find(names.begin(), names.end(), col_name) == names.end()) {
-			throw BinderException("Column name \"%s\" in FIELD_IDS not found in columns", col_name);
+		idx_t col_idx;
+		for (col_idx = 0; col_idx < names.size(); col_idx++) {
+			if (col_name == names[col_idx]) {
+				break;
+			}
 		}
-		if (field_ids.find(col_name) != field_ids.end()) {
-			throw BinderException("Duplicate column name name \"%s\" found in FIELD_IDS");
+		if (col_idx == names.size()) {
+			throw BinderException("Column name \"%s\" in FIELD_IDS not found. Available column names: [%s]", col_name,
+			                      StringUtil::Join(names, ", "));
 		}
-		field_ids.emplace(col_name, IntegerValue::Get(kv[1]));
+		D_ASSERT(field_ids.find(col_name) == field_ids.end()); // Caught by MAP - deduplicates keys
+		auto &input_string = StringValue::Get(kv[1]);
+
+		string field_id_string;
+		bool has_child_field_ids = false;
+		string child_input_string;
+		if (StringUtil::Contains(input_string, ":")) {
+			auto id_and_children = StringUtil::Split(input_string, ":");
+			if (id_and_children.size() != 2) {
+				throw BinderException("Invalid FIELD_IDS specification for column \"%s\": \"%s\"", col_name,
+				                      input_string);
+			}
+			field_id_string = std::move(id_and_children[0]);
+			has_child_field_ids = true;
+			child_input_string = std::move(id_and_children[1]);
+		} else {
+			field_id_string = input_string;
+		}
+
+		Value field_id_value(field_id_string);
+		if (!field_id_value.DefaultTryCastAs(LogicalType::INTEGER)) {
+			throw BinderException("Expected an INTEGER in FIELD_IDS for column \"%s\", got \"%s\" instead", col_name,
+			                      field_id_string);
+		}
+
+		const uint32_t field_id = IntegerValue::Get(field_id_value);
+		if (!unique_field_ids.insert(field_id).second) {
+			throw BinderException("Duplicate field_id %s found in FIELD_IDS", field_id_value.ToString());
+		}
+		auto inserted = field_ids.emplace(col_name, field_id);
+		D_ASSERT(inserted.second);
+
+		if (!has_child_field_ids) {
+			continue;
+		}
+
+		const auto &col_type = sql_types[col_idx];
+		if (col_type.id() != LogicalTypeId::LIST && col_type.id() != LogicalTypeId::MAP &&
+		    col_type.id() != LogicalTypeId::STRUCT) {
+			throw BinderException("Column \"%s\" cannot have a nested FIELD_IDS specification, got \"%s\"", col_name,
+			                      input_string);
+		}
+
+		vector<string> child_names;
+		vector<LogicalType> child_types;
+		switch (col_type.id()) {
+		case LogicalTypeId::LIST:
+			child_names.emplace_back("element");
+			child_types.emplace_back(ListType::GetChildType(col_type));
+			break;
+		case LogicalTypeId::MAP:
+			child_names.emplace_back("key");
+			child_names.emplace_back("value");
+			child_types.emplace_back(MapType::KeyType(col_type));
+			child_types.emplace_back(MapType::ValueType(col_type));
+			break;
+		case LogicalTypeId::STRUCT:
+			for (auto &child_type : StructType::GetChildTypes(col_type)) {
+				child_names.emplace_back(child_type.first);
+				child_types.emplace_back(child_type.second);
+			}
+			break;
+		default: // LCOV_EXCL_START
+			throw InternalException("Unexpected type in GetFieldIDs");
+		} // LCOV_EXCL_STOP
+
+		GetFieldIDs(child_input_string, inserted.first->second.child_field_ids.ids, unique_field_ids, child_names,
+		            child_types);
 	}
 }
 
@@ -628,13 +708,11 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 			}
 			throw BinderException("Expected %s argument to be either [uncompressed, snappy, gzip or zstd]", loption);
 		} else if (loption == "field_ids") {
-			if (option.second.empty() ||
-			    !option.second[0].TryCastAs(context, LogicalType::MAP(LogicalType::VARCHAR, LogicalType::INTEGER))) {
-				throw BinderException(
-				    "Expected %s argument to be a MAP(VARCHAR, INTEGER) as a string, e.g., '{col1=42, col2=43}'",
-				    loption);
+			if (option.second.empty()) {
+				throw BinderException("FIELD_IDS cannot be empty");
 			}
-			GetFieldIDs(option.second[0], bind_data->field_ids, names);
+			unordered_set<uint32_t> unique_field_ids;
+			GetFieldIDs(option.second[0], bind_data->field_ids, unique_field_ids, names, sql_types);
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}

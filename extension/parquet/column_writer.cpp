@@ -1820,7 +1820,7 @@ ColumnWriter::CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement
 		auto field_id_it = field_ids->find(name);
 		if (field_id_it != field_ids->end()) {
 			field_id = &field_id_it->second;
-			child_field_ids = &field_id->child_field_ids;
+			child_field_ids = &field_id->child_field_ids.ids;
 		}
 	}
 

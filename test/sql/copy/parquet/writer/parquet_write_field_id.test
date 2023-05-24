@@ -1,5 +1,5 @@
 # name: test/sql/copy/parquet/writer/parquet_write_field_id.test
-# description: FIELD_ID tests
+# description: Parquet writer FIELD_IDS tests
 # group: [writer]
 
 require parquet
@@ -28,11 +28,22 @@ select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
 ----
 42
 
+# can't have duplicate field id keys
+statement error
+copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42, i=43}')
+----
+Invalid Input Error
+
+# can't have duplicate field id values either
+statement error
+copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42, j=42}')
+----
+Binder Error
+
 # we don't have to supply a field_id for all columns
 statement ok
 copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42}')
 
-#
 query I
 select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
 ----
@@ -43,27 +54,85 @@ select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'j'
 ----
 NULL
 
-# we tested a non-nested type, now do all the nested types so we test all the code paths
+# but we can
 statement ok
-copy (select NULL::INT[] as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42}')
+copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42, j=43}')
 
 query I
 select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
 ----
 42
 
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'j'
+----
+43
+
+# i is not a nested type, so we can't specify nested field ids
+statement error
+copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42:{j=43}}')
+----
+Binder Error
+
+# we tested a non-nested column type, now do all the nested types so we test all the code paths
 statement ok
-copy (select NULL::STRUCT(i INTEGER) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42}')
+copy (select range(range, range + 3) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42:{element=43}}')
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+42
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'element'
+----
+43
+
+# list child is always called "element"
+statement error
+copy (select range(range, range + 3) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42:{elem=43}}')
+----
+Binder Error: Column name "elem" in FIELD_IDS not found. Available column names: [element]
+
+statement ok
+copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42:{f=43}}')
 
 query I
 select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i' and num_children > 0
 ----
 42
 
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'f'
+----
+43
+
+# struct does not have child "g"
+statement error
+copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42:{g=43}}')
+----
+Binder Error: Column name "g" in FIELD_IDS not found. Available column names: [f]
+
 statement ok
-copy (select NULL::MAP(INTEGER, INTEGER) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42}')
+copy (select map {range : 10 - range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42:{key=43, value=44}}')
 
 query I
 select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i' and num_children > 0
 ----
 42
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'key'
+----
+43
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'value'
+----
+44
+
+# map type children need to be called "key" and "value"
+statement error
+copy (select map {range : 10 - range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42:{k=43, v=44}}')
+----
+Binder Error: Column name "k" in FIELD_IDS not found. Available column names: [key, value]
