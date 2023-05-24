@@ -19,11 +19,11 @@ static IndexType StringToIndexType(const string &str) {
 	return IndexType::INVALID;
 }
 
-vector<unique_ptr<ParsedExpression>> Transformer::TransformIndexParameters(duckdb_libpgquery::PGList *list,
+vector<unique_ptr<ParsedExpression>> Transformer::TransformIndexParameters(duckdb_libpgquery::PGList &list,
                                                                            const string &relation_name) {
 	vector<unique_ptr<ParsedExpression>> expressions;
-	for (auto cell = list->head; cell != nullptr; cell = cell->next) {
-		auto index_element = (duckdb_libpgquery::PGIndexElem *)cell->data.ptr_value;
+	for (auto cell = list.head; cell != nullptr; cell = cell->next) {
+		auto index_element = PGPointerCast<duckdb_libpgquery::PGIndexElem>(cell->data.ptr_value);
 		if (index_element->collation) {
 			throw NotImplementedException("Index with collation not supported yet!");
 		}
@@ -43,30 +43,28 @@ vector<unique_ptr<ParsedExpression>> Transformer::TransformIndexParameters(duckd
 	return expressions;
 }
 
-unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery::PGNode *node) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGIndexStmt *>(node);
-	D_ASSERT(stmt);
+unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery::PGIndexStmt &stmt) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateIndexInfo>();
-	if (stmt->unique) {
+	if (stmt.unique) {
 		info->constraint_type = IndexConstraintType::UNIQUE;
 	} else {
 		info->constraint_type = IndexConstraintType::NONE;
 	}
 
-	info->on_conflict = TransformOnConflict(stmt->onconflict);
+	info->on_conflict = TransformOnConflict(stmt.onconflict);
 
-	info->expressions = TransformIndexParameters(stmt->indexParams, stmt->relation->relname);
+	info->expressions = TransformIndexParameters(*stmt.indexParams, stmt.relation->relname);
 
-	info->index_type = StringToIndexType(string(stmt->accessMethod));
+	info->index_type = StringToIndexType(string(stmt.accessMethod));
 	auto tableref = make_uniq<BaseTableRef>();
-	tableref->table_name = stmt->relation->relname;
-	if (stmt->relation->schemaname) {
-		tableref->schema_name = stmt->relation->schemaname;
+	tableref->table_name = stmt.relation->relname;
+	if (stmt.relation->schemaname) {
+		tableref->schema_name = stmt.relation->schemaname;
 	}
 	info->table = std::move(tableref);
-	if (stmt->idxname) {
-		info->index_name = stmt->idxname;
+	if (stmt.idxname) {
+		info->index_name = stmt.idxname;
 	} else {
 		throw NotImplementedException("Index without a name not supported yet!");
 	}

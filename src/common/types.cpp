@@ -811,6 +811,17 @@ public:
 	virtual void FormatSerialize(FormatSerializer &serializer) const;
 	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
 
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
 protected:
 	virtual bool EqualsInternal(ExtraTypeInfo *other_p) const {
 		// Do nothing
@@ -888,7 +899,7 @@ public:
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
-		auto &other = (DecimalTypeInfo &)*other_p;
+		auto &other = other_p->Cast<DecimalTypeInfo>();
 		return width == other.width && scale == other.scale;
 	}
 };
@@ -897,14 +908,14 @@ uint8_t DecimalType::GetWidth(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((DecimalTypeInfo &)*info).width;
+	return info->Cast<DecimalTypeInfo>().width;
 }
 
 uint8_t DecimalType::GetScale(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((DecimalTypeInfo &)*info).scale;
+	return info->Cast<DecimalTypeInfo>().scale;
 }
 
 uint8_t DecimalType::MaxWidth() {
@@ -965,7 +976,7 @@ string StringType::GetCollation(const LogicalType &type) {
 	if (info->type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
 		return string();
 	}
-	return ((StringTypeInfo &)*info).collation;
+	return info->Cast<StringTypeInfo>().collation;
 }
 
 LogicalType LogicalType::VARCHAR_COLLATION(string collation) { // NOLINT
@@ -1005,7 +1016,7 @@ public:
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
-		auto &other = (ListTypeInfo &)*other_p;
+		auto &other = other_p->Cast<ListTypeInfo>();
 		return child_type == other.child_type;
 	}
 };
@@ -1014,7 +1025,7 @@ const LogicalType &ListType::GetChildType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((ListTypeInfo &)*info).child_type;
+	return info->Cast<ListTypeInfo>().child_type;
 }
 
 LogicalType LogicalType::LIST(const LogicalType &child) {
@@ -1066,7 +1077,7 @@ public:
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
-		auto &other = (StructTypeInfo &)*other_p;
+		auto &other = other_p->Cast<StructTypeInfo>();
 		return child_types == other.child_types;
 	}
 };
@@ -1122,7 +1133,7 @@ public:
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
-		auto &other = (AggregateStateTypeInfo &)*other_p;
+		auto &other = other_p->Cast<AggregateStateTypeInfo>();
 		return state_type.function_name == other.state_type.function_name &&
 		       state_type.return_type == other.state_type.return_type &&
 		       state_type.bound_argument_types == other.state_type.bound_argument_types;
@@ -1133,7 +1144,7 @@ const aggregate_state_t &AggregateStateType::GetStateType(const LogicalType &typ
 	D_ASSERT(type.id() == LogicalTypeId::AGGREGATE_STATE);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((AggregateStateTypeInfo &)*info).state_type;
+	return info->Cast<AggregateStateTypeInfo>().state_type;
 }
 
 const string AggregateStateType::GetTypeName(const LogicalType &type) {
@@ -1142,7 +1153,7 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 	if (!info) {
 		return "AGGREGATE_STATE<?>";
 	}
-	auto aggr_state = ((AggregateStateTypeInfo &)*info).state_type;
+	auto aggr_state = info->Cast<AggregateStateTypeInfo>().state_type;
 	return "AGGREGATE_STATE<" + aggr_state.function_name + "(" +
 	       StringUtil::Join(aggr_state.bound_argument_types, aggr_state.bound_argument_types.size(), ", ",
 	                        [](const LogicalType &arg_type) { return arg_type.ToString(); }) +
@@ -1154,7 +1165,7 @@ const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &ty
 
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((StructTypeInfo &)*info).child_types;
+	return info->Cast<StructTypeInfo>().child_types;
 }
 
 const LogicalType &StructType::GetChildType(const LogicalType &type, idx_t index) {
@@ -1277,7 +1288,7 @@ public:
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
-		auto &other = (UserTypeInfo &)*other_p;
+		auto &other = other_p->Cast<UserTypeInfo>();
 		return other.user_type_name == user_type_name;
 	}
 };
@@ -1286,7 +1297,7 @@ const string &UserType::GetTypeName(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::USER);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((UserTypeInfo &)*info).user_type_name;
+	return info->Cast<UserTypeInfo>().user_type_name;
 }
 
 LogicalType LogicalType::USER(const string &user_type_name) {
@@ -1306,19 +1317,19 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 	      dict_type(EnumDictType::VECTOR_DICT), enum_name(std::move(enum_name_p)), dict_size(dict_size_p) {
 	}
 
-	const EnumDictType &GetEnumDictType() {
+	const EnumDictType &GetEnumDictType() const {
 		return dict_type;
 	};
-	const string &GetEnumName() {
+	const string &GetEnumName() const {
 		return enum_name;
 	};
 	const string GetSchemaName() const {
 		return catalog_entry ? catalog_entry->schema.name : "";
 	};
-	const Vector &GetValuesInsertOrder() {
+	const Vector &GetValuesInsertOrder() const {
 		return values_insert_order;
 	};
-	const idx_t &GetDictSize() {
+	const idx_t &GetDictSize() const {
 		return dict_size;
 	};
 	EnumTypeInfo(const EnumTypeInfo &) = delete;
@@ -1327,7 +1338,7 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 protected:
 	// Equalities are only used in enums with different catalog entries
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
-		auto &other = (EnumTypeInfo &)*other_p;
+		auto &other = other_p->Cast<EnumTypeInfo>();
 		if (dict_type != other.dict_type) {
 			return false;
 		}
@@ -1360,7 +1371,7 @@ protected:
 		ExtraTypeInfo::FormatSerialize(serializer);
 		serializer.WriteProperty("dict_size", dict_size);
 		serializer.WriteProperty("enum_name", enum_name);
-		((Vector &)values_insert_order).FormatSerialize(serializer, dict_size);
+		((Vector &)values_insert_order).FormatSerialize(serializer, dict_size); // NOLINT - FIXME
 	}
 	Vector values_insert_order;
 
@@ -1374,7 +1385,7 @@ private:
 
 void EnumType::Serialize(FieldWriter &writer, const ExtraTypeInfo &type_info, bool serialize_internals) {
 	D_ASSERT(type_info.type == ExtraTypeInfoType::ENUM_TYPE_INFO);
-	auto &enum_info = (EnumTypeInfo &)type_info;
+	auto &enum_info = type_info.Cast<EnumTypeInfo>();
 	// Store Schema Name
 	writer.WriteString(enum_info.GetSchemaName());
 	// Store Enum Name
@@ -1387,7 +1398,7 @@ void EnumType::Serialize(FieldWriter &writer, const ExtraTypeInfo &type_info, bo
 		// Store Dictionary Size
 		writer.WriteField<uint32_t>(dict_size);
 		// Store Vector Order By Insertion
-		((Vector &)enum_info.GetValuesInsertOrder()).Serialize(dict_size, writer.GetSerializer());
+		((Vector &)enum_info.GetValuesInsertOrder()).Serialize(dict_size, writer.GetSerializer()); // NOLINT - FIXME
 	}
 }
 
@@ -1400,7 +1411,7 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		UnifiedVectorFormat vdata;
 		values_insert_order.ToUnifiedFormat(size_p, vdata);
 
-		auto data = (string_t *)vdata.data;
+		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 		for (idx_t i = 0; i < size_p; i++) {
 			auto idx = vdata.sel->get_index(i);
 			if (!vdata.validity.RowIsValid(idx)) {
@@ -1428,7 +1439,7 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		return make_shared<EnumTypeInfoTemplated>(std::move(enum_name), values_insert_order, size);
 	}
 
-	string_map_t<T> &GetValues() {
+	const string_map_t<T> &GetValues() const {
 		return values;
 	}
 
@@ -1443,7 +1454,7 @@ const string &EnumType::GetTypeName(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((EnumTypeInfo &)*info).GetEnumName();
+	return info->Cast<EnumTypeInfo>().GetEnumName();
 }
 
 static PhysicalType EnumVectorDictType(idx_t size) {
@@ -1480,7 +1491,7 @@ LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx
 }
 
 template <class T>
-int64_t TemplatedGetPos(string_map_t<T> &map, const string_t &key) {
+int64_t TemplatedGetPos(const string_map_t<T> &map, const string_t &key) {
 	auto it = map.find(key);
 	if (it == map.end()) {
 		return -1;
@@ -1492,11 +1503,11 @@ int64_t EnumType::GetPos(const LogicalType &type, const string_t &key) {
 	auto info = type.AuxInfo();
 	switch (type.InternalType()) {
 	case PhysicalType::UINT8:
-		return TemplatedGetPos(((EnumTypeInfoTemplated<uint8_t> &)*info).GetValues(), key);
+		return TemplatedGetPos(info->Cast<EnumTypeInfoTemplated<uint8_t>>().GetValues(), key);
 	case PhysicalType::UINT16:
-		return TemplatedGetPos(((EnumTypeInfoTemplated<uint16_t> &)*info).GetValues(), key);
+		return TemplatedGetPos(info->Cast<EnumTypeInfoTemplated<uint16_t>>().GetValues(), key);
 	case PhysicalType::UINT32:
-		return TemplatedGetPos(((EnumTypeInfoTemplated<uint32_t> &)*info).GetValues(), key);
+		return TemplatedGetPos(info->Cast<EnumTypeInfoTemplated<uint32_t>>().GetValues(), key);
 	default:
 		throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 	}
@@ -1504,7 +1515,7 @@ int64_t EnumType::GetPos(const LogicalType &type, const string_t &key) {
 
 const string EnumType::GetValue(const Value &val) {
 	auto info = val.type().AuxInfo();
-	auto &values_insert_order = ((EnumTypeInfo &)*info).GetValuesInsertOrder();
+	auto &values_insert_order = info->Cast<EnumTypeInfo>().GetValuesInsertOrder();
 	return StringValue::Get(values_insert_order.GetValue(val.GetValue<uint32_t>()));
 }
 
@@ -1512,14 +1523,14 @@ const Vector &EnumType::GetValuesInsertOrder(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((EnumTypeInfo &)*info).GetValuesInsertOrder();
+	return info->Cast<EnumTypeInfo>().GetValuesInsertOrder();
 }
 
 idx_t EnumType::GetSize(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((EnumTypeInfo &)*info).GetDictSize();
+	return info->Cast<EnumTypeInfo>().GetDictSize();
 }
 
 void EnumType::SetCatalog(LogicalType &type, optional_ptr<TypeCatalogEntry> catalog_entry) {
@@ -1535,7 +1546,7 @@ optional_ptr<TypeCatalogEntry> EnumType::GetCatalog(const LogicalType &type) {
 	if (!info) {
 		return nullptr;
 	}
-	return ((ExtraTypeInfo &)*info).catalog_entry;
+	return info->catalog_entry;
 }
 
 string EnumType::GetSchemaName(const LogicalType &type) {
@@ -1547,7 +1558,7 @@ PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto aux_info = type.AuxInfo();
 	D_ASSERT(aux_info);
-	auto &info = (EnumTypeInfo &)*aux_info;
+	auto &info = aux_info->Cast<EnumTypeInfo>();
 	D_ASSERT(info.GetEnumDictType() == EnumDictType::VECTOR_DICT);
 	return EnumVectorDictType(info.GetDictSize());
 }

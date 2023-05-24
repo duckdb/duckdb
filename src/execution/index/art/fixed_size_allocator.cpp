@@ -59,7 +59,7 @@ SwizzleablePointer FixedSizeAllocator::New() {
 		buffers_with_free_space.insert(buffer_id);
 
 		// set the bitmask
-		ValidityMask mask((validity_t *)buffer);
+		ValidityMask mask(reinterpret_cast<validity_t *>(buffer));
 		mask.SetAllValid(allocations_per_buffer);
 	}
 
@@ -67,7 +67,7 @@ SwizzleablePointer FixedSizeAllocator::New() {
 	D_ASSERT(!buffers_with_free_space.empty());
 	auto buffer_id = (uint32_t)*buffers_with_free_space.begin();
 
-	auto bitmask_ptr = (validity_t *)buffers[buffer_id].ptr;
+	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffers[buffer_id].ptr);
 	ValidityMask mask(bitmask_ptr);
 	auto offset = GetOffset(mask, buffers[buffer_id].allocation_count);
 
@@ -81,8 +81,7 @@ SwizzleablePointer FixedSizeAllocator::New() {
 }
 
 void FixedSizeAllocator::Free(const SwizzleablePointer ptr) {
-
-	auto bitmask_ptr = (validity_t *)buffers[ptr.buffer_id].ptr;
+	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffers[ptr.buffer_id].ptr);
 	ValidityMask mask(bitmask_ptr);
 	D_ASSERT(!mask.RowIsValid(ptr.offset));
 	mask.SetValid(ptr.offset);

@@ -9,7 +9,7 @@ hash_t Checksum(uint64_t x) {
 
 uint64_t Checksum(uint8_t *buffer, size_t size) {
 	uint64_t result = 5381;
-	uint64_t *ptr = (uint64_t *)buffer;
+	uint64_t *ptr = reinterpret_cast<uint64_t *>(buffer);
 	size_t i;
 	// for efficiency, we first checksum uint64_t values
 	for (i = 0; i < size / 8; i++) {

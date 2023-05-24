@@ -49,7 +49,7 @@ struct RegrBaseOperation {
 
 struct RegrSXXOperation : RegrBaseOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &aggr_input_data, A_TYPE *x_data, B_TYPE *y_data,
+	static void Operation(STATE *state, AggregateInputData &aggr_input_data, const A_TYPE *x_data, const B_TYPE *y_data,
 	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
 		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(&state->count, aggr_input_data, y_data, x_data, bmask,
 		                                                         amask, yidx, xidx);
@@ -59,7 +59,7 @@ struct RegrSXXOperation : RegrBaseOperation {
 
 struct RegrSYYOperation : RegrBaseOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &aggr_input_data, A_TYPE *x_data, B_TYPE *y_data,
+	static void Operation(STATE *state, AggregateInputData &aggr_input_data, const A_TYPE *x_data, const B_TYPE *y_data,
 	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
 		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(&state->count, aggr_input_data, y_data, x_data, bmask,
 		                                                         amask, yidx, xidx);

@@ -63,53 +63,42 @@ string WindowExpression::ToString() const {
 	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, schema, function_name);
 }
 
-bool WindowExpression::Equal(const WindowExpression *a, const WindowExpression *b) {
+bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &b) {
 	// check if the child expressions are equivalent
-	if (b->children.size() != a->children.size()) {
+	if (a.ignore_nulls != b.ignore_nulls) {
 		return false;
 	}
-	if (a->ignore_nulls != b->ignore_nulls) {
+	if (!ParsedExpression::ListEquals(a.children, b.children)) {
 		return false;
 	}
-	for (idx_t i = 0; i < a->children.size(); i++) {
-		if (!a->children[i]->Equals(b->children[i].get())) {
-			return false;
-		}
-	}
-	if (a->start != b->start || a->end != b->end) {
+	if (a.start != b.start || a.end != b.end) {
 		return false;
 	}
 	// check if the framing expressions are equivalentbind_
-	if (!BaseExpression::Equals(a->start_expr.get(), b->start_expr.get()) ||
-	    !BaseExpression::Equals(a->end_expr.get(), b->end_expr.get()) ||
-	    !BaseExpression::Equals(a->offset_expr.get(), b->offset_expr.get()) ||
-	    !BaseExpression::Equals(a->default_expr.get(), b->default_expr.get())) {
+	if (!ParsedExpression::Equals(a.start_expr, b.start_expr) || !ParsedExpression::Equals(a.end_expr, b.end_expr) ||
+	    !ParsedExpression::Equals(a.offset_expr, b.offset_expr) ||
+	    !ParsedExpression::Equals(a.default_expr, b.default_expr)) {
 		return false;
 	}
 
 	// check if the partitions are equivalent
-	if (a->partitions.size() != b->partitions.size()) {
+	if (!ParsedExpression::ListEquals(a.partitions, b.partitions)) {
 		return false;
-	}
-	for (idx_t i = 0; i < a->partitions.size(); i++) {
-		if (!a->partitions[i]->Equals(b->partitions[i].get())) {
-			return false;
-		}
 	}
 	// check if the orderings are equivalent
-	if (a->orders.size() != b->orders.size()) {
+	if (a.orders.size() != b.orders.size()) {
 		return false;
 	}
-	for (idx_t i = 0; i < a->orders.size(); i++) {
-		if (a->orders[i].type != b->orders[i].type) {
+	for (idx_t i = 0; i < a.orders.size(); i++) {
+		if (a.orders[i].type != b.orders[i].type) {
 			return false;
 		}
-		if (!a->orders[i].expression->Equals(b->orders[i].expression.get())) {
+		if (!a.orders[i].expression->Equals(*b.orders[i].expression)) {
 			return false;
 		}
 	}
 	// check if the filter clauses are equivalent
-	if (!BaseExpression::Equals(a->filter_expr.get(), b->filter_expr.get())) {
+	if (!ParsedExpression::Equals(a.filter_expr, b.filter_expr)) {
 		return false;
 	}
 

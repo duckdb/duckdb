@@ -24,11 +24,14 @@ private:
 	template <class T>
 	void Write(T element) {
 		static_assert(std::is_trivially_destructible<T>(), "Write element must be trivially destructible");
-		WriteData((const_data_ptr_t)&element, sizeof(T));
+		WriteData(const_data_ptr_cast(&element), sizeof(T));
 	}
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) {
 		data.insert(data.end(), buffer, buffer + write_size);
 		stack.back().size += write_size;
+	}
+	void WriteData(const char *ptr, idx_t write_size) {
+		WriteData(const_data_ptr_cast(ptr), write_size);
 	}
 
 	explicit BinarySerializer() {

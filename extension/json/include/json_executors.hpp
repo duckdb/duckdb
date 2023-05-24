@@ -89,7 +89,7 @@ public:
 		UnifiedVectorFormat input_data;
 		auto &input_vector = args.data[0];
 		input_vector.ToUnifiedFormat(count, input_data);
-		auto inputs = (string_t *)input_data.data;
+		auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 		ListVector::Reserve(result, list_size);
 		auto list_entries = FlatVector::GetData<list_entry_t>(result);

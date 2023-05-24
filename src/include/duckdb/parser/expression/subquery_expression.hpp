@@ -42,7 +42,7 @@ public:
 
 	string ToString() const override;
 
-	static bool Equal(const SubqueryExpression *a, const SubqueryExpression *b);
+	static bool Equal(const SubqueryExpression &a, const SubqueryExpression &b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
