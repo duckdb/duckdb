@@ -7,30 +7,30 @@ namespace duckdb {
 
 struct BaseCountFunction {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		*state = 0;
+	static void Initialize(STATE &state) {
+		state = 0;
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
-		*target += source;
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		target += source;
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		target[idx] = *state;
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		target = state;
 	}
 };
 
 struct CountStarFunction : public BaseCountFunction {
 	template <class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, idx_t idx) {
-		*state += 1;
+	static void Operation(STATE &state, AggregateInputData &, idx_t idx) {
+		state += 1;
 	}
 
 	template <class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &, idx_t count) {
-		*state += count;
+	static void ConstantOperation(STATE &state, AggregateInputData &, idx_t count) {
+		state += count;
 	}
 
 	template <typename RESULT_TYPE>
@@ -56,14 +56,14 @@ struct CountStarFunction : public BaseCountFunction {
 
 struct CountFunction : public BaseCountFunction {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
-		*state += 1;
+	static void Operation(STATE &state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+		state += 1;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask,
+	static void ConstantOperation(STATE &state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask,
 	                              idx_t count) {
-		*state += count;
+		state += count;
 	}
 
 	static bool IgnoreNull() {
