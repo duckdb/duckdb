@@ -14,6 +14,12 @@ void LogicalCopyToFile::Serialize(FieldWriter &writer) const {
 	writer.WriteField(overwrite_or_ignore);
 	writer.WriteField(per_thread_output);
 	writer.WriteList<idx_t>(partition_columns);
+	writer.WriteList<string>(names);
+	writer.WriteField(partition_output);
+	writer.WriteRegularSerializableList<LogicalType>(expected_types);
+	writer.WriteString(filename_pattern._base);
+	writer.WriteField(filename_pattern._pos);
+	writer.WriteField(filename_pattern._uuid);
 
 	D_ASSERT(!function.name.empty());
 	writer.WriteString(function.name);
@@ -32,6 +38,12 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializatio
 	auto overwrite_or_ignore = reader.ReadRequired<bool>();
 	auto per_thread_output = reader.ReadRequired<bool>();
 	auto partition_columns = reader.ReadRequiredList<idx_t>();
+	auto names = reader.ReadRequiredList<string>();
+	bool partition_output = reader.ReadRequired<bool>();
+	auto types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	auto filename_patter_base = reader.ReadRequired<string>();
+	auto filename_patter_pos = reader.ReadRequired<idx_t>();
+	auto filename_patter_uuid = reader.ReadRequired<bool>();
 
 	auto copy_func_name = reader.ReadRequired<string>();
 
@@ -56,6 +68,12 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(LogicalDeserializatio
 	result->overwrite_or_ignore = overwrite_or_ignore;
 	result->per_thread_output = per_thread_output;
 	result->partition_columns = std::move(partition_columns);
+	result->expected_types = std::move(types);
+	result->partition_output = partition_output;
+	result->names = std::move(names);
+	result->filename_pattern._base = filename_patter_base;
+	result->filename_pattern._pos = filename_patter_pos;
+	result->filename_pattern._uuid = filename_patter_uuid;
 	return std::move(result);
 }
 
