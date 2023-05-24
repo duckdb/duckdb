@@ -776,7 +776,7 @@ static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &
                                       JSONTransformOptions &options) {
 	UnifiedVectorFormat input_data;
 	input.ToUnifiedFormat(count, input_data);
-	auto inputs = (string_t *)input_data.data;
+	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	// Read documents
 	auto docs = (yyjson_doc **)alc->malloc(alc->ctx, sizeof(yyjson_doc *) * count);

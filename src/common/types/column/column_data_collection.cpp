@@ -454,7 +454,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 		// 'append_count' is less if we cannot fit that amount of non-inlined strings on one buffer-managed block
 		idx_t append_count;
 		idx_t heap_size = 0;
-		const auto source_entries = (string_t *)source_data.data;
+		const auto source_entries = UnifiedVectorFormat::GetData<string_t>(source_data);
 		for (append_count = 0; append_count < vector_remaining; append_count++) {
 			auto source_idx = source_data.sel->get_index(offset + append_count);
 			if (!source_data.validity.RowIsValid(source_idx)) {
@@ -505,7 +505,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			target_validity.SetAllValid(STANDARD_VECTOR_SIZE);
 		}
 
-		auto target_entries = (string_t *)base_ptr;
+		auto target_entries = reinterpret_cast<string_t *>(base_ptr);
 		for (idx_t i = 0; i < append_count; i++) {
 			auto source_idx = source_data.sel->get_index(offset + i);
 			auto target_idx = current_segment.count + i;
@@ -520,7 +520,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			} else {
 				D_ASSERT(heap_ptr != nullptr);
 				memcpy(heap_ptr, source_entry.GetData(), source_entry.GetSize());
-				target_entry = string_t((const char *)heap_ptr, source_entry.GetSize());
+				target_entry = string_t(const_char_ptr_cast(heap_ptr), source_entry.GetSize());
 				heap_ptr += source_entry.GetSize();
 			}
 		}

@@ -42,8 +42,8 @@ string ConjunctionExpression::ToString() const {
 	return ToString<ConjunctionExpression, ParsedExpression>(*this);
 }
 
-bool ConjunctionExpression::Equal(const ConjunctionExpression *a, const ConjunctionExpression *b) {
-	return ExpressionUtil::SetEquals(a->children, b->children);
+bool ConjunctionExpression::Equal(const ConjunctionExpression &a, const ConjunctionExpression &b) {
+	return ExpressionUtil::SetEquals(a.children, b.children);
 }
 
 unique_ptr<ParsedExpression> ConjunctionExpression::Copy() const {

@@ -183,7 +183,7 @@ static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionK
 	input.ToUnifiedFormat(count, format);
 
 	const auto &sel = *format.sel;
-	const auto data = (T *)format.data;
+	const auto data = UnifiedVectorFormat::GetData<T>(format);
 	const auto &validity = format.validity;
 
 	const auto &type = input.GetType();

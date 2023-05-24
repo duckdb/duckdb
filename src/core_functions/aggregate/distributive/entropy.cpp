@@ -75,7 +75,7 @@ struct EntropyFunctionBase {
 
 struct EntropyFunction : EntropyFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->distinct) {
 			state->distinct = new unordered_map<INPUT_TYPE, idx_t>();
 		}
@@ -93,7 +93,7 @@ struct EntropyFunction : EntropyFunctionBase {
 
 struct EntropyFunctionString : EntropyFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (!state->distinct) {
 			state->distinct = new unordered_map<string, idx_t>();
 		}
@@ -103,7 +103,7 @@ struct EntropyFunctionString : EntropyFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
 	                              ValidityMask &mask, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
