@@ -83,7 +83,7 @@
 #endif
 
 #if DUCKDB_OOT_EXTENSION_AUTOCOMPLETE_LINKED
-#include "automalloc_extension.hpp"
+#include "autocomplete_extension.hpp"
 #endif
 #endif
 
