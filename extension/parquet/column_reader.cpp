@@ -97,7 +97,7 @@ const uint64_t ParquetDecodeUtils::BITPACK_MASKS[] = {0,
                                                       2305843009213693951,
                                                       4611686018427387903,
                                                       9223372036854775807,
-                                                      18446744073709551615};
+                                                      18446744073709551615ULL};
 
 const uint64_t ParquetDecodeUtils::BITPACK_MASKS_SIZE = sizeof(ParquetDecodeUtils::BITPACK_MASKS) / sizeof(uint64_t);
 
