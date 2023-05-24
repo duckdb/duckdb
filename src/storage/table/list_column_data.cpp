@@ -167,7 +167,7 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 	auto &list_validity = list_data.validity;
 
 	// construct the list_entry_t entries to append to the column data
-	auto input_offsets = (list_entry_t *)list_data.data;
+	auto input_offsets = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	auto start_offset = child_column->GetMaxEntry();
 	idx_t child_count = 0;
 
@@ -210,7 +210,7 @@ void ListColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vec
 
 	UnifiedVectorFormat vdata;
 	vdata.sel = FlatVector::IncrementalSelectionVector();
-	vdata.data = (data_ptr_t)append_offsets.get();
+	vdata.data = data_ptr_cast(append_offsets.get());
 
 	// append the list offsets
 	ColumnData::AppendData(stats, state, vdata, count);
@@ -337,7 +337,7 @@ unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group
 	auto base_state = ColumnData::Checkpoint(row_group, partial_block_manager, checkpoint_info);
 	auto child_state = child_column->Checkpoint(row_group, partial_block_manager, checkpoint_info);
 
-	auto &checkpoint_state = (ListColumnCheckpointState &)*base_state;
+	auto &checkpoint_state = base_state->Cast<ListColumnCheckpointState>();
 	checkpoint_state.validity_state = std::move(validity_state);
 	checkpoint_state.child_state = std::move(child_state);
 	return base_state;

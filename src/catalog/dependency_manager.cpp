@@ -220,8 +220,8 @@ void DependencyManager::AddOwnership(CatalogTransaction transaction, CatalogEntr
 	// Emplace guarantees that the same object cannot be inserted twice in the unordered_set
 	// In the case AddOwnership is called twice, because of emplace, the object will not be repeated in the set.
 	// We use an automatic dependency because if the Owner gets deleted, then the owned objects are also deleted
-	dependents_map[owner].emplace(Dependency(entry, DependencyType::DEPENDENCY_OWNS));
-	dependents_map[entry].emplace(Dependency(owner, DependencyType::DEPENDENCY_OWNED_BY));
+	dependents_map[owner].emplace(entry, DependencyType::DEPENDENCY_OWNS);
+	dependents_map[entry].emplace(owner, DependencyType::DEPENDENCY_OWNED_BY);
 	dependencies_map[owner].emplace(entry);
 }
 

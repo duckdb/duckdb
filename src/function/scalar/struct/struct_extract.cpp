@@ -21,7 +21,7 @@ public:
 		return make_uniq<StructExtractBindData>(key, index, type);
 	}
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const StructExtractBindData &)other_p;
+		auto &other = other_p.Cast<StructExtractBindData>();
 		return key == other.key && index == other.index && type == other.type;
 	}
 };

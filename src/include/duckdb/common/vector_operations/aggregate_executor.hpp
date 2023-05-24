@@ -39,7 +39,7 @@ private:
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static inline void UnaryFlatLoop(INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
+	static inline void UnaryFlatLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                 STATE_TYPE **__restrict states, ValidityMask &mask, idx_t count) {
 		if (!mask.AllValid()) {
 			idx_t base_idx = 0;
@@ -76,7 +76,7 @@ private:
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static inline void UnaryScatterLoop(INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
+	static inline void UnaryScatterLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                    STATE_TYPE **__restrict states, const SelectionVector &isel,
 	                                    const SelectionVector &ssel, ValidityMask &mask, idx_t count) {
 		if (OP::IgnoreNull() && !mask.AllValid()) {
@@ -99,7 +99,7 @@ private:
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static inline void UnaryFlatUpdateLoop(INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
+	static inline void UnaryFlatUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                       STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask) {
 		idx_t base_idx = 0;
 		auto entry_count = ValidityMask::EntryCount(count);
@@ -129,7 +129,7 @@ private:
 	}
 
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
-	static inline void UnaryUpdateLoop(INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
+	static inline void UnaryUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                   STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask,
 	                                   const SelectionVector &__restrict sel_vector) {
 		if (OP::IgnoreNull() && !mask.AllValid()) {
@@ -150,8 +150,8 @@ private:
 	}
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
-	static inline void BinaryScatterLoop(A_TYPE *__restrict adata, AggregateInputData &aggr_input_data,
-	                                     B_TYPE *__restrict bdata, STATE_TYPE **__restrict states, idx_t count,
+	static inline void BinaryScatterLoop(const A_TYPE *__restrict adata, AggregateInputData &aggr_input_data,
+	                                     const B_TYPE *__restrict bdata, STATE_TYPE **__restrict states, idx_t count,
 	                                     const SelectionVector &asel, const SelectionVector &bsel,
 	                                     const SelectionVector &ssel, ValidityMask &avalidity,
 	                                     ValidityMask &bvalidity) {
@@ -179,8 +179,8 @@ private:
 	}
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
-	static inline void BinaryUpdateLoop(A_TYPE *__restrict adata, AggregateInputData &aggr_input_data,
-	                                    B_TYPE *__restrict bdata, STATE_TYPE *__restrict state, idx_t count,
+	static inline void BinaryUpdateLoop(const A_TYPE *__restrict adata, AggregateInputData &aggr_input_data,
+	                                    const B_TYPE *__restrict bdata, STATE_TYPE *__restrict state, idx_t count,
 	                                    const SelectionVector &asel, const SelectionVector &bsel,
 	                                    ValidityMask &avalidity, ValidityMask &bvalidity) {
 		if (OP::IgnoreNull() && (!avalidity.AllValid() || !bvalidity.AllValid())) {
@@ -248,9 +248,9 @@ public:
 			UnifiedVectorFormat idata, sdata;
 			input.ToUnifiedFormat(count, idata);
 			states.ToUnifiedFormat(count, sdata);
-			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>((INPUT_TYPE *)idata.data, aggr_input_data,
-			                                             (STATE_TYPE **)sdata.data, *idata.sel, *sdata.sel,
-			                                             idata.validity, count);
+			UnaryScatterLoop<STATE_TYPE, INPUT_TYPE, OP>(UnifiedVectorFormat::GetData<INPUT_TYPE>(idata),
+			                                             aggr_input_data, (STATE_TYPE **)sdata.data, *idata.sel,
+			                                             *sdata.sel, idata.validity, count);
 		}
 	}
 
@@ -275,8 +275,9 @@ public:
 		default: {
 			UnifiedVectorFormat idata;
 			input.ToUnifiedFormat(count, idata);
-			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>((INPUT_TYPE *)idata.data, aggr_input_data, (STATE_TYPE *)state,
-			                                            count, idata.validity, *idata.sel);
+			UnaryUpdateLoop<STATE_TYPE, INPUT_TYPE, OP>(UnifiedVectorFormat::GetData<INPUT_TYPE>(idata),
+			                                            aggr_input_data, (STATE_TYPE *)state, count, idata.validity,
+			                                            *idata.sel);
 			break;
 		}
 		}
@@ -290,9 +291,9 @@ public:
 		b.ToUnifiedFormat(count, bdata);
 		states.ToUnifiedFormat(count, sdata);
 
-		BinaryScatterLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>((A_TYPE *)adata.data, aggr_input_data, (B_TYPE *)bdata.data,
-		                                                  (STATE_TYPE **)sdata.data, count, *adata.sel, *bdata.sel,
-		                                                  *sdata.sel, adata.validity, bdata.validity);
+		BinaryScatterLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>(
+		    UnifiedVectorFormat::GetData<A_TYPE>(adata), aggr_input_data, UnifiedVectorFormat::GetData<B_TYPE>(bdata),
+		    (STATE_TYPE **)sdata.data, count, *adata.sel, *bdata.sel, *sdata.sel, adata.validity, bdata.validity);
 	}
 
 	template <class STATE_TYPE, class A_TYPE, class B_TYPE, class OP>
@@ -302,9 +303,9 @@ public:
 		a.ToUnifiedFormat(count, adata);
 		b.ToUnifiedFormat(count, bdata);
 
-		BinaryUpdateLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>((A_TYPE *)adata.data, aggr_input_data, (B_TYPE *)bdata.data,
-		                                                 (STATE_TYPE *)state, count, *adata.sel, *bdata.sel,
-		                                                 adata.validity, bdata.validity);
+		BinaryUpdateLoop<STATE_TYPE, A_TYPE, B_TYPE, OP>(
+		    UnifiedVectorFormat::GetData<A_TYPE>(adata), aggr_input_data, UnifiedVectorFormat::GetData<B_TYPE>(bdata),
+		    (STATE_TYPE *)state, count, *adata.sel, *bdata.sel, adata.validity, bdata.validity);
 	}
 
 	template <class STATE_TYPE, class OP>

@@ -31,7 +31,7 @@ static unique_ptr<GlobalTableFunctionState> RepeatInit(ClientContext &context, T
 }
 
 static void RepeatFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (const RepeatFunctionData &)*data_p.bind_data;
+	auto &bind_data = data_p.bind_data->Cast<RepeatFunctionData>();
 	auto &state = data_p.global_state->Cast<RepeatOperatorData>();
 
 	idx_t remaining = MinValue<idx_t>(bind_data.target_count - state.current_count, STANDARD_VECTOR_SIZE);
@@ -41,7 +41,7 @@ static void RepeatFunction(ClientContext &context, TableFunctionInput &data_p, D
 }
 
 static unique_ptr<NodeStatistics> RepeatCardinality(ClientContext &context, const FunctionData *bind_data_p) {
-	auto &bind_data = (const RepeatFunctionData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<RepeatFunctionData>();
 	return make_uniq<NodeStatistics>(bind_data.target_count, bind_data.target_count);
 }
 

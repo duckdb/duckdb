@@ -52,7 +52,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast vector auxiliary data to type - type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -60,7 +60,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast vector auxiliary data to type - type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -121,6 +121,18 @@ protected:
 	VectorBufferType buffer_type;
 	unique_ptr<VectorAuxiliaryData> aux_data;
 	unsafe_unique_array<data_t> data;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 //! The DictionaryBuffer holds a selection vector
@@ -154,7 +166,7 @@ private:
 class VectorStringBuffer : public VectorBuffer {
 public:
 	VectorStringBuffer();
-	VectorStringBuffer(VectorBufferType type);
+	explicit VectorStringBuffer(VectorBufferType type);
 
 public:
 	string_t AddString(const char *data, idx_t len) {
@@ -207,7 +219,7 @@ private:
 class VectorStructBuffer : public VectorBuffer {
 public:
 	VectorStructBuffer();
-	VectorStructBuffer(const LogicalType &struct_type, idx_t capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorStructBuffer(const LogicalType &struct_type, idx_t capacity = STANDARD_VECTOR_SIZE);
 	VectorStructBuffer(Vector &other, const SelectionVector &sel, idx_t count);
 	~VectorStructBuffer() override;
 
@@ -226,8 +238,8 @@ private:
 
 class VectorListBuffer : public VectorBuffer {
 public:
-	VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
-	VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
+	explicit VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
 	~VectorListBuffer() override;
 
 public:

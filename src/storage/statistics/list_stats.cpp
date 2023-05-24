@@ -90,7 +90,7 @@ void ListStats::Verify(const BaseStatistics &stats, Vector &vector, const Select
 	UnifiedVectorFormat vdata;
 	vector.ToUnifiedFormat(count, vdata);
 
-	auto list_data = (list_entry_t *)vdata.data;
+	auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(vdata);
 	idx_t total_list_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);

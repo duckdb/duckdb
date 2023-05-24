@@ -42,7 +42,7 @@ private:
 };
 
 CatalogSet::CatalogSet(Catalog &catalog_p, unique_ptr<DefaultGenerator> defaults)
-    : catalog((DuckCatalog &)catalog_p), defaults(std::move(defaults)) {
+    : catalog(catalog_p.Cast<DuckCatalog>()), defaults(std::move(defaults)) {
 	D_ASSERT(catalog_p.IsDuckCatalog());
 }
 CatalogSet::~CatalogSet() {

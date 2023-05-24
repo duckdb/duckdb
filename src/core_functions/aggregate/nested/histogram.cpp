@@ -18,7 +18,7 @@ struct HistogramFunctor {
 				if (!state->hist) {
 					state->hist = new MAP_TYPE();
 				}
-				auto value = (T *)input_data.data;
+				auto value = UnifiedVectorFormat::GetData<T>(input_data);
 				(*state->hist)[value[input_data.sel->get_index(i)]]++;
 			}
 		}
@@ -33,16 +33,15 @@ struct HistogramFunctor {
 struct HistogramStringFunctor {
 	template <class T, class MAP_TYPE = map<T, idx_t>>
 	static void HistogramUpdate(UnifiedVectorFormat &sdata, UnifiedVectorFormat &input_data, idx_t count) {
-
 		auto states = (HistogramAggState<T, MAP_TYPE> **)sdata.data;
+		auto input_strings = UnifiedVectorFormat::GetData<string_t>(input_data);
 		for (idx_t i = 0; i < count; i++) {
 			if (input_data.validity.RowIsValid(input_data.sel->get_index(i))) {
 				auto state = states[sdata.sel->get_index(i)];
 				if (!state->hist) {
 					state->hist = new MAP_TYPE();
 				}
-				auto value = (string_t *)input_data.data;
-				(*state->hist)[value[input_data.sel->get_index(i)].GetString()]++;
+				(*state->hist)[input_strings[input_data.sel->get_index(i)].GetString()]++;
 			}
 		}
 	}

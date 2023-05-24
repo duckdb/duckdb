@@ -18,8 +18,8 @@ string ConstantExpression::ToString() const {
 	return value.ToSQLString();
 }
 
-bool ConstantExpression::Equal(const ConstantExpression *a, const ConstantExpression *b) {
-	return a->value.type() == b->value.type() && !ValueOperations::DistinctFrom(a->value, b->value);
+bool ConstantExpression::Equal(const ConstantExpression &a, const ConstantExpression &b) {
+	return a.value.type() == b.value.type() && !ValueOperations::DistinctFrom(a.value, b.value);
 }
 
 hash_t ConstantExpression::Hash() const {

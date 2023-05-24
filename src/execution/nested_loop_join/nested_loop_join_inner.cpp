@@ -24,8 +24,8 @@ struct InitialNestedLoopJoin {
 		left.ToUnifiedFormat(left_size, left_data);
 		right.ToUnifiedFormat(right_size, right_data);
 
-		auto ldata = (T *)left_data.data;
-		auto rdata = (T *)right_data.data;
+		auto ldata = UnifiedVectorFormat::GetData<T>(left_data);
+		auto rdata = UnifiedVectorFormat::GetData<T>(right_data);
 		idx_t result_count = 0;
 		for (; rpos < right_size; rpos++) {
 			idx_t right_position = right_data.sel->get_index(rpos);
@@ -62,8 +62,8 @@ struct RefineNestedLoopJoin {
 		// refine lvector and rvector based on matches of subsequent conditions (in case there are multiple conditions
 		// in the join)
 		D_ASSERT(current_match_count > 0);
-		auto ldata = (T *)left_data.data;
-		auto rdata = (T *)right_data.data;
+		auto ldata = UnifiedVectorFormat::GetData<T>(left_data);
+		auto rdata = UnifiedVectorFormat::GetData<T>(right_data);
 		idx_t result_count = 0;
 		for (idx_t i = 0; i < current_match_count; i++) {
 			auto lidx = lvector.get_index(i);

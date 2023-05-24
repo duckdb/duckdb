@@ -108,8 +108,8 @@ struct ArgMinMaxBase {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, A_TYPE *x_data, B_TYPE *y_data, ValidityMask &amask,
-	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
+	static void Operation(STATE *state, AggregateInputData &, const A_TYPE *x_data, const B_TYPE *y_data,
+	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
 		if (!state->is_initialized) {
 			STATE::template AssignValue<A_TYPE>(state->arg, x_data[xidx], false);
 			STATE::template AssignValue<B_TYPE>(state->value, y_data[yidx], false);
@@ -176,7 +176,7 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 		auto &by = inputs[1];
 		UnifiedVectorFormat bdata;
 		by.ToUnifiedFormat(count, bdata);
-		const auto bys = (BY_TYPE *)bdata.data;
+		const auto bys = UnifiedVectorFormat::GetData<BY_TYPE>(bdata);
 
 		UnifiedVectorFormat sdata;
 		state_vector.ToUnifiedFormat(count, sdata);
