@@ -48,21 +48,17 @@ struct RegrBaseOperation {
 
 struct RegrSXXOperation : RegrBaseOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, AggregateInputData &aggr_input_data, const A_TYPE *x_data, const B_TYPE *y_data,
-	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(state.count, aggr_input_data, y_data, x_data, bmask,
-		                                                         amask, yidx, xidx);
-		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop, y_data[yidx]);
+	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
+		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(state.count, x, y, idata);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop, y);
 	}
 };
 
 struct RegrSYYOperation : RegrBaseOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, AggregateInputData &aggr_input_data, const A_TYPE *x_data, const B_TYPE *y_data,
-	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(state.count, aggr_input_data, y_data, x_data, bmask,
-		                                                         amask, yidx, xidx);
-		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop, x_data[xidx]);
+	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
+		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(state.count, x, y, idata);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop, x);
 	}
 };
 

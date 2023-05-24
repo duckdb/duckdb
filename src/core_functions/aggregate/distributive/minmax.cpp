@@ -54,7 +54,8 @@ struct MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
 		if (!state.isset) {
 			OP::template Assign<INPUT_TYPE, STATE>(state, input, unary_input.input);
 			state.isset = true;

@@ -20,12 +20,9 @@ struct RegrSXYOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, AggregateInputData &aggr_input_data, const A_TYPE *x_data, const B_TYPE *y_data,
-	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(state.count, aggr_input_data, y_data, x_data, bmask,
-		                                                         amask, yidx, xidx);
-		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(state.cov_pop, aggr_input_data, x_data, y_data, amask,
-		                                                          bmask, xidx, yidx);
+	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
+		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(state.count, x, y, idata);
+		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(state.cov_pop, x, y, idata);
 	}
 
 	template <class STATE, class OP>

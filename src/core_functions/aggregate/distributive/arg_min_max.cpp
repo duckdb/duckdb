@@ -109,14 +109,13 @@ struct ArgMinMaxBase {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, AggregateInputData &, const A_TYPE *x_data, const B_TYPE *y_data,
-	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
+	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &) {
 		if (!state.is_initialized) {
-			STATE::template AssignValue<A_TYPE>(state.arg, x_data[xidx], false);
-			STATE::template AssignValue<B_TYPE>(state.value, y_data[yidx], false);
+			STATE::template AssignValue<A_TYPE>(state.arg, x, false);
+			STATE::template AssignValue<B_TYPE>(state.value, y, false);
 			state.is_initialized = true;
 		} else {
-			OP::template Execute<A_TYPE, B_TYPE, STATE>(state, x_data[xidx], y_data[yidx]);
+			OP::template Execute<A_TYPE, B_TYPE, STATE>(state, x, y);
 		}
 	}
 

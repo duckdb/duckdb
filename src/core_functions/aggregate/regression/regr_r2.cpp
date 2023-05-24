@@ -24,12 +24,10 @@ struct RegrR2Operation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, AggregateInputData &aggr_input_data, const A_TYPE *x_data, const B_TYPE *y_data,
-	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		CorrOperation::Operation<A_TYPE, B_TYPE, CorrState, OP>(state.corr, aggr_input_data, y_data, x_data, bmask,
-		                                                        amask, yidx, xidx);
-		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop_x, y_data[yidx]);
-		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop_y, x_data[xidx]);
+	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
+		CorrOperation::Operation<A_TYPE, B_TYPE, CorrState, OP>(state.corr, x, y, idata);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop_x, y);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop_y, x);
 	}
 
 	template <class STATE, class OP>

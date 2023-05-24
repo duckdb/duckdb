@@ -31,12 +31,10 @@ struct CorrOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, AggregateInputData &aggr_input_data, const A_TYPE *x_data, const B_TYPE *y_data,
-	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(state.cov_pop, aggr_input_data, x_data, y_data,
-		                                                          amask, bmask, xidx, yidx);
-		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.dev_pop_x, x_data[xidx]);
-		STDDevBaseOperation::Execute<B_TYPE, StddevState>(state.dev_pop_y, y_data[yidx]);
+	static void Operation(STATE &state, const A_TYPE &x_input, const B_TYPE &y_input, AggregateBinaryInput &idata) {
+		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(state.cov_pop, x_input, y_input, idata);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.dev_pop_x, x_input);
+		STDDevBaseOperation::Execute<B_TYPE, StddevState>(state.dev_pop_y, y_input);
 	}
 
 	template <class STATE, class OP>

@@ -43,7 +43,8 @@ struct FirstFunction : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
 		Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 	}
 
@@ -100,7 +101,8 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
 		Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 	}
 

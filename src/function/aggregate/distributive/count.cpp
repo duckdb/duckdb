@@ -122,16 +122,18 @@ struct CountFunction : public BaseCountFunction {
 		}
 	}
 
-	static void CountScatter(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
-									   Vector &states, idx_t count) {
+	static void CountScatter(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
+	                         idx_t count) {
 		auto &input = inputs[0];
-		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR && states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR &&
+		    states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			if (ConstantVector::IsNull(input)) {
 				return;
 			}
 			auto sdata = ConstantVector::GetData<STATE *>(states);
 			*sdata += count;
-		} else if (input.GetVectorType() == VectorType::FLAT_VECTOR && states.GetVectorType() == VectorType::FLAT_VECTOR) {
+		} else if (input.GetVectorType() == VectorType::FLAT_VECTOR &&
+		           states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto sdata = FlatVector::GetData<STATE *>(states);
 			CountFlatLoop(sdata, FlatVector::Validity(input), count);
 		} else {
@@ -168,7 +170,8 @@ struct CountFunction : public BaseCountFunction {
 		}
 	}
 
-	static inline void CountUpdateLoop(STATE &result, ValidityMask &mask, idx_t count, const SelectionVector &sel_vector) {
+	static inline void CountUpdateLoop(STATE &result, ValidityMask &mask, idx_t count,
+	                                   const SelectionVector &sel_vector) {
 		if (mask.AllValid()) {
 			// no NULL values
 			result += count;
@@ -213,11 +216,11 @@ struct CountFunction : public BaseCountFunction {
 };
 
 AggregateFunction CountFun::GetFunction() {
-	AggregateFunction fun(
-		    {LogicalType(LogicalTypeId::ANY)}, LogicalType::BIGINT, AggregateFunction::StateSize<int64_t>,
-		    AggregateFunction::StateInitialize<int64_t, CountFunction>, CountFunction::CountScatter,
-		    AggregateFunction::StateCombine<int64_t, CountFunction>, AggregateFunction::StateFinalize<int64_t, int64_t, CountFunction>,
-		    FunctionNullHandling::SPECIAL_HANDLING, CountFunction::CountUpdate);
+	AggregateFunction fun({LogicalType(LogicalTypeId::ANY)}, LogicalType::BIGINT, AggregateFunction::StateSize<int64_t>,
+	                      AggregateFunction::StateInitialize<int64_t, CountFunction>, CountFunction::CountScatter,
+	                      AggregateFunction::StateCombine<int64_t, CountFunction>,
+	                      AggregateFunction::StateFinalize<int64_t, int64_t, CountFunction>,
+	                      FunctionNullHandling::SPECIAL_HANDLING, CountFunction::CountUpdate);
 	fun.name = "count";
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return fun;

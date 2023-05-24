@@ -64,7 +64,8 @@ private:
 					idx_t start = base_idx;
 					for (; base_idx < next; base_idx++) {
 						if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
-							OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[base_idx], idata[base_idx], input);
+							OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[base_idx], idata[base_idx],
+							                                                   input);
 						}
 					}
 				}
@@ -162,25 +163,26 @@ private:
 	                                     const SelectionVector &asel, const SelectionVector &bsel,
 	                                     const SelectionVector &ssel, ValidityMask &avalidity,
 	                                     ValidityMask &bvalidity) {
+		AggregateBinaryInput input(aggr_input_data, avalidity, bvalidity);
 		if (OP::IgnoreNull() && (!avalidity.AllValid() || !bvalidity.AllValid())) {
 			// potential NULL values and NULL values are ignored
 			for (idx_t i = 0; i < count; i++) {
-				auto aidx = asel.get_index(i);
-				auto bidx = bsel.get_index(i);
+				input.lidx = asel.get_index(i);
+				input.ridx = bsel.get_index(i);
 				auto sidx = ssel.get_index(i);
-				if (avalidity.RowIsValid(aidx) && bvalidity.RowIsValid(bidx)) {
-					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(*states[sidx], aggr_input_data, adata, bdata,
-					                                                       avalidity, bvalidity, aidx, bidx);
+				if (avalidity.RowIsValid(input.lidx) && bvalidity.RowIsValid(input.ridx)) {
+					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(*states[sidx], adata[input.lidx],
+					                                                       bdata[input.ridx], input);
 				}
 			}
 		} else {
 			// quick path: no NULL values or NULL values are not ignored
 			for (idx_t i = 0; i < count; i++) {
-				auto aidx = asel.get_index(i);
-				auto bidx = bsel.get_index(i);
+				input.lidx = asel.get_index(i);
+				input.ridx = bsel.get_index(i);
 				auto sidx = ssel.get_index(i);
-				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(*states[sidx], aggr_input_data, adata, bdata,
-				                                                       avalidity, bvalidity, aidx, bidx);
+				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(*states[sidx], adata[input.lidx],
+				                                                       bdata[input.ridx], input);
 			}
 		}
 	}
@@ -190,23 +192,24 @@ private:
 	                                    const B_TYPE *__restrict bdata, STATE_TYPE *__restrict state, idx_t count,
 	                                    const SelectionVector &asel, const SelectionVector &bsel,
 	                                    ValidityMask &avalidity, ValidityMask &bvalidity) {
+		AggregateBinaryInput input(aggr_input_data, avalidity, bvalidity);
 		if (OP::IgnoreNull() && (!avalidity.AllValid() || !bvalidity.AllValid())) {
 			// potential NULL values and NULL values are ignored
 			for (idx_t i = 0; i < count; i++) {
-				auto aidx = asel.get_index(i);
-				auto bidx = bsel.get_index(i);
-				if (avalidity.RowIsValid(aidx) && bvalidity.RowIsValid(bidx)) {
-					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(*state, aggr_input_data, adata, bdata,
-					                                                       avalidity, bvalidity, aidx, bidx);
+				input.lidx = asel.get_index(i);
+				input.ridx = bsel.get_index(i);
+				if (avalidity.RowIsValid(input.lidx) && bvalidity.RowIsValid(input.ridx)) {
+					OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(*state, adata[input.lidx], bdata[input.ridx],
+					                                                       input);
 				}
 			}
 		} else {
 			// quick path: no NULL values or NULL values are not ignored
 			for (idx_t i = 0; i < count; i++) {
-				auto aidx = asel.get_index(i);
-				auto bidx = bsel.get_index(i);
-				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(*state, aggr_input_data, adata, bdata, avalidity,
-				                                                       bvalidity, aidx, bidx);
+				input.lidx = asel.get_index(i);
+				input.ridx = bsel.get_index(i);
+				OP::template Operation<A_TYPE, B_TYPE, STATE_TYPE, OP>(*state, adata[input.lidx], bdata[input.ridx],
+				                                                       input);
 			}
 		}
 	}
@@ -270,8 +273,8 @@ public:
 			}
 			auto idata = ConstantVector::GetData<INPUT_TYPE>(input);
 			AggregateUnaryInput input_data(aggr_input_data, ConstantVector::Validity(input));
-			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(
-			    *reinterpret_cast<STATE_TYPE *>(state), *idata, input_data, count);
+			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(*reinterpret_cast<STATE_TYPE *>(state), *idata,
+			                                                           input_data, count);
 			break;
 		}
 		case VectorType::FLAT_VECTOR: {

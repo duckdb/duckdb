@@ -33,8 +33,7 @@ struct RegrCountFunction {
 		return true;
 	}
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, AggregateInputData &, const A_TYPE *x_data, const B_TYPE *y_data, ValidityMask &amask,
-	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
+	static void Operation(STATE &state, const A_TYPE &, const B_TYPE &, AggregateBinaryInput &) {
 		state += 1;
 	}
 };
