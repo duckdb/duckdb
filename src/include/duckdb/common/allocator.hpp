@@ -105,6 +105,8 @@ public:
 	DUCKDB_API static Allocator &DefaultAllocator();
 	DUCKDB_API static shared_ptr<Allocator> &DefaultAllocatorReference();
 
+	static void SetThreadIdle();
+
 private:
 	allocate_function_ptr_t allocate_function;
 	free_function_ptr_t free_function;

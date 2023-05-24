@@ -6,8 +6,8 @@
 
 #ifndef DUCKDB_NO_THREADS
 #include "concurrentqueue.h"
-#include "lightweightsemaphore.h"
 #include "duckdb/common/thread.hpp"
+#include "lightweightsemaphore.h"
 #else
 #include <queue>
 #endif
@@ -126,14 +126,16 @@ bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &
 
 void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 #ifndef DUCKDB_NO_THREADS
+	bool idle = false;
 	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
 		// wait for a signal with a timeout
 		queue->semaphore.wait();
 		if (queue->q.try_dequeue(task)) {
-			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
+			idle = false;
 
+			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
 			switch (execute_result) {
 			case TaskExecutionResult::TASK_FINISHED:
 			case TaskExecutionResult::TASK_ERROR:
@@ -146,6 +148,9 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 				task.reset();
 				break;
 			}
+		} else if (!idle) {
+			idle = true;
+			Allocator::SetThreadIdle();
 		}
 	}
 #else
