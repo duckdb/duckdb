@@ -879,6 +879,8 @@ const char *EnumUtil::ToChars<QueryNodeType>(QueryNodeType value) {
 		return "BOUND_SUBQUERY_NODE";
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 		return "RECURSIVE_CTE_NODE";
+	case QueryNodeType::CTE_NODE:
+		return "CTE_NODE";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -896,6 +898,9 @@ QueryNodeType EnumUtil::FromString<QueryNodeType>(const char *value) {
 		return QueryNodeType::BOUND_SUBQUERY_NODE;
 	}
 	if (StringUtil::Equals(value, "RECURSIVE_CTE_NODE")) {
+		return QueryNodeType::RECURSIVE_CTE_NODE;
+	}
+	if (StringUtil::Equals(value, "CTE_NODE")) {
 		return QueryNodeType::RECURSIVE_CTE_NODE;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
@@ -2605,6 +2610,8 @@ const char *EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) 
 		return "CHUNK_SCAN";
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:
 		return "RECURSIVE_CTE_SCAN";
+	case PhysicalOperatorType::CTE_SCAN:
+		return "CTE_SCAN";
 	case PhysicalOperatorType::DELIM_SCAN:
 		return "DELIM_SCAN";
 	case PhysicalOperatorType::EXPRESSION_SCAN:
@@ -2774,6 +2781,9 @@ PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *valu
 	}
 	if (StringUtil::Equals(value, "RECURSIVE_CTE_SCAN")) {
 		return PhysicalOperatorType::RECURSIVE_CTE_SCAN;
+	}
+	if (StringUtil::Equals(value, "CTE_SCAN")) {
+		return PhysicalOperatorType::CTE_SCAN;
 	}
 	if (StringUtil::Equals(value, "DELIM_SCAN")) {
 		return PhysicalOperatorType::DELIM_SCAN;
@@ -4676,6 +4686,8 @@ const char *EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
 		return "LOGICAL_INTERSECT";
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		return "LOGICAL_RECURSIVE_CTE";
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		return "LOGICAL_MATERIALIZED_CTE";
 	case LogicalOperatorType::LOGICAL_INSERT:
 		return "LOGICAL_INSERT";
 	case LogicalOperatorType::LOGICAL_DELETE:
@@ -4830,6 +4842,9 @@ LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value)
 	}
 	if (StringUtil::Equals(value, "LOGICAL_RECURSIVE_CTE")) {
 		return LogicalOperatorType::LOGICAL_RECURSIVE_CTE;
+	}
+	if (StringUtil::Equals(value, "LOGICAL_MATERIALIZED_CTE")) {
+		return LogicalOperatorType::LOGICAL_MATERIALIZED_CTE;
 	}
 	if (StringUtil::Equals(value, "LOGICAL_INSERT")) {
 		return LogicalOperatorType::LOGICAL_INSERT;
