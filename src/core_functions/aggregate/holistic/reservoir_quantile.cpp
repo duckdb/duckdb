@@ -92,17 +92,15 @@ struct ReservoirQuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, AggregateInputData &aggr_input_data, const INPUT_TYPE *data, ValidityMask &mask,
-	                      idx_t idx) {
-		auto &bind_data = aggr_input_data.bind_data->template Cast<ReservoirQuantileBindData>();
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		auto &bind_data = unary_input.input.bind_data->template Cast<ReservoirQuantileBindData>();
 		if (state.pos == 0) {
 			state.Resize(bind_data.sample_size);
 		}
@@ -110,7 +108,7 @@ struct ReservoirQuantileOperation {
 			state.r_samp = new BaseReservoirSampling();
 		}
 		D_ASSERT(state.v);
-		state.FillReservoir(bind_data.sample_size, data[idx]);
+		state.FillReservoir(bind_data.sample_size, input);
 	}
 
 	template <class STATE, class OP>
@@ -235,37 +233,6 @@ struct ReservoirQuantileListOperation : public ReservoirQuantileOperation {
 
 		ListVector::SetListSize(finalize_data.result, entry.offset + entry.length);
 	}
-	//
-	//	template <class STATE_TYPE, class RESULT_TYPE>
-	//	static void FinalizeList(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count, //
-	//NOLINT 	                         idx_t offset) { 		D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-	//
-	//		D_ASSERT(aggr_input_data.bind_data);
-	//		auto &bind_data = aggr_input_data.bind_data->Cast<ReservoirQuantileBindData>();
-	//
-	//		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-	//			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	//			ListVector::Reserve(result, bind_data.quantiles.size());
-	//
-	//			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
-	//			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
-	//			auto &mask = ConstantVector::Validity(result);
-	//			Finalize<RESULT_TYPE, STATE_TYPE>(result, aggr_input_data, sdata[0], rdata, mask, 0);
-	//		} else {
-	//			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
-	//			result.SetVectorType(VectorType::FLAT_VECTOR);
-	//			ListVector::Reserve(result, (offset + count) * bind_data.quantiles.size());
-	//
-	//			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
-	//			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
-	//			auto &mask = FlatVector::Validity(result);
-	//			for (idx_t i = 0; i < count; i++) {
-	//				Finalize<RESULT_TYPE, STATE_TYPE>(result, aggr_input_data, sdata[i], rdata, mask, i + offset);
-	//			}
-	//		}
-	//
-	//		result.Verify(count);
-	//	}
 };
 
 template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>

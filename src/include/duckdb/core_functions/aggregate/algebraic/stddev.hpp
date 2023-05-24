@@ -29,11 +29,10 @@ struct STDDevBaseOperation {
 		state.dsquared = 0;
 	}
 
-	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, AggregateInputData &, const INPUT_TYPE *input_data, ValidityMask &mask, idx_t idx) {
+	template <class INPUT_TYPE, class STATE>
+	static void Execute(STATE &state, const INPUT_TYPE &input) {
 		// update running mean and d^2
 		state.count++;
-		const double input = input_data[idx];
 		const double mean_differential = (input - state.mean) / state.count;
 		const double new_mean = state.mean + mean_differential;
 		const double dsquared_increment = (input - new_mean) * (input - state.mean);
@@ -41,13 +40,18 @@ struct STDDevBaseOperation {
 
 		state.mean = new_mean;
 		state.dsquared = new_dsquared;
+
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, AggregateInputData &aggr_input_data, INPUT_TYPE *input_data,
-	                              ValidityMask &mask, idx_t count) {
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
+		Execute(state, input);
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input_data, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 		}
 	}
 

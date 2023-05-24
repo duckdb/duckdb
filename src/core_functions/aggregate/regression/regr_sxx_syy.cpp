@@ -52,7 +52,7 @@ struct RegrSXXOperation : RegrBaseOperation {
 	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
 		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(state.count, aggr_input_data, y_data, x_data, bmask,
 		                                                         amask, yidx, xidx);
-		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(state.var_pop, aggr_input_data, y_data, bmask, yidx);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop, y_data[yidx]);
 	}
 };
 
@@ -62,7 +62,7 @@ struct RegrSYYOperation : RegrBaseOperation {
 	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
 		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(state.count, aggr_input_data, y_data, x_data, bmask,
 		                                                         amask, yidx, xidx);
-		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(state.var_pop, aggr_input_data, x_data, bmask, xidx);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop, x_data[xidx]);
 	}
 };
 

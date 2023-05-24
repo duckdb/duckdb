@@ -144,16 +144,15 @@ struct BaseSumOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
 		STATEOP::template AddValues<STATE>(state, 1);
-		ADDOP::template AddNumber<STATE, INPUT_TYPE>(state, input[idx]);
+		ADDOP::template AddNumber<STATE, INPUT_TYPE>(state, input);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &, idx_t count) {
 		STATEOP::template AddValues<STATE>(state, count);
-		ADDOP::template AddConstant<STATE, INPUT_TYPE>(state, *input, count);
+		ADDOP::template AddConstant<STATE, INPUT_TYPE>(state, input, count);
 	}
 
 	static bool IgnoreNull() {

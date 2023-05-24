@@ -53,9 +53,8 @@ struct BitStringAggOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, AggregateInputData &data, const INPUT_TYPE *input, ValidityMask &mask,
-	                      idx_t idx) {
-		auto &bind_agg_data = data.bind_data->template Cast<BitstringAggBindData>();
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		auto &bind_agg_data = unary_input.input.bind_data->template Cast<BitstringAggBindData>();
 		if (!state.is_set) {
 			if (bind_agg_data.min.IsNull() || bind_agg_data.max.IsNull()) {
 				throw BinderException(
@@ -78,19 +77,18 @@ struct BitStringAggOperation {
 			state.value = target;
 			state.is_set = true;
 		}
-		if (input[idx] >= state.min && input[idx] <= state.max) {
-			Execute(state, input[idx], bind_agg_data.min.GetValue<INPUT_TYPE>());
+		if (input >= state.min && input <= state.max) {
+			Execute(state, input, bind_agg_data.min.GetValue<INPUT_TYPE>());
 		} else {
 			throw OutOfRangeException("Value %s is outside of provided min and max range (%s <-> %s)",
-			                          NumericHelper::ToString(input[idx]), NumericHelper::ToString(state.min),
+			                          NumericHelper::ToString(input), NumericHelper::ToString(state.min),
 			                          NumericHelper::ToString(state.max));
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
-		OP::template Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input, idx_t count) {
+		OP::template Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 	}
 
 	template <class INPUT_TYPE>

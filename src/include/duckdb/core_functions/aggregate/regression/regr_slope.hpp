@@ -29,7 +29,7 @@ struct RegrSlopeOperation {
 	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
 		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(state.cov_pop, aggr_input_data, y_data, x_data,
 		                                                          bmask, amask, yidx, xidx);
-		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(state.var_pop, aggr_input_data, y_data, bmask, yidx);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop, y_data[yidx]);
 	}
 
 	template <class STATE, class OP>

@@ -28,8 +28,8 @@ struct RegrR2Operation {
 	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
 		CorrOperation::Operation<A_TYPE, B_TYPE, CorrState, OP>(state.corr, aggr_input_data, y_data, x_data, bmask,
 		                                                        amask, yidx, xidx);
-		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(state.var_pop_x, aggr_input_data, y_data, bmask, yidx);
-		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(state.var_pop_y, aggr_input_data, x_data, amask, xidx);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop_x, y_data[yidx]);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop_y, x_data[xidx]);
 	}
 
 	template <class STATE, class OP>

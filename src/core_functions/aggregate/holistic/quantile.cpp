@@ -456,16 +456,15 @@ struct QuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, AggregateInputData &, const INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
-		state.v.emplace_back(data[idx]);
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
+		state.v.emplace_back(input);
 	}
 
 	template <class STATE, class OP>
@@ -485,39 +484,6 @@ struct QuantileOperation {
 		return true;
 	}
 };
-//
-// template <class STATE_TYPE, class RESULT_TYPE, class OP>
-// static void ExecuteListFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result,
-//                                idx_t count, // NOLINT
-//                                idx_t offset) {
-//	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-//
-//	D_ASSERT(aggr_input_data.bind_data);
-//	auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
-//
-//	if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-//		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-//		ListVector::Reserve(result, bind_data.quantiles.size());
-//
-//		auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
-//		auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
-//		auto &mask = ConstantVector::Validity(result);
-//		OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, aggr_input_data, sdata[0], rdata, mask, 0);
-//	} else {
-//		D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
-//		result.SetVectorType(VectorType::FLAT_VECTOR);
-//		ListVector::Reserve(result, (offset + count) * bind_data.quantiles.size());
-//
-//		auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
-//		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
-//		auto &mask = FlatVector::Validity(result);
-//		for (idx_t i = 0; i < count; i++) {
-//			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, aggr_input_data, sdata[i], rdata, mask, i + offset);
-//		}
-//	}
-//
-//	result.Verify(count);
-//}
 
 template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 static AggregateFunction QuantileListAggregate(const LogicalType &input_type, const LogicalType &child_type) { // NOLINT

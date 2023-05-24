@@ -54,25 +54,22 @@ struct MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE &state, AggregateInputData &input_data, const INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
-		D_ASSERT(mask.RowIsValid(0));
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input, idx_t count) {
 		if (!state.isset) {
-			OP::template Assign<INPUT_TYPE, STATE>(state, input_data, input[0]);
+			OP::template Assign<INPUT_TYPE, STATE>(state, input, unary_input.input);
 			state.isset = true;
 		} else {
-			OP::template Execute<INPUT_TYPE, STATE>(state, input_data, input[0]);
+			OP::template Execute<INPUT_TYPE, STATE>(state, input, unary_input.input);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, AggregateInputData &input_data, const INPUT_TYPE *input, ValidityMask &mask,
-	                      idx_t idx) {
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
 		if (!state.isset) {
-			OP::template Assign<INPUT_TYPE, STATE>(state, input_data, input[idx]);
+			OP::template Assign<INPUT_TYPE, STATE>(state, input, unary_input.input);
 			state.isset = true;
 		} else {
-			OP::template Execute<INPUT_TYPE, STATE>(state, input_data, input[idx]);
+			OP::template Execute<INPUT_TYPE, STATE>(state, input, unary_input.input);
 		}
 	}
 
@@ -83,7 +80,7 @@ struct MinMaxBase {
 
 struct NumericMinMaxBase : public MinMaxBase {
 	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE &state, AggregateInputData &, INPUT_TYPE input) {
+	static void Assign(STATE &state, INPUT_TYPE input, AggregateInputData &) {
 		state.value = input;
 	}
 
@@ -99,7 +96,7 @@ struct NumericMinMaxBase : public MinMaxBase {
 
 struct MinOperation : public NumericMinMaxBase {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE &state, AggregateInputData &, INPUT_TYPE input) {
+	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &) {
 		if (LessThan::Operation<INPUT_TYPE>(input, state.value)) {
 			state.value = input;
 		}
@@ -122,7 +119,7 @@ struct MinOperation : public NumericMinMaxBase {
 
 struct MaxOperation : public NumericMinMaxBase {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE &state, AggregateInputData &, INPUT_TYPE input) {
+	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &) {
 		if (GreaterThan::Operation<INPUT_TYPE>(input, state.value)) {
 			state.value = input;
 		}
@@ -152,7 +149,7 @@ struct StringMinMaxBase : public MinMaxBase {
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE &state, AggregateInputData &input_data, INPUT_TYPE input) {
+	static void Assign(STATE &state, INPUT_TYPE input, AggregateInputData &input_data) {
 		Destroy(state, input_data);
 		if (input.IsInlined()) {
 			state.value = input;
@@ -183,28 +180,28 @@ struct StringMinMaxBase : public MinMaxBase {
 		}
 		if (!target.isset) {
 			// target is NULL, use source value directly
-			Assign(target, input_data, source.value);
+			Assign(target, source.value, input_data);
 			target.isset = true;
 		} else {
-			OP::template Execute<string_t, STATE>(target, input_data, source.value);
+			OP::template Execute<string_t, STATE>(target, source.value, input_data);
 		}
 	}
 };
 
 struct MinOperationString : public StringMinMaxBase {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE &state, AggregateInputData &input_data, INPUT_TYPE input) {
+	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &input_data) {
 		if (LessThan::Operation<INPUT_TYPE>(input, state.value)) {
-			Assign(state, input_data, input);
+			Assign(state, input, input_data);
 		}
 	}
 };
 
 struct MaxOperationString : public StringMinMaxBase {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE &state, AggregateInputData &input_data, INPUT_TYPE input) {
+	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &input_data) {
 		if (GreaterThan::Operation<INPUT_TYPE>(input, state.value)) {
-			Assign(state, input_data, input);
+			Assign(state, input, input_data);
 		}
 	}
 };

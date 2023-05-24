@@ -42,17 +42,18 @@ private:
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryFlatLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                 STATE_TYPE **__restrict states, ValidityMask &mask, idx_t count) {
-		if (!mask.AllValid()) {
-			idx_t base_idx = 0;
+		if (OP::IgnoreNull() && !mask.AllValid()) {
+			AggregateUnaryInput input(aggr_input_data, mask);
+			auto &base_idx = input.input_idx;
+			base_idx = 0;
 			auto entry_count = ValidityMask::EntryCount(count);
 			for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 				auto validity_entry = mask.GetValidityEntry(entry_idx);
 				idx_t next = MinValue<idx_t>(base_idx + ValidityMask::BITS_PER_VALUE, count);
-				if (!OP::IgnoreNull() || ValidityMask::AllValid(validity_entry)) {
+				if (ValidityMask::AllValid(validity_entry)) {
 					// all valid: perform operation
 					for (; base_idx < next; base_idx++) {
-						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[base_idx], aggr_input_data, idata,
-						                                                   mask, base_idx);
+						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[base_idx], idata[base_idx], input);
 					}
 				} else if (ValidityMask::NoneValid(validity_entry)) {
 					// nothing valid: skip all
@@ -63,15 +64,16 @@ private:
 					idx_t start = base_idx;
 					for (; base_idx < next; base_idx++) {
 						if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
-							OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[base_idx], aggr_input_data,
-							                                                   idata, mask, base_idx);
+							OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[base_idx], idata[base_idx], input);
 						}
 					}
 				}
 			}
 		} else {
-			for (idx_t i = 0; i < count; i++) {
-				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[i], aggr_input_data, idata, mask, i);
+			AggregateUnaryInput input(aggr_input_data, mask);
+			auto &i = input.input_idx;
+			for (i = 0; i < count; i++) {
+				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[i], idata[i], input);
 			}
 		}
 	}
@@ -82,20 +84,21 @@ private:
 	                                    const SelectionVector &ssel, ValidityMask &mask, idx_t count) {
 		if (OP::IgnoreNull() && !mask.AllValid()) {
 			// potential NULL values and NULL values are ignored
+			AggregateUnaryInput input(aggr_input_data, mask);
 			for (idx_t i = 0; i < count; i++) {
-				auto idx = isel.get_index(i);
+				input.input_idx = isel.get_index(i);
 				auto sidx = ssel.get_index(i);
-				if (mask.RowIsValid(idx)) {
-					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[sidx], aggr_input_data, idata, mask,
-					                                                   idx);
+				if (mask.RowIsValid(input.input_idx)) {
+					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[sidx], idata[input.input_idx], input);
 				}
 			}
 		} else {
 			// quick path: no NULL values or NULL values are not ignored
+			AggregateUnaryInput input(aggr_input_data, mask);
 			for (idx_t i = 0; i < count; i++) {
-				auto idx = isel.get_index(i);
+				input.input_idx = isel.get_index(i);
 				auto sidx = ssel.get_index(i);
-				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[sidx], aggr_input_data, idata, mask, idx);
+				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*states[sidx], idata[input.input_idx], input);
 			}
 		}
 	}
@@ -103,7 +106,9 @@ private:
 	template <class STATE_TYPE, class INPUT_TYPE, class OP>
 	static inline void UnaryFlatUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                       STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask) {
-		idx_t base_idx = 0;
+		AggregateUnaryInput input(aggr_input_data, mask);
+		auto &base_idx = input.input_idx;
+		base_idx = 0;
 		auto entry_count = ValidityMask::EntryCount(count);
 		for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 			auto validity_entry = mask.GetValidityEntry(entry_idx);
@@ -111,7 +116,7 @@ private:
 			if (!OP::IgnoreNull() || ValidityMask::AllValid(validity_entry)) {
 				// all valid: perform operation
 				for (; base_idx < next; base_idx++) {
-					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*state, aggr_input_data, idata, mask, base_idx);
+					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*state, idata[base_idx], input);
 				}
 			} else if (ValidityMask::NoneValid(validity_entry)) {
 				// nothing valid: skip all
@@ -122,8 +127,7 @@ private:
 				idx_t start = base_idx;
 				for (; base_idx < next; base_idx++) {
 					if (ValidityMask::RowIsValid(validity_entry, base_idx - start)) {
-						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*state, aggr_input_data, idata, mask,
-						                                                   base_idx);
+						OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*state, idata[base_idx], input);
 					}
 				}
 			}
@@ -134,19 +138,20 @@ private:
 	static inline void UnaryUpdateLoop(const INPUT_TYPE *__restrict idata, AggregateInputData &aggr_input_data,
 	                                   STATE_TYPE *__restrict state, idx_t count, ValidityMask &mask,
 	                                   const SelectionVector &__restrict sel_vector) {
+		AggregateUnaryInput input(aggr_input_data, mask);
 		if (OP::IgnoreNull() && !mask.AllValid()) {
 			// potential NULL values and NULL values are ignored
 			for (idx_t i = 0; i < count; i++) {
-				auto idx = sel_vector.get_index(i);
-				if (mask.RowIsValid(idx)) {
-					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*state, aggr_input_data, idata, mask, idx);
+				input.input_idx = sel_vector.get_index(i);
+				if (mask.RowIsValid(input.input_idx)) {
+					OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*state, idata[input.input_idx], input);
 				}
 			}
 		} else {
 			// quick path: no NULL values or NULL values are not ignored
 			for (idx_t i = 0; i < count; i++) {
-				auto idx = sel_vector.get_index(i);
-				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*state, aggr_input_data, idata, mask, idx);
+				input.input_idx = sel_vector.get_index(i);
+				OP::template Operation<INPUT_TYPE, STATE_TYPE, OP>(*state, idata[input.input_idx], input);
 			}
 		}
 	}
@@ -238,8 +243,8 @@ public:
 			// regular constant: get first state
 			auto idata = ConstantVector::GetData<INPUT_TYPE>(input);
 			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
-			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(**sdata, aggr_input_data, idata,
-			                                                           ConstantVector::Validity(input), count);
+			AggregateUnaryInput input_data(aggr_input_data, ConstantVector::Validity(input));
+			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(**sdata, *idata, input_data, count);
 		} else if (input.GetVectorType() == VectorType::FLAT_VECTOR &&
 		           states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto idata = FlatVector::GetData<INPUT_TYPE>(input);
@@ -264,8 +269,9 @@ public:
 				return;
 			}
 			auto idata = ConstantVector::GetData<INPUT_TYPE>(input);
+			AggregateUnaryInput input_data(aggr_input_data, ConstantVector::Validity(input));
 			OP::template ConstantOperation<INPUT_TYPE, STATE_TYPE, OP>(
-			    *reinterpret_cast<STATE_TYPE *>(state), aggr_input_data, idata, ConstantVector::Validity(input), count);
+			    *reinterpret_cast<STATE_TYPE *>(state), *idata, input_data, count);
 			break;
 		}
 		case VectorType::FLAT_VECTOR: {
