@@ -4306,6 +4306,7 @@ label_done:
 JEMALLOC_ATTR(constructor)
 static void
 jemalloc_constructor(void) {
+	je_malloc_conf = "dirty_decay_ms:500,muzzy_decay_ms:500";
 	malloc_init();
 }
 #endif
