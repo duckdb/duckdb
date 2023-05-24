@@ -62,9 +62,6 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
 		options.hive_types_autocast = BooleanValue::Get(val);
 	} else if (loption == "hive_types" || loption == "hive_type") {
-		// using 'hive_types' implies 'hive_partitioning'
-		options.hive_partitioning = true;
-
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException(
 			    "'hive_types' only accepts a STRUCT('name':VARCHAR, ...), but '%s' was provided",
@@ -525,8 +522,15 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(const string &file, Cli
 }
 void MultiFileReaderOptions::AutoDetectHivePartitioning(const vector<string> &files, ClientContext &context) {
 	D_ASSERT(!files.empty());
-	if (!auto_detect_hive_partitioning && !hive_partitioning && !hive_types_schema.empty()) {
+	const bool hp_explicitly_disabled = !auto_detect_hive_partitioning && !hive_partitioning;
+	const bool ht_enabled = !hive_types_schema.empty();
+	if (hp_explicitly_disabled && ht_enabled) {
 		throw InvalidInputException("cannot disable hive_partitioning when hive_types is enabled");
+	}
+	if (ht_enabled && auto_detect_hive_partitioning && !hive_partitioning) {
+		// hive_types flag implies hive_partitioning
+		hive_partitioning = true;
+		auto_detect_hive_partitioning = false;
 	}
 	if (auto_detect_hive_partitioning) {
 		hive_partitioning = AutoDetectHivePartitioningInternal(files);
