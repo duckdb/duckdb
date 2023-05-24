@@ -1,5 +1,6 @@
 #include "duckdb/execution/index/art/node4.hpp"
 
+#include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"

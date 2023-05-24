@@ -72,7 +72,7 @@ public:
 	static void Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx_t position);
 
 	//! Returns the string representation of a prefix node
-	string ToString(ART &art) const;
+	string ToString(ART &art);
 
 	//! Serialize this node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);

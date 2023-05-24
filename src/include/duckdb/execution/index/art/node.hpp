@@ -93,7 +93,7 @@ public:
 	void Deserialize(ART &art);
 
 	//! Returns the string representation of the node
-	string ToString(ART &art) const;
+	string ToString(ART &art);
 	//! Returns the capacity of the node
 	idx_t GetCapacity() const;
 	//! Returns the matching node type for a given count

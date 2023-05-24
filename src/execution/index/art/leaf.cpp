@@ -259,7 +259,7 @@ uint32_t Leaf::FindRowId(const ART &art, Node &ptr, const row_t row_id) const {
 string Leaf::ToString(const ART &art) const {
 
 	if (IsInlined()) {
-		return "Leaf (" + to_string(count) + "): [" + to_string(row_ids.inlined) + "]";
+		return "Leaf [count: 1, row ID: " + to_string(row_ids.inlined) + "]";
 	}
 
 	auto ptr = row_ids.ptr;
@@ -277,7 +277,9 @@ string Leaf::ToString(const ART &art) const {
 		remaining -= to_string_count;
 		ptr = segment.next;
 	}
-	return "Leaf (" + to_string(this_count) + ", " + to_string(count) + "): [" + str + "] \n";
+	D_ASSERT(remaining == 0);
+	D_ASSERT(this_count == count);
+	return "Leaf [count: " + to_string(count) + ", row IDs: " + str + "] \n";
 }
 
 BlockPointer Leaf::Serialize(const ART &art, MetaBlockWriter &writer) const {

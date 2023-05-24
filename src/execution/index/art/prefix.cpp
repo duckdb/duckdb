@@ -99,11 +99,11 @@ void Prefix::Concatenate(ART &art, Node &prefix_node, const uint8_t byte, Node &
 		return;
 	}
 
-	// push the byte on top of child_prefix
+	// create a new prefix node containing byte, then append the child_prefix to it
 	if (prefix_node.DecodeARTNodeType() != NType::PREFIX && child_prefix_node.DecodeARTNodeType() == NType::PREFIX) {
 
 		auto child_prefix = child_prefix_node;
-		auto prefix = Prefix::New(art, child_prefix_node, byte, Node());
+		auto &prefix = Prefix::New(art, prefix_node, byte, Node());
 
 		prefix.Append(art, child_prefix);
 		return;
@@ -279,7 +279,10 @@ void Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx
 	return;
 }
 
-string Prefix::ToString(ART &art) const {
+string Prefix::ToString(ART &art) {
+
+	D_ASSERT(data[Node::PREFIX_SIZE] != 0);
+	D_ASSERT(data[Node::PREFIX_SIZE] <= Node::PREFIX_SIZE);
 
 	string str = " prefix_bytes:[";
 	for (idx_t i = 0; i < data[Node::PREFIX_SIZE]; i++) {

@@ -276,23 +276,28 @@ void Node::Deserialize(ART &art) {
 // Utility
 //===--------------------------------------------------------------------===//
 
-string Node::ToString(ART &art) const {
+string Node::ToString(ART &art) {
 
-	D_ASSERT(!IsSwizzled());
+	D_ASSERT(IsSet());
+	if (IsSwizzled()) {
+		Deserialize(art);
+	}
 
 	auto type = DecodeARTNodeType();
 	if (type == NType::LEAF) {
-		return Leaf::Get(art, *this).ToString(art);
+		return "\n" + Leaf::Get(art, *this).ToString(art);
 	}
 	if (type == NType::PREFIX) {
-		return Prefix::Get(art, *this).ToString(art);
+		return "\n" + Prefix::Get(art, *this).ToString(art);
 	}
 
 	string str = "Node" + to_string(GetCapacity()) + ": [";
 
+	idx_t child_count = 0;
 	uint8_t byte = 0;
 	auto child = GetNextChild(art, byte);
 	while (child) {
+		child_count++;
 		str += "(" + to_string(byte) + ", " + child->ToString(art) + ")";
 		if (byte == NumericLimits<uint8_t>::Maximum()) {
 			break;
@@ -301,7 +306,9 @@ string Node::ToString(ART &art) const {
 		child = GetNextChild(art, byte);
 	}
 
-	return str + "]";
+	// ensure that the child count is at least two
+	D_ASSERT(child_count > 1);
+	return "\n" + str + "]";
 }
 
 idx_t Node::GetCapacity() const {

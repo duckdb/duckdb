@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <iostream>
 
 namespace duckdb {
 
@@ -608,7 +609,7 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 
 		// recurse
 		Erase(*child, key, depth + 1, row_id);
-		node.ReplaceChild(*this, key[depth], *child);
+		next_node.get().ReplaceChild(*this, key[depth], *child);
 	}
 }
 
@@ -722,8 +723,7 @@ Node ART::Lookup(Node node, const ARTKey &key, idx_t depth) {
 // Greater Than and Less Than
 //===--------------------------------------------------------------------===//
 
-bool ART::SearchGreater(ARTIndexScanState &state, ARTKey &key, bool equal, idx_t max_count,
-                        vector<row_t> &result_ids) {
+bool ART::SearchGreater(ARTIndexScanState &state, ARTKey &key, bool equal, idx_t max_count, vector<row_t> &result_ids) {
 
 	if (!tree->IsSet()) {
 		return true;
@@ -1076,7 +1076,9 @@ bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 
 string ART::ToString() {
 	if (tree->IsSet()) {
-		return tree->ToString(*this);
+		auto str = tree->ToString(*this);
+		std::cout << str << std::endl;
+		return str;
 	}
 	return "[empty]";
 }
