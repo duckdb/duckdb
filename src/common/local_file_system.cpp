@@ -699,8 +699,12 @@ void LocalFileSystem::CreateDirectory(const string &directory) {
 		return;
 	}
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(directory.c_str());
-	if (directory.empty() || !CreateDirectoryW(unicode_path.c_str(), NULL) || !DirectoryExists(directory)) {
-		throw IOException("Could not create directory!");
+	if (directory.empty()) {
+		throw IOException("Could not create directory: \'%s\' is empty!", directory.c_str());
+	} else if (!CreateDirectoryW(unicode_path.c_str(), NULL)) {
+		throw IOException("Could not create directory: \'%s\' creation failed", directory.c_str());
+	} else if (!DirectoryExists(directory)) {
+		throw IOException("Could not create directory: \'%s\' does not exist", directory.c_str());
 	}
 }
 

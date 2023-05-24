@@ -15,9 +15,7 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["hive_partitioning"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["union_by_name"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["hive_types"] = LogicalType::ANY;
-	table_function.named_parameters["hive_type"] = LogicalType::ANY;
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["hive_type_autocast"] = LogicalType::BOOLEAN;
 }
 
 vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value &input, const string &name,
