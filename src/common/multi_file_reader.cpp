@@ -66,29 +66,24 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		options.hive_partitioning = true;
 
 		if (val.type().id() != LogicalTypeId::STRUCT) {
-			throw InvalidInputException("'hive_types' only accepts a STRUCT(name : VARCHAR, ...), not %s",
-			                            val.type().ToString());
+			throw InvalidInputException(
+			    "'hive_types' only accepts a STRUCT('name':VARCHAR, ...), but '%s' was provided",
+			    val.type().ToString());
 		}
 		// verify that that all the children of the struct value are VARCHAR
 		auto &children = StructValue::GetChildren(val);
 		for (idx_t i = 0; i < children.size(); i++) {
 			const Value &child = children[i];
 			if (child.type().id() != LogicalType::VARCHAR) {
-				throw InvalidInputException("one of the children is not a VARCHAR: %s", child.type().ToString());
+				throw InvalidInputException("hive_types: '%s' must be a VARCHAR, instead: '%s' was provided",
+				                            StructType::GetChildName(val.type(), i), child.type().ToString());
 			}
 			// for every child of the struct, get the logical type
 			LogicalType transformed_type = TransformStringToLogicalType(child.ToString(), context);
 			const string &name = StructType::GetChildName(val.type(), i);
-
-			if (options.hive_types_schema.find(name) != options.hive_types_schema.end()) {
-				throw InvalidInputException("\'HIVE_TYPES\' contains duplicate entries");
-			}
-			// add the hive_type to the map
 			options.hive_types_schema[name] = transformed_type;
 		}
-		if (options.hive_types_schema.empty()) {
-			throw InvalidInputException("\'HIVE_TYPES\' can not be empty");
-		}
+		D_ASSERT(!options.hive_types_schema.empty());
 	} else {
 		return false;
 	}
@@ -432,7 +427,10 @@ HivePartitioningIndex HivePartitioningIndex::Deserialize(Deserializer &source) {
 void MultiFileReaderOptions::AddBatchInfo(BindInfo &bind_info) const {
 	bind_info.InsertOption("filename", Value::BOOLEAN(filename));
 	bind_info.InsertOption("hive_partitioning", Value::BOOLEAN(hive_partitioning));
+	bind_info.InsertOption("auto_detect_hive_partitioning", Value::BOOLEAN(auto_detect_hive_partitioning));
 	bind_info.InsertOption("union_by_name", Value::BOOLEAN(union_by_name));
+	bind_info.InsertOption("hive_types_autocast", Value::BOOLEAN(hive_types_autocast));
+	// hive_types_schema?
 }
 
 void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vector<LogicalType> &sql_types,
