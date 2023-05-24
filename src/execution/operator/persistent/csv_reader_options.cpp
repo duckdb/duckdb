@@ -179,7 +179,7 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		allow_quoted_nulls = ParseBoolean(value, loption);
 	} else if (loption == "parallel") {
 		parallel_mode = ParseBoolean(value, loption) ? ParallelMode::PARALLEL : ParallelMode::SINGLE_THREADED;
-	} else if (loption == "rejects_table" || loption == "rejects_recovery_columns") {
+	} else if (loption == "rejects_table" || loption == "rejects_recovery_columns" || loption == "rejects_limit") {
 		// skip, handled in SetRejectsOptions
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
@@ -196,7 +196,14 @@ void BufferedCSVReaderOptions::SetRejectsOptions(const named_parameter_map_t &pa
 			if (!ignore_errors) {
 				throw BinderException("REJECTS_TABLE option is only supported when IGNORE_ERRORS is set to true");
 			}
-			rejects_table_name = ParseString(value, loption);
+			if (file_options.union_by_name) {
+				throw BinderException("REJECTS_TABLE option is not supported when UNION_BY_NAME is set to true");
+			}
+			auto str = ParseString(value, loption);
+			if (str.empty()) {
+				throw BinderException("REJECTS_TABLE option cannot be empty");
+			}
+			rejects_table_name = str;
 		}
 	}
 
@@ -234,6 +241,17 @@ void BufferedCSVReaderOptions::SetRejectsOptions(const named_parameter_map_t &pa
 					throw BinderException("Unsupported parameter for REJECTS_RECOVERY_COLUMNS: column \"%s\" not found",
 					                      col_name);
 				}
+			}
+		}
+
+		if (loption == "rejects_limit") {
+			if (rejects_table_name.empty()) {
+				throw BinderException(
+				    "REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
+			}
+			rejects_limit = ParseInteger(value, loption);
+			if (rejects_limit < 0) {
+				throw BinderException("Unsupported parameter for REJECTS_LIMIT: cannot be smaller than 0");
 			}
 		}
 	}

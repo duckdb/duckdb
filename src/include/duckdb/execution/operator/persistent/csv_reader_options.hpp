@@ -57,6 +57,8 @@ struct BufferedCSVReaderOptions {
 	bool ignore_errors = false;
 	//! Rejects table name
 	string rejects_table_name;
+	//! Rejects table entry limit (0 = no limit)
+	idx_t rejects_limit = 0;
 	//! Columns to use as recovery key for rejected rows when reading with ignore_errors = true
 	vector<idx_t> rejects_recovery_columns;
 	//! Expected number of columns

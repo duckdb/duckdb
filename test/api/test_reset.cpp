@@ -69,8 +69,7 @@ OptionValuePair &GetValueForOption(const string &name) {
 	    {"wal_autocheckpoint", {"4.2GB"}},
 	    {"worker_threads", {42}},
 	    {"enable_http_metadata_cache", {true}},
-	    {"force_bitpacking_mode", {"constant"}},
-	    {"csv_rejects_table_capacity", {50}}};
+	    {"force_bitpacking_mode", {"constant"}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		REQUIRE(name == "MISSING_FROM_MAP");

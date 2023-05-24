@@ -34,8 +34,7 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 		child_list_t<LogicalType> recovery_key_components;
 		for (auto &key_idx : data.options.rejects_recovery_columns) {
 			auto &col_name = data.csv_names[key_idx];
-			auto &col_type = data.csv_types[key_idx];
-			recovery_key_components.emplace_back(col_name, col_type);
+			recovery_key_components.emplace_back(col_name, LogicalType::VARCHAR);
 		}
 		info->columns.AddColumn(ColumnDefinition("recovery_columns", LogicalType::STRUCT(recovery_key_components)));
 	}

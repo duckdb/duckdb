@@ -66,14 +66,13 @@ statement ok
 DROP TABLE csv_rejects_table;
 
 # Set limit
-statement ok
-SET csv_rejects_table_capacity = 1;
 
 query III
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/bad*.csv', 
     columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
     rejects_table='csv_rejects_table',
+    rejects_limit=2,
     ignore_errors=true, parallel=${PARALLEL}) ORDER BY ALL;
 ----
 1	2	AAA
@@ -89,9 +88,6 @@ SELECT COUNT(*) FROM csv_rejects_table
 
 statement ok
 DROP TABLE csv_rejects_table;
-
-statement ok
-SET csv_rejects_table_capacity = 2048;
 
 # Try with bigger files
 query I

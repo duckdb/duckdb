@@ -219,8 +219,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->csv_types = return_types;
 	result->csv_names = names;
 
-	options.SetRejectsOptions(input.named_parameters, names, return_types);
-
 	if (options.file_options.union_by_name) {
 		result->reader_bind =
 		    MultiFileReader::BindUnionReader<BufferedCSVReader>(context, return_types, names, *result, options);
@@ -240,6 +238,10 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	} else {
 		result->reader_bind = MultiFileReader::BindOptions(options.file_options, result->files, return_types, names);
 	}
+
+	// Do this after the other options have been set and column types/names are resolved
+	options.SetRejectsOptions(input.named_parameters, names, return_types);
+
 	result->return_types = return_types;
 	result->return_names = names;
 	result->FinalizeRead(context);
@@ -560,6 +562,10 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		// update the current reader
 		reader->SetBufferRead(std::move(result));
 	}
+
+	// set the linenr of the reader, taking into account the header
+	reader->linenr = bind_data.options.has_header ? 1 : 0;
+
 	return true;
 }
 void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions, idx_t file_number_p, idx_t batch_idx) {
@@ -717,9 +723,6 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 			}
 			csv_global_state.UpdateLinesRead(*csv_local_state.csv_reader->buffer, csv_local_state.csv_reader->file_idx);
 			auto has_next = csv_global_state.Next(context, bind_data, csv_local_state.csv_reader);
-			if (csv_local_state.csv_reader) {
-				csv_local_state.csv_reader->linenr = 0;
-			}
 
 			if (!has_next) {
 				csv_global_state.DecrementThread();
@@ -1005,6 +1008,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["maximum_line_size"] = LogicalType::VARCHAR;
 	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["rejects_table"] = LogicalType::VARCHAR;
+	table_function.named_parameters["rejects_limit"] = LogicalType::BIGINT;
 	table_function.named_parameters["rejects_recovery_columns"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["buffer_size"] = LogicalType::UBIGINT;
 	table_function.named_parameters["decimal_separator"] = LogicalType::VARCHAR;
@@ -1095,6 +1099,7 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	}
 	writer.WriteList<string>(csv_formats);
 	writer.WriteString(rejects_table_name);
+	writer.WriteField<idx_t>(rejects_limit);
 	writer.WriteList<idx_t>(rejects_recovery_columns);
 }
 
@@ -1144,6 +1149,7 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 		StrTimeFormat::ParseFormatSpecifier(format, date_format[type]);
 	}
 	rejects_table_name = reader.ReadRequired<string>();
+	rejects_limit = reader.ReadRequired<idx_t>();
 	rejects_recovery_columns = reader.ReadRequiredList<idx_t>();
 }
 
