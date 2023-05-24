@@ -11,10 +11,15 @@
 */examples/*
 */third_party/*
 */test/*
+*/extension/autocomplete/*
 */extension/fts/*
 */extension/icu/*
+*/extension/jemalloc/*
 */extension/tpcds/*
 */extension/tpch/*
 */extension/visualizer/*
 */extension/json/yyjson/*
 src/main/extension_helper.cpp
+*extension_oote*
+*/adbc/*
+src/common/enum_util.cpp

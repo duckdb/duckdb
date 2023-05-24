@@ -22,8 +22,8 @@ enum class PhysicalType : uint8_t;
 struct LogicalType;
 struct hugeint_t;
 
-inline void assert_restrict_function(void *left_start, void *left_end, void *right_start, void *right_end,
-                                     const char *fname, int linenr) {
+inline void assert_restrict_function(const void *left_start, const void *left_end, const void *right_start,
+                                     const void *right_end, const char *fname, int linenr) {
 	// assert that the two pointers do not overlap
 #ifdef DEBUG
 	if (!(left_end <= right_start || right_end <= left_start)) {
@@ -121,7 +121,7 @@ public:
 	DUCKDB_API static bool UncaughtException();
 
 	DUCKDB_API static string GetStackTrace(int max_depth = 120);
-	DUCKDB_API static string FormatStackTrace(string message = "") {
+	static string FormatStackTrace(string message = "") {
 		return (message + "\n" + GetStackTrace());
 	}
 
@@ -269,7 +269,7 @@ public:
 class IOException : public Exception {
 public:
 	DUCKDB_API explicit IOException(const string &msg);
-	DUCKDB_API explicit IOException(ExceptionType exception_type, const string &msg) : Exception(exception_type, msg) {
+	explicit IOException(ExceptionType exception_type, const string &msg) : Exception(exception_type, msg) {
 	}
 
 	template <typename... Args>
@@ -371,7 +371,7 @@ public:
 
 class FatalException : public Exception {
 public:
-	DUCKDB_API explicit FatalException(const string &msg) : FatalException(ExceptionType::FATAL, msg) {
+	explicit FatalException(const string &msg) : FatalException(ExceptionType::FATAL, msg) {
 	}
 	template <typename... Args>
 	explicit FatalException(const string &msg, Args... params) : FatalException(ConstructMessage(msg, params...)) {

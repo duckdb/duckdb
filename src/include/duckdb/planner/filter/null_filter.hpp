@@ -14,6 +14,9 @@ namespace duckdb {
 
 class IsNullFilter : public TableFilter {
 public:
+	static constexpr const TableFilterType TYPE = TableFilterType::IS_NULL;
+
+public:
 	IsNullFilter();
 
 public:
@@ -24,6 +27,9 @@ public:
 };
 
 class IsNotNullFilter : public TableFilter {
+public:
+	static constexpr const TableFilterType TYPE = TableFilterType::IS_NOT_NULL;
+
 public:
 	IsNotNullFilter();
 

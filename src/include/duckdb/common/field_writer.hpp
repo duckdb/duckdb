@@ -34,12 +34,12 @@ public:
 		static_assert(std::is_trivially_destructible<T>(), "WriteField object must be trivially destructible");
 
 		AddField();
-		WriteData((const_data_ptr_t)&element, sizeof(T));
+		WriteData(const_data_ptr_cast(&element), sizeof(T));
 	}
 
 	//! Write a string with a length prefix
 	void WriteString(const string &val) {
-		WriteStringLen((const_data_ptr_t)val.c_str(), val.size());
+		WriteStringLen(const_data_ptr_cast(val.c_str()), val.size());
 	}
 	void WriteStringLen(const_data_ptr_t val, idx_t len) {
 		AddField();
@@ -135,7 +135,7 @@ public:
 private:
 	template <class T>
 	void Write(const T &element) {
-		WriteData((const_data_ptr_t)&element, sizeof(T));
+		WriteData(const_data_ptr_cast(&element), sizeof(T));
 	}
 
 	DUCKDB_API void WriteData(const_data_ptr_t buffer, idx_t write_size);
@@ -263,15 +263,15 @@ public:
 		return ReadRequiredGenericList<T, idx_t, IndexReadOperation>();
 	}
 
-	template <class T>
-	set<T> ReadRequiredSet() {
+	template <class T, class CONTAINER_TYPE = set<T>>
+	CONTAINER_TYPE ReadRequiredSet() {
 		if (field_count >= max_field_count) {
 			// field is not there, throw an exception
 			throw SerializationException("Attempting to read a required field, but field is missing");
 		}
 		AddField();
 		auto result_count = source.Read<uint32_t>();
-		set<T> result;
+		CONTAINER_TYPE result;
 		for (idx_t i = 0; i < result_count; i++) {
 			result.insert(source.Read<T>());
 		}

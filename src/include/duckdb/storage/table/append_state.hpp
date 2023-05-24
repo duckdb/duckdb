@@ -44,7 +44,7 @@ struct RowGroupAppendState {
 	//! The current row_group we are appending to
 	RowGroup *row_group;
 	//! The column append states
-	unique_ptr<ColumnAppendState[]> states;
+	unsafe_unique_array<ColumnAppendState> states;
 	//! Offset within the row_group
 	idx_t offset_in_row_group;
 };

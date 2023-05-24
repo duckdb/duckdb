@@ -12,6 +12,7 @@ import org.duckdb.JsonNode;
 
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -60,6 +61,10 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.TimeZone;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.logging.Logger;
 
@@ -115,12 +120,12 @@ public class TestDuckDBJDBC {
 	private static <T extends Throwable> String assertThrows(Thrower thrower, Class<T> exception) throws Exception {
 		try {
 			thrower.run();
-			fail("Expected to throw " + exception.getName());
-			return null;
 		} catch (Throwable e) {
 			assertEquals(e.getClass(), exception);
 			return e.getMessage();
 		}
+		fail("Expected to throw " + exception.getName());
+		return null;
 	}
 
 	static {
@@ -504,6 +509,19 @@ public class TestDuckDBJDBC {
 		stmt.close();
 		conn.close();
 	}
+
+    public static void test_consecutive_timestamps() throws Exception {
+    	long expected = 986860800000L;
+        try (Connection conn = DriverManager.getConnection("jdbc:duckdb:"); Statement stmt = conn.createStatement()) {
+            try (ResultSet rs = stmt.executeQuery("select range from range(TIMESTAMP '2001-04-10', TIMESTAMP '2001-04-11', INTERVAL 30 MINUTE)")) {
+                while (rs.next()) {
+                    Timestamp actual = rs.getTimestamp(1, Calendar.getInstance());
+                    assertEquals(expected, actual.getTime());
+                    expected += 30 * 60 * 1_000;
+                }
+            }
+        }
+    }
 
 	public static void test_throw_wrong_datatype() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
@@ -2696,7 +2714,7 @@ public class TestDuckDBJDBC {
 			assertEquals(rs.getMetaData().getColumnType(1), Types.JAVA_OBJECT);
 			JsonNode jsonNode = (JsonNode) rs.getObject(1);
 			assertTrue(jsonNode.isArray());
-			assertEquals(jsonNode.toString(), "[1, 5]");
+			assertEquals(jsonNode.toString(), "[1,5]");
 		}
 
 		try (Statement stmt = conn.createStatement()) {
@@ -3544,6 +3562,19 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	public static void test_cancel() throws Exception {
+		ExecutorService service = Executors.newFixedThreadPool(1);
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:"); Statement stmt = conn.createStatement()) {
+			Future<String> thread = service.submit(() -> assertThrows(() ->
+				stmt.execute("select count(*) from range(10000000) t1, range(1000000) t2;"), SQLException.class)
+			);
+			Thread.sleep(500); // wait for query to start running
+			stmt.cancel();
+			String message = thread.get(1, TimeUnit.SECONDS);
+			assertEquals(message, "INTERRUPT Error: Interrupted!");
+		}
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
@@ -3574,6 +3605,9 @@ public class TestDuckDBJDBC {
 					m.invoke(null);
 					System.out.println("success in " + Duration.between(start, LocalDateTime.now()).getSeconds() + " seconds");
 				} catch (Throwable t) {
+					if (t instanceof InvocationTargetException) {
+						t = t.getCause();
+					}
 					System.out.println("failed with " + t);
 					t.printStackTrace(System.out);
 					anyFailed = true;

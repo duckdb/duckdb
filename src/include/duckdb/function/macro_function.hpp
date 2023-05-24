@@ -21,7 +21,7 @@ enum class MacroType : uint8_t { VOID_MACRO = 0, TABLE_MACRO = 1, SCALAR_MACRO =
 
 class MacroFunction {
 public:
-	MacroFunction(MacroType type);
+	explicit MacroFunction(MacroType type);
 
 	//! The type
 	MacroType type;
@@ -45,13 +45,19 @@ public:
 
 	virtual string ToSQL(const string &schema, const string &name) const;
 
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<MacroFunction> Deserialize(Deserializer &deserializer);
+
+protected:
+	virtual void SerializeInternal(FieldWriter &writer) const = 0;
+
 public:
 	template <class TARGET>
 	TARGET &Cast() {
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast macro to type - macro type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -59,7 +65,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast macro to type - macro type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 

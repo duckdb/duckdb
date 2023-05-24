@@ -730,7 +730,7 @@ Value Value::EMPTYLIST(const LogicalType &child_type) {
 Value Value::BLOB(const_data_ptr_t data, idx_t len) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
-	result.value_info_ = make_shared<StringValueInfo>(string((const char *)data, len));
+	result.value_info_ = make_shared<StringValueInfo>(string(const_char_ptr_cast(data), len));
 	return result;
 }
 
@@ -744,7 +744,7 @@ Value Value::BLOB(const string &data) {
 Value Value::BIT(const_data_ptr_t data, idx_t len) {
 	Value result(LogicalType::BIT);
 	result.is_null = false;
-	result.value_info_ = make_shared<StringValueInfo>(string((const char *)data, len));
+	result.value_info_ = make_shared<StringValueInfo>(string(const_char_ptr_cast(data), len));
 	return result;
 }
 

@@ -27,8 +27,8 @@ struct ListAggregatesBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const ListAggregatesBindData &)other_p;
-		return stype == other.stype && aggr_expr->Equals(other.aggr_expr.get());
+		auto &other = other_p.Cast<ListAggregatesBindData>();
+		return stype == other.stype && aggr_expr->Equals(*other.aggr_expr);
 	}
 	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
 		throw NotImplementedException("FIXME: list aggr serialize");
@@ -175,11 +175,11 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 
 	UnifiedVectorFormat lists_data;
 	lists.ToUnifiedFormat(count, lists_data);
-	auto list_entries = (list_entry_t *)lists_data.data;
+	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
 	// state_buffer holds the state for each list of this chunk
 	idx_t size = aggr.function.state_size();
-	auto state_buffer = unique_ptr<data_t[]>(new data_t[size * count]);
+	auto state_buffer = make_unsafe_uniq_array<data_t>(size * count);
 
 	// state vector for initialize and finalize
 	StateVector state_vector(count, info.aggr_expr->Copy());
@@ -344,19 +344,16 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 }
 
 static void ListAggregateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-
-	D_ASSERT(args.ColumnCount() == 2);
+	D_ASSERT(args.ColumnCount() >= 2);
 	ListAggregatesFunction<AggregateFunctor, true>(args, state, result);
 }
 
 static void ListDistinctFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-
 	D_ASSERT(args.ColumnCount() == 1);
 	ListAggregatesFunction<DistinctFunctor>(args, state, result);
 }
 
 static void ListUniqueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-
 	D_ASSERT(args.ColumnCount() == 1);
 	ListAggregatesFunction<UniqueFunctor>(args, state, result);
 }

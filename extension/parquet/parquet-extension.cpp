@@ -239,8 +239,7 @@ public:
 					// missing metadata entry in cache, no usable stats
 					return nullptr;
 				}
-				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
-				                          FileSystem::DEFAULT_COMPRESSION, FileSystem::GetFileOpener(context));
+				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
 				// we need to check if the metadata cache entries are current
 				if (fs.GetLastModifiedTime(*handle) >= metadata->read_time) {
 					// missing or invalid metadata entry in cache, no usable stats overall
@@ -344,7 +343,7 @@ public:
 
 	static unique_ptr<GlobalTableFunctionState> ParquetScanInitGlobal(ClientContext &context,
 	                                                                  TableFunctionInitInput &input) {
-		auto &bind_data = (ParquetReadBindData &)*input.bind_data;
+		auto &bind_data = input.bind_data->CastNoConst<ParquetReadBindData>();
 		auto result = make_uniq<ParquetReadGlobalState>();
 
 		result->file_opening = vector<bool>(bind_data.files.size(), false);
@@ -627,8 +626,7 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	global_state->writer =
-	    make_uniq<ParquetWriter>(fs, file_path, FileSystem::GetFileOpener(context), parquet_bind.sql_types,
-	                             parquet_bind.column_names, parquet_bind.codec);
+	    make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec);
 	return std::move(global_state);
 }
 
@@ -726,6 +724,11 @@ unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
 	table_function->function = make_uniq<FunctionExpression>("parquet_scan", std::move(children));
+
+	if (!FileSystem::HasGlob(table_name)) {
+		table_function->alias = FileSystem::ExtractBaseName(table_name);
+	}
+
 	return std::move(table_function);
 }
 
