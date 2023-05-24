@@ -17,7 +17,11 @@ public:
 
 	template <typename T>
 	static uint32_t BitUnpack(ByteBuffer &buffer, uint8_t &bitpack_pos, T *dest, uint32_t count, uint8_t width) {
-		D_ASSERT(width < ParquetDecodeUtils::BITPACK_MASKS_SIZE);
+		if (width >= ParquetDecodeUtils::BITPACK_MASKS_SIZE) {
+			throw InvalidInputException("The width (%d) of the bitpacked data exceeds the supported max width (%d), "
+			                            "the file might be corrupted.",
+			                            width, ParquetDecodeUtils::BITPACK_MASKS_SIZE);
+		}
 		auto mask = BITPACK_MASKS[width];
 
 		for (uint32_t i = 0; i < count; i++) {
