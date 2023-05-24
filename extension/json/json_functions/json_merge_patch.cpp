@@ -36,7 +36,7 @@ static inline void ReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_va
 	UnifiedVectorFormat input_data;
 	auto &input_vector = input;
 	input_vector.ToUnifiedFormat(count, input_data);
-	auto inputs = (string_t *)input_data.data;
+	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	// Read the documents
 	for (idx_t i = 0; i < count; i++) {

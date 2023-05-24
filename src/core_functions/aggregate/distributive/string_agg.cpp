@@ -94,13 +94,13 @@ struct StringAggFunction {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *str_data,
+	static void Operation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *str_data,
 	                      ValidityMask &str_mask, idx_t str_idx) {
 		PerformOperation(state, str_data[str_idx], aggr_input_data.bind_data);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
 	                              ValidityMask &mask, idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
 			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);

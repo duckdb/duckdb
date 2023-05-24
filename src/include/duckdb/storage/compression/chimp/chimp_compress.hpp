@@ -127,7 +127,7 @@ public:
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		auto data = (CHIMP_TYPE *)vdata.data;
+		auto data = UnifiedVectorFormat::GetData<CHIMP_TYPE>(vdata);
 
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
@@ -145,7 +145,7 @@ public:
 		current_segment->count++;
 
 		if (is_valid) {
-			T floating_point_value = Load<T>((const_data_ptr_t)&value);
+			T floating_point_value = Load<T>(const_data_ptr_cast(&value));
 			NumericStats::Update<T>(current_segment->stats.statistics, floating_point_value);
 		} else {
 			//! FIXME: find a cheaper alternative to storing a NULL

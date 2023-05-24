@@ -96,7 +96,7 @@ public:
 	void AddSubquery(idx_t index, const string &alias, TableFunctionRef &ref, BoundQueryNode &subquery);
 	//! Adds a binding to a catalog entry with a given alias to the BindContext.
 	void AddEntryBinding(idx_t index, const string &alias, const vector<string> &names,
-	                     const vector<LogicalType> &types, StandardEntry *entry);
+	                     const vector<LogicalType> &types, StandardEntry &entry);
 	//! Adds a base table with the given alias to the BindContext.
 	void AddGenericBinding(idx_t index, const string &alias, const vector<string> &names,
 	                       const vector<LogicalType> &types);

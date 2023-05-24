@@ -225,7 +225,7 @@ static void AddKeyValuePairs(yyjson_mut_doc *doc, yyjson_mut_val *objs[], Vector
                              idx_t count) {
 	UnifiedVectorFormat key_data;
 	key_v.ToUnifiedFormat(count, key_data);
-	auto keys = (string_t *)key_data.data;
+	auto keys = UnifiedVectorFormat::GetData<string_t>(key_data);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto key_idx = key_data.sel->get_index(i);
@@ -253,7 +253,7 @@ template <class INPUT_TYPE, class TARGET_TYPE>
 static void TemplatedCreateValues(yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v, idx_t count) {
 	UnifiedVectorFormat value_data;
 	value_v.ToUnifiedFormat(count, value_data);
-	auto values = (INPUT_TYPE *)value_data.data;
+	auto values = UnifiedVectorFormat::GetData<INPUT_TYPE>(value_data);
 
 	const auto type_is_json = JSONCommon::LogicalTypeIsJSON(value_v.GetType());
 	for (idx_t i = 0; i < count; i++) {
@@ -311,7 +311,7 @@ static void CreateValuesMap(const StructNames &names, yyjson_mut_doc *doc, yyjso
 	// Add the key/value pairs to the values
 	UnifiedVectorFormat map_data;
 	value_v.ToUnifiedFormat(count, map_data);
-	auto map_key_list_entries = (list_entry_t *)map_data.data;
+	auto map_key_list_entries = UnifiedVectorFormat::GetData<list_entry_t>(map_data);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = map_data.sel->get_index(i);
 		if (!map_data.validity.RowIsValid(idx)) {
@@ -358,14 +358,14 @@ static void CreateValuesUnion(const StructNames &names, yyjson_mut_doc *doc, yyj
 		// and the rows where the member is not matching the tag
 		UnifiedVectorFormat key_data;
 		member_key_v.ToUnifiedFormat(count, key_data);
-		auto keys = (string_t *)key_data.data;
+		auto keys = UnifiedVectorFormat::GetData<string_t>(key_data);
 
 		for (idx_t i = 0; i < count; i++) {
 			auto tag_idx = tag_data.sel->get_index(i);
 			if (!tag_data.validity.RowIsValid(tag_idx)) {
 				continue;
 			}
-			auto tag = ((uint8_t *)tag_data.data)[tag_idx];
+			auto tag = (UnifiedVectorFormat::GetData<uint8_t>(tag_data))[tag_idx];
 			if (tag != member_idx) {
 				continue;
 			}
@@ -390,7 +390,7 @@ static void CreateValuesList(const StructNames &names, yyjson_mut_doc *doc, yyjs
 	// Now we add the values to the appropriate JSON arrays
 	UnifiedVectorFormat list_data;
 	value_v.ToUnifiedFormat(count, list_data);
-	auto list_entries = (list_entry_t *)list_data.data;
+	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = list_data.sel->get_index(i);
 		if (!list_data.validity.RowIsValid(idx)) {

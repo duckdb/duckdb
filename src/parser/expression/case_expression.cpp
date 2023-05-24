@@ -27,19 +27,19 @@ string CaseExpression::ToString() const {
 	return ToString<CaseExpression, ParsedExpression>(*this);
 }
 
-bool CaseExpression::Equal(const CaseExpression *a, const CaseExpression *b) {
-	if (a->case_checks.size() != b->case_checks.size()) {
+bool CaseExpression::Equal(const CaseExpression &a, const CaseExpression &b) {
+	if (a.case_checks.size() != b.case_checks.size()) {
 		return false;
 	}
-	for (idx_t i = 0; i < a->case_checks.size(); i++) {
-		if (!a->case_checks[i].when_expr->Equals(b->case_checks[i].when_expr.get())) {
+	for (idx_t i = 0; i < a.case_checks.size(); i++) {
+		if (!a.case_checks[i].when_expr->Equals(*b.case_checks[i].when_expr)) {
 			return false;
 		}
-		if (!a->case_checks[i].then_expr->Equals(b->case_checks[i].then_expr.get())) {
+		if (!a.case_checks[i].then_expr->Equals(*b.case_checks[i].then_expr)) {
 			return false;
 		}
 	}
-	if (!a->else_expr->Equals(b->else_expr.get())) {
+	if (!a.else_expr->Equals(*b.else_expr)) {
 		return false;
 	}
 	return true;

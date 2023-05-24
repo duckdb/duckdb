@@ -501,7 +501,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
 		break;
 	case CatalogType::VIEW_ENTRY: {
-		auto &base = (CreateViewInfo &)*stmt.info;
+		auto &base = stmt.info->Cast<CreateViewInfo>();
 		// bind the schema
 		auto &schema = BindCreateSchema(*stmt.info);
 		BindCreateViewInfo(base);
