@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/helper/physical_materialized_collector.hpp"
+#include "duckdb/execution/operator/result_collector/physical_materialized_collector.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/client_context.hpp"

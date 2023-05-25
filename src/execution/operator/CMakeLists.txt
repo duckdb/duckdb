@@ -1,6 +1,7 @@
 add_subdirectory(aggregate)
 add_subdirectory(filter)
 add_subdirectory(helper)
+add_subdirectory(result_collector)
 add_subdirectory(join)
 add_subdirectory(order)
 add_subdirectory(persistent)

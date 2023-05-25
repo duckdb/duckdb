@@ -12,7 +12,7 @@
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
-#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
+#include "duckdb/execution/operator/result_collector/physical_result_collector.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/attached_database.hpp"

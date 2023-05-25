@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/helper/physical_result_collector.hpp
+// duckdb/execution/operator/result_collector/physical_result_collector.hpp
 //
 //
 //===----------------------------------------------------------------------===//

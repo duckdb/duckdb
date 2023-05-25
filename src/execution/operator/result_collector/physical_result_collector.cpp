@@ -1,7 +1,7 @@
-#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
+#include "duckdb/execution/operator/result_collector/physical_result_collector.hpp"
 
-#include "duckdb/execution/operator/helper/physical_batch_collector.hpp"
-#include "duckdb/execution/operator/helper/physical_materialized_collector.hpp"
+#include "duckdb/execution/operator/result_collector/physical_batch_collector.hpp"
+#include "duckdb/execution/operator/result_collector/physical_materialized_collector.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
