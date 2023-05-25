@@ -48,49 +48,48 @@ struct BitStringAggOperation {
 	static constexpr const idx_t MAX_BIT_RANGE = 1000000000; // for now capped at 1 billion bits
 
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->is_set = false;
+	static void Initialize(STATE &state) {
+		state.is_set = false;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &data, const INPUT_TYPE *input, ValidityMask &mask,
-	                      idx_t idx) {
-		auto &bind_agg_data = data.bind_data->template Cast<BitstringAggBindData>();
-		if (!state->is_set) {
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		auto &bind_agg_data = unary_input.input.bind_data->template Cast<BitstringAggBindData>();
+		if (!state.is_set) {
 			if (bind_agg_data.min.IsNull() || bind_agg_data.max.IsNull()) {
 				throw BinderException(
 				    "Could not retrieve required statistics. Alternatively, try by providing the statistics "
 				    "explicitly: BITSTRING_AGG(col, min, max) ");
 			}
-			state->min = bind_agg_data.min.GetValue<INPUT_TYPE>();
-			state->max = bind_agg_data.max.GetValue<INPUT_TYPE>();
+			state.min = bind_agg_data.min.GetValue<INPUT_TYPE>();
+			state.max = bind_agg_data.max.GetValue<INPUT_TYPE>();
 			idx_t bit_range =
 			    GetRange(bind_agg_data.min.GetValue<INPUT_TYPE>(), bind_agg_data.max.GetValue<INPUT_TYPE>());
 			if (bit_range > MAX_BIT_RANGE) {
 				throw OutOfRangeException(
 				    "The range between min and max value (%s <-> %s) is too large for bitstring aggregation",
-				    NumericHelper::ToString(state->min), NumericHelper::ToString(state->max));
+				    NumericHelper::ToString(state.min), NumericHelper::ToString(state.max));
 			}
 			idx_t len = Bit::ComputeBitstringLen(bit_range);
 			auto target = len > string_t::INLINE_LENGTH ? string_t(new char[len], len) : string_t(len);
 			Bit::SetEmptyBitString(target, bit_range);
 
-			state->value = target;
-			state->is_set = true;
+			state.value = target;
+			state.is_set = true;
 		}
-		if (input[idx] >= state->min && input[idx] <= state->max) {
-			Execute(state, input[idx], bind_agg_data.min.GetValue<INPUT_TYPE>());
+		if (input >= state.min && input <= state.max) {
+			Execute(state, input, bind_agg_data.min.GetValue<INPUT_TYPE>());
 		} else {
 			throw OutOfRangeException("Value %s is outside of provided min and max range (%s <-> %s)",
-			                          NumericHelper::ToString(input[idx]), NumericHelper::ToString(state->min),
-			                          NumericHelper::ToString(state->max));
+			                          NumericHelper::ToString(input), NumericHelper::ToString(state.min),
+			                          NumericHelper::ToString(state.max));
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
-		OP::template Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
+		OP::template Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 	}
 
 	template <class INPUT_TYPE>
@@ -108,51 +107,51 @@ struct BitStringAggOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input, INPUT_TYPE min) {
-		Bit::SetBit(state->value, input - min, 1);
+	static void Execute(STATE &state, INPUT_TYPE input, INPUT_TYPE min) {
+		Bit::SetBit(state.value, input - min, 1);
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.is_set) {
 			return;
 		}
-		if (!target->is_set) {
+		if (!target.is_set) {
 			Assign(target, source.value);
-			target->is_set = true;
-			target->min = source.min;
-			target->max = source.max;
+			target.is_set = true;
+			target.min = source.min;
+			target.max = source.max;
 		} else {
-			Bit::BitwiseOr(source.value, target->value, target->value);
+			Bit::BitwiseOr(source.value, target.value, target.value);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE *state, INPUT_TYPE input) {
-		D_ASSERT(state->is_set == false);
+	static void Assign(STATE &state, INPUT_TYPE input) {
+		D_ASSERT(state.is_set == false);
 		if (input.IsInlined()) {
-			state->value = input;
+			state.value = input;
 		} else { // non-inlined string, need to allocate space for it
 			auto len = input.GetSize();
 			auto ptr = new char[len];
 			memcpy(ptr, input.GetData(), len);
-			state->value = string_t(ptr, len);
+			state.value = string_t(ptr, len);
 		}
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->is_set) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.is_set) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = StringVector::AddStringOrBlob(result, state->value);
+			target = StringVector::AddStringOrBlob(finalize_data.result, state.value);
 		}
 	}
 
 	template <class STATE>
-	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
-		if (state->is_set && !state->value.IsInlined()) {
-			delete[] state->value.GetData();
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		if (state.is_set && !state.value.IsInlined()) {
+			delete[] state.value.GetData();
 		}
 	}
 
@@ -162,10 +161,10 @@ struct BitStringAggOperation {
 };
 
 template <>
-void BitStringAggOperation::Execute(BitAggState<hugeint_t> *state, hugeint_t input, hugeint_t min) {
+void BitStringAggOperation::Execute(BitAggState<hugeint_t> &state, hugeint_t input, hugeint_t min) {
 	idx_t val;
 	if (Hugeint::TryCast(input - min, val)) {
-		Bit::SetBit(state->value, val, 1);
+		Bit::SetBit(state.value, val, 1);
 	} else {
 		throw OutOfRangeException("Range too large for bitstring aggregation");
 	}

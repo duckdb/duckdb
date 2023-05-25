@@ -25,8 +25,8 @@ struct ArgMinMaxStateBase {
 	}
 
 	template <typename T>
-	static inline void ReadValue(Vector &result, T &arg, T *target, idx_t idx) {
-		target[idx] = arg;
+	static inline void ReadValue(Vector &result, T &arg, T &target) {
+		target = arg;
 	}
 
 	bool is_initialized;
@@ -69,8 +69,8 @@ void ArgMinMaxStateBase::AssignValue(string_t &target, string_t new_value, bool 
 }
 
 template <>
-void ArgMinMaxStateBase::ReadValue(Vector &result, string_t &arg, string_t *target, idx_t idx) {
-	target[idx] = StringVector::AddStringOrBlob(result, arg);
+void ArgMinMaxStateBase::ReadValue(Vector &result, string_t &arg, string_t &target) {
+	target = StringVector::AddStringOrBlob(result, arg);
 }
 
 template <class A, class B>
@@ -97,54 +97,54 @@ struct ArgMinMaxState : public ArgMinMaxStateBase {
 
 template <class COMPARATOR>
 struct ArgMinMaxBase {
+
 	template <class STATE>
-	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
-		state->~STATE();
+	static void Initialize(STATE &state) {
+		new (&state) STATE;
 	}
 
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		new (state) STATE;
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		state.~STATE();
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, const A_TYPE *x_data, const B_TYPE *y_data,
-	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		if (!state->is_initialized) {
-			STATE::template AssignValue<A_TYPE>(state->arg, x_data[xidx], false);
-			STATE::template AssignValue<B_TYPE>(state->value, y_data[yidx], false);
-			state->is_initialized = true;
+	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &) {
+		if (!state.is_initialized) {
+			STATE::template AssignValue<A_TYPE>(state.arg, x, false);
+			STATE::template AssignValue<B_TYPE>(state.value, y, false);
+			state.is_initialized = true;
 		} else {
-			OP::template Execute<A_TYPE, B_TYPE, STATE>(state, x_data[xidx], y_data[yidx]);
+			OP::template Execute<A_TYPE, B_TYPE, STATE>(state, x, y);
 		}
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE>
-	static void Execute(STATE *state, A_TYPE x_data, B_TYPE y_data) {
-		if (COMPARATOR::Operation(y_data, state->value)) {
-			STATE::template AssignValue<A_TYPE>(state->arg, x_data, true);
-			STATE::template AssignValue<B_TYPE>(state->value, y_data, true);
+	static void Execute(STATE &state, A_TYPE x_data, B_TYPE y_data) {
+		if (COMPARATOR::Operation(y_data, state.value)) {
+			STATE::template AssignValue<A_TYPE>(state.arg, x_data, true);
+			STATE::template AssignValue<B_TYPE>(state.value, y_data, true);
 		}
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.is_initialized) {
 			return;
 		}
-		if (!target->is_initialized || COMPARATOR::Operation(source.value, target->value)) {
-			STATE::template AssignValue(target->arg, source.arg, target->is_initialized);
-			STATE::template AssignValue(target->value, source.value, target->is_initialized);
-			target->is_initialized = true;
+		if (!target.is_initialized || COMPARATOR::Operation(source.value, target.value)) {
+			STATE::template AssignValue(target.arg, source.arg, target.is_initialized);
+			STATE::template AssignValue(target.value, source.value, target.is_initialized);
+			target.is_initialized = true;
 		}
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->is_initialized) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.is_initialized) {
+			finalize_data.ReturnNull();
 		} else {
-			STATE::template ReadValue(result, state->arg, target, idx);
+			STATE::template ReadValue(finalize_data.result, state.arg, target);
 		}
 	}
 
@@ -156,14 +156,14 @@ struct ArgMinMaxBase {
 template <typename COMPARATOR>
 struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 	template <class STATE>
-	static void AssignVector(STATE *state, Vector &arg, const idx_t idx) {
-		if (!state->is_initialized) {
-			state->arg = new Vector(arg.GetType());
-			state->arg->SetVectorType(VectorType::CONSTANT_VECTOR);
+	static void AssignVector(STATE &state, Vector &arg, const idx_t idx) {
+		if (!state.is_initialized) {
+			state.arg = new Vector(arg.GetType());
+			state.arg->SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 		sel_t selv = idx;
 		SelectionVector sel(&selv);
-		VectorOperations::Copy(arg, *state->arg, sel, 1, 0, 0);
+		VectorOperations::Copy(arg, *state.arg, sel, 1, 0, 0);
 	}
 
 	template <class STATE>
@@ -190,49 +190,37 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 			const auto bval = bys[bidx];
 
 			const auto sidx = sdata.sel->get_index(i);
-			auto state = states[sidx];
-			if (!state->is_initialized) {
-				STATE::template AssignValue<BY_TYPE>(state->value, bval, false);
+			auto &state = *states[sidx];
+			if (!state.is_initialized) {
+				STATE::template AssignValue<BY_TYPE>(state.value, bval, false);
 				AssignVector(state, arg, i);
-				state->is_initialized = true;
+				state.is_initialized = true;
 
-			} else if (COMPARATOR::template Operation<BY_TYPE>(bval, state->value)) {
-				STATE::template AssignValue<BY_TYPE>(state->value, bval, true);
+			} else if (COMPARATOR::template Operation<BY_TYPE>(bval, state.value)) {
+				STATE::template AssignValue<BY_TYPE>(state.value, bval, true);
 				AssignVector(state, arg, i);
 			}
 		}
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.is_initialized) {
 			return;
 		}
-		if (!target->is_initialized || COMPARATOR::Operation(source.value, target->value)) {
-			STATE::template AssignValue(target->value, source.value, target->is_initialized);
+		if (!target.is_initialized || COMPARATOR::Operation(source.value, target.value)) {
+			STATE::template AssignValue(target.value, source.value, target.is_initialized);
 			AssignVector(target, *source.arg, 0);
-			target->is_initialized = true;
+			target.is_initialized = true;
 		}
 	}
 
-	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->is_initialized) {
-			// we need to use SetNull here
-			// since for STRUCT columns only setting the validity mask of the struct is incorrect
-			// as for a struct column, we need to also set ALL child columns to NULL
-			switch (result.GetVectorType()) {
-			case VectorType::FLAT_VECTOR:
-				FlatVector::SetNull(result, idx, true);
-				break;
-			case VectorType::CONSTANT_VECTOR:
-				ConstantVector::SetNull(result, true);
-				break;
-			default:
-				throw InternalException("Invalid result vector type for nested arg_min/max");
-			}
+	template <class STATE>
+	static void Finalize(STATE &state, AggregateFinalizeData &finalize_data) {
+		if (!state.is_initialized) {
+			finalize_data.ReturnNull();
 		} else {
-			VectorOperations::Copy(*state->arg, result, 1, 0, idx);
+			VectorOperations::Copy(*state.arg, finalize_data.result, 1, 0, finalize_data.result_idx);
 		}
 	}
 
@@ -247,11 +235,10 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR> {
 template <class OP, class ARG_TYPE, class BY_TYPE>
 AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type, const LogicalType &type) {
 	using STATE = ArgMinMaxState<ARG_TYPE, BY_TYPE>;
-	return AggregateFunction({type, by_type}, type, AggregateFunction::StateSize<STATE>,
-	                         AggregateFunction::StateInitialize<STATE, OP>, OP::template Update<STATE>,
-	                         AggregateFunction::StateCombine<STATE, OP>,
-	                         AggregateFunction::StateFinalize<STATE, void, OP>, nullptr, OP::Bind,
-	                         AggregateFunction::StateDestroy<STATE, OP>);
+	return AggregateFunction(
+	    {type, by_type}, type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
+	    OP::template Update<STATE>, AggregateFunction::StateCombine<STATE, OP>,
+	    AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, OP::Bind, AggregateFunction::StateDestroy<STATE, OP>);
 }
 
 template <class OP, class ARG_TYPE>

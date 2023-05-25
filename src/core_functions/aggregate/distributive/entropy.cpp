@@ -27,38 +27,38 @@ struct EntropyState {
 
 struct EntropyFunctionBase {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->distinct = nullptr;
-		state->count = 0;
+	static void Initialize(STATE &state) {
+		state.distinct = nullptr;
+		state.count = 0;
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.distinct) {
 			return;
 		}
-		if (!target->distinct) {
-			target->Assign(source);
+		if (!target.distinct) {
+			target.Assign(source);
 			return;
 		}
 		for (auto &val : *source.distinct) {
 			auto value = val.first;
-			(*target->distinct)[value] += val.second;
+			(*target.distinct)[value] += val.second;
 		}
-		target->count += source.count;
+		target.count += source.count;
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		double count = state->count;
-		if (state->distinct) {
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		double count = state.count;
+		if (state.distinct) {
 			double entropy = 0;
-			for (auto &val : *state->distinct) {
+			for (auto &val : *state.distinct) {
 				entropy += (val.second / count) * log2(count / val.second);
 			}
-			target[idx] = entropy;
+			target = entropy;
 		} else {
-			target[idx] = 0;
+			target = 0;
 		}
 	}
 
@@ -66,47 +66,47 @@ struct EntropyFunctionBase {
 		return true;
 	}
 	template <class STATE>
-	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
-		if (state->distinct) {
-			delete state->distinct;
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		if (state.distinct) {
+			delete state.distinct;
 		}
 	}
 };
 
 struct EntropyFunction : EntropyFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
-		if (!state->distinct) {
-			state->distinct = new unordered_map<INPUT_TYPE, idx_t>();
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		if (!state.distinct) {
+			state.distinct = new unordered_map<INPUT_TYPE, idx_t>();
 		}
-		(*state->distinct)[input[idx]]++;
-		state->count++;
+		(*state.distinct)[input]++;
+		state.count++;
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 		}
 	}
 };
 
 struct EntropyFunctionString : EntropyFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
-		if (!state->distinct) {
-			state->distinct = new unordered_map<string, idx_t>();
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		if (!state.distinct) {
+			state.distinct = new unordered_map<string, idx_t>();
 		}
-		auto value = input[idx].GetString();
-		(*state->distinct)[value]++;
-		state->count++;
+		auto value = input.GetString();
+		(*state.distinct)[value]++;
+		state.count++;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 		}
 	}
 };
