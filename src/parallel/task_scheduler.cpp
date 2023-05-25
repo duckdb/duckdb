@@ -148,11 +148,15 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 				task.reset();
 				break;
 			}
-		} else if (!idle) {
+			continue;
+		}
+
+		// threads that didn't get a task clean up
+		if (!idle) {
 			idle = true;
 			Allocator::ThreadIdle();
+			Allocator::ThreadCleanup();
 		}
-		Allocator::ThreadCleanup();
 	}
 #else
 	throw NotImplementedException("DuckDB was compiled without threads! Background thread loop is not allowed.");
