@@ -225,4 +225,20 @@ void CatalogSearchPath::SetPaths(vector<CatalogSearchEntry> new_paths) {
 	paths.emplace_back(SYSTEM_CATALOG, "pg_catalog");
 }
 
+bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const string &catalog_name,
+                                           const string &schema_name) {
+	for (auto &path : paths) {
+		if (path.schema != schema_name) {
+			continue;
+		}
+		if (path.catalog == catalog_name) {
+			return true;
+		}
+		if (IsInvalidCatalog(path.catalog) && catalog_name == DatabaseManager::GetDefaultDatabase(context)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 } // namespace duckdb
