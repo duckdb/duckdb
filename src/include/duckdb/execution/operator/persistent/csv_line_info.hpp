@@ -22,8 +22,8 @@ public:
 	              bool stop_at_first = true);
 	//! Verify if the CSV File was read correctly from [0,batch_idx] batches.
 	void Verify(idx_t file_idx, idx_t batch_idx, idx_t cur_first_pos);
-	//! Lines read per batch, <batch_index,count>
-	unordered_map<idx_t, idx_t> lines_read;
+	//! Lines read per batch, <file_index, <batch_index, count>>
+	vector<unordered_map<idx_t, idx_t>> lines_read;
 	//! Set of batches that have been initialized but are not yet finished.
 	vector<set<idx_t>> current_batches;
 	//! Pointer to CSV Reader Mutex

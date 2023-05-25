@@ -268,10 +268,6 @@ public:
 	      line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
 		file_handle->DisableReset();
 		current_file_path = files_path_p[0];
-		line_info.lines_read[0] = rows_to_skip;
-		if (has_header) {
-			line_info.lines_read[0]++;
-		}
 		file_size = file_handle->FileSize();
 		first_file_size = file_size;
 		on_disk_file = file_handle->OnDiskFile();
@@ -298,10 +294,17 @@ public:
 		// Initialize all the book-keeping variables
 		auto file_count = files_path_p.size();
 		line_info.current_batches.resize(file_count);
+		line_info.lines_read.resize(file_count);
 		tuple_start.resize(file_count);
 		tuple_end.resize(file_count);
 		tuple_end_to_batch.resize(file_count);
 		batch_to_tuple_end.resize(file_count);
+
+		// Initialize the lines read
+		line_info.lines_read[0][0] = rows_to_skip;
+		if (has_header) {
+			line_info.lines_read[0][0]++;
+		}
 	}
 	ParallelCSVGlobalState() : line_info(main_mutex, batch_to_tuple_end, tuple_start, tuple_end) {
 		running_threads = MaxThreads();
@@ -507,10 +510,13 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 			current_csv_position = 0;
 			file_number++;
 			local_batch_index = 0;
+			
+			line_info.lines_read[file_number][local_batch_index] = (bind_data.options.has_header ? 1 : 0);
+			
 			current_buffer =
 			    make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
 			next_buffer = shared_ptr<CSVBuffer>(
-			    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
+			    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());			
 		} else {
 			// We are done scanning.
 			reader.reset();
@@ -518,7 +524,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		}
 	}
 	// set up the current buffer
-	line_info.current_batches.back().insert(local_batch_index);
+	line_info.current_batches[file_number].insert(local_batch_index);
 	auto result = make_uniq<CSVBufferRead>(current_buffer, next_buffer, next_byte, next_byte + bytes_per_local_state,
 	                                       batch_index++, local_batch_index++, &line_info);
 	// move the byte index of the CSV reader to the next buffer
@@ -563,9 +569,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		reader->SetBufferRead(std::move(result));
 	}
 
-	// set the linenr of the reader, taking into account the header
-	reader->linenr = bind_data.options.has_header ? 1 : 0;
-
+	
 	return true;
 }
 void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions, idx_t file_number_p, idx_t batch_idx) {
@@ -586,7 +590,7 @@ void ParallelCSVGlobalState::UpdateLinesRead(CSVBufferRead &buffer_read, idx_t f
 	auto lines_read = buffer_read.lines_read;
 	lock_guard<mutex> parallel_lock(main_mutex);
 	line_info.current_batches[file_idx].erase(batch_idx);
-	line_info.lines_read[batch_idx] += lines_read;
+	line_info.lines_read[file_idx][batch_idx] += lines_read;
 }
 
 bool LineInfo::CanItGetLine(idx_t file_idx, idx_t batch_idx) {
@@ -617,10 +621,10 @@ idx_t LineInfo::GetLine(idx_t batch_idx, idx_t line_error, idx_t file_idx, idx_t
 		// Figure out the amount of lines read in the current file
 		auto &file_batches = current_batches[file_idx];
 		for (auto &batch : file_batches) {
-			if (batch >= batch_idx) {
+			if (batch > batch_idx) {
 				break;
 			}
-			line_count += lines_read[batch];
+			line_count += lines_read[file_idx][batch];
 		}
 		return line_count + line_error + 1;
 	}
@@ -631,10 +635,10 @@ idx_t LineInfo::GetLine(idx_t batch_idx, idx_t line_error, idx_t file_idx, idx_t
 		return first_line + 1;
 	}
 	for (idx_t i = 0; i <= batch_idx; i++) {
-		if (lines_read.find(i) == lines_read.end() && i != batch_idx) {
+		if (lines_read[file_idx].find(i) == lines_read[file_idx].end() && i != batch_idx) {
 			throw InternalException("Missing batch index on Parallel CSV Reader GetLine");
 		}
-		line_count += lines_read[i];
+		line_count += lines_read[file_idx][i];
 	}
 
 	// before we are done, if this is not a call in Verify() we must check Verify up to this batch
@@ -723,7 +727,9 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 			}
 			csv_global_state.UpdateLinesRead(*csv_local_state.csv_reader->buffer, csv_local_state.csv_reader->file_idx);
 			auto has_next = csv_global_state.Next(context, bind_data, csv_local_state.csv_reader);
-
+			if (csv_local_state.csv_reader) {
+				csv_local_state.csv_reader->linenr = 0;
+			}
 			if (!has_next) {
 				csv_global_state.DecrementThread();
 				break;
