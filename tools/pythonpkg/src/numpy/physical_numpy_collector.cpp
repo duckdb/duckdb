@@ -1,7 +1,8 @@
-#include "duckdb/execution/operator/result_collector/physical_numpy_collector.hpp"
+#include "duckdb_python/numpy/physical_numpy_collector.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/main/query_result/materialized_query_result.hpp"
+#include "duckdb_python/numpy/numpy_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb_python/numpy/array_wrapper.hpp"
 
 namespace duckdb {
 
@@ -15,20 +16,19 @@ PhysicalNumpyCollector::PhysicalNumpyCollector(PreparedStatementData &data, bool
 class NumpyCollectorGlobalState : public GlobalSinkState {
 public:
 	mutex glock;
-	unique_ptr<ColumnDataCollection> collection;
+	unique_ptr<NumpyResultConversion> collection;
 	shared_ptr<ClientContext> context;
 };
 
 class NumpyCollectorLocalState : public LocalSinkState {
 public:
-	unique_ptr<ColumnDataCollection> collection;
-	ColumnDataAppendState append_state;
+	unique_ptr<NumpyResultConversion> collection;
 };
 
 SinkResultType PhysicalNumpyCollector::Sink(ExecutionContext &context, DataChunk &chunk,
                                             OperatorSinkInput &input) const {
 	auto &lstate = input.local_state.Cast<NumpyCollectorLocalState>();
-	lstate.collection->Append(lstate.append_state, chunk);
+	lstate.collection->Append(chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -56,18 +56,17 @@ unique_ptr<GlobalSinkState> PhysicalNumpyCollector::GetGlobalSinkState(ClientCon
 
 unique_ptr<LocalSinkState> PhysicalNumpyCollector::GetLocalSinkState(ExecutionContext &context) const {
 	auto state = make_uniq<NumpyCollectorLocalState>();
-	state->collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
-	state->collection->InitializeAppend(state->append_state);
+	state->collection = make_uniq<NumpyResultConversion>(types, STANDARD_VECTOR_SIZE);
 	return std::move(state);
 }
 
 unique_ptr<QueryResult> PhysicalNumpyCollector::GetResult(GlobalSinkState &state) {
 	auto &gstate = state.Cast<NumpyCollectorGlobalState>();
 	if (!gstate.collection) {
-		gstate.collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+		gstate.collection = make_uniq<NumpyResultConversion>(types, 0);
 	}
-	auto result = make_uniq<MaterializedQueryResult>(statement_type, properties, names, std::move(gstate.collection),
-	                                                 gstate.context->GetClientProperties());
+	auto result = make_uniq<NumpyQueryResult>(statement_type, properties, names, std::move(gstate.collection),
+	                                          gstate.context->GetClientProperties());
 	return std::move(result);
 }
 

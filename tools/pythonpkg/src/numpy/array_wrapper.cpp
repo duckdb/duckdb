@@ -604,6 +604,12 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 	data = data_ptr_cast(array.mutable_data());
 }
 
+void RawArrayWrapper::Combine(RawArrayWrapper &other) {
+	D_ASSERT(other.type_width == type_width);
+	Resize(count + other.count);
+	memcpy(data + (type_width * count), other.data, (type_width * other.count));
+}
+
 void RawArrayWrapper::Resize(idx_t new_capacity) {
 	vector<py::ssize_t> new_shape {py::ssize_t(new_capacity)};
 	array.resize(new_shape, false);
@@ -623,6 +629,11 @@ void ArrayWrapper::Initialize(idx_t capacity) {
 void ArrayWrapper::Resize(idx_t new_capacity) {
 	data->Resize(new_capacity);
 	mask->Resize(new_capacity);
+}
+
+void ArrayWrapper::Combine(ArrayWrapper &other) {
+	data->Combine(*other.data);
+	mask->Combine(*other.mask);
 }
 
 void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {

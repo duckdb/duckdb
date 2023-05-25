@@ -35,6 +35,7 @@ public:
 	void Initialize(idx_t capacity);
 	void Resize(idx_t new_capacity);
 	void Append(idx_t current_offset, Vector &input, idx_t count);
+	void Combine(RawArrayWrapper &other);
 };
 
 struct ArrayWrapper {
@@ -48,6 +49,7 @@ public:
 	void Initialize(idx_t capacity);
 	void Resize(idx_t new_capacity);
 	void Append(idx_t current_offset, Vector &input, idx_t count);
+	void Combine(ArrayWrapper &other);
 	py::object ToArray(idx_t count) const;
 	const LogicalType &Type() const;
 };
@@ -67,8 +69,46 @@ public:
 		return types;
 	}
 
+	bool CompareTypes(NumpyResultConversion &other) const {
+		if (other.owned_data.size() != owned_data.size()) {
+			return false;
+		}
+		for (idx_t i = 0; i < owned_data.size(); i++) {
+			auto &a = owned_data[i];
+			auto &b = other.owned_data[i];
+			if (a.Type() != b.Type()) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	//===--------------------------------------------------------------------===//
+	// Combine
+	//===--------------------------------------------------------------------===//
+	void Combine(NumpyResultConversion &other) {
+		if (other.count == 0) {
+			return;
+		}
+		D_ASSERT(CompareTypes(other));
+		for (idx_t i = 0; i < owned_data.size(); i++) {
+			auto &this_data = owned_data[i];
+			auto &other_data = other.owned_data[i];
+			this_data.Combine(other_data);
+		}
+		capacity = count + other.count;
+		count = capacity;
+		other.Reset();
+	}
+
 	idx_t Count() const {
 		return count;
+	}
+
+	void Reset() {
+		owned_data.clear();
+		count = 0;
+		capacity = 0;
 	}
 
 	const LogicalType &Type(idx_t col_idx) {
