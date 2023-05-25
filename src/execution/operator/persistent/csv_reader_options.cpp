@@ -249,10 +249,11 @@ void BufferedCSVReaderOptions::SetRejectsOptions(const named_parameter_map_t &pa
 				throw BinderException(
 				    "REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
 			}
-			rejects_limit = ParseInteger(value, loption);
-			if (rejects_limit < 0) {
+			int64_t limit = ParseInteger(value, loption);
+			if (limit < 0) {
 				throw BinderException("Unsupported parameter for REJECTS_LIMIT: cannot be smaller than 0");
 			}
+			rejects_limit = limit;
 		}
 	}
 }
