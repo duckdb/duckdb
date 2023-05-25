@@ -64,7 +64,7 @@ static void TemplatedMatchType(UnifiedVectorFormat &col, Vector &rows, Selection
 	idx_t idx_in_entry;
 	ValidityBytes::GetEntryIndex(col_no, entry_idx, idx_in_entry);
 
-	auto data = (T *)col.data;
+	auto data = UnifiedVectorFormat::GetData<T>(col);
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 	idx_t match_count = 0;
 	if (!col.validity.AllValid()) {

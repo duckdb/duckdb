@@ -64,12 +64,12 @@ string ColumnRefExpression::ToString() const {
 	return result;
 }
 
-bool ColumnRefExpression::Equal(const ColumnRefExpression *a, const ColumnRefExpression *b) {
-	if (a->column_names.size() != b->column_names.size()) {
+bool ColumnRefExpression::Equal(const ColumnRefExpression &a, const ColumnRefExpression &b) {
+	if (a.column_names.size() != b.column_names.size()) {
 		return false;
 	}
-	for (idx_t i = 0; i < a->column_names.size(); i++) {
-		if (!StringUtil::CIEquals(a->column_names[i], b->column_names[i])) {
+	for (idx_t i = 0; i < a.column_names.size(); i++) {
+		if (!StringUtil::CIEquals(a.column_names[i], b.column_names[i])) {
 			return false;
 		}
 	}

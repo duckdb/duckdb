@@ -21,7 +21,7 @@ public:
 	ListColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
 	                 idx_t max_define_p, idx_t max_repeat_p, duckdb::unique_ptr<ColumnReader> child_column_reader_p);
 
-	idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
+	idx_t Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out, data_ptr_t repeat_out,
 	           Vector &result_out) override;
 
 	void ApplyPendingSkips(idx_t num_values) override;

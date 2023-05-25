@@ -40,7 +40,7 @@ public:
 	}
 
 	template <class OP = EmptyRLEWriter>
-	void Update(T *data, ValidityMask &validity, idx_t idx) {
+	void Update(const T *data, ValidityMask &validity, idx_t idx) {
 		if (validity.RowIsValid(idx)) {
 			if (all_null) {
 				// no value seen yet
@@ -94,11 +94,11 @@ unique_ptr<AnalyzeState> RLEInitAnalyze(ColumnData &col_data, PhysicalType type)
 
 template <class T>
 bool RLEAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
-	auto &rle_state = (RLEAnalyzeState<T> &)state;
+	auto &rle_state = state.template Cast<RLEAnalyzeState<T>>();
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
-	auto data = (T *)vdata.data;
+	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		rle_state.state.Update(data, vdata.validity, idx);
@@ -108,7 +108,7 @@ bool RLEAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 
 template <class T>
 idx_t RLEFinalAnalyze(AnalyzeState &state) {
-	auto &rle_state = (RLEAnalyzeState<T> &)state;
+	auto &rle_state = state.template Cast<RLEAnalyzeState<T>>();
 	return (sizeof(rle_count_t) + sizeof(T)) * rle_state.state.seen_count;
 }
 
@@ -124,7 +124,7 @@ struct RLECompressState : public CompressionState {
 	struct RLEWriter {
 		template <class VALUE_TYPE>
 		static void Operation(VALUE_TYPE value, rle_count_t count, void *dataptr, bool is_null) {
-			auto state = (RLECompressState<T, WRITE_STATISTICS> *)dataptr;
+			auto state = reinterpret_cast<RLECompressState<T, WRITE_STATISTICS> *>(dataptr);
 			state->WriteValue(value, count, is_null);
 		}
 	};
@@ -156,7 +156,7 @@ struct RLECompressState : public CompressionState {
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		auto data = (T *)vdata.data;
+		auto data = UnifiedVectorFormat::GetData<T>(vdata);
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
 			state.template Update<RLECompressState<T, WRITE_STATISTICS>::RLEWriter>(data, vdata.validity, idx);
@@ -289,14 +289,14 @@ unique_ptr<SegmentScanState> RLEInitScan(ColumnSegment &segment) {
 //===--------------------------------------------------------------------===//
 template <class T>
 void RLESkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
-	auto &scan_state = (RLEScanState<T> &)*state.scan_state;
+	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 	scan_state.Skip(segment, skip_count);
 }
 
 template <class T>
 void RLEScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                     idx_t result_offset) {
-	auto &scan_state = (RLEScanState<T> &)*state.scan_state;
+	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto data_pointer = (T *)(data + RLEConstants::RLE_HEADER_SIZE);

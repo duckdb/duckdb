@@ -27,7 +27,7 @@ struct FirstFunctionBase {
 template <bool LAST, bool SKIP_NULLS>
 struct FirstFunction : public FirstFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
 		if (LAST || !state->is_set) {
 			if (!mask.RowIsValid(idx)) {
 				if (!SKIP_NULLS) {
@@ -43,7 +43,7 @@ struct FirstFunction : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
 	                              ValidityMask &mask, idx_t count) {
 		Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 	}
@@ -94,7 +94,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &input_data, INPUT_TYPE *input, ValidityMask &mask,
+	static void Operation(STATE *state, AggregateInputData &input_data, const INPUT_TYPE *input, ValidityMask &mask,
 	                      idx_t idx) {
 		if (LAST || !state->is_set) {
 			SetValue(state, input_data, input[idx], !mask.RowIsValid(idx));
@@ -102,7 +102,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
+	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
 	                              ValidityMask &mask, idx_t count) {
 		Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
 	}
@@ -171,7 +171,7 @@ struct FirstVectorFunction {
 		UnifiedVectorFormat sdata;
 		state_vector.ToUnifiedFormat(count, sdata);
 
-		auto states = (FirstStateVector **)sdata.data;
+		auto states = UnifiedVectorFormat::GetData<FirstStateVector *>(sdata);
 		for (idx_t i = 0; i < count; i++) {
 			const auto idx = idata.sel->get_index(i);
 			if (SKIP_NULLS && !idata.validity.RowIsValid(idx)) {
