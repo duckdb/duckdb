@@ -21,7 +21,7 @@ struct DefaultType {
 
 using builtin_type_array = std::array<DefaultType, 70>;
 
-static const builtin_type_array BUILTIN_TYPES{{
+static constexpr const builtin_type_array BUILTIN_TYPES{{
 	{"decimal", LogicalTypeId::DECIMAL},
 	{"dec", LogicalTypeId::DECIMAL},
 	{"numeric", LogicalTypeId::DECIMAL},

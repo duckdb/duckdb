@@ -60,7 +60,7 @@ new_text += f'''
 using builtin_type_array = std::array<DefaultType, {TYPE_COUNT}>;
 '''
 new_text += '''
-static const builtin_type_array BUILTIN_TYPES{{
+static constexpr const builtin_type_array BUILTIN_TYPES{{
 '''
 
 type_text = ",\n".join(type_entries)
