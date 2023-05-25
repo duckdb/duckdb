@@ -436,6 +436,15 @@ struct SchemaSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct SchemaOrCatalogSetting {
+	static constexpr const char *Name = "schema_or_catalog";
+	static constexpr const char *Description = "Sets the default catalog or schema (or both).";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct SearchPathSetting {
 	static constexpr const char *Name = "search_path";
 	static constexpr const char *Description =
