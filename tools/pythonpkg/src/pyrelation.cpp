@@ -12,7 +12,7 @@
 #include "duckdb/parser/statement/pragma_statement.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #include "duckdb/main/query_result.hpp"
-#include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/query_result/materialized_query_result.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 

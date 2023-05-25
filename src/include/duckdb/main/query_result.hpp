@@ -16,7 +16,7 @@
 namespace duckdb {
 struct BoxRendererConfig;
 
-enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDING_RESULT };
+enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDING_RESULT, NUMPY_RESULT };
 
 //! A set of properties from the client context that can be used to interpret the query result
 struct ClientProperties {

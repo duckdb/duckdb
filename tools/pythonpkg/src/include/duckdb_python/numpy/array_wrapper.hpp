@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/array_wrapper.hpp
+// duckdb_python/numpy/array_wrapper.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -57,6 +57,19 @@ public:
 	NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity);
 
 	void Append(DataChunk &chunk);
+
+	vector<LogicalType> Types() const {
+		vector<LogicalType> types;
+		types.reserve(owned_data.size());
+		for (auto &data : owned_data) {
+			types.push_back(data.Type());
+		}
+		return types;
+	}
+
+	idx_t Count() const {
+		return count;
+	}
 
 	const LogicalType &Type(idx_t col_idx) {
 		return owned_data[col_idx].Type();
