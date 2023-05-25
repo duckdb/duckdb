@@ -262,6 +262,9 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
 }
 
 void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result) {
+	// We want these to be in-memory so we don't have to copy over strings to the dictionary
+	D_ASSERT(buffer.GetAllocatorType() == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
+
 	// set up a new row group for this chunk collection
 	auto &row_group = result.row_group;
 	row_group.num_rows = buffer.Count();
@@ -288,6 +291,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 		}
 		states.push_back(std::move(write_state));
 	}
+	result.heaps = buffer.GetHeapReferences();
 }
 
 void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {

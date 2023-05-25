@@ -55,9 +55,9 @@ static T GetJemallocCTL(const char *name) {
 }
 
 void JEMallocExtension::ThreadCleanup() {
+	static const string PURGE_ALL = StringUtil::Format("arena.%lld.purge", idx_t(MALLCTL_ARENAS_ALL));
 	SetJemallocCTL("thread.tcache.flush");
-	const auto name = StringUtil::Format("arena.%lld.purge", idx_t(MALLCTL_ARENAS_ALL));
-	SetJemallocCTL(name.c_str());
+	SetJemallocCTL(PURGE_ALL.c_str());
 }
 
 void JEMallocExtension::ThreadIdle() {

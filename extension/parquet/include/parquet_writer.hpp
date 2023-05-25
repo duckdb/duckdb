@@ -28,6 +28,7 @@ class FileOpener;
 struct PreparedRowGroup {
 	duckdb_parquet::format::RowGroup row_group;
 	vector<unique_ptr<ColumnWriterState>> states;
+	vector<shared_ptr<StringHeap>> heaps;
 };
 
 class ParquetWriter {
