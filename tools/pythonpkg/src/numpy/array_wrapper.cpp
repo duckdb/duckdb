@@ -758,6 +758,10 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	mask->count += count;
 }
 
+const LogicalType &ArrayWrapper::Type() const {
+	return data->type;
+}
+
 py::object ArrayWrapper::ToArray(idx_t count) const {
 	D_ASSERT(data->array && mask->array);
 	data->Resize(data->count);
@@ -803,6 +807,17 @@ void NumpyResultConversion::Append(DataChunk &chunk) {
 	auto chunk_types = chunk.GetTypes();
 	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
 		owned_data[col_idx].Append(count, chunk.data[col_idx], chunk.size());
+		auto &type = Type(col_idx);
+		if (type.id() == LogicalTypeId::ENUM) {
+			// It's an ENUM type, in addition to converting the codes we must convert the categories
+			if (categories.find(col_idx) == categories.end()) {
+				auto &categories_list = EnumType::GetValuesInsertOrder(type);
+				auto categories_size = EnumType::GetSize(type);
+				for (idx_t i = 0; i < categories_size; i++) {
+					categories[col_idx].append(py::cast(categories_list.GetValue(i).ToString()));
+				}
+			}
+		}
 	}
 	count += chunk.size();
 #ifdef DEBUG

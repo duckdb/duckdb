@@ -129,35 +129,7 @@ py::dict DuckDBPyResult::FetchNumpy() {
 }
 
 void DuckDBPyResult::FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name) {
-	if (result->types[col_idx].id() == LogicalTypeId::ENUM) {
-		// first we (might) need to create the categorical type
-		if (categories_type.find(col_idx) == categories_type.end()) {
-			// Equivalent to: pandas.CategoricalDtype(['a', 'b'], ordered=True)
-			categories_type[col_idx] = py::module::import("pandas").attr("CategoricalDtype")(categories[col_idx], true);
-		}
-		// Equivalent to: pandas.Categorical.from_codes(codes=[0, 1, 0, 1], dtype=dtype)
-		res[name] = py::module::import("pandas")
-		                .attr("Categorical")
-		                .attr("from_codes")(conversion.ToArray(col_idx), py::arg("dtype") = categories_type[col_idx]);
-	} else {
-		res[name] = conversion.ToArray(col_idx);
-	}
-}
-
-void InsertCategory(QueryResult &result, unordered_map<idx_t, py::list> &categories) {
-	for (idx_t col_idx = 0; col_idx < result.types.size(); col_idx++) {
-		auto &type = result.types[col_idx];
-		if (type.id() == LogicalTypeId::ENUM) {
-			// It's an ENUM type, in addition to converting the codes we must convert the categories
-			if (categories.find(col_idx) == categories.end()) {
-				auto &categories_list = EnumType::GetValuesInsertOrder(type);
-				auto categories_size = EnumType::GetSize(type);
-				for (idx_t i = 0; i < categories_size; i++) {
-					categories[col_idx].append(py::cast(categories_list.GetValue(i).ToString()));
-				}
-			}
-		}
-	}
+	res[name] = conversion.ToArray(col_idx);
 }
 
 py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
@@ -179,7 +151,6 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 		for (auto &chunk : materialized.Collection().Chunks()) {
 			conversion.Append(chunk);
 		}
-		InsertCategory(materialized, categories);
 		materialized.Collection().Reset();
 	} else {
 		D_ASSERT(result->type == QueryResultType::STREAM_RESULT);
@@ -201,7 +172,6 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 				break;
 			}
 			conversion.Append(*chunk);
-			InsertCategory(stream_result, categories);
 		}
 	}
 
