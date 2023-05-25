@@ -789,6 +789,7 @@ static bool TypeSupportsRegularUpdate(const LogicalType &type) {
 }
 
 void DuckTableEntry::BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update) {
+	TableCatalogEntry::BindUpdateConstraints(get, proj, update);
 	// check the constraints and indexes of the table to see if we need to project any additional columns
 	// we do this for indexes with multiple columns and CHECK constraints in the UPDATE clause
 	// suppose we have a constraint CHECK(i + j < 10); now we need both i and j to check the constraint
