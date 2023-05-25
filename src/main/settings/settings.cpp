@@ -997,27 +997,6 @@ Value SchemaSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Schema Or Catalog
-//===--------------------------------------------------------------------===//
-void SchemaOrCatalogSetting::ResetLocal(ClientContext &context) {
-	// FIXME: catalog_search_path is controlled by both SchemaSetting and SearchPathSetting
-	auto &client_data = ClientData::Get(context);
-	client_data.catalog_search_path->Reset();
-}
-
-void SchemaOrCatalogSetting::SetLocal(ClientContext &context, const Value &input) {
-	auto parameter = input.ToString();
-	auto &client_data = ClientData::Get(context);
-	client_data.catalog_search_path->Set(CatalogSearchEntry::Parse(parameter), CatalogSetPathType::SET_USE);
-}
-
-Value SchemaOrCatalogSetting::GetSetting(ClientContext &context) {
-	auto &client_data = ClientData::Get(context);
-	auto &default_entry = client_data.catalog_search_path->GetDefault();
-	return Value(default_entry.catalog + "." + default_entry.schema);
-}
-
-//===--------------------------------------------------------------------===//
 // Search Path
 //===--------------------------------------------------------------------===//
 void SearchPathSetting::ResetLocal(ClientContext &context) {

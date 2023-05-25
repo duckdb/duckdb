@@ -14,7 +14,7 @@ unique_ptr<SetStatement> Transformer::TransformUse(duckdb_libpgquery::PGUseStmt 
 	} else {
 		name = qualified_name.schema + "." + qualified_name.name;
 	}
-	return make_uniq<SetVariableStatement>("schema_or_catalog", std::move(name), SetScope::AUTOMATIC);
+	return make_uniq<SetVariableStatement>("schema", std::move(name), SetScope::AUTOMATIC);
 }
 
 } // namespace duckdb

@@ -100,7 +100,6 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL_ALIAS("profiling_output", ProfileOutputSetting),
                                                  DUCKDB_LOCAL(ProgressBarTimeSetting),
                                                  DUCKDB_LOCAL(SchemaSetting),
-                                                 DUCKDB_LOCAL(SchemaOrCatalogSetting),
                                                  DUCKDB_LOCAL(SearchPathSetting),
                                                  DUCKDB_GLOBAL(TempDirectorySetting),
                                                  DUCKDB_GLOBAL(ThreadsSetting),
