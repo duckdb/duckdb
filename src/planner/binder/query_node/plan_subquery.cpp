@@ -337,7 +337,7 @@ void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 		D_ASSERT(root);
 		if (root->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
 			// Found a dependent join, flatten it
-			auto &new_root = (LogicalDependentJoin &)*root;
+			auto &new_root = root->Cast<LogicalDependentJoin>();
 			root = binder.PlanLateralJoin(std::move(new_root.children[0]), std::move(new_root.children[1]),
 			                              new_root.correlated_columns, new_root.join_type,
 			                              std::move(new_root.join_condition));
