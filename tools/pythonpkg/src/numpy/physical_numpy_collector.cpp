@@ -16,7 +16,7 @@ PhysicalNumpyCollector::PhysicalNumpyCollector(PreparedStatementData &data, bool
 class NumpyCollectorGlobalState : public GlobalSinkState {
 public:
 	mutex glock;
-	unique_ptr<NumpyResultConversion> collection;
+	vector<unique_ptr<NumpyResultConversion>> collections;
 	shared_ptr<ClientContext> context;
 };
 
@@ -48,11 +48,7 @@ void PhysicalNumpyCollector::Combine(ExecutionContext &context, GlobalSinkState 
 	}
 
 	lock_guard<mutex> l(gstate.glock);
-	if (!gstate.collection) {
-		gstate.collection = std::move(lstate.collection);
-	} else {
-		gstate.collection->Combine(*lstate.collection);
-	}
+	gstate.collections.push_back(std::move(lstate.collection));
 }
 
 unique_ptr<GlobalSinkState> PhysicalNumpyCollector::GetGlobalSinkState(ClientContext &context) const {
@@ -72,11 +68,19 @@ unique_ptr<LocalSinkState> PhysicalNumpyCollector::GetLocalSinkState(ExecutionCo
 
 unique_ptr<QueryResult> PhysicalNumpyCollector::GetResult(GlobalSinkState &state) {
 	auto &gstate = state.Cast<NumpyCollectorGlobalState>();
-	if (!gstate.collection) {
-		py::gil_scoped_acquire gil;
-		gstate.collection = make_uniq<NumpyResultConversion>(types, 0);
+	idx_t result_size = 0;
+	for (auto &collection : gstate.collections) {
+		result_size += collection->Count();
 	}
-	auto result = make_uniq<NumpyQueryResult>(statement_type, properties, names, std::move(gstate.collection),
+	unique_ptr<NumpyResultConversion> collection;
+	{
+		py::gil_scoped_acquire gil;
+		collection = make_uniq<NumpyResultConversion>(types, result_size);
+		if (result_size != 0) {
+			collection->Merge(gstate.collections);
+		}
+	}
+	auto result = make_uniq<NumpyQueryResult>(statement_type, properties, names, std::move(collection),
 	                                          gstate.context->GetClientProperties());
 	return std::move(result);
 }

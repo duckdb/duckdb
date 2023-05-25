@@ -101,6 +101,44 @@ public:
 		other.Reset();
 	}
 
+	const py::array &InternalArray(idx_t col_idx) const {
+		return owned_data[col_idx].data->array;
+	}
+
+	const py::array &InternalMask(idx_t col_idx) const {
+		return owned_data[col_idx].mask->array;
+	}
+
+	void Merge(vector<unique_ptr<NumpyResultConversion>> &collections) {
+		for (idx_t col_idx; col_idx < owned_data.size(); col_idx++) {
+
+			// Collect all the arrays of the collections for this column
+			py::tuple arrays(collections.size());
+			for (idx_t i = 0; i < collections.size(); i++) {
+				auto &collection = collections[i];
+				arrays[i] = collection->InternalArray(col_idx);
+			}
+
+			auto &destination_array = owned_data[col_idx].data->array;
+			destination_array =
+			    py::module_::import("numpy").attr("concatenate")(arrays, py::arg("out") = destination_array);
+
+			// Collect all the masks of the collections for this column
+			py::tuple masks(collections.size());
+			for (idx_t i = 0; i < collections.size(); i++) {
+				auto &collection = collections[i];
+				masks[i] = collection->owned_data[col_idx].mask->array;
+			}
+
+			auto &destination_mask = owned_data[col_idx].mask->array;
+			destination_mask = py::module_::import("numpy").attr("concatenate")(masks);
+		}
+
+		for (auto &collection : collections) {
+			collection->Reset();
+		}
+	}
+
 	idx_t Count() const {
 		return count;
 	}
