@@ -22,6 +22,9 @@ namespace duckdb {
 
 class LogicalDependentJoin : public LogicalComparisonJoin {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_DEPENDENT_JOIN;
+
+public:
 	explicit LogicalDependentJoin(unique_ptr<LogicalOperator> left, unique_ptr<LogicalOperator> right,
 	                              vector<CorrelatedColumnInfo> correlated_columns, JoinType type,
 	                              unique_ptr<Expression> condition);
