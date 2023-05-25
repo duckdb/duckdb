@@ -24,7 +24,7 @@ alice	10	1	20
 charlie	7	3	30
 
 query IIIIIII rowsort
-SELECT "line", "column", "column_name", "parsed_value", "recovery_columns", "error", regexp_replace("file", '\\', '\/', 'g') 
+SELECT "line", "column", "column_name", "parsed_value", "recovery_columns", "error", regexp_replace("file", '\\', '/', 'g') 
 FROM csv_rejects_table;
 ----
 2	3	"count"	NOT_A_NUMBER	{'name': bobby, 'age': 12}	Could not convert string 'NOT_A_NUMBER' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/example.tsv
@@ -63,7 +63,7 @@ SELECT SUM(COL1) FROM read_csv(
 12282
 
 query IIIIIII rowsort
-SELECT "line", "column", "column_name", "parsed_value", "recovery_columns", "error", regexp_replace("file", '\\', '\/', 'g') 
+SELECT "line", "column", "column_name", "parsed_value", "recovery_columns", "error", regexp_replace("file", '\\', '/', 'g') 
 FROM csv_rejects_table;
 ----
 1001	0	"COL1"	B	{'COL2': BAD2B}	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/part2.csv

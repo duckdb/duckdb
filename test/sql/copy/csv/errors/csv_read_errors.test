@@ -17,7 +17,7 @@ SELECT * FROM read_csv(
 6	7	CCC
 
 query IIIIII rowsort
-SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '\/', 'g') 
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
 FROM csv_rejects_table;
 ----
 2	1	"col1"	BBB	Could not convert string 'BBB' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad.csv
@@ -36,7 +36,7 @@ SELECT * FROM read_csv(
 4	5	9
 
 query IIIIII rowsort
-SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '\/', 'g') 
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
 FROM csv_rejects_table;
 ----
 1	2	"col2"	DDD	Could not convert string 'DDD' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad2.csv
@@ -61,7 +61,7 @@ SELECT * FROM read_csv(
 
 
 query IIIIII rowsort
-SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '\/', 'g') 
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
 FROM csv_rejects_table;
 ----
 2	1	"col1"	BBB	Could not convert string 'BBB' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad.csv
@@ -105,7 +105,7 @@ SELECT SUM(num) FROM read_csv(
 4094
 
 query  IIIIII rowsort
-SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '\/', 'g') 
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
 FROM csv_rejects_table;
 ----
 2000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
@@ -124,7 +124,7 @@ SELECT SUM(num) FROM read_csv(
 4094
 
 query  IIIIII rowsort
-SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '\/', 'g') 
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
 FROM csv_rejects_table;
 ----
 1000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
@@ -144,7 +144,7 @@ SELECT SUM(num) FROM read_csv(
 8188
 
 query  IIIIII rowsort
-SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '\/', 'g') 
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
 FROM csv_rejects_table;
 ----
 1000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
@@ -178,14 +178,14 @@ ON L.num = R.num;
 3	C	3	C
 
 query IIIIII rowsort
-SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '\/', 'g') 
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
 FROM csv_rejects_table_left;
 ----
 3	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small1.csv
 6	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small1.csv
 
 query IIIIII rowsort
-SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '\/', 'g') 
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
 FROM csv_rejects_table_right;
 ----
 3	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small2.csv
@@ -223,7 +223,7 @@ ON L.num = R.num;
 
 
 query IIIIII rowsort
-SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '\/', 'g') 
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
 FROM csv_rejects_table_left;
 ----
 3	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small1.csv
