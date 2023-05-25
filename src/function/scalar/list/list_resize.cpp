@@ -46,11 +46,11 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 
 	UnifiedVectorFormat list_data;
 	lists.ToUnifiedFormat(count, list_data);
-	auto list_entries = (list_entry_t *)list_data.data;
+	auto list_entries = reinterpret_cast<list_entry_t *>(list_data.data);
 
 	UnifiedVectorFormat new_size_data;
 	new_sizes.ToUnifiedFormat(count, new_size_data);
-	auto new_size_entries = (int64_t *)new_size_data.data;
+	auto new_size_entries = reinterpret_cast<int64_t *>(new_size_data.data);
 
 	UnifiedVectorFormat child_data;
 	child->ToUnifiedFormat(count, child_data);
