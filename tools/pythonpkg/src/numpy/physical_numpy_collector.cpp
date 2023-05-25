@@ -73,6 +73,7 @@ unique_ptr<LocalSinkState> PhysicalNumpyCollector::GetLocalSinkState(ExecutionCo
 unique_ptr<QueryResult> PhysicalNumpyCollector::GetResult(GlobalSinkState &state) {
 	auto &gstate = state.Cast<NumpyCollectorGlobalState>();
 	if (!gstate.collection) {
+		py::gil_scoped_acquire gil;
 		gstate.collection = make_uniq<NumpyResultConversion>(types, 0);
 	}
 	auto result = make_uniq<NumpyQueryResult>(statement_type, properties, names, std::move(gstate.collection),
