@@ -674,19 +674,6 @@ vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(ClientContext &context
 	return schemas;
 }
 
-bool Catalog::TypeExists(ClientContext &context, const string &catalog_name, const string &schema, const string &name) {
-	optional_ptr<CatalogEntry> entry;
-	entry = GetEntry(context, CatalogType::TYPE_ENTRY, catalog_name, schema, name, OnEntryNotFound::RETURN_NULL);
-	if (!entry) {
-		// look in the system catalog
-		entry = GetEntry(context, CatalogType::TYPE_ENTRY, SYSTEM_CATALOG, schema, name, OnEntryNotFound::RETURN_NULL);
-		if (!entry) {
-			return false;
-		}
-	}
-	return true;
-}
-
 vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(ClientContext &context, const string &catalog_name) {
 	vector<reference<Catalog>> catalogs;
 	if (IsInvalidCatalog(catalog_name)) {
