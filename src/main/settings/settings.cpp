@@ -718,10 +718,10 @@ Value IntegerDivisionSetting::GetSetting(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value(config.integer_division);
 }
+
 //===--------------------------------------------------------------------===//
 // Log Query Path
 //===--------------------------------------------------------------------===//
-
 void LogQueryPathSetting::ResetLocal(ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
 	// TODO: verify that this does the right thing
@@ -743,6 +743,23 @@ void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
 Value LogQueryPathSetting::GetSetting(ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
 	return client_data.log_query_writer ? Value(client_data.log_query_writer->path) : Value();
+}
+
+//===--------------------------------------------------------------------===//
+// Lock Configuration
+//===--------------------------------------------------------------------===//
+void LockConfigurationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<bool>();
+	config.options.lock_configuration = new_value;
+}
+
+void LockConfigurationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.lock_configuration = DBConfig().options.lock_configuration;
+}
+
+Value LockConfigurationSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.lock_configuration);
 }
 
 //===--------------------------------------------------------------------===//
