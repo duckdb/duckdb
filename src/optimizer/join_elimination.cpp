@@ -49,7 +49,7 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 		}
 
 		// Check whether all of the unique columns are came from the outer side.
-		auto &outer_child = comp_join.children[1^inner_child_idx];
+		auto &outer_child = comp_join.children[1 ^ inner_child_idx];
 		column_binding_set_t all_outer_bindings;
 		for (const auto &binding : outer_child->GetColumnBindings()) {
 			all_outer_bindings.insert(binding);
@@ -79,7 +79,7 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 			if (aggr_expr.IsDistinct()) {
 				has_unique_column = true;
 			} else {
-				auto agg_expr_function_name =  aggr_expr.function.name;
+				auto agg_expr_function_name = aggr_expr.function.name;
 				if (agg_expr_function_name == "max" || agg_expr_function_name == "min") {
 					has_unique_column = true;
 				}
@@ -101,7 +101,8 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 			if (distinct.distinct_targets[col_idx]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
 			}
-			unique_column_references.insert(distinct.distinct_targets[col_idx]->Cast<BoundColumnRefExpression>().binding);
+			unique_column_references.insert(
+			    distinct.distinct_targets[col_idx]->Cast<BoundColumnRefExpression>().binding);
 		}
 		break;
 	}
@@ -133,15 +134,13 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 	return op;
 }
 
-unique_ptr<Expression> JoinElimination::VisitReplace(BoundColumnRefExpression &expr,
-                                                         unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> JoinElimination::VisitReplace(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	// Add a column reference to record which column has been used.
 	column_references.insert(expr.binding);
 	return nullptr;
 }
 
-unique_ptr<Expression> JoinElimination::VisitReplace(BoundReferenceExpression &expr,
-                                                         unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> JoinElimination::VisitReplace(BoundReferenceExpression &expr, unique_ptr<Expression> *expr_ptr) {
 	// BoundReferenceExpression should not be used here yet, they only belong in the physical plan
 	throw InternalException("BoundReferenceExpression should not be used here yet!");
 }
