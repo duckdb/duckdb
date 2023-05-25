@@ -133,9 +133,6 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 	if (select.withClause) {
 		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(select.withClause), select_node->cte_map,
 		             materialized_ctes);
-		if (!materialized_ctes.empty()) {
-			throw NotImplementedException("Materialized CTEs are not implemented for pivot statements.");
-		}
 	}
 	if (!pivot->columns) {
 		// no pivot columns - not actually a pivot
@@ -202,7 +199,10 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 	select_node->from_table = std::move(pivot_ref);
 	// transform order by/limit modifiers
 	TransformModifiers(select, *select_node);
-	return std::move(select_node);
+
+	auto node = Transformer::TransformMaterializedCTE(std::move(select_node), materialized_ctes);
+
+	return node;
 }
 
 } // namespace duckdb
