@@ -428,9 +428,8 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 	// - the aggregates (i.e. the values of the pivot columns)
 
 	// we have two ways of executing a pivot statement
-	// (1) the straightforward manner of filtered aggregates (SUM(..) FILTER (pivot_value=X), SUM(..) FILTER
-	// (pivot_value=Y, ...) (2) computing the aggregates once, then using LIST to group the aggregates together with a
-	// dedicated PIVOT operator
+	// (1) the straightforward manner of filtered aggregates SUM(..) FILTER (pivot_value=X)
+	// (2) computing the aggregates once, then using LIST to group the aggregates together with the PIVOT operator
 	// -> filtered aggregates are faster when there are FEW pivot values
 	// -> LIST is faster when there are MANY pivot values
 	// we switch dynamically based on the number of pivots to compute
