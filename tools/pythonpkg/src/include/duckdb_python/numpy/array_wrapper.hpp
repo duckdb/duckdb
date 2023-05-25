@@ -121,8 +121,11 @@ public:
 			auto category_entry = categories_type.find(col_idx);
 			if (category_entry == categories_type.end()) {
 				// Equivalent to: pandas.CategoricalDtype(['a', 'b'], ordered=True)
-				categories_type[col_idx] = py::module::import("pandas").attr("CategoricalDtype")(
-				    categories[col_idx], py::arg("ordered") = true);
+				auto result = categories_type.emplace(
+				    std::make_pair(col_idx, py::module::import("pandas").attr("CategoricalDtype")(
+				                                categories[col_idx], py::arg("ordered") = true)));
+				D_ASSERT(result.second);
+				category_entry = result.first;
 			}
 			// Equivalent to: pandas.Categorical.from_codes(codes=[0, 1, 0, 1], dtype=dtype)
 			return py::module::import("pandas")

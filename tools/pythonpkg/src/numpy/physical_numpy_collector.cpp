@@ -25,6 +25,13 @@ public:
 	unique_ptr<NumpyResultConversion> collection;
 };
 
+unique_ptr<PhysicalResultCollector> PhysicalNumpyCollector::Create(ClientContext &context,
+                                                                   PreparedStatementData &data) {
+	(void)context;
+	// Always create a parallel result collector
+	return make_uniq_base<PhysicalResultCollector, PhysicalNumpyCollector>(data, true);
+}
+
 SinkResultType PhysicalNumpyCollector::Sink(ExecutionContext &context, DataChunk &chunk,
                                             OperatorSinkInput &input) const {
 	auto &lstate = input.local_state.Cast<NumpyCollectorLocalState>();
@@ -56,7 +63,10 @@ unique_ptr<GlobalSinkState> PhysicalNumpyCollector::GetGlobalSinkState(ClientCon
 
 unique_ptr<LocalSinkState> PhysicalNumpyCollector::GetLocalSinkState(ExecutionContext &context) const {
 	auto state = make_uniq<NumpyCollectorLocalState>();
-	state->collection = make_uniq<NumpyResultConversion>(types, STANDARD_VECTOR_SIZE);
+	{
+		py::gil_scoped_acquire gil;
+		state->collection = make_uniq<NumpyResultConversion>(types, STANDARD_VECTOR_SIZE);
+	}
 	return std::move(state);
 }
 

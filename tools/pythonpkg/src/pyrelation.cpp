@@ -15,6 +15,7 @@
 #include "duckdb/main/query_result/materialized_query_result.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
+#include "duckdb_python/numpy/physical_numpy_collector.hpp"
 
 namespace duckdb {
 
@@ -420,7 +421,10 @@ PandasDataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
 		if (!rel) {
 			return py::none();
 		}
+		auto &context = *rel->context.GetContext();
+		context.config.result_collector = PhysicalNumpyCollector::Create;
 		ExecuteOrThrow();
+		context.config.result_collector = nullptr;
 	}
 	if (result->IsClosed()) {
 		return py::none();

@@ -16,6 +16,7 @@
 #include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
+#include "duckdb_python/numpy/numpy_query_result.hpp"
 
 namespace duckdb {
 
@@ -132,9 +133,36 @@ void DuckDBPyResult::FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversi
 	res[name] = conversion.ToArray(col_idx);
 }
 
+py::dict DuckDBPyResult::FillDictionary(NumpyResultConversion &conversion) {
+	// now that we have materialized the result in contiguous arrays, construct the actual NumPy arrays or categorical
+	// types
+	py::dict res;
+	unordered_map<string, idx_t> names;
+	for (idx_t col_idx = 0; col_idx < result->types.size(); col_idx++) {
+		if (names[result->names[col_idx]]++ == 0) {
+			FillNumpy(res, col_idx, conversion, result->names[col_idx].c_str());
+		} else {
+			auto name = result->names[col_idx] + "_" + to_string(names[result->names[col_idx]]);
+			while (names[name] > 0) {
+				// This entry already exists
+				name += "_" + to_string(names[name]);
+			}
+			names[name]++;
+			FillNumpy(res, col_idx, conversion, name.c_str());
+		}
+	}
+	return res;
+}
+
 py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
 	if (!result) {
 		throw InvalidInputException("result closed");
+	}
+
+	if (result->type == QueryResultType::NUMPY_RESULT) {
+		auto &numpy_result = result->Cast<NumpyQueryResult>();
+		auto &conversion = numpy_result.Collection();
+		return FillDictionary(conversion);
 	}
 
 	// iterate over the result to materialize the data needed for the NumPy arrays
@@ -175,24 +203,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 		}
 	}
 
-	// now that we have materialized the result in contiguous arrays, construct the actual NumPy arrays or categorical
-	// types
-	py::dict res;
-	unordered_map<string, idx_t> names;
-	for (idx_t col_idx = 0; col_idx < result->types.size(); col_idx++) {
-		if (names[result->names[col_idx]]++ == 0) {
-			FillNumpy(res, col_idx, conversion, result->names[col_idx].c_str());
-		} else {
-			auto name = result->names[col_idx] + "_" + to_string(names[result->names[col_idx]]);
-			while (names[name] > 0) {
-				// This entry already exists
-				name += "_" + to_string(names[name]);
-			}
-			names[name]++;
-			FillNumpy(res, col_idx, conversion, name.c_str());
-		}
-	}
-	return res;
+	return FillDictionary(conversion);
 }
 
 // TODO: unify these with an enum/flag to indicate which conversions to do

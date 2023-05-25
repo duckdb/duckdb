@@ -22,6 +22,7 @@ public:
 	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) override;
 
 public:
+	static unique_ptr<PhysicalResultCollector> Create(ClientContext &context, PreparedStatementData &data);
 	// Sink interface
 	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
