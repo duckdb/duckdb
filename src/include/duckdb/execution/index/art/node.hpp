@@ -71,6 +71,8 @@ public:
 
 	//! Set the pointer
 	inline void SetPtr(const SwizzleablePointer ptr) {
+		swizzle_flag = ptr.swizzle_flag;
+		type = ptr.type;
 		offset = ptr.offset;
 		buffer_id = ptr.buffer_id;
 	}

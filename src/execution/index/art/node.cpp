@@ -251,10 +251,11 @@ void Node::Deserialize(ART &art) {
 	type = reader.Read<uint8_t>();
 	swizzle_flag = 0;
 
-	auto type = DecodeARTNodeType();
-	SetPtr(Node::GetAllocator(art, type).New());
+	auto decoded_type = DecodeARTNodeType();
+	SetPtr(Node::GetAllocator(art, decoded_type).New());
+	type = (uint8_t)decoded_type;
 
-	switch (type) {
+	switch (decoded_type) {
 	case NType::PREFIX:
 		return Prefix::Get(art, *this).Deserialize(reader);
 	case NType::LEAF:
@@ -280,7 +281,7 @@ string Node::ToString(ART &art) {
 
 	D_ASSERT(IsSet());
 	if (IsSwizzled()) {
-		Deserialize(art);
+		return "swizzled";
 	}
 
 	auto type = DecodeARTNodeType();

@@ -237,6 +237,10 @@ void Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx
 	D_ASSERT(prefix_node.get().IsSet() && !prefix_node.get().IsSwizzled());
 
 	auto &prefix = Prefix::Get(art, prefix_node);
+
+	// the split is at the last byte of this prefix, so the child_node contains all subsequent
+	// prefix nodes (prefix.ptr) (if any), and the count of this prefix decreases by one,
+	// then, we reference prefix.ptr, to overwrite is with a new node later
 	if (position + 1 == Node::PREFIX_SIZE) {
 		prefix.data[Node::PREFIX_SIZE]--;
 		prefix_node = prefix.ptr;
@@ -342,20 +346,18 @@ Prefix &Prefix::Append(ART &art, const uint8_t byte) {
 	return prefix.get();
 }
 
-Prefix &Prefix::Append(ART &art, Node &other_prefix_node) {
+void Prefix::Append(ART &art, Node other_prefix) {
 
-	D_ASSERT(other_prefix_node.IsSet());
-	if (other_prefix_node.IsSwizzled()) {
-		other_prefix_node.Deserialize(art);
+	D_ASSERT(other_prefix.IsSet());
+	if (other_prefix.IsSwizzled()) {
+		other_prefix.Deserialize(art);
 	}
 
 	reference<Prefix> prefix(*this);
-	reference<Node> other_prefix(other_prefix_node);
-
-	while (other_prefix.get().DecodeARTNodeType() == NType::PREFIX) {
+	while (other_prefix.DecodeARTNodeType() == NType::PREFIX) {
 
 		// copy prefix bytes
-		auto &other = Prefix::Get(art, other_prefix.get());
+		auto &other = Prefix::Get(art, other_prefix);
 		for (idx_t i = 0; i < other.data[Node::PREFIX_SIZE]; i++) {
 			prefix = prefix.get().Append(art, other.data[i]);
 		}
@@ -364,18 +366,13 @@ Prefix &Prefix::Append(ART &art, Node &other_prefix_node) {
 		if (other.ptr.IsSwizzled()) {
 			other.ptr.Deserialize(art);
 		}
-		prefix.get().ptr = other.ptr;
-		other_prefix = prefix.get().ptr;
 
-		// free all copied other prefix nodes
-		if (other.ptr.DecodeARTNodeType() != NType::PREFIX) {
-			other.ptr.Reset();
-			Node::Free(art, other_prefix_node);
-		}
+		prefix.get().ptr = other.ptr;
+		Node::GetAllocator(art, NType::PREFIX).Free(other_prefix);
+		other_prefix = prefix.get().ptr;
 	}
 
 	D_ASSERT(prefix.get().ptr.DecodeARTNodeType() != NType::PREFIX);
-	return prefix.get();
 }
 
 } // namespace duckdb

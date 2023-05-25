@@ -17,8 +17,6 @@
 #include "duckdb/storage/table/scan_state.hpp"
 
 #include <algorithm>
-#include <cstring>
-#include <iostream>
 
 namespace duckdb {
 
@@ -125,7 +123,7 @@ static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_
 	input.ToUnifiedFormat(count, idata);
 
 	D_ASSERT(keys.size() >= count);
-	auto input_data = (T *)idata.data;
+	auto input_data = UnifiedVectorFormat::GetData<T>(idata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
 		if (idata.validity.RowIsValid(idx)) {
@@ -142,7 +140,7 @@ static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t coun
 	UnifiedVectorFormat idata;
 	input.ToUnifiedFormat(count, idata);
 
-	auto input_data = (T *)idata.data;
+	auto input_data = UnifiedVectorFormat::GetData<T>(idata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
 
@@ -386,6 +384,7 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 			break;
 		}
 	}
+	D_ASSERT(!ToString().empty());
 
 	// failed to insert because of constraint violation: remove previously inserted entries
 	if (failed_index != DConstants::INVALID_INDEX) {
@@ -552,6 +551,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		}
 #endif
 	}
+	D_ASSERT(!ToString().empty());
 }
 
 void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id) {
@@ -1076,9 +1076,7 @@ bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 
 string ART::ToString() {
 	if (tree->IsSet()) {
-		auto str = tree->ToString(*this);
-		std::cout << str << std::endl;
-		return str;
+		return tree->ToString(*this);
 	}
 	return "[empty]";
 }
