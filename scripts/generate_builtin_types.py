@@ -14,7 +14,7 @@ header = '''//===---------------------------------------------------------------
 #pragma once
 
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/array.hpp"
 
 namespace duckdb {
 '''
@@ -35,10 +35,6 @@ def sanitize_string(text):
     return text.replace('"', '\\"')
 
 new_text = header
-new_text += '''
-const case_insensitive_map_t<LogicalTypeId> &GetInternalTypes() {
-\tstatic const std::pair<std::string, LogicalTypeId> types[] = {
-'''
 
 type_entries = []
 json_path = normalize_path_separators(f'src/include/duckdb/catalog/default/builtin_types/types.json')
@@ -47,20 +43,30 @@ with open(json_path, 'r') as f:
 
 # Extract all the types from the json
 for type in parsed_json:
-	type_text = ''
 	names = type['names']
 	
 	type_id = type['id']
 
-	type_entries += ['\t\t{' + f'''"{name}", LogicalTypeId::{type_id}''' + '}' for name in names]
+	type_entries += ['\t{' + f'''"{name}", LogicalTypeId::{type_id}''' + '}' for name in names]
+
+TYPE_COUNT = len(type_entries)
+new_text += '''
+struct DefaultType {
+	const char *name;
+	LogicalTypeId type;
+};
+'''
+new_text += f'''
+using builtin_type_array = std::array<DefaultType, {TYPE_COUNT}>;
+'''
+new_text += '''
+static const builtin_type_array BUILTIN_TYPES{{
+'''
 
 type_text = ",\n".join(type_entries)
 new_text += type_text
 new_text += '''
-\t};
-\tstatic const case_insensitive_map_t<LogicalTypeId> type_map(types, types + (sizeof(types) / sizeof(std::pair<std::string, LogicalTypeId>)));
-	return type_map;
-}
+}};
 
 '''
 

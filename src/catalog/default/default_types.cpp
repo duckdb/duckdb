@@ -9,12 +9,13 @@
 namespace duckdb {
 
 LogicalTypeId DefaultTypeGenerator::GetDefaultType(const string &name) {
-	auto &internal_types = GetInternalTypes();
-	auto entry = internal_types.find(name);
+	auto &internal_types = BUILTIN_TYPES;
+	auto entry = std::find_if(internal_types.begin(), internal_types.end(),
+	                          [&](const DefaultType &type) { return StringUtil::CIEquals(name, type.name); });
 	if (entry == internal_types.end()) {
 		return LogicalType::INVALID;
 	}
-	return entry->second;
+	return entry->type;
 }
 
 DefaultTypeGenerator::DefaultTypeGenerator(Catalog &catalog, SchemaCatalogEntry &schema)
@@ -42,9 +43,9 @@ vector<string> DefaultTypeGenerator::GetDefaultEntries() {
 	if (schema.name != DEFAULT_SCHEMA) {
 		return result;
 	}
-	auto &internal_types = GetInternalTypes();
-	for (auto &pair : internal_types) {
-		result.emplace_back(StringUtil::Lower(pair.first));
+	auto &internal_types = BUILTIN_TYPES;
+	for (auto &type : internal_types) {
+		result.emplace_back(StringUtil::Lower(type.name));
 	}
 	return result;
 }
