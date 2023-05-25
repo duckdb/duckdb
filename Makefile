@@ -206,7 +206,7 @@ clean-python:
 debug:
 	mkdir -p ./build/debug && \
 	cd build/debug && \
-	echo ${DUCKDB_OOT_EXTENSION_SUBSTRAIT_PATH} && \
+	echo ${DUCKDB_EXTENSION_SUBSTRAIT_PATH} && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${EXTRA_CMAKE_VARIABLES} -DDEBUG_MOVE=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
 

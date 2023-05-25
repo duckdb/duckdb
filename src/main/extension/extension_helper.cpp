@@ -8,81 +8,81 @@
 
 // Note that c++ preprocessor doesn't have a nice way to clean this up so we need to set the defines we use to false
 // explicitly when they are undefined
-#ifndef DUCKDB_OOT_EXTENSION_ICU_LINKED
-#define DUCKDB_OOT_EXTENSION_ICU_LINKED false
+#ifndef DUCKDB_EXTENSION_ICU_LINKED
+#define DUCKDB_EXTENSION_ICU_LINKED false
 #endif
 
-#ifndef DUCKDB_OOT_EXTENSION_PARQUET_LINKED
-#define DUCKDB_OOT_EXTENSION_PARQUET_LINKED false
+#ifndef DUCKDB_EXTENSION_PARQUET_LINKED
+#define DUCKDB_EXTENSION_PARQUET_LINKED false
 #endif
 
-#ifndef DUCKDB_OOT_EXTENSION_TPCH_LINKED
-#define DUCKDB_OOT_EXTENSION_TPCH_LINKED false
+#ifndef DUCKDB_EXTENSION_TPCH_LINKED
+#define DUCKDB_EXTENSION_TPCH_LINKED false
 #endif
 
-#ifndef DUCKDB_OOT_EXTENSION_TPCDS_LINKED
-#define DUCKDB_OOT_EXTENSION_TPCDS_LINKED false
+#ifndef DUCKDB_EXTENSION_TPCDS_LINKED
+#define DUCKDB_EXTENSION_TPCDS_LINKED false
 #endif
 
-#ifndef DUCKDB_OOT_EXTENSION_FTS_LINKED
-#define DUCKDB_OOT_EXTENSION_FTS_LINKED false
+#ifndef DUCKDB_EXTENSION_FTS_LINKED
+#define DUCKDB_EXTENSION_FTS_LINKED false
 #endif
 
-#ifndef DUCKDB_OOT_EXTENSION_HTTPFS_LINKED
-#define DUCKDB_OOT_EXTENSION_HTTPFS_LINKED false
+#ifndef DUCKDB_EXTENSION_HTTPFS_LINKED
+#define DUCKDB_EXTENSION_HTTPFS_LINKED false
 #endif
 
-#ifndef DUCKDB_OOT_EXTENSION_JSON_LINKED
-#define DUCKDB_OOT_EXTENSION_JSON_LINKED false
+#ifndef DUCKDB_EXTENSION_JSON_LINKED
+#define DUCKDB_EXTENSION_JSON_LINKED false
 #endif
 
-#ifndef DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED
-#define DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED false
+#ifndef DUCKDB_EXTENSION_JEMALLOC_LINKED
+#define DUCKDB_EXTENSION_JEMALLOC_LINKED false
 #endif
 
-#ifndef DUCKDB_OOT_EXTENSION_AUTOCOMPLETE_LINKED
-#define DUCKDB_OOT_EXTENSION_AUTOCOMPLETE_LINKED false
+#ifndef DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED
+#define DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED false
 #endif
 
 // Load the generated header file containing our list of extension headers
-#if defined(OOTE_HEADERS_AVAILABLE) && OOTE_HEADERS_AVAILABLE
-#include "extension_oote_loader.hpp"
+#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
+#include "generated_extension_loader.hpp"
 #else
 // TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
 //		 these can be removed
-#if DUCKDB_OOT_EXTENSION_ICU_LINKED
+#if DUCKDB_EXTENSION_ICU_LINKED
 #include "icu_extension.hpp"
 #endif
 
-#if DUCKDB_OOT_EXTENSION_PARQUET_LINKED
+#if DUCKDB_EXTENSION_PARQUET_LINKED
 #include "parquet_extension.hpp"
 #endif
 
-#if DUCKDB_OOT_EXTENSION_TPCH_LINKED
+#if DUCKDB_EXTENSION_TPCH_LINKED
 #include "tpch_extension.hpp"
 #endif
 
-#if DUCKDB_OOT_EXTENSION_TPCDS_LINKED
+#if DUCKDB_EXTENSION_TPCDS_LINKED
 #include "tpcds_extension.hpp"
 #endif
 
-#if DUCKDB_OOT_EXTENSION_FTS_LINKED
+#if DUCKDB_EXTENSION_FTS_LINKED
 #include "fts_extension.hpp"
 #endif
 
-#if DUCKDB_OOT_EXTENSION_HTTPFS_LINKED
+#if DUCKDB_EXTENSION_HTTPFS_LINKED
 #include "httpfs_extension.hpp"
 #endif
 
-#if DUCKDB_OOT_EXTENSION_JSON_LINKED
+#if DUCKDB_EXTENSION_JSON_LINKED
 #include "json_extension.hpp"
 #endif
 
-#if DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED
+#if DUCKDB_EXTENSION_JEMALLOC_LINKED
 #include "jemalloc_extension.hpp"
 #endif
 
-#if DUCKDB_OOT_EXTENSION_AUTOCOMPLETE_LINKED
+#if DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED
 #include "autocomplete_extension.hpp"
 #endif
 #endif
@@ -92,18 +92,17 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Default Extensions
 //===--------------------------------------------------------------------===//
-// TODO: Test this after adding OOTEs
 static DefaultExtension internal_extensions[] = {
-    {"icu", "Adds support for time zones and collations using the ICU library", DUCKDB_OOT_EXTENSION_ICU_LINKED},
-    {"parquet", "Adds support for reading and writing parquet files", DUCKDB_OOT_EXTENSION_PARQUET_LINKED},
-    {"tpch", "Adds TPC-H data generation and query support", DUCKDB_OOT_EXTENSION_TPCH_LINKED},
-    {"tpcds", "Adds TPC-DS data generation and query support", DUCKDB_OOT_EXTENSION_TPCDS_LINKED},
-    {"fts", "Adds support for Full-Text Search Indexes", DUCKDB_OOT_EXTENSION_FTS_LINKED},
+    {"icu", "Adds support for time zones and collations using the ICU library", DUCKDB_EXTENSION_ICU_LINKED},
+    {"parquet", "Adds support for reading and writing parquet files", DUCKDB_EXTENSION_PARQUET_LINKED},
+    {"tpch", "Adds TPC-H data generation and query support", DUCKDB_EXTENSION_TPCH_LINKED},
+    {"tpcds", "Adds TPC-DS data generation and query support", DUCKDB_EXTENSION_TPCDS_LINKED},
+    {"fts", "Adds support for Full-Text Search Indexes", DUCKDB_EXTENSION_FTS_LINKED},
     {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection",
-     DUCKDB_OOT_EXTENSION_HTTPFS_LINKED},
-    {"json", "Adds support for JSON operations", DUCKDB_OOT_EXTENSION_JSON_LINKED},
-    {"jemalloc", "Overwrites system allocator with JEMalloc", DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED},
-    {"autocomplete", "Add supports for autocomplete in the shell", DUCKDB_OOT_EXTENSION_AUTOCOMPLETE_LINKED},
+     DUCKDB_EXTENSION_HTTPFS_LINKED},
+    {"json", "Adds support for JSON operations", DUCKDB_EXTENSION_JSON_LINKED},
+    {"jemalloc", "Overwrites system allocator with JEMalloc", DUCKDB_EXTENSION_JEMALLOC_LINKED},
+    {"autocomplete", "Add supports for autocomplete in the shell", DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED},
     {"motherduck", "Enables motherduck integration with the system", false},
     {"sqlite_scanner", "Adds support for reading SQLite database files", false},
     {"postgres_scanner", "Adds support for reading from a Postgres database", false},
@@ -151,8 +150,8 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 		LoadExtensionInternal(db, ext, true);
 	}
 
-#if defined(OOTE_HEADERS_AVAILABLE) && OOTE_HEADERS_AVAILABLE
-	for (auto &ext : OOT_EXTENSIONS) {
+#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
+	for (auto &ext : LINKED_EXTENSIONS) {
 		if (std::find(extensions.begin(), extensions.end(), ext) == extensions.end()) {
 			LoadExtensionInternal(db, ext, true);
 		}
@@ -184,7 +183,7 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 #endif
 
 	// This is the main extension loading mechanism that loads the extension that are statically linked.
-#if defined(OOTE_HEADERS_AVAILABLE) && OOTE_HEADERS_AVAILABLE
+#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
 	if (TryLoadLinkedExtension(db, extension)) {
 		return ExtensionLoadResult::LOADED_EXTENSION;
 	} else {
@@ -195,90 +194,90 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 	// This is the fallback to the "old" extension loading mechanism for non-cmake builds
 	// TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds
 	if (extension == "parquet") {
-#if DUCKDB_OOT_EXTENSION_PARQUET_LINKED
+#if DUCKDB_EXTENSION_PARQUET_LINKED
 		db.LoadExtension<ParquetExtension>();
 #else
 		// parquet extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "icu") {
-#if DUCKDB_OOT_EXTENSION_ICU_LINKED
+#if DUCKDB_EXTENSION_ICU_LINKED
 		db.LoadExtension<IcuExtension>();
 #else
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "tpch") {
-#if DUCKDB_OOT_EXTENSION_TPCH_LINKED
+#if DUCKDB_EXTENSION_TPCH_LINKED
 		db.LoadExtension<TpchExtension>();
 #else
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "tpcds") {
-#if DUCKDB_OOT_EXTENSION_TPCDS_LINKED
+#if DUCKDB_EXTENSION_TPCDS_LINKED
 		db.LoadExtension<TpcdsExtension>();
 #else
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "fts") {
-#if DUCKDB_OOT_EXTENSION_FTS_LINKED
+#if DUCKDB_EXTENSION_FTS_LINKED
 //		db.LoadExtension<FtsExtension>();
 #else
 		// fts extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "httpfs") {
-#if DUCKDB_OOT_EXTENSION_HTTPFS_LINKED
+#if DUCKDB_EXTENSION_HTTPFS_LINKED
 		db.LoadExtension<HttpfsExtension>();
 #else
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "visualizer") {
-#if DUCKDB_OOT_EXTENSION_VISUALIZER_LINKED
+#if DUCKDB_EXTENSION_VISUALIZER_LINKED
 		db.LoadExtension<VisualizerExtension>();
 #else
 		// visualizer extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "json") {
-#if DUCKDB_OOT_EXTENSION_JSON_LINKED
+#if DUCKDB_EXTENSION_JSON_LINKED
 		db.LoadExtension<JsonExtension>();
 #else
 		// json extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "excel") {
-#if DUCKDB_OOT_EXTENSION_EXCEL_LINKED
+#if DUCKDB_EXTENSION_EXCEL_LINKED
 		db.LoadExtension<ExcelExtension>();
 #else
 		// excel extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "sqlsmith") {
-#if DUCKDB_OOT_EXTENSION_SQLSMITH_LINKED
+#if DUCKDB_EXTENSION_SQLSMITH_LINKED
 		db.LoadExtension<SqlsmithExtension>();
 #else
 		// excel extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "jemalloc") {
-#if DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED
+#if DUCKDB_EXTENSION_JEMALLOC_LINKED
 		db.LoadExtension<JemallocExtension>();
 #else
 		// jemalloc extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "autocomplete") {
-#if DUCKDB_OOT_EXTENSION_AUTOCOMPLETE_LINKED
+#if DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED
 		db.LoadExtension<AutocompleteExtension>();
 #else
 		// autocomplete extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	} else if (extension == "inet") {
-#if DUCKDB_OOT_EXTENSION_INET_LINKED
+#if DUCKDB_EXTENSION_INET_LINKED
 		db.LoadExtension<InetExtension>();
 #else
 		// inet extension required but not build: skip this test

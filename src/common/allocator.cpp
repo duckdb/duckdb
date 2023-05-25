@@ -14,7 +14,7 @@
 #include <execinfo.h>
 #endif
 
-#if defined(DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED) && DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED && !defined(WIN32)
+#if defined(DUCKDB_EXTENSION_JEMALLOC_LINKED) && DUCKDB_EXTENSION_JEMALLOC_LINKED && !defined(WIN32)
 #include "jemalloc_extension.hpp"
 #endif
 
@@ -89,7 +89,7 @@ PrivateAllocatorData::~PrivateAllocatorData() {
 //===--------------------------------------------------------------------===//
 // Allocator
 //===--------------------------------------------------------------------===//
-#if defined(DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED) && DUCKDB_OOT_EXTENSION_JEMALLOC_LINKED && !defined(WIN32)
+#if defined(DUCKDB_EXTENSION_JEMALLOC_LINKED) && DUCKDB_EXTENSION_JEMALLOC_LINKED && !defined(WIN32)
 Allocator::Allocator()
     : Allocator(JemallocExtension::Allocate, JemallocExtension::Free, JemallocExtension::Reallocate, nullptr) {
 }
