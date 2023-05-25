@@ -60,7 +60,7 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
 	auto column_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto expression = reader.ReadOptional<ParsedExpression>(nullptr);
 	auto category = reader.ReadField<TableColumnType>(TableColumnType::STANDARD);
-	auto compression_type = reader.ReadField<duckdb::CompressionType>(CompressionType::COMPRESSION_AUTO);
+	auto compression_type = reader.ReadField<duckdb::CompressionType>(duckdb::CompressionType::COMPRESSION_AUTO);
 	reader.Finalize();
 
 	ColumnDefinition result(column_name, column_type, std::move(expression), category);
