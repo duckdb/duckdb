@@ -23,6 +23,7 @@ add_library_unity(
   regex_range_filter.cpp
   remove_unused_columns.cpp
   statistics_propagator.cpp
+  join_elimination.cpp
   topn_optimizer.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_optimizer>
