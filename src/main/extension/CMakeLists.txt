@@ -1,7 +1,8 @@
 include_directories(../../../third_party/httplib/)
 
-# To link extensions into DuckDB and auto-load them on startup, we generated an include file and a loader function
-# based on the `DUCKDB_EXTENSION_NAMES` parameter.
+# To link extensions into DuckDB and auto-load them on startup, we generated an
+# include file and a loader function based on the `DUCKDB_EXTENSION_NAMES`
+# parameter.
 
 # generated_extension_headers.hpp
 configure_file(generated_extension_headers.hpp.in
@@ -11,7 +12,8 @@ if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
     string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
     if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
       set(DUCKDB_EXTENSION_HEADER "${EXT_NAME}_extension.hpp")
-      file(APPEND "${PROJECT_BINARY_DIR}/include/generated_extension_headers.hpp"
+      file(APPEND
+           "${PROJECT_BINARY_DIR}/include/generated_extension_headers.hpp"
            "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
     endif()
   endforeach()
