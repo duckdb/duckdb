@@ -1,7 +1,10 @@
+# name: test/sql/copy/csv/errors/csv_rejects_recovery.test
+# group: [errors]
+
 # # name: test/sql/copy/csv/errors/csv_rejects_recovery.test
 # # group: [errors]
-statement ok
-pragma threads=1
+
+require skip_reload
 
 foreach PARALLEL true false
 

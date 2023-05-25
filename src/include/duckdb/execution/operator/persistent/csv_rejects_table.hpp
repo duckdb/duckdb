@@ -11,16 +11,17 @@ struct ReadCSVData;
 
 class CSVRejectsTable : public ObjectCacheEntry {
 public:
-	CSVRejectsTable() {
+	CSVRejectsTable(string name) : name(name), count(0) {
 	}
 	~CSVRejectsTable() override = default;
 	mutex write_lock;
-	idx_t count = 0;
+	string name;
+	idx_t count;
 
-	static shared_ptr<CSVRejectsTable> GetOrCreate(ClientContext &context);
+	static shared_ptr<CSVRejectsTable> GetOrCreate(ClientContext &context, const string &name);
 
-	void InitializeTable(ClientContext &context, const ReadCSVData &options, const string &name);
-	TableCatalogEntry &GetTable(ClientContext &context, const string &name);
+	void InitializeTable(ClientContext &context, const ReadCSVData &options);
+	TableCatalogEntry &GetTable(ClientContext &context);
 
 public:
 	static string ObjectType() {

@@ -69,6 +69,11 @@ public:
 		cache[key] = std::move(value);
 	}
 
+	void Delete(const string &key) {
+		lock_guard<mutex> glock(lock);
+		cache.erase(key);
+	}
+
 	DUCKDB_API static ObjectCache &GetObjectCache(ClientContext &context);
 	DUCKDB_API static bool ObjectCacheEnabled(ClientContext &context);
 

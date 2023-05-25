@@ -7,19 +7,19 @@
 
 namespace duckdb {
 
-TableCatalogEntry &CSVRejectsTable::GetTable(ClientContext &context, const string &name) {
+TableCatalogEntry &CSVRejectsTable::GetTable(ClientContext &context) {
 	auto &temp_catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
 	auto &table_entry = temp_catalog.GetEntry<TableCatalogEntry>(context, TEMP_CATALOG, DEFAULT_SCHEMA, name);
 	return table_entry;
 }
 
-shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context) {
-	const char *key = "CSV_REJECTS_TABLE_CACHE_ENTRY";
+shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context, const string &name) {
+	auto key = "CSV_REJECTS_TABLE_CACHE_ENTRY_" + StringUtil::Upper(name);
 	auto &cache = ObjectCache::GetObjectCache(context);
-	return cache.GetOrCreate<CSVRejectsTable>(key);
+	return cache.GetOrCreate<CSVRejectsTable>(key, name);
 }
 
-void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData &data, const string &name) {
+void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData &data) {
 	// (Re)Create the temporary rejects table
 	auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
 	auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, name);

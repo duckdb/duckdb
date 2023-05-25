@@ -1,6 +1,8 @@
 # name: test/sql/copy/csv/errors/csv_read_errors.test
 # group: [errors]
 
+require skip_reload
+
 foreach PARALLEL true false
 
 # Basic test
@@ -146,5 +148,89 @@ SELECT * FROM csv_rejects_table ORDER BY ALL;
 
 statement ok
 DROP TABLE csv_rejects_table;
+
+# Test with multiple rejects table in the same query
+query IIII
+SELECT * 
+FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/small1.csv', 
+    header = true,
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
+    rejects_table='csv_rejects_table_left',
+    ignore_errors=true,
+	parallel=${PARALLEL}) as L
+JOIN read_csv(
+    'test/sql/copy/csv/data/error/mismatch/small2.csv',
+    header = true,
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
+    rejects_table='csv_rejects_table_right',
+    ignore_errors=true,
+	parallel=${PARALLEL}) as R
+ON L.num = R.num
+ORDER BY ALL;
+----
+1	A	1	A
+3	C	3	C
+
+query IIIIII
+SELECT * FROM csv_rejects_table_left ORDER BY ALL;
+----
+3	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small1.csv
+6	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small1.csv
+
+query IIIIII
+SELECT * FROM csv_rejects_table_right ORDER BY ALL;
+----
+3	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small2.csv
+5	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small2.csv
+
+statement ok
+DROP TABLE csv_rejects_table_left;
+
+statement ok
+DROP TABLE csv_rejects_table_right;
+
+# Test with multiple rejects table in the same query, with different limits
+# (only one reject should be logged in right table)
+query IIII
+SELECT * 
+FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/small1.csv', 
+    header = true,
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
+    rejects_table='csv_rejects_table_left',
+    ignore_errors=true,
+	parallel=${PARALLEL}) as L
+JOIN read_csv(
+    'test/sql/copy/csv/data/error/mismatch/small2.csv',
+    header = true,
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
+    rejects_table='csv_rejects_table_right',
+	rejects_limit=1,
+    ignore_errors=true,
+	parallel=${PARALLEL}) as R
+ON L.num = R.num
+ORDER BY ALL;
+----
+1	A	1	A
+3	C	3	C
+
+
+query IIIIII
+SELECT * FROM csv_rejects_table_left ORDER BY ALL;
+----
+3	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small1.csv
+6	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small1.csv
+
+query IIIIII
+SELECT * FROM csv_rejects_table_right ORDER BY ALL;
+----
+3	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small2.csv
+
+statement ok
+DROP TABLE csv_rejects_table_left;
+
+statement ok
+DROP TABLE csv_rejects_table_right;
 
 endloop

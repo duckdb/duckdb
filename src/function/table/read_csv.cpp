@@ -510,13 +510,13 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 			current_csv_position = 0;
 			file_number++;
 			local_batch_index = 0;
-			
+
 			line_info.lines_read[file_number][local_batch_index] = (bind_data.options.has_header ? 1 : 0);
-			
+
 			current_buffer =
 			    make_shared<CSVBuffer>(context, buffer_size, *file_handle, current_csv_position, file_number);
 			next_buffer = shared_ptr<CSVBuffer>(
-			    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());			
+			    current_buffer->Next(*file_handle, buffer_size, current_csv_position, file_number).release());
 		} else {
 			// We are done scanning.
 			reader.reset();
@@ -569,7 +569,6 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		reader->SetBufferRead(std::move(result));
 	}
 
-	
 	return true;
 }
 void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions, idx_t file_number_p, idx_t batch_idx) {
@@ -951,7 +950,7 @@ static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &con
 	// Create the temporary rejects table
 	auto rejects_table = bind_data.options.rejects_table_name;
 	if (!rejects_table.empty()) {
-		CSVRejectsTable::GetOrCreate(context)->InitializeTable(context, bind_data, rejects_table);
+		CSVRejectsTable::GetOrCreate(context, rejects_table)->InitializeTable(context, bind_data);
 	}
 	if (bind_data.single_threaded) {
 		return SingleThreadedCSVInit(context, input);

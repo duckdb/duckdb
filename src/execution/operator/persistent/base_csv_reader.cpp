@@ -583,13 +583,14 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 
 		// Now do a second pass to produce the reject table entries
 		if (!options.rejects_table_name.empty()) {
-			auto rejects = CSVRejectsTable::GetOrCreate(context);
+			auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_table_name);
 			auto limit = options.rejects_limit;
 			// short circuit if we already have too many rejects
 			if (limit == 0 || rejects->count < limit) {
 
 				lock_guard<mutex> lock(rejects->write_lock);
-				InternalAppender appender(context, rejects->GetTable(context, options.rejects_table_name));
+				auto &table = rejects->GetTable(context);
+				InternalAppender appender(context, table);
 				auto file_name = GetFileName();
 
 				for (auto &cell : failed_cells) {
