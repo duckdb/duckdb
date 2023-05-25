@@ -125,15 +125,7 @@ struct CountFunction : public BaseCountFunction {
 	static void CountScatter(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count, Vector &states,
 	                         idx_t count) {
 		auto &input = inputs[0];
-		if (input.GetVectorType() == VectorType::CONSTANT_VECTOR &&
-		    states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			if (ConstantVector::IsNull(input)) {
-				return;
-			}
-			auto sdata = ConstantVector::GetData<STATE *>(states);
-			*sdata += count;
-		} else if (input.GetVectorType() == VectorType::FLAT_VECTOR &&
-		           states.GetVectorType() == VectorType::FLAT_VECTOR) {
+		if (input.GetVectorType() == VectorType::FLAT_VECTOR && states.GetVectorType() == VectorType::FLAT_VECTOR) {
 			auto sdata = FlatVector::GetData<STATE *>(states);
 			CountFlatLoop(sdata, FlatVector::Validity(input), count);
 		} else {
