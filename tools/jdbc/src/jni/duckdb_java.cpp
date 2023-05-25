@@ -361,16 +361,16 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1schema
 	return env->NewStringUTF(entry.schema.c_str());
 }
 
-static void set_catalog_search_path(JNIEnv *env, jobject conn_ref_buf, CatalogSearchEntry search_entry,
-                                    bool is_set_schema) {
+static void set_catalog_search_path(JNIEnv *env, jobject conn_ref_buf, CatalogSearchEntry search_entry) {
 	auto conn_ref = get_connection(env, conn_ref_buf);
 	if (!conn_ref) {
 		return;
 	}
 
 	try {
-		conn_ref->context->RunFunctionInTransaction(
-		    [&]() { ClientData::Get(*conn_ref->context).catalog_search_path->Set(search_entry, is_set_schema); });
+		conn_ref->context->RunFunctionInTransaction([&]() {
+			ClientData::Get(*conn_ref->context).catalog_search_path->Set(search_entry, CatalogSetPathType::SET_SCHEMA);
+		});
 	} catch (const exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
 	}
@@ -378,14 +378,12 @@ static void set_catalog_search_path(JNIEnv *env, jobject conn_ref_buf, CatalogSe
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1schema(JNIEnv *env, jclass, jobject conn_ref_buf,
                                                                               jstring schema) {
-	set_catalog_search_path(env, conn_ref_buf, CatalogSearchEntry(INVALID_CATALOG, jstring_to_string(env, schema)),
-	                        true);
+	set_catalog_search_path(env, conn_ref_buf, CatalogSearchEntry(INVALID_CATALOG, jstring_to_string(env, schema)));
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1catalog(JNIEnv *env, jclass,
                                                                                jobject conn_ref_buf, jstring catalog) {
-	set_catalog_search_path(env, conn_ref_buf, CatalogSearchEntry(jstring_to_string(env, catalog), DEFAULT_SCHEMA),
-	                        false);
+	set_catalog_search_path(env, conn_ref_buf, CatalogSearchEntry(jstring_to_string(env, catalog), DEFAULT_SCHEMA));
 }
 
 JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1catalog(JNIEnv *env, jclass,
