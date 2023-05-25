@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/result_collector/physical_numpy_collector.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/query_result/materialized_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {

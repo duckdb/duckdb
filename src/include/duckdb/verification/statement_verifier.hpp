@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/query_result/materialized_query_result.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 
 namespace duckdb {
