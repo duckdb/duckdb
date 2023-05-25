@@ -28,7 +28,7 @@ public:
 public:
 	string ToString() const override;
 
-	static bool Equal(const CollateExpression *a, const CollateExpression *b);
+	static bool Equal(const CollateExpression &a, const CollateExpression &b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 

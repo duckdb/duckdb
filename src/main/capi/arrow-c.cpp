@@ -23,7 +23,7 @@ duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema 
 	if (!out_schema) {
 		return DuckDBSuccess;
 	}
-	auto wrapper = (ArrowResultWrapper *)result;
+	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
 	ArrowConverter::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names,
 	                              wrapper->timezone_config);
 	return DuckDBSuccess;
@@ -33,7 +33,7 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	if (!out_array) {
 		return DuckDBSuccess;
 	}
-	auto wrapper = (ArrowResultWrapper *)result;
+	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
 	auto success = wrapper->result->TryFetch(wrapper->current_chunk, wrapper->result->GetErrorObject());
 	if (!success) { // LCOV_EXCL_START
 		return DuckDBError;
@@ -41,12 +41,12 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
 		return DuckDBSuccess;
 	}
-	ArrowConverter::ToArrowArray(*wrapper->current_chunk, (ArrowArray *)*out_array);
+	ArrowConverter::ToArrowArray(*wrapper->current_chunk, reinterpret_cast<ArrowArray *>(*out_array));
 	return DuckDBSuccess;
 }
 
 idx_t duckdb_arrow_row_count(duckdb_arrow result) {
-	auto wrapper = (ArrowResultWrapper *)result;
+	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
 	if (wrapper->result->HasError()) {
 		return 0;
 	}
@@ -54,12 +54,12 @@ idx_t duckdb_arrow_row_count(duckdb_arrow result) {
 }
 
 idx_t duckdb_arrow_column_count(duckdb_arrow result) {
-	auto wrapper = (ArrowResultWrapper *)result;
+	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
 	return wrapper->result->ColumnCount();
 }
 
 idx_t duckdb_arrow_rows_changed(duckdb_arrow result) {
-	auto wrapper = (ArrowResultWrapper *)result;
+	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
 	if (wrapper->result->HasError()) {
 		return 0;
 	}
@@ -76,20 +76,20 @@ idx_t duckdb_arrow_rows_changed(duckdb_arrow result) {
 }
 
 const char *duckdb_query_arrow_error(duckdb_arrow result) {
-	auto wrapper = (ArrowResultWrapper *)result;
+	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
 	return wrapper->result->GetError().c_str();
 }
 
 void duckdb_destroy_arrow(duckdb_arrow *result) {
 	if (*result) {
-		auto wrapper = (ArrowResultWrapper *)*result;
+		auto wrapper = reinterpret_cast<ArrowResultWrapper *>(*result);
 		delete wrapper;
 		*result = nullptr;
 	}
 }
 
 duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_statement, duckdb_arrow *out_result) {
-	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError() || !out_result) {
 		return DuckDBError;
 	}
@@ -105,6 +105,6 @@ duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_st
 	auto result = wrapper->statement->Execute(wrapper->values, false);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	arrow_wrapper->result = duckdb::unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
-	*out_result = (duckdb_arrow)arrow_wrapper;
+	*out_result = reinterpret_cast<duckdb_arrow>(arrow_wrapper);
 	return !arrow_wrapper->result->HasError() ? DuckDBSuccess : DuckDBError;
 }

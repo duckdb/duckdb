@@ -9,17 +9,15 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode *node) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGPragmaStmt *>(node);
-
+unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGPragmaStmt &stmt) {
 	auto result = make_uniq<PragmaStatement>();
 	auto &info = *result->info;
 
-	info.name = stmt->name;
+	info.name = stmt.name;
 	// parse the arguments, if any
-	if (stmt->args) {
-		for (auto cell = stmt->args->head; cell != nullptr; cell = cell->next) {
-			auto node = reinterpret_cast<duckdb_libpgquery::PGNode *>(cell->data.ptr_value);
+	if (stmt.args) {
+		for (auto cell = stmt.args->head; cell != nullptr; cell = cell->next) {
+			auto node = PGPointerCast<duckdb_libpgquery::PGNode>(cell->data.ptr_value);
 			auto expr = TransformExpression(node);
 
 			if (expr->type == ExpressionType::COMPARE_EQUAL) {
@@ -34,7 +32,7 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode 
 				auto &constant = comp.right->Cast<ConstantExpression>();
 				info.named_parameters[columnref.GetName()] = constant.value;
 			} else if (node->type == duckdb_libpgquery::T_PGAConst) {
-				auto constant = TransformConstant((duckdb_libpgquery::PGAConst *)node);
+				auto constant = TransformConstant(*PGPointerCast<duckdb_libpgquery::PGAConst>(node.get()));
 				info.parameters.push_back((constant->Cast<ConstantExpression>()).value);
 			} else if (expr->type == ExpressionType::COLUMN_REF) {
 				auto &colref = expr->Cast<ColumnRefExpression>();
@@ -49,7 +47,7 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode 
 		}
 	}
 	// now parse the pragma type
-	switch (stmt->kind) {
+	switch (stmt.kind) {
 	case duckdb_libpgquery::PG_PRAGMA_TYPE_NOTHING: {
 		if (!info.parameters.empty() || !info.named_parameters.empty()) {
 			throw InternalException("PRAGMA statement that is not a call or assignment cannot contain parameters");

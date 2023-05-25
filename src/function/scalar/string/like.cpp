@@ -78,7 +78,7 @@ struct LikeMatcher : public FunctionData {
 	}
 
 	bool Match(string_t &str) {
-		auto str_data = (const unsigned char *)str.GetData();
+		auto str_data = const_uchar_ptr_cast(str.GetData());
 		auto str_len = str.GetSize();
 		idx_t segment_idx = 0;
 		idx_t end_idx = segments.size() - 1;
@@ -105,7 +105,7 @@ struct LikeMatcher : public FunctionData {
 		for (; segment_idx < end_idx; segment_idx++) {
 			auto &segment = segments[segment_idx];
 			// find the pattern of the current segment
-			idx_t next_offset = ContainsFun::Find(str_data, str_len, (const unsigned char *)segment.pattern.c_str(),
+			idx_t next_offset = ContainsFun::Find(str_data, str_len, const_uchar_ptr_cast(segment.pattern.c_str()),
 			                                      segment.pattern.size());
 			if (next_offset == DConstants::INVALID_INDEX) {
 				// could not find this pattern in the string: no match
@@ -130,7 +130,7 @@ struct LikeMatcher : public FunctionData {
 		} else {
 			auto &segment = segments.back();
 			// find the pattern of the current segment
-			idx_t next_offset = ContainsFun::Find(str_data, str_len, (const unsigned char *)segment.pattern.c_str(),
+			idx_t next_offset = ContainsFun::Find(str_data, str_len, const_uchar_ptr_cast(segment.pattern.c_str()),
 			                                      segment.pattern.size());
 			return next_offset != DConstants::INVALID_INDEX;
 		}
@@ -179,7 +179,7 @@ struct LikeMatcher : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const LikeMatcher &)other_p;
+		auto &other = other_p.Cast<LikeMatcher>();
 		return like_pattern == other.like_pattern;
 	}
 
@@ -491,7 +491,7 @@ template <class OP, bool INVERT>
 static void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	if (func_expr.bind_info) {
-		auto &matcher = (LikeMatcher &)*func_expr.bind_info;
+		auto &matcher = func_expr.bind_info->Cast<LikeMatcher>();
 		// use fast like matcher
 		UnaryExecutor::Execute<string_t, bool>(input.data[0], result, input.size(), [&](string_t input) {
 			return INVERT ? !matcher.Match(input) : matcher.Match(input);

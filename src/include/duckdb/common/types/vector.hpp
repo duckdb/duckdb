@@ -24,6 +24,15 @@ struct UnifiedVectorFormat {
 	data_ptr_t data;
 	ValidityMask validity;
 	SelectionVector owned_sel;
+
+	template <class T>
+	static inline const T *GetData(const UnifiedVectorFormat &format) {
+		return reinterpret_cast<const T *>(format.data);
+	}
+	template <class T>
+	static inline T *GetDataNoConst(UnifiedVectorFormat &format) {
+		return reinterpret_cast<T *>(format.data);
+	}
 };
 
 class VectorCache;

@@ -169,12 +169,12 @@ string BoundCastExpression::ToString() const {
 	return (try_cast ? "TRY_CAST(" : "CAST(") + child->GetName() + " AS " + return_type.ToString() + ")";
 }
 
-bool BoundCastExpression::Equals(const BaseExpression *other_p) const {
+bool BoundCastExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto &other = other_p->Cast<BoundCastExpression>();
-	if (!Expression::Equals(child.get(), other.child.get())) {
+	auto &other = other_p.Cast<BoundCastExpression>();
+	if (!Expression::Equals(*child, *other.child)) {
 		return false;
 	}
 	if (try_cast != other.try_cast) {

@@ -19,7 +19,7 @@ public:
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const CheckpointBindData &)other_p;
+		auto &other = other_p.Cast<CheckpointBindData>();
 		return db == other.db;
 	}
 };

@@ -41,7 +41,7 @@ SingleFileCheckpointWriter::SingleFileCheckpointWriter(AttachedDatabase &db, Blo
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
-	auto &storage_manager = (SingleFileStorageManager &)db.GetStorageManager();
+	auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	return *storage_manager.block_manager;
 }
 
@@ -55,7 +55,7 @@ unique_ptr<TableDataWriter> SingleFileCheckpointWriter::GetTableDataWriter(Table
 
 void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto &config = DBConfig::Get(db);
-	auto &storage_manager = (SingleFileStorageManager &)db.GetStorageManager();
+	auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	if (storage_manager.InMemory()) {
 		return;
 	}
@@ -73,7 +73,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 	vector<reference<SchemaCatalogEntry>> schemas;
 	// we scan the set of committed schemas
-	auto &catalog = (DuckCatalog &)Catalog::GetCatalog(db);
+	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
 	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
 	// write the actual data into the database
 	// write the amount of schemas
