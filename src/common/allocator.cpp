@@ -185,13 +185,9 @@ Allocator &Allocator::DefaultAllocator() {
 	return *DefaultAllocatorReference();
 }
 
-void Allocator::ThreadCleanup() {
-	JEMallocExtension::ThreadCleanup();
-}
-
-void Allocator::ThreadIdle() {
+void Allocator::ThreadFlush() {
 #ifdef USE_JEMALLOC
-	JEMallocExtension::ThreadIdle();
+	JEMallocExtension::ThreadFlush();
 #endif
 }
 

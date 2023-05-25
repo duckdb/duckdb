@@ -54,14 +54,13 @@ static T GetJemallocCTL(const char *name) {
 	return result;
 }
 
-void JEMallocExtension::ThreadCleanup() {
-	static const string PURGE_ALL = StringUtil::Format("arena.%lld.purge", idx_t(MALLCTL_ARENAS_ALL));
+void JEMallocExtension::ThreadFlush() {
+	// Flush thread-local cache
 	SetJemallocCTL("thread.tcache.flush");
-	SetJemallocCTL(PURGE_ALL.c_str());
-}
 
-void JEMallocExtension::ThreadIdle() {
-	SetJemallocCTL("thread.idle");
+	// Flush this thread's arena
+	const auto purge_arena = StringUtil::Format("arena.%llu.purge", idx_t(GetJemallocCTL<unsigned>("thread.arena")));
+	SetJemallocCTL(purge_arena.c_str());
 }
 
 } // namespace duckdb

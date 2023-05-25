@@ -39,7 +39,7 @@ public:
 			key_types.push_back(order.expression->return_type);
 			key_executor.AddExpression(*order.expression);
 		}
-		auto &allocator = BufferAllocator::Get(context);
+		auto &allocator = Allocator::Get(context);
 		keys.Initialize(allocator, key_types);
 		payload.Initialize(allocator, op.types);
 	}

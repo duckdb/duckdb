@@ -1,5 +1,6 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -124,18 +125,23 @@ bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &
 	return queue->DequeueFromProducer(token, task);
 }
 
+static inline int64_t CurrentTimeMS() {
+	return duration_cast<std::chrono::milliseconds>(system_clock::now().time_since_epoch()).count();
+}
+
 void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 #ifndef DUCKDB_NO_THREADS
-	bool idle = false;
+	constexpr static int64_t FLUSH_INTERVAL_MS = 50;
+	auto flush_timestamp = CurrentTimeMS();
+
 	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
 		// wait for a signal with a timeout
 		queue->semaphore.wait();
 		if (queue->q.try_dequeue(task)) {
-			idle = false;
-
 			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
+
 			switch (execute_result) {
 			case TaskExecutionResult::TASK_FINISHED:
 			case TaskExecutionResult::TASK_ERROR:
@@ -148,14 +154,12 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 				task.reset();
 				break;
 			}
-			continue;
 		}
 
-		// threads that didn't get a task clean up
-		if (!idle) {
-			idle = true;
-			Allocator::ThreadIdle();
-			Allocator::ThreadCleanup();
+		// flush this thread's allocations
+		if (CurrentTimeMS() - flush_timestamp >= FLUSH_INTERVAL_MS) {
+			Allocator::ThreadFlush();
+			flush_timestamp = CurrentTimeMS();
 		}
 	}
 #else

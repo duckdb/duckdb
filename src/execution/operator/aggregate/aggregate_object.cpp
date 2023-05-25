@@ -41,7 +41,7 @@ AggregateFilterData::AggregateFilterData(ClientContext &context, Expression &fil
 	if (payload_types.empty()) {
 		return;
 	}
-	filtered_payload.Initialize(BufferAllocator::Get(context), payload_types);
+	filtered_payload.Initialize(Allocator::Get(context), payload_types);
 }
 
 idx_t AggregateFilterData::ApplyFilter(DataChunk &payload) {
