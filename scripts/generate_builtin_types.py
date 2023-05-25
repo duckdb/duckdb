@@ -34,16 +34,6 @@ def get_struct_name(function_name):
 def sanitize_string(text):
     return text.replace('"', '\\"')
 
-categories = [
-    'numeric',
-    'floating_point',
-    'fixed_point',
-    'time',
-    'text',
-    'misc',
-    'nested'
-]
-
 new_text = header
 new_text += '''
 const case_insensitive_map_t<LogicalTypeId> &GetInternalTypes() {
@@ -51,19 +41,18 @@ const case_insensitive_map_t<LogicalTypeId> &GetInternalTypes() {
 '''
 
 type_entries = []
-for category in categories:
-    json_path = normalize_path_separators(f'src/include/duckdb/catalog/default/builtin_types/{category}.json')
-    with open(json_path, 'r') as f:
-        parsed_json = json.load(f)
+json_path = normalize_path_separators(f'src/include/duckdb/catalog/default/builtin_types/types.json')
+with open(json_path, 'r') as f:
+	parsed_json = json.load(f)
 
-    # Extract all the types from the json
-    for type in parsed_json:
-        type_text = ''
-        names = type['names']
-        
-        type_id = type['id']
+# Extract all the types from the json
+for type in parsed_json:
+	type_text = ''
+	names = type['names']
+	
+	type_id = type['id']
 
-        type_entries += ['\t\t{' + f'''"{name}", LogicalTypeId::{type_id}''' + '}' for name in names]
+	type_entries += ['\t\t{' + f'''"{name}", LogicalTypeId::{type_id}''' + '}' for name in names]
 
 type_text = ",\n".join(type_entries)
 new_text += type_text
