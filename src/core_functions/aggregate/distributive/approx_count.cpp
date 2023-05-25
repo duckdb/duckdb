@@ -74,6 +74,9 @@ static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], AggregateIn
 	UnifiedVectorFormat vdata;
 	inputs[0].ToUnifiedFormat(count, vdata);
 
+	if (count > STANDARD_VECTOR_SIZE) {
+		throw InternalException("ApproxCountDistinct - count must be at most vector size");
+	}
 	uint64_t indices[STANDARD_VECTOR_SIZE];
 	uint8_t counts[STANDARD_VECTOR_SIZE];
 	HyperLogLog::ProcessEntries(vdata, inputs[0].GetType(), indices, counts, count);
@@ -98,6 +101,9 @@ static void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputDat
 	UnifiedVectorFormat vdata;
 	inputs[0].ToUnifiedFormat(count, vdata);
 
+	if (count > STANDARD_VECTOR_SIZE) {
+		throw InternalException("ApproxCountDistinct - count must be at most vector size");
+	}
 	uint64_t indices[STANDARD_VECTOR_SIZE];
 	uint8_t counts[STANDARD_VECTOR_SIZE];
 	HyperLogLog::ProcessEntries(vdata, inputs[0].GetType(), indices, counts, count);
