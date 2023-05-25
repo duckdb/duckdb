@@ -1206,6 +1206,7 @@ void DataTable::WALAddIndex(ClientContext &context, unique_ptr<Index> index,
 		intermediate_types.push_back(it.Type());
 		column_ids.push_back(it.Oid());
 	}
+	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	intermediate_types.emplace_back(LogicalType::ROW_TYPE);
 
 	intermediate.Initialize(allocator, intermediate_types);
