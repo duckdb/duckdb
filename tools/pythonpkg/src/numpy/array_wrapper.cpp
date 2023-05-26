@@ -162,18 +162,18 @@ struct StringConvert {
 		// based on the max codepoint, we construct the result string
 		auto result = PyUnicode_New(start_pos + codepoint_count, max_codepoint);
 		// based on the resulting unicode kind, we fill in the code points
-		auto kind = PyUnicode_KIND(result);
+		auto kind = PyUtil::PyUnicodeKind(result);
 		switch (kind) {
 		case PyUnicode_1BYTE_KIND:
-			ConvertUnicodeValueTemplated<Py_UCS1>(PyUnicode_1BYTE_DATA(result), codepoints, codepoint_count, data,
+			ConvertUnicodeValueTemplated<Py_UCS1>(PyUtil::PyUnicode1ByteData(result), codepoints, codepoint_count, data,
 			                                      start_pos);
 			break;
 		case PyUnicode_2BYTE_KIND:
-			ConvertUnicodeValueTemplated<Py_UCS2>(PyUnicode_2BYTE_DATA(result), codepoints, codepoint_count, data,
+			ConvertUnicodeValueTemplated<Py_UCS2>(PyUtil::PyUnicode2ByteData(result), codepoints, codepoint_count, data,
 			                                      start_pos);
 			break;
 		case PyUnicode_4BYTE_KIND:
-			ConvertUnicodeValueTemplated<Py_UCS4>(PyUnicode_4BYTE_DATA(result), codepoints, codepoint_count, data,
+			ConvertUnicodeValueTemplated<Py_UCS4>(PyUtil::PyUnicode4ByteData(result), codepoints, codepoint_count, data,
 			                                      start_pos);
 			break;
 		default:
@@ -186,19 +186,19 @@ struct StringConvert {
 	static PyObject *ConvertValue(string_t val) {
 		// we could use PyUnicode_FromStringAndSize here, but it does a lot of verification that we don't need
 		// because of that it is a lot slower than it needs to be
-		auto data = (uint8_t *)val.GetData();
+		auto data = const_data_ptr_cast(val.GetData());
 		auto len = val.GetSize();
 		// check if there are any non-ascii characters in there
 		for (idx_t i = 0; i < len; i++) {
 			if (data[i] > 127) {
 				// there are! fallback to slower case
-				return ConvertUnicodeValue((const char *)data, len, i);
+				return ConvertUnicodeValue(const_char_ptr_cast(data), len, i);
 			}
 		}
 		// no unicode: fast path
 		// directly construct the string and memcpy it
 		auto result = PyUnicode_New(len, 127);
-		auto target_data = PyUnicode_DATA(result);
+		auto target_data = PyUtil::PyUnicodeDataMutable(result);
 		memcpy(target_data, data, len);
 		return result;
 	}
@@ -322,8 +322,8 @@ double IntegralConvert::ConvertValue(hugeint_t val) {
 template <class DUCKDB_T, class NUMPY_T, class CONVERT>
 static bool ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *target_mask, UnifiedVectorFormat &idata,
                           idx_t count) {
-	auto src_ptr = (DUCKDB_T *)idata.data;
-	auto out_ptr = (NUMPY_T *)target_data;
+	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
+	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i);
@@ -351,8 +351,8 @@ static bool ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *tar
 template <class DUCKDB_T, class NUMPY_T>
 static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t target_data, UnifiedVectorFormat &idata,
                                              idx_t count) {
-	auto src_ptr = (DUCKDB_T *)idata.data;
-	auto out_ptr = (NUMPY_T *)target_data;
+	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
+	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i);
@@ -379,7 +379,7 @@ static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t tar
 template <class NUMPY_T, class CONVERT>
 static bool ConvertNested(idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &input,
                           UnifiedVectorFormat &idata, idx_t count) {
-	auto out_ptr = (NUMPY_T *)target_data;
+	auto out_ptr = reinterpret_cast<NUMPY_T *>(target_data);
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i);
@@ -427,8 +427,8 @@ static bool ConvertColumnRegular(idx_t target_offset, data_ptr_t target_data, bo
 template <class DUCKDB_T>
 static bool ConvertDecimalInternal(idx_t target_offset, data_ptr_t target_data, bool *target_mask,
                                    UnifiedVectorFormat &idata, idx_t count, double division) {
-	auto src_ptr = (DUCKDB_T *)idata.data;
-	auto out_ptr = (double *)target_data;
+	auto src_ptr = UnifiedVectorFormat::GetData<DUCKDB_T>(idata);
+	auto out_ptr = reinterpret_cast<double *>(target_data);
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i);
@@ -601,13 +601,13 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 	string dtype = DuckDBToNumpyDtype(type);
 
 	array = py::array(py::dtype(dtype), capacity);
-	data = (data_ptr_t)array.mutable_data();
+	data = data_ptr_cast(array.mutable_data());
 }
 
 void RawArrayWrapper::Resize(idx_t new_capacity) {
 	vector<py::ssize_t> new_shape {py::ssize_t(new_capacity)};
 	array.resize(new_shape, false);
-	data = (data_ptr_t)array.mutable_data();
+	data = data_ptr_cast(array.mutable_data());
 }
 
 ArrayWrapper::ArrayWrapper(const LogicalType &type) : requires_mask(false) {
@@ -627,7 +627,7 @@ void ArrayWrapper::Resize(idx_t new_capacity) {
 
 void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	auto dataptr = data->data;
-	auto maskptr = (bool *)mask->data;
+	auto maskptr = reinterpret_cast<bool *>(mask->data);
 	D_ASSERT(dataptr);
 	D_ASSERT(maskptr);
 	D_ASSERT(input.GetType() == data->type);
@@ -774,7 +774,7 @@ py::object ArrayWrapper::ToArray(idx_t count) const {
 	return masked_array;
 }
 
-NumpyResultConversion::NumpyResultConversion(vector<LogicalType> &types, idx_t initial_capacity)
+NumpyResultConversion::NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity)
     : count(0), capacity(0) {
 	owned_data.reserve(types.size());
 	for (auto &type : types) {

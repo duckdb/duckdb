@@ -123,14 +123,14 @@ unique_ptr<SQLStatement> Transformer::CreatePivotStatement(unique_ptr<SQLStateme
 	return std::move(result);
 }
 
-unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PGSelectStmt *stmt) {
-	auto pivot = stmt->pivot;
-	auto source = TransformTableRefNode(pivot->source);
+unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PGSelectStmt &select) {
+	auto pivot = select.pivot;
+	auto source = TransformTableRefNode(*pivot->source);
 
 	auto select_node = make_uniq<SelectNode>();
 	// handle the CTEs
-	if (stmt->withClause) {
-		TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), select_node->cte_map);
+	if (select.withClause) {
+		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(select.withClause), select_node->cte_map);
 	}
 	if (!pivot->columns) {
 		// no pivot columns - not actually a pivot
@@ -154,7 +154,7 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 	}
 
 	// generate CREATE TYPE statements for each of the columns that do not have an IN list
-	auto columns = TransformPivotList(pivot->columns);
+	auto columns = TransformPivotList(*pivot->columns);
 	auto pivot_idx = PivotEntryCount();
 	for (idx_t c = 0; c < columns.size(); c++) {
 		auto &col = columns[c];
@@ -196,7 +196,7 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 	pivot_ref->pivots = std::move(columns);
 	select_node->from_table = std::move(pivot_ref);
 	// transform order by/limit modifiers
-	TransformModifiers(*stmt, *select_node);
+	TransformModifiers(select, *select_node);
 	return std::move(select_node);
 }
 

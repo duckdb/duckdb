@@ -861,16 +861,16 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
 unique_ptr<LocalTableFunctionState> SingleThreadedReadCSVInitLocal(ExecutionContext &context,
                                                                    TableFunctionInitInput &input,
                                                                    GlobalTableFunctionState *global_state_p) {
-	auto &bind_data = (ReadCSVData &)*input.bind_data;
-	auto &data = (SingleThreadedCSVState &)*global_state_p;
+	auto &bind_data = input.bind_data->CastNoConst<ReadCSVData>();
+	auto &data = global_state_p->Cast<SingleThreadedCSVState>();
 	auto result = make_uniq<SingleThreadedCSVLocalState>();
 	result->csv_reader = data.GetCSVReader(context.client, bind_data, result->file_index, result->total_size);
 	return std::move(result);
 }
 
 static void SingleThreadedCSVFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (ReadCSVData &)*data_p.bind_data;
-	auto &data = (SingleThreadedCSVState &)*data_p.global_state;
+	auto &bind_data = data_p.bind_data->CastNoConst<ReadCSVData>();
+	auto &data = data_p.global_state->Cast<SingleThreadedCSVState>();
 	auto &lstate = data_p.local_state->Cast<SingleThreadedCSVLocalState>();
 	if (!lstate.csv_reader) {
 		// no csv_reader was set, this can happen when a filename-based filter has filtered out all possible files

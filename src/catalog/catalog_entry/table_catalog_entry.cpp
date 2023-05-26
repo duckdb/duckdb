@@ -214,6 +214,10 @@ DataTable &TableCatalogEntry::GetStorage() {
 const vector<unique_ptr<BoundConstraint>> &TableCatalogEntry::GetBoundConstraints() {
 	throw InternalException("Calling GetBoundConstraints on a TableCatalogEntry that is not a DuckTableEntry");
 }
+
 // LCOV_EXCL_STOP
+
+void TableCatalogEntry::BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update) {
+}
 
 } // namespace duckdb

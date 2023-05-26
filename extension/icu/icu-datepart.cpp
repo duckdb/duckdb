@@ -329,7 +329,7 @@ struct ICUDatePart : public ICUDateFunc {
 			input.ToUnifiedFormat(count, rdata);
 
 			const auto &arg_valid = rdata.validity;
-			auto tdata = (const INPUT_TYPE *)rdata.data;
+			auto tdata = UnifiedVectorFormat::GetData<INPUT_TYPE>(rdata);
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto &child_entries = StructVector::GetEntries(result);

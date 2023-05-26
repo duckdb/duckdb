@@ -33,7 +33,7 @@ struct SQLAutoCompleteData : public GlobalTableFunctionState {
 };
 
 struct AutoCompleteCandidate {
-	AutoCompleteCandidate(string candidate_p, int32_t score_bonus = 0)
+	explicit AutoCompleteCandidate(string candidate_p, int32_t score_bonus = 0)
 	    : candidate(std::move(candidate_p)), score_bonus(score_bonus) {
 	}
 
@@ -408,7 +408,7 @@ void AutocompleteExtension::Load(DuckDB &db) {
 }
 
 std::string AutocompleteExtension::Name() {
-	return "sql_auto_complete";
+	return "autocomplete";
 }
 
 } // namespace duckdb

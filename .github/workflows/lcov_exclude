@@ -23,4 +23,4 @@ src/main/extension_helper.cpp
 generated_extension_loader.hpp
 
 */adbc/*
-common/enum_util.cpp
+src/common/enum_util.cpp

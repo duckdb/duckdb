@@ -408,7 +408,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 			aggr.function.initialize(aggr_state.get());
 
 			AggregateInputData aggr_input_data(aggr.bind_info.get(), Allocator::DefaultAllocator());
-			Vector state_vector(Value::POINTER((uintptr_t)aggr_state.get()));
+			Vector state_vector(Value::POINTER(CastPointerToValue(aggr_state.get())));
 			aggr.function.finalize(state_vector, aggr_input_data, chunk.data[null_groups.size() + i], 1, 0);
 			if (aggr.function.destructor) {
 				aggr.function.destructor(state_vector, aggr_input_data, 1);

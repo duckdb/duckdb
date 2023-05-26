@@ -15,13 +15,13 @@ string BaseTableRef::ToString() const {
 	return BaseToString(result, column_name_alias);
 }
 
-bool BaseTableRef::Equals(const TableRef *other_p) const {
+bool BaseTableRef::Equals(const TableRef &other_p) const {
 	if (!TableRef::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BaseTableRef *)other_p;
-	return other->catalog_name == catalog_name && other->schema_name == schema_name &&
-	       other->table_name == table_name && column_name_alias == other->column_name_alias;
+	auto &other = other_p.Cast<BaseTableRef>();
+	return other.catalog_name == catalog_name && other.schema_name == schema_name && other.table_name == table_name &&
+	       column_name_alias == other.column_name_alias;
 }
 
 void BaseTableRef::Serialize(FieldWriter &writer) const {

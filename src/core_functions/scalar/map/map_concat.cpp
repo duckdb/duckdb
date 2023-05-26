@@ -69,7 +69,7 @@ static void MapConcatFunction(DataChunk &args, ExpressionState &state, Vector &r
 			auto &keys = MapVector::GetKeys(args.data[map_idx]);
 
 			auto index = map_format.sel->get_index(i);
-			auto entry = ((list_entry_t *)map_format.data)[index];
+			auto entry = UnifiedVectorFormat::GetData<list_entry_t>(map_format)[index];
 
 			// Update the list for this row
 			for (idx_t list_idx = 0; list_idx < entry.length; list_idx++) {

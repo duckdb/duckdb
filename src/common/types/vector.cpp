@@ -202,7 +202,7 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 		auto entry = cache.cache.find(target_data);
 		if (entry != cache.cache.end()) {
 			// cached entry exists: use that
-			this->buffer = make_buffer<DictionaryBuffer>(((DictionaryBuffer &)*entry->second).GetSelVector());
+			this->buffer = make_buffer<DictionaryBuffer>(entry->second->Cast<DictionaryBuffer>().GetSelVector());
 			vector_type = VectorType::DICTIONARY_VECTOR;
 		} else {
 			Slice(sel, count);
@@ -251,7 +251,7 @@ struct DataArrays {
 
 void FindChildren(vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
 	if (auxiliary.GetBufferType() == VectorBufferType::LIST_BUFFER) {
-		auto &buffer = (VectorListBuffer &)auxiliary;
+		auto &buffer = auxiliary.Cast<VectorListBuffer>();
 		auto &child = buffer.GetChild();
 		auto data = child.GetData();
 		if (!data) {
@@ -266,7 +266,7 @@ void FindChildren(vector<DataArrays> &to_resize, VectorBuffer &auxiliary) {
 			to_resize.emplace_back(arrays);
 		}
 	} else if (auxiliary.GetBufferType() == VectorBufferType::STRUCT_BUFFER) {
-		auto &buffer = (VectorStructBuffer &)auxiliary;
+		auto &buffer = auxiliary.Cast<VectorStructBuffer>();
 		auto &children = buffer.GetChildren();
 		for (auto &child : children) {
 			auto data = child->GetData();
@@ -332,46 +332,46 @@ void Vector::SetValue(idx_t index, const Value &val) {
 
 	switch (GetType().InternalType()) {
 	case PhysicalType::BOOL:
-		((bool *)data)[index] = val.GetValueUnsafe<bool>();
+		reinterpret_cast<bool *>(data)[index] = val.GetValueUnsafe<bool>();
 		break;
 	case PhysicalType::INT8:
-		((int8_t *)data)[index] = val.GetValueUnsafe<int8_t>();
+		reinterpret_cast<int8_t *>(data)[index] = val.GetValueUnsafe<int8_t>();
 		break;
 	case PhysicalType::INT16:
-		((int16_t *)data)[index] = val.GetValueUnsafe<int16_t>();
+		reinterpret_cast<int16_t *>(data)[index] = val.GetValueUnsafe<int16_t>();
 		break;
 	case PhysicalType::INT32:
-		((int32_t *)data)[index] = val.GetValueUnsafe<int32_t>();
+		reinterpret_cast<int32_t *>(data)[index] = val.GetValueUnsafe<int32_t>();
 		break;
 	case PhysicalType::INT64:
-		((int64_t *)data)[index] = val.GetValueUnsafe<int64_t>();
+		reinterpret_cast<int64_t *>(data)[index] = val.GetValueUnsafe<int64_t>();
 		break;
 	case PhysicalType::INT128:
-		((hugeint_t *)data)[index] = val.GetValueUnsafe<hugeint_t>();
+		reinterpret_cast<hugeint_t *>(data)[index] = val.GetValueUnsafe<hugeint_t>();
 		break;
 	case PhysicalType::UINT8:
-		((uint8_t *)data)[index] = val.GetValueUnsafe<uint8_t>();
+		reinterpret_cast<uint8_t *>(data)[index] = val.GetValueUnsafe<uint8_t>();
 		break;
 	case PhysicalType::UINT16:
-		((uint16_t *)data)[index] = val.GetValueUnsafe<uint16_t>();
+		reinterpret_cast<uint16_t *>(data)[index] = val.GetValueUnsafe<uint16_t>();
 		break;
 	case PhysicalType::UINT32:
-		((uint32_t *)data)[index] = val.GetValueUnsafe<uint32_t>();
+		reinterpret_cast<uint32_t *>(data)[index] = val.GetValueUnsafe<uint32_t>();
 		break;
 	case PhysicalType::UINT64:
-		((uint64_t *)data)[index] = val.GetValueUnsafe<uint64_t>();
+		reinterpret_cast<uint64_t *>(data)[index] = val.GetValueUnsafe<uint64_t>();
 		break;
 	case PhysicalType::FLOAT:
-		((float *)data)[index] = val.GetValueUnsafe<float>();
+		reinterpret_cast<float *>(data)[index] = val.GetValueUnsafe<float>();
 		break;
 	case PhysicalType::DOUBLE:
-		((double *)data)[index] = val.GetValueUnsafe<double>();
+		reinterpret_cast<double *>(data)[index] = val.GetValueUnsafe<double>();
 		break;
 	case PhysicalType::INTERVAL:
-		((interval_t *)data)[index] = val.GetValueUnsafe<interval_t>();
+		reinterpret_cast<interval_t *>(data)[index] = val.GetValueUnsafe<interval_t>();
 		break;
 	case PhysicalType::VARCHAR:
-		((string_t *)data)[index] = StringVector::AddStringOrBlob(*this, StringValue::Get(val));
+		reinterpret_cast<string_t *>(data)[index] = StringVector::AddStringOrBlob(*this, StringValue::Get(val));
 		break;
 	case PhysicalType::STRUCT: {
 		D_ASSERT(GetVectorType() == VectorType::CONSTANT_VECTOR || GetVectorType() == VectorType::FLAT_VECTOR);
@@ -402,7 +402,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 			}
 		}
 		//! now set the pointer
-		auto &entry = ((list_entry_t *)data)[index];
+		auto &entry = reinterpret_cast<list_entry_t *>(data)[index];
 		entry.length = val_children.size();
 		entry.offset = offset;
 		break;
@@ -457,64 +457,63 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		if (vector->GetType().InternalType() != PhysicalType::VARCHAR) {
 			throw InternalException("FSST Vector with non-string datatype found!");
 		}
-		auto str_compressed = ((string_t *)data)[index];
-		Value result =
-		    FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
-		                                    (unsigned char *)str_compressed.GetData(), str_compressed.GetSize());
+		auto str_compressed = reinterpret_cast<string_t *>(data)[index];
+		Value result = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(const_cast<Vector &>(*vector)),
+		                                               str_compressed.GetData(), str_compressed.GetSize());
 		return result;
 	}
 
 	switch (vector->GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
-		return Value::BOOLEAN(((bool *)data)[index]);
+		return Value::BOOLEAN(reinterpret_cast<bool *>(data)[index]);
 	case LogicalTypeId::TINYINT:
-		return Value::TINYINT(((int8_t *)data)[index]);
+		return Value::TINYINT(reinterpret_cast<int8_t *>(data)[index]);
 	case LogicalTypeId::SMALLINT:
-		return Value::SMALLINT(((int16_t *)data)[index]);
+		return Value::SMALLINT(reinterpret_cast<int16_t *>(data)[index]);
 	case LogicalTypeId::INTEGER:
-		return Value::INTEGER(((int32_t *)data)[index]);
+		return Value::INTEGER(reinterpret_cast<int32_t *>(data)[index]);
 	case LogicalTypeId::DATE:
-		return Value::DATE(((date_t *)data)[index]);
+		return Value::DATE(reinterpret_cast<date_t *>(data)[index]);
 	case LogicalTypeId::TIME:
-		return Value::TIME(((dtime_t *)data)[index]);
+		return Value::TIME(reinterpret_cast<dtime_t *>(data)[index]);
 	case LogicalTypeId::TIME_TZ:
-		return Value::TIMETZ(((dtime_t *)data)[index]);
+		return Value::TIMETZ(reinterpret_cast<dtime_t *>(data)[index]);
 	case LogicalTypeId::BIGINT:
-		return Value::BIGINT(((int64_t *)data)[index]);
+		return Value::BIGINT(reinterpret_cast<int64_t *>(data)[index]);
 	case LogicalTypeId::UTINYINT:
-		return Value::UTINYINT(((uint8_t *)data)[index]);
+		return Value::UTINYINT(reinterpret_cast<uint8_t *>(data)[index]);
 	case LogicalTypeId::USMALLINT:
-		return Value::USMALLINT(((uint16_t *)data)[index]);
+		return Value::USMALLINT(reinterpret_cast<uint16_t *>(data)[index]);
 	case LogicalTypeId::UINTEGER:
-		return Value::UINTEGER(((uint32_t *)data)[index]);
+		return Value::UINTEGER(reinterpret_cast<uint32_t *>(data)[index]);
 	case LogicalTypeId::UBIGINT:
-		return Value::UBIGINT(((uint64_t *)data)[index]);
+		return Value::UBIGINT(reinterpret_cast<uint64_t *>(data)[index]);
 	case LogicalTypeId::TIMESTAMP:
-		return Value::TIMESTAMP(((timestamp_t *)data)[index]);
+		return Value::TIMESTAMP(reinterpret_cast<timestamp_t *>(data)[index]);
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TIMESTAMPNS(((timestamp_t *)data)[index]);
+		return Value::TIMESTAMPNS(reinterpret_cast<timestamp_t *>(data)[index]);
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TIMESTAMPMS(((timestamp_t *)data)[index]);
+		return Value::TIMESTAMPMS(reinterpret_cast<timestamp_t *>(data)[index]);
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Value::TIMESTAMPSEC(((timestamp_t *)data)[index]);
+		return Value::TIMESTAMPSEC(reinterpret_cast<timestamp_t *>(data)[index]);
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMPTZ(((timestamp_t *)data)[index]);
+		return Value::TIMESTAMPTZ(reinterpret_cast<timestamp_t *>(data)[index]);
 	case LogicalTypeId::HUGEINT:
-		return Value::HUGEINT(((hugeint_t *)data)[index]);
+		return Value::HUGEINT(reinterpret_cast<hugeint_t *>(data)[index]);
 	case LogicalTypeId::UUID:
-		return Value::UUID(((hugeint_t *)data)[index]);
+		return Value::UUID(reinterpret_cast<hugeint_t *>(data)[index]);
 	case LogicalTypeId::DECIMAL: {
 		auto width = DecimalType::GetWidth(type);
 		auto scale = DecimalType::GetScale(type);
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
-			return Value::DECIMAL(((int16_t *)data)[index], width, scale);
+			return Value::DECIMAL(reinterpret_cast<int16_t *>(data)[index], width, scale);
 		case PhysicalType::INT32:
-			return Value::DECIMAL(((int32_t *)data)[index], width, scale);
+			return Value::DECIMAL(reinterpret_cast<int32_t *>(data)[index], width, scale);
 		case PhysicalType::INT64:
-			return Value::DECIMAL(((int64_t *)data)[index], width, scale);
+			return Value::DECIMAL(reinterpret_cast<int64_t *>(data)[index], width, scale);
 		case PhysicalType::INT128:
-			return Value::DECIMAL(((hugeint_t *)data)[index], width, scale);
+			return Value::DECIMAL(reinterpret_cast<hugeint_t *>(data)[index], width, scale);
 		default:
 			throw InternalException("Physical type '%s' has a width bigger than 38, which is not supported",
 			                        TypeIdToString(type.InternalType()));
@@ -523,38 +522,38 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 	case LogicalTypeId::ENUM: {
 		switch (type.InternalType()) {
 		case PhysicalType::UINT8:
-			return Value::ENUM(((uint8_t *)data)[index], type);
+			return Value::ENUM(reinterpret_cast<uint8_t *>(data)[index], type);
 		case PhysicalType::UINT16:
-			return Value::ENUM(((uint16_t *)data)[index], type);
+			return Value::ENUM(reinterpret_cast<uint16_t *>(data)[index], type);
 		case PhysicalType::UINT32:
-			return Value::ENUM(((uint32_t *)data)[index], type);
+			return Value::ENUM(reinterpret_cast<uint32_t *>(data)[index], type);
 		default:
 			throw InternalException("ENUM can only have unsigned integers as physical types");
 		}
 	}
 	case LogicalTypeId::POINTER:
-		return Value::POINTER(((uintptr_t *)data)[index]);
+		return Value::POINTER(reinterpret_cast<uintptr_t *>(data)[index]);
 	case LogicalTypeId::FLOAT:
-		return Value::FLOAT(((float *)data)[index]);
+		return Value::FLOAT(reinterpret_cast<float *>(data)[index]);
 	case LogicalTypeId::DOUBLE:
-		return Value::DOUBLE(((double *)data)[index]);
+		return Value::DOUBLE(reinterpret_cast<double *>(data)[index]);
 	case LogicalTypeId::INTERVAL:
-		return Value::INTERVAL(((interval_t *)data)[index]);
+		return Value::INTERVAL(reinterpret_cast<interval_t *>(data)[index]);
 	case LogicalTypeId::VARCHAR: {
-		auto str = ((string_t *)data)[index];
+		auto str = reinterpret_cast<string_t *>(data)[index];
 		return Value(str.GetString());
 	}
 	case LogicalTypeId::AGGREGATE_STATE:
 	case LogicalTypeId::BLOB: {
-		auto str = ((string_t *)data)[index];
-		return Value::BLOB((const_data_ptr_t)str.GetData(), str.GetSize());
+		auto str = reinterpret_cast<string_t *>(data)[index];
+		return Value::BLOB(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	case LogicalTypeId::BIT: {
-		auto str = ((string_t *)data)[index];
-		return Value::BIT((const_data_ptr_t)str.GetData(), str.GetSize());
+		auto str = reinterpret_cast<string_t *>(data)[index];
+		return Value::BIT(const_data_ptr_cast(str.GetData()), str.GetSize());
 	}
 	case LogicalTypeId::MAP: {
-		auto offlen = ((list_entry_t *)data)[index];
+		auto offlen = reinterpret_cast<list_entry_t *>(data)[index];
 		auto &child_vec = ListVector::GetEntry(*vector);
 		duckdb::vector<Value> children;
 		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
@@ -579,7 +578,7 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 		return Value::STRUCT(std::move(children));
 	}
 	case LogicalTypeId::LIST: {
-		auto offlen = ((list_entry_t *)data)[index];
+		auto offlen = reinterpret_cast<list_entry_t *>(data)[index];
 		auto &child_vec = ListVector::GetEntry(*vector);
 		duckdb::vector<Value> children;
 		for (idx_t i = offlen.offset; i < offlen.offset + offlen.length; i++) {
@@ -639,10 +638,9 @@ string Vector::ToString(idx_t count) const {
 		break;
 	case VectorType::FSST_VECTOR: {
 		for (idx_t i = 0; i < count; i++) {
-			string_t compressed_string = ((string_t *)data)[i];
+			string_t compressed_string = reinterpret_cast<string_t *>(data)[i];
 			Value val = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(const_cast<Vector &>(*this)),
-			                                            (unsigned char *)compressed_string.GetData(),
-			                                            compressed_string.GetSize());
+			                                            compressed_string.GetData(), compressed_string.GetSize());
 			retval += GetValue(i).ToString() + (i == count - 1 ? "" : ", ");
 		}
 	} break;
@@ -896,7 +894,7 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data) {
 void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 	this->vector_type = VectorType::SEQUENCE_VECTOR;
 	this->buffer = make_buffer<VectorBuffer>(sizeof(int64_t) * 3);
-	auto data = (int64_t *)buffer->GetData();
+	auto data = reinterpret_cast<int64_t *>(buffer->GetData());
 	data[0] = start;
 	data[1] = increment;
 	data[2] = int64_t(count);
@@ -918,7 +916,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			auto row_idx = vdata.sel->get_index(i);
 			flat_mask.Set(i, vdata.validity.RowIsValid(row_idx));
 		}
-		serializer.WriteData((const_data_ptr_t)flat_mask.GetData(), flat_mask.ValidityMaskSize(count));
+		serializer.WriteData(const_data_ptr_cast(flat_mask.GetData()), flat_mask.ValidityMaskSize(count));
 	}
 	if (TypeIsConstantSize(type.InternalType())) {
 		// constant size type: simple copy
@@ -929,11 +927,11 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 	} else {
 		switch (type.InternalType()) {
 		case PhysicalType::VARCHAR: {
-			auto strings = (string_t *)vdata.data;
+			auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = !vdata.validity.RowIsValid(idx) ? NullValue<string_t>() : strings[idx];
-				serializer.WriteStringLen((const_data_ptr_t)source.GetData(), source.GetSize());
+				serializer.WriteStringLen(const_data_ptr_cast(source.GetData()), source.GetSize());
 			}
 			break;
 		}
@@ -951,7 +949,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 
 			// serialize the list entries in a flat array
 			auto data = make_unsafe_uniq_array<list_entry_t>(count);
-			auto source_array = (list_entry_t *)vdata.data;
+			auto source_array = UnifiedVectorFormat::GetData<list_entry_t>(vdata);
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = source_array[idx];
@@ -961,7 +959,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 
 			// write the list size
 			serializer.Write<idx_t>(list_size);
-			serializer.WriteData((data_ptr_t)data.get(), count * sizeof(list_entry_t));
+			serializer.WriteData(const_data_ptr_cast(data.get()), count * sizeof(list_entry_t));
 
 			child.Serialize(list_size, serializer);
 			break;
@@ -986,7 +984,8 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 			auto row_idx = vdata.sel->get_index(i);
 			flat_mask.Set(i, vdata.validity.RowIsValid(row_idx));
 		}
-		serializer.WriteProperty("validity", (data_ptr_t)flat_mask.GetData(), flat_mask.ValidityMaskSize(count));
+		serializer.WriteProperty("validity", const_data_ptr_cast(flat_mask.GetData()),
+		                         flat_mask.ValidityMaskSize(count));
 	}
 	if (TypeIsConstantSize(logical_type.InternalType())) {
 		// constant size type: simple copy
@@ -997,7 +996,7 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 	} else {
 		switch (logical_type.InternalType()) {
 		case PhysicalType::VARCHAR: {
-			auto strings = (string_t *)vdata.data;
+			auto strings = UnifiedVectorFormat::GetData<string_t>(vdata);
 
 			// Serialize data as a list
 			serializer.SetTag("data");
@@ -1031,7 +1030,7 @@ void Vector::FormatSerialize(FormatSerializer &serializer, idx_t count) {
 
 			// serialize the list entries in a flat array
 			auto entries = make_unsafe_uniq_array<list_entry_t>(count);
-			auto source_array = (list_entry_t *)vdata.data;
+			auto source_array = UnifiedVectorFormat::GetData<list_entry_t>(vdata);
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = source_array[idx];
@@ -1068,7 +1067,7 @@ void Vector::FormatDeserialize(FormatDeserializer &deserializer, idx_t count) {
 	const auto has_validity = deserializer.ReadProperty<bool>("all_valid");
 	if (has_validity) {
 		validity.Initialize(count);
-		deserializer.ReadProperty("validity", (data_ptr_t)validity.GetData(), validity.ValidityMaskSize(count));
+		deserializer.ReadProperty("validity", data_ptr_cast(validity.GetData()), validity.ValidityMaskSize(count));
 	}
 
 	if (TypeIsConstantSize(logical_type.InternalType())) {
@@ -1155,7 +1154,7 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 	const auto has_validity = source.Read<bool>();
 	if (has_validity) {
 		validity.Initialize(count);
-		source.ReadData((data_ptr_t)validity.GetData(), validity.ValidityMaskSize(count));
+		source.ReadData(data_ptr_cast(validity.GetData()), validity.ValidityMaskSize(count));
 	}
 
 	if (TypeIsConstantSize(type.InternalType())) {
@@ -1506,7 +1505,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 			break;
 		}
 
-		auto list_data = (list_entry_t *)vdata.data;
+		auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(vdata);
 		auto list_entry = list_data[list_index];
 
 		// add the list entry as the first element of "vector"
@@ -1583,7 +1582,7 @@ string_t StringVector::AddString(Vector &vector, string_t data) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
+	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
 	return string_buffer.AddString(data);
 }
 
@@ -1597,7 +1596,7 @@ string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
+	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
 	return string_buffer.AddBlob(data);
 }
 
@@ -1610,7 +1609,7 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
+	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
 	return string_buffer.EmptyString(len);
 }
 
@@ -1619,7 +1618,7 @@ void StringVector::AddHandle(Vector &vector, BufferHandle handle) {
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
-	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
+	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
 	string_buffer.AddHeapReference(make_buffer<ManagedVectorBuffer>(std::move(handle)));
 }
 
@@ -1629,7 +1628,7 @@ void StringVector::AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer) {
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
-	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
+	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
 	string_buffer.AddHeapReference(std::move(buffer));
 }
 
@@ -1664,7 +1663,7 @@ string_t FSSTVector::AddCompressedString(Vector &vector, string_t data) {
 		vector.auxiliary = make_buffer<VectorFSSTStringBuffer>();
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
-	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
+	auto &fsst_string_buffer = vector.auxiliary->Cast<VectorFSSTStringBuffer>();
 	return fsst_string_buffer.AddBlob(data);
 }
 
@@ -1674,8 +1673,8 @@ void *FSSTVector::GetDecoder(const Vector &vector) {
 		throw InternalException("GetDecoder called on FSST Vector without registered buffer");
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
-	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
-	return (duckdb_fsst_decoder_t *)fsst_string_buffer.GetDecoder();
+	auto &fsst_string_buffer = vector.auxiliary->Cast<VectorFSSTStringBuffer>();
+	return fsst_string_buffer.GetDecoder();
 }
 
 void FSSTVector::RegisterDecoder(Vector &vector, buffer_ptr<void> &duckdb_fsst_decoder) {
@@ -1686,7 +1685,7 @@ void FSSTVector::RegisterDecoder(Vector &vector, buffer_ptr<void> &duckdb_fsst_d
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
 
-	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
+	auto &fsst_string_buffer = vector.auxiliary->Cast<VectorFSSTStringBuffer>();
 	fsst_string_buffer.AddDecoder(duckdb_fsst_decoder);
 }
 
@@ -1698,7 +1697,7 @@ void FSSTVector::SetCount(Vector &vector, idx_t count) {
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
 
-	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
+	auto &fsst_string_buffer = vector.auxiliary->Cast<VectorFSSTStringBuffer>();
 	fsst_string_buffer.SetCount(count);
 }
 
@@ -1710,7 +1709,7 @@ idx_t FSSTVector::GetCount(Vector &vector) {
 	}
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::FSST_BUFFER);
 
-	auto &fsst_string_buffer = (VectorFSSTStringBuffer &)*vector.auxiliary;
+	auto &fsst_string_buffer = vector.auxiliary->Cast<VectorFSSTStringBuffer>();
 	return fsst_string_buffer.GetCount();
 }
 
@@ -1726,9 +1725,8 @@ void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offs
 		auto target_idx = dst_offset + i;
 		string_t compressed_string = ldata[source_idx];
 		if (dst_mask.RowIsValid(target_idx) && compressed_string.GetSize() > 0) {
-			tdata[target_idx] = FSSTPrimitives::DecompressValue(FSSTVector::GetDecoder(src), dst,
-			                                                    (unsigned char *)compressed_string.GetData(),
-			                                                    compressed_string.GetSize());
+			tdata[target_idx] = FSSTPrimitives::DecompressValue(
+			    FSSTVector::GetDecoder(src), dst, compressed_string.GetData(), compressed_string.GetSize());
 		} else {
 			tdata[target_idx] = string_t(nullptr, 0);
 		}
@@ -1827,7 +1825,7 @@ vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRUCT_BUFFER);
-	return ((VectorStructBuffer *)vector.auxiliary.get())->GetChildren();
+	return vector.auxiliary->Cast<VectorStructBuffer>().GetChildren();
 }
 
 const vector<unique_ptr<Vector>> &StructVector::GetEntries(const Vector &vector) {
@@ -1847,7 +1845,7 @@ const Vector &ListVector::GetEntry(const Vector &vector) {
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::LIST_BUFFER);
-	return ((VectorListBuffer *)vector.auxiliary.get())->GetChild();
+	return vector.auxiliary->Cast<VectorListBuffer>().GetChild();
 }
 
 Vector &ListVector::GetEntry(Vector &vector) {
@@ -1861,7 +1859,7 @@ void ListVector::Reserve(Vector &vector, idx_t required_capacity) {
 	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	D_ASSERT(vector.auxiliary);
 	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::LIST_BUFFER);
-	auto &child_buffer = *((VectorListBuffer *)vector.auxiliary.get());
+	auto &child_buffer = vector.auxiliary->Cast<VectorListBuffer>();
 	child_buffer.Reserve(required_capacity);
 }
 
@@ -1871,7 +1869,7 @@ idx_t ListVector::GetListSize(const Vector &vec) {
 		return ListVector::GetListSize(child);
 	}
 	D_ASSERT(vec.auxiliary);
-	return ((VectorListBuffer &)*vec.auxiliary).GetSize();
+	return vec.auxiliary->Cast<VectorListBuffer>().GetSize();
 }
 
 idx_t ListVector::GetListCapacity(const Vector &vec) {
@@ -1880,7 +1878,7 @@ idx_t ListVector::GetListCapacity(const Vector &vec) {
 		return ListVector::GetListSize(child);
 	}
 	D_ASSERT(vec.auxiliary);
-	return ((VectorListBuffer &)*vec.auxiliary).GetCapacity();
+	return vec.auxiliary->Cast<VectorListBuffer>().GetCapacity();
 }
 
 void ListVector::ReferenceEntry(Vector &vector, Vector &other) {
@@ -1897,7 +1895,7 @@ void ListVector::SetListSize(Vector &vec, idx_t size) {
 		auto &child = DictionaryVector::Child(vec);
 		ListVector::SetListSize(child, size);
 	}
-	((VectorListBuffer &)*vec.auxiliary).SetSize(size);
+	vec.auxiliary->Cast<VectorListBuffer>().SetSize(size);
 }
 
 void ListVector::Append(Vector &target, const Vector &source, idx_t source_size, idx_t source_offset) {
@@ -1905,7 +1903,7 @@ void ListVector::Append(Vector &target, const Vector &source, idx_t source_size,
 		//! Nothing to add
 		return;
 	}
-	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
+	auto &target_buffer = target.auxiliary->Cast<VectorListBuffer>();
 	target_buffer.Append(source, source_size, source_offset);
 }
 
@@ -1915,12 +1913,12 @@ void ListVector::Append(Vector &target, const Vector &source, const SelectionVec
 		//! Nothing to add
 		return;
 	}
-	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
+	auto &target_buffer = target.auxiliary->Cast<VectorListBuffer>();
 	target_buffer.Append(source, sel, source_size, source_offset);
 }
 
 void ListVector::PushBack(Vector &target, const Value &insert) {
-	auto &target_buffer = (VectorListBuffer &)*target.auxiliary;
+	auto &target_buffer = target.auxiliary->Cast<VectorListBuffer>();
 	target_buffer.PushBack(insert);
 }
 
@@ -1942,7 +1940,7 @@ ConsecutiveChildListInfo ListVector::GetConsecutiveChildListInfo(Vector &list, i
 	ConsecutiveChildListInfo info;
 	UnifiedVectorFormat unified_list_data;
 	list.ToUnifiedFormat(offset + count, unified_list_data);
-	auto list_data = (list_entry_t *)unified_list_data.data;
+	auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(unified_list_data);
 
 	// find the first non-NULL entry
 	idx_t first_length = 0;
@@ -1992,10 +1990,9 @@ ConsecutiveChildListInfo ListVector::GetConsecutiveChildListInfo(Vector &list, i
 }
 
 void ListVector::GetConsecutiveChildSelVector(Vector &list, SelectionVector &sel, idx_t offset, idx_t count) {
-
 	UnifiedVectorFormat unified_list_data;
 	list.ToUnifiedFormat(offset + count, unified_list_data);
-	auto list_data = (list_entry_t *)unified_list_data.data;
+	auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(unified_list_data);
 
 	//	SelectionVector child_sel(info.second.length);
 	idx_t entry = 0;
@@ -2130,7 +2127,7 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector, idx_t count, 
 			continue;
 		}
 
-		auto tag = ((union_tag_t *)tags_vdata.data)[tag_mapped_row_idx];
+		auto tag = (UnifiedVectorFormat::GetData<union_tag_t>(tags_vdata))[tag_mapped_row_idx];
 		if (tag >= member_count) {
 			return UnionInvalidReason::TAG_OUT_OF_RANGE;
 		}

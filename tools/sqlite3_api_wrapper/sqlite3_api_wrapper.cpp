@@ -694,7 +694,7 @@ int sqlite3_bind_blob(sqlite3_stmt *stmt, int idx, const void *val, int length, 
 	if (length < 0) {
 		blob = Value::BLOB(string((const char *)val));
 	} else {
-		blob = Value::BLOB((const_data_ptr_t)val, length);
+		blob = Value::BLOB(const_data_ptr_cast(val), length);
 	}
 	if (free_func && ((ptrdiff_t)free_func) != -1) {
 		free_func((void *)val);
