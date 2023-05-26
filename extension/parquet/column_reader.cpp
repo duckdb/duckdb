@@ -17,7 +17,6 @@
 #include "utf8proc_wrapper.hpp"
 #include "zstd.h"
 
-#include <iostream>
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/blob.hpp"
