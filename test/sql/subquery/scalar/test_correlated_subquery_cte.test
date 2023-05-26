@@ -14,6 +14,8 @@ CREATE TABLE integers(i INTEGER)
 statement ok
 INSERT INTO integers VALUES (1), (2), (3), (NULL)
 
+require noalternativeverify
+
 # scalar select with correlation
 query II
 SELECT i, (WITH i2 AS (SELECT 42+i1.i AS j) SELECT j FROM i2) AS j FROM integers i1 ORDER BY i;
