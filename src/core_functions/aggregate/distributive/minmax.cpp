@@ -49,30 +49,28 @@ static AggregateFunction GetUnaryAggregate(LogicalType type) {
 
 struct MinMaxBase {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->isset = false;
+	static void Initialize(STATE &state) {
+		state.isset = false;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &input_data, const INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
-		D_ASSERT(mask.RowIsValid(0));
-		if (!state->isset) {
-			OP::template Assign<INPUT_TYPE, STATE>(state, input_data, input[0]);
-			state->isset = true;
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
+		if (!state.isset) {
+			OP::template Assign<INPUT_TYPE, STATE>(state, input, unary_input.input);
+			state.isset = true;
 		} else {
-			OP::template Execute<INPUT_TYPE, STATE>(state, input_data, input[0]);
+			OP::template Execute<INPUT_TYPE, STATE>(state, input, unary_input.input);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &input_data, const INPUT_TYPE *input, ValidityMask &mask,
-	                      idx_t idx) {
-		if (!state->isset) {
-			OP::template Assign<INPUT_TYPE, STATE>(state, input_data, input[idx]);
-			state->isset = true;
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		if (!state.isset) {
+			OP::template Assign<INPUT_TYPE, STATE>(state, input, unary_input.input);
+			state.isset = true;
 		} else {
-			OP::template Execute<INPUT_TYPE, STATE>(state, input_data, input[idx]);
+			OP::template Execute<INPUT_TYPE, STATE>(state, input, unary_input.input);
 		}
 	}
 
@@ -83,125 +81,128 @@ struct MinMaxBase {
 
 struct NumericMinMaxBase : public MinMaxBase {
 	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE *state, AggregateInputData &, INPUT_TYPE input) {
-		state->value = input;
+	static void Assign(STATE &state, INPUT_TYPE input, AggregateInputData &) {
+		state.value = input;
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		mask.Set(idx, state->isset);
-		target[idx] = state->value;
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.isset) {
+			finalize_data.ReturnNull();
+		} else {
+			target = state.value;
+		}
 	}
 };
 
 struct MinOperation : public NumericMinMaxBase {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, AggregateInputData &, INPUT_TYPE input) {
-		if (LessThan::Operation<INPUT_TYPE>(input, state->value)) {
-			state->value = input;
+	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &) {
+		if (LessThan::Operation<INPUT_TYPE>(input, state.value)) {
+			state.value = input;
 		}
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.isset) {
 			// source is NULL, nothing to do
 			return;
 		}
-		if (!target->isset) {
+		if (!target.isset) {
 			// target is NULL, use source value directly
-			*target = source;
-		} else if (GreaterThan::Operation(target->value, source.value)) {
-			target->value = source.value;
+			target = source;
+		} else if (GreaterThan::Operation(target.value, source.value)) {
+			target.value = source.value;
 		}
 	}
 };
 
 struct MaxOperation : public NumericMinMaxBase {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, AggregateInputData &, INPUT_TYPE input) {
-		if (GreaterThan::Operation<INPUT_TYPE>(input, state->value)) {
-			state->value = input;
+	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &) {
+		if (GreaterThan::Operation<INPUT_TYPE>(input, state.value)) {
+			state.value = input;
 		}
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.isset) {
 			// source is NULL, nothing to do
 			return;
 		}
-		if (!target->isset) {
+		if (!target.isset) {
 			// target is NULL, use source value directly
-			*target = source;
-		} else if (LessThan::Operation(target->value, source.value)) {
-			target->value = source.value;
+			target = source;
+		} else if (LessThan::Operation(target.value, source.value)) {
+			target.value = source.value;
 		}
 	}
 };
 
 struct StringMinMaxBase : public MinMaxBase {
 	template <class STATE>
-	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
-		if (state->isset && !state->value.IsInlined()) {
-			delete[] state->value.GetData();
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		if (state.isset && !state.value.IsInlined()) {
+			delete[] state.value.GetData();
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE *state, AggregateInputData &input_data, INPUT_TYPE input) {
-		Destroy(input_data, state);
+	static void Assign(STATE &state, INPUT_TYPE input, AggregateInputData &input_data) {
+		Destroy(state, input_data);
 		if (input.IsInlined()) {
-			state->value = input;
+			state.value = input;
 		} else {
 			// non-inlined string, need to allocate space for it
 			auto len = input.GetSize();
 			auto ptr = new char[len];
 			memcpy(ptr, input.GetData(), len);
 
-			state->value = string_t(ptr, len);
+			state.value = string_t(ptr, len);
 		}
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->isset) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.isset) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = StringVector::AddStringOrBlob(result, state->value);
+			target = StringVector::AddStringOrBlob(finalize_data.result, state.value);
 		}
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &input_data) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &input_data) {
 		if (!source.isset) {
 			// source is NULL, nothing to do
 			return;
 		}
-		if (!target->isset) {
+		if (!target.isset) {
 			// target is NULL, use source value directly
-			Assign(target, input_data, source.value);
-			target->isset = true;
+			Assign(target, source.value, input_data);
+			target.isset = true;
 		} else {
-			OP::template Execute<string_t, STATE>(target, input_data, source.value);
+			OP::template Execute<string_t, STATE>(target, source.value, input_data);
 		}
 	}
 };
 
 struct MinOperationString : public StringMinMaxBase {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, AggregateInputData &input_data, INPUT_TYPE input) {
-		if (LessThan::Operation<INPUT_TYPE>(input, state->value)) {
-			Assign(state, input_data, input);
+	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &input_data) {
+		if (LessThan::Operation<INPUT_TYPE>(input, state.value)) {
+			Assign(state, input, input_data);
 		}
 	}
 };
 
 struct MaxOperationString : public StringMinMaxBase {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, AggregateInputData &input_data, INPUT_TYPE input) {
-		if (GreaterThan::Operation<INPUT_TYPE>(input, state->value)) {
-			Assign(state, input_data, input);
+	static void Execute(STATE &state, INPUT_TYPE input, AggregateInputData &input_data) {
+		if (GreaterThan::Operation<INPUT_TYPE>(input, state.value)) {
+			Assign(state, input, input_data);
 		}
 	}
 };
@@ -379,31 +380,31 @@ struct VectorMinMaxBase {
 	}
 
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->value = nullptr;
+	static void Initialize(STATE &state) {
+		state.value = nullptr;
 	}
 
 	template <class STATE>
-	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
-		if (state->value) {
-			delete state->value;
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		if (state.value) {
+			delete state.value;
 		}
-		state->value = nullptr;
+		state.value = nullptr;
 	}
 
 	template <class STATE>
-	static void Assign(STATE *state, Vector &input, const idx_t idx) {
-		if (!state->value) {
-			state->value = new Vector(input.GetType());
-			state->value->SetVectorType(VectorType::CONSTANT_VECTOR);
+	static void Assign(STATE &state, Vector &input, const idx_t idx) {
+		if (!state.value) {
+			state.value = new Vector(input.GetType());
+			state.value->SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 		sel_t selv = idx;
 		SelectionVector sel(&selv);
-		VectorOperations::Copy(input, *state->value, sel, 1, 0, 0);
+		VectorOperations::Copy(input, *state.value, sel, 1, 0, 0);
 	}
 
 	template <class STATE>
-	static void Execute(STATE *state, Vector &input, const idx_t idx, const idx_t count) {
+	static void Execute(STATE &state, Vector &input, const idx_t idx, const idx_t count) {
 		Assign(state, input, idx);
 	}
 
@@ -423,8 +424,8 @@ struct VectorMinMaxBase {
 				continue;
 			}
 			const auto sidx = sdata.sel->get_index(i);
-			auto state = states[sidx];
-			if (!state->value) {
+			auto &state = *states[sidx];
+			if (!state.value) {
 				Assign(state, input, i);
 			} else {
 				OP::template Execute(state, input, i, count);
@@ -433,34 +434,22 @@ struct VectorMinMaxBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.value) {
 			return;
-		} else if (!target->value) {
+		} else if (!target.value) {
 			Assign(target, *source.value, 0);
 		} else {
 			OP::template Execute(target, *source.value, 0, 1);
 		}
 	}
 
-	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->value) {
-			// we need to use SetNull here
-			// since for STRUCT columns only setting the validity mask of the struct is incorrect
-			// as for a struct column, we need to also set ALL child columns to NULL
-			switch (result.GetVectorType()) {
-			case VectorType::FLAT_VECTOR:
-				FlatVector::SetNull(result, idx, true);
-				break;
-			case VectorType::CONSTANT_VECTOR:
-				ConstantVector::SetNull(result, true);
-				break;
-			default:
-				throw InternalException("Invalid result vector type for nested min/max");
-			}
+	template <class STATE>
+	static void Finalize(STATE &state, AggregateFinalizeData &finalize_data) {
+		if (!state.value) {
+			finalize_data.ReturnNull();
 		} else {
-			VectorOperations::Copy(*state->value, result, 1, 0, idx);
+			VectorOperations::Copy(*state.value, finalize_data.result, 1, 0, finalize_data.result_idx);
 		}
 	}
 
@@ -474,8 +463,8 @@ struct VectorMinMaxBase {
 
 struct MinOperationVector : public VectorMinMaxBase {
 	template <class STATE>
-	static void Execute(STATE *state, Vector &input, const idx_t idx, const idx_t count) {
-		if (TemplatedOptimumValue<DistinctLessThan>(input, idx, count, *state->value, 0, 1)) {
+	static void Execute(STATE &state, Vector &input, const idx_t idx, const idx_t count) {
+		if (TemplatedOptimumValue<DistinctLessThan>(input, idx, count, *state.value, 0, 1)) {
 			Assign(state, input, idx);
 		}
 	}
@@ -483,8 +472,8 @@ struct MinOperationVector : public VectorMinMaxBase {
 
 struct MaxOperationVector : public VectorMinMaxBase {
 	template <class STATE>
-	static void Execute(STATE *state, Vector &input, const idx_t idx, const idx_t count) {
-		if (TemplatedOptimumValue<DistinctGreaterThan>(input, idx, count, *state->value, 0, 1)) {
+	static void Execute(STATE &state, Vector &input, const idx_t idx, const idx_t count) {
+		if (TemplatedOptimumValue<DistinctGreaterThan>(input, idx, count, *state.value, 0, 1)) {
 			Assign(state, input, idx);
 		}
 	}
@@ -518,11 +507,10 @@ unique_ptr<FunctionData> BindDecimalMinMax(ClientContext &context, AggregateFunc
 
 template <typename OP, typename STATE>
 static AggregateFunction GetMinMaxFunction(const LogicalType &type) {
-	return AggregateFunction({type}, type, AggregateFunction::StateSize<STATE>,
-	                         AggregateFunction::StateInitialize<STATE, OP>, OP::template Update<STATE, OP>,
-	                         AggregateFunction::StateCombine<STATE, OP>,
-	                         AggregateFunction::StateFinalize<STATE, void, OP>, nullptr, OP::Bind,
-	                         AggregateFunction::StateDestroy<STATE, OP>);
+	return AggregateFunction(
+	    {type}, type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
+	    OP::template Update<STATE, OP>, AggregateFunction::StateCombine<STATE, OP>,
+	    AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, OP::Bind, AggregateFunction::StateDestroy<STATE, OP>);
 }
 
 template <class OP, class OP_STRING, class OP_VECTOR>

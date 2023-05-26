@@ -16,30 +16,29 @@ struct RegrSState {
 
 struct RegrBaseOperation {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		RegrCountFunction::Initialize<size_t>(&state->count);
-		STDDevBaseOperation::Initialize<StddevState>(&state->var_pop);
+	static void Initialize(STATE &state) {
+		RegrCountFunction::Initialize<size_t>(state.count);
+		STDDevBaseOperation::Initialize<StddevState>(state.var_pop);
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
-		RegrCountFunction::Combine<size_t, OP>(source.count, &target->count, aggr_input_data);
-		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop, &target->var_pop, aggr_input_data);
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
+		RegrCountFunction::Combine<size_t, OP>(source.count, target.count, aggr_input_data);
+		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop, target.var_pop, aggr_input_data);
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target,
-	                     ValidityMask &mask, idx_t idx) {
-		if (state->var_pop.count == 0) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.var_pop.count == 0) {
+			finalize_data.ReturnNull();
 			return;
 		}
-		auto var_pop = state->var_pop.count > 1 ? (state->var_pop.dsquared / state->var_pop.count) : 0;
+		auto var_pop = state.var_pop.count > 1 ? (state.var_pop.dsquared / state.var_pop.count) : 0;
 		if (!Value::DoubleIsFinite(var_pop)) {
 			throw OutOfRangeException("VARPOP is out of range!");
 		}
-		RegrCountFunction::Finalize<T, size_t>(result, aggr_input_data, &state->count, target, mask, idx);
-		target[idx] *= var_pop;
+		RegrCountFunction::Finalize<T, size_t>(state.count, target, finalize_data);
+		target *= var_pop;
 	}
 
 	static bool IgnoreNull() {
@@ -49,21 +48,17 @@ struct RegrBaseOperation {
 
 struct RegrSXXOperation : RegrBaseOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &aggr_input_data, const A_TYPE *x_data, const B_TYPE *y_data,
-	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(&state->count, aggr_input_data, y_data, x_data, bmask,
-		                                                         amask, yidx, xidx);
-		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->var_pop, aggr_input_data, y_data, bmask, yidx);
+	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
+		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(state.count, x, y, idata);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop, y);
 	}
 };
 
 struct RegrSYYOperation : RegrBaseOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &aggr_input_data, const A_TYPE *x_data, const B_TYPE *y_data,
-	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(&state->count, aggr_input_data, y_data, x_data, bmask,
-		                                                         amask, yidx, xidx);
-		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->var_pop, aggr_input_data, x_data, bmask, xidx);
+	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
+		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(state.count, x, y, idata);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop, x);
 	}
 };
 

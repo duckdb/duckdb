@@ -12,23 +12,23 @@ struct RegrState {
 
 struct RegrAvgFunction {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->sum = 0;
-		state->count = 0;
+	static void Initialize(STATE &state) {
+		state.sum = 0;
+		state.count = 0;
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
-		target->sum += source.sum;
-		target->count += source.count;
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		target.sum += source.sum;
+		target.count += source.count;
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (state->count == 0) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = state->sum / (double)state->count;
+			target = state.sum / (double)state.count;
 		}
 	}
 	static bool IgnoreNull() {
@@ -37,19 +37,17 @@ struct RegrAvgFunction {
 };
 struct RegrAvgXFunction : RegrAvgFunction {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, const A_TYPE *x_data, const B_TYPE *y_data,
-	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		state->sum += y_data[yidx];
-		state->count++;
+	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
+		state.sum += y;
+		state.count++;
 	}
 };
 
 struct RegrAvgYFunction : RegrAvgFunction {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, const A_TYPE *x_data, const B_TYPE *y_data,
-	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		state->sum += x_data[xidx];
-		state->count++;
+	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
+		state.sum += x;
+		state.count++;
 	}
 };
 

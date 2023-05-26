@@ -15,62 +15,60 @@ struct SkewState {
 
 struct SkewnessOperation {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->n = 0;
-		state->sum = state->sum_sqr = state->sum_cub = 0;
+	static void Initialize(STATE &state) {
+		state.n = 0;
+		state.sum = state.sum_sqr = state.sum_cub = 0;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
-		state->n++;
-		state->sum += data[idx];
-		state->sum_sqr += pow(data[idx], 2);
-		state->sum_cub += pow(data[idx], 3);
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		state.n++;
+		state.sum += input;
+		state.sum_sqr += pow(input, 2);
+		state.sum_cub += pow(input, 3);
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (source.n == 0) {
 			return;
 		}
 
-		target->n += source.n;
-		target->sum += source.sum;
-		target->sum_sqr += source.sum_sqr;
-		target->sum_cub += source.sum_cub;
+		target.n += source.n;
+		target.sum += source.sum;
+		target.sum_sqr += source.sum_sqr;
+		target.sum_cub += source.sum_cub;
 	}
 
 	template <class TARGET_TYPE, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, TARGET_TYPE *target, ValidityMask &mask,
-	                     idx_t idx) {
-		if (state->n <= 2) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, TARGET_TYPE &target, AggregateFinalizeData &finalize_data) {
+		if (state.n <= 2) {
+			finalize_data.ReturnNull();
 			return;
 		}
-		double n = state->n;
+		double n = state.n;
 		double temp = 1 / n;
-		auto p = std::pow(temp * (state->sum_sqr - state->sum * state->sum * temp), 3);
+		auto p = std::pow(temp * (state.sum_sqr - state.sum * state.sum * temp), 3);
 		if (p < 0) {
 			p = 0; // Shouldn't be below 0 but floating points are weird
 		}
 		double div = std::sqrt(p);
 		if (div == 0) {
-			mask.SetInvalid(idx);
+			finalize_data.ReturnNull();
 			return;
 		}
 		double temp1 = std::sqrt(n * (n - 1)) / (n - 2);
-		target[idx] = temp1 * temp *
-		              (state->sum_cub - 3 * state->sum_sqr * state->sum * temp + 2 * pow(state->sum, 3) * temp * temp) /
-		              div;
-		if (!Value::DoubleIsFinite(target[idx])) {
+		target = temp1 * temp *
+		         (state.sum_cub - 3 * state.sum_sqr * state.sum * temp + 2 * pow(state.sum, 3) * temp * temp) / div;
+		if (!Value::DoubleIsFinite(target)) {
 			throw OutOfRangeException("SKEW is out of range!");
 		}
 	}
