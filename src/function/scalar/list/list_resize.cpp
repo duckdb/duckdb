@@ -5,34 +5,10 @@
 
 namespace duckdb {
 
-struct StandardCopyValue {
-	template <class T>
-	static void Operation(T *result_child_data, optional_ptr<T> child_entries, optional_ptr<Vector>, Vector &, idx_t i,
-	                      idx_t result_child_offset) {
-		result_child_data[result_child_offset] = child_entries.get()[i];
-	}
-};
-
-struct StringCopyValue {
-	template <class T>
-	static void Operation(T *result_child_data, optional_ptr<T> child_entries, optional_ptr<Vector>,
-	                      Vector &result_child, idx_t i, idx_t result_child_offset) {
-		result_child_data[result_child_offset] = StringVector::AddStringOrBlob(result_child, child_entries.get()[i]);
-	}
-};
-
-struct NestedCopyValue {
-	template <class T>
-	static void Operation(T *, optional_ptr<T>, optional_ptr<Vector> child, Vector &result_child, idx_t i,
-	                      idx_t result_child_offset) {
-		result_child.SetValue(result_child_offset, child->GetValue(i));
-	}
-};
-
-template <class T, class COPY_FUNCTION>
-static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
+void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.data[1].GetType().id() == LogicalTypeId::UBIGINT);
 	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
-		FlatVector::Validity(result).SetInvalid(0);
+		FlatVector::SetNull(result, 0, true);
 		return;
 	}
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
@@ -41,23 +17,19 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
 	auto &lists = args.data[0];
-	optional_ptr<Vector> child = &ListVector::GetEntry(args.data[0]);
+	auto &child = ListVector::GetEntry(args.data[0]);
 	auto &new_sizes = args.data[1];
 
 	UnifiedVectorFormat list_data;
 	lists.ToUnifiedFormat(count, list_data);
-	auto list_entries = reinterpret_cast<list_entry_t *>(list_data.data);
+	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 
 	UnifiedVectorFormat new_size_data;
 	new_sizes.ToUnifiedFormat(count, new_size_data);
-	auto new_size_entries = reinterpret_cast<int64_t *>(new_size_data.data);
+	auto new_size_entries = UnifiedVectorFormat::GetData<int64_t>(new_size_data);
 
 	UnifiedVectorFormat child_data;
-	child->ToUnifiedFormat(count, child_data);
-	optional_ptr<T> child_entries;
-	if (child->GetType() != LogicalTypeId::LIST && child->GetType().InternalType() != PhysicalType::STRUCT) {
-		child_entries = (T *)child_data.data;
-	}
+	child.ToUnifiedFormat(count, child_data);
 
 	// Find the new size of the result child vector
 	idx_t new_child_size = 0;
@@ -69,13 +41,12 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 	}
 
 	// Create the default vector if it exists
-	T *default_entries = nullptr;
 	UnifiedVectorFormat default_data;
 	optional_ptr<Vector> default_vector;
 	if (args.ColumnCount() == 3) {
 		default_vector = &args.data[2];
 		default_vector->ToUnifiedFormat(count, default_data);
-		default_entries = (T *)default_data.data;
+		default_vector->SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 
 	ListVector::Reserve(result, new_child_size);
@@ -83,7 +54,6 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 
 	auto result_entries = FlatVector::GetData<list_entry_t>(result);
 	auto &result_child = ListVector::GetEntry(result);
-	auto result_child_data = FlatVector::GetData<T>(result_child);
 
 	// for each lists in the args
 	idx_t result_child_offset = 0;
@@ -110,15 +80,9 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 		result_entries[args_index].length = new_size_entry;
 
 		// copy the values from the child vector
-		for (idx_t list_index = 0; list_index < values_to_copy; list_index++) {
-			if (!child_data.validity.RowIsValid(list_entries[l_index].offset + list_index)) {
-				FlatVector::SetNull(result_child, result_child_offset, true);
-			} else {
-				COPY_FUNCTION::template Operation<T>(result_child_data, child_entries, child, result_child,
-				                                     list_entries[l_index].offset + list_index, result_child_offset);
-			}
-			result_child_offset++;
-		}
+		VectorOperations::Copy(child, result_child, list_entries[l_index].offset + values_to_copy,
+		                       list_entries[l_index].offset, result_child_offset);
+		result_child_offset += values_to_copy;
 
 		// set default value if it exists
 		idx_t def_index = 0;
@@ -127,77 +91,22 @@ static void TemplatedListResizeFunction(DataChunk &args, Vector &result) {
 		}
 
 		// if the new size is larger than the old size, fill in the default value
-		for (idx_t j = values_to_copy; j < new_size_entry; j++) {
+		if (values_to_copy < new_size_entry) {
 			if (default_vector && default_data.validity.RowIsValid(def_index)) {
-				COPY_FUNCTION::template Operation<T>(result_child_data, default_entries, default_vector, result_child,
-				                                     def_index, result_child_offset);
+				VectorOperations::Copy(*default_vector, result_child, new_size_entry - values_to_copy, def_index,
+				                       result_child_offset);
+				result_child_offset += new_size_entry - values_to_copy;
 			} else {
-				FlatVector::SetNull(result_child, result_child_offset, true);
+				for (idx_t j = values_to_copy; j < new_size_entry; j++) {
+					FlatVector::SetNull(result_child, result_child_offset, true);
+					result_child_offset++;
+				}
 			}
-			result_child_offset++;
 		}
 	}
 
 	if (args.AllConstant()) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	}
-}
-
-void ListResizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	D_ASSERT(args.data[1].GetType().id() == LogicalTypeId::UBIGINT);
-	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
-		FlatVector::Validity(result).SetInvalid(0);
-		return;
-	}
-	auto child_type = ListType::GetChildType(args.data[0].GetType()).InternalType();
-	switch (child_type) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		TemplatedListResizeFunction<int8_t, StandardCopyValue>(args, result);
-		break;
-	case PhysicalType::INT16:
-		TemplatedListResizeFunction<int16_t, StandardCopyValue>(args, result);
-		break;
-	case PhysicalType::INT32:
-		TemplatedListResizeFunction<int32_t, StandardCopyValue>(args, result);
-		break;
-	case PhysicalType::INT64:
-		TemplatedListResizeFunction<int64_t, StandardCopyValue>(args, result);
-		break;
-	case PhysicalType::INT128:
-		TemplatedListResizeFunction<hugeint_t, StandardCopyValue>(args, result);
-		break;
-	case PhysicalType::UINT8:
-		TemplatedListResizeFunction<uint8_t, StandardCopyValue>(args, result);
-		break;
-	case PhysicalType::UINT16:
-		TemplatedListResizeFunction<uint16_t, StandardCopyValue>(args, result);
-		break;
-	case PhysicalType::UINT32:
-		TemplatedListResizeFunction<uint32_t, StandardCopyValue>(args, result);
-		break;
-	case PhysicalType::UINT64:
-		TemplatedListResizeFunction<uint64_t, StandardCopyValue>(args, result);
-		break;
-	case PhysicalType::FLOAT:
-		TemplatedListResizeFunction<float, StandardCopyValue>(args, result);
-		break;
-	case PhysicalType::DOUBLE:
-		TemplatedListResizeFunction<double, StandardCopyValue>(args, result);
-		break;
-	case PhysicalType::VARCHAR:
-		TemplatedListResizeFunction<string_t, StringCopyValue>(args, result);
-		break;
-	case PhysicalType::INTERVAL:
-		TemplatedListResizeFunction<interval_t, NestedCopyValue>(args, result);
-		break;
-	case PhysicalType::STRUCT:
-	case PhysicalType::LIST:
-		TemplatedListResizeFunction<int8_t, NestedCopyValue>(args, result);
-		break;
-	default:
-		throw NotImplementedException("This function has not been implemented for logical type %s",
-		                              TypeIdToString(child_type));
 	}
 }
 
@@ -223,8 +132,7 @@ static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFun
 	if (bound_function.arguments.size() == 3 &&
 	    ListType::GetChildType(arguments[0]->return_type) != arguments[2]->return_type &&
 	    arguments[2]->return_type != LogicalTypeId::SQLNULL) {
-		throw InvalidInputException("Default value must be of the same type as the lists or NULL");
-	}
+		bound_function.arguments[2] = ListType::GetChildType(arguments[0]->return_type);}
 
 	bound_function.return_type = arguments[0]->return_type;
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);

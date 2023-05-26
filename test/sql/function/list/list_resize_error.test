@@ -46,7 +46,7 @@ foreach q q3 q4
 statement error
 execute ${q}([1, 2, 3], 5, 'abc');
 ----
-Invalid Input Error: Default value must be of the same type as the lists or NULL
+Conversion Error: Could not convert string 'abc' to INT32
 
 statement error
 execute ${q}([1, 2, 3], 2, 3, 4);
@@ -54,6 +54,6 @@ execute ${q}([1, 2, 3], 2, 3, 4);
 statement error
 execute ${q}([1, 2, 3], 1, [1, 2, 3]);
 ----
-Invalid Input Error: Default value must be of the same type as the lists or NULL
+Conversion Error: Unimplemented type for cast (INTEGER[] -> INTEGER)
 
 endloop

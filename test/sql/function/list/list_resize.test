@@ -294,4 +294,9 @@ execute ${q}([2], 2::TINYINT);
 
 endloop
 
+query I
+SELECT list_resize([1, 2, 3]::BIGINT[], 5, 42);
+----
+[1, 2, 3, 42, 42]
+
 
