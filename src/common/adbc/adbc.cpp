@@ -201,7 +201,7 @@ AdbcStatusCode ConnectionSetOption(struct AdbcConnection *connection, const char
 				// no-op
 			} else {
 				// begin
-				AdbcStatusCode status = ExecuteQuery(conn, "BEGIN", error);
+				AdbcStatusCode status = ExecuteQuery(conn, "START TRANSACTION", error);
 				if (status != ADBC_STATUS_OK) {
 					return status;
 				}
@@ -248,7 +248,7 @@ AdbcStatusCode ConnectionCommit(struct AdbcConnection *connection, struct AdbcEr
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
-	return ExecuteQuery(conn, "BEGIN", error);
+	return ExecuteQuery(conn, "START TRANSACTION", error);
 }
 
 AdbcStatusCode ConnectionRollback(struct AdbcConnection *connection, struct AdbcError *error) {
@@ -266,7 +266,7 @@ AdbcStatusCode ConnectionRollback(struct AdbcConnection *connection, struct Adbc
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
-	return ExecuteQuery(conn, "BEGIN", error);
+	return ExecuteQuery(conn, "START TRANSACTION", error);
 }
 
 AdbcStatusCode ConnectionInit(struct AdbcConnection *connection, struct AdbcDatabase *database,
