@@ -615,7 +615,7 @@ static void GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const ve
 	D_ASSERT(names.size() == sql_types.size());
 	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 		const auto &col_name = names[col_idx];
-		auto inserted = field_ids.ids->emplace(col_name, field_id++);
+		auto inserted = field_ids.ids->insert(std::make_pair(col_name, FieldID(field_id++)));
 		D_ASSERT(inserted.second);
 
 		const auto &col_type = sql_types[col_idx];
@@ -664,14 +664,10 @@ static void GetFieldIDs(const Value &field_id_string_value, ChildFieldIDs &field
 		bool has_child_field_ids = false;
 		string child_input_string;
 		if (StringUtil::Contains(input_string, ":")) {
-			auto id_and_children = StringUtil::Split(input_string, ":");
-			if (id_and_children.size() != 2) {
-				throw BinderException("Invalid FIELD_IDS specification for column \"%s\": \"%s\"", col_name,
-				                      input_string);
-			}
-			field_id_string = std::move(id_and_children[0]);
+			const auto pos = input_string.find(':');
+			field_id_string = string(input_string.c_str(), pos);
 			has_child_field_ids = true;
-			child_input_string = std::move(id_and_children[1]);
+			child_input_string = string(input_string.c_str() + pos + 1, input_string.length() - pos - 1);
 		} else {
 			field_id_string = input_string;
 		}
@@ -686,7 +682,7 @@ static void GetFieldIDs(const Value &field_id_string_value, ChildFieldIDs &field
 		if (!unique_field_ids.insert(field_id).second) {
 			throw BinderException("Duplicate field_id %s found in FIELD_IDS", field_id_value.ToString());
 		}
-		auto inserted = field_ids.ids->emplace(col_name, field_id);
+		auto inserted = field_ids.ids->insert(make_pair(col_name, FieldID(field_id)));
 		D_ASSERT(inserted.second);
 
 		if (!has_child_field_ids) {
