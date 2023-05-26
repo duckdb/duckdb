@@ -64,7 +64,7 @@ static void UnaryTrimFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void GetIgnoredCodepoints(string_t ignored, unordered_set<utf8proc_int32_t> &ignored_codepoints) {
-	auto dataptr = (utf8proc_uint8_t *)ignored.GetData();
+	auto dataptr = reinterpret_cast<const utf8proc_uint8_t *>(ignored.GetData());
 	auto size = ignored.GetSize();
 	idx_t pos = 0;
 	while (pos < size) {

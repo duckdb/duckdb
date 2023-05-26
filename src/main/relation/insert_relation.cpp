@@ -21,7 +21,7 @@ BoundStatement InsertRelation::Bind(Binder &binder) {
 	stmt.schema = schema_name;
 	stmt.table = table_name;
 	stmt.select_statement = std::move(select);
-	return binder.Bind((SQLStatement &)stmt);
+	return binder.Bind(stmt.Cast<SQLStatement>());
 }
 
 const vector<ColumnDefinition> &InsertRelation::Columns() {

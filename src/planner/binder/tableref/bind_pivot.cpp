@@ -84,7 +84,7 @@ static unique_ptr<SelectNode> PivotInitialAggregate(PivotBindState &bind_state, 
 			if (entry->type != ExpressionType::COLUMN_REF) {
 				throw InternalException("Unexpected child of pivot source - not a ColumnRef");
 			}
-			auto &columnref = (ColumnRefExpression &)*entry;
+			auto &columnref = entry->Cast<ColumnRefExpression>();
 			if (handled_columns.find(columnref.GetColumnName()) == handled_columns.end()) {
 				// not handled - add to grouping set
 				subquery_stage1->groups.group_expressions.push_back(

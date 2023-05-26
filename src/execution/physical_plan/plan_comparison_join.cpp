@@ -186,7 +186,7 @@ static bool PlanIndexJoin(ClientContext &context, LogicalComparisonJoin &op, uni
 	}
 	// index joins are not supported if there are pushed down table filters
 	D_ASSERT(right->type == PhysicalOperatorType::TABLE_SCAN);
-	auto &tbl_scan = (PhysicalTableScan &)*right;
+	auto &tbl_scan = right->Cast<PhysicalTableScan>();
 	//	if (tbl_scan.table_filters && !tbl_scan.table_filters->filters.empty()) {
 	//		return false;
 	//	}

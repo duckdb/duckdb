@@ -7,24 +7,22 @@
 
 namespace duckdb {
 
-unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgquery::PGNode *node) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateSeqStmt *>(node);
-
+unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgquery::PGCreateSeqStmt &stmt) {
 	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreateSequenceInfo>();
 
-	auto qname = TransformQualifiedName(stmt->sequence);
+	auto qname = TransformQualifiedName(*stmt.sequence);
 	info->catalog = qname.catalog;
 	info->schema = qname.schema;
 	info->name = qname.name;
 
-	if (stmt->options) {
+	if (stmt.options) {
 		unordered_set<SequenceInfo, EnumClassHash> used;
 		duckdb_libpgquery::PGListCell *cell = nullptr;
-		for_each_cell(cell, stmt->options->head) {
-			auto *def_elem = reinterpret_cast<duckdb_libpgquery::PGDefElem *>(cell->data.ptr_value);
+		for_each_cell(cell, stmt.options->head) {
+			auto def_elem = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
 			string opt_name = string(def_elem->defname);
-			auto val = (duckdb_libpgquery::PGValue *)def_elem->arg;
+			auto val = PGPointerCast<duckdb_libpgquery::PGValue>(def_elem->arg);
 			bool nodef = def_elem->defaction == duckdb_libpgquery::PG_DEFELEM_UNSPEC && !val; // e.g. NO MINVALUE
 			int64_t opt_value = 0;
 
@@ -110,8 +108,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgque
 			}
 		}
 	}
-	info->temporary = !stmt->sequence->relpersistence;
-	info->on_conflict = TransformOnConflict(stmt->onconflict);
+	info->temporary = !stmt.sequence->relpersistence;
+	info->on_conflict = TransformOnConflict(stmt.onconflict);
 	if (info->max_value <= info->min_value) {
 		throw ParserException("MINVALUE (%lld) must be less than MAXVALUE (%lld)", info->min_value, info->max_value);
 	}

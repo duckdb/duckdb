@@ -158,7 +158,7 @@ void ParsedExpressionIterator::EnumerateQueryNodeModifiers(
 	for (auto &modifier : node.modifiers) {
 		switch (modifier->type) {
 		case ResultModifierType::LIMIT_MODIFIER: {
-			auto &limit_modifier = (LimitModifier &)*modifier;
+			auto &limit_modifier = modifier->Cast<LimitModifier>();
 			if (limit_modifier.limit) {
 				callback(limit_modifier.limit);
 			}
@@ -168,7 +168,7 @@ void ParsedExpressionIterator::EnumerateQueryNodeModifiers(
 		} break;
 
 		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-			auto &limit_modifier = (LimitPercentModifier &)*modifier;
+			auto &limit_modifier = modifier->Cast<LimitPercentModifier>();
 			if (limit_modifier.limit) {
 				callback(limit_modifier.limit);
 			}
@@ -178,14 +178,14 @@ void ParsedExpressionIterator::EnumerateQueryNodeModifiers(
 		} break;
 
 		case ResultModifierType::ORDER_MODIFIER: {
-			auto &order_modifier = (OrderModifier &)*modifier;
+			auto &order_modifier = modifier->Cast<OrderModifier>();
 			for (auto &order : order_modifier.orders) {
 				callback(order.expression);
 			}
 		} break;
 
 		case ResultModifierType::DISTINCT_MODIFIER: {
-			auto &distinct_modifier = (DistinctModifier &)*modifier;
+			auto &distinct_modifier = modifier->Cast<DistinctModifier>();
 			for (auto &target : distinct_modifier.distinct_on_targets) {
 				callback(target);
 			}

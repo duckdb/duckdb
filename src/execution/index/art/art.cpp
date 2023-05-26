@@ -125,7 +125,7 @@ static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_
 	input.ToUnifiedFormat(count, idata);
 
 	D_ASSERT(keys.size() >= count);
-	auto input_data = (T *)idata.data;
+	auto input_data = UnifiedVectorFormat::GetData<T>(idata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
 		if (idata.validity.RowIsValid(idx)) {
@@ -142,7 +142,7 @@ static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t coun
 	UnifiedVectorFormat idata;
 	input.ToUnifiedFormat(count, idata);
 
-	auto input_data = (T *)idata.data;
+	auto input_data = UnifiedVectorFormat::GetData<T>(idata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = idata.sel->get_index(i);
 
@@ -715,16 +715,16 @@ Node ART::Lookup(Node node, const ARTKey &key, idx_t depth) {
 //          False (Otherwise)
 //===--------------------------------------------------------------------===//
 
-bool ART::SearchGreater(ARTIndexScanState *state, ARTKey &key, bool inclusive, idx_t max_count,
+bool ART::SearchGreater(ARTIndexScanState &state, ARTKey &key, bool inclusive, idx_t max_count,
                         vector<row_t> &result_ids) {
 
-	Iterator *it = &state->iterator;
+	auto &it = state.iterator;
 
 	// greater than scan: first set the iterator to the node at which we will start our scan by finding the lowest node
 	// that satisfies our requirement
-	if (!it->art) {
-		it->art = this;
-		if (!it->LowerBound(*tree, key, inclusive)) {
+	if (!it.art) {
+		it.art = this;
+		if (!it.LowerBound(*tree, key, inclusive)) {
 			return true;
 		}
 	}
@@ -732,74 +732,72 @@ bool ART::SearchGreater(ARTIndexScanState *state, ARTKey &key, bool inclusive, i
 	// after that we continue the scan; we don't need to check the bounds as any value following this value is
 	// automatically bigger and hence satisfies our predicate
 	ARTKey empty_key = ARTKey();
-	return it->Scan(empty_key, max_count, result_ids, false);
+	return it.Scan(empty_key, max_count, result_ids, false);
 }
 
 //===--------------------------------------------------------------------===//
 // Less Than
 //===--------------------------------------------------------------------===//
 
-bool ART::SearchLess(ARTIndexScanState *state, ARTKey &upper_bound, bool inclusive, idx_t max_count,
+bool ART::SearchLess(ARTIndexScanState &state, ARTKey &upper_bound, bool inclusive, idx_t max_count,
                      vector<row_t> &result_ids) {
 
 	if (!tree->IsSet()) {
 		return true;
 	}
 
-	Iterator *it = &state->iterator;
+	auto &it = state.iterator;
 
-	if (!it->art) {
-		it->art = this;
+	if (!it.art) {
+		it.art = this;
 		// first find the minimum value in the ART: we start scanning from this value
-		it->FindMinimum(*tree);
+		it.FindMinimum(*tree);
 		// early out min value higher than upper bound query
-		if (it->cur_key > upper_bound) {
+		if (it.cur_key > upper_bound) {
 			return true;
 		}
 	}
 
 	// now continue the scan until we reach the upper bound
-	return it->Scan(upper_bound, max_count, result_ids, inclusive);
+	return it.Scan(upper_bound, max_count, result_ids, inclusive);
 }
 
 //===--------------------------------------------------------------------===//
 // Closed Range Query
 //===--------------------------------------------------------------------===//
 
-bool ART::SearchCloseRange(ARTIndexScanState *state, ARTKey &lower_bound, ARTKey &upper_bound, bool left_inclusive,
+bool ART::SearchCloseRange(ARTIndexScanState &state, ARTKey &lower_bound, ARTKey &upper_bound, bool left_inclusive,
                            bool right_inclusive, idx_t max_count, vector<row_t> &result_ids) {
-
-	Iterator *it = &state->iterator;
+	auto &it = state.iterator;
 
 	// first find the first node that satisfies the left predicate
-	if (!it->art) {
-		it->art = this;
-		if (!it->LowerBound(*tree, lower_bound, left_inclusive)) {
+	if (!it.art) {
+		it.art = this;
+		if (!it.LowerBound(*tree, lower_bound, left_inclusive)) {
 			return true;
 		}
 	}
 
 	// now continue the scan until we reach the upper bound
-	return it->Scan(upper_bound, max_count, result_ids, right_inclusive);
+	return it.Scan(upper_bound, max_count, result_ids, right_inclusive);
 }
 
 bool ART::Scan(const Transaction &transaction, const DataTable &table, IndexScanState &table_state,
                const idx_t max_count, vector<row_t> &result_ids) {
-
-	auto state = (ARTIndexScanState *)&table_state;
+	auto &state = table_state.Cast<ARTIndexScanState>();
 	vector<row_t> row_ids;
 	bool success;
 
 	// FIXME: the key directly owning the data for a single key might be more efficient
-	D_ASSERT(state->values[0].type().InternalType() == types[0]);
+	D_ASSERT(state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
-	auto key = CreateKey(arena_allocator, types[0], state->values[0]);
+	auto key = CreateKey(arena_allocator, types[0], state.values[0]);
 
-	if (state->values[1].IsNull()) {
+	if (state.values[1].IsNull()) {
 
 		// single predicate
 		lock_guard<mutex> l(lock);
-		switch (state->expressions[0]) {
+		switch (state.expressions[0]) {
 		case ExpressionType::COMPARE_EQUAL:
 			success = SearchEqual(key, max_count, row_ids);
 			break;
@@ -824,11 +822,11 @@ bool ART::Scan(const Transaction &transaction, const DataTable &table, IndexScan
 		// two predicates
 		lock_guard<mutex> l(lock);
 
-		D_ASSERT(state->values[1].type().InternalType() == types[0]);
-		auto upper_bound = CreateKey(arena_allocator, types[0], state->values[1]);
+		D_ASSERT(state.values[1].type().InternalType() == types[0]);
+		auto upper_bound = CreateKey(arena_allocator, types[0], state.values[1]);
 
-		bool left_inclusive = state->expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
-		bool right_inclusive = state->expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
+		bool left_inclusive = state.expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
+		bool right_inclusive = state.expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
 		success = SearchCloseRange(state, key, upper_bound, left_inclusive, right_inclusive, max_count, row_ids);
 	}
 

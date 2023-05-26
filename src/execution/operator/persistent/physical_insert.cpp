@@ -63,7 +63,7 @@ PhysicalInsert::PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry &schema, 
 
 void PhysicalInsert::GetInsertInfo(const BoundCreateTableInfo &info, vector<LogicalType> &insert_types,
                                    vector<unique_ptr<Expression>> &bound_defaults) {
-	auto &create_info = (CreateTableInfo &)*info.base;
+	auto &create_info = info.base->Cast<CreateTableInfo>();
 	for (auto &col : create_info.columns.Physical()) {
 		insert_types.push_back(col.GetType());
 		bound_defaults.push_back(make_uniq<BoundConstantExpression>(Value(col.GetType())));

@@ -521,8 +521,9 @@ struct DatePart {
 		}
 
 		template <typename P>
-		static inline P HasPartValue(P *part_values, DatePartSpecifier part) {
-			return part_values[int(part)];
+		static inline bool HasPartValue(P *part_values, DatePartSpecifier part, P &value) {
+			value = part_values[int(part)];
+			return value;
 		}
 
 		template <class TA, class TR>
@@ -534,28 +535,28 @@ struct DatePart {
 			int32_t dd = 1;
 			if (mask & YMD) {
 				Date::Convert(input, yyyy, mm, dd);
-				if ((part_data = HasPartValue(part_values, DatePartSpecifier::YEAR))) {
+				if (HasPartValue(part_values, DatePartSpecifier::YEAR, part_data)) {
 					part_data[idx] = yyyy;
 				}
-				if ((part_data = HasPartValue(part_values, DatePartSpecifier::MONTH))) {
+				if (HasPartValue(part_values, DatePartSpecifier::MONTH, part_data)) {
 					part_data[idx] = mm;
 				}
-				if ((part_data = HasPartValue(part_values, DatePartSpecifier::DAY))) {
+				if (HasPartValue(part_values, DatePartSpecifier::DAY, part_data)) {
 					part_data[idx] = dd;
 				}
-				if ((part_data = HasPartValue(part_values, DatePartSpecifier::DECADE))) {
+				if (HasPartValue(part_values, DatePartSpecifier::DECADE, part_data)) {
 					part_data[idx] = DecadeOperator::DecadeFromYear(yyyy);
 				}
-				if ((part_data = HasPartValue(part_values, DatePartSpecifier::CENTURY))) {
+				if (HasPartValue(part_values, DatePartSpecifier::CENTURY, part_data)) {
 					part_data[idx] = CenturyOperator::CenturyFromYear(yyyy);
 				}
-				if ((part_data = HasPartValue(part_values, DatePartSpecifier::MILLENNIUM))) {
+				if (HasPartValue(part_values, DatePartSpecifier::MILLENNIUM, part_data)) {
 					part_data[idx] = MillenniumOperator::MillenniumFromYear(yyyy);
 				}
-				if ((part_data = HasPartValue(part_values, DatePartSpecifier::QUARTER))) {
+				if (HasPartValue(part_values, DatePartSpecifier::QUARTER, part_data)) {
 					part_data[idx] = QuarterOperator::QuarterFromMonth(mm);
 				}
-				if ((part_data = HasPartValue(part_values, DatePartSpecifier::ERA))) {
+				if (HasPartValue(part_values, DatePartSpecifier::ERA, part_data)) {
 					part_data[idx] = EraOperator::EraFromYear(yyyy);
 				}
 			}
@@ -563,10 +564,10 @@ struct DatePart {
 			// Week calculations
 			if (mask & DOW) {
 				auto isodow = Date::ExtractISODayOfTheWeek(input);
-				if ((part_data = HasPartValue(part_values, DatePartSpecifier::DOW))) {
+				if (HasPartValue(part_values, DatePartSpecifier::DOW, part_data)) {
 					part_data[idx] = DayOfWeekOperator::DayOfWeekFromISO(isodow);
 				}
-				if ((part_data = HasPartValue(part_values, DatePartSpecifier::ISODOW))) {
+				if (HasPartValue(part_values, DatePartSpecifier::ISODOW, part_data)) {
 					part_data[idx] = isodow;
 				}
 			}
@@ -576,24 +577,24 @@ struct DatePart {
 				int32_t ww = 0;
 				int32_t iyyy = 0;
 				Date::ExtractISOYearWeek(input, iyyy, ww);
-				if ((part_data = HasPartValue(part_values, DatePartSpecifier::WEEK))) {
+				if (HasPartValue(part_values, DatePartSpecifier::WEEK, part_data)) {
 					part_data[idx] = ww;
 				}
-				if ((part_data = HasPartValue(part_values, DatePartSpecifier::ISOYEAR))) {
+				if (HasPartValue(part_values, DatePartSpecifier::ISOYEAR, part_data)) {
 					part_data[idx] = iyyy;
 				}
-				if ((part_data = HasPartValue(part_values, DatePartSpecifier::YEARWEEK))) {
+				if (HasPartValue(part_values, DatePartSpecifier::YEARWEEK, part_data)) {
 					part_data[idx] = YearWeekOperator::YearWeekFromParts(iyyy, ww);
 				}
 			}
 
 			if (mask & EPOCH) {
-				if ((part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH))) {
+				if (HasPartValue(part_values, DatePartSpecifier::EPOCH, part_data)) {
 					part_data[idx] = Date::Epoch(input);
 				}
 			}
 			if (mask & DOY) {
-				if ((part_data = HasPartValue(part_values, DatePartSpecifier::DOY))) {
+				if (HasPartValue(part_values, DatePartSpecifier::DOY, part_data)) {
 					part_data[idx] = Date::ExtractDayOfTheYear(input);
 				}
 			}
@@ -948,38 +949,37 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const dtime_t &i
 	int64_t *part_data;
 	if (mask & TIME) {
 		const auto micros = MicrosecondsOperator::Operation<dtime_t, int64_t>(input);
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MICROSECONDS))) {
+		if (HasPartValue(part_values, DatePartSpecifier::MICROSECONDS, part_data)) {
 			part_data[idx] = micros;
 		}
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MILLISECONDS))) {
+		if (HasPartValue(part_values, DatePartSpecifier::MILLISECONDS, part_data)) {
 			part_data[idx] = micros / Interval::MICROS_PER_MSEC;
 		}
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::SECOND))) {
+		if (HasPartValue(part_values, DatePartSpecifier::SECOND, part_data)) {
 			part_data[idx] = micros / Interval::MICROS_PER_SEC;
 		}
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MINUTE))) {
+		if (HasPartValue(part_values, DatePartSpecifier::MINUTE, part_data)) {
 			part_data[idx] = MinutesOperator::Operation<dtime_t, int64_t>(input);
 		}
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::HOUR))) {
+		if (HasPartValue(part_values, DatePartSpecifier::HOUR, part_data)) {
 			part_data[idx] = HoursOperator::Operation<dtime_t, int64_t>(input);
 		}
 	}
 
 	if (mask & EPOCH) {
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH))) {
+		if (HasPartValue(part_values, DatePartSpecifier::EPOCH, part_data)) {
 			part_data[idx] = EpochOperator::Operation<dtime_t, int64_t>(input);
-			;
 		}
 	}
 
 	if (mask & ZONE) {
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::TIMEZONE))) {
+		if (HasPartValue(part_values, DatePartSpecifier::TIMEZONE, part_data)) {
 			part_data[idx] = 0;
 		}
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::TIMEZONE_HOUR))) {
+		if (HasPartValue(part_values, DatePartSpecifier::TIMEZONE_HOUR, part_data)) {
 			part_data[idx] = 0;
 		}
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::TIMEZONE_MINUTE))) {
+		if (HasPartValue(part_values, DatePartSpecifier::TIMEZONE_MINUTE, part_data)) {
 			part_data[idx] = 0;
 		}
 	}
@@ -998,8 +998,8 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const timestamp_
 	Operation(part_values, t, idx, mask & ~EPOCH);
 
 	if (mask & EPOCH) {
-		auto part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH);
-		if (part_data) {
+		int64_t *part_data;
+		if (HasPartValue(part_values, DatePartSpecifier::EPOCH, part_data)) {
 			part_data[idx] = EpochOperator::Operation<timestamp_t, int64_t>(input);
 		}
 	}
@@ -1011,50 +1011,50 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const interval_t
 	int64_t *part_data;
 	if (mask & YMD) {
 		const auto mm = input.months % Interval::MONTHS_PER_YEAR;
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::YEAR))) {
+		if (HasPartValue(part_values, DatePartSpecifier::YEAR, part_data)) {
 			part_data[idx] = input.months / Interval::MONTHS_PER_YEAR;
 		}
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MONTH))) {
+		if (HasPartValue(part_values, DatePartSpecifier::MONTH, part_data)) {
 			part_data[idx] = mm;
 		}
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::DAY))) {
+		if (HasPartValue(part_values, DatePartSpecifier::DAY, part_data)) {
 			part_data[idx] = input.days;
 		}
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::DECADE))) {
+		if (HasPartValue(part_values, DatePartSpecifier::DECADE, part_data)) {
 			part_data[idx] = input.months / Interval::MONTHS_PER_DECADE;
 		}
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::CENTURY))) {
+		if (HasPartValue(part_values, DatePartSpecifier::CENTURY, part_data)) {
 			part_data[idx] = input.months / Interval::MONTHS_PER_CENTURY;
 		}
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MILLENNIUM))) {
+		if (HasPartValue(part_values, DatePartSpecifier::MILLENNIUM, part_data)) {
 			part_data[idx] = input.months / Interval::MONTHS_PER_MILLENIUM;
 		}
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::QUARTER))) {
+		if (HasPartValue(part_values, DatePartSpecifier::QUARTER, part_data)) {
 			part_data[idx] = mm / Interval::MONTHS_PER_QUARTER + 1;
 		}
 	}
 
 	if (mask & TIME) {
 		const auto micros = MicrosecondsOperator::Operation<interval_t, int64_t>(input);
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MICROSECONDS))) {
+		if (HasPartValue(part_values, DatePartSpecifier::MICROSECONDS, part_data)) {
 			part_data[idx] = micros;
 		}
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MILLISECONDS))) {
+		if (HasPartValue(part_values, DatePartSpecifier::MILLISECONDS, part_data)) {
 			part_data[idx] = micros / Interval::MICROS_PER_MSEC;
 		}
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::SECOND))) {
+		if (HasPartValue(part_values, DatePartSpecifier::SECOND, part_data)) {
 			part_data[idx] = micros / Interval::MICROS_PER_SEC;
 		}
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::MINUTE))) {
+		if (HasPartValue(part_values, DatePartSpecifier::MINUTE, part_data)) {
 			part_data[idx] = MinutesOperator::Operation<interval_t, int64_t>(input);
 		}
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::HOUR))) {
+		if (HasPartValue(part_values, DatePartSpecifier::HOUR, part_data)) {
 			part_data[idx] = HoursOperator::Operation<interval_t, int64_t>(input);
 		}
 	}
 
 	if (mask & EPOCH) {
-		if ((part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH))) {
+		if (HasPartValue(part_values, DatePartSpecifier::EPOCH, part_data)) {
 			part_data[idx] = EpochOperator::Operation<interval_t, int64_t>(input);
 		}
 	}
@@ -1264,7 +1264,7 @@ struct StructDatePart {
 	template <typename INPUT_TYPE>
 	static void Function(DataChunk &args, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		D_ASSERT(args.ColumnCount() == 1);
 
 		const auto count = args.size();
@@ -1313,7 +1313,7 @@ struct StructDatePart {
 			input.ToUnifiedFormat(count, rdata);
 
 			const auto &arg_valid = rdata.validity;
-			auto tdata = (const INPUT_TYPE *)rdata.data;
+			auto tdata = UnifiedVectorFormat::GetData<INPUT_TYPE>(rdata);
 
 			// Start with a valid flat vector
 			result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -1372,7 +1372,7 @@ struct StructDatePart {
 	static void SerializeFunction(FieldWriter &writer, const FunctionData *bind_data_p,
 	                              const ScalarFunction &function) {
 		D_ASSERT(bind_data_p);
-		auto &info = (BindData &)*bind_data_p;
+		auto &info = bind_data_p->Cast<BindData>();
 		writer.WriteSerializable(info.stype);
 		writer.WriteList<DatePartSpecifier>(info.part_codes);
 	}

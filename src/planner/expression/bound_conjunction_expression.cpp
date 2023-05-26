@@ -20,11 +20,11 @@ string BoundConjunctionExpression::ToString() const {
 	return ConjunctionExpression::ToString<BoundConjunctionExpression, Expression>(*this);
 }
 
-bool BoundConjunctionExpression::Equals(const BaseExpression *other_p) const {
+bool BoundConjunctionExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto &other = other_p->Cast<BoundConjunctionExpression>();
+	auto &other = other_p.Cast<BoundConjunctionExpression>();
 	return ExpressionUtil::SetEquals(children, other.children);
 }
 

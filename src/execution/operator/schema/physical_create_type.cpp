@@ -45,7 +45,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 		gstate.capacity *= 2;
 	}
 
-	auto src_ptr = (string_t *)sdata.data;
+	auto src_ptr = UnifiedVectorFormat::GetData<string_t>(sdata);
 	auto result_ptr = FlatVector::GetData<string_t>(gstate.result);
 	// Input vector has NULL value, we just throw an exception
 	for (idx_t i = 0; i < chunk.size(); i++) {
