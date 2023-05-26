@@ -67,7 +67,7 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 	VisitOperatorExpressions(op);
 	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN && DelimGetCount(op) == 0) {
 		auto &delim_join = op.Cast<LogicalDelimJoin>();
-		auto decs = &delim_join.duplicate_eliminated_columns;
+		auto &decs = delim_join.duplicate_eliminated_columns;
 		for (auto &cond : delim_join.conditions) {
 			if (!IsEqualityJoinCondition(cond)) {
 				continue;
@@ -83,10 +83,10 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 			auto &colref = rhs->Cast<BoundColumnRefExpression>();
 			if (projection_map.find(colref.binding) != projection_map.end()) {
 				// value on the right is a projection of removed DelimGet
-				for (idx_t i = 0; i < decs->size(); i++) {
-					if (decs->at(i)->Equals(cond.left.get())) {
+				for (idx_t i = 0; i < decs.size(); i++) {
+					if (decs[i]->Equals(*cond.left)) {
 						// the value on the left no longer needs to be a duplicate-eliminated column
-						decs->erase(decs->begin() + i);
+						decs.erase(decs.begin() + i);
 						break;
 					}
 				}
@@ -95,7 +95,7 @@ void DeliminatorPlanUpdater::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		// change type if there are no more duplicate-eliminated columns
-		if (decs->empty()) {
+		if (decs.empty()) {
 			delim_join.type = LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
 			// sub-plans with DelimGets are not re-orderable (yet), however, we removed all DelimGet of this DelimJoin
 			// the DelimGets are on the RHS of the DelimJoin, so we can call the JoinOrderOptimizer on the RHS now
@@ -198,9 +198,9 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 	idx_t delim_idx = OperatorIsDelimGet(*join.children[0]) ? 0 : 1;
 	D_ASSERT(OperatorIsDelimGet(*join.children[delim_idx]));
 	// get the filter (if any)
-	LogicalFilter *filter = nullptr;
+	optional_ptr<LogicalFilter> filter;
 	if (join.children[delim_idx]->type == LogicalOperatorType::LOGICAL_FILTER) {
-		filter = (LogicalFilter *)join.children[delim_idx].get();
+		filter = &join.children[delim_idx]->Cast<LogicalFilter>();
 	}
 	auto &delim_get = (filter ? filter->children[0] : join.children[delim_idx])->Cast<LogicalDelimGet>();
 	if (join.conditions.size() != delim_get.chunk_types.size()) {
@@ -231,7 +231,7 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 			updater.projection_map[cb] = true;
 			updater.reverse_proj_or_agg_map[cb] = proj_or_agg.expressions[cb.column_index].get();
 			for (auto &expr : nulls_are_not_equal_exprs) {
-				if (proj_or_agg.expressions[cb.column_index]->Equals(&expr.get())) {
+				if (proj_or_agg.expressions[cb.column_index]->Equals(expr.get())) {
 					updater.projection_map[cb] = false;
 					break;
 				}
@@ -254,8 +254,8 @@ bool Deliminator::RemoveCandidate(unique_ptr<LogicalOperator> *plan, unique_ptr<
 			updater.projection_map[cb] = true;
 			updater.reverse_proj_or_agg_map[cb] = all_agg_exprs[cb.column_index];
 			for (auto &expr : nulls_are_not_equal_exprs) {
-				if ((cb.table_index == agg.group_index && agg.groups[cb.column_index]->Equals(&expr.get())) ||
-				    (cb.table_index == agg.aggregate_index && agg.expressions[cb.column_index]->Equals(&expr.get()))) {
+				if ((cb.table_index == agg.group_index && agg.groups[cb.column_index]->Equals(expr.get())) ||
+				    (cb.table_index == agg.aggregate_index && agg.expressions[cb.column_index]->Equals(expr.get()))) {
 					updater.projection_map[cb] = false;
 					break;
 				}
@@ -386,7 +386,7 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 		}
 		// try to find the corresponding child condition
 		// TODO: can be more flexible - allow CAST
-		auto child_expr = it->second;
+		auto &child_expr = *it->second;
 		bool found = false;
 		for (auto &child_cond : join.conditions) {
 			if (child_cond.left->Equals(child_expr) || child_cond.right->Equals(child_expr)) {
@@ -418,7 +418,7 @@ bool Deliminator::RemoveInequalityCandidate(unique_ptr<LogicalOperator> *plan, u
 		auto &parent_expr = parent_delim_get_side == 0 ? parent_cond.left : parent_cond.right;
 		auto &parent_colref = parent_expr->Cast<BoundColumnRefExpression>();
 		auto it = updater.reverse_proj_or_agg_map.find(parent_colref.binding);
-		auto child_expr = it->second;
+		auto &child_expr = *it->second;
 		for (auto &child_cond : join.conditions) {
 			if (!child_cond.left->Equals(child_expr) && !child_cond.right->Equals(child_expr)) {
 				continue;

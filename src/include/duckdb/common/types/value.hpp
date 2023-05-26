@@ -166,7 +166,7 @@ public:
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
 	DUCKDB_API static Value BLOB(const_data_ptr_t data, idx_t len);
 	static Value BLOB_RAW(const string &data) { // NOLINT
-		return Value::BLOB((const_data_ptr_t)data.c_str(), data.size());
+		return Value::BLOB(const_data_ptr_cast(data.c_str()), data.size());
 	}
 	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
 	DUCKDB_API static Value BLOB(const string &data);

@@ -48,21 +48,21 @@ string JoinRef::ToString() const {
 	return result;
 }
 
-bool JoinRef::Equals(const TableRef *other_p) const {
+bool JoinRef::Equals(const TableRef &other_p) const {
 	if (!TableRef::Equals(other_p)) {
 		return false;
 	}
-	auto other = (JoinRef *)other_p;
-	if (using_columns.size() != other->using_columns.size()) {
+	auto &other = other_p.Cast<JoinRef>();
+	if (using_columns.size() != other.using_columns.size()) {
 		return false;
 	}
 	for (idx_t i = 0; i < using_columns.size(); i++) {
-		if (using_columns[i] != other->using_columns[i]) {
+		if (using_columns[i] != other.using_columns[i]) {
 			return false;
 		}
 	}
-	return left->Equals(other->left.get()) && right->Equals(other->right.get()) &&
-	       BaseExpression::Equals(condition.get(), other->condition.get()) && type == other->type;
+	return left->Equals(*other.left) && right->Equals(*other.right) &&
+	       ParsedExpression::Equals(condition, other.condition) && type == other.type;
 }
 
 unique_ptr<TableRef> JoinRef::Copy() {

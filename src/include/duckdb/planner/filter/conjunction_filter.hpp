@@ -34,6 +34,9 @@ public:
 
 class ConjunctionOrFilter : public ConjunctionFilter {
 public:
+	static constexpr const TableFilterType TYPE = TableFilterType::CONJUNCTION_OR;
+
+public:
 	ConjunctionOrFilter();
 
 public:
@@ -45,6 +48,9 @@ public:
 };
 
 class ConjunctionAndFilter : public ConjunctionFilter {
+public:
+	static constexpr const TableFilterType TYPE = TableFilterType::CONJUNCTION_AND;
+
 public:
 	ConjunctionAndFilter();
 

@@ -33,7 +33,7 @@ static unique_ptr<GlobalTableFunctionState> GlobFunctionInit(ClientContext &cont
 
 static void GlobFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &bind_data = data_p.bind_data->Cast<GlobFunctionBindData>();
-	auto &state = (GlobFunctionState &)*data_p.global_state;
+	auto &state = data_p.global_state->Cast<GlobFunctionState>();
 
 	idx_t count = 0;
 	idx_t next_idx = MinValue<idx_t>(state.current_idx + STANDARD_VECTOR_SIZE, bind_data.files.size());

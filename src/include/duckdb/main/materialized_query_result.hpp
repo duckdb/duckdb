@@ -18,6 +18,9 @@ class ClientContext;
 
 class MaterializedQueryResult : public QueryResult {
 public:
+	static constexpr const QueryResultType TYPE = QueryResultType::MATERIALIZED_RESULT;
+
+public:
 	friend class ClientContext;
 	//! Creates a successful query result with the specified names and types
 	DUCKDB_API MaterializedQueryResult(StatementType statement_type, StatementProperties properties,

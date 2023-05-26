@@ -55,8 +55,8 @@ static bool ListEntriesEqual(Vector &keys, Vector &values, idx_t count) {
 	keys.ToUnifiedFormat(count, keys_data);
 	values.ToUnifiedFormat(count, values_data);
 
-	auto keys_entries = (list_entry_t *)keys_data.data;
-	auto values_entries = (list_entry_t *)values_data.data;
+	auto keys_entries = UnifiedVectorFormat::GetData<list_entry_t>(keys_data);
+	auto values_entries = UnifiedVectorFormat::GetData<list_entry_t>(values_data);
 
 	if (same_vector_type) {
 		const auto key_data = keys_data.data;

@@ -279,9 +279,8 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
 		auto &catalog = schema->catalog;
-		table = (TableCatalogEntry *)catalog
-		            .CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(), *info)
-		            .get();
+		auto created_table = catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(), *info);
+		table = &created_table->Cast<TableCatalogEntry>();
 	} else {
 		D_ASSERT(insert_table);
 		D_ASSERT(insert_table->IsDuckTable());

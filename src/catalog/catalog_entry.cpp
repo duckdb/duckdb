@@ -34,10 +34,6 @@ unique_ptr<CatalogEntry> CatalogEntry::Copy(ClientContext &context) const {
 string CatalogEntry::ToSQL() const {
 	throw InternalException("Unsupported catalog type for ToSQL()");
 }
-// LCOV_EXCL_STOP
-
-void CatalogEntry::Verify(Catalog &catalog_p) {
-}
 
 Catalog &CatalogEntry::ParentCatalog() {
 	throw InternalException("CatalogEntry::ParentCatalog called on catalog entry without catalog");
@@ -45,6 +41,10 @@ Catalog &CatalogEntry::ParentCatalog() {
 
 SchemaCatalogEntry &CatalogEntry::ParentSchema() {
 	throw InternalException("CatalogEntry::ParentSchema called on catalog entry without schema");
+}
+// LCOV_EXCL_STOP
+
+void CatalogEntry::Verify(Catalog &catalog_p) {
 }
 
 InCatalogEntry::InCatalogEntry(CatalogType type, Catalog &catalog, string name)

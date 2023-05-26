@@ -55,7 +55,7 @@ struct AggregateState {
 			if (!destructors[i]) {
 				continue;
 			}
-			Vector state_vector(Value::POINTER((uintptr_t)aggregates[i].get()));
+			Vector state_vector(Value::POINTER(CastPointerToValue(aggregates[i].get())));
 			state_vector.SetVectorType(VectorType::FLAT_VECTOR);
 
 			AggregateInputData aggr_input_data(bind_data[i], Allocator::DefaultAllocator());
@@ -332,8 +332,8 @@ void PhysicalUngroupedAggregate::Combine(ExecutionContext &context, GlobalSinkSt
 			continue;
 		}
 
-		Vector source_state(Value::POINTER((uintptr_t)source.state.aggregates[aggr_idx].get()));
-		Vector dest_state(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
+		Vector source_state(Value::POINTER(CastPointerToValue(source.state.aggregates[aggr_idx].get())));
+		Vector dest_state(Value::POINTER(CastPointerToValue(gstate.state.aggregates[aggr_idx].get())));
 
 		AggregateInputData aggr_input_data(aggregate.bind_info.get(), Allocator::DefaultAllocator());
 		aggregate.function.combine(source_state, dest_state, aggr_input_data, 1);
@@ -565,7 +565,7 @@ SourceResultType PhysicalUngroupedAggregate::GetData(ExecutionContext &context, 
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = aggregates[aggr_idx]->Cast<BoundAggregateExpression>();
 
-		Vector state_vector(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
+		Vector state_vector(Value::POINTER(CastPointerToValue(gstate.state.aggregates[aggr_idx].get())));
 		AggregateInputData aggr_input_data(aggregate.bind_info.get(), Allocator::DefaultAllocator());
 		aggregate.function.finalize(state_vector, aggr_input_data, chunk.data[aggr_idx], 1, 0);
 	}
