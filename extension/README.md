@@ -1,7 +1,7 @@
 This readme explains what types of extensions there are in DuckDB and how to build them.
 
 # What are DuckDB extensions?
-DuckDB extensions are collections of DuckDB functionality that are logically separated from DuckDBs main codebase. These
+DuckDB extensions are libraries containing additional DuckDB functionality separate from the main codebase. These
 extensions can provide added functionality to DuckDB that can/should not live in DuckDB main code for various reasons.
 DuckDB extensions can be built in two ways. Firstly, they can be statically linked into DuckDBs executables (duckdb cli,
 unittest binary, benchmark runner binary, etc). Doing so will automatically make them available when using these binaries.
@@ -16,9 +16,9 @@ In-tree extensions are extensions that live in the main DuckDB repository. These
 to DuckDB and/or tie into to DuckDB so deeply that changes to DuckDB are expected to regularly break them.  We aim to 
 keep the amount of in-tree extensions to a minimum and strive to move extensions out-of-tree where possible.
 ### Out-of-tree Extensions (OOTEs)
-Out-of-tree extensions live in separate repositories outside the main DuckDB repository. Moving extenions out of the main
-DuckDB code-base keeps the core DuckDB code less complex at the price of making breaking changes to the APIs these 
-extensions use more cumbersome. Additionally, keeping extensions out-of-tree can be useful for licensing reasons.
+Out-of-tree extensions live in separate repositories outside the main DuckDB repository. The reasons for moving extensions
+out-of-tree can vary. Firstly, moving extensions out of the main DuckDB code-base keeps the core DuckDB code smaller
+and less complex. Secondly, keeping extensions out-of-tree can be useful for licensing reasons.
 
 There are two main types of OOTEs. Firstly, there are the **DuckDB Managed OOTEs**. These are distributed through the main
 DuckDB CI. These extensions are signed using DuckDBs signing key and are maintained by the DuckDB team. Some examples are 
@@ -27,7 +27,7 @@ release of DuckDB. For the current list of extensions in this category check out
 
 Secondly, there are **External OOTEs**. Extensions in this category are not tied to the DuckDB CI, but instead their CI/CD
 runs in their own repository. The maintainer of the external OOTE repo is responsible for testing, distribution and making
-sure that an up to date version of the extension is available. Depending on who maintains the extension, these extensions
+sure that an up-to-date version of the extension is available. Depending on who maintains the extension, these extensions
 may or may not be signed.
 
 # Building extensions
