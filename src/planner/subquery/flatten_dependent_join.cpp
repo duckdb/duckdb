@@ -282,7 +282,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		return std::move(join);
 	}
 	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
-		auto &dependent_join = (LogicalJoin &)*plan;
+		auto &dependent_join = plan->Cast<LogicalJoin>();
 		if (!((dependent_join.join_type == JoinType::INNER) || (dependent_join.join_type == JoinType::LEFT))) {
 			throw Exception("Dependent join can only be INNER or LEFT type");
 		}
