@@ -151,7 +151,7 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 
 #if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
 	for (auto &ext : LINKED_EXTENSIONS) {
-		if (std::find(extensions.begin(), extensions.end(), ext) == extensions.end()) {
+		if (extensions.find(ext) != extensions.end()) {
 			LoadExtensionInternal(db, ext, true);
 		}
 	}
