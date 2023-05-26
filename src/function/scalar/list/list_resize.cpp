@@ -132,7 +132,8 @@ static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFun
 	if (bound_function.arguments.size() == 3 &&
 	    ListType::GetChildType(arguments[0]->return_type) != arguments[2]->return_type &&
 	    arguments[2]->return_type != LogicalTypeId::SQLNULL) {
-		bound_function.arguments[2] = ListType::GetChildType(arguments[0]->return_type);}
+		bound_function.arguments[2] = ListType::GetChildType(arguments[0]->return_type);
+	}
 
 	bound_function.return_type = arguments[0]->return_type;
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
