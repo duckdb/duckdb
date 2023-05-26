@@ -5,10 +5,12 @@
 #include "duckdb/common/string_util.hpp"
 
 #include "duckdb.h"
-#include "duckdb/main/connection.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
+
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/main/connection.hpp"
+#endif
 
 #include <string.h>
 #include <stdlib.h>
@@ -372,16 +374,14 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, stru
 	auto cconn = (duckdb::Connection *)connection;
 
 	auto has_table = cconn->TableInfo(table_name);
-	auto arrow_scan = cconn
-		    ->TableFunction("arrow_scan",
-		                    {duckdb::Value::POINTER((uintptr_t)input),
-		                     duckdb::Value::POINTER((uintptr_t)stream_produce),
-		                     duckdb::Value::POINTER((uintptr_t)get_schema)});
+	auto arrow_scan = cconn->TableFunction("arrow_scan", {duckdb::Value::POINTER((uintptr_t)input),
+	                                                      duckdb::Value::POINTER((uintptr_t)stream_produce),
+	                                                      duckdb::Value::POINTER((uintptr_t)get_schema)});
 	try {
-		if (!has_table){
+		if (!has_table) {
 			// We create the table based on an Arrow Scanner
 			arrow_scan->Create(table_name);
-		} else{
+		} else {
 			arrow_scan->CreateView("temp_adbc_view", true, true);
 			auto query = "insert into " + std::string(table_name) + " select * from temp_adbc_view";
 			auto result = cconn->Query(query);
