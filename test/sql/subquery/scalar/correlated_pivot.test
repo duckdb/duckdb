@@ -66,3 +66,11 @@ PIVOT is not supported in correlated subqueries yet
 
 statement ok
 RESET pivot_filter_threshold
+
+statement ok
+RESET SESSION pivot_filter_threshold
+
+statement error
+RESET GLOBAL pivot_filter_threshold
+----
+cannot be reset globally
