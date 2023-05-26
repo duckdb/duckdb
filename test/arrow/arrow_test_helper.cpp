@@ -147,7 +147,7 @@ vector<Value> ArrowTestHelper::ConstructArrowScan(uintptr_t arrow_object, bool f
 	return params;
 }
 
-bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, bool big_result, ArrowOptions options) {
+bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, bool big_result) {
 	// run the query
 	auto initial_result = con.Query(query);
 	if (initial_result->HasError()) {
@@ -156,10 +156,14 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 		return false;
 	}
 	// create the roundtrip factory
-	auto tz = ClientConfig::GetConfig(*con.context).ExtractTimezone();
+	auto client_config = ClientConfig::GetConfig(*con.context);
+	auto tz = client_config.ExtractTimezone();
+
+	ArrowOptions arrow_option(con.context->db->config.options.arrow_offset_size);
 	auto types = initial_result->types;
 	auto names = initial_result->names;
-	ArrowTestFactory factory(std::move(types), std::move(names), tz, std::move(initial_result), big_result, options);
+	ArrowTestFactory factory(std::move(types), std::move(names), tz, std::move(initial_result), big_result,
+	                         arrow_option);
 
 	// construct the arrow scan
 	auto params = ConstructArrowScan((uintptr_t)&factory, true);
