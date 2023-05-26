@@ -24,8 +24,9 @@ duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema 
 		return DuckDBSuccess;
 	}
 	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
+	duckdb::ArrowOptions options(wrapper->offset_size);
 	ArrowConverter::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names,
-	                              wrapper->timezone_config);
+	                              wrapper->timezone_config, options);
 	return DuckDBSuccess;
 }
 
@@ -41,7 +42,8 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
 		return DuckDBSuccess;
 	}
-	ArrowConverter::ToArrowArray(*wrapper->current_chunk, reinterpret_cast<ArrowArray *>(*out_array));
+	duckdb::ArrowOptions options(wrapper->offset_size);
+	ArrowConverter::ToArrowArray(*wrapper->current_chunk, reinterpret_cast<ArrowArray *>(*out_array), options);
 	return DuckDBSuccess;
 }
 

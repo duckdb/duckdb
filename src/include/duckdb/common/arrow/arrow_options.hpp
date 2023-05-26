@@ -13,6 +13,10 @@ namespace duckdb {
 enum ArrowOffsetSize { REGULAR, LARGE };
 
 struct ArrowOptions {
-	ArrowOffsetSize offset_size = ArrowOffsetSize::LARGE;
+	explicit ArrowOptions(ArrowOffsetSize offset_size_p) : offset_size(offset_size_p) {
+	}
+	ArrowOptions() {
+	}
+	ArrowOffsetSize offset_size = ArrowOffsetSize::REGULAR;
 };
 } // namespace duckdb

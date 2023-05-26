@@ -112,7 +112,7 @@ public:
 
 	string ExtractTimezone() const;
 
-	ArrowOffsetSize GetArrowBufferSizeConfig() const;
+	//	ArrowOffsetSize GetArrowBufferSizeConfig() const;
 
 	bool AnyVerification() {
 		return query_verification_enabled || verify_external || verify_serializer;

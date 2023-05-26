@@ -74,8 +74,7 @@ public:
 class ArrowTestHelper {
 public:
 	//! Used in the Arrow Roundtrip Tests
-	static bool RunArrowComparison(Connection &con, const string &query, bool big_result = false,
-	                               ArrowOptions options = ArrowOptions());
+	static bool RunArrowComparison(Connection &con, const string &query, bool big_result = false);
 	//! Used in the ADBC Testing
 	static bool RunArrowComparison(Connection &con, const string &query, ArrowArrayStream &arrow_stream);
 

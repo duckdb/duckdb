@@ -3,7 +3,6 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/common/box_renderer.hpp"
-
 namespace duckdb {
 
 BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_type, StatementProperties properties_p,
@@ -72,7 +71,7 @@ idx_t CurrentChunk::RemainingSize() {
 }
 
 QueryResult::QueryResult(QueryResultType type, PreservedError error)
-    : BaseQueryResult(type, std::move(error)), client_properties("UTC", ArrowOffsetSize::LARGE) {
+    : BaseQueryResult(type, std::move(error)), client_properties("UTC", ArrowOffsetSize::REGULAR) {
 }
 
 QueryResult::~QueryResult() {
