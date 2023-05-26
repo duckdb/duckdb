@@ -151,7 +151,7 @@ void OrderedAggregateThreshold::ResetLocal(ClientContext &context) {
 
 void OrderedAggregateThreshold::SetLocal(ClientContext &context, const Value &input) {
 	const auto param = input.GetValue<uint64_t>();
-	if (!param) {
+	if (param <= 0) {
 		throw ParserException("Invalid option for PRAGMA ordered_aggregate_threshold, value must be positive");
 	}
 	ClientConfig::GetConfig(context).ordered_aggregate_threshold = param;
@@ -189,7 +189,7 @@ Value DebugWindowMode::GetSetting(ClientContext &context) {
 // Debug AsOf Join
 //===--------------------------------------------------------------------===//
 void DebugAsOfIEJoin::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).force_no_cross_product = ClientConfig().force_asof_iejoin;
+	ClientConfig::GetConfig(context).force_asof_iejoin = ClientConfig().force_asof_iejoin;
 }
 
 void DebugAsOfIEJoin::SetLocal(ClientContext &context, const Value &input) {
@@ -433,7 +433,6 @@ Value EnableHTTPMetadataCacheSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Enable Profiling
 //===--------------------------------------------------------------------===//
-
 void EnableProfilingSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.profiler_print_format = ClientConfig().profiler_print_format;

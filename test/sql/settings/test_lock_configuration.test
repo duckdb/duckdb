@@ -15,6 +15,10 @@ SET memory_limit='8GB';
 
 # nop
 statement ok
+RESET lock_configuration;
+
+# nop
+statement ok
 SET lock_configuration=false;
 
 statement ok
