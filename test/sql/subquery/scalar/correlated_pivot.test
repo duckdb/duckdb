@@ -63,3 +63,6 @@ SELECT DaysToManufacture, StandardCost, (SELECT LIST(cost) FROM
 FROM Product
 ----
 PIVOT is not supported in correlated subqueries yet
+
+statement ok
+RESET pivot_filter_threshold
