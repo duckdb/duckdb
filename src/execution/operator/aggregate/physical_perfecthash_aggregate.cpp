@@ -186,7 +186,7 @@ unique_ptr<GlobalSourceState> PhysicalPerfectHashAggregate::GetGlobalSourceState
 
 SourceResultType PhysicalPerfectHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
                                                        OperatorSourceInput &input) const {
-	auto &state = (PerfectHashAggregateState &)input.global_state;
+	auto &state = input.global_state.Cast<PerfectHashAggregateState>();
 	auto &gstate = sink_state->Cast<PerfectHashAggregateGlobalState>();
 
 	gstate.ht->Scan(state.ht_scan_position, chunk);

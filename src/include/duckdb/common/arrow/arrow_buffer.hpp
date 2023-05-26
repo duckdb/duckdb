@@ -73,12 +73,17 @@ struct ArrowBuffer {
 		return dataptr;
 	}
 
+	template <class T>
+	T *GetData() {
+		return reinterpret_cast<T *>(data());
+	}
+
 private:
 	void ReserveInternal(idx_t bytes) {
 		if (dataptr) {
-			dataptr = (data_ptr_t)realloc(dataptr, bytes);
+			dataptr = data_ptr_cast(realloc(dataptr, bytes));
 		} else {
-			dataptr = (data_ptr_t)malloc(bytes);
+			dataptr = data_ptr_cast(malloc(bytes));
 		}
 		capacity = bytes;
 	}

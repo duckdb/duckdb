@@ -464,7 +464,7 @@ struct QuantileOperation {
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
+	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
 		state->v.emplace_back(data[idx]);
 	}
 
@@ -493,11 +493,11 @@ static void ExecuteListFinalize(Vector &states, AggregateInputData &aggr_input_d
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 	D_ASSERT(aggr_input_data.bind_data);
-	auto bind_data = (QuantileBindData *)aggr_input_data.bind_data;
+	auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
 	if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ListVector::Reserve(result, bind_data->quantiles.size());
+		ListVector::Reserve(result, bind_data.quantiles.size());
 
 		auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 		auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
@@ -506,7 +506,7 @@ static void ExecuteListFinalize(Vector &states, AggregateInputData &aggr_input_d
 	} else {
 		D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		ListVector::Reserve(result, (offset + count) * bind_data->quantiles.size());
+		ListVector::Reserve(result, (offset + count) * bind_data.quantiles.size());
 
 		auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
@@ -540,9 +540,9 @@ struct QuantileScalarOperation : public QuantileOperation {
 			return;
 		}
 		D_ASSERT(aggr_input_data.bind_data);
-		auto bind_data = (QuantileBindData *)aggr_input_data.bind_data;
-		D_ASSERT(bind_data->quantiles.size() == 1);
-		Interpolator<DISCRETE> interp(bind_data->quantiles[0], state->v.size(), bind_data->desc);
+		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
+		D_ASSERT(bind_data.quantiles.size() == 1);
+		Interpolator<DISCRETE> interp(bind_data.quantiles[0], state->v.size(), bind_data.desc);
 		target[idx] = interp.template Operation<typename STATE::SaveType, RESULT_TYPE>(state->v.data(), result);
 	}
 
@@ -563,10 +563,10 @@ struct QuantileScalarOperation : public QuantileOperation {
 		D_ASSERT(index);
 
 		D_ASSERT(aggr_input_data.bind_data);
-		auto bind_data = (QuantileBindData *)aggr_input_data.bind_data;
+		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
 		// Find the two positions needed
-		const auto q = bind_data->quantiles[0];
+		const auto q = bind_data.quantiles[0];
 
 		bool replace = false;
 		if (frame.first == prev.first + 1 && frame.second == prev.second + 1) {
@@ -670,11 +670,11 @@ struct QuantileListOperation : public QuantileOperation {
 		}
 
 		D_ASSERT(aggr_input_data.bind_data);
-		auto bind_data = (QuantileBindData *)aggr_input_data.bind_data;
+		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
 		auto &result = ListVector::GetEntry(result_list);
 		auto ridx = ListVector::GetListSize(result_list);
-		ListVector::Reserve(result_list, ridx + bind_data->quantiles.size());
+		ListVector::Reserve(result_list, ridx + bind_data.quantiles.size());
 		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
 
 		auto v_t = state->v.data();
@@ -683,14 +683,14 @@ struct QuantileListOperation : public QuantileOperation {
 		auto &entry = target[idx];
 		entry.offset = ridx;
 		idx_t lower = 0;
-		for (const auto &q : bind_data->order) {
-			const auto &quantile = bind_data->quantiles[q];
-			Interpolator<DISCRETE> interp(quantile, state->v.size(), bind_data->desc);
+		for (const auto &q : bind_data.order) {
+			const auto &quantile = bind_data.quantiles[q];
+			Interpolator<DISCRETE> interp(quantile, state->v.size(), bind_data.desc);
 			interp.begin = lower;
 			rdata[ridx + q] = interp.template Operation<typename STATE::SaveType, CHILD_TYPE>(v_t, result);
 			lower = interp.FRN;
 		}
-		entry.length = bind_data->quantiles.size();
+		entry.length = bind_data.quantiles.size();
 
 		ListVector::SetListSize(result_list, entry.offset + entry.length);
 	}
@@ -700,7 +700,7 @@ struct QuantileListOperation : public QuantileOperation {
 	                   AggregateInputData &aggr_input_data, STATE *state, const FrameBounds &frame,
 	                   const FrameBounds &prev, Vector &list, idx_t lidx, idx_t bias) {
 		D_ASSERT(aggr_input_data.bind_data);
-		auto bind_data = (QuantileBindData *)aggr_input_data.bind_data;
+		auto &bind_data = aggr_input_data.bind_data->Cast<QuantileBindData>();
 
 		QuantileIncluded included(fmask, dmask, bias);
 
@@ -709,7 +709,7 @@ struct QuantileListOperation : public QuantileOperation {
 		auto &lmask = FlatVector::Validity(list);
 		auto &lentry = ldata[lidx];
 		lentry.offset = ListVector::GetListSize(list);
-		lentry.length = bind_data->quantiles.size();
+		lentry.length = bind_data.quantiles.size();
 
 		ListVector::Reserve(list, lentry.offset + lentry.length);
 		ListVector::SetListSize(list, lentry.offset + lentry.length);
@@ -734,8 +734,8 @@ struct QuantileListOperation : public QuantileOperation {
 			const auto j = ReplaceIndex(index, frame, prev);
 			//	We can only replace if the number of NULLs has not changed
 			if (included.AllValid() || included(prev.first) == included(prev.second)) {
-				for (const auto &q : bind_data->order) {
-					const auto &quantile = bind_data->quantiles[q];
+				for (const auto &q : bind_data.order) {
+					const auto &quantile = bind_data.quantiles[q];
 					Interpolator<DISCRETE> interp(quantile, prev_pos, false);
 					const auto replace = CanReplace(index, data, j, interp.FRN, interp.CRN, included);
 					if (replace < 0) {
@@ -765,8 +765,8 @@ struct QuantileListOperation : public QuantileOperation {
 		if (state->pos) {
 			using ID = QuantileIndirect<INPUT_TYPE>;
 			ID indirect(data);
-			for (const auto &q : bind_data->order) {
-				const auto &quantile = bind_data->quantiles[q];
+			for (const auto &q : bind_data.order) {
+				const auto &quantile = bind_data.quantiles[q];
 				Interpolator<DISCRETE> interp(quantile, state->pos, false);
 				if (replaceable.first <= interp.FRN && interp.CRN <= replaceable.second) {
 					rdata[lentry.offset + q] = interp.template Replace<idx_t, CHILD_TYPE, ID>(index, result, indirect);

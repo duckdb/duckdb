@@ -280,6 +280,15 @@ struct MakeTimestampFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct EpochMicrosecondsFun {
+	static constexpr const char *Name = "epoch_us";
+	static constexpr const char *Parameters = "ts";
+	static constexpr const char *Description = "Return the total number of microseconds since the epoch";
+	static constexpr const char *Example = "epoch_us(timestamp '2021-08-03 11:59:44.123456')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 struct MicrosecondsFun {
 	static constexpr const char *Name = "microsecond";
 	static constexpr const char *Parameters = "ts";

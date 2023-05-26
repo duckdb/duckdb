@@ -50,7 +50,7 @@ void PreparedStatementVerifier::ConvertConstants(unique_ptr<ParsedExpression> &c
 		// check if the value already exists
 		idx_t index = values.size();
 		for (idx_t v_idx = 0; v_idx < values.size(); v_idx++) {
-			if (values[v_idx]->Equals(child.get())) {
+			if (values[v_idx]->Equals(*child)) {
 				// duplicate value! refer to the original value
 				index = v_idx;
 				break;

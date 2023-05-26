@@ -51,7 +51,7 @@ public:
 	                                             const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define,
 	                                             idx_t max_repeat);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
-	virtual idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
+	virtual idx_t Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out, data_ptr_t repeat_out,
 	                   Vector &result_out);
 
 	virtual void Skip(idx_t num_values);
@@ -143,7 +143,8 @@ private:
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);
-	void DecompressInternal(CompressionCodec::type codec, const char *src, idx_t src_size, char *dst, idx_t dst_size);
+	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
+	                        idx_t dst_size);
 
 	const duckdb_parquet::format::ColumnChunk *chunk = nullptr;
 
@@ -174,7 +175,7 @@ public:
 		if (TARGET::TYPE != PhysicalType::INVALID && type.InternalType() != TARGET::TYPE) {
 			throw InternalException("Failed to cast column reader to type - type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -182,7 +183,7 @@ public:
 		if (TARGET::TYPE != PhysicalType::INVALID && type.InternalType() != TARGET::TYPE) {
 			throw InternalException("Failed to cast column reader to type - type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
