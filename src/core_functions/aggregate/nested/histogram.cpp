@@ -10,16 +10,15 @@ namespace duckdb {
 struct HistogramFunctor {
 	template <class T, class MAP_TYPE = map<T, idx_t>>
 	static void HistogramUpdate(UnifiedVectorFormat &sdata, UnifiedVectorFormat &input_data, idx_t count) {
-
 		auto states = (HistogramAggState<T, MAP_TYPE> **)sdata.data;
 		for (idx_t i = 0; i < count; i++) {
 			if (input_data.validity.RowIsValid(input_data.sel->get_index(i))) {
-				auto state = states[sdata.sel->get_index(i)];
-				if (!state->hist) {
-					state->hist = new MAP_TYPE();
+				auto &state = *states[sdata.sel->get_index(i)];
+				if (!state.hist) {
+					state.hist = new MAP_TYPE();
 				}
 				auto value = UnifiedVectorFormat::GetData<T>(input_data);
-				(*state->hist)[value[input_data.sel->get_index(i)]]++;
+				(*state.hist)[value[input_data.sel->get_index(i)]]++;
 			}
 		}
 	}
@@ -37,11 +36,11 @@ struct HistogramStringFunctor {
 		auto input_strings = UnifiedVectorFormat::GetData<string_t>(input_data);
 		for (idx_t i = 0; i < count; i++) {
 			if (input_data.validity.RowIsValid(input_data.sel->get_index(i))) {
-				auto state = states[sdata.sel->get_index(i)];
-				if (!state->hist) {
-					state->hist = new MAP_TYPE();
+				auto &state = *states[sdata.sel->get_index(i)];
+				if (!state.hist) {
+					state.hist = new MAP_TYPE();
 				}
-				(*state->hist)[input_strings[input_data.sel->get_index(i)].GetString()]++;
+				(*state.hist)[input_strings[input_data.sel->get_index(i)].GetString()]++;
 			}
 		}
 	}
@@ -55,14 +54,14 @@ struct HistogramStringFunctor {
 
 struct HistogramFunction {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->hist = nullptr;
+	static void Initialize(STATE &state) {
+		state.hist = nullptr;
 	}
 
 	template <class STATE>
-	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
-		if (state->hist) {
-			delete state->hist;
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		if (state.hist) {
+			delete state.hist;
 		}
 	}
 
@@ -87,25 +86,25 @@ static void HistogramUpdateFunction(Vector inputs[], AggregateInputData &, idx_t
 }
 
 template <class T, class MAP_TYPE>
-static void HistogramCombineFunction(Vector &state, Vector &combined, AggregateInputData &, idx_t count) {
+static void HistogramCombineFunction(Vector &state_vector, Vector &combined, AggregateInputData &, idx_t count) {
 
 	UnifiedVectorFormat sdata;
-	state.ToUnifiedFormat(count, sdata);
+	state_vector.ToUnifiedFormat(count, sdata);
 	auto states_ptr = (HistogramAggState<T, MAP_TYPE> **)sdata.data;
 
 	auto combined_ptr = FlatVector::GetData<HistogramAggState<T, MAP_TYPE> *>(combined);
 
 	for (idx_t i = 0; i < count; i++) {
-		auto state = states_ptr[sdata.sel->get_index(i)];
-		if (!state->hist) {
+		auto &state = *states_ptr[sdata.sel->get_index(i)];
+		if (!state.hist) {
 			continue;
 		}
 		if (!combined_ptr[i]->hist) {
 			combined_ptr[i]->hist = new MAP_TYPE();
 		}
 		D_ASSERT(combined_ptr[i]->hist);
-		D_ASSERT(state->hist);
-		for (auto &entry : *state->hist) {
+		D_ASSERT(state.hist);
+		for (auto &entry : *state.hist) {
 			(*combined_ptr[i]->hist)[entry.first] += entry.second;
 		}
 	}
@@ -124,13 +123,13 @@ static void HistogramFinalizeFunction(Vector &state_vector, AggregateInputData &
 
 	for (idx_t i = 0; i < count; i++) {
 		const auto rid = i + offset;
-		auto state = states[sdata.sel->get_index(i)];
-		if (!state->hist) {
+		auto &state = *states[sdata.sel->get_index(i)];
+		if (!state.hist) {
 			mask.SetInvalid(rid);
 			continue;
 		}
 
-		for (auto &entry : *state->hist) {
+		for (auto &entry : *state.hist) {
 			Value bucket_value = OP::template HistogramFinalize<T>(entry.first);
 			auto count_value = Value::CreateValue(entry.second);
 			auto struct_value =
