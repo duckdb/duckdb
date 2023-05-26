@@ -1815,11 +1815,11 @@ void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 //===--------------------------------------------------------------------===//
 // Create Column Writer
 //===--------------------------------------------------------------------===//
-unique_ptr<ColumnWriter>
-ColumnWriter::CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement> &schemas, ParquetWriter &writer,
-                                    const LogicalType &type, const string &name, vector<string> schema_path,
-                                    optional_ptr<const unordered_map<string, FieldID>> field_ids, idx_t max_repeat,
-                                    idx_t max_define, bool can_have_nulls) {
+unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement> &schemas,
+                                                             ParquetWriter &writer, const LogicalType &type,
+                                                             const string &name, vector<string> schema_path,
+                                                             optional_ptr<const ChildFieldIDs> field_ids,
+                                                             idx_t max_repeat, idx_t max_define, bool can_have_nulls) {
 	auto null_type = can_have_nulls ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
 	if (!can_have_nulls) {
 		max_define--;
@@ -1827,12 +1827,12 @@ ColumnWriter::CreateWriterRecursive(vector<duckdb_parquet::format::SchemaElement
 	idx_t schema_idx = schemas.size();
 
 	optional_ptr<const FieldID> field_id;
-	optional_ptr<const unordered_map<string, FieldID>> child_field_ids;
+	optional_ptr<const ChildFieldIDs> child_field_ids;
 	if (field_ids) {
-		auto field_id_it = field_ids->find(name);
-		if (field_id_it != field_ids->end()) {
+		auto field_id_it = field_ids->ids->find(name);
+		if (field_id_it != field_ids->ids->end()) {
 			field_id = &field_id_it->second;
-			child_field_ids = &field_id->child_field_ids.ids;
+			child_field_ids = &field_id->child_field_ids;
 		}
 	}
 

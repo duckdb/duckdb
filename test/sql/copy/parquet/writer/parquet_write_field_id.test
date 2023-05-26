@@ -75,6 +75,8 @@ copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet'
 Binder Error
 
 # we tested a non-nested column type, now do all the nested types so we test all the code paths
+
+# list
 statement ok
 copy (select range(range, range + 3) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42:{element=43}}')
 
@@ -94,6 +96,7 @@ copy (select range(range, range + 3) as i from range(10)) to '__TEST_DIR__/my.pa
 ----
 Binder Error: Column name "elem" in FIELD_IDS not found. Available column names: [element]
 
+# struct
 statement ok
 copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42:{f=43}}')
 
@@ -113,6 +116,7 @@ copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIEL
 ----
 Binder Error: Column name "g" in FIELD_IDS not found. Available column names: [f]
 
+# map
 statement ok
 copy (select map {range : 10 - range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42:{key=43, value=44}}')
 
@@ -136,3 +140,64 @@ statement error
 copy (select map {range : 10 - range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS '{i=42:{k=43, v=44}}')
 ----
 Binder Error: Column name "k" in FIELD_IDS not found. Available column names: [key, value]
+
+# test auto-generation (flat)
+statement ok
+copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS 'auto')
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+0
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'j'
+----
+1
+
+# test auto-generation (list)
+statement ok
+copy (select range(range, range + 3) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS 'auto')
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+0
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'element'
+----
+1
+
+# test auto-generation (struct)
+statement ok
+copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS 'auto')
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i' and num_children > 0
+----
+0
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'f'
+----
+1
+
+# test auto-generation (map)
+statement ok
+copy (select map {range : 10 - range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS 'auto')
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i' and num_children > 0
+----
+0
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'key'
+----
+1
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'value'
+----
+2

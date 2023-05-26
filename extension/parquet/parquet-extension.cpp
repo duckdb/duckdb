@@ -116,7 +116,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
 	idx_t row_group_size = RowGroup::ROW_GROUP_SIZE;
-	unordered_map<string, FieldID> field_ids;
+	ChildFieldIDs field_ids;
 };
 
 struct ParquetWriteGlobalState : public GlobalFunctionData {
@@ -586,7 +586,53 @@ public:
 	}
 };
 
-static void GetFieldIDs(const Value &field_id_string_value, unordered_map<string, FieldID> &field_ids,
+static void GetChildNamesAndTypes(const LogicalType &type, vector<string> &child_names,
+                                  vector<LogicalType> &child_types) {
+	switch (type.id()) {
+	case LogicalTypeId::LIST:
+		child_names.emplace_back("element");
+		child_types.emplace_back(ListType::GetChildType(type));
+		break;
+	case LogicalTypeId::MAP:
+		child_names.emplace_back("key");
+		child_names.emplace_back("value");
+		child_types.emplace_back(MapType::KeyType(type));
+		child_types.emplace_back(MapType::ValueType(type));
+		break;
+	case LogicalTypeId::STRUCT:
+		for (auto &child_type : StructType::GetChildTypes(type)) {
+			child_names.emplace_back(child_type.first);
+			child_types.emplace_back(child_type.second);
+		}
+		break;
+	default: // LCOV_EXCL_START
+		throw InternalException("Unexpected type in GetChildNamesAndTypes");
+	} // LCOV_EXCL_STOP
+}
+
+static void GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const vector<string> &names,
+                             const vector<LogicalType> &sql_types) {
+	D_ASSERT(names.size() == sql_types.size());
+	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
+		const auto &col_name = names[col_idx];
+		auto inserted = field_ids.ids->emplace(col_name, field_id++);
+		D_ASSERT(inserted.second);
+
+		const auto &col_type = sql_types[col_idx];
+		if (col_type.id() != LogicalTypeId::LIST && col_type.id() != LogicalTypeId::MAP &&
+		    col_type.id() != LogicalTypeId::STRUCT) {
+			continue;
+		}
+
+		vector<string> child_names;
+		vector<LogicalType> child_types;
+		GetChildNamesAndTypes(col_type, child_names, child_types);
+
+		GenerateFieldIDs(inserted.first->second.child_field_ids, field_id, child_names, child_types);
+	}
+}
+
+static void GetFieldIDs(const Value &field_id_string_value, ChildFieldIDs &field_ids,
                         unordered_set<uint32_t> &unique_field_ids, const vector<string> &names,
                         const vector<LogicalType> &sql_types) {
 	Value field_id_map;
@@ -611,7 +657,7 @@ static void GetFieldIDs(const Value &field_id_string_value, unordered_map<string
 			throw BinderException("Column name \"%s\" in FIELD_IDS not found. Available column names: [%s]", col_name,
 			                      StringUtil::Join(names, ", "));
 		}
-		D_ASSERT(field_ids.find(col_name) == field_ids.end()); // Caught by MAP - deduplicates keys
+		D_ASSERT(field_ids.ids->find(col_name) == field_ids.ids->end()); // Caught by MAP - deduplicates keys
 		auto &input_string = StringValue::Get(kv[1]);
 
 		string field_id_string;
@@ -640,7 +686,7 @@ static void GetFieldIDs(const Value &field_id_string_value, unordered_map<string
 		if (!unique_field_ids.insert(field_id).second) {
 			throw BinderException("Duplicate field_id %s found in FIELD_IDS", field_id_value.ToString());
 		}
-		auto inserted = field_ids.emplace(col_name, field_id);
+		auto inserted = field_ids.ids->emplace(col_name, field_id);
 		D_ASSERT(inserted.second);
 
 		if (!has_child_field_ids) {
@@ -656,28 +702,9 @@ static void GetFieldIDs(const Value &field_id_string_value, unordered_map<string
 
 		vector<string> child_names;
 		vector<LogicalType> child_types;
-		switch (col_type.id()) {
-		case LogicalTypeId::LIST:
-			child_names.emplace_back("element");
-			child_types.emplace_back(ListType::GetChildType(col_type));
-			break;
-		case LogicalTypeId::MAP:
-			child_names.emplace_back("key");
-			child_names.emplace_back("value");
-			child_types.emplace_back(MapType::KeyType(col_type));
-			child_types.emplace_back(MapType::ValueType(col_type));
-			break;
-		case LogicalTypeId::STRUCT:
-			for (auto &child_type : StructType::GetChildTypes(col_type)) {
-				child_names.emplace_back(child_type.first);
-				child_types.emplace_back(child_type.second);
-			}
-			break;
-		default: // LCOV_EXCL_START
-			throw InternalException("Unexpected type in GetFieldIDs");
-		} // LCOV_EXCL_STOP
+		GetChildNamesAndTypes(col_type, child_names, child_types);
 
-		GetFieldIDs(child_input_string, inserted.first->second.child_field_ids.ids, unique_field_ids, child_names,
+		GetFieldIDs(child_input_string, inserted.first->second.child_field_ids, unique_field_ids, child_names,
 		            child_types);
 	}
 }
@@ -708,11 +735,16 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 			}
 			throw BinderException("Expected %s argument to be either [uncompressed, snappy, gzip or zstd]", loption);
 		} else if (loption == "field_ids") {
-			if (option.second.empty()) {
-				throw BinderException("FIELD_IDS cannot be empty");
+			if (option.second.size() != 1) {
+				throw BinderException("FIELD_IDS requires exactly one argument");
 			}
-			unordered_set<uint32_t> unique_field_ids;
-			GetFieldIDs(option.second[0], bind_data->field_ids, unique_field_ids, names, sql_types);
+			if (StringUtil::Lower(StringValue::Get(option.second[0])) == "auto") {
+				idx_t field_id = 0;
+				GenerateFieldIDs(bind_data->field_ids, field_id, names, sql_types);
+			} else {
+				unordered_set<uint32_t> unique_field_ids;
+				GetFieldIDs(option.second[0], bind_data->field_ids, unique_field_ids, names, sql_types);
+			}
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
@@ -729,7 +761,7 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	global_state->writer = make_uniq<ParquetWriter>(fs, file_path, parquet_bind.sql_types, parquet_bind.column_names,
-	                                                parquet_bind.codec, parquet_bind.field_ids);
+	                                                parquet_bind.codec, parquet_bind.field_ids.Copy());
 	return std::move(global_state);
 }
 

@@ -32,21 +32,22 @@ struct PreparedRowGroup {
 
 struct FieldID;
 struct ChildFieldIDs {
-	unordered_map<string, FieldID> ids;
+	ChildFieldIDs();
+	ChildFieldIDs Copy() const;
+	unique_ptr<unordered_map<string, FieldID>> ids;
 };
 
 struct FieldID {
-	explicit FieldID(int32_t field_id_p) : field_id(field_id_p) {
-	}
+	explicit FieldID(int32_t field_id);
+	FieldID Copy() const;
 	int32_t field_id;
-	// TODO: current unused, implement at some point
 	ChildFieldIDs child_field_ids;
 };
 
 class ParquetWriter {
 public:
 	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names,
-	              duckdb_parquet::format::CompressionCodec::type codec, unordered_map<string, FieldID> field_ids);
+	              duckdb_parquet::format::CompressionCodec::type codec, ChildFieldIDs field_ids);
 
 public:
 	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
@@ -75,7 +76,7 @@ private:
 	vector<LogicalType> sql_types;
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec;
-	unordered_map<string, FieldID> field_ids;
+	ChildFieldIDs field_ids;
 
 	duckdb::unique_ptr<BufferedFileWriter> writer;
 	shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
