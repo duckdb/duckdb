@@ -1460,7 +1460,7 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
 	}
 
 	result = StringVector::EmptyString(result_vector, result_size);
-	Blob::ToBlob(input, (data_ptr_t)result.GetDataWriteable());
+	Blob::ToBlob(input, data_ptr_cast(result.GetDataWriteable()));
 	result.Finalize();
 	return true;
 }

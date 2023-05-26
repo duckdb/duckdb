@@ -56,7 +56,7 @@ void ExpressionExecutor::Execute(const BoundConjunctionExpression &expr, Express
 idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, ExpressionState *state_p,
                                  const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
                                  SelectionVector *false_sel) {
-	auto state = (ConjunctionState *)state_p;
+	auto &state = state_p->Cast<ConjunctionState>();
 
 	if (expr.type == ExpressionType::CONJUNCTION_AND) {
 		// get runtime statistics
@@ -75,8 +75,8 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			true_sel = temp_true.get();
 		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			idx_t tcount = Select(*expr.children[state->adaptive_filter->permutation[i]],
-			                      state->child_states[state->adaptive_filter->permutation[i]].get(), current_sel,
+			idx_t tcount = Select(*expr.children[state.adaptive_filter->permutation[i]],
+			                      state.child_states[state.adaptive_filter->permutation[i]].get(), current_sel,
 			                      current_count, true_sel, temp_false.get());
 			idx_t fcount = current_count - tcount;
 			if (fcount > 0 && false_sel) {
@@ -99,7 +99,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 
 		// adapt runtime statistics
 		auto end_time = high_resolution_clock::now();
-		state->adaptive_filter->AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - start_time).count());
+		state.adaptive_filter->AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - start_time).count());
 		return current_count;
 	} else {
 		// get runtime statistics
@@ -118,8 +118,8 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 			false_sel = temp_false.get();
 		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {
-			idx_t tcount = Select(*expr.children[state->adaptive_filter->permutation[i]],
-			                      state->child_states[state->adaptive_filter->permutation[i]].get(), current_sel,
+			idx_t tcount = Select(*expr.children[state.adaptive_filter->permutation[i]],
+			                      state.child_states[state.adaptive_filter->permutation[i]].get(), current_sel,
 			                      current_count, temp_true.get(), false_sel);
 			if (tcount > 0) {
 				if (true_sel) {
@@ -136,7 +136,7 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 
 		// adapt runtime statistics
 		auto end_time = high_resolution_clock::now();
-		state->adaptive_filter->AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - start_time).count());
+		state.adaptive_filter->AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - start_time).count());
 		return result_count;
 	}
 }

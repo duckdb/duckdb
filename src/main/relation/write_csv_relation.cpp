@@ -22,7 +22,7 @@ BoundStatement WriteCSVRelation::Bind(Binder &binder) {
 	info->format = "csv";
 	info->options = options;
 	copy.info = std::move(info);
-	return binder.Bind((SQLStatement &)copy);
+	return binder.Bind(copy.Cast<SQLStatement>());
 }
 
 const vector<ColumnDefinition> &WriteCSVRelation::Columns() {

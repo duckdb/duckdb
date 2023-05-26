@@ -16,8 +16,8 @@ string LambdaExpression::ToString() const {
 	return lhs->ToString() + " -> " + expr->ToString();
 }
 
-bool LambdaExpression::Equal(const LambdaExpression *a, const LambdaExpression *b) {
-	return a->lhs->Equals(b->lhs.get()) && a->expr->Equals(b->expr.get());
+bool LambdaExpression::Equal(const LambdaExpression &a, const LambdaExpression &b) {
+	return a.lhs->Equals(*b.lhs) && a.expr->Equals(*b.expr);
 }
 
 hash_t LambdaExpression::Hash() const {

@@ -54,26 +54,26 @@ string StarExpression::ToString() const {
 	return result;
 }
 
-bool StarExpression::Equal(const StarExpression *a, const StarExpression *b) {
-	if (a->relation_name != b->relation_name || a->exclude_list != b->exclude_list) {
+bool StarExpression::Equal(const StarExpression &a, const StarExpression &b) {
+	if (a.relation_name != b.relation_name || a.exclude_list != b.exclude_list) {
 		return false;
 	}
-	if (a->columns != b->columns) {
+	if (a.columns != b.columns) {
 		return false;
 	}
-	if (a->replace_list.size() != b->replace_list.size()) {
+	if (a.replace_list.size() != b.replace_list.size()) {
 		return false;
 	}
-	for (auto &entry : a->replace_list) {
-		auto other_entry = b->replace_list.find(entry.first);
-		if (other_entry == b->replace_list.end()) {
+	for (auto &entry : a.replace_list) {
+		auto other_entry = b.replace_list.find(entry.first);
+		if (other_entry == b.replace_list.end()) {
 			return false;
 		}
-		if (!entry.second->Equals(other_entry->second.get())) {
+		if (!entry.second->Equals(*other_entry->second)) {
 			return false;
 		}
 	}
-	if (!BaseExpression::Equals(a->expr.get(), b->expr.get())) {
+	if (!ParsedExpression::Equals(a.expr, b.expr)) {
 		return false;
 	}
 	return true;

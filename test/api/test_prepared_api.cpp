@@ -335,7 +335,7 @@ TEST_CASE("Test BLOB with PreparedStatement", "[api]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BYTEA);"));
 
 	// Insert blob values through a PreparedStatement
-	Value blob_val = Value::BLOB((const_data_ptr_t)blob_chars.get(), num_chars);
+	Value blob_val = Value::BLOB(const_data_ptr_cast(blob_chars.get()), num_chars);
 	duckdb::unique_ptr<PreparedStatement> ps = con.Prepare("INSERT INTO blobs VALUES (?::BYTEA)");
 	ps->Execute(blob_val);
 	REQUIRE(!ps->HasError());
