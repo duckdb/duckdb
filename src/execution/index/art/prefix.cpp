@@ -213,7 +213,7 @@ void Prefix::Reduce(ART &art, Node &prefix_node, const idx_t n) {
 	reference<Prefix> prefix = Prefix::Get(art, prefix_node);
 
 	// free this prefix node
-	if (n == Node::PREFIX_SIZE - 1) {
+	if (n == prefix.get().data[Node::PREFIX_SIZE] - 1) {
 		auto next_ptr = prefix.get().ptr;
 		D_ASSERT(next_ptr.IsSet());
 		prefix.get().ptr.Reset();
@@ -283,7 +283,7 @@ void Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx
 	return;
 }
 
-string Prefix::ToString(ART &art) {
+string Prefix::VerifyAndToString(ART &art, const bool only_verify) {
 
 	D_ASSERT(data[Node::PREFIX_SIZE] != 0);
 	D_ASSERT(data[Node::PREFIX_SIZE] <= Node::PREFIX_SIZE);
@@ -294,7 +294,7 @@ string Prefix::ToString(ART &art) {
 	}
 	str += "] ";
 
-	return str + ptr.ToString(art);
+	return only_verify ? "" : str + ptr.VerifyAndToString(art, only_verify);
 }
 
 BlockPointer Prefix::Serialize(ART &art, MetaBlockWriter &writer) {

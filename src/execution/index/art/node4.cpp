@@ -146,6 +146,7 @@ void Node4::ReplaceChild(const uint8_t byte, const Node child) {
 optional_ptr<Node> Node4::GetChild(const uint8_t byte) {
 
 	for (idx_t i = 0; i < count; i++) {
+		D_ASSERT(children[i].IsSet());
 		if (key[i] == byte) {
 			return &children[i];
 		}

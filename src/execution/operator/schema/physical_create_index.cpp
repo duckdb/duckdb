@@ -7,6 +7,8 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
 
 namespace duckdb {
 
@@ -106,6 +108,21 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	if (!lstate.local_index->MergeIndexes(*art)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
+	lstate.local_index->VerifyAndToString(true);
+
+#ifdef DEBUG
+	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
+	for (idx_t i = 0; i < lstate.key_chunk.size(); i++) {
+		auto leaf_node =
+		    lstate.local_index->Cast<ART>().Lookup(*lstate.local_index->Cast<ART>().tree, lstate.keys[i], 0);
+		D_ASSERT(leaf_node.IsSet());
+		auto &leaf = Leaf::Get(lstate.local_index->Cast<ART>(), leaf_node);
+		Node leaf_segment;
+		D_ASSERT(leaf.FindRowId(lstate.local_index->Cast<ART>(), leaf_segment, row_ids[i]) !=
+		         (uint32_t)DConstants::INVALID_INDEX);
+	}
+#endif
+
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -149,6 +166,7 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 
 	// vacuum excess memory
 	state.global_index->Vacuum();
+	D_ASSERT(!state.global_index->VerifyAndToString(true).empty());
 
 	// add index to storage
 	storage.info->indexes.AddIndex(std::move(state.global_index));

@@ -234,7 +234,12 @@ row_t Leaf::GetRowId(const ART &art, const idx_t position) const {
 
 uint32_t Leaf::FindRowId(const ART &art, Node &ptr, const row_t row_id) const {
 
-	D_ASSERT(!IsInlined());
+	if (IsInlined()) {
+		if (row_ids.inlined == row_id) {
+			return 0;
+		}
+		return (uint32_t)DConstants::INVALID_INDEX;
+	}
 
 	auto remaining = count;
 	while (ptr.IsSet()) {
@@ -256,10 +261,10 @@ uint32_t Leaf::FindRowId(const ART &art, Node &ptr, const row_t row_id) const {
 	return (uint32_t)DConstants::INVALID_INDEX;
 }
 
-string Leaf::ToString(const ART &art) const {
+string Leaf::VerifyAndToString(const ART &art, const bool only_verify) const {
 
 	if (IsInlined()) {
-		return "Leaf [count: 1, row ID: " + to_string(row_ids.inlined) + "]";
+		return only_verify ? "" : "Leaf [count: 1, row ID: " + to_string(row_ids.inlined) + "]";
 	}
 
 	auto ptr = row_ids.ptr;
@@ -279,7 +284,7 @@ string Leaf::ToString(const ART &art) const {
 	}
 	D_ASSERT(remaining == 0);
 	D_ASSERT(this_count == count);
-	return "Leaf [count: " + to_string(count) + ", row IDs: " + str + "] \n";
+	return only_verify ? "" : "Leaf [count: " + to_string(count) + ", row IDs: " + str + "] \n";
 }
 
 BlockPointer Leaf::Serialize(const ART &art, MetaBlockWriter &writer) const {

@@ -61,6 +61,11 @@ public:
 	//! Free the node (and its subtree)
 	static void Free(ART &art, Node &node);
 
+	inline bool operator==(const Node &node) const {
+		return swizzle_flag == node.swizzle_flag && type == node.type && offset == node.offset &&
+		       buffer_id == node.buffer_id;
+	}
+
 	//! Retrieve the node type from the leftmost byte
 	inline NType DecodeARTNodeType() const {
 		D_ASSERT(!IsSwizzled());
@@ -87,15 +92,15 @@ public:
 	//! Get the child for the respective byte in the node
 	optional_ptr<Node> GetChild(ART &art, const uint8_t byte) const;
 	//! Get the first child that is greater or equal to the specific byte
-	optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte) const;
+	optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte, const bool deserialize = true) const;
 
 	//! Serialize the node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
 	//! Deserialize the node
 	void Deserialize(ART &art);
 
-	//! Returns the string representation of the node
-	string ToString(ART &art);
+	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
+	string VerifyAndToString(ART &art, const bool only_verify);
 	//! Returns the capacity of the node
 	idx_t GetCapacity() const;
 	//! Returns the matching node type for a given count

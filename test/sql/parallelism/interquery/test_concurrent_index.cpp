@@ -48,7 +48,6 @@ TEST_CASE("Concurrent reads during index creation", "[interquery][.]") {
 	}
 	appender.Close();
 
-	is_finished = false;
 	// now launch a bunch of reading threads
 	bool correct[CONCURRENT_INDEX_THREAD_COUNT];
 	thread threads[CONCURRENT_INDEX_THREAD_COUNT];
@@ -58,7 +57,6 @@ TEST_CASE("Concurrent reads during index creation", "[interquery][.]") {
 
 	// create the index
 	REQUIRE_NO_FAIL(con.Query("CREATE INDEX i_index ON integers(i)"));
-	is_finished = true;
 
 	for (idx_t i = 0; i < CONCURRENT_INDEX_THREAD_COUNT; i++) {
 		threads[i].join();

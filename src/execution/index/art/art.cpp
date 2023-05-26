@@ -350,7 +350,18 @@ bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_ide
 
 	auto key_section = KeySection(0, count - 1, 0, 0);
 	auto has_constraint = IsUnique();
-	return Construct(*this, keys, row_ids, *this->tree, key_section, has_constraint);
+	auto success = Construct(*this, keys, row_ids, *this->tree, key_section, has_constraint);
+	VerifyAndToStringInternal(true);
+#ifdef DEBUG
+	for (idx_t i = 0; i < count; i++) {
+		auto leaf_node = Lookup(*tree, keys[i], 0);
+		D_ASSERT(leaf_node.IsSet());
+		auto &leaf = Leaf::Get(*this, leaf_node);
+		Node leaf_segment;
+		D_ASSERT(leaf.FindRowId(*this, leaf_segment, row_ids[i]) != (uint32_t)DConstants::INVALID_INDEX);
+	}
+#endif
+	return success;
 }
 
 //===--------------------------------------------------------------------===//
@@ -384,7 +395,7 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 			break;
 		}
 	}
-	D_ASSERT(!ToString().empty());
+	D_ASSERT(!VerifyAndToStringInternal(true).empty());
 
 	// failed to insert because of constraint violation: remove previously inserted entries
 	if (failed_index != DConstants::INVALID_INDEX) {
@@ -551,7 +562,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		}
 #endif
 	}
-	D_ASSERT(!ToString().empty());
+	D_ASSERT(!VerifyAndToStringInternal(true).empty());
 }
 
 void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id) {
@@ -1046,6 +1057,9 @@ void ART::InitializeMerge(ARTFlags &flags) {
 
 bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 
+	VerifyAndToStringInternal(true);
+	other_index.VerifyAndToString(true);
+
 	auto &other_art = other_index.Cast<ART>();
 	if (!other_art.tree->IsSet()) {
 		return true;
@@ -1074,9 +1088,13 @@ bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 // Utility
 //===--------------------------------------------------------------------===//
 
-string ART::ToString() {
+string ART::VerifyAndToString(IndexLock &state, const bool only_verify) {
+	return VerifyAndToStringInternal(only_verify);
+}
+
+string ART::VerifyAndToStringInternal(const bool only_verify) {
 	if (tree->IsSet()) {
-		return tree->ToString(*this);
+		return "ART: " + tree->VerifyAndToString(*this, only_verify);
 	}
 	return "[empty]";
 }

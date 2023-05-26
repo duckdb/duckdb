@@ -177,14 +177,14 @@ optional_ptr<Node> Node::GetChild(ART &art, const uint8_t byte) const {
 		throw InternalException("Invalid node type for GetChild.");
 	}
 
-	// unswizzle the ART node before returning it
+	// deserialize the ART node before returning it
 	if (child && child->IsSwizzled()) {
 		child->Deserialize(art);
 	}
 	return child;
 }
 
-optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte) const {
+optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte, const bool deserialize) const {
 
 	D_ASSERT(!IsSwizzled());
 
@@ -206,8 +206,8 @@ optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte) const {
 		throw InternalException("Invalid node type for GetNextChild.");
 	}
 
-	// unswizzle the ART node before returning it
-	if (child && child->IsSwizzled()) {
+	// deserialize the ART node before returning it
+	if (child && deserialize && child->IsSwizzled()) {
 		child->Deserialize(art);
 	}
 	return child;
@@ -277,39 +277,50 @@ void Node::Deserialize(ART &art) {
 // Utility
 //===--------------------------------------------------------------------===//
 
-string Node::ToString(ART &art) {
+string Node::VerifyAndToString(ART &art, const bool only_verify) {
 
 	D_ASSERT(IsSet());
 	if (IsSwizzled()) {
-		return "swizzled";
+		return only_verify ? "" : "swizzled";
 	}
 
 	auto type = DecodeARTNodeType();
 	if (type == NType::LEAF) {
-		return "\n" + Leaf::Get(art, *this).ToString(art);
+		auto str = Leaf::Get(art, *this).VerifyAndToString(art, only_verify);
+		return only_verify ? "" : "\n" + str;
 	}
 	if (type == NType::PREFIX) {
-		return "\n" + Prefix::Get(art, *this).ToString(art);
+		auto str = Prefix::Get(art, *this).VerifyAndToString(art, only_verify);
+		return only_verify ? "" : "\n" + str;
 	}
 
 	string str = "Node" + to_string(GetCapacity()) + ": [";
 
 	idx_t child_count = 0;
 	uint8_t byte = 0;
-	auto child = GetNextChild(art, byte);
+	auto child = GetNextChild(art, byte, false);
+
 	while (child) {
+
 		child_count++;
-		str += "(" + to_string(byte) + ", " + child->ToString(art) + ")";
-		if (byte == NumericLimits<uint8_t>::Maximum()) {
-			break;
+		if (child->IsSwizzled()) {
+			if (!only_verify) {
+				str += "(swizzled)";
+			}
+		} else {
+			str += "(" + to_string(byte) + ", " + child->VerifyAndToString(art, only_verify) + ")";
+			if (byte == NumericLimits<uint8_t>::Maximum()) {
+				break;
+			}
 		}
+
 		byte++;
-		child = GetNextChild(art, byte);
+		child = GetNextChild(art, byte, false);
 	}
 
 	// ensure that the child count is at least two
 	D_ASSERT(child_count > 1);
-	return "\n" + str + "]";
+	return only_verify ? "" : "\n" + str + "]";
 }
 
 idx_t Node::GetCapacity() const {
@@ -398,6 +409,9 @@ bool Node::Merge(ART &art, Node &other) {
 		return true;
 	}
 
+	VerifyAndToString(art, true);
+	other.VerifyAndToString(art, true);
+
 	return ResolvePrefixes(art, other);
 }
 
@@ -428,8 +442,20 @@ bool Node::ResolvePrefixes(ART &art, Node &other) {
 	// make sure that the r_node's prefix has the longer prefix
 	if (l_type == NType::PREFIX && r_type != NType::PREFIX) {
 		swap(l_type, r_type);
-		swap(l_node, r_node);
+		if (*this == l_node && other == r_node) {
+			swap(*this, other);
+		} else if (*this == l_node) {
+			swap(*this, other);
+			r_node = *this;
+		} else if (other == r_node) {
+			swap(*this, other);
+			l_node = other;
+		} else {
+			swap(*this, other);
+			swap(l_node, r_node);
+		}
 	}
+
 	if (l_type != NType::PREFIX && r_type == NType::PREFIX) {
 		// r_node's prefix contains l_node's prefix
 		// l_node cannot be a leaf, otherwise the key represented by l_node would be a subset of another key
@@ -465,6 +491,7 @@ bool Node::ResolvePrefixes(ART &art, Node &other) {
 	// insert children
 	Node4::InsertChild(art, l_node, l_byte, l_child);
 	auto r_byte = Prefix::GetByte(art, r_node, mismatch_position);
+	Prefix::Reduce(art, r_node, mismatch_position);
 	Node4::InsertChild(art, l_node, r_byte, r_node);
 
 	r_node.get().Reset();
