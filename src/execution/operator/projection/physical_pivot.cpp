@@ -17,11 +17,11 @@ PhysicalPivot::PhysicalPivot(vector<LogicalType> types_p, unique_ptr<PhysicalOpe
 	}
 	// extract the empty aggregate expressions
 	for (auto &aggr_expr : bound_pivot.aggregates) {
-		auto &aggr = (BoundAggregateExpression &)*aggr_expr;
+		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
 		// for each aggregate, initialize an empty aggregate state and finalize it immediately
 		auto state = make_unsafe_uniq_array<data_t>(aggr.function.state_size());
 		aggr.function.initialize(state.get());
-		Vector state_vector(Value::POINTER((uintptr_t)state.get()));
+		Vector state_vector(Value::POINTER(CastPointerToValue(state.get())));
 		Vector result_vector(aggr_expr->return_type);
 		AggregateInputData aggr_input_data(aggr.bind_info.get(), Allocator::DefaultAllocator());
 		aggr.function.finalize(state_vector, aggr_input_data, result_vector, 1, 0);

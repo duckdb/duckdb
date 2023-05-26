@@ -32,10 +32,10 @@ static void TransformPivotInList(unique_ptr<ParsedExpression> &expr, PivotColumn
 	}
 }
 
-PivotColumn Transformer::TransformPivotColumn(duckdb_libpgquery::PGPivot *pivot) {
+PivotColumn Transformer::TransformPivotColumn(duckdb_libpgquery::PGPivot &pivot) {
 	PivotColumn col;
-	if (pivot->pivot_columns) {
-		TransformExpressionList(*pivot->pivot_columns, col.pivot_expressions);
+	if (pivot.pivot_columns) {
+		TransformExpressionList(*pivot.pivot_columns, col.pivot_expressions);
 		for (auto &expr : col.pivot_expressions) {
 			if (expr->IsScalar()) {
 				throw ParserException("Cannot pivot on constant value \"%s\"", expr->ToString());
@@ -44,14 +44,14 @@ PivotColumn Transformer::TransformPivotColumn(duckdb_libpgquery::PGPivot *pivot)
 				throw ParserException("Cannot pivot on subquery \"%s\"", expr->ToString());
 			}
 		}
-	} else if (pivot->unpivot_columns) {
-		col.unpivot_names = TransformStringList(pivot->unpivot_columns);
+	} else if (pivot.unpivot_columns) {
+		col.unpivot_names = TransformStringList(pivot.unpivot_columns);
 	} else {
 		throw InternalException("Either pivot_columns or unpivot_columns must be defined");
 	}
-	if (pivot->pivot_value) {
-		for (auto node = pivot->pivot_value->head; node != nullptr; node = node->next) {
-			auto n = (duckdb_libpgquery::PGNode *)node->data.ptr_value;
+	if (pivot.pivot_value) {
+		for (auto node = pivot.pivot_value->head; node != nullptr; node = node->next) {
+			auto n = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
 			auto expr = TransformExpression(n);
 			PivotColumnEntry entry;
 			entry.alias = expr->alias;
@@ -59,36 +59,36 @@ PivotColumn Transformer::TransformPivotColumn(duckdb_libpgquery::PGPivot *pivot)
 			col.entries.push_back(std::move(entry));
 		}
 	}
-	if (pivot->subquery) {
-		col.subquery = TransformSelectNode(reinterpret_cast<duckdb_libpgquery::PGSelectStmt *>(pivot->subquery));
+	if (pivot.subquery) {
+		col.subquery = TransformSelectNode(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(pivot.subquery));
 	}
-	if (pivot->pivot_enum) {
-		col.pivot_enum = pivot->pivot_enum;
+	if (pivot.pivot_enum) {
+		col.pivot_enum = pivot.pivot_enum;
 	}
 	return col;
 }
 
-vector<PivotColumn> Transformer::TransformPivotList(duckdb_libpgquery::PGList *list) {
+vector<PivotColumn> Transformer::TransformPivotList(duckdb_libpgquery::PGList &list) {
 	vector<PivotColumn> result;
-	for (auto node = list->head; node != nullptr; node = node->next) {
-		auto pivot = (duckdb_libpgquery::PGPivot *)node->data.ptr_value;
-		result.push_back(TransformPivotColumn(pivot));
+	for (auto node = list.head; node != nullptr; node = node->next) {
+		auto pivot = PGPointerCast<duckdb_libpgquery::PGPivot>(node->data.ptr_value);
+		result.push_back(TransformPivotColumn(*pivot));
 	}
 	return result;
 }
 
-unique_ptr<TableRef> Transformer::TransformPivot(duckdb_libpgquery::PGPivotExpr *root) {
+unique_ptr<TableRef> Transformer::TransformPivot(duckdb_libpgquery::PGPivotExpr &root) {
 	auto result = make_uniq<PivotRef>();
-	result->source = TransformTableRefNode(root->source);
-	if (root->aggrs) {
-		TransformExpressionList(*root->aggrs, result->aggregates);
+	result->source = TransformTableRefNode(*root.source);
+	if (root.aggrs) {
+		TransformExpressionList(*root.aggrs, result->aggregates);
 	}
-	if (root->unpivots) {
-		result->unpivot_names = TransformStringList(root->unpivots);
+	if (root.unpivots) {
+		result->unpivot_names = TransformStringList(root.unpivots);
 	}
-	result->pivots = TransformPivotList(root->pivots);
-	if (root->groups) {
-		result->groups = TransformStringList(root->groups);
+	result->pivots = TransformPivotList(*root.pivots);
+	if (root.groups) {
+		result->groups = TransformStringList(root.groups);
 	}
 	for (auto &pivot : result->pivots) {
 		idx_t expected_size;
@@ -116,8 +116,8 @@ unique_ptr<TableRef> Transformer::TransformPivot(duckdb_libpgquery::PGPivotExpr 
 			}
 		}
 	}
-	result->include_nulls = root->include_nulls;
-	result->alias = TransformAlias(root->alias, result->column_name_alias);
+	result->include_nulls = root.include_nulls;
+	result->alias = TransformAlias(root.alias, result->column_name_alias);
 	return std::move(result);
 }
 

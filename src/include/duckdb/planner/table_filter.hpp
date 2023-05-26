@@ -47,6 +47,23 @@ public:
 	void Serialize(Serializer &serializer) const;
 	virtual void Serialize(FieldWriter &writer) const = 0;
 	static unique_ptr<TableFilter> Deserialize(Deserializer &source);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (filter_type != TARGET::TYPE) {
+			throw InternalException("Failed to cast table to type - table filter type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (filter_type != TARGET::TYPE) {
+			throw InternalException("Failed to cast table to type - table filter type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 class TableFilterSet {

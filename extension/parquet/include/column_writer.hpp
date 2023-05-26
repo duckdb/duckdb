@@ -25,6 +25,18 @@ public:
 	vector<uint16_t> definition_levels;
 	vector<uint16_t> repetition_levels;
 	vector<bool> is_empty;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 class ColumnWriterStatistics {
@@ -35,6 +47,18 @@ public:
 	virtual string GetMax();
 	virtual string GetMinValue();
 	virtual string GetMaxValue();
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 class ColumnWriter {

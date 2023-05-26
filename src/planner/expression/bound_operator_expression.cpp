@@ -1,6 +1,5 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/expression_util.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/common/field_writer.hpp"
 
@@ -14,12 +13,12 @@ string BoundOperatorExpression::ToString() const {
 	return OperatorExpression::ToString<BoundOperatorExpression, Expression>(*this);
 }
 
-bool BoundOperatorExpression::Equals(const BaseExpression *other_p) const {
+bool BoundOperatorExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto &other = other_p->Cast<BoundOperatorExpression>();
-	if (!ExpressionUtil::ListEquals(children, other.children)) {
+	auto &other = other_p.Cast<BoundOperatorExpression>();
+	if (!Expression::ListEquals(children, other.children)) {
 		return false;
 	}
 	return true;
