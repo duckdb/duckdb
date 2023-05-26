@@ -208,7 +208,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 		root = CreatePlan(ref.Cast<BoundCTERef>());
 		break;
 	case TableReferenceType::PIVOT:
-		root = CreatePlan((BoundPivotRef &)ref);
+		root = CreatePlan(ref.Cast<BoundPivotRef>());
 		break;
 	case TableReferenceType::INVALID:
 	default:

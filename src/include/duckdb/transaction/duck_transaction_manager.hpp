@@ -46,9 +46,9 @@ public:
 	}
 
 private:
-	bool CanCheckpoint(DuckTransaction *current = nullptr);
+	bool CanCheckpoint(optional_ptr<DuckTransaction> current = nullptr);
 	//! Remove the given transaction from the list of active transactions
-	void RemoveTransaction(DuckTransaction *transaction) noexcept;
+	void RemoveTransaction(DuckTransaction &transaction) noexcept;
 	void LockClients(vector<ClientLockWrapper> &client_locks, ClientContext &context);
 
 private:

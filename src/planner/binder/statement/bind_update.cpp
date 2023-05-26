@@ -87,7 +87,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 	// with a "useless" update (i.e. i=i) so we can verify that the CHECK constraint is not violated
 	for (auto &constraint : table.GetBoundConstraints()) {
 		if (constraint->type == ConstraintType::CHECK) {
-			auto &check = *reinterpret_cast<BoundCheckConstraint *>(constraint.get());
+			auto &check = constraint->Cast<BoundCheckConstraint>();
 			// check constraint! check if we need to add any extra columns to the UPDATE clause
 			BindExtraColumns(table, get, proj, update, check.bound_columns);
 		}

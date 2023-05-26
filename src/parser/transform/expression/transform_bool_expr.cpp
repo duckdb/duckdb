@@ -4,12 +4,12 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(duckdb_libpgquery::PGBoolExpr *root) {
+unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(duckdb_libpgquery::PGBoolExpr &root) {
 	unique_ptr<ParsedExpression> result;
-	for (auto node = root->args->head; node != nullptr; node = node->next) {
-		auto next = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value));
+	for (auto node = root.args->head; node != nullptr; node = node->next) {
+		auto next = TransformExpression(PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value));
 
-		switch (root->boolop) {
+		switch (root.boolop) {
 		case duckdb_libpgquery::PG_AND_EXPR: {
 			if (!result) {
 				result = std::move(next);

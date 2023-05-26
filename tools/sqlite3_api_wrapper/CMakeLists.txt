@@ -10,7 +10,7 @@ add_definitions(-DUSE_DUCKDB_SHELL_WRAPPER)
 
 include_directories(../../third_party/utf8proc/include)
 
-if(NOT BUILD_AUTOCOMPLETE_EXTENSION)
+if(NOT BUILD_AUTOCOMPLETE_EXTENSION AND NOT DISABLE_BUILTIN_EXTENSIONS)
   include_directories(../../extension/autocomplete/include)
   set(ALL_OBJECT_FILES
       ${ALL_OBJECT_FILES}
