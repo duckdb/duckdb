@@ -690,15 +690,16 @@ bool Catalog::TypeExists(ClientContext &context, const string &catalog_name, con
 vector<reference<SchemaCatalogEntry>> Catalog::GetSchemas(ClientContext &context, const string &catalog_name) {
 	vector<reference<Catalog>> catalogs;
 	if (IsInvalidCatalog(catalog_name)) {
-		unordered_set<string> name;
+		reference_set_t<Catalog> inserted_catalogs;
 
 		auto &search_path = *context.client_data->catalog_search_path;
 		for (auto &entry : search_path.Get()) {
-			if (name.find(entry.catalog) != name.end()) {
+			auto &catalog = Catalog::GetCatalog(context, entry.catalog);
+			if (inserted_catalogs.find(catalog) != inserted_catalogs.end()) {
 				continue;
 			}
-			name.insert(entry.catalog);
-			catalogs.push_back(Catalog::GetCatalog(context, entry.catalog));
+			inserted_catalogs.insert(catalog);
+			catalogs.push_back(catalog);
 		}
 	} else {
 		catalogs.push_back(Catalog::GetCatalog(context, catalog_name));
