@@ -582,6 +582,7 @@ parser/transform/expression/transform_expression.cpp	4
 parser/transform/expression/transform_function.cpp	21
 parser/transform/expression/transform_interval.cpp	4
 parser/transform/expression/transform_param_ref.cpp	2
+parser/transform/helpers/transform_cte.cpp  1
 parser/transform/helpers/transform_sample.cpp	5
 parser/transform/helpers/transform_typename.cpp	14
 parser/transform/statement/transform_alter_sequence.cpp	2
