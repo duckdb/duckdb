@@ -988,7 +988,7 @@ void SchemaSetting::ResetLocal(ClientContext &context) {
 void SchemaSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = input.ToString();
 	auto &client_data = ClientData::Get(context);
-	client_data.catalog_search_path->Set(CatalogSearchEntry::Parse(parameter), true);
+	client_data.catalog_search_path->Set(CatalogSearchEntry::Parse(parameter), CatalogSetPathType::SET_SCHEMA);
 }
 
 Value SchemaSetting::GetSetting(ClientContext &context) {
@@ -1008,7 +1008,7 @@ void SearchPathSetting::ResetLocal(ClientContext &context) {
 void SearchPathSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = input.ToString();
 	auto &client_data = ClientData::Get(context);
-	client_data.catalog_search_path->Set(CatalogSearchEntry::ParseList(parameter), false);
+	client_data.catalog_search_path->Set(CatalogSearchEntry::ParseList(parameter), CatalogSetPathType::SET_SCHEMAS);
 }
 
 Value SearchPathSetting::GetSetting(ClientContext &context) {
