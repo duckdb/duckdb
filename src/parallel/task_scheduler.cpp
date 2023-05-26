@@ -131,8 +131,7 @@ static inline int64_t CurrentTimeMS() {
 
 void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 #ifndef DUCKDB_NO_THREADS
-	constexpr static int64_t FLUSH_INTERVAL_MS = 50;
-	auto flush_timestamp = CurrentTimeMS();
+	constexpr static int64_t TASK_DURATION_FLUSH_THRESHOLD_MS = 100;
 
 	shared_ptr<Task> task;
 	// loop until the marker is set to false
@@ -140,7 +139,11 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 		// wait for a signal with a timeout
 		queue->semaphore.wait();
 		if (queue->q.try_dequeue(task)) {
+			const auto timestamp_before_task = CurrentTimeMS();
 			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
+			if (CurrentTimeMS() - timestamp_before_task >= TASK_DURATION_FLUSH_THRESHOLD_MS) {
+				Allocator::ThreadFlush();
+			}
 
 			switch (execute_result) {
 			case TaskExecutionResult::TASK_FINISHED:
@@ -154,12 +157,6 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 				task.reset();
 				break;
 			}
-		}
-
-		// flush this thread's allocations
-		if (CurrentTimeMS() - flush_timestamp >= FLUSH_INTERVAL_MS) {
-			Allocator::ThreadFlush();
-			flush_timestamp = CurrentTimeMS();
 		}
 	}
 #else
