@@ -28,6 +28,10 @@ public:
 unique_ptr<PhysicalResultCollector> PhysicalNumpyCollector::Create(ClientContext &context,
                                                                    PreparedStatementData &data) {
 	(void)context;
+	// The creation of `py::array` requires this module, and when this is imported for the first time from a thread that
+	// is not the main execution thread this might cause a crash. So we import it here while we're still in the main
+	// thread.
+	auto numpy_internal = py::module_::import("numpy.core.multiarray");
 	// Always create a parallel result collector
 	return make_uniq_base<PhysicalResultCollector, PhysicalNumpyCollector>(data, true);
 }
@@ -73,7 +77,9 @@ unique_ptr<QueryResult> PhysicalNumpyCollector::GetResult(GlobalSinkState &state
 		result_size += collection->Count();
 	}
 	unique_ptr<NumpyResultConversion> collection;
-	{
+	if (gstate.collections.size() == 1) {
+		collection = std::move(gstate.collections[0]);
+	} else {
 		py::gil_scoped_acquire gil;
 		collection = make_uniq<NumpyResultConversion>(types, result_size);
 		if (result_size != 0) {

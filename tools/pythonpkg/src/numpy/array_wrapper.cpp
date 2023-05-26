@@ -472,7 +472,7 @@ static bool ConvertDecimal(const LogicalType &decimal_type, idx_t target_offset,
 	}
 }
 
-RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(type), count(0) {
+RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : array(), data(nullptr), type(type), count(0) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		type_width = sizeof(bool);
