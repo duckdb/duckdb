@@ -217,17 +217,10 @@ void BufferedCSVReaderOptions::SetRejectsOptions(const named_parameter_map_t &pa
 				    "REJECTS_RECOVERY_COLUMNS option is only supported when REJECTS_TABLE is set to a table name");
 			}
 
-			if (value.type().id() != LogicalTypeId::LIST) {
-				throw BinderException(
-				    "Unsupported parameter for REJECTS_RECOVERY_COLUMNS: expected a list of column indices");
-			}
-			if (names.empty()) {
-				throw BinderException(
-				    "Unsupported parameter for REJECTS_RECOVERY_COLUMNS: no 'columns' parameter provided");
-			}
 			// Get the list of columns to use as a recovery key
 			auto &children = ListValue::GetChildren(value);
 			for (auto &child : children) {
+				auto col_name_raw = child.GetValue<string>();
 				auto col_name = StringUtil::Lower(child.GetValue<string>());
 				bool found = false;
 				for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
@@ -239,7 +232,7 @@ void BufferedCSVReaderOptions::SetRejectsOptions(const named_parameter_map_t &pa
 				}
 				if (!found) {
 					throw BinderException("Unsupported parameter for REJECTS_RECOVERY_COLUMNS: column \"%s\" not found",
-					                      col_name);
+					                      col_name_raw);
 				}
 			}
 		}
@@ -251,7 +244,7 @@ void BufferedCSVReaderOptions::SetRejectsOptions(const named_parameter_map_t &pa
 			}
 			int64_t limit = ParseInteger(value, loption);
 			if (limit < 0) {
-				throw BinderException("Unsupported parameter for REJECTS_LIMIT: cannot be smaller than 0");
+				throw BinderException("Unsupported parameter for REJECTS_LIMIT: cannot be negative");
 			}
 			rejects_limit = limit;
 		}
