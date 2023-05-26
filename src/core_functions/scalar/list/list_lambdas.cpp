@@ -40,7 +40,7 @@ unique_ptr<FunctionData> ListLambdaBindData::Copy() const {
 
 bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<ListLambdaBindData>();
-	return lambda_expr->Equals(other.lambda_expr.get()) && stype == other.stype;
+	return lambda_expr->Equals(*other.lambda_expr) && stype == other.stype;
 }
 
 ListLambdaBindData::~ListLambdaBindData() {
@@ -63,7 +63,7 @@ static void AppendFilteredToResult(Vector &lambda_vector, list_entry_t *result_e
 	UnifiedVectorFormat lambda_data;
 	lambda_vector.ToUnifiedFormat(elem_cnt, lambda_data);
 
-	auto lambda_values = (bool *)lambda_data.data;
+	auto lambda_values = UnifiedVectorFormat::GetData<bool>(lambda_data);
 	auto &lambda_validity = lambda_data.validity;
 
 	// compute the new lengths and offsets, and create a selection vector
@@ -167,7 +167,7 @@ static void ListLambdaFunction(DataChunk &args, ExpressionState &state, Vector &
 	// get the lists data
 	UnifiedVectorFormat lists_data;
 	lists.ToUnifiedFormat(count, lists_data);
-	auto list_entries = (list_entry_t *)lists_data.data;
+	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
 	// get the lambda expression
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
@@ -321,8 +321,7 @@ static void ListFilterFunction(DataChunk &args, ExpressionState &state, Vector &
 template <int64_t LAMBDA_PARAM_CNT>
 static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-
-	auto &bound_lambda_expr = (BoundLambdaExpression &)*arguments[1];
+	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	if (bound_lambda_expr.parameter_count != LAMBDA_PARAM_CNT) {
 		throw BinderException("Incorrect number of parameters in lambda function! " + bound_function.name +
 		                      " expects " + to_string(LAMBDA_PARAM_CNT) + " parameter(s).");
@@ -355,7 +354,7 @@ static unique_ptr<FunctionData> ListTransformBind(ClientContext &context, Scalar
 		throw BinderException("Invalid lambda expression!");
 	}
 
-	auto &bound_lambda_expr = (BoundLambdaExpression &)*arguments[1];
+	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	bound_function.return_type = LogicalType::LIST(bound_lambda_expr.lambda_expr->return_type);
 	return ListLambdaBind<1>(context, bound_function, arguments);
 }
@@ -370,7 +369,7 @@ static unique_ptr<FunctionData> ListFilterBind(ClientContext &context, ScalarFun
 	}
 
 	// try to cast to boolean, if the return type of the lambda filter expression is not already boolean
-	auto &bound_lambda_expr = (BoundLambdaExpression &)*arguments[1];
+	auto &bound_lambda_expr = arguments[1]->Cast<BoundLambdaExpression>();
 	if (bound_lambda_expr.lambda_expr->return_type != LogicalType::BOOLEAN) {
 		auto cast_lambda_expr =
 		    BoundCastExpression::AddCastToType(context, std::move(bound_lambda_expr.lambda_expr), LogicalType::BOOLEAN);

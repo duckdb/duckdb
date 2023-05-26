@@ -126,37 +126,57 @@ void CatalogSearchPath::Reset() {
 	SetPaths(empty);
 }
 
-void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, bool is_set_schema) {
-	if (is_set_schema && new_paths.size() != 1) {
-		throw CatalogException("SET schema can set only 1 schema. This has %d", new_paths.size());
+string CatalogSearchPath::GetSetName(CatalogSetPathType set_type) {
+	switch (set_type) {
+	case CatalogSetPathType::SET_SCHEMA:
+		return "SET schema";
+	case CatalogSetPathType::SET_SCHEMAS:
+		return "SET search_path";
+	default:
+		throw InternalException("Unrecognized CatalogSetPathType");
+	}
+}
+
+void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type) {
+	if (set_type != CatalogSetPathType::SET_SCHEMAS && new_paths.size() != 1) {
+		throw CatalogException("%s can set only 1 schema. This has %d", GetSetName(set_type), new_paths.size());
 	}
 	for (auto &path : new_paths) {
-		if (!Catalog::GetSchema(context, path.catalog, path.schema, OnEntryNotFound::RETURN_NULL)) {
+		auto schema_entry = Catalog::GetSchema(context, path.catalog, path.schema, OnEntryNotFound::RETURN_NULL);
+		if (schema_entry) {
+			// we are setting a schema - update the catalog and schema
 			if (path.catalog.empty()) {
-				// only schema supplied - check if this is a database instead
-				auto schema = Catalog::GetSchema(context, path.schema, DEFAULT_SCHEMA, OnEntryNotFound::RETURN_NULL);
+				path.catalog = GetDefault().catalog;
+			}
+			continue;
+		}
+		// only schema supplied - check if this is a catalog instead
+		if (path.catalog.empty()) {
+			auto catalog = Catalog::GetCatalogEntry(context, path.schema);
+			if (catalog) {
+				auto schema = catalog->GetSchema(context, DEFAULT_SCHEMA, OnEntryNotFound::RETURN_NULL);
 				if (schema) {
 					path.catalog = std::move(path.schema);
 					path.schema = schema->name;
 					continue;
 				}
 			}
-			throw CatalogException("SET %s: No catalog + schema named %s found.",
-			                       is_set_schema ? "schema" : "search_path", path.ToString());
 		}
+		throw CatalogException("%s: No catalog + schema named \"%s\" found.", GetSetName(set_type), path.ToString());
 	}
-	if (is_set_schema) {
+	if (set_type == CatalogSetPathType::SET_SCHEMA) {
 		if (new_paths[0].catalog == TEMP_CATALOG || new_paths[0].catalog == SYSTEM_CATALOG) {
-			throw CatalogException("SET schema cannot be set to internal schema \"%s\"", new_paths[0].catalog);
+			throw CatalogException("%s cannot be set to internal schema \"%s\"", GetSetName(set_type),
+			                       new_paths[0].catalog);
 		}
 	}
 	this->set_paths = std::move(new_paths);
 	SetPaths(set_paths);
 }
 
-void CatalogSearchPath::Set(CatalogSearchEntry new_value, bool is_set_schema) {
+void CatalogSearchPath::Set(CatalogSearchEntry new_value, CatalogSetPathType set_type) {
 	vector<CatalogSearchEntry> new_paths {std::move(new_value)};
-	Set(std::move(new_paths), is_set_schema);
+	Set(std::move(new_paths), set_type);
 }
 
 const vector<CatalogSearchEntry> &CatalogSearchPath::Get() {

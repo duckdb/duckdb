@@ -311,7 +311,7 @@ void duckdb_bind_add_result_column(duckdb_bind_info info, const char *name, duck
 	}
 	auto bind_info = (duckdb::CTableInternalBindInfo *)info;
 	bind_info->names.push_back(name);
-	bind_info->return_types.push_back(*((duckdb::LogicalType *)type));
+	bind_info->return_types.push_back(*(reinterpret_cast<duckdb::LogicalType *>(type)));
 }
 
 idx_t duckdb_bind_get_parameter_count(duckdb_bind_info info) {

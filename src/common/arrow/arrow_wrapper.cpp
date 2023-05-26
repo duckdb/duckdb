@@ -77,7 +77,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	if (!stream->release) {
 		return -1;
 	}
-	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
+	auto my_stream = reinterpret_cast<ResultArrowArrayStreamWrapper *>(stream->private_data);
 	if (!my_stream->column_types.empty()) {
 		ArrowOptions options;
 		options.offset_size = my_stream->arrow_offet_size;
@@ -92,7 +92,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 		return -1;
 	}
 	if (result.type == QueryResultType::STREAM_RESULT) {
-		auto &stream_result = (StreamQueryResult &)result;
+		auto &stream_result = result.Cast<StreamQueryResult>();
 		if (!stream_result.IsOpen()) {
 			my_stream->last_error = PreservedError("Query Stream is closed");
 			return -1;
@@ -113,14 +113,14 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	if (!stream->release) {
 		return -1;
 	}
-	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
+	auto my_stream = reinterpret_cast<ResultArrowArrayStreamWrapper *>(stream->private_data);
 	auto &result = *my_stream->result;
 	if (result.HasError()) {
 		my_stream->last_error = result.GetErrorObject();
 		return -1;
 	}
 	if (result.type == QueryResultType::STREAM_RESULT) {
-		auto &stream_result = (StreamQueryResult &)result;
+		auto &stream_result = result.Cast<StreamQueryResult>();
 		if (!stream_result.IsOpen()) {
 			// Nothing to output
 			out->release = nullptr;
@@ -150,7 +150,7 @@ void ResultArrowArrayStreamWrapper::MyStreamRelease(struct ArrowArrayStream *str
 		return;
 	}
 	stream->release = nullptr;
-	delete (ResultArrowArrayStreamWrapper *)stream->private_data;
+	delete reinterpret_cast<ResultArrowArrayStreamWrapper *>(stream->private_data);
 }
 
 const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArrayStream *stream) {
@@ -158,7 +158,7 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 		return "stream was released";
 	}
 	D_ASSERT(stream->private_data);
-	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
+	auto my_stream = reinterpret_cast<ResultArrowArrayStreamWrapper *>(stream->private_data);
 	return my_stream->last_error.Message().c_str();
 }
 
@@ -180,7 +180,7 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 
 bool ArrowUtil::TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &chunk, PreservedError &error) {
 	if (result.type == QueryResultType::STREAM_RESULT) {
-		auto &stream_result = (StreamQueryResult &)result;
+		auto &stream_result = result.Cast<StreamQueryResult>();
 		if (!stream_result.IsOpen()) {
 			return true;
 		}

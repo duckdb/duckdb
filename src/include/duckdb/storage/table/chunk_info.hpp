@@ -44,11 +44,31 @@ public:
 
 	virtual void Serialize(Serializer &serialize) = 0;
 	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast chunk info to type - query result type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast chunk info to type - query result type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 class ChunkConstantInfo : public ChunkInfo {
 public:
-	ChunkConstantInfo(idx_t start);
+	static constexpr const ChunkInfoType TYPE = ChunkInfoType::CONSTANT_INFO;
+
+public:
+	explicit ChunkConstantInfo(idx_t start);
 
 	atomic<transaction_t> insert_id;
 	atomic<transaction_t> delete_id;
@@ -71,7 +91,10 @@ private:
 
 class ChunkVectorInfo : public ChunkInfo {
 public:
-	ChunkVectorInfo(idx_t start);
+	static constexpr const ChunkInfoType TYPE = ChunkInfoType::VECTOR_INFO;
+
+public:
+	explicit ChunkVectorInfo(idx_t start);
 
 	//! The transaction ids of the transactions that inserted the tuples (if any)
 	atomic<transaction_t> inserted[STANDARD_VECTOR_SIZE];

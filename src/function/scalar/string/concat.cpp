@@ -31,7 +31,7 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			UnifiedVectorFormat vdata;
 			input.ToUnifiedFormat(args.size(), vdata);
 
-			auto input_data = (string_t *)vdata.data;
+			auto input_data = UnifiedVectorFormat::GetData<string_t>(vdata);
 			// now add the length of each vector to the result length
 			for (idx_t i = 0; i < args.size(); i++) {
 				auto idx = vdata.sel->get_index(i);
@@ -77,7 +77,7 @@ static void ConcatFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			UnifiedVectorFormat idata;
 			input.ToUnifiedFormat(args.size(), idata);
 
-			auto input_data = (string_t *)idata.data;
+			auto input_data = UnifiedVectorFormat::GetData<string_t>(idata);
 			for (idx_t i = 0; i < args.size(); i++) {
 				auto idx = idata.sel->get_index(i);
 				if (!idata.validity.RowIsValid(idx)) {
@@ -114,7 +114,7 @@ static void ConcatOperator(DataChunk &args, ExpressionState &state, Vector &resu
 	    });
 }
 
-static void TemplatedConcatWS(DataChunk &args, string_t *sep_data, const SelectionVector &sep_sel,
+static void TemplatedConcatWS(DataChunk &args, const string_t *sep_data, const SelectionVector &sep_sel,
                               const SelectionVector &rsel, idx_t count, Vector &result) {
 	vector<idx_t> result_lengths(args.size(), 0);
 	vector<bool> has_results(args.size(), false);
@@ -127,7 +127,7 @@ static void TemplatedConcatWS(DataChunk &args, string_t *sep_data, const Selecti
 	for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
 		auto &idata = orrified_data[col_idx - 1];
 
-		auto input_data = (string_t *)idata.data;
+		auto input_data = UnifiedVectorFormat::GetData<string_t>(idata);
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = rsel.get_index(i);
 			auto sep_idx = sep_sel.get_index(ridx);
@@ -157,7 +157,7 @@ static void TemplatedConcatWS(DataChunk &args, string_t *sep_data, const Selecti
 	// now that the empty space for the strings has been allocated, perform the concatenation
 	for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
 		auto &idata = orrified_data[col_idx - 1];
-		auto input_data = (string_t *)idata.data;
+		auto input_data = UnifiedVectorFormat::GetData<string_t>(idata);
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = rsel.get_index(i);
 			auto sep_idx = sep_sel.get_index(ridx);
@@ -206,7 +206,7 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 		}
 		// no null values
 		auto sel = FlatVector::IncrementalSelectionVector();
-		TemplatedConcatWS(args, (string_t *)vdata.data, *vdata.sel, *sel, args.size(), result);
+		TemplatedConcatWS(args, UnifiedVectorFormat::GetData<string_t>(vdata), *vdata.sel, *sel, args.size(), result);
 		return;
 	}
 	default: {
@@ -221,7 +221,8 @@ static void ConcatWSFunction(DataChunk &args, ExpressionState &state, Vector &re
 				not_null_vector.set_index(not_null_count++, i);
 			}
 		}
-		TemplatedConcatWS(args, (string_t *)vdata.data, *vdata.sel, not_null_vector, not_null_count, result);
+		TemplatedConcatWS(args, UnifiedVectorFormat::GetData<string_t>(vdata), *vdata.sel, not_null_vector,
+		                  not_null_count, result);
 		return;
 	}
 	}

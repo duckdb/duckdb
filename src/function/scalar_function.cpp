@@ -59,8 +59,8 @@ bool ScalarFunction::Equal(const ScalarFunction &rhs) const {
 bool ScalarFunction::CompareScalarFunctionT(const scalar_function_t &other) const {
 	typedef void(scalar_function_ptr_t)(DataChunk &, ExpressionState &, Vector &);
 
-	auto func_ptr = (scalar_function_ptr_t **)function.template target<scalar_function_ptr_t *>();
-	auto other_ptr = (scalar_function_ptr_t **)other.template target<scalar_function_ptr_t *>();
+	auto func_ptr = (scalar_function_ptr_t **)function.template target<scalar_function_ptr_t *>(); // NOLINT
+	auto other_ptr = (scalar_function_ptr_t **)other.template target<scalar_function_ptr_t *>();   // NOLINT
 
 	// Case the functions were created from lambdas the target will return a nullptr
 	if (!func_ptr && !other_ptr) {
@@ -70,7 +70,7 @@ bool ScalarFunction::CompareScalarFunctionT(const scalar_function_t &other) cons
 		// scalar_function_t (std::functions) from lambdas cannot be compared
 		return false;
 	}
-	return ((size_t)*func_ptr == (size_t)*other_ptr);
+	return CastPointerToValue(*func_ptr) == CastPointerToValue(*other_ptr);
 }
 
 void ScalarFunction::NopFunction(DataChunk &input, ExpressionState &state, Vector &result) {

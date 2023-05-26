@@ -17,8 +17,14 @@ static data_ptr_t AllocatePrimitiveData(Allocator &allocator, uint16_t capacity)
 }
 
 template <class T>
-static T *GetPrimitiveData(const ListSegment *segment) {
-	return (T *)(((char *)segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
+static T *GetPrimitiveData(ListSegment *segment) {
+	return reinterpret_cast<T *>(data_ptr_cast(segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
+}
+
+template <class T>
+static const T *GetPrimitiveData(const ListSegment *segment) {
+	return reinterpret_cast<const T *>(const_data_ptr_cast(segment) + sizeof(ListSegment) +
+	                                   segment->capacity * sizeof(bool));
 }
 
 //===--------------------------------------------------------------------===//
@@ -32,13 +38,24 @@ static data_ptr_t AllocateListData(Allocator &allocator, uint16_t capacity) {
 	return allocator.AllocateData(GetAllocationSizeList(capacity));
 }
 
-static uint64_t *GetListLengthData(const ListSegment *segment) {
-	return (uint64_t *)(((char *)segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
+static uint64_t *GetListLengthData(ListSegment *segment) {
+	return reinterpret_cast<uint64_t *>(data_ptr_cast(segment) + sizeof(ListSegment) +
+	                                    segment->capacity * sizeof(bool));
 }
 
-static LinkedList *GetListChildData(const ListSegment *segment) {
-	return (LinkedList *)(((char *)segment) + sizeof(ListSegment) +
-	                      segment->capacity * (sizeof(bool) + sizeof(uint64_t)));
+static const uint64_t *GetListLengthData(const ListSegment *segment) {
+	return reinterpret_cast<const uint64_t *>(const_data_ptr_cast(segment) + sizeof(ListSegment) +
+	                                          segment->capacity * sizeof(bool));
+}
+
+static const LinkedList *GetListChildData(const ListSegment *segment) {
+	return reinterpret_cast<const LinkedList *>(const_data_ptr_cast(segment) + sizeof(ListSegment) +
+	                                            segment->capacity * (sizeof(bool) + sizeof(uint64_t)));
+}
+
+static LinkedList *GetListChildData(ListSegment *segment) {
+	return reinterpret_cast<LinkedList *>(data_ptr_cast(segment) + sizeof(ListSegment) +
+	                                      segment->capacity * (sizeof(bool) + sizeof(uint64_t)));
 }
 
 //===--------------------------------------------------------------------===//
@@ -52,12 +69,22 @@ static data_ptr_t AllocateStructData(Allocator &allocator, uint16_t capacity, id
 	return allocator.AllocateData(GetAllocationSizeStruct(capacity, child_count));
 }
 
-static ListSegment **GetStructData(const ListSegment *segment) {
-	return (ListSegment **)(((char *)segment) + sizeof(ListSegment) + segment->capacity * sizeof(bool));
+static ListSegment **GetStructData(ListSegment *segment) {
+	return reinterpret_cast<ListSegment **>(data_ptr_cast(segment) + +sizeof(ListSegment) +
+	                                        segment->capacity * sizeof(bool));
 }
 
-static bool *GetNullMask(const ListSegment *segment) {
-	return (bool *)(((char *)segment) + sizeof(ListSegment));
+static const ListSegment *const *GetStructData(const ListSegment *segment) {
+	return reinterpret_cast<const ListSegment *const *>(const_data_ptr_cast(segment) + sizeof(ListSegment) +
+	                                                    segment->capacity * sizeof(bool));
+}
+
+static bool *GetNullMask(ListSegment *segment) {
+	return reinterpret_cast<bool *>(data_ptr_cast(segment) + sizeof(ListSegment));
+}
+
+static const bool *GetNullMask(const ListSegment *segment) {
+	return reinterpret_cast<const bool *>(const_data_ptr_cast(segment) + sizeof(ListSegment));
 }
 
 static uint16_t GetCapacityForNewSegment(uint16_t capacity) {
@@ -96,12 +123,12 @@ static ListSegment *CreatePrimitiveSegment(const ListSegmentFunctions &, Allocat
 template <class T>
 void DestroyPrimitiveSegment(const ListSegmentFunctions &, ListSegment *segment, Allocator &allocator) {
 	D_ASSERT(segment);
-	allocator.FreeData((data_ptr_t)segment, GetAllocationSize<T>(segment->capacity));
+	allocator.FreeData(data_ptr_cast(segment), GetAllocationSize<T>(segment->capacity));
 }
 
 static ListSegment *CreateListSegment(const ListSegmentFunctions &, Allocator &allocator, uint16_t capacity) {
 	// allocate data and set the header
-	auto segment = (ListSegment *)AllocateListData(allocator, capacity);
+	auto segment = reinterpret_cast<ListSegment *>(AllocateListData(allocator, capacity));
 	segment->capacity = capacity;
 	segment->count = 0;
 	segment->next = nullptr;
@@ -109,24 +136,25 @@ static ListSegment *CreateListSegment(const ListSegmentFunctions &, Allocator &a
 	// create an empty linked list for the child vector
 	auto linked_child_list = GetListChildData(segment);
 	LinkedList linked_list(0, nullptr, nullptr);
-	Store<LinkedList>(linked_list, (data_ptr_t)linked_child_list);
+	Store<LinkedList>(linked_list, data_ptr_cast(linked_child_list));
 
 	return segment;
 }
 
 void DestroyListSegment(const ListSegmentFunctions &functions, ListSegment *segment, Allocator &allocator) {
 	// destroy the child list
-	auto linked_child_list = Load<LinkedList>((data_ptr_t)GetListChildData(segment));
+	auto linked_child_list = Load<LinkedList>(data_ptr_cast(GetListChildData(segment)));
 	DestroyLinkedList(functions.child_functions[0], allocator, linked_child_list);
 
 	// destroy the list segment itself
-	allocator.FreeData((data_ptr_t)segment, GetAllocationSizeList(segment->capacity));
+	allocator.FreeData(data_ptr_cast(segment), GetAllocationSizeList(segment->capacity));
 }
 
 static ListSegment *CreateStructSegment(const ListSegmentFunctions &functions, Allocator &allocator,
                                         uint16_t capacity) {
 	// allocate data and set header
-	auto segment = (ListSegment *)AllocateStructData(allocator, capacity, functions.child_functions.size());
+	auto segment =
+	    reinterpret_cast<ListSegment *>(AllocateStructData(allocator, capacity, functions.child_functions.size()));
 	segment->capacity = capacity;
 	segment->count = 0;
 	segment->next = nullptr;
@@ -136,7 +164,7 @@ static ListSegment *CreateStructSegment(const ListSegmentFunctions &functions, A
 	for (idx_t i = 0; i < functions.child_functions.size(); i++) {
 		auto child_function = functions.child_functions[i];
 		auto child_segment = child_function.create_segment(child_function, allocator, capacity);
-		Store<ListSegment *>(child_segment, (data_ptr_t)(child_segments + i));
+		Store<ListSegment *>(child_segment, data_ptr_cast(child_segments + i));
 	}
 
 	return segment;
@@ -147,12 +175,12 @@ void DestroyStructSegment(const ListSegmentFunctions &functions, ListSegment *se
 	auto child_segments = GetStructData(segment);
 	for (idx_t i = 0; i < functions.child_functions.size(); i++) {
 		auto child_function = functions.child_functions[i];
-		auto child_segment = Load<ListSegment *>((data_ptr_t)(child_segments + i));
+		auto child_segment = Load<ListSegment *>(data_ptr_cast(child_segments + i));
 		child_function.destroy(child_function, child_segment, allocator);
 	}
 
 	// destroy the struct segment itself
-	allocator.FreeData((data_ptr_t)segment,
+	allocator.FreeData(data_ptr_cast(segment),
 	                   GetAllocationSizeStruct(segment->capacity, functions.child_functions.size()));
 }
 
@@ -200,7 +228,7 @@ static void WriteDataToPrimitiveSegment(const ListSegmentFunctions &functions, A
 	// write value
 	if (!is_null) {
 		auto data = GetPrimitiveData<T>(segment);
-		Store<T>(((T *)input_data)[entry_idx], (data_ptr_t)(data + segment->count));
+		Store<T>(((T *)input_data)[entry_idx], data_ptr_cast(data + segment->count));
 	}
 }
 
@@ -208,7 +236,7 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, All
                                       Vector &input, idx_t &entry_idx, idx_t &count) {
 
 	// get the vector data and the source index of the entry that we want to write
-	auto input_data = FlatVector::GetData(input);
+	auto input_data = FlatVector::GetData<string_t>(input);
 
 	// write null validity
 	auto null_mask = GetNullMask(segment);
@@ -222,19 +250,19 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, All
 	// get the string
 	string_t str_t;
 	if (!is_null) {
-		str_t = ((string_t *)input_data)[entry_idx];
+		str_t = input_data[entry_idx];
 		str_length = str_t.GetSize();
 	}
 
 	// we can reconstruct the offset from the length
-	Store<uint64_t>(str_length, (data_ptr_t)(str_length_data + segment->count));
+	Store<uint64_t>(str_length, data_ptr_cast(str_length_data + segment->count));
 
 	if (is_null) {
 		return;
 	}
 
 	// write the characters to the linked list of child segments
-	auto child_segments = Load<LinkedList>((data_ptr_t)GetListChildData(segment));
+	auto child_segments = Load<LinkedList>(data_ptr_cast(GetListChildData(segment)));
 	for (char &c : str_t.GetString()) {
 		auto child_segment = GetSegment(functions.child_functions.back(), allocator, child_segments);
 		auto data = GetPrimitiveData<char>(child_segment);
@@ -244,14 +272,14 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, All
 	}
 
 	// store the updated linked list
-	Store<LinkedList>(child_segments, (data_ptr_t)GetListChildData(segment));
+	Store<LinkedList>(child_segments, data_ptr_cast(GetListChildData(segment)));
 }
 
 static void WriteDataToListSegment(const ListSegmentFunctions &functions, Allocator &allocator, ListSegment *segment,
                                    Vector &input, idx_t &entry_idx, idx_t &count) {
 
 	// get the vector data and the source index of the entry that we want to write
-	auto input_data = FlatVector::GetData(input);
+	auto input_data = FlatVector::GetData<list_entry_t>(input);
 
 	// write null validity
 	auto null_mask = GetNullMask(segment);
@@ -264,7 +292,7 @@ static void WriteDataToListSegment(const ListSegmentFunctions &functions, Alloca
 
 	if (!is_null) {
 		// get list entry information
-		auto list_entries = (list_entry_t *)input_data;
+		auto list_entries = input_data;
 		const auto &list_entry = list_entries[entry_idx];
 		list_length = list_entry.length;
 
@@ -273,7 +301,7 @@ static void WriteDataToListSegment(const ListSegmentFunctions &functions, Alloca
 		auto &child_vector = ListVector::GetEntry(input);
 
 		// loop over the child vector entries and recurse on them
-		auto child_segments = Load<LinkedList>((data_ptr_t)GetListChildData(segment));
+		auto child_segments = Load<LinkedList>(data_ptr_cast(GetListChildData(segment)));
 		D_ASSERT(functions.child_functions.size() == 1);
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
 			auto source_idx_child = list_entry.offset + child_idx;
@@ -281,10 +309,10 @@ static void WriteDataToListSegment(const ListSegmentFunctions &functions, Alloca
 			                                       lists_size);
 		}
 		// store the updated linked list
-		Store<LinkedList>(child_segments, (data_ptr_t)GetListChildData(segment));
+		Store<LinkedList>(child_segments, data_ptr_cast(GetListChildData(segment)));
 	}
 
-	Store<uint64_t>(list_length, (data_ptr_t)(list_length_data + segment->count));
+	Store<uint64_t>(list_length, data_ptr_cast(list_length_data + segment->count));
 }
 
 static void WriteDataToStructSegment(const ListSegmentFunctions &functions, Allocator &allocator, ListSegment *segment,
@@ -302,7 +330,7 @@ static void WriteDataToStructSegment(const ListSegmentFunctions &functions, Allo
 
 	// write the data of each of the children of the struct
 	for (idx_t child_count = 0; child_count < children.size(); child_count++) {
-		auto child_list_segment = Load<ListSegment *>((data_ptr_t)(child_list + child_count));
+		auto child_list_segment = Load<ListSegment *>(data_ptr_cast(child_list + child_count));
 		auto &child_function = functions.child_functions[child_count];
 		child_function.write_data(child_function, allocator, child_list_segment, *children[child_count], entry_idx,
 		                          count);
@@ -339,13 +367,13 @@ static void ReadDataFromPrimitiveSegment(const ListSegmentFunctions &, const Lis
 		}
 	}
 
-	auto aggr_vector_data = FlatVector::GetData(result);
+	auto aggr_vector_data = FlatVector::GetData<T>(result);
 
 	// load values
 	for (idx_t i = 0; i < segment->count; i++) {
 		if (aggr_vector_validity.RowIsValid(total_count + i)) {
 			auto data = GetPrimitiveData<T>(segment);
-			((T *)aggr_vector_data)[total_count + i] = Load<T>((data_ptr_t)(data + i));
+			aggr_vector_data[total_count + i] = Load<T>(const_data_ptr_cast(data + i));
 		}
 	}
 }
@@ -365,7 +393,7 @@ static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListS
 
 	// append all the child chars to one string
 	string str = "";
-	auto linked_child_list = Load<LinkedList>((data_ptr_t)GetListChildData(segment));
+	auto linked_child_list = Load<LinkedList>(const_data_ptr_cast(GetListChildData(segment)));
 	while (linked_child_list.first_segment) {
 		auto child_segment = linked_child_list.first_segment;
 		auto data = GetPrimitiveData<char>(child_segment);
@@ -375,17 +403,17 @@ static void ReadDataFromVarcharSegment(const ListSegmentFunctions &, const ListS
 	linked_child_list.last_segment = nullptr;
 
 	// use length and (reconstructed) offset to get the correct substrings
-	auto aggr_vector_data = FlatVector::GetData(result);
+	auto aggr_vector_data = FlatVector::GetData<string_t>(result);
 	auto str_length_data = GetListLengthData(segment);
 
 	// get the substrings and write them to the result vector
 	idx_t offset = 0;
 	for (idx_t i = 0; i < segment->count; i++) {
 		if (!null_mask[i]) {
-			auto str_length = Load<uint64_t>((data_ptr_t)(str_length_data + i));
+			auto str_length = Load<uint64_t>(const_data_ptr_cast(str_length_data + i));
 			auto substr = str.substr(offset, str_length);
 			auto str_t = StringVector::AddStringOrBlob(result, substr);
-			((string_t *)aggr_vector_data)[total_count + i] = str_t;
+			aggr_vector_data[total_count + i] = str_t;
 			offset += str_length;
 		}
 	}
@@ -416,14 +444,14 @@ static void ReadDataFromListSegment(const ListSegmentFunctions &functions, const
 	// set length and offsets
 	auto list_length_data = GetListLengthData(segment);
 	for (idx_t i = 0; i < segment->count; i++) {
-		auto list_length = Load<uint64_t>((data_ptr_t)(list_length_data + i));
+		auto list_length = Load<uint64_t>(const_data_ptr_cast(list_length_data + i));
 		list_vector_data[total_count + i].length = list_length;
 		list_vector_data[total_count + i].offset = offset;
 		offset += list_length;
 	}
 
 	auto &child_vector = ListVector::GetEntry(result);
-	auto linked_child_list = Load<LinkedList>((data_ptr_t)GetListChildData(segment));
+	auto linked_child_list = Load<LinkedList>(const_data_ptr_cast(GetListChildData(segment)));
 	ListVector::Reserve(result, offset);
 
 	// recurse into the linked list of child values
@@ -451,7 +479,7 @@ static void ReadDataFromStructSegment(const ListSegmentFunctions &functions, con
 	D_ASSERT(children.size() == functions.child_functions.size());
 	auto struct_children = GetStructData(segment);
 	for (idx_t child_count = 0; child_count < children.size(); child_count++) {
-		auto struct_children_segment = Load<ListSegment *>((data_ptr_t)(struct_children + child_count));
+		auto struct_children_segment = Load<ListSegment *>(const_data_ptr_cast(struct_children + child_count));
 		auto &child_function = functions.child_functions[child_count];
 		child_function.read_data(child_function, struct_children_segment, *children[child_count], total_count);
 	}
@@ -487,25 +515,25 @@ static ListSegment *CopyDataFromListSegment(const ListSegmentFunctions &function
                                             Allocator &allocator) {
 
 	// create an empty linked list for the child vector of target
-	auto source_linked_child_list = Load<LinkedList>((data_ptr_t)GetListChildData(source));
+	auto source_linked_child_list = Load<LinkedList>(const_data_ptr_cast(GetListChildData(source)));
 
 	// create the segment
-	auto target = (ListSegment *)AllocateListData(allocator, source->capacity);
+	auto target = reinterpret_cast<ListSegment *>(AllocateListData(allocator, source->capacity));
 	memcpy(target, source,
 	       sizeof(ListSegment) + source->capacity * (sizeof(bool) + sizeof(uint64_t)) + sizeof(LinkedList));
 	target->next = nullptr;
 
 	auto target_linked_list = GetListChildData(target);
 	LinkedList linked_list(source_linked_child_list.total_capacity, nullptr, nullptr);
-	Store<LinkedList>(linked_list, (data_ptr_t)target_linked_list);
+	Store<LinkedList>(linked_list, data_ptr_cast(target_linked_list));
 
 	// recurse to copy the linked child list
-	auto target_linked_child_list = Load<LinkedList>((data_ptr_t)GetListChildData(target));
+	auto target_linked_child_list = Load<LinkedList>(data_ptr_cast(GetListChildData(target)));
 	D_ASSERT(functions.child_functions.size() == 1);
 	functions.child_functions[0].CopyLinkedList(source_linked_child_list, target_linked_child_list, allocator);
 
 	// store the updated linked list
-	Store<LinkedList>(target_linked_child_list, (data_ptr_t)GetListChildData(target));
+	Store<LinkedList>(target_linked_child_list, data_ptr_cast(GetListChildData(target)));
 	return target;
 }
 
@@ -513,7 +541,7 @@ static ListSegment *CopyDataFromStructSegment(const ListSegmentFunctions &functi
                                               Allocator &allocator) {
 
 	auto source_child_count = functions.child_functions.size();
-	auto target = (ListSegment *)AllocateStructData(allocator, source->capacity, source_child_count);
+	auto target = reinterpret_cast<ListSegment *>(AllocateStructData(allocator, source->capacity, source_child_count));
 	memcpy(target, source,
 	       sizeof(ListSegment) + source->capacity * sizeof(bool) + source_child_count * sizeof(ListSegment *));
 	target->next = nullptr;
@@ -524,9 +552,9 @@ static ListSegment *CopyDataFromStructSegment(const ListSegmentFunctions &functi
 
 	for (idx_t i = 0; i < functions.child_functions.size(); i++) {
 		auto child_function = functions.child_functions[i];
-		auto source_child_segment = Load<ListSegment *>((data_ptr_t)(source_child_segments + i));
+		auto source_child_segment = Load<ListSegment *>(const_data_ptr_cast(source_child_segments + i));
 		auto target_child_segment = child_function.copy_data(child_function, source_child_segment, allocator);
-		Store<ListSegment *>(target_child_segment, (data_ptr_t)(target_child_segments + i));
+		Store<ListSegment *>(target_child_segment, data_ptr_cast(target_child_segments + i));
 	}
 	return target;
 }

@@ -479,15 +479,15 @@ optional_ptr<TableFilterSet> CardinalityEstimator::GetTableFilters(LogicalOperat
 	return get ? &get->table_filters : nullptr;
 }
 
-idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter *filter,
+idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t column_index, ConjunctionAndFilter &filter,
                                                   unique_ptr<BaseStatistics> base_stats) {
 	auto has_equality_filter = false;
 	auto cardinality_after_filters = cardinality;
-	for (auto &child_filter : filter->child_filters) {
+	for (auto &child_filter : filter.child_filters) {
 		if (child_filter->filter_type != TableFilterType::CONSTANT_COMPARISON) {
 			continue;
 		}
-		auto comparison_filter = (ConstantFilter &)*child_filter;
+		auto &comparison_filter = child_filter->Cast<ConstantFilter>();
 		if (comparison_filter.comparison_type != ExpressionType::COMPARE_EQUAL) {
 			continue;
 		}
@@ -510,15 +510,15 @@ idx_t CardinalityEstimator::InspectConjunctionAND(idx_t cardinality, idx_t colum
 	return cardinality_after_filters;
 }
 
-idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter *filter,
+idx_t CardinalityEstimator::InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter &filter,
                                                  unique_ptr<BaseStatistics> base_stats) {
 	auto has_equality_filter = false;
 	auto cardinality_after_filters = cardinality;
-	for (auto &child_filter : filter->child_filters) {
+	for (auto &child_filter : filter.child_filters) {
 		if (child_filter->filter_type != TableFilterType::CONSTANT_COMPARISON) {
 			continue;
 		}
-		auto comparison_filter = (ConstantFilter &)*child_filter;
+		auto &comparison_filter = child_filter->Cast<ConstantFilter>();
 		if (comparison_filter.comparison_type == ExpressionType::COMPARE_EQUAL) {
 			auto column_count = cardinality_after_filters;
 			if (base_stats) {
@@ -549,14 +549,14 @@ idx_t CardinalityEstimator::InspectTableFilters(idx_t cardinality, LogicalOperat
 			column_statistics = get->function.statistics(context, &table_scan_bind_data, it.first);
 		}
 		if (it.second->filter_type == TableFilterType::CONJUNCTION_AND) {
-			auto &filter = (ConjunctionAndFilter &)*it.second;
+			auto &filter = it.second->Cast<ConjunctionAndFilter>();
 			idx_t cardinality_with_and_filter =
-			    InspectConjunctionAND(cardinality, it.first, &filter, std::move(column_statistics));
+			    InspectConjunctionAND(cardinality, it.first, filter, std::move(column_statistics));
 			cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_and_filter);
 		} else if (it.second->filter_type == TableFilterType::CONJUNCTION_OR) {
-			auto &filter = (ConjunctionOrFilter &)*it.second;
+			auto &filter = it.second->Cast<ConjunctionOrFilter>();
 			idx_t cardinality_with_or_filter =
-			    InspectConjunctionOR(cardinality, it.first, &filter, std::move(column_statistics));
+			    InspectConjunctionOR(cardinality, it.first, filter, std::move(column_statistics));
 			cardinality_after_filters = MinValue(cardinality_after_filters, cardinality_with_or_filter);
 		}
 	}
