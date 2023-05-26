@@ -12,7 +12,7 @@ TEST_CASE("Alter", "[odbc]") {
 	CONNECT_TO_DATABASE(ret, env, dbc);
 
 	ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc, &hstmt);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLAllocHandle (STMT)");
+	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLAllocHandle (HSTMT)");
 
 	// Create a table to test with
 	ret = SQLExecDirect(hstmt, (SQLCHAR *)"CREATE TABLE testtbl(t varchar(40))", SQL_NTS);
@@ -29,7 +29,7 @@ TEST_CASE("Alter", "[odbc]") {
 	REQUIRE(num_cols == 1);
 
 	// Retrieve metadata from the column
-	METADATA_CHECK(ret, hstmt, 1, "t", sizeof('t'), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
+	METADATA_CHECK(ret, hstmt, num_cols, "t", sizeof('t'), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
 	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLDescribeCol");
 
 	// Alter the table
@@ -47,7 +47,7 @@ TEST_CASE("Alter", "[odbc]") {
 	REQUIRE(num_cols2 == 1);
 
 	// Retrieve metadata from the column
-	METADATA_CHECK(ret, hstmt, 1, "t", sizeof('t'), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
+	METADATA_CHECK(ret, hstmt, num_cols2, "t", sizeof('t'), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
 	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLDescribeCol");
 
 	ret = SQLFreeStmt(hstmt, SQL_CLOSE);
