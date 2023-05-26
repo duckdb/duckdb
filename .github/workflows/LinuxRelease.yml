@@ -274,11 +274,10 @@ jobs:
 
     - name: Build
       shell: bash
+      env:
+        DISABLE_BUILTIN_EXTENSIONS: 1
       run: |
-        mkdir -p build/release
-        cd build/release
-        cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release ../..
-        cmake --build . --config Release
+        make
 
     - uses: actions/download-artifact@v3
       with:
