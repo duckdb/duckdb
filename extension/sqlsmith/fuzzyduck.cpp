@@ -49,7 +49,7 @@ string FuzzyDuck::GenerateQuery() {
 }
 
 void FuzzyDuck::RunQuery(string query) {
-	LogQuery(query);
+	LogQuery(query + ";");
 
 	Connection con(*context.db);
 	auto result = con.Query(query);
