@@ -83,7 +83,7 @@ unique_ptr<SQLStatement> StatementGenerator::GenerateStatement(StatementType typ
 unique_ptr<SQLStatement> StatementGenerator::GenerateSelect() {
 	auto select = make_uniq<SelectStatement>();
 	select->node = GenerateQueryNode();
-	return select;
+	return std::move(select);
 }
 
 //===--------------------------------------------------------------------===//
@@ -269,7 +269,7 @@ unique_ptr<TableRef> StatementGenerator::GenerateBaseTableRef() {
 	}
 	result->alias = GenerateTableIdentifier();
 	result->table_name = entry.name;
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<TableRef> StatementGenerator::GenerateExpressionListRef() {
@@ -282,7 +282,7 @@ unique_ptr<TableRef> StatementGenerator::GenerateExpressionListRef() {
 		}
 		result->values.push_back(std::move(values));
 	}
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<TableRef> StatementGenerator::GenerateJoinRef() {
@@ -315,7 +315,7 @@ unique_ptr<TableRef> StatementGenerator::GenerateJoinRef() {
 	}
 	join->type = Choose<JoinType>(
 	    {JoinType::LEFT, JoinType::RIGHT, JoinType::INNER, JoinType::OUTER, JoinType::SEMI, JoinType::ANTI});
-	return join;
+	return std::move(join);
 }
 
 unique_ptr<TableRef> StatementGenerator::GenerateSubqueryRef() {
@@ -331,7 +331,7 @@ unique_ptr<TableRef> StatementGenerator::GenerateSubqueryRef() {
 		}
 	}
 	auto result = make_uniq<SubqueryRef>(std::move(subquery), GenerateTableIdentifier());
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<TableRef> StatementGenerator::GenerateTableFunctionRef() {
@@ -361,7 +361,7 @@ unique_ptr<TableRef> StatementGenerator::GenerateTableFunctionRef() {
 		result->column_name_alias.push_back(GenerateIdentifier());
 	}
 	result->alias = GenerateTableIdentifier();
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<TableRef> StatementGenerator::GeneratePivotRef() {
@@ -415,7 +415,7 @@ unique_ptr<TableRef> StatementGenerator::GeneratePivotRef() {
 			break;
 		}
 	}
-	return pivot;
+	return std::move(pivot);
 }
 
 //===--------------------------------------------------------------------===//
@@ -794,7 +794,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
 	default:
 		break;
 	}
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> StatementGenerator::RandomExpression(idx_t percentage) {
@@ -849,7 +849,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateStar() {
 			result->expr = GenerateLambda();
 		}
 	}
-	return result;
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> StatementGenerator::GenerateLambda() {
@@ -900,7 +900,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateSubquery() {
 	if (subquery->subquery_type == SubqueryType::ANY) {
 		subquery->comparison_type = GenerateComparisonType();
 	}
-	return subquery;
+	return std::move(subquery);
 }
 
 unique_ptr<ParsedExpression> StatementGenerator::GenerateCast() {
