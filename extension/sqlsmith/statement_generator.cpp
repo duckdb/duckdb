@@ -25,13 +25,13 @@ struct GeneratorContext {
 	vector<reference<CatalogEntry>> tables_and_views;
 };
 
-StatementGenerator::StatementGenerator(ClientContext &context) :
-	context(context), parent(nullptr), depth(0) {
+StatementGenerator::StatementGenerator(ClientContext &context) : context(context), parent(nullptr), depth(0) {
 	generator_context = GetDatabaseState(context);
 }
 
-StatementGenerator::StatementGenerator(StatementGenerator &parent_p) :
-	context(parent_p.context), parent(&parent_p), generator_context(parent_p.generator_context), depth(parent_p.depth + 1) {
+StatementGenerator::StatementGenerator(StatementGenerator &parent_p)
+    : context(parent_p.context), parent(&parent_p), generator_context(parent_p.generator_context),
+      depth(parent_p.depth + 1) {
 	if (depth > MAX_DEPTH) {
 		throw InternalException("depth too high");
 	}
@@ -46,22 +46,20 @@ shared_ptr<GeneratorContext> StatementGenerator::GetDatabaseState(ClientContext 
 
 	auto schemas = Catalog::GetAllSchemas(context);
 	// extract the functions
-	for(auto &schema_ref : schemas) {
+	for (auto &schema_ref : schemas) {
 		auto &schema = schema_ref.get();
 		schema.Scan(context, CatalogType::SCALAR_FUNCTION_ENTRY,
-					[&](CatalogEntry &entry) {
-			            result->scalar_functions.push_back(entry);
-		            });
+		            [&](CatalogEntry &entry) { result->scalar_functions.push_back(entry); });
 		schema.Scan(context, CatalogType::TABLE_FUNCTION_ENTRY,
-					[&](CatalogEntry &entry) { result->table_functions.push_back(entry); });
+		            [&](CatalogEntry &entry) { result->table_functions.push_back(entry); });
 		schema.Scan(context, CatalogType::PRAGMA_FUNCTION_ENTRY,
-					[&](CatalogEntry &entry) { result->pragma_functions.push_back(entry); });
-		schema.Scan(context, CatalogType::TABLE_ENTRY,
-					[&](CatalogEntry &entry) {
-						if (entry.internal) {
-				            return;
-			            }
-			            result->tables_and_views.push_back(entry); });
+		            [&](CatalogEntry &entry) { result->pragma_functions.push_back(entry); });
+		schema.Scan(context, CatalogType::TABLE_ENTRY, [&](CatalogEntry &entry) {
+			if (entry.internal) {
+				return;
+			}
+			result->tables_and_views.push_back(entry);
+		});
 	}
 	return result;
 }
@@ -71,7 +69,7 @@ unique_ptr<SQLStatement> StatementGenerator::GenerateStatement() {
 }
 
 unique_ptr<SQLStatement> StatementGenerator::GenerateStatement(StatementType type) {
-	switch(type) {
+	switch (type) {
 	case StatementType::SELECT_STATEMENT:
 		return GenerateSelect();
 	default:
@@ -95,10 +93,10 @@ void StatementGenerator::GenerateCTEs(QueryNode &node) {
 	if (depth > 0) {
 		return;
 	}
-	while(RandomPercentage(20)) {
+	while (RandomPercentage(20)) {
 		auto cte = make_uniq<CommonTableExpressionInfo>();
 		cte->query = unique_ptr_cast<SQLStatement, SelectStatement>(GenerateSelect());
-		for(idx_t i = 0; i < 1 + RandomValue(10); i++) {
+		for (idx_t i = 0; i < 1 + RandomValue(10); i++) {
 			cte->aliases.push_back(GenerateIdentifier());
 		}
 		node.cte_map.map.insert(make_pair(GenerateTableIdentifier(), std::move(cte)));
@@ -126,15 +124,15 @@ unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {
 			if (RandomPercentage(70)) {
 				// single GROUP BY
 				GroupingSet set;
-				for(idx_t i = 0; i < group_count; i++) {
+				for (idx_t i = 0; i < group_count; i++) {
 					set.insert(i);
 				}
 				select_node->groups.grouping_sets.push_back(std::move(set));
 			} else {
 				// multiple grouping sets
-				while(true) {
+				while (true) {
 					GroupingSet set;
-					while(true) {
+					while (true) {
 						set.insert(RandomValue(group_count));
 						if (RandomPercentage(50)) {
 							break;
@@ -148,7 +146,8 @@ unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {
 			}
 		}
 		select_node->qualify = RandomExpression(10);
-		select_node->aggregate_handling = RandomPercentage(10) ? AggregateHandling::FORCE_AGGREGATES : AggregateHandling::STANDARD_HANDLING;
+		select_node->aggregate_handling =
+		    RandomPercentage(10) ? AggregateHandling::FORCE_AGGREGATES : AggregateHandling::STANDARD_HANDLING;
 		if (RandomPercentage(10)) {
 			auto sample = make_uniq<SampleOptions>();
 			sample->is_percentage = RandomPercentage(50);
@@ -157,17 +156,19 @@ unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {
 			} else {
 				sample->sample_size = Value::BIGINT(RandomValue(99999));
 			}
-			sample->method = Choose<SampleMethod>({SampleMethod::BERNOULLI_SAMPLE, SampleMethod::RESERVOIR_SAMPLE, SampleMethod::SYSTEM_SAMPLE});
+			sample->method = Choose<SampleMethod>(
+			    {SampleMethod::BERNOULLI_SAMPLE, SampleMethod::RESERVOIR_SAMPLE, SampleMethod::SYSTEM_SAMPLE});
 			select_node->sample = std::move(sample);
 		}
 		result = std::move(select_node);
 	} else {
 		auto setop = make_uniq<SetOperationNode>();
 		GenerateCTEs(*setop);
-		setop->setop_type = Choose<SetOperationType>({SetOperationType::EXCEPT, SetOperationType::INTERSECT, SetOperationType::UNION, SetOperationType::UNION_BY_NAME});
+		setop->setop_type = Choose<SetOperationType>({SetOperationType::EXCEPT, SetOperationType::INTERSECT,
+		                                              SetOperationType::UNION, SetOperationType::UNION_BY_NAME});
 		setop->left = GenerateQueryNode();
 		setop->right = GenerateQueryNode();
-		switch(setop->setop_type) {
+		switch (setop->setop_type) {
 		case SetOperationType::EXCEPT:
 		case SetOperationType::INTERSECT:
 			is_distinct = true;
@@ -181,7 +182,6 @@ unique_ptr<QueryNode> StatementGenerator::GenerateQueryNode() {
 		}
 		result = std::move(setop);
 	}
-
 
 	if (is_distinct) {
 		result->modifiers.push_back(make_uniq<DistinctModifier>());
@@ -230,7 +230,7 @@ unique_ptr<TableRef> StatementGenerator::GenerateTableRef() {
 	if (RandomPercentage(40)) {
 		return GenerateJoinRef();
 	}
-	switch(RandomValue(3)) {
+	switch (RandomValue(3)) {
 	case 0:
 		return GenerateSubqueryRef();
 	case 1:
@@ -240,18 +240,17 @@ unique_ptr<TableRef> StatementGenerator::GenerateTableRef() {
 	default:
 		throw InternalException("StatementGenerator::GenerateTableRef");
 	}
-
 }
 
 unique_ptr<TableRef> StatementGenerator::GenerateBaseTableRef() {
 	if (generator_context->tables_and_views.empty()) {
 		return GenerateExpressionListRef();
 	}
-    auto &entry_ref = Choose(generator_context->tables_and_views);
+	auto &entry_ref = Choose(generator_context->tables_and_views);
 	auto &entry = entry_ref.get();
 	auto result = make_uniq<BaseTableRef>();
 	idx_t column_count;
-	switch(entry.type) {
+	switch (entry.type) {
 	case CatalogType::TABLE_ENTRY: {
 		auto &table = entry.Cast<TableCatalogEntry>();
 		column_count = table.GetColumns().LogicalColumnCount();
@@ -265,7 +264,7 @@ unique_ptr<TableRef> StatementGenerator::GenerateBaseTableRef() {
 	default:
 		throw InternalException("StatementGenerator::GenerateBaseTableRef");
 	}
-	for(idx_t i = 0; i < column_count; i++) {
+	for (idx_t i = 0; i < column_count; i++) {
 		result->column_name_alias.push_back(GenerateIdentifier());
 	}
 	result->alias = GenerateTableIdentifier();
@@ -276,9 +275,9 @@ unique_ptr<TableRef> StatementGenerator::GenerateBaseTableRef() {
 unique_ptr<TableRef> StatementGenerator::GenerateExpressionListRef() {
 	auto result = make_uniq<ExpressionListRef>();
 	auto column_count = 1 + RandomValue(10);
-	for(idx_t r = 0; r < 1 + RandomValue(10); r++) {
+	for (idx_t r = 0; r < 1 + RandomValue(10); r++) {
 		vector<unique_ptr<ParsedExpression>> values;
-		for(idx_t c = 0; c < column_count; c++) {
+		for (idx_t c = 0; c < column_count; c++) {
 			values.push_back(GenerateConstant());
 		}
 		result->values.push_back(std::move(values));
@@ -327,7 +326,7 @@ unique_ptr<TableRef> StatementGenerator::GenerateSubqueryRef() {
 	{
 		StatementGenerator child_generator(*this);
 		subquery = unique_ptr_cast<SQLStatement, SelectStatement>(child_generator.GenerateSelect());
-		for(auto &col : child_generator.current_column_names) {
+		for (auto &col : child_generator.current_column_names) {
 			current_column_names.push_back(std::move(col));
 		}
 	}
@@ -343,11 +342,11 @@ unique_ptr<TableRef> StatementGenerator::GenerateTableFunctionRef() {
 
 	auto result = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	for(idx_t i = 0; i < table_function.arguments.size(); i++) {
+	for (idx_t i = 0; i < table_function.arguments.size(); i++) {
 		children.push_back(GenerateConstant());
 	}
 	vector<string> names;
-	for(auto &e : table_function.named_parameters) {
+	for (auto &e : table_function.named_parameters) {
 		names.push_back(e.first);
 	}
 	while (!names.empty() && RandomPercentage(50)) {
@@ -358,7 +357,7 @@ unique_ptr<TableRef> StatementGenerator::GenerateTableFunctionRef() {
 		children.push_back(std::move(expr));
 	}
 	result->function = make_uniq<FunctionExpression>(entry.name, std::move(children));
-	for(idx_t i = 0; i < 1 + RandomValue(9); i++) {
+	for (idx_t i = 0; i < 1 + RandomValue(9); i++) {
 		result->column_name_alias.push_back(GenerateIdentifier());
 	}
 	result->alias = GenerateTableIdentifier();
@@ -372,18 +371,18 @@ unique_ptr<TableRef> StatementGenerator::GeneratePivotRef() {
 	if (is_pivot) {
 		// pivot
 		// aggregates
-		while(true) {
+		while (true) {
 			pivot->aggregates.push_back(GenerateFunction());
 			if (RandomPercentage(50)) {
 				break;
 			}
 		}
-		while(RandomPercentage(50)) {
+		while (RandomPercentage(50)) {
 			pivot->groups.push_back(GenerateColumnName());
 		}
 	} else {
 		// unpivot
-		while(true) {
+		while (true) {
 			pivot->unpivot_names.push_back(GenerateColumnName());
 			if (RandomPercentage(50)) {
 				break;
@@ -391,19 +390,19 @@ unique_ptr<TableRef> StatementGenerator::GeneratePivotRef() {
 		}
 		pivot->include_nulls = RandomBoolean();
 	}
-	while(true) {
+	while (true) {
 		PivotColumn col;
 		idx_t number_of_columns = 1 + RandomValue(2);
-		for(idx_t i = 0; i < number_of_columns; i++) {
+		for (idx_t i = 0; i < number_of_columns; i++) {
 			if (is_pivot) {
 				col.pivot_expressions.push_back(GenerateExpression());
 			} else {
 				col.unpivot_names.push_back(GenerateColumnName());
 			}
 		}
-		while(true) {
+		while (true) {
 			PivotColumnEntry entry;
-			for(idx_t i = 0; i < number_of_columns; i++) {
+			for (idx_t i = 0; i < number_of_columns; i++) {
 				entry.values.push_back(GenerateConstantValue());
 			}
 			col.entries.push_back(std::move(entry));
@@ -418,8 +417,6 @@ unique_ptr<TableRef> StatementGenerator::GeneratePivotRef() {
 	}
 	return pivot;
 }
-
-
 
 //===--------------------------------------------------------------------===//
 // Expressions
@@ -447,7 +444,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateExpression() {
 	if (RandomPercentage(3)) {
 		return GenerateSubquery();
 	}
-	switch(RandomValue(9)) {
+	switch (RandomValue(9)) {
 	case 0:
 		return GenerateOperator();
 	case 1:
@@ -480,7 +477,7 @@ Value StatementGenerator::GenerateConstantValue() {
 	}
 	auto &val = Choose(generator_context->test_types);
 	Value constant_val;
-	switch(RandomValue(3)) {
+	switch (RandomValue(3)) {
 	case 0:
 		constant_val = val.min_value;
 		break;
@@ -500,7 +497,6 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateConstant() {
 	return make_uniq<ConstantExpression>(GenerateConstantValue());
 }
 
-
 LogicalType StatementGenerator::GenerateLogicalType() {
 	return Choose(generator_context->test_types).type;
 }
@@ -512,7 +508,6 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateColumnRef() {
 	}
 	return make_uniq<ColumnRefExpression>(std::move(column_name));
 }
-
 
 class AggregateChecker {
 public:
@@ -526,10 +521,9 @@ public:
 	StatementGenerator &generator;
 };
 
-
 unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
 	// get a random function
-    auto &function_ref = Choose(generator_context->scalar_functions);
+	auto &function_ref = Choose(generator_context->scalar_functions);
 	auto &function = function_ref.get();
 	string name;
 	idx_t min_parameters;
@@ -539,14 +533,15 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
 	bool distinct = false;
 	unique_ptr<AggregateChecker> checker;
 	vector<LogicalType> arguments;
-	switch(function.type) {
+	switch (function.type) {
 	case CatalogType::SCALAR_FUNCTION_ENTRY: {
 		auto &scalar_entry = function.Cast<ScalarFunctionCatalogEntry>();
 		auto actual_function = scalar_entry.functions.GetFunctionByOffset(RandomValue(scalar_entry.functions.Size()));
 
 		name = scalar_entry.name;
 		arguments = actual_function.arguments;
-		min_parameters = actual_function.arguments.size();;
+		min_parameters = actual_function.arguments.size();
+		;
 		max_parameters = min_parameters;
 		if (actual_function.varargs.id() != LogicalTypeId::INVALID) {
 			max_parameters += 5;
@@ -555,10 +550,12 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
 	}
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
 		auto &aggregate_entry = function.Cast<AggregateFunctionCatalogEntry>();
-		auto actual_function = aggregate_entry.functions.GetFunctionByOffset(RandomValue(aggregate_entry.functions.Size()));
+		auto actual_function =
+		    aggregate_entry.functions.GetFunctionByOffset(RandomValue(aggregate_entry.functions.Size()));
 
 		name = aggregate_entry.name;
-		min_parameters = actual_function.arguments.size();;
+		min_parameters = actual_function.arguments.size();
+		;
 		max_parameters = min_parameters;
 		if (actual_function.varargs.id() != LogicalTypeId::INVALID) {
 			max_parameters += 5;
@@ -593,20 +590,22 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
 	}
 	auto children = GenerateChildren(min_parameters, max_parameters);
 	// push lambda expressions
-	for(idx_t i = 0; i < arguments.size(); i++) {
+	for (idx_t i = 0; i < arguments.size(); i++) {
 		if (arguments[i].id() == LogicalTypeId::LAMBDA) {
 			children[i] = GenerateLambda();
 		}
 	}
 	// FIXME: add export_state
-	return make_uniq<FunctionExpression>(std::move(name), std::move(children), std::move(filter), std::move(order_bys), distinct);
+	return make_uniq<FunctionExpression>(std::move(name), std::move(children), std::move(filter), std::move(order_bys),
+	                                     distinct);
 }
 
 unique_ptr<OrderModifier> StatementGenerator::GenerateOrderBy() {
 	auto result = make_uniq<OrderModifier>();
 	while (true) {
 		auto order_type = Choose<OrderType>({OrderType::ASCENDING, OrderType::DESCENDING, OrderType::ORDER_DEFAULT});
-		auto null_type = Choose<OrderByNullType>({OrderByNullType::NULLS_FIRST, OrderByNullType::NULLS_LAST, OrderByNullType::ORDER_DEFAULT});
+		auto null_type = Choose<OrderByNullType>(
+		    {OrderByNullType::NULLS_FIRST, OrderByNullType::NULLS_LAST, OrderByNullType::ORDER_DEFAULT});
 		result->orders.emplace_back(order_type, null_type, GenerateExpression());
 		// continue with a random chance
 		if (RandomPercentage(50)) {
@@ -620,7 +619,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateOperator() {
 	ExpressionType type;
 	idx_t min_parameters;
 	idx_t max_parameters;
-	switch(RandomValue(9)) {
+	switch (RandomValue(9)) {
 	case 0:
 		type = ExpressionType::COMPARE_IN;
 		min_parameters = 2;
@@ -715,21 +714,10 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
 		min_parameters = function->arguments.size();
 		max_parameters = min_parameters;
 	} else {
-		name = Choose<string>({
-		    "rank",
-			"rank_dense",
-			"percent_rank",
-			"row_number",
-			"first_value",
-			"last_value",
-			"nth_value",
-			"cume_dist",
-			"lead",
-			"lag",
-			"ntile"
-		});
+		name = Choose<string>({"rank", "rank_dense", "percent_rank", "row_number", "first_value", "last_value",
+		                       "nth_value", "cume_dist", "lead", "lag", "ntile"});
 		type = WindowExpression::WindowToExpressionType(name);
-		switch(type) {
+		switch (type) {
 		case ExpressionType::WINDOW_RANK:
 		case ExpressionType::WINDOW_RANK_DENSE:
 		case ExpressionType::WINDOW_ROW_NUMBER:
@@ -755,7 +743,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
 	WindowChecker checker(*this);
 	auto result = make_uniq<WindowExpression>(type, INVALID_CATALOG, INVALID_SCHEMA, std::move(name));
 	result->children = GenerateChildren(min_parameters, max_parameters);
-	while(RandomPercentage(50)) {
+	while (RandomPercentage(50)) {
 		result->partitions.push_back(GenerateExpression());
 	}
 	if (RandomPercentage(30)) {
@@ -768,22 +756,16 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
 		}
 	}
 	vector<WindowBoundary> window_boundaries {
-		WindowBoundary::UNBOUNDED_PRECEDING,
-		WindowBoundary::UNBOUNDED_FOLLOWING,
-		WindowBoundary::CURRENT_ROW_RANGE,
-		WindowBoundary::CURRENT_ROW_ROWS,
-		WindowBoundary::EXPR_PRECEDING_ROWS,
-		WindowBoundary::EXPR_FOLLOWING_ROWS,
-		WindowBoundary::EXPR_PRECEDING_RANGE,
-		WindowBoundary::EXPR_FOLLOWING_RANGE
-	};
+	    WindowBoundary::UNBOUNDED_PRECEDING,  WindowBoundary::UNBOUNDED_FOLLOWING, WindowBoundary::CURRENT_ROW_RANGE,
+	    WindowBoundary::CURRENT_ROW_ROWS,     WindowBoundary::EXPR_PRECEDING_ROWS, WindowBoundary::EXPR_FOLLOWING_ROWS,
+	    WindowBoundary::EXPR_PRECEDING_RANGE, WindowBoundary::EXPR_FOLLOWING_RANGE};
 	do {
 		result->start = Choose(window_boundaries);
-	} while(result->start == WindowBoundary::UNBOUNDED_FOLLOWING);
+	} while (result->start == WindowBoundary::UNBOUNDED_FOLLOWING);
 	do {
 		result->end = Choose(window_boundaries);
-	} while(result->end == WindowBoundary::UNBOUNDED_PRECEDING);
-	switch(result->start) {
+	} while (result->end == WindowBoundary::UNBOUNDED_PRECEDING);
+	switch (result->start) {
 	case WindowBoundary::EXPR_PRECEDING_ROWS:
 	case WindowBoundary::EXPR_PRECEDING_RANGE:
 	case WindowBoundary::EXPR_FOLLOWING_ROWS:
@@ -803,7 +785,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
 	default:
 		break;
 	}
-	switch(type) {
+	switch (type) {
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
 		result->offset_expr = RandomExpression(30);
@@ -814,7 +796,6 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateWindowFunction(optional
 	}
 	return result;
 }
-
 
 unique_ptr<ParsedExpression> StatementGenerator::RandomExpression(idx_t percentage) {
 	if (RandomPercentage(percentage)) {
@@ -827,7 +808,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateConjunction() {
 	auto left = GenerateExpression();
 	auto right = GenerateExpression();
 	ExpressionType conjunction_type;
-	switch(RandomValue(2)) {
+	switch (RandomValue(2)) {
 	case 0:
 		conjunction_type = ExpressionType::CONJUNCTION_AND;
 		break;
@@ -848,14 +829,14 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateStar() {
 		}
 	}
 
-	while(RandomPercentage(20)) {
+	while (RandomPercentage(20)) {
 		auto column_name = GenerateColumnName();
 		if (column_name.empty()) {
 			break;
 		}
 		result->exclude_list.insert(column_name);
 	}
-	while(RandomPercentage(20)) {
+	while (RandomPercentage(20)) {
 		auto column_name = GenerateColumnName();
 		if (column_name.empty()) {
 			break;
@@ -911,12 +892,8 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateSubquery() {
 		StatementGenerator child_generator(*this);
 		subquery->subquery = unique_ptr_cast<SQLStatement, SelectStatement>(child_generator.GenerateSelect());
 	}
-	subquery->subquery_type = Choose<SubqueryType>({
-	    SubqueryType::ANY,
-	    SubqueryType::EXISTS,
-	    SubqueryType::SCALAR,
-	    SubqueryType::NOT_EXISTS
-	});
+	subquery->subquery_type =
+	    Choose<SubqueryType>({SubqueryType::ANY, SubqueryType::EXISTS, SubqueryType::SCALAR, SubqueryType::NOT_EXISTS});
 	if (subquery->subquery_type == SubqueryType::ANY || subquery->subquery_type == SubqueryType::SCALAR) {
 		subquery->child = GenerateExpression();
 	}
@@ -940,12 +917,14 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateBetween() {
 }
 
 ExpressionType StatementGenerator::GenerateComparisonType() {
-    static vector<ExpressionType> comparisons {
-		ExpressionType::COMPARE_EQUAL, ExpressionType::COMPARE_NOTEQUAL, ExpressionType::COMPARE_LESSTHAN,
-		    ExpressionType::COMPARE_GREATERTHAN, ExpressionType::COMPARE_LESSTHANOREQUALTO,
-		    ExpressionType::COMPARE_GREATERTHANOREQUALTO, ExpressionType::COMPARE_DISTINCT_FROM,
-		    ExpressionType::COMPARE_NOT_DISTINCT_FROM
-	};
+	static vector<ExpressionType> comparisons {ExpressionType::COMPARE_EQUAL,
+	                                           ExpressionType::COMPARE_NOTEQUAL,
+	                                           ExpressionType::COMPARE_LESSTHAN,
+	                                           ExpressionType::COMPARE_GREATERTHAN,
+	                                           ExpressionType::COMPARE_LESSTHANOREQUALTO,
+	                                           ExpressionType::COMPARE_GREATERTHANOREQUALTO,
+	                                           ExpressionType::COMPARE_DISTINCT_FROM,
+	                                           ExpressionType::COMPARE_NOT_DISTINCT_FROM};
 	return Choose(comparisons);
 }
 
@@ -962,7 +941,7 @@ unique_ptr<ParsedExpression> StatementGenerator::GeneratePositionalReference() {
 unique_ptr<ParsedExpression> StatementGenerator::GenerateCase() {
 	auto case_stmt = make_uniq<CaseExpression>();
 	case_stmt->else_expr = GenerateExpression();
-	while(true) {
+	while (true) {
 		CaseCheck check;
 		check.then_expr = GenerateExpression();
 		check.when_expr = GenerateExpression();
@@ -1031,4 +1010,4 @@ bool StatementGenerator::RandomPercentage(idx_t percentage) {
 	return RandomValue(100) <= percentage;
 }
 
-}
+} // namespace duckdb

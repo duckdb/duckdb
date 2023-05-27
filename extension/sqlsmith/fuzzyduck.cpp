@@ -4,10 +4,11 @@
 
 namespace duckdb {
 
-FuzzyDuck::FuzzyDuck(ClientContext &context) :
-  context(context) {}
+FuzzyDuck::FuzzyDuck(ClientContext &context) : context(context) {
+}
 
-FuzzyDuck::~FuzzyDuck() {}
+FuzzyDuck::~FuzzyDuck() {
+}
 
 void FuzzyDuck::Fuzz() {
 	auto &random_engine = RandomEngine::Get(context);
@@ -20,9 +21,10 @@ void FuzzyDuck::Fuzz() {
 	if (!complete_log.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context);
 		TryRemoveFile(complete_log);
-		complete_log_handle = fs.OpenFile(complete_log, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+		complete_log_handle =
+		    fs.OpenFile(complete_log, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	}
-	for(idx_t i = 0; i < max_queries; i++) {
+	for (idx_t i = 0; i < max_queries; i++) {
 		LogMessage("Query " + to_string(i) + "\n");
 		auto query = GenerateQuery();
 		RunQuery(std::move(query));
@@ -94,7 +96,7 @@ void FuzzyDuck::LogToCurrent(const string &message) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	TryRemoveFile(log);
 	auto file = fs.OpenFile(log, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
-	file->Write((void *) message.c_str(), message.size());
+	file->Write((void *)message.c_str(), message.size());
 	file->Sync();
 	file->Close();
 }
@@ -102,9 +104,9 @@ void FuzzyDuck::LogToComplete(const string &message) {
 	if (!complete_log_handle) {
 		return;
 	}
-	complete_log_handle->Write((void *) message.c_str(), message.size());
-	complete_log_handle->Write((void *) "\n", 1);
+	complete_log_handle->Write((void *)message.c_str(), message.size());
+	complete_log_handle->Write((void *)"\n", 1);
 	complete_log_handle->Sync();
 }
 
-}
+} // namespace duckdb

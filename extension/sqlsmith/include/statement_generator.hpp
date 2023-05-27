@@ -36,6 +36,7 @@ public:
 	friend class ExpressionDepthChecker;
 	friend class AggregateChecker;
 	friend class WindowChecker;
+
 public:
 	StatementGenerator(ClientContext &context);
 	StatementGenerator(StatementGenerator &parent);
@@ -46,7 +47,6 @@ public:
 
 private:
 	unique_ptr<SQLStatement> GenerateStatement(StatementType type);
-
 
 	unique_ptr<SQLStatement> GenerateSelect();
 	unique_ptr<QueryNode> GenerateQueryNode();
@@ -116,7 +116,7 @@ private:
 	shared_ptr<GeneratorContext> GetDatabaseState(ClientContext &context);
 	vector<unique_ptr<ParsedExpression>> GenerateChildren(idx_t min, idx_t max);
 
-	template<class T>
+	template <class T>
 	const T &Choose(const vector<T> &entries) {
 		if (entries.empty()) {
 			throw InternalException("Attempting to choose from an empty vector");
