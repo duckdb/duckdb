@@ -23,6 +23,9 @@ struct RegisteredArray {
 struct RawArrayWrapper {
 
 	explicit RawArrayWrapper(const LogicalType &type);
+	~RawArrayWrapper() {
+		D_ASSERT(py::gil_check());
+	}
 
 	py::array array;
 	data_ptr_t data;
@@ -83,24 +86,6 @@ public:
 		return true;
 	}
 
-	//===--------------------------------------------------------------------===//
-	// Combine
-	//===--------------------------------------------------------------------===//
-	void Combine(NumpyResultConversion &other) {
-		if (other.count == 0) {
-			return;
-		}
-		D_ASSERT(CompareTypes(other));
-		for (idx_t i = 0; i < owned_data.size(); i++) {
-			auto &this_data = owned_data[i];
-			auto &other_data = other.owned_data[i];
-			this_data.Combine(other_data);
-		}
-		capacity = count + other.count;
-		count = capacity;
-		other.Reset();
-	}
-
 	const py::array &InternalArray(idx_t col_idx) const {
 		return owned_data[col_idx].data->array;
 	}
@@ -110,28 +95,27 @@ public:
 	}
 
 	void Merge(vector<unique_ptr<NumpyResultConversion>> &collections) {
-		for (idx_t col_idx; col_idx < owned_data.size(); col_idx++) {
+		D_ASSERT(py::gil_check());
+
+		idx_t new_count = 0;
+		for (auto &collection : collections) {
+			new_count += collection->Count();
+		}
+		count = new_count;
+
+		for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
+			auto &array = *owned_data[col_idx].data;
+			auto &mask = *owned_data[col_idx].mask;
 
 			// Collect all the arrays of the collections for this column
-			py::tuple arrays(collections.size());
 			for (idx_t i = 0; i < collections.size(); i++) {
 				auto &collection = collections[i];
-				arrays[i] = collection->InternalArray(col_idx);
+				auto &source_array = *collection->owned_data[col_idx].data;
+				auto &source_mask = *collection->owned_data[col_idx].mask;
+
+				array.Combine(source_array);
+				mask.Combine(source_mask);
 			}
-
-			auto &destination_array = owned_data[col_idx].data->array;
-			destination_array =
-			    py::module_::import("numpy").attr("concatenate")(arrays, py::arg("out") = destination_array);
-
-			// Collect all the masks of the collections for this column
-			py::tuple masks(collections.size());
-			for (idx_t i = 0; i < collections.size(); i++) {
-				auto &collection = collections[i];
-				masks[i] = collection->owned_data[col_idx].mask->array;
-			}
-
-			auto &destination_mask = owned_data[col_idx].mask->array;
-			destination_mask = py::module_::import("numpy").attr("concatenate")(masks);
 		}
 
 		for (auto &collection : collections) {
@@ -144,6 +128,7 @@ public:
 	}
 
 	void Reset() {
+		D_ASSERT(py::gil_check());
 		owned_data.clear();
 		count = 0;
 		capacity = 0;
@@ -154,6 +139,7 @@ public:
 	}
 
 	py::object ToArray(idx_t col_idx) {
+		D_ASSERT(py::gil_check());
 		if (Type(col_idx).id() == LogicalTypeId::ENUM) {
 			// first we (might) need to create the categorical type
 			auto category_entry = categories_type.find(col_idx);

@@ -158,6 +158,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	if (!result) {
 		throw InvalidInputException("result closed");
 	}
+	D_ASSERT(py::gil_check());
 
 	if (result->type == QueryResultType::NUMPY_RESULT) {
 		auto &numpy_result = result->Cast<NumpyQueryResult>();
@@ -227,6 +228,7 @@ void DuckDBPyResult::ChangeDateToDatetime(PandasDataFrame &df) {
 }
 
 PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::handle &o) {
+	D_ASSERT(py::gil_check());
 	auto df = py::cast<PandasDataFrame>(py::module::import("pandas").attr("DataFrame").attr("from_dict")(o));
 	// Unfortunately we have to do a type change here for timezones since these types are not supported by numpy
 	ChangeToTZType(df);

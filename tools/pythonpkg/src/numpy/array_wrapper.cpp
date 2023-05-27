@@ -472,6 +472,13 @@ static bool ConvertDecimal(const LogicalType &decimal_type, idx_t target_offset,
 	}
 }
 
+void RawArrayWrapper::Combine(RawArrayWrapper &other) {
+	D_ASSERT(other.type_width == type_width);
+	// The capacity should already be big enough to fit the new array
+	memcpy(data + (type_width * count), other.data, (type_width * other.count));
+	count += other.count;
+}
+
 RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : array(), data(nullptr), type(type), count(0) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -598,19 +605,15 @@ string RawArrayWrapper::DuckDBToNumpyDtype(const LogicalType &type) {
 }
 
 void RawArrayWrapper::Initialize(idx_t capacity) {
+	D_ASSERT(py::gil_check());
 	string dtype = DuckDBToNumpyDtype(type);
 
 	array = py::array(py::dtype(dtype), capacity);
 	data = data_ptr_cast(array.mutable_data());
 }
 
-void RawArrayWrapper::Combine(RawArrayWrapper &other) {
-	D_ASSERT(other.type_width == type_width);
-	Resize(count + other.count);
-	memcpy(data + (type_width * count), other.data, (type_width * other.count));
-}
-
 void RawArrayWrapper::Resize(idx_t new_capacity) {
+	D_ASSERT(py::gil_check());
 	vector<py::ssize_t> new_shape {py::ssize_t(new_capacity)};
 	array.resize(new_shape, false);
 	data = data_ptr_cast(array.mutable_data());
@@ -629,11 +632,6 @@ void ArrayWrapper::Initialize(idx_t capacity) {
 void ArrayWrapper::Resize(idx_t new_capacity) {
 	data->Resize(new_capacity);
 	mask->Resize(new_capacity);
-}
-
-void ArrayWrapper::Combine(ArrayWrapper &other) {
-	data->Combine(*other.data);
-	mask->Combine(*other.mask);
 }
 
 void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
@@ -774,6 +772,7 @@ const LogicalType &ArrayWrapper::Type() const {
 }
 
 py::object ArrayWrapper::ToArray(idx_t count) const {
+	D_ASSERT(py::gil_check());
 	D_ASSERT(data->array && mask->array);
 	data->Resize(data->count);
 	if (!requires_mask) {

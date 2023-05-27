@@ -31,7 +31,10 @@ unique_ptr<PhysicalResultCollector> PhysicalNumpyCollector::Create(ClientContext
 	// The creation of `py::array` requires this module, and when this is imported for the first time from a thread that
 	// is not the main execution thread this might cause a crash. So we import it here while we're still in the main
 	// thread.
-	auto numpy_internal = py::module_::import("numpy.core.multiarray");
+	{
+		py::gil_scoped_acquire gil;
+		auto numpy_internal = py::module_::import("numpy.core.multiarray");
+	}
 	// Always create a parallel result collector
 	return make_uniq_base<PhysicalResultCollector, PhysicalNumpyCollector>(data, true);
 }
@@ -48,6 +51,8 @@ void PhysicalNumpyCollector::Combine(ExecutionContext &context, GlobalSinkState 
 	auto &gstate = gstate_p.Cast<NumpyCollectorGlobalState>();
 	auto &lstate = lstate_p.Cast<NumpyCollectorLocalState>();
 	if (lstate.collection->Count() == 0) {
+		py::gil_scoped_acquire gil;
+		lstate.collection->Reset();
 		return;
 	}
 
