@@ -800,10 +800,8 @@ NumpyResultConversion::NumpyResultConversion(vector<unique_ptr<NumpyResultConver
 
 	auto concatenate_func = py::module_::import("numpy").attr("concatenate");
 
-	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
-		auto &array = *owned_data[col_idx].data;
-		auto &mask = *owned_data[col_idx].mask;
-
+	D_ASSERT(owned_data.empty());
+	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		// Collect all the arrays of the collections for this column
 		py::tuple arrays(collections.size());
 		py::tuple masks(collections.size());
@@ -815,6 +813,10 @@ NumpyResultConversion::NumpyResultConversion(vector<unique_ptr<NumpyResultConver
 			// Check if the result array requires a mask
 			auto &source = collection->owned_data[col_idx];
 			requires_mask = requires_mask || source.requires_mask;
+
+			// Shrink to fit
+			source.data->Resize(source.data->count);
+			source.mask->Resize(source.mask->count);
 
 			arrays[i] = *source.data->array;
 			masks[i] = *source.mask->array;
