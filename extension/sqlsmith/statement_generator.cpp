@@ -541,7 +541,6 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
 		name = scalar_entry.name;
 		arguments = actual_function.arguments;
 		min_parameters = actual_function.arguments.size();
-		;
 		max_parameters = min_parameters;
 		if (actual_function.varargs.id() != LogicalTypeId::INVALID) {
 			max_parameters += 5;
@@ -555,7 +554,6 @@ unique_ptr<ParsedExpression> StatementGenerator::GenerateFunction() {
 
 		name = aggregate_entry.name;
 		min_parameters = actual_function.arguments.size();
-		;
 		max_parameters = min_parameters;
 		if (actual_function.varargs.id() != LogicalTypeId::INVALID) {
 			max_parameters += 5;
@@ -1009,5 +1007,92 @@ bool StatementGenerator::RandomPercentage(idx_t percentage) {
 	}
 	return RandomValue(100) <= percentage;
 }
+
+
+//===--------------------------------------------------------------------===//
+// Exhaustive Function Generation
+//===--------------------------------------------------------------------===//
+string StatementGenerator::GenerateFunctionQuery(BaseScalarFunction &base_function) {
+	auto select = make_uniq<SelectStatement>();
+	auto node = make_uniq<SelectNode>();
+
+	// some functions run for a very long time with extreme parameters because they e.g. generate giant strings
+	// for that reason we skip testing those functions with extreme parameters
+	static case_insensitive_set_t always_null_functions {
+	    "rpad",
+	    "pad",
+	    "lpad"
+	};
+
+	auto always_null = always_null_functions.find(base_function.name) != always_null_functions.end();
+
+
+	vector<unique_ptr<ParsedExpression>> children;
+	for(auto &arg : base_function.arguments) {
+		// look up the type
+		unique_ptr<ParsedExpression> argument;
+		if (!always_null) {
+			for(auto &test_type : generator_context->test_types) {
+				if (test_type.type.id() == arg.id()) {
+					argument = make_uniq<ColumnRefExpression>(test_type.name);
+				}
+			}
+		}
+		if (!argument) {
+			argument = make_uniq<ConstantExpression>(Value(arg));
+		}
+		children.push_back(std::move(argument));
+	}
+	auto from_clause = make_uniq<BaseTableRef>();
+	from_clause->table_name = "test_all_types";
+	node->from_table = std::move(from_clause);
+
+	auto function_expr = make_uniq<FunctionExpression>(base_function.name, std::move(children));
+	node->select_list.push_back(std::move(function_expr));
+
+	select->node = std::move(node);
+	return select->ToString();
+
+}
+void StatementGenerator::GenerateAllScalar(ScalarFunctionCatalogEntry &scalar_function, vector<string> &result) {
+	for(idx_t offset = 0; offset < scalar_function.functions.Size(); offset++) {
+		auto function = scalar_function.functions.GetFunctionByOffset(offset);
+
+		result.push_back(GenerateFunctionQuery(function));
+	}
+}
+
+void StatementGenerator::GenerateAllAggregate(AggregateFunctionCatalogEntry &aggregate_function, vector<string> &result) {
+	for(idx_t offset = 0; offset < aggregate_function.functions.Size(); offset++) {
+		auto function = aggregate_function.functions.GetFunctionByOffset(offset);
+
+		result.push_back(GenerateFunctionQuery(function));
+	}
+}
+
+vector<string> StatementGenerator::GenerateAllFunctionCalls() {
+	// all scalar functions
+	vector<string> result;
+	for(auto &function_ref : generator_context->scalar_functions) {
+		auto &function = function_ref.get();
+		switch(function.type) {
+		case CatalogType::SCALAR_FUNCTION_ENTRY: {
+			auto &scalar_entry = function.Cast<ScalarFunctionCatalogEntry>();
+			GenerateAllScalar(scalar_entry, result);
+			break;
+		}
+		case CatalogType::AGGREGATE_FUNCTION_ENTRY: {
+			auto &aggregate_entry = function.Cast<AggregateFunctionCatalogEntry>();
+			GenerateAllAggregate(aggregate_entry, result);
+			break;
+		}
+		case CatalogType::MACRO_ENTRY:
+		default:
+			break;
+		}
+	}
+	return result;
+}
+
 
 } // namespace duckdb

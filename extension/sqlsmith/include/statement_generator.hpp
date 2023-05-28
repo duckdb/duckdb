@@ -45,6 +45,8 @@ public:
 public:
 	unique_ptr<SQLStatement> GenerateStatement();
 
+	vector<string> GenerateAllFunctionCalls();
+
 private:
 	unique_ptr<SQLStatement> GenerateStatement(StatementType type);
 
@@ -80,6 +82,10 @@ private:
 	unique_ptr<OrderModifier> GenerateOrderBy();
 
 	LogicalType GenerateLogicalType();
+
+	void GenerateAllScalar(ScalarFunctionCatalogEntry &scalar_function, vector<string> &result);
+	void GenerateAllAggregate(AggregateFunctionCatalogEntry &aggregate_function, vector<string> &result);
+	string GenerateFunctionQuery(BaseScalarFunction &base_function);
 
 	idx_t RandomValue(idx_t max);
 	bool RandomBoolean();
