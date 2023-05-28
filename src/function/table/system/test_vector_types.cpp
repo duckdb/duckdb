@@ -6,7 +6,7 @@ namespace duckdb {
 
 // FLAT, CONSTANT, DICTIONARY, SEQUENCE
 struct TestVectorBindData : public TableFunctionData {
-	LogicalType type;
+	vector<LogicalType> types;
 	bool all_flat = false;
 };
 
@@ -19,12 +19,12 @@ struct TestVectorTypesData : public GlobalTableFunctionState {
 };
 
 struct TestVectorInfo {
-	TestVectorInfo(const LogicalType &type, const map<LogicalTypeId, TestType> &test_type_map,
+	TestVectorInfo(const vector<LogicalType> &types, const map<LogicalTypeId, TestType> &test_type_map,
 	               vector<unique_ptr<DataChunk>> &entries)
-	    : type(type), test_type_map(test_type_map), entries(entries) {
+	    : types(types), test_type_map(test_type_map), entries(entries) {
 	}
 
-	const LogicalType &type;
+	const vector<LogicalType> &types;
 	const map<LogicalTypeId, TestType> &test_type_map;
 	vector<unique_ptr<DataChunk>> &entries;
 };
@@ -75,14 +75,24 @@ struct TestVectorFlat {
 		return result;
 	}
 
+	static vector<vector<Value>> GenerateValues(TestVectorInfo &info) {
+		vector<vector<Value>> result_values;
+		for(auto &type : info.types) {
+			result_values.push_back(GenerateValues(info, type));
+		}
+		return result_values;
+	}
+
 	static void Generate(TestVectorInfo &info) {
-		vector<Value> result_values = GenerateValues(info, info.type);
+		auto result_values = GenerateValues(info);
 		for (idx_t cur_row = 0; cur_row < result_values.size(); cur_row += STANDARD_VECTOR_SIZE) {
 			auto result = make_uniq<DataChunk>();
-			result->Initialize(Allocator::DefaultAllocator(), {info.type});
+			result->Initialize(Allocator::DefaultAllocator(), info.types);
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, result_values.size() - cur_row);
-			for (idx_t i = 0; i < cardinality; i++) {
-				result->data[0].SetValue(i, result_values[cur_row + i]);
+			for(idx_t c = 0; c < info.types.size(); c++) {
+				for (idx_t i = 0; i < cardinality; i++) {
+					result->data[c].SetValue(i, result_values[c][cur_row + i]);
+				}
 			}
 			result->SetCardinality(cardinality);
 			info.entries.push_back(std::move(result));
@@ -92,13 +102,15 @@ struct TestVectorFlat {
 
 struct TestVectorConstant {
 	static void Generate(TestVectorInfo &info) {
-		auto values = TestVectorFlat::GenerateValues(info, info.type);
+		auto values = TestVectorFlat::GenerateValues(info);
 		for (idx_t cur_row = 0; cur_row < TestVectorFlat::TEST_VECTOR_CARDINALITY; cur_row += STANDARD_VECTOR_SIZE) {
 			auto result = make_uniq<DataChunk>();
-			result->Initialize(Allocator::DefaultAllocator(), {info.type});
+			result->Initialize(Allocator::DefaultAllocator(), info.types);
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, TestVectorFlat::TEST_VECTOR_CARDINALITY - cur_row);
-			result->data[0].SetValue(0, values[0]);
-			result->data[0].SetVectorType(VectorType::CONSTANT_VECTOR);
+			for(idx_t c = 0; c < info.types.size(); c++) {
+				result->data[c].SetValue(0, values[c][0]);
+				result->data[c].SetVectorType(VectorType::CONSTANT_VECTOR);
+			}
 			result->SetCardinality(cardinality);
 
 			info.entries.push_back(std::move(result));
@@ -160,9 +172,11 @@ struct TestVectorSequence {
 	static void Generate(TestVectorInfo &info) {
 #if STANDARD_VECTOR_SIZE > 2
 		auto result = make_uniq<DataChunk>();
-		result->Initialize(Allocator::DefaultAllocator(), {info.type});
+		result->Initialize(Allocator::DefaultAllocator(), info.types);
 
-		GenerateVector(info, info.type, result->data[0]);
+		for(idx_t c = 0; c < info.types.size(); c++) {
+			GenerateVector(info, info.types[c], result->data[c]);
+		}
 		result->SetCardinality(3);
 		info.entries.push_back(std::move(result));
 #endif
@@ -195,7 +209,16 @@ struct TestVectorDictionary {
 static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<TestVectorBindData>();
-	result->type = input.inputs[0].type();
+	for(idx_t i = 0; i < input.inputs.size(); i++) {
+		string name = "test_vector";
+		if (i > 0) {
+			name += to_string(i + 1);
+		}
+		auto &input_val = input.inputs[i];
+		names.emplace_back(name);
+		return_types.push_back(input_val.type());
+		result->types.push_back(input_val.type());
+	}
 	for(auto &entry : input.named_parameters) {
 		if (entry.first == "all_flat") {
 			result->all_flat = BooleanValue::Get(entry.second);
@@ -203,9 +226,6 @@ static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, Tabl
 			throw InternalException("Unrecognized named parameter for test_vector_types");
 		}
 	}
-
-	return_types.push_back(result->type);
-	names.emplace_back("test_vector");
 	return std::move(result);
 }
 
@@ -221,7 +241,7 @@ unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context,
 		test_type_map.insert(make_pair(test_type.type.id(), std::move(test_type)));
 	}
 
-	TestVectorInfo info(bind_data.type, test_type_map, result->entries);
+	TestVectorInfo info(bind_data.types, test_type_map, result->entries);
 	TestVectorFlat::Generate(info);
 	TestVectorConstant::Generate(info);
 	TestVectorDictionary::Generate(info);
@@ -251,6 +271,7 @@ void TestVectorTypesFunction(ClientContext &context, TableFunctionInput &data_p,
 void TestVectorTypesFun::RegisterFunction(BuiltinFunctions &set) {
 	TableFunction test_vector_types("test_vector_types", {LogicalType::ANY},
 	                              TestVectorTypesFunction, TestVectorTypesBind, TestVectorTypesInit);
+	test_vector_types.varargs = LogicalType::ANY;
 	test_vector_types.named_parameters["all_flat"] = LogicalType::BOOLEAN;
 
 	set.AddFunction(std::move(test_vector_types));
