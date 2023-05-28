@@ -229,9 +229,6 @@ public:
 	DUCKDB_API static LogicalType GetType(ClientContext &context, const string &catalog_name, const string &schema,
 	                                      const string &name);
 
-	static bool TypeExists(ClientContext &context, const string &catalog_name, const string &schema,
-	                       const string &name);
-
 	template <class T>
 	optional_ptr<T> GetEntry(ClientContext &context, const string &schema_name, const string &name,
 	                         OnEntryNotFound if_not_found, QueryErrorContext error_context = QueryErrorContext()) {

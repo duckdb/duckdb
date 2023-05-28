@@ -18,21 +18,18 @@ string PragmaTableInfo(ClientContext &context, const FunctionParameters &paramet
 }
 
 string PragmaShowTables(ClientContext &context, const FunctionParameters &parameters) {
-	auto catalog = DatabaseManager::GetDefaultDatabase(context);
-	auto schema = ClientData::Get(context).catalog_search_path->GetDefault().schema;
-	schema = (schema == INVALID_SCHEMA) ? DEFAULT_SCHEMA : schema; // NOLINT
-
-	auto where_clause = StringUtil::Format("where ((database_name = '%s') and (schema_name = '%s'))", catalog, schema);
 	// clang-format off
-	auto pragma_query = StringUtil::Format(R"EOF(
+	return R"EOF(
 	with "tables" as
 	(
 		SELECT table_name as "name"
-		FROM duckdb_tables %s
+		FROM duckdb_tables
+		where in_search_path(database_name, schema_name)
 	), "views" as
 	(
 		SELECT view_name as "name"
-		FROM duckdb_views %s
+		FROM duckdb_views
+		where in_search_path(database_name, schema_name)
 	), db_objects as
 	(
 		SELECT "name" FROM "tables"
@@ -41,26 +38,39 @@ string PragmaShowTables(ClientContext &context, const FunctionParameters &parame
 	)
 	SELECT "name"
 	FROM db_objects
-	ORDER BY "name";)EOF", where_clause, where_clause);
+	ORDER BY "name";)EOF";
 	// clang-format on
-
-	return pragma_query;
 }
 
 string PragmaShowTablesExpanded(ClientContext &context, const FunctionParameters &parameters) {
 	return R"(
-			SELECT
-				t.database_name AS database,
-				t.schema_name AS schema,
-				t.table_name,
-				LIST(c.column_name order by c.column_index) AS column_names,
-				LIST(c.data_type order by c.column_index) AS column_types,
-				FIRST(t.temporary) AS temporary,
-			FROM duckdb_tables t
-			JOIN duckdb_columns c
-			USING (table_oid)
-			GROUP BY t.database_name, t.schema_name, t.table_name
-			ORDER BY t.database_name, t.schema_name, t.table_name;
+	SELECT
+		t.database_name AS database,
+		t.schema_name AS schema,
+		t.table_name AS name,
+		LIST(c.column_name order by c.column_index) AS column_names,
+		LIST(c.data_type order by c.column_index) AS column_types,
+		FIRST(t.temporary) AS temporary,
+	FROM duckdb_tables t
+	JOIN duckdb_columns c
+	USING (table_oid)
+	GROUP BY database, schema, name
+
+	UNION ALL
+
+	SELECT
+		v.database_name AS database,
+		v.schema_name AS schema,
+		v.view_name AS name,
+		LIST(c.column_name order by c.column_index) AS column_names,
+		LIST(c.data_type order by c.column_index) AS column_types,
+		FIRST(v.temporary) AS temporary,
+	FROM duckdb_views v
+	JOIN duckdb_columns c
+	ON (v.view_oid=c.table_oid)
+	GROUP BY database, schema, name
+
+	ORDER BY database, schema, name
 	)";
 }
 
