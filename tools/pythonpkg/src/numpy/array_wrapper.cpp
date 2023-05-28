@@ -479,43 +479,41 @@ void RawArrayWrapper::Combine(RawArrayWrapper &other) {
 	count += other.count;
 }
 
+RawArrayWrapper::RawArrayWrapper(py::array array_p, idx_t count_p, const LogicalType &type)
+    : array(std::move(array_p)), data(data_ptr_cast(array.mutable_data())), type(type), count(count_p) {
+	type_width = DuckDBToNumpyTypeWidth(type);
+}
+
 RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : array(), data(nullptr), type(type), count(0) {
+	type_width = DuckDBToNumpyTypeWidth(type);
+}
+
+idx_t RawArrayWrapper::DuckDBToNumpyTypeWidth(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		type_width = sizeof(bool);
-		break;
+		return sizeof(bool);
 	case LogicalTypeId::UTINYINT:
-		type_width = sizeof(uint8_t);
-		break;
+		return sizeof(uint8_t);
 	case LogicalTypeId::USMALLINT:
-		type_width = sizeof(uint16_t);
-		break;
+		return sizeof(uint16_t);
 	case LogicalTypeId::UINTEGER:
-		type_width = sizeof(uint32_t);
-		break;
+		return sizeof(uint32_t);
 	case LogicalTypeId::UBIGINT:
-		type_width = sizeof(uint64_t);
-		break;
+		return sizeof(uint64_t);
 	case LogicalTypeId::TINYINT:
-		type_width = sizeof(int8_t);
-		break;
+		return sizeof(int8_t);
 	case LogicalTypeId::SMALLINT:
-		type_width = sizeof(int16_t);
-		break;
+		return sizeof(int16_t);
 	case LogicalTypeId::INTEGER:
-		type_width = sizeof(int32_t);
-		break;
+		return sizeof(int32_t);
 	case LogicalTypeId::BIGINT:
-		type_width = sizeof(int64_t);
-		break;
+		return sizeof(int64_t);
 	case LogicalTypeId::FLOAT:
-		type_width = sizeof(float);
-		break;
+		return sizeof(float);
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
-		type_width = sizeof(double);
-		break;
+		return sizeof(double);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -523,8 +521,7 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : array(), data(nullpt
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::INTERVAL:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		type_width = sizeof(int64_t);
-		break;
+		return sizeof(int64_t);
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::VARCHAR:
@@ -535,8 +532,7 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : array(), data(nullpt
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::UUID:
-		type_width = sizeof(PyObject *);
-		break;
+		return sizeof(PyObject *);
 	default:
 		throw NotImplementedException("Unsupported type \"%s\" for DuckDB -> NumPy conversion", type.ToString());
 	}
@@ -617,6 +613,10 @@ void RawArrayWrapper::Resize(idx_t new_capacity) {
 	vector<py::ssize_t> new_shape {py::ssize_t(new_capacity)};
 	array.resize(new_shape, false);
 	data = data_ptr_cast(array.mutable_data());
+}
+
+ArrayWrapper::ArrayWrapper(unique_ptr<RawArrayWrapper> data_p, unique_ptr<RawArrayWrapper> mask_p, bool requires_mask)
+    : data(std::move(data_p)), mask(std::move(mask_p)), requires_mask(requires_mask) {
 }
 
 ArrayWrapper::ArrayWrapper(const LogicalType &type) : requires_mask(false) {
@@ -788,6 +788,50 @@ py::object ArrayWrapper::ToArray(idx_t count) const {
 	return masked_array;
 }
 
+NumpyResultConversion::NumpyResultConversion(vector<unique_ptr<NumpyResultConversion>> collections,
+                                             const vector<LogicalType> &types) {
+	D_ASSERT(py::gil_check());
+
+	// Calculate the size of the resulting arrays
+	count = 0;
+	for (auto &collection : collections) {
+		count += collection->Count();
+	}
+
+	auto concatenate_func = py::module_::import("numpy").attr("concatenate");
+
+	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
+		auto &array = *owned_data[col_idx].data;
+		auto &mask = *owned_data[col_idx].mask;
+
+		// Collect all the arrays of the collections for this column
+		py::tuple arrays(collections.size());
+		py::tuple masks(collections.size());
+
+		bool requires_mask = false;
+		for (idx_t i = 0; i < collections.size(); i++) {
+			auto &collection = collections[i];
+
+			// Check if the result array requires a mask
+			auto &source = collection->owned_data[col_idx];
+			requires_mask = requires_mask || source.requires_mask;
+
+			arrays[i] = *source.data->array;
+			masks[i] = *source.mask->array;
+		}
+		py::array result_array = concatenate_func(arrays);
+		py::array result_mask = concatenate_func(masks);
+		auto array_wrapper = make_uniq<RawArrayWrapper>(std::move(result_array), count, types[col_idx]);
+		auto mask_wrapper = make_uniq<RawArrayWrapper>(std::move(result_mask), count, types[col_idx]);
+		owned_data.emplace_back(std::move(array_wrapper), std::move(mask_wrapper), requires_mask);
+	}
+
+	// Delete the input arrays, we don't need them anymore
+	for (auto &collection : collections) {
+		collection->Reset();
+	}
+}
+
 NumpyResultConversion::NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity)
     : count(0), capacity(0) {
 	owned_data.reserve(types.size());
@@ -819,6 +863,7 @@ void NumpyResultConversion::Append(DataChunk &chunk) {
 		owned_data[col_idx].Append(count, chunk.data[col_idx], chunk.size());
 		auto &type = Type(col_idx);
 		if (type.id() == LogicalTypeId::ENUM) {
+			// FIXME: this should be done in the global state, so we don't unnecessarily do this work THREAD_COUNT times
 			// It's an ENUM type, in addition to converting the codes we must convert the categories
 			if (categories.find(col_idx) == categories.end()) {
 				auto &categories_list = EnumType::GetValuesInsertOrder(type);

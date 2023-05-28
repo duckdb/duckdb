@@ -24,12 +24,12 @@ unique_ptr<DataChunk> NumpyQueryResult::FetchRaw() {
 }
 
 string NumpyQueryResult::ToString() {
-	//throw NotImplementedException("Can't convert NumpyQueryResult to string");
+	// throw NotImplementedException("Can't convert NumpyQueryResult to string");
 	return "";
 }
 
 string NumpyQueryResult::ToBox(ClientContext &context, const BoxRendererConfig &config) {
-	//throw NotImplementedException("Can't convert NumpyQueryResult to a box-rendered string");
+	// throw NotImplementedException("Can't convert NumpyQueryResult to a box-rendered string");
 	return "";
 }
 

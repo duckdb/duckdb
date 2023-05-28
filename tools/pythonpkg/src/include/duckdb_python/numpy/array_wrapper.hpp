@@ -23,6 +23,7 @@ struct RegisteredArray {
 struct RawArrayWrapper {
 
 	explicit RawArrayWrapper(const LogicalType &type);
+	explicit RawArrayWrapper(py::array array, idx_t count, const LogicalType &type);
 	~RawArrayWrapper() {
 		D_ASSERT(py::gil_check());
 	}
@@ -35,6 +36,7 @@ struct RawArrayWrapper {
 
 public:
 	static string DuckDBToNumpyDtype(const LogicalType &type);
+	static idx_t DuckDBToNumpyTypeWidth(const LogicalType &type);
 	void Initialize(idx_t capacity);
 	void Resize(idx_t new_capacity);
 	void Append(idx_t current_offset, Vector &input, idx_t count);
@@ -43,6 +45,7 @@ public:
 
 struct ArrayWrapper {
 	explicit ArrayWrapper(const LogicalType &type);
+	explicit ArrayWrapper(unique_ptr<RawArrayWrapper> data, unique_ptr<RawArrayWrapper> mask, bool requires_mask);
 
 	unique_ptr<RawArrayWrapper> data;
 	unique_ptr<RawArrayWrapper> mask;
@@ -60,6 +63,7 @@ public:
 class NumpyResultConversion {
 public:
 	NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity);
+	NumpyResultConversion(vector<unique_ptr<NumpyResultConversion>> collections, const vector<LogicalType> &types);
 
 	void Append(DataChunk &chunk);
 
@@ -92,35 +96,6 @@ public:
 
 	const py::array &InternalMask(idx_t col_idx) const {
 		return owned_data[col_idx].mask->array;
-	}
-
-	void Merge(vector<unique_ptr<NumpyResultConversion>> &collections) {
-		D_ASSERT(py::gil_check());
-
-		idx_t new_count = 0;
-		for (auto &collection : collections) {
-			new_count += collection->Count();
-		}
-		count = new_count;
-
-		for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
-			auto &array = *owned_data[col_idx].data;
-			auto &mask = *owned_data[col_idx].mask;
-
-			// Collect all the arrays of the collections for this column
-			for (idx_t i = 0; i < collections.size(); i++) {
-				auto &collection = collections[i];
-				auto &source_array = *collection->owned_data[col_idx].data;
-				auto &source_mask = *collection->owned_data[col_idx].mask;
-
-				array.Combine(source_array);
-				mask.Combine(source_mask);
-			}
-		}
-
-		for (auto &collection : collections) {
-			collection->Reset();
-		}
 	}
 
 	idx_t Count() const {

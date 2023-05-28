@@ -86,10 +86,7 @@ unique_ptr<QueryResult> PhysicalNumpyCollector::GetResult(GlobalSinkState &state
 		collection = std::move(gstate.collections[0]);
 	} else {
 		py::gil_scoped_acquire gil;
-		collection = make_uniq<NumpyResultConversion>(types, result_size);
-		if (result_size != 0) {
-			collection->Merge(gstate.collections);
-		}
+		collection = make_uniq<NumpyResultConversion>(std::move(gstate.collections), types);
 	}
 	auto result = make_uniq<NumpyQueryResult>(statement_type, properties, names, std::move(collection),
 	                                          gstate.context->GetClientProperties());
