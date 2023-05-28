@@ -5,6 +5,7 @@ pd = pytest.importorskip("pandas")
 
 class TestResolveObjectColumns(object):
 	def test_result_collector_setting(self):
+		con = duckdb.connect()
 		class Thrower:
 			def __init__(self):
 				self.counter = 0
@@ -19,8 +20,8 @@ class TestResolveObjectColumns(object):
 
 		thrower = Thrower()
 
-		duckdb.create_function("throw", thrower, ['VARCHAR'], 'VARCHAR')
-		rel = duckdb.sql("select throw(a) from (select 'test') tbl(a)")
+		con.create_function("throw", thrower, ['VARCHAR'], 'VARCHAR')
+		rel = con.sql("select throw(a) from (select 'test') tbl(a)")
 
 		# This will cause the 'thrower' to raise an exception
 		try:
