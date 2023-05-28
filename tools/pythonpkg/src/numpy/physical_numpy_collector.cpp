@@ -15,12 +15,29 @@ PhysicalNumpyCollector::PhysicalNumpyCollector(PreparedStatementData &data, bool
 //===--------------------------------------------------------------------===//
 class NumpyCollectorGlobalState : public GlobalSinkState {
 public:
+	~NumpyCollectorGlobalState() {
+		py::gil_scoped_acquire gil;
+		collections.clear();
+	}
+
+public:
 	mutex glock;
 	vector<unique_ptr<NumpyResultConversion>> collections;
 	shared_ptr<ClientContext> context;
 };
 
 class NumpyCollectorLocalState : public LocalSinkState {
+public:
+	~NumpyCollectorLocalState() {
+		// If an exception occurred, this is destroyed without the GIL held
+		if (py::gil_check()) {
+			collection.reset();
+		} else {
+			py::gil_scoped_acquire gil;
+			collection.reset();
+		}
+	}
+
 public:
 	unique_ptr<NumpyResultConversion> collection;
 };
@@ -50,11 +67,6 @@ void PhysicalNumpyCollector::Combine(ExecutionContext &context, GlobalSinkState 
                                      LocalSinkState &lstate_p) const {
 	auto &gstate = gstate_p.Cast<NumpyCollectorGlobalState>();
 	auto &lstate = lstate_p.Cast<NumpyCollectorLocalState>();
-	if (lstate.collection->Count() == 0) {
-		py::gil_scoped_acquire gil;
-		lstate.collection->Reset();
-		return;
-	}
 
 	lock_guard<mutex> l(gstate.glock);
 	gstate.collections.push_back(std::move(lstate.collection));
@@ -82,6 +94,7 @@ unique_ptr<QueryResult> PhysicalNumpyCollector::GetResult(GlobalSinkState &state
 		result_size += collection->Count();
 	}
 	unique_ptr<NumpyResultConversion> collection;
+	D_ASSERT(!gstate.collections.empty());
 	if (gstate.collections.size() == 1) {
 		collection = std::move(gstate.collections[0]);
 	} else {

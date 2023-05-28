@@ -821,6 +821,8 @@ NumpyResultConversion::NumpyResultConversion(vector<unique_ptr<NumpyResultConver
 			arrays[i] = *source.data->array;
 			masks[i] = *source.mask->array;
 		}
+		D_ASSERT(!arrays.empty());
+		D_ASSERT(arrays.size() == masks.size());
 		py::array result_array = concatenate_func(arrays);
 		py::array result_mask = concatenate_func(masks);
 		auto array_wrapper = make_uniq<RawArrayWrapper>(std::move(result_array), count, types[col_idx]);
