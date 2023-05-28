@@ -154,6 +154,17 @@ ORDER BY 1;
 1 year 4 months	{'hour': 0, 'minute': 0, 'second': 0, 'epoch': 41925600}
 2 years	{'hour': 0, 'minute': 0, 'second': 0, 'epoch': 63115200}
 
+# Function-only parts
+query II
+SELECT i, epoch_ns(i) AS parts
+FROM intervals
+ORDER BY 1;
+----
+00:34:26.3434	2066343400000
+42 days	3628800000000000
+1 year 4 months	41472000000000000
+2 years	62208000000000000
+
 query II
 SELECT i, epoch_us(i) AS parts
 FROM intervals
@@ -163,6 +174,16 @@ ORDER BY 1;
 42 days	3628800000000
 1 year 4 months	41472000000000
 2 years	62208000000000
+
+query II
+SELECT i, epoch_ms(i) AS parts
+FROM intervals
+ORDER BY 1;
+----
+00:34:26.3434	2066343
+42 days	3628800000
+1 year 4 months	41472000000
+2 years	62208000000
 
 # Invalid parts
 
