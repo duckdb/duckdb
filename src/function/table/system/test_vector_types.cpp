@@ -7,7 +7,7 @@ namespace duckdb {
 // FLAT, CONSTANT, DICTIONARY, SEQUENCE
 struct TestVectorBindData : public TableFunctionData {
 	LogicalType type;
-	bool all_flat;
+	bool all_flat = false;
 };
 
 struct TestVectorTypesData : public GlobalTableFunctionState {
@@ -196,7 +196,13 @@ static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, Tabl
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<TestVectorBindData>();
 	result->type = input.inputs[0].type();
-	result->all_flat = BooleanValue::Get(input.inputs[1]);
+	for(auto &entry : input.named_parameters) {
+		if (entry.first == "all_flat") {
+			result->all_flat = BooleanValue::Get(entry.second);
+		} else {
+			throw InternalException("Unrecognized named parameter for test_vector_types");
+		}
+	}
 
 	return_types.push_back(result->type);
 	names.emplace_back("test_vector");
@@ -243,8 +249,11 @@ void TestVectorTypesFunction(ClientContext &context, TableFunctionInput &data_p,
 }
 
 void TestVectorTypesFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("test_vector_types", {LogicalType::ANY, LogicalType::BOOLEAN},
-	                              TestVectorTypesFunction, TestVectorTypesBind, TestVectorTypesInit));
+	TableFunction test_vector_types("test_vector_types", {LogicalType::ANY},
+	                              TestVectorTypesFunction, TestVectorTypesBind, TestVectorTypesInit);
+	test_vector_types.named_parameters["all_flat"] = LogicalType::BOOLEAN;
+
+	set.AddFunction(std::move(test_vector_types));
 }
 
 } // namespace duckdb
