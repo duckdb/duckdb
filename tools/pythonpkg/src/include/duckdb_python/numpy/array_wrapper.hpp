@@ -65,6 +65,7 @@ public:
 	NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity);
 	NumpyResultConversion(vector<unique_ptr<NumpyResultConversion>> collections, const vector<LogicalType> &types);
 
+	void SetCategories();
 	void Append(DataChunk &chunk);
 
 	vector<LogicalType> Types() const {
@@ -115,6 +116,7 @@ public:
 
 	py::object ToArray(idx_t col_idx) {
 		D_ASSERT(py::gil_check());
+		SetCategories();
 		if (Type(col_idx).id() == LogicalTypeId::ENUM) {
 			// first we (might) need to create the categorical type
 			auto category_entry = categories_type.find(col_idx);

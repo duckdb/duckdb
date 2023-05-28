@@ -797,10 +797,12 @@ NumpyResultConversion::NumpyResultConversion(vector<unique_ptr<NumpyResultConver
 	for (auto &collection : collections) {
 		count += collection->Count();
 	}
+	capacity = count;
 
 	auto concatenate_func = py::module_::import("numpy").attr("concatenate");
 
 	D_ASSERT(owned_data.empty());
+	D_ASSERT(!collections.empty());
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		// Collect all the arrays of the collections for this column
 		py::tuple arrays(collections.size());
@@ -858,13 +860,8 @@ void NumpyResultConversion::Resize(idx_t new_capacity) {
 	capacity = new_capacity;
 }
 
-void NumpyResultConversion::Append(DataChunk &chunk) {
-	if (count + chunk.size() > capacity) {
-		Resize(capacity * 2);
-	}
-	auto chunk_types = chunk.GetTypes();
+void NumpyResultConversion::SetCategories() {
 	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
-		owned_data[col_idx].Append(count, chunk.data[col_idx], chunk.size());
 		auto &type = Type(col_idx);
 		if (type.id() == LogicalTypeId::ENUM) {
 			// FIXME: this should be done in the global state, so we don't unnecessarily do this work THREAD_COUNT times
@@ -878,6 +875,17 @@ void NumpyResultConversion::Append(DataChunk &chunk) {
 			}
 		}
 	}
+}
+
+void NumpyResultConversion::Append(DataChunk &chunk) {
+	if (count + chunk.size() > capacity) {
+		Resize(capacity * 2);
+	}
+	auto chunk_types = chunk.GetTypes();
+	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
+		owned_data[col_idx].Append(count, chunk.data[col_idx], chunk.size());
+	}
+
 	count += chunk.size();
 #ifdef DEBUG
 	for (auto &data : owned_data) {
