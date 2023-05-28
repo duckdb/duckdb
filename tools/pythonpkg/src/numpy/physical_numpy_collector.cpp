@@ -3,6 +3,7 @@
 #include "duckdb_python/numpy/numpy_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb_python/numpy/array_wrapper.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
 
 namespace duckdb {
 
@@ -45,6 +46,10 @@ public:
 unique_ptr<PhysicalResultCollector> PhysicalNumpyCollector::Create(ClientContext &context,
                                                                    PreparedStatementData &data) {
 	(void)context;
+	if (PhysicalPlanGenerator::PreserveInsertionOrder(context, *data.plan)) {
+		// FIXME: need to create a batched numpy collector, so we can replace this
+		return PhysicalResultCollector::GetResultCollector(context, data);
+	}
 	// The creation of `py::array` requires this module, and when this is imported for the first time from a thread that
 	// is not the main execution thread this might cause a crash. So we import it here while we're still in the main
 	// thread.
