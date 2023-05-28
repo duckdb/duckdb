@@ -15,9 +15,8 @@ class TestPandasEnum(object):
         """
         )
         df = con.query(f"SELECT * FROM tab LIMIT 0;").to_df()
+        print(df["cat"].cat.categories)
         assert df["cat"].cat.categories.equals(pd.Index(['marie', 'duchess', 'toulouse']))
-        con.execute("DROP TABLE tab")
-        con.execute("DROP TYPE cat")
 
     def test_3479(self):
         con = duckdb.connect()
@@ -37,6 +36,4 @@ class TestPandasEnum(object):
             con.execute(f"INSERT INTO tab SELECT * FROM df;")
 
         assert con.execute("select * from tab").fetchall() == []
-        con.execute("DROP TABLE tab")
-        con.execute("DROP TYPE cat")
 
