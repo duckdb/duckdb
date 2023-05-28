@@ -59,6 +59,7 @@ unique_ptr<PhysicalResultCollector> PhysicalNumpyCollector::Create(ClientContext
 SinkResultType PhysicalNumpyCollector::Sink(ExecutionContext &context, DataChunk &chunk,
                                             OperatorSinkInput &input) const {
 	auto &lstate = input.local_state.Cast<NumpyCollectorLocalState>();
+	py::gil_scoped_acquire gil;
 	lstate.collection->Append(chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
