@@ -422,9 +422,10 @@ PandasDataFrame DuckDBPyRelation::FetchDF(bool date_as_object) {
 			return py::none();
 		}
 		auto &context = *rel->context.GetContext();
-		context.config.result_collector = PhysicalNumpyCollector::Create;
+		ScopedConfigSetting setting(
+		    context.config, [](ClientConfig &config) { config.result_collector = PhysicalNumpyCollector::Create; },
+		    [](ClientConfig &config) { config.result_collector = nullptr; });
 		ExecuteOrThrow();
-		context.config.result_collector = nullptr;
 	}
 	if (result->IsClosed()) {
 		return py::none();

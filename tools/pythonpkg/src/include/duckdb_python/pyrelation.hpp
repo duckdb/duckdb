@@ -44,6 +44,25 @@ public:
 	vector<unique_ptr<RegisteredObject>> py_object_list;
 };
 
+struct ScopedConfigSetting {
+public:
+	using config_modify_func_t = std::function<void(ClientConfig &config)>;
+
+public:
+	ScopedConfigSetting(ClientConfig &config, config_modify_func_t set, config_modify_func_t unset)
+	    : config(config), set(std::move(set)), unset(std::move(unset)) {
+		set(config);
+	}
+	~ScopedConfigSetting() {
+		unset(config);
+	}
+
+public:
+	ClientConfig &config;
+	config_modify_func_t set;
+	config_modify_func_t unset;
+};
+
 struct DuckDBPyRelation {
 public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
