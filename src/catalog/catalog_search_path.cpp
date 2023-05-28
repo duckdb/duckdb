@@ -5,6 +5,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -243,6 +244,22 @@ void CatalogSearchPath::SetPaths(vector<CatalogSearchEntry> new_paths) {
 	paths.emplace_back(INVALID_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, DEFAULT_SCHEMA);
 	paths.emplace_back(SYSTEM_CATALOG, "pg_catalog");
+}
+
+bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const string &catalog_name,
+                                           const string &schema_name) {
+	for (auto &path : paths) {
+		if (path.schema != schema_name) {
+			continue;
+		}
+		if (path.catalog == catalog_name) {
+			return true;
+		}
+		if (IsInvalidCatalog(path.catalog) && catalog_name == DatabaseManager::GetDefaultDatabase(context)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 } // namespace duckdb

@@ -27,12 +27,12 @@ INSERT INTO test SELECT i::VARCHAR id, 1337 FROM range(10000, 20000) tbl(i)
 statement ok
 INSERT INTO test SELECT i::VARCHAR id, i b FROM range(20000, 30000) tbl(i)
 
+statement ok
+CHECKPOINT
+
 query I
 SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'INTEGER' and compression != 'BitPacking'
 ----
-
-statement ok
-CHECKPOINT
 
 query IIIIII
 SELECT MIN(id), MAX(id), SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='5000'
