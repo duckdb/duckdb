@@ -1012,20 +1012,23 @@ bool StatementGenerator::RandomPercentage(idx_t percentage) {
 //===--------------------------------------------------------------------===//
 // Exhaustive Function Generation
 //===--------------------------------------------------------------------===//
-string StatementGenerator::GenerateFunctionQuery(BaseScalarFunction &base_function) {
-	auto select = make_uniq<SelectStatement>();
-	auto node = make_uniq<SelectNode>();
-
+bool StatementGenerator::FunctionArgumentsAlwaysNull(const string &name) {
 	// some functions run for a very long time with extreme parameters because they e.g. generate giant strings
 	// for that reason we skip testing those functions with extreme parameters
 	static case_insensitive_set_t always_null_functions {
 	    "rpad",
 	    "pad",
-	    "lpad"
+	    "lpad",
+	    "repeat"
 	};
 
-	auto always_null = always_null_functions.find(base_function.name) != always_null_functions.end();
+	return always_null_functions.find(name) != always_null_functions.end();
+}
+string StatementGenerator::GenerateTestAllTypes(BaseScalarFunction &base_function) {
+	auto select = make_uniq<SelectStatement>();
+	auto node = make_uniq<SelectNode>();
 
+	bool always_null = FunctionArgumentsAlwaysNull(base_function.name);
 
 	vector<unique_ptr<ParsedExpression>> children;
 	for(auto &arg : base_function.arguments) {
@@ -1052,13 +1055,52 @@ string StatementGenerator::GenerateFunctionQuery(BaseScalarFunction &base_functi
 
 	select->node = std::move(node);
 	return select->ToString();
-
 }
+
+string StatementGenerator::GenerateTestVectorTypes(BaseScalarFunction &base_function) {
+	auto select = make_uniq<SelectStatement>();
+	auto node = make_uniq<SelectNode>();
+
+	bool always_null = FunctionArgumentsAlwaysNull(base_function.name);
+
+
+	vector<unique_ptr<ParsedExpression>> children;
+	vector<unique_ptr<ParsedExpression>> test_vector_types;
+	vector<string> column_aliases;
+	for(auto &arg : base_function.arguments) {
+		unique_ptr<ParsedExpression> argument;
+		if (!always_null) {
+			string argument_name = "c" + to_string(column_aliases.size() + 1);
+			column_aliases.push_back(argument_name);
+			argument = make_uniq<ColumnRefExpression>(std::move(argument_name));
+			auto constant_expr = make_uniq<ConstantExpression>(Value());
+			auto cast = make_uniq<CastExpression>(arg, std::move(constant_expr));
+			test_vector_types.push_back(std::move(cast));
+		} else {
+			argument = make_uniq<ConstantExpression>(Value(arg));
+		}
+		children.push_back(std::move(argument));
+	}
+	auto from_clause = make_uniq<TableFunctionRef>();
+	auto vector_types_fun = make_uniq<FunctionExpression>("test_vector_types", std::move(test_vector_types));
+	from_clause->function = std::move(vector_types_fun);
+	from_clause->alias = "test_vector_types";
+	from_clause->column_name_alias = std::move(column_aliases);
+	node->from_table = std::move(from_clause);
+
+	auto function_expr = make_uniq<FunctionExpression>(base_function.name, std::move(children));
+	node->select_list.push_back(std::move(function_expr));
+
+	select->node = std::move(node);
+	return select->ToString();
+}
+
 void StatementGenerator::GenerateAllScalar(ScalarFunctionCatalogEntry &scalar_function, vector<string> &result) {
 	for(idx_t offset = 0; offset < scalar_function.functions.Size(); offset++) {
 		auto function = scalar_function.functions.GetFunctionByOffset(offset);
 
-		result.push_back(GenerateFunctionQuery(function));
+		result.push_back(GenerateTestAllTypes(function));
+		result.push_back(GenerateTestVectorTypes(function));
 	}
 }
 
@@ -1066,7 +1108,8 @@ void StatementGenerator::GenerateAllAggregate(AggregateFunctionCatalogEntry &agg
 	for(idx_t offset = 0; offset < aggregate_function.functions.Size(); offset++) {
 		auto function = aggregate_function.functions.GetFunctionByOffset(offset);
 
-		result.push_back(GenerateFunctionQuery(function));
+		result.push_back(GenerateTestAllTypes(function));
+		result.push_back(GenerateTestVectorTypes(function));
 	}
 }
 

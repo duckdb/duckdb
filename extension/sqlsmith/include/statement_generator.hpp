@@ -85,7 +85,9 @@ private:
 
 	void GenerateAllScalar(ScalarFunctionCatalogEntry &scalar_function, vector<string> &result);
 	void GenerateAllAggregate(AggregateFunctionCatalogEntry &aggregate_function, vector<string> &result);
-	string GenerateFunctionQuery(BaseScalarFunction &base_function);
+	string GenerateTestAllTypes(BaseScalarFunction &base_function);
+	string GenerateTestVectorTypes(BaseScalarFunction &base_function);
+	bool FunctionArgumentsAlwaysNull(const string &name);
 
 	idx_t RandomValue(idx_t max);
 	bool RandomBoolean();
