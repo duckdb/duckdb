@@ -810,8 +810,7 @@ NumpyResultConversion::NumpyResultConversion(vector<unique_ptr<NumpyResultConver
 			requires_mask = requires_mask || source.requires_mask;
 
 			// Shrink to fit
-			source.data->Resize(source.data->count);
-			source.mask->Resize(source.mask->count);
+			source.Resize(source.data->count);
 
 			arrays[i] = *source.data->array;
 			masks[i] = *source.mask->array;

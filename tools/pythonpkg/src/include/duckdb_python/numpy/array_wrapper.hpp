@@ -76,14 +76,6 @@ public:
 		return types;
 	}
 
-	const py::array &InternalArray(idx_t col_idx) const {
-		return owned_data[col_idx].data->array;
-	}
-
-	const py::array &InternalMask(idx_t col_idx) const {
-		return owned_data[col_idx].mask->array;
-	}
-
 	idx_t Count() const {
 		return count;
 	}
