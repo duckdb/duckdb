@@ -3244,7 +3244,7 @@ public class TestDuckDBJDBC {
 
             ResultSet rs = statement.executeQuery("select * from tbl1");
             assertTrue(rs.next());
-            assertEquals(rs.getObject(1), "1");
+            assertEquals(rs.getObject(1), 1);
             assertTrue(rs.next());
             assertEquals(rs.getObject(1), "two");
             assertTrue(rs.next());

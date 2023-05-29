@@ -59,66 +59,68 @@ class DuckDBVector {
     protected ByteBuffer constlen_data = null;
     protected Object[] varlen_data = null;
 
-	Object getObject(int idx) throws SQLException {
-		if (check_and_null(idx)) {
-			return null;
-		}
-		switch (duckdb_type) {
-			case BOOLEAN:
-				return getBoolean(idx);
-			case TINYINT:
-				return getByte(idx);
-			case SMALLINT:
-				return getShort(idx);
-			case INTEGER:
-				return getInt(idx);
-			case BIGINT:
-				return getLong(idx);
-			case HUGEINT:
-				return getHugeint(idx);
-			case UTINYINT:
-				return getUint8(idx);
-			case USMALLINT:
-				return getUint16(idx);
-			case UINTEGER:
-				return getUint32(idx);
-			case UBIGINT:
-				return getUint64(idx);
-			case FLOAT:
-				return getFloat(idx);
-			case DOUBLE:
-				return getDouble(idx);
-			case DECIMAL:
-				return getBigDecimal(idx);
-			case TIME:
-				return getLocalTime(idx);
-			case TIME_WITH_TIME_ZONE:
-				return getOffsetTime(idx);
-			case DATE:
-				return getLocalDate(idx);
-			case TIMESTAMP:
-			case TIMESTAMP_NS:
-			case TIMESTAMP_S:
-			case TIMESTAMP_MS:
-				return getTimestamp(idx);
-			case TIMESTAMP_WITH_TIME_ZONE:
-				return getOffsetDateTime(idx);
-			case JSON:
-				return getJsonObject(idx);
-			case BLOB:
-				return getBlob(idx);
-			case UUID:
-				return getUuid(idx);
-			case MAP:
-				return getMap(idx);
-			case LIST:
-				return getArray(idx);
-			case STRUCT:
-				return getStruct(idx);
-			default:
-				return getLazyString(idx);
-		}
-	}
+    Object getObject(int idx) throws SQLException {
+        if (check_and_null(idx)) {
+            return null;
+        }
+        switch (duckdb_type) {
+        case BOOLEAN:
+            return getBoolean(idx);
+        case TINYINT:
+            return getByte(idx);
+        case SMALLINT:
+            return getShort(idx);
+        case INTEGER:
+            return getInt(idx);
+        case BIGINT:
+            return getLong(idx);
+        case HUGEINT:
+            return getHugeint(idx);
+        case UTINYINT:
+            return getUint8(idx);
+        case USMALLINT:
+            return getUint16(idx);
+        case UINTEGER:
+            return getUint32(idx);
+        case UBIGINT:
+            return getUint64(idx);
+        case FLOAT:
+            return getFloat(idx);
+        case DOUBLE:
+            return getDouble(idx);
+        case DECIMAL:
+            return getBigDecimal(idx);
+        case TIME:
+            return getLocalTime(idx);
+        case TIME_WITH_TIME_ZONE:
+            return getOffsetTime(idx);
+        case DATE:
+            return getLocalDate(idx);
+        case TIMESTAMP:
+        case TIMESTAMP_NS:
+        case TIMESTAMP_S:
+        case TIMESTAMP_MS:
+            return getTimestamp(idx);
+        case TIMESTAMP_WITH_TIME_ZONE:
+            return getOffsetDateTime(idx);
+        case JSON:
+            return getJsonObject(idx);
+        case BLOB:
+            return getBlob(idx);
+        case UUID:
+            return getUuid(idx);
+        case MAP:
+            return getMap(idx);
+        case LIST:
+            return getArray(idx);
+        case STRUCT:
+            return getStruct(idx);
+        case UNION:
+            return getUnion(idx);
+        default:
+            return getLazyString(idx);
+        }
+    }
 
     LocalTime getLocalTime(int idx) throws SQLException {
         String lazyString = getLazyString(idx);
@@ -524,7 +526,20 @@ class DuckDBVector {
         return LocalDateTime.parse(o.toString());
     }
 
-	Struct getStruct(int idx) {
-		return check_and_null(idx) ? null : (Struct) varlen_data[idx];
-	}
+    Struct getStruct(int idx) {
+        return check_and_null(idx) ? null : (Struct) varlen_data[idx];
+    }
+
+    Object getUnion(int idx) throws SQLException {
+        if (check_and_null(idx))
+            return null;
+
+        Struct struct = getStruct(idx);
+
+        Object[] attributes = struct.getAttributes();
+
+		byte tag = (byte) attributes[0];
+
+        return attributes[1 + tag];
+    }
 }

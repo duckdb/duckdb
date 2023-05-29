@@ -848,6 +848,7 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 			env->SetObjectArrayElement(varlen_data, row_idx, j_str);
 		}
 		break;
+	case LogicalTypeId::UNION:
 	case LogicalTypeId::STRUCT: {
 		varlen_data = env->NewObjectArray(row_count, J_DuckStruct, nullptr);
 
