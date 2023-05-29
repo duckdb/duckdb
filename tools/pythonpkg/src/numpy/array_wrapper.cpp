@@ -856,7 +856,6 @@ void NumpyResultConversion::SetCategories() {
 	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
 		auto &type = Type(col_idx);
 		if (type.id() == LogicalTypeId::ENUM) {
-			// FIXME: this should be done in the global state, so we don't unnecessarily do this work THREAD_COUNT times
 			// It's an ENUM type, in addition to converting the codes we must convert the categories
 			if (categories.find(col_idx) == categories.end()) {
 				auto &categories_list = EnumType::GetValuesInsertOrder(type);
