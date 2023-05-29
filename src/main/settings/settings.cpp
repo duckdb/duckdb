@@ -848,9 +848,23 @@ Value PerfectHashThresholdSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Pivot Filter Threshold
+//===--------------------------------------------------------------------===//
+void PivotFilterThreshold::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).pivot_filter_threshold = ClientConfig().pivot_filter_threshold;
+}
+
+void PivotFilterThreshold::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).pivot_filter_threshold = input.GetValue<uint64_t>();
+}
+
+Value PivotFilterThreshold::GetSetting(ClientContext &context) {
+	return Value::BIGINT(ClientConfig::GetConfig(context).pivot_filter_threshold);
+}
+
+//===--------------------------------------------------------------------===//
 // Pivot Limit
 //===--------------------------------------------------------------------===//
-
 void PivotLimitSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).pivot_limit = ClientConfig().pivot_limit;
 }

@@ -77,6 +77,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
 	    {"null_order", {"nulls_first"}},
 	    {"perfect_ht_threshold", {0}},
+	    {"pivot_filter_threshold", {999}},
 	    {"pivot_limit", {999}},
 	    {"preserve_identifier_case", {false}},
 	    {"preserve_insertion_order", {false}},
@@ -132,7 +133,6 @@ void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &
 //! New options should be added to the value_map in GetValueForOption
 //! Or added to the 'excluded_options' in OptionIsExcludedFromTest
 TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
-
 	// Create a connection
 	DuckDB db(nullptr);
 	Connection con(db);
