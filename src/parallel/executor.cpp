@@ -1,7 +1,7 @@
 #include "duckdb/execution/executor.hpp"
 
 #include "duckdb/execution/execution_context.hpp"
-#include "duckdb/execution/operator/result_collector/physical_result_collector.hpp"
+#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_context.hpp"
