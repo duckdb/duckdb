@@ -76,20 +76,6 @@ public:
 		return types;
 	}
 
-	bool CompareTypes(NumpyResultConversion &other) const {
-		if (other.owned_data.size() != owned_data.size()) {
-			return false;
-		}
-		for (idx_t i = 0; i < owned_data.size(); i++) {
-			auto &a = owned_data[i];
-			auto &b = other.owned_data[i];
-			if (a.Type() != b.Type()) {
-				return false;
-			}
-		}
-		return true;
-	}
-
 	const py::array &InternalArray(idx_t col_idx) const {
 		return owned_data[col_idx].data->array;
 	}
