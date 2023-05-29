@@ -14,9 +14,7 @@ namespace duckdb {
 
 class PhysicalNumpyCollector : public PhysicalResultCollector {
 public:
-	PhysicalNumpyCollector(PreparedStatementData &data, bool parallel);
-
-	bool parallel;
+	PhysicalNumpyCollector(PreparedStatementData &data);
 
 public:
 	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) override;

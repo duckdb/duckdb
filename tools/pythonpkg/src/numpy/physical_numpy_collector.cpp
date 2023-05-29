@@ -7,8 +7,7 @@
 
 namespace duckdb {
 
-PhysicalNumpyCollector::PhysicalNumpyCollector(PreparedStatementData &data, bool parallel)
-    : PhysicalResultCollector(data), parallel(parallel) {
+PhysicalNumpyCollector::PhysicalNumpyCollector(PreparedStatementData &data) : PhysicalResultCollector(data) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -57,8 +56,7 @@ unique_ptr<PhysicalResultCollector> PhysicalNumpyCollector::Create(ClientContext
 		py::gil_scoped_acquire gil;
 		auto numpy_internal = py::module_::import("numpy.core.multiarray");
 	}
-	// Always create a parallel result collector
-	return make_uniq_base<PhysicalResultCollector, PhysicalNumpyCollector>(data, true);
+	return make_uniq_base<PhysicalResultCollector, PhysicalNumpyCollector>(data);
 }
 
 SinkResultType PhysicalNumpyCollector::Sink(ExecutionContext &context, DataChunk &chunk,
@@ -111,7 +109,7 @@ unique_ptr<QueryResult> PhysicalNumpyCollector::GetResult(GlobalSinkState &state
 }
 
 bool PhysicalNumpyCollector::ParallelSink() const {
-	return parallel;
+	return true;
 }
 
 bool PhysicalNumpyCollector::SinkOrderDependent() const {
