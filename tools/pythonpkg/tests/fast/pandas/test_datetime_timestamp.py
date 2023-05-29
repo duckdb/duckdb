@@ -3,6 +3,8 @@ import datetime
 import numpy as np
 import pytest
 from conftest import NumpyPandas, ArrowPandas
+from packaging.version import Version
+pd = pytest.importorskip("pandas")
 
 class TestDateTimeTimeStamp(object):
 
@@ -24,6 +26,7 @@ class TestDateTimeTimeStamp(object):
         df_out = duckdb.query_df(df_in, "df", "select * from df").df()
         pandas.testing.assert_frame_equal(df_out, duckdb_time)
 
+    @pytest.mark.skipif(Version(pd.__version__) < Version('2.0.2'), reason="pandas < 2.0.2 does not properly convert timezones")
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_timestamp_timezone_regular(self, pandas):
         duckdb_time = duckdb.query("""
@@ -40,6 +43,7 @@ class TestDateTimeTimeStamp(object):
         print(duckdb_time)
         pandas.testing.assert_frame_equal(df_out, duckdb_time)
 
+    @pytest.mark.skipif(Version(pd.__version__) < Version('2.0.2'), reason="pandas < 2.0.2 does not properly convert timezones")
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_timestamp_timezone_negative_extreme(self, pandas):
         duckdb_time = duckdb.query("""
@@ -61,6 +65,7 @@ class TestDateTimeTimeStamp(object):
         df_out = duckdb.query_df(df_in, "df", "select * from df").df()
         pandas.testing.assert_frame_equal(df_out, duckdb_time)
 
+    @pytest.mark.skipif(Version(pd.__version__) < Version('2.0.2'), reason="pandas < 2.0.2 does not properly convert timezones")
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_timestamp_timezone_positive_extreme(self, pandas):
         duckdb_time = duckdb.query("""
