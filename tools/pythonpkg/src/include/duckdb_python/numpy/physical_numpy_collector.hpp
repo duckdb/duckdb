@@ -1,14 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/result_collector/physical_numpy_collector.hpp
+// duckdb_python/numpy/physical_numpy_collector.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/execution/operator/result_collector/physical_result_collector.hpp"
+#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 
 namespace duckdb {
 

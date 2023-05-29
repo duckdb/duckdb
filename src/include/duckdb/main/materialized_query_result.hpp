@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/main/query_result/materialized_query_result.hpp
+// duckdb/main/materialized_query_result.hpp
 //
 //
 //===----------------------------------------------------------------------===//

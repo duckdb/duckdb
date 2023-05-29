@@ -1,4 +1,4 @@
-#include "duckdb/main/query_result/pending_query_result.hpp"
+#include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 

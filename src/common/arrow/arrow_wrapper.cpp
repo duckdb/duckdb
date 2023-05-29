@@ -4,7 +4,7 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
 
-#include "duckdb/main/query_result/stream_query_result.hpp"
+#include "duckdb/main/stream_query_result.hpp"
 
 #include "duckdb/common/arrow/result_arrow_wrapper.hpp"
 #include "duckdb/common/arrow/arrow_appender.hpp"

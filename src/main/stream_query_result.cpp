@@ -1,7 +1,7 @@
-#include "duckdb/main/query_result/stream_query_result.hpp"
+#include "duckdb/main/stream_query_result.hpp"
 
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/query_result/materialized_query_result.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/common/box_renderer.hpp"
 
 namespace duckdb {

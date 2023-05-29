@@ -1,6 +1,6 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/query_result.hpp"
-#include "duckdb/main/query_result/pending_query_result.hpp"
+#include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/common/preserved_error.hpp"
 
 using duckdb::make_uniq;

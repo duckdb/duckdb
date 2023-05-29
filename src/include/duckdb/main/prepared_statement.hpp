@@ -9,8 +9,8 @@
 #pragma once
 
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/main/query_result/materialized_query_result.hpp"
-#include "duckdb/main/query_result/pending_query_result.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/common/preserved_error.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 
