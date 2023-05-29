@@ -472,13 +472,6 @@ static bool ConvertDecimal(const LogicalType &decimal_type, idx_t target_offset,
 	}
 }
 
-void RawArrayWrapper::Combine(RawArrayWrapper &other) {
-	D_ASSERT(other.type_width == type_width);
-	// The capacity should already be big enough to fit the new array
-	memcpy(data + (type_width * count), other.data, (type_width * other.count));
-	count += other.count;
-}
-
 RawArrayWrapper::RawArrayWrapper(py::array array_p, idx_t count_p, const LogicalType &type)
     : array(std::move(array_p)), data(data_ptr_cast(array.mutable_data())), type(type), count(count_p) {
 	type_width = DuckDBToNumpyTypeWidth(type);
