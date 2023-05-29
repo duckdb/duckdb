@@ -16,7 +16,7 @@ PhysicalNumpyCollector::PhysicalNumpyCollector(PreparedStatementData &data, bool
 //===--------------------------------------------------------------------===//
 class NumpyCollectorGlobalState : public GlobalSinkState {
 public:
-	~NumpyCollectorGlobalState() {
+	~NumpyCollectorGlobalState() override {
 		py::gil_scoped_acquire gil;
 		collections.clear();
 	}
@@ -29,7 +29,7 @@ public:
 
 class NumpyCollectorLocalState : public LocalSinkState {
 public:
-	~NumpyCollectorLocalState() {
+	~NumpyCollectorLocalState() override {
 		// If an exception occurred, this is destroyed without the GIL held
 		if (py::gil_check()) {
 			collection.reset();
