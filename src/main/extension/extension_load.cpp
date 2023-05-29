@@ -86,7 +86,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const str
 
 		auto signature_offset = handle->GetFileSize() - signature.size();
 
-		const idx_t maxLenChunks = 1024 * 1024;
+		const idx_t maxLenChunks = 1024ULL * 1024ULL;
 		const idx_t numChunks = (signature_offset + maxLenChunks - 1) / maxLenChunks;
 		std::vector<std::string> hash_chunks(numChunks);
 		std::vector<idx_t> splits(numChunks + 1);

@@ -91,7 +91,7 @@ struct CastToVectorSQLiteValue {
 		unique_ptr<vector<sqlite3_value>> result = make_uniq<vector<sqlite3_value>>(count);
 		auto res_data = (*result).data();
 
-		auto input_data = (INPUT_TYPE *)vec_data.data;
+		auto input_data = UnifiedVectorFormat::GetData<INPUT_TYPE>(vec_data);
 
 		if (vec_data.validity.AllValid()) {
 			for (idx_t i = 0; i < count; ++i) {

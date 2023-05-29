@@ -39,7 +39,7 @@ bool ConstantFilter::Equals(const TableFilter &other_p) const {
 	if (!TableFilter::Equals(other_p)) {
 		return false;
 	}
-	auto &other = (ConstantFilter &)other_p;
+	auto &other = other_p.Cast<ConstantFilter>();
 	return other.comparison_type == comparison_type && other.constant == constant;
 }
 

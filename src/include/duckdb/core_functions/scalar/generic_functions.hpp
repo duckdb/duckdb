@@ -121,6 +121,15 @@ struct CurrentDatabaseFun {
 	static ScalarFunction GetFunction();
 };
 
+struct InSearchPathFun {
+	static constexpr const char *Name = "in_search_path";
+	static constexpr const char *Parameters = "database_name,schema_name";
+	static constexpr const char *Description = "Returns whether or not the database/schema are in the search path.";
+	static constexpr const char *Example = "in_search_path('memory', 'main')";
+
+	static ScalarFunction GetFunction();
+};
+
 struct CurrentTransactionIdFun {
 	static constexpr const char *Name = "txid_current";
 	static constexpr const char *Parameters = "";

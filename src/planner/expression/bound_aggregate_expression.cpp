@@ -30,11 +30,11 @@ hash_t BoundAggregateExpression::Hash() const {
 	return result;
 }
 
-bool BoundAggregateExpression::Equals(const BaseExpression *other_p) const {
+bool BoundAggregateExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto &other = other_p->Cast<BoundAggregateExpression>();
+	auto &other = other_p.Cast<BoundAggregateExpression>();
 	if (other.aggr_type != aggr_type) {
 		return false;
 	}
@@ -44,18 +44,18 @@ bool BoundAggregateExpression::Equals(const BaseExpression *other_p) const {
 	if (children.size() != other.children.size()) {
 		return false;
 	}
-	if (!Expression::Equals(other.filter.get(), filter.get())) {
+	if (!Expression::Equals(other.filter, filter)) {
 		return false;
 	}
 	for (idx_t i = 0; i < children.size(); i++) {
-		if (!Expression::Equals(children[i].get(), other.children[i].get())) {
+		if (!Expression::Equals(*children[i], *other.children[i])) {
 			return false;
 		}
 	}
 	if (!FunctionData::Equals(bind_info.get(), other.bind_info.get())) {
 		return false;
 	}
-	if (!BoundOrderModifier::Equals(order_bys.get(), other.order_bys.get())) {
+	if (!BoundOrderModifier::Equals(order_bys, other.order_bys)) {
 		return false;
 	}
 	return true;

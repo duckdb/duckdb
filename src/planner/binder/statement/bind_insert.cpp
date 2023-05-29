@@ -350,7 +350,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 		// Get the column_ids we need to fetch later on from the conflicting tuples
 		// of the original table, to execute the expressions
 		D_ASSERT(original_binding->binding_type == BindingType::TABLE);
-		auto &table_binding = (TableBinding &)*original_binding;
+		auto &table_binding = original_binding->Cast<TableBinding>();
 		insert.columns_to_fetch = table_binding.GetBoundColumnIds();
 		return;
 	}
@@ -376,7 +376,7 @@ void Binder::BindOnConflictClause(LogicalInsert &insert, TableCatalogEntry &tabl
 	// Get the column_ids we need to fetch later on from the conflicting tuples
 	// of the original table, to execute the expressions
 	D_ASSERT(original_binding->binding_type == BindingType::TABLE);
-	auto &table_binding = (TableBinding &)*original_binding;
+	auto &table_binding = original_binding->Cast<TableBinding>();
 	insert.columns_to_fetch = table_binding.GetBoundColumnIds();
 
 	// Replace the column bindings to refer to the child operator

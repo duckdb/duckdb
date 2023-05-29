@@ -15,14 +15,14 @@ string BetweenExpression::ToString() const {
 	return ToString<BetweenExpression, ParsedExpression>(*this);
 }
 
-bool BetweenExpression::Equal(const BetweenExpression *a, const BetweenExpression *b) {
-	if (!a->input->Equals(b->input.get())) {
+bool BetweenExpression::Equal(const BetweenExpression &a, const BetweenExpression &b) {
+	if (!a.input->Equals(*b.input)) {
 		return false;
 	}
-	if (!a->lower->Equals(b->lower.get())) {
+	if (!a.lower->Equals(*b.lower)) {
 		return false;
 	}
-	if (!a->upper->Equals(b->upper.get())) {
+	if (!a.upper->Equals(*b.upper)) {
 		return false;
 	}
 	return true;

@@ -26,7 +26,7 @@ static unique_ptr<GlobalTableFunctionState> PragmaVersionInit(ClientContext &con
 }
 
 static void PragmaVersionFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (PragmaVersionData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<PragmaVersionData>();
 	if (data.finished) {
 		// finished returning values
 		return;

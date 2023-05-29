@@ -133,10 +133,6 @@ static AdbcStatusCode ReleaseDriver(struct AdbcDriver *driver, struct AdbcError 
 
 // Default stubs
 
-AdbcStatusCode ConnectionCommit(struct AdbcConnection *, struct AdbcError *error) {
-	return ADBC_STATUS_NOT_IMPLEMENTED;
-}
-
 AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *info_codes, size_t info_codes_length,
                                  struct ArrowArrayStream *out, struct AdbcError *error) {
 	return ADBC_STATUS_NOT_IMPLEMENTED;
@@ -147,24 +143,8 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *, const char *, c
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 
-AdbcStatusCode ConnectionReadPartition(struct AdbcConnection *connection, const uint8_t *serialized_partition,
-                                       size_t serialized_length, struct ArrowArrayStream *out,
-                                       struct AdbcError *error) {
-	return ADBC_STATUS_NOT_IMPLEMENTED;
-}
-
-AdbcStatusCode ConnectionRollback(struct AdbcConnection *, struct AdbcError *error) {
-	return ADBC_STATUS_NOT_IMPLEMENTED;
-}
-
 AdbcStatusCode StatementBind(struct AdbcStatement *, struct ArrowArray *, struct ArrowSchema *,
                              struct AdbcError *error) {
-	return ADBC_STATUS_NOT_IMPLEMENTED;
-}
-
-AdbcStatusCode StatementExecutePartitions(struct AdbcStatement *statement, struct ArrowSchema *schema,
-                                          struct AdbcPartitions *partitions, int64_t *rows_affected,
-                                          struct AdbcError *error) {
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 
