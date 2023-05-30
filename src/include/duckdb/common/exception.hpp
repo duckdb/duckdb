@@ -76,7 +76,8 @@ enum class ExceptionType {
 	PERMISSION = 34,      // insufficient permissions
 	PARAMETER_NOT_RESOLVED = 35, // parameter types could not be resolved
 	PARAMETER_NOT_ALLOWED = 36,  // parameter types not allowed
-	DEPENDENCY = 37              // dependency
+	DEPENDENCY = 37,              // dependency
+    MISSING_EXTENSION = 38 // Missing extension
 };
 
 class Exception : public std::exception {
@@ -262,13 +263,13 @@ public:
 	}
 };
 
-class MissingExtensionException : public IOException {
+class MissingExtensionException : public Exception {
 public:
 	DUCKDB_API explicit MissingExtensionException(const string &msg);
 
 	template <typename... Args>
 	explicit MissingExtensionException(const string &msg, Args... params)
-	    : IOException(ConstructMessage(msg, params...)) {
+	    : Exception(ConstructMessage(msg, params...)) {
 	}
 };
 
