@@ -276,7 +276,7 @@ static void ExecuteSlice(Vector &result, Vector &v, Vector &b, Vector &e, const 
 	} else {
 		ExecuteFlatSlice<INPUT_TYPE, INDEX_TYPE>(result, v, b, e, count, s, sel, sel_idx, result_child_vector);
 	}
-    result.Verify(count);
+	result.Verify(count);
 }
 
 static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -356,7 +356,7 @@ ScalarFunctionSet ListSliceFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun({LogicalType::ANY, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::ANY,
 	                   ArraySliceFunction, ArraySliceBind);
-//		fun.varargs = LogicalType::ANY; // Do we need this?
+	//		fun.varargs = LogicalType::ANY; // Do we need this?
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 
 	ScalarFunctionSet set;
