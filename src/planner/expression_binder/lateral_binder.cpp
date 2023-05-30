@@ -94,7 +94,7 @@ protected:
 			ReduceColumnRefDepth(expr.Cast<BoundColumnRefExpression>());
 		}
 		if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
-			auto &subquery_ref = (BoundSubqueryExpression &)expr;
+			auto &subquery_ref = expr.Cast<BoundSubqueryExpression>();
 			ReduceExpressionSubquery(expr.Cast<BoundSubqueryExpression>());
 			// Recursively update the depth in the bindings of the children nodes
 			ExpressionIterator::EnumerateQueryNodeChildren(

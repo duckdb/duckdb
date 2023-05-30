@@ -32,25 +32,25 @@ struct StringAggBindData : public FunctionData {
 
 struct StringAggFunction {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->dataptr = nullptr;
-		state->alloc_size = 0;
-		state->size = 0;
+	static void Initialize(STATE &state) {
+		state.dataptr = nullptr;
+		state.alloc_size = 0;
+		state.size = 0;
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->dataptr) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.dataptr) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = StringVector::AddString(result, state->dataptr, state->size);
+			target = StringVector::AddString(finalize_data.result, state.dataptr, state.size);
 		}
 	}
 
 	template <class STATE>
-	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
-		if (state->dataptr) {
-			delete[] state->dataptr;
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		if (state.dataptr) {
+			delete[] state.dataptr;
 		}
 	}
 
@@ -58,57 +58,56 @@ struct StringAggFunction {
 		return true;
 	}
 
-	static inline void PerformOperation(StringAggState *state, const char *str, const char *sep, idx_t str_size,
+	static inline void PerformOperation(StringAggState &state, const char *str, const char *sep, idx_t str_size,
 	                                    idx_t sep_size) {
-		if (!state->dataptr) {
+		if (!state.dataptr) {
 			// first iteration: allocate space for the string and copy it into the state
-			state->alloc_size = MaxValue<idx_t>(8, NextPowerOfTwo(str_size));
-			state->dataptr = new char[state->alloc_size];
-			state->size = str_size;
-			memcpy(state->dataptr, str, str_size);
+			state.alloc_size = MaxValue<idx_t>(8, NextPowerOfTwo(str_size));
+			state.dataptr = new char[state.alloc_size];
+			state.size = str_size;
+			memcpy(state.dataptr, str, str_size);
 		} else {
 			// subsequent iteration: first check if we have space to place the string and separator
-			idx_t required_size = state->size + str_size + sep_size;
-			if (required_size > state->alloc_size) {
+			idx_t required_size = state.size + str_size + sep_size;
+			if (required_size > state.alloc_size) {
 				// no space! allocate extra space
-				while (state->alloc_size < required_size) {
-					state->alloc_size *= 2;
+				while (state.alloc_size < required_size) {
+					state.alloc_size *= 2;
 				}
-				auto new_data = new char[state->alloc_size];
-				memcpy(new_data, state->dataptr, state->size);
-				delete[] state->dataptr;
-				state->dataptr = new_data;
+				auto new_data = new char[state.alloc_size];
+				memcpy(new_data, state.dataptr, state.size);
+				delete[] state.dataptr;
+				state.dataptr = new_data;
 			}
 			// copy the separator
-			memcpy(state->dataptr + state->size, sep, sep_size);
-			state->size += sep_size;
+			memcpy(state.dataptr + state.size, sep, sep_size);
+			state.size += sep_size;
 			// copy the string
-			memcpy(state->dataptr + state->size, str, str_size);
-			state->size += str_size;
+			memcpy(state.dataptr + state.size, str, str_size);
+			state.size += str_size;
 		}
 	}
 
-	static inline void PerformOperation(StringAggState *state, string_t str, FunctionData *data_p) {
+	static inline void PerformOperation(StringAggState &state, string_t str, optional_ptr<FunctionData> data_p) {
 		auto &data = data_p->Cast<StringAggBindData>();
 		PerformOperation(state, str.GetData(), data.sep.c_str(), str.GetSize(), data.sep.size());
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *str_data,
-	                      ValidityMask &str_mask, idx_t str_idx) {
-		PerformOperation(state, str_data[str_idx], aggr_input_data.bind_data);
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		PerformOperation(state, input, unary_input.input.bind_data);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 		}
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
 		if (!source.dataptr) {
 			// source is not set: skip combining
 			return;
