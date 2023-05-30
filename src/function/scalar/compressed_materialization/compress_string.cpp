@@ -35,7 +35,7 @@ static inline RESULT_TYPE MiniStringCompress(const string_t &input) {
 	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
 		return input.GetSize() + *input.GetPrefixWriteable();
 	} else {
-		return input.GetSize() + *(uint8_t *)input.GetDataUnsafe();
+		return input.GetSize() + *input.GetDataUnsafe();
 	}
 }
 
@@ -135,7 +135,7 @@ static inline string_t MiniStringDecompress(const INPUT_TYPE &input, ArenaAlloca
 	} else {
 		auto ptr = allocator.Allocate(1);
 		*ptr = input - 1;
-		return string_t((const char *)ptr, 1);
+		return string_t(reinterpret_cast<const char *>(ptr), 1);
 	}
 }
 

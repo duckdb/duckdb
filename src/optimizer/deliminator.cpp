@@ -148,7 +148,7 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalDelimJoin &delim_join, const idx
 	optional_ptr<LogicalFilter> filter;
 	vector<unique_ptr<Expression>> filter_expressions;
 	if (join->children[delim_idx]->type == LogicalOperatorType::LOGICAL_FILTER) {
-		filter = (LogicalFilter *)join->children[delim_idx].get();
+		filter = &join->children[delim_idx]->Cast<LogicalFilter>();
 		for (auto &expr : filter->expressions) {
 			filter_expressions.emplace_back(expr->Copy());
 		}

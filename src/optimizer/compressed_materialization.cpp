@@ -411,8 +411,8 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 	if (cast_type.id() == LogicalTypeId::USMALLINT) {
 		auto min_string = StringStats::Min(stats);
 		auto max_string = StringStats::Max(stats);
-		uint8_t min_numeric = max_string_length == 0 || min_string.length() == 0 ? 0 : *(uint8_t *)min_string.c_str();
-		uint8_t max_numeric = max_string_length == 0 || max_string.length() == 0 ? 0 : *(uint8_t *)max_string.c_str();
+		uint8_t min_numeric = max_string_length == 0 || min_string.length() == 0 ? 0 : *min_string.c_str();
+		uint8_t max_numeric = max_string_length == 0 || max_string.length() == 0 ? 0 : *max_string.c_str();
 
 		Value min_val = Value::USMALLINT(min_numeric);
 		Value max_val = Value::USMALLINT(max_numeric + 1);
