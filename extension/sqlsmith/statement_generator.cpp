@@ -1095,6 +1095,28 @@ string StatementGenerator::GenerateTestVectorTypes(BaseScalarFunction &base_func
 	return select->ToString();
 }
 
+string StatementGenerator::GenerateCast(const LogicalType &target, const string &source_name, bool add_varchar) {
+	auto select = make_uniq<SelectStatement>();
+	auto node = make_uniq<SelectNode>();
+
+
+
+	auto from_clause = make_uniq<BaseTableRef>();
+	from_clause->table_name = "test_all_types";
+	node->from_table = std::move(from_clause);
+
+	unique_ptr<ParsedExpression> source;
+	source = make_uniq<ColumnRefExpression>(source_name);
+	if (add_varchar) {
+		source = make_uniq<CastExpression>(LogicalType::VARCHAR, std::move(source));
+	}
+	auto cast = make_uniq<CastExpression>(target, std::move(source));
+	node->select_list.push_back(std::move(cast));
+
+	select->node = std::move(node);
+	return select->ToString();
+}
+
 void StatementGenerator::GenerateAllScalar(ScalarFunctionCatalogEntry &scalar_function, vector<string> &result) {
 	for(idx_t offset = 0; offset < scalar_function.functions.Size(); offset++) {
 		auto function = scalar_function.functions.GetFunctionByOffset(offset);
@@ -1132,6 +1154,13 @@ vector<string> StatementGenerator::GenerateAllFunctionCalls() {
 		case CatalogType::MACRO_ENTRY:
 		default:
 			break;
+		}
+	}
+	// generate all casts
+	for(auto &source_type: generator_context->test_types) {
+		for(auto &target_type: generator_context->test_types) {
+			result.push_back(GenerateCast(target_type.type, source_type.name, false));
+			result.push_back(GenerateCast(target_type.type, source_type.name, true));
 		}
 	}
 	return result;
