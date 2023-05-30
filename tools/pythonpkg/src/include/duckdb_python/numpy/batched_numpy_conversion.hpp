@@ -20,6 +20,7 @@ class ClientContext;
 class BatchedNumpyConversion {
 public:
 	DUCKDB_API BatchedNumpyConversion(vector<LogicalType> types);
+	~BatchedNumpyConversion();
 
 	//! Appends a datachunk with the given batch index to the batched collection
 	DUCKDB_API void Append(DataChunk &input, idx_t batch_index);

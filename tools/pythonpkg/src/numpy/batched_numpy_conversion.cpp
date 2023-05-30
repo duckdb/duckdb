@@ -9,6 +9,11 @@ namespace duckdb {
 BatchedNumpyConversion::BatchedNumpyConversion(vector<LogicalType> types_p) : types(std::move(types_p)) {
 }
 
+BatchedNumpyConversion::~BatchedNumpyConversion() {
+	// If the data is not empty, this means that the GIL should be held/grabbed when this is destroyed
+	D_ASSERT(data.empty());
+}
+
 void BatchedNumpyConversion::Append(DataChunk &input, idx_t batch_index) {
 	D_ASSERT(batch_index != DConstants::INVALID_INDEX);
 	optional_ptr<NumpyResultConversion> collection;
@@ -50,7 +55,11 @@ void BatchedNumpyConversion::Merge(BatchedNumpyConversion &other) {
 unique_ptr<NumpyResultConversion> BatchedNumpyConversion::FetchCollection() {
 	unique_ptr<NumpyResultConversion> collection;
 
-	D_ASSERT(!data.empty());
+	if (data.empty()) {
+		py::gil_scoped_acquire gil;
+		return make_uniq<NumpyResultConversion>(types, 0);
+	}
+
 	if (data.size() == 1) {
 		auto entry = data.begin();
 		collection = std::move(entry->second);
