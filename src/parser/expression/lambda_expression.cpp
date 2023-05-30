@@ -13,7 +13,7 @@ LambdaExpression::LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<
 }
 
 string LambdaExpression::ToString() const {
-	return lhs->ToString() + " -> " + expr->ToString();
+	return "(" + lhs->ToString() + " -> " + expr->ToString() + ")";
 }
 
 bool LambdaExpression::Equal(const LambdaExpression &a, const LambdaExpression &b) {
