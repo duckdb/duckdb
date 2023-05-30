@@ -1168,7 +1168,21 @@ const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &ty
 	return info->Cast<StructTypeInfo>().child_types;
 }
 
+child_list_t<LogicalType> &StructType::GetChildTypes(LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION);
+
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return info->Cast<StructTypeInfo>().child_types;
+}
+
 const LogicalType &StructType::GetChildType(const LogicalType &type, idx_t index) {
+	auto &child_types = StructType::GetChildTypes(type);
+	D_ASSERT(index < child_types.size());
+	return child_types[index].second;
+}
+
+LogicalType &StructType::GetChildType(LogicalType &type, idx_t index) {
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(index < child_types.size());
 	return child_types[index].second;

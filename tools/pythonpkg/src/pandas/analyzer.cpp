@@ -115,7 +115,17 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 	}
 	// If struct constraints are not respected, left will be set to MAP
 	if (left.id() == LogicalTypeId::STRUCT && right.id() == left.id()) {
-		if (!IsStructColumnValid(left, right)) {
+		bool valid_struct = IsStructColumnValid(left, right);
+		if (valid_struct) {
+			for (idx_t i = 0; i < StructType::GetChildCount(right); i++) {
+				auto &right_child = StructType::GetChildType(right, i);
+				auto &left_child = StructType::GetChildType(left, i);
+				if (!UpgradeType(left_child, right_child)) {
+					return false;
+				}
+			}
+		}
+		if (!valid_struct) {
 			LogicalType map_value_type = LogicalType::SQLNULL;
 			if (SatisfiesMapConstraints(left, right, map_value_type)) {
 				left = ConvertStructToMap(map_value_type);

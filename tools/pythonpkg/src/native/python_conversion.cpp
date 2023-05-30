@@ -67,9 +67,15 @@ bool DictionaryHasMapFormat(const PyDictionary &dict) {
 Value TransformDictionaryToStruct(const PyDictionary &dict, const LogicalType &target_type = LogicalType::UNKNOWN) {
 	auto struct_keys = TransformStructKeys(dict.keys, dict.len, target_type);
 
+	bool struct_target = target_type.id() == LogicalTypeId::STRUCT;
+	if (struct_target) {
+		D_ASSERT(dict.len == StructType::GetChildCount(target_type));
+	}
+
 	child_list_t<Value> struct_values;
 	for (idx_t i = 0; i < dict.len; i++) {
-		auto val = TransformPythonValue(dict.values.attr("__getitem__")(i));
+		auto &child_type = struct_target ? StructType::GetChildType(target_type, i) : LogicalType::UNKNOWN;
+		auto val = TransformPythonValue(dict.values.attr("__getitem__")(i), child_type);
 		struct_values.emplace_back(make_pair(std::move(struct_keys[i]), std::move(val)));
 	}
 	return Value::STRUCT(std::move(struct_values));
