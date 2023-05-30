@@ -170,6 +170,7 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 	if (batch_size_p == 0) {
 		throw std::runtime_error("Approximate Batch Size of Record Batch MUST be higher than 0");
 	}
+	arrow_offet_size = result->client_properties.arrow_offset_size;
 	batch_size = batch_size_p;
 	//! We initialize the stream functions
 	stream.get_schema = ResultArrowArrayStreamWrapper::MyStreamGetSchema;
