@@ -132,25 +132,72 @@ SELECT COUNT(*) FROM csv_rejects_table;
 statement ok
 DROP TABLE csv_rejects_table;
 
+# Test same with COPY
+statement ok
+CREATE TABLE tbl1 (col1 BIGINT, col2 VARCHAR);
+
+statement ok
+COPY tbl1 FROM 'test/sql/copy/csv/data/error/mismatch/half1.csv' 
+WITH (HEADER, IGNORE_ERRORS TRUE, PARALLEL ${PARALLEL}, SAMPLE_SIZE 1000, REJECTS_TABLE 'csv_rejects_table');
+
+query I
+SELECT SUM(col1) FROM tbl1;
+----
+1024
+
+query I
+SELECT COUNT(*) FROM csv_rejects_table;
+----
+1024
+
+statement ok
+DROP TABLE csv_rejects_table;
+
+statement ok
+DROP TABLE tbl1;
+
+# Test with more errors than STANDARD_VECTOR_SIZE
 query I
 SELECT SUM(num) FROM read_csv_auto(
 	'test/sql/copy/csv/data/error/mismatch/half2.csv',
 	header=true,
 	ignore_errors=true,
-	sample_size=500,
+	sample_size=1000,
 	rejects_table='csv_rejects_table',
 	parallel=${PARALLEL});
 ----
 1024
 
+query I
+SELECT COUNT(*) FROM csv_rejects_table;
+----
+3072
+
+statement ok
+DROP TABLE csv_rejects_table;
+
+statement ok
+CREATE TABLE tbl1 (col1 BIGINT, col2 VARCHAR);
+
+statement ok
+COPY tbl1 FROM 'test/sql/copy/csv/data/error/mismatch/half2.csv' 
+WITH (HEADER, IGNORE_ERRORS TRUE, PARALLEL ${PARALLEL}, SAMPLE_SIZE 1000, REJECTS_TABLE 'csv_rejects_table');
+
+query I
+SELECT SUM(col1) FROM tbl1;
+----
+1024
 
 query I
 SELECT COUNT(*) FROM csv_rejects_table;
 ----
-2048
+3072
 
 statement ok
 DROP TABLE csv_rejects_table;
+
+statement ok
+DROP TABLE tbl1;
 
 
 endloop PARALLEL

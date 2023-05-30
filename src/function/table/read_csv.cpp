@@ -241,7 +241,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	// Do this after the other options have been set and column types/names are resolved
 	options.SetRejectsOptions(input.named_parameters, names, return_types);
-	if(options.auto_detect) {
+	if (options.auto_detect) {
 		result->initial_reader->options = options;
 	}
 

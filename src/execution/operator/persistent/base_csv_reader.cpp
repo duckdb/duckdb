@@ -455,8 +455,8 @@ struct ErrorLocation {
 	idx_t col_idx;
 	idx_t row_line;
 
-	ErrorLocation(idx_t row_idx, idx_t col_idx, idx_t row_line) 
-		: row_idx(row_idx), col_idx(col_idx), row_line(row_line) {
+	ErrorLocation(idx_t row_idx, idx_t col_idx, idx_t row_line)
+	    : row_idx(row_idx), col_idx(col_idx), row_line(row_line) {
 	}
 };
 
