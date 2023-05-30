@@ -314,8 +314,9 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, c
 	const auto child_list_entries = UnifiedVectorFormat::GetData<list_entry_t>(child_list_data);
 	const auto &child_list_validity = child_list_data.validity;
 
-	// Figure out actual child list size (differs from ListVector::GetListSize if dict/const vector)
-	idx_t child_list_child_count = ListVector::GetListSize(source_v);
+	// Figure out actual child list size (can differ from ListVector::GetListSize if dict/const vector),
+	// and we cannot use ConstantVector::ZeroSelectionVector because it may need to be longer than STANDARD_VECTOR_SIZE
+	idx_t child_list_child_count = 0;
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
 		if (!list_validity.RowIsValid(list_idx)) {
@@ -324,7 +325,18 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, c
 		const auto &list_entry = list_entries[list_idx];
 		const auto &list_offset = list_entry.offset;
 		const auto &list_length = list_entry.length;
-		child_list_child_count = MaxValue<idx_t>(child_list_child_count, list_offset + list_length);
+
+		for (idx_t child_i = 0; child_i < list_length; child_i++) {
+			const auto child_list_idx = child_list_sel.get_index(list_offset + child_i);
+			if (!child_list_validity.RowIsValid(child_list_idx)) {
+				continue;
+			}
+
+			const auto &child_list_entry = child_list_entries[child_list_idx];
+			const auto &child_list_length = child_list_entry.length;
+
+			child_list_child_count += child_list_length;
+		}
 	}
 
 	// Target
@@ -365,7 +377,7 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, c
 				const auto &child_list_offset = child_list_entry.offset;
 				const auto &child_list_length = child_list_entry.length;
 
-				// Add this child's list entry's to the combined selection vector
+				// Add this child's list entries to the combined selection vector
 				for (idx_t child_value_i = 0; child_value_i < child_list_length; child_value_i++) {
 					auto idx = combined_list_offset + child_list_size + child_value_i;
 					auto loc = child_list_offset + child_value_i;
