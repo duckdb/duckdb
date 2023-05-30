@@ -159,6 +159,7 @@ idx_t Prefix::Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_nod
 			}
 			D_ASSERT(l_prefix.ptr.IsSet() && !l_prefix.ptr.IsSwizzled());
 			l_node = l_prefix.ptr;
+			D_ASSERT(r_prefix.data[Node::PREFIX_SIZE] > max_count);
 			return max_count;
 		}
 		// l_prefix contains r_prefix
@@ -171,6 +172,7 @@ idx_t Prefix::Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_nod
 			}
 			D_ASSERT(r_prefix.ptr.IsSet() && !r_prefix.ptr.IsSwizzled());
 			r_node = r_prefix.ptr;
+			D_ASSERT(l_prefix.data[Node::PREFIX_SIZE] > max_count);
 			return max_count;
 		}
 	}
@@ -294,7 +296,11 @@ string Prefix::VerifyAndToString(ART &art, const bool only_verify) {
 	}
 	str += "] ";
 
-	return only_verify ? "" : str + ptr.VerifyAndToString(art, only_verify);
+	if (only_verify) {
+		return ptr.VerifyAndToString(art, only_verify);
+	}
+
+	return str + ptr.VerifyAndToString(art, only_verify);
 }
 
 BlockPointer Prefix::Serialize(ART &art, MetaBlockWriter &writer) {

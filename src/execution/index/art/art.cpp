@@ -351,8 +351,9 @@ bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_ide
 	auto key_section = KeySection(0, count - 1, 0, 0);
 	auto has_constraint = IsUnique();
 	auto success = Construct(*this, keys, row_ids, *this->tree, key_section, has_constraint);
-	VerifyAndToStringInternal(true);
+
 #ifdef DEBUG
+	D_ASSERT(!VerifyAndToStringInternal(true).empty());
 	for (idx_t i = 0; i < count; i++) {
 		auto leaf_node = Lookup(*tree, keys[i], 0);
 		D_ASSERT(leaf_node.IsSet());
@@ -361,6 +362,7 @@ bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_ide
 		D_ASSERT(leaf.FindRowId(*this, leaf_segment, row_ids[i]) != (uint32_t)DConstants::INVALID_INDEX);
 	}
 #endif
+
 	return success;
 }
 
@@ -395,7 +397,6 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 			break;
 		}
 	}
-	D_ASSERT(!VerifyAndToStringInternal(true).empty());
 
 	// failed to insert because of constraint violation: remove previously inserted entries
 	if (failed_index != DConstants::INVALID_INDEX) {
@@ -412,6 +413,17 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		return PreservedError(ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicate key \"%s\"",
 		                                          AppendRowError(input, failed_index)));
 	}
+
+#ifdef DEBUG
+	for (idx_t i = 0; i < input.size(); i++) {
+		auto leaf_node = Lookup(*tree, keys[i], 0);
+		D_ASSERT(leaf_node.IsSet());
+		auto &leaf = Leaf::Get(*this, leaf_node);
+		Node leaf_segment;
+		D_ASSERT(leaf.FindRowId(*this, leaf_segment, row_identifiers[i]) != (uint32_t)DConstants::INVALID_INDEX);
+	}
+#endif
+
 	return PreservedError();
 }
 
@@ -552,17 +564,19 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 			continue;
 		}
 		Erase(*tree, keys[i], 0, row_identifiers[i]);
+	}
+
 #ifdef DEBUG
+	// verify that we removed all row IDs
+	for (idx_t i = 0; i < input.size(); i++) {
 		auto node = Lookup(*tree, keys[i], 0);
 		if (node.IsSet()) {
 			auto &leaf = Leaf::Get(*this, node);
-			for (idx_t k = 0; k < leaf.count; k++) {
-				D_ASSERT(leaf.GetRowId(*this, k) != row_identifiers[i]);
-			}
+			Node leaf_segment;
+			D_ASSERT(leaf.FindRowId(*this, leaf_segment, row_identifiers[i]) == (uint32_t)DConstants::INVALID_INDEX);
 		}
-#endif
 	}
-	D_ASSERT(!VerifyAndToStringInternal(true).empty());
+#endif
 }
 
 void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id) {
@@ -721,7 +735,7 @@ Node ART::Lookup(Node node, const ARTKey &key, idx_t depth) {
 			return Node();
 		}
 
-		// recurse into child
+		// lookup in child node
 		node = *child;
 		D_ASSERT(node.IsSet());
 		depth++;
@@ -1056,9 +1070,6 @@ void ART::InitializeMerge(ARTFlags &flags) {
 }
 
 bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
-
-	VerifyAndToStringInternal(true);
-	other_index.VerifyAndToString(true);
 
 	auto &other_art = other_index.Cast<ART>();
 	if (!other_art.tree->IsSet()) {

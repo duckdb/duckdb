@@ -126,13 +126,19 @@ void FixedSizeAllocator::Merge(FixedSizeAllocator &other) {
 
 bool FixedSizeAllocator::InitializeVacuum() {
 
+	if (total_allocations == 0) {
+		Reset();
+		return false;
+	}
+
 	auto total_available_allocations = allocations_per_buffer * buffers.size();
 	auto total_free_positions = total_available_allocations - total_allocations;
 
 	// vacuum_count buffers can be freed
-	auto vacuum_count = total_free_positions / allocations_per_buffer / 2;
+	auto vacuum_count = floor(total_free_positions / allocations_per_buffer);
 
 	// calculate the vacuum threshold adaptively
+	D_ASSERT(vacuum_count < buffers.size());
 	idx_t memory_usage = GetMemoryUsage();
 	idx_t excess_memory_usage = vacuum_count * BUFFER_ALLOC_SIZE;
 	auto excess_percentage = (double)excess_memory_usage / (double)memory_usage;

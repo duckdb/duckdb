@@ -157,7 +157,7 @@ void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) {
 
 optional_ptr<Node> Node::GetChild(ART &art, const uint8_t byte) const {
 
-	D_ASSERT(!IsSwizzled());
+	D_ASSERT(IsSet() && !IsSwizzled());
 
 	optional_ptr<Node> child;
 	switch (DecodeARTNodeType()) {
@@ -186,7 +186,7 @@ optional_ptr<Node> Node::GetChild(ART &art, const uint8_t byte) const {
 
 optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte, const bool deserialize) const {
 
-	D_ASSERT(!IsSwizzled());
+	D_ASSERT(IsSet() && !IsSwizzled());
 
 	optional_ptr<Node> child;
 	switch (DecodeARTNodeType()) {
@@ -409,9 +409,6 @@ bool Node::Merge(ART &art, Node &other) {
 		return true;
 	}
 
-	VerifyAndToString(art, true);
-	other.VerifyAndToString(art, true);
-
 	return ResolvePrefixes(art, other);
 }
 
@@ -446,10 +443,12 @@ bool Node::ResolvePrefixes(ART &art, Node &other) {
 			swap(*this, other);
 		} else if (*this == l_node) {
 			swap(*this, other);
-			r_node = *this;
+			l_node = r_node;
+			r_node = other;
 		} else if (other == r_node) {
 			swap(*this, other);
-			l_node = other;
+			r_node = l_node;
+			l_node = *this;
 		} else {
 			swap(*this, other);
 			swap(l_node, r_node);
@@ -523,7 +522,7 @@ bool Node::MergeInternal(ART &art, Node &other) {
 			return false;
 		}
 
-		Leaf::Get(art, *this).Merge(art, r_node);
+		Leaf::Get(art, l_node).Merge(art, r_node);
 		return true;
 	}
 
