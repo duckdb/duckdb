@@ -309,7 +309,7 @@ extension/parquet/include/row_number_column_reader.hpp	10
 extension/parquet/include/templated_column_reader.hpp	5
 extension/parquet/include/thrift_tools.hpp	27
 extension/parquet/include/zstd_file_system.hpp	3
-extension/parquet/parquet-extension.cpp	30
+extension/parquet/parquet-extension.cpp	43
 extension/parquet/parquet_metadata.cpp	29
 extension/parquet/parquet_reader.cpp	113
 extension/parquet/parquet_statistics.cpp	12
@@ -641,7 +641,7 @@ planner/binder/tableref/bind_pivot.cpp	5
 planner/binder/tableref/bind_table_function.cpp	18
 planner/binder/tableref/plan_joinref.cpp	2
 planner/binder/tableref/plan_subqueryref.cpp	2
-planner/bound_result_modifier.cpp	6
+planner/bound_result_modifier.cpp	16
 planner/expression.cpp	4
 planner/expression/bound_aggregate_expression.cpp	2
 planner/expression/bound_between_expression.cpp	3
@@ -679,7 +679,7 @@ planner/joinside.cpp	12
 planner/logical_operator.cpp	30
 planner/operator/logical_aggregate.cpp	3
 planner/operator/logical_column_data_get.cpp	2
-planner/operator/logical_copy_to_file.cpp	36
+planner/operator/logical_copy_to_file.cpp	53
 planner/operator/logical_create_index.cpp	2
 planner/operator/logical_cross_product.cpp	2
 planner/operator/logical_cteref.cpp	2
