@@ -580,7 +580,24 @@ class TestResolveObjectColumns(object):
         # This gets upgraded to STRUCT(b MAP(VARCHAR, VARCHAR))
         con = duckdb.connect()
         res = con.sql("select * from x").fetchall()
-        assert res == [({'b': {'key': ['x', 'y'], 'value': ['A', 'B']}},), ({'b': {'key': ['x'], 'value': ['A']}},)]
+        assert res == [
+            (
+                {
+                    'b': {
+                        'key': ['x', 'y'],
+                        'value': ['A', 'B']
+                    }
+                },
+            ),
+            (
+                {
+                    'b': {
+                        'key': ['x'],
+                        'value': ['A']
+                    }
+                },
+            )
+        ]
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_analyze_sample_too_small(self, pandas):
