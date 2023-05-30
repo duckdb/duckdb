@@ -1,14 +1,38 @@
-# name: test/sql/copy/csv/errors/csv_rejects_recovery.test
-# group: [errors]
-
-# # name: test/sql/copy/csv/errors/csv_rejects_recovery.test
-# # group: [errors]
+# name: test/sql/copy/csv/rejects/csv_rejects_recovery.test
+# group: [rejects]
 
 require skip_reload
 
+# Test invalid arguments
+
+# Should not work without rejects_table
+statement error
+SELECT SUM(COL1) + SUM(COL3) FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/part*.csv',
+    ignore_errors=true,
+    header=true,
+    columns = {COL3 :'INTEGER', COL1: 'INTEGER', COL2: 'VARCHAR'},
+    rejects_recovery_columns=['COL2']
+);
+----
+only supported when REJECTS_TABLE is set to a table name
+
+# Should not work without rejects_recovery_columns as list
+statement error
+SELECT SUM(COL1) + SUM(COL3) FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/part*.csv',
+    header=true,
+    columns = {COL3 :'INTEGER', COL1: 'INTEGER', COL2: 'VARCHAR'},
+    rejects_table='csv_rejects_table',
+    rejects_recovery_columns=['NON_EXISTING_COLUMN'],
+    ignore_errors=true
+);
+----
+REJECTS_RECOVERY_COLUMNS: column "NON_EXISTING_COLUMN" not found
+
 foreach PARALLEL true false
 
-# # Basic test
+# Basic test
 query IIII rowsort
 SELECT * FROM read_csv(
     'test/sql/copy/csv/data/error/mismatch/example.tsv', 
@@ -31,35 +55,6 @@ FROM csv_rejects_table;
 
 statement ok
 DROP TABLE csv_rejects_table;
-
-# Test invalid arguments
-
-# Should not work without rejects_table
-statement error
-SELECT SUM(COL1) + SUM(COL3) FROM read_csv(
-    'test/sql/copy/csv/data/error/mismatch/part*.csv',
-    ignore_errors=true,
-    header=true,
-    columns = {COL3 :'INTEGER', COL1: 'INTEGER', COL2: 'VARCHAR'},
-    rejects_recovery_columns=['COL2'],
-    parallel=${PARALLEL}
-);
-----
-only supported when REJECTS_TABLE is set to a table name
-
-# Should not work without rejects_recovery_columns as list
-statement error
-SELECT SUM(COL1) + SUM(COL3) FROM read_csv(
-    'test/sql/copy/csv/data/error/mismatch/part*.csv',
-    header=true,
-    columns = {COL3 :'INTEGER', COL1: 'INTEGER', COL2: 'VARCHAR'},
-    rejects_table='csv_rejects_table',
-    rejects_recovery_columns=['NON_EXISTING_COLUMN'],
-    ignore_errors=true,
-    parallel=${PARALLEL}
-);
-----
-REJECTS_RECOVERY_COLUMNS: column "NON_EXISTING_COLUMN" not found
 
 # We should not prune columns that are part of the rejects_recovery_columns
 query I

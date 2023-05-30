@@ -24,6 +24,7 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 	auto info = make_uniq<CreateTableInfo>(TEMP_CATALOG, DEFAULT_SCHEMA, name);
 	info->temporary = true;
 	info->on_conflict = OnCreateConflict::ERROR_ON_CONFLICT;
+	info->columns.AddColumn(ColumnDefinition("file", LogicalType::VARCHAR));
 	info->columns.AddColumn(ColumnDefinition("line", LogicalType::BIGINT));
 	info->columns.AddColumn(ColumnDefinition("column", LogicalType::BIGINT));
 	info->columns.AddColumn(ColumnDefinition("column_name", LogicalType::VARCHAR));
@@ -39,7 +40,6 @@ void CSVRejectsTable::InitializeTable(ClientContext &context, const ReadCSVData 
 	}
 
 	info->columns.AddColumn(ColumnDefinition("error", LogicalType::VARCHAR));
-	info->columns.AddColumn(ColumnDefinition("file", LogicalType::VARCHAR));
 
 	catalog.CreateTable(context, std::move(info));
 

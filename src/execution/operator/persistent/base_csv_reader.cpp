@@ -449,6 +449,17 @@ bool TryCastFloatingVectorCommaSeparated(BufferedCSVReaderOptions &options, Vect
 	}
 }
 
+// Location of erroneous value in the current parse chunk
+struct ErrorLocation {
+	idx_t row_idx;
+	idx_t col_idx;
+	idx_t row_line;
+
+	ErrorLocation(idx_t row_idx, idx_t col_idx, idx_t row_line) 
+		: row_idx(row_idx), col_idx(col_idx), row_line(row_line) {
+	}
+};
+
 bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_add_line) {
 	if (parse_chunk.size() == 0) {
 		return true;
@@ -531,7 +542,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			line_error += linenr;
 			line_error -= parse_chunk.size();
 
-			idx_t error_line = GetLineError(line_error, buffer_idx);
+			auto error_line = GetLineError(line_error, buffer_idx);
 
 			if (options.ignore_errors) {
 				conversion_error_ignored = true;
@@ -554,8 +565,8 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 		SelectionVector succesful_rows(parse_chunk.size());
 		idx_t sel_size = 0;
 
-		// Keep track of failed cells <row, col, line>
-		vector<std::tuple<idx_t, idx_t, idx_t>> failed_cells;
+		// Keep track of failed cells
+		vector<ErrorLocation> failed_cells;
 
 		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
 
@@ -600,9 +611,9 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 					}
 					rejects->count++;
 
-					auto row_idx = std::get<0>(cell);
-					auto col_idx = std::get<1>(cell);
-					auto row_line = std::get<2>(cell);
+					auto row_idx = cell.row_idx;
+					auto col_idx = cell.col_idx;
+					auto row_line = cell.row_line;
 
 					auto col_name = to_string(col_idx);
 					if (col_idx < names.size()) {
@@ -617,9 +628,10 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 
 					// Add the row to the rejects table
 					appender.BeginRow();
+					appender.Append(string_t(file_name));
 					appender.Append(row_line);
 					appender.Append(col_idx);
-					appender.Append(Value(col_name));
+					appender.Append(string_t(col_name));
 					appender.Append(parsed_str);
 
 					if (!options.rejects_recovery_columns.empty()) {
@@ -639,8 +651,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 						appender.Append(Value::STRUCT(recovery_key));
 					}
 
-					appender.Append(Value(row_error_msg));
-					appender.Append(Value(file_name));
+					appender.Append(string_t(row_error_msg));
 					appender.EndRow();
 				}
 				appender.Close();

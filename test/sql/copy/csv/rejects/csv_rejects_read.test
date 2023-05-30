@@ -1,29 +1,7 @@
-# name: test/sql/copy/csv/errors/csv_read_errors.test
-# group: [errors]
+# name: test/sql/copy/csv/rejects/csv_rejects_read.test
+# group: [rejects]
 
 require skip_reload
-
-foreach PARALLEL true false
-
-# Basic test
-query III rowsort
-SELECT * FROM read_csv(
-    'test/sql/copy/csv/data/error/mismatch/bad.csv', 
-    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
-    rejects_table='csv_rejects_table',
-    ignore_errors=true, parallel=${PARALLEL});
-----
-1	2	AAA
-6	7	CCC
-
-query IIIIII rowsort
-SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
-FROM csv_rejects_table;
-----
-2	1	"col1"	BBB	Could not convert string 'BBB' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad.csv
-
-statement ok
-DROP TABLE csv_rejects_table;
 
 # Test invalid arguments
 statement error
@@ -74,6 +52,27 @@ SELECT * FROM read_csv(
 ----
 REJECTS_LIMIT: cannot be negative
 
+foreach PARALLEL true false
+
+# Basic test
+query III rowsort
+SELECT * FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/bad.csv', 
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    rejects_table='csv_rejects_table',
+    ignore_errors=true, parallel=${PARALLEL});
+----
+1	2	AAA
+6	7	CCC
+
+query IIIIII rowsort
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
+FROM csv_rejects_table;
+----
+2	1	"col1"	BBB	Could not convert string 'BBB' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad.csv
+
+statement ok
+DROP TABLE csv_rejects_table;
 
 # Test with multiple columns on the same row
 query III rowsort
