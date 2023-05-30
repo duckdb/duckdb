@@ -4,10 +4,12 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb_python/numpy/physical_numpy_batch_collector.hpp"
 
 namespace duckdb {
 
-PhysicalNumpyCollector::PhysicalNumpyCollector(PreparedStatementData &data) : PhysicalResultCollector(data) {
+PhysicalNumpyCollector::PhysicalNumpyCollector(PreparedStatementData &data, bool parallel)
+    : PhysicalResultCollector(data), parallel(parallel) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -45,10 +47,6 @@ public:
 unique_ptr<PhysicalResultCollector> PhysicalNumpyCollector::Create(ClientContext &context,
                                                                    PreparedStatementData &data) {
 	(void)context;
-	if (PhysicalPlanGenerator::PreserveInsertionOrder(context, *data.plan)) {
-		// FIXME: need to create a batched numpy collector, so we can replace this
-		return PhysicalResultCollector::GetResultCollector(context, data);
-	}
 	// The creation of `py::array` requires this module, and when this is imported for the first time from a thread that
 	// is not the main execution thread this might cause a crash. So we import it here while we're still in the main
 	// thread.
@@ -56,7 +54,18 @@ unique_ptr<PhysicalResultCollector> PhysicalNumpyCollector::Create(ClientContext
 		py::gil_scoped_acquire gil;
 		auto numpy_internal = py::module_::import("numpy.core.multiarray");
 	}
-	return make_uniq_base<PhysicalResultCollector, PhysicalNumpyCollector>(data);
+
+	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, *data.plan)) {
+		// the plan is not order preserving, so we just use the parallel materialized collector
+		return make_uniq_base<PhysicalResultCollector, PhysicalNumpyCollector>(data, false);
+	} else if (!PhysicalPlanGenerator::UseBatchIndex(context, *data.plan)) {
+		// the plan is order preserving, but we cannot use the batch index: use a single-threaded result collector
+		return make_uniq_base<PhysicalResultCollector, PhysicalNumpyCollector>(data, false);
+	} else {
+		// we care about maintaining insertion order and the sources all support batch indexes
+		// use a batch collector
+		return make_uniq_base<PhysicalResultCollector, PhysicalNumpyBatchCollector>(data);
+	}
 }
 
 SinkResultType PhysicalNumpyCollector::Sink(ExecutionContext &context, DataChunk &chunk,
@@ -109,7 +118,7 @@ unique_ptr<QueryResult> PhysicalNumpyCollector::GetResult(GlobalSinkState &state
 }
 
 bool PhysicalNumpyCollector::ParallelSink() const {
-	return true;
+	return parallel;
 }
 
 bool PhysicalNumpyCollector::SinkOrderDependent() const {
