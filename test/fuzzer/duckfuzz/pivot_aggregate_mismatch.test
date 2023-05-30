@@ -1,4 +1,4 @@
-# name: test/fuzzer/duckfuzz/group_by_all_positional_ref.test
+# name: test/fuzzer/duckfuzz/pivot_aggregate_mismatch.test
 # description: Pivot with non-aggregate function
 # group: [duckfuzz]
 
