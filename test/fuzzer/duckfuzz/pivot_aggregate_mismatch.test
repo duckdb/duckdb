@@ -1,5 +1,5 @@
 # name: test/fuzzer/duckfuzz/group_by_all_positional_ref.test
-# description: Mix GROUP BY ALL and positional references
+# description: Pivot with non-aggregate function
 # group: [duckfuzz]
 
 statement ok
