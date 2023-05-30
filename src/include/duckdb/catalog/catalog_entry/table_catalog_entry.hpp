@@ -40,6 +40,10 @@ class TableColumnInfo;
 class TableIndexInfo;
 class TableStorageInfo;
 
+class LogicalGet;
+class LogicalProjection;
+class LogicalUpdate;
+
 //! A table catalog entry
 class TableCatalogEntry : public StandardEntry {
 public:
@@ -101,6 +105,8 @@ public:
 
 	//! Returns the storage info of this table
 	virtual TableStorageInfo GetStorageInfo(ClientContext &context) = 0;
+
+	DUCKDB_API virtual void BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update);
 
 protected:
 	// This is used to serialize the entry by #Serialize(Serializer& ). It is virtual to allow

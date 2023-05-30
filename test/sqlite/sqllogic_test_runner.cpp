@@ -94,6 +94,9 @@ void SQLLogicTestRunner::Reconnect() {
 	if (original_sqlite_test) {
 		con->Query("SET integer_division=true");
 	}
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	con->Query("SET pivot_filter_threshold=0");
+#endif
 	if (enable_verification) {
 		con->EnableQueryVerification();
 	}

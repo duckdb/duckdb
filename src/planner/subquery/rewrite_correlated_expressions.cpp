@@ -89,7 +89,7 @@ RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedRecur
 void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteJoinRefRecursive(BoundTableRef &ref) {
 	// recursively rewrite bindings in the correlated columns for the table ref and all the children
 	if (ref.type == TableReferenceType::JOIN) {
-		auto &bound_join = (BoundJoinRef &)ref;
+		auto &bound_join = ref.Cast<BoundJoinRef>();
 		for (auto &corr : bound_join.correlated_columns) {
 			auto entry = correlated_map.find(corr.binding);
 			if (entry != correlated_map.end()) {
@@ -114,7 +114,7 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 	auto &node = *expr.subquery;
 	if (node.type == QueryNodeType::SELECT_NODE) {
 		// Found an unplanned select node, need to update column bindings correlated columns in the from tables
-		auto &bound_select = (BoundSelectNode &)node;
+		auto &bound_select = node.Cast<BoundSelectNode>();
 		if (bound_select.from_table) {
 			BoundTableRef &table_ref = *bound_select.from_table;
 			RewriteJoinRefRecursive(table_ref);
