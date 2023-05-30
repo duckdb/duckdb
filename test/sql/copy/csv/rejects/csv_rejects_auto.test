@@ -199,5 +199,29 @@ DROP TABLE csv_rejects_table;
 statement ok
 DROP TABLE tbl1;
 
+# Test with more errors than STANDARD_VECTOR_SIZE and limit
+statement ok
+CREATE TABLE tbl1 (col1 BIGINT, col2 VARCHAR);
+
+statement ok
+COPY tbl1 FROM 'test/sql/copy/csv/data/error/mismatch/half2.csv' 
+WITH (HEADER, IGNORE_ERRORS TRUE, PARALLEL ${PARALLEL}, SAMPLE_SIZE 1000, REJECTS_TABLE 'csv_rejects_table', REJECTS_LIMIT 1337);
+
+query I
+SELECT SUM(col1) FROM tbl1;
+----
+1024
+
+query I
+SELECT COUNT(*) FROM csv_rejects_table;
+----
+1337
+
+statement ok
+DROP TABLE csv_rejects_table;
+
+statement ok
+DROP TABLE tbl1;
+
 
 endloop PARALLEL
