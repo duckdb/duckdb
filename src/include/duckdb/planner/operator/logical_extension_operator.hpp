@@ -28,6 +28,8 @@ public:
 
 	virtual unique_ptr<PhysicalOperator> CreatePlan(ClientContext &context, PhysicalPlanGenerator &generator) = 0;
 
-	virtual bool SupportsSerialization() { return true; };
+	virtual bool SupportsSerialization() {
+		return true;
+	};
 };
 } // namespace duckdb
