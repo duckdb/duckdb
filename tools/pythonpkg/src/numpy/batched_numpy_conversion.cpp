@@ -2,6 +2,7 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb_python/pybind11/gil_wrapper.hpp"
 
 namespace duckdb {
 
@@ -11,12 +12,13 @@ BatchedNumpyConversion::BatchedNumpyConversion(vector<LogicalType> types_p) : ty
 void BatchedNumpyConversion::Append(DataChunk &input, idx_t batch_index) {
 	D_ASSERT(batch_index != DConstants::INVALID_INDEX);
 	optional_ptr<NumpyResultConversion> collection;
+	unique_ptr<PythonGILWrapper> gil;
 	if (last_collection.collection && last_collection.batch_index == batch_index) {
 		// we are inserting into the same collection as before: use it directly
 		collection = last_collection.collection;
 	} else {
 		// new collection
-		py::gil_scoped_acquire gil;
+		gil = make_uniq<PythonGILWrapper>();
 		D_ASSERT(data.find(batch_index) == data.end());
 		unique_ptr<NumpyResultConversion> new_collection;
 		new_collection = make_uniq<NumpyResultConversion>(types, input.size());
@@ -25,6 +27,9 @@ void BatchedNumpyConversion::Append(DataChunk &input, idx_t batch_index) {
 		last_collection.batch_index = batch_index;
 		collection = new_collection.get();
 		data.insert(make_pair(batch_index, std::move(new_collection)));
+	}
+	if (!gil) {
+		gil = make_uniq<PythonGILWrapper>();
 	}
 	collection->Append(input);
 }
