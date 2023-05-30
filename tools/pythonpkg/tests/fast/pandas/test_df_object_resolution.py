@@ -578,7 +578,8 @@ class TestResolveObjectColumns(object):
         ])
         # The dataframe has incompatible struct schemas in the nested child
         # This gets upgraded to STRUCT(b MAP(VARCHAR, VARCHAR))
-        res = duckdb.sql("select * from x").fetchall()
+        con = duckdb.connect()
+        res = con.sql("select * from x").fetchall()
         assert res == [({'b': {'key': ['x', 'y'], 'value': ['A', 'B']}},), ({'b': {'key': ['x'], 'value': ['A']}},)]
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
