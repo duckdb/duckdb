@@ -117,13 +117,17 @@ static bool UpgradeType(LogicalType &left, const LogicalType &right) {
 	if (left.id() == LogicalTypeId::STRUCT && right.id() == left.id()) {
 		bool valid_struct = IsStructColumnValid(left, right);
 		if (valid_struct) {
+			child_list_t<LogicalType> children;
 			for (idx_t i = 0; i < StructType::GetChildCount(right); i++) {
 				auto &right_child = StructType::GetChildType(right, i);
-				auto &left_child = StructType::GetChildType(left, i);
-				if (!UpgradeType(left_child, right_child)) {
+				auto new_child = StructType::GetChildType(left, i);
+				auto child_name = StructType::GetChildName(left, i);
+				if (!UpgradeType(new_child, right_child)) {
 					return false;
 				}
+				children.push_back(std::make_pair(child_name, new_child));
 			}
+			left = LogicalType::STRUCT(std::move(children));
 		}
 		if (!valid_struct) {
 			LogicalType map_value_type = LogicalType::SQLNULL;

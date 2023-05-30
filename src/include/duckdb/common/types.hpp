@@ -266,9 +266,6 @@ struct LogicalType {
 	inline const ExtraTypeInfo *AuxInfo() const {
 		return type_info_.get();
 	}
-	inline ExtraTypeInfo *AuxInfo() {
-		return type_info_.get();
-	}
 
 	inline shared_ptr<ExtraTypeInfo> GetAuxInfoShrPtr() const {
 		return type_info_;
@@ -437,9 +434,7 @@ struct EnumType{
 
 struct StructType {
 	DUCKDB_API static const child_list_t<LogicalType> &GetChildTypes(const LogicalType &type);
-	DUCKDB_API static child_list_t<LogicalType> &GetChildTypes(LogicalType &type);
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type, idx_t index);
-	DUCKDB_API static LogicalType &GetChildType(LogicalType &type, idx_t index);
 	DUCKDB_API static const string &GetChildName(const LogicalType &type, idx_t index);
 	DUCKDB_API static idx_t GetChildCount(const LogicalType &type);
 };
