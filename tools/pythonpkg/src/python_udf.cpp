@@ -19,19 +19,20 @@
 namespace duckdb {
 
 static py::list ConvertToSingleBatch(const string &timezone_config, vector<LogicalType> &types, vector<string> &names,
-                                     DataChunk &input) {
+                                     DataChunk &input, ArrowOptions options) {
 	ArrowSchema schema;
-	ArrowConverter::ToArrowSchema(&schema, types, names, timezone_config);
+	ArrowConverter::ToArrowSchema(&schema, types, names, timezone_config, options);
 
 	py::list single_batch;
-	ArrowAppender appender(types, STANDARD_VECTOR_SIZE);
+	ArrowAppender appender(types, STANDARD_VECTOR_SIZE, options);
 	appender.Append(input, 0, input.size(), input.size());
 	auto array = appender.Finalize();
 	TransformDuckToArrowChunk(schema, array, single_batch);
 	return single_batch;
 }
 
-static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const string &timezone_config) {
+static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const string &timezone_config,
+                                                 ArrowOptions options) {
 	auto types = input.GetTypes();
 	vector<string> names;
 	names.reserve(types.size());
@@ -40,7 +41,7 @@ static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const string 
 	}
 
 	return pyarrow::ToArrowTable(types, names, timezone_config,
-	                             ConvertToSingleBatch(timezone_config, types, names, input));
+	                             ConvertToSingleBatch(timezone_config, types, names, input, options), options);
 }
 
 static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, ClientContext &context, idx_t count) {
@@ -109,12 +110,16 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 		py::object python_object;
 		// Convert the input datachunk to pyarrow
 		string timezone_config = "UTC";
+		ArrowOptions options;
+
 		if (state.HasContext()) {
 			auto &context = state.GetContext();
 			auto client_properties = context.GetClientProperties();
 			timezone_config = client_properties.time_zone;
+			options.offset_size = client_properties.arrow_offset_size;
 		}
-		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, timezone_config);
+
+		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, timezone_config, options);
 		py::tuple column_list = pyarrow_table.attr("columns");
 
 		auto count = input.size();
