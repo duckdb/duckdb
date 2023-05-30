@@ -234,12 +234,7 @@ row_t Leaf::GetRowId(const ART &art, const idx_t position) const {
 
 uint32_t Leaf::FindRowId(const ART &art, Node &ptr, const row_t row_id) const {
 
-	if (IsInlined()) {
-		if (row_ids.inlined == row_id) {
-			return 0;
-		}
-		return (uint32_t)DConstants::INVALID_INDEX;
-	}
+	D_ASSERT(!IsInlined());
 
 	auto remaining = count;
 	while (ptr.IsSet()) {
@@ -352,6 +347,7 @@ void Leaf::Vacuum(ART &art) {
 	auto &allocator = Node::GetAllocator(art, NType::LEAF_SEGMENT);
 	if (allocator.NeedsVacuum(row_ids.ptr)) {
 		row_ids.ptr.SetPtr(allocator.VacuumPointer(row_ids.ptr));
+		row_ids.ptr.type = (uint8_t)NType::LEAF_SEGMENT;
 	}
 
 	auto ptr = row_ids.ptr;
@@ -360,6 +356,7 @@ void Leaf::Vacuum(ART &art) {
 		ptr = segment.next;
 		if (ptr.IsSet() && allocator.NeedsVacuum(ptr)) {
 			segment.next.SetPtr(allocator.VacuumPointer(ptr));
+			segment.next.type = (uint8_t)NType::LEAF_SEGMENT;
 			ptr = segment.next;
 		}
 	}

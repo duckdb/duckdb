@@ -570,6 +570,7 @@ void Node::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
 	auto needs_vacuum = flags.vacuum_flags[node.type - 1] && allocator.NeedsVacuum(node);
 	if (needs_vacuum) {
 		node.SetPtr(allocator.VacuumPointer(node));
+		node.type = (uint8_t)type;
 	}
 
 	switch (type) {

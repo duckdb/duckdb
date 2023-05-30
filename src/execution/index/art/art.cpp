@@ -358,8 +358,16 @@ bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_ide
 		auto leaf_node = Lookup(*tree, keys[i], 0);
 		D_ASSERT(leaf_node.IsSet());
 		auto &leaf = Leaf::Get(*this, leaf_node);
-		Node leaf_segment;
-		D_ASSERT(leaf.FindRowId(*this, leaf_segment, row_ids[i]) != (uint32_t)DConstants::INVALID_INDEX);
+
+		if (leaf.IsInlined()) {
+			D_ASSERT(row_ids[i] == leaf.row_ids.inlined);
+			continue;
+		}
+
+		D_ASSERT(leaf.row_ids.ptr.IsSet());
+		Node leaf_segment = leaf.row_ids.ptr;
+		auto position = leaf.FindRowId(*this, leaf_segment, row_ids[i]);
+		D_ASSERT(position != (uint32_t)DConstants::INVALID_INDEX);
 	}
 #endif
 
@@ -419,8 +427,16 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		auto leaf_node = Lookup(*tree, keys[i], 0);
 		D_ASSERT(leaf_node.IsSet());
 		auto &leaf = Leaf::Get(*this, leaf_node);
-		Node leaf_segment;
-		D_ASSERT(leaf.FindRowId(*this, leaf_segment, row_identifiers[i]) != (uint32_t)DConstants::INVALID_INDEX);
+
+		if (leaf.IsInlined()) {
+			D_ASSERT(row_identifiers[i] == leaf.row_ids.inlined);
+			continue;
+		}
+
+		D_ASSERT(leaf.row_ids.ptr.IsSet());
+		Node leaf_segment = leaf.row_ids.ptr;
+		auto position = leaf.FindRowId(*this, leaf_segment, row_identifiers[i]);
+		D_ASSERT(position != (uint32_t)DConstants::INVALID_INDEX);
 	}
 #endif
 
@@ -572,8 +588,16 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		auto node = Lookup(*tree, keys[i], 0);
 		if (node.IsSet()) {
 			auto &leaf = Leaf::Get(*this, node);
-			Node leaf_segment;
-			D_ASSERT(leaf.FindRowId(*this, leaf_segment, row_identifiers[i]) == (uint32_t)DConstants::INVALID_INDEX);
+
+			if (leaf.IsInlined()) {
+				D_ASSERT(row_identifiers[i] != leaf.row_ids.inlined);
+				continue;
+			}
+
+			D_ASSERT(leaf.row_ids.ptr.IsSet());
+			Node leaf_segment = leaf.row_ids.ptr;
+			auto position = leaf.FindRowId(*this, leaf_segment, row_identifiers[i]);
+			D_ASSERT(position == (uint32_t)DConstants::INVALID_INDEX);
 		}
 	}
 #endif
@@ -1055,6 +1079,10 @@ void ART::Vacuum(IndexLock &state) {
 
 	// finalize the vacuum operation
 	FinalizeVacuum(flags);
+
+	for (auto &allocator : allocators) {
+		allocator->Verify();
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -1091,6 +1119,10 @@ bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 	// merge the ARTs
 	if (!tree->Merge(*this, *other_art.tree)) {
 		return false;
+	}
+
+	for (auto &allocator : allocators) {
+		allocator->Verify();
 	}
 	return true;
 }

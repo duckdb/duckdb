@@ -100,6 +100,8 @@ public:
 	//! Vacuums a pointer
 	SwizzleablePointer VacuumPointer(const SwizzleablePointer ptr);
 
+	void Verify() const;
+
 private:
 	//! Returns the data_ptr_t of a pointer
 	inline data_ptr_t Get(const SwizzleablePointer ptr) const {

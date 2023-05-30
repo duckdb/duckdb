@@ -132,6 +132,7 @@ bool FixedSizeAllocator::InitializeVacuum() {
 	}
 
 	auto total_available_allocations = allocations_per_buffer * buffers.size();
+	D_ASSERT(total_available_allocations >= total_allocations);
 	auto total_free_positions = total_available_allocations - total_allocations;
 
 	// vacuum_count buffers can be freed
@@ -177,8 +178,20 @@ SwizzleablePointer FixedSizeAllocator::VacuumPointer(const SwizzleablePointer pt
 	// buffer after the vacuum operation
 
 	auto new_ptr = New();
+
+	// new increases the allocation count
+	total_allocations--;
+
 	memcpy(Get(new_ptr), Get(ptr), allocation_size);
 	return new_ptr;
+}
+
+void FixedSizeAllocator::Verify() const {
+#ifdef DEBUG
+	auto total_available_allocations = allocations_per_buffer * buffers.size();
+	D_ASSERT(total_available_allocations >= total_allocations);
+	D_ASSERT(buffers.size() >= buffers_with_free_space.size());
+#endif
 }
 
 uint32_t FixedSizeAllocator::GetOffset(ValidityMask &mask, const idx_t allocation_count) {

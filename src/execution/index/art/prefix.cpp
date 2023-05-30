@@ -257,6 +257,11 @@ void Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx
 			child_prefix = child_prefix.get().Append(art, prefix.data[i]);
 		}
 
+		D_ASSERT(prefix.ptr.IsSet());
+		if (prefix.ptr.IsSwizzled()) {
+			prefix.ptr.Deserialize(art);
+		}
+
 		if (prefix.ptr.DecodeARTNodeType() == NType::PREFIX) {
 			child_prefix.get().Append(art, prefix.ptr);
 		} else {
