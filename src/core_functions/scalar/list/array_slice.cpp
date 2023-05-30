@@ -150,6 +150,7 @@ static void ExecuteConstantSlice(Vector &result, Vector &v, Vector &b, Vector &e
 		throw ValueOutOfRangeException("Slice step cannot be zero");
 	}
 
+	// Clamp offsets
 	bool clamp_result = false;
 	if (vvalid && bvalid && evalid && (svalid || step == 1)) {
 		clamp_result = ClampSlice(sliced, begin, end, bvalid, evalid);
