@@ -132,18 +132,26 @@ NULL
 query T
 SELECT hello[NULL:length+NULL] FROM lists, hello
 ----
-[h, e, l, l, o]
-[h, e, l, l, o]
-[h, e, l, l, o]
-[h, e, l, l, o]
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT hello[:length] FROM lists, hello
+----
+[h, e]
+[h, e, l]
+[h]
+[h, e]
 
 query T
 SELECT hello[off:NULL+off] FROM lists, hello
 ----
-[h, e, l, l, o]
-[e, l, l, o]
-[h, e, l, l, o]
-[h, e, l, l, o]
+NULL
+NULL
+NULL
+NULL
 
 query T
 SELECT n[NULL:length+NULL] FROM lists, nulltable
@@ -156,10 +164,10 @@ NULL
 query T
 SELECT hello[NULL:NULL+NULL] FROM lists, hello
 ----
-[h, e, l, l, o]
-[h, e, l, l, o]
-[h, e, l, l, o]
-[h, e, l, l, o]
+NULL
+NULL
+NULL
+NULL
 
 query T
 SELECT n[off:NULL+off] FROM lists, nulltable
@@ -171,6 +179,14 @@ NULL
 
 query T
 SELECT n[NULL:NULL+NULL] FROM lists, nulltable
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT n[:] FROM lists, nulltable
 ----
 NULL
 NULL
@@ -201,7 +217,7 @@ SELECT s[-4:-2] FROM lists
 ----
 [e, l]
 [o, r]
-NULL
+[]
 NULL
 
 # length 1
@@ -258,9 +274,9 @@ NULL
 query T
 SELECT s[(-2147483646-1):-2147483647] FROM lists
 ----
-NULL
-NULL
-NULL
+[]
+[]
+[]
 NULL
 
 # pop back
