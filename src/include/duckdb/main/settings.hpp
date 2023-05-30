@@ -309,6 +309,15 @@ struct LogQueryPathSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct LockConfigurationSetting {
+	static constexpr const char *Name = "lock_configuration";
+	static constexpr const char *Description = "Whether or not the configuration can be altered";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct ImmediateTransactionModeSetting {
 	static constexpr const char *Name = "immediate_transaction_mode";
 	static constexpr const char *Description =
