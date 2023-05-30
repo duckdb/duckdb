@@ -156,7 +156,7 @@ Value TransformDictionaryToMap(const PyDictionary &dict, const LogicalType &targ
 	return Value::MAP(ListType::GetChildType(map_type), std::move(elements));
 }
 
-Value TransformListValue(py::handle ele) {
+Value TransformListValue(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN) {
 	auto size = py::len(ele);
 
 	if (size == 0) {
@@ -166,9 +166,12 @@ Value TransformListValue(py::handle ele) {
 	vector<Value> values;
 	values.reserve(size);
 
+	bool list_target = target_type.id() == LogicalTypeId::LIST;
+
 	LogicalType element_type = LogicalType::SQLNULL;
 	for (idx_t i = 0; i < size; i++) {
-		Value new_value = TransformPythonValue(ele.attr("__getitem__")(i));
+		auto &child_type = list_target ? ListType::GetChildType(target_type) : LogicalType::UNKNOWN;
+		Value new_value = TransformPythonValue(ele.attr("__getitem__")(i), child_type);
 		element_type = LogicalType::MaxLogicalType(element_type, new_value.type());
 		values.push_back(std::move(new_value));
 	}
@@ -380,7 +383,7 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		return Value::BLOB(const_data_ptr_t(ele_string.data()), ele_string.size());
 	}
 	case PythonObjectType::List:
-		return TransformListValue(ele);
+		return TransformListValue(ele, target_type);
 	case PythonObjectType::Dict: {
 		PyDictionary dict = PyDictionary(py::reinterpret_borrow<py::object>(ele));
 		switch (target_type.id()) {
