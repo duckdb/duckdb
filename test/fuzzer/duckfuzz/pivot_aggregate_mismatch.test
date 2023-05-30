@@ -1,0 +1,11 @@
+# name: test/fuzzer/duckfuzz/group_by_all_positional_ref.test
+# description: Mix GROUP BY ALL and positional references
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+FROM (VALUES (42)) t(i) PIVOT (current_date() FOR (i) IN (41))
+----
+Are all pivot expressions aggregate functions?
