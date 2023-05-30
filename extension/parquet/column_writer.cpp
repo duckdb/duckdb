@@ -1846,7 +1846,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		schema_element.__isset.type = false;
 		schema_element.__isset.repetition_type = true;
 		schema_element.name = name;
-		if (field_id) {
+		if (field_id && field_id->set) {
 			schema_element.__isset.field_id = true;
 			schema_element.field_id = field_id->field_id;
 		}
@@ -1877,7 +1877,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		optional_element.__isset.repetition_type = true;
 		optional_element.__isset.converted_type = true;
 		optional_element.name = name;
-		if (field_id) {
+		if (field_id && field_id->set) {
 			optional_element.__isset.field_id = true;
 			optional_element.field_id = field_id->field_id;
 		}
@@ -1919,7 +1919,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 		top_element.__isset.converted_type = true;
 		top_element.__isset.type = false;
 		top_element.name = name;
-		if (field_id) {
+		if (field_id && field_id->set) {
 			top_element.__isset.field_id = true;
 			top_element.field_id = field_id->field_id;
 		}
@@ -1962,7 +1962,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(vector<duckdb_parqu
 	schema_element.__isset.type = true;
 	schema_element.__isset.repetition_type = true;
 	schema_element.name = name;
-	if (field_id) {
+	if (field_id && field_id->set) {
 		schema_element.__isset.field_id = true;
 		schema_element.field_id = field_id->field_id;
 	}

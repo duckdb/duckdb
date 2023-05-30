@@ -41,11 +41,14 @@ ChildFieldIDs ChildFieldIDs::Copy() const {
 	return result;
 }
 
-FieldID::FieldID(int32_t field_id_p) : field_id(field_id_p) {
+FieldID::FieldID() : set(false) {
+}
+
+FieldID::FieldID(int32_t field_id_p) : set(true), field_id(field_id_p) {
 }
 
 FieldID FieldID::Copy() const {
-	FieldID result(field_id);
+	auto result = set ? FieldID(field_id) : FieldID();
 	result.child_field_ids = child_field_ids.Copy();
 	return result;
 }

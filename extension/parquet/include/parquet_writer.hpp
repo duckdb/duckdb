@@ -38,8 +38,10 @@ struct ChildFieldIDs {
 };
 
 struct FieldID {
+	FieldID();
 	explicit FieldID(int32_t field_id);
 	FieldID Copy() const;
+	bool set;
 	int32_t field_id;
 	ChildFieldIDs child_field_ids;
 };

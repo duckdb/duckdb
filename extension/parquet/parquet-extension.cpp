@@ -632,21 +632,19 @@ static void GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const ve
 	}
 }
 
-static void GetFieldIDs(const Value &field_id_string_value, ChildFieldIDs &field_ids,
+static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
                         unordered_set<uint32_t> &unique_field_ids, const vector<string> &names,
                         const vector<LogicalType> &sql_types) {
-	Value field_id_map;
-	string error_message;
-	if (!field_id_string_value.DefaultTryCastAs(LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR),
-	                                            field_id_map, &error_message)) {
-		throw BinderException("Expected FIELD_IDS to be a MAP, e.g., '{col1=42, col2=43:{nested_col=44}}'");
+	const auto &struct_type = field_ids_value.type();
+	if (struct_type.id() != LogicalTypeId::STRUCT) {
+		throw BinderException(
+		    "Expected FIELD_IDS to be a STRUCT, e.g., '{col1: 42, col2=(43, {nested_col: 44}), col3: 44}'");
 	}
-
+	const auto &struct_children = StructValue::GetChildren(field_ids_value);
+	D_ASSERT(StructType::GetChildTypes(struct_type).size() == struct_children.size());
 	D_ASSERT(names.size() == sql_types.size());
-	for (auto &entry : ListValue::GetChildren(field_id_map)) {
-		auto &kv = StructValue::GetChildren(entry);
-		D_ASSERT(kv.size() == 2);
-		const auto &col_name = StringValue::Get(kv[0]);
+	for (idx_t i = 0; i < struct_children.size(); i++) {
+		const auto &col_name = StructType::GetChildName(struct_type, i);
 		idx_t col_idx;
 		for (col_idx = 0; col_idx < names.size(); col_idx++) {
 			if (col_name == names[col_idx]) {
@@ -657,50 +655,61 @@ static void GetFieldIDs(const Value &field_id_string_value, ChildFieldIDs &field
 			throw BinderException("Column name \"%s\" in FIELD_IDS not found. Available column names: [%s]", col_name,
 			                      StringUtil::Join(names, ", "));
 		}
-		D_ASSERT(field_ids.ids->find(col_name) == field_ids.ids->end()); // Caught by MAP - deduplicates keys
-		auto &input_string = StringValue::Get(kv[1]);
+		D_ASSERT(field_ids.ids->find(col_name) == field_ids.ids->end()); // Caught by STRUCT - deduplicates keys
 
-		string field_id_string;
-		bool has_child_field_ids = false;
-		string child_input_string;
-		if (StringUtil::Contains(input_string, ":")) {
-			const auto pos = input_string.find(':');
-			field_id_string = string(input_string.c_str(), pos);
-			has_child_field_ids = true;
-			child_input_string = string(input_string.c_str() + pos + 1, input_string.length() - pos - 1);
+		const auto &child_value = struct_children[i];
+		const auto &child_type = child_value.type();
+		optional_ptr<const Value> field_id_value;
+		optional_ptr<const Value> child_field_ids_value;
+
+		if (child_type.id() == LogicalTypeId::STRUCT) {
+			const auto &nested_children = StructValue::GetChildren(child_value);
+			D_ASSERT(StructType::GetChildTypes(child_type).size() == nested_children.size());
+			for (idx_t nested_i = 0; nested_i < nested_children.size(); nested_i++) {
+				const auto &field_id_or_nested = StructType::GetChildName(child_type, nested_i);
+				if (field_id_or_nested == "field_id") {
+					field_id_value = &nested_children[nested_i];
+				} else if (field_id_or_nested == "nested") {
+					child_field_ids_value = &nested_children[nested_i];
+				} else {
+					throw BinderException("Invalid struct field \"%s\" in nested FIELD_IDS specification, must be "
+					                      "\"field_id\" or \"nested\"",
+					                      field_id_or_nested);
+				}
+			}
 		} else {
-			field_id_string = input_string;
+			field_id_value = &child_value;
 		}
 
-		Value field_id_value(field_id_string);
-		if (!field_id_value.DefaultTryCastAs(LogicalType::INTEGER)) {
-			throw BinderException("Expected an INTEGER in FIELD_IDS for column \"%s\", got \"%s\" instead", col_name,
-			                      field_id_string);
+		FieldID field_id;
+		if (field_id_value) {
+			if (field_id_value->type().id() != LogicalTypeId::INTEGER) {
+				throw BinderException("TODO");
+			}
+			const uint32_t field_id_int = IntegerValue::Get(*field_id_value);
+			if (!unique_field_ids.insert(field_id_int).second) {
+				throw BinderException("Duplicate field_id %s found in FIELD_IDS", field_id_value->ToString());
+			}
+			field_id = FieldID(field_id_int);
 		}
-
-		const uint32_t field_id = IntegerValue::Get(field_id_value);
-		if (!unique_field_ids.insert(field_id).second) {
-			throw BinderException("Duplicate field_id %s found in FIELD_IDS", field_id_value.ToString());
-		}
-		auto inserted = field_ids.ids->insert(make_pair(col_name, FieldID(field_id)));
+		auto inserted = field_ids.ids->insert(make_pair(col_name, std::move(field_id)));
 		D_ASSERT(inserted.second);
 
-		if (!has_child_field_ids) {
+		if (!child_field_ids_value) {
 			continue;
 		}
 
 		const auto &col_type = sql_types[col_idx];
 		if (col_type.id() != LogicalTypeId::LIST && col_type.id() != LogicalTypeId::MAP &&
 		    col_type.id() != LogicalTypeId::STRUCT) {
-			throw BinderException("Column \"%s\" cannot have a nested FIELD_IDS specification, got \"%s\"", col_name,
-			                      input_string);
+			throw BinderException("Field \"%s\" cannot have a nested FIELD_IDS specification", col_name);
 		}
 
 		vector<string> child_names;
 		vector<LogicalType> child_types;
 		GetChildNamesAndTypes(col_type, child_names, child_types);
 
-		GetFieldIDs(child_input_string, inserted.first->second.child_field_ids, unique_field_ids, child_names,
+		GetFieldIDs(*child_field_ids_value, inserted.first->second.child_field_ids, unique_field_ids, child_names,
 		            child_types);
 	}
 }
@@ -734,7 +743,8 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 			if (option.second.size() != 1) {
 				throw BinderException("FIELD_IDS requires exactly one argument");
 			}
-			if (StringUtil::Lower(StringValue::Get(option.second[0])) == "auto") {
+			if (option.second[0].type().id() == LogicalTypeId::VARCHAR &&
+			    StringUtil::Lower(StringValue::Get(option.second[0])) == "auto") {
 				idx_t field_id = 0;
 				GenerateFieldIDs(bind_data->field_ids, field_id, names, sql_types);
 			} else {
