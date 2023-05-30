@@ -3,6 +3,7 @@
 #include <cassert>
 
 #include "sqlite3.h"
+#include "duckdb/common/types/blob.hpp"
 
 duckdb::scalar_function_t duckdb::SQLiteUDFWrapper::CreateSQLiteScalarFunction(duckdb::scalar_sqlite_udf_t sqlite_udf,
                                                                                sqlite3 *db_sqlite3, void *pApp) {
@@ -59,9 +60,11 @@ duckdb::scalar_function_t duckdb::SQLiteUDFWrapper::CreateSQLiteScalarFunction(d
 			case SQLiteTypeValue::FLOAT:
 				result_data[row_idx] = StringVector::AddString(result, to_string(context.result.u.r));
 				break;
-			case SQLiteTypeValue::BLOB:
 			case SQLiteTypeValue::TEXT:
 				result_data[row_idx] = StringVector::AddString(result, context.result.str);
+				break;
+			case SQLiteTypeValue::BLOB:
+				result_data[row_idx] = StringVector::AddString(result, Blob::ToString(context.result.str));
 				break;
 			case SQLiteTypeValue::NULL_VALUE:
 				// NULL value set by the UDF by calling sqlite3_result_null()
