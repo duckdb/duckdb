@@ -253,13 +253,13 @@ struct SortedAggregateState {
 
 struct SortedAggregateFunction {
 	template <typename STATE>
-	static void Initialize(STATE *state) {
-		new (state) STATE();
+	static void Initialize(STATE &state) {
+		new (&state) STATE();
 	}
 
 	template <typename STATE>
-	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
-		state->~STATE();
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		state.~STATE();
 	}
 
 	static void ProjectInputs(Vector inputs[], const SortedAggregateBindData &order_bind, idx_t input_count,
@@ -345,10 +345,10 @@ struct SortedAggregateFunction {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
 		auto &order_bind = aggr_input_data.bind_data->Cast<SortedAggregateBindData>();
 		auto &other = const_cast<STATE &>(source);
-		target->Combine(order_bind, other);
+		target.Combine(order_bind, other);
 	}
 
 	static void Window(Vector inputs[], const ValidityMask &filter_mask, AggregateInputData &aggr_input_data,
