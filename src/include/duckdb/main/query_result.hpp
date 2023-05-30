@@ -146,9 +146,8 @@ public:
 		}
 	}
 
+	static ArrowOptions GetArrowOptions(QueryResult &query_result);
 	static string GetConfigTimezone(QueryResult &query_result);
-
-	static string GetArrowBufferConfiguration(QueryResult &query_result);
 
 private:
 	class QueryResultIterator;

@@ -18,8 +18,7 @@ namespace duckdb {
 
 struct ArrowConverter {
 	DUCKDB_API static void ToArrowSchema(ArrowSchema *out_schema, const vector<LogicalType> &types,
-	                                     const vector<string> &names, const string &config_timezone,
-	                                     ArrowOptions options);
+	                                     const vector<string> &names, const ArrowOptions &options);
 	DUCKDB_API static void ToArrowArray(DataChunk &input, ArrowArray *out_array, ArrowOptions options);
 };
 
