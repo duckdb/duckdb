@@ -48,8 +48,7 @@ struct PendingStatementWrapper {
 struct ArrowResultWrapper {
 	unique_ptr<MaterializedQueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
-	string timezone_config;
-	ArrowOffsetSize offset_size;
+	ArrowOptions options;
 };
 
 struct AppenderWrapper {

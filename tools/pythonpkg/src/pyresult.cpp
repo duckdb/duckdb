@@ -298,10 +298,8 @@ bool DuckDBPyResult::FetchArrowChunk(QueryResult *query_result, py::list &batche
 		return false;
 	}
 	ArrowSchema arrow_schema;
-	timezone_config = QueryResult::GetConfigTimezone(*query_result);
-	ArrowOptions options;
-	options.offset_size = query_result->client_properties.arrow_offset_size;
-	ArrowConverter::ToArrowSchema(&arrow_schema, query_result->types, query_result->names, timezone_config, options);
+	ArrowConverter::ToArrowSchema(&arrow_schema, query_result->types, query_result->names,
+	                              QueryResult::GetArrowOptions(*query_result));
 	TransformDuckToArrowChunk(arrow_schema, data, batches);
 	return true;
 }
@@ -323,11 +321,8 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch) {
 	if (!result) {
 		throw InvalidInputException("There is no query result");
 	}
-	timezone_config = QueryResult::GetConfigTimezone(*result);
-	ArrowOptions options;
-	options.offset_size = result->client_properties.arrow_offset_size;
-	return pyarrow::ToArrowTable(result->types, result->names, timezone_config, FetchAllArrowChunks(rows_per_batch),
-	                             options);
+	return pyarrow::ToArrowTable(result->types, result->names, FetchAllArrowChunks(rows_per_batch),
+	                             QueryResult::GetArrowOptions(*result));
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyResult::FetchRecordBatchReader(idx_t rows_per_batch) {
