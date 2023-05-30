@@ -355,6 +355,7 @@ bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_ide
 #ifdef DEBUG
 	D_ASSERT(!VerifyAndToStringInternal(true).empty());
 	for (idx_t i = 0; i < count; i++) {
+		D_ASSERT(!keys[i].Empty());
 		auto leaf_node = Lookup(*tree, keys[i], 0);
 		D_ASSERT(leaf_node.IsSet());
 		auto &leaf = Leaf::Get(*this, leaf_node);
@@ -424,6 +425,10 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 
 #ifdef DEBUG
 	for (idx_t i = 0; i < input.size(); i++) {
+		if (keys[i].Empty()) {
+			continue;
+		}
+
 		auto leaf_node = Lookup(*tree, keys[i], 0);
 		D_ASSERT(leaf_node.IsSet());
 		auto &leaf = Leaf::Get(*this, leaf_node);
@@ -585,6 +590,10 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 #ifdef DEBUG
 	// verify that we removed all row IDs
 	for (idx_t i = 0; i < input.size(); i++) {
+		if (keys[i].Empty()) {
+			continue;
+		}
+
 		auto node = Lookup(*tree, keys[i], 0);
 		if (node.IsSet()) {
 			auto &leaf = Leaf::Get(*this, node);
