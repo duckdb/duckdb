@@ -1008,19 +1008,13 @@ bool StatementGenerator::RandomPercentage(idx_t percentage) {
 	return RandomValue(100) <= percentage;
 }
 
-
 //===--------------------------------------------------------------------===//
 // Exhaustive Function Generation
 //===--------------------------------------------------------------------===//
 bool StatementGenerator::FunctionArgumentsAlwaysNull(const string &name) {
 	// some functions run for a very long time with extreme parameters because they e.g. generate giant strings
 	// for that reason we skip testing those functions with extreme parameters
-	static case_insensitive_set_t always_null_functions {
-	    "rpad",
-	    "pad",
-	    "lpad",
-	    "repeat"
-	};
+	static case_insensitive_set_t always_null_functions {"rpad", "pad", "lpad", "repeat"};
 
 	return always_null_functions.find(name) != always_null_functions.end();
 }
@@ -1031,11 +1025,11 @@ string StatementGenerator::GenerateTestAllTypes(BaseScalarFunction &base_functio
 	bool always_null = FunctionArgumentsAlwaysNull(base_function.name);
 
 	vector<unique_ptr<ParsedExpression>> children;
-	for(auto &arg : base_function.arguments) {
+	for (auto &arg : base_function.arguments) {
 		// look up the type
 		unique_ptr<ParsedExpression> argument;
 		if (!always_null) {
-			for(auto &test_type : generator_context->test_types) {
+			for (auto &test_type : generator_context->test_types) {
 				if (test_type.type.id() == arg.id()) {
 					argument = make_uniq<ColumnRefExpression>(test_type.name);
 				}
@@ -1063,11 +1057,10 @@ string StatementGenerator::GenerateTestVectorTypes(BaseScalarFunction &base_func
 
 	bool always_null = FunctionArgumentsAlwaysNull(base_function.name);
 
-
 	vector<unique_ptr<ParsedExpression>> children;
 	vector<unique_ptr<ParsedExpression>> test_vector_types;
 	vector<string> column_aliases;
-	for(auto &arg : base_function.arguments) {
+	for (auto &arg : base_function.arguments) {
 		unique_ptr<ParsedExpression> argument;
 		if (!always_null) {
 			string argument_name = "c" + to_string(column_aliases.size() + 1);
@@ -1099,8 +1092,6 @@ string StatementGenerator::GenerateCast(const LogicalType &target, const string 
 	auto select = make_uniq<SelectStatement>();
 	auto node = make_uniq<SelectNode>();
 
-
-
 	auto from_clause = make_uniq<BaseTableRef>();
 	from_clause->table_name = "test_all_types";
 	node->from_table = std::move(from_clause);
@@ -1118,7 +1109,7 @@ string StatementGenerator::GenerateCast(const LogicalType &target, const string 
 }
 
 void StatementGenerator::GenerateAllScalar(ScalarFunctionCatalogEntry &scalar_function, vector<string> &result) {
-	for(idx_t offset = 0; offset < scalar_function.functions.Size(); offset++) {
+	for (idx_t offset = 0; offset < scalar_function.functions.Size(); offset++) {
 		auto function = scalar_function.functions.GetFunctionByOffset(offset);
 
 		result.push_back(GenerateTestAllTypes(function));
@@ -1126,8 +1117,9 @@ void StatementGenerator::GenerateAllScalar(ScalarFunctionCatalogEntry &scalar_fu
 	}
 }
 
-void StatementGenerator::GenerateAllAggregate(AggregateFunctionCatalogEntry &aggregate_function, vector<string> &result) {
-	for(idx_t offset = 0; offset < aggregate_function.functions.Size(); offset++) {
+void StatementGenerator::GenerateAllAggregate(AggregateFunctionCatalogEntry &aggregate_function,
+                                              vector<string> &result) {
+	for (idx_t offset = 0; offset < aggregate_function.functions.Size(); offset++) {
 		auto function = aggregate_function.functions.GetFunctionByOffset(offset);
 
 		result.push_back(GenerateTestAllTypes(function));
@@ -1138,9 +1130,9 @@ void StatementGenerator::GenerateAllAggregate(AggregateFunctionCatalogEntry &agg
 vector<string> StatementGenerator::GenerateAllFunctionCalls() {
 	// all scalar functions
 	vector<string> result;
-	for(auto &function_ref : generator_context->scalar_functions) {
+	for (auto &function_ref : generator_context->scalar_functions) {
 		auto &function = function_ref.get();
-		switch(function.type) {
+		switch (function.type) {
 		case CatalogType::SCALAR_FUNCTION_ENTRY: {
 			auto &scalar_entry = function.Cast<ScalarFunctionCatalogEntry>();
 			GenerateAllScalar(scalar_entry, result);
@@ -1157,14 +1149,13 @@ vector<string> StatementGenerator::GenerateAllFunctionCalls() {
 		}
 	}
 	// generate all casts
-	for(auto &source_type: generator_context->test_types) {
-		for(auto &target_type: generator_context->test_types) {
+	for (auto &source_type : generator_context->test_types) {
+		for (auto &target_type : generator_context->test_types) {
 			result.push_back(GenerateCast(target_type.type, source_type.name, false));
 			result.push_back(GenerateCast(target_type.type, source_type.name, true));
 		}
 	}
 	return result;
 }
-
 
 } // namespace duckdb

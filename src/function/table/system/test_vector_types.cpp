@@ -77,7 +77,7 @@ struct TestVectorFlat {
 
 	static vector<vector<Value>> GenerateValues(TestVectorInfo &info) {
 		vector<vector<Value>> result_values;
-		for(auto &type : info.types) {
+		for (auto &type : info.types) {
 			result_values.push_back(GenerateValues(info, type));
 		}
 		return result_values;
@@ -89,7 +89,7 @@ struct TestVectorFlat {
 			auto result = make_uniq<DataChunk>();
 			result->Initialize(Allocator::DefaultAllocator(), info.types);
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, result_values.size() - cur_row);
-			for(idx_t c = 0; c < info.types.size(); c++) {
+			for (idx_t c = 0; c < info.types.size(); c++) {
 				for (idx_t i = 0; i < cardinality; i++) {
 					result->data[c].SetValue(i, result_values[c][cur_row + i]);
 				}
@@ -107,7 +107,7 @@ struct TestVectorConstant {
 			auto result = make_uniq<DataChunk>();
 			result->Initialize(Allocator::DefaultAllocator(), info.types);
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, TestVectorFlat::TEST_VECTOR_CARDINALITY - cur_row);
-			for(idx_t c = 0; c < info.types.size(); c++) {
+			for (idx_t c = 0; c < info.types.size(); c++) {
 				result->data[c].SetValue(0, values[c][0]);
 				result->data[c].SetVectorType(VectorType::CONSTANT_VECTOR);
 			}
@@ -174,7 +174,7 @@ struct TestVectorSequence {
 		auto result = make_uniq<DataChunk>();
 		result->Initialize(Allocator::DefaultAllocator(), info.types);
 
-		for(idx_t c = 0; c < info.types.size(); c++) {
+		for (idx_t c = 0; c < info.types.size(); c++) {
 			GenerateVector(info, info.types[c], result->data[c]);
 		}
 		result->SetCardinality(3);
@@ -209,7 +209,7 @@ struct TestVectorDictionary {
 static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<TestVectorBindData>();
-	for(idx_t i = 0; i < input.inputs.size(); i++) {
+	for (idx_t i = 0; i < input.inputs.size(); i++) {
 		string name = "test_vector";
 		if (i > 0) {
 			name += to_string(i + 1);
@@ -219,7 +219,7 @@ static unique_ptr<FunctionData> TestVectorTypesBind(ClientContext &context, Tabl
 		return_types.push_back(input_val.type());
 		result->types.push_back(input_val.type());
 	}
-	for(auto &entry : input.named_parameters) {
+	for (auto &entry : input.named_parameters) {
 		if (entry.first == "all_flat") {
 			result->all_flat = BooleanValue::Get(entry.second);
 		} else {
@@ -269,8 +269,8 @@ void TestVectorTypesFunction(ClientContext &context, TableFunctionInput &data_p,
 }
 
 void TestVectorTypesFun::RegisterFunction(BuiltinFunctions &set) {
-	TableFunction test_vector_types("test_vector_types", {LogicalType::ANY},
-	                              TestVectorTypesFunction, TestVectorTypesBind, TestVectorTypesInit);
+	TableFunction test_vector_types("test_vector_types", {LogicalType::ANY}, TestVectorTypesFunction,
+	                                TestVectorTypesBind, TestVectorTypesInit);
 	test_vector_types.varargs = LogicalType::ANY;
 	test_vector_types.named_parameters["all_flat"] = LogicalType::BOOLEAN;
 
