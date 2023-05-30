@@ -215,7 +215,7 @@ void Prefix::Reduce(ART &art, Node &prefix_node, const idx_t n) {
 	reference<Prefix> prefix = Prefix::Get(art, prefix_node);
 
 	// free this prefix node
-	if (n == prefix.get().data[Node::PREFIX_SIZE] - 1) {
+	if (n == (idx_t)(prefix.get().data[Node::PREFIX_SIZE] - 1)) {
 		auto next_ptr = prefix.get().ptr;
 		D_ASSERT(next_ptr.IsSet());
 		prefix.get().ptr.Reset();

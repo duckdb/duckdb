@@ -136,7 +136,7 @@ bool FixedSizeAllocator::InitializeVacuum() {
 	auto total_free_positions = total_available_allocations - total_allocations;
 
 	// vacuum_count buffers can be freed
-	auto vacuum_count = floor(total_free_positions / allocations_per_buffer);
+	auto vacuum_count = total_free_positions / allocations_per_buffer;
 
 	// calculate the vacuum threshold adaptively
 	D_ASSERT(vacuum_count < buffers.size());
