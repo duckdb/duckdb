@@ -27,5 +27,7 @@ public:
 	static unique_ptr<LogicalExtensionOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 
 	virtual unique_ptr<PhysicalOperator> CreatePlan(ClientContext &context, PhysicalPlanGenerator &generator) = 0;
+
+	virtual bool SupportsSerialization() { return true; };
 };
 } // namespace duckdb

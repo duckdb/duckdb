@@ -150,6 +150,8 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		// unsupported (for now)
 		return false;
+	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
+		return static_cast<LogicalExtensionOperator &>(op).SupportsSerialization();
 	default:
 		break;
 	}
