@@ -315,13 +315,10 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 			D_ASSERT(env->IsInstanceOf(value, J_String));
 			const string &value_str = jstring_to_string(env, (jstring)value);
 
-			auto const pOption = DBConfig::GetOptionByName(key_str);
-			if (pOption) {
-				config.SetOption(*pOption, Value(value_str));
-			} else {
-				throw CatalogException(
-				    "unrecognized configuration parameter \"%s\"\n%s", key_str,
-				    StringUtil::CandidatesErrorMessage(DBConfig::GetOptionNames(), key_str, "Did you mean"));
+			try {
+				config.SetOptionByName(key_str, Value(value_str));
+			} catch (Exception e) {
+				throw CatalogException("Failed to set configuration option \"%s\"", key_str, e.what());
 			}
 		}
 		bool cache_instance = database != ":memory:" && !database.empty();

@@ -1319,6 +1319,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::BLOB:
 		return "'" + ToString() + "'::" + type_.ToString();
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::ENUM:
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	case LogicalTypeId::STRUCT: {
 		string ret = "{";

@@ -300,6 +300,7 @@ option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
 option(DISABLE_THREADS "Disable support for multi-threading" FALSE)
 option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY "Debug setting: disable memory access checks at runtime" FALSE)
+option(DISABLE_ASSERTIONS "Debug setting: disable assertions" FALSE)
 option(ALTERNATIVE_VERIFY "Debug setting: use alternative verify mode" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
 option(FORCE_ASYNC_SINK_SOURCE "Debug setting: forces sinks/sources to block the first 2 times they're called" FALSE)
@@ -348,6 +349,10 @@ endif()
 
 if(DISABLE_MEMORY_SAFETY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_NO_SAFETY")
+endif()
+
+if(DISABLE_ASSERTIONS)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISABLE_ASSERTIONS")
 endif()
 
 if(DESTROY_UNPINNED_BLOCKS)
