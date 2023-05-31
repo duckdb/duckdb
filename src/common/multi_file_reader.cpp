@@ -134,26 +134,23 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 			auto file_partitions = HivePartitioning::Parse(f);
 			for (auto &part_info : partitions) {
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
+					string error_msg = "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found";
 					if (options.auto_detect_hive_partitioning == true) {
-						throw BinderException(
-						    "Hive partitioning was enabled automatically, but an error was encountered: Hive partition "
-						    "mismatch between file \"%s\" and \"%s\": key \"%s\" not found\n\nTo switch off hive "
-						    "partition, set: HIVE_PARTITIONING=0",
-						    files[0], f, part_info.first);
+						error_msg =
+						    "Hive partitioning was enabled automatically, but an error was encountered: " + error_msg +
+						    "\n\nTo switch off hive partitioning, set: HIVE_PARTITIONING=0";
 					}
-					throw BinderException(
-					    "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found", files[0], f,
-					    part_info.first);
+					throw BinderException(error_msg.c_str(), files[0], f, part_info.first);
 				}
 			}
 			if (partitions.size() != file_partitions.size()) {
+				string error_msg = "Hive partition mismatch between file \"%s\" and \"%s\"";
 				if (options.auto_detect_hive_partitioning == true) {
-					throw BinderException("Hive partitioning was enabled automatically, but an error was encountered: "
-					                      "Hive partition mismatch between file \"%s\" and \"%s\"\n\nTo switch off "
-					                      "hive partition, set: HIVE_PARTITIONING=0",
-					                      files[0], f);
+					error_msg =
+					    "Hive partitioning was enabled automatically, but an error was encountered: " + error_msg +
+					    "\n\nTo switch off hive partitioninging, set: HIVE_PARTITIONING=0";
 				}
-				throw BinderException("Hive partition mismatch between file \"%s\" and \"%s\"", files[0], f);
+				throw BinderException(error_msg.c_str(), files[0], f);
 			}
 		}
 
@@ -417,7 +414,6 @@ void MultiFileReaderOptions::AddBatchInfo(BindInfo &bind_info) const {
 	bind_info.InsertOption("auto_detect_hive_partitioning", Value::BOOLEAN(auto_detect_hive_partitioning));
 	bind_info.InsertOption("union_by_name", Value::BOOLEAN(union_by_name));
 	bind_info.InsertOption("hive_types_autocast", Value::BOOLEAN(hive_types_autocast));
-	// hive_types_schema?
 }
 
 void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vector<LogicalType> &sql_types,
@@ -444,14 +440,14 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 
 bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(const vector<string> &files) {
 	std::unordered_set<string> partitions;
-	
+
 	auto splits_first_file = StringUtil::Split(files.front(), FileSystem::PathSeparator());
 	if (splits_first_file.size() < 2) {
 		return false;
 	}
-	for (auto it = splits_first_file.begin(); it != splits_first_file.end(); it++){
+	for (auto it = splits_first_file.begin(); it != splits_first_file.end(); it++) {
 		auto partition = StringUtil::Split(*it, "=");
-		if (partition.size() == 2){
+		if (partition.size() == 2) {
 			partitions.insert(partition.front());
 		}
 	}
@@ -542,14 +538,16 @@ LogicalType MultiFileReaderOptions::GetHiveLogicalType(const string &hive_partit
 	}
 	return LogicalType::VARCHAR;
 }
-Value MultiFileReaderOptions::GetHivePartitionValue(const string& base, const string& entry, ClientContext& context) const {
+Value MultiFileReaderOptions::GetHivePartitionValue(const string &base, const string &entry,
+                                                    ClientContext &context) const {
 	Value value(base);
 	auto it = hive_types_schema.find(entry);
 	if (it == hive_types_schema.end()) {
 		return value;
 	}
 	if (!value.TryCastAs(context, it->second)) {
-		throw InvalidInputException("Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(), StringUtil::Upper(it->first), it->second.ToString());
+		throw InvalidInputException("Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(),
+		                            StringUtil::Upper(it->first), it->second.ToString());
 	}
 	return value;
 }
