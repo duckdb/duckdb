@@ -929,7 +929,9 @@ if(BUILD_PYTHON
     string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
     if (${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_LINK})
       get_target_property(OOTE_LINKED_LIBS ${OOTE_NAME}_extension LINK_LIBRARIES)
-      set(duckdb_libs ${OOTE_LINKED_LIBS} ${duckdb_libs})
+      if (NOT "${OOTE_LINKED_LIBS}" STREQUAL "OOTE_LINKED_LIBS-NOTFOUND")
+        set(duckdb_libs ${OOTE_LINKED_LIBS} ${duckdb_libs})
+      endif()
     endif()
   endforeach()
 
