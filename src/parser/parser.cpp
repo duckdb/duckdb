@@ -1,18 +1,17 @@
 #include "duckdb/parser/parser.hpp"
 
-#include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/query_error_context.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/statement/extension_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
-#include "postgres_parser.hpp"
-#include "duckdb/parser/query_error_context.hpp"
-#include "duckdb/parser/parser_extension.hpp"
-
+#include "duckdb/parser/transformer.hpp"
 #include "parser/parser.hpp"
+#include "postgres_parser.hpp"
 
 namespace duckdb {
 
@@ -157,7 +156,7 @@ void Parser::ParseQuery(const string &query) {
 		if (options.extensions) {
 			for (auto &ext : *options.extensions) {
 				D_ASSERT(ext.parse_function);
-				auto result = ext.parse_function(ext.parser_info.get(), query);
+				auto result = ext.parse_function(ext.parser_info.get(), query, parser_error);
 				if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
 					auto statement = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
 					statement->stmt_length = query.size();

@@ -53,7 +53,8 @@ struct ParserExtensionParseResult {
 	string error;
 };
 
-typedef ParserExtensionParseResult (*parse_function_t)(ParserExtensionInfo *info, const string &query);
+typedef ParserExtensionParseResult (*parse_function_t)(ParserExtensionInfo *info, const string &query,
+                                                       const string &parser_error);
 //===--------------------------------------------------------------------===//
 // Plan
 //===--------------------------------------------------------------------===//
