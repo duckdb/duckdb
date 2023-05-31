@@ -350,7 +350,9 @@ bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_ide
 
 	auto key_section = KeySection(0, count - 1, 0, 0);
 	auto has_constraint = IsUnique();
-	auto success = Construct(*this, keys, row_ids, *this->tree, key_section, has_constraint);
+	if (!Construct(*this, keys, row_ids, *this->tree, key_section, has_constraint)) {
+		return false;
+	}
 
 #ifdef DEBUG
 	D_ASSERT(!VerifyAndToStringInternal(true).empty());
@@ -372,7 +374,7 @@ bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_ide
 	}
 #endif
 
-	return success;
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
