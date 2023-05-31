@@ -4,9 +4,6 @@
 
 require parquet
 
-statement ok
-pragma enable_verification
-
 # need to supply an argument
 statement error
 copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS)
@@ -70,7 +67,7 @@ select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'j'
 
 # we can also specify the col like this
 statement ok
-copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{field_id:42},j:{field_id:43}})
+copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42},j:{__duckdb_field_id:43}})
 
 query I
 select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
@@ -84,7 +81,7 @@ select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'j'
 
 # i is not a nested type, so we can't specify nested field ids
 statement error
-copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{field_id:42,nested:{j:43}}})
+copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,j:43}})
 ----
 Binder Error
 
@@ -92,7 +89,7 @@ Binder Error
 
 # list
 statement ok
-copy (select range(range, range + 3) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{field_id:42,nested:{element:43}}})
+copy (select range(range, range + 3) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,element:43}})
 
 query I
 select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
@@ -106,7 +103,7 @@ select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'ele
 
 # we don't have to specify a field_id for the top-level list, we can also just specify for the nested children
 statement ok
-copy (select range(range, range + 3) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{nested:{element:43}}})
+copy (select range(range, range + 3) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{element:43}})
 
 query I
 select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
@@ -120,13 +117,13 @@ select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'ele
 
 # list child is always called "element"
 statement error
-copy (select range(range, range + 3) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{field_id:42,nested:{elem:43}}})
+copy (select range(range, range + 3) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,elem:43}})
 ----
-Binder Error: Column name "elem" in FIELD_IDS not found. Available column names: [element]
+Binder Error: Column name "elem" specified in FIELD_IDS not found. Available column names: [element]
 
 # struct
 statement ok
-copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{field_id:42,nested:{f:43}}})
+copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,f:43}})
 
 query I
 select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i' and num_children > 0
@@ -140,13 +137,13 @@ select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'f'
 
 # struct does not have child "g"
 statement error
-copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{field_id:42,nested:{g:43}}})
+copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,g:43}})
 ----
-Binder Error: Column name "g" in FIELD_IDS not found. Available column names: [f]
+Binder Error: Column name "g" specified in FIELD_IDS not found. Available column names: [f]
 
 # map
 statement ok
-copy (select map {range : 10 - range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{field_id:42,nested:{key:43,value:44}}})
+copy (select map {range : 10 - range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,key:43,value:44}})
 
 query I
 select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i' and num_children > 0
@@ -165,9 +162,9 @@ select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'val
 
 # map type children need to be called "key" and "value"
 statement error
-copy (select map {range : 10 - range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{field_id:42,nested:{k:43,v:44}}})
+copy (select map {range : 10 - range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,k:43,v:44}})
 ----
-Binder Error: Column name "k" in FIELD_IDS not found. Available column names: [key, value]
+Binder Error: Column name "k" specified in FIELD_IDS not found. Available column names: [value, key]
 
 # test auto-generation (flat)
 statement ok
@@ -185,7 +182,7 @@ select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'j'
 
 # big nestedness
 statement ok
-copy (select map {'my_key' : [{j : 42}]} as i) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{field_id:42,nested:{key:43,value:{field_id:44,nested:{element:{field_id:45,nested:{j:46}}}}}}})
+copy (select map {'my_key' : [{j : 42}]} as i) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,key:43,value:{__duckdb_field_id:44,element:{__duckdb_field_id:45,j:46}}}})
 
 query II
 select name, field_id from parquet_schema('__TEST_DIR__/my.parquet') where name in ('i', 'key', 'value', 'element', 'j') order by field_id
@@ -196,14 +193,15 @@ value	44
 element	45
 j	46
 
-# columns need to be called "field_id" and "nested"
+# we can't specify "f" in the first level struct
 statement error
-copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{field_id:42,nest:43}})
+copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42}, f:43})
 ----
 Binder Error
 
+# needs to be called exactly "__duckdb_field_id"
 statement error
-copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{fieldid:42,nested:43}})
+copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{field_id:42, f:43}})
 ----
 Binder Error
 
@@ -266,3 +264,14 @@ key	1
 value	2
 element	3
 j	4
+
+# cannot have a column named "__duckdb_field_id"
+statement error
+copy (select range as __duckdb_field_id from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {__duckdb_field_id : 42})
+----
+Binder Error
+
+statement error
+copy (select {__duckdb_field_id : range} as __duckdb_field_id from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {__duckdb_field_id : {__duckdb_field_id : 42}})
+----
+Binder Error

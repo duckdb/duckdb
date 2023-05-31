@@ -9,7 +9,6 @@
 
 %type <node> indirection_expr
 %type <node> struct_expr
-%type <node> map_expr
 
 
 %type <lockwaitpolicy>	opt_nowait_or_skip

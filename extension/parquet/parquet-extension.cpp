@@ -586,6 +586,31 @@ public:
 	}
 };
 
+static case_insensitive_map_t<LogicalType> GetChildNameToTypeMap(const LogicalType &type) {
+	case_insensitive_map_t<LogicalType> name_to_type_map;
+	switch (type.id()) {
+	case LogicalTypeId::LIST:
+		name_to_type_map.emplace("element", ListType::GetChildType(type));
+		break;
+	case LogicalTypeId::MAP:
+		name_to_type_map.emplace("key", MapType::KeyType(type));
+		name_to_type_map.emplace("value", MapType::ValueType(type));
+		break;
+	case LogicalTypeId::STRUCT:
+		for (auto &child_type : StructType::GetChildTypes(type)) {
+			if (child_type.first == FieldID::DUCKDB_FIELD_ID) {
+				throw BinderException("Cannot have a column named \"%s\" when writing FIELD_IDS",
+				                      FieldID::DUCKDB_FIELD_ID);
+			}
+			name_to_type_map.emplace(child_type);
+		}
+		break;
+	default: // LCOV_EXCL_START
+		throw InternalException("Unexpected type in GetChildNameToTypeMap");
+	} // LCOV_EXCL_STOP
+	return name_to_type_map;
+}
+
 static void GetChildNamesAndTypes(const LogicalType &type, vector<string> &child_names,
                                   vector<LogicalType> &child_types) {
 	switch (type.id()) {
@@ -615,7 +640,7 @@ static void GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const ve
 	D_ASSERT(names.size() == sql_types.size());
 	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 		const auto &col_name = names[col_idx];
-		auto inserted = field_ids.ids->insert(std::make_pair(col_name, FieldID(field_id++)));
+		auto inserted = field_ids.ids->insert(make_pair(col_name, FieldID(field_id++)));
 		D_ASSERT(inserted.second);
 
 		const auto &col_type = sql_types[col_idx];
@@ -624,6 +649,7 @@ static void GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const ve
 			continue;
 		}
 
+		// Cannot use GetChildNameToTypeMap here because we lose order, and we want to generate depth-first
 		vector<string> child_names;
 		vector<LogicalType> child_types;
 		GetChildNamesAndTypes(col_type, child_names, child_types);
@@ -633,27 +659,33 @@ static void GenerateFieldIDs(ChildFieldIDs &field_ids, idx_t &field_id, const ve
 }
 
 static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
-                        unordered_set<uint32_t> &unique_field_ids, const vector<string> &names,
-                        const vector<LogicalType> &sql_types) {
+                        unordered_set<uint32_t> &unique_field_ids,
+                        const case_insensitive_map_t<LogicalType> &name_to_type_map) {
 	const auto &struct_type = field_ids_value.type();
 	if (struct_type.id() != LogicalTypeId::STRUCT) {
 		throw BinderException(
-		    "Expected FIELD_IDS to be a STRUCT, e.g., '{col1: 42, col2=(43, {nested_col: 44}), col3: 44}'");
+		    "Expected FIELD_IDS to be a STRUCT, e.g., {col1: 42, col2: {%s: 43, nested_col: 44}, col3: 44}",
+		    FieldID::DUCKDB_FIELD_ID);
 	}
 	const auto &struct_children = StructValue::GetChildren(field_ids_value);
 	D_ASSERT(StructType::GetChildTypes(struct_type).size() == struct_children.size());
-	D_ASSERT(names.size() == sql_types.size());
 	for (idx_t i = 0; i < struct_children.size(); i++) {
 		const auto &col_name = StructType::GetChildName(struct_type, i);
-		idx_t col_idx;
-		for (col_idx = 0; col_idx < names.size(); col_idx++) {
-			if (col_name == names[col_idx]) {
-				break;
-			}
+		if (col_name == FieldID::DUCKDB_FIELD_ID) {
+			continue;
 		}
-		if (col_idx == names.size()) {
-			throw BinderException("Column name \"%s\" in FIELD_IDS not found. Available column names: [%s]", col_name,
-			                      StringUtil::Join(names, ", "));
+
+		auto it = name_to_type_map.find(col_name);
+		if (it == name_to_type_map.end()) {
+			string names;
+			for (const auto &name : name_to_type_map) {
+				if (!names.empty()) {
+					names += ", ";
+				}
+				names += name.first;
+			}
+			throw BinderException("Column name \"%s\" specified in FIELD_IDS not found. Available column names: [%s]",
+			                      col_name, names);
 		}
 		D_ASSERT(field_ids.ids->find(col_name) == field_ids.ids->end()); // Caught by STRUCT - deduplicates keys
 
@@ -666,15 +698,11 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 			const auto &nested_children = StructValue::GetChildren(child_value);
 			D_ASSERT(StructType::GetChildTypes(child_type).size() == nested_children.size());
 			for (idx_t nested_i = 0; nested_i < nested_children.size(); nested_i++) {
-				const auto &field_id_or_nested = StructType::GetChildName(child_type, nested_i);
-				if (field_id_or_nested == "field_id") {
+				const auto &field_id_or_nested_col = StructType::GetChildName(child_type, nested_i);
+				if (field_id_or_nested_col == FieldID::DUCKDB_FIELD_ID) {
 					field_id_value = &nested_children[nested_i];
-				} else if (field_id_or_nested == "nested") {
-					child_field_ids_value = &nested_children[nested_i];
 				} else {
-					throw BinderException("Invalid struct field \"%s\" in nested FIELD_IDS specification, must be "
-					                      "\"field_id\" or \"nested\"",
-					                      field_id_or_nested);
+					child_field_ids_value = &child_value;
 				}
 			}
 		} else {
@@ -684,7 +712,7 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 		FieldID field_id;
 		if (field_id_value) {
 			if (field_id_value->type().id() != LogicalTypeId::INTEGER) {
-				throw BinderException("TODO");
+				throw BinderException("Expected an INTEGER in FIELD_IDS specification for column \"%s\"", col_name);
 			}
 			const uint32_t field_id_int = IntegerValue::Get(*field_id_value);
 			if (!unique_field_ids.insert(field_id_int).second) {
@@ -695,27 +723,23 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 		auto inserted = field_ids.ids->insert(make_pair(col_name, std::move(field_id)));
 		D_ASSERT(inserted.second);
 
-		if (!child_field_ids_value) {
-			continue;
+		if (child_field_ids_value) {
+			const auto &col_type = it->second;
+			if (col_type.id() != LogicalTypeId::LIST && col_type.id() != LogicalTypeId::MAP &&
+			    col_type.id() != LogicalTypeId::STRUCT) {
+				throw BinderException("Column \"%s\" with type \"%s\" cannot have a nested FIELD_IDS specification",
+				                      col_name, LogicalTypeIdToString(col_type.id()));
+			}
+
+			GetFieldIDs(*child_field_ids_value, inserted.first->second.child_field_ids, unique_field_ids,
+			            GetChildNameToTypeMap(col_type));
 		}
-
-		const auto &col_type = sql_types[col_idx];
-		if (col_type.id() != LogicalTypeId::LIST && col_type.id() != LogicalTypeId::MAP &&
-		    col_type.id() != LogicalTypeId::STRUCT) {
-			throw BinderException("Field \"%s\" cannot have a nested FIELD_IDS specification", col_name);
-		}
-
-		vector<string> child_names;
-		vector<LogicalType> child_types;
-		GetChildNamesAndTypes(col_type, child_names, child_types);
-
-		GetFieldIDs(*child_field_ids_value, inserted.first->second.child_field_ids, unique_field_ids, child_names,
-		            child_types);
 	}
 }
 
 unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info, vector<string> &names,
                                           vector<LogicalType> &sql_types) {
+	D_ASSERT(names.size() == sql_types.size());
 	auto bind_data = make_uniq<ParquetWriteBindData>();
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
@@ -749,7 +773,15 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 				GenerateFieldIDs(bind_data->field_ids, field_id, names, sql_types);
 			} else {
 				unordered_set<uint32_t> unique_field_ids;
-				GetFieldIDs(option.second[0], bind_data->field_ids, unique_field_ids, names, sql_types);
+				case_insensitive_map_t<LogicalType> name_to_type_map;
+				for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
+					if (names[col_idx] == FieldID::DUCKDB_FIELD_ID) {
+						throw BinderException("Cannot have a column named \"%s\" when writing FIELD_IDS",
+						                      FieldID::DUCKDB_FIELD_ID);
+					}
+					name_to_type_map.emplace(names[col_idx], sql_types[col_idx]);
+				}
+				GetFieldIDs(option.second[0], bind_data->field_ids, unique_field_ids, name_to_type_map);
 			}
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
