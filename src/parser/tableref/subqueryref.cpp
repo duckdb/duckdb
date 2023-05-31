@@ -44,7 +44,7 @@ void SubqueryRef::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<TableRef> SubqueryRef::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto subquery = deserializer.ReadProperty<unique_ptr<SelectStatement>>("subquery");
+	unique_ptr<SelectStatement> subquery = deserializer.ReadProperty("subquery");
 	auto result = make_uniq<SubqueryRef>(std::move(subquery));
 	deserializer.ReadProperty("column_name_alias", result->column_name_alias);
 	return std::move(result);

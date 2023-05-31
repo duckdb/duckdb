@@ -66,7 +66,7 @@ void OperatorExpression::FormatSerialize(FormatSerializer &serializer) const {
 unique_ptr<ParsedExpression> OperatorExpression::FormatDeserialize(ExpressionType type,
                                                                    FormatDeserializer &deserializer) {
 	auto expression = make_uniq<OperatorExpression>(type);
-	expression->children = deserializer.ReadProperty<vector<unique_ptr<ParsedExpression>>>("children");
+	expression->children = deserializer.ReadProperty("children");
 	return std::move(expression);
 }
 

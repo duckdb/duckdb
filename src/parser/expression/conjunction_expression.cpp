@@ -76,7 +76,7 @@ void ConjunctionExpression::FormatSerialize(FormatSerializer &serializer) const 
 unique_ptr<ParsedExpression> ConjunctionExpression::FormatDeserialize(ExpressionType type,
                                                                       FormatDeserializer &deserializer) {
 	auto result = make_uniq<ConjunctionExpression>(type);
-	result->children = deserializer.ReadProperty<vector<unique_ptr<ParsedExpression>>>("children");
+	result->children = deserializer.ReadProperty("children");
 	return std::move(result);
 }
 
