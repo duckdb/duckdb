@@ -1079,6 +1079,11 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->alias = $9;
 					$$ = (PGNode *) n;
 				}
+            | GRAPH_TABLE GraphTableStmt
+                {
+                        $$ = (PGNode *) $2;
+                }
+
 		;
 
 opt_pivot_group_by:

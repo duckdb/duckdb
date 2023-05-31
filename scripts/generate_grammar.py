@@ -46,6 +46,12 @@ func_name_keywords = read_list_from_file(os.path.join(kwdir, 'func_name_keywords
 type_name_keywords = read_list_from_file(os.path.join(kwdir, 'type_name_keywords.list'))
 reserved_keywords = read_list_from_file(os.path.join(kwdir, 'reserved_keywords.list'))
 
+# SQL/PGQ introduces new keywords, in principle as unreserved keywords, but we need to avoid these as PGQ idents
+pgq_unreserved_keywords = read_list_from_file(os.path.join(kwdir, 'pgq_unreserved_keywords.list'))
+
+# COLUMNS is a PGQ-problematic ident, but exists already (so cannot be in the above), we do not allow it as a PGQ ident
+pgq_colname_keywords = list(filter(lambda word: word != "COLUMNS", colname_keywords))
+
 def strip_p(x):
     if x.endswith("_P"):
         return x[:-2]
@@ -57,6 +63,8 @@ colname_keywords.sort(key=lambda x: strip_p(x))
 func_name_keywords.sort(key=lambda x: strip_p(x))
 type_name_keywords.sort(key=lambda x: strip_p(x))
 reserved_keywords.sort(key=lambda x: strip_p(x))
+pgq_unreserved_keywords.sort(key=lambda x: strip_p(x))
+pgq_colname_keywords.sort(key=lambda x: strip_p(x))
 
 statements = read_list_from_file(os.path.join(base_dir, 'statements.list'))
 statements.sort()
@@ -68,6 +76,9 @@ if len(statements) < 0:
 kwdict = {}
 for kw in unreserved_keywords:
     kwdict[kw] = 'UNRESERVED_KEYWORD'
+
+for kw in pgq_unreserved_keywords:
+    kwdict[kw] = 'PGQ_UNRESERVED_KEYWORD'
 
 for kw in colname_keywords:
     kwdict[kw] = 'COL_NAME_KEYWORD'
@@ -144,6 +155,7 @@ text = text.replace("{{{ STATEMENTS }}}", stmt_list)
 # verify that this is the case
 reserved_dict = {}
 unreserved_dict = {}
+pgq_unreserved_dict = {}
 other_dict = {}
 for r in reserved_keywords:
     if r in reserved_dict:
@@ -160,12 +172,29 @@ for ur in unreserved_keywords:
         exit(1)
     unreserved_dict[ur] = True
 
+for pur in pgq_unreserved_keywords:
+    if pur in pgq_unreserved_dict:
+        print("Duplicate keyword " + pur + " in unreserved keywords")
+        exit(1)
+    if pur in unreserved_dict:
+        print("Duplicate keyword " + pur + " in unreserved keywords")
+        exit(1)
+    if pur in reserved_dict:
+        print("Keyword " + pur + " is marked as both unreserved and reserved")
+        exit(1)
+    pgq_unreserved_dict[pur] = True
+
+
 def add_to_other_keywords(kw, list_name):
     global unreserved_dict
+    global pgq_unreserved_dict
     global reserved_dict
     global other_dict
     if kw in unreserved_dict:
         print("Keyword " + kw + " is marked as both unreserved and " + list_name)
+        exit(1)
+    if kw in pgq_unreserved_dict:
+        print("Keyword " + kw + " is marked as both pgq_unreserved and " + list_name)
         exit(1)
     if kw in reserved_dict:
         print("Keyword " + kw + " is marked as both reserved and " + list_name)
@@ -187,7 +216,7 @@ for fr in func_name_keywords:
 type_func_name_keywords = list(type_func_name_dict.keys())
 type_func_name_keywords.sort()
 
-all_keywords = list(reserved_dict.keys()) + list(unreserved_dict.keys()) + list(other_dict.keys())
+all_keywords = list(reserved_dict.keys()) + list(unreserved_dict.keys()) + list(pgq_unreserved_dict.keys()) + list(other_dict.keys())
 all_keywords.sort()
 
 other_keyword = list(other_dict.keys())
@@ -200,6 +229,8 @@ kw_definitions += "type_name_keyword: " + " | ".join(type_name_keywords) + "\n"
 kw_definitions += "other_keyword: " + " | ".join(other_keyword) + "\n"
 kw_definitions += "type_func_name_keyword: " + " | ".join(type_func_name_keywords) + "\n"
 kw_definitions += "reserved_keyword: " + " | ".join(reserved_keywords) + "\n"
+kw_definitions += "pgq_unreserved_keyword: " + " | ".join(pgq_unreserved_keywords) + "\n"
+kw_definitions += "pgq_col_name_keyword: " + " | ".join(pgq_colname_keywords) + "\n"
 text = text.replace("{{{ KEYWORD_DEFINITIONS }}}", kw_definitions)
 
 # types
