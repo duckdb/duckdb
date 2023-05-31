@@ -4,6 +4,8 @@
 statement ok
 pragma enable_verification
 
+require duckpgq
+
 statement ok
 CREATE TABLE Student(id BIGINT, name VARCHAR);
 
@@ -21,7 +23,7 @@ INSERT INTO know VALUES (0,1, 10), (0,2, 11), (0,3, 12), (1,2, 14), (1,3, 15), (
 
 # vertex table with alias
 statement ok
-CREATE PROPERTY GRAPH pg
+-CREATE PROPERTY GRAPH pg
 VERTEX TABLES (
     Student PROPERTIES ( id, name ) LABEL Person,
     School as school_alias PROPERTIES ( school_id, school_name ) LABEL School IN School_kind (Hogeschool, University)
