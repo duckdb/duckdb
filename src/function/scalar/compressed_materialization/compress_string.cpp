@@ -44,11 +44,6 @@ inline uint8_t StringCompress(const string_t &input) {
 	return MiniStringCompress<uint8_t>(input);
 }
 
-template <>
-inline uint16_t StringCompress(const string_t &input) {
-	return MiniStringCompress<uint16_t>(input);
-}
-
 template <class RESULT_TYPE>
 static void StringCompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	UnaryExecutor::Execute<string_t, RESULT_TYPE>(args.data[0], result, args.size(), StringCompress<RESULT_TYPE>);
@@ -135,7 +130,7 @@ static inline string_t MiniStringDecompress(const INPUT_TYPE &input, ArenaAlloca
 	} else {
 		auto ptr = allocator.Allocate(1);
 		*ptr = input - 1;
-		return string_t(reinterpret_cast<const char *>(ptr), 1);
+		return string_t(const_char_ptr_cast(ptr), 1);
 	}
 }
 

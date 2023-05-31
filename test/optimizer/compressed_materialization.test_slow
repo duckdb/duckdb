@@ -2,8 +2,11 @@
 # description: Compressed materialization test
 # group: [optimizer]
 
-statement ok
-PRAGMA explain_output = OPTIMIZED_ONLY
+# these functions live in the catalog, but cannot be called directly
+statement error
+select __internal_compress_string_utinyint('L')
+----
+Binder Error: Compressed materialization functions are for internal use only!
 
 # tricky tests taken from test/sql/subquery/scalar/test_issue_6136.test
 statement ok
@@ -38,15 +41,27 @@ from b
 {'x': NULL, 'y': NULL, '__matches': 0}
 
 statement ok
-create table test as
-select (range + 7) % 4 i,
-       (range + 7) % 11 j
-from range(10)
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+# we should see compress twice (in the ORDER BY expression and payload) and decompress once (just the payload)
+statement ok
+create table t1 as select range i from range(10)
+
+query II
+explain select i from t1 order by 10-i
+----
+logical_opt	<REGEX>:(.*__internal_decompress.*){1}(.*__internal_compress.*){2}
 
 # should see compress exactly twice (for columns i and j)
 # if we see less than twice we're not compressing,
 # and if we see it more than twice we're likely compressing and decompressing twice (once for each ORDER BY)
 # but we can compress once, then do both ORDER BYs, then decompress
+statement ok
+create table test as
+select (range + 7) % 4 i,
+       (range + 7) % 11 j
+from range(10)
+
 query II
 explain select count(i), count(j) from (select i, j from (select i, j from test order by j offset 1) order by j offset 1)
 ----

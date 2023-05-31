@@ -75,7 +75,7 @@ string GetStringMinMaxValue(const data_t data[]) {
 			break;
 		}
 	}
-	return string((const char *)data, len);
+	return string(const_char_ptr_cast(data), len);
 }
 
 string StringStats::Min(const BaseStatistics &stats) {

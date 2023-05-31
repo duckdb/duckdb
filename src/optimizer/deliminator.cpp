@@ -34,17 +34,6 @@ static bool IsEqualityJoinCondition(const JoinCondition &cond) {
 	}
 }
 
-bool JoinHasInequality(LogicalComparisonJoin &comparison_join) {
-	bool has_inequality = false;
-	for (const auto &cond : comparison_join.conditions) {
-		if (!IsEqualityJoinCondition(cond)) {
-			has_inequality = true;
-			break;
-		}
-	}
-	return has_inequality;
-}
-
 unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op) {
 	root = op;
 
@@ -224,11 +213,8 @@ bool FindAndReplaceBindings(vector<ColumnBinding> &traced_bindings, const vector
 			}
 		}
 
-		if (current_idx == expressions.size()) {
-			return false; // Didn't find
-		}
-		if (expressions[current_idx]->type != ExpressionType::BOUND_COLUMN_REF) {
-			return false; // Can't deal with non colref
+		if (current_idx == expressions.size() || expressions[current_idx]->type != ExpressionType::BOUND_COLUMN_REF) {
+			return false; // Didn't find / can't deal with non-colref
 		}
 
 		auto &colref = expressions[current_idx]->Cast<BoundColumnRefExpression>();
@@ -285,26 +271,21 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalDelimJoin &delim_join,
 		}
 
 		const auto current_bindings = current_op.get().GetColumnBindings();
+
+		reference<vector<unique_ptr<Expression>>> expressions = current_op.get().expressions;
 		switch (current_op.get().type) {
-		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-			auto &aggr = current_op.get().Cast<LogicalAggregate>();
-			if (!FindAndReplaceBindings(traced_bindings, aggr.groups, current_bindings)) {
-				return false;
-			}
+		case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
+			expressions = current_op.get().Cast<LogicalAggregate>().groups;
 			break;
-		}
-		case LogicalOperatorType::LOGICAL_PROJECTION: {
-			if (!FindAndReplaceBindings(traced_bindings, current_op.get().expressions, current_bindings)) {
-				return false;
-			}
+		case LogicalOperatorType::LOGICAL_PROJECTION:
 			break;
-		}
 		case LogicalOperatorType::LOGICAL_LIMIT:
 		case LogicalOperatorType::LOGICAL_FILTER:
-			break; // These don't change bindings
+			continue; // These don't change bindings
 		default:
 			return false;
 		}
+		FindAndReplaceBindings(traced_bindings, expressions.get(), current_bindings);
 
 		current_op = *current_op.get().children[0];
 	}
