@@ -1041,7 +1041,7 @@ string StatementGenerator::GenerateTestAllTypes(BaseScalarFunction &base_functio
 		children.push_back(std::move(argument));
 	}
 	auto from_clause = make_uniq<BaseTableRef>();
-	from_clause->table_name = "test_all_types";
+	from_clause->table_name = "all_types";
 	node->from_table = std::move(from_clause);
 
 	auto function_expr = make_uniq<FunctionExpression>(base_function.name, std::move(children));
@@ -1093,7 +1093,7 @@ string StatementGenerator::GenerateCast(const LogicalType &target, const string 
 	auto node = make_uniq<SelectNode>();
 
 	auto from_clause = make_uniq<BaseTableRef>();
-	from_clause->table_name = "test_all_types";
+	from_clause->table_name = "all_types";
 	node->from_table = std::move(from_clause);
 
 	unique_ptr<ParsedExpression> source;
