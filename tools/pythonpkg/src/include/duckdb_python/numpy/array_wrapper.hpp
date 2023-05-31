@@ -64,6 +64,7 @@ public:
 	NumpyResultConversion(vector<unique_ptr<NumpyResultConversion>> collections, const vector<LogicalType> &types);
 
 	void SetCategories();
+	void Append(DataChunk &chunk, idx_t offset);
 	void Append(DataChunk &chunk);
 
 	vector<LogicalType> Types() const {
@@ -77,6 +78,9 @@ public:
 
 	idx_t Count() const {
 		return count;
+	}
+	idx_t Capacity() const {
+		return capacity;
 	}
 
 	void Reset() {

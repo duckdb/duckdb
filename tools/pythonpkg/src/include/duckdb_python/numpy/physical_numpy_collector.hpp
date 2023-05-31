@@ -1,38 +1,36 @@
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb_python/numpy/physical_numpy_collector.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
 #pragma once
 
-#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
+#include "duckdb/execution/operator/helper/physical_materialized_collector.hpp"
+#include "duckdb_python/numpy/array_wrapper.hpp"
+#include "duckdb/common/types/batched_data_collection.hpp"
+#include "duckdb/common/map.hpp"
 
 namespace duckdb {
 
-class PhysicalNumpyCollector : public PhysicalResultCollector {
+class NumpyCollectorGlobalState : public MaterializedCollectorGlobalState {
 public:
-	PhysicalNumpyCollector(PreparedStatementData &data, bool parallel);
-	bool parallel;
+	//! The result returned by GetResult
+	unique_ptr<QueryResult> result;
+	//! The unordered batches
+	map<idx_t, unique_ptr<ColumnDataCollection>> batches;
+	//! The number assigned to a batch in Combine
+	idx_t batch_index = 0;
+	//! The collection we will create from the batches
+	unique_ptr<BatchedDataCollection> collection;
+};
 
+class PhysicalNumpyCollector : public PhysicalMaterializedCollector {
 public:
-	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) override;
+	PhysicalNumpyCollector(PreparedStatementData &data, bool parallel) : PhysicalMaterializedCollector(data, parallel) {
+	}
 
 public:
 	static unique_ptr<PhysicalResultCollector> Create(ClientContext &context, PreparedStatementData &data);
-	// Sink interface
-	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
+	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) override;
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          GlobalSinkState &gstate) const override;
-
-	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
-	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
-
-	bool ParallelSink() const override;
-	bool SinkOrderDependent() const override;
 };
 
 } // namespace duckdb

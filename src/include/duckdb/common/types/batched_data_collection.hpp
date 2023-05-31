@@ -15,7 +15,8 @@ namespace duckdb {
 class BufferManager;
 class ClientContext;
 
-using batch_iterator_t = map<idx_t, unique_ptr<ColumnDataCollection>>::iterator;
+using batch_map_t = map<idx_t, unique_ptr<ColumnDataCollection>>;
+using batch_iterator_t = typename batch_map_t::iterator;
 
 struct BatchedChunkIteratorRange {
 	batch_iterator_t begin;
@@ -32,6 +33,7 @@ struct BatchedChunkScanState {
 class BatchedDataCollection {
 public:
 	DUCKDB_API BatchedDataCollection(vector<LogicalType> types);
+	DUCKDB_API BatchedDataCollection(vector<LogicalType> types, batch_map_t batches);
 
 	//! Appends a datachunk with the given batch index to the batched collection
 	DUCKDB_API void Append(DataChunk &input, idx_t batch_index);
@@ -51,8 +53,20 @@ public:
 	//! Fetch a column data collection from the batched data collection - this consumes all of the data stored within
 	DUCKDB_API unique_ptr<ColumnDataCollection> FetchCollection();
 
+	//! Inspect how many tuples this batched data collection contains
+	DUCKDB_API idx_t Count() const;
+
+	//! Inspect the types of the collection
+	DUCKDB_API const vector<LogicalType> Types() const;
+
 	//! Inspect how many batches this collection contains
 	DUCKDB_API idx_t BatchCount() const;
+
+	//! Retrieve the batch index of the nth batch in the collection
+	DUCKDB_API idx_t IndexToBatchIndex(idx_t index) const;
+
+	//! Inspect how big a given batch is
+	DUCKDB_API idx_t BatchSize(idx_t batch_index) const;
 
 	//! Create an iterator range from the provided indices
 	BatchedChunkIteratorRange BatchRange(idx_t begin = 0, idx_t end = DConstants::INVALID_INDEX);

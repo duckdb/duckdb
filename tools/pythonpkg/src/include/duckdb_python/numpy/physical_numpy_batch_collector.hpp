@@ -1,45 +1,18 @@
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// duckdb/execution/operator/helper/physical_batch_collector.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
 #pragma once
 
-#include "duckdb/execution/operator/helper/physical_result_collector.hpp"
+#include "duckdb/execution/operator/helper/physical_batch_collector.hpp"
+#include "duckdb_python/numpy/array_wrapper.hpp"
 
 namespace duckdb {
 
-class PhysicalNumpyBatchCollector : public PhysicalResultCollector {
+class PhysicalNumpyBatchCollector : public PhysicalBatchCollector {
 public:
-	PhysicalNumpyBatchCollector(PreparedStatementData &data);
+	PhysicalNumpyBatchCollector(PreparedStatementData &data) : PhysicalBatchCollector(data) {
+	}
 
 public:
-	unique_ptr<QueryResult> GetResult(GlobalSinkState &state) override;
-
-public:
-	// Sink interface
-	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
-	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const override;
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          GlobalSinkState &gstate) const override;
-
-	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
-	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
-
-	bool RequiresBatchIndex() const override {
-		return true;
-	}
-
-	bool IsSink() const override {
-		return true;
-	}
-
-	bool ParallelSink() const override {
-		return true;
-	}
 };
 
 } // namespace duckdb

@@ -1,48 +1,11 @@
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb_python/numpy/physical_numpy_collector.hpp"
-#include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb_python/numpy/numpy_query_result.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb_python/numpy/array_wrapper.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb_python/numpy/physical_numpy_batch_collector.hpp"
+#include "duckdb_python/numpy/numpy_merge_event.hpp"
 
 namespace duckdb {
-
-PhysicalNumpyCollector::PhysicalNumpyCollector(PreparedStatementData &data, bool parallel)
-    : PhysicalResultCollector(data), parallel(parallel) {
-}
-
-//===--------------------------------------------------------------------===//
-// Sink
-//===--------------------------------------------------------------------===//
-class NumpyCollectorGlobalState : public GlobalSinkState {
-public:
-	~NumpyCollectorGlobalState() override {
-		py::gil_scoped_acquire gil;
-		collections.clear();
-	}
-
-public:
-	mutex glock;
-	vector<unique_ptr<NumpyResultConversion>> collections;
-	shared_ptr<ClientContext> context;
-};
-
-class NumpyCollectorLocalState : public LocalSinkState {
-public:
-	~NumpyCollectorLocalState() override {
-		// If an exception occurred, this is destroyed without the GIL held
-		if (py::gil_check()) {
-			collection.reset();
-		} else {
-			py::gil_scoped_acquire gil;
-			collection.reset();
-		}
-	}
-
-public:
-	unique_ptr<NumpyResultConversion> collection;
-};
 
 unique_ptr<PhysicalResultCollector> PhysicalNumpyCollector::Create(ClientContext &context,
                                                                    PreparedStatementData &data) {
@@ -68,71 +31,53 @@ unique_ptr<PhysicalResultCollector> PhysicalNumpyCollector::Create(ClientContext
 	}
 }
 
-SinkResultType PhysicalNumpyCollector::Sink(ExecutionContext &context, DataChunk &chunk,
-                                            OperatorSinkInput &input) const {
-	auto &lstate = input.local_state.Cast<NumpyCollectorLocalState>();
-	py::gil_scoped_acquire gil;
-	lstate.collection->Append(chunk);
-	return SinkResultType::NEED_MORE_INPUT;
-}
-
 void PhysicalNumpyCollector::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
                                      LocalSinkState &lstate_p) const {
 	auto &gstate = gstate_p.Cast<NumpyCollectorGlobalState>();
-	auto &lstate = lstate_p.Cast<NumpyCollectorLocalState>();
+	auto &lstate = lstate_p.Cast<MaterializedCollectorLocalState>();
+	if (lstate.collection->Count() == 0) {
+		return;
+	}
 
+	// Collect all the collections
 	lock_guard<mutex> l(gstate.glock);
-	gstate.collections.push_back(std::move(lstate.collection));
+	gstate.batches[gstate.batch_index++] = std::move(lstate.collection);
+}
+
+unique_ptr<QueryResult> PhysicalNumpyCollector::GetResult(GlobalSinkState &state_p) {
+	auto &gstate = state_p.Cast<NumpyCollectorGlobalState>();
+	return std::move(gstate.result);
+}
+
+unique_ptr<GlobalSinkState> PhysicalNumpyCollector::GetGlobalSinkState(ClientContext &context) const {
+	return make_uniq<NumpyCollectorGlobalState>();
 }
 
 SinkFinalizeType PhysicalNumpyCollector::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                   GlobalSinkState &gstate_p) const {
-	// auto &gstate = gstate_p.Cast<NumpyCollectorGlobalState>();
+	auto &gstate = gstate_p.Cast<NumpyCollectorGlobalState>();
+	D_ASSERT(gstate.collection == nullptr);
 
-	// auto new_event = make_shared<HashAggregateMergeEvent>(*this, gstate, &pipeline);
-	// event.InsertEvent(std::move(new_event));
+	gstate.collection = make_uniq<BatchedDataCollection>(types, std::move(gstate.batches));
 
-	return SinkFinalizeType::READY;
-}
-
-unique_ptr<GlobalSinkState> PhysicalNumpyCollector::GetGlobalSinkState(ClientContext &context) const {
-	auto state = make_uniq<NumpyCollectorGlobalState>();
-	state->context = context.shared_from_this();
-	return std::move(state);
-}
-
-unique_ptr<LocalSinkState> PhysicalNumpyCollector::GetLocalSinkState(ExecutionContext &context) const {
-	auto state = make_uniq<NumpyCollectorLocalState>();
+	// Pre-allocate the conversion result
+	unique_ptr<NumpyResultConversion> result;
+	auto total_tuple_count = gstate.collection->Count();
+	auto &types = gstate.collection->Types();
 	{
 		py::gil_scoped_acquire gil;
-		state->collection = make_uniq<NumpyResultConversion>(types, STANDARD_VECTOR_SIZE);
-	}
-	return std::move(state);
-}
-
-unique_ptr<QueryResult> PhysicalNumpyCollector::GetResult(GlobalSinkState &state) {
-	auto &gstate = state.Cast<NumpyCollectorGlobalState>();
-
-	unique_ptr<NumpyResultConversion> collection;
-	D_ASSERT(!gstate.collections.empty());
-	if (gstate.collections.size() == 1) {
-		collection = std::move(gstate.collections[0]);
-	} else {
-		py::gil_scoped_acquire gil;
-		collection = make_uniq<NumpyResultConversion>(std::move(gstate.collections), types);
+		result = make_uniq<NumpyResultConversion>(types, total_tuple_count);
 	}
 
-	auto result = make_uniq<NumpyQueryResult>(statement_type, properties, names, std::move(collection),
-	                                          gstate.context->GetClientProperties());
-	return std::move(result);
-}
+	// Spawn an event that will populate the conversion result
+	auto new_event = make_shared<NumpyMergeEvent>(*result, *gstate.collection, pipeline);
+	event.InsertEvent(std::move(new_event));
 
-bool PhysicalNumpyCollector::ParallelSink() const {
-	return parallel;
-}
+	// Already create the final query result
+	gstate.result = make_uniq<NumpyQueryResult>(statement_type, properties, names, std::move(result),
+	                                            context.GetClientProperties());
 
-bool PhysicalNumpyCollector::SinkOrderDependent() const {
-	return true;
+	return SinkFinalizeType::READY;
 }
 
 } // namespace duckdb

@@ -8,6 +8,10 @@ namespace duckdb {
 BatchedDataCollection::BatchedDataCollection(vector<LogicalType> types_p) : types(std::move(types_p)) {
 }
 
+BatchedDataCollection::BatchedDataCollection(vector<LogicalType> types_p, batch_map_t batches)
+    : types(std::move(types_p)), data(std::move(batches)) {
+}
+
 void BatchedDataCollection::Append(DataChunk &input, idx_t batch_index) {
 	D_ASSERT(batch_index != DConstants::INVALID_INDEX);
 	optional_ptr<ColumnDataCollection> collection;
@@ -92,8 +96,39 @@ unique_ptr<ColumnDataCollection> BatchedDataCollection::FetchCollection() {
 	return result;
 }
 
+const vector<LogicalType> BatchedDataCollection::Types() const {
+	return types;
+}
+
+idx_t BatchedDataCollection::Count() const {
+	idx_t count = 0;
+	for (auto &collection : data) {
+		count += collection.second->Count();
+	}
+	return count;
+}
+
 idx_t BatchedDataCollection::BatchCount() const {
 	return data.size();
+}
+
+idx_t BatchedDataCollection::IndexToBatchIndex(idx_t index) const {
+	if (index >= data.size()) {
+		throw InternalException("Index %d is out of range for this collection, it only contains %d batches", index,
+		                        data.size());
+	}
+	auto entry = data.begin();
+	std::advance(entry, index);
+	return entry->first;
+}
+
+idx_t BatchedDataCollection::BatchSize(idx_t batch_index) const {
+	auto entry = data.find(batch_index);
+	if (entry == data.end()) {
+		throw InternalException("This batched data collection does not contain a collection for batch_index %d",
+		                        batch_index);
+	}
+	return entry->second->Count();
 }
 
 BatchedChunkIteratorRange BatchedDataCollection::BatchRange(idx_t begin_idx, idx_t end_idx) {
