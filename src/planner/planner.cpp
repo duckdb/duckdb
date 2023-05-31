@@ -151,7 +151,7 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 		// unsupported (for now)
 		return false;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
-		return static_cast<LogicalExtensionOperator &>(op).SupportsSerialization();
+		return static_cast<LogicalExtensionOperator &>(op).SupportSerialization();
 	default:
 		break;
 	}
