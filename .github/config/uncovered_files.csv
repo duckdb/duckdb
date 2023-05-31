@@ -54,7 +54,7 @@ common/serializer/buffered_file_reader.cpp	9
 common/serializer/buffered_file_writer.cpp	2
 common/sort/comparators.cpp	72
 common/sort/merge_sorter.cpp	100
-common/sort/partition_state.cpp	43
+common/sort/partition_state.cpp	44
 common/sort/sort_state.cpp	10
 common/sort/sorted_block.cpp	20
 common/string_util.cpp	15
