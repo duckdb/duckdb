@@ -31,7 +31,7 @@ static py::list ConvertToSingleBatch(vector<LogicalType> &types, vector<string> 
 	return single_batch;
 }
 
-static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, ArrowOptions options) {
+static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ArrowOptions &options) {
 	auto types = input.GetTypes();
 	vector<string> names;
 	names.reserve(types.size());
@@ -123,8 +123,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 		auto count = input.size();
 
 		// Call the function
-		PyObject *ret = nullptr;
-		ret = PyObject_CallObject(function, column_list.ptr());
+		auto ret = PyObject_CallObject(function, column_list.ptr());
 		if (ret == nullptr && PyErr_Occurred()) {
 			if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
 				auto exception = py::error_already_set();
@@ -179,8 +178,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 			}
 
 			// Call the function
-			PyObject *ret = nullptr;
-			ret = PyObject_CallObject(function, bundled_parameters.ptr());
+			auto ret = PyObject_CallObject(function, bundled_parameters.ptr());
 			if (ret == nullptr && PyErr_Occurred()) {
 				if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
 					auto exception = py::error_already_set();
