@@ -56,6 +56,8 @@ def run_fuzzer_script(fuzzer):
         return "call sqlsmith(max_queries=${MAX_QUERIES}, seed=${SEED}, verbose_output=1, log='${LAST_LOG_FILE}', complete_log='${COMPLETE_LOG_FILE}');"
     elif fuzzer == 'duckfuzz':
         return "call fuzzyduck(max_queries=${MAX_QUERIES}, seed=${SEED}, verbose_output=1, log='${LAST_LOG_FILE}', complete_log='${COMPLETE_LOG_FILE}');"
+    elif fuzzer == 'duckfuzz_functions':
+        return "call fuzz_all_functions(seed=${SEED}, verbose_output=1, log='${LAST_LOG_FILE}', complete_log='${COMPLETE_LOG_FILE}');"
     else:
         raise Exception("Unknown fuzzer type")
 
@@ -64,6 +66,8 @@ def get_fuzzer_name(fuzzer):
         return 'SQLSmith'
     elif fuzzer == 'duckfuzz':
         return 'DuckFuzz'
+    elif fuzzer == 'duckfuzz_functions':
+        return 'DuckFuzz (Functions)'
     else:
         return 'Unknown'
 
