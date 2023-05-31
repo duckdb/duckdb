@@ -56,7 +56,7 @@ public:
 	//! or throws an exception if the column could not be bound.
 	BindResult BindColumn(ColumnRefExpression &colref, idx_t depth);
 	string BindColumn(PositionalReferenceExpression &ref, string &table_name, string &column_name);
-	BindResult BindColumn(PositionalReferenceExpression &ref, idx_t depth);
+	unique_ptr<ColumnRefExpression> PositionToColumn(PositionalReferenceExpression &ref);
 
 	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &table_name, const string &column_name);
 
