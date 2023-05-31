@@ -363,10 +363,6 @@ InternalException::InternalException(const string &msg) : FatalException(Excepti
 #endif
 }
 
-MissingExtensionException::MissingExtensionException(const string &msg) :
-    Exception(ExceptionType::MISSING_EXTENSION, msg){
-}
-
 InvalidInputException::InvalidInputException(const string &msg) : Exception(ExceptionType::INVALID_INPUT, msg) {
 }
 
