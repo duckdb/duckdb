@@ -89,6 +89,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"worker_threads", {42}},
 	    {"enable_http_metadata_cache", {true}},
 	    {"force_bitpacking_mode", {"constant"}},
+	    {"arrow_large_buffer_size", {true}},
 	};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
