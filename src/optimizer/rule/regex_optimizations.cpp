@@ -154,11 +154,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 	// the constant_expr is a scalar expression that we have to fold
 	if (!constant_expr.IsFoldable()) {
 		return nullptr;
-	}
-
-	constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
-	D_ASSERT(constant_value.type() == constant_expr.return_type);
-	patt_str = StringValue::Get(constant_value);
+	};
 
 	duckdb_re2::RE2 pattern(patt_str, parsed_options);
 	if (!pattern.ok()) {
