@@ -20,7 +20,7 @@ unique_ptr<PhysicalResultCollector> PhysicalNumpyCollector::Create(ClientContext
 
 	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, *data.plan)) {
 		// the plan is not order preserving, so we just use the parallel materialized collector
-		return make_uniq_base<PhysicalResultCollector, PhysicalNumpyCollector>(data, false);
+		return make_uniq_base<PhysicalResultCollector, PhysicalNumpyCollector>(data, true);
 	} else if (!PhysicalPlanGenerator::UseBatchIndex(context, *data.plan)) {
 		// the plan is order preserving, but we cannot use the batch index: use a single-threaded result collector
 		return make_uniq_base<PhysicalResultCollector, PhysicalNumpyCollector>(data, false);
