@@ -228,7 +228,8 @@ void Prefix::Reduce(ART &art, Node &prefix_node, const idx_t n) {
 	for (idx_t i = 0; i < Node::PREFIX_SIZE - n - 1; i++) {
 		prefix.get().data[i] = prefix.get().data[n + i + 1];
 	}
-	prefix.get().data[Node::PREFIX_SIZE] = Node::PREFIX_SIZE - n - 1;
+	D_ASSERT(n < (idx_t)(prefix.get().data[Node::PREFIX_SIZE] - 1));
+	prefix.get().data[Node::PREFIX_SIZE] -= n + 1;
 
 	// append the remaining prefix bytes
 	prefix.get().Append(art, prefix.get().ptr);
