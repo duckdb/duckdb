@@ -36,6 +36,8 @@ void PhysicalNumpyCollector::Combine(ExecutionContext &context, GlobalSinkState 
 	auto &gstate = gstate_p.Cast<NumpyCollectorGlobalState>();
 	auto &lstate = lstate_p.Cast<MaterializedCollectorLocalState>();
 	if (lstate.collection->Count() == 0) {
+		py::gil_scoped_acquire gil;
+		lstate.collection.reset();
 		return;
 	}
 
@@ -67,6 +69,12 @@ SinkFinalizeType PhysicalNumpyCollector::Finalize(Pipeline &pipeline, Event &eve
 	{
 		py::gil_scoped_acquire gil;
 		result = make_uniq<NumpyResultConversion>(types, total_tuple_count);
+	}
+	if (total_tuple_count == 0) {
+		// Create the result containing a single empty numpy result
+		gstate.result = make_uniq<NumpyQueryResult>(statement_type, properties, names, std::move(result),
+		                                            context.GetClientProperties());
+		return SinkFinalizeType::READY;
 	}
 
 	// Spawn an event that will populate the conversion result

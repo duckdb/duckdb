@@ -5,6 +5,18 @@
 
 namespace duckdb {
 
+class NumpyBatchGlobalState : public BatchCollectorGlobalState {
+public:
+	NumpyBatchGlobalState(ClientContext &context, const PhysicalBatchCollector &op)
+	    : BatchCollectorGlobalState(context, op) {
+	}
+	~NumpyBatchGlobalState() override {
+		// If an exception occurred, we need to grab the gil so we can destroy this
+		py::gil_scoped_acquire gil;
+		result.reset();
+	}
+};
+
 class PhysicalNumpyBatchCollector : public PhysicalBatchCollector {
 public:
 	PhysicalNumpyBatchCollector(PreparedStatementData &data) : PhysicalBatchCollector(data) {
@@ -13,6 +25,7 @@ public:
 public:
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          GlobalSinkState &gstate) const override;
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 };
 
 } // namespace duckdb

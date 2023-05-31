@@ -6,9 +6,13 @@
 
 namespace duckdb {
 
+unique_ptr<GlobalSinkState> PhysicalNumpyBatchCollector::GetGlobalSinkState(ClientContext &context) const {
+	return make_uniq<NumpyBatchGlobalState>(context, *this);
+}
+
 SinkFinalizeType PhysicalNumpyBatchCollector::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                        GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<BatchCollectorGlobalState>();
+	auto &gstate = gstate_p.Cast<NumpyBatchGlobalState>();
 
 	// Pre-allocate the conversion result
 	unique_ptr<NumpyResultConversion> result;
@@ -17,6 +21,12 @@ SinkFinalizeType PhysicalNumpyBatchCollector::Finalize(Pipeline &pipeline, Event
 	{
 		py::gil_scoped_acquire gil;
 		result = make_uniq<NumpyResultConversion>(types, total_tuple_count);
+	}
+	if (total_tuple_count == 0) {
+		// Create the result containing a single empty result conversion
+		gstate.result = make_uniq<NumpyQueryResult>(statement_type, properties, names, std::move(result),
+		                                            context.GetClientProperties());
+		return SinkFinalizeType::READY;
 	}
 
 	// Spawn an event that will populate the conversion result

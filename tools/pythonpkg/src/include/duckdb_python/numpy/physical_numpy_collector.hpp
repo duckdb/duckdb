@@ -9,6 +9,13 @@ namespace duckdb {
 
 class NumpyCollectorGlobalState : public MaterializedCollectorGlobalState {
 public:
+	~NumpyCollectorGlobalState() override {
+		py::gil_scoped_acquire gil;
+		result.reset();
+		batches.clear();
+	}
+
+public:
 	//! The result returned by GetResult
 	unique_ptr<QueryResult> result;
 	//! The unordered batches
