@@ -124,8 +124,8 @@ protected:
 	                          const LogicalType &list_child_type);
 	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
-	BindResult BindExpression(PositionalReferenceExpression &ref, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
+	BindResult BindPositionalReference(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression);
 
 	void TransformCapturedLambdaColumn(unique_ptr<Expression> &original, unique_ptr<Expression> &replacement,
 	                                   vector<unique_ptr<Expression>> &captures, LogicalType &list_child_type);
