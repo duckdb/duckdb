@@ -14,12 +14,14 @@ on:
       - 'tools/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
+      - '.github/config/uncovered_files.csv'
   pull_request:
     paths-ignore:
       - '**.md'
       - 'tools/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
+      - '.github/config/uncovered_files.csv'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}

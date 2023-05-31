@@ -15,6 +15,8 @@ shell = None
 for param in sys.argv:
     if param == '--sqlsmith':
         fuzzer = 'sqlsmith'
+    elif param == '--duckfuzz':
+        fuzzer = 'duckfuzz'
     elif param == '--alltypes':
         db = 'alltypes'
     elif param == '--tpch':
@@ -25,7 +27,7 @@ for param in sys.argv:
         seed = int(param.replace('--seed=', ''))
 
 if fuzzer is None:
-    print("Unrecognized fuzzer to run, expected e.g. --sqlsmith")
+    print("Unrecognized fuzzer to run, expected e.g. --sqlsmith or --duckfuzz")
     exit(1)
 
 if db is None:
@@ -52,6 +54,8 @@ def create_db_script(db):
 def run_fuzzer_script(fuzzer):
     if fuzzer == 'sqlsmith':
         return "call sqlsmith(max_queries=${MAX_QUERIES}, seed=${SEED}, verbose_output=1, log='${LAST_LOG_FILE}', complete_log='${COMPLETE_LOG_FILE}');"
+    elif fuzzer == 'duckfuzz':
+        return "call fuzzyduck(max_queries=${MAX_QUERIES}, seed=${SEED}, verbose_output=1, log='${LAST_LOG_FILE}', complete_log='${COMPLETE_LOG_FILE}');"
     else:
         raise Exception("Unknown fuzzer type")
 

@@ -150,126 +150,124 @@ struct ModeAssignmentString {
 template <typename KEY_TYPE, typename ASSIGN_OP>
 struct ModeFunction {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->Initialize();
+	static void Initialize(STATE &state) {
+		state.Initialize();
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
-		if (!state->frequency_map) {
-			state->frequency_map = new typename STATE::Counts();
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
+		if (!state.frequency_map) {
+			state.frequency_map = new typename STATE::Counts();
 		}
-		auto key = KEY_TYPE(input[idx]);
-		auto &i = (*state->frequency_map)[key];
+		auto key = KEY_TYPE(input);
+		auto &i = (*state.frequency_map)[key];
 		i.count++;
-		i.first_row = MinValue<idx_t>(i.first_row, state->count);
-		state->count++;
+		i.first_row = MinValue<idx_t>(i.first_row, state.count);
+		state.count++;
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.frequency_map) {
 			return;
 		}
-		if (!target->frequency_map) {
+		if (!target.frequency_map) {
 			// Copy - don't destroy! Otherwise windowing will break.
-			target->frequency_map = new typename STATE::Counts(*source.frequency_map);
+			target.frequency_map = new typename STATE::Counts(*source.frequency_map);
 			return;
 		}
 		for (auto &val : *source.frequency_map) {
-			auto &i = (*target->frequency_map)[val.first];
+			auto &i = (*target.frequency_map)[val.first];
 			i.count += val.second.count;
 			i.first_row = MinValue(i.first_row, val.second.first_row);
 		}
-		target->count += source.count;
+		target.count += source.count;
 	}
 
-	template <class INPUT_TYPE, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, INPUT_TYPE *target, ValidityMask &mask,
-	                     idx_t idx) {
-		if (!state->frequency_map) {
-			mask.SetInvalid(idx);
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.frequency_map) {
+			finalize_data.ReturnNull();
 			return;
 		}
-		auto highest_frequency = state->Scan();
-		if (highest_frequency != state->frequency_map->end()) {
-			target[idx] = ASSIGN_OP::template Assign<INPUT_TYPE, INPUT_TYPE>(result, highest_frequency->first);
+		auto highest_frequency = state.Scan();
+		if (highest_frequency != state.frequency_map->end()) {
+			target = ASSIGN_OP::template Assign<T, T>(finalize_data.result, highest_frequency->first);
 		} else {
-			mask.SetInvalid(idx);
+			finalize_data.ReturnNull();
 		}
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask,
-	                              idx_t count) {
-		if (!state->frequency_map) {
-			state->frequency_map = new typename STATE::Counts();
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &, idx_t count) {
+		if (!state.frequency_map) {
+			state.frequency_map = new typename STATE::Counts();
 		}
-		auto key = KEY_TYPE(input[0]);
-		auto &i = (*state->frequency_map)[key];
+		auto key = KEY_TYPE(input);
+		auto &i = (*state.frequency_map)[key];
 		i.count += count;
-		i.first_row = MinValue<idx_t>(i.first_row, state->count);
-		state->count += count;
+		i.first_row = MinValue<idx_t>(i.first_row, state.count);
+		state.count += count;
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &fmask, const ValidityMask &dmask,
-	                   AggregateInputData &, STATE *state, const FrameBounds &frame, const FrameBounds &prev,
+	                   AggregateInputData &, STATE &state, const FrameBounds &frame, const FrameBounds &prev,
 	                   Vector &result, idx_t rid, idx_t bias) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
 		ModeIncluded included(fmask, dmask, bias);
 
-		if (!state->frequency_map) {
-			state->frequency_map = new typename STATE::Counts;
+		if (!state.frequency_map) {
+			state.frequency_map = new typename STATE::Counts;
 		}
 		const double tau = .25;
-		if (state->nonzero <= tau * state->frequency_map->size()) {
-			state->Reset();
+		if (state.nonzero <= tau * state.frequency_map->size()) {
+			state.Reset();
 			// for f ∈ F do
 			for (auto f = frame.first; f < frame.second; ++f) {
 				if (included(f)) {
-					state->ModeAdd(KEY_TYPE(data[f]), f);
+					state.ModeAdd(KEY_TYPE(data[f]), f);
 				}
 			}
 		} else {
 			// for f ∈ P \ F do
 			for (auto p = prev.first; p < frame.first; ++p) {
 				if (included(p)) {
-					state->ModeRm(KEY_TYPE(data[p]), p);
+					state.ModeRm(KEY_TYPE(data[p]), p);
 				}
 			}
 			for (auto p = frame.second; p < prev.second; ++p) {
 				if (included(p)) {
-					state->ModeRm(KEY_TYPE(data[p]), p);
+					state.ModeRm(KEY_TYPE(data[p]), p);
 				}
 			}
 
 			// for f ∈ F \ P do
 			for (auto f = frame.first; f < prev.first; ++f) {
 				if (included(f)) {
-					state->ModeAdd(KEY_TYPE(data[f]), f);
+					state.ModeAdd(KEY_TYPE(data[f]), f);
 				}
 			}
 			for (auto f = prev.second; f < frame.second; ++f) {
 				if (included(f)) {
-					state->ModeAdd(KEY_TYPE(data[f]), f);
+					state.ModeAdd(KEY_TYPE(data[f]), f);
 				}
 			}
 		}
 
-		if (!state->valid) {
+		if (!state.valid) {
 			// Rescan
-			auto highest_frequency = state->Scan();
-			if (highest_frequency != state->frequency_map->end()) {
-				*(state->mode) = highest_frequency->first;
-				state->count = highest_frequency->second.count;
-				state->valid = (state->count > 0);
+			auto highest_frequency = state.Scan();
+			if (highest_frequency != state.frequency_map->end()) {
+				*(state.mode) = highest_frequency->first;
+				state.count = highest_frequency->second.count;
+				state.valid = (state.count > 0);
 			}
 		}
 
-		if (state->valid) {
-			rdata[rid] = ASSIGN_OP::template Assign<INPUT_TYPE, RESULT_TYPE>(result, *state->mode);
+		if (state.valid) {
+			rdata[rid] = ASSIGN_OP::template Assign<INPUT_TYPE, RESULT_TYPE>(result, *state.mode);
 		} else {
 			rmask.Set(rid, false);
 		}
@@ -280,8 +278,8 @@ struct ModeFunction {
 	}
 
 	template <class STATE>
-	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
-		state->Destroy();
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		state.Destroy();
 	}
 };
 

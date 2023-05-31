@@ -2,7 +2,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
@@ -16,52 +15,50 @@ struct ApproxDistinctCountState {
 			delete log;
 		}
 	}
-	void Resize(idx_t count) {
-		indices.resize(count);
-		counts.resize(count);
-	}
 
 	HyperLogLog *log;
-	vector<uint64_t> indices;
-	vector<uint8_t> counts;
 };
 
 struct ApproxCountDistinctFunction {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		new (state) STATE;
+	static void Initialize(STATE &state) {
+		state.log = nullptr;
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.log) {
 			return;
 		}
-		if (!target->log) {
-			target->log = new HyperLogLog();
+		if (!target.log) {
+			target.log = new HyperLogLog();
 		}
-		D_ASSERT(target->log);
+		D_ASSERT(target.log);
 		D_ASSERT(source.log);
-		auto new_log = target->log->MergePointer(*source.log);
-		delete target->log;
-		target->log = new_log;
+		auto new_log = target.log->MergePointer(*source.log);
+		delete target.log;
+		target.log = new_log;
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (state->log) {
-			target[idx] = state->log->Count();
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.log) {
+			target = state.log->Count();
 		} else {
-			target[idx] = 0;
+			target = 0;
 		}
 	}
 
 	static bool IgnoreNull() {
 		return true;
 	}
+
 	template <class STATE>
-	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
-		state->~STATE();
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		if (state.log) {
+			delete state.log;
+			state.log = nullptr;
+		}
 	}
 };
 
@@ -77,10 +74,11 @@ static void ApproxCountDistinctSimpleUpdateFunction(Vector inputs[], AggregateIn
 	UnifiedVectorFormat vdata;
 	inputs[0].ToUnifiedFormat(count, vdata);
 
-	agg_state->Resize(count);
-	auto indices = agg_state->indices.data();
-	auto counts = agg_state->counts.data();
-
+	if (count > STANDARD_VECTOR_SIZE) {
+		throw InternalException("ApproxCountDistinct - count must be at most vector size");
+	}
+	uint64_t indices[STANDARD_VECTOR_SIZE];
+	uint8_t counts[STANDARD_VECTOR_SIZE];
 	HyperLogLog::ProcessEntries(vdata, inputs[0].GetType(), indices, counts, count);
 	agg_state->log->AddToLog(vdata, count, indices, counts);
 }
@@ -93,23 +91,21 @@ static void ApproxCountDistinctUpdateFunction(Vector inputs[], AggregateInputDat
 	state_vector.ToUnifiedFormat(count, sdata);
 	auto states = UnifiedVectorFormat::GetDataNoConst<ApproxDistinctCountState *>(sdata);
 
-	uint64_t *indices = nullptr;
-	uint8_t *counts = nullptr;
 	for (idx_t i = 0; i < count; i++) {
 		auto agg_state = states[sdata.sel->get_index(i)];
 		if (!agg_state->log) {
 			agg_state->log = new HyperLogLog();
-		}
-		if (i == 0) {
-			agg_state->Resize(count);
-			indices = agg_state->indices.data();
-			counts = agg_state->counts.data();
 		}
 	}
 
 	UnifiedVectorFormat vdata;
 	inputs[0].ToUnifiedFormat(count, vdata);
 
+	if (count > STANDARD_VECTOR_SIZE) {
+		throw InternalException("ApproxCountDistinct - count must be at most vector size");
+	}
+	uint64_t indices[STANDARD_VECTOR_SIZE];
+	uint8_t counts[STANDARD_VECTOR_SIZE];
 	HyperLogLog::ProcessEntries(vdata, inputs[0].GetType(), indices, counts, count);
 	HyperLogLog::AddToLogs(vdata, count, indices, counts, reinterpret_cast<HyperLogLog ***>(states), sdata.sel);
 }

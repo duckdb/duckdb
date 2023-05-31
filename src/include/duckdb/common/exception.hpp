@@ -105,6 +105,9 @@ public:
 
 	template <typename... Args>
 	static string ConstructMessage(const string &msg, Args... params) {
+		const std::size_t num_args = sizeof...(Args);
+		if (num_args == 0)
+			return msg;
 		std::vector<ExceptionFormatValue> values;
 		return ConstructMessageRecursive(msg, values, params...);
 	}

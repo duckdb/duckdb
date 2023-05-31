@@ -2788,7 +2788,19 @@ public class TestDuckDBJDBC {
 				SQLException.class
 		);
 
-		assertTrue(message.contains("unrecognized configuration parameter \"invalid config name\""));
+		assertTrue(message.contains("Unrecognized configuration property \"invalid config name\""));
+	}
+
+	public static void test_valid_but_local_config_throws_exception() throws Exception {
+		Properties info = new Properties();
+		info.put("ordered_aggregate_threshold", "123");
+
+		String message = assertThrows(
+				() -> DriverManager.getConnection("jdbc:duckdb:", info),
+				SQLException.class
+		);
+
+		assertTrue(message.contains("Failed to set configuration option \"ordered_aggregate_threshold\""));
 	}
 
 	private static String getSetting(Connection conn, String settingName) throws Exception {
@@ -3619,7 +3631,7 @@ public class TestDuckDBJDBC {
 			System.out.println("No tests found that match " + specific_test);
 			System.exit(1);
 		}
-		System.out.println("OK");
+		System.out.println(anyFailed ? "FAILED" : "OK");
 
 		System.exit(anyFailed ? 1 : 0);
 	}

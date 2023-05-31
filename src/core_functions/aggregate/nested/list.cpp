@@ -55,17 +55,16 @@ struct ListAggState {
 
 struct ListFunction {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->linked_list.total_capacity = 0;
-		state->linked_list.first_segment = nullptr;
-		state->linked_list.last_segment = nullptr;
+	static void Initialize(STATE &state) {
+		state.linked_list.total_capacity = 0;
+		state.linked_list.first_segment = nullptr;
+		state.linked_list.last_segment = nullptr;
 	}
 
 	template <class STATE>
-	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
-		D_ASSERT(state);
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
 		auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
-		list_bind_data.functions.Destroy(aggr_input_data.allocator, state->linked_list);
+		list_bind_data.functions.Destroy(aggr_input_data.allocator, state.linked_list);
 	}
 	static bool IgnoreNull() {
 		return false;
@@ -86,8 +85,8 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 
 	for (idx_t i = 0; i < count; i++) {
-		auto state = states[sdata.sel->get_index(i)];
-		list_bind_data.functions.AppendRow(aggr_input_data.allocator, state->linked_list, input, i, count);
+		auto &state = *states[sdata.sel->get_index(i)];
+		list_bind_data.functions.AppendRow(aggr_input_data.allocator, state.linked_list, input, i, count);
 	}
 }
 
@@ -100,15 +99,15 @@ static void ListCombineFunction(Vector &state, Vector &combined, AggregateInputD
 
 	auto combined_ptr = FlatVector::GetData<ListAggState *>(combined);
 	for (idx_t i = 0; i < count; i++) {
-		auto state = states_ptr[sdata.sel->get_index(i)];
-		if (state->linked_list.total_capacity == 0) {
+		auto &state = *states_ptr[sdata.sel->get_index(i)];
+		if (state.linked_list.total_capacity == 0) {
 			// NULL, no need to append.
 			continue;
 		}
 
 		// copy the linked list of the state
-		auto copied_linked_list = LinkedList(state->linked_list.total_capacity, nullptr, nullptr);
-		list_bind_data.functions.CopyLinkedList(state->linked_list, copied_linked_list, aggr_input_data.allocator);
+		auto copied_linked_list = LinkedList(state.linked_list.total_capacity, nullptr, nullptr);
+		list_bind_data.functions.CopyLinkedList(state.linked_list, copied_linked_list, aggr_input_data.allocator);
 
 		// append the copied linked list to the combined state
 		if (combined_ptr[i]->linked_list.last_segment) {
@@ -136,16 +135,16 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &aggr_input_da
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 	// first iterate over all of the entries and set up the list entries, plus get the newly required total length
 	for (idx_t i = 0; i < count; i++) {
-		auto state = states[sdata.sel->get_index(i)];
+		auto &state = *states[sdata.sel->get_index(i)];
 		const auto rid = i + offset;
 		result_data[rid].offset = total_len;
-		if (state->linked_list.total_capacity == 0) {
+		if (state.linked_list.total_capacity == 0) {
 			mask.SetInvalid(rid);
 			result_data[rid].length = 0;
 			continue;
 		}
 		// set the length and offset of this list in the result vector
-		auto total_capacity = state->linked_list.total_capacity;
+		auto total_capacity = state.linked_list.total_capacity;
 		result_data[rid].length = total_capacity;
 		total_len += total_capacity;
 	}
@@ -153,14 +152,14 @@ static void ListFinalize(Vector &state_vector, AggregateInputData &aggr_input_da
 	ListVector::Reserve(result, total_len);
 	auto &result_child = ListVector::GetEntry(result);
 	for (idx_t i = 0; i < count; i++) {
-		auto state = states[sdata.sel->get_index(i)];
+		auto &state = *states[sdata.sel->get_index(i)];
 		const auto rid = i + offset;
-		if (state->linked_list.total_capacity == 0) {
+		if (state.linked_list.total_capacity == 0) {
 			continue;
 		}
 
 		idx_t current_offset = result_data[rid].offset;
-		list_bind_data.functions.BuildListVector(state->linked_list, result_child, current_offset);
+		list_bind_data.functions.BuildListVector(state.linked_list, result_child, current_offset);
 	}
 	ListVector::SetListSize(result, total_len);
 }

@@ -15,42 +15,39 @@ struct RegrInterceptState {
 
 struct RegrInterceptOperation {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->count = 0;
-		state->sum_x = 0;
-		state->sum_y = 0;
-		RegrSlopeOperation::Initialize<RegrSlopeState>(&state->slope);
+	static void Initialize(STATE &state) {
+		state.count = 0;
+		state.sum_x = 0;
+		state.sum_y = 0;
+		RegrSlopeOperation::Initialize<RegrSlopeState>(state.slope);
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &aggr_input_data, const A_TYPE *x_data, const B_TYPE *y_data,
-	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		state->count++;
-		state->sum_x += y_data[yidx];
-		state->sum_y += x_data[xidx];
-		RegrSlopeOperation::Operation<A_TYPE, B_TYPE, RegrSlopeState, OP>(&state->slope, aggr_input_data, x_data,
-		                                                                  y_data, amask, bmask, xidx, yidx);
+	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
+		state.count++;
+		state.sum_x += y;
+		state.sum_y += x;
+		RegrSlopeOperation::Operation<A_TYPE, B_TYPE, RegrSlopeState, OP>(state.slope, x, y, idata);
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
-		target->count += source.count;
-		target->sum_x += source.sum_x;
-		target->sum_y += source.sum_y;
-		RegrSlopeOperation::Combine<RegrSlopeState, OP>(source.slope, &target->slope, aggr_input_data);
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
+		target.count += source.count;
+		target.sum_x += source.sum_x;
+		target.sum_y += source.sum_y;
+		RegrSlopeOperation::Combine<RegrSlopeState, OP>(source.slope, target.slope, aggr_input_data);
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target,
-	                     ValidityMask &mask, idx_t idx) {
-		if (state->count == 0) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
 			return;
 		}
-		RegrSlopeOperation::Finalize<T, RegrSlopeState>(result, aggr_input_data, &state->slope, target, mask, idx);
-		auto x_avg = state->sum_x / state->count;
-		auto y_avg = state->sum_y / state->count;
-		target[idx] = y_avg - target[idx] * x_avg;
+		RegrSlopeOperation::Finalize<T, RegrSlopeState>(state.slope, target, finalize_data);
+		auto x_avg = state.sum_x / state.count;
+		auto y_avg = state.sum_y / state.count;
+		target = y_avg - target * x_avg;
 	}
 
 	static bool IgnoreNull() {

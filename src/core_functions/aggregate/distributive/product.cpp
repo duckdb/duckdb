@@ -13,38 +13,38 @@ struct ProductState {
 
 struct ProductFunction {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->val = 1;
-		state->empty = true;
+	static void Initialize(STATE &state) {
+		state.val = 1;
+		state.empty = true;
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
-		target->val *= source.val;
-		target->empty = target->empty && source.empty;
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		target.val *= source.val;
+		target.empty = target.empty && source.empty;
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (state->empty) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.empty) {
+			finalize_data.ReturnNull();
 			return;
 		}
-		target[idx] = state->val;
+		target = state.val;
 	}
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
-		if (state->empty) {
-			state->empty = false;
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		if (state.empty) {
+			state.empty = false;
 		}
-		state->val *= input[idx];
+		state.val *= input;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 		}
 	}
 
