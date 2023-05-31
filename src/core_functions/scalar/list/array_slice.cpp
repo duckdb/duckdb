@@ -146,7 +146,7 @@ static void ExecuteConstantSlice(Vector &result, Vector &v, Vector &b, Vector &e
 	auto evalid = !ConstantVector::IsNull(e);
 	auto svalid = s && !ConstantVector::IsNull(*s);
 
-	if (step == 0) {
+	if (step == 0 && svalid) {
 		throw ValueOutOfRangeException("Slice step cannot be zero");
 	}
 
@@ -206,7 +206,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, co
 			end = SliceLength<INPUT_TYPE, INDEX_TYPE>(sliced);
 		}
 
-		if (step == 0) {
+		if (step == 0 && sdata.validity.RowIsValid(sidx)) {
 			throw ValueOutOfRangeException("Slice step cannot be zero");
 		}
 
