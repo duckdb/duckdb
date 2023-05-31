@@ -21,8 +21,8 @@ void LeafSegment::Free(ART &art, Node &node) {
 	D_ASSERT(!node.IsSwizzled());
 
 	// free next segment
-	auto next = LeafSegment::Get(art, node).next;
-	Node::Free(art, next);
+	auto next_segment = LeafSegment::Get(art, node).next;
+	Node::Free(art, next_segment);
 }
 
 LeafSegment &LeafSegment::Append(ART &art, uint32_t &count, const row_t row_id) {

@@ -42,53 +42,53 @@ static AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
 
 struct BitwiseOperation {
 	template <class STATE>
-	static void Initialize(STATE *state) {
+	static void Initialize(STATE &state) {
 		//  If there are no matching rows, returns a null value.
-		state->is_set = false;
+		state.is_set = false;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
-		if (!state->is_set) {
-			OP::template Assign(state, input[idx]);
-			state->is_set = true;
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
+		if (!state.is_set) {
+			OP::template Assign(state, input);
+			state.is_set = true;
 		} else {
-			OP::template Execute(state, input[idx]);
+			OP::template Execute(state, input);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
-		OP::template Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
+		OP::template Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE *state, INPUT_TYPE input) {
-		state->value = input;
+	static void Assign(STATE &state, INPUT_TYPE input) {
+		state.value = input;
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (!source.is_set) {
 			// source is NULL, nothing to do.
 			return;
 		}
-		if (!target->is_set) {
+		if (!target.is_set) {
 			// target is NULL, use source value directly.
 			OP::template Assign(target, source.value);
-			target->is_set = true;
+			target.is_set = true;
 		} else {
 			OP::template Execute(target, source.value);
 		}
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->is_set) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.is_set) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = state->value;
+			target = state.value;
 		}
 	}
 
@@ -99,61 +99,61 @@ struct BitwiseOperation {
 
 struct BitAndOperation : public BitwiseOperation {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
-		state->value &= input;
+	static void Execute(STATE &state, INPUT_TYPE input) {
+		state.value &= input;
 	}
 };
 
 struct BitOrOperation : public BitwiseOperation {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
-		state->value |= input;
+	static void Execute(STATE &state, INPUT_TYPE input) {
+		state.value |= input;
 	}
 };
 
 struct BitXorOperation : public BitwiseOperation {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
-		state->value ^= input;
+	static void Execute(STATE &state, INPUT_TYPE input) {
+		state.value ^= input;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 		}
 	}
 };
 
 struct BitStringBitwiseOperation : public BitwiseOperation {
 	template <class STATE>
-	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
-		if (state->is_set && !state->value.IsInlined()) {
-			delete[] state->value.GetData();
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		if (state.is_set && !state.value.IsInlined()) {
+			delete[] state.value.GetData();
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE>
-	static void Assign(STATE *state, INPUT_TYPE input) {
-		D_ASSERT(state->is_set == false);
+	static void Assign(STATE &state, INPUT_TYPE input) {
+		D_ASSERT(state.is_set == false);
 		if (input.IsInlined()) {
-			state->value = input;
+			state.value = input;
 		} else { // non-inlined string, need to allocate space for it
 			auto len = input.GetSize();
 			auto ptr = new char[len];
 			memcpy(ptr, input.GetData(), len);
 
-			state->value = string_t(ptr, len);
+			state.value = string_t(ptr, len);
 		}
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->is_set) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.is_set) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = StringVector::AddStringOrBlob(result, state->value);
+			target = finalize_data.ReturnString(state.value);
 		}
 	}
 };
@@ -161,30 +161,30 @@ struct BitStringBitwiseOperation : public BitwiseOperation {
 struct BitStringAndOperation : public BitStringBitwiseOperation {
 
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
-		Bit::BitwiseAnd(input, state->value, state->value);
+	static void Execute(STATE &state, INPUT_TYPE input) {
+		Bit::BitwiseAnd(input, state.value, state.value);
 	}
 };
 
 struct BitStringOrOperation : public BitStringBitwiseOperation {
 
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
-		Bit::BitwiseOr(input, state->value, state->value);
+	static void Execute(STATE &state, INPUT_TYPE input) {
+		Bit::BitwiseOr(input, state.value, state.value);
 	}
 };
 
 struct BitStringXorOperation : public BitStringBitwiseOperation {
 	template <class INPUT_TYPE, class STATE>
-	static void Execute(STATE *state, INPUT_TYPE input) {
-		Bit::BitwiseXor(input, state->value, state->value);
+	static void Execute(STATE &state, INPUT_TYPE input) {
+		Bit::BitwiseXor(input, state.value, state.value);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 		}
 	}
 };

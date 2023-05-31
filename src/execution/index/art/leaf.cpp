@@ -277,6 +277,7 @@ string Leaf::VerifyAndToString(const ART &art, const bool only_verify) const {
 		remaining -= to_string_count;
 		ptr = segment.next;
 	}
+
 	D_ASSERT(remaining == 0);
 	D_ASSERT(this_count == count);
 	return only_verify ? "" : "Leaf [count: " + to_string(count) + ", row IDs: " + str + "] \n";

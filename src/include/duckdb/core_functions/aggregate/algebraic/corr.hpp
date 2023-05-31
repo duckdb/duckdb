@@ -24,49 +24,45 @@ struct CorrState {
 // CORR(y, x) = COVAR_POP(y, x) / (STDDEV_POP(x) * STDDEV_POP(y))
 struct CorrOperation {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		CovarOperation::Initialize<CovarState>(&state->cov_pop);
-		STDDevBaseOperation::Initialize<StddevState>(&state->dev_pop_x);
-		STDDevBaseOperation::Initialize<StddevState>(&state->dev_pop_y);
+	static void Initialize(STATE &state) {
+		CovarOperation::Initialize<CovarState>(state.cov_pop);
+		STDDevBaseOperation::Initialize<StddevState>(state.dev_pop_x);
+		STDDevBaseOperation::Initialize<StddevState>(state.dev_pop_y);
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &aggr_input_data, const A_TYPE *x_data, const B_TYPE *y_data,
-	                      ValidityMask &amask, ValidityMask &bmask, idx_t xidx, idx_t yidx) {
-		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(&state->cov_pop, aggr_input_data, x_data, y_data,
-		                                                          amask, bmask, xidx, yidx);
-		STDDevBaseOperation::Operation<A_TYPE, StddevState, OP>(&state->dev_pop_x, aggr_input_data, x_data, amask,
-		                                                        xidx);
-		STDDevBaseOperation::Operation<B_TYPE, StddevState, OP>(&state->dev_pop_y, aggr_input_data, y_data, bmask,
-		                                                        yidx);
+	static void Operation(STATE &state, const A_TYPE &x_input, const B_TYPE &y_input, AggregateBinaryInput &idata) {
+		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(state.cov_pop, x_input, y_input, idata);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.dev_pop_x, x_input);
+		STDDevBaseOperation::Execute<B_TYPE, StddevState>(state.dev_pop_y, y_input);
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &aggr_input_data) {
-		CovarOperation::Combine<CovarState, OP>(source.cov_pop, &target->cov_pop, aggr_input_data);
-		STDDevBaseOperation::Combine<StddevState, OP>(source.dev_pop_x, &target->dev_pop_x, aggr_input_data);
-		STDDevBaseOperation::Combine<StddevState, OP>(source.dev_pop_y, &target->dev_pop_y, aggr_input_data);
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &aggr_input_data) {
+		CovarOperation::Combine<CovarState, OP>(source.cov_pop, target.cov_pop, aggr_input_data);
+		STDDevBaseOperation::Combine<StddevState, OP>(source.dev_pop_x, target.dev_pop_x, aggr_input_data);
+		STDDevBaseOperation::Combine<StddevState, OP>(source.dev_pop_y, target.dev_pop_y, aggr_input_data);
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (state->cov_pop.count == 0 || state->dev_pop_x.count == 0 || state->dev_pop_y.count == 0) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.cov_pop.count == 0 || state.dev_pop_x.count == 0 || state.dev_pop_y.count == 0) {
+			finalize_data.ReturnNull();
 		} else {
-			auto cov = state->cov_pop.co_moment / state->cov_pop.count;
-			auto std_x = state->dev_pop_x.count > 1 ? sqrt(state->dev_pop_x.dsquared / state->dev_pop_x.count) : 0;
+			auto cov = state.cov_pop.co_moment / state.cov_pop.count;
+			auto std_x = state.dev_pop_x.count > 1 ? sqrt(state.dev_pop_x.dsquared / state.dev_pop_x.count) : 0;
 			if (!Value::DoubleIsFinite(std_x)) {
 				throw OutOfRangeException("STDDEV_POP for X is out of range!");
 			}
-			auto std_y = state->dev_pop_y.count > 1 ? sqrt(state->dev_pop_y.dsquared / state->dev_pop_y.count) : 0;
+			auto std_y = state.dev_pop_y.count > 1 ? sqrt(state.dev_pop_y.dsquared / state.dev_pop_y.count) : 0;
 			if (!Value::DoubleIsFinite(std_y)) {
 				throw OutOfRangeException("STDDEV_POP for Y is out of range!");
 			}
 			if (std_x * std_y == 0) {
-				mask.SetInvalid(idx);
+				finalize_data.ReturnNull();
 				return;
 			}
-			target[idx] = cov / (std_x * std_y);
+			target = cov / (std_x * std_y);
 		}
 	}
 

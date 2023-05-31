@@ -100,6 +100,7 @@ public:
 	//! Vacuums a pointer
 	SwizzleablePointer VacuumPointer(const SwizzleablePointer ptr);
 
+	//! Verify that the allocation counts match the existing positions on the buffers
 	void Verify() const;
 
 private:
