@@ -84,7 +84,7 @@ public:
 	}
 
 	//! Allows LogicalOperators to opt out of serialization
-	virtual bool SupportSerialization() {
+	virtual bool SupportSerialization() const {
 		return true;
 	};
 
