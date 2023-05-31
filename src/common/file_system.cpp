@@ -63,11 +63,11 @@ string FileSystem::GetEnvVariable(const string &name) {
 }
 
 bool FileSystem::IsPathAbsolute(const string &path) {
-	auto path_separator = FileSystem::PathSeparator();
+	auto path_separator = PathSeparator();
 	return PathMatched(path, path_separator);
 }
 
-string FileSystem::PathSeparator() {
+string FileSystem::PathSeparator() const {
 	return "/";
 }
 

@@ -58,7 +58,7 @@ public:
 	bool IsTemporary() const;
 	bool IsReadOnly() const;
 
-	static string ExtractDatabaseName(const string &dbpath);
+	static string ExtractDatabaseName(const string &dbpath, FileSystem &fs);
 
 private:
 	DatabaseInstance &db;

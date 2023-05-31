@@ -24,7 +24,7 @@ void FilenamePattern::SetFilenamePattern(const string &pattern) {
 	_pos = std::min(_pos, (idx_t)_base.length());
 }
 
-string FilenamePattern::CreateFilename(const FileSystem &fs, const string &path, const string &extension,
+string FilenamePattern::CreateFilename(FileSystem &fs, const string &path, const string &extension,
                                        idx_t offset) const {
 	string result(_base);
 	string replacement;

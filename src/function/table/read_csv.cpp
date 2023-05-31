@@ -181,7 +181,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		}
 	}
 	if (options.file_options.auto_detect_hive_partitioning) {
-		options.file_options.hive_partitioning = MultiFileReaderOptions::AutoDetectHivePartitioning(result->files);
+		options.file_options.hive_partitioning = MultiFileReaderOptions::AutoDetectHivePartitioning(result->files, FileSystem::GetFileSystem(context));
 	}
 
 	if (!options.auto_detect && return_types.empty()) {
@@ -1192,7 +1192,8 @@ unique_ptr<TableRef> ReadCSVReplacement(ClientContext &context, const string &ta
 	table_function->function = make_uniq<FunctionExpression>("read_csv_auto", std::move(children));
 
 	if (!FileSystem::HasGlob(table_name)) {
-		table_function->alias = FileSystem::ExtractBaseName(table_name);
+		auto &fs = FileSystem::GetFileSystem(context);
+		table_function->alias = fs.ExtractBaseName(table_name);
 	}
 
 	return std::move(table_function);

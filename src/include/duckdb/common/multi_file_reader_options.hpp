@@ -27,7 +27,7 @@ struct MultiFileReaderOptions {
 	DUCKDB_API static MultiFileReaderOptions Deserialize(Deserializer &source);
 	DUCKDB_API void AddBatchInfo(BindInfo &bind_info) const;
 
-	static bool AutoDetectHivePartitioning(const vector<string> &files) {
+	static bool AutoDetectHivePartitioning(const vector<string> &files, FileSystem &fs) {
 		if (files.empty()) {
 			return false;
 		}
@@ -36,7 +36,7 @@ struct MultiFileReaderOptions {
 		idx_t splits_size;
 		{
 			//	front file
-			auto splits = StringUtil::Split(files.front(), FileSystem::PathSeparator());
+			auto splits = StringUtil::Split(files.front(), fs.PathSeparator());
 			splits_size = splits.size();
 			if (splits.size() < 2) {
 				return false;
@@ -52,7 +52,7 @@ struct MultiFileReaderOptions {
 			return false;
 		}
 		for (auto &file : files) {
-			auto splits = StringUtil::Split(file, FileSystem::PathSeparator());
+			auto splits = StringUtil::Split(file, fs.PathSeparator());
 			if (splits.size() != splits_size) {
 				return false;
 			}

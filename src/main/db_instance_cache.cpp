@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-string GetDBAbsolutePath(const string &database_p) {
+string GetDBAbsolutePath(const string &database_p, FileSystem& fs) {
 	auto database = FileSystem::ExpandPath(database_p, nullptr);
 	if (database.empty()) {
 		return ":memory:";
@@ -16,15 +16,17 @@ string GetDBAbsolutePath(const string &database_p) {
 		// this database path is handled by a replacement open and is not a file path
 		return database;
 	}
-	if (FileSystem::IsPathAbsolute(database)) {
-		return FileSystem::NormalizeAbsolutePath(database);
+	if (fs.IsPathAbsolute(database)) {
+		return fs.NormalizeAbsolutePath(database);
 	}
-	return FileSystem::NormalizeAbsolutePath(FileSystem::JoinPath(FileSystem::GetWorkingDirectory(), database));
+	return fs.NormalizeAbsolutePath(fs.JoinPath(FileSystem::GetWorkingDirectory(), database));
 }
 
 shared_ptr<DuckDB> DBInstanceCache::GetInstanceInternal(const string &database, const DBConfig &config) {
 	shared_ptr<DuckDB> db_instance;
-	auto abs_database_path = GetDBAbsolutePath(database);
+
+	auto& fs = db_instance->GetFileSystem();
+	auto abs_database_path = GetDBAbsolutePath(database, fs);
 	if (db_instances.find(abs_database_path) != db_instances.end()) {
 		db_instance = db_instances[abs_database_path].lock();
 		if (db_instance) {
@@ -48,7 +50,8 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &database, const DB
 
 shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &database, DBConfig &config,
                                                            bool cache_instance) {
-	auto abs_database_path = GetDBAbsolutePath(database);
+	auto& fs = *config.file_system;
+	auto abs_database_path = GetDBAbsolutePath(database, fs);
 	if (db_instances.find(abs_database_path) != db_instances.end()) {
 		throw duckdb::Exception(ExceptionType::CONNECTION,
 		                        "Instance with path: " + abs_database_path + " already exists.");

@@ -135,7 +135,9 @@ public:
 	string GetName() const override {
 		return "HTTPFileSystem";
 	}
-
+	string PathSeparator() const override {
+		return "/";
+	}
 	static void Verify();
 
 	// Global cache
