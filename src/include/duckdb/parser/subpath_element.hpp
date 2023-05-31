@@ -10,7 +10,7 @@ enum class PGQPathMode : uint8_t { NONE, WALK, SIMPLE, TRAIL, ACYCLIC };
 class SubPath : public PathReference {
 
 public:
-	std::vector<unique_ptr<PathReference>> path_list;
+	vector<unique_ptr<PathReference>> path_list;
 
 	unique_ptr<ParsedExpression> where_clause;
 

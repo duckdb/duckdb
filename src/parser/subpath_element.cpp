@@ -3,7 +3,7 @@
 namespace duckdb {
 
 unique_ptr<PathReference> SubPath::Copy() {
-	auto result = make_unique<SubPath>(PGQPathReferenceType::SUBPATH);
+	auto result = make_uniq<SubPath>(PGQPathReferenceType::SUBPATH);
 
 	result->path_reference_type = path_reference_type;
 	result->path_mode = path_mode;
@@ -67,7 +67,7 @@ void SubPath::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<PathReference> SubPath::Deserialize(FieldReader &reader) {
-	auto result = make_unique<SubPath>(PGQPathReferenceType::SUBPATH);
+	auto result = make_uniq<SubPath>(PGQPathReferenceType::SUBPATH);
 
 	result->path_mode = reader.ReadRequired<PGQPathMode>();
 	result->path_list = reader.ReadRequiredSerializableList<PathReference>();

@@ -15,7 +15,7 @@ void PathPattern::Serialize(Serializer &serializer) const {
 }
 
 unique_ptr<PathPattern> PathPattern::Deserialize(Deserializer &deserializer) {
-	auto result = make_unique<PathPattern>();
+	auto result = make_uniq<PathPattern>();
 	FieldReader reader(deserializer);
 	result->path_elements = reader.ReadRequiredSerializableList<PathReference>();
 	result->where_clause = reader.ReadOptional<ParsedExpression>(nullptr);
@@ -64,7 +64,7 @@ bool PathPattern::Equals(const PathPattern *other_p) const {
     return true;
 }
 unique_ptr<PathPattern> PathPattern::Copy() {
-	auto result = make_unique<PathPattern>();
+	auto result = make_uniq<PathPattern>();
 
 	for (auto &path_element : path_elements) {
 		result->path_elements.push_back(path_element->Copy());
