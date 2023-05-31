@@ -55,12 +55,24 @@ static T GetJemallocCTL(const char *name) {
 }
 
 void JEMallocExtension::ThreadFlush() {
+	// Flush threshold is 1 << 27 (~128MB)
+	// For 1 << 26 we regress on benchmark/imdb/07c.benchmark
+	static constexpr uint64_t FLUSH_THRESHOLD = 134217728;
+
+	// We flush after exceeding the threshold
+	if (GetJemallocCTL<uint64_t>("thread.peak.read") < FLUSH_THRESHOLD) {
+		return;
+	}
+
 	// Flush thread-local cache
 	SetJemallocCTL("thread.tcache.flush");
 
 	// Flush this thread's arena
 	const auto purge_arena = StringUtil::Format("arena.%llu.purge", idx_t(GetJemallocCTL<unsigned>("thread.arena")));
 	SetJemallocCTL(purge_arena.c_str());
+
+	// Reset the peak after resetting
+	SetJemallocCTL("thread.peak.reset");
 }
 
 } // namespace duckdb

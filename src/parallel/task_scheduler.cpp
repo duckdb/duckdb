@@ -125,25 +125,15 @@ bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &
 	return queue->DequeueFromProducer(token, task);
 }
 
-static inline int64_t CurrentTimeMS() {
-	return duration_cast<std::chrono::milliseconds>(system_clock::now().time_since_epoch()).count();
-}
-
 void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 #ifndef DUCKDB_NO_THREADS
-	constexpr static int64_t TASK_DURATION_FLUSH_THRESHOLD_MS = 100;
-
 	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
 		// wait for a signal with a timeout
 		queue->semaphore.wait();
 		if (queue->q.try_dequeue(task)) {
-			const auto timestamp_before_task = CurrentTimeMS();
 			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
-			if (CurrentTimeMS() - timestamp_before_task >= TASK_DURATION_FLUSH_THRESHOLD_MS) {
-				Allocator::ThreadFlush();
-			}
 
 			switch (execute_result) {
 			case TaskExecutionResult::TASK_FINISHED:
@@ -157,6 +147,9 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 				task.reset();
 				break;
 			}
+
+			// Flushes the outstanding allocator's outstanding allocations
+			Allocator::ThreadFlush();
 		}
 	}
 #else
