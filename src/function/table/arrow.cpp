@@ -206,8 +206,8 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 			throw InvalidInputException("arrow_scan: released schema passed");
 		}
 		if (schema.dictionary) {
-			res->arrow_convert_data[col_idx] =
-			    make_uniq<ArrowConvertData>(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
+			auto logical_type = GetArrowLogicalType(schema, res->arrow_convert_data, col_idx);
+			res->arrow_convert_data[col_idx] = make_uniq<ArrowConvertData>(std::move(logical_type));
 			return_types.emplace_back(GetArrowLogicalType(*schema.dictionary, res->arrow_convert_data, col_idx));
 		} else {
 			return_types.emplace_back(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));

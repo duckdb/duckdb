@@ -16,6 +16,9 @@ CREATE TABLE db1.integers AS FROM range(1000000);
 statement ok
 DROP TABLE db1.integers
 
+statement ok
+CHECKPOINT db1
+
 query I
 SELECT free_blocks>0 FROM pragma_database_size() WHERE database_name='db1';
 ----

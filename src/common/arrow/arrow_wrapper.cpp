@@ -79,10 +79,8 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	}
 	auto my_stream = reinterpret_cast<ResultArrowArrayStreamWrapper *>(stream->private_data);
 	if (!my_stream->column_types.empty()) {
-		ArrowOptions options;
-		options.offset_size = my_stream->arrow_offet_size;
-		ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names, my_stream->timezone_config,
-		                              options);
+		ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
+		                              QueryResult::GetArrowOptions(*my_stream->result));
 		return 0;
 	}
 
@@ -102,10 +100,8 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 		my_stream->column_types = result.types;
 		my_stream->column_names = result.names;
 	}
-	ArrowOptions options;
-	options.offset_size = my_stream->arrow_offet_size;
-	ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names, my_stream->timezone_config,
-	                              options);
+	ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
+	                              QueryResult::GetArrowOptions(*my_stream->result));
 	return 0;
 }
 
@@ -191,9 +187,7 @@ bool ArrowUtil::TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &chunk, 
 bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out, idx_t &count,
                               PreservedError &error) {
 	count = 0;
-	ArrowOptions options;
-	options.offset_size = result->client_properties.arrow_offset_size;
-	ArrowAppender appender(result->types, chunk_size, options);
+	ArrowAppender appender(result->types, chunk_size, QueryResult::GetArrowOptions(*result));
 	auto &current_chunk = result->current_chunk;
 	if (current_chunk.Valid()) {
 		// We start by scanning the non-finished current chunk

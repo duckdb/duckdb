@@ -80,7 +80,7 @@ void ArrowTestFactory::GetSchema(uintptr_t factory_ptr, duckdb::ArrowSchemaWrapp
 }
 
 void ArrowTestFactory::ToArrowSchema(struct ArrowSchema *out) {
-	ArrowConverter::ToArrowSchema(out, types, names, tz, options);
+	ArrowConverter::ToArrowSchema(out, types, names, options);
 }
 
 duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper>
@@ -157,13 +157,10 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 	}
 	// create the roundtrip factory
 	auto client_config = ClientConfig::GetConfig(*con.context);
-	auto tz = client_config.ExtractTimezone();
-
-	ArrowOptions arrow_option(con.context->db->config.options.arrow_offset_size);
+	ArrowOptions arrow_option(con.context->db->config.options.arrow_offset_size, client_config.ExtractTimezone());
 	auto types = initial_result->types;
 	auto names = initial_result->names;
-	ArrowTestFactory factory(std::move(types), std::move(names), tz, std::move(initial_result), big_result,
-	                         arrow_option);
+	ArrowTestFactory factory(std::move(types), std::move(names), std::move(initial_result), big_result, arrow_option);
 
 	// construct the arrow scan
 	auto params = ConstructArrowScan((uintptr_t)&factory, true);

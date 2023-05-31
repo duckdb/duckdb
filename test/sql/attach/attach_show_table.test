@@ -51,4 +51,11 @@ USE db2.test_schema;
 query I
 SHOW TABLES
 ----
+table_in_db2
 table_in_db2_test_schema
+
+statement ok
+FROM table_in_db2
+
+statement ok
+FROM table_in_db2_test_schema

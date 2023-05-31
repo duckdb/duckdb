@@ -21,8 +21,6 @@ public:
 	idx_t batch_size;
 	vector<LogicalType> column_types;
 	vector<string> column_names;
-	string timezone_config;
-	ArrowOffsetSize arrow_offet_size;
 
 private:
 	static int MyStreamGetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out);
