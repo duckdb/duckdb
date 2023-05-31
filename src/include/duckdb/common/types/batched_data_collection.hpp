@@ -15,8 +15,15 @@ namespace duckdb {
 class BufferManager;
 class ClientContext;
 
+using batch_iterator_t = map<idx_t, unique_ptr<ColumnDataCollection>>::iterator;
+
+struct BatchedChunkIteratorRange {
+	batch_iterator_t begin;
+	batch_iterator_t end;
+};
+
 struct BatchedChunkScanState {
-	map<idx_t, unique_ptr<ColumnDataCollection>>::iterator iterator;
+	BatchedChunkIteratorRange range;
 	ColumnDataScanState scan_state;
 };
 
@@ -32,6 +39,9 @@ public:
 	//! Merge the other batched chunk collection into this batched collection
 	DUCKDB_API void Merge(BatchedDataCollection &other);
 
+	// Initialize a scan over a range of batches of the batched chunk collection
+	void InitializeScan(BatchedChunkScanState &state, const BatchedChunkIteratorRange &range);
+
 	//! Initialize a scan over the batched chunk collection
 	DUCKDB_API void InitializeScan(BatchedChunkScanState &state);
 
@@ -40,6 +50,12 @@ public:
 
 	//! Fetch a column data collection from the batched data collection - this consumes all of the data stored within
 	DUCKDB_API unique_ptr<ColumnDataCollection> FetchCollection();
+
+	//! Inspect how many batches this collection contains
+	DUCKDB_API idx_t BatchCount() const;
+
+	//! Create an iterator range from the provided indices
+	BatchedChunkIteratorRange BatchRange(idx_t begin = 0, idx_t end = DConstants::INVALID_INDEX);
 
 	DUCKDB_API string ToString() const;
 	DUCKDB_API void Print() const;

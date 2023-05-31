@@ -45,28 +45,33 @@ void BatchedDataCollection::Merge(BatchedDataCollection &other) {
 	other.data.clear();
 }
 
-void BatchedDataCollection::InitializeScan(BatchedChunkScanState &state) {
-	state.iterator = data.begin();
-	if (state.iterator == data.end()) {
+void BatchedDataCollection::InitializeScan(BatchedChunkScanState &state, const BatchedChunkIteratorRange &range) {
+	state.range = range;
+	if (state.range.begin == state.range.end) {
 		return;
 	}
-	state.iterator->second->InitializeScan(state.scan_state);
+	state.range.begin->second->InitializeScan(state.scan_state);
+}
+
+void BatchedDataCollection::InitializeScan(BatchedChunkScanState &state) {
+	auto range = BatchRange();
+	return InitializeScan(state, range);
 }
 
 void BatchedDataCollection::Scan(BatchedChunkScanState &state, DataChunk &output) {
-	while (state.iterator != data.end()) {
+	while (state.range.begin != state.range.end) {
 		// check if there is a chunk remaining in this collection
-		auto collection = state.iterator->second.get();
+		auto collection = state.range.begin->second.get();
 		collection->Scan(state.scan_state, output);
 		if (output.size() > 0) {
 			return;
 		}
 		// there isn't! move to the next collection
-		state.iterator++;
-		if (state.iterator == data.end()) {
+		state.range.begin++;
+		if (state.range.begin == state.range.end) {
 			return;
 		}
-		state.iterator->second->InitializeScan(state.scan_state);
+		state.range.begin->second->InitializeScan(state.scan_state);
 	}
 }
 
@@ -85,6 +90,28 @@ unique_ptr<ColumnDataCollection> BatchedDataCollection::FetchCollection() {
 		return make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 	}
 	return result;
+}
+
+idx_t BatchedDataCollection::BatchCount() const {
+	return data.size();
+}
+
+BatchedChunkIteratorRange BatchedDataCollection::BatchRange(idx_t begin_idx, idx_t end_idx) {
+	D_ASSERT(begin_idx < end_idx);
+	if (end_idx > data.size()) {
+		// Limit the iterator to the end
+		end_idx = DConstants::INVALID_INDEX;
+	}
+	BatchedChunkIteratorRange range;
+	range.begin = data.begin();
+	std::advance(range.begin, begin_idx);
+	if (end_idx == DConstants::INVALID_INDEX) {
+		range.end = data.end();
+	} else {
+		range.end = data.begin();
+		std::advance(range.end, end_idx);
+	}
+	return range;
 }
 
 string BatchedDataCollection::ToString() const {

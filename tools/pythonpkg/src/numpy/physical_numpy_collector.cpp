@@ -85,6 +85,16 @@ void PhysicalNumpyCollector::Combine(ExecutionContext &context, GlobalSinkState 
 	gstate.collections.push_back(std::move(lstate.collection));
 }
 
+SinkFinalizeType PhysicalNumpyCollector::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                  GlobalSinkState &gstate_p) const {
+	// auto &gstate = gstate_p.Cast<NumpyCollectorGlobalState>();
+
+	// auto new_event = make_shared<HashAggregateMergeEvent>(*this, gstate, &pipeline);
+	// event.InsertEvent(std::move(new_event));
+
+	return SinkFinalizeType::READY;
+}
+
 unique_ptr<GlobalSinkState> PhysicalNumpyCollector::GetGlobalSinkState(ClientContext &context) const {
 	auto state = make_uniq<NumpyCollectorGlobalState>();
 	state->context = context.shared_from_this();
