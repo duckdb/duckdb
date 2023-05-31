@@ -250,7 +250,9 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 	auto &aggregates = result->bound_pivot.aggregates;
 	ExtractPivotAggregates(*result->child, aggregates);
 	if (aggregates.size() != ref.bound_aggregate_names.size()) {
-		throw InternalException("Pivot - aggregate count mismatch");
+		throw BinderException("Pivot aggregate count mismatch. Expected %llu aggregates but found %llu. Are all pivot "
+		                      "expressions aggregate functions?",
+		                      ref.bound_aggregate_names.size(), aggregates.size());
 	}
 
 	vector<string> child_names;
