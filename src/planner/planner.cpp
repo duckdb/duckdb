@@ -150,8 +150,6 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		// unsupported (for now)
 		return false;
-	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
-		return static_cast<LogicalExtensionOperator &>(op).SupportSerialization();
 	default:
 		break;
 	}
@@ -160,7 +158,7 @@ static bool OperatorSupportsSerialization(LogicalOperator &op) {
 			return false;
 		}
 	}
-	return true;
+	return op.SupportSerialization();
 }
 
 void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op, bound_parameter_map_t *map) {
