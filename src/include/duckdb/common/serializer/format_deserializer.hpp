@@ -19,6 +19,8 @@
 
 namespace duckdb {
 
+class ConversionHelper;
+
 class FormatDeserializer {
 	friend Vector;
 
@@ -39,6 +41,8 @@ public:
 		SetTag(tag);
 		return Read<T>();
 	}
+
+	inline ConversionHelper ReadProperty(const char *tag);
 
 	// Read optional property and return a value, or forward a default value
 	template <typename T>
@@ -373,5 +377,27 @@ protected:
 	virtual interval_t ReadInterval() = 0;
 	virtual void ReadDataPtr(data_ptr_t &ptr, idx_t count) = 0;
 };
+
+class ConversionHelper {
+	friend FormatDeserializer;
+private:
+	FormatDeserializer &deserializer;
+	const char *tag;
+
+	ConversionHelper(ConversionHelper &&c) : deserializer(c.deserializer), tag(c.tag) {
+	}
+public:
+	ConversionHelper(FormatDeserializer &deserializer, const char *tag) : deserializer(deserializer), tag(tag) {
+	}
+	ConversionHelper(ConversionHelper &) = delete;
+	template <typename T>
+	operator T() {
+		return std::move(deserializer.ReadProperty<T>(tag));
+	}
+};
+
+ConversionHelper FormatDeserializer::ReadProperty(const char *tag) {
+	return ConversionHelper(*this, tag);
+}
 
 } // namespace duckdb
