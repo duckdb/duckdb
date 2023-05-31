@@ -187,7 +187,7 @@ unique_ptr<Expression> RegexOptimizationRule::Apply(LogicalOperator &op, vector<
 		return nullptr;
 	}
 
-	// if regexp had options, remove them the new Like Expression can be matched with.
+	// if regexp had options, remove them so the new Like Expression can be matched for other optimizers.
 	if (root.children.size() == 3) {
 		root.children.pop_back();
 		D_ASSERT(root.children.size() == 2);
