@@ -445,11 +445,11 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(const vector<string> &files) {
 	std::unordered_set<string> partitions;
 	
-	auto split_path_first_file = StringUtil::Split(files.front(), FileSystem::PathSeparator());
-	if (split_path_first_file.size() < 2) {
+	auto splits_first_file = StringUtil::Split(files.front(), FileSystem::PathSeparator());
+	if (splits_first_file.size() < 2) {
 		return false;
 	}
-	for (auto it = split_path_first_file.begin(); it != split_path_first_file.end(); it++){
+	for (auto it = splits_first_file.begin(); it != splits_first_file.end(); it++){
 		auto partition = StringUtil::Split(*it, "=");
 		if (partition.size() == 2){
 			partitions.insert(partition.front());
@@ -460,7 +460,7 @@ bool MultiFileReaderOptions::AutoDetectHivePartitioningInternal(const vector<str
 	}
 	for (auto &file : files) {
 		auto splits = StringUtil::Split(file, FileSystem::PathSeparator());
-		if (splits.size() != split_path_first_file.size()) {
+		if (splits.size() != splits_first_file.size()) {
 			return false;
 		}
 		for (auto it = splits.begin(); it != std::prev(splits.end()); it++) {
