@@ -18,7 +18,6 @@
 #include "duckdb/storage/table/scan_state.hpp"
 
 #include <algorithm>
-#include <cstring>
 
 namespace duckdb {
 
@@ -347,7 +346,31 @@ bool ART::ConstructFromSorted(idx_t count, vector<ARTKey> &keys, Vector &row_ide
 
 	auto key_section = KeySection(0, count - 1, 0, 0);
 	auto has_constraint = IsUnique();
-	return Construct(*this, keys, row_ids, *this->tree, key_section, has_constraint);
+	if (!Construct(*this, keys, row_ids, *this->tree, key_section, has_constraint)) {
+		return false;
+	}
+
+#ifdef DEBUG
+	D_ASSERT(!VerifyAndToStringInternal(true).empty());
+	for (idx_t i = 0; i < count; i++) {
+		D_ASSERT(!keys[i].Empty());
+		auto leaf_node = Lookup(*tree, keys[i], 0);
+		D_ASSERT(leaf_node.IsSet());
+		auto &leaf = Leaf::Get(*this, leaf_node);
+
+		if (leaf.IsInlined()) {
+			D_ASSERT(row_ids[i] == leaf.row_ids.inlined);
+			continue;
+		}
+
+		D_ASSERT(leaf.row_ids.ptr.IsSet());
+		Node leaf_segment = leaf.row_ids.ptr;
+		auto position = leaf.FindRowId(*this, leaf_segment, row_ids[i]);
+		D_ASSERT(position != (uint32_t)DConstants::INVALID_INDEX);
+	}
+#endif
+
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -397,6 +420,29 @@ PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 		return PreservedError(ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicate key \"%s\"",
 		                                          AppendRowError(input, failed_index)));
 	}
+
+#ifdef DEBUG
+	for (idx_t i = 0; i < input.size(); i++) {
+		if (keys[i].Empty()) {
+			continue;
+		}
+
+		auto leaf_node = Lookup(*tree, keys[i], 0);
+		D_ASSERT(leaf_node.IsSet());
+		auto &leaf = Leaf::Get(*this, leaf_node);
+
+		if (leaf.IsInlined()) {
+			D_ASSERT(row_identifiers[i] == leaf.row_ids.inlined);
+			continue;
+		}
+
+		D_ASSERT(leaf.row_ids.ptr.IsSet());
+		Node leaf_segment = leaf.row_ids.ptr;
+		auto position = leaf.FindRowId(*this, leaf_segment, row_identifiers[i]);
+		D_ASSERT(position != (uint32_t)DConstants::INVALID_INDEX);
+	}
+#endif
+
 	return PreservedError();
 }
 
@@ -535,16 +581,31 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 			continue;
 		}
 		Erase(*tree, keys[i], 0, row_identifiers[i]);
+	}
+
 #ifdef DEBUG
+	// verify that we removed all row IDs
+	for (idx_t i = 0; i < input.size(); i++) {
+		if (keys[i].Empty()) {
+			continue;
+		}
+
 		auto node = Lookup(*tree, keys[i], 0);
 		if (node.IsSet()) {
 			auto &leaf = Leaf::Get(*this, node);
-			for (idx_t k = 0; k < leaf.count; k++) {
-				D_ASSERT(leaf.GetRowId(*this, k) != row_identifiers[i]);
+
+			if (leaf.IsInlined()) {
+				D_ASSERT(row_identifiers[i] != leaf.row_ids.inlined);
+				continue;
 			}
+
+			D_ASSERT(leaf.row_ids.ptr.IsSet());
+			Node leaf_segment = leaf.row_ids.ptr;
+			auto position = leaf.FindRowId(*this, leaf_segment, row_identifiers[i]);
+			D_ASSERT(position == (uint32_t)DConstants::INVALID_INDEX);
 		}
-#endif
 	}
+#endif
 }
 
 void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id) {
@@ -1022,6 +1083,10 @@ void ART::Vacuum(IndexLock &state) {
 
 	// finalize the vacuum operation
 	FinalizeVacuum(flags);
+
+	for (auto &allocator : allocators) {
+		allocator->Verify();
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -1059,6 +1124,10 @@ bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 	if (!tree->Merge(*this, *other_art.tree)) {
 		return false;
 	}
+
+	for (auto &allocator : allocators) {
+		allocator->Verify();
+	}
 	return true;
 }
 
@@ -1066,9 +1135,13 @@ bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 // Utility
 //===--------------------------------------------------------------------===//
 
-string ART::ToString() {
+string ART::VerifyAndToString(IndexLock &state, const bool only_verify) {
+	return VerifyAndToStringInternal(only_verify);
+}
+
+string ART::VerifyAndToStringInternal(const bool only_verify) {
 	if (tree->IsSet()) {
-		return tree->ToString(*this);
+		return "ART: " + tree->VerifyAndToString(*this, only_verify);
 	}
 	return "[empty]";
 }
