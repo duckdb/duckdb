@@ -2,6 +2,9 @@
 # description: ENUM types used in temporary table
 # group: [enum]
 
+# Can't do reload tests with temp tables
+require skip_reload
+
 statement ok
 PRAGMA enable_verification
 

@@ -14,8 +14,7 @@ void DependencyList::AddDependency(CatalogEntry &entry) {
 void DependencyList::VerifyDependencies(Catalog &catalog, const string &name) {
 	for (auto &dep_entry : set) {
 		auto &dep = dep_entry.get();
-		bool is_user_type_temp_table = dep.type == CatalogType::TYPE_ENTRY && catalog.IsTemporaryCatalog();
-		if (&dep.ParentCatalog() != &catalog && !is_user_type_temp_table) {
+		if (&dep.ParentCatalog() != &catalog) {
 			throw DependencyException(
 			    "Error adding dependency for object \"%s\" - dependency \"%s\" is in catalog "
 			    "\"%s\", which does not match the catalog \"%s\".\nCross catalog dependencies are not supported.",
