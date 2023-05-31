@@ -153,6 +153,9 @@ static unique_ptr<FunctionData> MapConcatBind(ClientContext &context, ScalarFunc
 			// The maps are allowed to be NULL
 			continue;
 		}
+		if (map.id() != LogicalTypeId::MAP) {
+			throw InvalidInputException("MAP_CONCAT only takes map arguments");
+		}
 		is_null = false;
 		if (IsEmptyMap(map)) {
 			// Map is allowed to be empty

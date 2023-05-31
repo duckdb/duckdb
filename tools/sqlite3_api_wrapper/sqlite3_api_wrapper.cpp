@@ -1527,7 +1527,7 @@ SQLITE_API void sqlite3_result_blob64(sqlite3_context *context, const void *blob
 	}
 	context->result.type = SQLiteTypeValue::BLOB;
 	context->result.str = string((char *)blob, n_bytes);
-	if (xDel) {
+	if (xDel && xDel != SQLITE_TRANSIENT) {
 		xDel((void *)blob);
 	}
 }
