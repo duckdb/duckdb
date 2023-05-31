@@ -53,7 +53,7 @@ SELECT COUNT(i), COUNT(rowid) FROM int
 ----
 350	610
 
-query III
+query III rowsort
 SELECT rowid // 200 AS g, COUNT(i), COUNT(rowid) FROM int GROUP BY g
 ----
 0	128	200

@@ -378,8 +378,8 @@ private:
 	//! Current File Number
 	idx_t file_number = 0;
 	idx_t max_tuple_end = 0;
-	//! the vector stores positions where threads ended the last line they read in the CSV File, and the set stores
-	//! positions where they started reading the first line.
+	//! The vector stores positions where threads ended the last line they read in the CSV File, and the set stores
+	//! Positions where they started reading the first line.
 	vector<vector<idx_t>> tuple_end;
 	vector<set<idx_t>> tuple_start;
 	//! Tuple end to batch
@@ -559,15 +559,13 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 }
 void ParallelCSVGlobalState::UpdateVerification(VerificationPositions positions, idx_t file_number_p, idx_t batch_idx) {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	if (positions.beginning_of_first_line < positions.end_of_last_line) {
-		if (positions.end_of_last_line > max_tuple_end) {
-			max_tuple_end = positions.end_of_last_line;
-		}
-		tuple_end_to_batch[file_number_p][positions.end_of_last_line] = batch_idx;
-		batch_to_tuple_end[file_number_p][batch_idx] = tuple_end[file_number_p].size();
-		tuple_start[file_number_p].insert(positions.beginning_of_first_line);
-		tuple_end[file_number_p].push_back(positions.end_of_last_line);
+	if (positions.end_of_last_line > max_tuple_end) {
+		max_tuple_end = positions.end_of_last_line;
 	}
+	tuple_end_to_batch[file_number_p][positions.end_of_last_line] = batch_idx;
+	batch_to_tuple_end[file_number_p][batch_idx] = tuple_end[file_number_p].size();
+	tuple_start[file_number_p].insert(positions.beginning_of_first_line);
+	tuple_end[file_number_p].push_back(positions.end_of_last_line);
 }
 
 void ParallelCSVGlobalState::UpdateLinesRead(CSVBufferRead &buffer_read, idx_t file_idx) {
@@ -690,17 +688,14 @@ static void ParallelReadCSVFunction(ClientContext &context, TableFunctionInput &
 		}
 		if (csv_local_state.csv_reader->finished) {
 			auto verification_updates = csv_local_state.csv_reader->GetVerificationPositions();
-			if (verification_updates.beginning_of_first_line != verification_updates.end_of_last_line) {
-				csv_global_state.UpdateVerification(verification_updates,
-				                                    csv_local_state.csv_reader->buffer->buffer->GetFileNumber(),
-				                                    csv_local_state.csv_reader->buffer->local_batch_index);
-			}
+			csv_global_state.UpdateVerification(verification_updates,
+			                                    csv_local_state.csv_reader->buffer->buffer->GetFileNumber(),
+			                                    csv_local_state.csv_reader->buffer->local_batch_index);
 			csv_global_state.UpdateLinesRead(*csv_local_state.csv_reader->buffer, csv_local_state.csv_reader->file_idx);
 			auto has_next = csv_global_state.Next(context, bind_data, csv_local_state.csv_reader);
 			if (csv_local_state.csv_reader) {
 				csv_local_state.csv_reader->linenr = 0;
 			}
-
 			if (!has_next) {
 				csv_global_state.DecrementThread();
 				break;

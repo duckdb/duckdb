@@ -9,6 +9,9 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+PRAGMA verify_external
+
+statement ok
 CREATE TABLE integers(fk INTEGER)
 
 statement ok
@@ -383,13 +386,13 @@ SELECT fk, pk, p FROM integers FULL OUTER JOIN longlists ON integers.fk=longlist
 ----
 21 values hashing to 397312e04f9a44a70a2672865240afb0
 
+# duckdb-fuzzer issue #132
 statement ok
 CREATE TABLE all_types("varchar" VARCHAR, nested_int_array INTEGER[][]);;
 
 statement ok
 INSERT INTO all_types VALUES('b',[[], NULL, [], [NULL]]);
 
-# duckdb-fuzzer issue #132
 query T
 SELECT ref_1.nested_int_array AS c0
 FROM all_types AS ref_1
@@ -397,3 +400,14 @@ INNER JOIN (SELECT NULL AS c8 FROM range(3)) AS subq_1 ON (ref_1."varchar" = ref
 INNER JOIN range(3) AS ref_4(time_tz) ON (subq_1.c8 = ref_4.time_tz);
 ----
 
+
+# duckdb-fuzzer issue #135
+statement ok
+CREATE TABLE nested(nested_int_array INTEGER[][]);
+
+statement ok
+INSERT INTO nested VALUES([[42, 999]]);
+SELECT (
+	SELECT ref_1.nested_int_array
+) AS c0
+FROM range(3), nested AS ref_1;
