@@ -320,7 +320,7 @@ TEST_CASE("Test BLOB with PreparedStatement", "[api]") {
 
 	// Creating a blob buffer with almost ALL ASCII chars
 	uint8_t num_chars = 256 - 5; // skipping: '\0', '\n', '\15', ',', '\32'
-	duckdb::unique_ptr<char[]> blob_chars(new char[num_chars]);
+	auto blob_chars = make_unsafe_uniq_array<char>(num_chars);
 	char ch = '\0';
 	idx_t buf_idx = 0;
 	for (idx_t i = 0; i < 255; ++i, ++ch) {
@@ -335,7 +335,7 @@ TEST_CASE("Test BLOB with PreparedStatement", "[api]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b BYTEA);"));
 
 	// Insert blob values through a PreparedStatement
-	Value blob_val = Value::BLOB((const_data_ptr_t)blob_chars.get(), num_chars);
+	Value blob_val = Value::BLOB(const_data_ptr_cast(blob_chars.get()), num_chars);
 	duckdb::unique_ptr<PreparedStatement> ps = con.Prepare("INSERT INTO blobs VALUES (?::BYTEA)");
 	ps->Execute(blob_val);
 	REQUIRE(!ps->HasError());

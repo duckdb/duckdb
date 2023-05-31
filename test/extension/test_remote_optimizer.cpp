@@ -79,7 +79,7 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 			REQUIRE(buffer);
 			REQUIRE(read(connfd, buffer, bytes) == ssize_t(bytes));
 
-			BufferedDeserializer deserializer((data_ptr_t)buffer, bytes);
+			BufferedDeserializer deserializer(data_ptr_cast(buffer), bytes);
 			con2.BeginTransaction();
 			PlanDeserializationState state(*con2.context);
 			auto plan = LogicalOperator::Deserialize(deserializer, state);

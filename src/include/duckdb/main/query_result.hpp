@@ -90,6 +90,23 @@ public:
 	CurrentChunk current_chunk;
 
 public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast query result to type - query result type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast query result to type - query result type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
+public:
 	//! Returns the name of the column for the given index
 	DUCKDB_API const string &ColumnName(idx_t index) const;
 	//! Fetches a DataChunk of normalized (flat) vectors from the query result.
@@ -108,7 +125,7 @@ public:
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	DUCKDB_API bool Equals(QueryResult &other);
 
-	DUCKDB_API bool TryFetch(unique_ptr<DataChunk> &result, PreservedError &error) {
+	bool TryFetch(unique_ptr<DataChunk> &result, PreservedError &error) {
 		try {
 			result = Fetch();
 			return success;
@@ -191,10 +208,10 @@ private:
 	};
 
 public:
-	DUCKDB_API QueryResultIterator begin() {
+	QueryResultIterator begin() {
 		return QueryResultIterator(this);
 	}
-	DUCKDB_API QueryResultIterator end() {
+	QueryResultIterator end() {
 		return QueryResultIterator(nullptr);
 	}
 

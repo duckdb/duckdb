@@ -35,18 +35,20 @@ private:
 	static string WriteOptionallyQuoted(const string &input);
 };
 
+enum class CatalogSetPathType { SET_SCHEMA, SET_SCHEMAS };
+
 //! The schema search path, in order by which entries are searched if no schema entry is provided
 class CatalogSearchPath {
 public:
 	DUCKDB_API explicit CatalogSearchPath(ClientContext &client_p);
 	CatalogSearchPath(const CatalogSearchPath &other) = delete;
 
-	DUCKDB_API void Set(CatalogSearchEntry new_value, bool is_set_schema);
-	DUCKDB_API void Set(vector<CatalogSearchEntry> new_paths, bool is_set_schema = false);
+	DUCKDB_API void Set(CatalogSearchEntry new_value, CatalogSetPathType set_type);
+	DUCKDB_API void Set(vector<CatalogSearchEntry> new_paths, CatalogSetPathType set_type);
 	DUCKDB_API void Reset();
 
 	DUCKDB_API const vector<CatalogSearchEntry> &Get();
-	DUCKDB_API const vector<CatalogSearchEntry> &GetSetPaths() {
+	const vector<CatalogSearchEntry> &GetSetPaths() {
 		return set_paths;
 	}
 	DUCKDB_API const CatalogSearchEntry &GetDefault();
@@ -56,8 +58,12 @@ public:
 	DUCKDB_API vector<string> GetSchemasForCatalog(const string &catalog);
 	DUCKDB_API vector<string> GetCatalogsForSchema(const string &schema);
 
+	DUCKDB_API bool SchemaInSearchPath(ClientContext &context, const string &catalog_name, const string &schema_name);
+
 private:
 	void SetPaths(vector<CatalogSearchEntry> new_paths);
+
+	string GetSetName(CatalogSetPathType set_type);
 
 private:
 	ClientContext &context;

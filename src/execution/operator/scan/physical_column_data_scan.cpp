@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
@@ -60,7 +61,7 @@ void PhysicalColumnDataScan::BuildPipelines(Pipeline &current, MetaPipeline &met
 		D_ASSERT(delim_sink->type == PhysicalOperatorType::DELIM_JOIN);
 		auto &delim_join = delim_sink->Cast<PhysicalDelimJoin>();
 		current.AddDependency(delim_dependency);
-		state.SetPipelineSource(current, (PhysicalOperator &)*delim_join.distinct);
+		state.SetPipelineSource(current, delim_join.distinct->Cast<PhysicalOperator>());
 		return;
 	}
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:

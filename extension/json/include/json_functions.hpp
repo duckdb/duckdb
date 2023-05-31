@@ -17,13 +17,14 @@ class TableRef;
 struct ReplacementScanData;
 class CastFunctionSet;
 struct CastParameters;
+struct CastLocalStateParameters;
 struct JSONScanInfo;
 class BuiltinFunctions;
 
 // Scalar function stuff
 struct JSONReadFunctionData : public FunctionData {
 public:
-	JSONReadFunctionData(bool constant, string path_p, idx_t len);
+	JSONReadFunctionData(bool constant, string path_p, idx_t len, JSONCommon::JSONPathType path_type);
 	unique_ptr<FunctionData> Copy() const override;
 	bool Equals(const FunctionData &other_p) const override;
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
@@ -32,6 +33,7 @@ public:
 public:
 	const bool constant;
 	const string path;
+	const JSONCommon::JSONPathType path_type;
 	const char *ptr;
 	const size_t len;
 };
@@ -56,6 +58,7 @@ public:
 	explicit JSONFunctionLocalState(ClientContext &context);
 	static unique_ptr<FunctionLocalState> Init(ExpressionState &state, const BoundFunctionExpression &expr,
 	                                           FunctionData *bind_data);
+	static unique_ptr<FunctionLocalState> InitCastLocalState(CastLocalStateParameters &parameters);
 	static JSONFunctionLocalState &ResetAndGet(ExpressionState &state);
 
 public:
@@ -71,7 +74,9 @@ public:
 	                                                ReplacementScanData *data);
 	static TableFunction GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info);
 	static CopyFunction GetJSONCopyFunction();
-	static void RegisterCastFunctions(CastFunctionSet &casts);
+	static void RegisterSimpleCastFunctions(CastFunctionSet &casts);
+	static void RegisterJSONCreateCastFunctions(CastFunctionSet &casts);
+	static void RegisterJSONTransformCastFunctions(CastFunctionSet &casts);
 
 private:
 	// Scalar functions
@@ -111,10 +116,13 @@ private:
 	// Table functions
 	static TableFunctionSet GetReadJSONObjectsFunction();
 	static TableFunctionSet GetReadNDJSONObjectsFunction();
+	static TableFunctionSet GetReadJSONObjectsAutoFunction();
+
 	static TableFunctionSet GetReadJSONFunction();
 	static TableFunctionSet GetReadNDJSONFunction();
 	static TableFunctionSet GetReadJSONAutoFunction();
 	static TableFunctionSet GetReadNDJSONAutoFunction();
+
 	static TableFunctionSet GetExecuteJsonSerializedSqlFunction();
 };
 

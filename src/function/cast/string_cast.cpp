@@ -8,7 +8,7 @@
 namespace duckdb {
 
 template <class T>
-bool StringEnumCastLoop(string_t *source_data, ValidityMask &source_mask, const LogicalType &source_type,
+bool StringEnumCastLoop(const string_t *source_data, ValidityMask &source_mask, const LogicalType &source_type,
                         T *result_data, ValidityMask &result_mask, const LogicalType &result_type, idx_t count,
                         string *error_message, const SelectionVector *sel) {
 	bool all_converted = true;
@@ -55,7 +55,7 @@ bool StringEnumCast(Vector &source, Vector &result, idx_t count, CastParameters 
 
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 
-		auto source_data = (string_t *)vdata.data;
+		auto source_data = UnifiedVectorFormat::GetData<string_t>(vdata);
 		auto source_sel = vdata.sel;
 		auto source_mask = vdata.validity;
 		auto result_data = FlatVector::GetData<T>(result);
@@ -119,9 +119,9 @@ static BoundCastInfo VectorStringCastNumericSwitch(BindCastInput &input, const L
 //===--------------------------------------------------------------------===//
 // string -> list casting
 //===--------------------------------------------------------------------===//
-bool VectorStringToList::StringToNestedTypeCastLoop(string_t *source_data, ValidityMask &source_mask, Vector &result,
-                                                    ValidityMask &result_mask, idx_t count, CastParameters &parameters,
-                                                    const SelectionVector *sel) {
+bool VectorStringToList::StringToNestedTypeCastLoop(const string_t *source_data, ValidityMask &source_mask,
+                                                    Vector &result, ValidityMask &result_mask, idx_t count,
+                                                    CastParameters &parameters, const SelectionVector *sel) {
 	idx_t total_list_size = 0;
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = i;
@@ -183,8 +183,8 @@ static LogicalType InitVarcharStructType(const LogicalType &target) {
 //===--------------------------------------------------------------------===//
 // string -> struct casting
 //===--------------------------------------------------------------------===//
-bool VectorStringToStruct::StringToNestedTypeCastLoop(string_t *source_data, ValidityMask &source_mask, Vector &result,
-                                                      ValidityMask &result_mask, idx_t count,
+bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_data, ValidityMask &source_mask,
+                                                      Vector &result, ValidityMask &result_mask, idx_t count,
                                                       CastParameters &parameters, const SelectionVector *sel) {
 	auto varchar_struct_type = InitVarcharStructType(result.GetType());
 	Vector varchar_vector(varchar_struct_type, count);
@@ -253,9 +253,9 @@ unique_ptr<FunctionLocalState> InitMapCastLocalState(CastLocalStateParameters &p
 	return std::move(result);
 }
 
-bool VectorStringToMap::StringToNestedTypeCastLoop(string_t *source_data, ValidityMask &source_mask, Vector &result,
-                                                   ValidityMask &result_mask, idx_t count, CastParameters &parameters,
-                                                   const SelectionVector *sel) {
+bool VectorStringToMap::StringToNestedTypeCastLoop(const string_t *source_data, ValidityMask &source_mask,
+                                                   Vector &result, ValidityMask &result_mask, idx_t count,
+                                                   CastParameters &parameters, const SelectionVector *sel) {
 	idx_t total_elements = 0;
 	for (idx_t i = 0; i < count; i++) {
 		idx_t idx = i;
@@ -352,7 +352,7 @@ bool StringToNestedTypeCast(Vector &source, Vector &result, idx_t count, CastPar
 
 		source.ToUnifiedFormat(count, unified_source);
 		auto source_sel = unified_source.sel;
-		auto source_data = (string_t *)unified_source.data;
+		auto source_data = UnifiedVectorFormat::GetData<string_t>(unified_source);
 		auto &source_mask = unified_source.validity;
 		auto &result_mask = FlatVector::Validity(result);
 

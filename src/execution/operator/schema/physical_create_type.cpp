@@ -7,9 +7,9 @@
 
 namespace duckdb {
 
-PhysicalCreateType::PhysicalCreateType(unique_ptr<CreateTypeInfo> info, idx_t estimated_cardinality)
+PhysicalCreateType::PhysicalCreateType(unique_ptr<CreateTypeInfo> info_p, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::CREATE_TYPE, {LogicalType::BIGINT}, estimated_cardinality),
-      info(std::move(info)) {
+      info(std::move(info_p)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -45,7 +45,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 		gstate.capacity *= 2;
 	}
 
-	auto src_ptr = (string_t *)sdata.data;
+	auto src_ptr = UnifiedVectorFormat::GetData<string_t>(sdata);
 	auto result_ptr = FlatVector::GetData<string_t>(gstate.result);
 	// Input vector has NULL value, we just throw an exception
 	for (idx_t i = 0; i < chunk.size(); i++) {

@@ -272,10 +272,20 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 		}
 		return type;
 	}
-	case PythonObjectType::Datetime:
+	case PythonObjectType::Datetime: {
+		auto tzinfo = ele.attr("tzinfo");
+		if (!py::none().is(tzinfo)) {
+			return LogicalType::TIMESTAMP_TZ;
+		}
 		return LogicalType::TIMESTAMP;
-	case PythonObjectType::Time:
+	}
+	case PythonObjectType::Time: {
+		auto tzinfo = ele.attr("tzinfo");
+		if (!py::none().is(tzinfo)) {
+			return LogicalType::TIME_TZ;
+		}
 		return LogicalType::TIME;
+	}
 	case PythonObjectType::Date:
 		return LogicalType::DATE;
 	case PythonObjectType::Timedelta:
@@ -321,6 +331,8 @@ LogicalType PandasAnalyzer::GetItemType(py::handle ele, bool &can_convert) {
 		// Fall back to string for unknown types
 		can_convert = false;
 		return LogicalType::VARCHAR;
+	default:
+		throw InternalException("Unsupported PythonObjectType");
 	}
 }
 

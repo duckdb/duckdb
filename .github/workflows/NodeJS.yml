@@ -18,6 +18,7 @@ on:
       - '!tools/nodejs/**'
       - '.github/workflows/**'
       - '!.github/workflows/NodeJS.yml'
+      - '.github/config/uncovered_files.csv'
   pull_request:
     paths-ignore:
       - '**.md'
@@ -28,6 +29,7 @@ on:
       - '!tools/nodejs/**'
       - '.github/workflows/**'
       - '!.github/workflows/NodeJS.yml'
+      - '.github/config/uncovered_files.csv'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -233,7 +235,6 @@ jobs:
           NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
       - name: Node ${{ matrix.node }}
-        if: matrix.target_arch != 'arm64'
         shell: bash
         run: ./scripts/node_build.sh ${{ matrix.node }}
 

@@ -847,12 +847,12 @@ void DuckDBPyRelation::Create(const string &table) {
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun, Optional<py::object> schema) {
 	AssertRelation();
 	vector<Value> params;
-	params.emplace_back(Value::POINTER((uintptr_t)fun.ptr()));
-	params.emplace_back(Value::POINTER((uintptr_t)schema.ptr()));
+	params.emplace_back(Value::POINTER(CastPointerToValue(fun.ptr())));
+	params.emplace_back(Value::POINTER(CastPointerToValue(schema.ptr())));
 	auto relation = make_uniq<DuckDBPyRelation>(rel->TableFunction("python_map_function", params));
 	auto rel_dependency = make_uniq<PythonDependencies>();
 	rel_dependency->map_function = std::move(fun);
-	rel_dependency->py_object_list.push_back(std::move(make_uniq<RegisteredObject>(std::move(schema))));
+	rel_dependency->py_object_list.push_back(make_uniq<RegisteredObject>(std::move(schema)));
 	relation->rel->extra_dependencies = std::move(rel_dependency);
 	return relation;
 }
@@ -882,7 +882,7 @@ string DuckDBPyRelation::Explain(ExplainType type) {
 	py::gil_scoped_release release;
 	auto res = rel->Explain(type);
 	D_ASSERT(res->type == duckdb::QueryResultType::MATERIALIZED_RESULT);
-	auto &materialized = (duckdb::MaterializedQueryResult &)*res;
+	auto &materialized = res->Cast<MaterializedQueryResult>();
 	auto &coll = materialized.Collection();
 	string result;
 	for (auto &row : coll.Rows()) {

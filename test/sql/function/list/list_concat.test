@@ -117,7 +117,7 @@ CREATE TABLE test AS SELECT range % 4 i, range j, range k FROM range(16)
 statement ok
 CREATE TABLE lists AS SELECT i, list(j) j, list(k) k FROM test GROUP BY i
 
-query II
+query II rowsort
 SELECT i, list_concat(j, k) FROM lists
 ----
 0	[0, 4, 8, 12, 0, 4, 8, 12]
@@ -144,8 +144,8 @@ SELECT list_append(NULL, 3)
 ----
 [3]
 
-query II
-SELECT i, list_append(list_concat(j, k), i) FROM lists
+query II rowsort
+SELECT i, list_append(list_concat(j, k), i) FROM lists ORDER BY i;
 ----
 0	[0, 4, 8, 12, 0, 4, 8, 12, 0]
 1	[1, 5, 9, 13, 1, 5, 9, 13, 1]

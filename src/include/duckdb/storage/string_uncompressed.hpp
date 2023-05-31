@@ -80,7 +80,7 @@ public:
 	                              UnifiedVectorFormat &data, idx_t offset, idx_t count) {
 		D_ASSERT(segment.GetBlockOffset() == 0);
 		auto handle_ptr = handle.Ptr();
-		auto source_data = (string_t *)data.data;
+		auto source_data = UnifiedVectorFormat::GetData<string_t>(data);
 		auto result_data = (int32_t *)(handle_ptr + DICTIONARY_HEADER_SIZE);
 		uint32_t *dictionary_size = (uint32_t *)handle_ptr;
 		uint32_t *dictionary_end = (uint32_t *)(handle_ptr + sizeof(uint32_t));

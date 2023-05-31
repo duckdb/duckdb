@@ -258,6 +258,7 @@ extension Vector: Collection {
 extension Vector.Element {
   
   var dataType: DatabaseType { vector.logicalType.dataType }
+  var logicalType: LogicalType { vector.logicalType }
   
   func unwrapNull() -> Bool { vector.unwrapNull(at: index) }
   func unwrap(_ type: Int.Type) throws -> Int { try vector.unwrap(type, at: index) }

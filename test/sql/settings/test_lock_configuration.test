@@ -1,0 +1,54 @@
+# name: test/sql/settings/test_lock_configuration.test
+# description: Test lock configuration
+# group: [settings]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT current_setting('lock_configuration')
+----
+false
+
+statement ok
+SET memory_limit='8GB';
+
+# nop
+statement ok
+RESET lock_configuration;
+
+# nop
+statement ok
+SET lock_configuration=false;
+
+statement ok
+SET memory_limit='8GB';
+
+# lock the config
+statement ok
+SET lock_configuration=true;
+
+statement error
+SET memory_limit='10GB';
+----
+configuration has been locked
+
+statement error
+SET lock_configuration=false;
+----
+configuration has been locked
+
+statement error
+RESET memory_limit;
+----
+configuration has been locked
+
+statement error
+RESET lock_configuration;
+----
+configuration has been locked
+
+query I
+SELECT current_setting('lock_configuration')
+----
+true

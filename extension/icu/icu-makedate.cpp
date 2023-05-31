@@ -36,8 +36,8 @@ struct ICUMakeDate : public ICUDateFunc {
 
 	static bool CastToDate(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 		auto &cast_data = parameters.cast_data->Cast<CastData>();
-		auto info = (BindData *)cast_data.info.get();
-		CalendarPtr calendar(info->calendar->clone());
+		auto &info = cast_data.info->Cast<BindData>();
+		CalendarPtr calendar(info.calendar->clone());
 
 		UnaryExecutor::Execute<timestamp_t, date_t>(
 		    source, result, count, [&](timestamp_t input) { return Operation(calendar.get(), input); });
@@ -85,9 +85,15 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	}
 
 	template <typename T>
+	static void FromMicros(DataChunk &input, ExpressionState &state, Vector &result) {
+		UnaryExecutor::Execute<T, timestamp_t>(input.data[0], result, input.size(),
+		                                       [&](T micros) { return timestamp_t(micros); });
+	}
+
+	template <typename T>
 	static void Execute(DataChunk &input, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -137,6 +143,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetSenaryFunction<int64_t>(LogicalType::BIGINT));
 		set.AddFunction(GetSeptenaryFunction<int64_t>(LogicalType::BIGINT));
+		set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP_TZ, FromMicros<int64_t>));
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetSystemCatalog(context);

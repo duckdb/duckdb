@@ -305,7 +305,7 @@ void AsOfLocalState::ResolveJoinKeys(DataChunk &input) {
 
 	DataChunk payload_chunk;
 	payload_chunk.InitializeEmpty({LogicalType::UINTEGER});
-	FlatVector::SetData(payload_chunk.data[0], (data_ptr_t)lhs_sel.data());
+	FlatVector::SetData(payload_chunk.data[0], data_ptr_cast(lhs_sel.data()));
 	payload_chunk.SetCardinality(lhs_valid);
 	local_sort.SinkChunk(lhs_keys, payload_chunk);
 
@@ -338,7 +338,7 @@ void AsOfLocalState::ResolveJoin(DataChunk &input, bool *found_match, std::pair<
 	// But they may be constant, so unify.
 	UnifiedVectorFormat bin_unified;
 	bin_vector.ToUnifiedFormat(lhs_valid, bin_unified);
-	const auto bins = (hash_t *)bin_unified.data;
+	const auto bins = UnifiedVectorFormat::GetData<hash_t>(bin_unified);
 
 	hash_t prev_bin = global_partition.bin_groups.size();
 	optional_ptr<PartitionGlobalHashGroup> hash_group;

@@ -16,4 +16,4 @@ run
 SELECT COUNT(*) FROM lineitem WHERE contains(l_comment, 'reg')
 
 result I
-817643
+816933

@@ -22,6 +22,11 @@ statement error
 select from_json_strict('42', '"DATE"')
 
 # singletons
+statement error
+select json_transform('42', '42')
+----
+Binder Error
+
 query T
 select json_transform('42', '"UBIGINT"')
 ----
@@ -58,6 +63,26 @@ select json_transform('{"a": 42}', '{"a":"UBIGINT"}')
 ----
 {'a': 42}
 
+statement error
+select json_transform_strict('{"a": 42, "a":43}', '{"a":"UBIGINT"}')
+----
+Invalid Input Error
+
+statement error
+select json_transform_strict('{}', '{"a":"UBIGINT"}')
+----
+Invalid Input Error
+
+statement error
+select json_transform_strict('{}', '["UBIGINT"]')
+----
+Invalid Input Error
+
+query T
+select json_transform('[{}, [42]]', '[["UBIGINT"]]')
+----
+[NULL, [42]]
+
 query T
 select json_transform('{"a": null}', '{"a":"UBIGINT"}')
 ----
@@ -72,6 +97,16 @@ statement error
 select json_transform('{"a": 42}', '{"a":"ARRAY"}')
 
 # arrays
+statement error
+select json_transform('[1,2,3]', '["UBIGINT", "BIGINT"]')
+----
+Binder Error
+
+query T
+select list_sum(json_transform(range(5000)::JSON, '["UBIGINT"]'))::UBIGINT s
+----
+12497500
+
 query T
 select json_transform('[1,2,3]', '["UBIGINT"]')
 ----
@@ -338,6 +373,11 @@ query T
 select json_transform('42', '"UUID"')
 ----
 NULL
+
+statement error
+select json_transform_strict('42', '"UUID"')
+----
+Invalid Input Error
 
 query T
 select json_transform('-42', '"UUID"')

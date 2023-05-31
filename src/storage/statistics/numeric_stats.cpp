@@ -525,7 +525,7 @@ void NumericStats::TemplatedVerify(const BaseStatistics &stats, Vector &vector, 
 	UnifiedVectorFormat vdata;
 	vector.ToUnifiedFormat(count, vdata);
 
-	auto data = (T *)vdata.data;
+	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 	auto min_value = NumericStats::MinOrNull(stats);
 	auto max_value = NumericStats::MaxOrNull(stats);
 	for (idx_t i = 0; i < count; i++) {

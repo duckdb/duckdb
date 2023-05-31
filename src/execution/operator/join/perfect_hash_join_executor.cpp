@@ -25,7 +25,7 @@ bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	}
 
 	// and for duplicate_checking
-	bitmap_build_idx = unique_ptr<bool[]>(new bool[build_size]);
+	bitmap_build_idx = make_unsafe_uniq_array<bool>(build_size);
 	memset(bitmap_build_idx.get(), 0, sizeof(bool) * build_size); // set false
 
 	// Now fill columns with build data
@@ -168,7 +168,7 @@ unique_ptr<OperatorState> PerfectHashJoinExecutor::GetOperatorState(ExecutionCon
 
 OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, DataChunk &input,
                                                                   DataChunk &result, OperatorState &state_p) {
-	auto &state = (PerfectHashJoinState &)state_p;
+	auto &state = state_p.Cast<PerfectHashJoinState>();
 	// keeps track of how many probe keys have a match
 	idx_t probe_sel_count = 0;
 

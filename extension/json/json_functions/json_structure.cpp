@@ -1,9 +1,9 @@
 #include "json_structure.hpp"
 
+#include "duckdb/common/enum_util.hpp"
 #include "json_executors.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
-#include "duckdb/common/enum_util.hpp"
 
 namespace duckdb {
 
@@ -93,7 +93,7 @@ bool JSONStructureNode::ContainsVarchar() const {
 }
 
 void JSONStructureNode::InitializeCandidateTypes(const idx_t max_depth, idx_t depth) {
-	if (depth > max_depth) {
+	if (depth >= max_depth) {
 		return;
 	}
 	if (descriptions.size() != 1) {
@@ -393,7 +393,7 @@ static inline void ExtractStructureObject(yyjson_val *obj, JSONStructureNode &no
 
 static inline void ExtractStructureVal(yyjson_val *val, JSONStructureNode &node) {
 	D_ASSERT(!yyjson_is_arr(val) && !yyjson_is_obj(val));
-	node.GetOrCreateDescription(JSONCommon::ValTypeToLogicalTypeId<yyjson_val>(val));
+	node.GetOrCreateDescription(JSONCommon::ValTypeToLogicalTypeId(val));
 }
 
 void JSONStructure::ExtractStructure(yyjson_val *val, JSONStructureNode &node) {
@@ -521,11 +521,11 @@ static LogicalType StructureToTypeString(const JSONStructureNode &node) {
 
 LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStructureNode &node, const idx_t max_depth,
                                            idx_t depth) {
-	if (depth > max_depth) {
+	if (depth >= max_depth) {
 		return JSONCommon::JSONType();
 	}
 	if (node.descriptions.empty()) {
-		return LogicalTypeId::SQLNULL;
+		return JSONCommon::JSONType();
 	}
 	if (node.descriptions.size() != 1) { // Inconsistent types, so we resort to JSON
 		return JSONCommon::JSONType();
@@ -540,7 +540,9 @@ LogicalType JSONStructure::StructureToType(ClientContext &context, const JSONStr
 	case LogicalTypeId::VARCHAR:
 		return StructureToTypeString(node);
 	case LogicalTypeId::SQLNULL:
-		return LogicalTypeId::INTEGER;
+		return JSONCommon::JSONType();
+	case LogicalTypeId::UBIGINT:
+		return LogicalTypeId::BIGINT; // We prefer not to return UBIGINT in our type auto-detection
 	default:
 		return desc.type;
 	}
