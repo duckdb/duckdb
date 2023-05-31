@@ -170,7 +170,7 @@ select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'val
 statement error
 copy (select map {range : 10 - range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,k:43,v:44}})
 ----
-Binder Error: Column name "k" specified in FIELD_IDS not found. Available column names: [value, key]
+Binder Error: Column name "k" specified in FIELD_IDS not found.
 
 # test auto-generation (flat)
 statement ok
