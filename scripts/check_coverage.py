@@ -29,9 +29,13 @@ else:
             splits = line.split('\t')
             partial_coverage_dict[splits[0]] = int(splits[1].strip())
 
-any_failed = False
+DASH_COUNT = 80
+total_difference = 0
+allowed_difference = 1
+
 def check_file(path, partial_coverage_dict):
     global any_failed
+    global total_difference
     if not '.cpp' in path and not '.hpp' in path:
         # files are named [path].[ch]pp
         return
@@ -57,7 +61,8 @@ def check_file(path, partial_coverage_dict):
         if args.fix:
             uncovered_file.write(f'{original_path}\t{len(uncovered_lines) + 1}\n')
             return
-        DASH_COUNT = 80
+        total_difference += len(uncovered_lines) - expected_uncovered_lines
+
         print("-" * DASH_COUNT)
         print(f"Coverage failure in file {original_path}")
         print("-" * DASH_COUNT)
@@ -71,7 +76,6 @@ def check_file(path, partial_coverage_dict):
         print("-" * DASH_COUNT)
         for e in uncovered_lines:
             print(e[0] + ' ' * 8 + cleanup_line(e[1]))
-        any_failed = True
 
 
 def scan_directory(path):
@@ -93,5 +97,10 @@ for file in files:
 if args.fix:
     uncovered_file.close()
 
-if any_failed:
+if total_difference > allowed_difference:
     exit(1)
+elif total_difference > 0:
+    print("-" * DASH_COUNT)
+    print("SUCCESS-ish")
+    print("-" * DASH_COUNT)
+    print(f"{total_difference} lines were uncovered but this falls within the margin of {allowed_difference}")

@@ -100,16 +100,30 @@
     },
     {
         "name": "epoch",
-        "parameters": "ts",
-        "description": "Extract the epoch component from a date or timestamp",
+        "parameters": "temporal",
+        "description": "Extract the epoch component from a temporal type",
         "example": "epoch(timestamp '2021-08-03 11:59:44.123456')",
         "type": "scalar_function_set"
     },
     {
         "name": "epoch_ms",
-        "parameters": "ms",
-        "description": "Converts ms since epoch to a timestamp",
-        "example": "epoch_ms(701222400000)",
+        "parameters": "temporal",
+        "description": "Extract the epoch component in milliseconds from a temporal type",
+        "example": "epoch_ms(timestamp '2021-08-03 11:59:44.123456')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "epoch_us",
+        "parameters": "temporal",
+        "description": "Extract the epoch component in microseconds from a temporal type",
+        "example": "epoch_us(timestamp '2021-08-03 11:59:44.123456')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "epoch_ns",
+        "parameters": "temporal",
+        "description": "Extract the epoch component in nanoseconds from a temporal type",
+        "example": "epoch_ns(timestamp '2021-08-03 11:59:44.123456')",
         "type": "scalar_function"
     },
     {

@@ -75,8 +75,8 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 	static inline timestamp_t WidthConvertibleToDaysCommon(int32_t bucket_width_days, const timestamp_t ts,
 	                                                       const timestamp_t origin, icu::Calendar *calendar) {
-		static part_trunc_t trunc_days = TruncationFactory(DatePartSpecifier::DAY);
-		static part_sub_t sub_days = SubtractFactory(DatePartSpecifier::DAY);
+		const auto trunc_days = TruncationFactory(DatePartSpecifier::DAY);
+		const auto sub_days = SubtractFactory(DatePartSpecifier::DAY);
 
 		uint64_t tmp_micros = SetTime(calendar, ts);
 		trunc_days(calendar, tmp_micros);
@@ -97,8 +97,8 @@ struct ICUTimeBucket : public ICUDateFunc {
 
 	static inline timestamp_t WidthConvertibleToMonthsCommon(int32_t bucket_width_months, const timestamp_t ts,
 	                                                         const timestamp_t origin, icu::Calendar *calendar) {
-		static part_trunc_t trunc_months = TruncationFactory(DatePartSpecifier::MONTH);
-		static part_sub_t sub_months = SubtractFactory(DatePartSpecifier::MONTH);
+		const auto trunc_months = TruncationFactory(DatePartSpecifier::MONTH);
+		const auto sub_months = SubtractFactory(DatePartSpecifier::MONTH);
 
 		uint64_t tmp_micros = SetTime(calendar, ts);
 		trunc_months(calendar, tmp_micros);
@@ -126,7 +126,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 2);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 
 		BinaryExecutor::Execute<TA, TB, TR>(args.data[0], args.data[1], result, args.size(), [&](TA left, TB right) {
@@ -139,7 +139,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 3);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 
 		TernaryExecutor::Execute<TA, TB, TC, TR>(
@@ -153,7 +153,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 			if (!Value::IsFinite(ts)) {
 				return ts;
 			}
-			static timestamp_t origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
+			const auto origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
 			return WidthConvertibleToMicrosCommon(bucket_width.micros, ts, origin, calendar);
 		}
 	};
@@ -163,7 +163,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 			if (!Value::IsFinite(ts)) {
 				return ts;
 			}
-			static timestamp_t origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
+			const auto origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
 			return WidthConvertibleToDaysCommon(bucket_width.days, ts, origin, calendar);
 		}
 	};
@@ -173,7 +173,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 			if (!Value::IsFinite(ts)) {
 				return ts;
 			}
-			static timestamp_t origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_2);
+			const auto origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_2);
 			return WidthConvertibleToMonthsCommon(bucket_width.months, ts, origin, calendar);
 		}
 	};
@@ -200,7 +200,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 			if (!Value::IsFinite(ts)) {
 				return ts;
 			}
-			static timestamp_t origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
+			const auto origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
 			return Add(calendar,
 			           WidthConvertibleToMicrosCommon(bucket_width.micros, Sub(calendar, ts, offset), origin, calendar),
 			           offset);
@@ -213,7 +213,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 			if (!Value::IsFinite(ts)) {
 				return ts;
 			}
-			static timestamp_t origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
+			const auto origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_1);
 			return Add(calendar,
 			           WidthConvertibleToDaysCommon(bucket_width.days, Sub(calendar, ts, offset), origin, calendar),
 			           offset);
@@ -226,7 +226,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 			if (!Value::IsFinite(ts)) {
 				return ts;
 			}
-			static timestamp_t origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_2);
+			const auto origin = Timestamp::FromEpochMicroSeconds(DEFAULT_ORIGIN_MICROS_2);
 			return Add(calendar,
 			           WidthConvertibleToMonthsCommon(bucket_width.months, Sub(calendar, ts, offset), origin, calendar),
 			           offset);
@@ -358,7 +358,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 2);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 		SetTimeZone(calendar, string_t("UTC"));
@@ -414,7 +414,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 3);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 		SetTimeZone(calendar, string_t("UTC"));
@@ -479,7 +479,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 3);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 		SetTimeZone(calendar, string_t("UTC"));
@@ -547,7 +547,7 @@ struct ICUTimeBucket : public ICUDateFunc {
 		D_ASSERT(args.ColumnCount() == 3);
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 

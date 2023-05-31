@@ -195,15 +195,16 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 // Replay Table
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateTable() {
-
 	auto info = TableCatalogEntry::Deserialize(source, context);
 	if (deserialize_only) {
 		return;
 	}
 
 	// bind the constraints to the table again
+
 	auto binder = Binder::CreateBinder(context);
-	auto bound_info = binder->BindCreateTableInfo(std::move(info));
+	auto &schema = catalog.GetSchema(context, info->schema);
+	auto bound_info = binder->BindCreateTableInfo(std::move(info), schema);
 
 	catalog.CreateTable(context, *bound_info);
 }
@@ -282,9 +283,7 @@ void ReplayState::ReplayDropSchema() {
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateType() {
 	auto info = TypeCatalogEntry::Deserialize(source);
-	if (Catalog::TypeExists(context, info->catalog, info->schema, info->name)) {
-		return;
-	}
+	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	catalog.CreateType(context, *info);
 }
 

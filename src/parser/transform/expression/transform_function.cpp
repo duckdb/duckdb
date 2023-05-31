@@ -309,6 +309,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			order_bys.reset();   // NOLINT
 			filter_expr.reset(); // NOLINT
 			children.clear();    // NOLINT
+			root.agg_distinct = false;
 			children.emplace_back(std::move(unordered));
 			children.emplace_back(std::move(sense));
 			children.emplace_back(std::move(nulls));
