@@ -275,3 +275,46 @@ statement error
 copy (select {__duckdb_field_id : range} as __duckdb_field_id from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {__duckdb_field_id : {__duckdb_field_id : 42}})
 ----
 Binder Error
+
+# we should be case insensitive here (it's just DuckDB col names / struct col names)
+statement ok
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {"I" : 42})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+42
+
+statement ok
+copy (select range as "I" from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i : 42})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'I'
+----
+42
+
+statement ok
+copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {"I" : {__duckdb_field_id: 42, "F": 43}})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i' and num_children > 0
+----
+42
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'f'
+----
+43
+
+statement ok
+copy (select {"F" : range} as "I" from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i : {__duckdb_field_id: 42, f: 43}})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'I' and num_children > 0
+----
+42
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'F'
+----
+43

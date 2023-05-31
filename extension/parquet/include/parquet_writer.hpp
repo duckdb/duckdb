@@ -34,7 +34,7 @@ struct FieldID;
 struct ChildFieldIDs {
 	ChildFieldIDs();
 	ChildFieldIDs Copy() const;
-	unique_ptr<unordered_map<string, FieldID>> ids;
+	unique_ptr<case_insensitive_map_t<FieldID>> ids;
 };
 
 struct FieldID {

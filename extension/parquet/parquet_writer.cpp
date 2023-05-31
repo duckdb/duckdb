@@ -30,7 +30,7 @@ using ParquetRowGroup = duckdb_parquet::format::RowGroup;
 using duckdb_parquet::format::Type;
 
 ChildFieldIDs::ChildFieldIDs() {
-	ids = make_uniq<unordered_map<string, FieldID>>();
+	ids = make_uniq<case_insensitive_map_t<FieldID>>();
 }
 
 ChildFieldIDs ChildFieldIDs::Copy() const {
