@@ -29,6 +29,31 @@ struct TestVectorInfo {
 	vector<unique_ptr<DataChunk>> &entries;
 };
 
+struct TestGeneratedValues {
+public:
+	void AddColumn(vector<Value> values) {
+		if (!column_values.empty() && column_values[0].size() != values.size()) {
+			throw InternalException("Size mismatch when adding a column to TestGeneratedValues");
+		}
+		column_values.push_back(std::move(values));
+	}
+
+	const Value &GetValue(idx_t row, idx_t column) const {
+		return column_values[column][row];
+	}
+
+	idx_t Rows() const {
+		return column_values.empty() ? 0 : column_values[0].size();
+	}
+
+	idx_t Columns() const {
+		return column_values.size();
+	}
+
+private:
+	vector<vector<Value>> column_values;
+};
+
 struct TestVectorFlat {
 	static constexpr const idx_t TEST_VECTOR_CARDINALITY = 3;
 
@@ -75,23 +100,24 @@ struct TestVectorFlat {
 		return result;
 	}
 
-	static vector<vector<Value>> GenerateValues(TestVectorInfo &info) {
-		vector<vector<Value>> result_values;
+	static TestGeneratedValues GenerateValues(TestVectorInfo &info) {
+		// generate the values for each column
+		TestGeneratedValues generated_values;
 		for (auto &type : info.types) {
-			result_values.push_back(GenerateValues(info, type));
+			generated_values.AddColumn(GenerateValues(info, type));
 		}
-		return result_values;
+		return generated_values;
 	}
 
 	static void Generate(TestVectorInfo &info) {
 		auto result_values = GenerateValues(info);
-		for (idx_t cur_row = 0; cur_row < result_values.size(); cur_row += STANDARD_VECTOR_SIZE) {
+		for (idx_t cur_row = 0; cur_row < result_values.Rows(); cur_row += STANDARD_VECTOR_SIZE) {
 			auto result = make_uniq<DataChunk>();
 			result->Initialize(Allocator::DefaultAllocator(), info.types);
-			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, result_values.size() - cur_row);
+			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, result_values.Rows() - cur_row);
 			for (idx_t c = 0; c < info.types.size(); c++) {
 				for (idx_t i = 0; i < cardinality; i++) {
-					result->data[c].SetValue(i, result_values[c][cur_row + i]);
+					result->data[c].SetValue(i, result_values.GetValue(cur_row + i, c));
 				}
 			}
 			result->SetCardinality(cardinality);
@@ -108,7 +134,7 @@ struct TestVectorConstant {
 			result->Initialize(Allocator::DefaultAllocator(), info.types);
 			auto cardinality = MinValue<idx_t>(STANDARD_VECTOR_SIZE, TestVectorFlat::TEST_VECTOR_CARDINALITY - cur_row);
 			for (idx_t c = 0; c < info.types.size(); c++) {
-				result->data[c].SetValue(0, values[c][0]);
+				result->data[c].SetValue(0, values.GetValue(0, c));
 				result->data[c].SetVectorType(VectorType::CONSTANT_VECTOR);
 			}
 			result->SetCardinality(cardinality);
