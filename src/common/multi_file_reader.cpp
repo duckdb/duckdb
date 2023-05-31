@@ -214,17 +214,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			bool found_partition = false;
 			for (auto &entry : options.hive_partitioning_indexes) {
 				if (column_id == entry.index) {
-					Value value(partitions[entry.value]);
-					if (!file_options.hive_types_schema.empty()) {
-						auto it = file_options.hive_types_schema.find(entry.value);
-						if (it != file_options.hive_types_schema.end()) {
-							if (!value.TryCastAs(context, it->second)) {
-								throw InvalidInputException(
-								    "Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(),
-								    StringUtil::Upper(it->first), it->second.ToString());
-							}
-						}
-					}
+					Value value = file_options.GetHivePartitionValue(partitions[entry.value], entry.value, context);
 					reader_data.constant_map.emplace_back(i, value);
 					found_partition = true;
 					break;
@@ -554,6 +544,17 @@ LogicalType MultiFileReaderOptions::GetHiveLogicalType(const string &hive_partit
 		}
 	}
 	return LogicalType::VARCHAR;
+}
+Value MultiFileReaderOptions::GetHivePartitionValue(const string& base, const string& entry, ClientContext& context) const {
+	Value value(base);
+	auto it = hive_types_schema.find(entry);
+	if (it == hive_types_schema.end()) {
+		return value;
+	}
+	if (!value.TryCastAs(context, it->second)) {
+		throw InvalidInputException("Unable to cast '%s' (from hive partition column '%s') to: '%s'", value.ToString(), StringUtil::Upper(it->first), it->second.ToString());
+	}
+	return value;
 }
 
 } // namespace duckdb
