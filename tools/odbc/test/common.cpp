@@ -1,7 +1,6 @@
 #define CATCH_CONFIG_MAIN
 #include "common.h"
 
-
 using namespace std;
 namespace odbc_test {
 
@@ -29,10 +28,32 @@ void ODBC_CHECK(SQLRETURN ret, SQLSMALLINT tpe, SQLHANDLE hnd, const char *func)
 	REQUIRE(ret == SQL_SUCCESS);
 }
 
+void ACCESS_DIAGNOSTIC(string &state, string &message, SQLHANDLE handle, SQLRETURN &ret, SQLSMALLINT handle_type) {
+	SQLCHAR sqlstate[6];
+	SQLINTEGER native_error;
+	SQLCHAR message_text[256];
+	SQLSMALLINT text_length;
+	SQLSMALLINT recnum = 0;
+
+	ret = SQL_SUCCESS;
+	while (SQL_SUCCEEDED(ret)) {
+		recnum++;
+		ret = SQLGetDiagRec(handle_type, handle, recnum, sqlstate, &native_error, message_text, sizeof(message_text),
+	                              &text_length);
+		if (SQL_SUCCEEDED(ret)) {
+			state = (const char *)sqlstate;
+			message = (const char *)message_text;
+		}
+	}
+
+	if (ret != SQL_NO_DATA) {
+		ODBC_CHECK(ret, handle_type, handle, "SQLGetDiagRec");
+	}
+}
+
 void METADATA_CHECK(SQLRETURN &ret, SQLHSTMT hstmt, SQLUSMALLINT col_num, const char *expected_col_name,
-                           SQLSMALLINT expected_col_name_len, SQLSMALLINT expected_col_data_type,
-                           SQLULEN expected_col_size, SQLSMALLINT expected_col_decimal_digits,
-                           SQLSMALLINT expected_col_nullable) {
+                    SQLSMALLINT expected_col_name_len, SQLSMALLINT expected_col_data_type, SQLULEN expected_col_size,
+                    SQLSMALLINT expected_col_decimal_digits, SQLSMALLINT expected_col_nullable) {
 	SQLCHAR col_name[256];
 	SQLSMALLINT col_name_len;
 	SQLSMALLINT col_type;
@@ -63,11 +84,27 @@ void METADATA_CHECK(SQLRETURN &ret, SQLHSTMT hstmt, SQLUSMALLINT col_num, const 
 	}
 }
 
-void CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc) {
-	auto dsn = "DuckDB";
+void DRIVER_CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc, const string &extra_params) {
+	string dsn;
+	string default_dsn = "duckdbmemory";
+	SQLCHAR str[1024];
+	SQLSMALLINT strl;
+	auto tmp  = getenv("COMMON_CONNECTION_STRING_FOR_REGRESSION_TEST");
+	string envvar = tmp ? tmp : "";
 
-	ret = SQLAllocHandle(SQL_HANDLE_ENV, nullptr, &env);
-	REQUIRE(ret == SQL_SUCCESS);
+	if (!envvar.empty()) {
+		if (!extra_params.empty()) {
+			dsn = "DSN=" + default_dsn + ";" + extra_params + ";" + envvar + ";" + extra_params;
+		} else {
+			dsn = "DSN=" + default_dsn + ";" + envvar;
+		}
+	} else {
+		if (!extra_params.empty()) {
+			dsn = "DSN=" + default_dsn + ";" + extra_params;
+		} else {
+			dsn = "DSN=" + default_dsn;
+		}
+	}
 
 	ret = SQLAllocHandle(SQL_HANDLE_ENV, nullptr, &env);
 	REQUIRE(ret == SQL_SUCCESS);
@@ -78,7 +115,23 @@ void CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc) {
 	ret = SQLAllocHandle(SQL_HANDLE_DBC, env, &dbc);
 	ODBC_CHECK(ret, SQL_HANDLE_ENV, env, "SQLAllocHandle (DBC)");
 
-	ret = SQLConnect(dbc, (SQLCHAR *)dsn, SQL_NTS, nullptr, SQL_NTS, nullptr, SQL_NTS);
+	ret = SQLDriverConnect(dbc, nullptr, (SQLCHAR *)dsn.c_str(), SQL_NTS, str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
+	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLDriverConnect");
+}
+
+void CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc) {
+	string dsn = "DuckDB";
+
+	ret = SQLAllocHandle(SQL_HANDLE_ENV, nullptr, &env);
+	REQUIRE(ret == SQL_SUCCESS);
+
+	ret = SQLSetEnvAttr(env, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)(uintptr_t)SQL_OV_ODBC3, 0);
+	ODBC_CHECK(ret, SQL_HANDLE_ENV, env, "SQLSetEnvAttr (SQL_ATTR_ODBC_VERSION ODBC3)");
+
+	ret = SQLAllocHandle(SQL_HANDLE_DBC, env, &dbc);
+	ODBC_CHECK(ret, SQL_HANDLE_ENV, env, "SQLAllocHandle (DBC)");
+
+	ret = SQLConnect(dbc, (SQLCHAR *)dsn.c_str(), SQL_NTS, nullptr, 0, nullptr, 0);
 	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLConnect");
 }
 

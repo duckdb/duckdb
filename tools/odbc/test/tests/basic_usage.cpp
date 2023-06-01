@@ -36,4 +36,3 @@ TEST_CASE("Basic ODBC usage", "[odbc]") {
 	ret = SQLFreeHandle(SQL_HANDLE_ENV, env);
 	ODBC_CHECK(ret, SQL_HANDLE_ENV, env, "SQLFreeHandle (ENV)");
 }
-

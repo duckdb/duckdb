@@ -19,7 +19,6 @@ select-test
 #TODO: boolsaschar-test
 #TODO: catalogfunctions-test
 #TODO: colattribute-test
-#TODO: connect-test
 #TODO: cte-test
 #TODO: cursor-commit-test
 #TODO: declare-fetch-block-test
