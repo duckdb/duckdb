@@ -556,6 +556,84 @@ class TestResolveObjectColumns(object):
 
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_struct_deeply_nested_in_struct(self, pandas):
+        x = pandas.DataFrame([
+            {
+                # STRUCT(b STRUCT(x VARCHAR, y VARCHAR))
+                'a': {
+                    'b': {
+                        'x': 'A', 
+                        'y': 'B'
+                    }
+                }
+            },
+            {
+                # STRUCT(b STRUCT(x VARCHAR))
+                'a': {
+                    'b': {
+                        'x': 'A'
+                    }
+                }
+            }
+        ])
+        # The dataframe has incompatible struct schemas in the nested child
+        # This gets upgraded to STRUCT(b MAP(VARCHAR, VARCHAR))
+        con = duckdb.connect()
+        res = con.sql("select * from x").fetchall()
+        assert res == [
+            (
+                {
+                    'b': {
+                        'key': ['x', 'y'],
+                        'value': ['A', 'B']
+                    }
+                },
+            ),
+            (
+                {
+                    'b': {
+                        'key': ['x'],
+                        'value': ['A']
+                    }
+                },
+            )
+        ]
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_struct_deeply_nested_in_list(self, pandas):
+        x = pandas.DataFrame({'a': [
+            [
+                # STRUCT(x VARCHAR, y VARCHAR)[]
+                {
+                    'x': 'A', 
+                    'y': 'B'
+                },
+                # STRUCT(x VARCHAR)[]
+                {
+                    'x': 'A'
+                }
+            ]
+        ]})
+        # The dataframe has incompatible struct schemas in the nested child
+        # This gets upgraded to STRUCT(b MAP(VARCHAR, VARCHAR))
+        con = duckdb.connect()
+        res = con.sql("select * from x").fetchall()
+        assert res == [
+            (
+                [
+                    {
+                        'key': ['x', 'y'],
+                        'value': ['A', 'B']
+                    },
+                    {
+                        'key': ['x'],
+                        'value': ['A']
+                    }
+                ],
+            )
+        ]
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_analyze_sample_too_small(self, pandas):
         data = [1 for _ in range(9)] + [[1,2,3]] + [1 for _ in range(9991)]
         x = pandas.DataFrame({

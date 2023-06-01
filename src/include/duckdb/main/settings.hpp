@@ -366,10 +366,20 @@ struct PerfectHashThresholdSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct PivotFilterThreshold {
+	static constexpr const char *Name = "pivot_filter_threshold";
+	static constexpr const char *Description =
+	    "The threshold to switch from using filtered aggregates to LIST with a dedicated pivot operator";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct PivotLimitSetting {
 	static constexpr const char *Name = "pivot_limit";
 	static constexpr const char *Description =
-	    "The maximum numer of pivot columns in a pivot statement (default: 100000)";
+	    "The maximum number of pivot columns in a pivot statement (default: 100000)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);

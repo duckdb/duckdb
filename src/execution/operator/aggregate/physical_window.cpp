@@ -224,12 +224,14 @@ struct WindowInputColumn {
 	}
 
 	void Append(DataChunk &input_chunk) {
-		if (input_expr.expr && (!input_expr.scalar || !count)) {
-			input_expr.Execute(input_chunk);
-			auto &source = input_expr.chunk.data[0];
-			const auto source_count = input_expr.chunk.size();
+		if (input_expr.expr) {
+			const auto source_count = input_chunk.size();
 			D_ASSERT(count + source_count <= capacity);
-			VectorOperations::Copy(source, *target, source_count, 0, count);
+			if (!input_expr.scalar || !count) {
+				input_expr.Execute(input_chunk);
+				auto &source = input_expr.chunk.data[0];
+				VectorOperations::Copy(source, *target, source_count, 0, count);
+			}
 			count += source_count;
 		}
 	}

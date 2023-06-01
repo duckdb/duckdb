@@ -92,6 +92,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(OrderedAggregateThreshold),
                                                  DUCKDB_GLOBAL(PasswordSetting),
                                                  DUCKDB_LOCAL(PerfectHashThresholdSetting),
+                                                 DUCKDB_LOCAL(PivotFilterThreshold),
                                                  DUCKDB_LOCAL(PivotLimitSetting),
                                                  DUCKDB_LOCAL(PreserveIdentifierCase),
                                                  DUCKDB_GLOBAL(PreserveInsertionOrder),

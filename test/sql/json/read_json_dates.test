@@ -59,6 +59,12 @@ select typeof(d), d from read_ndjson('__TEST_DIR__/my_file.json', columns={d: 'D
 ----
 DATE	1996-03-27
 
+# wrong format read_ndjson
+statement error
+select typeof(d), d from read_ndjson('__TEST_DIR__/my_file.json', columns={d: 'DATE'}, dateformat='%d-%Y-%m')
+----
+Invalid Input Error
+
 # forced format COPY
 statement ok
 drop table if exists date_copy_test
@@ -93,6 +99,12 @@ query II
 select typeof(t), t from read_ndjson('__TEST_DIR__/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format=${a} ${b} ${c})
 ----
 TIMESTAMP	1996-03-27 07:42:33
+
+# wrong format read_ndjson
+statement error
+select typeof(t), t from read_ndjson('__TEST_DIR__/my_file.json', columns={t: 'TIMESTAMP'}, timestamp_format='%H:%M:%S%y-%m-%d')
+----
+Invalid Input Error
 
 # forced format COPY
 statement ok
