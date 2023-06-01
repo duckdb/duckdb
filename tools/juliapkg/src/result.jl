@@ -704,6 +704,7 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     if Threads.nthreads() != 1
         # When we have additional worker threads, don't execute using the main thread
         while duckdb_execution_is_finished(stmt.con.handle) == false
+            Base.yield()
             GC.safepoint()
         end
     else
