@@ -233,7 +233,7 @@ unique_ptr<GlobalTableFunctionState> TestVectorTypesInit(ClientContext &context,
 }
 
 void TestVectorTypesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (TestVectorTypesData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<TestVectorTypesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;

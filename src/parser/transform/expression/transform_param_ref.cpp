@@ -13,23 +13,22 @@ struct PreparedParam {
 
 } // namespace
 
-static PreparedParam GetParameterIdentifier(duckdb_libpgquery::PGParamRef *node) {
+static PreparedParam GetParameterIdentifier(duckdb_libpgquery::PGParamRef &node) {
 	PreparedParam param;
-	if (node->name) {
+	if (node.name) {
 		param.type = PreparedParamType::NAMED;
-		param.identifier = node->name;
+		param.identifier = node.name;
 		return param;
 	}
-	if (node->number < 0) {
+	if (node.number < 0) {
 		throw ParserException("Parameter numbers cannot be negative");
 	}
-	param.identifier = StringUtil::Format("%d", node->number);
-	param.type = node->number == 0 ? PreparedParamType::AUTO_INCREMENT : PreparedParamType::POSITIONAL;
+	param.identifier = StringUtil::Format("%d", node.number);
+	param.type = node.number == 0 ? PreparedParamType::AUTO_INCREMENT : PreparedParamType::POSITIONAL;
 	return param;
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformParamRef(duckdb_libpgquery::PGParamRef *node) {
-	D_ASSERT(node);
+unique_ptr<ParsedExpression> Transformer::TransformParamRef(duckdb_libpgquery::PGParamRef &node) {
 	auto expr = make_uniq<ParameterExpression>();
 
 	auto param = GetParameterIdentifier(node);
@@ -39,12 +38,12 @@ unique_ptr<ParsedExpression> Transformer::TransformParamRef(duckdb_libpgquery::P
 
 	if (known_param_index == DConstants::INVALID_INDEX) {
 		// We have not seen this parameter before
-		if (node->number != 0) {
+		if (node.number != 0) {
 			// Preserve the parameter number
-			known_param_index = node->number;
+			known_param_index = node.number;
 		} else {
 			known_param_index = ParamCount() + 1;
-			if (!node->name) {
+			if (!node.name) {
 				param.identifier = StringUtil::Format("%d", known_param_index);
 			}
 		}

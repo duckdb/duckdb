@@ -23,11 +23,11 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 	tuple_size = layout.GetRowWidth();
 
 	// allocate and null initialize the data
-	owned_data = make_unsafe_array<data_t>(tuple_size * total_groups);
+	owned_data = make_unsafe_uniq_array<data_t>(tuple_size * total_groups);
 	data = owned_data.get();
 
 	// set up the empty payloads for every tuple, and initialize the "occupied" flag to false
-	group_is_set = make_unsafe_array<bool>(total_groups);
+	group_is_set = make_unsafe_uniq_array<bool>(total_groups);
 	memset(group_is_set.get(), 0, total_groups * sizeof(bool));
 
 	// initialize the hash table for each entry
@@ -51,7 +51,7 @@ PerfectAggregateHashTable::~PerfectAggregateHashTable() {
 template <class T>
 static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value &min, uintptr_t *address_data,
                                           idx_t current_shift, idx_t count) {
-	auto data = (T *)group_data.data;
+	auto data = UnifiedVectorFormat::GetData<T>(group_data);
 	auto min_val = min.GetValueUnsafe<T>();
 	if (!group_data.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {

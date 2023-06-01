@@ -1,0 +1,16 @@
+# name: test/fuzzer/duckfuzz/regexp_replace_constant.test
+# description: regexp_replace
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT regexp_extract('foobarbaz', 'B..', 0, NULL);
+----
+must not be NULL
+
+statement error
+SELECT regexp_extract('foobarbaz', 'B..', 0, 42);
+----
+must be a string

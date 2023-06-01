@@ -122,9 +122,12 @@ struct BufferedCSVReaderOptions {
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//
-
 	//! True, if column with that index must be quoted
 	vector<bool> force_quote;
+	//! Prefix/suffix/custom newline the entire file once (enables writing of files as JSON arrays)
+	string prefix;
+	string suffix;
+	string write_newline;
 
 	//! The date format to use (if any is specified)
 	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};

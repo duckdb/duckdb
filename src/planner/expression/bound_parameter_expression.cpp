@@ -43,11 +43,11 @@ string BoundParameterExpression::ToString() const {
 	return "$" + identifier;
 }
 
-bool BoundParameterExpression::Equals(const BaseExpression *other_p) const {
+bool BoundParameterExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto &other = other_p->Cast<BoundParameterExpression>();
+	auto &other = other_p.Cast<BoundParameterExpression>();
 	return StringUtil::CIEquals(identifier, other.identifier);
 }
 

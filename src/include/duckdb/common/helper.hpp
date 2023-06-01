@@ -48,7 +48,7 @@ using reference = std::reference_wrapper<T>;
 template<class _Tp, bool SAFE = true>
 struct __unique_if
 {
-    typedef unique_ptr<_Tp, SAFE> __unique_single;
+    typedef unique_ptr<_Tp, std::default_delete<_Tp>, SAFE> __unique_single;
 };
 
 template<class _Tp>
@@ -68,7 +68,7 @@ inline
 typename __unique_if<_Tp, true>::__unique_single
 make_uniq(_Args&&... __args)
 {
-    return unique_ptr<_Tp, true>(new _Tp(std::forward<_Args>(__args)...));
+    return unique_ptr<_Tp, std::default_delete<_Tp>, true>(new _Tp(std::forward<_Args>(__args)...));
 }
 
 template<class _Tp, class... _Args>
@@ -76,21 +76,21 @@ inline
 typename __unique_if<_Tp, false>::__unique_single
 make_unsafe_uniq(_Args&&... __args)
 {
-    return unique_ptr<_Tp, false>(new _Tp(std::forward<_Args>(__args)...));
+    return unique_ptr<_Tp, std::default_delete<_Tp>, false>(new _Tp(std::forward<_Args>(__args)...));
 }
 
 template<class _Tp>
-inline unique_ptr<_Tp[], true>
-make_array(size_t __n)
+inline unique_ptr<_Tp[], std::default_delete<_Tp>, true>
+make_uniq_array(size_t __n)
 {
-    return unique_ptr<_Tp[], true>(new _Tp[__n]());
+    return unique_ptr<_Tp[], std::default_delete<_Tp>, true>(new _Tp[__n]());
 }
 
 template<class _Tp>
-inline unique_ptr<_Tp[], false>
-make_unsafe_array(size_t __n)
+inline unique_ptr<_Tp[], std::default_delete<_Tp>, false>
+make_unsafe_uniq_array(size_t __n)
 {
-    return unique_ptr<_Tp[], false>(new _Tp[__n]());
+    return unique_ptr<_Tp[], std::default_delete<_Tp>, false>(new _Tp[__n]());
 }
 
 template<class _Tp, class... _Args>

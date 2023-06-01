@@ -35,14 +35,14 @@ public:
 	//! Whether to delay the error when transforming (e.g., when non-strict casting or reading from file)
 	bool delay_error = false;
 	//! Date format used for parsing (can be NULL)
-	DateFormatMap *date_format_map = nullptr;
+	optional_ptr<DateFormatMap> date_format_map = nullptr;
 	//! String to store errors in
 	string error_message;
 	//! Index of the object where the error occurred
 	idx_t object_index = DConstants::INVALID_INDEX;
 
 public:
-	void Serialize(FieldWriter &writer);
+	void Serialize(FieldWriter &writer) const;
 	void Deserialize(FieldReader &reader);
 };
 

@@ -10,34 +10,32 @@ OnEntryNotFound Transformer::TransformOnEntryNotFound(bool missing_ok) {
 	return missing_ok ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 }
 
-unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode *node) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGAlterTableStmt *>(node);
-	D_ASSERT(stmt);
-	D_ASSERT(stmt->relation);
+unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterTableStmt &stmt) {
+	D_ASSERT(stmt.relation);
 
-	if (stmt->cmds->length != 1) {
+	if (stmt.cmds->length != 1) {
 		throw ParserException("Only one ALTER command per statement is supported");
 	}
 
 	auto result = make_uniq<AlterStatement>();
-	auto qname = TransformQualifiedName(stmt->relation);
+	auto qname = TransformQualifiedName(*stmt.relation);
 
 	// first we check the type of ALTER
-	for (auto c = stmt->cmds->head; c != nullptr; c = c->next) {
+	for (auto c = stmt.cmds->head; c != nullptr; c = c->next) {
 		auto command = reinterpret_cast<duckdb_libpgquery::PGAlterTableCmd *>(lfirst(c));
-		AlterEntryData data(qname.catalog, qname.schema, qname.name, TransformOnEntryNotFound(stmt->missing_ok));
+		AlterEntryData data(qname.catalog, qname.schema, qname.name, TransformOnEntryNotFound(stmt.missing_ok));
 		// TODO: Include more options for command->subtype
 		switch (command->subtype) {
 		case duckdb_libpgquery::PG_AT_AddColumn: {
-			auto cdef = (duckdb_libpgquery::PGColumnDef *)command->def;
+			auto cdef = PGPointerCast<duckdb_libpgquery::PGColumnDef>(command->def);
 
-			if (stmt->relkind != duckdb_libpgquery::PG_OBJECT_TABLE) {
+			if (stmt.relkind != duckdb_libpgquery::PG_OBJECT_TABLE) {
 				throw ParserException("Adding columns is only supported for tables");
 			}
 			if (cdef->category == duckdb_libpgquery::COL_GENERATED) {
 				throw ParserException("Adding generated columns after table creation is not supported yet");
 			}
-			auto centry = TransformColumnDefinition(cdef);
+			auto centry = TransformColumnDefinition(*cdef);
 
 			if (cdef->constraints) {
 				for (auto constr = cdef->constraints->head; constr != nullptr; constr = constr->next) {
@@ -54,7 +52,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 		case duckdb_libpgquery::PG_AT_DropColumn: {
 			bool cascade = command->behavior == duckdb_libpgquery::PG_DROP_CASCADE;
 
-			if (stmt->relkind != duckdb_libpgquery::PG_OBJECT_TABLE) {
+			if (stmt.relkind != duckdb_libpgquery::PG_OBJECT_TABLE) {
 				throw ParserException("Dropping columns is only supported for tables");
 			}
 			result->info = make_uniq<RemoveColumnInfo>(std::move(data), command->name, command->missing_ok, cascade);
@@ -63,18 +61,18 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGNode
 		case duckdb_libpgquery::PG_AT_ColumnDefault: {
 			auto expr = TransformExpression(command->def);
 
-			if (stmt->relkind != duckdb_libpgquery::PG_OBJECT_TABLE) {
+			if (stmt.relkind != duckdb_libpgquery::PG_OBJECT_TABLE) {
 				throw ParserException("Alter column's default is only supported for tables");
 			}
 			result->info = make_uniq<SetDefaultInfo>(std::move(data), command->name, std::move(expr));
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_AlterColumnType: {
-			auto cdef = (duckdb_libpgquery::PGColumnDef *)command->def;
-			auto column_definition = TransformColumnDefinition(cdef);
+			auto cdef = PGPointerCast<duckdb_libpgquery::PGColumnDef>(command->def);
+			auto column_definition = TransformColumnDefinition(*cdef);
 			unique_ptr<ParsedExpression> expr;
 
-			if (stmt->relkind != duckdb_libpgquery::PG_OBJECT_TABLE) {
+			if (stmt.relkind != duckdb_libpgquery::PG_OBJECT_TABLE) {
 				throw ParserException("Alter column's type is only supported for tables");
 			}
 			if (cdef->raw_default) {

@@ -19,7 +19,7 @@ struct ArrowAppendData;
 //! The ArrowAppender class can be used to incrementally construct an arrow array by appending data chunks into it
 class ArrowAppender {
 public:
-	DUCKDB_API ArrowAppender(vector<LogicalType> types, idx_t initial_capacity);
+	DUCKDB_API ArrowAppender(vector<LogicalType> types, idx_t initial_capacity, ArrowOptions options = ArrowOptions());
 	DUCKDB_API ~ArrowAppender();
 
 	//! Append a data chunk to the underlying arrow array
@@ -34,6 +34,8 @@ private:
 	vector<unique_ptr<ArrowAppendData>> root_data;
 	//! The total row count that has been appended
 	idx_t row_count = 0;
+
+	ArrowOptions options;
 };
 
 } // namespace duckdb

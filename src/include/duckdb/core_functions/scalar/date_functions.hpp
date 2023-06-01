@@ -171,11 +171,29 @@ struct EpochFun {
 
 struct EpochMsFun {
 	static constexpr const char *Name = "epoch_ms";
-	static constexpr const char *Parameters = "ms";
-	static constexpr const char *Description = "Converts ms since epoch to a timestamp";
-	static constexpr const char *Example = "epoch_ms(701222400000)";
+	static constexpr const char *Parameters = "temporal";
+	static constexpr const char *Description = "Return the total number of milliseconds since the epoch";
+	static constexpr const char *Example = "epoch_ms(timestamp '2021-08-03 11:59:44.123456')";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct EpochMicrosecondsFun {
+	static constexpr const char *Name = "epoch_us";
+	static constexpr const char *Parameters = "temporal";
+	static constexpr const char *Description = "Return the total number of microseconds since the epoch";
+	static constexpr const char *Example = "epoch_us(timestamp '2021-08-03 11:59:44.123456')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct EpochNanosecondsFun {
+	static constexpr const char *Name = "epoch_ns";
+	static constexpr const char *Parameters = "temporal";
+	static constexpr const char *Description = "Return the total number of nanooseconds since the epoch";
+	static constexpr const char *Example = "epoch_ns(timestamp '2021-08-03 11:59:44.123456')";
+
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct EraFun {
@@ -273,11 +291,11 @@ struct MakeTimeFun {
 
 struct MakeTimestampFun {
 	static constexpr const char *Name = "make_timestamp";
-	static constexpr const char *Parameters = "year,month,day,hour,minute,seconds";
+	static constexpr const char *Parameters = "year,month,day,hour,minute,seconds; or just microseconds since the epoch";
 	static constexpr const char *Description = "The timestamp for the given parts";
 	static constexpr const char *Example = "make_timestamp(1992, 9, 20, 13, 34, 27.123456)";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct MicrosecondsFun {

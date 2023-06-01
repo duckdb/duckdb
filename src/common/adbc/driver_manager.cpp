@@ -61,16 +61,18 @@ void GetWinError(std::string *buffer) {
 
 void ReleaseError(struct AdbcError *error) {
 	if (error) {
-		if (error->message)
+		if (error->message) {
 			delete[] error->message;
+		}
 		error->message = nullptr;
 		error->release = nullptr;
 	}
 }
 
 void SetError(struct AdbcError *error, const std::string &message) {
-	if (!error)
+	if (!error) {
 		return;
+	}
 	if (error->message) {
 		// Append
 		std::string buffer = error->message;
@@ -131,10 +133,6 @@ static AdbcStatusCode ReleaseDriver(struct AdbcDriver *driver, struct AdbcError 
 
 // Default stubs
 
-AdbcStatusCode ConnectionCommit(struct AdbcConnection *, struct AdbcError *error) {
-	return ADBC_STATUS_NOT_IMPLEMENTED;
-}
-
 AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *info_codes, size_t info_codes_length,
                                  struct ArrowArrayStream *out, struct AdbcError *error) {
 	return ADBC_STATUS_NOT_IMPLEMENTED;
@@ -145,24 +143,8 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *, const char *, c
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 
-AdbcStatusCode ConnectionReadPartition(struct AdbcConnection *connection, const uint8_t *serialized_partition,
-                                       size_t serialized_length, struct ArrowArrayStream *out,
-                                       struct AdbcError *error) {
-	return ADBC_STATUS_NOT_IMPLEMENTED;
-}
-
-AdbcStatusCode ConnectionRollback(struct AdbcConnection *, struct AdbcError *error) {
-	return ADBC_STATUS_NOT_IMPLEMENTED;
-}
-
 AdbcStatusCode StatementBind(struct AdbcStatement *, struct ArrowArray *, struct ArrowSchema *,
                              struct AdbcError *error) {
-	return ADBC_STATUS_NOT_IMPLEMENTED;
-}
-
-AdbcStatusCode StatementExecutePartitions(struct AdbcStatement *statement, struct ArrowSchema *schema,
-                                          struct AdbcPartitions *partitions, int64_t *rows_affected,
-                                          struct AdbcError *error) {
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 
@@ -466,6 +448,9 @@ AdbcStatusCode AdbcStatementExecutePartitions(struct AdbcStatement *statement, A
 
 AdbcStatusCode AdbcStatementExecuteQuery(struct AdbcStatement *statement, struct ArrowArrayStream *out,
                                          int64_t *rows_affected, struct AdbcError *error) {
+	if (!statement) {
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
 	if (!statement->private_driver) {
 		return ADBC_STATUS_INVALID_STATE;
 	}
@@ -482,6 +467,9 @@ AdbcStatusCode AdbcStatementGetParameterSchema(struct AdbcStatement *statement, 
 
 AdbcStatusCode AdbcStatementNew(struct AdbcConnection *connection, struct AdbcStatement *statement,
                                 struct AdbcError *error) {
+	if (!connection) {
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
 	if (!connection->private_driver) {
 		return ADBC_STATUS_INVALID_STATE;
 	}
