@@ -22,6 +22,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/parser/parsed_data/create_property_graph_info.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -115,8 +116,10 @@ public:
 	void BindCreateViewInfo(CreateViewInfo &base);
 	SchemaCatalogEntry &BindSchema(CreateInfo &info);
 	SchemaCatalogEntry &BindCreateFunctionInfo(CreateInfo &info);
+    void BindCreatePropertyGraphInfo(CreatePropertyGraphInfo &info);
 
-	//! Check usage, and cast named parameters to their types
+
+    //! Check usage, and cast named parameters to their types
 	static void BindNamedParameters(named_parameter_type_map_t &types, named_parameter_map_t &values,
 	                                QueryErrorContext &error_context, string &func_name);
 
