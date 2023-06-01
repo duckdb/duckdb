@@ -20,8 +20,6 @@ class LateralBinder : public ExpressionBinder {
 public:
 	LateralBinder(Binder &binder, ClientContext &context);
 
-	//! Extract the correlated lateral join columns and remove them from the targeted binder
-	vector<CorrelatedColumnInfo> ExtractCorrelatedColumns(Binder &binder);
 	bool HasCorrelatedColumns() const {
 		return !correlated_columns.empty();
 	}

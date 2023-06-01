@@ -87,6 +87,9 @@ unique_ptr<TableRef> Transformer::TransformPivot(duckdb_libpgquery::PGPivotExpr 
 		result->unpivot_names = TransformStringList(root.unpivots);
 	}
 	result->pivots = TransformPivotList(*root.pivots);
+	if (!result->unpivot_names.empty() && result->pivots.size() > 1) {
+		throw ParserException("UNPIVOT requires a single pivot element");
+	}
 	if (root.groups) {
 		result->groups = TransformStringList(root.groups);
 	}

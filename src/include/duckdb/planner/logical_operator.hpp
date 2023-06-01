@@ -83,6 +83,11 @@ public:
 		return true;
 	}
 
+	//! Allows LogicalOperators to opt out of serialization
+	virtual bool SupportSerialization() const {
+		return true;
+	};
+
 	//! Returns the set of table indexes of this operator
 	virtual vector<idx_t> GetTableIndex() const;
 
