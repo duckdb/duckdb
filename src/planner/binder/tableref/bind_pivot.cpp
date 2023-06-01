@@ -18,6 +18,7 @@
 #include "duckdb/planner/tableref/bound_pivotref.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -363,6 +364,9 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 		if (aggr->IsWindow()) {
 			throw BinderException(FormatError(*aggr, "Pivot expression cannot contain window functions"));
 		}
+		// bind the function as an aggregate to ensure it is an aggregate and not a scalar function
+		auto &aggr_function = aggr->Cast<FunctionExpression>();
+		(void) Catalog::GetEntry<AggregateFunctionCatalogEntry>(context, aggr_function.catalog, aggr_function.schema, aggr_function.function_name);
 		ExtractPivotExpressions(*aggr, handled_columns);
 	}
 	value_set_t pivots;
