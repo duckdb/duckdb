@@ -3,7 +3,7 @@
 namespace duckdb {
 
 DropPropertyGraphStatement::DropPropertyGraphStatement()
-    : SQLStatement(StatementType::DROP_PROPERTY_GRAPH_STATEMENT), info(make_unique<DropPropertyGraphInfo>()) {
+    : SQLStatement(StatementType::DROP_PROPERTY_GRAPH_STATEMENT), info(make_uniq<DropPropertyGraphInfo>()) {
 }
 
 DropPropertyGraphStatement::DropPropertyGraphStatement(const DropPropertyGraphStatement &other)
