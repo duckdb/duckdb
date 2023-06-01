@@ -297,7 +297,7 @@ void BufferedJSONReader::ThrowTransformError(idx_t buf_index, idx_t line_or_obje
                                              const string &error_message) {
 	string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "record/value";
 	auto line = GetLineNumber(buf_index, line_or_object_in_buf);
-	throw InvalidInputException("JSON transform error in file \"%s\", in %s %llu: %s.", file_name, unit, line,
+	throw InvalidInputException("JSON transform error in file \"%s\", in %s %llu: %s", file_name, unit, line,
 	                            error_message);
 }
 
