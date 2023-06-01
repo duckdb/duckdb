@@ -82,7 +82,7 @@ common/types/row/row_layout.cpp	4
 common/types/row/tuple_data_allocator.cpp	23
 common/types/row/tuple_data_collection.cpp	76
 common/types/row/tuple_data_iterator.cpp	5
-common/types/row/tuple_data_scatter_gather.cpp	15
+common/types/row/tuple_data_scatter_gather.cpp	16
 common/types/row/tuple_data_segment.cpp	10
 common/types/string_heap.cpp	11
 common/types/time.cpp	20
@@ -616,6 +616,7 @@ planner/binder/expression/bind_columnref_expression.cpp	5
 planner/binder/expression/bind_comparison_expression.cpp	2
 planner/binder/expression/bind_function_expression.cpp	5
 planner/binder/expression/bind_operator_expression.cpp	3
+planner/binder/expression/bind_positional_reference_expression.cpp	1
 planner/binder/expression/bind_star_expression.cpp	3
 planner/binder/expression/bind_subquery_expression.cpp	7
 planner/binder/expression/bind_unnest_expression.cpp	3
