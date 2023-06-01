@@ -599,9 +599,10 @@ void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_i
 // Checkpoint
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &global_stats) {
+	bool can_vacuum_deletes = info->indexes.Empty();
 	idx_t deleted_count = 0;
 	for (auto &row_group : row_groups->Segments()) {
-		if (row_group.AllDeleted()) {
+		if (can_vacuum_deletes && row_group.AllDeleted()) {
 			deleted_count += row_group.count;
 			continue;
 		}
@@ -610,6 +611,7 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
 	}
 	if (deleted_count > 0) {
+		D_ASSERT(can_vacuum_deletes);
 		auto segments = row_groups->MoveSegments();
 		idx_t start = this->row_start;
 		auto l = row_groups->Lock();

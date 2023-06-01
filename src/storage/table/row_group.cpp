@@ -77,7 +77,6 @@ idx_t VersionNode::GetCommittedDeletedCount(idx_t count) {
 			break;
 		}
 		deleted_count += info[i]->GetCommittedDeletedCount(max_count);
-
 	}
 	return deleted_count;
 }
