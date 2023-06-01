@@ -65,7 +65,7 @@ public:
 	void FindMinimum(Node &node);
 	//! Finds the lower bound of the ART and adds the nodes to the stack. Returns false, if the lower
 	//! bound exceeds the maximum value of the ART
-	bool LowerBound(Node node, const ARTKey &key, const bool equal, idx_t depth);
+	bool LowerBound(Node &node, const ARTKey &key, const bool equal, idx_t depth);
 
 private:
 	//! Stack of nodes from the root to the currently active node

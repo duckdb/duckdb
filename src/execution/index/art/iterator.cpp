@@ -80,6 +80,9 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row
 void Iterator::FindMinimum(Node &node) {
 
 	D_ASSERT(node.IsSet());
+	if (node.IsSwizzled()) {
+		node.Deserialize(*art);
+	}
 
 	// found the minimum
 	if (node.DecodeARTNodeType() == NType::LEAF) {
@@ -89,7 +92,7 @@ void Iterator::FindMinimum(Node &node) {
 
 	// traverse the prefix
 	if (node.DecodeARTNodeType() == NType::PREFIX) {
-		auto prefix = Prefix::Get(*art, node);
+		auto &prefix = Prefix::Get(*art, node);
 		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 			current_key.Push(prefix.data[i]);
 		}
@@ -106,10 +109,14 @@ void Iterator::FindMinimum(Node &node) {
 	FindMinimum(*next);
 }
 
-bool Iterator::LowerBound(Node node, const ARTKey &key, const bool equal, idx_t depth) {
+bool Iterator::LowerBound(Node &node, const ARTKey &key, const bool equal, idx_t depth) {
 
 	if (!node.IsSet()) {
 		return false;
+	}
+
+	if (node.IsSwizzled()) {
+		node.Deserialize(*art);
 	}
 
 	// we found the lower bound
@@ -144,7 +151,7 @@ bool Iterator::LowerBound(Node node, const ARTKey &key, const bool equal, idx_t 
 	}
 
 	// resolve the prefix
-	auto prefix = Prefix::Get(*art, node);
+	auto &prefix = Prefix::Get(*art, node);
 	for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
 		current_key.Push(prefix.data[i]);
 	}

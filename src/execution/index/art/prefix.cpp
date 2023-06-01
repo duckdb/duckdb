@@ -67,7 +67,11 @@ void Prefix::Free(ART &art, Node &node) {
 void Prefix::Concatenate(ART &art, Node &prefix_node, const uint8_t byte, Node &child_prefix_node) {
 
 	D_ASSERT(prefix_node.IsSet() && !prefix_node.IsSwizzled());
-	D_ASSERT(child_prefix_node.IsSet() && !child_prefix_node.IsSwizzled());
+	D_ASSERT(child_prefix_node.IsSet());
+
+	if (child_prefix_node.IsSwizzled()) {
+		child_prefix_node.Deserialize(art);
+	}
 
 	// append a byte and a child_prefix to prefix
 	if (prefix_node.DecodeARTNodeType() == NType::PREFIX) {
@@ -113,6 +117,17 @@ void Prefix::Concatenate(ART &art, Node &prefix_node, const uint8_t byte, Node &
 	Prefix::New(art, prefix_node, byte, child_prefix_node);
 }
 
+void FreeTraversedNodes(ART &art, vector<reference<Node>> &traversed_nodes, reference<Node> &node) {
+	if (!traversed_nodes.empty()) {
+		auto free_start = traversed_nodes.front().get();
+		auto &prev_prefix = Prefix::Get(art, traversed_nodes.back());
+		traversed_nodes.front().get() = prev_prefix.ptr;
+		node = traversed_nodes.front();
+		prev_prefix.ptr.Reset();
+		Node::Free(art, free_start);
+	}
+}
+
 idx_t Prefix::Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node) {
 
 	D_ASSERT(l_node.get().IsSet() && !l_node.get().IsSwizzled());
@@ -130,56 +145,55 @@ idx_t Prefix::Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_nod
 		auto &r_prefix = Prefix::Get(art, r_node);
 
 		// compare prefix bytes
-		auto max_count = MinValue(l_prefix.data[Node::PREFIX_SIZE], r_prefix.data[Node::PREFIX_SIZE]);
+		idx_t max_count = MinValue(l_prefix.data[Node::PREFIX_SIZE], r_prefix.data[Node::PREFIX_SIZE]);
 		for (idx_t i = 0; i < max_count; i++) {
 			if (l_prefix.data[i] != r_prefix.data[i]) {
 				// mismatching byte position
+				FreeTraversedNodes(art, traversed_r_nodes, r_node);
 				return i;
 			}
 		}
 
+		D_ASSERT(l_prefix.ptr.IsSet() && !l_prefix.ptr.IsSwizzled());
+		D_ASSERT(r_prefix.ptr.IsSet() && !r_prefix.ptr.IsSwizzled());
+
 		// prefixes match (so far)
-		if (l_prefix.data[Node::PREFIX_SIZE] == r_prefix.data[Node::PREFIX_SIZE]) {
+		if (l_prefix.ptr.DecodeARTNodeType() == NType::PREFIX && r_prefix.ptr.DecodeARTNodeType() == NType::PREFIX) {
 			traversed_l_nodes.push_back(l_node);
 			traversed_r_nodes.push_back(r_node);
-			D_ASSERT(l_prefix.ptr.IsSet() && !l_prefix.ptr.IsSwizzled());
-			D_ASSERT(r_prefix.ptr.IsSet() && !r_prefix.ptr.IsSwizzled());
 			l_node = l_prefix.ptr;
 			r_node = r_prefix.ptr;
 			continue;
 		}
 
+		// prefixes match
+		if (l_prefix.ptr.DecodeARTNodeType() != NType::PREFIX && r_prefix.ptr.DecodeARTNodeType() != NType::PREFIX &&
+		    l_prefix.data[Node::PREFIX_SIZE] == r_prefix.data[Node::PREFIX_SIZE]) {
+			// mismatching byte position
+			FreeTraversedNodes(art, traversed_r_nodes, r_node);
+			l_node = l_prefix.ptr;
+			r_node = r_prefix.ptr;
+			break;
+		}
+
 		// r_prefix contains l_prefix
-		if (l_prefix.data[Node::PREFIX_SIZE] == max_count) {
-			// free preceding r_prefix nodes
-			if (!traversed_r_nodes.empty()) {
-				auto &prev_prefix = Prefix::Get(art, traversed_r_nodes.back());
-				prev_prefix.ptr.Reset();
-				Node::Free(art, traversed_r_nodes.front());
-			}
+		if (l_prefix.ptr.DecodeARTNodeType() != NType::PREFIX && l_prefix.data[Node::PREFIX_SIZE] == max_count) {
+			FreeTraversedNodes(art, traversed_r_nodes, r_node);
 			D_ASSERT(l_prefix.ptr.IsSet() && !l_prefix.ptr.IsSwizzled());
 			l_node = l_prefix.ptr;
-			D_ASSERT(r_prefix.data[Node::PREFIX_SIZE] > max_count);
-			return max_count;
+			return max_count == Node::PREFIX_SIZE ? 0 : max_count;
 		}
+
+		D_ASSERT(r_prefix.ptr.DecodeARTNodeType() != NType::PREFIX);
+		D_ASSERT(r_prefix.data[Node::PREFIX_SIZE] == max_count);
+
 		// l_prefix contains r_prefix
-		if (r_prefix.data[Node::PREFIX_SIZE] == max_count) {
-			// free preceding l_prefix nodes
-			if (!traversed_l_nodes.empty()) {
-				auto &prev_prefix = Prefix::Get(art, traversed_l_nodes.back());
-				prev_prefix.ptr.Reset();
-				Node::Free(art, traversed_l_nodes.front());
-			}
-			D_ASSERT(r_prefix.ptr.IsSet() && !r_prefix.ptr.IsSwizzled());
-			r_node = r_prefix.ptr;
-			D_ASSERT(l_prefix.data[Node::PREFIX_SIZE] > max_count);
-			return max_count;
-		}
+		FreeTraversedNodes(art, traversed_l_nodes, l_node);
+		D_ASSERT(r_prefix.ptr.IsSet() && !r_prefix.ptr.IsSwizzled());
+		r_node = r_prefix.ptr;
+		return max_count == Node::PREFIX_SIZE ? 0 : max_count;
 	}
 
-	// prefixes match
-	D_ASSERT(l_node.get().DecodeARTNodeType() != NType::PREFIX);
-	D_ASSERT(r_node.get().DecodeARTNodeType() != NType::PREFIX);
 	return DConstants::INVALID_INDEX;
 }
 
