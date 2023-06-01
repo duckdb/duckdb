@@ -2,6 +2,8 @@
 # description: Test edge cases to increase ART coverage
 # group: [art]
 
+require vector_size 2048
+
 # very mixed-length prefixes
 
 statement ok
@@ -119,10 +121,3 @@ WHERE rowid IN (SELECT rowid FROM mixed_distinct_prefixes LIMIT 1000)
 
 statement ok
 DROP INDEX idx_mixed_distinct_prefixes
-
-#119                 if (other.IsInlined()) {
-#120                         for (idx_t i = 0; i < other.count; i++) {
-#121                                 segment = segment.get().Append(art, count, other.data.inlined[i]);
-#123                         return;
-
-
