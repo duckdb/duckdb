@@ -64,8 +64,9 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<SubqueryExpression>(), depth);
 	case ExpressionClass::PARAMETER:
 		return BindExpression(expr_ref.Cast<ParameterExpression>(), depth);
-	case ExpressionClass::POSITIONAL_REFERENCE:
-		return BindExpression(expr_ref.Cast<PositionalReferenceExpression>(), depth);
+	case ExpressionClass::POSITIONAL_REFERENCE: {
+		return BindPositionalReference(expr, depth, root_expression);
+	}
 	case ExpressionClass::STAR:
 		return BindResult(binder.FormatError(expr_ref, "STAR expression is not supported here"));
 	default:

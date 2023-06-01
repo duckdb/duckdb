@@ -21,51 +21,48 @@ struct CovarState {
 
 struct CovarOperation {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->count = 0;
-		state->meanx = 0;
-		state->meany = 0;
-		state->co_moment = 0;
+	static void Initialize(STATE &state) {
+		state.count = 0;
+		state.meanx = 0;
+		state.meany = 0;
+		state.co_moment = 0;
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, const A_TYPE *x_data, const B_TYPE *y_data, ValidityMask &amask,
-	                      ValidityMask &bmask, idx_t xidx, idx_t yidx) {
+	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
 		// update running mean and d^2
-		const uint64_t n = ++(state->count);
+		const uint64_t n = ++(state.count);
 
-		const auto x = x_data[xidx];
-		const double dx = (x - state->meanx);
-		const double meanx = state->meanx + dx / n;
+		const double dx = (x - state.meanx);
+		const double meanx = state.meanx + dx / n;
 
-		const auto y = y_data[yidx];
-		const double dy = (y - state->meany);
-		const double meany = state->meany + dy / n;
+		const double dy = (y - state.meany);
+		const double meany = state.meany + dy / n;
 
-		const double C = state->co_moment + dx * (y - meany);
+		const double C = state.co_moment + dx * (y - meany);
 
-		state->meanx = meanx;
-		state->meany = meany;
-		state->co_moment = C;
+		state.meanx = meanx;
+		state.meany = meany;
+		state.co_moment = C;
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
-		if (target->count == 0) {
-			*target = source;
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		if (target.count == 0) {
+			target = source;
 		} else if (source.count > 0) {
-			const auto count = target->count + source.count;
-			const auto meanx = (source.count * source.meanx + target->count * target->meanx) / count;
-			const auto meany = (source.count * source.meany + target->count * target->meany) / count;
+			const auto count = target.count + source.count;
+			const auto meanx = (source.count * source.meanx + target.count * target.meanx) / count;
+			const auto meany = (source.count * source.meany + target.count * target.meany) / count;
 
 			//  Schubert and Gertz SSDBM 2018, equation 21
-			const auto deltax = target->meanx - source.meanx;
-			const auto deltay = target->meany - source.meany;
-			target->co_moment =
-			    source.co_moment + target->co_moment + deltax * deltay * source.count * target->count / count;
-			target->meanx = meanx;
-			target->meany = meany;
-			target->count = count;
+			const auto deltax = target.meanx - source.meanx;
+			const auto deltay = target.meany - source.meany;
+			target.co_moment =
+			    source.co_moment + target.co_moment + deltax * deltay * source.count * target.count / count;
+			target.meanx = meanx;
+			target.meany = meany;
+			target.count = count;
 		}
 	}
 
@@ -76,22 +73,22 @@ struct CovarOperation {
 
 struct CovarPopOperation : public CovarOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (state->count == 0) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = state->co_moment / state->count;
+			target = state.co_moment / state.count;
 		}
 	}
 };
 
 struct CovarSampOperation : public CovarOperation {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if ((state->count) < 2) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.count < 2) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = state->co_moment / (state->count - 1);
+			target = state.co_moment / (state.count - 1);
 		}
 	}
 };

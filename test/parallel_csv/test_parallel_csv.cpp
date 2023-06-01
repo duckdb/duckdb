@@ -243,7 +243,21 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
 	std::set<std::string> skip;
 	// This file is too big, executing on it is slow and unreliable
 	skip.insert("data/csv/sequences.csv.gz");
+	// This file requires specific parameters
+	skip.insert("data/csv/bug_7578.csv");
 	RunTestOnFolder("data/csv/", &skip);
+}
+
+//! Test case with specific parameters that allow us to run the bug_7578.csv we were skipping
+TEST_CASE("Test Parallel CSV All Files - data/csv/bug_7578.csv", "[parallel-csv][.]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	string add_parameters = ", delim=\'\\t\', header=true, quote = \'`\', columns={ \'transaction_id\': \'VARCHAR\', "
+	                        "\'team_id\': \'INT\', \'direction\': \'INT\', \'amount\':\'DOUBLE\', "
+	                        "\'account_id\':\'INT\', \'transaction_date\':\'DATE\', \'recorded_date\':\'DATE\', "
+	                        "\'tags.transaction_id\':\'VARCHAR\', \'tags.team_id\':\'INT\', \'tags\':\'varchar\'}";
+	string file = "data/csv/bug_7578.csv";
+	REQUIRE(RunFull(file, con, nullptr, add_parameters));
 }
 
 TEST_CASE("Test Parallel CSV All Files - data/csv/decimal_separators", "[parallel-csv][.]") {
