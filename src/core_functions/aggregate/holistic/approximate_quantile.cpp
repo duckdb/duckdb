@@ -55,49 +55,49 @@ struct ApproxQuantileOperation {
 	using SAVE_TYPE = duckdb_tdigest::Value;
 
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->pos = 0;
-		state->h = nullptr;
+	static void Initialize(STATE &state) {
+		state.pos = 0;
+		state.h = nullptr;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, const INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
 		for (idx_t i = 0; i < count; i++) {
-			Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, const INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
-		auto val = Cast::template Operation<INPUT_TYPE, SAVE_TYPE>(data[idx]);
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		auto val = Cast::template Operation<INPUT_TYPE, SAVE_TYPE>(input);
 		if (!Value::DoubleIsFinite(val)) {
 			return;
 		}
-		if (!state->h) {
-			state->h = new duckdb_tdigest::TDigest(100);
+		if (!state.h) {
+			state.h = new duckdb_tdigest::TDigest(100);
 		}
-		state->h->add(val);
-		state->pos++;
+		state.h->add(val);
+		state.pos++;
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (source.pos == 0) {
 			return;
 		}
 		D_ASSERT(source.h);
-		if (!target->h) {
-			target->h = new duckdb_tdigest::TDigest(100);
+		if (!target.h) {
+			target.h = new duckdb_tdigest::TDigest(100);
 		}
-		target->h->merge(source.h);
-		target->pos += source.pos;
+		target.h->merge(source.h);
+		target.pos += source.pos;
 	}
 
 	template <class STATE>
-	static void Destroy(AggregateInputData &aggr_input_data, STATE *state) {
-		if (state->h) {
-			delete state->h;
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		if (state.h) {
+			delete state.h;
 		}
 	}
 
@@ -107,21 +107,18 @@ struct ApproxQuantileOperation {
 };
 
 struct ApproxQuantileScalarOperation : public ApproxQuantileOperation {
-
 	template <class TARGET_TYPE, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, TARGET_TYPE *target,
-	                     ValidityMask &mask, idx_t idx) {
-
-		if (state->pos == 0) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, TARGET_TYPE &target, AggregateFinalizeData &finalize_data) {
+		if (state.pos == 0) {
+			finalize_data.ReturnNull();
 			return;
 		}
-		D_ASSERT(state->h);
-		D_ASSERT(aggr_input_data.bind_data);
-		state->h->compress();
-		auto &bind_data = aggr_input_data.bind_data->template Cast<ApproximateQuantileBindData>();
+		D_ASSERT(state.h);
+		D_ASSERT(finalize_data.input.bind_data);
+		state.h->compress();
+		auto &bind_data = finalize_data.input.bind_data->template Cast<ApproximateQuantileBindData>();
 		D_ASSERT(bind_data.quantiles.size() == 1);
-		target[idx] = Cast::template Operation<SAVE_TYPE, TARGET_TYPE>(state->h->quantile(bind_data.quantiles[0]));
+		target = Cast::template Operation<SAVE_TYPE, TARGET_TYPE>(state.h->quantile(bind_data.quantiles[0]));
 	}
 };
 
@@ -212,65 +209,32 @@ template <class CHILD_TYPE>
 struct ApproxQuantileListOperation : public ApproxQuantileOperation {
 
 	template <class RESULT_TYPE, class STATE>
-	static void Finalize(Vector &result_list, AggregateInputData &aggr_input_data, STATE *state, RESULT_TYPE *target,
-	                     ValidityMask &mask, idx_t idx) {
-		if (state->pos == 0) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, RESULT_TYPE &target, AggregateFinalizeData &finalize_data) {
+		if (state.pos == 0) {
+			finalize_data.ReturnNull();
 			return;
 		}
 
-		D_ASSERT(aggr_input_data.bind_data);
-		auto &bind_data = aggr_input_data.bind_data->template Cast<ApproximateQuantileBindData>();
+		D_ASSERT(finalize_data.input.bind_data);
+		auto &bind_data = finalize_data.input.bind_data->template Cast<ApproximateQuantileBindData>();
 
-		auto &result = ListVector::GetEntry(result_list);
-		auto ridx = ListVector::GetListSize(result_list);
-		ListVector::Reserve(result_list, ridx + bind_data.quantiles.size());
+		auto &result = ListVector::GetEntry(finalize_data.result);
+		auto ridx = ListVector::GetListSize(finalize_data.result);
+		ListVector::Reserve(finalize_data.result, ridx + bind_data.quantiles.size());
 		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
 
-		D_ASSERT(state->h);
-		state->h->compress();
+		D_ASSERT(state.h);
+		state.h->compress();
 
-		auto &entry = target[idx];
+		auto &entry = target;
 		entry.offset = ridx;
 		entry.length = bind_data.quantiles.size();
 		for (size_t q = 0; q < entry.length; ++q) {
 			const auto &quantile = bind_data.quantiles[q];
-			rdata[ridx + q] = Cast::template Operation<SAVE_TYPE, CHILD_TYPE>(state->h->quantile(quantile));
+			rdata[ridx + q] = Cast::template Operation<SAVE_TYPE, CHILD_TYPE>(state.h->quantile(quantile));
 		}
 
-		ListVector::SetListSize(result_list, entry.offset + entry.length);
-	}
-
-	template <class STATE_TYPE, class RESULT_TYPE>
-	static void FinalizeList(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count, // NOLINT
-	                         idx_t offset) {
-		D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-
-		D_ASSERT(aggr_input_data.bind_data);
-		auto &bind_data = aggr_input_data.bind_data->template Cast<ApproximateQuantileBindData>();
-
-		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ListVector::Reserve(result, bind_data.quantiles.size());
-
-			auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
-			auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
-			auto &mask = ConstantVector::Validity(result);
-			Finalize<RESULT_TYPE, STATE_TYPE>(result, aggr_input_data, sdata[0], rdata, mask, 0);
-		} else {
-			D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-			ListVector::Reserve(result, (offset + count) * bind_data.quantiles.size());
-
-			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
-			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
-			auto &mask = FlatVector::Validity(result);
-			for (idx_t i = 0; i < count; i++) {
-				Finalize<RESULT_TYPE, STATE_TYPE>(result, aggr_input_data, sdata[i], rdata, mask, i + offset);
-			}
-		}
-
-		result.Verify(count);
+		ListVector::SetListSize(finalize_data.result, entry.offset + entry.length);
 	}
 };
 
@@ -280,8 +244,8 @@ static AggregateFunction ApproxQuantileListAggregate(const LogicalType &input_ty
 	return AggregateFunction(
 	    {input_type}, result_type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
 	    AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>, AggregateFunction::StateCombine<STATE, OP>,
-	    OP::template FinalizeList<STATE, RESULT_TYPE>, AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>, nullptr,
-	    AggregateFunction::StateDestroy<STATE, OP>);
+	    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>,
+	    nullptr, AggregateFunction::StateDestroy<STATE, OP>);
 }
 
 template <typename INPUT_TYPE, typename SAVE_TYPE>

@@ -62,6 +62,8 @@ public:
 	//! Parses a column list (i.e. as found in a CREATE TABLE statement)
 	static ColumnList ParseColumnList(const string &column_list, ParserOptions options = ParserOptions());
 
+	static bool StripUnicodeSpaces(const string &query_str, string &new_query);
+
 private:
 	ParserOptions options;
 };

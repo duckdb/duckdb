@@ -68,22 +68,27 @@ ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(hugeint_t value) {
 }
 
 string ExceptionFormatValue::Format(const string &msg, std::vector<ExceptionFormatValue> &values) {
-	std::vector<duckdb_fmt::basic_format_arg<duckdb_fmt::printf_context>> format_args;
-	for (auto &val : values) {
-		switch (val.type) {
-		case ExceptionFormatValueType::FORMAT_VALUE_TYPE_DOUBLE:
-			format_args.push_back(duckdb_fmt::internal::make_arg<duckdb_fmt::printf_context>(val.dbl_val));
-			break;
-		case ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER:
-			format_args.push_back(duckdb_fmt::internal::make_arg<duckdb_fmt::printf_context>(val.int_val));
-			break;
-		case ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING:
-			format_args.push_back(duckdb_fmt::internal::make_arg<duckdb_fmt::printf_context>(val.str_val));
-			break;
+	try {
+		std::vector<duckdb_fmt::basic_format_arg<duckdb_fmt::printf_context>> format_args;
+		for (auto &val : values) {
+			switch (val.type) {
+			case ExceptionFormatValueType::FORMAT_VALUE_TYPE_DOUBLE:
+				format_args.push_back(duckdb_fmt::internal::make_arg<duckdb_fmt::printf_context>(val.dbl_val));
+				break;
+			case ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER:
+				format_args.push_back(duckdb_fmt::internal::make_arg<duckdb_fmt::printf_context>(val.int_val));
+				break;
+			case ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING:
+				format_args.push_back(duckdb_fmt::internal::make_arg<duckdb_fmt::printf_context>(val.str_val));
+				break;
+			}
 		}
+		return duckdb_fmt::vsprintf(msg, duckdb_fmt::basic_format_args<duckdb_fmt::printf_context>(
+		                                     format_args.data(), static_cast<int>(format_args.size())));
+	} catch (std::exception &ex) {
+		throw InternalException(std::string("Primary exception: ") + msg +
+		                        "\nSecondary exception in ExceptionFormatValue: " + ex.what());
 	}
-	return duckdb_fmt::vsprintf(msg, duckdb_fmt::basic_format_args<duckdb_fmt::printf_context>(
-	                                     format_args.data(), static_cast<int>(format_args.size())));
 }
 
 } // namespace duckdb

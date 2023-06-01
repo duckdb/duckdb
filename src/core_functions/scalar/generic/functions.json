@@ -85,6 +85,13 @@
         "type": "scalar_function"
     },
     {
+        "name": "in_search_path",
+        "parameters": "database_name,schema_name",
+        "description": "Returns whether or not the database/schema are in the search path.",
+        "example": "in_search_path('memory', 'main')",
+        "type": "scalar_function"
+    },
+    {
         "name": "txid_current",
         "parameters": "",
         "description": "Returns the current transaction’s ID (a BIGINT). It will assign a new one if the current transaction does not have one already.",

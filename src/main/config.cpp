@@ -82,6 +82,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(ForceBitpackingModeSetting),
                                                  DUCKDB_LOCAL(HomeDirectorySetting),
                                                  DUCKDB_LOCAL(LogQueryPathSetting),
+                                                 DUCKDB_GLOBAL(LockConfigurationSetting),
                                                  DUCKDB_GLOBAL(ImmediateTransactionModeSetting),
                                                  DUCKDB_LOCAL(IntegerDivisionSetting),
                                                  DUCKDB_LOCAL(MaximumExpressionDepthSetting),
