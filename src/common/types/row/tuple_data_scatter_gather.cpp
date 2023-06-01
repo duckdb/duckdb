@@ -62,12 +62,14 @@ inline string_t TupleDataWithinListValueLoad(const data_ptr_t &location, data_pt
 	return result;
 }
 
+#ifdef DEBUG
 static void ResetCombinedListData(vector<TupleDataVectorFormat> &vector_data) {
 	for (auto &vd : vector_data) {
 		vd.combined_list_data = nullptr;
 		ResetCombinedListData(vd.child_formats);
 	}
 }
+#endif
 
 void TupleDataCollection::ComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
                                            const SelectionVector &append_sel, const idx_t append_count) {
