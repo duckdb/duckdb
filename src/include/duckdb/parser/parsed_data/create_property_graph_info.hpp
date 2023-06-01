@@ -25,7 +25,7 @@ namespace duckdb {
         CreatePropertyGraphInfo(string catalog, string schema, string name);
         //	explicit CreatePropertyGraphInfo(string property_graph_name);
 
-        CreatePropertyGraphInfo(SchemaCatalogEntry *schema, string pg_name);
+        CreatePropertyGraphInfo(SchemaCatalogEntry &schema, string pg_name);
 
         //! Property graph name
         string property_graph_name;

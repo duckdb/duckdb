@@ -39,6 +39,10 @@ enum class CatalogType : uint8_t {
 	// version info
 	UPDATED_ENTRY = 50,
 	DELETED_ENTRY = 51,
+
+
+    // SQL/PGQ property graph
+    PROPERTY_GRAPH_ENTRY = 80
 };
 
 DUCKDB_API string CatalogTypeToString(CatalogType type);
