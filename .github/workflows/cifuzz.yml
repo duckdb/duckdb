@@ -1,13 +1,14 @@
 name: CIFuzz
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 2 * * *"
+  repository_dispatch:
   push:
     branches:
       - '**'
       - '!master'
       - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
       - 'tools/**'

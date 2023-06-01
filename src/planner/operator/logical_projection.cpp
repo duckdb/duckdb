@@ -25,7 +25,7 @@ void LogicalProjection::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalProjection::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
-	return make_unique<LogicalProjection>(table_index, std::move(expressions));
+	return make_uniq<LogicalProjection>(table_index, std::move(expressions));
 }
 
 vector<idx_t> LogicalProjection::GetTableIndex() const {

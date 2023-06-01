@@ -16,6 +16,9 @@ namespace duckdb {
 //! operator.
 class LogicalWindow : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_WINDOW;
+
+public:
 	explicit LogicalWindow(idx_t window_index)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_WINDOW), window_index(window_index) {
 	}

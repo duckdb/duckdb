@@ -18,7 +18,7 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 		// undo this catalog entry
 		auto catalog_entry = Load<CatalogEntry *>(data);
 		D_ASSERT(catalog_entry->set);
-		catalog_entry->set->Undo(catalog_entry);
+		catalog_entry->set->Undo(*catalog_entry);
 		break;
 	}
 	case UndoFlags::INSERT_TUPLE: {

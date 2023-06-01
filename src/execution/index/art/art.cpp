@@ -6,12 +6,25 @@
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
 #include "duckdb/common/types/conflict_manager.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 #include <algorithm>
 #include <cstring>
 #include <ctgmath>
 
 namespace duckdb {
+
+struct ARTIndexScanState : public IndexScanState {
+
+	//! Scan predicates (single predicate scan or range scan)
+	Value values[2];
+	//! Expressions of the scan predicates
+	ExpressionType expressions[2];
+	bool checked = false;
+	//! All scanned row IDs
+	vector<row_t> result_ids;
+	Iterator iterator;
+};
 
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, IndexConstraintType constraint_type,
@@ -76,7 +89,7 @@ ART::~ART() {
 unique_ptr<IndexScanState> ART::InitializeScanSinglePredicate(const Transaction &transaction, const Value &value,
                                                               ExpressionType expression_type) {
 	// initialize point lookup
-	auto result = make_unique<ARTIndexScanState>();
+	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = value;
 	result->expressions[0] = expression_type;
 	return std::move(result);
@@ -86,7 +99,7 @@ unique_ptr<IndexScanState> ART::InitializeScanTwoPredicates(Transaction &transac
                                                             ExpressionType low_expression_type, const Value &high_value,
                                                             ExpressionType high_expression_type) {
 	// initialize range lookup
-	auto result = make_unique<ARTIndexScanState>();
+	auto result = make_uniq<ARTIndexScanState>();
 	result->values[0] = low_value;
 	result->expressions[0] = low_expression_type;
 	result->values[1] = high_value;
@@ -330,8 +343,7 @@ bool ART::ConstructFromSorted(idx_t count, vector<Key> &keys, Vector &row_identi
 //===--------------------------------------------------------------------===//
 // Insert / Verification / Constraint Checking
 //===--------------------------------------------------------------------===//
-
-bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
+PreservedError ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 	D_ASSERT(logical_types[0] == input.data[0].GetType());
@@ -375,12 +387,13 @@ bool ART::Insert(IndexLock &lock, DataChunk &input, Vector &row_ids) {
 
 	IncreaseAndVerifyMemorySize(old_memory_size);
 	if (failed_index != DConstants::INVALID_INDEX) {
-		return false;
+		return PreservedError(ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicate key \"%s\"",
+		                                          AppendRowError(input, failed_index)));
 	}
-	return true;
+	return PreservedError();
 }
 
-bool ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
+PreservedError ART::Append(IndexLock &lock, DataChunk &appended_data, Vector &row_identifiers) {
 	DataChunk expression_result;
 	expression_result.Initialize(Allocator::DefaultAllocator(), logical_types);
 
@@ -654,6 +667,7 @@ bool ART::SearchEqual(Key &key, idx_t max_count, vector<row_t> &result_ids) {
 }
 
 void ART::SearchEqualJoinNoFetch(Key &key, idx_t &result_size) {
+	result_size = 0;
 
 	// we need to look for a leaf
 	auto old_memory_size = memory_size;
@@ -988,19 +1002,17 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 //===--------------------------------------------------------------------===//
 // Merging
 //===--------------------------------------------------------------------===//
-
-bool ART::MergeIndexes(IndexLock &state, Index *other_index) {
-
-	auto other_art = (ART *)other_index;
+bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
+	auto &other_art = other_index.Cast<ART>();
 
 	if (!this->tree) {
-		IncreaseMemorySize(other_art->memory_size);
-		tree = other_art->tree;
-		other_art->tree = nullptr;
+		IncreaseMemorySize(other_art.memory_size);
+		tree = other_art.tree;
+		other_art.tree = nullptr;
 		return true;
 	}
 
-	return Node::MergeARTs(this, other_art);
+	return Node::MergeARTs(this, &other_art);
 }
 
 //===--------------------------------------------------------------------===//

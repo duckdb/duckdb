@@ -116,6 +116,21 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 }
 
 //===--------------------------------------------------------------------===//
+// Allow Auto-Install Extensions
+//===--------------------------------------------------------------------===//
+static const char *auto_install[] = {"motherduck", "postgres_scanner", "sqlite_scanner", nullptr};
+
+bool ExtensionHelper::AllowAutoInstall(const string &extension) {
+	auto lcase = StringUtil::Lower(extension);
+	for (idx_t i = 0; auto_install[i]; i++) {
+		if (lcase == auto_install[i]) {
+			return true;
+		}
+	}
+	return false;
+}
+
+//===--------------------------------------------------------------------===//
 // Load Statically Compiled Extension
 //===--------------------------------------------------------------------===//
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {

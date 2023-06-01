@@ -81,7 +81,7 @@ data_ptr_t HyperLogLog::GetPtr() const {
 }
 
 unique_ptr<HyperLogLog> HyperLogLog::Copy() {
-	auto result = make_unique<HyperLogLog>();
+	auto result = make_uniq<HyperLogLog>();
 	lock_guard<mutex> guard(lock);
 	memcpy(result->GetPtr(), GetPtr(), GetSize());
 	D_ASSERT(result->Count() == Count());
@@ -94,7 +94,7 @@ void HyperLogLog::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<HyperLogLog> HyperLogLog::Deserialize(FieldReader &reader) {
-	auto result = make_unique<HyperLogLog>();
+	auto result = make_uniq<HyperLogLog>();
 	auto storage_type = reader.ReadRequired<HLLStorageType>();
 	switch (storage_type) {
 	case HLLStorageType::UNCOMPRESSED:

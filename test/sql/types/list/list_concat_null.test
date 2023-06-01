@@ -1,0 +1,15 @@
+# name: test/sql/types/list/list_concat_null.test
+# description: Issue #6656 - Segmentation Fault on Select query on table with column of array type
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE table x1 (b INT[]);
+
+statement ok
+SELECT b || NULL from x1;
+
+statement ok
+SELECT NULL || NULL from x1;

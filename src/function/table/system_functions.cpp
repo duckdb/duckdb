@@ -29,6 +29,7 @@ void BuiltinFunctions::RegisterSQLiteFunctions() {
 	DuckDBSequencesFun::RegisterFunction(*this);
 	DuckDBSettingsFun::RegisterFunction(*this);
 	DuckDBTablesFun::RegisterFunction(*this);
+	DuckDBTemporaryFilesFun::RegisterFunction(*this);
 	DuckDBTypesFun::RegisterFunction(*this);
 	DuckDBViewsFun::RegisterFunction(*this);
 	TestAllTypesFun::RegisterFunction(*this);

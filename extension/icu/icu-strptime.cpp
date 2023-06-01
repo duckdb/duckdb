@@ -28,19 +28,19 @@ struct ICUStrptime : public ICUDateFunc {
 		StrpTimeFormat format;
 
 		bool Equals(const FunctionData &other_p) const override {
-			auto &other = (ICUStrptimeBindData &)other_p;
+			auto &other = other_p.Cast<ICUStrptimeBindData>();
 			return format.format_specifier == other.format.format_specifier;
 		}
-		unique_ptr<FunctionData> Copy() const override {
-			return make_unique<ICUStrptimeBindData>(*this);
+		duckdb::unique_ptr<FunctionData> Copy() const override {
+			return make_uniq<ICUStrptimeBindData>(*this);
 		}
 
 		static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
 			throw NotImplementedException("FIXME: serialize icu-strptime");
 		}
 
-		static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
-		                                            ScalarFunction &bound_function) {
+		static duckdb::unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+		                                                    ScalarFunction &bound_function) {
 			throw NotImplementedException("FIXME: serialize icu-strptime");
 		}
 	};
@@ -91,8 +91,8 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &str_arg = args.data[0];
 		auto &fmt_arg = args.data[1];
 
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
-		auto &info = (ICUStrptimeBindData &)*func_expr.bind_info;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+		auto &info = func_expr.bind_info->Cast<ICUStrptimeBindData>();
 		CalendarPtr calendar(info.calendar->clone());
 		auto &format = info.format;
 
@@ -109,8 +109,8 @@ struct ICUStrptime : public ICUDateFunc {
 
 	static bind_scalar_function_t bind;
 
-	static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
-	                                                     vector<unique_ptr<Expression>> &arguments) {
+	static duckdb::unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
+	                                                             vector<duckdb::unique_ptr<Expression>> &arguments) {
 		if (arguments[1]->HasParameter()) {
 			throw ParameterNotResolvedException();
 		}
@@ -131,7 +131,7 @@ struct ICUStrptime : public ICUDateFunc {
 			if (format.HasFormatSpecifier(StrTimeSpecifier::TZ_NAME)) {
 				bound_function.function = ICUStrptimeFunction;
 				bound_function.return_type = LogicalType::TIMESTAMP_TZ;
-				return make_unique<ICUStrptimeBindData>(context, format);
+				return make_uniq<ICUStrptimeBindData>(context, format);
 			}
 		}
 
@@ -145,7 +145,7 @@ struct ICUStrptime : public ICUDateFunc {
 		auto &catalog = Catalog::GetSystemCatalog(context);
 		auto entry = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, name);
 		D_ASSERT(entry && entry->type == CatalogType::SCALAR_FUNCTION_ENTRY);
-		auto &func = (ScalarFunctionCatalogEntry &)*entry;
+		auto &func = entry->Cast<ScalarFunctionCatalogEntry>();
 		vector<LogicalType> types {LogicalType::VARCHAR, LogicalType::VARCHAR};
 		string error;
 
@@ -162,7 +162,7 @@ struct ICUStrptime : public ICUDateFunc {
 	}
 
 	static bool CastFromVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-		auto &cast_data = (CastData &)*parameters.cast_data;
+		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto info = (BindData *)cast_data.info.get();
 		CalendarPtr cal(info->calendar->clone());
 
@@ -220,7 +220,7 @@ struct ICUStrptime : public ICUDateFunc {
 			throw InternalException("Missing context for VARCHAR to TIMESTAMPTZ cast.");
 		}
 
-		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
+		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
 
 		return BoundCastInfo(CastFromVarchar, std::move(cast_data));
 	}
@@ -283,7 +283,7 @@ struct ICUStrftime : public ICUDateFunc {
 		auto &src_arg = args.data[0];
 		auto &fmt_arg = args.data[1];
 
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = (BindData &)*func_expr.bind_info;
 		CalendarPtr calendar(info.calendar->clone());
 		const auto tz_name = info.tz_setting.c_str();
@@ -389,7 +389,7 @@ struct ICUStrftime : public ICUDateFunc {
 	}
 
 	static bool CastToVarchar(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-		auto &cast_data = (CastData &)*parameters.cast_data;
+		auto &cast_data = parameters.cast_data->Cast<CastData>();
 		auto info = (BindData *)cast_data.info.get();
 		CalendarPtr calendar(info->calendar->clone());
 
@@ -405,7 +405,7 @@ struct ICUStrftime : public ICUDateFunc {
 			throw InternalException("Missing context for TIMESTAMPTZ to VARCHAR cast.");
 		}
 
-		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
+		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
 
 		return BoundCastInfo(CastToVarchar, std::move(cast_data));
 	}

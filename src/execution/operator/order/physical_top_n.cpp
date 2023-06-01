@@ -105,8 +105,8 @@ void TopNSortState::Initialize() {
 	RowLayout layout;
 	layout.Initialize(heap.payload_types);
 	auto &buffer_manager = heap.buffer_manager;
-	global_state = make_unique<GlobalSortState>(buffer_manager, heap.orders, layout);
-	local_state = make_unique<LocalSortState>();
+	global_state = make_uniq<GlobalSortState>(buffer_manager, heap.orders, layout);
+	local_state = make_uniq<LocalSortState>();
 	local_state->Initialize(*global_state, buffer_manager);
 }
 
@@ -157,7 +157,7 @@ void TopNSortState::InitializeScan(TopNScanState &state, bool exclude_offset) {
 		state.scanner = nullptr;
 	} else {
 		D_ASSERT(global_state->sorted_blocks.size() == 1);
-		state.scanner = make_unique<PayloadScanner>(*global_state->sorted_blocks[0]->payload_data, *global_state);
+		state.scanner = make_uniq<PayloadScanner>(*global_state->sorted_blocks[0]->payload_data, *global_state);
 	}
 	state.pos = 0;
 	state.exclude_offset = exclude_offset && heap.offset > 0;
@@ -425,11 +425,11 @@ public:
 };
 
 unique_ptr<LocalSinkState> PhysicalTopN::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<TopNLocalState>(context, types, orders, limit, offset);
+	return make_uniq<TopNLocalState>(context, types, orders, limit, offset);
 }
 
 unique_ptr<GlobalSinkState> PhysicalTopN::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<TopNGlobalState>(context, types, orders, limit, offset);
+	return make_uniq<TopNGlobalState>(context, types, orders, limit, offset);
 }
 
 //===--------------------------------------------------------------------===//
@@ -438,7 +438,7 @@ unique_ptr<GlobalSinkState> PhysicalTopN::GetGlobalSinkState(ClientContext &cont
 SinkResultType PhysicalTopN::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                   DataChunk &input) const {
 	// append to the local sink state
-	auto &sink = (TopNLocalState &)lstate;
+	auto &sink = lstate.Cast<TopNLocalState>();
 	sink.heap.Sink(input);
 	sink.heap.Reduce();
 	return SinkResultType::NEED_MORE_INPUT;
@@ -448,8 +448,8 @@ SinkResultType PhysicalTopN::Sink(ExecutionContext &context, GlobalSinkState &st
 // Combine
 //===--------------------------------------------------------------------===//
 void PhysicalTopN::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const {
-	auto &gstate = (TopNGlobalState &)state;
-	auto &lstate = (TopNLocalState &)lstate_p;
+	auto &gstate = state.Cast<TopNGlobalState>();
+	auto &lstate = lstate_p.Cast<TopNLocalState>();
 
 	// scan the local top N and append it to the global heap
 	lock_guard<mutex> glock(gstate.lock);
@@ -461,7 +461,7 @@ void PhysicalTopN::Combine(ExecutionContext &context, GlobalSinkState &state, Lo
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalTopN::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                         GlobalSinkState &gstate_p) const {
-	auto &gstate = (TopNGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<TopNGlobalState>();
 	// global finalize: compute the final top N
 	gstate.heap.Finalize();
 	return SinkFinalizeType::READY;
@@ -477,7 +477,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalTopN::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<TopNOperatorState>();
+	return make_uniq<TopNOperatorState>();
 }
 
 void PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
@@ -485,8 +485,8 @@ void PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 	if (limit == 0) {
 		return;
 	}
-	auto &state = (TopNOperatorState &)gstate_p;
-	auto &gstate = (TopNGlobalState &)*sink_state;
+	auto &state = gstate_p.Cast<TopNOperatorState>();
+	auto &gstate = sink_state->Cast<TopNGlobalState>();
 
 	if (!state.initialized) {
 		gstate.heap.InitializeScan(state.state, true);

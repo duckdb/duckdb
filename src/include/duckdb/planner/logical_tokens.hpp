@@ -14,6 +14,7 @@ class LogicalOperator;
 
 class LogicalAggregate;
 class LogicalAnyJoin;
+class LogicalAsOfJoin;
 class LogicalColumnDataGet;
 class LogicalComparisonJoin;
 class LogicalCopyToFile;
@@ -39,6 +40,7 @@ class LogicalInsert;
 class LogicalJoin;
 class LogicalLimit;
 class LogicalOrder;
+class LogicalPivot;
 class LogicalPositionalJoin;
 class LogicalPragma;
 class LogicalPrepare;

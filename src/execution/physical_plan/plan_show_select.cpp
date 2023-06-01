@@ -9,7 +9,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalShow &op) 
 	DataChunk output;
 	output.Initialize(Allocator::Get(context), op.types);
 
-	auto collection = make_unique<ColumnDataCollection>(context, op.types);
+	auto collection = make_uniq<ColumnDataCollection>(context, op.types);
 	ColumnDataAppendState append_state;
 	collection->InitializeAppend(append_state);
 	for (idx_t column_idx = 0; column_idx < op.types_select.size(); column_idx++) {
@@ -40,7 +40,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalShow &op) 
 
 	// create a chunk scan to output the result
 	auto chunk_scan =
-	    make_unique<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality);
+	    make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality);
 	chunk_scan->owned_collection = std::move(collection);
 	chunk_scan->collection = chunk_scan->owned_collection.get();
 	return std::move(chunk_scan);

@@ -18,6 +18,9 @@ namespace duckdb {
 //! It assumes that all functions have a common partitioning and ordering
 class PhysicalWindow : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::WINDOW;
+
+public:
 	PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
 	               PhysicalOperatorType type = PhysicalOperatorType::WINDOW);
 

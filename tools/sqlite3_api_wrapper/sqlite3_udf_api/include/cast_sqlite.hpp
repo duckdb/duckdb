@@ -27,7 +27,7 @@ struct CastSQLite {
 
 	static VectorType ToVectorsSQLiteValue(DataChunk &data_chunk, Vector &result,
 	                                       vector<unique_ptr<vector<sqlite3_value>>> &vec_sqlites,
-	                                       unique_ptr<UnifiedVectorFormat[]> vec_data);
+	                                       duckdb::unique_ptr<UnifiedVectorFormat[]> vec_data);
 
 	static unique_ptr<vector<sqlite3_value>> ToVector(LogicalType type, UnifiedVectorFormat &vec_data, idx_t size,
 	                                                  Vector &result);
@@ -88,7 +88,7 @@ struct CastToVectorSQLiteValue {
 
 	template <class INPUT_TYPE, class OPCAST>
 	static inline unique_ptr<vector<sqlite3_value>> Operation(UnifiedVectorFormat &vec_data, idx_t count) {
-		unique_ptr<vector<sqlite3_value>> result = make_unique<vector<sqlite3_value>>(count);
+		unique_ptr<vector<sqlite3_value>> result = make_uniq<vector<sqlite3_value>>(count);
 		auto res_data = (*result).data();
 
 		auto input_data = (INPUT_TYPE *)vec_data.data;
@@ -112,7 +112,7 @@ struct CastToVectorSQLiteValue {
 	}
 
 	static inline unique_ptr<vector<sqlite3_value>> FromNull(idx_t count) {
-		unique_ptr<vector<sqlite3_value>> result = make_unique<vector<sqlite3_value>>(count);
+		unique_ptr<vector<sqlite3_value>> result = make_uniq<vector<sqlite3_value>>(count);
 		auto res_data = (*result).data();
 		for (idx_t i = 0; i < count; ++i) {
 			res_data[i] = CastToSQLiteValue::OperationNull();

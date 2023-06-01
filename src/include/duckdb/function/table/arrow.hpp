@@ -32,7 +32,18 @@ enum class ArrowDateTimeType : uint8_t {
 	NANOSECONDS = 2,
 	SECONDS = 3,
 	DAYS = 4,
-	MONTHS = 5
+	MONTHS = 5,
+	MONTH_DAY_NANO = 6
+};
+
+struct ArrowInterval {
+	int32_t months;
+	int32_t days;
+	int64_t nanoseconds;
+
+	inline bool operator==(const ArrowInterval &rhs) const {
+		return this->days == rhs.days && this->months == rhs.months && this->nanoseconds == rhs.nanoseconds;
+	}
 };
 
 struct ArrowConvertData {
@@ -78,7 +89,7 @@ struct ArrowScanFunctionData : public PyTableFunctionData {
 };
 
 struct ArrowScanLocalState : public LocalTableFunctionState {
-	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(std::move(current_chunk)) {
+	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(current_chunk.release()) {
 	}
 
 	unique_ptr<ArrowArrayStreamWrapper> stream;

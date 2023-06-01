@@ -44,9 +44,9 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 			}
 			// column is not projected yet: project it by adding the clause "i=i" to the set of updated columns
 			auto &column = table.GetColumns().GetColumn(check_column_id);
-			update.expressions.push_back(make_unique<BoundColumnRefExpression>(
+			update.expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(proj.table_index, proj.expressions.size())));
-			proj.expressions.push_back(make_unique<BoundColumnRefExpression>(
+			proj.expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    column.Type(), ColumnBinding(get.table_index, get.column_ids.size())));
 			get.column_ids.push_back(check_column_id.index);
 			update.columns.push_back(check_column_id);
@@ -157,14 +157,14 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator *op, unique_pt
 		}
 		columns.push_back(column.Physical());
 		if (expr->type == ExpressionType::VALUE_DEFAULT) {
-			op->expressions.push_back(make_unique<BoundDefaultExpression>(column.Type()));
+			op->expressions.push_back(make_uniq<BoundDefaultExpression>(column.Type()));
 		} else {
 			UpdateBinder binder(*this, context);
 			binder.target_type = column.Type();
 			auto bound_expr = binder.Bind(expr);
 			PlanSubqueries(&bound_expr, &root);
 
-			op->expressions.push_back(make_unique<BoundColumnRefExpression>(
+			op->expressions.push_back(make_uniq<BoundColumnRefExpression>(
 			    bound_expr->return_type, ColumnBinding(proj_index, projection_expressions.size())));
 			projection_expressions.push_back(std::move(bound_expr));
 		}
@@ -173,7 +173,7 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator *op, unique_pt
 		return root;
 	}
 	// now create the projection
-	auto proj = make_unique<LogicalProjection>(proj_index, std::move(projection_expressions));
+	auto proj = make_uniq<LogicalProjection>(proj_index, std::move(projection_expressions));
 	proj->AddChild(std::move(root));
 	return unique_ptr_cast<LogicalProjection, LogicalOperator>(std::move(proj));
 }
@@ -188,18 +188,21 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	if (bound_table->type != TableReferenceType::BASE_TABLE) {
 		throw BinderException("Can only update base table!");
 	}
-	auto &table_binding = (BoundBaseTableRef &)*bound_table;
+	auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
+	;
 	auto table = table_binding.table;
 
 	// Add CTEs as bindable
 	AddCTEMap(stmt.cte_map);
 
 	if (stmt.from_table) {
+		auto from_binder = Binder::CreateBinder(context, this);
 		BoundJoinRef bound_crossproduct(JoinRefType::CROSS);
 		bound_crossproduct.left = std::move(bound_table);
-		bound_crossproduct.right = Bind(*stmt.from_table);
+		bound_crossproduct.right = from_binder->Bind(*stmt.from_table);
 		root = CreatePlan(bound_crossproduct);
 		get = (LogicalGet *)root->children[0].get();
+		bind_context.AddContext(std::move(from_binder->bind_context));
 	} else {
 		root = CreatePlan(*bound_table);
 		get = (LogicalGet *)root.get();
@@ -209,7 +212,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		// update of persistent table: not read only!
 		properties.modified_databases.insert(table->catalog->GetName());
 	}
-	auto update = make_unique<LogicalUpdate>(table);
+	auto update = make_uniq<LogicalUpdate>(table);
 
 	// set return_chunk boolean early because it needs uses update_is_del_and_insert logic
 	if (!stmt.returning_list.empty()) {
@@ -224,7 +227,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		auto condition = binder.Bind(stmt.set_info->condition);
 
 		PlanSubqueries(&condition, &root);
-		auto filter = make_unique<LogicalFilter>(std::move(condition));
+		auto filter = make_uniq<LogicalFilter>(std::move(condition));
 		filter->AddChild(std::move(root));
 		root = std::move(filter);
 	}
@@ -239,7 +242,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	// bind any extra columns necessary for CHECK constraints or indexes
 	BindUpdateConstraints(*table, *get, *proj, *update);
 	// finally add the row id column to the projection list
-	proj->expressions.push_back(make_unique<BoundColumnRefExpression>(
+	proj->expressions.push_back(make_uniq<BoundColumnRefExpression>(
 	    LogicalType::ROW_TYPE, ColumnBinding(get->table_index, get->column_ids.size())));
 	get->column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 
@@ -251,7 +254,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	if (!stmt.returning_list.empty()) {
 		unique_ptr<LogicalOperator> update_as_logicaloperator = std::move(update);
 
-		return BindReturning(std::move(stmt.returning_list), table, update_table_index,
+		return BindReturning(std::move(stmt.returning_list), table, stmt.table->alias, update_table_index,
 		                     std::move(update_as_logicaloperator), std::move(result));
 	}
 

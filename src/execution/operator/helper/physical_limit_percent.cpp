@@ -40,13 +40,13 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalLimitPercent::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<LimitPercentGlobalState>(context, *this);
+	return make_uniq<LimitPercentGlobalState>(context, *this);
 }
 
 SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
                                           DataChunk &input) const {
 	D_ASSERT(input.size() > 0);
-	auto &state = (LimitPercentGlobalState &)gstate;
+	auto &state = gstate.Cast<LimitPercentGlobalState>();
 	auto &limit_percent = state.limit_percent;
 	auto &offset = state.offset;
 
@@ -88,7 +88,7 @@ public:
 	explicit LimitPercentOperatorState(const PhysicalLimitPercent &op)
 	    : limit(DConstants::INVALID_INDEX), current_offset(0) {
 		D_ASSERT(op.sink_state);
-		auto &gstate = (LimitPercentGlobalState &)*op.sink_state;
+		auto &gstate = op.sink_state->Cast<LimitPercentGlobalState>();
 		gstate.data.InitializeScan(scan_state);
 	}
 
@@ -98,13 +98,13 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalLimitPercent::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<LimitPercentOperatorState>(*this);
+	return make_uniq<LimitPercentOperatorState>(*this);
 }
 
 void PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                                    LocalSourceState &lstate) const {
-	auto &gstate = (LimitPercentGlobalState &)*sink_state;
-	auto &state = (LimitPercentOperatorState &)gstate_p;
+	auto &gstate = sink_state->Cast<LimitPercentGlobalState>();
+	auto &state = gstate_p.Cast<LimitPercentOperatorState>();
 	auto &percent_limit = gstate.limit_percent;
 	auto &offset = gstate.offset;
 	auto &limit = state.limit;

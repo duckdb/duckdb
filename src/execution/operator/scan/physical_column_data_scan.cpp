@@ -17,12 +17,12 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalColumnDataScan::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<PhysicalColumnDataScanState>();
+	return make_uniq<PhysicalColumnDataScanState>();
 }
 
 void PhysicalColumnDataScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                      LocalSourceState &lstate) const {
-	auto &state = (PhysicalColumnDataScanState &)gstate;
+	auto &state = gstate.Cast<PhysicalColumnDataScanState>();
 	D_ASSERT(collection);
 	if (collection->Count() == 0) {
 		return;

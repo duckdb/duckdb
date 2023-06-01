@@ -1,0 +1,154 @@
+# name: test/sql/join/asof/test_asof_join_timestamps.test
+# description: Test As-Of joins for timestamps
+# group: [asof]
+
+statement ok
+PRAGMA enable_verification
+
+# Join on a timestamp range
+
+statement ok
+CREATE TABLE events0 AS
+	SELECT '2023-03-21 13:00:00'::TIMESTAMP + INTERVAL (range) HOUR AS begin, range AS value
+	FROM range(0, 4);
+
+# Could we add some tests where we have NULL values in the tables?
+# Could we add some tests where we have infinity values (e.g. NaN, or infinity::timestamp) in the tables?
+statement ok
+INSERT INTO events0 VALUES 
+	(NULL, -1),
+	('infinity', 9)
+;
+
+statement ok
+CREATE TABLE probe0 AS 
+	SELECT *
+	FROM range('2023-03-21 12:00:00'::TIMESTAMP, '2023-03-21 22:00:00'::TIMESTAMP, INTERVAL 1 HOUR) p(begin)
+;
+
+statement ok
+INSERT INTO probe0 VALUES 
+	(NULL),
+	('infinity')
+;
+
+# INNER Window version
+query II nosort inner_inequality
+SELECT p.begin, e.value
+FROM 
+	probe0 p
+JOIN (
+	SELECT value, begin, 
+		LEAD(begin, 1, 'infinity') OVER (ORDER BY begin ASC) AS end
+	FROM events0
+) e
+ON p.begin >= e.begin AND p.begin < e.end
+ORDER BY p.begin ASC
+----
+2023-03-21 13:00:00	0
+2023-03-21 14:00:00	1
+2023-03-21 15:00:00	2
+2023-03-21 16:00:00	3
+2023-03-21 17:00:00	3
+2023-03-21 18:00:00	3
+2023-03-21 19:00:00	3
+2023-03-21 20:00:00	3
+2023-03-21 21:00:00	3
+
+# INNER ON inequality only
+query II nosort inner_inequality
+SELECT p.begin, e.value
+FROM probe0 p ASOF JOIN events0 e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+
+# INNER USING inequality only
+query II nosort inner_inequality
+SELECT p.begin, e.value
+FROM probe0 p ASOF JOIN events0 e
+USING (begin)
+ORDER BY p.begin ASC
+----
+
+# LEFT Window version
+query II nosort left_inequality
+SELECT p.begin, e.value
+FROM 
+	probe0 p
+LEFT JOIN (
+	SELECT value, begin, 
+		LEAD(begin, 1, 'infinity') OVER (ORDER BY begin ASC) AS end
+	FROM events0
+) e
+ON p.begin >= e.begin AND p.begin < e.end
+ORDER BY p.begin ASC
+----
+2023-03-21 12:00:00	NULL
+2023-03-21 13:00:00	0
+2023-03-21 14:00:00	1
+2023-03-21 15:00:00	2
+2023-03-21 16:00:00	3
+2023-03-21 17:00:00	3
+2023-03-21 18:00:00	3
+2023-03-21 19:00:00	3
+2023-03-21 20:00:00	3
+2023-03-21 21:00:00	3
+
+# LEFT ON inequality only
+query II nosort left_inequality
+SELECT p.begin, e.value
+FROM probe0 p ASOF LEFT JOIN events0 e
+ON p.begin >= e.begin
+ORDER BY p.begin ASC
+----
+
+# LEFT USING inequality only
+query II nosort left_inequality
+SELECT p.begin, e.value
+FROM probe0 p ASOF LEFT JOIN events0 e
+USING (begin)
+ORDER BY p.begin ASC
+----
+
+
+# RIGHT Window version
+query II nosort right_inequality
+SELECT p.begin, e.value
+FROM 
+	probe0 p
+RIGHT JOIN (
+	SELECT value, begin, 
+		LEAD(begin, 1, 'infinity') OVER (ORDER BY begin ASC) AS end
+	FROM events0
+) e
+ON p.begin >= e.begin AND p.begin < e.end
+ORDER BY ALL
+----
+NULL	-1
+NULL	9
+2023-03-21 13:00:00	0
+2023-03-21 14:00:00	1
+2023-03-21 15:00:00	2
+2023-03-21 16:00:00	3
+2023-03-21 17:00:00	3
+2023-03-21 18:00:00	3
+2023-03-21 19:00:00	3
+2023-03-21 20:00:00	3
+2023-03-21 21:00:00	3
+
+# RIGHT ON inequality only
+query II nosort right_inequality
+SELECT p.begin, e.value
+FROM probe0 p ASOF RIGHT JOIN events0 e
+ON p.begin >= e.begin
+ORDER BY ALL
+----
+
+# RIGHT USING inequality only
+query II nosort right_inequality
+SELECT p.begin, e.value
+FROM probe0 p ASOF RIGHT JOIN events0 e
+USING (begin)
+ORDER BY ALL
+----

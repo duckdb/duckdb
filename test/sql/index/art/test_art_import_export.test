@@ -33,4 +33,4 @@ IMPORT DATABASE '__TEST_DIR__/export_index_db'
 statement error
 INSERT INTO raw VALUES (1, 1, 1, 1);
 ----
-TransactionContext Error: Failed to commit: Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicated key
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key

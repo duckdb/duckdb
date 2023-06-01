@@ -4,13 +4,12 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
-
+#include "duckdb/common/multi_file_reader.hpp"
 #include <limits>
 
 namespace duckdb {
@@ -62,7 +61,7 @@ void BaseCSVData::Finalize() {
 
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &info, vector<string> &names,
                                              vector<LogicalType> &sql_types) {
-	auto bind_data = make_unique<WriteCSVData>(info.file_path, sql_types, names);
+	auto bind_data = make_uniq<WriteCSVData>(info.file_path, sql_types, names);
 
 	// check all the options in the copy info
 	for (auto &option : info.options) {
@@ -83,13 +82,12 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
                                             vector<LogicalType> &expected_types) {
-	auto bind_data = make_unique<ReadCSVData>();
-	bind_data->sql_types = expected_types;
-
-	string file_pattern = info.file_path;
-	vector<string> patterns {file_pattern};
-
-	bind_data->InitializeFiles(context, patterns);
+	auto bind_data = make_uniq<ReadCSVData>();
+	bind_data->csv_types = expected_types;
+	bind_data->csv_names = expected_names;
+	bind_data->return_types = expected_types;
+	bind_data->return_names = expected_names;
+	bind_data->files = MultiFileReader::GetFileList(context, Value(info.file_path), "CSV");
 
 	auto &options = bind_data->options;
 
@@ -107,7 +105,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	bind_data->FinalizeRead(context);
 	if (!bind_data->single_threaded && options.auto_detect) {
 		options.file_path = bind_data->files[0];
-		auto initial_reader = make_unique<BufferedCSVReader>(context, options);
+		options.name_list = expected_names;
+		auto initial_reader = make_uniq<BufferedCSVReader>(context, options, expected_types);
 		options = initial_reader->options;
 	}
 	return std::move(bind_data);
@@ -266,11 +265,11 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 
 static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ExecutionContext &context, FunctionData &bind_data) {
 	auto &csv_data = (WriteCSVData &)bind_data;
-	auto local_data = make_unique<LocalReadCSVData>();
+	auto local_data = make_uniq<LocalReadCSVData>();
 
 	// create the chunk with VARCHAR types
 	vector<LogicalType> types;
-	types.resize(csv_data.options.names.size(), LogicalType::VARCHAR);
+	types.resize(csv_data.options.name_list.size(), LogicalType::VARCHAR);
 
 	local_data->cast_chunk.Initialize(Allocator::Get(context.client), types);
 	return std::move(local_data);
@@ -280,18 +279,18 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
                                                                const string &file_path) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
-	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path,
-	                                                   FileSystem::GetFileOpener(context), options.compression);
+	auto global_data = make_uniq<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), file_path,
+	                                                 FileSystem::GetFileOpener(context), options.compression);
 
 	if (options.header) {
 		BufferedSerializer serializer;
 		// write the header line to the file
-		for (idx_t i = 0; i < csv_data.options.names.size(); i++) {
+		for (idx_t i = 0; i < csv_data.options.name_list.size(); i++) {
 			if (i != 0) {
 				serializer.WriteBufferData(options.delimiter);
 			}
-			WriteQuotedString(serializer, csv_data, csv_data.options.names[i].c_str(), csv_data.options.names[i].size(),
-			                  false);
+			WriteQuotedString(serializer, csv_data, csv_data.options.name_list[i].c_str(),
+			                  csv_data.options.name_list[i].size(), false);
 		}
 		serializer.WriteBufferData(csv_data.newline);
 

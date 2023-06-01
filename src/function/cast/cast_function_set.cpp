@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-BindCastInput::BindCastInput(CastFunctionSet &function_set, BindCastInfo *info, ClientContext *context)
+BindCastInput::BindCastInput(CastFunctionSet &function_set, BindCastInfo *info, optional_ptr<ClientContext> context)
     : function_set(function_set), info(info), context(context) {
 }
 
@@ -117,7 +117,7 @@ void CastFunctionSet::RegisterCastFunction(const LogicalType &source, const Logi
 void CastFunctionSet::RegisterCastFunction(const LogicalType &source, const LogicalType &target, MapCastNode node) {
 	if (!map_info) {
 		// create the cast map and the cast map function
-		auto info = make_unique<MapCastInfo>();
+		auto info = make_uniq<MapCastInfo>();
 		map_info = info.get();
 		bind_functions.emplace_back(MapCastFunction, std::move(info));
 	}

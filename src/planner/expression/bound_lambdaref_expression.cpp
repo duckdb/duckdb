@@ -19,7 +19,7 @@ BoundLambdaRefExpression::BoundLambdaRefExpression(LogicalType type, ColumnBindi
 }
 
 unique_ptr<Expression> BoundLambdaRefExpression::Copy() {
-	return make_unique<BoundLambdaRefExpression>(alias, return_type, binding, lambda_index, depth);
+	return make_uniq<BoundLambdaRefExpression>(alias, return_type, binding, lambda_index, depth);
 }
 
 hash_t BoundLambdaRefExpression::Hash() const {
@@ -34,8 +34,8 @@ bool BoundLambdaRefExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundLambdaRefExpression *)other_p;
-	return other->binding == binding && other->lambda_index == lambda_index && other->depth == depth;
+	auto &other = other_p->Cast<BoundLambdaRefExpression>();
+	return other.binding == binding && other.lambda_index == lambda_index && other.depth == depth;
 }
 
 string BoundLambdaRefExpression::ToString() const {
@@ -64,8 +64,8 @@ unique_ptr<Expression> BoundLambdaRefExpression::Deserialize(ExpressionDeseriali
 	auto column_index = reader.ReadRequired<idx_t>();
 	auto depth = reader.ReadRequired<idx_t>();
 
-	return make_unique<BoundLambdaRefExpression>(alias, return_type, ColumnBinding(table_index, column_index),
-	                                             lambda_index, depth);
+	return make_uniq<BoundLambdaRefExpression>(alias, return_type, ColumnBinding(table_index, column_index),
+	                                           lambda_index, depth);
 }
 
 } // namespace duckdb

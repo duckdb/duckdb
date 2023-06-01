@@ -1,0 +1,8 @@
+# name: test/sql/alter/rename_schema/rename_schema.test
+# description: Fix #6640: Crash When Altering Schema
+# group: [rename_schema]
+
+statement error
+ALTER SCHEMA a RENAME TO b;
+----
+not yet supported

@@ -1,6 +1,7 @@
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/parser/parsed_data/alter_function_info.hpp"
+#include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/alter_table_function_info.hpp"
 
 #include "duckdb/common/field_writer.hpp"
 
@@ -33,8 +34,11 @@ unique_ptr<AlterInfo> AlterInfo::Deserialize(Deserializer &source) {
 	case AlterType::ALTER_VIEW:
 		result = AlterViewInfo::Deserialize(reader);
 		break;
-	case AlterType::ALTER_FUNCTION:
-		result = AlterFunctionInfo::Deserialize(reader);
+	case AlterType::ALTER_SCALAR_FUNCTION:
+		result = AlterScalarFunctionInfo::Deserialize(reader);
+		break;
+	case AlterType::ALTER_TABLE_FUNCTION:
+		result = AlterTableFunctionInfo::Deserialize(reader);
 		break;
 	default:
 		throw SerializationException("Unknown alter type for deserialization!");

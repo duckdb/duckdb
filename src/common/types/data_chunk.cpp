@@ -62,7 +62,7 @@ void DataChunk::InitializeEmpty(vector<LogicalType>::const_iterator begin, vecto
 	D_ASSERT(data.empty());                   // can only be initialized once
 	D_ASSERT(std::distance(begin, end) != 0); // empty chunk not allowed
 	for (; begin != end; begin++) {
-		data.emplace_back(Vector(*begin, nullptr));
+		data.emplace_back(*begin, nullptr);
 	}
 }
 

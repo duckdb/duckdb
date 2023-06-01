@@ -25,7 +25,7 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	}
 
 	// bind all the individual components of the CASE statement
-	auto result = make_unique<BoundCaseExpression>(return_type);
+	auto result = make_uniq<BoundCaseExpression>(return_type);
 	for (idx_t i = 0; i < expr.case_checks.size(); i++) {
 		auto &check = expr.case_checks[i];
 		auto &when_expr = (BoundExpression &)*check.when_expr;

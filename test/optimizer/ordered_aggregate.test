@@ -1,0 +1,84 @@
+# name: test/optimizer/ordered_aggregate.test
+# description: Test ORDER BY in AGGREGATE clause optimizations
+# group: [optimizer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(grp INTEGER, i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1, 10), (2, 15), (1, 30), (2, 20)
+
+# duplicate expressions are removed
+query I nosort order_by_agg
+EXPLAIN SELECT FIRST(i ORDER BY i) FROM integers
+----
+
+query I nosort order_by_agg
+EXPLAIN SELECT FIRST(i ORDER BY i, i, i) FROM integers
+----
+
+query I nosort order_by_agg
+EXPLAIN SELECT FIRST(i ORDER BY i, i DESC, i DESC NULLS FIRST) FROM integers
+----
+
+# groups are removed
+query I nosort order_by_agg_grp
+EXPLAIN SELECT grp, FIRST(i ORDER BY i) FROM integers GROUP BY grp ORDER BY grp
+----
+
+query I nosort order_by_agg_grp
+EXPLAIN SELECT grp, FIRST(i ORDER BY grp, i) FROM integers GROUP BY grp ORDER BY grp
+----
+
+query I nosort order_by_agg_grp
+EXPLAIN SELECT grp, FIRST(i ORDER BY grp, i, grp DESC, i DESC) FROM integers GROUP BY grp ORDER BY grp
+----
+
+# now with no remaining aggregates
+query I nosort order_by_none
+EXPLAIN SELECT grp, FIRST(i) FROM integers GROUP BY grp ORDER BY grp
+----
+
+query I nosort order_by_none
+EXPLAIN SELECT grp, FIRST(i ORDER BY grp) FROM integers GROUP BY grp ORDER BY grp
+----
+
+query I nosort order_by_none
+EXPLAIN SELECT grp, FIRST(i ORDER BY grp, grp DESC, grp DESC NULLS FIRST) FROM integers GROUP BY grp ORDER BY grp
+----
+
+# ORDER BY is removed from aggregates for which it has no effect
+query I nosort order_by_min
+EXPLAIN SELECT MIN(i) FROM integers
+----
+
+query I nosort order_by_min
+EXPLAIN SELECT MIN(i ORDER BY i) FROM integers
+----
+
+query I nosort order_by_max
+EXPLAIN SELECT MAX(i) FROM integers
+----
+
+query I nosort order_by_max
+EXPLAIN SELECT MAX(i ORDER BY i) FROM integers
+----
+
+query I nosort order_by_median
+EXPLAIN SELECT MEDIAN(i) FROM integers
+----
+
+query I nosort order_by_median
+EXPLAIN SELECT MEDIAN(i ORDER BY i) FROM integers
+----
+
+query I nosort order_by_sum
+EXPLAIN SELECT SUM(i) FROM integers
+----
+
+query I nosort order_by_sum
+EXPLAIN SELECT SUM(i ORDER BY i) FROM integers
+----

@@ -15,6 +15,9 @@ namespace duckdb {
 //! Represents a TableReference to a base table in the schema
 class BaseTableRef : public TableRef {
 public:
+	static constexpr const TableReferenceType TYPE = TableReferenceType::BASE_TABLE;
+
+public:
 	BaseTableRef()
 	    : TableRef(TableReferenceType::BASE_TABLE), catalog_name(INVALID_CATALOG), schema_name(INVALID_SCHEMA) {
 	}
@@ -38,5 +41,9 @@ public:
 	void Serialize(FieldWriter &serializer) const override;
 	//! Deserializes a blob back into a BaseTableRef
 	static unique_ptr<TableRef> Deserialize(FieldReader &source);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+
+	static unique_ptr<TableRef> FormatDeserialize(FormatDeserializer &source);
 };
 } // namespace duckdb

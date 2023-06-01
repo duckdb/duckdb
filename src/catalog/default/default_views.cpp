@@ -56,7 +56,7 @@ static unique_ptr<CreateViewInfo> GetDefaultView(ClientContext &context, const s
 	auto name = StringUtil::Lower(input_name);
 	for (idx_t index = 0; internal_views[index].name != nullptr; index++) {
 		if (internal_views[index].schema == schema && internal_views[index].name == name) {
-			auto result = make_unique<CreateViewInfo>();
+			auto result = make_uniq<CreateViewInfo>();
 			result->schema = schema;
 			result->view_name = name;
 			result->sql = internal_views[index].sql;
@@ -76,7 +76,7 @@ DefaultViewGenerator::DefaultViewGenerator(Catalog &catalog, SchemaCatalogEntry 
 unique_ptr<CatalogEntry> DefaultViewGenerator::CreateDefaultEntry(ClientContext &context, const string &entry_name) {
 	auto info = GetDefaultView(context, schema->name, entry_name);
 	if (info) {
-		return make_unique_base<CatalogEntry, ViewCatalogEntry>(&catalog, schema, info.get());
+		return make_uniq_base<CatalogEntry, ViewCatalogEntry>(&catalog, schema, info.get());
 	}
 	return nullptr;
 }

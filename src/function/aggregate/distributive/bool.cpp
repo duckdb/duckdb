@@ -95,6 +95,7 @@ AggregateFunction BoolOrFun::GetFunction() {
 	auto fun = AggregateFunction::UnaryAggregate<BoolState, bool, bool, BoolOrFunFunction>(
 	    LogicalType(LogicalTypeId::BOOLEAN), LogicalType::BOOLEAN);
 	fun.name = "bool_or";
+	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return fun;
 }
 
@@ -102,6 +103,7 @@ AggregateFunction BoolAndFun::GetFunction() {
 	auto fun = AggregateFunction::UnaryAggregate<BoolState, bool, bool, BoolAndFunFunction>(
 	    LogicalType(LogicalTypeId::BOOLEAN), LogicalType::BOOLEAN);
 	fun.name = "bool_and";
+	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return fun;
 }
 

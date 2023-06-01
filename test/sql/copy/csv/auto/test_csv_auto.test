@@ -4,7 +4,6 @@
 
 require vector_size 512
 
-
 statement ok
 SET experimental_parallel_csv=false;
 

@@ -17,6 +17,9 @@ namespace duckdb {
 //! Represents a built-in operator expression
 class OperatorExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::OPERATOR;
+
+public:
 	DUCKDB_API explicit OperatorExpression(ExpressionType type, unique_ptr<ParsedExpression> left = nullptr,
 	                                       unique_ptr<ParsedExpression> right = nullptr);
 	DUCKDB_API OperatorExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children);
@@ -32,6 +35,8 @@ public:
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
 
 public:
 	template <class T, class BASE>

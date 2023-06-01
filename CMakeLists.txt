@@ -120,6 +120,7 @@ endif()
 
 option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
+option(WASM_LOADABLE_EXTENSIONS "WebAssembly build with loadable extensions." FALSE)
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
 option(ENABLE_THREAD_SANITIZER "Enable thread sanitizer." FALSE)
 option(ENABLE_UBSAN "Enable undefined behavior sanitizer." TRUE)
@@ -278,6 +279,9 @@ option(EXTENSION_STATIC_BUILD
         "Extension build linking statically with DuckDB. Required for building linux loadable extensions."
         FALSE)
 
+if(WIN32)
+  set(EXTENSION_STATIC_BUILD TRUE)
+endif()
 
 set(JEMALLOC_DEFAULT_BUILD FALSE)
 if(NOT CLANG_TIDY AND OS_NAME STREQUAL "linux")
@@ -384,6 +388,10 @@ endif()
 
 if(DEBUG_MOVE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_DEBUG_MOVE")
+endif()
+
+if (CLANG_TIDY)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_CLANG_TIDY")
 endif()
 
 if(FORCE_ASSERT)
@@ -762,7 +770,6 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   if(WIN32 AND NOT MSVC)
     return()
   endif()
-
   set(TARGET_NAME ${NAME}_loadable_extension)
   # all parameters after output_directory
   set(FILES ${ARGV})
@@ -775,7 +782,6 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
 
   # parse parameters
   string(FIND "${PARAMETERS}" "-no-warnings" IGNORE_WARNINGS)
-
 
   add_library(${TARGET_NAME} SHARED ${FILES})
   # this disables the -Dsome_target_EXPORTS define being added by cmake which otherwise trips clang-tidy (yay)
@@ -794,7 +800,9 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
   #    The DuckDB symbols required by the loadable extensions are left unresolved. This will reduce the size of the binaries
   #    and works well when running the DuckDB cli directly. For windows this uses delay loading. For MacOS and linux the
   #    dynamic loader will look up the missing symbols when the extension is dlopen-ed.
-  if (EXTENSION_STATIC_BUILD)
+  if(WASM_LOADABLE_EXTENSIONS)
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sSIDE_MODULE=1 -DWASM_LOADABLE_EXTENSIONS")
+  elseif (EXTENSION_STATIC_BUILD)
     if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
       if (APPLE)
         set_target_properties(${TARGET_NAME} PROPERTIES CXX_VISIBILITY_PRESET hidden)
@@ -827,10 +835,6 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
           ".duckdb_extension")
 
   if(MSVC)
-    if (NOT EXTENSION_STATIC_BUILD)
-      target_link_libraries(${TARGET_NAME} delayimp)
-    endif()
-
     set_target_properties(
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
             "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
@@ -838,21 +842,6 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY PARAMETERS)
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE
             "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
   endif()
-
-  if(WIN32 AND NOT EXTENSION_STATIC_BUILD)
-    set_target_properties(${TARGET_NAME}
-            PROPERTIES LINK_FLAGS_DEBUG "/DELAYLOAD:duckdb.dll")
-    set(CMAKE_EXE_LINKER_FLAGS_DEBUG
-            "${CMAKE_EXE_LINKER_FLAGS_DEBUG}  /DELAYLOAD:duckdb.dll")
-    set_target_properties(${TARGET_NAME}
-            PROPERTIES LINK_FLAGS_RELEASE "/DELAYLOAD:duckdb.dll")
-    set(CMAKE_EXE_LINKER_FLAGS_RELEASE
-            "${CMAKE_EXE_LINKER_FLAGS_RELEASE}  /DELAYLOAD:duckdb.dll")
-    # This is only strictly required in non-Visual-Studio builds like Ninja:
-    target_link_libraries(${TARGET_NAME}
-            delayimp)
-endif()
-
 endfunction()
 
 function(build_loadable_extension NAME PARAMETERS)

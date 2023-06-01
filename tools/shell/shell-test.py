@@ -890,6 +890,24 @@ outstr = open(outfile,'rb').read().decode('utf8')
 if '99' not in outstr:
      raise Exception('.output test failed')
 
+# columnar mode
+test('''
+.col
+select * from range(4);
+''', out='Row 1')
+
+columns = ','.join(["'MyValue" + str(x) + "'" for x in range(100)])
+test(f'''
+.col
+select {columns};
+''', out='MyValue50')
+
+test(f'''
+.col
+select {columns}
+from range(1000)
+''', out='100 columns')
+
 # test null-byte rendering
 test('select varchar from test_all_types();', out='goo\\0se')
 

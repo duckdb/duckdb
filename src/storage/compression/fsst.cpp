@@ -90,7 +90,7 @@ struct FSSTAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<FSSTAnalyzeState>();
+	return make_uniq<FSSTAnalyzeState>();
 }
 
 bool FSSTStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
@@ -395,7 +395,7 @@ public:
 unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
                                                           unique_ptr<AnalyzeState> analyze_state_p) {
 	auto analyze_state = static_cast<FSSTAnalyzeState *>(analyze_state_p.get());
-	auto compression_state = make_unique<FSSTCompressionState>(checkpointer);
+	auto compression_state = make_uniq<FSSTCompressionState>(checkpointer);
 
 	if (analyze_state->fsst_encoder == nullptr) {
 		throw InternalException("No encoder found during FSST compression");
@@ -518,7 +518,7 @@ struct FSSTScanState : public StringScanState {
 };
 
 unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment) {
-	auto state = make_unique<FSSTScanState>();
+	auto state = make_uniq<FSSTScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	state->handle = buffer_manager.Pin(segment.block);
 	auto base_ptr = state->handle.Ptr() + segment.GetBlockOffset();

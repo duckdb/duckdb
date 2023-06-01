@@ -81,13 +81,13 @@ private:
 	//
 	//	template <typename CONJUNCTION_TYPE>
 	//	unique_ptr<TableFilter> NextConjunctionFilter(BoundConjunctionExpression *conjunction) {
-	//		unique_ptr<ConjunctionFilter> conj_filter = make_unique<CONJUNCTION_TYPE>();
+	//		unique_ptr<ConjunctionFilter> conj_filter = make_uniq<CONJUNCTION_TYPE>();
 	//		for (auto &expr : conjunction->children) {
 	//			auto comp_expr = (BoundComparisonExpression *)expr.get();
 	//			auto &const_expr =
 	//			    (comp_expr->left->type == ExpressionType::VALUE_CONSTANT) ? *comp_expr->left : *comp_expr->right;
 	//			auto const_value = ExpressionExecutor::EvaluateScalar(const_expr);
-	//			auto const_filter = make_unique<ConstantFilter>(comp_expr->type, const_value);
+	//			auto const_filter = make_uniq<ConstantFilter>(comp_expr->type, const_value);
 	//			conj_filter->child_filters.push_back(std::move(const_filter));
 	//		}
 	//		return std::move(conj_filter);

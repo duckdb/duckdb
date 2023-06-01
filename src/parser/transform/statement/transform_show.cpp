@@ -30,13 +30,13 @@ unique_ptr<SQLStatement> Transformer::TransformShow(duckdb_libpgquery::PGNode *n
 
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGVariableShowStmt *>(node);
 	if (stmt->is_summary) {
-		auto result = make_unique<ShowStatement>();
+		auto result = make_uniq<ShowStatement>();
 		auto &info = *result->info;
 		info.is_summary = stmt->is_summary;
 
-		auto select = make_unique<SelectNode>();
-		select->select_list.push_back(make_unique<StarExpression>());
-		auto basetable = make_unique<BaseTableRef>();
+		auto select = make_uniq<SelectNode>();
+		select->select_list.push_back(make_uniq<StarExpression>());
+		auto basetable = make_uniq<BaseTableRef>();
 		auto qualified_name = QualifiedName::Parse(stmt->name);
 		basetable->schema_name = qualified_name.schema;
 		basetable->table_name = qualified_name.name;
@@ -46,7 +46,7 @@ unique_ptr<SQLStatement> Transformer::TransformShow(duckdb_libpgquery::PGNode *n
 		return std::move(result);
 	}
 
-	auto result = make_unique<PragmaStatement>();
+	auto result = make_uniq<PragmaStatement>();
 
 	auto show_name = stmt->name;
 	TransformShowName(result, show_name);

@@ -1,0 +1,66 @@
+# name: test/sql/pivot/pivot_enum.test
+# description: Test SQL pivot syntax using an enum instead of an IN list
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+# pivot using an enum
+statement ok
+CREATE OR REPLACE TABLE monthly_sales(empid INT, amount INT, month TEXT);
+
+statement ok
+INSERT INTO monthly_sales VALUES
+    (1, 10000, 'JAN'),
+    (1, 400, 'JAN'),
+    (2, 4500, 'JAN'),
+    (2, 35000, 'JAN'),
+    (1, 5000, 'FEB'),
+    (1, 3000, 'FEB'),
+    (2, 200, 'FEB'),
+    (2, 90500, 'FEB'),
+    (1, 6000, 'MAR'),
+    (1, 5000, 'MAR'),
+    (2, 2500, 'MAR'),
+    (2, 9500, 'MAR'),
+    (1, 8000, 'APR'),
+    (1, 10000, 'APR'),
+    (2, 800, 'APR'),
+    (2, 4500, 'APR');
+
+statement ok
+CREATE TYPE unique_months AS ENUM (SELECT DISTINCT month FROM monthly_sales ORDER BY
+	CASE month WHEN 'JAN' THEN 1 WHEN 'FEB' THEN 2 WHEN 'MAR' THEN 3 ELSE 4 END);
+
+query IIIII
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTH IN unique_months)
+      AS p
+  ORDER BY EMPID;
+----
+1	10400	8000	11000	18000
+2	39500	90700	12000	5300
+
+# enum does not exist
+statement error
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTH IN unique_monthsx)
+      AS p
+  ORDER BY EMPID;
+----
+unique_monthsx
+
+statement ok
+CREATE TYPE not_an_enum AS VARCHAR;
+
+# enum does not exist
+statement error
+SELECT *
+  FROM monthly_sales
+    PIVOT(SUM(amount) FOR MONTH IN not_an_enum)
+      AS p
+  ORDER BY EMPID;
+----
+Pivot must reference an ENUM type

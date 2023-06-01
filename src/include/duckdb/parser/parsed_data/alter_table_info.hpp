@@ -137,6 +137,9 @@ public:
 	unique_ptr<AlterInfo> Copy() const override;
 	void SerializeAlterTable(FieldWriter &writer) const override;
 	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, AlterEntryData data);
+	string GetColumnName() const override {
+		return removed_column;
+	};
 };
 
 //===--------------------------------------------------------------------===//
@@ -158,6 +161,9 @@ public:
 	unique_ptr<AlterInfo> Copy() const override;
 	void SerializeAlterTable(FieldWriter &writer) const override;
 	static unique_ptr<AlterInfo> Deserialize(FieldReader &reader, AlterEntryData data);
+	string GetColumnName() const override {
+		return column_name;
+	};
 };
 
 //===--------------------------------------------------------------------===//

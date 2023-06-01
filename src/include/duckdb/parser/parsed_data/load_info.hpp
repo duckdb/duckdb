@@ -21,7 +21,7 @@ struct LoadInfo : public ParseInfo {
 
 public:
 	unique_ptr<LoadInfo> Copy() const {
-		auto result = make_unique<LoadInfo>();
+		auto result = make_uniq<LoadInfo>();
 		result->filename = filename;
 		result->load_type = load_type;
 		return result;
@@ -36,7 +36,7 @@ public:
 
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer) {
 		FieldReader reader(deserializer);
-		auto load_info = make_unique<LoadInfo>();
+		auto load_info = make_uniq<LoadInfo>();
 		load_info->filename = reader.ReadRequired<string>();
 		load_info->load_type = reader.ReadRequired<LoadType>();
 		reader.Finalize();

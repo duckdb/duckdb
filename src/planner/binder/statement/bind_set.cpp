@@ -11,7 +11,7 @@ BoundStatement Binder::Bind(SetVariableStatement &stmt) {
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
 
-	result.plan = make_unique<LogicalSet>(stmt.name, stmt.value, stmt.scope);
+	result.plan = make_uniq<LogicalSet>(stmt.name, stmt.value, stmt.scope);
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }
@@ -21,7 +21,7 @@ BoundStatement Binder::Bind(ResetVariableStatement &stmt) {
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
 
-	result.plan = make_unique<LogicalReset>(stmt.name, stmt.scope);
+	result.plan = make_uniq<LogicalReset>(stmt.name, stmt.scope);
 	properties.return_type = StatementReturnType::NOTHING;
 	return result;
 }
@@ -29,11 +29,11 @@ BoundStatement Binder::Bind(ResetVariableStatement &stmt) {
 BoundStatement Binder::Bind(SetStatement &stmt) {
 	switch (stmt.set_type) {
 	case SetType::SET: {
-		auto &set_stmt = (SetVariableStatement &)stmt;
+		auto &set_stmt = stmt.Cast<SetVariableStatement>();
 		return Bind(set_stmt);
 	}
 	case SetType::RESET: {
-		auto &set_stmt = (ResetVariableStatement &)stmt;
+		auto &set_stmt = stmt.Cast<ResetVariableStatement>();
 		return Bind(set_stmt);
 	}
 	default:

@@ -32,9 +32,8 @@ static SEXP cpp_str_to_charsexp(string s) {
 	return cstr_to_charsexp(s.c_str());
 }
 
-SEXP duckdb::StringsToSexp(vector<string> s) {
-	RProtector r;
-	SEXP retsexp = r.Protect(NEW_STRING(s.size()));
+cpp11::strings duckdb::StringsToSexp(vector<string> s) {
+	cpp11::writable::strings retsexp(s.size());
 	for (idx_t i = 0; i < s.size(); i++) {
 		SET_STRING_ELT(retsexp, i, cpp_str_to_charsexp(s[i]));
 	}
@@ -43,9 +42,7 @@ SEXP duckdb::StringsToSexp(vector<string> s) {
 
 RStrings::RStrings() {
 	// allocate strings once
-	RProtector r;
-
-	SEXP strings = r.Protect(Rf_allocVector(STRSXP, 5));
+	cpp11::sexp strings = Rf_allocVector(STRSXP, 5);
 	SET_STRING_ELT(strings, 0, secs = Rf_mkChar("secs"));
 	SET_STRING_ELT(strings, 1, mins = Rf_mkChar("mins"));
 	SET_STRING_ELT(strings, 2, hours = Rf_mkChar("hours"));
@@ -54,7 +51,7 @@ RStrings::RStrings() {
 	R_PreserveObject(strings);
 	MARK_NOT_MUTABLE(strings);
 
-	SEXP chars = r.Protect(Rf_allocVector(VECSXP, 9));
+	cpp11::sexp chars = Rf_allocVector(VECSXP, 9);
 	SET_VECTOR_ELT(chars, 0, UTC_str = Rf_mkString("UTC"));
 	SET_VECTOR_ELT(chars, 1, Date_str = Rf_mkString("Date"));
 	SET_VECTOR_ELT(chars, 2, difftime_str = Rf_mkString("difftime"));

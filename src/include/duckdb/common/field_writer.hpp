@@ -25,7 +25,7 @@ struct IndexWriteOperation {
 
 class FieldWriter {
 public:
-	DUCKDB_API FieldWriter(Serializer &serializer);
+	DUCKDB_API explicit FieldWriter(Serializer &serializer);
 	DUCKDB_API ~FieldWriter();
 
 public:
@@ -128,11 +128,11 @@ public:
 		return *buffer;
 	}
 
-private:
 	void AddField() {
 		field_count++;
 	}
 
+private:
 	template <class T>
 	void Write(const T &element) {
 		WriteData((const_data_ptr_t)&element, sizeof(T));
@@ -152,7 +152,7 @@ DUCKDB_API void FieldWriter::Write(const string &val);
 
 class FieldDeserializer : public Deserializer {
 public:
-	FieldDeserializer(Deserializer &root);
+	explicit FieldDeserializer(Deserializer &root);
 
 public:
 	void ReadData(data_ptr_t buffer, idx_t read_size) override;
@@ -161,6 +161,14 @@ public:
 	idx_t RemainingData();
 	Deserializer &GetRoot() {
 		return root;
+	}
+
+	ClientContext &GetContext() override {
+		return root.GetContext();
+	}
+
+	Catalog *GetCatalog() override {
+		return root.GetCatalog();
 	}
 
 private:
@@ -177,7 +185,7 @@ struct IndexReadOperation {
 
 class FieldReader {
 public:
-	DUCKDB_API FieldReader(Deserializer &source);
+	DUCKDB_API explicit FieldReader(Deserializer &source);
 	DUCKDB_API ~FieldReader();
 
 public:

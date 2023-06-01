@@ -53,7 +53,7 @@ static unique_ptr<FunctionData> PragmaDatabaseSizeBind(ClientContext &context, T
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaDatabaseSizeInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<PragmaDatabaseSizeData>();
+	auto result = make_uniq<PragmaDatabaseSizeData>();
 	result->databases = DatabaseManager::Get(context).GetDatabases(context);
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	result->memory_usage = Value(StringUtil::BytesToHumanReadableString(buffer_manager.GetUsedMemory()));

@@ -11,10 +11,10 @@ unique_ptr<SQLStatement> Transformer::TransformCheckpoint(duckdb_libpgquery::PGN
 	vector<unique_ptr<ParsedExpression>> children;
 	// transform into "CALL checkpoint()" or "CALL force_checkpoint()"
 	auto checkpoint_name = checkpoint->force ? "force_checkpoint" : "checkpoint";
-	auto result = make_unique<CallStatement>();
-	auto function = make_unique<FunctionExpression>(checkpoint_name, std::move(children));
+	auto result = make_uniq<CallStatement>();
+	auto function = make_uniq<FunctionExpression>(checkpoint_name, std::move(children));
 	if (checkpoint->name) {
-		function->children.push_back(make_unique<ConstantExpression>(Value(checkpoint->name)));
+		function->children.push_back(make_uniq<ConstantExpression>(Value(checkpoint->name)));
 	}
 	result->function = std::move(function);
 	return std::move(result);

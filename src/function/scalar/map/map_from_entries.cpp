@@ -45,7 +45,7 @@ static unique_ptr<FunctionData> MapFromEntriesBind(ClientContext &context, Scala
 	}
 
 	bound_function.return_type = LogicalType::MAP(elem_type);
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 void MapFromEntriesFun::RegisterFunction(BuiltinFunctions &set) {

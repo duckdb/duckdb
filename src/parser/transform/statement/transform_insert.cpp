@@ -5,7 +5,7 @@
 namespace duckdb {
 
 unique_ptr<TableRef> Transformer::TransformValuesList(duckdb_libpgquery::PGList *list) {
-	auto result = make_unique<ExpressionListRef>();
+	auto result = make_uniq<ExpressionListRef>();
 	for (auto value_list = list->head; value_list != nullptr; value_list = value_list->next) {
 		auto target = (duckdb_libpgquery::PGList *)(value_list->data.ptr_value);
 
@@ -32,7 +32,7 @@ unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGNo
 		throw ParserException("DEFAULT VALUES clause is not supported!");
 	}
 
-	auto result = make_unique<InsertStatement>();
+	auto result = make_uniq<InsertStatement>();
 	if (stmt->withClause) {
 		TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), result->cte_map);
 	}

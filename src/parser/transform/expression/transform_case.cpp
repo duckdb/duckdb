@@ -8,7 +8,7 @@ namespace duckdb {
 unique_ptr<ParsedExpression> Transformer::TransformCase(duckdb_libpgquery::PGCaseExpr *root) {
 	D_ASSERT(root);
 
-	auto case_node = make_unique<CaseExpression>();
+	auto case_node = make_uniq<CaseExpression>();
 	auto root_arg = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(root->arg));
 	for (auto cell = root->args->head; cell != nullptr; cell = cell->next) {
 		CaseCheck case_check;
@@ -18,7 +18,7 @@ unique_ptr<ParsedExpression> Transformer::TransformCase(duckdb_libpgquery::PGCas
 		unique_ptr<ParsedExpression> test;
 		if (root_arg) {
 			case_check.when_expr =
-			    make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, root_arg->Copy(), std::move(test_raw));
+			    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, root_arg->Copy(), std::move(test_raw));
 		} else {
 			case_check.when_expr = std::move(test_raw);
 		}
@@ -29,7 +29,7 @@ unique_ptr<ParsedExpression> Transformer::TransformCase(duckdb_libpgquery::PGCas
 	if (root->defresult) {
 		case_node->else_expr = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(root->defresult));
 	} else {
-		case_node->else_expr = make_unique<ConstantExpression>(Value(LogicalType::SQLNULL));
+		case_node->else_expr = make_uniq<ConstantExpression>(Value(LogicalType::SQLNULL));
 	}
 	return std::move(case_node);
 }

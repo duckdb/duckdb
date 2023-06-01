@@ -13,11 +13,11 @@ CreateTableRelation::CreateTableRelation(shared_ptr<Relation> child_p, string sc
 }
 
 BoundStatement CreateTableRelation::Bind(Binder &binder) {
-	auto select = make_unique<SelectStatement>();
+	auto select = make_uniq<SelectStatement>();
 	select->node = child->GetQueryNode();
 
 	CreateStatement stmt;
-	auto info = make_unique<CreateTableInfo>();
+	auto info = make_uniq<CreateTableInfo>();
 	info->schema = schema_name;
 	info->table = table_name;
 	info->query = std::move(select);

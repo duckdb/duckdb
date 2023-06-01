@@ -52,7 +52,7 @@ void ConjunctionOrFilter::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<TableFilter> ConjunctionOrFilter::Deserialize(FieldReader &source) {
-	auto res = make_unique<ConjunctionOrFilter>();
+	auto res = make_uniq<ConjunctionOrFilter>();
 	res->child_filters = source.ReadRequiredSerializableList<TableFilter>();
 	return std::move(res);
 }
@@ -107,7 +107,7 @@ void ConjunctionAndFilter::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<TableFilter> ConjunctionAndFilter::Deserialize(FieldReader &source) {
-	auto res = make_unique<ConjunctionAndFilter>();
+	auto res = make_uniq<ConjunctionAndFilter>();
 	res->child_filters = source.ReadRequiredSerializableList<TableFilter>();
 	return std::move(res);
 }

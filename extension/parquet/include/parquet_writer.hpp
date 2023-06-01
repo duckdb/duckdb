@@ -56,12 +56,12 @@ private:
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec;
 
-	unique_ptr<BufferedFileWriter> writer;
+	duckdb::unique_ptr<BufferedFileWriter> writer;
 	shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
 	duckdb_parquet::format::FileMetaData file_meta_data;
 	std::mutex lock;
 
-	vector<unique_ptr<ColumnWriter>> column_writers;
+	vector<duckdb::unique_ptr<ColumnWriter>> column_writers;
 };
 
 } // namespace duckdb

@@ -22,8 +22,8 @@ CatalogType ChangeOwnershipInfo::GetCatalogType() const {
 }
 
 unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
-	return make_unique_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, catalog, schema, name, owner_schema,
-	                                                        owner_name, if_exists);
+	return make_uniq_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, catalog, schema, name, owner_schema,
+	                                                      owner_name, if_exists);
 }
 
 void ChangeOwnershipInfo::Serialize(FieldWriter &writer) const {
@@ -98,7 +98,7 @@ RenameColumnInfo::~RenameColumnInfo() {
 }
 
 unique_ptr<AlterInfo> RenameColumnInfo::Copy() const {
-	return make_unique_base<AlterInfo, RenameColumnInfo>(GetAlterEntryData(), old_name, new_name);
+	return make_uniq_base<AlterInfo, RenameColumnInfo>(GetAlterEntryData(), old_name, new_name);
 }
 
 void RenameColumnInfo::SerializeAlterTable(FieldWriter &writer) const {
@@ -109,7 +109,7 @@ void RenameColumnInfo::SerializeAlterTable(FieldWriter &writer) const {
 unique_ptr<AlterInfo> RenameColumnInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
 	auto old_name = reader.ReadRequired<string>();
 	auto new_name = reader.ReadRequired<string>();
-	return make_unique<RenameColumnInfo>(std::move(data), old_name, new_name);
+	return make_uniq<RenameColumnInfo>(std::move(data), old_name, new_name);
 }
 
 //===--------------------------------------------------------------------===//
@@ -122,7 +122,7 @@ RenameTableInfo::~RenameTableInfo() {
 }
 
 unique_ptr<AlterInfo> RenameTableInfo::Copy() const {
-	return make_unique_base<AlterInfo, RenameTableInfo>(GetAlterEntryData(), new_table_name);
+	return make_uniq_base<AlterInfo, RenameTableInfo>(GetAlterEntryData(), new_table_name);
 }
 
 void RenameTableInfo::SerializeAlterTable(FieldWriter &writer) const {
@@ -131,7 +131,7 @@ void RenameTableInfo::SerializeAlterTable(FieldWriter &writer) const {
 
 unique_ptr<AlterInfo> RenameTableInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
 	auto new_name = reader.ReadRequired<string>();
-	return make_unique<RenameTableInfo>(std::move(data), new_name);
+	return make_uniq<RenameTableInfo>(std::move(data), new_name);
 }
 
 //===--------------------------------------------------------------------===//
@@ -146,7 +146,7 @@ AddColumnInfo::~AddColumnInfo() {
 }
 
 unique_ptr<AlterInfo> AddColumnInfo::Copy() const {
-	return make_unique_base<AlterInfo, AddColumnInfo>(GetAlterEntryData(), new_column.Copy(), if_column_not_exists);
+	return make_uniq_base<AlterInfo, AddColumnInfo>(GetAlterEntryData(), new_column.Copy(), if_column_not_exists);
 }
 
 void AddColumnInfo::SerializeAlterTable(FieldWriter &writer) const {
@@ -157,7 +157,7 @@ void AddColumnInfo::SerializeAlterTable(FieldWriter &writer) const {
 unique_ptr<AlterInfo> AddColumnInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
 	auto new_column = reader.ReadRequiredSerializable<ColumnDefinition, ColumnDefinition>();
 	auto if_column_not_exists = reader.ReadRequired<bool>();
-	return make_unique<AddColumnInfo>(std::move(data), std::move(new_column), if_column_not_exists);
+	return make_uniq<AddColumnInfo>(std::move(data), std::move(new_column), if_column_not_exists);
 }
 
 //===--------------------------------------------------------------------===//
@@ -171,8 +171,7 @@ RemoveColumnInfo::~RemoveColumnInfo() {
 }
 
 unique_ptr<AlterInfo> RemoveColumnInfo::Copy() const {
-	return make_unique_base<AlterInfo, RemoveColumnInfo>(GetAlterEntryData(), removed_column, if_column_exists,
-	                                                     cascade);
+	return make_uniq_base<AlterInfo, RemoveColumnInfo>(GetAlterEntryData(), removed_column, if_column_exists, cascade);
 }
 
 void RemoveColumnInfo::SerializeAlterTable(FieldWriter &writer) const {
@@ -185,7 +184,7 @@ unique_ptr<AlterInfo> RemoveColumnInfo::Deserialize(FieldReader &reader, AlterEn
 	auto new_name = reader.ReadRequired<string>();
 	auto if_column_exists = reader.ReadRequired<bool>();
 	auto cascade = reader.ReadRequired<bool>();
-	return make_unique<RemoveColumnInfo>(std::move(data), std::move(new_name), if_column_exists, cascade);
+	return make_uniq<RemoveColumnInfo>(std::move(data), std::move(new_name), if_column_exists, cascade);
 }
 
 //===--------------------------------------------------------------------===//
@@ -200,8 +199,8 @@ ChangeColumnTypeInfo::~ChangeColumnTypeInfo() {
 }
 
 unique_ptr<AlterInfo> ChangeColumnTypeInfo::Copy() const {
-	return make_unique_base<AlterInfo, ChangeColumnTypeInfo>(GetAlterEntryData(), column_name, target_type,
-	                                                         expression->Copy());
+	return make_uniq_base<AlterInfo, ChangeColumnTypeInfo>(GetAlterEntryData(), column_name, target_type,
+	                                                       expression->Copy());
 }
 
 void ChangeColumnTypeInfo::SerializeAlterTable(FieldWriter &writer) const {
@@ -214,8 +213,8 @@ unique_ptr<AlterInfo> ChangeColumnTypeInfo::Deserialize(FieldReader &reader, Alt
 	auto column_name = reader.ReadRequired<string>();
 	auto target_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto expression = reader.ReadOptional<ParsedExpression>(nullptr);
-	return make_unique<ChangeColumnTypeInfo>(std::move(data), std::move(column_name), std::move(target_type),
-	                                         std::move(expression));
+	return make_uniq<ChangeColumnTypeInfo>(std::move(data), std::move(column_name), std::move(target_type),
+	                                       std::move(expression));
 }
 
 //===--------------------------------------------------------------------===//
@@ -229,8 +228,8 @@ SetDefaultInfo::~SetDefaultInfo() {
 }
 
 unique_ptr<AlterInfo> SetDefaultInfo::Copy() const {
-	return make_unique_base<AlterInfo, SetDefaultInfo>(GetAlterEntryData(), column_name,
-	                                                   expression ? expression->Copy() : nullptr);
+	return make_uniq_base<AlterInfo, SetDefaultInfo>(GetAlterEntryData(), column_name,
+	                                                 expression ? expression->Copy() : nullptr);
 }
 
 void SetDefaultInfo::SerializeAlterTable(FieldWriter &writer) const {
@@ -241,7 +240,7 @@ void SetDefaultInfo::SerializeAlterTable(FieldWriter &writer) const {
 unique_ptr<AlterInfo> SetDefaultInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
 	auto column_name = reader.ReadRequired<string>();
 	auto new_default = reader.ReadOptional<ParsedExpression>(nullptr);
-	return make_unique<SetDefaultInfo>(std::move(data), std::move(column_name), std::move(new_default));
+	return make_uniq<SetDefaultInfo>(std::move(data), std::move(column_name), std::move(new_default));
 }
 
 //===--------------------------------------------------------------------===//
@@ -254,7 +253,7 @@ SetNotNullInfo::~SetNotNullInfo() {
 }
 
 unique_ptr<AlterInfo> SetNotNullInfo::Copy() const {
-	return make_unique_base<AlterInfo, SetNotNullInfo>(GetAlterEntryData(), column_name);
+	return make_uniq_base<AlterInfo, SetNotNullInfo>(GetAlterEntryData(), column_name);
 }
 
 void SetNotNullInfo::SerializeAlterTable(FieldWriter &writer) const {
@@ -263,7 +262,7 @@ void SetNotNullInfo::SerializeAlterTable(FieldWriter &writer) const {
 
 unique_ptr<AlterInfo> SetNotNullInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
 	auto column_name = reader.ReadRequired<string>();
-	return make_unique<SetNotNullInfo>(std::move(data), std::move(column_name));
+	return make_uniq<SetNotNullInfo>(std::move(data), std::move(column_name));
 }
 
 //===--------------------------------------------------------------------===//
@@ -276,7 +275,7 @@ DropNotNullInfo::~DropNotNullInfo() {
 }
 
 unique_ptr<AlterInfo> DropNotNullInfo::Copy() const {
-	return make_unique_base<AlterInfo, DropNotNullInfo>(GetAlterEntryData(), column_name);
+	return make_uniq_base<AlterInfo, DropNotNullInfo>(GetAlterEntryData(), column_name);
 }
 
 void DropNotNullInfo::SerializeAlterTable(FieldWriter &writer) const {
@@ -285,7 +284,7 @@ void DropNotNullInfo::SerializeAlterTable(FieldWriter &writer) const {
 
 unique_ptr<AlterInfo> DropNotNullInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
 	auto column_name = reader.ReadRequired<string>();
-	return make_unique<DropNotNullInfo>(std::move(data), std::move(column_name));
+	return make_uniq<DropNotNullInfo>(std::move(data), std::move(column_name));
 }
 
 //===--------------------------------------------------------------------===//
@@ -302,8 +301,8 @@ AlterForeignKeyInfo::~AlterForeignKeyInfo() {
 }
 
 unique_ptr<AlterInfo> AlterForeignKeyInfo::Copy() const {
-	return make_unique_base<AlterInfo, AlterForeignKeyInfo>(GetAlterEntryData(), fk_table, pk_columns, fk_columns,
-	                                                        pk_keys, fk_keys, type);
+	return make_uniq_base<AlterInfo, AlterForeignKeyInfo>(GetAlterEntryData(), fk_table, pk_columns, fk_columns,
+	                                                      pk_keys, fk_keys, type);
 }
 
 void AlterForeignKeyInfo::SerializeAlterTable(FieldWriter &writer) const {
@@ -322,8 +321,8 @@ unique_ptr<AlterInfo> AlterForeignKeyInfo::Deserialize(FieldReader &reader, Alte
 	auto pk_keys = reader.ReadRequiredIndexList<PhysicalIndex>();
 	auto fk_keys = reader.ReadRequiredIndexList<PhysicalIndex>();
 	auto type = reader.ReadRequired<AlterForeignKeyType>();
-	return make_unique<AlterForeignKeyInfo>(std::move(data), std::move(fk_table), std::move(pk_columns),
-	                                        std::move(fk_columns), std::move(pk_keys), std::move(fk_keys), type);
+	return make_uniq<AlterForeignKeyInfo>(std::move(data), std::move(fk_table), std::move(pk_columns),
+	                                      std::move(fk_columns), std::move(pk_keys), std::move(fk_keys), type);
 }
 
 //===--------------------------------------------------------------------===//
@@ -376,7 +375,7 @@ RenameViewInfo::~RenameViewInfo() {
 }
 
 unique_ptr<AlterInfo> RenameViewInfo::Copy() const {
-	return make_unique_base<AlterInfo, RenameViewInfo>(GetAlterEntryData(), new_view_name);
+	return make_uniq_base<AlterInfo, RenameViewInfo>(GetAlterEntryData(), new_view_name);
 }
 
 void RenameViewInfo::SerializeAlterView(FieldWriter &writer) const {
@@ -385,6 +384,6 @@ void RenameViewInfo::SerializeAlterView(FieldWriter &writer) const {
 
 unique_ptr<AlterInfo> RenameViewInfo::Deserialize(FieldReader &reader, AlterEntryData data) {
 	auto new_name = reader.ReadRequired<string>();
-	return make_unique<RenameViewInfo>(std::move(data), new_name);
+	return make_uniq<RenameViewInfo>(std::move(data), new_name);
 }
 } // namespace duckdb

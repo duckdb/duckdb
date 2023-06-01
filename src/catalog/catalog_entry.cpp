@@ -23,11 +23,11 @@ unique_ptr<CatalogEntry> CatalogEntry::AlterEntry(ClientContext &context, AlterI
 void CatalogEntry::UndoAlter(ClientContext &context, AlterInfo *info) {
 }
 
-unique_ptr<CatalogEntry> CatalogEntry::Copy(ClientContext &context) {
+unique_ptr<CatalogEntry> CatalogEntry::Copy(ClientContext &context) const {
 	throw InternalException("Unsupported copy type for catalog entry!");
 }
 
-string CatalogEntry::ToSQL() {
+string CatalogEntry::ToSQL() const {
 	throw InternalException("Unsupported catalog type for ToSQL()");
 }
 // LCOV_EXCL_STOP

@@ -92,12 +92,12 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalExport::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<ExportSourceState>();
+	return make_uniq<ExportSourceState>();
 }
 
 void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                              LocalSourceState &lstate) const {
-	auto &state = (ExportSourceState &)gstate;
+	auto &state = gstate.Cast<ExportSourceState>();
 	if (state.finished) {
 		return;
 	}

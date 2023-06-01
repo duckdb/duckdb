@@ -2,6 +2,8 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
 
@@ -14,6 +16,10 @@ string JoinRef::ToString() const {
 		break;
 	case JoinRefType::NATURAL:
 		result += "NATURAL ";
+		result += JoinTypeToString(type) + " JOIN ";
+		break;
+	case JoinRefType::ASOF:
+		result += "ASOF ";
 		result += JoinTypeToString(type) + " JOIN ";
 		break;
 	case JoinRefType::CROSS:
@@ -60,7 +66,7 @@ bool JoinRef::Equals(const TableRef *other_p) const {
 }
 
 unique_ptr<TableRef> JoinRef::Copy() {
-	auto copy = make_unique<JoinRef>(ref_type);
+	auto copy = make_uniq<JoinRef>(ref_type);
 	copy->left = left->Copy();
 	copy->right = right->Copy();
 	if (condition) {
@@ -82,8 +88,31 @@ void JoinRef::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(using_columns);
 }
 
+void JoinRef::FormatSerialize(FormatSerializer &serializer) const {
+	TableRef::FormatSerialize(serializer);
+	serializer.WriteProperty("left", *left);
+	serializer.WriteProperty("right", *right);
+	serializer.WriteOptionalProperty("condition", condition);
+	serializer.WriteProperty("join_type", type);
+	serializer.WriteProperty("ref_type", ref_type);
+	serializer.WriteProperty("using_columns", using_columns);
+}
+
+unique_ptr<TableRef> JoinRef::FormatDeserialize(FormatDeserializer &source) {
+	auto result = make_uniq<JoinRef>(JoinRefType::REGULAR);
+
+	source.ReadProperty("left", result->left);
+	source.ReadProperty("right", result->right);
+	source.ReadOptionalProperty("condition", result->condition);
+	source.ReadProperty("join_type", result->type);
+	source.ReadProperty("ref_type", result->ref_type);
+	source.ReadProperty("using_columns", result->using_columns);
+
+	return std::move(result);
+}
+
 unique_ptr<TableRef> JoinRef::Deserialize(FieldReader &reader) {
-	auto result = make_unique<JoinRef>(JoinRefType::REGULAR);
+	auto result = make_uniq<JoinRef>(JoinRefType::REGULAR);
 	result->left = reader.ReadRequiredSerializable<TableRef>();
 	result->right = reader.ReadRequiredSerializable<TableRef>();
 	result->condition = reader.ReadOptional<ParsedExpression>(nullptr);

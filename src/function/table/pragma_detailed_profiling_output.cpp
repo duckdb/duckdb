@@ -55,12 +55,12 @@ static unique_ptr<FunctionData> PragmaDetailedProfilingOutputBind(ClientContext 
 	names.emplace_back("EXTRA_INFO");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	return make_unique<PragmaDetailedProfilingOutputData>(return_types);
+	return make_uniq<PragmaDetailedProfilingOutputData>(return_types);
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaDetailedProfilingOutputInit(ClientContext &context,
                                                                        TableFunctionInitInput &input) {
-	return make_unique<PragmaDetailedProfilingOutputOperatorData>();
+	return make_uniq<PragmaDetailedProfilingOutputOperatorData>();
 }
 
 // Insert a row into the given datachunk
@@ -108,12 +108,12 @@ static void ExtractFunctions(ColumnDataCollection &collection, ExpressionInfo &i
 
 static void PragmaDetailedProfilingOutputFunction(ClientContext &context, TableFunctionInput &data_p,
                                                   DataChunk &output) {
-	auto &state = (PragmaDetailedProfilingOutputOperatorData &)*data_p.global_state;
+	auto &state = data_p.global_state->Cast<PragmaDetailedProfilingOutputOperatorData>();
 	auto &data = (PragmaDetailedProfilingOutputData &)*data_p.bind_data;
 
 	if (!state.initialized) {
 		// create a ColumnDataCollection
-		auto collection = make_unique<ColumnDataCollection>(context, data.types);
+		auto collection = make_uniq<ColumnDataCollection>(context, data.types);
 
 		// create a chunk
 		DataChunk chunk;

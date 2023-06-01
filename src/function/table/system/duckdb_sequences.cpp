@@ -65,7 +65,7 @@ static unique_ptr<FunctionData> DuckDBSequencesBind(ClientContext &context, Tabl
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBSequencesInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBSequencesData>();
+	auto result = make_uniq<DuckDBSequencesData>();
 
 	// scan all the schemas for tables and collect themand collect them
 	auto schemas = Catalog::GetAllSchemas(context);
@@ -88,7 +88,7 @@ void DuckDBSequencesFunction(ClientContext &context, TableFunctionInput &data_p,
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset++];
 
-		auto &seq = (SequenceCatalogEntry &)*entry;
+		auto &seq = entry->Cast<SequenceCatalogEntry>();
 		// return values:
 		idx_t col = 0;
 		// database_name, VARCHAR

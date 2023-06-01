@@ -22,7 +22,7 @@ JSONStructureNode::JSONStructureNode() : initialized(false) {
 }
 
 JSONStructureNode::JSONStructureNode(yyjson_val *key_p, yyjson_val *val_p)
-    : key(make_unique<string>(unsafe_yyjson_get_str(key_p), unsafe_yyjson_get_len(key_p))), initialized(false) {
+    : key(make_uniq<string>(unsafe_yyjson_get_str(key_p), unsafe_yyjson_get_len(key_p))), initialized(false) {
 	D_ASSERT(yyjson_is_str(key_p));
 	JSONStructure::ExtractStructure(val_p, *this);
 }
@@ -214,9 +214,6 @@ void JSONStructureNode::RefineCandidateTypesObject(yyjson_val *vals[], idx_t cou
 		}
 	}
 
-	if (count > STANDARD_VECTOR_SIZE) {
-		string_vector.Initialize(false, count);
-	}
 	for (idx_t child_idx = 0; child_idx < child_count; child_idx++) {
 		desc.children[child_idx].RefineCandidateTypes(child_vals[child_idx], count, string_vector, allocator,
 		                                              date_format_map);
@@ -431,6 +428,10 @@ static inline yyjson_mut_val *ConvertStructureArray(const JSONStructureNode &nod
 static inline yyjson_mut_val *ConvertStructureObject(const JSONStructureNode &node, yyjson_mut_doc *doc) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::STRUCT);
 	auto &desc = node.descriptions[0];
+	if (desc.children.empty()) {
+		// Empty struct - let's do JSON instead
+		return yyjson_mut_str(doc, JSONCommon::JSON_TYPE_NAME);
+	}
 
 	auto obj = yyjson_mut_obj(doc);
 	for (auto &child : desc.children) {
@@ -495,6 +496,10 @@ static LogicalType StructureToTypeObject(ClientContext &context, const JSONStruc
                                          idx_t depth) {
 	D_ASSERT(node.descriptions.size() == 1 && node.descriptions[0].type == LogicalTypeId::STRUCT);
 	auto &desc = node.descriptions[0];
+	if (desc.children.empty()) {
+		// Empty struct - let's do JSON instead
+		return JSONCommon::JSONType();
+	}
 
 	child_list_t<LogicalType> child_types;
 	child_types.reserve(desc.children.size());

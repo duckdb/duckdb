@@ -58,6 +58,9 @@ public:
 //! This only contains read-only variables, anything that is stateful instead gets stored in the Global/Local states
 class PhysicalHashAggregate : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::HASH_GROUP_BY;
+
+public:
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      idx_t estimated_cardinality);
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,

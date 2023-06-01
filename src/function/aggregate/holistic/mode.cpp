@@ -176,7 +176,7 @@ struct ModeFunction {
 		}
 		auto highest_frequency = state->Scan();
 		if (highest_frequency != state->frequency_map->end()) {
-			target[idx] = INPUT_TYPE(highest_frequency->first);
+			target[idx] = ASSIGN_OP::template Assign<INPUT_TYPE, INPUT_TYPE>(result, highest_frequency->first);
 		} else {
 			mask.SetInvalid(idx);
 		}

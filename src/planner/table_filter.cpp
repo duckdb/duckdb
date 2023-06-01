@@ -17,7 +17,7 @@ void TableFilterSet::PushFilter(idx_t column_index, unique_ptr<TableFilter> filt
 			auto &and_filter = (ConjunctionAndFilter &)*entry->second;
 			and_filter.child_filters.push_back(std::move(filter));
 		} else {
-			auto and_filter = make_unique<ConjunctionAndFilter>();
+			auto and_filter = make_uniq<ConjunctionAndFilter>();
 			and_filter->child_filters.push_back(std::move(entry->second));
 			and_filter->child_filters.push_back(std::move(filter));
 			filters[column_index] = std::move(and_filter);
@@ -37,7 +37,7 @@ void TableFilterSet::Serialize(Serializer &serializer) const {
 //! Deserializes a blob back into an LogicalType
 unique_ptr<TableFilterSet> TableFilterSet::Deserialize(Deserializer &source) {
 	auto len = source.Read<idx_t>();
-	auto res = make_unique<TableFilterSet>();
+	auto res = make_uniq<TableFilterSet>();
 	for (idx_t i = 0; i < len; i++) {
 		auto key = source.Read<idx_t>();
 		auto value = TableFilter::Deserialize(source);

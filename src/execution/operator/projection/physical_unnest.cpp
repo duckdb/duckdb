@@ -19,9 +19,9 @@ public:
 		vector<LogicalType> list_data_types;
 		for (auto &exp : select_list) {
 			D_ASSERT(exp->type == ExpressionType::BOUND_UNNEST);
-			auto bue = (BoundUnnestExpression *)exp.get();
-			list_data_types.push_back(bue->child->return_type);
-			executor.AddExpression(*bue->child.get());
+			auto &bue = exp->Cast<BoundUnnestExpression>();
+			list_data_types.push_back(bue.child->return_type);
+			executor.AddExpression(*bue.child.get());
 		}
 
 		auto &allocator = Allocator::Get(context);
@@ -56,7 +56,6 @@ void UnnestOperatorState::Reset() {
 }
 
 void UnnestOperatorState::SetLongestListLength() {
-
 	longest_list_length = 0;
 	for (idx_t col_idx = 0; col_idx < list_data.ColumnCount(); col_idx++) {
 
@@ -249,7 +248,7 @@ unique_ptr<OperatorState> PhysicalUnnest::GetOperatorState(ExecutionContext &con
 
 unique_ptr<OperatorState> PhysicalUnnest::GetState(ExecutionContext &context,
                                                    const vector<unique_ptr<Expression>> &select_list) {
-	return make_unique<UnnestOperatorState>(context.client, select_list);
+	return make_uniq<UnnestOperatorState>(context.client, select_list);
 }
 
 OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
@@ -257,7 +256,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
                                                    const vector<unique_ptr<Expression>> &select_list,
                                                    bool include_input) {
 
-	auto &state = (UnnestOperatorState &)state_p;
+	auto &state = state_p.Cast<UnnestOperatorState>();
 
 	do {
 		// prepare the input data by executing any expressions and getting the

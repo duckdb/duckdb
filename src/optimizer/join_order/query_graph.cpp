@@ -45,7 +45,7 @@ QueryEdge *QueryGraph::GetQueryEdge(JoinRelationSet *left) {
 		auto entry = info->children.find(left->relations[i]);
 		if (entry == info->children.end()) {
 			// node not found, create it
-			auto insert_it = info->children.insert(make_pair(left->relations[i], make_unique<QueryEdge>()));
+			auto insert_it = info->children.insert(make_pair(left->relations[i], make_uniq<QueryEdge>()));
 			entry = insert_it.first;
 		}
 		// move to the next node
@@ -69,7 +69,7 @@ void QueryGraph::CreateEdge(JoinRelationSet *left, JoinRelationSet *right, Filte
 		}
 	}
 	// neighbor does not exist, create it
-	auto n = make_unique<NeighborInfo>();
+	auto n = make_uniq<NeighborInfo>();
 	if (filter_info) {
 		n->filters.push_back(filter_info);
 	}

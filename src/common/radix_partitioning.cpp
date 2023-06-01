@@ -132,7 +132,7 @@ static void InitPartitions(BufferManager &buffer_manager, vector<unique_ptr<RowD
 	partition_collections.reserve(CONSTANTS::NUM_PARTITIONS);
 	partition_handles.reserve(CONSTANTS::NUM_PARTITIONS);
 	for (idx_t i = 0; i < CONSTANTS::NUM_PARTITIONS; i++) {
-		partition_collections.push_back(make_unique<RowDataCollection>(buffer_manager, block_capacity, row_width));
+		partition_collections.push_back(make_uniq<RowDataCollection>(buffer_manager, block_capacity, row_width));
 		partition_blocks[i] = &partition_collections[i]->CreateBlock();
 		partition_handles.push_back(buffer_manager.Pin(partition_blocks[i]->block));
 		if (partition_ptrs) {
@@ -450,7 +450,7 @@ void RadixPartitionedColumnData::InitializeAppendStateInternal(PartitionedColumn
 	state.partition_append_states.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
 		// TODO only initialize the append if partition idx > ...
-		state.partition_append_states.emplace_back(make_unique<ColumnDataAppendState>());
+		state.partition_append_states.emplace_back(make_uniq<ColumnDataAppendState>());
 		partitions[i]->InitializeAppend(*state.partition_append_states[i]);
 		state.partition_buffers.emplace_back(CreatePartitionBuffer());
 	}

@@ -1,0 +1,36 @@
+# name: test/sql/join/asof/test_asof_join_subquery.test
+# description: Test As-Of correlated subqueries
+# group: [asof]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE events (begin DOUBLE, value INTEGER);
+
+statement ok
+INSERT INTO events VALUES
+	(1, 0),
+	(3, 1),
+	(6, 2),
+	(8, 3)
+;
+
+query II
+SELECT begin, value IN (
+	SELECT e1.value 
+	FROM (
+		SELECT * 
+		FROM events e1 
+		WHERE e1.value = events.value) e1 
+	ASOF JOIN 
+		range(1, 10) tbl(begin) 
+	USING (begin)
+	) 
+FROM events
+ORDER BY ALL;
+----
+1.0	true
+3.0	true
+6.0	true
+8.0	true

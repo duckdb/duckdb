@@ -15,7 +15,7 @@ string NotNullConstraint::ToString() const {
 }
 
 unique_ptr<Constraint> NotNullConstraint::Copy() const {
-	return make_unique<NotNullConstraint>(index);
+	return make_uniq<NotNullConstraint>(index);
 }
 
 void NotNullConstraint::Serialize(FieldWriter &writer) const {
@@ -24,7 +24,7 @@ void NotNullConstraint::Serialize(FieldWriter &writer) const {
 
 unique_ptr<Constraint> NotNullConstraint::Deserialize(FieldReader &source) {
 	auto index = source.ReadRequired<idx_t>();
-	return make_unique_base<Constraint, NotNullConstraint>(LogicalIndex(index));
+	return make_uniq_base<Constraint, NotNullConstraint>(LogicalIndex(index));
 }
 
 } // namespace duckdb

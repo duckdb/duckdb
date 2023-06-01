@@ -14,14 +14,16 @@ namespace duckdb {
 
 class BufferedFileReader : public Deserializer {
 public:
-	BufferedFileReader(FileSystem &fs, const char *path, FileLockType lock_type = FileLockType::READ_LOCK,
-	                   FileOpener *opener = nullptr);
+	BufferedFileReader(FileSystem &fs, const char *path, ClientContext *context,
+	                   FileLockType lock_type = FileLockType::READ_LOCK, FileOpener *opener = nullptr);
 
 	FileSystem &fs;
 	unique_ptr<data_t[]> data;
 	idx_t offset;
 	idx_t read_data;
 	unique_ptr<FileHandle> handle;
+	ClientContext *context;
+	Catalog *catalog = nullptr;
 
 public:
 	void ReadData(data_ptr_t buffer, uint64_t read_size) override;
@@ -34,6 +36,10 @@ public:
 
 	void Seek(uint64_t location);
 	uint64_t CurrentOffset();
+
+	ClientContext &GetContext() override;
+
+	Catalog *GetCatalog() override;
 
 private:
 	idx_t file_size;

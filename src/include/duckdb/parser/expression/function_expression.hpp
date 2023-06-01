@@ -16,6 +16,9 @@ namespace duckdb {
 //! Represents a function call
 class FunctionExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::FUNCTION;
+
+public:
 	DUCKDB_API FunctionExpression(string catalog_name, string schema_name, const string &function_name,
 	                              vector<unique_ptr<ParsedExpression>> children,
 	                              unique_ptr<ParsedExpression> filter = nullptr,
@@ -55,13 +58,15 @@ public:
 
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
 
 	void Verify() const override;
 
 public:
-	template <class T, class BASE>
+	template <class T, class BASE, class ORDER_MODIFIER = OrderModifier>
 	static string ToString(const T &entry, const string &schema, const string &function_name, bool is_operator = false,
-	                       bool distinct = false, BASE *filter = nullptr, OrderModifier *order_bys = nullptr,
+	                       bool distinct = false, BASE *filter = nullptr, ORDER_MODIFIER *order_bys = nullptr,
 	                       bool export_state = false, bool add_alias = false) {
 		if (is_operator) {
 			// built-in operator

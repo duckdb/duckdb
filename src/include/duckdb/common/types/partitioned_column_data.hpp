@@ -87,7 +87,7 @@ protected:
 	void CreateAllocator();
 	//! Create a collection for a specific a partition
 	unique_ptr<ColumnDataCollection> CreatePartitionCollection(idx_t partition_index) const {
-		return make_unique<ColumnDataCollection>(allocators->allocators[partition_index], types);
+		return make_uniq<ColumnDataCollection>(allocators->allocators[partition_index], types);
 	}
 	//! Create a DataChunk used for buffering appends to the partition
 	unique_ptr<DataChunk> CreatePartitionBuffer() const;

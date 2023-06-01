@@ -16,6 +16,9 @@ namespace duckdb {
 //! PhysicalPositionalJoin represents a cross product between two tables
 class PhysicalPositionalJoin : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::POSITIONAL_JOIN;
+
+public:
 	PhysicalPositionalJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
 	                       unique_ptr<PhysicalOperator> right, idx_t estimated_cardinality);
 

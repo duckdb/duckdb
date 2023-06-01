@@ -34,8 +34,8 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 			alias = expr.alias;
 		}
 	}
-	return make_unique<BoundColumnRefExpression>(std::move(alias), LogicalType::INVALID,
-	                                             ColumnBinding(projection_index, index));
+	return make_uniq<BoundColumnRefExpression>(std::move(alias), LogicalType::INVALID,
+	                                           ColumnBinding(projection_index, index));
 }
 
 unique_ptr<Expression> OrderBinder::CreateExtraReference(unique_ptr<ParsedExpression> expr) {
@@ -73,13 +73,13 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	case ExpressionClass::CONSTANT: {
 		// ORDER BY constant
 		// is the ORDER BY expression a constant integer? (e.g. ORDER BY 1)
-		auto &constant = (ConstantExpression &)*expr;
+		auto &constant = expr->Cast<ConstantExpression>();
 		return BindConstant(*expr, constant.value);
 	}
 	case ExpressionClass::COLUMN_REF: {
 		// COLUMN REF expression
 		// check if we can bind it to an alias in the select list
-		auto &colref = (ColumnRefExpression &)*expr;
+		auto &colref = expr->Cast<ColumnRefExpression>();
 		// if there is an explicit table name we can't bind to an alias
 		if (colref.IsQualified()) {
 			break;
@@ -93,7 +93,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		break;
 	}
 	case ExpressionClass::POSITIONAL_REFERENCE: {
-		auto &posref = (PositionalReferenceExpression &)*expr;
+		auto &posref = expr->Cast<PositionalReferenceExpression>();
 		if (posref.index < 1 || posref.index > max_count) {
 			throw BinderException("ORDER term out of range - should be between 1 and %lld", (idx_t)max_count);
 		}

@@ -92,7 +92,7 @@ unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(LogicalDeserialization
 	for (idx_t i = 0; i < grouping_functions_size; i++) {
 		grouping_functions.push_back(reader.ReadRequiredList<idx_t>());
 	}
-	auto result = make_unique<LogicalAggregate>(group_index, aggregate_index, std::move(expressions));
+	auto result = make_uniq<LogicalAggregate>(group_index, aggregate_index, std::move(expressions));
 	result->groupings_index = groupings_index;
 	result->groups = std::move(groups);
 	result->grouping_functions = std::move(grouping_functions);

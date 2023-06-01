@@ -3,6 +3,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/planner/expression/list.hpp"
 
 namespace duckdb {
 
@@ -55,7 +56,7 @@ Allocator &ExpressionExecutor::GetAllocator() {
 
 void ExpressionExecutor::AddExpression(const Expression &expr) {
 	expressions.push_back(&expr);
-	auto state = make_unique<ExpressionExecutorState>(expr.ToString());
+	auto state = make_uniq<ExpressionExecutorState>(expr.ToString());
 	Initialize(expr, *state);
 	state->Verify();
 	states.push_back(std::move(state));
@@ -225,11 +226,11 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 	D_ASSERT(expr.return_type.id() == LogicalTypeId::BOOLEAN);
 	switch (expr.expression_class) {
 	case ExpressionClass::BOUND_BETWEEN:
-		return Select((BoundBetweenExpression &)expr, state, sel, count, true_sel, false_sel);
+		return Select(expr.Cast<BoundBetweenExpression>(), state, sel, count, true_sel, false_sel);
 	case ExpressionClass::BOUND_COMPARISON:
-		return Select((BoundComparisonExpression &)expr, state, sel, count, true_sel, false_sel);
+		return Select(expr.Cast<BoundComparisonExpression>(), state, sel, count, true_sel, false_sel);
 	case ExpressionClass::BOUND_CONJUNCTION:
-		return Select((BoundConjunctionExpression &)expr, state, sel, count, true_sel, false_sel);
+		return Select(expr.Cast<BoundConjunctionExpression>(), state, sel, count, true_sel, false_sel);
 	default:
 		return DefaultSelect(expr, state, sel, count, true_sel, false_sel);
 	}

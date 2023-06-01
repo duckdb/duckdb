@@ -40,7 +40,7 @@ SELECT BIT_OR(i), BIT_OR(1), BIT_OR(DISTINCT i), BIT_OR(NULL) FROM integers
 31
 NULL
 
-# test on an empty set
+# # test on an empty set
 query I
 SELECT BIT_OR(i) FROM integers WHERE i > 100
 ----
@@ -56,3 +56,24 @@ SELECT BIT_OR(1, 2, 3)
 statement error
 SELECT BIT_OR(BIT_AND(1))
 
+#test on bit types
+statement ok
+CREATE TABLE bits(b BIT);
+
+statement ok
+INSERT INTO bits VALUES ('1010101001'), ('0011010101'), ('0001011101'), ('1011111101'), ('0000010001'), ('1000110001')
+
+query I
+SELECT BIT_OR(b) FROM bits
+----
+1011111101
+
+query I
+SELECT BIT_OR(b) FROM bits WHERE get_bit(b, 3) = 0;
+----
+1010111001
+
+query I
+SELECT BIT_OR('111010'::BIT)
+----
+111010

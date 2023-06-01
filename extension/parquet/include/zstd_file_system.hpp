@@ -17,13 +17,13 @@ namespace duckdb {
 
 class ZStdFileSystem : public CompressedFileSystem {
 public:
-	unique_ptr<FileHandle> OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) override;
+	duckdb::unique_ptr<FileHandle> OpenCompressedFile(duckdb::unique_ptr<FileHandle> handle, bool write) override;
 
 	std::string GetName() const override {
 		return "ZStdFileSystem";
 	}
 
-	unique_ptr<StreamWrapper> CreateStream() override;
+	duckdb::unique_ptr<StreamWrapper> CreateStream() override;
 	idx_t InBufferSize() override;
 	idx_t OutBufferSize() override;
 };

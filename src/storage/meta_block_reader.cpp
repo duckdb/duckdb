@@ -1,5 +1,7 @@
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/main/connection_manager.hpp"
+#include "duckdb/main/database.hpp"
 
 #include <cstring>
 
@@ -34,6 +36,16 @@ void MetaBlockReader::ReadData(data_ptr_t buffer, idx_t read_size) {
 	offset += read_size;
 }
 
+ClientContext &MetaBlockReader::GetContext() {
+	if (!context) {
+		throw InternalException("Meta Block Reader is missing context");
+	}
+	return *context;
+}
+Catalog *MetaBlockReader::GetCatalog() {
+	return catalog;
+}
+
 void MetaBlockReader::ReadNewBlock(block_id_t id) {
 	auto &buffer_manager = block_manager.buffer_manager;
 
@@ -50,6 +62,16 @@ void MetaBlockReader::ReadNewBlock(block_id_t id) {
 	next_block = Load<block_id_t>(handle.Ptr());
 	D_ASSERT(next_block >= -1);
 	offset = sizeof(block_id_t);
+}
+
+void MetaBlockReader::SetCatalog(Catalog *catalog_p) {
+	D_ASSERT(!catalog);
+	catalog = catalog_p;
+}
+
+void MetaBlockReader::SetContext(ClientContext *context_p) {
+	D_ASSERT(!context);
+	context = context_p;
 }
 
 } // namespace duckdb

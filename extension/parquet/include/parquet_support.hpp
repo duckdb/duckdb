@@ -37,7 +37,7 @@ public:
 		 * @param throwIfNotFound fail if a stream is required and not found
 		 * @return the new stream
 		 */
-		virtual std::unique_ptr<SeekableInputStream> getStream(const StreamIdentifier &si, bool throwIfNotFound)
+		virtual duckdb::unique_ptr<SeekableInputStream> getStream(const StreamIdentifier &si, bool throwIfNotFound)
 		    const = 0;
 
 		/**
@@ -63,7 +63,7 @@ public:
 		 * Get the RowGroupIndex.
 		 * @return a vector of RowIndex belonging to the stripe
 		 */
-		virtual std::unique_ptr<proto::RowIndex> getRowGroupIndex(const StreamIdentifier &si) const = 0;
+		virtual duckdb::unique_ptr<proto::RowIndex> getRowGroupIndex(const StreamIdentifier &si) const = 0;
 
 		/**
 		 * Get stride index provider which is used by string dictionary reader to
@@ -84,7 +84,8 @@ public:
 	 * @param throwIfNotFound fail if a stream is required and not found
 	 * @return the new stream
 	 */
-	virtual std::unique_ptr<SeekableInputStream> getStream(const StreamIdentifier &si, bool throwIfNotFound) const = 0;
+	virtual duckdb::unique_ptr<SeekableInputStream> getStream(const StreamIdentifier &si,
+	                                                          bool throwIfNotFound) const = 0;
 
 	/**
 	 * visit all streams of given node and execute visitor logic
@@ -109,7 +110,7 @@ public:
 	 * Get the RowGroupIndex.
 	 * @return a vector of RowIndex belonging to the stripe
 	 */
-	virtual std::unique_ptr<proto::RowIndex> getRowGroupIndex(const StreamIdentifier &si) const = 0;
+	virtual duckdb::unique_ptr<proto::RowIndex> getRowGroupIndex(const StreamIdentifier &si) const = 0;
 
 	/**
 	 * Get stride index provider which is used by string dictionary reader to
@@ -156,7 +157,7 @@ public:
 	}
 
 	// Creates a reader for the given stripe.
-	static std::unique_ptr<SelectiveColumnReader>
+	static duckdb::unique_ptr<SelectiveColumnReader>
 	build(const std::shared_ptr<const dwio::common::TypeWithId> &requestedType,
 	      const std::shared_ptr<const dwio::common::TypeWithId> &dataType, StripeStreams &stripe,
 	      common::ScanSpec *scanSpec, uint32_t sequence = 0);
@@ -335,7 +336,7 @@ public:
 		return kind_;
 	}
 
-	virtual std::unique_ptr<Filter> clone() const = 0;
+	virtual duckdb::unique_ptr<Filter> clone() const = 0;
 
 	/**
 	 * A filter becomes non-deterministic when applies to nested column,

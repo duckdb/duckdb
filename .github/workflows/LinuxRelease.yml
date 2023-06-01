@@ -1,13 +1,14 @@
 name: LinuxRelease
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 2 * * *"
+  repository_dispatch:
   push:
     branches:
       - '**'
       - '!master'
       - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -90,7 +91,7 @@ jobs:
         zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so tools/odbc/linux_setup/unixodbc_setup.sh
         python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_odbc-linux-amd64.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-binaries-linux
         path: |
@@ -160,7 +161,7 @@ jobs:
          zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
          python3.7 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
 
-     - uses: actions/upload-artifact@v2
+     - uses: actions/upload-artifact@v3
        with:
          name: duckdb-binaries-linux-aarch64
          path: |
@@ -190,7 +191,7 @@ jobs:
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: linux-extensions-64
         path: |
@@ -229,7 +230,7 @@ jobs:
           aarch64_cross_compile: 1
           run_tests: 0 # Cannot run tests here due to cross-compiling
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: linux-extensions-64-aarch64
           path: |
@@ -318,7 +319,7 @@ jobs:
         zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         python3.7 scripts/asset-upload-gha.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-binaries-linux-32bit
         path: |
@@ -368,7 +369,7 @@ jobs:
         zip -j libduckdb-linux-rpi.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-linux-rpi.zip duckdb_cli-linux-rpi.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-binaries-rpi
         path: |
@@ -423,6 +424,7 @@ jobs:
     name: GCC 4.8
     runs-on: ubuntu-20.04
     container: ubuntu:16.04
+    needs: linux-release-64
 
     steps:
     - uses: actions/checkout@v3
@@ -574,11 +576,86 @@ jobs:
         zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
         python scripts/asset-upload-gha.py duckdb-wasm32-nothreads.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-wasm32-nothreads
         path: |
           duckdb-wasm32-nothreads.zip
+
+ linux-wasm-experimental:
+    name: WebAssembly duckdb-wasm builds
+    runs-on: ubuntu-22.04
+    needs: linux-release-64
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: mymindstorm/setup-emsdk@v12
+
+    - name: Setup
+      shell: bash
+      run: |
+        git clone --recurse-submodules https://github.com/duckdb/duckdb-wasm
+        cd duckdb-wasm
+        git checkout e401029fb3020c7a7be2c03896717c615418277e
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build WebAssembly
+      shell: bash
+      run: |
+        cd duckdb-wasm
+        bash scripts/wasm_build_lib.sh relsize mvp $(pwd)/..
+        bash scripts/wasm_build_lib.sh relsize eh $(pwd)/..
+        bash scripts/wasm_build_lib.sh relsize coi $(pwd)/..
+
+    - name: Package
+      shell: bash
+      run: |
+        zip -r duckdb-wasm32.zip duckdb-wasm/packages/duckdb-wasm/src/bindings
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: duckdb-wasm32
+        path: |
+          duckdb-wasm32.zip
+
+ linux-wasm-experimental-loadable:
+    name: WebAssembly duckdb-wasm loadable builds
+    runs-on: ubuntu-22.04
+    needs: linux-release-64
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - uses: mymindstorm/setup-emsdk@v12
+
+    - name: Setup
+      shell: bash
+      run: |
+        git clone --recurse-submodules https://github.com/duckdb/duckdb-wasm
+        cd duckdb-wasm
+        git checkout e401029fb3020c7a7be2c03896717c615418277e
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build WebAssembly
+      shell: bash
+      run: |
+        cd duckdb-wasm
+        WASM_LOADABLE_EXTENSIONS=1 bash scripts/wasm_build_lib.sh relsize mvp $(pwd)/..
+        WASM_LOADABLE_EXTENSIONS=1 bash scripts/wasm_build_lib.sh relsize eh $(pwd)/..
+        WASM_LOADABLE_EXTENSIONS=1 bash scripts/wasm_build_lib.sh relsize coi $(pwd)/..
 
  symbol-leakage:
     name: Symbol Leakage
@@ -652,6 +729,8 @@ jobs:
       BUILD_HTTPFS: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
+      BUILD_PARQUET: 1
+      BUILD_JSON: 1
       S3_TEST_SERVER_AVAILABLE: 1
       AWS_DEFAULT_REGION: eu-west-1
       AWS_ACCESS_KEY_ID: minio_duckdb_user
@@ -688,7 +767,8 @@ jobs:
       shell: bash
       run: |
         sudo ./scripts/install_s3_test_server.sh
-        ./scripts/run_s3_test_server.sh
+        ./scripts/generate_presigned_url.sh
+        source ./scripts/run_s3_test_server.sh
         sleep 60
 
     - name: Test

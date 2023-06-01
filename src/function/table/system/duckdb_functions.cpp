@@ -81,7 +81,7 @@ static void ExtractFunctionsFromSchema(ClientContext &context, SchemaCatalogEntr
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBFunctionsInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBFunctionsData>();
+	auto result = make_uniq<DuckDBFunctionsData>();
 
 	// scan all the schemas for tables and collect themand collect them
 	auto schemas = Catalog::GetAllSchemas(context);
@@ -213,7 +213,7 @@ struct MacroExtractor {
 		vector<Value> results;
 		for (auto &param : entry.function->parameters) {
 			D_ASSERT(param->type == ExpressionType::COLUMN_REF);
-			auto &colref = (ColumnRefExpression &)*param;
+			auto &colref = param->Cast<ColumnRefExpression>();
 			results.emplace_back(colref.GetColumnName());
 		}
 		for (auto &param_entry : entry.function->default_parameters) {
@@ -269,7 +269,7 @@ struct TableMacroExtractor {
 		vector<Value> results;
 		for (auto &param : entry.function->parameters) {
 			D_ASSERT(param->type == ExpressionType::COLUMN_REF);
-			auto &colref = (ColumnRefExpression &)*param;
+			auto &colref = param->Cast<ColumnRefExpression>();
 			results.emplace_back(colref.GetColumnName());
 		}
 		for (auto &param_entry : entry.function->default_parameters) {

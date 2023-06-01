@@ -58,7 +58,7 @@ static unique_ptr<FunctionData> DuckDBTypesBind(ClientContext &context, TableFun
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBTypesInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBTypesData>();
+	auto result = make_uniq<DuckDBTypesData>();
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
 		schema->Scan(context, CatalogType::TYPE_ENTRY,

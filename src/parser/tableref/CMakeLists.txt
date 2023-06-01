@@ -5,6 +5,7 @@ add_library_unity(
   emptytableref.cpp
   expressionlistref.cpp
   joinref.cpp
+  pivotref.cpp
   subqueryref.cpp
   table_function.cpp)
 set(ALL_OBJECT_FILES

@@ -11,6 +11,7 @@
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 
@@ -40,7 +41,7 @@ bool OptimisticDataWriter::PrepareWrite() {
 	// allocate the partial block-manager if none is allocated yet
 	if (!partial_manager) {
 		auto &block_manager = table->info->table_io_manager->GetBlockManagerForRowData();
-		partial_manager = make_unique<PartialBlockManager>(block_manager);
+		partial_manager = make_uniq<PartialBlockManager>(block_manager);
 	}
 	return true;
 }
@@ -119,15 +120,16 @@ LocalTableStorage::LocalTableStorage(DataTable &table)
 	row_groups->InitializeEmpty();
 	table.info->indexes.Scan([&](Index &index) {
 		D_ASSERT(index.type == IndexType::ART);
-		auto &art = (ART &)index;
+		auto &art = index.Cast<ART>();
+		;
 		if (art.constraint_type != IndexConstraintType::NONE) {
 			// unique index: create a local ART index that maintains the same unique constraint
 			vector<unique_ptr<Expression>> unbound_expressions;
 			for (auto &expr : art.unbound_expressions) {
 				unbound_expressions.push_back(expr->Copy());
 			}
-			indexes.AddIndex(make_unique<ART>(art.column_ids, art.table_io_manager, std::move(unbound_expressions),
-			                                  art.constraint_type, art.db, true));
+			indexes.AddIndex(make_uniq<ART>(art.column_ids, art.table_io_manager, std::move(unbound_expressions),
+			                                art.constraint_type, art.db, true));
 		}
 		return false;
 	});
@@ -197,16 +199,16 @@ void LocalTableStorage::FlushToDisk() {
 	optimistic_writer.FinalFlush();
 }
 
-bool LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
-                                        TableIndexList &index_list, const vector<LogicalType> &table_types,
-                                        row_t &start_row) {
+PreservedError LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source,
+                                                  TableIndexList &index_list, const vector<LogicalType> &table_types,
+                                                  row_t &start_row) {
 	// only need to scan for index append
 	// figure out which columns we need to scan for the set of indexes
 	auto columns = index_list.GetRequiredColumns();
 	// create an empty mock chunk that contains all the correct types for the table
 	DataChunk mock_chunk;
 	mock_chunk.InitializeEmpty(table_types);
-	bool success = true;
+	PreservedError error;
 	source.Scan(transaction, columns, [&](DataChunk &chunk) -> bool {
 		// construct the mock chunk by referencing the required columns
 		for (idx_t i = 0; i < columns.size(); i++) {
@@ -214,28 +216,28 @@ bool LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGroupCo
 		}
 		mock_chunk.SetCardinality(chunk);
 		// append this chunk to the indexes of the table
-		if (!DataTable::AppendToIndexes(index_list, mock_chunk, start_row)) {
-			success = false;
+		error = DataTable::AppendToIndexes(index_list, mock_chunk, start_row);
+		if (error) {
 			return false;
 		}
 		start_row += chunk.size();
 		return true;
 	});
-	return success;
+	return error;
 }
 
 void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state,
                                         idx_t append_count, bool append_to_table) {
-	bool constraint_violated = false;
 	if (append_to_table) {
 		table->InitializeAppend(transaction, append_state, append_count);
 	}
+	PreservedError error;
 	if (append_to_table) {
 		// appending: need to scan entire
 		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
-			if (!table->AppendToIndexes(chunk, append_state.current_row)) {
-				constraint_violated = true;
+			error = table->AppendToIndexes(chunk, append_state.current_row);
+			if (error) {
 				return false;
 			}
 			// append to base table
@@ -243,11 +245,10 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 			return true;
 		});
 	} else {
-		constraint_violated = !AppendToIndexes(transaction, *row_groups, table->info->indexes, table->GetTypes(),
-		                                       append_state.current_row);
+		error = AppendToIndexes(transaction, *row_groups, table->info->indexes, table->GetTypes(),
+		                        append_state.current_row);
 	}
-	if (constraint_violated) {
-		PreservedError error;
+	if (error) {
 		// need to revert the append
 		row_t current_row = append_state.row_start;
 		// remove the data from the indexes, if there are any indexes
@@ -273,15 +274,12 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		if (append_to_table) {
 			table->RevertAppendInternal(append_state.row_start, append_count);
 		}
-		if (error) {
-			error.Throw();
-		}
-		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+		error.Throw();
 	}
 }
 
 OptimisticDataWriter *LocalTableStorage::CreateOptimisticWriter() {
-	auto writer = make_unique<OptimisticDataWriter>(table);
+	auto writer = make_uniq<OptimisticDataWriter>(table);
 	optimistic_writers.push_back(std::move(writer));
 	return optimistic_writers.back().get();
 }
@@ -359,6 +357,12 @@ LocalStorage::LocalStorage(ClientContext &context, DuckTransaction &transaction)
     : context(context), transaction(transaction) {
 }
 
+LocalStorage::CommitState::CommitState() {
+}
+
+LocalStorage::CommitState::~CommitState() {
+}
+
 LocalStorage &LocalStorage::Get(DuckTransaction &transaction) {
 	return transaction.GetLocalStorage();
 }
@@ -412,8 +416,9 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 	// append to unique indices (if any)
 	auto storage = state.storage;
 	idx_t base_id = MAX_ROW_ID + storage->row_groups->GetTotalRows() + state.append_state.total_append_count;
-	if (!DataTable::AppendToIndexes(storage->indexes, chunk, base_id)) {
-		throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+	auto error = DataTable::AppendToIndexes(storage->indexes, chunk, base_id);
+	if (error) {
+		error.Throw();
 	}
 
 	//! Append the chunk to the local storage
@@ -434,9 +439,9 @@ void LocalStorage::LocalMerge(DataTable *table, RowGroupCollection &collection) 
 	if (!storage->indexes.Empty()) {
 		// append data to indexes if required
 		row_t base_id = MAX_ROW_ID + storage->row_groups->GetTotalRows();
-		bool success = storage->AppendToIndexes(transaction, collection, storage->indexes, table->GetTypes(), base_id);
-		if (!success) {
-			throw ConstraintException("PRIMARY KEY or UNIQUE constraint violated: duplicated key");
+		auto error = storage->AppendToIndexes(transaction, collection, storage->indexes, table->GetTypes(), base_id);
+		if (error) {
+			error.Throw();
 		}
 	}
 	storage->row_groups->MergeStorage(collection);
@@ -570,7 +575,7 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 	if (!storage) {
 		return;
 	}
-	auto new_storage = make_unique<LocalTableStorage>(context, *new_dt, *storage, new_column, default_value);
+	auto new_storage = make_shared<LocalTableStorage>(context, *new_dt, *storage, new_column, default_value);
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
@@ -580,7 +585,7 @@ void LocalStorage::DropColumn(DataTable *old_dt, DataTable *new_dt, idx_t remove
 	if (!storage) {
 		return;
 	}
-	auto new_storage = make_unique<LocalTableStorage>(*new_dt, *storage, removed_column);
+	auto new_storage = make_shared<LocalTableStorage>(*new_dt, *storage, removed_column);
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
@@ -592,7 +597,7 @@ void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t change
 		return;
 	}
 	auto new_storage =
-	    make_unique<LocalTableStorage>(context, *new_dt, *storage, changed_idx, target_type, bound_columns, cast_expr);
+	    make_shared<LocalTableStorage>(context, *new_dt, *storage, changed_idx, target_type, bound_columns, cast_expr);
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 

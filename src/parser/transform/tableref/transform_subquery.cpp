@@ -9,7 +9,7 @@ unique_ptr<TableRef> Transformer::TransformRangeSubselect(duckdb_libpgquery::PGR
 	if (!subquery) {
 		return nullptr;
 	}
-	auto result = make_unique<SubqueryRef>(std::move(subquery));
+	auto result = make_uniq<SubqueryRef>(std::move(subquery));
 	result->alias = TransformAlias(root->alias, result->column_name_alias);
 	if (root->sample) {
 		result->sample = TransformSampleOptions(root->sample);

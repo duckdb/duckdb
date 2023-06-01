@@ -19,12 +19,12 @@ typedef BoundCastInfo (*bind_cast_function_t)(BindCastInput &input, const Logica
 typedef int64_t (*implicit_cast_cost_t)(const LogicalType &from, const LogicalType &to);
 
 struct GetCastFunctionInput {
-	GetCastFunctionInput(ClientContext *context = nullptr) : context(context) {
+	GetCastFunctionInput(optional_ptr<ClientContext> context = nullptr) : context(context) {
 	}
 	GetCastFunctionInput(ClientContext &context) : context(&context) {
 	}
 
-	ClientContext *context;
+	optional_ptr<ClientContext> context;
 };
 
 struct BindCastFunction {

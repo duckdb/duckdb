@@ -1,0 +1,118 @@
+# name: test/sql/storage/types/list/list_index_compression.test
+# description: Test list lookups using an index on a compressed table
+# group: [list]
+
+load __TEST_DIR__/list_index_compression.db
+
+foreach compression rle bitpacking uncompressed
+
+statement ok
+PRAGMA force_compression='${compression}'
+
+statement ok
+CREATE TABLE a(id INTEGER PRIMARY KEY, c INT[]);
+
+statement ok
+INSERT INTO a VALUES (1, [1, 2, 3])
+
+restart
+
+# simple lookup
+query II
+SELECT * FROM a WHERE id=1
+----
+1	[1, 2, 3]
+
+# now with null values at different levels
+statement ok
+INSERT INTO a VALUES (2, NULL)
+
+statement ok
+INSERT INTO a VALUES (3, [NULL])
+
+statement ok
+INSERT INTO a VALUES (4, [4, 5, NULL, 6])
+
+query II
+SELECT * FROM a WHERE id=2
+----
+2	NULL
+
+query II
+SELECT * FROM a WHERE id=3
+----
+3	[NULL]
+
+query II
+SELECT * FROM a WHERE id=4
+----
+4	[4, 5, NULL, 6]
+
+# test index construction on a table with lists
+statement ok
+DROP TABLE a;
+
+statement ok
+CREATE TABLE a(id INTEGER, c INT[]);
+
+statement ok
+INSERT INTO a VALUES (1, [1, 2, 3])
+
+statement ok
+INSERT INTO a VALUES (2, NULL)
+
+statement ok
+INSERT INTO a VALUES (3, [NULL])
+
+statement ok
+INSERT INTO a VALUES (4, [4, 5, NULL, 6])
+
+statement ok
+CREATE INDEX a_index ON a(id);
+
+query II
+SELECT * FROM a WHERE id=1
+----
+1	[1, 2, 3]
+
+query II
+SELECT * FROM a WHERE id=2
+----
+2	NULL
+
+query II
+SELECT * FROM a WHERE id=3
+----
+3	[NULL]
+
+query II
+SELECT * FROM a WHERE id=4
+----
+4	[4, 5, NULL, 6]
+
+# now try with multiple entries on the same index
+statement ok
+INSERT INTO a VALUES (1, [4, 5, NULL])
+
+statement ok
+INSERT INTO a VALUES (1, NULL)
+
+statement ok
+INSERT INTO a VALUES (1, [NULL])
+
+statement ok
+INSERT INTO a VALUES (1, [7, 8, 9, 10, 11, 12, 13, 14, 15])
+
+query II
+SELECT * FROM a WHERE id=1 ORDER BY c[1] NULLS FIRST
+----
+1	NULL
+1	[NULL]
+1	[1, 2, 3]
+1	[4, 5, NULL]
+1	[7, 8, 9, 10, 11, 12, 13, 14, 15]
+
+statement ok
+DROP TABLE a;
+
+endloop

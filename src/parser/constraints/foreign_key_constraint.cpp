@@ -44,7 +44,7 @@ string ForeignKeyConstraint::ToString() const {
 }
 
 unique_ptr<Constraint> ForeignKeyConstraint::Copy() const {
-	return make_unique<ForeignKeyConstraint>(pk_columns, fk_columns, info);
+	return make_uniq<ForeignKeyConstraint>(pk_columns, fk_columns, info);
 }
 
 void ForeignKeyConstraint::Serialize(FieldWriter &writer) const {
@@ -70,7 +70,7 @@ unique_ptr<Constraint> ForeignKeyConstraint::Deserialize(FieldReader &source) {
 	read_info.fk_keys = source.ReadRequiredIndexList<PhysicalIndex>();
 
 	// column list parsed constraint
-	return make_unique<ForeignKeyConstraint>(pk_columns, fk_columns, std::move(read_info));
+	return make_uniq<ForeignKeyConstraint>(pk_columns, fk_columns, std::move(read_info));
 }
 
 } // namespace duckdb

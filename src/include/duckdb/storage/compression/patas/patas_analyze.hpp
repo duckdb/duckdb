@@ -108,7 +108,7 @@ struct EmptyPatasWriter {
 
 template <class T>
 unique_ptr<AnalyzeState> PatasInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<PatasAnalyzeState<T>>();
+	return make_uniq<PatasAnalyzeState<T>>();
 }
 
 template <class T>

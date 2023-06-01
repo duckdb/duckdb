@@ -27,15 +27,15 @@ bool BoundUnnestExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundUnnestExpression *)other_p;
-	if (!Expression::Equals(child.get(), other->child.get())) {
+	auto &other = other_p->Cast<BoundUnnestExpression>();
+	if (!Expression::Equals(child.get(), other.child.get())) {
 		return false;
 	}
 	return true;
 }
 
 unique_ptr<Expression> BoundUnnestExpression::Copy() {
-	auto copy = make_unique<BoundUnnestExpression>(return_type);
+	auto copy = make_uniq<BoundUnnestExpression>(return_type);
 	copy->child = child->Copy();
 	return std::move(copy);
 }
@@ -49,7 +49,7 @@ unique_ptr<Expression> BoundUnnestExpression::Deserialize(ExpressionDeserializat
 	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto child = reader.ReadRequiredSerializable<Expression>(state.gstate);
 
-	auto result = make_unique<BoundUnnestExpression>(return_type);
+	auto result = make_uniq<BoundUnnestExpression>(return_type);
 	result->child = std::move(child);
 	return std::move(result);
 }

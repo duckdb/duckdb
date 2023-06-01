@@ -9,13 +9,13 @@ namespace duckdb {
 unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 	if (op->type == LogicalOperatorType::LOGICAL_LIMIT &&
 	    op->children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
-		auto &limit = (LogicalLimit &)*op;
-		auto &order_by = (LogicalOrder &)*(op->children[0]);
+		auto &limit = op->Cast<LogicalLimit>();
+		auto &order_by = (op->children[0])->Cast<LogicalOrder>();
 
 		// This optimization doesn't apply when OFFSET is present without LIMIT
 		// Or if offset is not constant
 		if (limit.limit_val != NumericLimits<int64_t>::Maximum() || limit.offset) {
-			auto topn = make_unique<LogicalTopN>(std::move(order_by.orders), limit.limit_val, limit.offset_val);
+			auto topn = make_uniq<LogicalTopN>(std::move(order_by.orders), limit.limit_val, limit.offset_val);
 			topn->AddChild(std::move(order_by.children[0]));
 			op = std::move(topn);
 		}

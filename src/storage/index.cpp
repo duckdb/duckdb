@@ -36,7 +36,7 @@ void Index::InitializeLock(IndexLock &state) {
 	state.index_lock = unique_lock<mutex>(lock);
 }
 
-bool Index::Append(DataChunk &entries, Vector &row_identifiers) {
+PreservedError Index::Append(DataChunk &entries, Vector &row_identifiers) {
 	IndexLock state;
 	InitializeLock(state);
 	return Append(state, entries, row_identifiers);
@@ -48,15 +48,14 @@ void Index::Delete(DataChunk &entries, Vector &row_identifiers) {
 	Delete(state, entries, row_identifiers);
 }
 
-bool Index::MergeIndexes(Index *other_index) {
-
+bool Index::MergeIndexes(Index &other_index) {
 	IndexLock state;
 	InitializeLock(state);
 
 	switch (this->type) {
 	case IndexType::ART: {
-		auto art = (ART *)this;
-		return art->MergeIndexes(state, other_index);
+		auto &art = Cast<ART>();
+		return art.MergeIndexes(state, other_index);
 	}
 	default:
 		throw InternalException("Unimplemented index type for merge");
@@ -69,8 +68,8 @@ void Index::ExecuteExpressions(DataChunk &input, DataChunk &result) {
 
 unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {
 	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &bound_colref = (BoundColumnRefExpression &)*expr;
-		return make_unique<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
+		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
+		return make_uniq<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
 	}
 	ExpressionIterator::EnumerateChildren(
 	    *expr, [this](unique_ptr<Expression> &expr) { expr = BindExpression(std::move(expr)); });
@@ -88,6 +87,17 @@ bool Index::IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const {
 
 BlockPointer Index::Serialize(MetaBlockWriter &writer) {
 	throw NotImplementedException("The implementation of this index serialization does not exist.");
+}
+
+string Index::AppendRowError(DataChunk &input, idx_t index) {
+	string error;
+	for (idx_t c = 0; c < input.ColumnCount(); c++) {
+		if (c > 0) {
+			error += ", ";
+		}
+		error += input.GetValue(c, index).ToString();
+	}
+	return error;
 }
 
 } // namespace duckdb

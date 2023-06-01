@@ -15,6 +15,9 @@ namespace duckdb {
 //! LogicalProjection represents the projection list in a SELECT clause
 class LogicalProjection : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_PROJECTION;
+
+public:
 	LogicalProjection(idx_t table_index, vector<unique_ptr<Expression>> select_list);
 
 	idx_t table_index;

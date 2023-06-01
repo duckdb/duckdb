@@ -16,6 +16,9 @@ namespace duckdb {
 //! PhysicalCreateType represents a CREATE TYPE command
 class PhysicalCreateType : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_TYPE;
+
+public:
 	explicit PhysicalCreateType(unique_ptr<CreateTypeInfo> info, idx_t estimated_cardinality);
 
 	unique_ptr<CreateTypeInfo> info;

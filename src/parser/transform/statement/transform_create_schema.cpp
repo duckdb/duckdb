@@ -7,8 +7,8 @@ namespace duckdb {
 unique_ptr<CreateStatement> Transformer::TransformCreateSchema(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateSchemaStmt *>(node);
 	D_ASSERT(stmt);
-	auto result = make_unique<CreateStatement>();
-	auto info = make_unique<CreateSchemaInfo>();
+	auto result = make_uniq<CreateStatement>();
+	auto info = make_uniq<CreateSchemaInfo>();
 
 	D_ASSERT(stmt->schemaname);
 	info->catalog = stmt->catalogname ? stmt->catalogname : INVALID_CATALOG;

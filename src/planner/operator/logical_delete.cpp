@@ -23,7 +23,7 @@ unique_ptr<LogicalOperator> LogicalDelete::Deserialize(LogicalDeserializationSta
 	    Catalog::GetEntry<TableCatalogEntry>(context, INVALID_CATALOG, info->schema, info->table);
 
 	auto table_index = reader.ReadRequired<idx_t>();
-	auto result = make_unique<LogicalDelete>(table_catalog_entry, table_index);
+	auto result = make_uniq<LogicalDelete>(table_catalog_entry, table_index);
 	result->return_chunk = reader.ReadRequired<bool>();
 	return std::move(result);
 }

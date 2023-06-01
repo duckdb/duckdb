@@ -26,7 +26,7 @@ static unique_ptr<FunctionData> DuckDBKeywordsBind(ClientContext &context, Table
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBKeywordsInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBKeywordsData>();
+	auto result = make_uniq<DuckDBKeywordsData>();
 	result->entries = Parser::KeywordList();
 	return std::move(result);
 }

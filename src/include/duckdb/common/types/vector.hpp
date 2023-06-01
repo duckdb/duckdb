@@ -162,6 +162,9 @@ public:
 	//! Deserializes a blob back into a Vector
 	DUCKDB_API void Deserialize(idx_t count, Deserializer &source);
 
+	DUCKDB_API void FormatSerialize(FormatSerializer &serializer, idx_t count);
+	DUCKDB_API void FormatDeserialize(FormatDeserializer &deserializer, idx_t count);
+
 	// Getters
 	inline VectorType GetVectorType() const {
 		return vector_type;
@@ -312,7 +315,6 @@ struct FlatVector {
 		return !vector.validity.RowIsValid(idx);
 	}
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector();
-	static Value GetValuesFromOffsets(Vector &values, vector<idx_t> &offsets);
 };
 
 struct ListVector {

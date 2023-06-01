@@ -13,6 +13,7 @@
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
@@ -28,7 +29,7 @@ struct ColumnCheckpointState {
 
 	RowGroup &row_group;
 	ColumnData &column_data;
-	SegmentTree new_tree;
+	ColumnSegmentTree new_tree;
 	vector<DataPointer> data_pointers;
 	unique_ptr<BaseStatistics> global_stats;
 

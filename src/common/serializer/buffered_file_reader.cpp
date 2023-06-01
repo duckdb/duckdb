@@ -7,8 +7,10 @@
 
 namespace duckdb {
 
-BufferedFileReader::BufferedFileReader(FileSystem &fs, const char *path, FileLockType lock_type, FileOpener *opener)
-    : fs(fs), data(unique_ptr<data_t[]>(new data_t[FILE_BUFFER_SIZE])), offset(0), read_data(0), total_read(0) {
+BufferedFileReader::BufferedFileReader(FileSystem &fs, const char *path, ClientContext *context, FileLockType lock_type,
+                                       FileOpener *opener)
+    : fs(fs), data(unique_ptr<data_t[]>(new data_t[FILE_BUFFER_SIZE])), offset(0), read_data(0), context(context),
+      total_read(0) {
 	handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ, lock_type, FileSystem::DEFAULT_COMPRESSION, opener);
 	file_size = fs.GetFileSize(*handle);
 }
@@ -52,6 +54,17 @@ void BufferedFileReader::Seek(uint64_t location) {
 
 uint64_t BufferedFileReader::CurrentOffset() {
 	return total_read + offset;
+}
+
+ClientContext &BufferedFileReader::GetContext() {
+	if (!context) {
+		throw InternalException("Trying to acquire a client context that does not exist");
+	}
+	return *context;
+}
+
+Catalog *BufferedFileReader::GetCatalog() {
+	return catalog;
 }
 
 } // namespace duckdb

@@ -7,7 +7,13 @@ require vector_size 512
 statement ok
 PRAGMA enable_verification
 
-statement error
+query II
 select * from 'data/csv/csv_quoted_newline_odd.csv';
 ----
-csv_quoted_newline_odd.csv": CSV options could not be auto-detected
+Vos animaux vont être gâtés à Noël ! Avec Purina	 nous vous proposons de remporter l'une des 10 cartes cadeaux Truffaut de 20€ pour offrir un joli cadeau à votre animal 🐈✨
+Pour jouer :	NULL
+🐶 RT	NULL
+😺 Follow @PurinaFr et @Truffaut	NULL
+TAS le 06/12 !	NULL
+Bonne chance à tous 🤞 https://twitter.com/Truffaut/status/1597871806160986112/photo/1"	NULL
+84	hello world

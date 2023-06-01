@@ -14,6 +14,9 @@ namespace duckdb {
 
 class BoundNotNullConstraint : public BoundConstraint {
 public:
+	static constexpr const ConstraintType TYPE = ConstraintType::NOT_NULL;
+
+public:
 	explicit BoundNotNullConstraint(PhysicalIndex index) : BoundConstraint(ConstraintType::NOT_NULL), index(index) {
 	}
 

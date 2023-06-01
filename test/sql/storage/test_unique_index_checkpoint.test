@@ -20,7 +20,7 @@ restart
 statement error
 INSERT INTO test VALUES (1,101),(2,201);
 ----
-TransactionContext Error: Failed to commit: Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicated key
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key
 
 restart
 
@@ -38,4 +38,4 @@ restart
 statement error
 INSERT INTO unique_index_test VALUES (1,101),(2,201);
 ----
-TransactionContext Error: Failed to commit: Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicated key
+Constraint Error: PRIMARY KEY or UNIQUE constraint violated: duplicate key

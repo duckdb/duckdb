@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   approx_count.cpp
   bitagg.cpp
+  bitstring_agg.cpp
   count.cpp
   first.cpp
   minmax.cpp

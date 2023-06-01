@@ -24,7 +24,7 @@ static unique_ptr<FunctionData> PragmaCollateBind(ClientContext &context, TableF
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaCollateInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<PragmaCollateData>();
+	auto result = make_uniq<PragmaCollateData>();
 
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto schema : schemas) {

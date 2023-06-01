@@ -5,7 +5,7 @@
 require json
 
 statement ok
-create table input as select 'Laurens' as name;
+create table input as select range as a from range(1, 4);
 
 loop i 0 2000
 
@@ -14,10 +14,7 @@ copy input to '__TEST_DIR__/input${i}.json';
 
 endloop
 
-statement ok
-pragma threads=1
-
 query T
 select count(*) from read_json_auto('__TEST_DIR__/input*.json');
 ----
-2000
+6000

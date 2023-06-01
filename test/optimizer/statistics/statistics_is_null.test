@@ -104,3 +104,34 @@ SELECT i1.i IS NULL FROM integers i1 FULL OUTER JOIN integers i2 ON (false) ORDE
 0
 0
 0
+
+# FIXME: we don't yet correctly track when columns don't contain valid values
+mode skip
+
+statement ok
+CREATE TABLE integers3 AS SELECT * FROM (VALUES (NULL), (NULL), (NULL)) tbl(i);
+
+# we can statically determine IS NULL/IS NOT NULL are true, if there are no valid values for this column
+query II
+EXPLAIN SELECT i IS NULL FROM integers3;
+----
+logical_opt	<!REGEX>:.*IS NULL.*
+
+query II
+EXPLAIN SELECT i IS NOT NULL FROM integers3;
+----
+logical_opt	<!REGEX>:.*IS NOT NULL.*
+
+query I
+SELECT i IS NULL FROM integers3;
+----
+true
+true
+true
+
+query I
+SELECT i IS NOT NULL FROM integers3;
+----
+false
+false
+false

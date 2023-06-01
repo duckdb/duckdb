@@ -62,8 +62,39 @@ void RegisterExceptions(const py::module &m) {
 	py::register_exception<ConnectionException>(m, "ConnectionException", operational_error);
 	// no object size error
 	// no null pointer errors
-	py::register_exception<IOException>(m, "IOException", operational_error);
+	auto io_exception = py::register_exception<IOException>(m, "IOException", operational_error);
 	py::register_exception<SerializationException>(m, "SerializationException", operational_error);
+
+	static py::exception<HTTPException> HTTP_EXCEPTION(m, "HTTPException", io_exception);
+	const auto string_type = py::type::of(py::str());
+	const auto Dict = py::module_::import("typing").attr("Dict");
+	HTTP_EXCEPTION.attr("__annotations__") =
+	    py::dict(py::arg("status_code") = py::type::of(py::int_()), py::arg("body") = string_type,
+	             py::arg("reason") = string_type, py::arg("headers") = Dict[py::make_tuple(string_type, string_type)]);
+	HTTP_EXCEPTION.doc() = "Thrown when an error occurs in the httpfs extension, or whilst downloading an extension.";
+
+	py::register_exception_translator([](std::exception_ptr p) { // NOLINT(performance-unnecessary-value-param)
+		try {
+			if (p) {
+				std::rethrow_exception(p);
+			}
+		} catch (const HTTPException &httpe) {
+			// construct exception object
+			auto e = py::handle(HTTP_EXCEPTION.ptr())(py::str(httpe.what()));
+
+			e.attr("status_code") = httpe.GetStatusCode();
+			e.attr("body") = py::str(httpe.GetResponseBody());
+			e.attr("reason") = py::str(httpe.GetReason());
+			auto headers = py::dict();
+			for (const auto &item : httpe.GetHeaders()) {
+				headers[py::str(item.first)] = item.second;
+			}
+			e.attr("headers") = std::move(headers);
+
+			// "throw" exception object
+			PyErr_SetObject(HTTP_EXCEPTION.ptr(), e.ptr());
+		}
+	});
 
 	// IntegrityError
 	auto integrity_error = py::register_exception<IntegrityError>(m, "IntegrityError", error).ptr();

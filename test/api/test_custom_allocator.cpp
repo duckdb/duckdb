@@ -39,8 +39,8 @@ TEST_CASE("Test using a custom allocator", "[api][.]") {
 	REQUIRE(memory_counter.load() == 0);
 
 	DBConfig config;
-	config.allocator = make_unique<Allocator>(my_allocate_function, my_free_function, my_reallocate_function,
-	                                          make_unique<MyAllocateData>(&memory_counter));
+	config.allocator = make_uniq<Allocator>(my_allocate_function, my_free_function, my_reallocate_function,
+	                                        make_uniq<MyAllocateData>(&memory_counter));
 	DuckDB db(nullptr, &config);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl AS SELECT * FROM range(1000000)"));

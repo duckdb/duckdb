@@ -180,4 +180,3 @@ SELECT * FROM (SELECT 0=1 AS cond FROM integers i1, integers i2) a1 WHERE cond O
 query T
 SELECT * FROM (SELECT 0=1 AS cond FROM integers i1, integers i2 GROUP BY 1) a1 WHERE cond ORDER BY 1
 ----
-

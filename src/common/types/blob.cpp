@@ -20,7 +20,7 @@ const int Blob::HEX_MAP[256] = {
     -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
 bool IsRegularCharacter(data_t c) {
-	return c >= 32 && c <= 127 && c != '\\' && c != '\'' && c != '"';
+	return c >= 32 && c <= 126 && c != '\\' && c != '\'' && c != '"';
 }
 
 idx_t Blob::GetStringSize(string_t blob) {
@@ -64,7 +64,7 @@ void Blob::ToString(string_t blob, char *output) {
 
 string Blob::ToString(string_t blob) {
 	auto str_len = GetStringSize(blob);
-	auto buffer = std::unique_ptr<char[]>(new char[str_len]);
+	auto buffer = unique_ptr<char[]>(new char[str_len]);
 	Blob::ToString(blob, buffer.get());
 	return string(buffer.get(), str_len);
 }
@@ -136,7 +136,7 @@ void Blob::ToBlob(string_t str, data_ptr_t output) {
 
 string Blob::ToBlob(string_t str) {
 	auto blob_len = GetBlobSize(str);
-	auto buffer = std::unique_ptr<char[]>(new char[blob_len]);
+	auto buffer = unique_ptr<char[]>(new char[blob_len]);
 	Blob::ToBlob(str, (data_ptr_t)buffer.get());
 	return string(buffer.get(), blob_len);
 }

@@ -20,7 +20,7 @@ BindResult AlterBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, i
 	case ExpressionClass::SUBQUERY:
 		return BindResult("cannot use subquery in alter statement");
 	case ExpressionClass::COLUMN_REF:
-		return BindColumn((ColumnRefExpression &)expr);
+		return BindColumn(expr.Cast<ColumnRefExpression>());
 	default:
 		return ExpressionBinder::BindExpression(expr_ptr, depth);
 	}
@@ -43,7 +43,7 @@ BindResult AlterBinder::BindColumn(ColumnRefExpression &colref) {
 		throw BinderException("Using generated columns in alter statement not supported");
 	}
 	bound_columns.push_back(idx);
-	return BindResult(make_unique<BoundReferenceExpression>(table.GetColumn(idx).Type(), bound_columns.size() - 1));
+	return BindResult(make_uniq<BoundReferenceExpression>(table.GetColumn(idx).Type(), bound_columns.size() - 1));
 }
 
 } // namespace duckdb

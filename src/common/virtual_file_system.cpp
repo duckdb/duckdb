@@ -7,7 +7,7 @@
 namespace duckdb {
 
 VirtualFileSystem::VirtualFileSystem() : default_fs(FileSystem::CreateLocal()) {
-	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_unique<GZipFileSystem>());
+	VirtualFileSystem::RegisterSubSystem(FileCompressionType::GZIP, make_uniq<GZipFileSystem>());
 }
 
 unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,

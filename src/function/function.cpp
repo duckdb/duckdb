@@ -46,7 +46,7 @@ SimpleFunction::SimpleFunction(string name_p, vector<LogicalType> arguments_p, L
 SimpleFunction::~SimpleFunction() {
 }
 
-string SimpleFunction::ToString() {
+string SimpleFunction::ToString() const {
 	return Function::CallToString(name, arguments);
 }
 
@@ -62,11 +62,11 @@ SimpleNamedParameterFunction::SimpleNamedParameterFunction(string name_p, vector
 SimpleNamedParameterFunction::~SimpleNamedParameterFunction() {
 }
 
-string SimpleNamedParameterFunction::ToString() {
+string SimpleNamedParameterFunction::ToString() const {
 	return Function::CallToString(name, arguments, named_parameters);
 }
 
-bool SimpleNamedParameterFunction::HasNamedParameters() {
+bool SimpleNamedParameterFunction::HasNamedParameters() const {
 	return !named_parameters.empty();
 }
 
@@ -80,7 +80,7 @@ BaseScalarFunction::BaseScalarFunction(string name_p, vector<LogicalType> argume
 BaseScalarFunction::~BaseScalarFunction() {
 }
 
-string BaseScalarFunction::ToString() {
+string BaseScalarFunction::ToString() const {
 	return Function::CallToString(name, arguments, return_type);
 }
 

@@ -64,7 +64,7 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery:
 	case duckdb_libpgquery::T_PGSQLValueFunction:
 		return TransformSQLValueFunction(reinterpret_cast<duckdb_libpgquery::PGSQLValueFunction *>(node));
 	case duckdb_libpgquery::T_PGSetToDefault:
-		return make_unique<DefaultExpression>();
+		return make_uniq<DefaultExpression>();
 	case duckdb_libpgquery::T_PGCollateClause:
 		return TransformCollateExpr(reinterpret_cast<duckdb_libpgquery::PGCollateClause *>(node));
 	case duckdb_libpgquery::T_PGIntervalConstant:
@@ -79,8 +79,11 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery:
 		return TransformGroupingFunction(reinterpret_cast<duckdb_libpgquery::PGGroupingFunc *>(node));
 	case duckdb_libpgquery::T_PGAStar:
 		return TransformStarExpression(node);
+	case duckdb_libpgquery::T_PGBooleanTest:
+		return TransformBooleanTest(reinterpret_cast<duckdb_libpgquery::PGBooleanTest *>(node));
+
 	default:
-		throw NotImplementedException("Expr of type %d not implemented\n", (int)node->type);
+		throw NotImplementedException("Expression type %s (%d)", NodetypeToString(node->type), (int)node->type);
 	}
 }
 

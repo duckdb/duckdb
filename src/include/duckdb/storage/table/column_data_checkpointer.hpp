@@ -10,6 +10,7 @@
 
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/table/column_checkpoint_state.hpp"
 
 namespace duckdb {
 
@@ -25,7 +26,7 @@ public:
 	RowGroup &GetRowGroup();
 	ColumnCheckpointState &GetCheckpointState();
 
-	void Checkpoint(vector<SegmentNode> nodes);
+	void Checkpoint(vector<SegmentNode<ColumnSegment>> nodes);
 
 private:
 	void ScanSegments(const std::function<void(Vector &, idx_t)> &callback);
@@ -40,7 +41,7 @@ private:
 	ColumnCheckpointState &state;
 	bool is_validity;
 	Vector intermediate;
-	vector<SegmentNode> nodes;
+	vector<SegmentNode<ColumnSegment>> nodes;
 	vector<CompressionFunction *> compression_functions;
 	ColumnCheckpointInfo &checkpoint_info;
 };

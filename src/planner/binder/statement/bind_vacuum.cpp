@@ -27,7 +27,7 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 		vector<unique_ptr<Expression>> select_list;
 		if (columns.empty()) {
 			// Empty means ALL columns should be vacuumed/analyzed
-			auto &get = (LogicalGet &)*ref->get;
+			auto &get = ref->get->Cast<LogicalGet>();
 			columns.insert(columns.end(), get.names.begin(), get.names.end());
 		}
 
@@ -59,7 +59,7 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 			auto table_scan = CreatePlan(*ref);
 			D_ASSERT(table_scan->type == LogicalOperatorType::LOGICAL_GET);
 
-			auto &get = (LogicalGet &)*table_scan;
+			auto &get = table_scan->Cast<LogicalGet>();
 
 			D_ASSERT(select_list.size() == get.column_ids.size());
 			D_ASSERT(stmt.info->columns.size() == get.column_ids.size());
@@ -68,7 +68,7 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 				    ref->table->GetColumns().LogicalToPhysical(LogicalIndex(get.column_ids[i])).index;
 			}
 
-			auto projection = make_unique<LogicalProjection>(GenerateTableIndex(), std::move(select_list));
+			auto projection = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(select_list));
 			projection->children.push_back(std::move(table_scan));
 
 			root = std::move(projection);
@@ -79,7 +79,7 @@ BoundStatement Binder::Bind(VacuumStatement &stmt) {
 			stmt.info->has_table = false;
 		}
 	}
-	auto vacuum = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_VACUUM, std::move(stmt.info));
+	auto vacuum = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_VACUUM, std::move(stmt.info));
 	if (root) {
 		vacuum->children.push_back(std::move(root));
 	}

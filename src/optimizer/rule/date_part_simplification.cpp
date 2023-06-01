@@ -12,23 +12,23 @@
 namespace duckdb {
 
 DatePartSimplificationRule::DatePartSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
-	auto func = make_unique<FunctionExpressionMatcher>();
-	func->function = make_unique<SpecificFunctionMatcher>("date_part");
-	func->matchers.push_back(make_unique<ConstantExpressionMatcher>());
-	func->matchers.push_back(make_unique<ExpressionMatcher>());
+	auto func = make_uniq<FunctionExpressionMatcher>();
+	func->function = make_uniq<SpecificFunctionMatcher>("date_part");
+	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
+	func->matchers.push_back(make_uniq<ExpressionMatcher>());
 	func->policy = SetMatcher::Policy::ORDERED;
 	root = std::move(func);
 }
 
 unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
                                                          bool &changes_made, bool is_root) {
-	auto &date_part = (BoundFunctionExpression &)*bindings[0];
-	auto &constant_expr = (BoundConstantExpression &)*bindings[1];
+	auto &date_part = bindings[0]->Cast<BoundFunctionExpression>();
+	auto &constant_expr = bindings[1]->Cast<BoundConstantExpression>();
 	auto &constant = constant_expr.value;
 
 	if (constant.IsNull()) {
 		// NULL specifier: return constant NULL
-		return make_unique<BoundConstantExpression>(Value(date_part.return_type));
+		return make_uniq<BoundConstantExpression>(Value(date_part.return_type));
 	}
 	// otherwise check the specifier
 	auto specifier = GetDatePartSpecifier(StringValue::Get(constant));

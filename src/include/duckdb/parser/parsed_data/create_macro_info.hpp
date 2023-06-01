@@ -24,7 +24,7 @@ struct CreateMacroInfo : public CreateFunctionInfo {
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {
-		auto result = make_unique<CreateMacroInfo>();
+		auto result = make_uniq<CreateMacroInfo>();
 		result->function = function->Copy();
 		result->name = name;
 		CopyProperties(*result);

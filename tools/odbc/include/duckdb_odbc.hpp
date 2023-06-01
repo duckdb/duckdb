@@ -37,7 +37,7 @@ struct OdbcHandle {
 	// appending all error messages into it
 	std::vector<std::string> error_messages;
 
-	unique_ptr<OdbcDiagnostic> odbc_diagnostic;
+	duckdb::unique_ptr<OdbcDiagnostic> odbc_diagnostic;
 };
 
 struct OdbcHandleEnv : public OdbcHandle {
@@ -67,7 +67,7 @@ public:
 
 public:
 	OdbcHandleEnv *env;
-	unique_ptr<Connection> conn;
+	duckdb::unique_ptr<Connection> conn;
 	bool autocommit;
 	SQLUINTEGER sql_attr_metadata_id;
 	SQLUINTEGER sql_attr_access_mode;
@@ -115,19 +115,19 @@ public:
 
 public:
 	OdbcHandleDbc *dbc;
-	unique_ptr<PreparedStatement> stmt;
-	unique_ptr<QueryResult> res;
+	duckdb::unique_ptr<PreparedStatement> stmt;
+	duckdb::unique_ptr<QueryResult> res;
 	vector<OdbcBoundCol> bound_cols;
 	bool open;
 	SQLULEN retrieve_data = SQL_RD_ON;
 	SQLULEN *rows_fetched_ptr;
 
 	// fetcher
-	unique_ptr<OdbcFetch> odbc_fetcher;
+	duckdb::unique_ptr<OdbcFetch> odbc_fetcher;
 
-	unique_ptr<ParameterDescriptor> param_desc;
+	duckdb::unique_ptr<ParameterDescriptor> param_desc;
 
-	unique_ptr<RowDescriptor> row_desc;
+	duckdb::unique_ptr<RowDescriptor> row_desc;
 };
 
 struct OdbcHandleDesc : public OdbcHandle {

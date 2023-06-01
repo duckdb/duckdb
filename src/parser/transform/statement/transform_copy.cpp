@@ -58,7 +58,7 @@ void Transformer::TransformCopyOptions(CopyInfo &info, duckdb_libpgquery::PGList
 unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCopyStmt *>(node);
 	D_ASSERT(stmt);
-	auto result = make_unique<CopyStatement>();
+	auto result = make_uniq<CopyStatement>();
 	auto &info = *result->info;
 
 	// get file_path and is_from

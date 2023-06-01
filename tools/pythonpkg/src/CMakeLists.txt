@@ -12,6 +12,7 @@ add_subdirectory(pandas)
 add_library(
   python_src OBJECT
   array_wrapper.cpp
+  path_like.cpp
   pyconnection.cpp
   python_import_cache.cpp
   pyrelation.cpp
@@ -21,6 +22,7 @@ add_library(
   vector_conversion.cpp
   python_conversion.cpp
   python_objects.cpp
+  pybind_wrapper.cpp
   arrow_array_stream.cpp)
 
 set(ALL_OBJECT_FILES

@@ -51,7 +51,7 @@ static unique_ptr<FunctionData> DuckDBExtensionsBind(ClientContext &context, Tab
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBExtensionsData>();
+	auto result = make_uniq<DuckDBExtensionsData>();
 
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto &db = DatabaseInstance::GetDatabase(context);

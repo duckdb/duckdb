@@ -32,10 +32,13 @@ public:
 	idx_t MaxCount() const {
 		return max_count;
 	}
-
 	bool HasExtraList() const {
 		return extra_list;
 	}
+	const vector<Binder *> &GetBinders() const {
+		return binders;
+	}
+
 	unique_ptr<Expression> CreateExtraReference(unique_ptr<ParsedExpression> expr);
 
 private:

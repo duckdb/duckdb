@@ -11,7 +11,7 @@ void LogicalDelimGet::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalDelimGet::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto chunk_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
-	return make_unique<LogicalDelimGet>(table_index, chunk_types);
+	return make_uniq<LogicalDelimGet>(table_index, chunk_types);
 }
 
 vector<idx_t> LogicalDelimGet::GetTableIndex() const {

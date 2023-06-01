@@ -176,13 +176,13 @@ require httpfs
 query II
 select typeof("type"), typeof(features) from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_object_size=4194304, maximum_depth=2);
 ----
-VARCHAR	STRUCT(type JSON, properties JSON, geometry JSON)[]
+VARCHAR	STRUCT("type" JSON, properties JSON, geometry JSON)[]
 
 # let's crank up maximum_depth and see if we can fully unnest this big object
 query II
 select typeof("type"), typeof(features) from read_json_auto('https://github.com/duckdb/duckdb-data/releases/download/v1.0/canada.json', maximum_object_size=4194304, maximum_depth=7);
 ----
-VARCHAR	STRUCT(type VARCHAR, properties STRUCT(name VARCHAR), geometry STRUCT(type VARCHAR, coordinates DOUBLE[][][]))[]
+VARCHAR	STRUCT("type" VARCHAR, properties STRUCT("name" VARCHAR), geometry STRUCT("type" VARCHAR, coordinates DOUBLE[][][]))[]
 
 # ^ fully unnested, no more JSON type in there
 

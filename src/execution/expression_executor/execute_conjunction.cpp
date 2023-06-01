@@ -10,14 +10,14 @@ namespace duckdb {
 
 struct ConjunctionState : public ExpressionState {
 	ConjunctionState(const Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
-		adaptive_filter = make_unique<AdaptiveFilter>(expr);
+		adaptive_filter = make_uniq<AdaptiveFilter>(expr);
 	}
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 };
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundConjunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {
-	auto result = make_unique<ConjunctionState>(expr, root);
+	auto result = make_uniq<ConjunctionState>(expr, root);
 	for (auto &child : expr.children) {
 		result->AddChild(child.get());
 	}
@@ -68,10 +68,10 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 
 		unique_ptr<SelectionVector> temp_true, temp_false;
 		if (false_sel) {
-			temp_false = make_unique<SelectionVector>(STANDARD_VECTOR_SIZE);
+			temp_false = make_uniq<SelectionVector>(STANDARD_VECTOR_SIZE);
 		}
 		if (!true_sel) {
-			temp_true = make_unique<SelectionVector>(STANDARD_VECTOR_SIZE);
+			temp_true = make_uniq<SelectionVector>(STANDARD_VECTOR_SIZE);
 			true_sel = temp_true.get();
 		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {
@@ -111,10 +111,10 @@ idx_t ExpressionExecutor::Select(const BoundConjunctionExpression &expr, Express
 
 		unique_ptr<SelectionVector> temp_true, temp_false;
 		if (true_sel) {
-			temp_true = make_unique<SelectionVector>(STANDARD_VECTOR_SIZE);
+			temp_true = make_uniq<SelectionVector>(STANDARD_VECTOR_SIZE);
 		}
 		if (!false_sel) {
-			temp_false = make_unique<SelectionVector>(STANDARD_VECTOR_SIZE);
+			temp_false = make_uniq<SelectionVector>(STANDARD_VECTOR_SIZE);
 			false_sel = temp_false.get();
 		}
 		for (idx_t i = 0; i < expr.children.size(); i++) {

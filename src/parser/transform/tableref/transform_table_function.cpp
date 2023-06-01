@@ -23,7 +23,7 @@ unique_ptr<TableRef> Transformer::TransformRangeFunction(duckdb_libpgquery::PGRa
 		throw NotImplementedException("Explicit column definition not supported yet");
 	}
 	// transform the function call
-	auto result = make_unique<TableFunctionRef>();
+	auto result = make_uniq<TableFunctionRef>();
 	switch (call_tree->type) {
 	case duckdb_libpgquery::T_PGFuncCall: {
 		auto func_call = (duckdb_libpgquery::PGFuncCall *)call_tree;

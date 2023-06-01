@@ -13,7 +13,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSample &op
 	unique_ptr<PhysicalOperator> sample;
 	switch (op.sample_options->method) {
 	case SampleMethod::RESERVOIR_SAMPLE:
-		sample = make_unique<PhysicalReservoirSample>(op.types, std::move(op.sample_options), op.estimated_cardinality);
+		sample = make_uniq<PhysicalReservoirSample>(op.types, std::move(op.sample_options), op.estimated_cardinality);
 		break;
 	case SampleMethod::SYSTEM_SAMPLE:
 	case SampleMethod::BERNOULLI_SAMPLE:
@@ -22,9 +22,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSample &op
 			                      "reservoir sampling or use a sample_size",
 			                      SampleMethodToString(op.sample_options->method));
 		}
-		sample = make_unique<PhysicalStreamingSample>(op.types, op.sample_options->method,
-		                                              op.sample_options->sample_size.GetValue<double>(),
-		                                              op.sample_options->seed, op.estimated_cardinality);
+		sample = make_uniq<PhysicalStreamingSample>(op.types, op.sample_options->method,
+		                                            op.sample_options->sample_size.GetValue<double>(),
+		                                            op.sample_options->seed, op.estimated_cardinality);
 		break;
 	default:
 		throw InternalException("Unimplemented sample method");

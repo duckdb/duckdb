@@ -18,21 +18,21 @@ bool BoundLambdaExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundLambdaExpression *)other_p;
-	if (!Expression::Equals(lambda_expr.get(), other->lambda_expr.get())) {
+	auto &other = other_p->Cast<BoundLambdaExpression>();
+	if (!Expression::Equals(lambda_expr.get(), other.lambda_expr.get())) {
 		return false;
 	}
-	if (!ExpressionUtil::ListEquals(captures, other->captures)) {
+	if (!ExpressionUtil::ListEquals(captures, other.captures)) {
 		return false;
 	}
-	if (parameter_count != other->parameter_count) {
+	if (parameter_count != other.parameter_count) {
 		return false;
 	}
 	return true;
 }
 
 unique_ptr<Expression> BoundLambdaExpression::Copy() {
-	auto copy = make_unique<BoundLambdaExpression>(type, return_type, lambda_expr->Copy(), parameter_count);
+	auto copy = make_uniq<BoundLambdaExpression>(type, return_type, lambda_expr->Copy(), parameter_count);
 	for (auto &capture : captures) {
 		copy->captures.push_back(capture->Copy());
 	}

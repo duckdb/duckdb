@@ -236,7 +236,7 @@ LogicalType PandasAnalyzer::DictToStruct(const PyDictionary &dict, bool &can_con
 		auto val = GetItemType(dict_val, can_convert);
 		struct_children.push_back(make_pair(key, std::move(val)));
 	}
-	return LogicalType::STRUCT(std::move(struct_children));
+	return LogicalType::STRUCT(struct_children);
 }
 
 //! 'can_convert' is used to communicate if internal structures encountered here are valid

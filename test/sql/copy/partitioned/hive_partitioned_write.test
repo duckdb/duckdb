@@ -77,7 +77,7 @@ statement ok
 COPY test TO '__TEST_DIR__/partitioned4' (FORMAT PARQUET, PARTITION_BY part_col);
 
 query III
-SELECT part_col, value_col, value2_col FROM parquet_scan('__TEST_DIR__/partitioned4/*/*.parquet', HIVE_PARTITIONING=1) WHERE part_col=0 ORDER BY value2_col;
+SELECT part_col, value_col, value2_col FROM parquet_scan('__TEST_DIR__/partitioned4/part_col=*/*.parquet', HIVE_PARTITIONING=1) WHERE part_col=0 ORDER BY value2_col;
 ----
 0	1	0
 0	3	2
@@ -152,3 +152,44 @@ SELECT part_col, value_col, value2_col FROM '__TEST_DIR__/partitioned8/part_col=
 0	0	4
 0	2	6
 0	4	8
+
+# Order matters!
+statement ok
+COPY test TO '__TEST_DIR__/partitioned9' (FORMAT PARQUET, PARTITION_BY (part_col, value_col));
+
+query I
+SELECT min(value2_col) as min_val
+FROM parquet_scan('__TEST_DIR__/partitioned9/part_col=*/value_col=*/*.parquet', FILENAME=1)
+GROUP BY filename
+ORDER BY min_val
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+statement ok
+COPY test TO '__TEST_DIR__/partitioned10' (FORMAT PARQUET, PARTITION_BY (value_col, part_col));
+
+query I
+SELECT min(value2_col) as min_val
+FROM parquet_scan('__TEST_DIR__/partitioned10/value_col=*/part_col=*/*.parquet', FILENAME=1)
+GROUP BY filename
+ORDER BY min_val
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9

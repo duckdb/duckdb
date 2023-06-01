@@ -11,7 +11,7 @@ void CommonAggregateOptimizer::VisitOperator(LogicalOperator &op) {
 	LogicalOperatorVisitor::VisitOperator(op);
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
-		ExtractCommonAggregates((LogicalAggregate &)op);
+		ExtractCommonAggregates(op.Cast<LogicalAggregate>());
 		break;
 	default:
 		break;

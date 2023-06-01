@@ -3,8 +3,8 @@
 
 namespace duckdb {
 
-static unique_ptr<FunctionData> JSONMergePatchBind(ClientContext &context, ScalarFunction &bound_function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
+static duckdb::unique_ptr<FunctionData> JSONMergePatchBind(ClientContext &context, ScalarFunction &bound_function,
+                                                           vector<duckdb::unique_ptr<Expression>> &arguments) {
 	if (arguments.size() < 2) {
 		throw InvalidInputException("json_merge_patch requires at least two parameters");
 	}

@@ -43,7 +43,7 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 }
 
 RowDataBlock &RowDataCollection::CreateBlock() {
-	blocks.push_back(make_unique<RowDataBlock>(buffer_manager, block_capacity, entry_size));
+	blocks.push_back(make_uniq<RowDataBlock>(buffer_manager, block_capacity, entry_size));
 	return *blocks.back();
 }
 

@@ -18,9 +18,9 @@ void BatchedDataCollection::Append(DataChunk &input, idx_t batch_index) {
 		D_ASSERT(data.find(batch_index) == data.end());
 		unique_ptr<ColumnDataCollection> new_collection;
 		if (last_collection.collection) {
-			new_collection = make_unique<ColumnDataCollection>(*last_collection.collection);
+			new_collection = make_uniq<ColumnDataCollection>(*last_collection.collection);
 		} else {
-			new_collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+			new_collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 		}
 		last_collection.collection = new_collection.get();
 		last_collection.batch_index = batch_index;
@@ -81,7 +81,7 @@ unique_ptr<ColumnDataCollection> BatchedDataCollection::FetchCollection() {
 	data.clear();
 	if (!result) {
 		// empty result
-		return make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+		return make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 	}
 	return result;
 }

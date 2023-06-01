@@ -10,8 +10,8 @@ namespace duckdb {
 unique_ptr<CreateStatement> Transformer::TransformCreateSequence(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateSeqStmt *>(node);
 
-	auto result = make_unique<CreateStatement>();
-	auto info = make_unique<CreateSequenceInfo>();
+	auto result = make_uniq<CreateStatement>();
+	auto info = make_uniq<CreateSequenceInfo>();
 
 	auto qname = TransformQualifiedName(stmt->sequence);
 	info->catalog = qname.catalog;

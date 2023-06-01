@@ -36,11 +36,13 @@ end
 
     DBInterface.execute(con, "SET TimeZone='UTC'")
     results = DBInterface.execute(con, "SELECT CURRENT_SETTING('TimeZone') AS tz")
-    @test isequal(results.df[1, "tz"], "UTC")
+    df = DataFrame(results)
+    @test isequal(df[1, "tz"], "UTC")
 
     DBInterface.execute(con, "SET TimeZone='America/Los_Angeles'")
     results = DBInterface.execute(con, "SELECT CURRENT_SETTING('TimeZone') AS tz")
-    @test isequal(results.df[1, "tz"], "America/Los_Angeles")
+    df = DataFrame(results)
+    @test isequal(df[1, "tz"], "America/Los_Angeles")
 
     DBInterface.close!(con)
 end

@@ -10,6 +10,7 @@ void BuiltinFunctions::RegisterDistributiveAggregates() {
 	Register<BitAndFun>();
 	Register<BitOrFun>();
 	Register<BitXorFun>();
+	Register<BitStringAggFun>();
 	Register<CountStarFun>();
 	Register<CountFun>();
 	Register<FirstFun>();

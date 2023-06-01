@@ -28,10 +28,10 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 			return binder.bind_context.CreateColumnReference(using_binding->primary_binding, column_name);
 		} else {
 			// // we cannot! we need to bind this as a coalesce between all the relevant columns
-			auto coalesce = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+			auto coalesce = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
 			coalesce->children.reserve(using_binding->bindings.size());
 			for (auto &entry : using_binding->bindings) {
-				coalesce->children.push_back(make_unique<ColumnRefExpression>(column_name, entry));
+				coalesce->children.push_back(make_uniq<ColumnRefExpression>(column_name, entry));
 			}
 			return std::move(coalesce);
 		}
@@ -59,14 +59,14 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 				}
 
 				D_ASSERT(!(*lambda_bindings)[i].alias.empty());
-				return make_unique<ColumnRefExpression>(column_name, (*lambda_bindings)[i].alias);
+				return make_uniq<ColumnRefExpression>(column_name, (*lambda_bindings)[i].alias);
 			}
 		}
 	}
 
 	if (is_macro_column) {
 		D_ASSERT(!binder.macro_binding->alias.empty());
-		return make_unique<ColumnRefExpression>(column_name, binder.macro_binding->alias);
+		return make_uniq<ColumnRefExpression>(column_name, binder.macro_binding->alias);
 	}
 	// see if it's a column
 	if (table_name.empty()) {
@@ -83,7 +83,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
 	switch (expr->type) {
 	case ExpressionType::COLUMN_REF: {
-		auto &colref = (ColumnRefExpression &)*expr;
+		auto &colref = expr->Cast<ColumnRefExpression>();
 		string error_message;
 		auto new_expr = QualifyColumnName(colref, error_message);
 		if (new_expr) {
@@ -96,7 +96,7 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
 		break;
 	}
 	case ExpressionType::POSITIONAL_REFERENCE: {
-		auto &ref = (PositionalReferenceExpression &)*expr;
+		auto &ref = expr->Cast<PositionalReferenceExpression>();
 		if (ref.alias.empty()) {
 			string table_name, column_name;
 			auto error = binder.bind_context.BindColumn(ref, table_name, column_name);
@@ -124,7 +124,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<Pa
 	// we need to transform the struct extract if it is inside a lambda expression
 	// because we cannot bind to an existing table, so we remove the dummy table also
 	if (lambda_bindings && base->type == ExpressionType::COLUMN_REF) {
-		auto &lambda_column_ref = (ColumnRefExpression &)*base;
+		auto &lambda_column_ref = base->Cast<ColumnRefExpression>();
 		D_ASSERT(!lambda_column_ref.column_names.empty());
 
 		if (lambda_column_ref.column_names[0].find(DummyBinding::DUMMY_NAME) != string::npos) {
@@ -137,8 +137,8 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<Pa
 
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(base));
-	children.push_back(make_unique_base<ParsedExpression, ConstantExpression>(Value(std::move(field_name))));
-	auto extract_fun = make_unique<OperatorExpression>(ExpressionType::STRUCT_EXTRACT, std::move(children));
+	children.push_back(make_uniq_base<ParsedExpression, ConstantExpression>(Value(std::move(field_name))));
+	auto extract_fun = make_uniq<OperatorExpression>(ExpressionType::STRUCT_EXTRACT, std::move(children));
 	return std::move(extract_fun);
 }
 
@@ -175,11 +175,12 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 		}
 	}
 	// We found the table, now create the struct_pack expression
-	vector<unique_ptr<ParsedExpression>> child_exprs;
+	vector<unique_ptr<ParsedExpression>> child_expressions;
+	child_expressions.reserve(binding->names.size());
 	for (const auto &column_name : binding->names) {
-		child_exprs.push_back(make_unique<ColumnRefExpression>(column_name, table_name));
+		child_expressions.push_back(make_uniq<ColumnRefExpression>(column_name, table_name));
 	}
-	return make_unique<FunctionExpression>("struct_pack", std::move(child_exprs));
+	return make_uniq<FunctionExpression>("struct_pack", std::move(child_expressions));
 }
 
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpression &colref, string &error_message) {
@@ -209,7 +210,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 			return binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1]);
 		} else {
 			// otherwise check if we can turn this into a struct extract
-			auto new_colref = make_unique<ColumnRefExpression>(colref.column_names[0]);
+			auto new_colref = make_uniq<ColumnRefExpression>(colref.column_names[0]);
 			string other_error;
 			auto qualified_colref = QualifyColumnName(colref.column_names[0], other_error);
 			if (qualified_colref) {
@@ -284,7 +285,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 
 BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t depth) {
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
-		return BindResult(make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
+		return BindResult(make_uniq<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
 	}
 	string error_message;
 	auto expr = QualifyColumnName(colref_p, error_message);
@@ -303,7 +304,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 		return result;
 	}
 
-	auto &colref = (ColumnRefExpression &)*expr;
+	auto &colref = expr->Cast<ColumnRefExpression>();
 	D_ASSERT(colref.IsQualified());
 	auto &table_name = colref.GetTableName();
 

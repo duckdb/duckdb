@@ -14,14 +14,14 @@ ViewRelation::ViewRelation(const std::shared_ptr<ClientContext> &context, string
 }
 
 unique_ptr<QueryNode> ViewRelation::GetQueryNode() {
-	auto result = make_unique<SelectNode>();
-	result->select_list.push_back(make_unique<StarExpression>());
+	auto result = make_uniq<SelectNode>();
+	result->select_list.push_back(make_uniq<StarExpression>());
 	result->from_table = GetTableRef();
 	return std::move(result);
 }
 
 unique_ptr<TableRef> ViewRelation::GetTableRef() {
-	auto table_ref = make_unique<BaseTableRef>();
+	auto table_ref = make_uniq<BaseTableRef>();
 	table_ref->schema_name = schema_name;
 	table_ref->table_name = view_name;
 	return std::move(table_ref);

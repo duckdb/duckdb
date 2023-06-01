@@ -70,7 +70,7 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	if (colref.alias.empty()) {
 		colref.alias = names[column_index];
 	}
-	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
+	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
 
 StandardEntry *Binding::GetStandardEntry() {
@@ -100,7 +100,7 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
 static void ReplaceAliases(ParsedExpression &expr, const ColumnList &list,
                            const unordered_map<idx_t, string> &alias_map) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expr;
+		auto &colref = expr.Cast<ColumnRefExpression>();
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.column_names;
 		D_ASSERT(col_names.size() == 1);
@@ -114,7 +114,7 @@ static void ReplaceAliases(ParsedExpression &expr, const ColumnList &list,
 
 static void BakeTableName(ParsedExpression &expr, const string &table_name) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expr;
+		auto &colref = expr.Cast<ColumnRefExpression>();
 		D_ASSERT(!colref.IsQualified());
 		auto &col_names = colref.column_names;
 		col_names.insert(col_names.begin(), table_name);
@@ -128,18 +128,18 @@ unique_ptr<ParsedExpression> TableBinding::ExpandGeneratedColumn(const string &c
 	D_ASSERT(catalog_entry); // Should only be called on a TableBinding
 
 	D_ASSERT(catalog_entry->type == CatalogType::TABLE_ENTRY);
-	auto table_entry = (TableCatalogEntry *)catalog_entry;
+	auto &table_entry = catalog_entry->Cast<TableCatalogEntry>();
 
 	// Get the index of the generated column
 	auto column_index = GetBindingIndex(column_name);
-	D_ASSERT(table_entry->GetColumn(LogicalIndex(column_index)).Generated());
+	D_ASSERT(table_entry.GetColumn(LogicalIndex(column_index)).Generated());
 	// Get a copy of the generated column
-	auto expression = table_entry->GetColumn(LogicalIndex(column_index)).GeneratedExpression().Copy();
+	auto expression = table_entry.GetColumn(LogicalIndex(column_index)).GeneratedExpression().Copy();
 	unordered_map<idx_t, string> alias_map;
 	for (auto &entry : name_map) {
 		alias_map[entry.second] = entry.first;
 	}
-	ReplaceAliases(*expression, table_entry->GetColumns(), alias_map);
+	ReplaceAliases(*expression, table_entry.GetColumns(), alias_map);
 	BakeTableName(*expression, alias);
 	return (expression);
 }
@@ -191,8 +191,8 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	if (entry && column_index != COLUMN_IDENTIFIER_ROW_ID) {
 		D_ASSERT(entry->type == CatalogType::TABLE_ENTRY);
 		// Either there is no table, or the columns category has to be standard
-		auto table_entry = (TableCatalogEntry *)entry;
-		auto &column_entry = table_entry->GetColumn(LogicalIndex(column_index));
+		auto &table_entry = entry->Cast<TableCatalogEntry>();
+		auto &column_entry = table_entry.GetColumn(LogicalIndex(column_index));
 		(void)table_entry;
 		(void)column_entry;
 		D_ASSERT(column_entry.Category() == TableColumnType::STANDARD);
@@ -210,7 +210,7 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		}
 	}
 	ColumnBinding binding = GetColumnBinding(column_index);
-	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
+	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
 }
 
 StandardEntry *TableBinding::GetStandardEntry() {
@@ -235,7 +235,7 @@ BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	ColumnBinding binding(index, column_index);
 
 	// we are binding a parameter to create the dummy binding, no arguments are supplied
-	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), types[column_index], binding, depth));
+	return BindResult(make_uniq<BoundColumnRefExpression>(colref.GetName(), types[column_index], binding, depth));
 }
 
 BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t lambda_index, idx_t depth) {
@@ -245,7 +245,7 @@ BindResult DummyBinding::Bind(ColumnRefExpression &colref, idx_t lambda_index, i
 	}
 	ColumnBinding binding(index, column_index);
 	return BindResult(
-	    make_unique<BoundLambdaRefExpression>(colref.GetName(), types[column_index], binding, lambda_index, depth));
+	    make_uniq<BoundLambdaRefExpression>(colref.GetName(), types[column_index], binding, lambda_index, depth));
 }
 
 unique_ptr<ParsedExpression> DummyBinding::ParamToArg(ColumnRefExpression &colref) {

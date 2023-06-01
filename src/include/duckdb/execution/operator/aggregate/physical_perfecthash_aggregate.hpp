@@ -18,9 +18,12 @@ class PerfectAggregateHashTable;
 //! PhysicalPerfectHashAggregate performs a group-by and aggregation using a perfect hash table
 class PhysicalPerfectHashAggregate : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::PERFECT_HASH_GROUP_BY;
+
+public:
 	PhysicalPerfectHashAggregate(ClientContext &context, vector<LogicalType> types,
 	                             vector<unique_ptr<Expression>> aggregates, vector<unique_ptr<Expression>> groups,
-	                             vector<unique_ptr<BaseStatistics>> group_stats, vector<idx_t> required_bits,
+	                             const vector<unique_ptr<BaseStatistics>> &group_stats, vector<idx_t> required_bits,
 	                             idx_t estimated_cardinality);
 
 	//! The groups

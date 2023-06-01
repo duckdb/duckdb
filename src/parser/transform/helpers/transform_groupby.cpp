@@ -41,7 +41,7 @@ static void MergeGroupingSet(GroupingSet &result, GroupingSet &other) {
 void Transformer::AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
                                        GroupByNode &result, vector<idx_t> &result_set) {
 	if (expression->type == ExpressionType::FUNCTION) {
-		auto &func = (FunctionExpression &)*expression;
+		auto &func = expression->Cast<FunctionExpression>();
 		if (func.function_name == "row") {
 			for (auto &child : func.children) {
 				AddGroupByExpression(std::move(child), map, result, result_set);
@@ -175,6 +175,13 @@ bool Transformer::TransformGroupBy(duckdb_libpgquery::PGList *group, SelectNode 
 			}
 			result.grouping_sets = std::move(new_sets);
 		}
+	}
+	if (result.group_expressions.size() == 1 && result.grouping_sets.size() == 1 &&
+	    ExpressionIsEmptyStar(*result.group_expressions[0])) {
+		// GROUP BY *
+		result.group_expressions.clear();
+		result.grouping_sets.clear();
+		select_node.aggregate_handling = AggregateHandling::FORCE_AGGREGATES;
 	}
 	return true;
 }

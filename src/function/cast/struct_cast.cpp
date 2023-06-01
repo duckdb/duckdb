@@ -1,5 +1,6 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
+#include "duckdb/function/cast/bound_cast_data.hpp"
 
 namespace duckdb {
 
@@ -15,11 +16,27 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 		auto child_cast = input.GetCastFunction(source_child_types[i].second, result_child_types[i].second);
 		child_cast_info.push_back(std::move(child_cast));
 	}
-	return make_unique<StructBoundCastData>(std::move(child_cast_info), target);
+	return make_uniq<StructBoundCastData>(std::move(child_cast_info), target);
+}
+
+unique_ptr<FunctionLocalState> StructBoundCastData::InitStructCastLocalState(CastLocalStateParameters &parameters) {
+	auto &cast_data = parameters.cast_data->Cast<StructBoundCastData>();
+	auto result = make_uniq<StructCastLocalState>();
+
+	for (auto &entry : cast_data.child_cast_info) {
+		unique_ptr<FunctionLocalState> child_state;
+		if (entry.init_local_state) {
+			CastLocalStateParameters child_params(parameters, entry.cast_data);
+			child_state = entry.init_local_state(child_params);
+		}
+		result->local_states.push_back(std::move(child_state));
+	}
+	return std::move(result);
 }
 
 static bool StructToStructCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	auto &cast_data = (StructBoundCastData &)*parameters.cast_data;
+	auto &cast_data = parameters.cast_data->Cast<StructBoundCastData>();
+	auto &lstate = parameters.local_state->Cast<StructCastLocalState>();
 	auto &source_child_types = StructType::GetChildTypes(source.GetType());
 	auto &source_children = StructVector::GetEntries(source);
 	D_ASSERT(source_children.size() == StructType::GetChildTypes(result.GetType()).size());
@@ -29,7 +46,8 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 	for (idx_t c_idx = 0; c_idx < source_child_types.size(); c_idx++) {
 		auto &result_child_vector = *result_children[c_idx];
 		auto &source_child_vector = *source_children[c_idx];
-		CastParameters child_parameters(parameters, cast_data.child_cast_info[c_idx].cast_data.get());
+		CastParameters child_parameters(parameters, cast_data.child_cast_info[c_idx].cast_data,
+		                                lstate.local_states[c_idx]);
 		if (!cast_data.child_cast_info[c_idx].function(source_child_vector, result_child_vector, count,
 		                                               child_parameters)) {
 			all_converted = false;
@@ -48,7 +66,7 @@ static bool StructToStructCast(Vector &source, Vector &result, idx_t count, Cast
 static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	// first cast all child elements to varchar
-	auto &cast_data = (StructBoundCastData &)*parameters.cast_data;
+	auto &cast_data = parameters.cast_data->Cast<StructBoundCastData>();
 	Vector varchar_struct(cast_data.target, count);
 	StructToStructCast(source, varchar_struct, count, parameters);
 
@@ -121,7 +139,8 @@ BoundCastInfo DefaultCasts::StructCastSwitch(BindCastInput &input, const Logical
                                              const LogicalType &target) {
 	switch (target.id()) {
 	case LogicalTypeId::STRUCT:
-		return BoundCastInfo(StructToStructCast, StructBoundCastData::BindStructToStructCast(input, source, target));
+		return BoundCastInfo(StructToStructCast, StructBoundCastData::BindStructToStructCast(input, source, target),
+		                     StructBoundCastData::InitStructCastLocalState);
 	case LogicalTypeId::VARCHAR: {
 		// bind a cast in which we convert all child entries to VARCHAR entries
 		auto &struct_children = StructType::GetChildTypes(source);
@@ -129,9 +148,10 @@ BoundCastInfo DefaultCasts::StructCastSwitch(BindCastInput &input, const Logical
 		for (auto &child_entry : struct_children) {
 			varchar_children.push_back(make_pair(child_entry.first, LogicalType::VARCHAR));
 		}
-		auto varchar_type = LogicalType::STRUCT(std::move(varchar_children));
+		auto varchar_type = LogicalType::STRUCT(varchar_children);
 		return BoundCastInfo(StructToVarcharCast,
-		                     StructBoundCastData::BindStructToStructCast(input, source, varchar_type));
+		                     StructBoundCastData::BindStructToStructCast(input, source, varchar_type),
+		                     StructBoundCastData::InitStructCastLocalState);
 	}
 	default:
 		return TryVectorNullCast;

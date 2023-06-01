@@ -18,7 +18,7 @@ unique_ptr<StatementVerifier> ParsedStatementVerifier::Create(const SQLStatement
 	}
 	D_ASSERT(parser.statements.size() == 1);
 	D_ASSERT(parser.statements[0]->type == StatementType::SELECT_STATEMENT);
-	return make_unique<ParsedStatementVerifier>(std::move(parser.statements[0]));
+	return make_uniq<ParsedStatementVerifier>(std::move(parser.statements[0]));
 }
 
 } // namespace duckdb

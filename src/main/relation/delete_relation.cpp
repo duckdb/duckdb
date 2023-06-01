@@ -14,7 +14,7 @@ DeleteRelation::DeleteRelation(ClientContextWrapper &context, unique_ptr<ParsedE
 }
 
 BoundStatement DeleteRelation::Bind(Binder &binder) {
-	auto basetable = make_unique<BaseTableRef>();
+	auto basetable = make_uniq<BaseTableRef>();
 	basetable->schema_name = schema_name;
 	basetable->table_name = table_name;
 

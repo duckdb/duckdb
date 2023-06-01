@@ -12,7 +12,6 @@
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/atomic.hpp"
-
 #include <memory>
 
 namespace duckdb {
@@ -54,15 +53,27 @@ public:
 	virtual unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info);
 	virtual void UndoAlter(ClientContext &context, AlterInfo *info);
 
-	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context);
+	virtual unique_ptr<CatalogEntry> Copy(ClientContext &context) const;
 
 	//! Sets the CatalogEntry as the new root entry (i.e. the newest entry)
 	// this is called on a rollback to an AlterEntry
 	virtual void SetAsRoot();
 
 	//! Convert the catalog entry to a SQL string that can be used to re-construct the catalog entry
-	virtual string ToSQL();
+	virtual string ToSQL() const;
 
 	virtual void Verify(Catalog &catalog);
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return (TARGET &)*this;
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return (const TARGET &)*this;
+	}
 };
 } // namespace duckdb

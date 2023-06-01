@@ -13,10 +13,10 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, AttachedDatabaseType ty
       db(db), type(type) {
 	D_ASSERT(type == AttachedDatabaseType::TEMP_DATABASE || type == AttachedDatabaseType::SYSTEM_DATABASE);
 	if (type == AttachedDatabaseType::TEMP_DATABASE) {
-		storage = make_unique<SingleFileStorageManager>(*this, ":memory:", false);
+		storage = make_uniq<SingleFileStorageManager>(*this, ":memory:", false);
 	}
-	catalog = make_unique<DuckCatalog>(*this);
-	transaction_manager = make_unique<DuckTransactionManager>(*this);
+	catalog = make_uniq<DuckCatalog>(*this);
+	transaction_manager = make_uniq<DuckTransactionManager>(*this);
 	internal = true;
 }
 
@@ -25,10 +25,9 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
     : CatalogEntry(CatalogType::DATABASE_ENTRY, &catalog_p, std::move(name_p)), db(db),
       type(access_mode == AccessMode::READ_ONLY ? AttachedDatabaseType::READ_ONLY_DATABASE
                                                 : AttachedDatabaseType::READ_WRITE_DATABASE) {
-	storage =
-	    make_unique<SingleFileStorageManager>(*this, std::move(file_path_p), access_mode == AccessMode::READ_ONLY);
-	catalog = make_unique<DuckCatalog>(*this);
-	transaction_manager = make_unique<DuckTransactionManager>(*this);
+	storage = make_uniq<SingleFileStorageManager>(*this, std::move(file_path_p), access_mode == AccessMode::READ_ONLY);
+	catalog = make_uniq<DuckCatalog>(*this);
+	transaction_manager = make_uniq<DuckTransactionManager>(*this);
 	internal = true;
 }
 

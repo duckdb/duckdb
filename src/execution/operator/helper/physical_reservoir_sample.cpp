@@ -14,13 +14,13 @@ public:
 			if (percentage == 0) {
 				return;
 			}
-			sample = make_unique<ReservoirSamplePercentage>(allocator, percentage, options.seed);
+			sample = make_uniq<ReservoirSamplePercentage>(allocator, percentage, options.seed);
 		} else {
 			auto size = options.sample_size.GetValue<int64_t>();
 			if (size == 0) {
 				return;
 			}
-			sample = make_unique<ReservoirSample>(allocator, size, options.seed);
+			sample = make_uniq<ReservoirSample>(allocator, size, options.seed);
 		}
 	}
 
@@ -31,12 +31,12 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalReservoirSample::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<SampleGlobalSinkState>(Allocator::Get(context), *options);
+	return make_uniq<SampleGlobalSinkState>(Allocator::Get(context), *options);
 }
 
 SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                              DataChunk &input) const {
-	auto &gstate = (SampleGlobalSinkState &)state;
+	auto &gstate = state.Cast<SampleGlobalSinkState>();
 	if (!gstate.sample) {
 		return SinkResultType::FINISHED;
 	}
@@ -53,7 +53,7 @@ SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, GlobalSi
 //===--------------------------------------------------------------------===//
 void PhysicalReservoirSample::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                       LocalSourceState &lstate) const {
-	auto &sink = (SampleGlobalSinkState &)*this->sink_state;
+	auto &sink = this->sink_state->Cast<SampleGlobalSinkState>();
 	if (!sink.sample) {
 		return;
 	}

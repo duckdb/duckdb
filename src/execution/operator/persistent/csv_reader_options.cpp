@@ -145,6 +145,7 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		}
 	} else if (loption == "skip") {
 		skip_rows = ParseInteger(value, loption);
+		skip_rows_set = true;
 	} else if (loption == "max_line_size" || loption == "maximum_line_size") {
 		maximum_line_size = ParseInteger(value, loption);
 	} else if (loption == "sample_chunk_size") {
@@ -171,8 +172,6 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		SetDateFormat(LogicalTypeId::TIMESTAMP, format, true);
 	} else if (loption == "ignore_errors") {
 		ignore_errors = ParseBoolean(value, loption);
-	} else if (loption == "union_by_name") {
-		union_by_name = ParseBoolean(value, loption);
 	} else if (loption == "buffer_size") {
 		buffer_size = ParseInteger(value, loption);
 		if (buffer_size == 0) {
@@ -183,6 +182,8 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		if (decimal_separator != "." && decimal_separator != ",") {
 			throw BinderException("Unsupported parameter for DECIMAL_SEPARATOR: should be '.' or ','");
 		}
+	} else if (loption == "null_padding") {
+		null_padding = ParseBoolean(value, loption);
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
 	}
@@ -194,7 +195,7 @@ void BufferedCSVReaderOptions::SetWriteOption(const string &loption, const Value
 	}
 
 	if (loption == "force_quote") {
-		force_quote = ParseColumnList(value, names, loption);
+		force_quote = ParseColumnList(value, name_list, loption);
 	} else if (loption == "date_format" || loption == "dateformat") {
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::DATE, format, false);

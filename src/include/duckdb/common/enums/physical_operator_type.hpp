@@ -33,6 +33,8 @@ enum class PhysicalOperatorType : uint8_t {
 	RESERVOIR_SAMPLE,
 	STREAMING_SAMPLE,
 	STREAMING_WINDOW,
+	PIVOT,
+
 	// -----------------------------
 	// Scans
 	// -----------------------------

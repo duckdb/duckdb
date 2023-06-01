@@ -37,8 +37,8 @@ bool ComparisonExpressionMatcher::Match(Expression *expr_p, vector<Expression *>
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
-	auto expr = (BoundComparisonExpression *)expr_p;
-	vector<Expression *> expressions = {expr->left.get(), expr->right.get()};
+	auto &expr = expr_p->Cast<BoundComparisonExpression>();
+	vector<Expression *> expressions = {expr.left.get(), expr.right.get()};
 	return SetMatcher::Match(matchers, expressions, bindings, policy);
 }
 
@@ -49,27 +49,27 @@ bool CastExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bind
 	if (!matcher) {
 		return true;
 	}
-	auto expr = (BoundCastExpression *)expr_p;
-	return matcher->Match(expr->child.get(), bindings);
+	auto &expr = expr_p->Cast<BoundCastExpression>();
+	return matcher->Match(expr.child.get(), bindings);
 }
 
 bool InClauseExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bindings) {
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
-	auto expr = (BoundOperatorExpression *)expr_p;
-	if (expr->type != ExpressionType::COMPARE_IN || expr->type == ExpressionType::COMPARE_NOT_IN) {
+	auto &expr = expr_p->Cast<BoundOperatorExpression>();
+	if (expr.type != ExpressionType::COMPARE_IN || expr.type == ExpressionType::COMPARE_NOT_IN) {
 		return false;
 	}
-	return SetMatcher::Match(matchers, expr->children, bindings, policy);
+	return SetMatcher::Match(matchers, expr.children, bindings, policy);
 }
 
 bool ConjunctionExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bindings) {
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
-	auto expr = (BoundConjunctionExpression *)expr_p;
-	if (!SetMatcher::Match(matchers, expr->children, bindings, policy)) {
+	auto &expr = expr_p->Cast<BoundConjunctionExpression>();
+	if (!SetMatcher::Match(matchers, expr.children, bindings, policy)) {
 		return false;
 	}
 	return true;
@@ -79,11 +79,11 @@ bool FunctionExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
-	auto expr = (BoundFunctionExpression *)expr_p;
-	if (!FunctionMatcher::Match(function, expr->function.name)) {
+	auto &expr = expr_p->Cast<BoundFunctionExpression>();
+	if (!FunctionMatcher::Match(function, expr.function.name)) {
 		return false;
 	}
-	if (!SetMatcher::Match(matchers, expr->children, bindings, policy)) {
+	if (!SetMatcher::Match(matchers, expr.children, bindings, policy)) {
 		return false;
 	}
 	return true;

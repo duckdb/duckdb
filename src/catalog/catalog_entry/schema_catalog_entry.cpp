@@ -24,7 +24,7 @@ SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction trans
                                                         const string &name) {
 	SimilarCatalogEntry result;
 	Scan(transaction.GetContext(), type, [&](CatalogEntry *entry) {
-		auto ldist = StringUtil::LevenshteinDistance(entry->name, name);
+		auto ldist = StringUtil::SimilarityScore(entry->name, name);
 		if (ldist < result.distance) {
 			result.distance = ldist;
 			result.name = entry->name;
@@ -33,14 +33,14 @@ SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction trans
 	return result;
 }
 
-void SchemaCatalogEntry::Serialize(Serializer &serializer) {
+void SchemaCatalogEntry::Serialize(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteString(name);
 	writer.Finalize();
 }
 
 unique_ptr<CreateSchemaInfo> SchemaCatalogEntry::Deserialize(Deserializer &source) {
-	auto info = make_unique<CreateSchemaInfo>();
+	auto info = make_uniq<CreateSchemaInfo>();
 
 	FieldReader reader(source);
 	info->schema = reader.ReadRequired<string>();
@@ -49,7 +49,7 @@ unique_ptr<CreateSchemaInfo> SchemaCatalogEntry::Deserialize(Deserializer &sourc
 	return info;
 }
 
-string SchemaCatalogEntry::ToSQL() {
+string SchemaCatalogEntry::ToSQL() const {
 	std::stringstream ss;
 	ss << "CREATE SCHEMA " << name << ";";
 	return ss.str();

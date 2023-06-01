@@ -17,7 +17,7 @@ struct SetseedBindData : public FunctionData {
 	}
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<SetseedBindData>(context);
+		return make_uniq<SetseedBindData>(context);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
@@ -26,8 +26,8 @@ struct SetseedBindData : public FunctionData {
 };
 
 static void SetSeedFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (SetseedBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<SetseedBindData>();
 	auto &input = args.data[0];
 	input.Flatten(args.size());
 
@@ -49,7 +49,7 @@ static void SetSeedFunction(DataChunk &args, ExpressionState &state, Vector &res
 
 unique_ptr<FunctionData> SetSeedBind(ClientContext &context, ScalarFunction &bound_function,
                                      vector<unique_ptr<Expression>> &arguments) {
-	return make_unique<SetseedBindData>(context);
+	return make_uniq<SetseedBindData>(context);
 }
 
 void SetseedFun::RegisterFunction(BuiltinFunctions &set) {

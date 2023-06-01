@@ -8,8 +8,8 @@
 namespace duckdb {
 
 DatabaseManager::DatabaseManager(DatabaseInstance &db) : catalog_version(0), current_query_number(1) {
-	system = make_unique<AttachedDatabase>(db);
-	databases = make_unique<CatalogSet>(system->GetCatalog());
+	system = make_uniq<AttachedDatabase>(db);
+	databases = make_uniq<CatalogSet>(system->GetCatalog());
 }
 
 DatabaseManager::~DatabaseManager() {

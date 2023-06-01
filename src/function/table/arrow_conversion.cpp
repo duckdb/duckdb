@@ -20,7 +20,13 @@ void ShiftRight(unsigned char *ar, int size, int shift) {
 
 void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
                      int64_t nested_offset = -1, bool add_null = false) {
-	if (array.null_count != 0 && array.buffers[0]) {
+	// In certains we don't need to or cannot copy arrow's validity mask to duckdb.
+	//
+	// The conditions where we do want to copy arrow's mask to duckdb are:
+	// 1. nulls exist
+	// 2. n_buffers > 0, meaning the array's arrow type is not `null`
+	// 3. the validity buffer (the first buffer) is not a nullptr
+	if (array.null_count != 0 && array.n_buffers > 0 && array.buffers[0]) {
 		auto bit_offset = scan_state.chunk_offset + array.offset;
 		if (nested_offset != -1) {
 			bit_offset = nested_offset;
@@ -316,6 +322,20 @@ void IntervalConversionMonths(Vector &vector, ArrowArray &array, ArrowScanLocalS
 	}
 }
 
+void IntervalConversionMonthDayNanos(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state,
+                                     int64_t nested_offset, idx_t size) {
+	auto tgt_ptr = (interval_t *)FlatVector::GetData(vector);
+	auto src_ptr = (ArrowInterval *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+	if (nested_offset != -1) {
+		src_ptr = (ArrowInterval *)array.buffers[1] + nested_offset + array.offset;
+	}
+	for (idx_t row = 0; row < size; row++) {
+		tgt_ptr[row].days = src_ptr[row].days;
+		tgt_ptr[row].micros = src_ptr[row].nanoseconds / Interval::NANOS_PER_MICRO;
+		tgt_ptr[row].months = src_ptr[row].months;
+	}
+}
+
 void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
                          std::pair<idx_t, idx_t> &arrow_convert_idx, int64_t nested_offset, ValidityMask *parent_mask) {
@@ -507,6 +527,10 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanLocalState 
 		}
 		case ArrowDateTimeType::MONTHS: {
 			IntervalConversionMonths(vector, array, scan_state, nested_offset, size);
+			break;
+		}
+		case ArrowDateTimeType::MONTH_DAY_NANO: {
+			IntervalConversionMonthDayNanos(vector, array, scan_state, nested_offset, size);
 			break;
 		}
 		default:
@@ -736,7 +760,7 @@ void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanL
 	auto &dict_vectors = scan_state.arrow_dictionary_vectors;
 	if (dict_vectors.find(col_idx) == dict_vectors.end()) {
 		//! We need to set the dictionary data for this column
-		auto base_vector = make_unique<Vector>(vector.GetType(), array.dictionary->length);
+		auto base_vector = make_uniq<Vector>(vector.GetType(), array.dictionary->length);
 		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, 0, array.null_count > 0);
 		ColumnArrowToDuckDB(*base_vector, *array.dictionary, scan_state, array.dictionary->length, arrow_convert_data,
 		                    col_idx, arrow_convert_idx);
@@ -778,7 +802,7 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state,
 		if (array.length != scan_state.chunk->arrow_array.length) {
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
-		output.data[idx].GetBuffer()->SetAuxiliaryData(make_unique<ArrowAuxiliaryData>(scan_state.chunk));
+		output.data[idx].GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(scan_state.chunk));
 		if (array.dictionary) {
 			ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state, output.size(), arrow_convert_data,
 			                              col_idx, arrow_convert_idx);

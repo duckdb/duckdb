@@ -5,7 +5,7 @@
 namespace duckdb {
 
 unique_ptr<ProgressBarDisplay> JupyterProgressBarDisplay::Create() {
-	return make_unique<JupyterProgressBarDisplay>();
+	return make_uniq<JupyterProgressBarDisplay>();
 }
 
 void JupyterProgressBarDisplay::Initialize() {
@@ -17,7 +17,7 @@ void JupyterProgressBarDisplay::Initialize() {
 	style["bar_color"] = "black";
 	progress_bar = float_progress_attr((py::arg("min") = 0, py::arg("max") = 100, py::arg("style") = style));
 
-	progress_bar.attr("layout").attr("width") = "100%";
+	progress_bar.attr("layout").attr("width") = "auto";
 
 	// Display the progress bar
 	auto display_attr = import_cache.IPython().display.display();

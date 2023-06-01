@@ -16,7 +16,7 @@ using namespace duckdb;
 
 struct ArrowRoundtripFactory {
 	ArrowRoundtripFactory(vector<LogicalType> types_p, vector<string> names_p, string tz_p,
-	                      unique_ptr<QueryResult> result_p, bool big_result)
+	                      duckdb::unique_ptr<QueryResult> result_p, bool big_result)
 	    : types(std::move(types_p)), names(std::move(names_p)), tz(std::move(tz_p)), result(std::move(result_p)),
 	      big_result(big_result) {
 	}
@@ -24,7 +24,7 @@ struct ArrowRoundtripFactory {
 	vector<LogicalType> types;
 	vector<string> names;
 	string tz;
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	bool big_result;
 
 public:
@@ -86,17 +86,17 @@ public:
 		stream->private_data = nullptr;
 	}
 
-	static std::unique_ptr<duckdb::ArrowArrayStreamWrapper> CreateStream(uintptr_t this_ptr,
-	                                                                     ArrowStreamParameters &parameters) {
+	static duckdb::unique_ptr<duckdb::ArrowArrayStreamWrapper> CreateStream(uintptr_t this_ptr,
+	                                                                        ArrowStreamParameters &parameters) {
 		//! Create a new batch reader
 		auto &factory = *reinterpret_cast<ArrowRoundtripFactory *>(this_ptr); //! NOLINT
 		if (!factory.result) {
 			throw InternalException("Stream already consumed!");
 		}
 
-		auto stream_wrapper = make_unique<ArrowArrayStreamWrapper>();
+		auto stream_wrapper = make_uniq<ArrowArrayStreamWrapper>();
 		stream_wrapper->number_of_rows = -1;
-		auto private_data = make_unique<ArrowArrayStreamData>(factory);
+		auto private_data = make_uniq<ArrowArrayStreamData>(factory);
 		stream_wrapper->arrow_array_stream.get_schema = ArrowArrayStreamGetSchema;
 		stream_wrapper->arrow_array_stream.get_next = ArrowArrayStreamGetNext;
 		stream_wrapper->arrow_array_stream.get_last_error = ArrowArrayStreamGetLastError;
@@ -219,8 +219,8 @@ TEST_CASE("Test arrow roundtrip", "[arrow]") {
 	// FIXME: there seems to be a bug in the enum arrow reader in this test when run with vsize=2
 	return;
 #endif
-	TestArrowRoundtrip("SELECT * REPLACE "
-	                   "(interval (1) seconds AS interval) FROM test_all_types()");
+	TestArrowRoundtrip("SELECT * EXCLUDE(bit) REPLACE "
+	                   "(interval (1) seconds AS interval, hugeint::DOUBLE as hugeint) FROM test_all_types()");
 }
 
 TEST_CASE("Test Parquet Files round-trip", "[arrow][.]") {

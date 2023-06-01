@@ -46,7 +46,7 @@ public:
 
 		for (idx_t expr_idx = 0; expr_idx < expressions.size(); expr_idx++) {
 			auto &expr = *expressions[expr_idx];
-			auto &wexpr = (BoundWindowExpression &)expr;
+			auto &wexpr = expr.Cast<BoundWindowExpression>();
 			switch (expr.GetExpressionType()) {
 			case ExpressionType::WINDOW_AGGREGATE: {
 				auto &aggregate = *wexpr.aggregate;
@@ -64,16 +64,16 @@ public:
 				result.Initialize(Allocator::Get(context), {wexpr.children[0]->return_type});
 				executor.Execute(input, result);
 
-				const_vectors[expr_idx] = make_unique<Vector>(result.GetValue(0, 0));
+				const_vectors[expr_idx] = make_uniq<Vector>(result.GetValue(0, 0));
 				break;
 			}
 			case ExpressionType::WINDOW_PERCENT_RANK: {
-				const_vectors[expr_idx] = make_unique<Vector>(Value((double)0));
+				const_vectors[expr_idx] = make_uniq<Vector>(Value((double)0));
 				break;
 			}
 			case ExpressionType::WINDOW_RANK:
 			case ExpressionType::WINDOW_RANK_DENSE: {
-				const_vectors[expr_idx] = make_unique<Vector>(Value((int64_t)1));
+				const_vectors[expr_idx] = make_uniq<Vector>(Value((int64_t)1));
 				break;
 			}
 			default:
@@ -95,16 +95,16 @@ public:
 };
 
 unique_ptr<GlobalOperatorState> PhysicalStreamingWindow::GetGlobalOperatorState(ClientContext &context) const {
-	return make_unique<StreamingWindowGlobalState>();
+	return make_uniq<StreamingWindowGlobalState>();
 }
 
 unique_ptr<OperatorState> PhysicalStreamingWindow::GetOperatorState(ExecutionContext &context) const {
-	return make_unique<StreamingWindowState>();
+	return make_uniq<StreamingWindowState>();
 }
 
 OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                     GlobalOperatorState &gstate_p, OperatorState &state_p) const {
-	auto &gstate = (StreamingWindowGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
 	auto &state = (StreamingWindowState &)state_p;
 	if (!state.initialized) {
 		state.Initialize(context.client, input, select_list);
@@ -122,7 +122,7 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 		switch (expr.GetExpressionType()) {
 		case ExpressionType::WINDOW_AGGREGATE: {
 			//	Establish the aggregation environment
-			auto &wexpr = (BoundWindowExpression &)expr;
+			auto &wexpr = expr.Cast<BoundWindowExpression>();
 			auto &aggregate = *wexpr.aggregate;
 			auto &statev = state.statev;
 			state.state_ptr = state.aggregate_states[expr_idx].data();

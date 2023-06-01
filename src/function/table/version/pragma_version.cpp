@@ -22,7 +22,7 @@ static unique_ptr<FunctionData> PragmaVersionBind(ClientContext &context, TableF
 }
 
 static unique_ptr<GlobalTableFunctionState> PragmaVersionInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<PragmaVersionData>();
+	return make_uniq<PragmaVersionData>();
 }
 
 static void PragmaVersionFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

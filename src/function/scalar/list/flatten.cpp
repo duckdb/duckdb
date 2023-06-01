@@ -1,7 +1,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/storage/statistics/list_statistics.hpp"
+#include "duckdb/storage/statistics/list_stats.hpp"
 
 namespace duckdb {
 
@@ -106,7 +106,7 @@ static unique_ptr<FunctionData> ListFlattenBind(ClientContext &context, ScalarFu
 	auto child_type = ListType::GetChildType(input_type);
 	if (child_type.id() == LogicalType::SQLNULL) {
 		bound_function.return_type = input_type;
-		return make_unique<VariableReturnBindData>(bound_function.return_type);
+		return make_uniq<VariableReturnBindData>(bound_function.return_type);
 	}
 	if (child_type.id() == LogicalTypeId::UNKNOWN) {
 		bound_function.arguments[0] = LogicalType(LogicalTypeId::UNKNOWN);
@@ -116,22 +116,15 @@ static unique_ptr<FunctionData> ListFlattenBind(ClientContext &context, ScalarFu
 	D_ASSERT(child_type.id() == LogicalTypeId::LIST);
 
 	bound_function.return_type = child_type;
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 static unique_ptr<BaseStatistics> ListFlattenStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
-	if (!child_stats[0]) {
-		return nullptr;
-	}
-	auto &list_stats = (ListStatistics &)*child_stats[0];
-	if (!list_stats.child_stats || list_stats.child_stats->type == LogicalTypeId::SQLNULL) {
-		return nullptr;
-	}
-
-	auto child_copy = list_stats.child_stats->Copy();
-	child_copy->validity_stats = make_unique<ValidityStatistics>(true);
-	return child_copy;
+	auto &list_child_stats = ListStats::GetChildStats(child_stats[0]);
+	auto child_copy = list_child_stats.Copy();
+	child_copy.Set(StatsInfo::CAN_HAVE_NULL_VALUES);
+	return child_copy.ToUnique();
 }
 
 void ListFlattenFun::RegisterFunction(BuiltinFunctions &set) {

@@ -3,6 +3,8 @@
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+
 namespace duckdb {
 
 ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup &row_group_p,
@@ -38,7 +40,7 @@ ColumnCheckpointState &ColumnDataCheckpointer::GetCheckpointState() {
 void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
 	Vector scan_vector(intermediate.GetType(), nullptr);
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto segment = (ColumnSegment *)nodes[segment_idx].node.get();
+		auto segment = nodes[segment_idx].node.get();
 		ColumnScanState scan_state;
 		scan_state.current = segment;
 		segment->InitializeScan(scan_state);
@@ -161,9 +163,9 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	// first we check the current segments
 	// if there are any persistent segments, we will mark their old block ids as modified
 	// since the segments will be rewritten their old on disk data is no longer required
-	auto &block_manager = col_data.block_manager;
+	auto &block_manager = col_data.GetBlockManager();
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto segment = (ColumnSegment *)nodes[segment_idx].node.get();
+		auto segment = nodes[segment_idx].node.get();
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 			// persistent segment has updates: mark it as modified and rewrite the block with the merged updates
 			auto block_id = segment->GetBlockId();
@@ -194,7 +196,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 
 bool ColumnDataCheckpointer::HasChanges() {
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto segment = (ColumnSegment *)nodes[segment_idx].node.get();
+		auto segment = nodes[segment_idx].node.get();
 		if (segment->segment_type == ColumnSegmentType::TRANSIENT) {
 			// transient segment: always need to write to disk
 			return true;
@@ -214,20 +216,19 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 	// all segments are persistent and there are no updates
 	// we only need to write the metadata
 	for (idx_t segment_idx = 0; segment_idx < nodes.size(); segment_idx++) {
-		auto segment = (ColumnSegment *)nodes[segment_idx].node.get();
+		auto segment = nodes[segment_idx].node.get();
 		D_ASSERT(segment->segment_type == ColumnSegmentType::PERSISTENT);
 
 		// set up the data pointer directly using the data from the persistent segment
-		DataPointer pointer;
+		DataPointer pointer(segment->stats.statistics.Copy());
 		pointer.block_pointer.block_id = segment->GetBlockId();
 		pointer.block_pointer.offset = segment->GetBlockOffset();
 		pointer.row_start = segment->start;
 		pointer.tuple_count = segment->count;
 		pointer.compression_type = segment->function->type;
-		pointer.statistics = segment->stats.statistics->Copy();
 
 		// merge the persistent stats into the global column stats
-		state.global_stats->Merge(*segment->stats.statistics);
+		state.global_stats->Merge(segment->stats.statistics);
 
 		// directly append the current segment to the new tree
 		state.new_tree.AppendSegment(std::move(nodes[segment_idx].node));
@@ -236,7 +237,7 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 	}
 }
 
-void ColumnDataCheckpointer::Checkpoint(vector<SegmentNode> nodes) {
+void ColumnDataCheckpointer::Checkpoint(vector<SegmentNode<ColumnSegment>> nodes) {
 	D_ASSERT(!nodes.empty());
 	this->nodes = std::move(nodes);
 	// first check if any of the segments have changes

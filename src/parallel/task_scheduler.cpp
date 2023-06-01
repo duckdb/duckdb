@@ -58,7 +58,7 @@ bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, unique_ptr<Task>
 
 #else
 struct ConcurrentQueue {
-	std::queue<std::unique_ptr<Task>> q;
+	std::queue<unique_ptr<Task>> q;
 	mutex qlock;
 
 	void Enqueue(ProducerToken &token, unique_ptr<Task> task);
@@ -93,7 +93,7 @@ ProducerToken::ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerT
 ProducerToken::~ProducerToken() {
 }
 
-TaskScheduler::TaskScheduler(DatabaseInstance &db) : db(db), queue(make_unique<ConcurrentQueue>()) {
+TaskScheduler::TaskScheduler(DatabaseInstance &db) : db(db), queue(make_uniq<ConcurrentQueue>()) {
 }
 
 TaskScheduler::~TaskScheduler() {
@@ -111,8 +111,8 @@ TaskScheduler &TaskScheduler::GetScheduler(DatabaseInstance &db) {
 }
 
 unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {
-	auto token = make_unique<QueueProducerToken>(*queue);
-	return make_unique<ProducerToken>(*this, std::move(token));
+	auto token = make_uniq<QueueProducerToken>(*queue);
+	return make_uniq<ProducerToken>(*this, std::move(token));
 }
 
 void TaskScheduler::ScheduleTask(ProducerToken &token, unique_ptr<Task> task) {
@@ -238,8 +238,8 @@ void TaskScheduler::SetThreadsInternal(int32_t n) {
 		for (idx_t i = 0; i < create_new_threads; i++) {
 			// launch a thread and assign it a cancellation marker
 			auto marker = unique_ptr<atomic<bool>>(new atomic<bool>(true));
-			auto worker_thread = make_unique<thread>(ThreadExecuteTasks, this, marker.get());
-			auto thread_wrapper = make_unique<SchedulerThread>(std::move(worker_thread));
+			auto worker_thread = make_uniq<thread>(ThreadExecuteTasks, this, marker.get());
+			auto thread_wrapper = make_uniq<SchedulerThread>(std::move(worker_thread));
 
 			threads.push_back(std::move(thread_wrapper));
 			markers.push_back(std::move(marker));

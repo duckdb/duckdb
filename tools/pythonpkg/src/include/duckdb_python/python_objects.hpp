@@ -188,6 +188,18 @@ public:
 	}
 };
 
+class FileLikeObject : public py::object {
+public:
+	FileLikeObject(const py::object &o) : py::object(o, borrowed_t {}) {
+	}
+	using py::object::object;
+
+public:
+	static bool check_(const py::handle &object) {
+		return py::isinstance(object, py::module::import("io").attr("IOBase"));
+	}
+};
+
 } // namespace duckdb
 
 namespace pybind11 {

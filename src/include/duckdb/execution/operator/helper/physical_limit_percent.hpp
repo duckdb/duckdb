@@ -16,6 +16,9 @@ namespace duckdb {
 //! PhyisicalLimitPercent represents the LIMIT PERCENT operator
 class PhysicalLimitPercent : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::LIMIT_PERCENT;
+
+public:
 	PhysicalLimitPercent(vector<LogicalType> types, double limit_percent, idx_t offset,
 	                     unique_ptr<Expression> limit_expression, unique_ptr<Expression> offset_expression,
 	                     idx_t estimated_cardinality)

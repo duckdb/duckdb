@@ -10719,6 +10719,7 @@ struct ShellState {
   int nWidth;            /* Number of slots in colWidth[] and actualWidth[] */
   char nullValue[20];    /* The text to print when a NULL comes back from
                          ** the database */
+  int columns;           /* Column-wise DuckBox rendering */
   char outfile[FILENAME_MAX]; /* Filename for *out */
   const char *zDbFilename;    /* name of the database file */
   char *zFreeOnClose;         /* Filename to free when closing */
@@ -12881,7 +12882,7 @@ columnar_end:
   sqlite3_free(azData);
 }
 
-extern char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value);
+extern char *sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_width, char *null_value, int columns);
 
 /*
 ** Run a prepared statement
@@ -12894,7 +12895,7 @@ static void exec_prepared_stmt(
   if (pArg->cMode == MODE_DuckBox) {
 	  size_t max_rows = pArg->outfile[0] == '\0' || pArg->outfile[0] == '|' ? pArg->max_rows : (size_t) -1;
 	  size_t max_width = pArg->outfile[0] == '\0' || pArg->outfile[0] == '|' ? pArg->max_width : (size_t) -1;
-	  char *str = sqlite3_print_duckbox(pStmt, max_rows, max_width, pArg->nullValue);
+	  char *str = sqlite3_print_duckbox(pStmt, max_rows, max_width, pArg->nullValue, pArg->columns);
 	  if (str) {
 		  utf8_printf(pArg->out, "%s", str);
 		  sqlite3_free(str);
@@ -13590,6 +13591,7 @@ static const char *(azHelp[]) = {
   ".changes on|off          Show number of rows changed by SQL",
   ".check GLOB              Fail if output since .testcase does not match",
   ".clone NEWDB             Clone data into NEWDB from the existing database",
+  ".columns                 Column-wise rendering of query results",
   ".constant ?COLOR?        Sets the syntax highlighting color used for constant values",
   "   COLOR is one of:",
   "     red|green|yellow|blue|magenta|cyan|white|brightblack|brightred|brightgreen",
@@ -13735,6 +13737,7 @@ static const char *(azHelp[]) = {
   "                            that are not also INTEGER PRIMARY KEYs",
 #endif
   ".restore ?DB? FILE       Restore content of DB (default \"main\") from FILE",
+  ".rows                    Row-wise rendering of query results (default)",
   ".save FILE               Write in-memory database into FILE",
   ".scanstats on|off        Turn sqlite3_stmt_scanstatus() metrics on or off",
   ".schema ?PATTERN?        Show the CREATE statements matching PATTERN",
@@ -18273,6 +18276,10 @@ static int do_meta_command(char *zLine, ShellState *p){
 	}else{
 	  p->max_width = (size_t)integerValue(azArg[1]);
 	}
+  }else if( c=='c' && strncmp(azArg[0],"columns",n)==0 ){
+    p->columns = 1;
+  }else if( c=='r' && strncmp(azArg[0],"rows",n)==0 ){
+    p->columns = 0;
   }else
   if( c=='m' && strncmp(azArg[0], "mode", n)==0 ){
     const char *zMode = nArg>=2 ? azArg[1] : "";

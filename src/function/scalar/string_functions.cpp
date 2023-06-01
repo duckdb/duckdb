@@ -45,11 +45,13 @@ void BuiltinFunctions::RegisterStringFunctions() {
 	// blob functions
 	Register<Base64Fun>();
 	Register<EncodeFun>();
+	Register<HexFun>();
 
 	// bit functions
 	Register<GetBitFun>();
 	Register<SetBitFun>();
 	Register<BitPositionFun>();
+	Register<BitStringFun>();
 
 	// uuid functions
 	Register<UUIDFun>();

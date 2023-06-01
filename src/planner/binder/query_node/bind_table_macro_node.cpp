@@ -41,7 +41,7 @@ unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, Table
 	// positional parameters
 	for (idx_t i = 0; i < macro_def.parameters.size(); i++) {
 		types.emplace_back(LogicalType::SQLNULL);
-		auto &param = (ColumnRefExpression &)*macro_def.parameters[i];
+		auto &param = macro_def.parameters[i]->Cast<ColumnRefExpression>();
 		names.push_back(param.GetColumnName());
 	}
 	// default parameters
@@ -51,7 +51,7 @@ unique_ptr<QueryNode> Binder::BindTableMacro(FunctionExpression &function, Table
 		// now push the defaults into the positionals
 		positionals.push_back(std::move(defaults[it->first]));
 	}
-	auto new_macro_binding = make_unique<DummyBinding>(types, names, macro_func->name);
+	auto new_macro_binding = make_uniq<DummyBinding>(types, names, macro_func->name);
 	new_macro_binding->arguments = &positionals;
 
 	// We need an ExpressionBinder so that we can call ExpressionBinder::ReplaceMacroParametersRecursive()

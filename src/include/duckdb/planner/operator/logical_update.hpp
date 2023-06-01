@@ -15,6 +15,9 @@ class TableCatalogEntry;
 
 class LogicalUpdate : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_UPDATE;
+
+public:
 	explicit LogicalUpdate(TableCatalogEntry *table);
 
 	//! The base table to update

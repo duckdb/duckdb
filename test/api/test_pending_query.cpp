@@ -128,8 +128,8 @@ static void parallel_pending_query(Connection *conn, bool *correct, size_t threa
 }
 
 TEST_CASE("Test parallel usage of pending query API", "[api][.]") {
-	auto db = make_unique<DuckDB>(nullptr);
-	auto conn = make_unique<Connection>(*db);
+	auto db = make_uniq<DuckDB>(nullptr);
+	auto conn = make_uniq<Connection>(*db);
 
 	REQUIRE_NO_FAIL(conn->Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(conn->Query("INSERT INTO integers VALUES (1), (2), (3), (NULL)"));

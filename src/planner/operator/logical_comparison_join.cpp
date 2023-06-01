@@ -13,8 +13,8 @@ string LogicalComparisonJoin::ParamsToString() const {
 	string result = JoinTypeToString(join_type);
 	for (auto &condition : conditions) {
 		result += "\n";
-		auto expr = make_unique<BoundComparisonExpression>(condition.comparison, condition.left->Copy(),
-		                                                   condition.right->Copy());
+		auto expr =
+		    make_uniq<BoundComparisonExpression>(condition.comparison, condition.left->Copy(), condition.right->Copy());
 		result += expr->ToString();
 	}
 
@@ -36,7 +36,7 @@ void LogicalComparisonJoin::Deserialize(LogicalComparisonJoin &comparison_join, 
 
 unique_ptr<LogicalOperator> LogicalComparisonJoin::Deserialize(LogicalDeserializationState &state,
                                                                FieldReader &reader) {
-	auto result = make_unique<LogicalComparisonJoin>(JoinType::INVALID, state.type);
+	auto result = make_uniq<LogicalComparisonJoin>(JoinType::INVALID, state.type);
 	LogicalComparisonJoin::Deserialize(*result, state, reader);
 	return std::move(result);
 }

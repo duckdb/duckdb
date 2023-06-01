@@ -1,4 +1,5 @@
 #include "duckdb/common/types/column_data_collection_segment.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 
@@ -168,11 +169,8 @@ idx_t ColumnDataCollectionSegment::ReadVectorInternal(ChunkManagementState &stat
 		if (type_size > 0) {
 			memcpy(target_data + current_offset * type_size, base_ptr, current_vdata.count * type_size);
 		}
-		// FIXME: use bitwise operations here
 		ValidityMask current_validity(validity_data);
-		for (idx_t k = 0; k < current_vdata.count; k++) {
-			target_validity.Set(current_offset + k, current_validity.RowIsValid(k));
-		}
+		target_validity.SliceInPlace(current_validity, current_offset, 0, current_vdata.count);
 		current_offset += current_vdata.count;
 		next_index = current_vdata.next_data;
 	}
@@ -202,12 +200,16 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 				throw InternalException("Column Data Collection: mismatch in struct child sizes");
 			}
 		}
-	} else if (internal_type == PhysicalType::VARCHAR &&
-	           allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
-		for (auto &swizzle_segment : vdata.swizzle_data) {
-			auto &string_heap_segment = GetVectorData(swizzle_segment.child_index);
-			allocator->UnswizzlePointers(state, result, swizzle_segment.offset, swizzle_segment.count,
-			                             string_heap_segment.block_id, string_heap_segment.offset);
+	} else if (internal_type == PhysicalType::VARCHAR) {
+		if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
+			for (auto &swizzle_segment : vdata.swizzle_data) {
+				auto &string_heap_segment = GetVectorData(swizzle_segment.child_index);
+				allocator->UnswizzlePointers(state, result, swizzle_segment.offset, swizzle_segment.count,
+				                             string_heap_segment.block_id, string_heap_segment.offset);
+			}
+		}
+		if (state.properties == ColumnDataScanProperties::DISALLOW_ZERO_COPY) {
+			VectorOperations::Copy(result, result, vdata.count, 0, 0);
 		}
 	}
 	return vcount;

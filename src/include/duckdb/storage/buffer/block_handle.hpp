@@ -17,6 +17,7 @@ namespace duckdb {
 class BlockManager;
 class BufferHandle;
 class BufferManager;
+class BufferPool;
 class DatabaseInstance;
 class FileBuffer;
 
@@ -55,6 +56,7 @@ class BlockHandle {
 	friend struct BufferEvictionNode;
 	friend class BufferHandle;
 	friend class BufferManager;
+	friend class BufferPool;
 
 public:
 	BlockHandle(BlockManager &block_manager, block_id_t block_id);

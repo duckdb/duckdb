@@ -78,7 +78,7 @@ static unique_ptr<FunctionData> DuckDBColumnsBind(ClientContext &context, TableF
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBColumnsInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBColumnsData>();
+	auto result = make_uniq<DuckDBColumnsData>();
 
 	// scan all the schemas for tables and views and collect them
 	auto schemas = Catalog::GetAllSchemas(context);
@@ -175,9 +175,9 @@ private:
 unique_ptr<ColumnHelper> ColumnHelper::Create(CatalogEntry *entry) {
 	switch (entry->type) {
 	case CatalogType::TABLE_ENTRY:
-		return make_unique<TableColumnHelper>((TableCatalogEntry *)entry);
+		return make_uniq<TableColumnHelper>((TableCatalogEntry *)entry);
 	case CatalogType::VIEW_ENTRY:
-		return make_unique<ViewColumnHelper>((ViewCatalogEntry *)entry);
+		return make_uniq<ViewColumnHelper>((ViewCatalogEntry *)entry);
 	default:
 		throw NotImplementedException("Unsupported catalog type for duckdb_columns");
 	}

@@ -30,7 +30,7 @@ int main(int argc, char *argv[]) {
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
 
 	int new_argc = 0;
-	auto new_argv = unique_ptr<char *[]>(new char *[argc]);
+	auto new_argv = duckdb::unique_ptr<char *[]>(new char *[argc]);
 	for (int i = 0; i < argc; i++) {
 		if (string(argv[i]) == "--force-storage") {
 			test_force_storage = true;

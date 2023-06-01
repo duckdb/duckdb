@@ -8,7 +8,7 @@ using Filter = FilterPushdown::Filter;
 unique_ptr<LogicalOperator> FilterPushdown::PushdownSingleJoin(unique_ptr<LogicalOperator> op,
                                                                unordered_set<idx_t> &left_bindings,
                                                                unordered_set<idx_t> &right_bindings) {
-	D_ASSERT(((LogicalJoin &)*op).join_type == JoinType::SINGLE);
+	D_ASSERT(op->Cast<LogicalJoin>().join_type == JoinType::SINGLE);
 	FilterPushdown left_pushdown(optimizer), right_pushdown(optimizer);
 	// now check the set of filters
 	for (idx_t i = 0; i < filters.size(); i++) {
@@ -23,7 +23,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownSingleJoin(unique_ptr<Logica
 	}
 	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
 	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
-	return FinishPushdown(std::move(op));
+	return PushFinalFilters(std::move(op));
 }
 
 } // namespace duckdb

@@ -58,8 +58,8 @@ public:
 
 SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                     DataChunk &chunk) const {
-	auto &gstate = (UpdateGlobalState &)state;
-	auto &ustate = (UpdateLocalState &)lstate;
+	auto &gstate = state.Cast<UpdateGlobalState>();
+	auto &ustate = lstate.Cast<UpdateLocalState>();
 
 	DataChunk &update_chunk = ustate.update_chunk;
 	DataChunk &mock_chunk = ustate.mock_chunk;
@@ -80,7 +80,7 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 		} else {
 			D_ASSERT(expressions[i]->type == ExpressionType::BOUND_REF);
 			// index into child chunk
-			auto &binding = (BoundReferenceExpression &)*expressions[i];
+			auto &binding = expressions[i]->Cast<BoundReferenceExpression>();
 			update_chunk.data[i].Reference(chunk.data[binding.index]);
 		}
 	}
@@ -133,15 +133,15 @@ SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &
 }
 
 unique_ptr<GlobalSinkState> PhysicalUpdate::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<UpdateGlobalState>(context, GetTypes());
+	return make_uniq<UpdateGlobalState>(context, GetTypes());
 }
 
 unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<UpdateLocalState>(context.client, expressions, table.GetTypes(), bound_defaults);
+	return make_uniq<UpdateLocalState>(context.client, expressions, table.GetTypes(), bound_defaults);
 }
 
 void PhysicalUpdate::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
-	auto &state = (UpdateLocalState &)lstate;
+	auto &state = lstate.Cast<UpdateLocalState>();
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(this, &state.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
@@ -155,7 +155,7 @@ public:
 	explicit UpdateSourceState(const PhysicalUpdate &op) : finished(false) {
 		if (op.return_chunk) {
 			D_ASSERT(op.sink_state);
-			auto &g = (UpdateGlobalState &)*op.sink_state;
+			auto &g = op.sink_state->Cast<UpdateGlobalState>();
 			g.return_collection.InitializeScan(scan_state);
 		}
 	}
@@ -165,13 +165,13 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalUpdate::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<UpdateSourceState>(*this);
+	return make_uniq<UpdateSourceState>(*this);
 }
 
 void PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                              LocalSourceState &lstate) const {
-	auto &state = (UpdateSourceState &)gstate;
-	auto &g = (UpdateGlobalState &)*sink_state;
+	auto &state = gstate.Cast<UpdateSourceState>();
+	auto &g = sink_state->Cast<UpdateGlobalState>();
 	if (state.finished) {
 		return;
 	}

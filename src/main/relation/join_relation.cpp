@@ -27,14 +27,14 @@ JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> rig
 }
 
 unique_ptr<QueryNode> JoinRelation::GetQueryNode() {
-	auto result = make_unique<SelectNode>();
-	result->select_list.push_back(make_unique<StarExpression>());
+	auto result = make_uniq<SelectNode>();
+	result->select_list.push_back(make_uniq<StarExpression>());
 	result->from_table = GetTableRef();
 	return std::move(result);
 }
 
 unique_ptr<TableRef> JoinRelation::GetTableRef() {
-	auto join_ref = make_unique<JoinRef>(JoinRefType::REGULAR);
+	auto join_ref = make_uniq<JoinRef>(JoinRefType::REGULAR);
 	join_ref->left = left->GetTableRef();
 	join_ref->right = right->GetTableRef();
 	if (condition) {

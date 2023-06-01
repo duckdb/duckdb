@@ -138,7 +138,7 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	child_list_t<LogicalType> struct_type_list;
 	struct_type_list.push_back(make_pair("a", LogicalType::INTEGER));
 	struct_type_list.push_back(make_pair("b", LogicalType::VARCHAR));
-	auto struct_type = LogicalType::STRUCT(std::move(struct_type_list));
+	auto struct_type = LogicalType::STRUCT(struct_type_list);
 
 	child_list_t<Value> min_struct_list;
 	min_struct_list.push_back(make_pair("a", Value(LogicalType::INTEGER)));
@@ -156,7 +156,7 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	child_list_t<LogicalType> struct_list_type_list;
 	struct_list_type_list.push_back(make_pair("a", int_list_type));
 	struct_list_type_list.push_back(make_pair("b", varchar_list_type));
-	auto struct_list_type = LogicalType::STRUCT(std::move(struct_list_type_list));
+	auto struct_list_type = LogicalType::STRUCT(struct_list_type_list);
 
 	child_list_t<Value> min_struct_vl_list;
 	min_struct_vl_list.push_back(make_pair("a", Value(int_list_type)));
@@ -210,7 +210,7 @@ static unique_ptr<FunctionData> TestAllTypesBind(ClientContext &context, TableFu
 }
 
 unique_ptr<GlobalTableFunctionState> TestAllTypesInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<TestAllTypesData>();
+	auto result = make_uniq<TestAllTypesData>();
 	auto test_types = TestAllTypesFun::GetTestTypes();
 	// 3 rows: min, max and NULL
 	result->entries.resize(3);

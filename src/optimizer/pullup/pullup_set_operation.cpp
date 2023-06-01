@@ -7,7 +7,7 @@ namespace duckdb {
 
 static void ReplaceFilterTableIndex(Expression &expr, LogicalSetOperation &setop) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		auto &colref = (BoundColumnRefExpression &)expr;
+		auto &colref = expr.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
 
 		colref.binding.table_index = setop.table_index;
@@ -27,8 +27,8 @@ unique_ptr<LogicalOperator> FilterPullup::PullupSetOperation(unique_ptr<LogicalO
 		op = PullupFromLeft(std::move(op));
 	}
 	if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
-		auto &filter = (LogicalFilter &)*op;
-		auto &setop = (LogicalSetOperation &)*filter.children[0];
+		auto &filter = op->Cast<LogicalFilter>();
+		auto &setop = filter.children[0]->Cast<LogicalSetOperation>();
 		for (idx_t i = 0; i < filter.expressions.size(); ++i) {
 			ReplaceFilterTableIndex(*filter.expressions[i], setop);
 		}

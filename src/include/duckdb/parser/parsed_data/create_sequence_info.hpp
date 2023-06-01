@@ -51,7 +51,7 @@ struct CreateSequenceInfo : public CreateInfo {
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {
-		auto result = make_unique<CreateSequenceInfo>();
+		auto result = make_uniq<CreateSequenceInfo>();
 		CopyProperties(*result);
 		result->name = name;
 		result->schema = schema;

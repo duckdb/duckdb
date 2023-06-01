@@ -58,7 +58,7 @@ unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, uint8_t fl
 
 	// `seekable` is passed here for `ArrowFSWrapper`, other implementations seem happy enough to ignore it
 	const auto &handle = filesystem.attr("open")(path, py::str(flags_s), py::arg("seekable") = true);
-	return make_unique<PythonFileHandle>(*this, path, handle);
+	return make_uniq<PythonFileHandle>(*this, path, handle);
 }
 
 int64_t PythonFilesystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
@@ -127,6 +127,10 @@ void PythonFilesystem::Seek(duckdb::FileHandle &handle, uint64_t location) {
 
 	auto seek = PythonFileHandle::GetHandle(handle).attr("seek");
 	seek(location);
+	if (PyErr_Occurred()) {
+		PyErr_PrintEx(1);
+		throw InvalidInputException("Python exception occurred!");
+	}
 }
 bool PythonFilesystem::CanHandleFile(const string &fpath) {
 	for (const auto &protocol : protocols) {

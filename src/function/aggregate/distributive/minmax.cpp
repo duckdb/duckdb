@@ -514,6 +514,7 @@ unique_ptr<FunctionData> BindDecimalMinMax(ClientContext &context, AggregateFunc
 	function.name = std::move(name);
 	function.arguments[0] = decimal_type;
 	function.return_type = decimal_type;
+	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return nullptr;
 }
 
@@ -545,6 +546,7 @@ unique_ptr<FunctionData> BindMinMax(ClientContext &context, AggregateFunction &f
 	auto name = std::move(function.name);
 	function = GetMinMaxOperator<OP, OP_STRING, OP_VECTOR>(input_type);
 	function.name = std::move(name);
+	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	if (function.bind) {
 		return function.bind(context, function, arguments);
 	} else {

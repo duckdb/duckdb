@@ -19,14 +19,15 @@ namespace duckdb {
 class MacroCatalogEntry : public StandardEntry {
 public:
 	MacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info);
+
 	//! The macro function
 	unique_ptr<MacroFunction> function;
 
 public:
 	//! Serialize the meta information
-	virtual void Serialize(Serializer &serializer) = 0;
+	virtual void Serialize(Serializer &serializer) const = 0;
 
-	string ToSQL() override {
+	string ToSQL() const override {
 		return function->ToSQL(schema->name, name);
 	}
 };

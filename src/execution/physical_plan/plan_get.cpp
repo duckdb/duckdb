@@ -11,7 +11,7 @@ namespace duckdb {
 
 unique_ptr<TableFilterSet> CreateTableFilterSet(TableFilterSet &table_filters, vector<column_t> &column_ids) {
 	// create the table filter map
-	auto table_filter_set = make_unique<TableFilterSet>();
+	auto table_filter_set = make_uniq<TableFilterSet>();
 	for (auto &table_filter : table_filters.filters) {
 		// find the relative column index from the absolute column index into the table
 		idx_t column_index = DConstants::INVALID_INDEX;
@@ -33,9 +33,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	if (!op.children.empty()) {
 		// this is for table producing functions that consume subquery results
 		D_ASSERT(op.children.size() == 1);
-		auto node =
-		    make_unique<PhysicalTableInOutFunction>(op.types, op.function, std::move(op.bind_data), op.column_ids,
-		                                            op.estimated_cardinality, std::move(op.projected_input));
+		auto node = make_uniq<PhysicalTableInOutFunction>(op.types, op.function, std::move(op.bind_data), op.column_ids,
+		                                                  op.estimated_cardinality, std::move(op.projected_input));
 		node->children.push_back(CreatePlan(std::move(op.children[0])));
 		return std::move(node);
 	}
@@ -54,9 +53,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	// create the table scan node
 	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
-		auto node = make_unique<PhysicalTableScan>(op.returned_types, op.function, std::move(op.bind_data),
-		                                           op.returned_types, op.column_ids, vector<column_t>(), op.names,
-		                                           std::move(table_filters), op.estimated_cardinality);
+		auto node = make_uniq<PhysicalTableScan>(op.returned_types, op.function, std::move(op.bind_data),
+		                                         op.returned_types, op.column_ids, vector<column_t>(), op.names,
+		                                         std::move(table_filters), op.estimated_cardinality);
 		// first check if an additional projection is necessary
 		if (op.column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
@@ -79,22 +78,22 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		for (auto &column_id : op.column_ids) {
 			if (column_id == COLUMN_IDENTIFIER_ROW_ID) {
 				types.emplace_back(LogicalType::BIGINT);
-				expressions.push_back(make_unique<BoundConstantExpression>(Value::BIGINT(0)));
+				expressions.push_back(make_uniq<BoundConstantExpression>(Value::BIGINT(0)));
 			} else {
 				auto type = op.returned_types[column_id];
 				types.push_back(type);
-				expressions.push_back(make_unique<BoundReferenceExpression>(type, column_id));
+				expressions.push_back(make_uniq<BoundReferenceExpression>(type, column_id));
 			}
 		}
 
 		auto projection =
-		    make_unique<PhysicalProjection>(std::move(types), std::move(expressions), op.estimated_cardinality);
+		    make_uniq<PhysicalProjection>(std::move(types), std::move(expressions), op.estimated_cardinality);
 		projection->children.push_back(std::move(node));
 		return std::move(projection);
 	} else {
-		return make_unique<PhysicalTableScan>(op.types, op.function, std::move(op.bind_data), op.returned_types,
-		                                      op.column_ids, op.projection_ids, op.names, std::move(table_filters),
-		                                      op.estimated_cardinality);
+		return make_uniq<PhysicalTableScan>(op.types, op.function, std::move(op.bind_data), op.returned_types,
+		                                    op.column_ids, op.projection_ids, op.names, std::move(table_filters),
+		                                    op.estimated_cardinality);
 	}
 }
 

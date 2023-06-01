@@ -106,7 +106,7 @@ private:
 	//! If there are multiple equivalence sets, they are merged.
 	void AddToEquivalenceSets(FilterInfo *filter_info, vector<idx_t> matching_equivalent_sets);
 
-	TableFilterSet *GetTableFilters(LogicalOperator *op);
+	TableFilterSet *GetTableFilters(LogicalOperator *op, idx_t table_index);
 
 	void AddRelationTdom(FilterInfo *filter_info);
 	bool EmptyFilter(FilterInfo *filter_info);
@@ -115,7 +115,7 @@ private:
 	                            unique_ptr<BaseStatistics> base_stats);
 	idx_t InspectConjunctionOR(idx_t cardinality, idx_t column_index, ConjunctionOrFilter *fil,
 	                           unique_ptr<BaseStatistics> base_stats);
-	idx_t InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters);
+	idx_t InspectTableFilters(idx_t cardinality, LogicalOperator *op, TableFilterSet *table_filters, idx_t table_index);
 };
 
 } // namespace duckdb

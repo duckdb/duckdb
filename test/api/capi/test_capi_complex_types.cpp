@@ -5,7 +5,7 @@ using namespace std;
 
 TEST_CASE("Test decimal types C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 
@@ -48,7 +48,7 @@ TEST_CASE("Test decimal types C API", "[capi]") {
 
 TEST_CASE("Test enum types C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	if (duckdb_vector_size() < 64) {
 		return;
@@ -92,7 +92,7 @@ TEST_CASE("Test enum types C API", "[capi]") {
 
 TEST_CASE("Test list types C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 	result = tester.Query("select [1, 2, 3] l, ['hello', 'world'] s, [[1, 2, 3], [4, 5]] nested, 3::int");
@@ -130,7 +130,7 @@ TEST_CASE("Test list types C API", "[capi]") {
 
 TEST_CASE("Test struct types C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
 	result = tester.Query("select {'a': 42::int}, {'b': 'hello', 'c': [1, 2, 3]}, {'d': {'e': 42}}, 3::int");

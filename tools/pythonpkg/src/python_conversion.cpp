@@ -280,7 +280,7 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::MemoryView;
 	} else if (py::isinstance<py::bytes>(ele)) {
 		return PythonObjectType::Bytes;
-	} else if (py::isinstance<py::list>(ele)) {
+	} else if (py::isinstance<py::list>(ele) || py::isinstance<py::tuple>(ele)) {
 		return PythonObjectType::List;
 	} else if (py::isinstance<py::dict>(ele)) {
 		return PythonObjectType::Dict;

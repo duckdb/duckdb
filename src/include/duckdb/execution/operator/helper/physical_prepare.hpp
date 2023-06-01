@@ -16,6 +16,9 @@ namespace duckdb {
 
 class PhysicalPrepare : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::PREPARE;
+
+public:
 	PhysicalPrepare(string name, shared_ptr<PreparedStatementData> prepared, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::PREPARE, {LogicalType::BOOLEAN}, estimated_cardinality), name(name),
 	      prepared(std::move(prepared)) {

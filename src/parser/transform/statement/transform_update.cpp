@@ -5,7 +5,7 @@ namespace duckdb {
 
 unique_ptr<UpdateSetInfo> Transformer::TransformUpdateSetInfo(duckdb_libpgquery::PGList *target_list,
                                                               duckdb_libpgquery::PGNode *where_clause) {
-	auto result = make_unique<UpdateSetInfo>();
+	auto result = make_uniq<UpdateSetInfo>();
 
 	auto root = target_list;
 	for (auto cell = root->head; cell != nullptr; cell = cell->next) {
@@ -21,7 +21,7 @@ unique_ptr<UpdateStatement> Transformer::TransformUpdate(duckdb_libpgquery::PGNo
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGUpdateStmt *>(node);
 	D_ASSERT(stmt);
 
-	auto result = make_unique<UpdateStatement>();
+	auto result = make_uniq<UpdateStatement>();
 	if (stmt->withClause) {
 		TransformCTE(reinterpret_cast<duckdb_libpgquery::PGWithClause *>(stmt->withClause), result->cte_map);
 	}

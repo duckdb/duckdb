@@ -25,7 +25,7 @@ public:
 	explicit VacuumInfo(VacuumOptions options) : options(options), has_table(false), table(nullptr) {};
 
 	unique_ptr<VacuumInfo> Copy() {
-		auto result = make_unique<VacuumInfo>(options);
+		auto result = make_uniq<VacuumInfo>(options);
 		result->has_table = has_table;
 		if (has_table) {
 			result->ref = ref->Copy();

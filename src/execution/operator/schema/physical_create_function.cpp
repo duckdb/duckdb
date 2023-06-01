@@ -17,12 +17,12 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalCreateFunction::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<CreateFunctionSourceState>();
+	return make_uniq<CreateFunctionSourceState>();
 }
 
 void PhysicalCreateFunction::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                      LocalSourceState &lstate) const {
-	auto &state = (CreateFunctionSourceState &)gstate;
+	auto &state = gstate.Cast<CreateFunctionSourceState>();
 	if (state.finished) {
 		return;
 	}

@@ -52,6 +52,7 @@ template <typename INPUT_TYPE, typename INDEX_TYPE>
 static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &end, bool begin_valid, bool end_valid) {
 	// Clamp offsets
 	begin = begin_valid ? begin : 0;
+	begin = (begin > 0) ? begin - 1 : begin;
 	end = end_valid ? end : ValueLength<INPUT_TYPE, INDEX_TYPE>(value);
 	if (!ClampIndex(begin, value) || !ClampIndex(end, value)) {
 		return false;
@@ -88,7 +89,7 @@ static void ExecuteSlice(Vector &result, Vector &s, Vector &b, Vector &e, const 
 		auto edata = ConstantVector::GetData<INDEX_TYPE>(e);
 
 		auto sliced = sdata[0];
-		auto begin = (bdata[0] > 0) ? bdata[0] - 1 : bdata[0];
+		auto begin = bdata[0];
 		auto end = edata[0];
 
 		auto svalid = !ConstantVector::IsNull(s);
@@ -119,8 +120,6 @@ static void ExecuteSlice(Vector &result, Vector &s, Vector &b, Vector &e, const 
 			auto sliced = ((INPUT_TYPE *)sdata.data)[sidx];
 			auto begin = ((INDEX_TYPE *)bdata.data)[bidx];
 			auto end = ((INDEX_TYPE *)edata.data)[eidx];
-
-			begin = (begin > 0) ? begin - 1 : begin;
 
 			auto svalid = sdata.validity.RowIsValid(sidx);
 			auto bvalid = bdata.validity.RowIsValid(bidx);
@@ -188,7 +187,7 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 		throw BinderException("ARRAY_SLICE can only operate on LISTs and VARCHARs");
 	}
 
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 void ArraySliceFun::RegisterFunction(BuiltinFunctions &set) {

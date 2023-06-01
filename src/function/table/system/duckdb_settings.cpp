@@ -38,7 +38,7 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, Table
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBSettingsInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBSettingsData>();
+	auto result = make_uniq<DuckDBSettingsData>();
 
 	auto &config = DBConfig::GetConfig(context);
 	auto options_count = DBConfig::GetOptionCount();

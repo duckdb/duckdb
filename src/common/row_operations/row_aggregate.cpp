@@ -57,6 +57,9 @@ void RowOperations::UpdateStates(AggregateObject &aggr, Vector &addresses, DataC
 void RowOperations::UpdateFilteredStates(AggregateFilterData &filter_data, AggregateObject &aggr, Vector &addresses,
                                          DataChunk &payload, idx_t arg_idx) {
 	idx_t count = filter_data.ApplyFilter(payload);
+	if (count == 0) {
+		return;
+	}
 
 	Vector filtered_addresses(addresses, filter_data.true_sel, count);
 	filtered_addresses.Flatten(count);

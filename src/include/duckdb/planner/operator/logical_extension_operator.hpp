@@ -14,6 +14,10 @@
 namespace duckdb {
 
 struct LogicalExtensionOperator : public LogicalOperator {
+public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR;
+
+public:
 	LogicalExtensionOperator() : LogicalOperator(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR) {
 	}
 	LogicalExtensionOperator(vector<unique_ptr<Expression>> expressions)

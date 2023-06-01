@@ -62,7 +62,7 @@ void AggregateFilterDataSet::Initialize(ClientContext &context, const vector<Agg
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggr = aggregates[aggr_idx];
 		if (aggr.filter) {
-			filter_data[aggr_idx] = make_unique<AggregateFilterData>(context, *aggr.filter, payload_types);
+			filter_data[aggr_idx] = make_uniq<AggregateFilterData>(context, *aggr.filter, payload_types);
 		}
 	}
 }

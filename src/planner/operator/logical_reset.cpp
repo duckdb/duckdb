@@ -11,7 +11,7 @@ void LogicalReset::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalReset::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto name = reader.ReadRequired<std::string>();
 	auto scope = reader.ReadRequired<SetScope>();
-	return make_unique<LogicalReset>(name, scope);
+	return make_uniq<LogicalReset>(name, scope);
 }
 
 idx_t LogicalReset::EstimateCardinality(ClientContext &context) {

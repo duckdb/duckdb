@@ -23,7 +23,7 @@ struct DetachInfo : public ParseInfo {
 
 public:
 	unique_ptr<DetachInfo> Copy() const {
-		auto result = make_unique<DetachInfo>();
+		auto result = make_uniq<DetachInfo>();
 		result->name = name;
 		result->if_exists = if_exists;
 		return result;

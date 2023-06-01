@@ -7,8 +7,8 @@ namespace duckdb {
 
 unique_ptr<DetachStatement> Transformer::TransformDetach(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGDetachStmt *>(node);
-	auto result = make_unique<DetachStatement>();
-	auto info = make_unique<DetachInfo>();
+	auto result = make_uniq<DetachStatement>();
+	auto info = make_uniq<DetachInfo>();
 	info->name = stmt->db_name;
 	info->if_exists = stmt->missing_ok;
 

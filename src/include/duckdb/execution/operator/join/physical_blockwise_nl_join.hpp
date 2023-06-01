@@ -18,6 +18,9 @@ namespace duckdb {
 //! RHS.
 class PhysicalBlockwiseNLJoin : public PhysicalJoin {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::BLOCKWISE_NL_JOIN;
+
+public:
 	PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                        unique_ptr<Expression> condition, JoinType join_type, idx_t estimated_cardinality);
 

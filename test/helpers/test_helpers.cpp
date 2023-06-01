@@ -28,12 +28,12 @@ bool NO_FAIL(QueryResult &result) {
 	return !result.HasError();
 }
 
-bool NO_FAIL(unique_ptr<QueryResult> result) {
+bool NO_FAIL(duckdb::unique_ptr<QueryResult> result) {
 	return NO_FAIL(*result);
 }
 
 void TestDeleteDirectory(string path) {
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	try {
 		if (fs->DirectoryExists(path)) {
 			fs->RemoveDirectory(path);
@@ -43,7 +43,7 @@ void TestDeleteDirectory(string path) {
 }
 
 void TestDeleteFile(string path) {
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	try {
 		if (fs->FileExists(path)) {
 			fs->RemoveFile(path);
@@ -63,12 +63,12 @@ void DeleteDatabase(string path) {
 }
 
 void TestCreateDirectory(string path) {
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	fs->CreateDirectory(path);
 }
 
 string TestDirectoryPath() {
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	if (!fs->DirectoryExists(TESTING_DIRECTORY_NAME)) {
 		fs->CreateDirectory(TESTING_DIRECTORY_NAME);
 	}
@@ -80,7 +80,7 @@ string TestDirectoryPath() {
 }
 
 string TestCreatePath(string suffix) {
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	return fs->JoinPath(TestDirectoryPath(), suffix);
 }
 
@@ -94,14 +94,14 @@ bool TestIsInternalError(unordered_set<string> &internal_error_messages, const s
 }
 
 unique_ptr<DBConfig> GetTestConfig() {
-	auto result = make_unique<DBConfig>();
+	auto result = make_uniq<DBConfig>();
 	result->options.checkpoint_wal_size = 0;
 	result->options.allow_unsigned_extensions = true;
 	return result;
 }
 
 string GetCSVPath() {
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	string csv_path = TestCreatePath("csv_files");
 	if (fs->DirectoryExists(csv_path)) {
 		fs->RemoveDirectory(csv_path);
@@ -171,7 +171,7 @@ bool CHECK_COLUMN(QueryResult &result_, size_t column_number, vector<duckdb::Val
 	return true;
 }
 
-bool CHECK_COLUMN(unique_ptr<duckdb::QueryResult> &result, size_t column_number, vector<duckdb::Value> values) {
+bool CHECK_COLUMN(duckdb::unique_ptr<duckdb::QueryResult> &result, size_t column_number, vector<duckdb::Value> values) {
 	if (result->type == QueryResultType::STREAM_RESULT) {
 		auto &stream = (StreamQueryResult &)*result;
 		result = stream.Materialize();
@@ -179,7 +179,7 @@ bool CHECK_COLUMN(unique_ptr<duckdb::QueryResult> &result, size_t column_number,
 	return CHECK_COLUMN(*result, column_number, values);
 }
 
-bool CHECK_COLUMN(unique_ptr<duckdb::MaterializedQueryResult> &result, size_t column_number,
+bool CHECK_COLUMN(duckdb::unique_ptr<duckdb::MaterializedQueryResult> &result, size_t column_number,
                   vector<duckdb::Value> values) {
 	return CHECK_COLUMN((QueryResult &)*result, column_number, values);
 }
@@ -268,6 +268,7 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 	DuckDB db;
 	Connection con(db);
 	BufferedCSVReader reader(*con.context, std::move(options), sql_types);
+	reader.InitializeProjection();
 
 	ColumnDataCollection csv_data_collection(*con.context, sql_types);
 	while (true) {

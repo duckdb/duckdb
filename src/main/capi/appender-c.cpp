@@ -23,7 +23,7 @@ duckdb_state duckdb_appender_create(duckdb_connection connection, const char *sc
 	auto wrapper = new AppenderWrapper();
 	*out_appender = (duckdb_appender)wrapper;
 	try {
-		wrapper->appender = duckdb::make_unique<Appender>(*conn, schema, table);
+		wrapper->appender = duckdb::make_uniq<Appender>(*conn, schema, table);
 	} catch (std::exception &ex) {
 		wrapper->error = ex.what();
 		return DuckDBError;

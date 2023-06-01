@@ -20,6 +20,9 @@ class Index;
 //! LogicalInsert represents an insertion of data into a base table
 class LogicalInsert : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_INSERT;
+
+public:
 	LogicalInsert(TableCatalogEntry *table, idx_t table_index);
 
 	vector<vector<unique_ptr<Expression>>> insert_values;

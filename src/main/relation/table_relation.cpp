@@ -14,14 +14,14 @@ TableRelation::TableRelation(const std::shared_ptr<ClientContext> &context, uniq
 }
 
 unique_ptr<QueryNode> TableRelation::GetQueryNode() {
-	auto result = make_unique<SelectNode>();
-	result->select_list.push_back(make_unique<StarExpression>());
+	auto result = make_uniq<SelectNode>();
+	result->select_list.push_back(make_uniq<StarExpression>());
 	result->from_table = GetTableRef();
 	return std::move(result);
 }
 
 unique_ptr<TableRef> TableRelation::GetTableRef() {
-	auto table_ref = make_unique<BaseTableRef>();
+	auto table_ref = make_uniq<BaseTableRef>();
 	table_ref->schema_name = description->schema;
 	table_ref->table_name = description->table;
 	return std::move(table_ref);

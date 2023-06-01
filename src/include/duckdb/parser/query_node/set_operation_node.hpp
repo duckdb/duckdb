@@ -17,6 +17,9 @@ namespace duckdb {
 
 class SetOperationNode : public QueryNode {
 public:
+	static constexpr const QueryNodeType TYPE = QueryNodeType::SET_OPERATION_NODE;
+
+public:
 	SetOperationNode() : QueryNode(QueryNodeType::SET_OPERATION_NODE) {
 	}
 
@@ -43,6 +46,9 @@ public:
 	void Serialize(FieldWriter &writer) const override;
 	//! Deserializes a blob back into a QueryNode
 	static unique_ptr<QueryNode> Deserialize(FieldReader &reader);
+
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<QueryNode> FormatDeserialize(FormatDeserializer &source);
 };
 
 } // namespace duckdb

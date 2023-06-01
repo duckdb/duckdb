@@ -31,11 +31,11 @@ public:
 	//! Get statistics of a column (physical or virtual) within the table
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
 
-	unique_ptr<CatalogEntry> Copy(ClientContext &context) override;
+	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;
 
 	void SetAsRoot() override;
 
-	void CommitAlter(AlterInfo &info);
+	void CommitAlter(string &column_name);
 	void CommitDrop();
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;

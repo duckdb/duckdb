@@ -15,6 +15,9 @@ namespace duckdb {
 
 class PhysicalExecute : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::EXECUTE;
+
+public:
 	explicit PhysicalExecute(PhysicalOperator *plan);
 
 	PhysicalOperator *plan;

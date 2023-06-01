@@ -15,12 +15,12 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalCreateSequence::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<CreateSequenceSourceState>();
+	return make_uniq<CreateSequenceSourceState>();
 }
 
 void PhysicalCreateSequence::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                      LocalSourceState &lstate) const {
-	auto &state = (CreateSequenceSourceState &)gstate;
+	auto &state = gstate.Cast<CreateSequenceSourceState>();
 	if (state.finished) {
 		return;
 	}

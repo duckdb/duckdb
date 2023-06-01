@@ -114,7 +114,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		break;
 	}
 	if (!function_name.empty()) {
-		auto function = make_unique<FunctionExpression>(function_name, std::move(op.children));
+		auto function = make_uniq<FunctionExpression>(function_name, std::move(op.children));
 		return BindExpression(*function, depth, nullptr);
 	}
 
@@ -134,7 +134,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		}
 	}
 
-	auto result = make_unique<BoundOperatorExpression>(op.type, result_type);
+	auto result = make_uniq<BoundOperatorExpression>(op.type, result_type);
 	for (auto &child : children) {
 		result->children.push_back(std::move(child->expr));
 	}

@@ -40,7 +40,6 @@ ParallelCSVReader::~ParallelCSVReader() {
 void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	return_types = requested_types;
 	InitParseChunk(return_types.size());
-	InitInsertChunkIdx(return_types.size());
 }
 
 bool ParallelCSVReader::NewLineDelimiter(bool carry, bool carry_followed_by_nl, bool first_char) {
@@ -86,7 +85,7 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 	bool successfully_read_first_line = false;
 	while (!successfully_read_first_line) {
 		DataChunk first_line_chunk;
-		first_line_chunk.Initialize(allocator, insert_chunk.GetTypes());
+		first_line_chunk.Initialize(allocator, return_types);
 		for (; position_buffer < end_buffer; position_buffer++) {
 			if (StringUtil::CharacterIsNewline((*buffer)[position_buffer])) {
 				bool carriage_return = (*buffer)[position_buffer] == '\r';
@@ -114,8 +113,17 @@ bool ParallelCSVReader::SetPosition(DataChunk &insert_chunk) {
 		}
 		idx_t position_set = position_buffer;
 		start_buffer = position_buffer;
+
 		// We check if we can add this line
+		// disable the projection pushdown while reading the first line
+		// otherwise the first line parsing can be influenced by which columns we are reading
+		auto column_ids = std::move(reader_data.column_ids);
+		auto column_mapping = std::move(reader_data.column_mapping);
+		InitializeProjection();
 		successfully_read_first_line = TryParseSimpleCSV(first_line_chunk, error_message, true);
+		// restore the projection pushdown
+		reader_data.column_ids = std::move(column_ids);
+		reader_data.column_mapping = std::move(column_mapping);
 
 		end_buffer = end_buffer_real;
 		start_buffer = position_set;
@@ -382,7 +390,8 @@ unquote : {
 		goto add_value;
 	} else if (StringUtil::CharacterIsNewline(c)) {
 		offset = 1;
-		D_ASSERT(column == insert_chunk.ColumnCount() - 1);
+		// FIXME: should this be an assertion?
+		D_ASSERT(column == parse_chunk.ColumnCount() - 1);
 		goto add_row;
 	} else if (position_buffer >= end_buffer) {
 		// reached end of buffer
