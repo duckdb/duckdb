@@ -45,14 +45,14 @@ timestamp_t &timestamp_t::operator+=(const int64_t &delta) {
 		throw OutOfRangeException("Overflow in timestamp increment");
 	}
 	return *this;
-};
+}
 
 timestamp_t &timestamp_t::operator-=(const int64_t &delta) {
 	if (!TrySubtractOperator::Operation(value, delta, value)) {
 		throw OutOfRangeException("Overflow in timestamp decrement");
 	}
 	return *this;
-};
+}
 
 bool Timestamp::TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset, string_t &tz) {
 	idx_t pos;
