@@ -80,26 +80,12 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 			throw InternalException("Incorrect stats size for type BIGINT");
 		}
 		return Value::BIGINT(Load<int64_t>(stats_data));
-	case LogicalTypeId::FLOAT: {
-		if (stats.size() != sizeof(float)) {
-			throw InternalException("Incorrect stats size for type FLOAT");
-		}
-		auto val = Load<float>(stats_data);
-		if (!Value::FloatIsFinite(val)) {
-			return Value();
-		}
-		return Value::FLOAT(val);
-	}
-	case LogicalTypeId::DOUBLE: {
-		if (stats.size() != sizeof(double)) {
-			throw InternalException("Incorrect stats size for type DOUBLE");
-		}
-		auto val = Load<double>(stats_data);
-		if (!Value::DoubleIsFinite(val)) {
-			return Value();
-		}
-		return Value::DOUBLE(val);
-	}
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+		// statistics for floats and doubles are explicitly not supported because NaN semantics are not well defined
+		// in the Parquet format. As a result the statistics are not usable without potentially introducing errors
+		// around NaN values.
+		return Value();
 	case LogicalTypeId::DECIMAL: {
 		auto width = DecimalType::GetWidth(type);
 		auto scale = DecimalType::GetScale(type);

@@ -1,0 +1,13 @@
+# name: test/sql/copy/parquet/parquet_nan_stats.test
+# description: Test statistics propagation of Parquet with nan values
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT COUNT(*) FROM 'data/parquet-testing/parquet_with_nans.parquet' WHERE value = 'NaN'::DOUBLE;
+----
+3801
