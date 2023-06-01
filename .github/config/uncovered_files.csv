@@ -34,7 +34,7 @@ common/fsst.cpp	6
 common/gzip_file_system.cpp	40
 common/hive_partitioning.cpp	54
 common/local_file_system.cpp	16
-common/multi_file_reader.cpp	10
+common/multi_file_reader.cpp	11
 common/operator/cast_operators.cpp	72
 common/operator/convert_to_string.cpp	7
 common/pipe_file_system.cpp	4
@@ -82,7 +82,7 @@ common/types/row/row_layout.cpp	4
 common/types/row/tuple_data_allocator.cpp	23
 common/types/row/tuple_data_collection.cpp	76
 common/types/row/tuple_data_iterator.cpp	5
-common/types/row/tuple_data_scatter_gather.cpp	15
+common/types/row/tuple_data_scatter_gather.cpp	16
 common/types/row/tuple_data_segment.cpp	10
 common/types/string_heap.cpp	11
 common/types/time.cpp	20
@@ -156,7 +156,7 @@ execution/index/art/leaf.cpp	38
 execution/index/art/node.cpp	40
 execution/index/art/node48.cpp	8
 execution/index/art/node256.cpp	4
-execution/index/art/prefix.cpp	78
+execution/index/art/prefix.cpp	4
 execution/index/art/prefix_segment.cpp	2
 execution/join_hashtable.cpp	22
 execution/nested_loop_join/nested_loop_join_inner.cpp	24
