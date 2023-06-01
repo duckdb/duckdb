@@ -149,7 +149,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 			}
 
 			// Flushes the outstanding allocator's outstanding allocations
-			Allocator::ThreadFlush();
+			Allocator::ThreadFlush(db.config.options.allocator_flush_threshold);
 		}
 	}
 #else

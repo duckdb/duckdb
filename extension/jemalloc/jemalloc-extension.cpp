@@ -54,13 +54,9 @@ static T GetJemallocCTL(const char *name) {
 	return result;
 }
 
-void JEMallocExtension::ThreadFlush() {
-	// Flush threshold is 1 << 28 (~256MB)
-	// For 1 << 27 we regress on benchmark/imdb/07c.benchmark
-	static constexpr uint64_t FLUSH_THRESHOLD = 268435456;
-
+void JEMallocExtension::ThreadFlush(idx_t threshold) {
 	// We flush after exceeding the threshold
-	if (GetJemallocCTL<uint64_t>("thread.peak.read") < FLUSH_THRESHOLD) {
+	if (GetJemallocCTL<uint64_t>("thread.peak.read") < threshold) {
 		return;
 	}
 

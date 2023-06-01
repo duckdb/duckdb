@@ -116,7 +116,7 @@ public:
 	DUCKDB_API static Allocator &DefaultAllocator();
 	DUCKDB_API static shared_ptr<Allocator> &DefaultAllocatorReference();
 
-	static void ThreadFlush();
+	static void ThreadFlush(idx_t threshold);
 
 private:
 	allocate_function_ptr_t allocate_function;

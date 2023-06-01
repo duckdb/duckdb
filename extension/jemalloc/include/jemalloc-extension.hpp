@@ -21,7 +21,7 @@ public:
 	static void Free(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
 	static data_ptr_t Reallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size, idx_t size);
 
-	static void ThreadFlush();
+	static void ThreadFlush(idx_t threshold);
 };
 
 } // namespace duckdb
