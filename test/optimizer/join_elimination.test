@@ -1,0 +1,27 @@
+# name: test/optimizer/join_elimination.test
+# description: Test whether the reduant join can be removed
+# group: [optimizer]
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+CREATE TABLE t1(a int, b int);
+
+statement ok
+CREATE TABLE t2(a int, b int, c int);
+
+query II
+EXPLAIN select distinct t1.a, t1.b from t1 left outer join t2 on t1.a = t2.a;
+----
+logical_opt	<!REGEX>:.*JOIN.*
+
+query II
+EXPLAIN select max(t1.a) from t1 left outer join t2 on t1.a = t2.a;
+----
+logical_opt	<!REGEX>:.*JOIN.*
+
+query II
+EXPLAIN select max(t1.a), sum(t1.a) from t1 left outer join t2 on t1.a = t2.a;
+----
+logical_opt	<REGEX>:.*JOIN.*

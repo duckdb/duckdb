@@ -19,17 +19,18 @@
 namespace duckdb {
 unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator> op) {
 	switch (op->type) {
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		// TODO: Support 'LOGICAL_ASOF_JOIN' and 'LOGICAL_DELIM_JOIN' later. Need more consideration and tests.
 		auto &comp_join = op->Cast<LogicalComparisonJoin>();
-		idx_t inner_child_idx;
+		idx_t inner_child_idx, outer_child_idx;
 		auto join_type = comp_join.join_type;
 		// We only handle the left outer join and right outer join now.
 		if (IsLeftOuterJoin(join_type)) {
 			inner_child_idx = 1;
+			outer_child_idx = 0;
 		} else if (IsRightOuterJoin(join_type)) {
 			inner_child_idx = 0;
+			outer_child_idx = 1;
 		} else {
 			break;
 		}
@@ -48,20 +49,22 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 			break;
 		}
 
-		// Check whether all of the unique columns are came from the outer side.
-		auto &outer_child = comp_join.children[1 ^ inner_child_idx];
+		// Check whether there are unique columns came from the outer side.
+		bool has_matched = false;
+		auto &outer_child = comp_join.children[outer_child_idx];
 		column_binding_set_t all_outer_bindings;
 		for (const auto &binding : outer_child->GetColumnBindings()) {
 			all_outer_bindings.insert(binding);
 		}
+
 		for (auto &binding : unique_column_references) {
-			if (all_outer_bindings.find(binding) == all_outer_bindings.end()) {
-				all_matched = false;
+			if (all_outer_bindings.find(binding) != all_outer_bindings.end()) {
+				has_matched = true;
 				break;
 			}
 		}
 
-		if (all_matched) {
+		if (has_matched) {
 			op = std::move(outer_child);
 		}
 
@@ -69,9 +72,16 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &aggr = op->Cast<LogicalAggregate>();
+		// If not all of the columns are met the requirement, we should clear it.
+		bool all_meet = true;
+		vector<ColumnBinding> unique_column_bindings;
 		for (idx_t col_idx = 0; col_idx < aggr.expressions.size(); col_idx++) {
-			if (aggr.expressions[col_idx]->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
+			// Except the aggregation function, we only allow the `BOUND_COLUMN_REF` for safety.
+			if (aggr.expressions[col_idx]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
+			} else if (aggr.expressions[col_idx]->GetExpressionClass() != ExpressionClass::BOUND_AGGREGATE) {
+				all_meet = false;
+				break ;
 			}
 			auto &aggr_expr = aggr.expressions[col_idx]->Cast<BoundAggregateExpression>();
 			// Collect the unique columns.
@@ -88,9 +98,20 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 			if (has_unique_column) {
 				for (auto &child : aggr_expr.children) {
 					if (child->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
-						unique_column_references.insert(child->Cast<BoundColumnRefExpression>().binding);
+						unique_column_bindings.push_back(child->Cast<BoundColumnRefExpression>().binding);
 					}
 				}
+			} else {
+				all_meet = false;
+				break;
+			}
+		}
+
+		if (!all_meet) {
+			unique_column_references.clear();
+		} else {
+			for (auto column_binding : unique_column_bindings) {
+				unique_column_references.insert(column_binding);
 			}
 		}
 		break;
@@ -105,6 +126,22 @@ unique_ptr<LogicalOperator> JoinElimination::Optimize(unique_ptr<LogicalOperator
 			    distinct.distinct_targets[col_idx]->Cast<BoundColumnRefExpression>().binding);
 		}
 		break;
+	}
+	case LogicalOperatorType::LOGICAL_PROJECTION: {
+		// Because after the projection, the `table_index` in the `ColumnBinding` will be changed. So we need adjust it.
+		// TODO: maybe other operations will also generate the new `table_index`. We need to figure them out.
+		auto &proj = op->Cast<LogicalProjection>();
+		idx_t table_index = proj.table_index;
+		for (idx_t col_idx = 0; col_idx < proj.expressions.size(); col_idx++) {
+			if (proj.expressions[col_idx]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+				continue;
+			}
+			auto target_column_binding = ColumnBinding(table_index, col_idx);
+			auto colrefs = unique_column_references.find(target_column_binding);
+			if (colrefs != unique_column_references.end()) {
+				unique_column_references.insert(proj.expressions[col_idx]->Cast<BoundColumnRefExpression>().binding);
+			}
+		}
 	}
 	default:
 		break;
