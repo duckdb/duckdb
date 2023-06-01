@@ -721,34 +721,48 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		may_have_null = ConvertColumn<interval_t, int64_t, duckdb_py_convert::IntervalConvert>(current_offset, dataptr,
 		                                                                                       maskptr, idata, count);
 		break;
-	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::VARCHAR: {
+		py::gil_scoped_acquire gil;
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::StringConvert>(current_offset, dataptr,
 		                                                                                      maskptr, idata, count);
 		break;
-	case LogicalTypeId::BLOB:
+	}
+	case LogicalTypeId::BLOB: {
+		py::gil_scoped_acquire gil;
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::BlobConvert>(current_offset, dataptr,
 		                                                                                    maskptr, idata, count);
 		break;
-	case LogicalTypeId::BIT:
+	}
+	case LogicalTypeId::BIT: {
+		py::gil_scoped_acquire gil;
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::BitConvert>(current_offset, dataptr,
 		                                                                                   maskptr, idata, count);
 		break;
-	case LogicalTypeId::LIST:
+	}
+	case LogicalTypeId::LIST: {
+		py::gil_scoped_acquire gil;
 		may_have_null = ConvertNested<py::list, duckdb_py_convert::ListConvert>(current_offset, dataptr, maskptr, input,
 		                                                                        idata, count);
 		break;
-	case LogicalTypeId::MAP:
+	}
+	case LogicalTypeId::MAP: {
+		py::gil_scoped_acquire gil;
 		may_have_null = ConvertNested<py::dict, duckdb_py_convert::MapConvert>(current_offset, dataptr, maskptr, input,
 		                                                                       idata, count);
 		break;
-	case LogicalTypeId::STRUCT:
+	}
+	case LogicalTypeId::STRUCT: {
+		py::gil_scoped_acquire gil;
 		may_have_null = ConvertNested<py::dict, duckdb_py_convert::StructConvert>(current_offset, dataptr, maskptr,
 		                                                                          input, idata, count);
 		break;
-	case LogicalTypeId::UUID:
+	}
+	case LogicalTypeId::UUID: {
+		py::gil_scoped_acquire gil;
 		may_have_null = ConvertColumn<hugeint_t, PyObject *, duckdb_py_convert::UUIDConvert>(current_offset, dataptr,
 		                                                                                     maskptr, idata, count);
 		break;
+	}
 
 	default:
 		throw NotImplementedException("Unsupported type \"%s\"", input.GetType().ToString());
@@ -878,6 +892,7 @@ void NumpyResultConversion::Append(DataChunk &chunk, idx_t offset) {
 
 void NumpyResultConversion::Append(DataChunk &chunk) {
 	if (count + chunk.size() > capacity) {
+		py::gil_scoped_acquire gil;
 		Resize(capacity * 2);
 	}
 	Append(chunk, count);
