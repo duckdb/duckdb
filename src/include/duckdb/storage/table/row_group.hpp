@@ -123,7 +123,7 @@ public:
 
 	RowGroupWriteData WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types);
 	bool AllDeleted();
-	RowGroupPointer Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats, idx_t deleted_count);
+	RowGroupPointer Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats);
 	static void Serialize(RowGroupPointer &pointer, Serializer &serializer);
 	static RowGroupPointer Deserialize(Deserializer &source, const vector<LogicalType> &columns);
 

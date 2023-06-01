@@ -2,8 +2,6 @@
 # description: Test vacuuming of deletes in combination with indexes
 # group: [vacuum]
 
-require skip_reload
-
 load __TEST_DIR__/vacuum_deletes_cleanup.db
 
 statement ok

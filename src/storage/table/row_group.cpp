@@ -811,7 +811,7 @@ bool RowGroup::AllDeleted() {
 	return version_info->GetCommittedDeletedCount(count) == count;
 }
 
-RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats, idx_t deleted_count) {
+RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats) {
 	RowGroupPointer row_group_pointer;
 
 	vector<CompressionType> compression_types;
@@ -826,7 +826,7 @@ RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &gl
 
 	// construct the row group pointer and write the column meta data to disk
 	D_ASSERT(result.states.size() == columns.size());
-	row_group_pointer.row_start = start - deleted_count;
+	row_group_pointer.row_start = start;
 	row_group_pointer.tuple_count = count;
 	for (auto &state : result.states) {
 		// get the current position of the table data writer
