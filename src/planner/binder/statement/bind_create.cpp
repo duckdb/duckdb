@@ -41,7 +41,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/parser/parsed_data/create_property_graph_info.hpp"
-#include "../../../../duckpgq/include/duckpgq/common.hpp"
+#include "../../../../../duckpgq/include/duckpgq_extension.hpp"
 
 namespace duckdb {
 
@@ -181,18 +181,18 @@ static void CheckPropertyGraphTableColumns(shared_ptr<PropertyGraphTable> &pg_ta
 }
 
 void Binder::BindCreatePropertyGraphInfo(CreatePropertyGraphInfo &info) {
-    auto sqlpgq_state_entry = context.registered_state.find("duckpgq");
-    shared_ptr<DuckPGQContext> duckpgq_state;
-    if (sqlpgq_state_entry == context.registered_state.end()) {
-        duckpgq_state = make_shared<DuckPGQContext>();
+    auto duckpgq_state_entry = context.registered_state.find("duckpgq");
+    shared_ptr<DuckPGQState> duckpgq_state;
+    if (duckpgq_state_entry == context.registered_state.end()) {
+        duckpgq_state = make_shared<DuckPGQState>();
         context.registered_state["duckpgq"] = duckpgq_state;
     } else {
-        duckpgq_state = dynamic_pointer_cast<DuckPGQContext>(sqlpgq_state_entry->second);
+        duckpgq_state = dynamic_pointer_cast<DuckPGQState>(duckpgq_state_entry->second);
     }
     auto pg_table = duckpgq_state->registered_property_graphs.find(info.property_graph_name);
 
     if (pg_table != duckpgq_state->registered_property_graphs.end()) {
-        throw MissingExtensionException("Property graph table with name %s already exists", info.property_graph_name);
+        throw BinderException("Property graph table with name %s already exists", info.property_graph_name);
     }
 
     auto &catalog = Catalog::GetCatalog(context, info.catalog);
