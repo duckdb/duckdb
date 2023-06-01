@@ -18,11 +18,11 @@ string ComparisonExpression::ToString() const {
 	return ToString<ComparisonExpression, ParsedExpression>(*this);
 }
 
-bool ComparisonExpression::Equal(const ComparisonExpression *a, const ComparisonExpression *b) {
-	if (!a->left->Equals(b->left.get())) {
+bool ComparisonExpression::Equal(const ComparisonExpression &a, const ComparisonExpression &b) {
+	if (!a.left->Equals(*b.left)) {
 		return false;
 	}
-	if (!a->right->Equals(b->right.get())) {
+	if (!a.right->Equals(*b.right)) {
 		return false;
 	}
 	return true;

@@ -114,9 +114,22 @@ string FileSystem::GetEnvVariable(const string &env) {
 	return WindowsUtil::UnicodeToUTF8(res_w);
 }
 
+static bool StartsWithSingleBackslash(const string &path) {
+	if (path.size() < 2) {
+		return false;
+	}
+	if (path[0] != '/' && path[0] != '\\') {
+		return false;
+	}
+	if (path[1] == '/' || path[1] == '\\') {
+		return false;
+	}
+	return true;
+}
+
 bool FileSystem::IsPathAbsolute(const string &path) {
 	// 1) A single backslash or forward-slash
-	if (PathMatched(path, "\\") || PathMatched(path, "/")) {
+	if (StartsWithSingleBackslash(path)) {
 		return true;
 	}
 	// 2) A disk designator with a backslash (e.g., C:\ or C:/)
@@ -131,7 +144,7 @@ bool FileSystem::IsPathAbsolute(const string &path) {
 string FileSystem::NormalizeAbsolutePath(const string &path) {
 	D_ASSERT(IsPathAbsolute(path));
 	auto result = StringUtil::Lower(FileSystem::ConvertSeparators(path));
-	if (PathMatched(result, "\\")) {
+	if (StartsWithSingleBackslash(result)) {
 		// Path starts with a single backslash or forward slash
 		// prepend drive letter
 		return GetWorkingDirectory().substr(0, 2) + result;

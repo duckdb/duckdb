@@ -57,7 +57,7 @@ void StatementVerifier::CheckExpressions(const StatementVerifier &other) const {
 
 	// Check equality
 	if (other.RequireEquality()) {
-		D_ASSERT(statement->Equals(other.statement.get()));
+		D_ASSERT(statement->Equals(*other.statement));
 	}
 
 #ifdef DEBUG
@@ -66,7 +66,6 @@ void StatementVerifier::CheckExpressions(const StatementVerifier &other) const {
 	const auto expr_count = select_list.size();
 	if (other.RequireEquality()) {
 		for (idx_t i = 0; i < expr_count; i++) {
-			D_ASSERT(!select_list[i]->Equals(nullptr));
 			// Run the ToString, to verify that it doesn't crash
 			select_list[i]->ToString();
 
@@ -75,7 +74,7 @@ void StatementVerifier::CheckExpressions(const StatementVerifier &other) const {
 			}
 
 			// Check that the expressions are equivalent
-			D_ASSERT(select_list[i]->Equals(other.select_list[i].get()));
+			D_ASSERT(select_list[i]->Equals(*other.select_list[i]));
 			// Check that the hashes are equivalent too
 			D_ASSERT(select_list[i]->Hash() == other.select_list[i]->Hash());
 
@@ -96,7 +95,7 @@ void StatementVerifier::CheckExpressions() const {
 			auto hash2 = select_list[inner_idx]->Hash();
 			if (hash != hash2) {
 				// if the hashes are not equivalent, the expressions should not be equivalent
-				D_ASSERT(!select_list[outer_idx]->Equals(select_list[inner_idx].get()));
+				D_ASSERT(!select_list[outer_idx]->Equals(*select_list[inner_idx]));
 			}
 		}
 	}

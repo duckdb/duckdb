@@ -20,7 +20,7 @@ using ValidityBytes = RowLayout::ValidityBytes;
 template <class T>
 static void TemplatedScatter(UnifiedVectorFormat &col, Vector &rows, const SelectionVector &sel, const idx_t count,
                              const idx_t col_offset, const idx_t col_no) {
-	auto data = (T *)col.data;
+	auto data = UnifiedVectorFormat::GetData<T>(col);
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
 	if (!col.validity.AllValid()) {
@@ -50,7 +50,7 @@ static void TemplatedScatter(UnifiedVectorFormat &col, Vector &rows, const Selec
 
 static void ComputeStringEntrySizes(const UnifiedVectorFormat &col, idx_t entry_sizes[], const SelectionVector &sel,
                                     const idx_t count, const idx_t offset = 0) {
-	auto data = (const string_t *)col.data;
+	auto data = UnifiedVectorFormat::GetData<string_t>(col);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto col_idx = col.sel->get_index(idx) + offset;
@@ -64,7 +64,7 @@ static void ComputeStringEntrySizes(const UnifiedVectorFormat &col, idx_t entry_
 static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr_t str_locations[],
                                 const SelectionVector &sel, const idx_t count, const idx_t col_offset,
                                 const idx_t col_no) {
-	auto string_data = (string_t *)col.data;
+	auto string_data = UnifiedVectorFormat::GetData<string_t>(col);
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
 	// Write out zero length to avoid swizzling problems.
@@ -81,7 +81,7 @@ static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr
 			Store<string_t>(string_data[col_idx], row + col_offset);
 		} else {
 			const auto &str = string_data[col_idx];
-			string_t inserted((const char *)str_locations[i], str.GetSize());
+			string_t inserted(const_char_ptr_cast(str_locations[i]), str.GetSize());
 			memcpy(inserted.GetDataWriteable(), str.GetData(), str.GetSize());
 			str_locations[i] += str.GetSize();
 			inserted.Finalize();

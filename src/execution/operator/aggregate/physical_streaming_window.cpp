@@ -28,7 +28,7 @@ public:
 
 	StreamingWindowState()
 	    : initialized(false), allocator(Allocator::DefaultAllocator()),
-	      statev(LogicalType::POINTER, (data_ptr_t)&state_ptr) {
+	      statev(LogicalType::POINTER, data_ptr_cast(&state_ptr)) {
 	}
 
 	~StreamingWindowState() override {
@@ -112,7 +112,7 @@ unique_ptr<OperatorState> PhysicalStreamingWindow::GetOperatorState(ExecutionCon
 OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                     GlobalOperatorState &gstate_p, OperatorState &state_p) const {
 	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
-	auto &state = (StreamingWindowState &)state_p;
+	auto &state = state_p.Cast<StreamingWindowState>();
 	state.allocator.Reset();
 
 	if (!state.initialized) {

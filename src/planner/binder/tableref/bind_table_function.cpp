@@ -150,8 +150,8 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
 		if (table_function.name == "pandas_scan" || table_function.name == "arrow_scan") {
-			auto arrow_bind = (PyTableFunctionData *)bind_data.get();
-			arrow_bind->external_dependency = std::move(external_dependency);
+			auto &arrow_bind = bind_data->Cast<PyTableFunctionData>();
+			arrow_bind.external_dependency = std::move(external_dependency);
 		}
 		if (table_function.name == "read_csv" || table_function.name == "read_csv_auto") {
 			auto &csv_bind = bind_data->Cast<ReadCSVData>();
@@ -161,6 +161,9 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 				table_function.extra_info = "(Multi-Threaded)";
 			}
 		}
+	} else {
+		throw InvalidInputException("Cannot call function \"%s\" directly - it has no bind function",
+		                            table_function.name);
 	}
 	if (return_types.size() != return_names.size()) {
 		throw InternalException("Failed to bind \"%s\": return_types/names must have same size", table_function.name);

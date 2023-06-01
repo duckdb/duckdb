@@ -12,8 +12,8 @@ namespace duckdb {
 
 WindowAggregateState::WindowAggregateState(AggregateObject aggr, const LogicalType &result_type_p)
     : aggr(std::move(aggr)), result_type(result_type_p), state(aggr.function.state_size()),
-      statev(Value::POINTER((idx_t)state.data())), statep(Value::POINTER((idx_t)state.data())),
-      allocator(Allocator::DefaultAllocator()) {
+      statev(Value::POINTER(CastPointerToValue(state.data()))),
+      statep(Value::POINTER(CastPointerToValue(state.data()))), allocator(Allocator::DefaultAllocator()) {
 	statev.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
 }
 
@@ -49,7 +49,6 @@ void WindowAggregateState::Compute(Vector &result, idx_t rid, idx_t start, idx_t
 WindowConstantAggregate::WindowConstantAggregate(AggregateObject aggr, const LogicalType &result_type,
                                                  const ValidityMask &partition_mask, const idx_t count)
     : WindowAggregateState(std::move(aggr), result_type), partition(0), row(0) {
-
 	// Locate the partition boundaries
 	idx_t start = 0;
 	if (partition_mask.AllValid()) {
@@ -181,12 +180,12 @@ void WindowConstantAggregate::Compute(Vector &target, idx_t rid, idx_t start, id
 //===--------------------------------------------------------------------===//
 // WindowSegmentTree
 //===--------------------------------------------------------------------===//
-WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type_p, DataChunk *input,
+WindowSegmentTree::WindowSegmentTree(AggregateObject aggr_p, const LogicalType &result_type_p, DataChunk *input,
                                      const ValidityMask &filter_mask_p, WindowAggregationMode mode_p)
-    : aggr(std::move(aggr)), result_type(result_type_p), state(aggr.function.state_size()),
-      statep(Value::POINTER((idx_t)state.data())), frame(0, 0), statev(Value::POINTER((idx_t)state.data())),
-      internal_nodes(0), input_ref(input), filter_mask(filter_mask_p), mode(mode_p),
-      allocator(Allocator::DefaultAllocator()) {
+    : aggr(std::move(aggr_p)), result_type(result_type_p), state(aggr.function.state_size()),
+      statep(Value::POINTER(CastPointerToValue(state.data()))), frame(0, 0),
+      statev(Value::POINTER(CastPointerToValue(state.data()))), internal_nodes(0), input_ref(input),
+      filter_mask(filter_mask_p), mode(mode_p), allocator(Allocator::DefaultAllocator()) {
 	statep.Flatten(input->size());
 	statev.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
 
@@ -214,7 +213,7 @@ WindowSegmentTree::~WindowSegmentTree() {
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	// call the destructor for all the intermediate states
 	data_ptr_t address_data[STANDARD_VECTOR_SIZE];
-	Vector addresses(LogicalType::POINTER, (data_ptr_t)address_data);
+	Vector addresses(LogicalType::POINTER, data_ptr_cast(address_data));
 	idx_t count = 0;
 	for (idx_t i = 0; i < internal_nodes; i++) {
 		address_data[count++] = data_ptr_t(levels_flat_native.get() + i * state.size());
