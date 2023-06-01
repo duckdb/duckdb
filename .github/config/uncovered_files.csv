@@ -34,7 +34,7 @@ common/fsst.cpp	6
 common/gzip_file_system.cpp	40
 common/hive_partitioning.cpp	54
 common/local_file_system.cpp	16
-common/multi_file_reader.cpp	10
+common/multi_file_reader.cpp	11
 common/operator/cast_operators.cpp	72
 common/operator/convert_to_string.cpp	7
 common/pipe_file_system.cpp	4
@@ -616,7 +616,6 @@ planner/binder/expression/bind_columnref_expression.cpp	5
 planner/binder/expression/bind_comparison_expression.cpp	2
 planner/binder/expression/bind_function_expression.cpp	5
 planner/binder/expression/bind_operator_expression.cpp	3
-planner/binder/expression/bind_positional_reference_expression.cpp	1
 planner/binder/expression/bind_star_expression.cpp	3
 planner/binder/expression/bind_subquery_expression.cpp	7
 planner/binder/expression/bind_unnest_expression.cpp	3
