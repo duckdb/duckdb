@@ -182,16 +182,16 @@ static void CheckPropertyGraphTableColumns(shared_ptr<PropertyGraphTable> &pg_ta
 
 void Binder::BindCreatePropertyGraphInfo(CreatePropertyGraphInfo &info) {
     auto sqlpgq_state_entry = context.registered_state.find("duckpgq");
-    shared_ptr<DuckPGQContext> sqlpgq_state;
+    shared_ptr<DuckPGQContext> duckpgq_state;
     if (sqlpgq_state_entry == context.registered_state.end()) {
-        sqlpgq_state = make_shared<DuckPGQContext>();
-        context.registered_state["duckpgq"] = sqlpgq_state;
+        duckpgq_state = make_shared<DuckPGQContext>();
+        context.registered_state["duckpgq"] = duckpgq_state;
     } else {
-        sqlpgq_state = dynamic_pointer_cast<DuckPGQContext>(sqlpgq_state_entry->second);
+        duckpgq_state = dynamic_pointer_cast<DuckPGQContext>(sqlpgq_state_entry->second);
     }
-    auto pg_table = sqlpgq_state->registered_property_graphs.find(info.property_graph_name);
+    auto pg_table = duckpgq_state->registered_property_graphs.find(info.property_graph_name);
 
-    if (pg_table != sqlpgq_state->registered_property_graphs.end()) {
+    if (pg_table != duckpgq_state->registered_property_graphs.end()) {
         throw MissingExtensionException("Property graph table with name %s already exists", info.property_graph_name);
     }
 
@@ -792,6 +792,16 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		}
 		break;
 	}
+    case CatalogType::PROPERTY_GRAPH_ENTRY: {
+        auto &create_pg_info = (CreatePropertyGraphInfo &)*stmt.info;
+
+//        auto &schema = BindSchema(*stmt.info);
+        BindCreatePropertyGraphInfo(create_pg_info);
+
+        result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_PROPERTY_GRAPH,
+                                                 std::move(stmt.info));
+        break;
+    }
 	default:
 		throw Exception("Unrecognized type!");
 	}
