@@ -652,8 +652,8 @@ function execute_tasks(state::duckdb_task_state, con::Connection)
         duckdb_execute_n_tasks_state(state, 1)
         if duckdb_execution_is_finished(con.handle)
             break
-        Base.yield()
-        GC.safepoint()
+            Base.yield()
+            GC.safepoint()
         end
     end
     return
