@@ -66,10 +66,6 @@ AttachedDatabase &RowGroupCollection::GetAttached() {
 	return GetTableInfo().db;
 }
 
-DatabaseInstance &RowGroupCollection::GetDatabase() {
-	return GetAttached().GetDatabase();
-}
-
 //===--------------------------------------------------------------------===//
 // Initialize
 //===--------------------------------------------------------------------===//
@@ -94,10 +90,6 @@ void RowGroupCollection::AppendRowGroup(SegmentLock &l, idx_t start_row) {
 
 RowGroup *RowGroupCollection::GetRowGroup(int64_t index) {
 	return (RowGroup *)row_groups->GetSegmentByIndex(index);
-}
-
-idx_t RowGroupCollection::RowGroupCount() {
-	return row_groups->GetSegmentCount();
 }
 
 void RowGroupCollection::Verify() {
@@ -657,7 +649,7 @@ void RowGroupCollection::GetStorageInfo(TableStorageInfo &result) {
 // Alter
 //===--------------------------------------------------------------------===//
 shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &context, ColumnDefinition &new_column,
-                                                             Expression *default_value) {
+                                                             Expression &default_value) {
 	idx_t new_column_idx = types.size();
 	auto new_types = types;
 	new_types.push_back(new_column.GetType());
@@ -667,11 +659,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 	ExpressionExecutor executor(context);
 	DataChunk dummy_chunk;
 	Vector default_vector(new_column.GetType());
-	if (!default_value) {
-		FlatVector::Validity(default_vector).SetAllInvalid(STANDARD_VECTOR_SIZE);
-	} else {
-		executor.AddExpression(*default_value);
-	}
+	executor.AddExpression(default_value);
 
 	result->stats.InitializeAddColumn(stats, new_column.GetType());
 	auto &new_column_stats = result->stats.GetStats(new_column_idx);

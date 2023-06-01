@@ -126,10 +126,6 @@ ColumnData &RowGroup::GetColumn(storage_t c) {
 	return *columns[c];
 }
 
-DatabaseInstance &RowGroup::GetDatabase() {
-	return GetCollection().GetDatabase();
-}
-
 BlockManager &RowGroup::GetBlockManager() {
 	return GetCollection().GetBlockManager();
 }
@@ -284,7 +280,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 }
 
 unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, ColumnDefinition &new_column,
-                                         ExpressionExecutor &executor, Expression *default_value, Vector &result) {
+                                         ExpressionExecutor &executor, Expression &default_value, Vector &result) {
 	Verify();
 
 	// construct a new column data for the new column
@@ -299,10 +295,8 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 		added_column->InitializeAppend(state);
 		for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {
 			idx_t rows_in_this_vector = MinValue<idx_t>(rows_to_write - i, STANDARD_VECTOR_SIZE);
-			if (default_value) {
-				dummy_chunk.SetCardinality(rows_in_this_vector);
-				executor.ExecuteExpression(dummy_chunk, result);
-			}
+			dummy_chunk.SetCardinality(rows_in_this_vector);
+			executor.ExecuteExpression(dummy_chunk, result);
 			added_column->Append(state, result, rows_in_this_vector);
 		}
 	}
