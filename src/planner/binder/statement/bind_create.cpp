@@ -181,14 +181,11 @@ static void CheckPropertyGraphTableColumns(shared_ptr<PropertyGraphTable> &pg_ta
 }
 
 void Binder::BindCreatePropertyGraphInfo(CreatePropertyGraphInfo &info) {
-    auto duckpgq_state_entry = context.registered_state.find("duckpgq");
-    shared_ptr<DuckPGQState> duckpgq_state;
-    if (duckpgq_state_entry == context.registered_state.end()) {
-        duckpgq_state = make_shared<DuckPGQState>();
-        context.registered_state["duckpgq"] = duckpgq_state;
-    } else {
-        duckpgq_state = dynamic_pointer_cast<DuckPGQState>(duckpgq_state_entry->second);
+    auto lookup = context.registered_state.find("duckpgq");
+    if (lookup == context.registered_state.end()) {
+        throw BinderException("Registered DuckPGQ state not found");
     }
+    auto duckpgq_state = (DuckPGQState *)lookup->second.get();
     auto pg_table = duckpgq_state->registered_property_graphs.find(info.property_graph_name);
 
     if (pg_table != duckpgq_state->registered_property_graphs.end()) {
