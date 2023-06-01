@@ -23,6 +23,7 @@ static int64_t TargetTypeCost(const LogicalType &type) {
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::UNION:
+	case LogicalTypeId::ARRAY:
 		return 160;
 	default:
 		return 110;
@@ -216,6 +217,23 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		}
 		return child_cost;
 	}
+
+	if (from.id() == LogicalTypeId::ARRAY && to.id() == LogicalTypeId::ARRAY) {
+		// Arrays can be cast if their child types can be cast and the source fits within the target
+		if(ArrayType::GetSize(from) <= ArrayType::GetSize(to)) {
+			auto child_cost = ImplicitCast(ListType::GetChildType(from), ListType::GetChildType(to));
+			if (child_cost >= 100) {
+				// subtract one from the cost because we prefer ARRAY[X] -> ARRAY[VARCHAR] over ARRAY[X] -> VARCHAR
+				child_cost--;
+			}
+			return child_cost;
+		}
+		else {
+			// Not possible
+			return -1;
+		}
+	}
+
 	if (from.id() == to.id()) {
 		// arguments match: do nothing
 		return 0;

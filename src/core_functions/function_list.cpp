@@ -17,6 +17,7 @@
 #include "duckdb/core_functions/scalar/string_functions.hpp"
 #include "duckdb/core_functions/scalar/struct_functions.hpp"
 #include "duckdb/core_functions/scalar/union_functions.hpp"
+#include "duckdb/core_functions/scalar/array_functions.hpp"
 
 namespace duckdb {
 
@@ -58,6 +59,7 @@ static StaticFunctionDefinition internal_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(AgeFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(AggregateFun),
 	DUCKDB_SCALAR_FUNCTION(AliasFun),
+	DUCKDB_SCALAR_FUNCTION(ArrayValueFun),
 	DUCKDB_SCALAR_FUNCTION_ALIAS(ApplyFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(ApproxCountDistinctFun),
 	DUCKDB_AGGREGATE_FUNCTION_SET(ApproxQuantileFun),

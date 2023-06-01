@@ -125,6 +125,8 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
 		return PhysicalType::LIST;
+	case LogicalTypeId::ARRAY:
+		return PhysicalType::FIXED_SIZE_LIST;
 	case LogicalTypeId::POINTER:
 		// LCOV_EXCL_START
 		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
@@ -229,7 +231,7 @@ const vector<LogicalType> LogicalType::AllTypes() {
 	    LogicalType::INTERVAL,  LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
 	    LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,
 	    LogicalTypeId::LIST,    LogicalTypeId::STRUCT, LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ,
-	    LogicalTypeId::MAP,     LogicalTypeId::UNION,  LogicalType::UUID};
+	    LogicalTypeId::MAP,     LogicalTypeId::UNION,  LogicalType::UUID, 	   LogicalTypeId::ARRAY};
 	return types;
 }
 
@@ -270,6 +272,8 @@ string TypeIdToString(PhysicalType type) {
 		return "STRUCT";
 	case PhysicalType::LIST:
 		return "LIST";
+	case PhysicalType::FIXED_SIZE_LIST:
+		return "FIXED_SIZE_LIST";
 	case PhysicalType::INVALID:
 		return "INVALID";
 	case PhysicalType::BIT:
@@ -314,6 +318,7 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return sizeof(interval_t);
 	case PhysicalType::STRUCT:
 	case PhysicalType::UNKNOWN:
+	case PhysicalType::FIXED_SIZE_LIST:
 		return 0; // no own payload
 	case PhysicalType::LIST:
 		return sizeof(list_entry_t); // offset + len
@@ -385,6 +390,13 @@ string LogicalType::ToString() const {
 		}
 		ret += ")";
 		return ret;
+	}
+	case LogicalTypeId::ARRAY: {
+		if (!type_info_) {
+			return "ARRAY";
+		}
+		auto size = ArrayType::GetSize(*this);
+		return ArrayType::GetChildType(*this).ToString() + "[" + to_string(size) + "]";
 	}
 	case LogicalTypeId::DECIMAL: {
 		if (!type_info_) {
@@ -692,6 +704,11 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 		// list: perform max recursively on child type
 		auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
 		return LogicalType::LIST(new_child);
+	}
+	if (type_id == LogicalTypeId::ARRAY) {
+		auto new_child = MaxLogicalType(ArrayType::GetChildType(left), ArrayType::GetChildType(right));
+		auto new_size = MaxValue<uint32_t>(ArrayType::GetSize(left), ArrayType::GetSize(right));
+		return LogicalType::ARRAY(new_child, new_size);
 	}
 	if (type_id == LogicalTypeId::MAP) {
 		// list: perform max recursively on child type
@@ -1032,6 +1049,69 @@ LogicalType LogicalType::LIST(const LogicalType &child) {
 	auto info = make_shared<ListTypeInfo>(child);
 	return LogicalType(LogicalTypeId::LIST, std::move(info));
 }
+
+//===--------------------------------------------------------------------===//
+// Array Type
+//===--------------------------------------------------------------------===//
+struct ArrayTypeInfo : public ExtraTypeInfo {
+
+	LogicalType child_type;
+	uint32_t size;
+
+	explicit ArrayTypeInfo(LogicalType child_type_p, uint32_t size_p)
+	    : ExtraTypeInfo(ExtraTypeInfoType::ARRAY_TYPE_INFO), child_type(std::move(child_type_p)), size(size_p) {
+	}
+
+	public:
+	void Serialize(FieldWriter &writer) const override {
+		writer.WriteSerializable(child_type);
+		writer.WriteField(size);
+	}
+
+	void FormatSerialize(FormatSerializer &serializer) const override {
+		ExtraTypeInfo::FormatSerialize(serializer);
+		serializer.WriteProperty("child_type", child_type);
+		serializer.WriteProperty("size", size);
+	}
+
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
+		auto child_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+		auto size = reader.ReadRequired<uint32_t>();
+		return make_shared<ArrayTypeInfo>(std::move(child_type), size);
+	}
+
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
+		auto child_type = source.ReadProperty<LogicalType>("child_type");
+		auto size = source.ReadProperty<uint32_t>("size");
+		return make_shared<ArrayTypeInfo>(std::move(child_type), size);
+	}
+
+protected:
+	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
+		auto &other = other_p->Cast<ArrayTypeInfo>();
+		return child_type == other.child_type && size == other.size;
+	}
+};
+
+const LogicalType &ArrayType::GetChildType(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return info->Cast<ArrayTypeInfo>().child_type;
+}
+
+uint32_t ArrayType::GetSize(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ARRAY);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return info->Cast<ArrayTypeInfo>().size;
+}
+
+LogicalType LogicalType::ARRAY(const LogicalType &child, uint32_t size) {
+	auto info = make_shared<ArrayTypeInfo>(child, size);
+	return LogicalType(LogicalTypeId::ARRAY, std::move(info));
+}
+
 
 //===--------------------------------------------------------------------===//
 // Struct Type
@@ -1607,6 +1687,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::FormatDeserialize(FormatDeserializer &d
 	case ExtraTypeInfoType::LIST_TYPE_INFO:
 		result = ListTypeInfo::FormatDeserialize(deserializer);
 		break;
+	case ExtraTypeInfoType::ARRAY_TYPE_INFO:
+		result = ArrayTypeInfo::FormatDeserialize(deserializer);
+		break;
 	case ExtraTypeInfoType::STRUCT_TYPE_INFO:
 		result = StructTypeInfo::FormatDeserialize(deserializer);
 		break;
@@ -1662,6 +1745,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 		break;
 	case ExtraTypeInfoType::LIST_TYPE_INFO:
 		extra_info = ListTypeInfo::Deserialize(reader);
+		break;
+	case ExtraTypeInfoType::ARRAY_TYPE_INFO:
+		extra_info = ArrayTypeInfo::Deserialize(reader);
 		break;
 	case ExtraTypeInfoType::STRUCT_TYPE_INFO:
 		extra_info = StructTypeInfo::Deserialize(reader);

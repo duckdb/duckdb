@@ -92,6 +92,11 @@ void Vector::Reference(const Value &value) {
 		auxiliary = shared_ptr<VectorBuffer>(list_buffer.release());
 		data = buffer->GetData();
 		SetValue(0, value);
+	} else if (internal_type == PhysicalType::FIXED_SIZE_LIST) {
+		auto array_buffer = make_uniq<VectorArrayBuffer>(value.type());
+		auxiliary = shared_ptr<VectorBuffer>(array_buffer.release());
+		data = buffer->GetData();
+		SetValue(0, value);
 	} else {
 		auxiliary.reset();
 		data = buffer->GetData();
@@ -224,6 +229,9 @@ void Vector::Initialize(bool zero_data, idx_t capacity) {
 	} else if (internal_type == PhysicalType::LIST) {
 		auto list_buffer = make_uniq<VectorListBuffer>(type, capacity);
 		auxiliary = shared_ptr<VectorBuffer>(list_buffer.release());
+	} else if (internal_type == PhysicalType::FIXED_SIZE_LIST) {
+		auto array_buffer = make_uniq<VectorArrayBuffer>(type, capacity);
+		auxiliary = shared_ptr<VectorBuffer>(array_buffer.release());
 	}
 	auto type_size = GetTypeIdSize(internal_type);
 	if (type_size > 0) {
@@ -407,6 +415,15 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		entry.offset = offset;
 		break;
 	}
+	case PhysicalType::FIXED_SIZE_LIST: {
+		auto &val_children = ArrayValue::GetChildren(val);
+		auto stride = ArrayType::GetSize(GetType());
+		auto &entry = ArrayVector::GetEntry(*this);
+		for (idx_t i = 0; i < val_children.size(); i++) {
+			entry.SetValue((index * stride) + i, val_children[i]);
+		}
+		break;
+	}
 	default:
 		throw InternalException("Unimplemented type for Vector::SetValue");
 	}
@@ -585,6 +602,16 @@ Value Vector::GetValueInternal(const Vector &v_p, idx_t index_p) {
 			children.push_back(child_vec.GetValue(i));
 		}
 		return Value::LIST(ListType::GetChildType(type), std::move(children));
+	}
+	case LogicalTypeId::ARRAY: {
+		auto stride = ArrayType::GetSize(type);
+		auto offset = index * stride;
+		auto &child_vec = ArrayVector::GetEntry(*vector);
+		duckdb::vector<Value> children;
+		for (idx_t i = offset; i < offset + stride; i++) {
+			children.push_back(child_vec.GetValue(i));
+		}
+		return Value::ARRAY(std::move(children));
 	}
 	default:
 		throw InternalException("Unimplemented type for value access");
@@ -2151,5 +2178,27 @@ UnionInvalidReason UnionVector::CheckUnionValidity(Vector &vector, idx_t count, 
 
 	return UnionInvalidReason::VALID;
 }
+
+//===--------------------------------------------------------------------===//
+// ArrayVector
+//===--------------------------------------------------------------------===//
+const Vector &ArrayVector::GetEntry(const Vector &vector) {
+	D_ASSERT(vector.GetType().id() == LogicalTypeId::ARRAY);
+	if (vector.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		auto &child = DictionaryVector::Child(vector);
+		return ArrayVector::GetEntry(child);
+	}
+	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR ||
+	         vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
+	D_ASSERT(vector.auxiliary);
+	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::ARRAY_BUFFER);
+	return vector.auxiliary->Cast<VectorArrayBuffer>().GetChild();
+}
+
+Vector &ArrayVector::GetEntry(Vector &vector) {
+	const Vector &cvector = vector;
+	return const_cast<Vector &>(ArrayVector::GetEntry(cvector));
+}
+
 
 } // namespace duckdb

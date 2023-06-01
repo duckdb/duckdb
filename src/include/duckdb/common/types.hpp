@@ -37,7 +37,8 @@ enum class ExtraTypeInfoType : uint8_t {
 	STRUCT_TYPE_INFO = 5,
 	ENUM_TYPE_INFO = 6,
 	USER_TYPE_INFO = 7,
-	AGGREGATE_STATE_TYPE_INFO = 8
+	AGGREGATE_STATE_TYPE_INFO = 8,
+	ARRAY_TYPE_INFO = 9
 };
 
 struct string_t;
@@ -168,7 +169,7 @@ enum class PhysicalType : uint8_t {
 	//EXTENSION = 28,
 
 	///// Fixed size list of some logical type
-	//FIXED_SIZE_LIST = 29,
+	FIXED_SIZE_LIST = 29,
 
 	///// Measure of elapsed time in either seconds, milliseconds, microseconds
 	///// or nanoseconds.
@@ -240,7 +241,8 @@ enum class LogicalTypeId : uint8_t {
 	ENUM = 104,
 	AGGREGATE_STATE = 105,
 	LAMBDA = 106,
-	UNION = 107
+	UNION = 107,
+	ARRAY = 108
 };
 
 
@@ -391,6 +393,7 @@ public:
 	DUCKDB_API static LogicalType MAP( child_list_t<LogicalType> children);       // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
 	DUCKDB_API static LogicalType UNION( child_list_t<LogicalType> members);     // NOLINT
+	DUCKDB_API static LogicalType ARRAY(const LogicalType &child, uint32_t size);     // NOLINT
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
@@ -450,6 +453,11 @@ struct UnionType {
 	DUCKDB_API static const LogicalType &GetMemberType(const LogicalType &type, idx_t index);
 	DUCKDB_API static const string &GetMemberName(const LogicalType &type, idx_t index);
 	DUCKDB_API static const child_list_t<LogicalType> CopyMemberTypes(const LogicalType &type);
+};
+
+struct ArrayType {
+	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type);
+	DUCKDB_API static uint32_t GetSize(const LogicalType &type);
 };
 
 struct AggregateStateType {

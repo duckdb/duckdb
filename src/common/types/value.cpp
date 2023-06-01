@@ -709,6 +709,7 @@ Value Value::LIST(vector<Value> values) {
 	return result;
 }
 
+
 Value Value::LIST(const LogicalType &child_type, vector<Value> values) {
 	if (values.empty()) {
 		return Value::EMPTYLIST(child_type);
@@ -726,6 +727,43 @@ Value Value::EMPTYLIST(const LogicalType &child_type) {
 	result.is_null = false;
 	return result;
 }
+
+Value Value::ARRAY(vector<Value> values) {
+	if (values.empty()) {
+		throw InternalException("Value::ARRAY without providing a child-type requires a non-empty list of values. Use "
+		                        "Value::ARRAY(child_type, list) instead.");
+	}
+#ifdef DEBUG
+	for (idx_t i = 1; i < values.size(); i++) {
+		D_ASSERT(values[i].type() == values[0].type());
+	}
+#endif
+	Value result;
+	result.type_ = LogicalType::ARRAY(values[0].type(), values.size());
+	result.value_info_ = make_shared<NestedValueInfo>(std::move(values));
+	result.is_null = false;
+	return result;
+}
+
+
+Value Value::ARRAY(const LogicalType &child_type, vector<Value> values) {
+	if (values.empty()) {
+		return Value::EMPTYARRAY(child_type, 0);
+	}
+	for (auto &val : values) {
+		val = val.DefaultCastAs(child_type);
+	}
+	return Value::ARRAY(std::move(values));
+}
+
+Value Value::EMPTYARRAY(const LogicalType &child_type, uint32_t size) {
+	Value result;
+	result.type_ = LogicalType::ARRAY(child_type, size);
+	result.value_info_ = make_shared<NestedValueInfo>();
+	result.is_null = false;
+	return result;
+}
+
 
 Value Value::BLOB(const_data_ptr_t data, idx_t len) {
 	Value result(LogicalType::BLOB);
@@ -1460,6 +1498,15 @@ const vector<Value> &ListValue::GetChildren(const Value &value) {
 		throw InternalException("Calling ListValue::GetChildren on a NULL value");
 	}
 	D_ASSERT(value.type().InternalType() == PhysicalType::LIST);
+	D_ASSERT(value.value_info_);
+	return value.value_info_->Get<NestedValueInfo>().GetValues();
+}
+
+const vector<Value> &ArrayValue::GetChildren(const Value &value){
+	if (value.is_null) {
+		throw InternalException("Calling ArrayValue::GetChildren on a NULL value");
+	}
+	D_ASSERT(value.type().InternalType() == PhysicalType::FIXED_SIZE_LIST);
 	D_ASSERT(value.value_info_);
 	return value.value_info_->Get<NestedValueInfo>().GetValues();
 }
