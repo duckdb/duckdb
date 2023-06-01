@@ -13,8 +13,7 @@
 
 namespace duckdb {
 
-//! PhysicalAsOfJoin represents a piecewise merge loop join between
-//! two tables
+//! PhysicalAsOfJoin represents an as-of join between two tables
 class PhysicalAsOfJoin : public PhysicalComparisonJoin {
 public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::ASOF_JOIN;
@@ -58,7 +57,7 @@ public:
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
-		return IsRightOuterJoin(join_type);
+		return true;
 	}
 	bool ParallelSource() const override {
 		return true;
@@ -79,13 +78,6 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
-
-private:
-	// resolve joins that output max N elements (SEMI, ANTI, MARK)
-	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;
-	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
-	OperatorResultType ResolveComplexJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-	                                      OperatorState &state) const;
 };
 
 } // namespace duckdb

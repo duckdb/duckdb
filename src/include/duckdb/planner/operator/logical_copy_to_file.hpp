@@ -8,10 +8,10 @@
 
 #pragma once
 
-#include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/filename_pattern.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/function/copy_function.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
@@ -41,6 +41,10 @@ public:
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 	idx_t EstimateCardinality(ClientContext &context) override;
+	//! Skips the serialization check in VerifyPlan
+	bool SupportSerialization() const override {
+		return false;
+	}
 
 protected:
 	void ResolveTypes() override {

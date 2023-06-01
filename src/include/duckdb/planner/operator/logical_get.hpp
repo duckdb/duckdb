@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
@@ -62,6 +62,10 @@ public:
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 	vector<idx_t> GetTableIndex() const override;
+	//! Skips the serialization check in VerifyPlan
+	bool SupportSerialization() const override {
+		return function.verify_serialization;
+	};
 
 protected:
 	void ResolveTypes() override;
