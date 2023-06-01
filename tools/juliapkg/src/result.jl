@@ -649,10 +649,11 @@ end
 # execute background tasks in a loop, until task execution is finished
 function execute_tasks(state::duckdb_task_state, con::Connection)
     while !duckdb_task_state_is_finished(state)
-        GC.safepoint()
         duckdb_execute_n_tasks_state(state, 1)
         if duckdb_execution_is_finished(con.handle)
             break
+        Base.yield()
+        GC.safepoint()
         end
     end
     return
