@@ -8,7 +8,7 @@ BindResult ExpressionBinder::BindPositionalReference(unique_ptr<ParsedExpression
                                                      bool root_expression) {
 	auto &ref = expr->Cast<PositionalReferenceExpression>();
 	if (depth != 0) {
-		return BindResult("Positional reference expression could not be bound");
+		throw InternalException("Positional reference expression could not be bound");
 	}
 	// replace the positional reference with a column
 	auto column = binder.bind_context.PositionToColumn(ref);

@@ -616,7 +616,6 @@ planner/binder/expression/bind_columnref_expression.cpp	5
 planner/binder/expression/bind_comparison_expression.cpp	2
 planner/binder/expression/bind_function_expression.cpp	5
 planner/binder/expression/bind_operator_expression.cpp	3
-planner/binder/expression/bind_positional_reference_expression.cpp	1
 planner/binder/expression/bind_star_expression.cpp	3
 planner/binder/expression/bind_subquery_expression.cpp	7
 planner/binder/expression/bind_unnest_expression.cpp	3
