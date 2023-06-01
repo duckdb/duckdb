@@ -10,6 +10,7 @@ add_library_unity(
   transform_copy.cpp
   transform_create_table_as.cpp
   transform_create_index.cpp
+  transform_create_property_graph.cpp
   transform_create_schema.cpp
   transform_create_table.cpp
   transform_create_view.cpp
@@ -19,6 +20,7 @@ add_library_unity(
   transform_explain.cpp
   transform_export.cpp
   transform_drop.cpp
+  transform_drop_property_graph.cpp
   transform_import.cpp
   transform_insert.cpp
   transform_load.cpp

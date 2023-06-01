@@ -116,7 +116,9 @@ private:
 	unique_ptr<AlterStatement> TransformRename(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGCreateStmt node into a CreateStatement
 	unique_ptr<CreateStatement> TransformCreateTable(duckdb_libpgquery::PGNode *node);
-	//! Transform a Postgres duckdb_libpgquery::T_PGCreateStmt node into a CreateStatement
+    //! Transform a SQL/PGQ duckdb_libpgquery::T_PGCreatePropertyGraphStmt node into a CreatePropertyGraphStatement
+    unique_ptr<CreateStatement> TransformCreatePropertyGraph(duckdb_libpgquery::PGNode *node);
+    //! Transform a Postgres duckdb_libpgquery::T_PGCreateStmt node into a CreateStatement
 	unique_ptr<CreateStatement> TransformCreateTableAs(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres node into a CreateStatement
 	unique_ptr<CreateStatement> TransformCreateSchema(duckdb_libpgquery::PGNode *node);
