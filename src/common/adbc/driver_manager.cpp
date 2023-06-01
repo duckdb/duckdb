@@ -111,7 +111,7 @@ static AdbcStatusCode ReleaseDriver(struct AdbcDriver *driver, struct AdbcError 
 
 	if (!driver->private_manager) {
 		return status;
-}
+	}
 	ManagerDriverState *state = reinterpret_cast<ManagerDriverState *>(driver->private_manager);
 
 	if (state->driver_release) {
@@ -349,7 +349,7 @@ AdbcStatusCode AdbcConnectionInit(struct AdbcConnection *connection, struct Adbc
 	auto status = database->private_driver->ConnectionNew(connection, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
-}
+	}
 	connection->private_driver = database->private_driver;
 
 	for (const auto &option : options) {
@@ -357,7 +357,7 @@ AdbcStatusCode AdbcConnectionInit(struct AdbcConnection *connection, struct Adbc
 		                                                       error);
 		if (status != ADBC_STATUS_OK) {
 			return status;
-}
+		}
 	}
 	return connection->private_driver->ConnectionInit(connection, database, error);
 }

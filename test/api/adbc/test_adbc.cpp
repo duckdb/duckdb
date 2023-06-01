@@ -532,9 +532,6 @@ TEST_CASE("Test ADBC Transaction Errors", "[adbc]") {
 	duckdb_adbc::AdbcError adbc_error;
 	duckdb_adbc::InitiliazeADBCError(&adbc_error);
 
-	ArrowArrayStream arrow_stream;
-	ArrowArray arrow_array;
-
 	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
@@ -569,4 +566,80 @@ TEST_CASE("Test ADBC Transaction Errors", "[adbc]") {
 	REQUIRE(SUCCESS(AdbcConnectionCommit(&adbc_connection, &adbc_error)));
 
 	REQUIRE(SUCCESS(AdbcConnectionRollback(&adbc_connection, &adbc_error)));
+}
+
+TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	duckdb_adbc::AdbcDatabase adbc_database;
+	duckdb_adbc::AdbcConnection adbc_connection;
+
+	duckdb_adbc::AdbcError adbc_error;
+	duckdb_adbc::InitiliazeADBCError(&adbc_error);
+
+	ArrowSchema arrow_schema;
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	// Test successful schema return
+	REQUIRE(SUCCESS(
+	    AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "main", "duckdb_indexes", &arrow_schema, &adbc_error)));
+	REQUIRE(arrow_schema.n_children == 12);
+	arrow_schema.release(&arrow_schema);
+
+	// Test Catalog Name (Not accepted)
+	REQUIRE(!SUCCESS(
+	    AdbcConnectionGetTableSchema(&adbc_connection, "bla", "main", "duckdb_indexes", &arrow_schema, &adbc_error)));
+	REQUIRE(std::strcmp(adbc_error.message,
+	                    "Catalog Name is not used in DuckDB. It must be set to nullptr or an empty string") == 0);
+	adbc_error.release(&adbc_error);
+
+	// Test null schema name
+	REQUIRE(!SUCCESS(AdbcConnectionGetTableSchema(&adbc_connection, nullptr, nullptr, "duckdb_indexes", &arrow_schema,
+	                                              &adbc_error)));
+	REQUIRE(std::strcmp(adbc_error.message, "AdbcConnectionGetTableSchema: must provide db_schema") == 0);
+	adbc_error.release(&adbc_error);
+
+	// Empty schema should be fine
+	REQUIRE(SUCCESS(
+	    AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "", "duckdb_indexes", &arrow_schema, &adbc_error)));
+	REQUIRE(arrow_schema.n_children == 12);
+	arrow_schema.release(&arrow_schema);
+
+	// Test null and empty table name
+	REQUIRE(!SUCCESS(AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "", nullptr, &arrow_schema, &adbc_error)));
+	REQUIRE(std::strcmp(adbc_error.message, "AdbcConnectionGetTableSchema: must provide table_name") == 0);
+	adbc_error.release(&adbc_error);
+
+	REQUIRE(!SUCCESS(AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "", "", &arrow_schema, &adbc_error)));
+	REQUIRE(std::strcmp(adbc_error.message, "AdbcConnectionGetTableSchema: must provide table_name") == 0);
+	adbc_error.release(&adbc_error);
+
+	// Test invalid schema
+
+	REQUIRE(!SUCCESS(
+	    AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "b", "duckdb_indexes", &arrow_schema, &adbc_error)));
+	REQUIRE(std::strcmp(adbc_error.message, "Catalog Error: Table with name duckdb_indexes does not exist!\nDid you "
+	                                        "mean \"main.duckdb_indexes\"?\nLINE 1: SELECT * FROM b.duckdb_indexes "
+	                                        "LIMIT 0;\n                      ^\nunable to initialize statement") == 0);
+	adbc_error.release(&adbc_error);
+
+	// Test invalid table
+	REQUIRE(!SUCCESS(
+	    AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "", "duckdb_indexeeees", &arrow_schema, &adbc_error)));
+	REQUIRE(
+	    std::strcmp(
+	        adbc_error.message,
+	        "Catalog Error: Table with name duckdb_indexeeees does not exist!\nDid you mean \"duckdb_indexes\"?\nLINE "
+	        "1: SELECT * FROM duckdb_indexeeees LIMIT 0;\n                      ^\nunable to initialize statement") ==
+	    0);
+	adbc_error.release(&adbc_error);
 }
