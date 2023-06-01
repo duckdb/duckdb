@@ -40,7 +40,7 @@ public:
 	//! Associated with the NO PROPERTIES functionality
 	bool no_columns = false;
 
-	bool is_vertex_table;
+	bool is_vertex_table = false;
 
 	string discriminator;
 
