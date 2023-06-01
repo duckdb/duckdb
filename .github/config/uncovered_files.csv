@@ -82,7 +82,7 @@ common/types/row/row_layout.cpp	4
 common/types/row/tuple_data_allocator.cpp	23
 common/types/row/tuple_data_collection.cpp	76
 common/types/row/tuple_data_iterator.cpp	5
-common/types/row/tuple_data_scatter_gather.cpp	15
+common/types/row/tuple_data_scatter_gather.cpp	16
 common/types/row/tuple_data_segment.cpp	10
 common/types/string_heap.cpp	11
 common/types/time.cpp	20
