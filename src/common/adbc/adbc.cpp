@@ -173,11 +173,28 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection* connection,
     // In DuckDB this is the name of the database, not sure what's the expected functionality here, so for now, scream.
 	SetError(error, "Catalog Name is not used in DuckDB. It must be set to nullptr or an empty string");
     return ADBC_STATUS_NOT_IMPLEMENTED;
-  }  else if (table_name == nullptr) {
-    SetError(error, "[SQLite] AdbcConnectionGetTableSchema: must provide table_name");
+  }  else if (db_schema == nullptr) {
+    SetError(error, "AdbcConnectionGetTableSchema: must provide db_schema");
+    return ADBC_STATUS_INVALID_ARGUMENT;
+  } else if (table_name == nullptr) {
+    SetError(error, "AdbcConnectionGetTableSchema: must provide table_name");
     return ADBC_STATUS_INVALID_ARGUMENT;
   }
-//  conn.
+   	auto query = duckdb::StringUtil::Format(R"(
+	SELECT table_name, table_type, LIST(column_info) as table_columns , LIST (constraints_info) as table_constraints
+	FROM (
+		SELECT duckdb_tables.table_name as table_name,
+			CASE WHEN duckdb_tables.temporary THEN 'temporary' WHEN duckdb_tables.internal THEN 'internal' ELSE 'persisted' END AS table_type,
+			{'column_name':column_name, 'ordinal_position': column_index, 'remarks': NULL} as column_info,
+			{'constraint_name':constraint_index, 'constraint_type': constraint_type, 'constraint_column_names': constraint_column_names, 'constraint_column_usage': NULL} as constraints_info,
+		FROM duckdb_tables
+		INNER JOIN duckdb_columns ON ( duckdb_tables.table_oid = duckdb_columns.table_oid)
+		INNER JOIN duckdb_constraints ON ( duckdb_tables.table_oid = duckdb_constraints.table_oid)
+		WHERE table_schema LIKE '%s' AND table_name LIKE '%s' ) GROUP BY ALL;
+		)",
+	                                    db_schema ? db_schema : "%", table_name ? table_name : "%");
+
+	return QueryInternal(connection, out, q.c_str(), error);
 }
 
 
