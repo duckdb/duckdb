@@ -15,7 +15,6 @@ namespace duckdb {
 using JSONPathType = JSONCommon::JSONPathType;
 
 static JSONPathType CheckPath(const Value &path_val, string &path, size_t &len) {
-static void CheckPath(const Value &path_val, string &path, size_t &len) {
 	if (path_val.IsNull()) {
 		throw InvalidInputException("JSON path cannot be NULL");
 	}
