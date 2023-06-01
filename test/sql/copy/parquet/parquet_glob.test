@@ -60,8 +60,8 @@ select * from parquet_scan('data\parquet-testing\g*\t1.parquet') order by i
 3	c
 
 # Double partial matches
-query II
-FROM parquet_scan('data/parquet-testing/glob3/*/dir/*.parquet') order by i;
+query II rowsort
+FROM parquet_scan('data/parquet-testing/glob3/*/dir/*.parquet');
 ----
 1	a
 3	c
