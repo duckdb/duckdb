@@ -54,8 +54,8 @@ public:
 public:
 	Connection *CommandConnection(ExecuteContext &context) const;
 
-	unique_ptr<MaterializedQueryResult> ExecuteQuery(ExecuteContext &context, Connection *connection, string file_name,
-	                                                 idx_t query_line) const;
+	duckdb::unique_ptr<MaterializedQueryResult> ExecuteQuery(ExecuteContext &context, Connection *connection,
+	                                                         string file_name, idx_t query_line) const;
 
 	virtual void ExecuteInternal(ExecuteContext &context) const = 0;
 	void Execute(ExecuteContext &context) const;
@@ -111,7 +111,7 @@ public:
 
 public:
 	LoopDefinition definition;
-	vector<unique_ptr<Command>> loop_commands;
+	vector<duckdb::unique_ptr<Command>> loop_commands;
 
 	void ExecuteInternal(ExecuteContext &context) const override;
 };

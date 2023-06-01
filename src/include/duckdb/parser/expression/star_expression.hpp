@@ -16,6 +16,9 @@ namespace duckdb {
 //! Represents a * expression in the SELECT clause
 class StarExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::STAR;
+
+public:
 	StarExpression(string relation_name = string());
 
 	//! The relation name in case of tbl.*, or empty if this is a normal *
@@ -32,7 +35,7 @@ public:
 public:
 	string ToString() const override;
 
-	static bool Equal(const StarExpression *a, const StarExpression *b);
+	static bool Equal(const StarExpression &a, const StarExpression &b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 

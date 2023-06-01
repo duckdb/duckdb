@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/function/scalar_function.hpp"
 
@@ -21,6 +22,17 @@ struct FunctionLocalState;
 //! Extra data that can be attached to a bind function of a cast, and is available during binding
 struct BindCastInfo {
 	DUCKDB_API virtual ~BindCastInfo();
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 //! Extra data that can be returned by the bind of a cast, and is available during execution of a cast
@@ -28,6 +40,17 @@ struct BoundCastData {
 	DUCKDB_API virtual ~BoundCastData();
 
 	DUCKDB_API virtual unique_ptr<BoundCastData> Copy() const = 0;
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 struct CastParameters {
@@ -85,10 +108,11 @@ public:
 };
 
 struct BindCastInput {
-	DUCKDB_API BindCastInput(CastFunctionSet &function_set, BindCastInfo *info, optional_ptr<ClientContext> context);
+	DUCKDB_API BindCastInput(CastFunctionSet &function_set, optional_ptr<BindCastInfo> info,
+	                         optional_ptr<ClientContext> context);
 
 	CastFunctionSet &function_set;
-	BindCastInfo *info;
+	optional_ptr<BindCastInfo> info;
 	optional_ptr<ClientContext> context;
 
 public:

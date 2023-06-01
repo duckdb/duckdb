@@ -5,7 +5,8 @@
 
 namespace duckdb {
 
-ConflictManager::ConflictManager(VerifyExistenceType lookup_type, idx_t input_size, ConflictInfo *conflict_info)
+ConflictManager::ConflictManager(VerifyExistenceType lookup_type, idx_t input_size,
+                                 optional_ptr<ConflictInfo> conflict_info)
     : lookup_type(lookup_type), input_size(input_size), conflict_info(conflict_info), conflicts(input_size, false),
       mode(ConflictManagerMode::THROW) {
 }
@@ -24,14 +25,14 @@ const unordered_set<idx_t> &ConflictManager::InternalConflictSet() const {
 
 Vector &ConflictManager::InternalRowIds() {
 	if (!row_ids) {
-		row_ids = make_unique<Vector>(LogicalType::ROW_TYPE, input_size);
+		row_ids = make_uniq<Vector>(LogicalType::ROW_TYPE, input_size);
 	}
 	return *row_ids;
 }
 
 Vector &ConflictManager::InternalIntermediate() {
 	if (!intermediate_vector) {
-		intermediate_vector = make_unique<Vector>(LogicalType::BOOLEAN, true, true, input_size);
+		intermediate_vector = make_uniq<Vector>(LogicalType::BOOLEAN, true, true, input_size);
 	}
 	return *intermediate_vector;
 }
@@ -64,7 +65,7 @@ void ConflictManager::SetMode(ConflictManagerMode mode) {
 
 void ConflictManager::AddToConflictSet(idx_t chunk_index) {
 	if (!conflict_set) {
-		conflict_set = make_unique<unordered_set<idx_t>>();
+		conflict_set = make_uniq<unordered_set<idx_t>>();
 	}
 	auto &set = *conflict_set;
 	set.insert(chunk_index);

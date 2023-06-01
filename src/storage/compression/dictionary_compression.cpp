@@ -18,7 +18,7 @@ public:
 	bool UpdateState(Vector &scan_vector, idx_t count) {
 		UnifiedVectorFormat vdata;
 		scan_vector.ToUnifiedFormat(count, vdata);
-		auto data = (string_t *)vdata.data;
+		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 		Verify();
 
 		for (idx_t i = 0; i < count; i++) {
@@ -130,16 +130,15 @@ struct DictionaryCompressionStorage {
 // scanning the whole dictionary at once and then scanning the selection buffer for each emitted vector. Secondly, it
 // allows for efficient bitpacking compression as the selection values should remain relatively small.
 struct DictionaryCompressionCompressState : public DictionaryCompressionState {
-	explicit DictionaryCompressionCompressState(ColumnDataCheckpointer &checkpointer)
-	    : checkpointer(checkpointer), heap(BufferAllocator::Get(checkpointer.GetDatabase())) {
-		auto &db = checkpointer.GetDatabase();
-		auto &config = DBConfig::GetConfig(db);
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY, PhysicalType::VARCHAR);
+	explicit DictionaryCompressionCompressState(ColumnDataCheckpointer &checkpointer_p)
+	    : checkpointer(checkpointer_p),
+	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY)),
+	      heap(BufferAllocator::Get(checkpointer.GetDatabase())) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 	}
 
 	ColumnDataCheckpointer &checkpointer;
-	CompressionFunction *function;
+	CompressionFunction &function;
 
 	// State regarding current segment
 	unique_ptr<ColumnSegment> current_segment;
@@ -150,8 +149,8 @@ struct DictionaryCompressionCompressState : public DictionaryCompressionState {
 	// Buffers and map for current segment
 	StringHeap heap;
 	string_map_t<uint32_t> current_string_map;
-	std::vector<uint32_t> index_buffer;
-	std::vector<uint32_t> selection_buffer;
+	vector<uint32_t> index_buffer;
+	vector<uint32_t> selection_buffer;
 
 	bitpacking_width_t current_width = 0;
 	bitpacking_width_t next_width = 0;
@@ -209,7 +208,7 @@ public:
 		// Copy string to dict
 		current_dictionary.size += str.GetSize();
 		auto dict_pos = current_end_ptr - current_dictionary.size;
-		memcpy(dict_pos, str.GetDataUnsafe(), str.GetSize());
+		memcpy(dict_pos, str.GetData(), str.GetSize());
 		current_dictionary.Verify();
 		D_ASSERT(current_dictionary.end == Storage::BLOCK_SIZE);
 
@@ -275,7 +274,7 @@ public:
 
 		// calculate ptr and offsets
 		auto base_ptr = handle.Ptr();
-		auto header_ptr = (dictionary_compression_header_t *)base_ptr;
+		auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(base_ptr);
 		auto compressed_selection_buffer_offset = DictionaryCompressionStorage::DICTIONARY_HEADER_SIZE;
 		auto index_buffer_offset = compressed_selection_buffer_offset + compressed_selection_buffer_size;
 
@@ -288,9 +287,9 @@ public:
 		memcpy(base_ptr + index_buffer_offset, index_buffer.data(), index_buffer_size);
 
 		// Store sizes and offsets in segment header
-		Store<uint32_t>(index_buffer_offset, (data_ptr_t)&header_ptr->index_buffer_offset);
-		Store<uint32_t>(index_buffer.size(), (data_ptr_t)&header_ptr->index_buffer_count);
-		Store<uint32_t>((uint32_t)current_width, (data_ptr_t)&header_ptr->bitpacking_width);
+		Store<uint32_t>(index_buffer_offset, data_ptr_cast(&header_ptr->index_buffer_offset));
+		Store<uint32_t>(index_buffer.size(), data_ptr_cast(&header_ptr->index_buffer_count));
+		Store<uint32_t>((uint32_t)current_width, data_ptr_cast(&header_ptr->bitpacking_width));
 
 		D_ASSERT(current_width == BitpackingPrimitives::MinimumBitWidth(index_buffer.size() - 1));
 		D_ASSERT(DictionaryCompressionStorage::HasEnoughSpace(current_segment->count, index_buffer.size(),
@@ -381,23 +380,23 @@ struct DictionaryAnalyzeState : public DictionaryCompressionState {
 };
 
 struct DictionaryCompressionAnalyzeState : public AnalyzeState {
-	DictionaryCompressionAnalyzeState() : analyze_state(make_unique<DictionaryAnalyzeState>()) {
+	DictionaryCompressionAnalyzeState() : analyze_state(make_uniq<DictionaryAnalyzeState>()) {
 	}
 
 	unique_ptr<DictionaryAnalyzeState> analyze_state;
 };
 
 unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<DictionaryCompressionAnalyzeState>();
+	return make_uniq<DictionaryCompressionAnalyzeState>();
 }
 
 bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
-	auto &state = (DictionaryCompressionAnalyzeState &)state_p;
+	auto &state = state_p.Cast<DictionaryCompressionAnalyzeState>();
 	return state.analyze_state->UpdateState(input, count);
 }
 
 idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
-	auto &analyze_state = (DictionaryCompressionAnalyzeState &)state_p;
+	auto &analyze_state = state_p.Cast<DictionaryCompressionAnalyzeState>();
 	auto &state = *analyze_state.analyze_state;
 
 	auto width = BitpackingPrimitives::MinimumBitWidth(state.current_unique_count + 1);
@@ -412,16 +411,16 @@ idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 unique_ptr<CompressionState> DictionaryCompressionStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
                                                                            unique_ptr<AnalyzeState> state) {
-	return make_unique<DictionaryCompressionCompressState>(checkpointer);
+	return make_uniq<DictionaryCompressionCompressState>(checkpointer);
 }
 
 void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = (DictionaryCompressionCompressState &)state_p;
+	auto &state = state_p.Cast<DictionaryCompressionCompressState>();
 	state.UpdateState(scan_vector, count);
 }
 
 void DictionaryCompressionStorage::FinalizeCompress(CompressionState &state_p) {
-	auto &state = (DictionaryCompressionCompressState &)state_p;
+	auto &state = state_p.Cast<DictionaryCompressionCompressState>();
 	state.Flush(true);
 }
 
@@ -437,7 +436,7 @@ struct CompressedStringScanState : public StringScanState {
 };
 
 unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(ColumnSegment &segment) {
-	auto state = make_unique<CompressedStringScanState>();
+	auto state = make_uniq<CompressedStringScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	state->handle = buffer_manager.Pin(segment.block);
 
@@ -445,12 +444,12 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 
 	// Load header values
 	auto dict = DictionaryCompressionStorage::GetDictionary(segment, state->handle);
-	auto header_ptr = (dictionary_compression_header_t *)baseptr;
-	auto index_buffer_offset = Load<uint32_t>((data_ptr_t)&header_ptr->index_buffer_offset);
-	auto index_buffer_count = Load<uint32_t>((data_ptr_t)&header_ptr->index_buffer_count);
-	state->current_width = (bitpacking_width_t)(Load<uint32_t>((data_ptr_t)&header_ptr->bitpacking_width));
+	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);
+	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_offset));
+	auto index_buffer_count = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_count));
+	state->current_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width)));
 
-	auto index_buffer_ptr = (uint32_t *)(baseptr + index_buffer_offset);
+	auto index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
 
 	state->dictionary = make_buffer<Vector>(segment.type, index_buffer_count);
 	auto dict_child_data = FlatVector::GetData<string_t>(*(state->dictionary));
@@ -471,17 +470,17 @@ template <bool ALLOW_DICT_VECTORS>
 void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
                                                      Vector &result, idx_t result_offset) {
 	// clear any previously locked buffers and get the primary buffer handle
-	auto &scan_state = (CompressedStringScanState &)*state.scan_state;
+	auto &scan_state = state.scan_state->Cast<CompressedStringScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto dict = DictionaryCompressionStorage::GetDictionary(segment, scan_state.handle);
 
-	auto header_ptr = (dictionary_compression_header_t *)baseptr;
-	auto index_buffer_offset = Load<uint32_t>((data_ptr_t)&header_ptr->index_buffer_offset);
-	auto index_buffer_ptr = (uint32_t *)(baseptr + index_buffer_offset);
+	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);
+	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_offset));
+	auto index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
 
-	auto base_data = (data_ptr_t)(baseptr + DICTIONARY_HEADER_SIZE);
+	auto base_data = data_ptr_cast(baseptr + DICTIONARY_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	if (!ALLOW_DICT_VECTORS || scan_count != STANDARD_VECTOR_SIZE ||
@@ -503,7 +502,7 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 		data_ptr_t src = &base_data[((start - start_offset) * scan_state.current_width) / 8];
 		sel_t *sel_vec_ptr = scan_state.sel_vec->data();
 
-		BitpackingPrimitives::UnPackBuffer<sel_t>((data_ptr_t)sel_vec_ptr, src, decompress_count,
+		BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), src, decompress_count,
 		                                          scan_state.current_width);
 
 		for (idx_t i = 0; i < scan_count; i++) {
@@ -528,8 +527,8 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 		}
 
 		// Scanning 1024 values, emitting a dict vector
-		data_ptr_t dst = (data_ptr_t)(scan_state.sel_vec->data());
-		data_ptr_t src = (data_ptr_t)&base_data[(start * scan_state.current_width) / 8];
+		data_ptr_t dst = data_ptr_cast(scan_state.sel_vec->data());
+		data_ptr_t src = data_ptr_cast(&base_data[(start * scan_state.current_width) / 8]);
 
 		BitpackingPrimitives::UnPackBuffer<sel_t>(dst, src, scan_count, scan_state.current_width);
 
@@ -552,12 +551,12 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 	auto &handle = state.GetOrInsertHandle(segment);
 
 	auto baseptr = handle.Ptr() + segment.GetBlockOffset();
-	auto header_ptr = (dictionary_compression_header_t *)baseptr;
+	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(baseptr);
 	auto dict = DictionaryCompressionStorage::GetDictionary(segment, handle);
-	auto index_buffer_offset = Load<uint32_t>((data_ptr_t)&header_ptr->index_buffer_offset);
-	auto width = (bitpacking_width_t)(Load<uint32_t>((data_ptr_t)&header_ptr->bitpacking_width));
-	auto index_buffer_ptr = (uint32_t *)(baseptr + index_buffer_offset);
-	auto base_data = (data_ptr_t)(baseptr + DICTIONARY_HEADER_SIZE);
+	auto index_buffer_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->index_buffer_offset));
+	auto width = (bitpacking_width_t)Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width));
+	auto index_buffer_ptr = reinterpret_cast<uint32_t *>(baseptr + index_buffer_offset);
+	auto base_data = data_ptr_cast(baseptr + DICTIONARY_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
 	// Handling non-bitpacking-group-aligned start values;
@@ -565,8 +564,8 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 
 	// Decompress part of selection buffer we need for this value.
 	sel_t decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
-	data_ptr_t src = (data_ptr_t)&base_data[((row_id - start_offset) * width) / 8];
-	BitpackingPrimitives::UnPackBuffer<sel_t>((data_ptr_t)decompression_buffer, src,
+	data_ptr_t src = data_ptr_cast(&base_data[((row_id - start_offset) * width) / 8]);
+	BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(decompression_buffer), src,
 	                                          BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, width);
 
 	auto selection_value = decompression_buffer[start_offset];
@@ -596,18 +595,18 @@ idx_t DictionaryCompressionStorage::RequiredSpace(idx_t current_count, idx_t ind
 }
 
 StringDictionaryContainer DictionaryCompressionStorage::GetDictionary(ColumnSegment &segment, BufferHandle &handle) {
-	auto header_ptr = (dictionary_compression_header_t *)(handle.Ptr() + segment.GetBlockOffset());
+	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
 	StringDictionaryContainer container;
-	container.size = Load<uint32_t>((data_ptr_t)&header_ptr->dict_size);
-	container.end = Load<uint32_t>((data_ptr_t)&header_ptr->dict_end);
+	container.size = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_size));
+	container.end = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_end));
 	return container;
 }
 
 void DictionaryCompressionStorage::SetDictionary(ColumnSegment &segment, BufferHandle &handle,
                                                  StringDictionaryContainer container) {
-	auto header_ptr = (dictionary_compression_header_t *)(handle.Ptr() + segment.GetBlockOffset());
-	Store<uint32_t>(container.size, (data_ptr_t)&header_ptr->dict_size);
-	Store<uint32_t>(container.end, (data_ptr_t)&header_ptr->dict_end);
+	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
+	Store<uint32_t>(container.size, data_ptr_cast(&header_ptr->dict_size));
+	Store<uint32_t>(container.end, data_ptr_cast(&header_ptr->dict_end));
 }
 
 string_t DictionaryCompressionStorage::FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict,
@@ -622,7 +621,7 @@ string_t DictionaryCompressionStorage::FetchStringFromDict(ColumnSegment &segmen
 	auto dict_end = baseptr + dict.end;
 	auto dict_pos = dict_end - dict_offset;
 
-	auto str_ptr = (char *)(dict_pos);
+	auto str_ptr = char_ptr_cast(dict_pos);
 	return string_t(str_ptr, string_len);
 }
 

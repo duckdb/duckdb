@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
@@ -43,7 +43,7 @@ struct WriteCSVData : public BaseCSVData {
 	WriteCSVData(string file_path, vector<LogicalType> sql_types, vector<string> names)
 	    : sql_types(std::move(sql_types)) {
 		files.push_back(std::move(file_path));
-		options.names = std::move(names);
+		options.name_list = std::move(names);
 	}
 
 	//! The SQL types to write
@@ -54,11 +54,41 @@ struct WriteCSVData : public BaseCSVData {
 	bool is_simple;
 	//! The size of the CSV file (in bytes) that we buffer before we flush it to disk
 	idx_t flush_size = 4096 * 8;
+	//! For each byte whether or not the CSV file requires quotes when containing the byte
+	unsafe_unique_array<bool> requires_quotes;
+};
+
+struct ColumnInfo {
+	ColumnInfo() {
+	}
+	ColumnInfo(vector<std::string> names_p, vector<LogicalType> types_p) {
+		names = std::move(names_p);
+		types = std::move(types_p);
+	}
+	void Serialize(FieldWriter &writer) const {
+		writer.WriteList<string>(names);
+		writer.WriteRegularSerializableList<LogicalType>(types);
+	}
+
+	static ColumnInfo Deserialize(FieldReader &reader) {
+		ColumnInfo info;
+		info.names = reader.ReadRequiredList<string>();
+		info.types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+		return info;
+	}
+	vector<std::string> names;
+	vector<LogicalType> types;
 };
 
 struct ReadCSVData : public BaseCSVData {
-	//! The expected SQL types to read
-	vector<LogicalType> sql_types;
+	//! The expected SQL types to read from the file
+	vector<LogicalType> csv_types;
+	//! The expected SQL names to be read from the file
+	vector<string> csv_names;
+	//! The expected SQL types to be returned from the read - including added constants (e.g. filename, hive partitions)
+	vector<LogicalType> return_types;
+	//! The expected SQL names to be returned from the read - including added constants (e.g. filename, hive partitions)
+	vector<string> return_names;
 	//! The initial reader (if any): this is used when automatic detection is used during binding.
 	//! In this case, the CSV reader is already created and might as well be re-used.
 	unique_ptr<BufferedCSVReader> initial_reader;
@@ -67,8 +97,13 @@ struct ReadCSVData : public BaseCSVData {
 	vector<unique_ptr<BufferedCSVReader>> union_readers;
 	//! Whether or not the single-threaded reader should be used
 	bool single_threaded = false;
+	//! Reader bind data
+	MultiFileReaderBindData reader_bind;
+	vector<ColumnInfo> column_info;
 
-	void InitializeFiles(ClientContext &context, const vector<string> &patterns);
+	void Initialize(unique_ptr<BufferedCSVReader> &reader) {
+		this->initial_reader = std::move(reader);
+	}
 	void FinalizeRead(ClientContext &context);
 };
 
@@ -77,8 +112,8 @@ struct CSVCopyFunction {
 };
 
 struct ReadCSVTableFunction {
-	static TableFunction GetFunction(bool list_parameter = false);
-	static TableFunction GetAutoFunction(bool list_parameter = false);
+	static TableFunction GetFunction();
+	static TableFunction GetAutoFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

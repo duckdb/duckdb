@@ -40,25 +40,25 @@ PIVOT Cities USING SUM(Population);
 ----
 30100
 
-query II
+query II rowsort
 PIVOT Cities USING SUM(Population) GROUP BY Country;
 ----
 NL	3228
 US	26872
 
-query I
+query I rowsort
 PIVOT Cities GROUP BY Country;
 ----
 NL
 US
 
-query IIII
+query IIII rowsort
 PIVOT Cities ON Year GROUP BY Country;
 ----
 NL	1	1	1
 US	2	2	2
 
-query IIII
+query IIII rowsort
 PIVOT (SELECT Country, Year FROM Cities) ON Year;
 ----
 NL	1	1	1

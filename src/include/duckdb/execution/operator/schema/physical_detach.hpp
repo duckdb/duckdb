@@ -15,6 +15,9 @@ namespace duckdb {
 
 class PhysicalDetach : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::DETACH;
+
+public:
 	explicit PhysicalDetach(unique_ptr<DetachInfo> info, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::DETACH, {LogicalType::BOOLEAN}, estimated_cardinality),
 	      info(std::move(info)) {
@@ -24,9 +27,11 @@ public:
 
 public:
 	// Source interface
-	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
-	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	             LocalSourceState &lstate) const override;
+	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+
+	bool IsSource() const override {
+		return true;
+	}
 };
 
 } // namespace duckdb

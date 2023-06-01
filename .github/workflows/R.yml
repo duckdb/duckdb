@@ -17,6 +17,7 @@ on:
       - '!tools/rpkg/**'
       - '.github/workflows/**'
       - '!.github/workflows/R.yml'
+      - '.github/config/uncovered_files.csv'
   pull_request:
     paths-ignore:
       - '**.md'
@@ -26,6 +27,7 @@ on:
       - '!tools/rpkg/**'
       - '.github/workflows/**'
       - '!.github/workflows/R.yml'
+      - '.github/config/uncovered_files.csv'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -80,7 +82,7 @@ jobs:
       with:
         python-version: '3.7'
 
-    - uses: r-lib/actions/setup-r@v1
+    - uses: r-lib/actions/setup-r@v2
       with:
         r-version: 'devel'
 
@@ -181,7 +183,7 @@ jobs:
       with:
         python-version: '3.7'
 
-    - uses: r-lib/actions/setup-r@v1
+    - uses: r-lib/actions/setup-r@v2
       with:
         r-version: 'devel'
 
@@ -220,7 +222,7 @@ jobs:
       with:
         python-version: '3.7'
 
-    - uses: r-lib/actions/setup-r@v1
+    - uses: r-lib/actions/setup-r@v2
       with:
         r-version: 'devel'
         update-rtools: true
@@ -249,6 +251,62 @@ jobs:
         _R_CHECK_CRAN_INCOMING_=FALSE _R_CHECK_PKG_SIZES_=FALSE R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
         if egrep 'NOTE|WARNING|ERROR' /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
+  rstats-windows-extensions:
+    name: R Package Windows (Extensions)
+    needs: rstats-linux
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.7'
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'devel'
+          update-rtools: true
+          rtools-version: '42' # linker bug in 43 ^^
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
+      - uses: ./.github/actions/build_extensions
+        with:
+          deploy_as: windows_amd64_rtools
+          treat_warn_as_error: 0
+          s3_id: ${{ secrets.S3_ID }}
+          s3_key: ${{ secrets.S3_KEY }}
+          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
+          python_name: python
+          override_cc: gcc
+          override_cxx: g++
+          out_of_tree_ext: 0
+          openssl_path: C:/rtools43/x86_64-w64-mingw32.static.posix # not sure if this is required, there seems to be an openssl there
+          run_tests: 0
+
+      - name: Install R package
+        shell: bash
+        run: |
+          R -e 'install.packages("DBI", repos = "https://cloud.r-project.org")'
+          cd tools/rpkg
+          ./configure
+          R CMD build .
+          R CMD INSTALL duckdb_*.tar.gz
+
+      - name: Test Load
+        shell: bash
+        run: |
+          R -e 'con <- DBI::dbConnect(duckdb::duckdb(config = list("allow_unsigned_extensions" = "true")), debug=TRUE); lapply(Sys.glob("build/release/extension/*/*.duckdb_extension"), function(x) DBI::dbExecute(con, sprintf("LOAD \"%s\"", x))); DBI::dbDisconnect(con, shutdown=TRUE);'
+
+
   rstats-windows-warnings:
     name: R Package Windows (Warnings)
     needs: rstats-linux
@@ -264,7 +322,7 @@ jobs:
       with:
         python-version: '3.7'
 
-    - uses: r-lib/actions/setup-r@v1
+    - uses: r-lib/actions/setup-r@v2
       with:
         r-version: 'devel'
         update-rtools: true

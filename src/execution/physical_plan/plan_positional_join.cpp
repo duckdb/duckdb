@@ -16,7 +16,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPositional
 		switch (right->type) {
 		case PhysicalOperatorType::TABLE_SCAN:
 		case PhysicalOperatorType::POSITIONAL_SCAN:
-			return make_unique<PhysicalPositionalScan>(op.types, std::move(left), std::move(right));
+			return make_uniq<PhysicalPositionalScan>(op.types, std::move(left), std::move(right));
 		default:
 			break;
 		}
@@ -24,7 +24,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPositional
 		break;
 	}
 
-	return make_unique<PhysicalPositionalJoin>(op.types, std::move(left), std::move(right), op.estimated_cardinality);
+	return make_uniq<PhysicalPositionalJoin>(op.types, std::move(left), std::move(right), op.estimated_cardinality);
 }
 
 } // namespace duckdb

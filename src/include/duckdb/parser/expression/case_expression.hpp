@@ -24,6 +24,9 @@ struct CaseCheck {
 //! The CaseExpression represents a CASE expression in the query
 class CaseExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::CASE;
+
+public:
 	DUCKDB_API CaseExpression();
 
 	vector<CaseCheck> case_checks;
@@ -32,7 +35,7 @@ public:
 public:
 	string ToString() const override;
 
-	static bool Equal(const CaseExpression *a, const CaseExpression *b);
+	static bool Equal(const CaseExpression &a, const CaseExpression &b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 

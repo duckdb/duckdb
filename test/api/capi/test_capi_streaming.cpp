@@ -8,7 +8,7 @@ TEST_CASE("Test streaming results in C API", "[capi]") {
 	CAPITester tester;
 	CAPIPrepared prepared;
 	CAPIPending pending;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
@@ -29,7 +29,6 @@ TEST_CASE("Test streaming results in C API", "[capi]") {
 	auto chunk = result->StreamChunk();
 
 	idx_t value = duckdb::DConstants::INVALID_INDEX;
-	idx_t chunk_count = 0;
 	while (chunk) {
 		auto old_value = value;
 
@@ -41,7 +40,6 @@ TEST_CASE("Test streaming results in C API", "[capi]") {
 			// one.
 			REQUIRE(value > old_value);
 		}
-		chunk_count++;
 		chunk = result->StreamChunk();
 	}
 }
@@ -50,7 +48,7 @@ TEST_CASE("Test other methods on streaming results in C API", "[capi]") {
 	CAPITester tester;
 	CAPIPrepared prepared;
 	CAPIPending pending;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));

@@ -19,7 +19,7 @@ string SelectNode::ToString() const {
 	// search for a distinct modifier
 	for (idx_t modifier_idx = 0; modifier_idx < modifiers.size(); modifier_idx++) {
 		if (modifiers[modifier_idx]->type == ResultModifierType::DISTINCT_MODIFIER) {
-			auto &distinct_modifier = (DistinctModifier &)*modifiers[modifier_idx];
+			auto &distinct_modifier = modifiers[modifier_idx]->Cast<DistinctModifier>();
 			result += "DISTINCT ";
 			if (!distinct_modifier.distinct_on_targets.empty()) {
 				result += "ON (";
@@ -39,7 +39,7 @@ string SelectNode::ToString() const {
 		}
 		result += select_list[i]->ToString();
 		if (!select_list[i]->alias.empty()) {
-			result += " AS " + KeywordHelper::WriteOptionallyQuoted(select_list[i]->alias);
+			result += StringUtil::Format(" AS %s", SQLIdentifier(select_list[i]->alias));
 		}
 	}
 	if (from_table && from_table->type != TableReferenceType::EMPTY) {
@@ -97,7 +97,7 @@ string SelectNode::ToString() const {
 		if (sample->is_percentage) {
 			result += "%";
 		}
-		result += " (" + SampleMethodToString(sample->method);
+		result += " (" + EnumUtil::ToString(sample->method);
 		if (sample->seed >= 0) {
 			result += ", " + std::to_string(sample->seed);
 		}
@@ -113,50 +113,43 @@ bool SelectNode::Equals(const QueryNode *other_p) const {
 	if (this == other_p) {
 		return true;
 	}
-	auto other = (SelectNode *)other_p;
+	auto &other = other_p->Cast<SelectNode>();
 
 	// SELECT
-	if (!ExpressionUtil::ListEquals(select_list, other->select_list)) {
+	if (!ExpressionUtil::ListEquals(select_list, other.select_list)) {
 		return false;
 	}
 	// FROM
-	if (from_table) {
-		// we have a FROM clause, compare to the other one
-		if (!from_table->Equals(other->from_table.get())) {
-			return false;
-		}
-	} else if (other->from_table) {
-		// we don't have a FROM clause, if the other statement has one they are
-		// not equal
+	if (!TableRef::Equals(from_table, other.from_table)) {
 		return false;
 	}
 	// WHERE
-	if (!BaseExpression::Equals(where_clause.get(), other->where_clause.get())) {
+	if (!ParsedExpression::Equals(where_clause, other.where_clause)) {
 		return false;
 	}
 	// GROUP BY
-	if (!ExpressionUtil::ListEquals(groups.group_expressions, other->groups.group_expressions)) {
+	if (!ParsedExpression::ListEquals(groups.group_expressions, other.groups.group_expressions)) {
 		return false;
 	}
-	if (groups.grouping_sets != other->groups.grouping_sets) {
+	if (groups.grouping_sets != other.groups.grouping_sets) {
 		return false;
 	}
-	if (!SampleOptions::Equals(sample.get(), other->sample.get())) {
+	if (!SampleOptions::Equals(sample.get(), other.sample.get())) {
 		return false;
 	}
 	// HAVING
-	if (!BaseExpression::Equals(having.get(), other->having.get())) {
+	if (!ParsedExpression::Equals(having, other.having)) {
 		return false;
 	}
 	// QUALIFY
-	if (!BaseExpression::Equals(qualify.get(), other->qualify.get())) {
+	if (!ParsedExpression::Equals(qualify, other.qualify)) {
 		return false;
 	}
 	return true;
 }
 
 unique_ptr<QueryNode> SelectNode::Copy() const {
-	auto result = make_unique<SelectNode>();
+	auto result = make_uniq<SelectNode>();
 	for (auto &child : select_list) {
 		result->select_list.push_back(child->Copy());
 	}
@@ -208,7 +201,7 @@ void SelectNode::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<QueryNode> SelectNode::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_unique<SelectNode>();
+	auto result = make_uniq<SelectNode>();
 
 	deserializer.ReadProperty("select_list", result->select_list);
 	deserializer.ReadOptionalProperty("from_table", result->from_table);
@@ -224,7 +217,7 @@ unique_ptr<QueryNode> SelectNode::FormatDeserialize(FormatDeserializer &deserial
 }
 
 unique_ptr<QueryNode> SelectNode::Deserialize(FieldReader &reader) {
-	auto result = make_unique<SelectNode>();
+	auto result = make_uniq<SelectNode>();
 	result->select_list = reader.ReadRequiredSerializableList<ParsedExpression>();
 	result->from_table = reader.ReadOptional<TableRef>(nullptr);
 	result->where_clause = reader.ReadOptional<ParsedExpression>(nullptr);

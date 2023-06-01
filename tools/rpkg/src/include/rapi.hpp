@@ -16,7 +16,7 @@ namespace duckdb {
 typedef unordered_map<std::string, SEXP> arrow_scans_t;
 
 struct DBWrapper {
-	unique_ptr<DuckDB> db;
+	duckdb::unique_ptr<DuckDB> db;
 	arrow_scans_t arrow_scans;
 	mutex lock;
 };
@@ -25,7 +25,7 @@ void DBDeleter(DBWrapper *);
 typedef cpp11::external_pointer<DBWrapper, DBDeleter> db_eptr_t;
 
 struct ConnWrapper {
-	unique_ptr<Connection> conn;
+	duckdb::unique_ptr<Connection> conn;
 	db_eptr_t db_eptr;
 };
 
@@ -33,7 +33,7 @@ void ConnDeleter(ConnWrapper *);
 typedef cpp11::external_pointer<ConnWrapper, ConnDeleter> conn_eptr_t;
 
 struct RStatement {
-	unique_ptr<PreparedStatement> stmt;
+	duckdb::unique_ptr<PreparedStatement> stmt;
 	vector<Value> parameters;
 };
 
@@ -49,7 +49,7 @@ typedef cpp11::external_pointer<RelationWrapper> rel_extptr_t;
 typedef cpp11::external_pointer<RStatement> stmt_eptr_t;
 
 struct RQueryResult {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 };
 
 typedef cpp11::external_pointer<RQueryResult> rqry_eptr_t;

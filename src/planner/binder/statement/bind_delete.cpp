@@ -20,16 +20,16 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	if (bound_table->type != TableReferenceType::BASE_TABLE) {
 		throw BinderException("Can only delete from base table!");
 	}
-	auto &table_binding = (BoundBaseTableRef &)*bound_table;
-	auto table = table_binding.table;
+	auto &table_binding = bound_table->Cast<BoundBaseTableRef>();
+	auto &table = table_binding.table;
 
 	auto root = CreatePlan(*bound_table);
-	auto &get = (LogicalGet &)*root;
+	auto &get = root->Cast<LogicalGet>();
 	D_ASSERT(root->type == LogicalOperatorType::LOGICAL_GET);
 
-	if (!table->temporary) {
+	if (!table.temporary) {
 		// delete from persistent table: not read only!
-		properties.modified_databases.insert(table->catalog->GetName());
+		properties.modified_databases.insert(table.catalog.GetName());
 	}
 
 	// Add CTEs as bindable
@@ -62,17 +62,17 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 		WhereBinder binder(*this, context);
 		condition = binder.Bind(stmt.condition);
 
-		PlanSubqueries(&condition, &root);
-		auto filter = make_unique<LogicalFilter>(std::move(condition));
+		PlanSubqueries(condition, root);
+		auto filter = make_uniq<LogicalFilter>(std::move(condition));
 		filter->AddChild(std::move(root));
 		root = std::move(filter);
 	}
 	// create the delete node
-	auto del = make_unique<LogicalDelete>(table, GenerateTableIndex());
+	auto del = make_uniq<LogicalDelete>(table, GenerateTableIndex());
 	del->AddChild(std::move(root));
 
 	// set up the delete expression
-	del->expressions.push_back(make_unique<BoundColumnRefExpression>(
+	del->expressions.push_back(make_uniq<BoundColumnRefExpression>(
 	    LogicalType::ROW_TYPE, ColumnBinding(get.table_index, get.column_ids.size())));
 	get.column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 

@@ -97,14 +97,12 @@ string SQLLogicParser::ExtractExpectedError(bool expect_ok) {
 	}
 	current_line++;
 	string error;
+	vector<string> error_lines;
 	while (current_line < lines.size() && !lines[current_line].empty()) {
-		if (error.empty()) {
-			error = lines[current_line];
-		} else {
-			Fail("Failed to parse statement error: expected single line error message");
-		}
+		error_lines.push_back(lines[current_line]);
 		current_line++;
 	}
+	error = StringUtil::Join(error_lines, "\n");
 	return error;
 }
 

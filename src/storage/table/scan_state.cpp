@@ -13,7 +13,7 @@ void TableScanState::Initialize(vector<column_t> column_ids, TableFilterSet *tab
 	this->table_filters = table_filters;
 	if (table_filters) {
 		D_ASSERT(table_filters->filters.size() > 0);
-		this->adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
+		this->adaptive_filter = make_uniq<AdaptiveFilter>(table_filters);
 	}
 }
 
@@ -55,7 +55,7 @@ void ColumnScanState::Next(idx_t count) {
 	}
 }
 
-const vector<column_t> &CollectionScanState::GetColumnIds() {
+const vector<storage_t> &CollectionScanState::GetColumnIds() {
 	return parent.GetColumnIds();
 }
 

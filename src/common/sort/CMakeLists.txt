@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   comparators.cpp
   merge_sorter.cpp
+  partition_state.cpp
   radix_sort.cpp
   sort_state.cpp
   sorted_block.cpp)

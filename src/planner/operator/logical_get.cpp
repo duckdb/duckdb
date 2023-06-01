@@ -6,6 +6,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/function/function_serialization.hpp"
 #include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
@@ -16,11 +17,7 @@ LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<Fun
       bind_data(std::move(bind_data)), returned_types(std::move(returned_types)), names(std::move(returned_names)) {
 }
 
-string LogicalGet::GetName() const {
-	return StringUtil::Upper(function.name);
-}
-
-TableCatalogEntry *LogicalGet::GetTable() const {
+optional_ptr<TableCatalogEntry> LogicalGet::GetTable() const {
 	return TableScanFunction::GetTableEntry(function, bind_data.get());
 }
 
@@ -185,7 +182,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState 
 	vector<column_t> projected_input;
 	reader.ReadList<column_t>(projected_input);
 
-	auto result = make_unique<LogicalGet>(table_index, function, std::move(bind_data), returned_types, returned_names);
+	auto result = make_uniq<LogicalGet>(table_index, function, std::move(bind_data), returned_types, returned_names);
 	result->column_ids = std::move(column_ids);
 	result->projection_ids = std::move(projection_ids);
 	result->table_filters = std::move(*table_filters);
@@ -199,6 +196,15 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(LogicalDeserializationState 
 
 vector<idx_t> LogicalGet::GetTableIndex() const {
 	return vector<idx_t> {table_index};
+}
+
+string LogicalGet::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return StringUtil::Upper(function.name) + StringUtil::Format(" #%llu", table_index);
+	}
+#endif
+	return StringUtil::Upper(function.name);
 }
 
 } // namespace duckdb

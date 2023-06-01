@@ -8,14 +8,23 @@
 
 namespace duckdb {
 
+string GetColumnsStringValue(ParsedExpression &expr) {
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		auto &colref = expr.Cast<ColumnRefExpression>();
+		return colref.GetColumnName();
+	} else {
+		return expr.ToString();
+	}
+}
+
 bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpression **star, bool is_root,
                                 bool in_columns) {
 	bool has_star = false;
 	if (expr->GetExpressionClass() == ExpressionClass::STAR) {
-		auto current_star = (StarExpression *)expr.get();
-		if (!current_star->columns) {
+		auto &current_star = expr->Cast<StarExpression>();
+		if (!current_star.columns) {
 			if (is_root) {
-				*star = current_star;
+				*star = &current_star;
 				return true;
 			}
 			if (!in_columns) {
@@ -23,21 +32,21 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 				    "STAR expression is only allowed as the root element of an expression. Use COLUMNS(*) instead.");
 			}
 			// star expression inside a COLUMNS - convert to a constant list
-			if (!current_star->replace_list.empty()) {
+			if (!current_star.replace_list.empty()) {
 				throw BinderException(
 				    "STAR expression with REPLACE list is only allowed as the root element of COLUMNS");
 			}
 			vector<unique_ptr<ParsedExpression>> star_list;
-			bind_context.GenerateAllColumnExpressions(*current_star, star_list);
+			bind_context.GenerateAllColumnExpressions(current_star, star_list);
 
 			vector<Value> values;
 			values.reserve(star_list.size());
 			for (auto &expr : star_list) {
-				values.emplace_back(expr->ToString());
+				values.emplace_back(GetColumnsStringValue(*expr));
 			}
 			D_ASSERT(!values.empty());
 
-			expr = make_unique<ConstantExpression>(Value::LIST(LogicalType::VARCHAR, values));
+			expr = make_uniq<ConstantExpression>(Value::LIST(LogicalType::VARCHAR, values));
 			return true;
 		}
 		if (in_columns) {
@@ -46,13 +55,13 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 		in_columns = true;
 		if (*star) {
 			// we can have multiple
-			if (!StarExpression::Equal(*star, current_star)) {
+			if (!(*star)->Equals(current_star)) {
 				throw BinderException(
 				    FormatError(*expr, "Multiple different STAR/COLUMNS in the same expression are not supported"));
 			}
 			return true;
 		}
-		*star = current_star;
+		*star = &current_star;
 		has_star = true;
 	}
 	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child_expr) {
@@ -118,7 +127,7 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			}
 			vector<unique_ptr<ParsedExpression>> new_list;
 			for (idx_t i = 0; i < star_list.size(); i++) {
-				auto &colref = (ColumnRefExpression &)*star_list[i];
+				auto &colref = star_list[i]->Cast<ColumnRefExpression>();
 				if (!RE2::PartialMatch(colref.GetColumnName(), regex)) {
 					continue;
 				}
@@ -139,17 +148,26 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			}
 			auto &children = ListValue::GetChildren(val);
 			vector<unique_ptr<ParsedExpression>> new_list;
+			// scan the list for all selected columns and construct a lookup table
+			case_insensitive_map_t<bool> selected_set;
 			for (auto &child : children) {
-				auto qname = QualifiedName::Parse(StringValue::Get(child));
-				vector<string> names;
-				if (!qname.catalog.empty()) {
-					names.push_back(qname.catalog);
+				selected_set.insert(make_pair(StringValue::Get(child), false));
+			}
+			// now check the list of all possible expressions and select which ones make it in
+			for (auto &expr : star_list) {
+				auto str = GetColumnsStringValue(*expr);
+				auto entry = selected_set.find(str);
+				if (entry != selected_set.end()) {
+					new_list.push_back(std::move(expr));
+					entry->second = true;
 				}
-				if (!qname.schema.empty()) {
-					names.push_back(qname.schema);
+			}
+			// check if all expressions found a match
+			for (auto &entry : selected_set) {
+				if (!entry.second) {
+					throw BinderException("Column \"%s\" was selected but was not found in the FROM clause",
+					                      entry.first);
 				}
-				names.push_back(qname.name);
-				new_list.push_back(make_unique<ColumnRefExpression>(std::move(names)));
 			}
 			star_list = std::move(new_list);
 		} else {

@@ -10,7 +10,7 @@ void CommonTableExpressionInfo::FormatSerialize(FormatSerializer &serializer) co
 }
 
 unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_unique<CommonTableExpressionInfo>();
+	auto result = make_uniq<CommonTableExpressionInfo>();
 	result->aliases = deserializer.ReadProperty<vector<string>>("aliases");
 	result->query = deserializer.ReadProperty<unique_ptr<SelectStatement>>("query");
 	return result;

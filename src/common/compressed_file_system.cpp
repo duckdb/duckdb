@@ -19,10 +19,10 @@ void CompressedFile::Initialize(bool write) {
 	this->write = write;
 	stream_data.in_buf_size = compressed_fs.InBufferSize();
 	stream_data.out_buf_size = compressed_fs.OutBufferSize();
-	stream_data.in_buff = unique_ptr<data_t[]>(new data_t[stream_data.in_buf_size]);
+	stream_data.in_buff = make_unsafe_uniq_array<data_t>(stream_data.in_buf_size);
 	stream_data.in_buff_start = stream_data.in_buff.get();
 	stream_data.in_buff_end = stream_data.in_buff.get();
-	stream_data.out_buff = unique_ptr<data_t[]>(new data_t[stream_data.out_buf_size]);
+	stream_data.out_buff = make_unsafe_uniq_array<data_t>(stream_data.out_buf_size);
 	stream_data.out_buff_start = stream_data.out_buff.get();
 	stream_data.out_buff_end = stream_data.out_buff.get();
 
@@ -57,6 +57,21 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 		stream_data.out_buff_end = stream_data.out_buff.get();
 		D_ASSERT(stream_data.in_buff_start <= stream_data.in_buff_end);
 		D_ASSERT(stream_data.in_buff_end <= stream_data.in_buff_start + stream_data.in_buf_size);
+
+		// read more input when requested and still data in the input stream
+		if (stream_data.refresh && (stream_data.in_buff_end == stream_data.in_buff.get() + stream_data.in_buf_size)) {
+			auto bufrem = stream_data.in_buff_end - stream_data.in_buff_start;
+			// buffer not empty, move remaining bytes to the beginning
+			memmove(stream_data.in_buff.get(), stream_data.in_buff_start, bufrem);
+			stream_data.in_buff_start = stream_data.in_buff.get();
+			// refill the rest of input buffer
+			auto sz = child_handle->Read(stream_data.in_buff_start + bufrem, stream_data.in_buf_size - bufrem);
+			stream_data.in_buff_end = stream_data.in_buff_start + bufrem + sz;
+			if (sz <= 0) {
+				stream_wrapper.reset();
+				break;
+			}
+		}
 
 		// read more input if none available
 		if (stream_data.in_buff_start == stream_data.in_buff_end) {
@@ -100,28 +115,28 @@ void CompressedFile::Close() {
 }
 
 int64_t CompressedFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &compressed_file = (CompressedFile &)handle;
+	auto &compressed_file = handle.Cast<CompressedFile>();
 	return compressed_file.ReadData(buffer, nr_bytes);
 }
 
 int64_t CompressedFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &compressed_file = (CompressedFile &)handle;
-	return compressed_file.WriteData((data_ptr_t)buffer, nr_bytes);
+	auto &compressed_file = handle.Cast<CompressedFile>();
+	return compressed_file.WriteData(data_ptr_cast(buffer), nr_bytes);
 }
 
 void CompressedFileSystem::Reset(FileHandle &handle) {
-	auto &compressed_file = (CompressedFile &)handle;
+	auto &compressed_file = handle.Cast<CompressedFile>();
 	compressed_file.child_handle->Reset();
 	compressed_file.Initialize(compressed_file.write);
 }
 
 int64_t CompressedFileSystem::GetFileSize(FileHandle &handle) {
-	auto &compressed_file = (CompressedFile &)handle;
+	auto &compressed_file = handle.Cast<CompressedFile>();
 	return compressed_file.child_handle->GetFileSize();
 }
 
 bool CompressedFileSystem::OnDiskFile(FileHandle &handle) {
-	auto &compressed_file = (CompressedFile &)handle;
+	auto &compressed_file = handle.Cast<CompressedFile>();
 	return compressed_file.child_handle->OnDiskFile();
 }
 

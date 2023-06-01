@@ -12,21 +12,24 @@ string JoinRef::ToString() const {
 	result = left->ToString() + " ";
 	switch (ref_type) {
 	case JoinRefType::REGULAR:
-		result += JoinTypeToString(type) + " JOIN ";
+		result += EnumUtil::ToString(type) + " JOIN ";
 		break;
 	case JoinRefType::NATURAL:
 		result += "NATURAL ";
-		result += JoinTypeToString(type) + " JOIN ";
+		result += EnumUtil::ToString(type) + " JOIN ";
 		break;
 	case JoinRefType::ASOF:
 		result += "ASOF ";
-		result += JoinTypeToString(type) + " JOIN ";
+		result += EnumUtil::ToString(type) + " JOIN ";
 		break;
 	case JoinRefType::CROSS:
 		result += ", ";
 		break;
 	case JoinRefType::POSITIONAL:
 		result += "POSITIONAL JOIN ";
+		break;
+	case JoinRefType::DEPENDENT:
+		result += "DEPENDENT JOIN ";
 		break;
 	}
 	result += right->ToString();
@@ -48,25 +51,25 @@ string JoinRef::ToString() const {
 	return result;
 }
 
-bool JoinRef::Equals(const TableRef *other_p) const {
+bool JoinRef::Equals(const TableRef &other_p) const {
 	if (!TableRef::Equals(other_p)) {
 		return false;
 	}
-	auto other = (JoinRef *)other_p;
-	if (using_columns.size() != other->using_columns.size()) {
+	auto &other = other_p.Cast<JoinRef>();
+	if (using_columns.size() != other.using_columns.size()) {
 		return false;
 	}
 	for (idx_t i = 0; i < using_columns.size(); i++) {
-		if (using_columns[i] != other->using_columns[i]) {
+		if (using_columns[i] != other.using_columns[i]) {
 			return false;
 		}
 	}
-	return left->Equals(other->left.get()) && right->Equals(other->right.get()) &&
-	       BaseExpression::Equals(condition.get(), other->condition.get()) && type == other->type;
+	return left->Equals(*other.left) && right->Equals(*other.right) &&
+	       ParsedExpression::Equals(condition, other.condition) && type == other.type;
 }
 
 unique_ptr<TableRef> JoinRef::Copy() {
-	auto copy = make_unique<JoinRef>(ref_type);
+	auto copy = make_uniq<JoinRef>(ref_type);
 	copy->left = left->Copy();
 	copy->right = right->Copy();
 	if (condition) {
@@ -99,7 +102,7 @@ void JoinRef::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<TableRef> JoinRef::FormatDeserialize(FormatDeserializer &source) {
-	auto result = make_unique<JoinRef>(JoinRefType::REGULAR);
+	auto result = make_uniq<JoinRef>(JoinRefType::REGULAR);
 
 	source.ReadProperty("left", result->left);
 	source.ReadProperty("right", result->right);
@@ -112,7 +115,7 @@ unique_ptr<TableRef> JoinRef::FormatDeserialize(FormatDeserializer &source) {
 }
 
 unique_ptr<TableRef> JoinRef::Deserialize(FieldReader &reader) {
-	auto result = make_unique<JoinRef>(JoinRefType::REGULAR);
+	auto result = make_uniq<JoinRef>(JoinRefType::REGULAR);
 	result->left = reader.ReadRequiredSerializable<TableRef>();
 	result->right = reader.ReadRequiredSerializable<TableRef>();
 	result->condition = reader.ReadOptional<ParsedExpression>(nullptr);

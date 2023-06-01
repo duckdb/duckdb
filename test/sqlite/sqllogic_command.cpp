@@ -17,12 +17,13 @@ static void query_break(int line) {
 	(void)line;
 }
 
-static Connection *GetConnection(DuckDB &db, unordered_map<string, unique_ptr<Connection>> &named_connection_map,
+static Connection *GetConnection(DuckDB &db,
+                                 unordered_map<string, duckdb::unique_ptr<Connection>> &named_connection_map,
                                  string con_name) {
 	auto entry = named_connection_map.find(con_name);
 	if (entry == named_connection_map.end()) {
 		// not found: create a new connection
-		auto con = make_unique<Connection>(db);
+		auto con = make_uniq<Connection>(db);
 		auto res = con.get();
 		named_connection_map[con_name] = std::move(con);
 		return res;
@@ -57,7 +58,7 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 		// cannot restart in parallel
 		return;
 	}
-	vector<unique_ptr<SQLStatement>> statements;
+	vector<duckdb::unique_ptr<SQLStatement>> statements;
 	bool query_fail = false;
 	try {
 		statements = connection->context->ParseStatements(sql_query);
@@ -75,7 +76,7 @@ void Command::RestartDatabase(ExecuteContext &context, Connection *&connection, 
 	}
 	if (!query_fail && can_restart && !runner.skip_reload) {
 		// We basically restart the database if no transaction is active and if the query is valid
-		auto command = make_unique<RestartCommand>(runner);
+		auto command = make_uniq<RestartCommand>(runner);
 		runner.ExecuteCommand(std::move(command));
 		connection = CommandConnection(context);
 	}
@@ -123,13 +124,13 @@ LoopCommand::LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p
 }
 
 struct ParallelExecuteContext {
-	ParallelExecuteContext(SQLLogicTestRunner &runner, const vector<unique_ptr<Command>> &loop_commands,
+	ParallelExecuteContext(SQLLogicTestRunner &runner, const vector<duckdb::unique_ptr<Command>> &loop_commands,
 	                       LoopDefinition definition)
 	    : runner(runner), loop_commands(loop_commands), definition(std::move(definition)), success(true) {
 	}
 
 	SQLLogicTestRunner &runner;
-	const vector<unique_ptr<Command>> &loop_commands;
+	const vector<duckdb::unique_ptr<Command>> &loop_commands;
 	LoopDefinition definition;
 	atomic<bool> success;
 	string error_message;
@@ -268,12 +269,11 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 	runner.con->context->config = client_config;
 
 	runner.con->BeginTransaction();
-	runner.con->context->client_data->catalog_search_path->Set(catalog_search_paths);
+	runner.con->context->client_data->catalog_search_path->Set(catalog_search_paths, CatalogSetPathType::SET_SCHEMAS);
 	runner.con->Commit();
 	if (!low_query_writer_path.empty()) {
-		runner.con->context->client_data->log_query_writer =
-		    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path,
-		                                    1 << 1 | 1 << 5, runner.con->context->client_data->file_opener.get());
+		runner.con->context->client_data->log_query_writer = make_uniq<BufferedFileWriter>(
+		    FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path, 1 << 1 | 1 << 5);
 	}
 }
 

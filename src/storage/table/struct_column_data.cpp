@@ -8,9 +8,9 @@
 namespace duckdb {
 
 StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                   idx_t start_row, LogicalType type_p, ColumnData *parent)
+                                   idx_t start_row, LogicalType type_p, optional_ptr<ColumnData> parent)
     : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
-      validity(block_manager, info, 0, start_row, this) {
+      validity(block_manager, info, 0, start_row, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(child_types.size() > 0);
@@ -23,12 +23,12 @@ StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &i
 	}
 }
 
-StructColumnData::StructColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
-    : ColumnData(original, start_row, parent), validity(((StructColumnData &)original).validity, start_row, this) {
-	auto &struct_data = (StructColumnData &)original;
-	for (auto &child_col : struct_data.sub_columns) {
-		sub_columns.push_back(ColumnData::CreateColumnUnique(*child_col, start_row, this));
+void StructColumnData::SetStart(idx_t new_start) {
+	this->start = new_start;
+	for (auto &sub_column : sub_columns) {
+		sub_column->SetStart(new_start);
 	}
+	validity.SetStart(new_start);
 }
 
 bool StructColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -203,7 +203,7 @@ void StructColumnData::FetchRow(TransactionData transaction, ColumnFetchState &s
 	auto &child_entries = StructVector::GetEntries(result);
 	// insert any child states that are required
 	for (idx_t i = state.child_states.size(); i < child_entries.size() + 1; i++) {
-		auto child_state = make_unique<ColumnFetchState>();
+		auto child_state = make_uniq<ColumnFetchState>();
 		state.child_states.push_back(std::move(child_state));
 	}
 	// fetch the validity state
@@ -246,23 +246,17 @@ public:
 			state->WriteDataPointers(writer);
 		}
 	}
-	void GetBlockIds(unordered_set<block_id_t> &result) override {
-		validity_state->GetBlockIds(result);
-		for (auto &state : child_states) {
-			state->GetBlockIds(result);
-		}
-	}
 };
 
 unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(RowGroup &row_group,
                                                                           PartialBlockManager &partial_block_manager) {
-	return make_unique<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
+	return make_uniq<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
 }
 
 unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_group,
                                                                PartialBlockManager &partial_block_manager,
                                                                ColumnCheckpointInfo &checkpoint_info) {
-	auto checkpoint_state = make_unique<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
+	auto checkpoint_state = make_uniq<StructColumnCheckpointState>(row_group, *this, partial_block_manager);
 	checkpoint_state->validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
 	for (auto &sub_column : sub_columns) {
 		checkpoint_state->child_states.push_back(

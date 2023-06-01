@@ -35,7 +35,7 @@ public:
 
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
-	SequenceCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateSequenceInfo *info);
+	SequenceCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateSequenceInfo &info);
 
 	//! Lock for getting a value on the sequence
 	mutex lock;
@@ -58,11 +58,11 @@ public:
 
 public:
 	//! Serialize the meta information of the SequenceCatalogEntry a serializer
-	virtual void Serialize(Serializer &serializer);
+	virtual void Serialize(Serializer &serializer) const;
 	//! Deserializes to a CreateTableInfo
 	static unique_ptr<CreateSequenceInfo> Deserialize(Deserializer &source);
 
-	string ToSQL() override;
+	string ToSQL() const override;
 
 	CatalogEntry *AlterOwnership(ClientContext &context, AlterInfo *info);
 };

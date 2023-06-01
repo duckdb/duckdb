@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-TableDataWriter::TableDataWriter(TableCatalogEntry &table_p) : table((DuckTableEntry &)table_p) {
+TableDataWriter::TableDataWriter(TableCatalogEntry &table_p) : table(table_p.Cast<DuckTableEntry>()) {
 	D_ASSERT(table_p.IsDuckTable());
 }
 
@@ -38,7 +38,7 @@ SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter 
 }
 
 unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup &row_group) {
-	return make_unique<SingleFileRowGroupWriter>(table, checkpoint_manager.partial_block_manager, table_data_writer);
+	return make_uniq<SingleFileRowGroupWriter>(table, checkpoint_manager.partial_block_manager, table_data_writer);
 }
 
 void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, DataTableInfo *info) {
@@ -65,7 +65,7 @@ void SingleFileTableDataWriter::FinalizeTable(TableStatistics &&global_stats, Da
 	meta_data_writer.Write<idx_t>(total_rows);
 
 	// Now we serialize indexes in the table_metadata_writer
-	std::vector<BlockPointer> index_pointers = info->indexes.SerializeIndexes(table_data_writer);
+	vector<BlockPointer> index_pointers = info->indexes.SerializeIndexes(table_data_writer);
 
 	// Write-off to metadata block ids and offsets of indexes
 	meta_data_writer.Write<idx_t>(index_pointers.size());

@@ -41,7 +41,7 @@ void LogicalSample::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalSample::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto sample_options = SampleOptions::Deserialize(reader.GetSource());
 	// TODO(stephwang): review how to pass child LogicalOperator
-	auto result = make_unique<LogicalSample>(std::move(sample_options), nullptr);
+	auto result = make_uniq<LogicalSample>(std::move(sample_options), nullptr);
 	return std::move(result);
 }
 } // namespace duckdb

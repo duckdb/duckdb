@@ -89,13 +89,13 @@ public:
 		lhs_layout.Initialize(op.children[0]->types);
 		vector<BoundOrderByNode> lhs_order;
 		lhs_order.emplace_back(op.lhs_orders[0][0].Copy());
-		tables[0] = make_unique<GlobalSortedTable>(context, lhs_order, lhs_layout);
+		tables[0] = make_uniq<GlobalSortedTable>(context, lhs_order, lhs_layout);
 
 		RowLayout rhs_layout;
 		rhs_layout.Initialize(op.children[1]->types);
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0][0].Copy());
-		tables[1] = make_unique<GlobalSortedTable>(context, rhs_order, rhs_layout);
+		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout);
 	}
 
 	IEJoinGlobalState(IEJoinGlobalState &prev)
@@ -122,35 +122,34 @@ public:
 
 unique_ptr<GlobalSinkState> PhysicalIEJoin::GetGlobalSinkState(ClientContext &context) const {
 	D_ASSERT(!sink_state);
-	return make_unique<IEJoinGlobalState>(context, *this);
+	return make_uniq<IEJoinGlobalState>(context, *this);
 }
 
 unique_ptr<LocalSinkState> PhysicalIEJoin::GetLocalSinkState(ExecutionContext &context) const {
 	idx_t sink_child = 0;
 	if (sink_state) {
-		const auto &ie_sink = (IEJoinGlobalState &)*sink_state;
+		const auto &ie_sink = sink_state->Cast<IEJoinGlobalState>();
 		sink_child = ie_sink.child;
 	}
-	return make_unique<IEJoinLocalState>(context.client, *this, sink_child);
+	return make_uniq<IEJoinLocalState>(context.client, *this, sink_child);
 }
 
-SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                    DataChunk &input) const {
-	auto &gstate = (IEJoinGlobalState &)gstate_p;
-	auto &lstate = (IEJoinLocalState &)lstate_p;
+SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<IEJoinGlobalState>();
+	auto &lstate = input.local_state.Cast<IEJoinLocalState>();
 
-	gstate.Sink(input, lstate);
+	gstate.Sink(chunk, lstate);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
 void PhysicalIEJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &gstate = (IEJoinGlobalState &)gstate_p;
-	auto &lstate = (IEJoinLocalState &)lstate_p;
+	auto &gstate = gstate_p.Cast<IEJoinGlobalState>();
+	auto &lstate = lstate_p.Cast<IEJoinLocalState>();
 	gstate.tables[gstate.child]->Combine(lstate.table);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
-	context.thread.profiler.Flush(this, &lstate.table.executor, gstate.child ? "rhs_executor" : "lhs_executor", 1);
+	context.thread.profiler.Flush(*this, lstate.table.executor, gstate.child ? "rhs_executor" : "lhs_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 }
 
@@ -159,7 +158,7 @@ void PhysicalIEJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalIEJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                           GlobalSinkState &gstate_p) const {
-	auto &gstate = (IEJoinGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<IEJoinGlobalState>();
 	auto &table = *gstate.tables[gstate.child];
 	auto &global_sort_state = table.global_sort_state;
 
@@ -384,11 +383,11 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	payload_layout.Initialize(types);
 
 	// Sort on the first expression
-	auto ref = make_unique<BoundReferenceExpression>(order1.expression->return_type, 0);
+	auto ref = make_uniq<BoundReferenceExpression>(order1.expression->return_type, 0);
 	vector<BoundOrderByNode> orders;
 	orders.emplace_back(order1.type, order1.null_order, std::move(ref));
 
-	l1 = make_unique<SortedTable>(context, orders, payload_layout);
+	l1 = make_uniq<SortedTable>(context, orders, payload_layout);
 
 	// LHS has positive rids
 	ExpressionExecutor l_executor(context);
@@ -402,10 +401,14 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	r_executor.AddExpression(*op.rhs_orders[1][0].expression);
 	AppendKey(t2, r_executor, *l1, -1, -1, b2);
 
+	if (l1->global_sort_state.sorted_blocks.empty()) {
+		return;
+	}
+
 	Sort(*l1);
 
-	op1 = make_unique<SBIterator>(l1->global_sort_state, cmp1);
-	off1 = make_unique<SBIterator>(l1->global_sort_state, cmp1);
+	op1 = make_uniq<SBIterator>(l1->global_sort_state, cmp1);
+	off1 = make_uniq<SBIterator>(l1->global_sort_state, cmp1);
 
 	// We don't actually need the L1 column, just its sort key, which is in the sort blocks
 	li = ExtractColumn<int64_t>(*l1, types.size() - 1);
@@ -421,13 +424,13 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 
 	// Sort on the first expression
 	orders.clear();
-	ref = make_unique<BoundReferenceExpression>(order2.expression->return_type, 0);
+	ref = make_uniq<BoundReferenceExpression>(order2.expression->return_type, 0);
 	orders.emplace_back(order2.type, order2.null_order, std::move(ref));
 
 	ExpressionExecutor executor(context);
 	executor.AddExpression(*orders[0].expression);
 
-	l2 = make_unique<SortedTable>(context, orders, payload_layout);
+	l2 = make_uniq<SortedTable>(context, orders, payload_layout);
 	for (idx_t base = 0, block_idx = 0; block_idx < l1->BlockCount(); ++block_idx) {
 		base += AppendKey(*l1, executor, *l2, 1, base, block_idx);
 	}
@@ -451,8 +454,8 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 
 	// 11. for(i←1 to n) do
 	const auto &cmp2 = op.conditions[1].comparison;
-	op2 = make_unique<SBIterator>(l2->global_sort_state, cmp2);
-	off2 = make_unique<SBIterator>(l2->global_sort_state, cmp2);
+	op2 = make_uniq<SBIterator>(l2->global_sort_state, cmp2);
+	off2 = make_uniq<SBIterator>(l2->global_sort_state, cmp2);
 	i = 0;
 	j = 0;
 	(void)NextRow();
@@ -701,8 +704,8 @@ public:
 };
 
 void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk, LocalSourceState &state_p) const {
-	auto &state = (IEJoinLocalSourceState &)state_p;
-	auto &ie_sink = (IEJoinGlobalState &)*sink_state;
+	auto &state = state_p.Cast<IEJoinLocalSourceState>();
+	auto &ie_sink = sink_state->Cast<IEJoinGlobalState>();
 	auto &left_table = *ie_sink.tables[0];
 	auto &right_table = *ie_sink.tables[1];
 
@@ -822,7 +825,7 @@ public:
 public:
 	idx_t MaxThreads() override {
 		// We can't leverage any more threads than block pairs.
-		const auto &sink_state = ((IEJoinGlobalState &)*op.sink_state);
+		const auto &sink_state = (op.sink_state->Cast<IEJoinGlobalState>());
 		return sink_state.tables[0]->BlockCount() * sink_state.tables[1]->BlockCount();
 	}
 
@@ -846,7 +849,7 @@ public:
 			lstate.right_block_index = b2;
 			lstate.right_base = right_bases[b2];
 
-			lstate.joiner = make_unique<IEJoinUnion>(client, op, left_table, b1, right_table, b2);
+			lstate.joiner = make_uniq<IEJoinUnion>(client, op, left_table, b1, right_table, b2);
 			return;
 		}
 
@@ -919,19 +922,19 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalIEJoin::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<IEJoinGlobalSourceState>(*this);
+	return make_uniq<IEJoinGlobalSourceState>(*this);
 }
 
 unique_ptr<LocalSourceState> PhysicalIEJoin::GetLocalSourceState(ExecutionContext &context,
                                                                  GlobalSourceState &gstate) const {
-	return make_unique<IEJoinLocalSourceState>(context.client, *this);
+	return make_uniq<IEJoinLocalSourceState>(context.client, *this);
 }
 
-void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, GlobalSourceState &gstate,
-                             LocalSourceState &lstate) const {
-	auto &ie_sink = (IEJoinGlobalState &)*sink_state;
-	auto &ie_gstate = (IEJoinGlobalSourceState &)gstate;
-	auto &ie_lstate = (IEJoinLocalSourceState &)lstate;
+SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result,
+                                         OperatorSourceInput &input) const {
+	auto &ie_sink = sink_state->Cast<IEJoinGlobalState>();
+	auto &ie_gstate = input.global_state.Cast<IEJoinGlobalSourceState>();
+	auto &ie_lstate = input.local_state.Cast<IEJoinLocalSourceState>();
 
 	ie_gstate.Initialize(ie_sink);
 
@@ -944,7 +947,7 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 		ResolveComplexJoin(context, result, ie_lstate);
 
 		if (result.size()) {
-			return;
+			return SourceResultType::HAVE_MORE_OUTPUT;
 		}
 
 		ie_gstate.PairCompleted(context.client, ie_sink, ie_lstate);
@@ -970,7 +973,7 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 		result.SetCardinality(count);
 		result.Verify();
 
-		return;
+		return result.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
 	// Process RIGHT OUTER results
@@ -993,8 +996,10 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 		result.SetCardinality(count);
 		result.Verify();
 
-		return;
+		break;
 	}
+
+	return result.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1007,24 +1012,24 @@ void PhysicalIEJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeli
 	}
 
 	// becomes a source after both children fully sink their data
-	meta_pipeline.GetState().SetPipelineSource(current, this);
+	meta_pipeline.GetState().SetPipelineSource(current, *this);
 
 	// Create one child meta pipeline that will hold the LHS and RHS pipelines
-	auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
-	auto lhs_pipeline = child_meta_pipeline->GetBasePipeline();
-	auto rhs_pipeline = child_meta_pipeline->CreatePipeline();
+	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
+	auto lhs_pipeline = child_meta_pipeline.GetBasePipeline();
+	auto rhs_pipeline = child_meta_pipeline.CreatePipeline();
 
 	// Build out LHS
-	children[0]->BuildPipelines(*lhs_pipeline, *child_meta_pipeline);
+	children[0]->BuildPipelines(*lhs_pipeline, child_meta_pipeline);
 
 	// RHS depends on everything in LHS
-	child_meta_pipeline->AddDependenciesFrom(rhs_pipeline, lhs_pipeline.get(), true);
+	child_meta_pipeline.AddDependenciesFrom(rhs_pipeline, lhs_pipeline.get(), true);
 
 	// Build out RHS
-	children[1]->BuildPipelines(*rhs_pipeline, *child_meta_pipeline);
+	children[1]->BuildPipelines(*rhs_pipeline, child_meta_pipeline);
 
 	// Despite having the same sink, RHS needs its own PipelineFinishEvent
-	child_meta_pipeline->AddFinishEvent(rhs_pipeline);
+	child_meta_pipeline.AddFinishEvent(rhs_pipeline);
 }
 
 } // namespace duckdb

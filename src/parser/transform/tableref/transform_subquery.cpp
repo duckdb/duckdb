@@ -3,16 +3,16 @@
 
 namespace duckdb {
 
-unique_ptr<TableRef> Transformer::TransformRangeSubselect(duckdb_libpgquery::PGRangeSubselect *root) {
-	Transformer subquery_transformer(this);
-	auto subquery = subquery_transformer.TransformSelect(root->subquery);
+unique_ptr<TableRef> Transformer::TransformRangeSubselect(duckdb_libpgquery::PGRangeSubselect &root) {
+	Transformer subquery_transformer(*this);
+	auto subquery = subquery_transformer.TransformSelect(root.subquery);
 	if (!subquery) {
 		return nullptr;
 	}
-	auto result = make_unique<SubqueryRef>(std::move(subquery));
-	result->alias = TransformAlias(root->alias, result->column_name_alias);
-	if (root->sample) {
-		result->sample = TransformSampleOptions(root->sample);
+	auto result = make_uniq<SubqueryRef>(std::move(subquery));
+	result->alias = TransformAlias(root.alias, result->column_name_alias);
+	if (root.sample) {
+		result->sample = TransformSampleOptions(root.sample);
 	}
 	return std::move(result);
 }

@@ -29,7 +29,7 @@ bool BoundOrderByNode::Equals(const BoundOrderByNode &other) const {
 	if (type != other.type || null_order != other.null_order) {
 		return false;
 	}
-	if (!expression->Equals(other.expression.get())) {
+	if (!expression->Equals(*other.expression)) {
 		return false;
 	}
 
@@ -81,29 +81,34 @@ BoundOrderByNode BoundOrderByNode::Deserialize(Deserializer &source, PlanDeseria
 }
 
 unique_ptr<BoundOrderModifier> BoundOrderModifier::Copy() const {
-	auto result = make_unique<BoundOrderModifier>();
+	auto result = make_uniq<BoundOrderModifier>();
 	for (auto &order : orders) {
 		result->orders.push_back(order.Copy());
 	}
 	return result;
 }
 
-bool BoundOrderModifier::Equals(const BoundOrderModifier *left, const BoundOrderModifier *right) {
-	if (left == right) {
+bool BoundOrderModifier::Equals(const BoundOrderModifier &left, const BoundOrderModifier &right) {
+	if (left.orders.size() != right.orders.size()) {
+		return false;
+	}
+	for (idx_t i = 0; i < left.orders.size(); i++) {
+		if (!left.orders[i].Equals(right.orders[i])) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool BoundOrderModifier::Equals(const unique_ptr<BoundOrderModifier> &left,
+                                const unique_ptr<BoundOrderModifier> &right) {
+	if (left.get() == right.get()) {
 		return true;
 	}
 	if (!left || !right) {
 		return false;
 	}
-	if (left->orders.size() != right->orders.size()) {
-		return false;
-	}
-	for (idx_t i = 0; i < left->orders.size(); i++) {
-		if (!left->orders[i].Equals(right->orders[i])) {
-			return false;
-		}
-	}
-	return true;
+	return BoundOrderModifier::Equals(*left, *right);
 }
 
 BoundLimitModifier::BoundLimitModifier() : BoundResultModifier(ResultModifierType::LIMIT_MODIFIER) {

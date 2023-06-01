@@ -4,39 +4,32 @@
 
 namespace duckdb {
 
-unique_ptr<CreateStatement> Transformer::TransformCreateView(duckdb_libpgquery::PGNode *node) {
-	D_ASSERT(node);
-	D_ASSERT(node->type == duckdb_libpgquery::T_PGViewStmt);
+unique_ptr<CreateStatement> Transformer::TransformCreateView(duckdb_libpgquery::PGViewStmt &stmt) {
+	D_ASSERT(stmt.type == duckdb_libpgquery::T_PGViewStmt);
+	D_ASSERT(stmt.view);
 
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGViewStmt *>(node);
-	D_ASSERT(stmt);
-	D_ASSERT(stmt->view);
+	auto result = make_uniq<CreateStatement>();
+	auto info = make_uniq<CreateViewInfo>();
 
-	auto result = make_unique<CreateStatement>();
-	auto info = make_unique<CreateViewInfo>();
-
-	auto qname = TransformQualifiedName(stmt->view);
+	auto qname = TransformQualifiedName(*stmt.view);
 	info->catalog = qname.catalog;
 	info->schema = qname.schema;
 	info->view_name = qname.name;
-	info->temporary = !stmt->view->relpersistence;
+	info->temporary = !stmt.view->relpersistence;
 	if (info->temporary && IsInvalidCatalog(info->catalog)) {
 		info->catalog = TEMP_CATALOG;
 	}
-	info->on_conflict = TransformOnConflict(stmt->onconflict);
+	info->on_conflict = TransformOnConflict(stmt.onconflict);
 
-	info->query = TransformSelect(stmt->query, false);
-	if (HasPivotEntries()) {
-		throw ParserException("Cannot use PIVOT statement syntax in a view. Use the SQL standard PIVOT syntax in the "
-		                      "FROM clause instead.");
-	}
+	info->query = TransformSelect(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.query), false);
 
-	if (stmt->aliases && stmt->aliases->length > 0) {
-		for (auto c = stmt->aliases->head; c != nullptr; c = lnext(c)) {
-			auto node = reinterpret_cast<duckdb_libpgquery::PGNode *>(c->data.ptr_value);
-			switch (node->type) {
+	PivotEntryCheck("view");
+
+	if (stmt.aliases && stmt.aliases->length > 0) {
+		for (auto c = stmt.aliases->head; c != nullptr; c = lnext(c)) {
+			auto val = PGPointerCast<duckdb_libpgquery::PGValue>(c->data.ptr_value);
+			switch (val->type) {
 			case duckdb_libpgquery::T_PGString: {
-				auto val = (duckdb_libpgquery::PGValue *)node;
 				info->aliases.emplace_back(val->val.str);
 				break;
 			}
@@ -49,11 +42,11 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(duckdb_libpgquery::
 		}
 	}
 
-	if (stmt->options && stmt->options->length > 0) {
+	if (stmt.options && stmt.options->length > 0) {
 		throw NotImplementedException("VIEW options");
 	}
 
-	if (stmt->withCheckOption != duckdb_libpgquery::PGViewCheckOption::PG_NO_CHECK_OPTION) {
+	if (stmt.withCheckOption != duckdb_libpgquery::PGViewCheckOption::PG_NO_CHECK_OPTION) {
 		throw NotImplementedException("VIEW CHECK options");
 	}
 	result->info = std::move(info);

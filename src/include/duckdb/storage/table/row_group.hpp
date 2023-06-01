@@ -59,20 +59,20 @@ public:
 public:
 	RowGroup(RowGroupCollection &collection, idx_t start, idx_t count);
 	RowGroup(RowGroupCollection &collection, RowGroupPointer &&pointer);
-	RowGroup(RowGroup &row_group, RowGroupCollection &collection, idx_t start);
 	~RowGroup();
 
 private:
 	//! The RowGroupCollection this row-group is a part of
-	RowGroupCollection &collection;
+	reference<RowGroupCollection> collection;
 	//! The version info of the row_group (inserted and deleted tuple info)
 	shared_ptr<VersionNode> version_info;
 	//! The column data of the row_group
 	vector<shared_ptr<ColumnData>> columns;
 
 public:
+	void MoveToCollection(RowGroupCollection &collection, idx_t new_start);
 	RowGroupCollection &GetCollection() {
-		return collection;
+		return collection.get();
 	}
 	DatabaseInstance &GetDatabase();
 	BlockManager &GetBlockManager();
@@ -120,7 +120,7 @@ public:
 	void RevertAppend(idx_t start);
 
 	//! Delete the given set of rows in the version manager
-	idx_t Delete(TransactionData transaction, DataTable *table, row_t *row_ids, idx_t count);
+	idx_t Delete(TransactionData transaction, DataTable &table, row_t *row_ids, idx_t count);
 
 	RowGroupWriteData WriteToDisk(PartialBlockManager &manager, const vector<CompressionType> &compression_types);
 	bool AllDeleted();
@@ -150,7 +150,7 @@ public:
 
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
-	ColumnData &GetColumn(idx_t c);
+	ColumnData &GetColumn(storage_t c);
 	idx_t GetColumnCount() const;
 	vector<shared_ptr<ColumnData>> &GetColumns();
 

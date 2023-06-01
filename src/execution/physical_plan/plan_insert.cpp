@@ -10,14 +10,34 @@
 
 namespace duckdb {
 
+static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op) {
+	if (op.IsSource()) {
+		return op.SourceOrder();
+	}
+	for (auto &child : op.children) {
+		auto child_preservation = OrderPreservationRecursive(*child);
+		if (child_preservation != OrderPreservationType::INSERTION_ORDER) {
+			return child_preservation;
+		}
+	}
+	return OrderPreservationType::INSERTION_ORDER;
+}
+
 bool PhysicalPlanGenerator::PreserveInsertionOrder(ClientContext &context, PhysicalOperator &plan) {
 	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.preserve_insertion_order) {
-		// preserving insertion order is disabled by config
+
+	auto preservation_type = OrderPreservationRecursive(plan);
+	if (preservation_type == OrderPreservationType::FIXED_ORDER) {
+		// always need to maintain preservation order
+		return true;
+	}
+	if (preservation_type == OrderPreservationType::NO_ORDER) {
+		// never need to preserve order
 		return false;
 	}
-	if (!plan.AllOperatorsPreserveOrder()) {
-		// the plan has no order defined: no need to preserve insertion order
+	// preserve insertion order - check flags
+	if (!config.options.preserve_insertion_order) {
+		// preserving insertion order is disabled by config
 		return false;
 	}
 	return true;
@@ -66,10 +86,10 @@ unique_ptr<PhysicalOperator> DuckCatalog::PlanInsert(ClientContext &context, Log
 	}
 	unique_ptr<PhysicalOperator> insert;
 	if (use_batch_index && !parallel_streaming_insert) {
-		insert = make_unique<PhysicalBatchInsert>(op.types, op.table, op.column_index_map, std::move(op.bound_defaults),
-		                                          op.estimated_cardinality);
+		insert = make_uniq<PhysicalBatchInsert>(op.types, op.table, op.column_index_map, std::move(op.bound_defaults),
+		                                        op.estimated_cardinality);
 	} else {
-		insert = make_unique<PhysicalInsert>(
+		insert = make_uniq<PhysicalInsert>(
 		    op.types, op.table, op.column_index_map, std::move(op.bound_defaults), std::move(op.expressions),
 		    std::move(op.set_columns), std::move(op.set_types), op.estimated_cardinality, op.return_chunk,
 		    parallel_streaming_insert && num_threads > 1, op.action_type, std::move(op.on_conflict_condition),
@@ -87,7 +107,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalInsert &op
 		plan = CreatePlan(*op.children[0]);
 	}
 	dependencies.AddDependency(op.table);
-	return op.table->catalog->PlanInsert(context, op, std::move(plan));
+	return op.table.catalog.PlanInsert(context, op, std::move(plan));
 }
 
 } // namespace duckdb

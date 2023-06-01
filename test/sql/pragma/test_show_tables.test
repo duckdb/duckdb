@@ -21,7 +21,13 @@ statement ok
 CREATE TABLE s1.tbl(i INTEGER UNIQUE);
 
 statement ok
+CREATE INDEX my_index ON s1.tbl(i);
+
+statement ok
 CREATE TABLE tbl(i INTEGER PRIMARY KEY);
+
+statement ok
+CREATE INDEX not_a_table ON tbl(i);
 
 # We test that right table is described (from s1 schema)
 # column_name | column_type | null | key | default | extra
@@ -29,6 +35,10 @@ query TTTITI
 DESCRIBE s1.tbl;
 ----
 i	INTEGER	YES	UNI	NULL	NULL
+
+# We test that the index can't be described
+statement error
+DESCRIBE my_index;
 
 # We test that right table is described (from main schema)
 # column_name | column_type | null | key | default | extra
@@ -61,7 +71,6 @@ integers
 select
 t2
 tbl
-tbl
 v1
 
 query T
@@ -70,7 +79,6 @@ DESCRIBE TABLES
 integers
 select
 t2
-tbl
 tbl
 v1
 
@@ -81,7 +89,6 @@ PRAGMA show_tables
 integers
 select
 t2
-tbl
 tbl
 v1
 

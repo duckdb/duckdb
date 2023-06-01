@@ -15,6 +15,9 @@ namespace duckdb {
 //! Represents a subquery
 class SubqueryRef : public TableRef {
 public:
+	static constexpr const TableReferenceType TYPE = TableReferenceType::SUBQUERY;
+
+public:
 	DUCKDB_API explicit SubqueryRef(unique_ptr<SelectStatement> subquery, string alias = string());
 
 	//! The subquery
@@ -24,7 +27,7 @@ public:
 
 public:
 	string ToString() const override;
-	bool Equals(const TableRef *other_p) const override;
+	bool Equals(const TableRef &other_p) const override;
 
 	unique_ptr<TableRef> Copy() override;
 

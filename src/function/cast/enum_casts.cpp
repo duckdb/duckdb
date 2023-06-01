@@ -17,7 +17,7 @@ bool EnumEnumCast(Vector &source, Vector &result, idx_t count, CastParameters &p
 	UnifiedVectorFormat vdata;
 	source.ToUnifiedFormat(count, vdata);
 
-	auto source_data = (SRC_TYPE *)vdata.data;
+	auto source_data = UnifiedVectorFormat::GetData<SRC_TYPE>(vdata);
 	auto source_sel = vdata.sel;
 	auto source_mask = vdata.validity;
 
@@ -71,7 +71,7 @@ static bool EnumToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	UnifiedVectorFormat vdata;
 	source.ToUnifiedFormat(count, vdata);
 
-	auto source_data = (SRC *)vdata.data;
+	auto source_data = UnifiedVectorFormat::GetData<SRC>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto source_idx = vdata.sel->get_index(i);
 		if (!vdata.validity.RowIsValid(source_idx)) {
@@ -99,14 +99,14 @@ struct EnumBoundCastData : public BoundCastData {
 
 public:
 	unique_ptr<BoundCastData> Copy() const override {
-		return make_unique<EnumBoundCastData>(to_varchar_cast.Copy(), from_varchar_cast.Copy());
+		return make_uniq<EnumBoundCastData>(to_varchar_cast.Copy(), from_varchar_cast.Copy());
 	}
 };
 
 unique_ptr<BoundCastData> BindEnumCast(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	auto to_varchar_cast = input.GetCastFunction(source, LogicalType::VARCHAR);
 	auto from_varchar_cast = input.GetCastFunction(LogicalType::VARCHAR, target);
-	return make_unique<EnumBoundCastData>(std::move(to_varchar_cast), std::move(from_varchar_cast));
+	return make_uniq<EnumBoundCastData>(std::move(to_varchar_cast), std::move(from_varchar_cast));
 }
 
 struct EnumCastLocalState : public FunctionLocalState {
@@ -116,8 +116,8 @@ public:
 };
 
 static unique_ptr<FunctionLocalState> InitEnumCastLocalState(CastLocalStateParameters &parameters) {
-	auto &cast_data = (EnumBoundCastData &)*parameters.cast_data;
-	auto result = make_unique<EnumCastLocalState>();
+	auto &cast_data = parameters.cast_data->Cast<EnumBoundCastData>();
+	auto result = make_uniq<EnumCastLocalState>();
 
 	if (cast_data.from_varchar_cast.init_local_state) {
 		CastLocalStateParameters from_varchar_params(parameters, cast_data.from_varchar_cast.cast_data);
@@ -131,8 +131,8 @@ static unique_ptr<FunctionLocalState> InitEnumCastLocalState(CastLocalStateParam
 }
 
 static bool EnumToAnyCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	auto &cast_data = (EnumBoundCastData &)*parameters.cast_data;
-	auto &lstate = (EnumCastLocalState &)*parameters.local_state;
+	auto &cast_data = parameters.cast_data->Cast<EnumBoundCastData>();
+	auto &lstate = parameters.local_state->Cast<EnumCastLocalState>();
 
 	Vector varchar_cast(LogicalType::VARCHAR, count);
 

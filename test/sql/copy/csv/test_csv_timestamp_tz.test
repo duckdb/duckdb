@@ -1,0 +1,18 @@
+# name: test/sql/copy/csv/test_csv_timestamp_tz.test
+# description: Test CSV with timestamp_tz and timestampformat
+# group: [csv]
+
+statement ok
+pragma enable_verification
+
+statement ok
+copy (
+select '2021-05-25 04:55:03.382494 UTC'::timestamp as ts, '2021-05-25 04:55:03.382494 UTC'::timestamptz as tstz
+) to '__TEST_DIR__/timestamps.csv' (header 1, timestampformat '%A');
+
+
+query II
+select * from read_csv_auto('__TEST_DIR__/timestamps.csv', header=1);
+----
+Tuesday	Tuesday
+

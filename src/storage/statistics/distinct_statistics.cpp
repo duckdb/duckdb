@@ -7,7 +7,7 @@
 
 namespace duckdb {
 
-DistinctStatistics::DistinctStatistics() : log(make_unique<HyperLogLog>()), sample_count(0), total_count(0) {
+DistinctStatistics::DistinctStatistics() : log(make_uniq<HyperLogLog>()), sample_count(0), total_count(0) {
 }
 
 DistinctStatistics::DistinctStatistics(unique_ptr<HyperLogLog> log, idx_t sample_count, idx_t total_count)
@@ -15,7 +15,7 @@ DistinctStatistics::DistinctStatistics(unique_ptr<HyperLogLog> log, idx_t sample
 }
 
 unique_ptr<DistinctStatistics> DistinctStatistics::Copy() const {
-	return make_unique<DistinctStatistics>(log->Copy(), sample_count, total_count);
+	return make_uniq<DistinctStatistics>(log->Copy(), sample_count, total_count);
 }
 
 void DistinctStatistics::Merge(const DistinctStatistics &other) {
@@ -46,7 +46,7 @@ unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(Deserializer &sou
 unique_ptr<DistinctStatistics> DistinctStatistics::Deserialize(FieldReader &reader) {
 	auto sample_count = reader.ReadRequired<idx_t>();
 	auto total_count = reader.ReadRequired<idx_t>();
-	return make_unique<DistinctStatistics>(HyperLogLog::Deserialize(reader), sample_count, total_count);
+	return make_uniq<DistinctStatistics>(HyperLogLog::Deserialize(reader), sample_count, total_count);
 }
 
 void DistinctStatistics::Update(Vector &v, idx_t count, bool sample) {

@@ -24,6 +24,12 @@ SELECT count(filename) FROM parquet_scan('data/parquet-testing/p2.parquet', FILE
 ----
 479
 
+# filter pushdown on filename
+query I
+SELECT count(id) FROM parquet_scan('data/parquet-testing/p2.parquet', FILENAME=1) where filename >= 'data';
+----
+4979
+
 # Filter on non-filename col
 query I
 select replace(filename, '\', '/') from parquet_scan('data/parquet-testing/glob*/t?.parquet', FILENAME=1) where i=2;
@@ -56,12 +62,26 @@ statement ok
 CREATE TABLE test_copy (i INT, j VARCHAR, filename VARCHAR);
 
 statement ok
-COPY test_copy FROM 'data/parquet-testing/glob/t1.parquet' (FILENAME 1);
+INSERT INTO test_copy FROM read_parquet('data/parquet-testing/glob/t1.parquet', filename=1, binary_as_string=1);
 
 query III
 SELECT i, j, replace(filename, '\', '/') FROM test_copy
 ----
 1	a	data/parquet-testing/glob/t1.parquet
+
+statement ok
+INSERT INTO test_copy FROM read_parquet('data/parquet-testing/glob/t1.parquet', filename=1);
+
+query III
+SELECT i, j, replace(filename, '\', '/') FROM test_copy
+----
+1	a	data/parquet-testing/glob/t1.parquet
+1	a	data/parquet-testing/glob/t1.parquet
+
+statement error
+COPY test_copy FROM 'data/parquet-testing/glob/t1.parquet';
+----
+column count mismatch
 
 # Multiple row groups in same file
 statement ok

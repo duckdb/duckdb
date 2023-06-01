@@ -39,7 +39,7 @@ bool ConstantFilter::Equals(const TableFilter &other_p) const {
 	if (!TableFilter::Equals(other_p)) {
 		return false;
 	}
-	auto &other = (ConstantFilter &)other_p;
+	auto &other = other_p.Cast<ConstantFilter>();
 	return other.comparison_type == comparison_type && other.constant == constant;
 }
 
@@ -51,7 +51,7 @@ void ConstantFilter::Serialize(FieldWriter &writer) const {
 unique_ptr<TableFilter> ConstantFilter::Deserialize(FieldReader &source) {
 	auto comparision_type = source.ReadRequired<ExpressionType>();
 	auto constant = source.ReadRequiredSerializable<Value, Value>();
-	return make_unique<ConstantFilter>(comparision_type, constant);
+	return make_uniq<ConstantFilter>(comparision_type, constant);
 }
 
 } // namespace duckdb

@@ -14,14 +14,14 @@ DeleteRelation::DeleteRelation(ClientContextWrapper &context, unique_ptr<ParsedE
 }
 
 BoundStatement DeleteRelation::Bind(Binder &binder) {
-	auto basetable = make_unique<BaseTableRef>();
+	auto basetable = make_uniq<BaseTableRef>();
 	basetable->schema_name = schema_name;
 	basetable->table_name = table_name;
 
 	DeleteStatement stmt;
 	stmt.condition = condition ? condition->Copy() : nullptr;
 	stmt.table = std::move(basetable);
-	return binder.Bind((SQLStatement &)stmt);
+	return binder.Bind(stmt.Cast<SQLStatement>());
 }
 
 const vector<ColumnDefinition> &DeleteRelation::Columns() {

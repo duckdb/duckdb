@@ -3,9 +3,6 @@
 # group: [auto]
 
 statement ok
-SET experimental_parallel_csv=true;
-
-statement ok
 PRAGMA verify_parallelism
 
 

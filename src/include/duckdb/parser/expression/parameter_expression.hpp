@@ -13,6 +13,9 @@
 namespace duckdb {
 class ParameterExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::PARAMETER;
+
+public:
 	ParameterExpression();
 
 	idx_t parameter_nr;
@@ -27,7 +30,7 @@ public:
 
 	string ToString() const override;
 
-	static bool Equal(const ParameterExpression *a, const ParameterExpression *b);
+	static bool Equal(const ParameterExpression &a, const ParameterExpression &b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 	hash_t Hash() const override;

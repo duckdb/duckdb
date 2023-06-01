@@ -25,8 +25,8 @@ static void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &
 	UnifiedVectorFormat rhs_data;
 	lhs.ToUnifiedFormat(count, lhs_data);
 	rhs.ToUnifiedFormat(count, rhs_data);
-	auto lhs_entries = (list_entry_t *)lhs_data.data;
-	auto rhs_entries = (list_entry_t *)rhs_data.data;
+	auto lhs_entries = UnifiedVectorFormat::GetData<list_entry_t>(lhs_data);
+	auto rhs_entries = UnifiedVectorFormat::GetData<list_entry_t>(rhs_data);
 
 	auto lhs_list_size = ListVector::GetListSize(lhs);
 	auto rhs_list_size = ListVector::GetListSize(rhs);
@@ -101,7 +101,7 @@ static unique_ptr<FunctionData> ListConcatBind(ClientContext &context, ScalarFun
 		bound_function.arguments[1] = list_type;
 		bound_function.return_type = list_type;
 	}
-	return make_unique<VariableReturnBindData>(bound_function.return_type);
+	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
 static unique_ptr<BaseStatistics> ListConcatStats(ClientContext &context, FunctionStatisticsInput &input) {

@@ -48,7 +48,7 @@ void CastSQLite::InputVectorsToVarchar(DataChunk &data_chunk, DataChunk &new_chu
 
 VectorType CastSQLite::ToVectorsSQLiteValue(DataChunk &data_chunk, Vector &result,
                                             vector<unique_ptr<vector<sqlite3_value>>> &vec_sqlite_values,
-                                            unique_ptr<UnifiedVectorFormat[]> vec_data) {
+                                            duckdb::unsafe_unique_array<UnifiedVectorFormat> vec_data) {
 	VectorType result_vec_type = VectorType::CONSTANT_VECTOR;
 
 	// Casting input data to sqlite_value
@@ -101,45 +101,6 @@ unique_ptr<vector<sqlite3_value>> CastSQLite::ToVector(LogicalType type, Unified
 	}
 }
 
-void CastSQLite::ToVectorString(SQLiteTypeValue type, vector<sqlite3_value> &vec_sqlite, Vector &result) {
-	string_t *result_data;
-	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result_data = ConstantVector::GetData<string_t>(result);
-	} else {
-		result_data = FlatVector::GetData<string_t>(result);
-	}
-
-	switch (type) {
-	case SQLiteTypeValue::INTEGER: {
-		ToVectorStringValue<int64_t>((sqlite3_value *)vec_sqlite.data(), vec_sqlite.size(), result_data, result);
-		break;
-	}
-	case SQLiteTypeValue::FLOAT: {
-		ToVectorStringValue<double>((sqlite3_value *)vec_sqlite.data(), vec_sqlite.size(), result_data, result);
-		break;
-	}
-	case SQLiteTypeValue::BLOB:
-	case SQLiteTypeValue::TEXT: {
-		ToVectorStringValue<string_t>((sqlite3_value *)vec_sqlite.data(), vec_sqlite.size(), result_data, result);
-		break;
-	}
-	default:
-		if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			ConstantVector::SetNull(result, true);
-		}
-		break;
-	}
-}
-
-template <>
-void CastSQLite::ToVectorStringValue<string_t>(sqlite3_value *__restrict data, idx_t count,
-                                               string_t *__restrict result_data, Vector &result) {
-	for (idx_t i = 0; i < count; ++i) {
-		string_t str_value = CastFromSQLiteValue::GetValue<string_t>(data[i]);
-		result_data[i] = StringVector::AddString(result, str_value);
-	}
-}
-
 /*** Cast Single Value Operations *****************************/
 
 // INT casts
@@ -189,22 +150,6 @@ sqlite3_value CastToSQLiteValue::OperationNull() {
 	sqlite_null.u.i = 0;
 	sqlite_null.u.r = 0.0;
 	return sqlite_null;
-}
-
-/*** Get Values *******************************************/
-template <>
-int64_t CastFromSQLiteValue::GetValue(sqlite3_value input) {
-	return input.u.i;
-}
-
-template <>
-double CastFromSQLiteValue::GetValue(sqlite3_value input) {
-	return input.u.r;
-}
-
-template <>
-string_t CastFromSQLiteValue::GetValue(sqlite3_value input) {
-	return string_t(input.str);
 }
 
 } // namespace duckdb

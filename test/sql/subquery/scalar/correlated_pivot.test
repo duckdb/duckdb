@@ -11,8 +11,11 @@ CREATE TABLE Product(DaysToManufacture int, StandardCost int);
 statement ok
 INSERT INTO Product VALUES (0, 5.0885), (1, 223.88), (2, 359.1082), (4, 949.4105);
 
+statement ok
+SET pivot_filter_threshold=0
+
 # pivot
-query III
+statement error
 SELECT DaysToManufacture, StandardCost, (SELECT ["0", "1", "2", "3", "4"] FROM
 	(SELECT DaysToManufacture, StandardCost) AS SourceTable
 	PIVOT
@@ -23,13 +26,10 @@ SELECT DaysToManufacture, StandardCost, (SELECT ["0", "1", "2", "3", "4"] FROM
 )
 FROM Product
 ----
-0	5	[5.0, NULL, NULL, NULL, NULL]
-1	224	[NULL, 224.0, NULL, NULL, NULL]
-2	359	[NULL, NULL, 359.0, NULL, NULL]
-4	949	[NULL, NULL, NULL, NULL, 949.0]
+PIVOT is not supported in correlated subqueries yet
 
 # unpivot with exclude nulls (default)
-query III
+statement error
 SELECT DaysToManufacture, StandardCost, (SELECT cost FROM
 	(SELECT DaysToManufacture, StandardCost) AS SourceTable
 	PIVOT
@@ -44,13 +44,10 @@ SELECT DaysToManufacture, StandardCost, (SELECT cost FROM
 )
 FROM Product
 ----
-0	5	5.0
-1	224	224.0
-2	359	359.0
-4	949	949.0
+PIVOT is not supported in correlated subqueries yet
 
 # unpivot with include nulls
-query III
+statement error
 SELECT DaysToManufacture, StandardCost, (SELECT LIST(cost) FROM
 	(SELECT DaysToManufacture, StandardCost) AS SourceTable
 	PIVOT
@@ -65,7 +62,15 @@ SELECT DaysToManufacture, StandardCost, (SELECT LIST(cost) FROM
 )
 FROM Product
 ----
-0	5	[5.0, NULL, NULL, NULL, NULL]
-1	224	[NULL, 224.0, NULL, NULL, NULL]
-2	359	[NULL, NULL, 359.0, NULL, NULL]
-4	949	[NULL, NULL, NULL, NULL, 949.0]
+PIVOT is not supported in correlated subqueries yet
+
+statement ok
+RESET pivot_filter_threshold
+
+statement ok
+RESET SESSION pivot_filter_threshold
+
+statement error
+RESET GLOBAL pivot_filter_threshold
+----
+cannot be reset globally

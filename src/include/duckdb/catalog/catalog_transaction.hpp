@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 class Catalog;
@@ -20,13 +21,15 @@ struct CatalogTransaction {
 	CatalogTransaction(Catalog &catalog, ClientContext &context);
 	CatalogTransaction(DatabaseInstance &db, transaction_t transaction_id_p, transaction_t start_time_p);
 
-	DatabaseInstance *db;
-	ClientContext *context;
-	Transaction *transaction;
+	optional_ptr<DatabaseInstance> db;
+	optional_ptr<ClientContext> context;
+	optional_ptr<Transaction> transaction;
 	transaction_t transaction_id;
 	transaction_t start_time;
 
 	ClientContext &GetContext();
+
+	static CatalogTransaction GetSystemTransaction(DatabaseInstance &db);
 };
 
 } // namespace duckdb

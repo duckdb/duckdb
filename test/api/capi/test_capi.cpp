@@ -17,11 +17,12 @@ static void require_hugeint_eq(duckdb_hugeint left, uint64_t lower, int64_t uppe
 
 TEST_CASE("Basic test of C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
 
+	REQUIRE_NO_FAIL(tester.Query("SET default_null_order='nulls_first'"));
 	// select scalar value
 	result = tester.Query("SELECT CAST(42 AS BIGINT)");
 	REQUIRE_NO_FAIL(*result);
@@ -116,14 +117,15 @@ TEST_CASE("Basic test of C API", "[capi]") {
 
 TEST_CASE("Test different types of C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
+	REQUIRE_NO_FAIL(tester.Query("SET default_null_order='nulls_first'"));
 
 	// integer columns
-	vector<string> types = {"TINYINT",  "SMALLINT",  "INTEGER",  "BIGINT", "HUGEINT",
-	                        "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT"};
+	duckdb::vector<string> types = {"TINYINT",  "SMALLINT",  "INTEGER",  "BIGINT", "HUGEINT",
+	                                "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT"};
 	for (auto &type : types) {
 		// create the table and insert values
 		REQUIRE_NO_FAIL(tester.Query("BEGIN TRANSACTION"));
@@ -390,7 +392,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 
 TEST_CASE("Test errors in C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	// cannot open database in random directory
 	REQUIRE(!tester.OpenDatabase("/bla/this/directory/should/not/exist/hopefully/awerar333"));
@@ -550,7 +552,7 @@ TEST_CASE("Issue #2058: Cleanup after execution of invalid SQL statement causes 
 TEST_CASE("Decimal -> Double casting issue", "[capi]") {
 
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));

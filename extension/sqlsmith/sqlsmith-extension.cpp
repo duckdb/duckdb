@@ -3,11 +3,12 @@
 #include "sqlsmith-extension.hpp"
 #include "sqlsmith.hh"
 #include "statement_simplifier.hpp"
+#include "fuzzyduck.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/function/table_function.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb/main/extension_util.hpp"
 #endif
 
 namespace duckdb {
@@ -27,9 +28,9 @@ struct SQLSmithFunctionData : public TableFunctionData {
 	bool finished = false;
 };
 
-static unique_ptr<FunctionData> SQLSmithBind(ClientContext &context, TableFunctionBindInput &input,
-                                             vector<LogicalType> &return_types, vector<string> &names) {
-	auto result = make_unique<SQLSmithFunctionData>();
+static duckdb::unique_ptr<FunctionData> SQLSmithBind(ClientContext &context, TableFunctionBindInput &input,
+                                                     vector<LogicalType> &return_types, vector<string> &names) {
+	auto result = make_uniq<SQLSmithFunctionData>();
 	for (auto &kv : input.named_parameters) {
 		if (kv.first == "seed") {
 			result->seed = IntegerValue::Get(kv.second);
@@ -55,7 +56,7 @@ static unique_ptr<FunctionData> SQLSmithBind(ClientContext &context, TableFuncti
 }
 
 static void SQLSmithFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (SQLSmithFunctionData &)*data_p.bind_data;
+	auto &data = data_p.bind_data->CastNoConst<SQLSmithFunctionData>();
 	if (data.finished) {
 		return;
 	}
@@ -82,12 +83,12 @@ struct ReduceSQLFunctionData : public TableFunctionData {
 	idx_t offset = 0;
 };
 
-static unique_ptr<FunctionData> ReduceSQLBind(ClientContext &context, TableFunctionBindInput &input,
-                                              vector<LogicalType> &return_types, vector<string> &names) {
+static duckdb::unique_ptr<FunctionData> ReduceSQLBind(ClientContext &context, TableFunctionBindInput &input,
+                                                      vector<LogicalType> &return_types, vector<string> &names) {
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("sql");
 
-	auto result = make_unique<ReduceSQLFunctionData>();
+	auto result = make_uniq<ReduceSQLFunctionData>();
 	auto sql = input.inputs[0].ToString();
 	Parser parser;
 	parser.ParseQuery(sql);
@@ -97,11 +98,11 @@ static unique_ptr<FunctionData> ReduceSQLBind(ClientContext &context, TableFunct
 	auto &statement = *parser.statements[0];
 	StatementSimplifier simplifier(statement, result->statements);
 	simplifier.Simplify(statement);
-	return result;
+	return std::move(result);
 }
 
 static void ReduceSQLFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (ReduceSQLFunctionData &)*data_p.bind_data;
+	auto &data = data_p.bind_data->CastNoConst<ReduceSQLFunctionData>();
 	if (data.offset >= data.statements.size()) {
 		// finished returning values
 		return;
@@ -117,10 +118,47 @@ static void ReduceSQLFunction(ClientContext &context, TableFunctionInput &data_p
 	output.SetCardinality(count);
 }
 
+struct FuzzyDuckFunctionData : public TableFunctionData {
+	FuzzyDuckFunctionData(ClientContext &context) : fuzzer(context) {
+	}
+
+	FuzzyDuck fuzzer;
+	bool finished = false;
+};
+
+static duckdb::unique_ptr<FunctionData> FuzzyDuckBind(ClientContext &context, TableFunctionBindInput &input,
+                                                      vector<LogicalType> &return_types, vector<string> &names) {
+	auto result = make_uniq<FuzzyDuckFunctionData>(context);
+	for (auto &kv : input.named_parameters) {
+		if (kv.first == "seed") {
+			result->fuzzer.seed = IntegerValue::Get(kv.second);
+		} else if (kv.first == "max_queries") {
+			result->fuzzer.max_queries = UBigIntValue::Get(kv.second);
+		} else if (kv.first == "complete_log") {
+			result->fuzzer.complete_log = StringValue::Get(kv.second);
+		} else if (kv.first == "log") {
+			result->fuzzer.log = StringValue::Get(kv.second);
+		} else if (kv.first == "verbose_output") {
+			result->fuzzer.verbose_output = BooleanValue::Get(kv.second);
+		}
+	}
+	return_types.emplace_back(LogicalType::BOOLEAN);
+	names.emplace_back("Success");
+	return std::move(result);
+}
+
+static void FuzzyDuckFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = data_p.bind_data->CastNoConst<FuzzyDuckFunctionData>();
+	if (data.finished) {
+		return;
+	}
+
+	data.fuzzer.Fuzz();
+	data.finished = true;
+}
+
 void SQLSmithExtension::Load(DuckDB &db) {
-	Connection con(db);
-	con.BeginTransaction();
-	auto &catalog = Catalog::GetSystemCatalog(*con.context);
+	auto &db_instance = *db.instance;
 
 	TableFunction sqlsmith_func("sqlsmith", {}, SQLSmithFunction, SQLSmithBind);
 	sqlsmith_func.named_parameters["seed"] = LogicalType::INTEGER;
@@ -131,14 +169,18 @@ void SQLSmithExtension::Load(DuckDB &db) {
 	sqlsmith_func.named_parameters["verbose_output"] = LogicalType::BOOLEAN;
 	sqlsmith_func.named_parameters["complete_log"] = LogicalType::VARCHAR;
 	sqlsmith_func.named_parameters["log"] = LogicalType::VARCHAR;
-	CreateTableFunctionInfo sqlsmith_info(sqlsmith_func);
-	catalog.CreateTableFunction(*con.context, &sqlsmith_info);
+	ExtensionUtil::RegisterFunction(db_instance, sqlsmith_func);
+
+	TableFunction fuzzy_duck_fun("fuzzyduck", {}, FuzzyDuckFunction, FuzzyDuckBind);
+	fuzzy_duck_fun.named_parameters["seed"] = LogicalType::INTEGER;
+	fuzzy_duck_fun.named_parameters["max_queries"] = LogicalType::UBIGINT;
+	fuzzy_duck_fun.named_parameters["log"] = LogicalType::VARCHAR;
+	fuzzy_duck_fun.named_parameters["complete_log"] = LogicalType::VARCHAR;
+	fuzzy_duck_fun.named_parameters["verbose_output"] = LogicalType::BOOLEAN;
+	ExtensionUtil::RegisterFunction(db_instance, fuzzy_duck_fun);
 
 	TableFunction reduce_sql_function("reduce_sql_statement", {LogicalType::VARCHAR}, ReduceSQLFunction, ReduceSQLBind);
-	CreateTableFunctionInfo reduce_sql_info(reduce_sql_function);
-	catalog.CreateTableFunction(*con.context, &reduce_sql_info);
-
-	con.Commit();
+	ExtensionUtil::RegisterFunction(db_instance, reduce_sql_function);
 }
 
 std::string SQLSmithExtension::Name() {

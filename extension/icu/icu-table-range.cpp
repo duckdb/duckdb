@@ -55,17 +55,17 @@ struct ICUTableRange {
 		bool greater_than_check;
 
 		bool Equals(const FunctionData &other_p) const override {
-			auto &other = (const BindData &)other_p;
+			auto &other = other_p.Cast<const BindData>();
 			return other.start == start && other.end == end && other.increment == increment &&
 			       other.inclusive_bound == inclusive_bound && other.greater_than_check == greater_than_check &&
 			       *calendar == *other.calendar;
 		}
 
 		unique_ptr<FunctionData> Copy() const override {
-			return make_unique<BindData>(*this);
+			return make_uniq<BindData>(*this);
 		}
 
-		bool Finished(timestamp_t current_value) {
+		bool Finished(timestamp_t current_value) const {
 			if (greater_than_check) {
 				if (inclusive_bound) {
 					return current_value > end;
@@ -85,7 +85,7 @@ struct ICUTableRange {
 	template <bool GENERATE_SERIES>
 	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
 	                                     vector<LogicalType> &return_types, vector<string> &names) {
-		auto result = make_unique<BindData>(context);
+		auto result = make_uniq<BindData>(context);
 
 		auto &inputs = input.inputs;
 		D_ASSERT(inputs.size() == 3);
@@ -139,15 +139,15 @@ struct ICUTableRange {
 	};
 
 	static unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionInitInput &input) {
-		auto &bind_data = (BindData &)*input.bind_data;
-		return make_unique<State>(bind_data.start);
+		auto &bind_data = input.bind_data->Cast<BindData>();
+		return make_uniq<State>(bind_data.start);
 	}
 
 	static void ICUTableRangeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-		auto &bind_data = (BindData &)*data_p.bind_data;
+		auto &bind_data = data_p.bind_data->Cast<BindData>();
 		CalendarPtr calendar_ptr(bind_data.calendar->clone());
 		auto calendar = calendar_ptr.get();
-		auto &state = (State &)*data_p.global_state;
+		auto &state = data_p.global_state->Cast<State>();
 		if (state.finished) {
 			return;
 		}
@@ -175,7 +175,7 @@ struct ICUTableRange {
 		range.AddFunction(TableFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                                ICUTableRangeFunction, Bind<false>, Init));
 		CreateTableFunctionInfo range_func_info(range);
-		catalog.AddFunction(context, &range_func_info);
+		catalog.AddFunction(context, range_func_info);
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		TableFunctionSet generate_series("generate_series");
@@ -183,7 +183,7 @@ struct ICUTableRange {
 		    TableFunction({LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL},
 		                  ICUTableRangeFunction, Bind<true>, Init));
 		CreateTableFunctionInfo generate_series_func_info(generate_series);
-		catalog.AddFunction(context, &generate_series_func_info);
+		catalog.AddFunction(context, generate_series_func_info);
 	}
 };
 

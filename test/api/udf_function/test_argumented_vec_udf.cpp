@@ -9,21 +9,21 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Vectorized UDF functions using arguments", "[coverage][.]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
 
 	string func_name, table_name, col_type;
 	// The types supported by the templated CreateVectorizedFunction
-	const vector<LogicalTypeId> all_sql_types = {
+	const duckdb::vector<LogicalTypeId> all_sql_types = {
 	    LogicalTypeId::BOOLEAN, LogicalTypeId::TINYINT, LogicalTypeId::SMALLINT, LogicalTypeId::DATE,
 	    LogicalTypeId::TIME,    LogicalTypeId::INTEGER, LogicalTypeId::BIGINT,   LogicalTypeId::TIMESTAMP,
 	    LogicalTypeId::FLOAT,   LogicalTypeId::DOUBLE,  LogicalTypeId::VARCHAR};
 
 	// Creating the tables
 	for (LogicalType sql_type : all_sql_types) {
-		col_type = LogicalTypeIdToString(sql_type.id());
+		col_type = EnumUtil::ToString(sql_type.id());
 		table_name = StringUtil::Lower(col_type);
 
 		con.Query("CREATE TABLE " + table_name + " (a " + col_type + ", b " + col_type + ", c " + col_type + ")");
@@ -31,7 +31,7 @@ TEST_CASE("Vectorized UDF functions using arguments", "[coverage][.]") {
 
 	// Create the UDF functions into the catalog
 	for (LogicalType sql_type : all_sql_types) {
-		func_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
+		func_name = StringUtil::Lower(EnumUtil::ToString(sql_type.id()));
 
 		switch (sql_type.id()) {
 		case LogicalTypeId::BOOLEAN: {
@@ -161,7 +161,7 @@ TEST_CASE("Vectorized UDF functions using arguments", "[coverage][.]") {
 	SECTION("Testing Vectorized UDF functions") {
 		// Inserting values
 		for (LogicalType sql_type : all_sql_types) {
-			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
+			table_name = StringUtil::Lower(EnumUtil::ToString(sql_type.id()));
 
 			string query = "INSERT INTO " + table_name + " VALUES";
 			if (sql_type == LogicalType::BOOLEAN) {
@@ -185,7 +185,7 @@ TEST_CASE("Vectorized UDF functions using arguments", "[coverage][.]") {
 
 		// Running the UDF functions and checking the results
 		for (LogicalType sql_type : all_sql_types) {
-			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
+			table_name = StringUtil::Lower(EnumUtil::ToString(sql_type.id()));
 			func_name = table_name;
 			if (sql_type.IsNumeric()) {
 				result = con.Query("SELECT " + func_name + "_1(a) FROM " + table_name);
@@ -249,7 +249,7 @@ TEST_CASE("Vectorized UDF functions using arguments", "[coverage][.]") {
 
 	SECTION("Cheking NULLs with Vectorized UDF functions") {
 		for (LogicalType sql_type : all_sql_types) {
-			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
+			table_name = StringUtil::Lower(EnumUtil::ToString(sql_type.id()));
 			func_name = table_name;
 
 			// Deleting old values
@@ -272,8 +272,8 @@ TEST_CASE("Vectorized UDF functions using arguments", "[coverage][.]") {
 	}
 
 	SECTION("Cheking Vectorized UDF functions with several input columns") {
-		vector<LogicalType> sql_args = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER,
-		                                LogicalType::INTEGER};
+		duckdb::vector<LogicalType> sql_args = {LogicalType::INTEGER, LogicalType::INTEGER, LogicalType::INTEGER,
+		                                        LogicalType::INTEGER};
 		// UDF with 4 input ints, return the last one
 		con.CreateVectorizedFunction("udf_four_ints", sql_args, LogicalType::INTEGER,
 		                             &udf_several_constant_input<int, 4>);

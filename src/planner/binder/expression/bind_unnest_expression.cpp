@@ -19,12 +19,12 @@ namespace duckdb {
 unique_ptr<Expression> CreateBoundStructExtract(ClientContext &context, unique_ptr<Expression> expr, string key) {
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(expr));
-	arguments.push_back(make_unique<BoundConstantExpression>(Value(key)));
+	arguments.push_back(make_uniq<BoundConstantExpression>(Value(key)));
 	auto extract_function = StructExtractFun::GetFunction();
 	auto bind_info = extract_function.bind(context, extract_function, arguments);
 	auto return_type = extract_function.return_type;
-	auto result = make_unique<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),
-	                                                   std::move(bind_info));
+	auto result = make_uniq<BoundFunctionExpression>(return_type, std::move(extract_function), std::move(arguments),
+	                                                 std::move(bind_info));
 	result->alias = std::move(key);
 	return std::move(result);
 }
@@ -57,8 +57,8 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			if (!error.empty()) {
 				return BindResult(error);
 			}
-			auto &const_child = (BoundExpression &)*function.children[i];
-			auto value = ExpressionExecutor::EvaluateScalar(context, *const_child.expr, true);
+			auto &const_child = BoundExpression::GetExpression(*function.children[i]);
+			auto value = ExpressionExecutor::EvaluateScalar(context, *const_child, true);
 			if (alias == "recursive") {
 				auto recursive = value.GetValue<bool>();
 				if (recursive) {
@@ -90,11 +90,11 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		if (!BindCorrelatedColumns(function.children[0])) {
 			return BindResult(error);
 		}
-		auto bound_expr = (BoundExpression *)function.children[0].get();
-		ExtractCorrelatedExpressions(binder, *bound_expr->expr);
+		auto &bound_expr = BoundExpression::GetExpression(*function.children[0]);
+		ExtractCorrelatedExpressions(binder, *bound_expr);
 	}
-	auto &child = (BoundExpression &)*function.children[0];
-	auto &child_type = child.expr->return_type;
+	auto &child = BoundExpression::GetExpression(*function.children[0]);
+	auto &child_type = child->return_type;
 	unnest_level--;
 
 	if (unnest_level > 0) {
@@ -116,7 +116,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	idx_t list_unnests;
 	idx_t struct_unnests = 0;
 
-	auto unnest_expr = std::move(child.expr);
+	auto unnest_expr = std::move(child);
 	if (child_type.id() == LogicalTypeId::SQLNULL) {
 		list_unnests = 1;
 	} else {
@@ -145,7 +145,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 		if (return_type.id() == LogicalTypeId::LIST) {
 			return_type = ListType::GetChildType(return_type);
 		}
-		auto result = make_unique<BoundUnnestExpression>(return_type);
+		auto result = make_uniq<BoundUnnestExpression>(return_type);
 		result->child = std::move(unnest_expr);
 		auto alias = function.alias.empty() ? result->ToString() : function.alias;
 
@@ -166,7 +166,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			entry->second.expressions.push_back(std::move(result));
 		}
 		// now create a column reference referring to the unnest
-		unnest_expr = make_unique<BoundColumnRefExpression>(
+		unnest_expr = make_uniq<BoundColumnRefExpression>(
 		    std::move(alias), return_type, ColumnBinding(unnest_table_index, unnest_column_index), depth);
 	}
 	// now perform struct unnests, if any
@@ -197,7 +197,7 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 			}
 		}
 		expanded_expressions = std::move(struct_expressions);
-		unnest_expr = make_unique<BoundConstantExpression>(Value(42));
+		unnest_expr = make_uniq<BoundConstantExpression>(Value(42));
 	}
 	return BindResult(std::move(unnest_expr));
 }

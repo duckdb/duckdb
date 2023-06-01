@@ -15,6 +15,9 @@ namespace duckdb {
 
 class LoadStatement : public SQLStatement {
 public:
+	static constexpr const StatementType TYPE = StatementType::LOAD_STATEMENT;
+
+public:
 	LoadStatement();
 
 protected:

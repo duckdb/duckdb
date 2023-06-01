@@ -16,6 +16,9 @@ namespace duckdb {
 //! operator.
 class LogicalWindow : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_WINDOW;
+
+public:
 	explicit LogicalWindow(idx_t window_index)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_WINDOW), window_index(window_index) {
 	}
@@ -27,6 +30,7 @@ public:
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 	vector<idx_t> GetTableIndex() const override;
+	string GetName() const override;
 
 protected:
 	void ResolveTypes() override;

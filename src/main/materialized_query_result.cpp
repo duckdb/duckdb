@@ -53,7 +53,7 @@ string MaterializedQueryResult::ToBox(ClientContext &context, const BoxRendererC
 
 Value MaterializedQueryResult::GetValue(idx_t column, idx_t index) {
 	if (!row_collection) {
-		row_collection = make_unique<ColumnDataRowCollection>(collection->GetRows());
+		row_collection = make_uniq<ColumnDataRowCollection>(collection->GetRows());
 	}
 	return row_collection->GetValue(column, index);
 }
@@ -81,7 +81,7 @@ unique_ptr<DataChunk> MaterializedQueryResult::FetchRaw() {
 	if (HasError()) {
 		throw InvalidInputException("Attempting to fetch from an unsuccessful query result\nError: %s", GetError());
 	}
-	auto result = make_unique<DataChunk>();
+	auto result = make_uniq<DataChunk>();
 	collection->InitializeScanChunk(*result);
 	if (!scan_initialized) {
 		// we disallow zero copy so the chunk is independently usable even after the result is destroyed

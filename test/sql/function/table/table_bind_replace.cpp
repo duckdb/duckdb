@@ -21,9 +21,10 @@ struct BindReplaceDemoFun {
 		bool done = false;
 	};
 
-	static unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
-	                                     vector<LogicalType> &return_types, vector<string> &names) {
-		auto result = make_unique<BindReplaceDemoFun::CustomFunctionData>();
+	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, TableFunctionBindInput &input,
+	                                             duckdb::vector<LogicalType> &return_types,
+	                                             duckdb::vector<string> &names) {
+		auto result = make_uniq<BindReplaceDemoFun::CustomFunctionData>();
 
 		result->current_depth = input.inputs[0].GetValue<int64_t>();
 		result->current_name = input.inputs[1].ToString();
@@ -37,8 +38,8 @@ struct BindReplaceDemoFun {
 		return std::move(result);
 	}
 
-	static unique_ptr<TableRef> BindReplace(ClientContext &context, TableFunctionBindInput &input) {
-		auto result = make_unique<BindReplaceDemoFun::CustomFunctionData>();
+	static duckdb::unique_ptr<TableRef> BindReplace(ClientContext &context, TableFunctionBindInput &input) {
+		auto result = make_uniq<BindReplaceDemoFun::CustomFunctionData>();
 
 		auto depth = input.inputs[0].GetValue<int64_t>();
 		auto name = input.inputs[1].ToString();
@@ -46,24 +47,24 @@ struct BindReplaceDemoFun {
 		// While depth > 0, we will replace the plan with a CROSS JOIN between to sub-calls to the same function
 		// resulting in a recursively bound query plan that will eventually result in the regular bind being called.
 		if (depth > 0) {
-			auto join_node = make_unique<JoinRef>(JoinRefType::CROSS);
+			auto join_node = make_uniq<JoinRef>(JoinRefType::CROSS);
 
 			// Construct LHS TableFunctionRef
-			vector<unique_ptr<ParsedExpression>> left_children;
-			left_children.push_back(make_unique<ConstantExpression>(Value(depth - 1)));
-			left_children.push_back(make_unique<ConstantExpression>(Value(name + "L")));
-			auto tf_ref_left = make_unique<TableFunctionRef>();
+			duckdb::vector<duckdb::unique_ptr<ParsedExpression>> left_children;
+			left_children.push_back(make_uniq<ConstantExpression>(Value(depth - 1)));
+			left_children.push_back(make_uniq<ConstantExpression>(Value(name + "L")));
+			auto tf_ref_left = make_uniq<TableFunctionRef>();
 			tf_ref_left->alias = "inner_table_" + name + "L";
-			tf_ref_left->function = make_unique<FunctionExpression>("bind_replace_demo", std::move(left_children));
+			tf_ref_left->function = make_uniq<FunctionExpression>("bind_replace_demo", std::move(left_children));
 			join_node->left = std::move(tf_ref_left);
 
 			// Construct RHS TableFunctionRef
-			vector<unique_ptr<ParsedExpression>> right_children;
-			right_children.push_back(make_unique<ConstantExpression>(Value(depth - 1)));
-			right_children.push_back(make_unique<ConstantExpression>(Value(name + "R")));
-			auto tf_ref_right = make_unique<TableFunctionRef>();
+			duckdb::vector<duckdb::unique_ptr<ParsedExpression>> right_children;
+			right_children.push_back(make_uniq<ConstantExpression>(Value(depth - 1)));
+			right_children.push_back(make_uniq<ConstantExpression>(Value(name + "R")));
+			auto tf_ref_right = make_uniq<TableFunctionRef>();
 			tf_ref_right->alias = "inner_table_" + name + "R";
-			tf_ref_right->function = make_unique<FunctionExpression>("bind_replace_demo", std::move(right_children));
+			tf_ref_right->function = make_uniq<FunctionExpression>("bind_replace_demo", std::move(right_children));
 			join_node->right = std::move(tf_ref_right);
 
 			return std::move(join_node);
@@ -97,7 +98,7 @@ struct BindReplaceDemoFun {
 		                                BindReplaceDemoFun::Function, BindReplaceDemoFun::Bind);
 		bind_replace_demo.bind_replace = BindReplaceDemoFun::BindReplace;
 		CreateTableFunctionInfo bind_replace_demo_info(bind_replace_demo);
-		catalog.CreateTableFunction(*con.context, &bind_replace_demo_info);
+		catalog.CreateTableFunction(*con.context, bind_replace_demo_info);
 		con.Commit();
 	}
 };
@@ -108,8 +109,8 @@ struct BindReplaceDemoFun2 {
 		bool done = false;
 	};
 
-	static unique_ptr<TableRef> BindReplace(ClientContext &context, TableFunctionBindInput &input) {
-		auto result = make_unique<BindReplaceDemoFun2::CustomFunctionData>();
+	static duckdb::unique_ptr<TableRef> BindReplace(ClientContext &context, TableFunctionBindInput &input) {
+		auto result = make_uniq<BindReplaceDemoFun2::CustomFunctionData>();
 
 		auto value = input.inputs[0].GetValue<int64_t>();
 		if (value < 0) {
@@ -117,10 +118,10 @@ struct BindReplaceDemoFun2 {
 			return nullptr;
 		}
 
-		vector<unique_ptr<ParsedExpression>> children;
-		children.push_back(make_unique<ConstantExpression>(Value(value)));
-		auto tf_ref = make_unique<TableFunctionRef>();
-		tf_ref->function = make_unique<FunctionExpression>("range", std::move(children));
+		duckdb::vector<duckdb::unique_ptr<ParsedExpression>> children;
+		children.push_back(make_uniq<ConstantExpression>(Value(value)));
+		auto tf_ref = make_uniq<TableFunctionRef>();
+		tf_ref->function = make_uniq<FunctionExpression>("range", std::move(children));
 
 		return std::move(tf_ref);
 	}
@@ -133,7 +134,7 @@ struct BindReplaceDemoFun2 {
 		TableFunction bind_replace_demo("bind_replace_demo2", {LogicalType::BIGINT}, nullptr, nullptr);
 		bind_replace_demo.bind_replace = BindReplaceDemoFun2::BindReplace;
 		CreateTableFunctionInfo bind_replace_demo_info(bind_replace_demo);
-		catalog.CreateTableFunction(*con.context, &bind_replace_demo_info);
+		catalog.CreateTableFunction(*con.context, bind_replace_demo_info);
 		con.Commit();
 	}
 };

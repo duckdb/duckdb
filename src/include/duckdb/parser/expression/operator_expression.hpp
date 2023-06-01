@@ -17,6 +17,9 @@ namespace duckdb {
 //! Represents a built-in operator expression
 class OperatorExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::OPERATOR;
+
+public:
 	DUCKDB_API explicit OperatorExpression(ExpressionType type, unique_ptr<ParsedExpression> left = nullptr,
 	                                       unique_ptr<ParsedExpression> right = nullptr);
 	DUCKDB_API OperatorExpression(ExpressionType type, vector<unique_ptr<ParsedExpression>> children);
@@ -26,7 +29,7 @@ public:
 public:
 	string ToString() const override;
 
-	static bool Equal(const OperatorExpression *a, const OperatorExpression *b);
+	static bool Equal(const OperatorExpression &a, const OperatorExpression &b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
@@ -93,8 +96,8 @@ public:
 			auto child_string = entry.children[1]->ToString();
 			D_ASSERT(child_string.size() >= 3);
 			D_ASSERT(child_string[0] == '\'' && child_string[child_string.size() - 1] == '\'');
-			return "(" + entry.children[0]->ToString() + ")." +
-			       KeywordHelper::WriteOptionallyQuoted(child_string.substr(1, child_string.size() - 2));
+			return StringUtil::Format("(%s).%s", entry.children[0]->ToString(),
+			                          SQLIdentifier(child_string.substr(1, child_string.size() - 2)));
 		}
 		case ExpressionType::ARRAY_CONSTRUCTOR: {
 			string result = "(ARRAY[";

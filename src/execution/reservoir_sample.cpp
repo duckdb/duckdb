@@ -93,7 +93,7 @@ ReservoirSamplePercentage::ReservoirSamplePercentage(Allocator &allocator, doubl
     : BlockingSample(seed), allocator(allocator), sample_percentage(percentage / 100.0), current_count(0),
       is_finalized(false) {
 	reservoir_sample_size = idx_t(sample_percentage * RESERVOIR_THRESHOLD);
-	current_sample = make_unique<ReservoirSample>(allocator, reservoir_sample_size, random.NextRandomInteger());
+	current_sample = make_uniq<ReservoirSample>(allocator, reservoir_sample_size, random.NextRandomInteger());
 }
 
 void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
@@ -121,7 +121,7 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 		finished_samples.push_back(std::move(current_sample));
 
 		// allocate a new sample, and potentially add the remainder of the current input to that sample
-		current_sample = make_unique<ReservoirSample>(allocator, reservoir_sample_size, random.NextRandomInteger());
+		current_sample = make_uniq<ReservoirSample>(allocator, reservoir_sample_size, random.NextRandomInteger());
 		if (append_to_next_sample > 0) {
 			current_sample->AddToReservoir(input);
 		}
@@ -154,7 +154,7 @@ void ReservoirSamplePercentage::Finalize() {
 	if (current_count > 0) {
 		// create a new sample
 		auto new_sample_size = idx_t(round(sample_percentage * current_count));
-		auto new_sample = make_unique<ReservoirSample>(allocator, new_sample_size, random.NextRandomInteger());
+		auto new_sample = make_uniq<ReservoirSample>(allocator, new_sample_size, random.NextRandomInteger());
 		while (true) {
 			auto chunk = current_sample->GetChunk();
 			if (!chunk || chunk->size() == 0) {
@@ -186,7 +186,7 @@ void BaseReservoirSampling::InitializeReservoir(idx_t cur_size, idx_t sample_siz
 		//! we use a priority queue to extract the minimum key in O(1) time
 		for (idx_t i = 0; i < sample_size; i++) {
 			double k_i = random.NextRandom();
-			reservoir_weights.push(std::make_pair(-k_i, i));
+			reservoir_weights.emplace(-k_i, i);
 		}
 		SetNextEntry();
 	}
@@ -217,7 +217,7 @@ void BaseReservoirSampling::ReplaceElement() {
 	//! we generate a random number between (min_threshold, 1)
 	double r2 = random.NextRandom(min_threshold, 1);
 	//! now we insert the new weight into the reservoir
-	reservoir_weights.push(std::make_pair(-r2, min_entry));
+	reservoir_weights.emplace(-r2, min_entry);
 	//! we update the min entry with the new min entry in the reservoir
 	SetNextEntry();
 }

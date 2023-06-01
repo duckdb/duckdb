@@ -2,7 +2,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
-#include "duckdb/parser/expression_util.hpp"
 #include "duckdb/function/function_serialization.hpp"
 
 namespace duckdb {
@@ -39,18 +38,18 @@ hash_t BoundFunctionExpression::Hash() const {
 	return CombineHash(result, function.Hash());
 }
 
-bool BoundFunctionExpression::Equals(const BaseExpression *other_p) const {
+bool BoundFunctionExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundFunctionExpression *)other_p;
-	if (other->function != function) {
+	auto &other = other_p.Cast<BoundFunctionExpression>();
+	if (other.function != function) {
 		return false;
 	}
-	if (!ExpressionUtil::ListEquals(children, other->children)) {
+	if (!Expression::ListEquals(children, other.children)) {
 		return false;
 	}
-	if (!FunctionData::Equals(bind_info.get(), other->bind_info.get())) {
+	if (!FunctionData::Equals(bind_info.get(), other.bind_info.get())) {
 		return false;
 	}
 	return true;
@@ -64,8 +63,8 @@ unique_ptr<Expression> BoundFunctionExpression::Copy() {
 	}
 	unique_ptr<FunctionData> new_bind_info = bind_info ? bind_info->Copy() : nullptr;
 
-	auto copy = make_unique<BoundFunctionExpression>(return_type, function, std::move(new_children),
-	                                                 std::move(new_bind_info), is_operator);
+	auto copy = make_uniq<BoundFunctionExpression>(return_type, function, std::move(new_children),
+	                                               std::move(new_bind_info), is_operator);
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
@@ -90,7 +89,7 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(ExpressionDeserializ
 	    reader, state, CatalogType::SCALAR_FUNCTION_ENTRY, children, bind_info);
 
 	auto return_type = function.return_type;
-	return make_unique<BoundFunctionExpression>(std::move(return_type), std::move(function), std::move(children),
-	                                            std::move(bind_info), is_operator);
+	return make_uniq<BoundFunctionExpression>(std::move(return_type), std::move(function), std::move(children),
+	                                          std::move(bind_info), is_operator);
 }
 } // namespace duckdb

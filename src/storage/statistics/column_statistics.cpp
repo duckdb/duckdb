@@ -5,7 +5,7 @@ namespace duckdb {
 
 ColumnStatistics::ColumnStatistics(BaseStatistics stats_p) : stats(std::move(stats_p)) {
 	if (DistinctStatistics::TypeIsSupported(stats.GetType())) {
-		distinct_stats = make_unique<DistinctStatistics>();
+		distinct_stats = make_uniq<DistinctStatistics>();
 	}
 }
 ColumnStatistics::ColumnStatistics(BaseStatistics stats_p, unique_ptr<DistinctStatistics> distinct_stats_p)

@@ -4,18 +4,18 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(duckdb_libpgquery::PGBoolExpr *root) {
+unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(duckdb_libpgquery::PGBoolExpr &root) {
 	unique_ptr<ParsedExpression> result;
-	for (auto node = root->args->head; node != nullptr; node = node->next) {
-		auto next = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value));
+	for (auto node = root.args->head; node != nullptr; node = node->next) {
+		auto next = TransformExpression(PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value));
 
-		switch (root->boolop) {
+		switch (root.boolop) {
 		case duckdb_libpgquery::PG_AND_EXPR: {
 			if (!result) {
 				result = std::move(next);
 			} else {
-				result = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(result),
-				                                            std::move(next));
+				result = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(result),
+				                                          std::move(next));
 			}
 			break;
 		}
@@ -23,8 +23,8 @@ unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(duckdb_libpgquery::P
 			if (!result) {
 				result = std::move(next);
 			} else {
-				result = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(result),
-				                                            std::move(next));
+				result = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_OR, std::move(result),
+				                                          std::move(next));
 			}
 			break;
 		}
@@ -40,7 +40,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBoolExpr(duckdb_libpgquery::P
 				next->type = NegateComparisonExpression(next->type);
 				result = std::move(next);
 			} else {
-				result = make_unique<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(next));
+				result = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_NOT, std::move(next));
 			}
 			break;
 		}

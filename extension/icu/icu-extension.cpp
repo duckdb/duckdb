@@ -38,7 +38,7 @@
 namespace duckdb {
 
 struct IcuBindData : public FunctionData {
-	std::unique_ptr<icu::Collator> collator;
+	duckdb::unique_ptr<icu::Collator> collator;
 	string language;
 	string country;
 
@@ -48,7 +48,7 @@ struct IcuBindData : public FunctionData {
 		if (locale.isBogus()) {
 			throw InternalException("Locale is bogus!?");
 		}
-		this->collator = std::unique_ptr<icu::Collator>(icu::Collator::createInstance(locale, status));
+		this->collator = duckdb::unique_ptr<icu::Collator>(icu::Collator::createInstance(locale, status));
 		if (U_FAILURE(status)) {
 			auto error_name = u_errorName(status);
 			throw InternalException("Failed to create ICU collator: %s (language: %s, country: %s)", error_name,
@@ -56,29 +56,29 @@ struct IcuBindData : public FunctionData {
 		}
 	}
 
-	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<IcuBindData>(language, country);
+	duckdb::unique_ptr<FunctionData> Copy() const override {
+		return make_uniq<IcuBindData>(language, country);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (IcuBindData &)other_p;
+		auto &other = other_p.Cast<IcuBindData>();
 		return language == other.language && country == other.country;
 	}
 };
 
-static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, unique_ptr<char[]> &buffer,
+static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, duckdb::unique_ptr<char[]> &buffer,
                              int32_t &buffer_size) {
 	int32_t string_size =
-	    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
-	                        (uint8_t *)buffer.get(), buffer_size);
+	    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize())),
+	                        reinterpret_cast<uint8_t *>(buffer.get()), buffer_size);
 	if (string_size > buffer_size) {
 		// have to resize the buffer
 		buffer_size = string_size;
-		buffer = unique_ptr<char[]>(new char[buffer_size]);
+		buffer = duckdb::unique_ptr<char[]>(new char[buffer_size]);
 
 		string_size =
-		    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
-		                        (uint8_t *)buffer.get(), buffer_size);
+		    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize())),
+		                        reinterpret_cast<uint8_t *>(buffer.get()), buffer_size);
 	}
 	return string_size;
 }
@@ -86,11 +86,11 @@ static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, unique_ptr
 static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	const char HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (IcuBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<IcuBindData>();
 	auto &collator = *info.collator;
 
-	unique_ptr<char[]> buffer;
+	duckdb::unique_ptr<char[]> buffer;
 	int32_t buffer_size = 0;
 	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
 		// create a sort key from the string
@@ -110,20 +110,20 @@ static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &
 	});
 }
 
-static unique_ptr<FunctionData> ICUCollateBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static duckdb::unique_ptr<FunctionData> ICUCollateBind(ClientContext &context, ScalarFunction &bound_function,
+                                                       vector<duckdb::unique_ptr<Expression>> &arguments) {
 	auto splits = StringUtil::Split(bound_function.name, "_");
 	if (splits.size() == 1) {
-		return make_unique<IcuBindData>(splits[0], "");
+		return make_uniq<IcuBindData>(splits[0], "");
 	} else if (splits.size() == 2) {
-		return make_unique<IcuBindData>(splits[0], splits[1]);
+		return make_uniq<IcuBindData>(splits[0], splits[1]);
 	} else {
 		throw InternalException("Expected one or two splits");
 	}
 }
 
-static unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, ScalarFunction &bound_function,
-                                               vector<unique_ptr<Expression>> &arguments) {
+static duckdb::unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, ScalarFunction &bound_function,
+                                                       vector<duckdb::unique_ptr<Expression>> &arguments) {
 	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) with non-constant collation is not supported");
 	}
@@ -133,9 +133,9 @@ static unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, ScalarFun
 	}
 	auto splits = StringUtil::Split(StringValue::Get(val), "_");
 	if (splits.size() == 1) {
-		return make_unique<IcuBindData>(splits[0], "");
+		return make_uniq<IcuBindData>(splits[0], "");
 	} else if (splits.size() == 2) {
-		return make_unique<IcuBindData>(splits[0], splits[1]);
+		return make_uniq<IcuBindData>(splits[0], splits[1]);
 	} else {
 		throw InternalException("Expected one or two splits");
 	}
@@ -145,8 +145,8 @@ static void ICUCollateSerialize(FieldWriter &writer, const FunctionData *bind_da
 	throw NotImplementedException("FIXME: serialize icu-collate");
 }
 
-static unique_ptr<FunctionData> ICUCollateDeserialize(ClientContext &context, FieldReader &reader,
-                                                      ScalarFunction &bound_function) {
+static duckdb::unique_ptr<FunctionData> ICUCollateDeserialize(ClientContext &context, FieldReader &reader,
+                                                              ScalarFunction &bound_function) {
 	throw NotImplementedException("FIXME: serialize icu-collate");
 }
 
@@ -160,7 +160,7 @@ static ScalarFunction GetICUFunction(const string &collation) {
 static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parameter) {
 	icu::StringPiece utf8(StringValue::Get(parameter));
 	const auto uid = icu::UnicodeString::fromUTF8(utf8);
-	std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(uid));
+	duckdb::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(uid));
 	if (*tz == icu::TimeZone::getUnknown()) {
 		throw NotImplementedException("Unknown TimeZone setting");
 	}
@@ -173,23 +173,24 @@ struct ICUCalendarData : public GlobalTableFunctionState {
 		calendars.reset(icu::Calendar::getKeywordValuesForLocale("calendar", icu::Locale::getDefault(), false, status));
 	}
 
-	std::unique_ptr<icu::StringEnumeration> calendars;
+	duckdb::unique_ptr<icu::StringEnumeration> calendars;
 };
 
-static unique_ptr<FunctionData> ICUCalendarBind(ClientContext &context, TableFunctionBindInput &input,
-                                                vector<LogicalType> &return_types, vector<string> &names) {
+static duckdb::unique_ptr<FunctionData> ICUCalendarBind(ClientContext &context, TableFunctionBindInput &input,
+                                                        vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }
 
-static unique_ptr<GlobalTableFunctionState> ICUCalendarInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<ICUCalendarData>();
+static duckdb::unique_ptr<GlobalTableFunctionState> ICUCalendarInit(ClientContext &context,
+                                                                    TableFunctionInitInput &input) {
+	return make_uniq<ICUCalendarData>();
 }
 
 static void ICUCalendarFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (ICUCalendarData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<ICUCalendarData>();
 	idx_t index = 0;
 	while (index < STANDARD_VECTOR_SIZE) {
 		if (!data.calendars) {
@@ -218,7 +219,7 @@ static void SetICUCalendar(ClientContext &context, SetScope scope, Value &parame
 	icu::Locale locale(locale_key.c_str());
 
 	UErrorCode status = U_ZERO_ERROR;
-	std::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(locale, status));
+	duckdb::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(locale, status));
 	if (U_FAILURE(status) || name != cal->getType()) {
 		throw NotImplementedException("Unknown Calendar setting");
 	}
@@ -246,17 +247,17 @@ void ICUExtension::Load(DuckDB &db) {
 
 		CreateCollationInfo info(collation, GetICUFunction(collation), false, true);
 		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-		catalog.CreateCollation(*con.context, &info);
+		catalog.CreateCollation(*con.context, info);
 	}
 	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                        ICUCollateFunction, ICUSortKeyBind);
 
 	CreateScalarFunctionInfo sort_key_info(std::move(sort_key));
-	catalog.CreateFunction(*con.context, &sort_key_info);
+	catalog.CreateFunction(*con.context, sort_key_info);
 
 	// Time Zones
 	auto &config = DBConfig::GetConfig(*db.instance);
-	std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createDefault());
+	duckdb::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createDefault());
 	icu::UnicodeString tz_id;
 	std::string tz_string;
 	tz->getID(tz_id).toUTF8String(tz_string);
@@ -276,13 +277,13 @@ void ICUExtension::Load(DuckDB &db) {
 
 	// Calendars
 	UErrorCode status = U_ZERO_ERROR;
-	std::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(status));
+	duckdb::unique_ptr<icu::Calendar> cal(icu::Calendar::createInstance(status));
 	config.AddExtensionOption("Calendar", "The current calendar", LogicalType::VARCHAR, Value(cal->getType()),
 	                          SetICUCalendar);
 
 	TableFunction cal_names("icu_calendar_names", {}, ICUCalendarFunction, ICUCalendarBind, ICUCalendarInit);
 	CreateTableFunctionInfo cal_names_info(std::move(cal_names));
-	catalog.CreateTableFunction(*con.context, &cal_names_info);
+	catalog.CreateTableFunction(*con.context, cal_names_info);
 
 	con.Commit();
 }

@@ -55,6 +55,7 @@
 	PGLockWaitPolicy lockwaitpolicy;
 	PGSubLinkType subquerytype;
 	PGViewCheckOption viewcheckoption;
+	PGInsertColumnOrder bynameorposition;
 }
 
 %type <node> stmt
@@ -73,7 +74,7 @@
  */
 %token <str>	IDENT FCONST SCONST BCONST XCONST Op
 %token <ival>	ICONST PARAM
-%token			TYPECAST DOT_DOT COLON_EQUALS EQUALS_GREATER POWER_OF LAMBDA_ARROW DOUBLE_ARROW
+%token			TYPECAST DOT_DOT COLON_EQUALS EQUALS_GREATER INTEGER_DIVISION POWER_OF LAMBDA_ARROW DOUBLE_ARROW
 %token			LESS_EQUALS GREATER_EQUALS NOT_EQUALS
 
 /*
@@ -142,7 +143,7 @@
 %nonassoc	IDENT GENERATED NULL_P PARTITION RANGE ROWS PRECEDING FOLLOWING CUBE ROLLUP ENUM_P
 %left		Op OPERATOR		/* multi-character ops and user-defined operators */
 %left		'+' '-'
-%left		'*' '/' '%'
+%left		'*' '/' '%' INTEGER_DIVISION
 %left		'^' POWER_OF
 /* Unary Operators */
 %left		AT				/* sets precedence for AT TIME ZONE */

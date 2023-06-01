@@ -1,30 +1,34 @@
 #include "json_functions.hpp"
 
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
 
-static void CheckPath(const Value &path_val, string &path, size_t &len) {
-	string error;
-	Value path_str_val;
-	if (!path_val.DefaultTryCastAs(LogicalType::VARCHAR, path_str_val, &error)) {
-		throw InvalidInputException(error);
+using JSONPathType = JSONCommon::JSONPathType;
+
+static JSONPathType CheckPath(const Value &path_val, string &path, size_t &len) {
+	if (path_val.IsNull()) {
+		throw InvalidInputException("JSON path cannot be NULL");
 	}
+	const auto path_str_val = path_val.DefaultCastAs(LogicalType::VARCHAR);
 	auto path_str = path_str_val.GetValueUnsafe<string_t>();
 	len = path_str.GetSize();
-	auto ptr = path_str.GetDataUnsafe();
+	auto ptr = path_str.GetData();
 	// Empty strings and invalid $ paths yield an error
 	if (len == 0) {
-		throw InvalidInputException("Empty JSON path");
+		throw BinderException("Empty JSON path");
 	}
+	JSONPathType path_type = JSONPathType::REGULAR;
 	if (*ptr == '$') {
-		JSONCommon::ValidatePathDollar(ptr, len);
+		path_type = JSONCommon::ValidatePath(ptr, len, true);
 	}
 	// Copy over string to the bind data
 	if (*ptr == '/' || *ptr == '$') {
@@ -33,19 +37,20 @@ static void CheckPath(const Value &path_val, string &path, size_t &len) {
 		path = "/" + string(ptr, len);
 		len++;
 	}
+	return path_type;
 }
 
-JSONReadFunctionData::JSONReadFunctionData(bool constant, string path_p, idx_t len)
-    : constant(constant), path(std::move(path_p)), ptr(path.c_str()), len(len) {
+JSONReadFunctionData::JSONReadFunctionData(bool constant, string path_p, idx_t len, JSONPathType path_type_p)
+    : constant(constant), path(std::move(path_p)), path_type(path_type_p), ptr(path.c_str()), len(len) {
 }
 
 unique_ptr<FunctionData> JSONReadFunctionData::Copy() const {
-	return make_unique<JSONReadFunctionData>(constant, path, len);
+	return make_uniq<JSONReadFunctionData>(constant, path, len, path_type);
 }
 
 bool JSONReadFunctionData::Equals(const FunctionData &other_p) const {
 	auto &other = (const JSONReadFunctionData &)other_p;
-	return constant == other.constant && path == other.path && len == other.len;
+	return constant == other.constant && path == other.path && len == other.len && path_type == other.path_type;
 }
 
 unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, ScalarFunction &bound_function,
@@ -54,12 +59,16 @@ unique_ptr<FunctionData> JSONReadFunctionData::Bind(ClientContext &context, Scal
 	bool constant = false;
 	string path = "";
 	size_t len = 0;
+	JSONPathType path_type = JSONPathType::REGULAR;
 	if (arguments[1]->return_type.id() != LogicalTypeId::SQLNULL && arguments[1]->IsFoldable()) {
 		constant = true;
 		const auto path_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
-		CheckPath(path_val, path, len);
+		path_type = CheckPath(path_val, path, len);
 	}
-	return make_unique<JSONReadFunctionData>(constant, std::move(path), len);
+	if (path_type == JSONCommon::JSONPathType::WILDCARD) {
+		bound_function.return_type = LogicalType::LIST(bound_function.return_type);
+	}
+	return make_uniq<JSONReadFunctionData>(constant, std::move(path), len, path_type);
 }
 
 JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vector<size_t> lens_p)
@@ -70,7 +79,7 @@ JSONReadManyFunctionData::JSONReadManyFunctionData(vector<string> paths_p, vecto
 }
 
 unique_ptr<FunctionData> JSONReadManyFunctionData::Copy() const {
-	return make_unique<JSONReadManyFunctionData>(paths, lens);
+	return make_uniq<JSONReadManyFunctionData>(paths, lens);
 }
 
 bool JSONReadManyFunctionData::Equals(const FunctionData &other_p) const {
@@ -85,10 +94,7 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 		throw ParameterNotResolvedException();
 	}
 	if (!arguments[1]->IsFoldable()) {
-		throw InvalidInputException("List of paths must be constant");
-	}
-	if (arguments[1]->return_type.id() == LogicalTypeId::SQLNULL) {
-		return make_unique<JSONReadManyFunctionData>(vector<string>(), vector<size_t>());
+		throw BinderException("List of paths must be constant");
 	}
 
 	vector<string> paths;
@@ -97,10 +103,12 @@ unique_ptr<FunctionData> JSONReadManyFunctionData::Bind(ClientContext &context, 
 	for (auto &path_val : ListValue::GetChildren(paths_val)) {
 		paths.emplace_back("");
 		lens.push_back(0);
-		CheckPath(path_val, paths.back(), lens.back());
+		if (CheckPath(path_val, paths.back(), lens.back()) == JSONPathType::WILDCARD) {
+			throw BinderException("Cannot have wildcards in JSON path when supplying multiple paths");
+		}
 	}
 
-	return make_unique<JSONReadManyFunctionData>(std::move(paths), std::move(lens));
+	return make_uniq<JSONReadManyFunctionData>(std::move(paths), std::move(lens));
 }
 
 JSONFunctionLocalState::JSONFunctionLocalState(Allocator &allocator) : json_allocator(allocator) {
@@ -111,17 +119,22 @@ JSONFunctionLocalState::JSONFunctionLocalState(ClientContext &context)
 
 unique_ptr<FunctionLocalState> JSONFunctionLocalState::Init(ExpressionState &state, const BoundFunctionExpression &expr,
                                                             FunctionData *bind_data) {
-	return make_unique<JSONFunctionLocalState>(state.GetContext());
+	return make_uniq<JSONFunctionLocalState>(state.GetContext());
+}
+
+unique_ptr<FunctionLocalState> JSONFunctionLocalState::InitCastLocalState(CastLocalStateParameters &parameters) {
+	return parameters.context ? make_uniq<JSONFunctionLocalState>(*parameters.context)
+	                          : make_uniq<JSONFunctionLocalState>(Allocator::DefaultAllocator());
 }
 
 JSONFunctionLocalState &JSONFunctionLocalState::ResetAndGet(ExpressionState &state) {
-	auto &lstate = (JSONFunctionLocalState &)*ExecuteFunctionState::GetFunctionState(state);
+	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
 	return lstate;
 }
 
-vector<CreateScalarFunctionInfo> JSONFunctions::GetScalarFunctions() {
-	vector<CreateScalarFunctionInfo> functions;
+vector<ScalarFunctionSet> JSONFunctions::GetScalarFunctions() {
+	vector<ScalarFunctionSet> functions;
 
 	// Extract functions
 	AddAliases({"json_extract", "json_extract_path"}, GetExtractFunction(), functions);
@@ -147,22 +160,31 @@ vector<CreateScalarFunctionInfo> JSONFunctions::GetScalarFunctions() {
 	functions.push_back(GetTypeFunction());
 	functions.push_back(GetValidFunction());
 	functions.push_back(GetSerializeSqlFunction());
+	functions.push_back(GetDeserializeSqlFunction());
 
 	return functions;
 }
 
-vector<CreateTableFunctionInfo> JSONFunctions::GetTableFunctions() {
-	vector<CreateTableFunctionInfo> functions;
+vector<PragmaFunctionSet> JSONFunctions::GetPragmaFunctions() {
+	vector<PragmaFunctionSet> functions;
+	functions.push_back(GetExecuteJsonSerializedSqlPragmaFunction());
+	return functions;
+}
+
+vector<TableFunctionSet> JSONFunctions::GetTableFunctions() {
+	vector<TableFunctionSet> functions;
 
 	// Reads JSON as string
 	functions.push_back(GetReadJSONObjectsFunction());
 	functions.push_back(GetReadNDJSONObjectsFunction());
+	functions.push_back(GetReadJSONObjectsAutoFunction());
 
 	// Read JSON as columnar data
 	functions.push_back(GetReadJSONFunction());
 	functions.push_back(GetReadNDJSONFunction());
 	functions.push_back(GetReadJSONAutoFunction());
 	functions.push_back(GetReadNDJSONAutoFunction());
+	functions.push_back(GetExecuteJsonSerializedSqlFunction());
 
 	return functions;
 }
@@ -181,54 +203,53 @@ unique_ptr<TableRef> JSONFunctions::ReadJSONReplacement(ClientContext &context, 
 	    !StringUtil::EndsWith(lower_name, ".ndjson") && !StringUtil::Contains(lower_name, ".ndjson?")) {
 		return nullptr;
 	}
-	auto table_function = make_unique<TableFunctionRef>();
+	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
-	table_function->function = make_unique<FunctionExpression>("read_json_auto", std::move(children));
+	children.push_back(make_uniq<ConstantExpression>(Value(table_name)));
+	table_function->function = make_uniq<FunctionExpression>("read_json_auto", std::move(children));
+
+	if (!FileSystem::HasGlob(table_name)) {
+		table_function->alias = FileSystem::ExtractBaseName(table_name);
+	}
+
 	return std::move(table_function);
 }
 
-static unique_ptr<FunctionLocalState> InitJSONCastLocalState(CastLocalStateParameters &parameters) {
-	if (parameters.context) {
-		return make_unique<JSONFunctionLocalState>(*parameters.context);
-	} else {
-		return make_unique<JSONFunctionLocalState>(Allocator::DefaultAllocator());
-	}
-}
-
 static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-	auto &lstate = (JSONFunctionLocalState &)*parameters.local_state;
+	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
-	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+	auto alc = lstate.json_allocator.GetYYAlc();
 
 	bool success = true;
 	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
 	    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
-		    auto data = (char *)(input.GetDataUnsafe());
-		    auto length = input.GetSize();
-		    yyjson_read_err error;
+		    auto data = input.GetDataWriteable();
+		    const auto length = input.GetSize();
 
+		    yyjson_read_err error;
 		    auto doc = JSONCommon::ReadDocumentUnsafe(data, length, JSONCommon::READ_FLAG, alc, &error);
 
 		    if (!doc) {
-			    HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error),
-			                                 parameters.error_message);
 			    mask.SetInvalid(idx);
-			    success = false;
+			    if (success) {
+				    HandleCastError::AssignError(JSONCommon::FormatParseError(data, length, error),
+				                                 parameters.error_message);
+				    success = false;
+			    }
 		    }
 		    return input;
 	    });
-	result.Reinterpret(source);
+	StringVector::AddHeapReference(result, source);
 	return success;
 }
 
-void JSONFunctions::RegisterCastFunctions(CastFunctionSet &casts) {
+void JSONFunctions::RegisterSimpleCastFunctions(CastFunctionSet &casts) {
 	// JSON to VARCHAR is basically free
 	casts.RegisterCastFunction(JSONCommon::JSONType(), LogicalType::VARCHAR, DefaultCasts::ReinterpretCast, 1);
 
 	// VARCHAR to JSON requires a parse so it's not free. Let's make it 1 more than a cast to STRUCT
 	auto varchar_to_json_cost = casts.ImplicitCastCost(LogicalType::SQLNULL, LogicalTypeId::STRUCT) + 1;
-	BoundCastInfo info(CastVarcharToJSON, nullptr, InitJSONCastLocalState);
+	BoundCastInfo info(CastVarcharToJSON, nullptr, JSONFunctionLocalState::InitCastLocalState);
 	casts.RegisterCastFunction(LogicalType::VARCHAR, JSONCommon::JSONType(), std::move(info), varchar_to_json_cost);
 
 	// Register NULL to JSON with a different cost than NULL to VARCHAR so the binder can disambiguate functions

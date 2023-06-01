@@ -1,11 +1,11 @@
 #include "duckdb_python/jupyter_progress_bar_display.hpp"
-#include "duckdb_python/pyconnection.hpp"
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 
 namespace duckdb {
 
 unique_ptr<ProgressBarDisplay> JupyterProgressBarDisplay::Create() {
-	return make_unique<JupyterProgressBarDisplay>();
+	return make_uniq<JupyterProgressBarDisplay>();
 }
 
 void JupyterProgressBarDisplay::Initialize() {

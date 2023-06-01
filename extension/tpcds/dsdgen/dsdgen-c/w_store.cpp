@@ -219,7 +219,7 @@ int mk_w_store(void *info_arr, ds_key_t index) {
 	sprintf(szTemp2, "%05d", r->address.zip);
 	append_varchar(info, szTemp2);
 	append_varchar(info, r->address.country);
-	append_integer(info, r->address.gmt_offset);
+	append_integer_decimal(info, r->address.gmt_offset);
 	append_decimal(info, &r->dTaxPercentage);
 
 	append_row_end(info);

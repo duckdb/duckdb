@@ -5,16 +5,14 @@
 
 namespace duckdb {
 
-unique_ptr<SQLStatement> Transformer::TransformCheckpoint(duckdb_libpgquery::PGNode *node) {
-	auto checkpoint = (duckdb_libpgquery::PGCheckPointStmt *)node;
-
+unique_ptr<SQLStatement> Transformer::TransformCheckpoint(duckdb_libpgquery::PGCheckPointStmt &stmt) {
 	vector<unique_ptr<ParsedExpression>> children;
 	// transform into "CALL checkpoint()" or "CALL force_checkpoint()"
-	auto checkpoint_name = checkpoint->force ? "force_checkpoint" : "checkpoint";
-	auto result = make_unique<CallStatement>();
-	auto function = make_unique<FunctionExpression>(checkpoint_name, std::move(children));
-	if (checkpoint->name) {
-		function->children.push_back(make_unique<ConstantExpression>(Value(checkpoint->name)));
+	auto checkpoint_name = stmt.force ? "force_checkpoint" : "checkpoint";
+	auto result = make_uniq<CallStatement>();
+	auto function = make_uniq<FunctionExpression>(checkpoint_name, std::move(children));
+	if (stmt.name) {
+		function->children.push_back(make_uniq<ConstantExpression>(Value(stmt.name)));
 	}
 	result->function = std::move(function);
 	return std::move(result);

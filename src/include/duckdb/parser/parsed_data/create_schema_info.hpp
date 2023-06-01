@@ -18,13 +18,13 @@ struct CreateSchemaInfo : public CreateInfo {
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {
-		auto result = make_unique<CreateSchemaInfo>();
+		auto result = make_uniq<CreateSchemaInfo>();
 		CopyProperties(*result);
 		return std::move(result);
 	}
 
 	static unique_ptr<CreateSchemaInfo> Deserialize(Deserializer &deserializer) {
-		auto result = make_unique<CreateSchemaInfo>();
+		auto result = make_uniq<CreateSchemaInfo>();
 		result->DeserializeBase(deserializer);
 		return result;
 	}

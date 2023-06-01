@@ -67,8 +67,6 @@ test_that("uppercase data frames are queryable", {
   duckdb_unregister(con, "My_Mtcars")
 })
 
-
-
 test_that("experimental string handling works", {
   con <- dbConnect(duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))

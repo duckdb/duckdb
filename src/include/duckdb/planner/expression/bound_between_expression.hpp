@@ -14,6 +14,9 @@ namespace duckdb {
 
 class BoundBetweenExpression : public Expression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_BETWEEN;
+
+public:
 	BoundBetweenExpression(unique_ptr<Expression> input, unique_ptr<Expression> lower, unique_ptr<Expression> upper,
 	                       bool lower_inclusive, bool upper_inclusive);
 
@@ -26,7 +29,7 @@ public:
 public:
 	string ToString() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	bool Equals(const BaseExpression &other) const override;
 
 	unique_ptr<Expression> Copy() override;
 	void Serialize(FieldWriter &writer) const override;

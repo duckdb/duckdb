@@ -6,11 +6,11 @@
 namespace duckdb {
 
 unique_ptr<LogicalOperator> Binder::CreatePlan(BoundExpressionListRef &ref) {
-	auto root = make_unique_base<LogicalOperator, LogicalDummyScan>(GenerateTableIndex());
+	auto root = make_uniq_base<LogicalOperator, LogicalDummyScan>(GenerateTableIndex());
 	// values list, first plan any subqueries in the list
 	for (auto &expr_list : ref.values) {
 		for (auto &expr : expr_list) {
-			PlanSubqueries(&expr, &root);
+			PlanSubqueries(expr, root);
 		}
 	}
 	// now create a LogicalExpressionGet from the set of expressions
@@ -19,7 +19,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundExpressionListRef &ref) {
 	for (auto &expr : ref.values[0]) {
 		types.push_back(expr->return_type);
 	}
-	auto expr_get = make_unique<LogicalExpressionGet>(ref.bind_index, types, std::move(ref.values));
+	auto expr_get = make_uniq<LogicalExpressionGet>(ref.bind_index, types, std::move(ref.values));
 	expr_get->AddChild(std::move(root));
 	return std::move(expr_get);
 }

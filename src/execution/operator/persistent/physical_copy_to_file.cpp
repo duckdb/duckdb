@@ -3,6 +3,8 @@
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/file_opener.hpp"
+#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <algorithm>
 
@@ -40,7 +42,8 @@ public:
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-void MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
+
+void PhysicalCopyToFile::MoveTmpFile(ClientContext &context, const string &tmp_file_path) {
 	auto &fs = FileSystem::GetFileSystem(context);
 	auto file_path = tmp_file_path.substr(0, tmp_file_path.length() - 4);
 	if (fs.FileExists(file_path)) {
@@ -55,22 +58,21 @@ PhysicalCopyToFile::PhysicalCopyToFile(vector<LogicalType> types, CopyFunction f
       function(std::move(function_p)), bind_data(std::move(bind_data)), parallel(false) {
 }
 
-SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                        DataChunk &input) const {
-	auto &g = (CopyToFunctionGlobalState &)gstate;
-	auto &l = (CopyToFunctionLocalState &)lstate;
+SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &g = input.global_state.Cast<CopyToFunctionGlobalState>();
+	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
 
 	if (partition_output) {
-		l.part_buffer->Append(*l.part_buffer_append_state, input);
+		l.part_buffer->Append(*l.part_buffer_append_state, chunk);
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
 	{
 		lock_guard<mutex> glock(g.lock);
-		g.rows_copied += input.size();
+		g.rows_copied += chunk.size();
 	}
 	function.copy_to_sink(context, *bind_data, per_thread_output ? *l.global_state : *g.global_state, *l.local_state,
-	                      input);
+	                      chunk);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -96,8 +98,8 @@ static string CreateDirRecursive(const vector<idx_t> &cols, const vector<string>
 }
 
 void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
-	auto &g = (CopyToFunctionGlobalState &)gstate;
-	auto &l = (CopyToFunctionLocalState &)lstate;
+	auto &g = gstate.Cast<CopyToFunctionGlobalState>();
+	auto &l = lstate.Cast<CopyToFunctionLocalState>();
 
 	if (partition_output) {
 		auto &fs = FileSystem::GetFileSystem(context.client);
@@ -111,10 +113,10 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 		for (idx_t i = 0; i < partitions.size(); i++) {
 			string hive_path =
 			    CreateDirRecursive(partition_columns, names, partition_key_map[i]->values, trimmed_path, fs);
-			string full_path = fs.JoinPath(hive_path, "data_" + to_string(l.writer_offset) + "." + function.extension);
-			if (fs.FileExists(full_path) && !allow_overwrite) {
+			string full_path(filename_pattern.CreateFilename(fs, hive_path, function.extension, l.writer_offset));
+			if (fs.FileExists(full_path) && !overwrite_or_ignore) {
 				throw IOException("failed to create " + full_path +
-				                  ", file exists! Enable ALLOW_OVERWRITE option to force writing");
+				                  ", file exists! Enable OVERWRITE_OR_IGNORE option to force writing");
 			}
 			// Create a writer for the current file
 			auto fun_data_global = function.copy_to_initialize_global(context.client, *bind_data, full_path);
@@ -143,7 +145,7 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 
 SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                               GlobalSinkState &gstate_p) const {
-	auto &gstate = (CopyToFunctionGlobalState &)gstate_p;
+	auto &gstate = gstate_p.Cast<CopyToFunctionGlobalState>();
 	if (per_thread_output || partition_output) {
 		// already happened in combine
 		return SinkFinalizeType::READY;
@@ -162,32 +164,31 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 
 unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
 	if (partition_output) {
-		auto state = make_unique<CopyToFunctionLocalState>(nullptr);
+		auto state = make_uniq<CopyToFunctionLocalState>(nullptr);
 		{
-			auto &g = (CopyToFunctionGlobalState &)*sink_state;
+			auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 			lock_guard<mutex> glock(g.lock);
 			state->writer_offset = g.last_file_offset++;
 
-			state->part_buffer = make_unique<HivePartitionedColumnData>(context.client, expected_types,
-			                                                            partition_columns, g.partition_state);
-			state->part_buffer_append_state = make_unique<PartitionedColumnDataAppendState>();
+			state->part_buffer = make_uniq<HivePartitionedColumnData>(context.client, expected_types, partition_columns,
+			                                                          g.partition_state);
+			state->part_buffer_append_state = make_uniq<PartitionedColumnDataAppendState>();
 			state->part_buffer->InitializeAppendState(*state->part_buffer_append_state);
 		}
 		return std::move(state);
 	}
-	auto res = make_unique<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
+	auto res = make_uniq<CopyToFunctionLocalState>(function.copy_to_initialize_local(context, *bind_data));
 	if (per_thread_output) {
 		idx_t this_file_offset;
 		{
-			auto &g = (CopyToFunctionGlobalState &)*sink_state;
+			auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 			lock_guard<mutex> glock(g.lock);
 			this_file_offset = g.last_file_offset++;
 		}
 		auto &fs = FileSystem::GetFileSystem(context.client);
-		string output_path =
-		    fs.JoinPath(file_path, StringUtil::Format("out_%llu", this_file_offset) + "." + function.extension);
-		if (fs.FileExists(output_path) && !allow_overwrite) {
-			throw IOException("%s exists! Enable ALLOW_OVERWRITE option to force writing", output_path);
+		string output_path(filename_pattern.CreateFilename(fs, file_path, function.extension, this_file_offset));
+		if (fs.FileExists(output_path) && !overwrite_or_ignore) {
+			throw IOException("%s exists! Enable OVERWRITE_OR_IGNORE option to force writing", output_path);
 		}
 		res->global_state = function.copy_to_initialize_global(context.client, *bind_data, output_path);
 	}
@@ -199,22 +200,21 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 	if (partition_output || per_thread_output) {
 		auto &fs = FileSystem::GetFileSystem(context);
 
-		if (fs.FileExists(file_path) && !allow_overwrite) {
-			throw IOException("%s exists! Enable ALLOW_OVERWRITE option to force writing", file_path);
+		if (fs.FileExists(file_path) && !overwrite_or_ignore) {
+			throw IOException("%s exists! Enable OVERWRITE_OR_IGNORE option to force writing", file_path);
 		}
 		if (!fs.DirectoryExists(file_path)) {
 			fs.CreateDirectory(file_path);
-		} else if (!allow_overwrite) {
+		} else if (!overwrite_or_ignore) {
 			idx_t n_files = 0;
-			fs.ListFiles(
-			    file_path, [&n_files](const string &path, bool) { n_files++; }, FileOpener::Get(context));
+			fs.ListFiles(file_path, [&n_files](const string &path, bool) { n_files++; });
 			if (n_files > 0) {
-				throw IOException("Directory %s is not empty! Enable ALLOW_OVERWRITE option to force writing",
+				throw IOException("Directory %s is not empty! Enable OVERWRITE_OR_IGNORE option to force writing",
 				                  file_path);
 			}
 		}
 
-		auto state = make_unique<CopyToFunctionGlobalState>(nullptr);
+		auto state = make_uniq<CopyToFunctionGlobalState>(nullptr);
 
 		if (partition_output) {
 			state->partition_state = make_shared<GlobalHivePartitionState>();
@@ -223,35 +223,21 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		return std::move(state);
 	}
 
-	return make_unique<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
+	return make_uniq<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data, file_path));
 }
 
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class CopyToFileState : public GlobalSourceState {
-public:
-	CopyToFileState() : finished(false) {
-	}
 
-	bool finished;
-};
-
-unique_ptr<GlobalSourceState> PhysicalCopyToFile::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<CopyToFileState>();
-}
-
-void PhysicalCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                 LocalSourceState &lstate) const {
-	auto &state = (CopyToFileState &)gstate;
-	auto &g = (CopyToFunctionGlobalState &)*sink_state;
-	if (state.finished) {
-		return;
-	}
+SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk,
+                                             OperatorSourceInput &input) const {
+	auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 
 	chunk.SetCardinality(1);
 	chunk.SetValue(0, 0, Value::BIGINT(g.rows_copied));
-	state.finished = true;
+
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

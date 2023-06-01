@@ -31,6 +31,9 @@ const char *ToString(WindowBoundary value);
 //! they inherit from them.
 class WindowExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::WINDOW;
+
+public:
 	WindowExpression(ExpressionType type, string catalog_name, string schema_name, const string &function_name);
 
 	//! Catalog of the aggregate function
@@ -67,7 +70,7 @@ public:
 	//! Convert the Expression to a String
 	string ToString() const override;
 
-	static bool Equal(const WindowExpression *a, const WindowExpression *b);
+	static bool Equal(const WindowExpression &a, const WindowExpression &b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
@@ -76,14 +79,18 @@ public:
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
 
+	static ExpressionType WindowToExpressionType(string &fun_name);
+
 public:
 	template <class T, class BASE, class ORDER_NODE>
 	static string ToString(const T &entry, const string &schema, const string &function_name) {
 		// Start with function call
 		string result = schema.empty() ? function_name : schema + "." + function_name;
 		result += "(";
-		result += StringUtil::Join(entry.children, entry.children.size(), ", ",
-		                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
+		if (entry.children.size()) {
+			result += StringUtil::Join(entry.children, entry.children.size(), ", ",
+			                           [](const unique_ptr<BASE> &child) { return child->ToString(); });
+		}
 		// Lead/Lag extra arguments
 		if (entry.offset_expr.get()) {
 			result += ", ";

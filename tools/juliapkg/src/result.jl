@@ -148,9 +148,9 @@ function convert_vector(
     ::Type{SRC},
     ::Type{DST}
 ) where {SRC, DST}
-    array = get_array(vector, SRC)
+    array = get_array(vector, SRC, size)
     if !all_valid
-        validity = get_validity(vector)
+        validity = get_validity(vector, size)
     end
     for i in 1:size
         if all_valid || isvalid(validity, i)
@@ -175,7 +175,7 @@ function convert_vector_string(
     raw_ptr = duckdb_vector_get_data(vector.handle)
     ptr = Base.unsafe_convert(Ptr{duckdb_string_t}, raw_ptr)
     if !all_valid
-        validity = get_validity(vector)
+        validity = get_validity(vector, size)
     end
     for i in 1:size
         if all_valid || isvalid(validity, i)
@@ -218,9 +218,9 @@ function convert_vector_list(
         ldata.target_type
     )
 
-    array = get_array(vector, SRC)
+    array = get_array(vector, SRC, size)
     if !all_valid
-        validity = get_validity(vector)
+        validity = get_validity(vector, size)
     end
     for i in 1:size
         if all_valid || isvalid(validity, i)
@@ -276,7 +276,7 @@ function convert_vector_struct(
     child_arrays = convert_struct_children(column_data, vector, size)
 
     if !all_valid
-        validity = get_validity(vector)
+        validity = get_validity(vector, size)
     end
     for i in 1:size
         if all_valid || isvalid(validity, i)
@@ -305,7 +305,7 @@ function convert_vector_union(
     child_arrays = convert_struct_children(column_data, vector, size)
 
     if !all_valid
-        validity = get_validity(vector)
+        validity = get_validity(vector, size)
     end
     for row in 1:size
         # For every row/record
@@ -359,9 +359,9 @@ function convert_vector_map(
     keys = child_arrays[1]
     values = child_arrays[2]
 
-    array = get_array(vector, SRC)
+    array = get_array(vector, SRC, size)
     if !all_valid
-        validity = get_validity(vector)
+        validity = get_validity(vector, size)
     end
     for i in 1:size
         if all_valid || isvalid(validity, i)
@@ -816,6 +816,8 @@ A `DuckDB.Stmt` object can be closed (resources freed) using `DBInterface.close!
 DBInterface.prepare(con::Connection, sql::AbstractString, result_type::Type) = Stmt(con, sql, result_type)
 DBInterface.prepare(con::Connection, sql::AbstractString) = DBInterface.prepare(con, sql, MaterializedResult)
 DBInterface.prepare(db::DB, sql::AbstractString) = DBInterface.prepare(db.main_connection, sql)
+DBInterface.prepare(db::DB, sql::AbstractString, result_type::Type) =
+    DBInterface.prepare(db.main_connection, sql, result_type)
 
 """
     DBInterface.execute(db::DuckDB.DB, sql::String, [params])

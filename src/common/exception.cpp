@@ -58,7 +58,27 @@ string Exception::GetStackTrace(int max_depth) {
 #endif
 }
 
-string Exception::ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values) {
+string Exception::ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values) {
+#ifdef DEBUG
+	// Verify that we have the required amount of values for the message
+	idx_t parameter_count = 0;
+	for (idx_t i = 0; i < msg.size(); i++) {
+		if (msg[i] != '%') {
+			continue;
+		}
+		if (i < msg.size() && msg[i + 1] == '%') {
+			i++;
+			continue;
+		}
+		parameter_count++;
+	}
+	if (parameter_count != values.size()) {
+		throw InternalException("Primary exception: %s\nSecondary exception in ConstructMessageRecursive: Expected %d "
+		                        "parameters, received %d",
+		                        msg.c_str(), parameter_count, values.size());
+	}
+
+#endif
 	return ExceptionFormatValue::Format(msg, values);
 }
 
@@ -321,6 +341,10 @@ BinderException::BinderException(const string &msg) : StandardException(Exceptio
 }
 
 IOException::IOException(const string &msg) : Exception(ExceptionType::IO, msg) {
+}
+
+MissingExtensionException::MissingExtensionException(const string &msg)
+    : Exception(ExceptionType::MISSING_EXTENSION, msg) {
 }
 
 SerializationException::SerializationException(const string &msg) : Exception(ExceptionType::SERIALIZATION, msg) {

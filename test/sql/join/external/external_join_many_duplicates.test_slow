@@ -8,17 +8,42 @@ require 64bit
 statement ok
 pragma verify_external
 
+statement ok
+pragma verify_parallelism
+
+statement ok
+create table test1 as select concat(range::VARCHAR, 'x', repeat('7', 1)) i from range(100, 132)
+
+statement ok
+create table test2 as select concat(range::VARCHAR, 'x', repeat('7', 1)) i from range(100, 132)
+
+statement ok
+insert into test2 select range::VARCHAR i from range(1000000000000, 1000000100000)
+
+query T
+select count(*) from test1 join test2 using (i)
+----
+32
+
 # 10M build side with many useless duplicates (stress tests the compare-and-swap pointer table construction)
 statement ok
-create table t1 as select range % 4 i from range(10000000)
+create sequence seq1 start 1000;
 
-# insert the stuff we'll actually be matching into the build side
 statement ok
-insert into t1 select range from range(1000, 2000)
+create table t1 as select case
+    when range % 10000 = 0 then nextval('seq1')
+    else range % 1000 end as i
+from range(10000000)
 
 # 100M probe side
 statement ok
-create table t2 as select range i from range(1000, 100000000)
+create sequence seq2 start 1000;
+
+statement ok
+create table t2 as select case
+    when range % 100000 = 0 then nextval('seq2')
+    else range end as i
+from range(100000000, 200000000)
 
 query T
 select count(*) from t1 join t2 using (i)

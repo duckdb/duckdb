@@ -200,7 +200,7 @@ public:
 
 template <class T>
 unique_ptr<SegmentScanState> PatasInitScan(ColumnSegment &segment) {
-	auto result = make_unique_base<SegmentScanState, PatasScanState<T>>(segment);
+	auto result = make_uniq_base<SegmentScanState, PatasScanState<T>>(segment);
 	return result;
 }
 

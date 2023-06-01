@@ -9,6 +9,7 @@
 #pragma once
 
 #include "parquet_reader.hpp"
+#include "duckdb/function/function_set.hpp"
 
 namespace duckdb {
 

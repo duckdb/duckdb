@@ -14,8 +14,8 @@
 
 // it was moved to here because the UDF API must know the structure members
 struct sqlite3 {
-	std::unique_ptr<duckdb::DuckDB> db;
-	std::unique_ptr<duckdb::Connection> con;
+	duckdb::unique_ptr<duckdb::DuckDB> db;
+	duckdb::unique_ptr<duckdb::Connection> con;
 	duckdb::PreservedError last_error;
 	int64_t last_changes = 0;
 	int64_t total_changes = 0;

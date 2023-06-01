@@ -19,7 +19,7 @@ class WindowExpression;
 class BoundSelectNode;
 
 struct BoundGroupInformation {
-	expression_map_t<idx_t> map;
+	parsed_expression_map_t<idx_t> map;
 	case_insensitive_map_t<idx_t> alias_map;
 };
 
@@ -40,10 +40,10 @@ public:
 	}
 
 protected:
-	BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
+	BindResult BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
 	                          bool root_expression = false) override;
 
-	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry *function, idx_t depth) override;
+	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth) override;
 
 	bool inside_window;
 	bool bound_aggregate = false;
@@ -53,12 +53,14 @@ protected:
 	case_insensitive_map_t<idx_t> alias_map;
 
 protected:
-	BindResult BindColumnRef(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth);
+	BindResult BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth);
 	BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth) override;
 	BindResult BindWindow(WindowExpression &expr, idx_t depth);
 
 	idx_t TryBindGroup(ParsedExpression &expr, idx_t depth);
 	BindResult BindGroup(ParsedExpression &expr, idx_t depth, idx_t group_index);
+
+	bool QualifyColumnAlias(const ColumnRefExpression &colref) override;
 };
 
 } // namespace duckdb

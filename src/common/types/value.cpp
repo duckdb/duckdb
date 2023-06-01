@@ -730,7 +730,7 @@ Value Value::EMPTYLIST(const LogicalType &child_type) {
 Value Value::BLOB(const_data_ptr_t data, idx_t len) {
 	Value result(LogicalType::BLOB);
 	result.is_null = false;
-	result.value_info_ = make_shared<StringValueInfo>(string((const char *)data, len));
+	result.value_info_ = make_shared<StringValueInfo>(string(const_char_ptr_cast(data), len));
 	return result;
 }
 
@@ -744,7 +744,7 @@ Value Value::BLOB(const string &data) {
 Value Value::BIT(const_data_ptr_t data, idx_t len) {
 	Value result(LogicalType::BIT);
 	result.is_null = false;
-	result.value_info_ = make_shared<StringValueInfo>(string((const char *)data, len));
+	result.value_info_ = make_shared<StringValueInfo>(string(const_char_ptr_cast(data), len));
 	return result;
 }
 
@@ -1319,6 +1319,7 @@ string Value::ToSQLString() const {
 	case LogicalTypeId::BLOB:
 		return "'" + ToString() + "'::" + type_.ToString();
 	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::ENUM:
 		return "'" + StringUtil::Replace(ToString(), "'", "''") + "'";
 	case LogicalTypeId::STRUCT: {
 		string ret = "{";
@@ -1801,7 +1802,12 @@ void Value::FormatSerialize(FormatSerializer &serializer) const {
 			serializer.WriteProperty("value", value_.interval);
 			break;
 		case PhysicalType::VARCHAR:
-			serializer.WriteProperty("value", StringValue::Get(*this));
+			if (type_.id() == LogicalTypeId::BLOB) {
+				auto blob_str = Blob::ToString(StringValue::Get(*this));
+				serializer.WriteProperty("value", blob_str);
+			} else {
+				serializer.WriteProperty("value", StringValue::Get(*this));
+			}
 			break;
 		default: {
 			Vector v(*this);
@@ -1848,6 +1854,9 @@ Value Value::FormatDeserialize(FormatDeserializer &deserializer) {
 	case PhysicalType::INT64:
 		new_value.value_.bigint = deserializer.ReadProperty<int64_t>("value");
 		break;
+	case PhysicalType::INT128:
+		new_value.value_.hugeint = deserializer.ReadProperty<hugeint_t>("value");
+		break;
 	case PhysicalType::FLOAT:
 		new_value.value_.float_ = deserializer.ReadProperty<float>("value");
 		break;
@@ -1857,9 +1866,14 @@ Value Value::FormatDeserialize(FormatDeserializer &deserializer) {
 	case PhysicalType::INTERVAL:
 		new_value.value_.interval = deserializer.ReadProperty<interval_t>("value");
 		break;
-	case PhysicalType::VARCHAR:
-		new_value.value_info_ = make_shared<StringValueInfo>(deserializer.ReadProperty<string>("value"));
-		break;
+	case PhysicalType::VARCHAR: {
+		auto str = deserializer.ReadProperty<string>("value");
+		if (type.id() == LogicalTypeId::BLOB) {
+			new_value.value_info_ = make_shared<StringValueInfo>(Blob::ToBlob(str));
+		} else {
+			new_value.value_info_ = make_shared<StringValueInfo>(str);
+		}
+	} break;
 	default: {
 		Vector v(type);
 		v.FormatDeserialize(deserializer, 1);

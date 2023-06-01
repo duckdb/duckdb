@@ -93,7 +93,7 @@ TEST_CASE("Test Logical Types C API", "[capi]") {
 
 TEST_CASE("Test DataChunk C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 	duckdb_state status;
 
 	REQUIRE(tester.OpenDatabase(nullptr));
@@ -193,9 +193,87 @@ TEST_CASE("Test DataChunk C API", "[capi]") {
 	duckdb_destroy_logical_type(&types[1]);
 }
 
+TEST_CASE("Test DataChunk varchar result fetch in C API", "[capi]") {
+	if (duckdb_vector_size() < 64) {
+		return;
+	}
+
+	duckdb_database database;
+	duckdb_connection connection;
+	duckdb_state state;
+
+	state = duckdb_open(nullptr, &database);
+	REQUIRE(state == DuckDBSuccess);
+	state = duckdb_connect(database, &connection);
+	REQUIRE(state == DuckDBSuccess);
+
+	constexpr const char *VARCHAR_TEST_QUERY = "select case when i != 0 and i % 42 = 0 then NULL else repeat(chr((65 + "
+	                                           "(i % 26))::INTEGER), (4 + (i % 12))) end from range(5000) tbl(i);";
+
+	// fetch a small result set
+	duckdb_result result;
+	state = duckdb_query(connection, VARCHAR_TEST_QUERY, &result);
+	REQUIRE(state == DuckDBSuccess);
+
+	REQUIRE(duckdb_column_count(&result) == 1);
+	REQUIRE(duckdb_row_count(&result) == 5000);
+	REQUIRE(duckdb_result_error(&result) == nullptr);
+
+	idx_t expected_chunk_count = (5000 / STANDARD_VECTOR_SIZE) + (5000 % STANDARD_VECTOR_SIZE != 0);
+
+	REQUIRE(duckdb_result_chunk_count(result) == expected_chunk_count);
+
+	auto chunk = duckdb_result_get_chunk(result, 0);
+
+	REQUIRE(duckdb_data_chunk_get_column_count(chunk) == 1);
+	REQUIRE(STANDARD_VECTOR_SIZE < 5000);
+	REQUIRE(duckdb_data_chunk_get_size(chunk) == STANDARD_VECTOR_SIZE);
+	duckdb_destroy_data_chunk(&chunk);
+
+	idx_t tuple_index = 0;
+	auto chunk_amount = duckdb_result_chunk_count(result);
+	for (idx_t chunk_index = 0; chunk_index < chunk_amount; chunk_index++) {
+		chunk = duckdb_result_get_chunk(result, chunk_index);
+		// Our result only has one column
+		auto vector = duckdb_data_chunk_get_vector(chunk, 0);
+		auto validity = duckdb_vector_get_validity(vector);
+		auto string_data = (duckdb_string_t *)duckdb_vector_get_data(vector);
+
+		auto tuples_in_chunk = duckdb_data_chunk_get_size(chunk);
+		for (idx_t i = 0; i < tuples_in_chunk; i++, tuple_index++) {
+			if (!duckdb_validity_row_is_valid(validity, i)) {
+				// This entry is NULL
+				REQUIRE((tuple_index != 0 && tuple_index % 42 == 0));
+				continue;
+			}
+			idx_t expected_length = (tuple_index % 12) + 4;
+			char expected_character = (tuple_index % 26) + 'A';
+
+			// TODO: how does the c-api handle non-flat vectors?
+			auto tuple = string_data[i];
+			auto length = tuple.value.inlined.length;
+			REQUIRE(length == expected_length);
+			if (duckdb_string_is_inlined(tuple)) {
+				// The data is small enough to fit in the string_t, it does not have a separate allocation
+				for (idx_t string_index = 0; string_index < length; string_index++) {
+					REQUIRE(tuple.value.inlined.inlined[string_index] == expected_character);
+				}
+			} else {
+				for (idx_t string_index = 0; string_index < length; string_index++) {
+					REQUIRE(tuple.value.pointer.ptr[string_index] == expected_character);
+				}
+			}
+		}
+		duckdb_destroy_data_chunk(&chunk);
+	}
+	duckdb_destroy_result(&result);
+	duckdb_disconnect(&connection);
+	duckdb_close(&database);
+}
+
 TEST_CASE("Test DataChunk result fetch in C API", "[capi]") {
 	CAPITester tester;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	if (duckdb_vector_size() < 64) {
 		return;
@@ -254,6 +332,7 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	REQUIRE(duckdb_list_vector_set_size(list_vector, 123) == duckdb_state::DuckDBSuccess);
 	REQUIRE(duckdb_list_vector_get_size(list_vector) == 123);
 
+#if STANDARD_VECTOR_SIZE > 2
 	auto entries = (duckdb_list_entry *)duckdb_vector_get_data(list_vector);
 	entries[0].offset = 0;
 	entries[0].length = 20;
@@ -266,6 +345,7 @@ TEST_CASE("Test DataChunk populate ListVector in C API", "[capi]") {
 	for (int i = 0; i < 123; i++) {
 		REQUIRE(ListVector::GetEntry(vector).GetValue(i) == i);
 	}
+#endif
 
 	duckdb_destroy_data_chunk(&chunk);
 	duckdb_destroy_logical_type(&list_type);

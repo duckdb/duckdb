@@ -40,7 +40,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 				case JoinType::ANTI: {
 					// when the right child has data, return the left child
 					// when the right child has no data, return an empty set
-					auto limit = make_unique<LogicalLimit>(1, 0, nullptr, nullptr);
+					auto limit = make_uniq<LogicalLimit>(1, 0, nullptr, nullptr);
 					limit->AddChild(std::move(join.children[1]));
 					auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(limit));
 					*node_ptr = std::move(cross_product);
@@ -76,7 +76,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 					case JoinType::SEMI: {
 						// when the right child has data, return the left child
 						// when the right child has no data, return an empty set
-						auto limit = make_unique<LogicalLimit>(1, 0, nullptr, nullptr);
+						auto limit = make_uniq<LogicalLimit>(1, 0, nullptr, nullptr);
 						limit->AddChild(std::move(join.children[1]));
 						auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(limit));
 						*node_ptr = std::move(cross_product);
@@ -196,10 +196,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
-		PropagateStatistics((LogicalComparisonJoin &)join, node_ptr);
+		PropagateStatistics(join.Cast<LogicalComparisonJoin>(), node_ptr);
 		break;
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
-		PropagateStatistics((LogicalAnyJoin &)join, node_ptr);
+		PropagateStatistics(join.Cast<LogicalAnyJoin>(), node_ptr);
 		break;
 	default:
 		break;

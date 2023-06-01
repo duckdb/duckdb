@@ -1,11 +1,11 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
-#include "duckdb/optimizer/optimizer_extension.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 using namespace duckdb;
 
@@ -30,7 +30,7 @@ public:
 
 	static bool HasParquetScan(LogicalOperator &op) {
 		if (op.type == LogicalOperatorType::LOGICAL_GET) {
-			auto &get = (LogicalGet &)op;
+			auto &get = op.Cast<LogicalGet>();
 			return get.function.name == "parquet_scan";
 		}
 		for (auto &child : op.children) {
@@ -63,7 +63,7 @@ public:
 	}
 
 	static void WaggleOptimizeFunction(ClientContext &context, OptimizerExtensionInfo *info,
-	                                   unique_ptr<LogicalOperator> &plan) {
+	                                   duckdb::unique_ptr<LogicalOperator> &plan) {
 		if (!HasParquetScan(*plan)) {
 			return;
 		}
@@ -102,7 +102,7 @@ public:
 		WriteChecked(sockfd, &len, sizeof(idx_t));
 		WriteChecked(sockfd, data.data.get(), len);
 
-		auto chunk_collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator());
+		auto chunk_collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator());
 		idx_t n_chunks;
 		ReadChecked(sockfd, &n_chunks, sizeof(idx_t));
 		for (idx_t i = 0; i < n_chunks; i++) {
@@ -111,7 +111,7 @@ public:
 			auto buffer = malloc(chunk_len);
 			D_ASSERT(buffer);
 			ReadChecked(sockfd, buffer, chunk_len);
-			BufferedDeserializer deserializer((data_ptr_t)buffer, chunk_len);
+			BufferedDeserializer deserializer(data_ptr_cast(buffer), chunk_len);
 			DataChunk chunk;
 
 			chunk.Deserialize(deserializer);
@@ -121,7 +121,7 @@ public:
 		}
 
 		auto types = chunk_collection->Types();
-		plan = make_unique<LogicalColumnDataGet>(0, types, std::move(chunk_collection));
+		plan = make_uniq<LogicalColumnDataGet>(0, types, std::move(chunk_collection));
 
 		len = 0;
 		(void)len;

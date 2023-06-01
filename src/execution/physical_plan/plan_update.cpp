@@ -9,8 +9,8 @@ namespace duckdb {
 unique_ptr<PhysicalOperator> DuckCatalog::PlanUpdate(ClientContext &context, LogicalUpdate &op,
                                                      unique_ptr<PhysicalOperator> plan) {
 	auto update =
-	    make_unique<PhysicalUpdate>(op.types, *op.table, op.table->GetStorage(), op.columns, std::move(op.expressions),
-	                                std::move(op.bound_defaults), op.estimated_cardinality, op.return_chunk);
+	    make_uniq<PhysicalUpdate>(op.types, op.table, op.table.GetStorage(), op.columns, std::move(op.expressions),
+	                              std::move(op.bound_defaults), op.estimated_cardinality, op.return_chunk);
 
 	update->update_is_del_and_insert = op.update_is_del_and_insert;
 	update->children.push_back(std::move(plan));
@@ -23,7 +23,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalUpdate &op
 	auto plan = CreatePlan(*op.children[0]);
 
 	dependencies.AddDependency(op.table);
-	return op.table->catalog->PlanUpdate(context, op, std::move(plan));
+	return op.table.catalog.PlanUpdate(context, op, std::move(plan));
 }
 
 } // namespace duckdb

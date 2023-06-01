@@ -60,7 +60,7 @@ using namespace cpp11::literals;
 	return StringsToSexp({json});
 }
 
-static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const string &query, idx_t n_param) {
+static cpp11::list construct_retlist(duckdb::unique_ptr<PreparedStatement> stmt, const string &query, idx_t n_param) {
 	cpp11::writable::list retlist;
 	retlist.reserve(6);
 	retlist.push_back({"str"_nm = query});
@@ -98,7 +98,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 	}
 
 	auto rel = conn->conn->TableFunction("from_substrait", {Value::BLOB(RAW_POINTER(query), LENGTH(query))});
-	auto relation_stmt = make_unique<RelationStatement>(rel);
+	auto relation_stmt = make_uniq<RelationStatement>(rel);
 	relation_stmt->n_param = 0;
 	relation_stmt->query = "";
 	auto stmt = conn->conn->Prepare(std::move(relation_stmt));
@@ -115,7 +115,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 	}
 
 	auto rel = conn->conn->TableFunction("from_substrait_json", {Value(json)});
-	auto relation_stmt = make_unique<RelationStatement>(rel);
+	auto relation_stmt = make_uniq<RelationStatement>(rel);
 	relation_stmt->n_param = 0;
 	relation_stmt->query = "";
 	auto stmt = conn->conn->Prepare(std::move(relation_stmt));

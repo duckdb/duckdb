@@ -18,8 +18,8 @@ public:
 	TableFunctionBinder(Binder &binder, ClientContext &context);
 
 protected:
-	BindResult BindColumnReference(ColumnRefExpression &expr, idx_t depth);
-	BindResult BindExpression(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression = false) override;
+	BindResult BindColumnReference(ColumnRefExpression &expr, idx_t depth, bool root_expression);
+	BindResult BindExpression(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression = false) override;
 
 	string UnsupportedAggregateMessage() override;
 };

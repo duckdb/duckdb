@@ -193,7 +193,7 @@ void duckdb_r_decorate(const LogicalType &type, const SEXP dest, bool integer64)
 }
 
 SEXP ToRString(const string_t &input) {
-	auto data = input.GetDataUnsafe();
+	auto data = input.GetData();
 	auto len = input.GetSize();
 	idx_t has_null_byte = 0;
 	for (idx_t c = 0; c < len; c++) {
@@ -423,7 +423,7 @@ void duckdb_r_transform(Vector &src_vec, const SEXP dest, idx_t dest_offset, idx
 				if (!rawval) {
 					throw std::bad_alloc();
 				}
-				memcpy(RAW_POINTER(rawval), src_ptr[row_idx].GetDataUnsafe(), src_ptr[row_idx].GetSize());
+				memcpy(RAW_POINTER(rawval), src_ptr[row_idx].GetData(), src_ptr[row_idx].GetSize());
 				SET_VECTOR_ELT(dest, dest_offset + row_idx, rawval);
 			}
 		}

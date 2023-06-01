@@ -15,6 +15,7 @@ add_library_unity(
   logical_delete.cpp
   logical_delim_get.cpp
   logical_delim_join.cpp
+  logical_dependent_join.cpp
   logical_distinct.cpp
   logical_dummy_scan.cpp
   logical_empty_result.cpp
@@ -30,6 +31,7 @@ add_library_unity(
   logical_limit.cpp
   logical_limit_percent.cpp
   logical_order.cpp
+  logical_pivot.cpp
   logical_positional_join.cpp
   logical_pragma.cpp
   logical_prepare.cpp

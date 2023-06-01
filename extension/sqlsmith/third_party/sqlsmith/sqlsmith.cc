@@ -22,6 +22,8 @@
 #include "duckdb.hh"
 #include "sqlsmith.hh"
 
+#include "duckdb/common/vector.hpp"
+
 using namespace std;
 
 using namespace std::chrono;
@@ -93,7 +95,7 @@ int32_t run_sqlsmith(duckdb::DatabaseInstance &database, SQLSmithOptions opt) {
 		smith::rng.seed(opt.seed >= 0 ? opt.seed : GETPID());
 		//		}
 
-		vector<shared_ptr<logger>> loggers;
+		duckdb::vector<shared_ptr<logger>> loggers;
 
 		loggers.push_back(make_shared<impedance_feedback>());
 

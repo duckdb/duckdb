@@ -4,6 +4,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
@@ -17,7 +18,7 @@ bool StatisticsPropagator::ExpressionIsConstant(Expression &expr, const Value &v
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT) {
 		return false;
 	}
-	auto &bound_constant = (BoundConstantExpression &)expr;
+	auto &bound_constant = expr.Cast<BoundConstantExpression>();
 	D_ASSERT(bound_constant.value.type() == val.type());
 	return Value::NotDistinctFrom(bound_constant.value, val);
 }
@@ -26,7 +27,7 @@ bool StatisticsPropagator::ExpressionIsConstantOrNull(Expression &expr, const Va
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return false;
 	}
-	auto &bound_function = (BoundFunctionExpression &)expr;
+	auto &bound_function = expr.Cast<BoundFunctionExpression>();
 	return ConstantOrNull::IsConstantOrNull(bound_function, val);
 }
 
@@ -154,25 +155,25 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &left, Expression &
 	// any column ref involved in a comparison will not be null after the comparison
 	bool compare_distinct = IsCompareDistinct(comparison_type);
 	if (!compare_distinct && left.type == ExpressionType::BOUND_COLUMN_REF) {
-		SetStatisticsNotNull(((BoundColumnRefExpression &)left).binding);
+		SetStatisticsNotNull((left.Cast<BoundColumnRefExpression>()).binding);
 	}
 	if (!compare_distinct && right.type == ExpressionType::BOUND_COLUMN_REF) {
-		SetStatisticsNotNull(((BoundColumnRefExpression &)right).binding);
+		SetStatisticsNotNull((right.Cast<BoundColumnRefExpression>()).binding);
 	}
 	// check if this is a comparison between a constant and a column ref
-	BoundConstantExpression *constant = nullptr;
-	BoundColumnRefExpression *columnref = nullptr;
+	optional_ptr<BoundConstantExpression> constant;
+	optional_ptr<BoundColumnRefExpression> columnref;
 	if (left.type == ExpressionType::VALUE_CONSTANT && right.type == ExpressionType::BOUND_COLUMN_REF) {
-		constant = (BoundConstantExpression *)&left;
-		columnref = (BoundColumnRefExpression *)&right;
+		constant = &left.Cast<BoundConstantExpression>();
+		columnref = &right.Cast<BoundColumnRefExpression>();
 		comparison_type = FlipComparisonExpression(comparison_type);
 	} else if (left.type == ExpressionType::BOUND_COLUMN_REF && right.type == ExpressionType::VALUE_CONSTANT) {
-		columnref = (BoundColumnRefExpression *)&left;
-		constant = (BoundConstantExpression *)&right;
+		columnref = &left.Cast<BoundColumnRefExpression>();
+		constant = &right.Cast<BoundConstantExpression>();
 	} else if (left.type == ExpressionType::BOUND_COLUMN_REF && right.type == ExpressionType::BOUND_COLUMN_REF) {
 		// comparison between two column refs
-		auto &left_column_ref = (BoundColumnRefExpression &)left;
-		auto &right_column_ref = (BoundColumnRefExpression &)right;
+		auto &left_column_ref = left.Cast<BoundColumnRefExpression>();
+		auto &right_column_ref = right.Cast<BoundColumnRefExpression>();
 		auto lentry = statistics_map.find(left_column_ref.binding);
 		auto rentry = statistics_map.find(right_column_ref.binding);
 		if (lentry == statistics_map.end() || rentry == statistics_map.end()) {
@@ -198,13 +199,13 @@ void StatisticsPropagator::UpdateFilterStatistics(Expression &condition) {
 	// if we find a comparison in the form of e.g. "i=3", we can update our statistics for that column
 	switch (condition.GetExpressionClass()) {
 	case ExpressionClass::BOUND_BETWEEN: {
-		auto &between = (BoundBetweenExpression &)condition;
+		auto &between = condition.Cast<BoundBetweenExpression>();
 		UpdateFilterStatistics(*between.input, *between.lower, between.LowerComparisonType());
 		UpdateFilterStatistics(*between.input, *between.upper, between.UpperComparisonType());
 		break;
 	}
 	case ExpressionClass::BOUND_COMPARISON: {
-		auto &comparison = (BoundComparisonExpression &)condition;
+		auto &comparison = condition.Cast<BoundComparisonExpression>();
 		UpdateFilterStatistics(*comparison.left, *comparison.right, comparison.type);
 		break;
 	}
@@ -219,7 +220,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 	node_stats = PropagateStatistics(filter.children[0]);
 	if (filter.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
 		ReplaceWithEmptyResult(*node_ptr);
-		return make_unique<NodeStatistics>(0, 0);
+		return make_uniq<NodeStatistics>(0, 0);
 	}
 
 	// then propagate to each of the expressions
@@ -241,7 +242,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
 		           ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
 			// filter is always false or null; this entire filter should be replaced by an empty result block
 			ReplaceWithEmptyResult(*node_ptr);
-			return make_unique<NodeStatistics>(0, 0);
+			return make_uniq<NodeStatistics>(0, 0);
 		} else {
 			// cannot prune this filter: propagate statistics from the filter
 			UpdateFilterStatistics(*condition);

@@ -22,30 +22,30 @@ string BoundCaseExpression::ToString() const {
 	return CaseExpression::ToString<BoundCaseExpression, Expression>(*this);
 }
 
-bool BoundCaseExpression::Equals(const BaseExpression *other_p) const {
+bool BoundCaseExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto &other = (BoundCaseExpression &)*other_p;
+	auto &other = other_p.Cast<BoundCaseExpression>();
 	if (case_checks.size() != other.case_checks.size()) {
 		return false;
 	}
 	for (idx_t i = 0; i < case_checks.size(); i++) {
-		if (!Expression::Equals(case_checks[i].when_expr.get(), other.case_checks[i].when_expr.get())) {
+		if (!Expression::Equals(*case_checks[i].when_expr, *other.case_checks[i].when_expr)) {
 			return false;
 		}
-		if (!Expression::Equals(case_checks[i].then_expr.get(), other.case_checks[i].then_expr.get())) {
+		if (!Expression::Equals(*case_checks[i].then_expr, *other.case_checks[i].then_expr)) {
 			return false;
 		}
 	}
-	if (!Expression::Equals(else_expr.get(), other.else_expr.get())) {
+	if (!Expression::Equals(*else_expr, *other.else_expr)) {
 		return false;
 	}
 	return true;
 }
 
 unique_ptr<Expression> BoundCaseExpression::Copy() {
-	auto new_case = make_unique<BoundCaseExpression>(return_type);
+	auto new_case = make_uniq<BoundCaseExpression>(return_type);
 	for (auto &check : case_checks) {
 		BoundCaseCheck new_check;
 		new_check.when_expr = check.when_expr->Copy();
@@ -87,7 +87,7 @@ unique_ptr<Expression> BoundCaseExpression::Deserialize(ExpressionDeserializatio
 	auto case_checks = reader.ReadRequiredSerializableList<BoundCaseCheck, BoundCaseCheck>(state.gstate);
 	auto else_expr = reader.ReadRequiredSerializable<Expression>(state.gstate);
 
-	auto result = make_unique<BoundCaseExpression>(return_type);
+	auto result = make_uniq<BoundCaseExpression>(return_type);
 	result->else_expr = std::move(else_expr);
 	result->case_checks = std::move(case_checks);
 	return std::move(result);

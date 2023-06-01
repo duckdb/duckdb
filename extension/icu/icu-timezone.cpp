@@ -12,16 +12,16 @@ namespace duckdb {
 struct ICUTimeZoneData : public GlobalTableFunctionState {
 	ICUTimeZoneData() : tzs(icu::TimeZone::createEnumeration()) {
 		UErrorCode status = U_ZERO_ERROR;
-		std::unique_ptr<icu::Calendar> calendar(icu::Calendar::createInstance(status));
+		duckdb::unique_ptr<icu::Calendar> calendar(icu::Calendar::createInstance(status));
 		now = calendar->getNow();
 	}
 
-	std::unique_ptr<icu::StringEnumeration> tzs;
+	duckdb::unique_ptr<icu::StringEnumeration> tzs;
 	UDate now;
 };
 
-static unique_ptr<FunctionData> ICUTimeZoneBind(ClientContext &context, TableFunctionBindInput &input,
-                                                vector<LogicalType> &return_types, vector<string> &names) {
+static duckdb::unique_ptr<FunctionData> ICUTimeZoneBind(ClientContext &context, TableFunctionBindInput &input,
+                                                        vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("abbrev");
@@ -34,12 +34,13 @@ static unique_ptr<FunctionData> ICUTimeZoneBind(ClientContext &context, TableFun
 	return nullptr;
 }
 
-static unique_ptr<GlobalTableFunctionState> ICUTimeZoneInit(ClientContext &context, TableFunctionInitInput &input) {
-	return make_unique<ICUTimeZoneData>();
+static duckdb::unique_ptr<GlobalTableFunctionState> ICUTimeZoneInit(ClientContext &context,
+                                                                    TableFunctionInitInput &input) {
+	return make_uniq<ICUTimeZoneData>();
 }
 
 static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (ICUTimeZoneData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<ICUTimeZoneData>();
 	idx_t index = 0;
 	while (index < STANDARD_VECTOR_SIZE) {
 		UErrorCode status = U_ZERO_ERROR;
@@ -71,7 +72,7 @@ static void ICUTimeZoneFunction(ClientContext &context, TableFunctionInput &data
 		}
 		output.SetValue(1, index, Value(short_id));
 
-		std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(*long_id));
+		duckdb::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(*long_id));
 		int32_t raw_offset_ms;
 		int32_t dst_offset_ms;
 		tz->getOffset(data.now, false, raw_offset_ms, dst_offset_ms, status);
@@ -123,9 +124,9 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 	}
 
 	static bool CastFromNaive(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-		auto &cast_data = (CastData &)*parameters.cast_data;
-		auto info = (BindData *)cast_data.info.get();
-		CalendarPtr calendar(info->calendar->clone());
+		auto &cast_data = parameters.cast_data->Cast<CastData>();
+		auto &info = cast_data.info->Cast<BindData>();
+		CalendarPtr calendar(info.calendar->clone());
 
 		UnaryExecutor::Execute<timestamp_t, timestamp_t>(
 		    source, result, count, [&](timestamp_t input) { return Operation(calendar.get(), input); });
@@ -137,7 +138,7 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 			throw InternalException("Missing context for TIMESTAMP to TIMESTAMPTZ cast.");
 		}
 
-		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
+		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
 
 		return BoundCastInfo(CastFromNaive, std::move(cast_data));
 	}
@@ -186,9 +187,9 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 	}
 
 	static bool CastToNaive(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-		auto &cast_data = (CastData &)*parameters.cast_data;
-		auto info = (BindData *)cast_data.info.get();
-		CalendarPtr calendar(info->calendar->clone());
+		auto &cast_data = parameters.cast_data->Cast<CastData>();
+		auto &info = cast_data.info->Cast<BindData>();
+		CalendarPtr calendar(info.calendar->clone());
 
 		UnaryExecutor::Execute<timestamp_t, timestamp_t>(
 		    source, result, count, [&](timestamp_t input) { return Operation(calendar.get(), input); });
@@ -200,7 +201,7 @@ struct ICUToNaiveTimestamp : public ICUDateFunc {
 			throw InternalException("Missing context for TIMESTAMPTZ to TIMESTAMP cast.");
 		}
 
-		auto cast_data = make_unique<CastData>(make_unique<BindData>(*input.context));
+		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
 
 		return BoundCastInfo(CastToNaive, std::move(cast_data));
 	}
@@ -224,7 +225,7 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 		}
 
 		bool Equals(const FunctionData &other_p) const override {
-			auto &other = (const BindDataNow &)other_p;
+			auto &other = other_p.Cast<const BindDataNow>();
 			if (now != other.now) {
 				return false;
 			}
@@ -232,21 +233,21 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 			return BindData::Equals(other_p);
 		}
 
-		unique_ptr<FunctionData> Copy() const override {
-			return make_unique<BindDataNow>(*this);
+		duckdb::unique_ptr<FunctionData> Copy() const override {
+			return make_uniq<BindDataNow>(*this);
 		}
 
 		timestamp_t now;
 	};
 
-	static unique_ptr<FunctionData> BindNow(ClientContext &context, ScalarFunction &bound_function,
-	                                        vector<unique_ptr<Expression>> &arguments) {
-		return make_unique<BindDataNow>(context);
+	static duckdb::unique_ptr<FunctionData> BindNow(ClientContext &context, ScalarFunction &bound_function,
+	                                                vector<duckdb::unique_ptr<Expression>> &arguments) {
+		return make_uniq<BindDataNow>(context);
 	}
 
 	static timestamp_t GetLocalTimestamp(ExpressionState &state) {
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
-		auto &info = (BindDataNow &)*func_expr.bind_info;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+		auto &info = func_expr.bind_info->Cast<BindDataNow>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -267,7 +268,7 @@ struct ICULocalTimestampFunc : public ICUDateFunc {
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 };
 
@@ -287,15 +288,15 @@ struct ICULocalTimeFunc : public ICUDateFunc {
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 };
 
 struct ICUTimeZoneFunc : public ICUDateFunc {
 	template <typename OP>
 	static void Execute(DataChunk &input, ExpressionState &state, Vector &result) {
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar_ptr(info.calendar->clone());
 		auto calendar = calendar_ptr.get();
 
@@ -334,7 +335,7 @@ struct ICUTimeZoneFunc : public ICUDateFunc {
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 };
 
@@ -347,7 +348,7 @@ void RegisterICUTimeZoneFunctions(ClientContext &context) {
 	auto &catalog = Catalog::GetSystemCatalog(context);
 	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit);
 	CreateTableFunctionInfo tz_names_info(std::move(tz_names));
-	catalog.CreateTableFunction(context, &tz_names_info);
+	catalog.CreateTableFunction(context, tz_names_info);
 
 	//	Scalar functions
 	ICUTimeZoneFunc::AddFunction("timezone", context);

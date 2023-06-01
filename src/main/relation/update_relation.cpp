@@ -17,12 +17,12 @@ UpdateRelation::UpdateRelation(ClientContextWrapper &context, unique_ptr<ParsedE
 }
 
 BoundStatement UpdateRelation::Bind(Binder &binder) {
-	auto basetable = make_unique<BaseTableRef>();
+	auto basetable = make_uniq<BaseTableRef>();
 	basetable->schema_name = schema_name;
 	basetable->table_name = table_name;
 
 	UpdateStatement stmt;
-	stmt.set_info = make_unique<UpdateSetInfo>();
+	stmt.set_info = make_uniq<UpdateSetInfo>();
 
 	stmt.set_info->condition = condition ? condition->Copy() : nullptr;
 	stmt.table = std::move(basetable);
@@ -30,7 +30,7 @@ BoundStatement UpdateRelation::Bind(Binder &binder) {
 	for (auto &expr : expressions) {
 		stmt.set_info->expressions.push_back(expr->Copy());
 	}
-	return binder.Bind((SQLStatement &)stmt);
+	return binder.Bind(stmt.Cast<SQLStatement>());
 }
 
 const vector<ColumnDefinition> &UpdateRelation::Columns() {

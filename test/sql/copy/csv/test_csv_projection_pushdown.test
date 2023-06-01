@@ -28,12 +28,6 @@ CREATE VIEW lineitem_csv AS SELECT * FROM read_csv('test/sql/copy/csv/data/real/
 statement ok
 CREATE VIEW lineitem_csv_auto AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/real/lineitem_sample.csv', header=False) lineitem(l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode, l_comment)
 
-# FIXME: does not work correctly with parallel read
-#foreach parallel_csv true false
-#
-#statement ok
-#SET experimental_parallel_csv=${parallel_csv}
-
 foreach lineitem lineitem_csv lineitem_csv_auto
 
 query I
@@ -85,4 +79,3 @@ SELECT COUNT(*) FROM ${lineitem}
 
 endloop
 
-#endloop

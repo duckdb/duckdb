@@ -27,26 +27,26 @@ string CaseExpression::ToString() const {
 	return ToString<CaseExpression, ParsedExpression>(*this);
 }
 
-bool CaseExpression::Equal(const CaseExpression *a, const CaseExpression *b) {
-	if (a->case_checks.size() != b->case_checks.size()) {
+bool CaseExpression::Equal(const CaseExpression &a, const CaseExpression &b) {
+	if (a.case_checks.size() != b.case_checks.size()) {
 		return false;
 	}
-	for (idx_t i = 0; i < a->case_checks.size(); i++) {
-		if (!a->case_checks[i].when_expr->Equals(b->case_checks[i].when_expr.get())) {
+	for (idx_t i = 0; i < a.case_checks.size(); i++) {
+		if (!a.case_checks[i].when_expr->Equals(*b.case_checks[i].when_expr)) {
 			return false;
 		}
-		if (!a->case_checks[i].then_expr->Equals(b->case_checks[i].then_expr.get())) {
+		if (!a.case_checks[i].then_expr->Equals(*b.case_checks[i].then_expr)) {
 			return false;
 		}
 	}
-	if (!a->else_expr->Equals(b->else_expr.get())) {
+	if (!a.else_expr->Equals(*b.else_expr)) {
 		return false;
 	}
 	return true;
 }
 
 unique_ptr<ParsedExpression> CaseExpression::Copy() const {
-	auto copy = make_unique<CaseExpression>();
+	auto copy = make_uniq<CaseExpression>();
 	copy->CopyProperties(*this);
 	for (auto &check : case_checks) {
 		CaseCheck new_check;
@@ -71,7 +71,7 @@ void CaseExpression::Serialize(FieldWriter &writer) const {
 }
 
 unique_ptr<ParsedExpression> CaseExpression::Deserialize(ExpressionType type, FieldReader &reader) {
-	auto result = make_unique<CaseExpression>();
+	auto result = make_uniq<CaseExpression>();
 	auto &source = reader.GetSource();
 	auto count = reader.ReadRequired<uint32_t>();
 	for (idx_t i = 0; i < count; i++) {
@@ -91,7 +91,7 @@ void CaseExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> CaseExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_unique<CaseExpression>();
+	auto result = make_uniq<CaseExpression>();
 	deserializer.ReadProperty("case_checks", result->case_checks);
 	deserializer.ReadProperty("else_expr", result->else_expr);
 	return std::move(result);

@@ -34,7 +34,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	if (expr.lhs->expression_class == ExpressionClass::COLUMN_REF) {
 		expr.params.push_back(std::move(expr.lhs));
 	} else {
-		auto &func_expr = (FunctionExpression &)*expr.lhs;
+		auto &func_expr = expr.lhs->Cast<FunctionExpression>();
 		for (idx_t i = 0; i < func_expr.children.size(); i++) {
 			expr.params.push_back(std::move(func_expr.children[i]));
 		}
@@ -52,7 +52,7 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 			throw BinderException("Parameter must be a column name.");
 		}
 
-		auto column_ref = (ColumnRefExpression &)*expr.params[i];
+		auto column_ref = expr.params[i]->Cast<ColumnRefExpression>();
 		if (column_ref.IsQualified()) {
 			throw BinderException("Invalid parameter name '%s': must be unqualified", column_ref.ToString());
 		}
@@ -78,13 +78,13 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 
 	// bind the parameter expressions
 	for (idx_t i = 0; i < expr.params.size(); i++) {
-		auto result = BindExpression(&expr.params[i], depth, false);
+		auto result = BindExpression(expr.params[i], depth, false);
 		if (result.HasError()) {
 			throw InternalException("Error during lambda binding: %s", result.error);
 		}
 	}
 
-	auto result = BindExpression(&expr.expr, depth, false);
+	auto result = BindExpression(expr.expr, depth, false);
 	lambda_bindings->pop_back();
 
 	// successfully bound a subtree of nested lambdas, set this to nullptr in case other parts of the
@@ -97,8 +97,8 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		throw BinderException(result.error);
 	}
 
-	return BindResult(make_unique<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA,
-	                                                     std::move(result.expression), params_strings.size()));
+	return BindResult(make_uniq<BoundLambdaExpression>(ExpressionType::LAMBDA, LogicalType::LAMBDA,
+	                                                   std::move(result.expression), params_strings.size()));
 }
 
 void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &original,
@@ -110,7 +110,7 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 	if (original->expression_class == ExpressionClass::BOUND_LAMBDA_REF) {
 
 		// determine if this is the lambda parameter
-		auto &bound_lambda_ref = (BoundLambdaRefExpression &)*original;
+		auto &bound_lambda_ref = original->Cast<BoundLambdaRefExpression>();
 		auto alias = bound_lambda_ref.alias;
 
 		if (lambda_bindings && bound_lambda_ref.lambda_index != lambda_bindings->size()) {
@@ -122,12 +122,12 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 			D_ASSERT(lambda_binding.types.size() == 1);
 			// refers to a lambda parameter outside of the current lambda function
 			replacement =
-			    make_unique<BoundReferenceExpression>(lambda_binding.names[0], lambda_binding.types[0],
-			                                          lambda_bindings->size() - bound_lambda_ref.lambda_index + 1);
+			    make_uniq<BoundReferenceExpression>(lambda_binding.names[0], lambda_binding.types[0],
+			                                        lambda_bindings->size() - bound_lambda_ref.lambda_index + 1);
 
 		} else {
 			// refers to current lambda parameter
-			replacement = make_unique<BoundReferenceExpression>(alias, list_child_type, 0);
+			replacement = make_uniq<BoundReferenceExpression>(alias, list_child_type, 0);
 		}
 
 	} else {
@@ -138,8 +138,8 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 		}
 
 		// this is not a lambda parameter, so we need to create a new argument for the arguments vector
-		replacement = make_unique<BoundReferenceExpression>(original->alias, original->return_type,
-		                                                    captures.size() + index_offset + 1);
+		replacement = make_uniq<BoundReferenceExpression>(original->alias, original->return_type,
+		                                                  captures.size() + index_offset + 1);
 		captures.push_back(std::move(original));
 	}
 }

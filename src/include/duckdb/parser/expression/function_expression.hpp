@@ -16,6 +16,9 @@ namespace duckdb {
 //! Represents a function call
 class FunctionExpression : public ParsedExpression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::FUNCTION;
+
+public:
 	DUCKDB_API FunctionExpression(string catalog_name, string schema_name, const string &function_name,
 	                              vector<unique_ptr<ParsedExpression>> children,
 	                              unique_ptr<ParsedExpression> filter = nullptr,
@@ -50,7 +53,7 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
-	static bool Equal(const FunctionExpression *a, const FunctionExpression *b);
+	static bool Equal(const FunctionExpression &a, const FunctionExpression &b);
 	hash_t Hash() const override;
 
 	void Serialize(FieldWriter &writer) const override;
@@ -89,7 +92,7 @@ public:
 		result += StringUtil::Join(entry.children, entry.children.size(), ", ", [&](const unique_ptr<BASE> &child) {
 			return child->alias.empty() || !add_alias
 			           ? child->ToString()
-			           : KeywordHelper::WriteOptionallyQuoted(child->alias) + " := " + child->ToString();
+			           : StringUtil::Format("%s := %s", SQLIdentifier(child->alias), child->ToString());
 		});
 		// ordered aggregate
 		if (order_bys && !order_bys->orders.empty()) {

@@ -9,6 +9,10 @@ foreach type tinyint smallint integer bigint utinyint usmallint uinteger ubigint
 statement ok
 CREATE TABLE test (g INTEGER, i ${type})
 
+query I
+SELECT LIST(i) FROM test GROUP BY g ORDER BY g
+----
+
 statement ok
 INSERT INTO test VALUES (1, 2), (1, 3), (2, 4)
 
@@ -60,6 +64,7 @@ SELECT LIST(str) FROM varch GROUP BY g ORDER BY g
 
 # LIST
 # one level nested LIST
+
 
 statement ok
 CREATE TABLE nested_lists (g INTEGER, i INTEGER[])

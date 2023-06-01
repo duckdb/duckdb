@@ -1,6 +1,7 @@
 #include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 class PipeFile : public FileHandle {
@@ -32,12 +33,12 @@ void PipeFileSystem::Reset(FileHandle &handle) {
 }
 
 int64_t PipeFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &pipe = (PipeFile &)handle;
+	auto &pipe = handle.Cast<PipeFile>();
 	return pipe.ReadChunk(buffer, nr_bytes);
 }
 
 int64_t PipeFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &pipe = (PipeFile &)handle;
+	auto &pipe = handle.Cast<PipeFile>();
 	return pipe.WriteChunk(buffer, nr_bytes);
 }
 
@@ -50,7 +51,7 @@ void PipeFileSystem::FileSync(FileHandle &handle) {
 
 unique_ptr<FileHandle> PipeFileSystem::OpenPipe(unique_ptr<FileHandle> handle) {
 	auto path = handle->path;
-	return make_unique<PipeFile>(std::move(handle), path);
+	return make_uniq<PipeFile>(std::move(handle), path);
 }
 
 } // namespace duckdb

@@ -8,7 +8,7 @@ namespace duckdb {
 
 BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t depth) {
 	D_ASSERT(expr.parameter_nr > 0);
-	auto bound_parameter = make_unique<BoundParameterExpression>(expr.parameter_nr);
+	auto bound_parameter = make_uniq<BoundParameterExpression>(expr.parameter_nr);
 	bound_parameter->alias = expr.alias;
 	if (!binder.parameters) {
 		throw BinderException("Unexpected prepared parameter. This type of statement can't be prepared!");
@@ -18,7 +18,7 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 	if (parameter_idx <= binder.parameters->parameter_data.size()) {
 		// it has! emit a constant directly
 		auto &data = binder.parameters->parameter_data[parameter_idx - 1];
-		auto constant = make_unique<BoundConstantExpression>(data.value);
+		auto constant = make_uniq<BoundConstantExpression>(data.value);
 		constant->alias = expr.alias;
 		return BindResult(std::move(constant));
 	}

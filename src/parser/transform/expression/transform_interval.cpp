@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::PGIntervalConstant *node) {
+unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::PGIntervalConstant &node) {
 	// handle post-fix notation of INTERVAL
 
 	// three scenarios
@@ -14,25 +14,25 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	// interval 'string' year
 	// interval int year
 	unique_ptr<ParsedExpression> expr;
-	switch (node->val_type) {
+	switch (node.val_type) {
 	case duckdb_libpgquery::T_PGAExpr:
-		expr = TransformExpression(node->eval);
+		expr = TransformExpression(node.eval);
 		break;
 	case duckdb_libpgquery::T_PGString:
-		expr = make_unique<ConstantExpression>(Value(node->sval));
+		expr = make_uniq<ConstantExpression>(Value(node.sval));
 		break;
 	case duckdb_libpgquery::T_PGInteger:
-		expr = make_unique<ConstantExpression>(Value(node->ival));
+		expr = make_uniq<ConstantExpression>(Value(node.ival));
 		break;
 	default:
 		throw InternalException("Unsupported interval transformation");
 	}
 
-	if (!node->typmods) {
-		return make_unique<CastExpression>(LogicalType::INTERVAL, std::move(expr));
+	if (!node.typmods) {
+		return make_uniq<CastExpression>(LogicalType::INTERVAL, std::move(expr));
 	}
 
-	int32_t mask = ((duckdb_libpgquery::PGAConst *)node->typmods->head->data.ptr_value)->val.val.ival;
+	int32_t mask = PGPointerCast<duckdb_libpgquery::PGAConst>(node.typmods->head->data.ptr_value)->val.val.ival;
 	// these seemingly random constants are from datetime.hpp
 	// they are copied here to avoid having to include this header
 	// the bitshift is from the function INTERVAL_MASK in the parser
@@ -109,11 +109,11 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 		throw InternalException("Unsupported interval post-fix");
 	}
 	// first push a cast to the target type
-	expr = make_unique<CastExpression>(target_type, std::move(expr));
+	expr = make_uniq<CastExpression>(target_type, std::move(expr));
 	// now push the operation
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(std::move(expr));
-	return make_unique<FunctionExpression>(fname, std::move(children));
+	return make_uniq<FunctionExpression>(fname, std::move(children));
 }
 
 } // namespace duckdb

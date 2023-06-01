@@ -22,7 +22,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalProjection
 		bool omit_projection = true;
 		for (idx_t i = 0; i < op.types.size(); i++) {
 			if (op.expressions[i]->type == ExpressionType::BOUND_REF) {
-				auto &bound_ref = (BoundReferenceExpression &)*op.expressions[i];
+				auto &bound_ref = op.expressions[i]->Cast<BoundReferenceExpression>();
 				if (bound_ref.index == i) {
 					continue;
 				}
@@ -36,7 +36,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalProjection
 		}
 	}
 
-	auto projection = make_unique<PhysicalProjection>(op.types, std::move(op.expressions), op.estimated_cardinality);
+	auto projection = make_uniq<PhysicalProjection>(op.types, std::move(op.expressions), op.estimated_cardinality);
 	projection->children.push_back(std::move(plan));
 	return std::move(projection);
 }

@@ -18,16 +18,16 @@ string ConstantExpression::ToString() const {
 	return value.ToSQLString();
 }
 
-bool ConstantExpression::Equal(const ConstantExpression *a, const ConstantExpression *b) {
-	return a->value.type() == b->value.type() && !ValueOperations::DistinctFrom(a->value, b->value);
+bool ConstantExpression::Equal(const ConstantExpression &a, const ConstantExpression &b) {
+	return a.value.type() == b.value.type() && !ValueOperations::DistinctFrom(a.value, b.value);
 }
 
 hash_t ConstantExpression::Hash() const {
-	return ParsedExpression::Hash();
+	return value.Hash();
 }
 
 unique_ptr<ParsedExpression> ConstantExpression::Copy() const {
-	auto copy = make_unique<ConstantExpression>(value);
+	auto copy = make_uniq<ConstantExpression>(value);
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
@@ -38,7 +38,7 @@ void ConstantExpression::Serialize(FieldWriter &writer) const {
 
 unique_ptr<ParsedExpression> ConstantExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	Value value = reader.ReadRequiredSerializable<Value, Value>();
-	return make_unique<ConstantExpression>(std::move(value));
+	return make_uniq<ConstantExpression>(std::move(value));
 }
 
 void ConstantExpression::FormatSerialize(FormatSerializer &serializer) const {
@@ -49,7 +49,7 @@ void ConstantExpression::FormatSerialize(FormatSerializer &serializer) const {
 unique_ptr<ParsedExpression> ConstantExpression::FormatDeserialize(ExpressionType type,
                                                                    FormatDeserializer &deserializer) {
 	auto value = deserializer.ReadProperty<Value>("value");
-	return make_unique<ConstantExpression>(std::move(value));
+	return make_uniq<ConstantExpression>(std::move(value));
 }
 
 } // namespace duckdb

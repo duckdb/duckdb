@@ -1,5 +1,7 @@
 #include "duckdb/planner/operator/logical_set_operation.hpp"
+
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -17,6 +19,15 @@ unique_ptr<LogicalOperator> LogicalSetOperation::Deserialize(LogicalDeserializat
 
 vector<idx_t> LogicalSetOperation::GetTableIndex() const {
 	return vector<idx_t> {table_index};
+}
+
+string LogicalSetOperation::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index);
+	}
+#endif
+	return LogicalOperator::GetName();
 }
 
 } // namespace duckdb
