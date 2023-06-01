@@ -61,6 +61,8 @@ string StatementTypeToString(StatementType type) {
 		return "DETACH";
 	case StatementType::MULTI_STATEMENT:
 		return "MULTI";
+    case StatementType::DROP_PROPERTY_GRAPH_STATEMENT:
+        return "DROP_PROPERTY_GRAPH";
 	case StatementType::INVALID_STATEMENT:
 		break;
 	}

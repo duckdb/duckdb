@@ -91,7 +91,7 @@ if(${FORCE_COLORED_OUTPUT})
   endif()
 endif()
 
-option("Enable address sanitizer." FALSE)
+option("Enable address sanitizer." TRUE)
 
 set(M32_FLAG "")
 if(FORCE_32_BIT)
