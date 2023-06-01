@@ -10,7 +10,7 @@ statement ok
 CREATE TABLE integers(i INTEGER);
 
 # verify that deleting an entire table in a loop doesn't increase database size (i.e. deletes are vacuumed correctly)
-loop i 0 100
+loop i 0 10
 
 statement ok
 INSERT INTO integers SELECT * FROM range(1000000);

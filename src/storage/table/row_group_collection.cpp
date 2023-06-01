@@ -610,19 +610,20 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 		writer.AddRowGroup(std::move(pointer), std::move(row_group_writer));
 	}
 	if (deleted_count > 0) {
-		auto new_row_groups = make_shared<RowGroupSegmentTree>(*this);
+		auto segments = row_groups->MoveSegments();
 		idx_t start = this->row_start;
-		auto l = new_row_groups->Lock();
-		for (auto &row_group : row_groups->Segments()) {
+		auto l = row_groups->Lock();
+		for (auto &entry : segments) {
+			auto &row_group = *entry.node;
 			if (row_group.AllDeleted()) {
 				row_group.CommitDrop();
 				continue;
 			}
-			auto new_row_group = make_unique<RowGroup>(row_group, *this, start);
-			start += new_row_group->count;
-			new_row_groups->AppendSegment(l, std::move(new_row_group));
+			row_group.MoveToCollection(*this, start);
+			start += row_group.count;
+			row_groups->AppendSegment(l, std::move(entry.node));
 		}
-		row_groups = std::move(new_row_groups);
+		total_rows = start;
 	}
 }
 
