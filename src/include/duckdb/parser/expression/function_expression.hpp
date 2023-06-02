@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/optional_unique_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/result_modifier.hpp"
@@ -42,7 +43,7 @@ public:
 	//! Whether or not the aggregate function is distinct, only used for aggregates
 	bool distinct;
 	//! Expression representing a filter, only used for aggregates
-	unique_ptr<ParsedExpression> filter;
+	optional_unique_ptr<ParsedExpression> filter;
 	//! Modifier representing an ORDER BY, only used for aggregates
 	unique_ptr<OrderModifier> order_bys;
 	//! whether this function should export its state or not
@@ -66,7 +67,7 @@ public:
 public:
 	template <class T, class BASE, class ORDER_MODIFIER = OrderModifier>
 	static string ToString(const T &entry, const string &schema, const string &function_name, bool is_operator = false,
-	                       bool distinct = false, BASE *filter = nullptr, ORDER_MODIFIER *order_bys = nullptr,
+	                       bool distinct = false, const BASE *filter = nullptr, ORDER_MODIFIER *order_bys = nullptr,
 	                       bool export_state = false, bool add_alias = false) {
 		if (is_operator) {
 			// built-in operator

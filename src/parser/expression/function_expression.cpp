@@ -93,7 +93,7 @@ void FunctionExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteString(function_name);
 	writer.WriteString(schema);
 	writer.WriteSerializableList(children);
-	writer.WriteOptional(filter);
+	writer.WriteOptional(filter.inner);
 	writer.WriteSerializable((ResultModifier &)*order_bys);
 	writer.WriteField<bool>(distinct);
 	writer.WriteField<bool>(is_operator);
@@ -127,7 +127,7 @@ void FunctionExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("function_name", function_name);
 	serializer.WriteProperty("schema", schema);
 	serializer.WriteProperty("children", children);
-	serializer.WriteOptionalProperty("filter", filter);
+	serializer.WriteProperty("filter", filter);
 	serializer.WriteProperty("order_bys", (ResultModifier &)*order_bys);
 	serializer.WriteProperty("distinct", distinct);
 	serializer.WriteProperty("is_operator", is_operator);
@@ -140,7 +140,7 @@ unique_ptr<ParsedExpression> FunctionExpression::FormatDeserialize(ExpressionTyp
 	auto function_name = deserializer.ReadProperty<string>("function_name");
 	auto schema = deserializer.ReadProperty<string>("schema");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<ParsedExpression>>>("children");
-	auto filter = deserializer.ReadOptionalProperty<unique_ptr<ParsedExpression>>("filter");
+	optional_unique_ptr<ParsedExpression> filter = deserializer.ReadProperty("filter");
 	auto order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(
 	    deserializer.ReadProperty<unique_ptr<ResultModifier>>("order_bys"));
 	auto distinct = deserializer.ReadProperty<bool>("distinct");
@@ -149,8 +149,10 @@ unique_ptr<ParsedExpression> FunctionExpression::FormatDeserialize(ExpressionTyp
 	auto catalog = deserializer.ReadProperty<string>("catalog");
 
 	unique_ptr<FunctionExpression> function;
-	function = make_uniq<FunctionExpression>(catalog, schema, function_name, std::move(children), std::move(filter),
-	                                         std::move(order_bys), distinct, is_operator, export_state);
+	function =
+	    make_uniq<FunctionExpression>(catalog, schema, function_name, std::move(children), std::move(filter.inner),
+	                                  std::move(order_bys), distinct, is_operator, export_state);
+
 	return std::move(function);
 }
 
