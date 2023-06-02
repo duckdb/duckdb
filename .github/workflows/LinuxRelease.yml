@@ -14,12 +14,14 @@ on:
       - 'tools/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
+      - '.github/config/uncovered_files.csv'
   pull_request:
     paths-ignore:
       - '**.md'
       - 'tools/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
+      - '.github/config/uncovered_files.csv'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -185,6 +187,11 @@ jobs:
       with:
         openssl: 1
 
+    - name: Configure OpenSSL path
+      shell: bash
+      run: |
+        echo "OPENSSL_ROOT_DIR=/usr/local/ssl" >> $GITHUB_ENV
+  
     - uses: ./.github/actions/build_extensions
       with:
         post_install: rm build/release/src/libduckdb*

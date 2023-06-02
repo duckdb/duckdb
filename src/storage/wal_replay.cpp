@@ -195,15 +195,16 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 // Replay Table
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateTable() {
-
 	auto info = TableCatalogEntry::Deserialize(source, context);
 	if (deserialize_only) {
 		return;
 	}
 
 	// bind the constraints to the table again
+
 	auto binder = Binder::CreateBinder(context);
-	auto bound_info = binder->BindCreateTableInfo(std::move(info));
+	auto &schema = catalog.GetSchema(context, info->schema);
+	auto bound_info = binder->BindCreateTableInfo(std::move(info), schema);
 
 	catalog.CreateTable(context, *bound_info);
 }
@@ -282,9 +283,7 @@ void ReplayState::ReplayDropSchema() {
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateType() {
 	auto info = TypeCatalogEntry::Deserialize(source);
-	if (Catalog::TypeExists(context, info->catalog, info->schema, info->name)) {
-		return;
-	}
+	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	catalog.CreateType(context, *info);
 }
 
@@ -486,7 +485,7 @@ void ReplayState::ReplayDelete() {
 
 	D_ASSERT(chunk.ColumnCount() == 1 && chunk.data[0].GetType() == LogicalType::ROW_TYPE);
 	row_t row_ids[1];
-	Vector row_identifiers(LogicalType::ROW_TYPE, (data_ptr_t)row_ids);
+	Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_ids));
 
 	auto source_ids = FlatVector::GetData<row_t>(chunk.data[0]);
 	// delete the tuples from the current table

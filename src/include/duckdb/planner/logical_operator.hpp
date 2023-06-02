@@ -83,6 +83,11 @@ public:
 		return true;
 	}
 
+	//! Allows LogicalOperators to opt out of serialization
+	virtual bool SupportSerialization() const {
+		return true;
+	};
+
 	//! Returns the set of table indexes of this operator
 	virtual vector<idx_t> GetTableIndex() const;
 
@@ -96,7 +101,7 @@ public:
 		if (TARGET::TYPE != LogicalOperatorType::LOGICAL_INVALID && type != TARGET::TYPE) {
 			throw InternalException("Failed to cast logical operator to type - logical operator type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -104,7 +109,7 @@ public:
 		if (TARGET::TYPE != LogicalOperatorType::LOGICAL_INVALID && type != TARGET::TYPE) {
 			throw InternalException("Failed to cast logical operator to type - logical operator type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 } // namespace duckdb

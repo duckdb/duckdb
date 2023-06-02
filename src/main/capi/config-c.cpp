@@ -16,7 +16,7 @@ duckdb_state duckdb_create_config(duckdb_config *out_config) {
 	} catch (...) { // LCOV_EXCL_START
 		return DuckDBError;
 	} // LCOV_EXCL_STOP
-	*out_config = (duckdb_config)config;
+	*out_config = reinterpret_cast<duckdb_config>(config);
 	return DuckDBSuccess;
 }
 

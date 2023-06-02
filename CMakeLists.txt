@@ -212,6 +212,7 @@ if (OSX_BUILD_UNIVERSAL)
     error("This only makes sense on OSX")
   endif()
   SET(CMAKE_OSX_ARCHITECTURES "x86_64;arm64" CACHE STRING "Build architectures for Mac OS X" FORCE)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET 11.0 CACHE STRING "Minimum OS X deployment version" FORCE)
 endif()
 
 set(SUN FALSE)
@@ -923,7 +924,9 @@ if(BUILD_PYTHON
     string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
     if (${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_LINK})
       get_target_property(OOTE_LINKED_LIBS ${OOTE_NAME}_extension LINK_LIBRARIES)
-      set(duckdb_libs ${OOTE_LINKED_LIBS} ${duckdb_libs})
+      if (NOT "${OOTE_LINKED_LIBS}" STREQUAL "OOTE_LINKED_LIBS-NOTFOUND")
+        set(duckdb_libs ${OOTE_LINKED_LIBS} ${duckdb_libs})
+      endif()
     endif()
   endforeach()
 

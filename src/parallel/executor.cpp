@@ -562,7 +562,7 @@ bool Executor::HasResultCollector() {
 
 unique_ptr<QueryResult> Executor::GetResult() {
 	D_ASSERT(HasResultCollector());
-	auto &result_collector = (PhysicalResultCollector &)*physical_plan;
+	auto &result_collector = physical_plan->Cast<PhysicalResultCollector>();
 	D_ASSERT(result_collector.sink_state);
 	return result_collector.GetResult(*result_collector.sink_state);
 }

@@ -61,9 +61,9 @@ bool ZstdStreamWrapper::Read(StreamData &sd) {
 		throw IOException(duckdb_zstd::ZSTD_getErrorName(res));
 	}
 
-	sd.in_buff_start = (data_ptr_t)in_buffer.src + in_buffer.pos;
-	sd.in_buff_end = (data_ptr_t)in_buffer.src + in_buffer.size;
-	sd.out_buff_end = (data_ptr_t)out_buffer.dst + out_buffer.pos;
+	sd.in_buff_start = (data_ptr_t)in_buffer.src + in_buffer.pos;  // NOLINT
+	sd.in_buff_end = (data_ptr_t)in_buffer.src + in_buffer.size;   // NOLINT
+	sd.out_buff_end = (data_ptr_t)out_buffer.dst + out_buffer.pos; // NOLINT
 	return false;
 }
 
