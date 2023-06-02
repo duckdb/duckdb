@@ -206,11 +206,13 @@ static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, co
 			end = SliceLength<INPUT_TYPE, INDEX_TYPE>(sliced);
 		}
 
-		if (step == 0 && sdata.validity.RowIsValid(sidx)) {
+		auto step_valid = s && sdata.validity.RowIsValid(sidx);
+
+		if (step == 0 && step_valid) {
 			throw ValueOutOfRangeException("Slice step cannot be zero");
 		}
 
-		if (s && ClampSlice(sliced, begin, end, bidx, eidx)) {
+		if (s && step_valid && ClampSlice(sliced, begin, end, bidx, eidx)) {
 			new_size += (end - begin + step) / step;
 		} else {
 			new_size += end - begin;
