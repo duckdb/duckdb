@@ -23,6 +23,7 @@ public:
 	Optimizer(Binder &binder, ClientContext &context);
 
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
+	ClientContext &GetContext();
 
 	ClientContext &context;
 	Binder &binder;

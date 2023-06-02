@@ -21,6 +21,8 @@ public:
 	explicit FilterPushdown(Optimizer &optimizer);
 	//! Perform filter pushdown
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
+	//! TODO
+	ClientContext &GetContext();
 
 	struct Filter {
 		unordered_set<idx_t> bindings;
