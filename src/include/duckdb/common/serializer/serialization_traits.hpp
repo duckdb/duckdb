@@ -1,6 +1,7 @@
 #pragma once
 #include <type_traits>
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/optional_unique_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 
@@ -67,6 +68,14 @@ struct is_unique_ptr : std::false_type {};
 
 template <typename T>
 struct is_unique_ptr<unique_ptr<T>> : std::true_type {
+	typedef T ELEMENT_TYPE;
+};
+
+template <typename T>
+struct is_optional_unique_ptr : std::false_type {};
+
+template <typename T>
+struct is_optional_unique_ptr<optional_unique_ptr<T>> : std::true_type {
 	typedef T ELEMENT_TYPE;
 };
 

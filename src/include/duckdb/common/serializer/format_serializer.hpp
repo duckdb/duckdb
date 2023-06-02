@@ -11,6 +11,7 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/optional_unique_ptr.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -86,6 +87,19 @@ protected:
 	template <typename T>
 	void WriteValue(const unique_ptr<T> &ptr) {
 		WriteValue(ptr.get());
+	}
+
+	// Unique Pointer Ref
+	template <typename T>
+	void WriteValue(const optional_unique_ptr<T> &ptr) {
+		if (!ptr.inner) {
+			OnOptionalBegin(false);
+			OnOptionalEnd(false);
+		} else {
+			OnOptionalBegin(true);
+			WriteValue(ptr.inner.get());
+			OnOptionalEnd(true);
+		}
 	}
 
 	// Pointer

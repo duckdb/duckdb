@@ -11,6 +11,7 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/optional_unique_ptr.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -112,6 +113,20 @@ public:
 	}
 
 private:
+	template <typename T = void>
+	inline typename std::enable_if<is_optional_unique_ptr<T>::value, T>::type Read() {
+		auto present = OnOptionalBegin();
+		if (present) {
+			T res;
+			res.inner = std::move(Read<unique_ptr<typename T::innerType>>());
+			OnOptionalEnd();
+			return res;
+		} else {
+			OnOptionalEnd();
+			return T();
+		}
+	}
+
 	// Deserialize anything implementing a FormatDeserialize method
 	template <typename T = void>
 	inline typename std::enable_if<has_deserialize<T>::value, T>::type Read() {
@@ -380,12 +395,14 @@ protected:
 
 class ConversionHelper {
 	friend FormatDeserializer;
+
 private:
 	FormatDeserializer &deserializer;
 	const char *tag;
 
 	ConversionHelper(ConversionHelper &&c) : deserializer(c.deserializer), tag(c.tag) {
 	}
+
 public:
 	ConversionHelper(FormatDeserializer &deserializer, const char *tag) : deserializer(deserializer), tag(tag) {
 	}
