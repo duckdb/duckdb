@@ -150,10 +150,10 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteField<WindowBoundary>(start);
 	writer.WriteField<WindowBoundary>(end);
 
-	writer.WriteOptional(start_expr);
-	writer.WriteOptional(end_expr);
-	writer.WriteOptional(offset_expr);
-	writer.WriteOptional(default_expr);
+	writer.WriteOptional(start_expr.inner);
+	writer.WriteOptional(end_expr.inner);
+	writer.WriteOptional(offset_expr.inner);
+	writer.WriteOptional(default_expr.inner);
 	writer.WriteField<bool>(ignore_nulls);
 	writer.WriteOptional(filter_expr);
 	writer.WriteString(catalog);
@@ -168,10 +168,10 @@ void WindowExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("orders", orders);
 	serializer.WriteProperty("start", start);
 	serializer.WriteProperty("end", end);
-	serializer.WriteOptionalProperty("start_expr", start_expr);
-	serializer.WriteOptionalProperty("end_expr", end_expr);
-	serializer.WriteOptionalProperty("offset_expr", offset_expr);
-	serializer.WriteOptionalProperty("default_expr", default_expr);
+	serializer.WriteProperty("start_expr", start_expr);
+	serializer.WriteProperty("end_expr", end_expr);
+	serializer.WriteProperty("offset_expr", offset_expr);
+	serializer.WriteProperty("default_expr", default_expr);
 	serializer.WriteProperty("ignore_nulls", ignore_nulls);
 	serializer.WriteOptionalProperty("filter_expr", filter_expr);
 	serializer.WriteProperty("catalog", catalog);
@@ -188,10 +188,10 @@ unique_ptr<ParsedExpression> WindowExpression::FormatDeserialize(ExpressionType 
 	deserializer.ReadProperty("orders", expr->orders);
 	deserializer.ReadProperty("start", expr->start);
 	deserializer.ReadProperty("end", expr->end);
-	deserializer.ReadOptionalProperty("start_expr", expr->start_expr);
-	deserializer.ReadOptionalProperty("end_expr", expr->end_expr);
-	deserializer.ReadOptionalProperty("offset_expr", expr->offset_expr);
-	deserializer.ReadOptionalProperty("default_expr", expr->default_expr);
+	deserializer.ReadProperty("start_expr", expr->start_expr);
+	deserializer.ReadProperty("end_expr", expr->end_expr);
+	deserializer.ReadProperty("offset_expr", expr->offset_expr);
+	deserializer.ReadProperty("default_expr", expr->default_expr);
 	deserializer.ReadProperty("ignore_nulls", expr->ignore_nulls);
 	deserializer.ReadOptionalProperty("filter_expr", expr->filter_expr);
 	deserializer.ReadProperty("catalog", expr->catalog);

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/optional_unique_ptr.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/query_node.hpp"
 
@@ -56,11 +57,11 @@ public:
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;
 
-	unique_ptr<ParsedExpression> start_expr;
-	unique_ptr<ParsedExpression> end_expr;
+	optional_unique_ptr<ParsedExpression> start_expr;
+	optional_unique_ptr<ParsedExpression> end_expr;
 	//! Offset and default expressions for WINDOW_LEAD and WINDOW_LAG functions
-	unique_ptr<ParsedExpression> offset_expr;
-	unique_ptr<ParsedExpression> default_expr;
+	optional_unique_ptr<ParsedExpression> offset_expr;
+	optional_unique_ptr<ParsedExpression> default_expr;
 
 public:
 	bool IsWindow() const override {
