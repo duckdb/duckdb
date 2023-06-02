@@ -46,8 +46,8 @@ static bool PrefixFunction(const string_t &str, const string_t &pattern) {
 			}
 		}
 		// compare the rest of the prefix
-		const char *str_data = str.GetDataUnsafe();
-		const char *patt_data = pattern.GetDataUnsafe();
+		const char *str_data = str.GetData();
+		const char *patt_data = pattern.GetData();
 		D_ASSERT(patt_length <= str_length);
 		for (idx_t i = string_t::PREFIX_LENGTH; i < patt_length; ++i) {
 			if (str_data[i] != patt_data[i]) {

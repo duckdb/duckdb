@@ -13,7 +13,7 @@ unique_ptr<LogicalOperator> LogicalSet::Deserialize(LogicalDeserializationState 
 	auto name = reader.ReadRequired<std::string>();
 	auto value = Value::Deserialize(reader.GetSource());
 	auto scope = reader.ReadRequired<SetScope>();
-	return make_unique<LogicalSet>(name, value, scope);
+	return make_uniq<LogicalSet>(name, value, scope);
 }
 
 idx_t LogicalSet::EstimateCardinality(ClientContext &context) {

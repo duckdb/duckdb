@@ -34,8 +34,6 @@ struct RowGroupPointer {
 	uint64_t tuple_count;
 	//! The data pointers of the column segments stored in the row group
 	vector<BlockPointer> data_pointers;
-	//! The per-column statistics of the row group
-	vector<BaseStatistics> statistics;
 	//! The versions information of the row group (if any)
 	shared_ptr<VersionNode> versions;
 };

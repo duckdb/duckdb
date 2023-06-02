@@ -1,0 +1,51 @@
+# name: test/sql/catalog/table/test_default_values.test
+# description: Test DEFAULT VALUES insert
+# group: [table]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table x (i int default 1, j int default 2)
+
+statement ok
+insert into x default values;
+
+query II
+SELECT * FROM x
+----
+1	2
+
+# returning
+query I
+insert into x default values returning (i);
+----
+1
+
+query I
+insert into x default values returning (j);
+----
+2
+
+statement error
+insert into x(i) default values;
+----
+Parser Error
+
+# on conflict
+statement ok
+drop table x;
+
+statement ok
+create table x (i int primary key default 1, j int default 2)
+
+statement ok
+insert into x default values;
+
+statement error
+insert into x default values;
+----
+violates primary key constraint
+
+statement ok
+insert into x default values on conflict do nothing;

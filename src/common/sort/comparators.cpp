@@ -163,17 +163,26 @@ int Comparators::CompareStringAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right
 	if (!valid) {
 		return 0;
 	}
-	// Construct the string_t
 	uint32_t left_string_size = Load<uint32_t>(left_ptr);
 	uint32_t right_string_size = Load<uint32_t>(right_ptr);
 	left_ptr += sizeof(uint32_t);
 	right_ptr += sizeof(uint32_t);
-	string_t left_val((const char *)left_ptr, left_string_size);
-	string_t right_val((const char *)right_ptr, right_string_size);
+	auto memcmp_res = memcmp(const_char_ptr_cast(left_ptr), const_char_ptr_cast(right_ptr),
+	                         std::min<uint32_t>(left_string_size, right_string_size));
+
 	left_ptr += left_string_size;
 	right_ptr += right_string_size;
-	// Compare
-	return TemplatedCompareVal<string_t>((data_ptr_t)&left_val, (data_ptr_t)&right_val);
+
+	if (memcmp_res != 0) {
+		return memcmp_res;
+	}
+	if (left_string_size == right_string_size) {
+		return 0;
+	}
+	if (left_string_size < right_string_size) {
+		return -1;
+	}
+	return 1;
 }
 
 int Comparators::CompareStructAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr,

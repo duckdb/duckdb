@@ -7,7 +7,7 @@
 namespace duckdb {
 
 void ListStats::Construct(BaseStatistics &stats) {
-	stats.child_stats = unique_ptr<BaseStatistics[]>(new BaseStatistics[1]);
+	stats.child_stats = unsafe_unique_array<BaseStatistics>(new BaseStatistics[1]);
 	BaseStatistics::Construct(stats.child_stats[0], ListType::GetChildType(stats.GetType()));
 }
 
@@ -34,12 +34,16 @@ void ListStats::Copy(BaseStatistics &stats, const BaseStatistics &other) {
 }
 
 const BaseStatistics &ListStats::GetChildStats(const BaseStatistics &stats) {
-	D_ASSERT(stats.GetStatsType() == StatisticsType::LIST_STATS);
+	if (stats.GetStatsType() != StatisticsType::LIST_STATS) {
+		throw InternalException("ListStats::GetChildStats called on stats that is not a list");
+	}
 	D_ASSERT(stats.child_stats);
 	return stats.child_stats[0];
 }
 BaseStatistics &ListStats::GetChildStats(BaseStatistics &stats) {
-	D_ASSERT(stats.GetStatsType() == StatisticsType::LIST_STATS);
+	if (stats.GetStatsType() != StatisticsType::LIST_STATS) {
+		throw InternalException("ListStats::GetChildStats called on stats that is not a list");
+	}
 	D_ASSERT(stats.child_stats);
 	return stats.child_stats[0];
 }
@@ -86,7 +90,7 @@ void ListStats::Verify(const BaseStatistics &stats, Vector &vector, const Select
 	UnifiedVectorFormat vdata;
 	vector.ToUnifiedFormat(count, vdata);
 
-	auto list_data = (list_entry_t *)vdata.data;
+	auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(vdata);
 	idx_t total_list_count = 0;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);

@@ -13,7 +13,7 @@ string CheckConstraint::ToString() const {
 }
 
 unique_ptr<Constraint> CheckConstraint::Copy() const {
-	return make_unique<CheckConstraint>(expression->Copy());
+	return make_uniq<CheckConstraint>(expression->Copy());
 }
 
 void CheckConstraint::Serialize(FieldWriter &writer) const {
@@ -22,7 +22,7 @@ void CheckConstraint::Serialize(FieldWriter &writer) const {
 
 unique_ptr<Constraint> CheckConstraint::Deserialize(FieldReader &source) {
 	auto expression = source.ReadRequiredSerializable<ParsedExpression>();
-	return make_unique<CheckConstraint>(std::move(expression));
+	return make_uniq<CheckConstraint>(std::move(expression));
 }
 
 } // namespace duckdb

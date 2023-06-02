@@ -197,7 +197,7 @@ struct ICUDateAdd : public ICUDateFunc {
 	static void ExecuteUnary(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 1);
 
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = (BindData &)*func_expr.bind_info;
 		CalendarPtr calendar(info.calendar->clone());
 
@@ -217,7 +217,7 @@ struct ICUDateAdd : public ICUDateFunc {
 	static void ExecuteBinary(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
 
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = (BindData &)*func_expr.bind_info;
 		CalendarPtr calendar(info.calendar->clone());
 
@@ -247,7 +247,7 @@ struct ICUDateAdd : public ICUDateFunc {
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 
 	template <typename TA, typename OP>
@@ -272,7 +272,7 @@ struct ICUDateAdd : public ICUDateFunc {
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 
 	static void AddDateAgeFunctions(const string &name, ClientContext &context) {
@@ -284,7 +284,7 @@ struct ICUDateAdd : public ICUDateFunc {
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 };
 

@@ -22,6 +22,7 @@
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 
 namespace duckdb {
 class BoundForeignKeyConstraint;
@@ -39,6 +40,7 @@ class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
 class ConflictManager;
+class TableScanState;
 enum class VerifyExistenceType : uint8_t;
 
 //! DataTable represents a physical table on disk
@@ -56,7 +58,7 @@ public:
 	DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
 	          const vector<column_t> &bound_columns, Expression &cast_expr);
 	//! Constructs a DataTable as a delta on an existing data table but with one column added new constraint
-	DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint);
+	explicit DataTable(ClientContext &context, DataTable &parent, unique_ptr<BoundConstraint> constraint);
 
 	//! The table info
 	shared_ptr<DataTableInfo> info;
@@ -103,7 +105,8 @@ public:
 	//! Merge a row group collection into the transaction-local storage
 	void LocalMerge(ClientContext &context, RowGroupCollection &collection);
 	//! Creates an optimistic writer for this table - used for optimistically writing parallel appends
-	OptimisticDataWriter *CreateOptimisticWriter(ClientContext &context);
+	OptimisticDataWriter &CreateOptimisticWriter(ClientContext &context);
+	void FinalizeOptimisticWriter(ClientContext &context, OptimisticDataWriter &writer);
 
 	//! Delete the entries with the specified row identifier from the table
 	idx_t Delete(TableCatalogEntry &table, ClientContext &context, Vector &row_ids, idx_t count);
@@ -150,8 +153,8 @@ public:
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table, returns
 	//! whether or not the append succeeded
-	bool AppendToIndexes(DataChunk &chunk, row_t row_start);
-	static bool AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t row_start);
+	PreservedError AppendToIndexes(DataChunk &chunk, row_t row_start);
+	static PreservedError AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t row_start);
 	//! Remove a chunk with the row ids [row_start, ..., row_start + chunk.size()] from all indexes of the table
 	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
 	//! Remove the chunk with the specified set of row identifiers from all indexes of the table
@@ -189,6 +192,10 @@ public:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
 	                             ConflictManager *conflict_manager = nullptr);
+
+public:
+	static void VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &context, DataChunk &chunk,
+	                                ConflictManager *conflict_manager);
 
 private:
 	//! Verify the new added constraints against current persistent&local data

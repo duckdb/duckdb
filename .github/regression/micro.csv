@@ -1,5 +1,3 @@
-Append100KIntegersINSERT
-Append100KIntegersPREPARED
 benchmark/micro/cast/cast_date_string.benchmark
 benchmark/micro/cast/cast_int_string.benchmark
 benchmark/micro/cast/cast_double_string.benchmark
@@ -13,3 +11,6 @@ benchmark/micro/filter/parallel_complex_filter.benchmark
 benchmark/micro/catalog/add_column_empty.benchmark
 benchmark/micro/groupby-parallel/many_groups_large_values_small.benchmark
 benchmark/tpch/csv/lineitem_csv_auto_detect.benchmark
+benchmark/tpch/parquet/write_lineitem_parquet.benchmark
+benchmark/tpch/pivot/lineitem_pivot_returnflag.benchmark
+benchmark/tpch/pivot/lineitem_pivot_shipdate.benchmark

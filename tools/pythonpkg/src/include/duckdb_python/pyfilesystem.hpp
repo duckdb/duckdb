@@ -2,12 +2,23 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb_python/pybind_wrapper.hpp"
-#include "duckdb_python/python_object_container.hpp"
-
-#include <vector>
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
+#include "duckdb_python/pybind11/gil_wrapper.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+
+class ModifiedMemoryFileSystem : public py::object {
+public:
+	using py::object::object;
+	ModifiedMemoryFileSystem(py::object object) : py::object(object) {
+	}
+
+public:
+	static bool check_(const py::handle &object) {
+		return py::isinstance(object, py::module::import("pyduckdb.filesystem").attr("ModifiedMemoryFileSystem"));
+	}
+};
 
 class AbstractFileSystem : public py::object {
 public:
@@ -21,7 +32,7 @@ public:
 
 class PythonFileHandle : public FileHandle {
 public:
-	PythonFileHandle(FileSystem &file_system, const string &path, const py::object handle);
+	PythonFileHandle(FileSystem &file_system, const string &path, const py::object &handle);
 	~PythonFileHandle() override;
 	void Close() override {
 		PythonGILWrapper gil;

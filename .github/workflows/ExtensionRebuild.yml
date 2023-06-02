@@ -4,19 +4,19 @@ on:
     inputs:
       extension_name:
         description: 'Extension name (e.g. postgres_scanner)'
-        required: true 
+        required: true
         type: string
       extension_repo:
         description: 'Extension git repo (e.g. https://github.com/duckdblabs/postgres_scanner)'
-        required: true 
+        required: true
         type: string
       extension_ref:
         description: 'Extension version (commit hash)'
-        required: true 
+        required: true
         type: string
       duckdb_ref:
         description: 'DuckDB version (short commit hash or vX.Y.Z tag)'
-        required: true 
+        required: true
         type: string
 
 jobs:

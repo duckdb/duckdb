@@ -4,8 +4,10 @@ add_library(
   external_statement_verifier.cpp
   prepared_statement_verifier.cpp
   deserialized_statement_verifier.cpp
+  deserialized_statement_verifier_v2.cpp
   statement_verifier.cpp
   parsed_statement_verifier.cpp
+  no_operator_caching_verifier.cpp
   unoptimized_statement_verifier.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_verification>

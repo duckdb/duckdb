@@ -74,19 +74,11 @@ jobs:
         shell: bash
         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global]
 
-      - name: Cache clang-tidy
-        id: date
-        shell: bash
-        run: echo "name=now::$(date)" >> $GITHUB_OUTPUT
-
-      - name: Cache clang-tidy
-        uses: actions/cache@v3
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
         with:
-          path: ~/.ctcache/cache
-          key: clang-tidy-${{ steps.date.outputs.now }}
-          restore-keys: |
-            clang-tidy
-
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
       - name: Download clang-tidy-cache
         shell: bash
         run: |
@@ -100,14 +92,11 @@ jobs:
         run: make tidy-check TIDY_BINARY=/tmp/clang-tidy-cache
 
   codecov:
-    name: CodeCov
+    name: Code Coverage
     runs-on: ubuntu-20.04
+    needs: format-check
     strategy:
       fail-fast: false
-      matrix:
-        testset:
-          - 'standard'
-    needs: tidy-check
     env:
       GEN: ninja
     steps:
@@ -117,23 +106,12 @@ jobs:
 
       - name: Install
         shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov curl
-
-      - name: Validate Configuration
-        shell: bash
-        run: |
-          curl --fail --data-binary @.codecov.yml https://codecov.io/validate
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov curl g++ zip
 
       - name: Set up Python 3.9
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
-
-      - name: Before Install
-        shell: bash
-        run: |
-          pip install --prefer-binary "pandas>=1.2.4" "requests>=2.26" "pyarrow==8.0" "psutil>=5.9.0" pytest
-          sudo apt-get install g++
 
       - name: Coverage Reset
         shell: bash
@@ -145,17 +123,9 @@ jobs:
         shell: bash
         run: |
           mkdir -p build/coverage
-          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_PYTHON=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_JEMALLOC_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_PARQUET_EXTENSION=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_JEMALLOC_EXTENSION=1 -DBUILD_AUTOCOMPLETE_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
 
-      - name: Run Python Tests
-        if: ${{ matrix.testset == 'python' }}
-        shell: bash
-        run: |
-          (cd tools/pythonpkg/tests/fast && python3 -m pytest)
-          (cd tools/pythonpkg/tests/coverage && python3 -m pytest)
-
-      - name: Run Standard Tests
-        if: ${{ matrix.testset == 'standard' }}
+      - name: Run Tests
         shell: bash
         run: |
           build/coverage/test/unittest
@@ -166,20 +136,27 @@ jobs:
           build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
           python tools/shell/shell-test.py build/coverage/duckdb
 
-      - name: Run Coverage Tests
-        if: ${{ matrix.testset == 'coverage' }}
-        shell: bash
-        run: |
-          build/coverage/test/unittest "[coverage]"
-
       - name: Generate Coverage
         shell: bash
         run: |
           lcov --config-file .github/workflows/lcovrc --directory . --base-directory . --no-external --capture --output-file coverage.info
           lcov --config-file .github/workflows/lcovrc --remove coverage.info $(< .github/workflows/lcov_exclude) -o lcov.info
+          genhtml -o coverage_html lcov.info
 
-      - name: CodeCov Upload
-        uses: codecov/codecov-action@v2
+      - name: Check Coverage
+        shell: bash
+        run: |
+          python3 scripts/check_coverage.py
+
+      - name: Create Archive
+        if: always()
+        shell: bash
+        run: |
+          zip -r coverage.zip coverage_html
+
+      - uses: actions/upload-artifact@v3
+        if: always()
         with:
-          files: lcov.info
-          fail_ci_if_error: true
+          name: coverage
+          path: coverage.zip
+          if-no-files-found: error

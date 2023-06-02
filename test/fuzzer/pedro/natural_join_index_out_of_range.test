@@ -1,0 +1,18 @@
+# name: test/fuzzer/pedro/natural_join_index_out_of_range.test
+# description: Natural join index out of range
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c1 INT);
+
+statement ok
+CREATE TABLE t1(c0 INT, c2 INT);
+
+statement ok
+CREATE TABLE t2(c1 INT, c2 INT);
+
+statement ok
+SELECT 1 FROM t1 t2(c1) NATURAL RIGHT JOIN t0, t2 t1(c0) WHERE t2.c2 >= c0;

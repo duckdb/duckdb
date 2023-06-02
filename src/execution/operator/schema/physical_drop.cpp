@@ -11,24 +11,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class DropSourceState : public GlobalSourceState {
-public:
-	DropSourceState() : finished(false) {
-	}
-
-	bool finished;
-};
-
-unique_ptr<GlobalSourceState> PhysicalDrop::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<DropSourceState>();
-}
-
-void PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                           LocalSourceState &lstate) const {
-	auto &state = (DropSourceState &)gstate;
-	if (state.finished) {
-		return;
-	}
+SourceResultType PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	switch (info->type) {
 	case CatalogType::PREPARED_STATEMENT: {
 		// DEALLOCATE silently ignores errors
@@ -40,7 +23,7 @@ void PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 	}
 	case CatalogType::SCHEMA_ENTRY: {
 		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-		catalog.DropEntry(context.client, info.get());
+		catalog.DropEntry(context.client, *info);
 		auto qualified_name = QualifiedName::Parse(info->name);
 
 		// Check if the dropped schema was set as the current schema
@@ -58,11 +41,12 @@ void PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 	}
 	default: {
 		auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
-		catalog.DropEntry(context.client, info.get());
+		catalog.DropEntry(context.client, *info);
 		break;
 	}
 	}
-	state.finished = true;
+
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

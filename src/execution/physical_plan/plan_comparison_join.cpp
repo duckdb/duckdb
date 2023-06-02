@@ -10,24 +10,20 @@
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-
 #include "duckdb/transaction/duck_transaction.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/execution/operator/join/physical_blockwise_nl_join.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 
 namespace duckdb {
 
-static bool CanPlanIndexJoin(ClientContext &context, TableScanBindData *bind_data, PhysicalTableScan &scan) {
-	if (!bind_data) {
-		// not a table scan
-		return false;
-	}
-	auto table = bind_data->table;
-	auto &transaction = DuckTransaction::Get(context, *table->catalog);
+static bool CanPlanIndexJoin(ClientContext &context, TableScanBindData &bind_data, PhysicalTableScan &scan) {
+	auto &table = bind_data.table;
+	auto &transaction = DuckTransaction::Get(context, table.catalog);
 	auto &local_storage = LocalStorage::Get(transaction);
-	if (local_storage.Find(table->GetStoragePtr())) {
+	if (local_storage.Find(table.GetStorage())) {
 		// transaction local appends: skip index join
 		return false;
 	}
@@ -139,45 +135,103 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	return;
 }
 
-static void CanUseIndexJoin(TableScanBindData *tbl, Expression &expr, Index **result_index) {
-	tbl->table->GetStorage().info->indexes.Scan([&](Index &index) {
+static optional_ptr<Index> CanUseIndexJoin(TableScanBindData &tbl, Expression &expr) {
+	optional_ptr<Index> result;
+	tbl.table.GetStorage().info->indexes.Scan([&](Index &index) {
 		if (index.unbound_expressions.size() != 1) {
 			return false;
 		}
 		if (expr.alias == index.unbound_expressions[0]->alias) {
-			*result_index = &index;
+			result = &index;
 			return true;
 		}
 		return false;
 	});
+	return result;
 }
 
-void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index **left_index, Index **right_index,
-                        PhysicalOperator *left, PhysicalOperator *right) {
-	// check if one of the tables has an index on column
-	if (op.join_type == JoinType::INNER && op.conditions.size() == 1) {
-		// check if one of the children are table scans and if they have an index in the join attribute
-		// (op.condition)
-		if (left->type == PhysicalOperatorType::TABLE_SCAN) {
-			auto &tbl_scan = (PhysicalTableScan &)*left;
-			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
-			if (CanPlanIndexJoin(context, tbl, tbl_scan)) {
-				CanUseIndexJoin(tbl, *op.conditions[0].left, left_index);
-			}
-		}
-		if (right->type == PhysicalOperatorType::TABLE_SCAN) {
-			auto &tbl_scan = (PhysicalTableScan &)*right;
-			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
-			if (CanPlanIndexJoin(context, tbl, tbl_scan)) {
-				CanUseIndexJoin(tbl, *op.conditions[0].right, right_index);
-			}
-		}
+optional_ptr<Index> CheckIndexJoin(ClientContext &context, LogicalComparisonJoin &op, PhysicalOperator &plan,
+                                   Expression &condition) {
+	if (op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		return nullptr;
 	}
+	// check if one of the tables has an index on column
+	if (op.join_type != JoinType::INNER) {
+		return nullptr;
+	}
+	if (op.conditions.size() != 1) {
+		return nullptr;
+	}
+	// check if the child is (1) a table scan, and (2) has an index on the join condition
+	if (plan.type != PhysicalOperatorType::TABLE_SCAN) {
+		return nullptr;
+	}
+	auto &tbl_scan = plan.Cast<PhysicalTableScan>();
+	auto tbl_data = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
+	if (!tbl_data) {
+		return nullptr;
+	}
+	optional_ptr<Index> result;
+	if (CanPlanIndexJoin(context, *tbl_data, tbl_scan)) {
+		result = CanUseIndexJoin(*tbl_data, condition);
+	}
+	return result;
+}
+
+static bool PlanIndexJoin(ClientContext &context, LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> &plan,
+                          unique_ptr<PhysicalOperator> &left, unique_ptr<PhysicalOperator> &right,
+                          optional_ptr<Index> index, bool swap_condition = false) {
+	if (!index) {
+		return false;
+	}
+	// index joins are not supported if there are pushed down table filters
+	D_ASSERT(right->type == PhysicalOperatorType::TABLE_SCAN);
+	auto &tbl_scan = right->Cast<PhysicalTableScan>();
+	//	if (tbl_scan.table_filters && !tbl_scan.table_filters->filters.empty()) {
+	//		return false;
+	//	}
+	// index joins are disabled if enable_optimizer is false
+	if (!ClientConfig::GetConfig(context).enable_optimizer) {
+		return false;
+	}
+	// check if the cardinality difference justifies an index join
+	if (!((ClientConfig::GetConfig(context).force_index_join ||
+	       left->estimated_cardinality < 0.01 * right->estimated_cardinality))) {
+		return false;
+	}
+
+	// plan the index join
+	if (swap_condition) {
+		swap(op.conditions[0].left, op.conditions[0].right);
+		swap(op.left_projection_map, op.right_projection_map);
+	}
+	plan = make_uniq<PhysicalIndexJoin>(op, std::move(left), std::move(right), std::move(op.conditions), op.join_type,
+	                                    op.left_projection_map, op.right_projection_map, tbl_scan.column_ids, *index,
+	                                    !swap_condition, op.estimated_cardinality);
+	return true;
+}
+
+static bool PlanIndexJoin(ClientContext &context, LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> &plan,
+                          unique_ptr<PhysicalOperator> &left, unique_ptr<PhysicalOperator> &right) {
+	if (op.conditions.empty()) {
+		return false;
+	}
+	// check if we can plan an index join on the RHS
+	auto right_index = CheckIndexJoin(context, op, *right, *op.conditions[0].right);
+	if (PlanIndexJoin(context, op, plan, left, right, right_index)) {
+		return true;
+	}
+	// else check if we can plan an index join on the left side
+	auto left_index = CheckIndexJoin(context, op, *left, *op.conditions[0].left);
+	if (PlanIndexJoin(context, op, plan, right, left, left_index, true)) {
+		return true;
+	}
+	return false;
 }
 
 static void RewriteJoinCondition(Expression &expr, idx_t offset) {
 	if (expr.type == ExpressionType::BOUND_REF) {
-		auto &ref = (BoundReferenceExpression &)expr;
+		auto &ref = expr.Cast<BoundReferenceExpression>();
 		ref.index += offset;
 	}
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { RewriteJoinCondition(child, offset); });
@@ -190,11 +244,13 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 	idx_t rhs_cardinality = op.children[1]->EstimateCardinality(context);
 	auto left = CreatePlan(*op.children[0]);
 	auto right = CreatePlan(*op.children[1]);
+	left->estimated_cardinality = lhs_cardinality;
+	right->estimated_cardinality = rhs_cardinality;
 	D_ASSERT(left && right);
 
 	if (op.conditions.empty()) {
 		// no conditions: insert a cross product
-		return make_unique<PhysicalCrossProduct>(op.types, std::move(left), std::move(right), op.estimated_cardinality);
+		return make_uniq<PhysicalCrossProduct>(op.types, std::move(left), std::move(right), op.estimated_cardinality);
 	}
 
 	bool has_equality = false;
@@ -224,29 +280,16 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 
 	unique_ptr<PhysicalOperator> plan;
 	if (has_equality) {
-		Index *left_index {}, *right_index {};
-		TransformIndexJoin(context, op, &left_index, &right_index, left.get(), right.get());
-		if (left_index &&
-		    (ClientConfig::GetConfig(context).force_index_join || rhs_cardinality < 0.01 * lhs_cardinality)) {
-			auto &tbl_scan = (PhysicalTableScan &)*left;
-			swap(op.conditions[0].left, op.conditions[0].right);
-			return make_unique<PhysicalIndexJoin>(op, std::move(right), std::move(left), std::move(op.conditions),
-			                                      op.join_type, op.right_projection_map, op.left_projection_map,
-			                                      tbl_scan.column_ids, left_index, false, op.estimated_cardinality);
-		}
-		if (right_index &&
-		    (ClientConfig::GetConfig(context).force_index_join || lhs_cardinality < 0.01 * rhs_cardinality)) {
-			auto &tbl_scan = (PhysicalTableScan &)*right;
-			return make_unique<PhysicalIndexJoin>(op, std::move(left), std::move(right), std::move(op.conditions),
-			                                      op.join_type, op.left_projection_map, op.right_projection_map,
-			                                      tbl_scan.column_ids, right_index, true, op.estimated_cardinality);
+		// check if we can use an index join
+		if (PlanIndexJoin(context, op, plan, left, right)) {
+			return plan;
 		}
 		// Equality join with small number of keys : possible perfect join optimization
 		PerfectHashJoinStats perfect_join_stats;
 		CheckForPerfectJoinOpt(op, perfect_join_stats);
-		plan = make_unique<PhysicalHashJoin>(op, std::move(left), std::move(right), std::move(op.conditions),
-		                                     op.join_type, op.left_projection_map, op.right_projection_map,
-		                                     std::move(op.delim_types), op.estimated_cardinality, perfect_join_stats);
+		plan = make_uniq<PhysicalHashJoin>(op, std::move(left), std::move(right), std::move(op.conditions),
+		                                   op.join_type, op.left_projection_map, op.right_projection_map,
+		                                   std::move(op.delim_types), op.estimated_cardinality, perfect_join_stats);
 
 	} else {
 		static constexpr const idx_t NESTED_LOOP_JOIN_THRESHOLD = 5;
@@ -268,24 +311,24 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 			can_merge = false;
 		}
 		if (can_iejoin) {
-			plan = make_unique<PhysicalIEJoin>(op, std::move(left), std::move(right), std::move(op.conditions),
-			                                   op.join_type, op.estimated_cardinality);
+			plan = make_uniq<PhysicalIEJoin>(op, std::move(left), std::move(right), std::move(op.conditions),
+			                                 op.join_type, op.estimated_cardinality);
 		} else if (can_merge) {
 			// range join: use piecewise merge join
 			plan =
-			    make_unique<PhysicalPiecewiseMergeJoin>(op, std::move(left), std::move(right), std::move(op.conditions),
-			                                            op.join_type, op.estimated_cardinality);
+			    make_uniq<PhysicalPiecewiseMergeJoin>(op, std::move(left), std::move(right), std::move(op.conditions),
+			                                          op.join_type, op.estimated_cardinality);
 		} else if (PhysicalNestedLoopJoin::IsSupported(op.conditions, op.join_type)) {
 			// inequality join: use nested loop
-			plan = make_unique<PhysicalNestedLoopJoin>(op, std::move(left), std::move(right), std::move(op.conditions),
-			                                           op.join_type, op.estimated_cardinality);
+			plan = make_uniq<PhysicalNestedLoopJoin>(op, std::move(left), std::move(right), std::move(op.conditions),
+			                                         op.join_type, op.estimated_cardinality);
 		} else {
 			for (auto &cond : op.conditions) {
 				RewriteJoinCondition(*cond.right, left->types.size());
 			}
 			auto condition = JoinCondition::CreateExpression(std::move(op.conditions));
-			plan = make_unique<PhysicalBlockwiseNLJoin>(op, std::move(left), std::move(right), std::move(condition),
-			                                            op.join_type, op.estimated_cardinality);
+			plan = make_uniq<PhysicalBlockwiseNLJoin>(op, std::move(left), std::move(right), std::move(condition),
+			                                          op.join_type, op.estimated_cardinality);
 		}
 	}
 	return plan;

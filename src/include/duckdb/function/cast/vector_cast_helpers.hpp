@@ -201,15 +201,15 @@ struct VectorCastHelpers {
 struct VectorStringToList {
 	static idx_t CountPartsList(const string_t &input);
 	static bool SplitStringList(const string_t &input, string_t *child_data, idx_t &child_start, Vector &child);
-	static bool StringToNestedTypeCastLoop(string_t *source_data, ValidityMask &source_mask, Vector &result,
+	static bool StringToNestedTypeCastLoop(const string_t *source_data, ValidityMask &source_mask, Vector &result,
 	                                       ValidityMask &result_mask, idx_t count, CastParameters &parameters,
 	                                       const SelectionVector *sel);
 };
 
 struct VectorStringToStruct {
-	static bool SplitStruct(string_t &input, std::vector<std::unique_ptr<Vector>> &varchar_vectors, idx_t &row_idx,
-	                        string_map_t<idx_t> &child_names, std::vector<ValidityMask *> &child_masks);
-	static bool StringToNestedTypeCastLoop(string_t *source_data, ValidityMask &source_mask, Vector &result,
+	static bool SplitStruct(const string_t &input, vector<unique_ptr<Vector>> &varchar_vectors, idx_t &row_idx,
+	                        string_map_t<idx_t> &child_names, vector<ValidityMask *> &child_masks);
+	static bool StringToNestedTypeCastLoop(const string_t *source_data, ValidityMask &source_mask, Vector &result,
 	                                       ValidityMask &result_mask, idx_t count, CastParameters &parameters,
 	                                       const SelectionVector *sel);
 };
@@ -218,7 +218,7 @@ struct VectorStringToMap {
 	static idx_t CountPartsMap(const string_t &input);
 	static bool SplitStringMap(const string_t &input, string_t *child_key_data, string_t *child_val_data,
 	                           idx_t &child_start, Vector &varchar_key, Vector &varchar_val);
-	static bool StringToNestedTypeCastLoop(string_t *source_data, ValidityMask &source_mask, Vector &result,
+	static bool StringToNestedTypeCastLoop(const string_t *source_data, ValidityMask &source_mask, Vector &result,
 	                                       ValidityMask &result_mask, idx_t count, CastParameters &parameters,
 	                                       const SelectionVector *sel);
 };

@@ -19,7 +19,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_UNION:
 		// UNION
-		return make_unique<PhysicalUnion>(op.types, std::move(left), std::move(right), op.estimated_cardinality);
+		return make_uniq<PhysicalUnion>(op.types, std::move(left), std::move(right), op.estimated_cardinality);
 	default: {
 		// EXCEPT/INTERSECT
 		D_ASSERT(op.type == LogicalOperatorType::LOGICAL_EXCEPT || op.type == LogicalOperatorType::LOGICAL_INTERSECT);
@@ -28,8 +28,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		// create equality condition for all columns
 		for (idx_t i = 0; i < types.size(); i++) {
 			JoinCondition cond;
-			cond.left = make_unique<BoundReferenceExpression>(types[i], i);
-			cond.right = make_unique<BoundReferenceExpression>(types[i], i);
+			cond.left = make_uniq<BoundReferenceExpression>(types[i], i);
+			cond.right = make_uniq<BoundReferenceExpression>(types[i], i);
 			cond.comparison = ExpressionType::COMPARE_NOT_DISTINCT_FROM;
 			conditions.push_back(std::move(cond));
 		}
@@ -37,8 +37,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSetOperati
 		// INTERSECT is SEMI join
 		PerfectHashJoinStats join_stats; // used in inner joins only
 		JoinType join_type = op.type == LogicalOperatorType::LOGICAL_EXCEPT ? JoinType::ANTI : JoinType::SEMI;
-		return make_unique<PhysicalHashJoin>(op, std::move(left), std::move(right), std::move(conditions), join_type,
-		                                     op.estimated_cardinality, join_stats);
+		return make_uniq<PhysicalHashJoin>(op, std::move(left), std::move(right), std::move(conditions), join_type,
+		                                   op.estimated_cardinality, join_stats);
 	}
 	}
 }

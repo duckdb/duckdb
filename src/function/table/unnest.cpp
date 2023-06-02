@@ -14,11 +14,11 @@ struct UnnestBindData : public FunctionData {
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<UnnestBindData>(input_type);
+		return make_uniq<UnnestBindData>(input_type);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const UnnestBindData &)other_p;
+		auto &other = other_p.Cast<UnnestBindData>();
 		return input_type == other.input_type;
 	}
 };
@@ -48,23 +48,23 @@ static unique_ptr<FunctionData> UnnestBind(ClientContext &context, TableFunction
 	}
 	return_types.push_back(ListType::GetChildType(input.input_table_types[0]));
 	names.push_back(input.input_table_names[0]);
-	return make_unique<UnnestBindData>(input.input_table_types[0]);
+	return make_uniq<UnnestBindData>(input.input_table_types[0]);
 }
 
 static unique_ptr<LocalTableFunctionState> UnnestLocalInit(ExecutionContext &context, TableFunctionInitInput &input,
                                                            GlobalTableFunctionState *global_state) {
-	auto &gstate = (UnnestGlobalState &)*global_state;
+	auto &gstate = global_state->Cast<UnnestGlobalState>();
 
-	auto result = make_unique<UnnestLocalState>();
+	auto result = make_uniq<UnnestLocalState>();
 	result->operator_state = PhysicalUnnest::GetState(context, gstate.select_list);
 	return std::move(result);
 }
 
 static unique_ptr<GlobalTableFunctionState> UnnestInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = (UnnestBindData &)*input.bind_data;
-	auto result = make_unique<UnnestGlobalState>();
-	auto ref = make_unique<BoundReferenceExpression>(bind_data.input_type, 0);
-	auto bound_unnest = make_unique<BoundUnnestExpression>(ListType::GetChildType(bind_data.input_type));
+	auto &bind_data = input.bind_data->Cast<UnnestBindData>();
+	auto result = make_uniq<UnnestGlobalState>();
+	auto ref = make_uniq<BoundReferenceExpression>(bind_data.input_type, 0);
+	auto bound_unnest = make_uniq<BoundUnnestExpression>(ListType::GetChildType(bind_data.input_type));
 	bound_unnest->child = std::move(ref);
 	result->select_list.push_back(std::move(bound_unnest));
 	return std::move(result);
@@ -72,8 +72,8 @@ static unique_ptr<GlobalTableFunctionState> UnnestInit(ClientContext &context, T
 
 static OperatorResultType UnnestFunction(ExecutionContext &context, TableFunctionInput &data_p, DataChunk &input,
                                          DataChunk &output) {
-	auto &state = (UnnestGlobalState &)*data_p.global_state;
-	auto &lstate = (UnnestLocalState &)*data_p.local_state;
+	auto &state = data_p.global_state->Cast<UnnestGlobalState>();
+	auto &lstate = data_p.local_state->Cast<UnnestLocalState>();
 	return PhysicalUnnest::ExecuteInternal(context, input, output, *lstate.operator_state, state.select_list, false);
 }
 

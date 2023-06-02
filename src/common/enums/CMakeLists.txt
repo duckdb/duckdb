@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   catalog_type.cpp
   compression_type.cpp
+  date_part_specifier.cpp
   expression_type.cpp
   file_compression_type.cpp
   join_type.cpp

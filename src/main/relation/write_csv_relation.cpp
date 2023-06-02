@@ -16,13 +16,13 @@ WriteCSVRelation::WriteCSVRelation(shared_ptr<Relation> child_p, string csv_file
 BoundStatement WriteCSVRelation::Bind(Binder &binder) {
 	CopyStatement copy;
 	copy.select_statement = child->GetQueryNode();
-	auto info = make_unique<CopyInfo>();
+	auto info = make_uniq<CopyInfo>();
 	info->is_from = false;
 	info->file_path = csv_file;
 	info->format = "csv";
 	info->options = options;
 	copy.info = std::move(info);
-	return binder.Bind((SQLStatement &)copy);
+	return binder.Bind(copy.Cast<SQLStatement>());
 }
 
 const vector<ColumnDefinition> &WriteCSVRelation::Columns() {

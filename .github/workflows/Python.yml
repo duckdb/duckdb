@@ -17,6 +17,7 @@ on:
       - '!tools/pythonpkg/**'
       - '.github/workflows/**'
       - '!.github/workflows/Python.yml'
+      - '.github/config/uncovered_files.csv'
   pull_request:
     paths-ignore:
       - '**.md'
@@ -26,6 +27,7 @@ on:
       - '!tools/pythonpkg/**'
       - '.github/workflows/**'
       - '!.github/workflows/Python.yml'
+      - '.github/config/uncovered_files.csv'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -403,7 +405,8 @@ jobs:
       - name: Install Python Test Dependencies
         shell: bash
         run: |
-          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install numpy pandas pyarrow pytest psutil
+          cd tools/pythonpkg
+          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install -r requirements-dev.txt
 
       - name: Install DuckDB Python
         shell: bash
@@ -411,11 +414,12 @@ jobs:
           cd tools/pythonpkg
           ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install .
 
+# explicitly skip the TestMemoryLeaks tests, as the address sanitizer will increase the memory usage, causing the test to fail
       - name: Run Python Tests
         shell: bash
         run: |
           cd tools/pythonpkg
-          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tests/fast
+          ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tests/fast --skiplist TestMemoryLeaks
 
    linux-release-cleanup:
       if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'

@@ -4,8 +4,15 @@
 
 namespace duckdb {
 
+void ProgressBar::SystemOverrideCheck(ClientConfig &config) {
+	if (config.system_progress_bar_disable_reason != nullptr) {
+		throw InvalidInputException("Could not change the progress bar setting because: '%s'",
+		                            config.system_progress_bar_disable_reason);
+	}
+}
+
 unique_ptr<ProgressBarDisplay> ProgressBar::DefaultProgressBarDisplay() {
-	return make_unique<TerminalProgressBarDisplay>();
+	return make_uniq<TerminalProgressBarDisplay>();
 }
 
 ProgressBar::ProgressBar(Executor &executor, idx_t show_progress_after,

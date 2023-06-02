@@ -1,7 +1,6 @@
 #include "duckdb/common/bitpacking.hpp"
 
 #include "duckdb/common/limits.hpp"
-#include "duckdb/common/types/null_value.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
@@ -11,6 +10,7 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 #include <functional>
 
@@ -68,7 +68,7 @@ static bitpacking_metadata_encoded_t EncodeMeta(bitpacking_metadata_t metadata) 
 }
 static bitpacking_metadata_t DecodeMeta(bitpacking_metadata_encoded_t *metadata_encoded) {
 	bitpacking_metadata_t metadata;
-	metadata.mode = Load<BitpackingMode>((data_ptr_t)(metadata_encoded) + 3);
+	metadata.mode = Load<BitpackingMode>(data_ptr_cast(metadata_encoded) + 3);
 	metadata.offset = *metadata_encoded & 0x00FFFFFF;
 	return metadata;
 }
@@ -312,7 +312,7 @@ template <class T>
 unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	auto &config = DBConfig::GetConfig(col_data.GetDatabase());
 
-	auto state = make_unique<BitpackingAnalyzeState<T>>();
+	auto state = make_uniq<BitpackingAnalyzeState<T>>();
 	state->state.mode = config.options.force_bitpacking_mode;
 
 	return std::move(state);
@@ -324,7 +324,7 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
-	auto data = (T *)vdata.data;
+	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(data[idx], vdata.validity.RowIsValid(idx))) {
@@ -350,20 +350,19 @@ idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
 template <class T, bool WRITE_STATISTICS, class T_S = typename std::make_signed<T>::type>
 struct BitpackingCompressState : public CompressionState {
 public:
-	explicit BitpackingCompressState(ColumnDataCheckpointer &checkpointer) : checkpointer(checkpointer) {
-		auto &db = checkpointer.GetDatabase();
-		auto &type = checkpointer.GetType();
-		auto &config = DBConfig::GetConfig(db);
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_BITPACKING, type.InternalType());
+	explicit BitpackingCompressState(ColumnDataCheckpointer &checkpointer)
+	    : checkpointer(checkpointer),
+	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_BITPACKING)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
 		state.data_ptr = (void *)this;
 
+		auto &config = DBConfig::GetConfig(checkpointer.GetDatabase());
 		state.mode = config.options.force_bitpacking_mode;
 	}
 
 	ColumnDataCheckpointer &checkpointer;
-	CompressionFunction *function;
+	CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
 
@@ -483,7 +482,7 @@ public:
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		auto data = (T *)vdata.data;
+		auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
@@ -533,7 +532,7 @@ public:
 template <class T, bool WRITE_STATISTICS>
 unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointer &checkpointer,
                                                        unique_ptr<AnalyzeState> state) {
-	return make_unique<BitpackingCompressState<T, WRITE_STATISTICS>>(checkpointer);
+	return make_uniq<BitpackingCompressState<T, WRITE_STATISTICS>>(checkpointer);
 }
 
 template <class T, bool WRITE_STATISTICS>
@@ -691,7 +690,7 @@ public:
 					idx_t decompress_offset = current_group_offset - extra_count;
 					bool skip_sign_extension = true;
 
-					BitpackingPrimitives::UnPackBuffer<T>((data_ptr_t)decompression_buffer,
+					BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(decompression_buffer),
 					                                      current_group_ptr + decompress_offset, decompress_count,
 					                                      current_width, skip_sign_extension);
 
@@ -728,7 +727,7 @@ public:
 
 template <class T>
 unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
-	auto result = make_unique<BitpackingScanState<T>>(segment);
+	auto result = make_uniq<BitpackingScanState<T>>(segment);
 	return std::move(result);
 }
 
@@ -796,11 +795,11 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 		if (to_scan == BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE && offset_in_compression_group == 0) {
 			// Decompress directly into result vector
-			BitpackingPrimitives::UnPackBlock<T>((data_ptr_t)current_result_ptr, decompression_group_start_pointer,
+			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(current_result_ptr), decompression_group_start_pointer,
 			                                     scan_state.current_width, skip_sign_extend);
 		} else {
 			// Decompress compression algorithm to buffer
-			BitpackingPrimitives::UnPackBlock<T>((data_ptr_t)scan_state.decompression_buffer,
+			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(scan_state.decompression_buffer),
 			                                     decompression_group_start_pointer, scan_state.current_width,
 			                                     skip_sign_extend);
 
@@ -861,8 +860,8 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	D_ASSERT(scan_state.current_group.mode == BitpackingMode::FOR ||
 	         scan_state.current_group.mode == BitpackingMode::DELTA_FOR);
 
-	BitpackingPrimitives::UnPackBlock<T>((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
-	                                     scan_state.current_width, skip_sign_extend);
+	BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(scan_state.decompression_buffer),
+	                                     decompression_group_start_pointer, scan_state.current_width, skip_sign_extend);
 
 	*current_result_ptr = *(T *)(scan_state.decompression_buffer + offset_in_compression_group);
 	*current_result_ptr += scan_state.current_frame_of_reference;

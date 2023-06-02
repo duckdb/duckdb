@@ -10,9 +10,13 @@
 #endif
 
 #include <cstdio>
-#include <inttypes.h>
+#include <cinttypes>
 
 namespace duckdb {
+
+#ifdef DEBUG
+bool DBConfigOptions::debug_print_bindings = false;
+#endif
 
 #define DUCKDB_GLOBAL(_PARAM)                                                                                          \
 	{                                                                                                                  \
@@ -54,6 +58,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(DebugCheckpointAbort),
                                                  DUCKDB_LOCAL(DebugForceExternal),
                                                  DUCKDB_LOCAL(DebugForceNoCrossProduct),
+                                                 DUCKDB_LOCAL(DebugAsOfIEJoin),
                                                  DUCKDB_GLOBAL(DebugWindowMode),
                                                  DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
                                                  DUCKDB_GLOBAL(DefaultOrderSetting),
@@ -77,13 +82,17 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(ForceBitpackingModeSetting),
                                                  DUCKDB_LOCAL(HomeDirectorySetting),
                                                  DUCKDB_LOCAL(LogQueryPathSetting),
+                                                 DUCKDB_GLOBAL(LockConfigurationSetting),
                                                  DUCKDB_GLOBAL(ImmediateTransactionModeSetting),
+                                                 DUCKDB_LOCAL(IntegerDivisionSetting),
                                                  DUCKDB_LOCAL(MaximumExpressionDepthSetting),
                                                  DUCKDB_GLOBAL(MaximumMemorySetting),
                                                  DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
                                                  DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
+                                                 DUCKDB_LOCAL(OrderedAggregateThreshold),
                                                  DUCKDB_GLOBAL(PasswordSetting),
                                                  DUCKDB_LOCAL(PerfectHashThresholdSetting),
+                                                 DUCKDB_LOCAL(PivotLimitSetting),
                                                  DUCKDB_LOCAL(PreserveIdentifierCase),
                                                  DUCKDB_GLOBAL(PreserveInsertionOrder),
                                                  DUCKDB_LOCAL(ProfilerHistorySize),
@@ -270,12 +279,16 @@ idx_t CGroupBandwidthQuota(idx_t physical_cores, FileSystem &fs) {
 }
 
 idx_t GetSystemMaxThreadsInternal(FileSystem &fs) {
+#ifndef DUCKDB_NO_THREADS
 	idx_t physical_cores = std::thread::hardware_concurrency();
 #ifdef __linux__
 	auto cores_available_per_period = CGroupBandwidthQuota(physical_cores, fs);
 	return MaxValue<idx_t>(cores_available_per_period, 1);
 #else
 	return physical_cores;
+#endif
+#else
+	return 1;
 #endif
 }
 
@@ -350,6 +363,31 @@ bool DBConfig::operator==(const DBConfig &other) {
 
 bool DBConfig::operator!=(const DBConfig &other) {
 	return !(other.options == options);
+}
+
+OrderType DBConfig::ResolveOrder(OrderType order_type) const {
+	if (order_type != OrderType::ORDER_DEFAULT) {
+		return order_type;
+	}
+	return options.default_order_type;
+}
+
+OrderByNullType DBConfig::ResolveNullOrder(OrderType order_type, OrderByNullType null_type) const {
+	if (null_type != OrderByNullType::ORDER_DEFAULT) {
+		return null_type;
+	}
+	switch (options.default_null_order) {
+	case DefaultOrderByNullType::NULLS_FIRST:
+		return OrderByNullType::NULLS_FIRST;
+	case DefaultOrderByNullType::NULLS_LAST:
+		return OrderByNullType::NULLS_LAST;
+	case DefaultOrderByNullType::NULLS_FIRST_ON_ASC_LAST_ON_DESC:
+		return order_type == OrderType::ASCENDING ? OrderByNullType::NULLS_FIRST : OrderByNullType::NULLS_LAST;
+	case DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC:
+		return order_type == OrderType::ASCENDING ? OrderByNullType::NULLS_LAST : OrderByNullType::NULLS_FIRST;
+	default:
+		throw InternalException("Unknown null order setting");
+	}
 }
 
 } // namespace duckdb

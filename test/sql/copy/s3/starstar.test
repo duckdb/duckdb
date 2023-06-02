@@ -1,0 +1,362 @@
+# name: test/sql/copy/s3/starstar.test
+# description: Test the glob "**" in s3
+# group: [s3]
+
+require parquet
+
+require httpfs
+
+require-env S3_TEST_SERVER_AVAILABLE 1
+
+## Require that these environment variables are also set
+require-env AWS_DEFAULT_REGION
+
+require-env AWS_ACCESS_KEY_ID
+
+require-env AWS_SECRET_ACCESS_KEY
+
+require-env DUCKDB_S3_ENDPOINT
+
+require-env DUCKDB_S3_USE_SSL
+
+# override the default behaviour of skipping HTTP errors and connection failures: this test fails on connection issues
+set ignore_error_messages
+
+# create a table
+statement ok
+CREATE TABLE mytable AS SELECT i as a, (i*2) as b, power(i,2) as c from range(0,10) tbl(i);
+
+
+
+# sanity check: the bucket is empty
+query I
+FROM GLOB('s3://test-bucket/glob_ss/*');
+----
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**');
+----
+
+
+
+# one file at the top
+statement ok
+COPY mytable TO 's3://test-bucket/glob_ss/t0.csv';
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/*');
+----
+s3://test-bucket/glob_ss/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**');
+----
+s3://test-bucket/glob_ss/t0.csv
+
+
+
+# and 1 file at depth 1 in dir 'a'
+statement ok
+COPY mytable TO 's3://test-bucket/glob_ss/a/t0.csv';
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/*/t0.csv');
+----
+s3://test-bucket/glob_ss/a/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**/t0.csv');
+----
+s3://test-bucket/glob_ss/a/t0.csv
+s3://test-bucket/glob_ss/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**/*/t0.csv');
+----
+s3://test-bucket/glob_ss/a/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/*/*/t0.csv');
+----
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**');
+----
+s3://test-bucket/glob_ss/a/t0.csv
+s3://test-bucket/glob_ss/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**/*');
+----
+s3://test-bucket/glob_ss/a/t0.csv
+s3://test-bucket/glob_ss/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/*/**');
+----
+s3://test-bucket/glob_ss/a/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/a/**');
+----
+s3://test-bucket/glob_ss/a/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/*/a/t0.csv');
+----
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**/a/t0.csv');
+----
+s3://test-bucket/glob_ss/a/t0.csv
+
+
+
+# add 1 file at depth 2 in dir 'a/b/'
+statement ok
+COPY mytable TO 's3://test-bucket/glob_ss/a/b/t0.csv';
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/*/t0.csv');
+----
+s3://test-bucket/glob_ss/a/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/*/*/t0.csv');
+----
+s3://test-bucket/glob_ss/a/b/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**/t0.csv');
+----
+s3://test-bucket/glob_ss/a/b/t0.csv
+s3://test-bucket/glob_ss/a/t0.csv
+s3://test-bucket/glob_ss/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**/*/t0.csv');
+----
+s3://test-bucket/glob_ss/a/b/t0.csv
+s3://test-bucket/glob_ss/a/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/*/*/*/t0.csv');
+----
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**');
+----
+s3://test-bucket/glob_ss/a/b/t0.csv
+s3://test-bucket/glob_ss/a/t0.csv
+s3://test-bucket/glob_ss/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**/*');
+----
+s3://test-bucket/glob_ss/a/b/t0.csv
+s3://test-bucket/glob_ss/a/t0.csv
+s3://test-bucket/glob_ss/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/*/**');
+----
+s3://test-bucket/glob_ss/a/b/t0.csv
+s3://test-bucket/glob_ss/a/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/a/**');
+----
+s3://test-bucket/glob_ss/a/b/t0.csv
+s3://test-bucket/glob_ss/a/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/*/a/t0.csv');
+----
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**/a/t0.csv');
+----
+s3://test-bucket/glob_ss/a/t0.csv
+
+### these next 3 require 'first_wildcard_pos == string::npos' to not trigger a return
+# #   sanity check
+# query I
+# FROM GLOB('s3://test-bucket/glob_ss/partitioned');
+# ----
+
+# #   sanity check
+# query I
+# SELECT COUNT(*) FROM GLOB('s3://test-bucket/glob_ss/partitioned');
+# ----
+# 0
+
+# #   sanity check
+# query I
+# SELECT COUNT(*) FROM GLOB('s3://test-bucket/glob_ss/partitioned/');
+# ----
+# 0
+
+#   sanity check
+query I
+SELECT COUNT(*) FROM GLOB('s3://test-bucket/glob_ss/partitioned/*');
+----
+0
+
+#	partitioned mytable
+statement ok
+COPY mytable TO 's3://test-bucket/glob_ss/partitioned' (FORMAT PARQUET, PARTITION_BY (a, b));
+
+query I
+SELECT COUNT(*) FROM GLOB('s3://test-bucket/glob_ss/partitioned/**');
+----
+10
+
+query I
+SELECT COUNT(*) FROM GLOB('s3://test-bucket/glob_ss/partitioned/*/**');
+----
+10
+
+query I
+SELECT COUNT(*) FROM GLOB('s3://test-bucket/glob_ss/partitioned/**/*');
+----
+10
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/partitioned/**/*.parquet');
+----
+s3://test-bucket/glob_ss/partitioned/a=0/b=0/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=1/b=2/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=2/b=4/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=3/b=6/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=4/b=8/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=5/b=10/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=6/b=12/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=7/b=14/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=8/b=16/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=9/b=18/data_0.parquet
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/partitioned/**/*2/*.parquet');
+----
+s3://test-bucket/glob_ss/partitioned/a=1/b=2/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=6/b=12/data_0.parquet
+
+
+
+#	use multiple **
+query I
+FROM GLOB('s3://test-bucket/glob_ss/partitioned/**/*2/**/*.parquet');
+----
+s3://test-bucket/glob_ss/partitioned/a=1/b=2/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=2/b=4/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=6/b=12/data_0.parquet
+
+
+
+#	fun stuff
+statement ok
+COPY mytable TO 's3://test-bucket/glob_ss/a/b/a/t0.csv';
+COPY mytable TO 's3://test-bucket/glob_ss/a/b/a/b/t0.csv';
+COPY mytable TO 's3://test-bucket/glob_ss/a/b/a/b/a/t0.csv';
+COPY mytable TO 's3://test-bucket/glob_ss/a/b/a/b/a/b/t0.csv';
+
+query I
+SELECT COUNT(*) FROM GLOB('s3://test-bucket/glob_ss/*/**');
+----
+16
+
+query I
+SELECT COUNT(*) FROM GLOB('s3://test-bucket/glob_ss/**/*');
+----
+17
+
+query I
+SELECT COUNT(*) FROM GLOB('s3://test-bucket/glob_ss/**/a/*');
+----
+3
+
+query I
+SELECT COUNT(*) FROM GLOB('s3://test-bucket/glob_ss/**/b/*');
+----
+3
+
+query I
+SELECT COUNT(*) FROM GLOB('s3://test-bucket/glob_ss/**/[a-b]/*');
+----
+6
+
+statement ok
+COPY mytable TO 's3://test-bucket/glob_ss/a/b/a/b/a/b/c/d/e/t0.csv';
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**/b/**/*');
+----
+s3://test-bucket/glob_ss/a/b/a/b/a/b/c/d/e/t0.csv
+s3://test-bucket/glob_ss/a/b/a/b/a/b/t0.csv
+s3://test-bucket/glob_ss/a/b/a/b/a/t0.csv
+s3://test-bucket/glob_ss/a/b/a/b/t0.csv
+s3://test-bucket/glob_ss/a/b/a/t0.csv
+s3://test-bucket/glob_ss/a/b/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**/b*/**/*');
+----
+s3://test-bucket/glob_ss/a/b/a/b/a/b/c/d/e/t0.csv
+s3://test-bucket/glob_ss/a/b/a/b/a/b/t0.csv
+s3://test-bucket/glob_ss/a/b/a/b/a/t0.csv
+s3://test-bucket/glob_ss/a/b/a/b/t0.csv
+s3://test-bucket/glob_ss/a/b/a/t0.csv
+s3://test-bucket/glob_ss/a/b/t0.csv
+s3://test-bucket/glob_ss/partitioned/a=0/b=0/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=1/b=2/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=2/b=4/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=3/b=6/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=4/b=8/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=5/b=10/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=6/b=12/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=7/b=14/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=8/b=16/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=9/b=18/data_0.parquet
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**/b*/*/**/*');
+----
+s3://test-bucket/glob_ss/a/b/a/b/a/b/c/d/e/t0.csv
+s3://test-bucket/glob_ss/a/b/a/b/a/b/t0.csv
+s3://test-bucket/glob_ss/a/b/a/b/a/t0.csv
+s3://test-bucket/glob_ss/a/b/a/b/t0.csv
+s3://test-bucket/glob_ss/a/b/a/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**/a*/b*/*/**/*');
+----
+s3://test-bucket/glob_ss/a/b/a/b/a/b/c/d/e/t0.csv
+s3://test-bucket/glob_ss/a/b/a/b/a/b/t0.csv
+s3://test-bucket/glob_ss/a/b/a/b/a/t0.csv
+s3://test-bucket/glob_ss/a/b/a/b/t0.csv
+s3://test-bucket/glob_ss/a/b/a/t0.csv
+
+query I
+FROM GLOB('s3://test-bucket/glob_ss/**/a*/b*/**/*');
+----
+s3://test-bucket/glob_ss/a/b/a/b/a/b/c/d/e/t0.csv
+s3://test-bucket/glob_ss/a/b/a/b/a/b/t0.csv
+s3://test-bucket/glob_ss/a/b/a/b/a/t0.csv
+s3://test-bucket/glob_ss/a/b/a/b/t0.csv
+s3://test-bucket/glob_ss/a/b/a/t0.csv
+s3://test-bucket/glob_ss/a/b/t0.csv
+s3://test-bucket/glob_ss/partitioned/a=0/b=0/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=1/b=2/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=2/b=4/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=3/b=6/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=4/b=8/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=5/b=10/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=6/b=12/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=7/b=14/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=8/b=16/data_0.parquet
+s3://test-bucket/glob_ss/partitioned/a=9/b=18/data_0.parquet
+
+query I
+SELECT COUNT(*) FROM GLOB('s3://test-bucket/glob_ss/**');
+----
+18

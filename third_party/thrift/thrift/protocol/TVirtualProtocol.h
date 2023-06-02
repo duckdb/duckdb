@@ -21,6 +21,7 @@
 #define _DUCKDB_THRIFT_PROTOCOL_TVIRTUALPROTOCOL_H_ 1
 
 #include "thrift/protocol/TProtocol.h"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb_apache {
 namespace thrift {
@@ -121,7 +122,7 @@ public:
                              "this protocol does not support reading (yet).");
   }
 
-  uint32_t readBool(std::vector<bool>::reference value) {
+  uint32_t readBool(duckdb::vector<bool>::reference value) {
     (void)value;
     throw TProtocolException(TProtocolException::NOT_IMPLEMENTED,
                              "this protocol does not support reading (yet).");
@@ -439,7 +440,7 @@ public:
     return static_cast<Protocol_*>(this)->readBool(value);
   }
 
-  uint32_t readBool_virt(std::vector<bool>::reference value) override {
+  uint32_t readBool_virt(duckdb::vector<bool>::reference value) override {
     return static_cast<Protocol_*>(this)->readBool(value);
   }
 
@@ -490,12 +491,12 @@ public:
 
   /*
    * Provide a default readBool() implementation for use with
-   * std::vector<bool>, that behaves the same as reading into a normal bool.
+   * duckdb::vector<bool>, that behaves the same as reading into a normal bool.
    *
    * Subclasses can override this if desired, but there normally shouldn't
    * be a need to.
    */
-  uint32_t readBool(std::vector<bool>::reference value) {
+  uint32_t readBool(duckdb::vector<bool>::reference value) {
     bool b = false;
     uint32_t ret = static_cast<Protocol_*>(this)->readBool(b);
     value = b;

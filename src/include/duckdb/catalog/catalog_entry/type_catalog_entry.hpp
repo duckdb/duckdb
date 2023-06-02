@@ -24,16 +24,16 @@ public:
 
 public:
 	//! Create a TypeCatalogEntry and initialize storage for it
-	TypeCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTypeInfo *info);
+	TypeCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTypeInfo &info);
 
 	LogicalType user_type;
 
 public:
 	//! Serialize the meta information of the TypeCatalogEntry a serializer
-	virtual void Serialize(Serializer &serializer);
+	virtual void Serialize(Serializer &serializer) const;
 	//! Deserializes to a TypeCatalogEntry
 	static unique_ptr<CreateTypeInfo> Deserialize(Deserializer &source);
 
-	string ToSQL() override;
+	string ToSQL() const override;
 };
 } // namespace duckdb

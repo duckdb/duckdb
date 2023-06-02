@@ -27,7 +27,7 @@ bool LogicalFilter::SplitPredicates(vector<unique_ptr<Expression>> &expressions)
 	bool found_conjunction = false;
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		if (expressions[i]->type == ExpressionType::CONJUNCTION_AND) {
-			auto &conjunction = (BoundConjunctionExpression &)*expressions[i];
+			auto &conjunction = expressions[i]->Cast<BoundConjunctionExpression>();
 			found_conjunction = true;
 			// AND expression, append the other children
 			for (idx_t k = 1; k < conjunction.children.size(); k++) {
@@ -51,7 +51,7 @@ void LogicalFilter::Serialize(FieldWriter &writer) const {
 unique_ptr<LogicalOperator> LogicalFilter::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
 	auto expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	auto projection_map = reader.ReadRequiredList<idx_t>();
-	auto result = make_unique<LogicalFilter>();
+	auto result = make_uniq<LogicalFilter>();
 	result->expressions = std::move(expressions);
 	result->projection_map = std::move(projection_map);
 	return std::move(result);

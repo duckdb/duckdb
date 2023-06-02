@@ -18,8 +18,9 @@ using namespace std;
 namespace tpcds {
 
 template <class T>
-static void CreateTPCDSTable(ClientContext &context, string schema, string suffix, bool keys, bool overwrite) {
-	auto info = make_unique<CreateTableInfo>();
+static void CreateTPCDSTable(ClientContext &context, string catalog_name, string schema, string suffix, bool keys,
+                             bool overwrite) {
+	auto info = make_uniq<CreateTableInfo>();
 	info->schema = schema;
 	info->table = T::Name + suffix;
 	info->on_conflict = overwrite ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
@@ -28,44 +29,45 @@ static void CreateTPCDSTable(ClientContext &context, string schema, string suffi
 		info->columns.AddColumn(ColumnDefinition(T::Columns[i], T::Types[i]));
 	}
 	if (keys) {
-		vector<string> pk_columns;
+		duckdb::vector<string> pk_columns;
 		for (idx_t i = 0; i < T::PrimaryKeyCount; i++) {
 			pk_columns.push_back(T::PrimaryKeyColumns[i]);
 		}
-		info->constraints.push_back(make_unique<UniqueConstraint>(std::move(pk_columns), true));
+		info->constraints.push_back(make_uniq<UniqueConstraint>(std::move(pk_columns), true));
 	}
-	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
+	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 	catalog.CreateTable(context, std::move(info));
 }
 
-void DSDGenWrapper::CreateTPCDSSchema(ClientContext &context, string schema, string suffix, bool keys, bool overwrite) {
-	CreateTPCDSTable<CallCenterInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<CatalogPageInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<CatalogReturnsInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<CatalogSalesInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<CustomerInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<CustomerAddressInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<CustomerDemographicsInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<DateDimInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<HouseholdDemographicsInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<IncomeBandInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<InventoryInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<ItemInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<PromotionInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<ReasonInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<ShipModeInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<StoreInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<StoreReturnsInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<StoreSalesInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<TimeDimInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<WarehouseInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<WebPageInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<WebReturnsInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<WebSalesInfo>(context, schema, suffix, keys, overwrite);
-	CreateTPCDSTable<WebSiteInfo>(context, schema, suffix, keys, overwrite);
+void DSDGenWrapper::CreateTPCDSSchema(ClientContext &context, string catalog, string schema, string suffix, bool keys,
+                                      bool overwrite) {
+	CreateTPCDSTable<CallCenterInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<CatalogPageInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<CatalogReturnsInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<CatalogSalesInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<CustomerInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<CustomerAddressInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<CustomerDemographicsInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<DateDimInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<HouseholdDemographicsInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<IncomeBandInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<InventoryInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<ItemInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<PromotionInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<ReasonInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<ShipModeInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<StoreInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<StoreReturnsInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<StoreSalesInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<TimeDimInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<WarehouseInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<WebPageInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<WebReturnsInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<WebSalesInfo>(context, catalog, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<WebSiteInfo>(context, catalog, schema, suffix, keys, overwrite);
 }
 
-void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string schema, string suffix) {
+void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string catalog_name, string schema, string suffix) {
 	if (scale <= 0) {
 		// schema only
 		return;
@@ -74,9 +76,9 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string schema, 
 	InitializeDSDgen(scale);
 
 	// populate append info
-	vector<unique_ptr<tpcds_append_information>> append_info;
+	duckdb::vector<duckdb::unique_ptr<tpcds_append_information>> append_info;
 	append_info.resize(DBGEN_VERSION);
-	auto &catalog = Catalog::GetCatalog(context, INVALID_CATALOG);
+	auto &catalog = Catalog::GetCatalog(context, catalog_name);
 
 	int tmin = CALL_CENTER, tmax = DBGEN_VERSION;
 
@@ -84,9 +86,9 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string schema, 
 		auto table_def = GetTDefByNumber(table_id);
 		auto table_name = table_def.name + suffix;
 		assert(table_def.name);
-		auto table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
+		auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
 
-		auto append = make_unique<tpcds_append_information>(context, table_entry);
+		auto append = make_uniq<tpcds_append_information>(context, &table_entry);
 		append->table_def = table_def;
 		append_info[table_id] = std::move(append);
 	}

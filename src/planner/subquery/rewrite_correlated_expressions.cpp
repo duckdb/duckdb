@@ -70,7 +70,7 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelatedExpressions(Expression &child) {
 	if (child.type == ExpressionType::BOUND_COLUMN_REF) {
 		// bound column reference
-		auto &bound_colref = (BoundColumnRefExpression &)child;
+		auto &bound_colref = child.Cast<BoundColumnRefExpression>();
 		if (bound_colref.depth == 0) {
 			// not a correlated column, ignore
 			return;
@@ -87,7 +87,7 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 	} else if (child.type == ExpressionType::SUBQUERY) {
 		// we encountered another subquery: rewrite recursively
 		D_ASSERT(child.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY);
-		auto &bound_subquery = (BoundSubqueryExpression &)child;
+		auto &bound_subquery = child.Cast<BoundSubqueryExpression>();
 		RewriteCorrelatedRecursive rewrite(bound_subquery, base_binding, correlated_map);
 		rewrite.RewriteCorrelatedSubquery(bound_subquery);
 	}
@@ -103,13 +103,12 @@ unique_ptr<Expression> RewriteCountAggregates::VisitReplace(BoundColumnRefExpres
 	if (entry != replacement_map.end()) {
 		// reference to a COUNT(*) aggregate
 		// replace this with CASE WHEN COUNT(*) IS NULL THEN 0 ELSE COUNT(*) END
-		auto is_null = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
+		auto is_null = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NULL, LogicalType::BOOLEAN);
 		is_null->children.push_back(expr.Copy());
 		auto check = std::move(is_null);
-		auto result_if_true = make_unique<BoundConstantExpression>(Value::Numeric(expr.return_type, 0));
+		auto result_if_true = make_uniq<BoundConstantExpression>(Value::Numeric(expr.return_type, 0));
 		auto result_if_false = std::move(*expr_ptr);
-		return make_unique<BoundCaseExpression>(std::move(check), std::move(result_if_true),
-		                                        std::move(result_if_false));
+		return make_uniq<BoundCaseExpression>(std::move(check), std::move(result_if_true), std::move(result_if_false));
 	}
 	return nullptr;
 }

@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTableInfo &info)
+TableCatalogEntry::TableCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info.table), columns(std::move(info.columns)),
       constraints(std::move(info.constraints)) {
 	this->temporary = info.temporary;
@@ -51,21 +51,35 @@ vector<LogicalType> TableCatalogEntry::GetTypes() {
 	return types;
 }
 
-void TableCatalogEntry::Serialize(Serializer &serializer) {
-	D_ASSERT(!internal);
+CreateTableInfo TableCatalogEntry::GetTableInfoForSerialization() const {
+	CreateTableInfo result;
+	result.catalog = catalog.GetName();
+	result.schema = schema.name;
+	result.table = name;
+	result.columns = columns.Copy();
+	result.constraints.reserve(constraints.size());
+	std::for_each(constraints.begin(), constraints.end(),
+	              [&result](const unique_ptr<Constraint> &c) { result.constraints.emplace_back(c->Copy()); });
+	return result;
+}
 
+void TableCatalogEntry::Serialize(Serializer &serializer) const {
+	D_ASSERT(!internal);
+	const auto info = GetTableInfoForSerialization();
 	FieldWriter writer(serializer);
-	writer.WriteString(schema->name);
-	writer.WriteString(name);
-	columns.Serialize(writer);
-	writer.WriteSerializableList(constraints);
+	writer.WriteString(info.catalog);
+	writer.WriteString(info.schema);
+	writer.WriteString(info.table);
+	info.columns.Serialize(writer);
+	writer.WriteSerializableList(info.constraints);
 	writer.Finalize();
 }
 
 unique_ptr<CreateTableInfo> TableCatalogEntry::Deserialize(Deserializer &source, ClientContext &context) {
-	auto info = make_unique<CreateTableInfo>();
+	auto info = make_uniq<CreateTableInfo>();
 
 	FieldReader reader(source);
+	info->catalog = reader.ReadRequired<string>();
 	info->schema = reader.ReadRequired<string>();
 	info->table = reader.ReadRequired<string>();
 	info->columns = ColumnList::Deserialize(reader);
@@ -88,10 +102,10 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 	vector<string> extra_constraints;
 	for (auto &constraint : constraints) {
 		if (constraint->type == ConstraintType::NOT_NULL) {
-			auto &not_null = (NotNullConstraint &)*constraint;
+			auto &not_null = constraint->Cast<NotNullConstraint>();
 			not_null_columns.insert(not_null.index);
 		} else if (constraint->type == ConstraintType::UNIQUE) {
-			auto &pk = (UniqueConstraint &)*constraint;
+			auto &pk = constraint->Cast<UniqueConstraint>();
 			vector<string> constraint_columns = pk.columns;
 			if (pk.index.index != DConstants::INVALID_INDEX) {
 				// no columns specified: single column constraint
@@ -111,7 +125,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 				extra_constraints.push_back(constraint->ToString());
 			}
 		} else if (constraint->type == ConstraintType::FOREIGN_KEY) {
-			auto &fk = (ForeignKeyConstraint &)*constraint;
+			auto &fk = constraint->Cast<ForeignKeyConstraint>();
 			if (fk.info.type == ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE ||
 			    fk.info.type == ForeignKeyType::FK_TYPE_SELF_REFERENCE_TABLE) {
 				extra_constraints.push_back(constraint->ToString());
@@ -160,13 +174,13 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 	return ss.str();
 }
 
-string TableCatalogEntry::ToSQL() {
+string TableCatalogEntry::ToSQL() const {
 	std::stringstream ss;
 
 	ss << "CREATE TABLE ";
 
-	if (schema->name != DEFAULT_SCHEMA) {
-		ss << KeywordHelper::WriteOptionallyQuoted(schema->name) << ".";
+	if (schema.name != DEFAULT_SCHEMA) {
+		ss << KeywordHelper::WriteOptionallyQuoted(schema.name) << ".";
 	}
 
 	ss << KeywordHelper::WriteOptionallyQuoted(name);
@@ -192,15 +206,18 @@ const vector<unique_ptr<Constraint>> &TableCatalogEntry::GetConstraints() {
 	return constraints;
 }
 
+// LCOV_EXCL_START
 DataTable &TableCatalogEntry::GetStorage() {
-	throw InternalException("Calling GetStorage on a TableCatalogEntry that is not a DTableCatalogEntry");
-}
-
-DataTable *TableCatalogEntry::GetStoragePtr() {
-	throw InternalException("Calling GetStoragePtr on a TableCatalogEntry that is not a DTableCatalogEntry");
+	throw InternalException("Calling GetStorage on a TableCatalogEntry that is not a DuckTableEntry");
 }
 
 const vector<unique_ptr<BoundConstraint>> &TableCatalogEntry::GetBoundConstraints() {
-	throw InternalException("Calling GetBoundConstraints on a TableCatalogEntry that is not a DTableCatalogEntry");
+	throw InternalException("Calling GetBoundConstraints on a TableCatalogEntry that is not a DuckTableEntry");
 }
+
+// LCOV_EXCL_STOP
+
+void TableCatalogEntry::BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update) {
+}
+
 } // namespace duckdb

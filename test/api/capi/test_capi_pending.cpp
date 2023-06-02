@@ -8,7 +8,7 @@ TEST_CASE("Test pending statements in C API", "[capi]") {
 	CAPITester tester;
 	CAPIPrepared prepared;
 	CAPIPending pending;
-	unique_ptr<CAPIResult> result;
+	duckdb::unique_ptr<CAPIResult> result;
 
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));

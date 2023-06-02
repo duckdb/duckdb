@@ -54,7 +54,7 @@ public:
 	}
 
 	//! Get the WAL of the StorageManager, returns nullptr if in-memory
-	WriteAheadLog *GetWriteAheadLog() {
+	optional_ptr<WriteAheadLog> GetWriteAheadLog() {
 		return wal.get();
 	}
 
@@ -82,6 +82,18 @@ protected:
 	unique_ptr<WriteAheadLog> wal;
 	//! Whether or not the database is opened in read-only mode
 	bool read_only;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 //! Stores database in a single file.

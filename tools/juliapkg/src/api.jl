@@ -360,6 +360,39 @@ function duckdb_result_get_chunk(result, chunk_index)
 end
 
 """
+ Checks if the type of the internal result is StreamQueryResult.
+
+ * result: The result object to check.
+ * returns: Whether or not the result object is of the type StreamQueryResult
+"""
+function duckdb_result_is_streaming(result)
+    return ccall((:duckdb_result_is_streaming, libduckdb), Bool, (duckdb_result,), result)
+end
+
+"""
+ Fetches a data chunk from the (streaming) duckdb_result. This function should be called repeatedly until the result is
+ exhausted.
+
+ The result must be destroyed with `duckdb_destroy_data_chunk`.
+
+ This function can only be used on duckdb_results created with 'duckdb_pending_prepared_streaming'
+
+ If this function is used, none of the other result functions can be used and vice versa (i.e. this function cannot be
+ mixed with the legacy result functions or the materialized result functions).
+
+ It is not known beforehand how many chunks will be returned by this result.
+
+ * result: The result object to fetch the data chunk from.
+ * returns: The resulting data chunk. Returns `NULL` if the result has an error.
+"""
+function duckdb_stream_fetch_chunk(result)
+    return ccall((:duckdb_stream_fetch_chunk, libduckdb), duckdb_data_chunk, (duckdb_result,), result)
+end
+
+
+
+
+"""
 Returns the number of data chunks present in the result.
 
 * result: The result object
@@ -1227,6 +1260,28 @@ Note that after calling `duckdb_pending_prepared`, the pending result should alw
 function duckdb_pending_prepared(prepared_statement, out_pending)
     return ccall(
         (:duckdb_pending_prepared, libduckdb),
+        duckdb_state,
+        (duckdb_prepared_statement, Ref{duckdb_pending_result}),
+        prepared_statement,
+        out_pending
+    )
+end
+
+"""
+Executes the prepared statement with the given bound parameters, and returns a pending result.
+This pending result will create a streaming duckdb_result when executed.
+The pending result represents an intermediate structure for a query that is not yet fully executed.
+
+Note that after calling `duckdb_pending_prepared_streaming`, the pending result should always be destroyed using
+`duckdb_destroy_pending`, even if this function returns DuckDBError.
+
+* prepared_statement: The prepared statement to execute.
+* out_result: The pending query result.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+"""
+function duckdb_pending_prepared_streaming(prepared_statement, out_pending)
+    return ccall(
+        (:duckdb_pending_prepared_streaming, libduckdb),
         duckdb_state,
         (duckdb_prepared_statement, Ref{duckdb_pending_result}),
         prepared_statement,

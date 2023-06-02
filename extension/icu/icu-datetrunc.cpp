@@ -98,7 +98,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 		auto &part_arg = args.data[0];
 		auto &date_arg = args.data[1];
 
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = (BindData &)*func_expr.bind_info;
 		CalendarPtr calendar(info.calendar->clone());
 
@@ -146,7 +146,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetSystemCatalog(context);
-		catalog.AddFunction(context, &func_info);
+		catalog.AddFunction(context, func_info);
 	}
 };
 

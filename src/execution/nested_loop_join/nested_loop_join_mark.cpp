@@ -10,8 +10,8 @@ static void TemplatedMarkJoin(Vector &left, Vector &right, idx_t lcount, idx_t r
 	left.ToUnifiedFormat(lcount, left_data);
 	right.ToUnifiedFormat(rcount, right_data);
 
-	auto ldata = (T *)left_data.data;
-	auto rdata = (T *)right_data.data;
+	auto ldata = UnifiedVectorFormat::GetData<T>(left_data);
+	auto rdata = UnifiedVectorFormat::GetData<T>(right_data);
 	for (idx_t i = 0; i < lcount; i++) {
 		if (found_match[i]) {
 			continue;

@@ -33,16 +33,32 @@ SELECT bitstring('1', 6);
 statement error
 SELECT bitstring('0101011', 3);
 ----
-Invalid Input Error: Length must be equal or larger than input string
+Length must be equal or larger than input string
 
 statement error
-SELECT bitstring('', 6);
+SELECT bitstring('', 0);
+----
+Cannot cast empty string to BIT
+
+query I
+SELECT bitstring('1', 1);
+----
+1
 
 statement error
 SELECT bitstring('5', 10);
+----
+Invalid character encountered
 
 statement error
 SELECT bitstring('0101011');
+----
+No function matches
+
+query I
+SELECT bitstring('0101011', 203);
+----
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000101011
 
 # insert valid bit strings
 statement ok

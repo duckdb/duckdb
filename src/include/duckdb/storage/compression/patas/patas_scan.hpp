@@ -21,6 +21,7 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 
 namespace duckdb {
 
@@ -199,7 +200,7 @@ public:
 
 template <class T>
 unique_ptr<SegmentScanState> PatasInitScan(ColumnSegment &segment) {
-	auto result = make_unique_base<SegmentScanState, PatasScanState<T>>(segment);
+	auto result = make_uniq_base<SegmentScanState, PatasScanState<T>>(segment);
 	return result;
 }
 

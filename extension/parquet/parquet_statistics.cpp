@@ -1,12 +1,12 @@
 #include "parquet_statistics.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "parquet_timestamp.hpp"
-
+#include "string_column_reader.hpp"
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/value.hpp"
-
+#include "duckdb/common/types/time.hpp"
 #endif
 
 namespace duckdb {
@@ -14,9 +14,9 @@ namespace duckdb {
 using duckdb_parquet::format::ConvertedType;
 using duckdb_parquet::format::Type;
 
-static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
-                                                     const duckdb_parquet::format::SchemaElement &schema_ele,
-                                                     const duckdb_parquet::format::Statistics &parquet_stats) {
+static duckdb::unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
+                                                             const duckdb_parquet::format::SchemaElement &schema_ele,
+                                                             const duckdb_parquet::format::Statistics &parquet_stats) {
 	auto stats = NumericStats::CreateUnknown(type);
 
 	// for reasons unknown to science, Parquet defines *both* `min` and `min_value` as well as `max` and
@@ -48,12 +48,13 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 	if (stats.empty()) {
 		return Value();
 	}
+	auto stats_data = const_data_ptr_cast(stats.c_str());
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN: {
 		if (stats.size() != sizeof(bool)) {
 			throw InternalException("Incorrect stats size for type BOOLEAN");
 		}
-		return Value::BOOLEAN(Load<bool>((data_ptr_t)stats.c_str()));
+		return Value::BOOLEAN(Load<bool>(stats_data));
 	}
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
@@ -61,29 +62,29 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 		if (stats.size() != sizeof(uint32_t)) {
 			throw InternalException("Incorrect stats size for type UINTEGER");
 		}
-		return Value::UINTEGER(Load<uint32_t>((data_ptr_t)stats.c_str()));
+		return Value::UINTEGER(Load<uint32_t>(stats_data));
 	case LogicalTypeId::UBIGINT:
 		if (stats.size() != sizeof(uint64_t)) {
 			throw InternalException("Incorrect stats size for type UBIGINT");
 		}
-		return Value::UBIGINT(Load<uint64_t>((data_ptr_t)stats.c_str()));
+		return Value::UBIGINT(Load<uint64_t>(stats_data));
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 		if (stats.size() != sizeof(int32_t)) {
 			throw InternalException("Incorrect stats size for type INTEGER");
 		}
-		return Value::INTEGER(Load<int32_t>((data_ptr_t)stats.c_str()));
+		return Value::INTEGER(Load<int32_t>(stats_data));
 	case LogicalTypeId::BIGINT:
 		if (stats.size() != sizeof(int64_t)) {
 			throw InternalException("Incorrect stats size for type BIGINT");
 		}
-		return Value::BIGINT(Load<int64_t>((data_ptr_t)stats.c_str()));
+		return Value::BIGINT(Load<int64_t>(stats_data));
 	case LogicalTypeId::FLOAT: {
 		if (stats.size() != sizeof(float)) {
 			throw InternalException("Incorrect stats size for type FLOAT");
 		}
-		auto val = Load<float>((data_ptr_t)stats.c_str());
+		auto val = Load<float>(stats_data);
 		if (!Value::FloatIsFinite(val)) {
 			return Value();
 		}
@@ -93,7 +94,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 		if (stats.size() != sizeof(double)) {
 			throw InternalException("Incorrect stats size for type DOUBLE");
 		}
-		auto val = Load<double>((data_ptr_t)stats.c_str());
+		auto val = Load<double>(stats_data);
 		if (!Value::DoubleIsFinite(val)) {
 			return Value();
 		}
@@ -107,33 +108,32 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 			if (stats.size() != sizeof(int32_t)) {
 				throw InternalException("Incorrect stats size for type %s", type.ToString());
 			}
-			return Value::DECIMAL(Load<int32_t>((data_ptr_t)stats.c_str()), width, scale);
+			return Value::DECIMAL(Load<int32_t>(stats_data), width, scale);
 		}
 		case Type::INT64: {
 			if (stats.size() != sizeof(int64_t)) {
 				throw InternalException("Incorrect stats size for type %s", type.ToString());
 			}
-			return Value::DECIMAL(Load<int64_t>((data_ptr_t)stats.c_str()), width, scale);
+			return Value::DECIMAL(Load<int64_t>(stats_data), width, scale);
 		}
 		case Type::BYTE_ARRAY:
 		case Type::FIXED_LEN_BYTE_ARRAY:
+			if (stats.size() > GetTypeIdSize(type.InternalType())) {
+				throw InternalException("Incorrect stats size for type %s", type.ToString());
+			}
 			switch (type.InternalType()) {
 			case PhysicalType::INT16:
-				return Value::DECIMAL(
-				    ParquetDecimalUtils::ReadDecimalValue<int16_t>((const_data_ptr_t)stats.c_str(), stats.size()),
-				    width, scale);
+				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<int16_t>(stats_data, stats.size()), width,
+				                      scale);
 			case PhysicalType::INT32:
-				return Value::DECIMAL(
-				    ParquetDecimalUtils::ReadDecimalValue<int32_t>((const_data_ptr_t)stats.c_str(), stats.size()),
-				    width, scale);
+				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<int32_t>(stats_data, stats.size()), width,
+				                      scale);
 			case PhysicalType::INT64:
-				return Value::DECIMAL(
-				    ParquetDecimalUtils::ReadDecimalValue<int64_t>((const_data_ptr_t)stats.c_str(), stats.size()),
-				    width, scale);
+				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<int64_t>(stats_data, stats.size()), width,
+				                      scale);
 			case PhysicalType::INT128:
-				return Value::DECIMAL(
-				    ParquetDecimalUtils::ReadDecimalValue<hugeint_t>((const_data_ptr_t)stats.c_str(), stats.size()),
-				    width, scale);
+				return Value::DECIMAL(ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size()), width,
+				                      scale);
 			default:
 				throw InternalException("Unsupported internal type for decimal");
 			}
@@ -152,14 +152,34 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 		if (stats.size() != sizeof(int32_t)) {
 			throw InternalException("Incorrect stats size for type DATE");
 		}
-		return Value::DATE(date_t(Load<int32_t>((data_ptr_t)stats.c_str())));
+		return Value::DATE(date_t(Load<int32_t>(stats_data)));
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ: {
-		if (stats.size() != sizeof(int64_t)) {
+		int64_t val;
+		if (stats.size() == sizeof(int32_t)) {
+			val = Load<int32_t>(stats_data);
+		} else if (stats.size() == sizeof(int64_t)) {
+			val = Load<int64_t>(stats_data);
+		} else {
 			throw InternalException("Incorrect stats size for type TIME");
 		}
-		auto time = dtime_t(Load<int64_t>((data_ptr_t)stats.c_str()));
-		return Value::TIME(time);
+		if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIME) {
+			// logical type
+			if (schema_ele.logicalType.TIME.unit.__isset.MILLIS) {
+				return Value::TIME(Time::FromTimeMs(val));
+			} else if (schema_ele.logicalType.TIME.unit.__isset.NANOS) {
+				return Value::TIME(Time::FromTimeNs(val));
+			} else if (schema_ele.logicalType.TIME.unit.__isset.MICROS) {
+				return Value::TIME(dtime_t(val));
+			} else {
+				throw InternalException("Time logicalType is set but unit is not defined");
+			}
+		}
+		if (schema_ele.converted_type == duckdb_parquet::format::ConvertedType::TIME_MILLIS) {
+			return Value::TIME(Time::FromTimeMs(val));
+		} else {
+			return Value::TIME(dtime_t(val));
+		}
 	}
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ: {
@@ -167,13 +187,13 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type,
 			if (stats.size() != sizeof(Int96)) {
 				throw InternalException("Incorrect stats size for type TIMESTAMP");
 			}
-			return Value::TIMESTAMP(ImpalaTimestampToTimestamp(Load<Int96>((data_ptr_t)stats.c_str())));
+			return Value::TIMESTAMP(ImpalaTimestampToTimestamp(Load<Int96>(stats_data)));
 		} else {
 			D_ASSERT(schema_ele.type == Type::INT64);
 			if (stats.size() != sizeof(int64_t)) {
 				throw InternalException("Incorrect stats size for type TIMESTAMP");
 			}
-			auto val = Load<int64_t>((data_ptr_t)stats.c_str());
+			auto val = Load<int64_t>(stats_data);
 			if (schema_ele.__isset.logicalType && schema_ele.logicalType.__isset.TIMESTAMP) {
 				// logical type
 				if (schema_ele.logicalType.TIMESTAMP.unit.__isset.MILLIS) {
@@ -206,7 +226,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		return nullptr;
 	}
 	auto &parquet_stats = column_chunk.meta_data.statistics;
-	unique_ptr<BaseStatistics> row_group_stats;
+	duckdb::unique_ptr<BaseStatistics> row_group_stats;
 
 	switch (type.id()) {
 	case LogicalTypeId::UTINYINT:
@@ -231,15 +251,19 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	case LogicalTypeId::VARCHAR: {
 		auto string_stats = StringStats::CreateEmpty(type);
 		if (parquet_stats.__isset.min) {
+			StringColumnReader::VerifyString(parquet_stats.min.c_str(), parquet_stats.min.size(), true);
 			StringStats::Update(string_stats, parquet_stats.min);
 		} else if (parquet_stats.__isset.min_value) {
+			StringColumnReader::VerifyString(parquet_stats.min_value.c_str(), parquet_stats.min_value.size(), true);
 			StringStats::Update(string_stats, parquet_stats.min_value);
 		} else {
 			return nullptr;
 		}
 		if (parquet_stats.__isset.max) {
+			StringColumnReader::VerifyString(parquet_stats.max.c_str(), parquet_stats.max.size(), true);
 			StringStats::Update(string_stats, parquet_stats.max);
 		} else if (parquet_stats.__isset.max_value) {
+			StringColumnReader::VerifyString(parquet_stats.max_value.c_str(), parquet_stats.max_value.size(), true);
 			StringStats::Update(string_stats, parquet_stats.max_value);
 		} else {
 			return nullptr;

@@ -83,7 +83,7 @@ void MergeSorter::MergePartition() {
 
 void MergeSorter::GetNextPartition() {
 	// Create result block
-	state.sorted_blocks_temp[state.pair_idx].push_back(make_unique<SortedBlock>(buffer_manager, state));
+	state.sorted_blocks_temp[state.pair_idx].push_back(make_uniq<SortedBlock>(buffer_manager, state));
 	result = state.sorted_blocks_temp[state.pair_idx].back().get();
 	// Determine which blocks must be merged
 	auto &left_block = *state.sorted_blocks[state.pair_idx * 2];
@@ -91,8 +91,8 @@ void MergeSorter::GetNextPartition() {
 	const idx_t l_count = left_block.Count();
 	const idx_t r_count = right_block.Count();
 	// Initialize left and right reader
-	left = make_unique<SBScanState>(buffer_manager, state);
-	right = make_unique<SBScanState>(buffer_manager, state);
+	left = make_uniq<SBScanState>(buffer_manager, state);
+	right = make_uniq<SBScanState>(buffer_manager, state);
 	// Compute the work that this thread must do using Merge Path
 	idx_t l_end;
 	idx_t r_end;
@@ -544,7 +544,9 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 					const bool &l_smaller = left_smaller[copied + i];
 					const bool r_smaller = !l_smaller;
 					const auto &entry_size = next_entry_sizes[copied + i];
-					memcpy(result_heap_ptr, (data_ptr_t)(l_smaller * (idx_t)l_heap_ptr + r_smaller * (idx_t)r_heap_ptr),
+					memcpy(result_heap_ptr,
+					       reinterpret_cast<data_ptr_t>(l_smaller * CastPointerToValue(l_heap_ptr) +
+					                                    r_smaller * CastPointerToValue(r_heap_ptr)),
 					       entry_size);
 					D_ASSERT(Load<uint32_t>(result_heap_ptr) == entry_size);
 					result_heap_ptr += entry_size;
@@ -585,7 +587,10 @@ void MergeSorter::MergeRows(data_ptr_t &l_ptr, idx_t &l_entry_idx, const idx_t &
 		const bool &l_smaller = left_smaller[copied + i];
 		const bool r_smaller = !l_smaller;
 		// Use comparison bool (0 or 1) to copy an entry from either side
-		FastMemcpy(target_ptr, (data_ptr_t)(l_smaller * (idx_t)l_ptr + r_smaller * (idx_t)r_ptr), entry_size);
+		FastMemcpy(
+		    target_ptr,
+		    reinterpret_cast<data_ptr_t>(l_smaller * CastPointerToValue(l_ptr) + r_smaller * CastPointerToValue(r_ptr)),
+		    entry_size);
 		target_ptr += entry_size;
 		// Use the comparison bool to increment entries and pointers
 		l_entry_idx += l_smaller;

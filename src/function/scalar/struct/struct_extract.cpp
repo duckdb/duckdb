@@ -18,17 +18,17 @@ struct StructExtractBindData : public FunctionData {
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<StructExtractBindData>(key, index, type);
+		return make_uniq<StructExtractBindData>(key, index, type);
 	}
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const StructExtractBindData &)other_p;
+		auto &other = other_p.Cast<StructExtractBindData>();
 		return key == other.key && index == other.index && type == other.type;
 	}
 };
 
 static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (StructExtractBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<StructExtractBindData>();
 
 	// this should be guaranteed by the binder
 	auto &vec = args.data[0];
@@ -62,7 +62,7 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	if (key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
 		throw BinderException("Key name for struct_extract needs to be a constant string");
 	}
-	Value key_val = ExpressionExecutor::EvaluateScalar(context, *key_child.get());
+	Value key_val = ExpressionExecutor::EvaluateScalar(context, *key_child);
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
 	auto &key_str = StringValue::Get(key_val);
 	if (key_val.IsNull() || key_str.empty()) {
@@ -96,14 +96,14 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	}
 
 	bound_function.return_type = return_type;
-	return make_unique<StructExtractBindData>(key, key_index, return_type);
+	return make_uniq<StructExtractBindData>(std::move(key), key_index, std::move(return_type));
 }
 
 static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, FunctionStatisticsInput &input) {
 	auto &child_stats = input.child_stats;
 	auto &bind_data = input.bind_data;
 
-	auto &info = (StructExtractBindData &)*bind_data;
+	auto &info = bind_data->Cast<StructExtractBindData>();
 	auto struct_child_stats = StructStats::GetChildStats(child_stats[0]);
 	return struct_child_stats[info.index].ToUnique();
 }

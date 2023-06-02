@@ -17,19 +17,19 @@ namespace duckdb {
 
 static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &context, const string &alias,
                                                const string &column_name) {
-	auto expr = make_unique_base<ParsedExpression, ColumnRefExpression>(column_name, alias);
+	auto expr = make_uniq_base<ParsedExpression, ColumnRefExpression>(column_name, alias);
 	ExpressionBinder expr_binder(binder, context);
 	auto result = expr_binder.Bind(expr);
-	return make_unique<BoundExpression>(std::move(result));
+	return make_uniq<BoundExpression>(std::move(result));
 }
 
 static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder &left_binder, Binder &right_binder,
                                                  const string &left_alias, const string &right_alias,
-                                                 const string &column_name) {
+                                                 const string &column_name, ExpressionType type) {
 	ExpressionBinder expr_binder(left_binder, context);
 	auto left = BindColumn(left_binder, context, left_alias, column_name);
 	auto right = BindColumn(right_binder, context, right_alias, column_name);
-	return make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(left), std::move(right));
+	return make_uniq<ComparisonExpression>(type, std::move(left), std::move(right));
 }
 
 bool Binder::TryFindBinding(const string &using_column, const string &join_side, string &result) {
@@ -68,7 +68,7 @@ string Binder::FindBinding(const string &using_column, const string &join_side) 
 	return result;
 }
 
-static void AddUsingBindings(UsingColumnSet &set, UsingColumnSet *input_set, const string &input_binding) {
+static void AddUsingBindings(UsingColumnSet &set, optional_ptr<UsingColumnSet> input_set, const string &input_binding) {
 	if (input_set) {
 		for (auto &entry : input_set->bindings) {
 			set.bindings.insert(entry);
@@ -95,8 +95,8 @@ static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const str
 	}
 }
 
-string Binder::RetrieveUsingBinding(Binder &current_binder, UsingColumnSet *current_set, const string &using_column,
-                                    const string &join_side, UsingColumnSet *new_set) {
+string Binder::RetrieveUsingBinding(Binder &current_binder, optional_ptr<UsingColumnSet> current_set,
+                                    const string &using_column, const string &join_side) {
 	string binding;
 	if (!current_set) {
 		binding = current_binder.FindBinding(using_column, join_side);
@@ -119,7 +119,7 @@ static vector<string> RemoveDuplicateUsingColumns(const vector<string> &using_co
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
-	auto result = make_unique<BoundJoinRef>(ref.ref_type);
+	auto result = make_uniq<BoundJoinRef>(ref.ref_type);
 	result->left_binder = Binder::CreateBinder(context, this);
 	result->right_binder = Binder::CreateBinder(context, this);
 	auto &left_binder = *result->left_binder;
@@ -150,7 +150,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		case_insensitive_set_t lhs_columns;
 		auto &lhs_binding_list = left_binder.bind_context.GetBindingsList();
 		for (auto &binding : lhs_binding_list) {
-			for (auto &column_name : binding.second->names) {
+			for (auto &column_name : binding.get().names) {
 				lhs_columns.insert(column_name);
 			}
 		}
@@ -175,20 +175,22 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			// gather all left/right candidates
 			string left_candidates, right_candidates;
 			auto &rhs_binding_list = right_binder.bind_context.GetBindingsList();
-			for (auto &binding : lhs_binding_list) {
-				for (auto &column_name : binding.second->names) {
+			for (auto &binding_ref : lhs_binding_list) {
+				auto &binding = binding_ref.get();
+				for (auto &column_name : binding.names) {
 					if (!left_candidates.empty()) {
 						left_candidates += ", ";
 					}
-					left_candidates += binding.first + "." + column_name;
+					left_candidates += binding.alias + "." + column_name;
 				}
 			}
-			for (auto &binding : rhs_binding_list) {
-				for (auto &column_name : binding.second->names) {
+			for (auto &binding_ref : rhs_binding_list) {
+				auto &binding = binding_ref.get();
+				for (auto &column_name : binding.names) {
 					if (!right_candidates.empty()) {
 						right_candidates += ", ";
 					}
-					right_candidates += binding.first + "." + column_name;
+					right_candidates += binding.alias + "." + column_name;
 				}
 			}
 			error_msg += "\n   Left candidates: " + left_candidates;
@@ -198,12 +200,14 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		break;
 	}
 	case JoinRefType::REGULAR:
+	case JoinRefType::ASOF:
 		if (!ref.using_columns.empty()) {
 			// USING columns
 			D_ASSERT(!result->condition);
 			extra_using_columns = ref.using_columns;
 		}
 		break;
+
 	case JoinRefType::CROSS:
 	case JoinRefType::POSITIONAL:
 		break;
@@ -211,8 +215,8 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	extra_using_columns = RemoveDuplicateUsingColumns(extra_using_columns);
 
 	if (!extra_using_columns.empty()) {
-		vector<UsingColumnSet *> left_using_bindings;
-		vector<UsingColumnSet *> right_using_bindings;
+		vector<optional_ptr<UsingColumnSet>> left_using_bindings;
+		vector<optional_ptr<UsingColumnSet>> right_using_bindings;
 		for (idx_t i = 0; i < extra_using_columns.size(); i++) {
 			auto &using_column = extra_using_columns[i];
 			// we check if there is ALREADY a using column of the same name in the left and right set
@@ -235,21 +239,26 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			string left_binding;
 			string right_binding;
 
-			auto set = make_unique<UsingColumnSet>();
-			auto left_using_binding = left_using_bindings[i];
-			auto right_using_binding = right_using_bindings[i];
-			left_binding = RetrieveUsingBinding(left_binder, left_using_binding, using_column, "left", set.get());
-			right_binding = RetrieveUsingBinding(right_binder, right_using_binding, using_column, "right", set.get());
+			auto set = make_uniq<UsingColumnSet>();
+			auto &left_using_binding = left_using_bindings[i];
+			auto &right_using_binding = right_using_bindings[i];
+			left_binding = RetrieveUsingBinding(left_binder, left_using_binding, using_column, "left");
+			right_binding = RetrieveUsingBinding(right_binder, right_using_binding, using_column, "right");
+
+			// Last column of ASOF JOIN ... USING is >=
+			const auto type = (ref.ref_type == JoinRefType::ASOF && i == extra_using_columns.size() - 1)
+			                      ? ExpressionType::COMPARE_GREATERTHANOREQUALTO
+			                      : ExpressionType::COMPARE_EQUAL;
 
 			extra_conditions.push_back(
-			    AddCondition(context, left_binder, right_binder, left_binding, right_binding, using_column));
+			    AddCondition(context, left_binder, right_binder, left_binding, right_binding, using_column, type));
 
 			AddUsingBindings(*set, left_using_binding, left_binding);
 			AddUsingBindings(*set, right_using_binding, right_binding);
 			SetPrimaryBinding(*set, ref.type, left_binding, right_binding);
-			bind_context.TransferUsingBinding(left_binder.bind_context, left_using_binding, set.get(), left_binding,
+			bind_context.TransferUsingBinding(left_binder.bind_context, left_using_binding, *set, left_binding,
 			                                  using_column);
-			bind_context.TransferUsingBinding(right_binder.bind_context, right_using_binding, set.get(), right_binding,
+			bind_context.TransferUsingBinding(right_binder.bind_context, right_using_binding, *set, right_binding,
 			                                  using_column);
 			AddUsingBindingSet(std::move(set));
 		}
@@ -263,8 +272,8 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 	MoveCorrelatedExpressions(right_binder);
 	for (auto &condition : extra_conditions) {
 		if (ref.condition) {
-			ref.condition = make_unique<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND,
-			                                                   std::move(ref.condition), std::move(condition));
+			ref.condition = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(ref.condition),
+			                                                 std::move(condition));
 		} else {
 			ref.condition = std::move(condition);
 		}

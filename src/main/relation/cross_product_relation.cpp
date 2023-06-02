@@ -16,14 +16,14 @@ CrossProductRelation::CrossProductRelation(shared_ptr<Relation> left_p, shared_p
 }
 
 unique_ptr<QueryNode> CrossProductRelation::GetQueryNode() {
-	auto result = make_unique<SelectNode>();
-	result->select_list.push_back(make_unique<StarExpression>());
+	auto result = make_uniq<SelectNode>();
+	result->select_list.push_back(make_uniq<StarExpression>());
 	result->from_table = GetTableRef();
 	return std::move(result);
 }
 
 unique_ptr<TableRef> CrossProductRelation::GetTableRef() {
-	auto cross_product_ref = make_unique<JoinRef>(JoinRefType::CROSS);
+	auto cross_product_ref = make_uniq<JoinRef>(JoinRefType::CROSS);
 	cross_product_ref->left = left->GetTableRef();
 	cross_product_ref->right = right->GetTableRef();
 	return std::move(cross_product_ref);

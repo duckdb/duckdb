@@ -14,18 +14,20 @@ on:
       - 'examples/**'
       - 'test/**'
       - 'tools/**'
-      - '!tools/swiftpm/**'
+      - '!tools/swift/**'
       - '.github/workflows/**'
       - '!.github/workflows/Swift.yml'
+      - '.github/config/uncovered_files.csv'
   pull_request:
     paths-ignore:
       - '**.md'
       - 'examples/**'
       - 'test/**'
       - 'tools/**'
-      - '!tools/swiftpm/**'
+      - '!tools/swift/**'
       - '.github/workflows/**'
       - '!.github/workflows/Swift.yml'
+      - '.github/config/uncovered_files.csv'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -34,6 +36,7 @@ concurrency:
 jobs:
 
   test-apple-platforms:
+    name: Test Apple Platforms
     strategy:
       matrix:
         # destinations need to match selected version of Xcode
@@ -53,7 +56,7 @@ jobs:
           fetch-depth: '0'
 
       - name: Prepare Package
-        run: python3 tools/swiftpm/create_package.py tools/swiftpm
+        run: python3 tools/swift/create_package.py tools/swift
 
       - name: Select Xcode
         run: sudo xcode-select -switch /Applications/Xcode_14.2.app && /usr/bin/xcodebuild -version
@@ -61,7 +64,33 @@ jobs:
       - name: Run Tests
         run: |
           xcrun xcodebuild test \
-            -workspace tools/swiftpm/duckdb-swift/DuckDB.xcworkspace \
+            -workspace tools/swift/duckdb-swift/DuckDB.xcworkspace \
             -scheme DuckDB \
             -destination platform='${{ matrix.destination }}'
-          
+
+  test-linux:
+    name: Test Linux
+    runs-on: ubuntu-latest
+    container:
+      image: swift:latest
+    steps:
+
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          # we need tags for the ubiquity build script to run without errors
+          fetch-depth: '0'
+
+      - name: Install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Prepare Package
+        run: python3 tools/swift/create_package.py tools/swift
+
+      - name: Build Package
+        run: swift build --package-path tools/swift/duckdb-swift
+
+      - name: Test Package
+        run: swift test --package-path tools/swift/duckdb-swift

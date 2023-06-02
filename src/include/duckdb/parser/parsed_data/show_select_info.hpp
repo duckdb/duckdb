@@ -24,7 +24,7 @@ struct ShowSelectInfo : public ParseInfo {
 	bool is_summary;
 
 	unique_ptr<ShowSelectInfo> Copy() {
-		auto result = make_unique<ShowSelectInfo>();
+		auto result = make_uniq<ShowSelectInfo>();
 		result->types = types;
 		result->query = query->Copy();
 		result->aliases = aliases;

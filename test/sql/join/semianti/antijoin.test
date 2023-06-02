@@ -66,7 +66,7 @@ CREATE TABLE other (a INTEGER, b INTEGER);
 statement ok
 INSERT INTO other VALUES (42, 1), (43, 1);
 
-# a table that is the result of a join can also be semi joined on
+# a table that is the result of a join can also be anti joined on
 query III
 SELECT * FROM left_table
 ANTI JOIN (select right_table.a FROM right_table JOIN other ON (other.a = right_table.a)) joined_right_table
@@ -113,11 +113,36 @@ SELECT * FROM left_table ANTI JOIN right_table ON (left_table.a > right_table.a)
 ----
 42	1	1
 
+
+statement ok
+SELECT * from left_table, right_table;
+
 # complex condition resulting in an any join
 query III
 SELECT * FROM left_table ANTI JOIN right_table ON (left_table.a + right_table.a = 85 OR left_table.a + right_table.b = 84) order by left_table.a, left_table.c;
 ----
-43	1	1
+42	1	1
+
+
+statement ok
+INSERT INTO right_table VALUES (1, 42), (1, 42);
+
+# Insert more values so that the scan side in the cross product is the right hand side
+statement ok
+INSERT INTO left_table VALUES (42, 1, 5), (42, 1, 5), (42, 1, 5), (2000, 20000, 200000);
+
+# complex condition resulting in an any join
+query III
+SELECT * FROM left_table ANTI JOIN right_table ON (left_table.a + right_table.a = 85 OR left_table.a + right_table.b = 84) order by left_table.a, left_table.c;
+----
+2000	20000	200000
+
+# correlated subqueries
+query II
+SELECT a as outer_a, (SELECT right_table.b FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
+----
+43	42
+2000	42
 
 statement ok
 INSERT INTO right_table VALUES (1, 20);
@@ -127,3 +152,4 @@ query II
 SELECT a as outer_a, (SELECT b FROM right_table where right_table.a != outer_a) right_table_b FROM left_table ANTI JOIN right_table ON (left_table.a = right_table.a) Order by outer_a, right_table_b;
 ----
 43	20
+2000	20

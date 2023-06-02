@@ -15,7 +15,7 @@ struct CaseExpressionState : public ExpressionState {
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseExpression &expr,
                                                                 ExpressionExecutorState &root) {
-	auto result = make_unique<CaseExpressionState>(expr, root);
+	auto result = make_uniq<CaseExpressionState>(expr, root);
 	for (auto &case_check : expr.case_checks) {
 		result->AddChild(case_check.when_expr.get());
 		result->AddChild(case_check.then_expr.get());
@@ -27,20 +27,20 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseE
 
 void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionState *state_p, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
-	auto state = (CaseExpressionState *)state_p;
+	auto &state = state_p->Cast<CaseExpressionState>();
 
-	state->intermediate_chunk.Reset();
+	state.intermediate_chunk.Reset();
 
 	// first execute the check expression
-	auto current_true_sel = &state->true_sel;
-	auto current_false_sel = &state->false_sel;
+	auto current_true_sel = &state.true_sel;
+	auto current_false_sel = &state.false_sel;
 	auto current_sel = sel;
 	idx_t current_count = count;
 	for (idx_t i = 0; i < expr.case_checks.size(); i++) {
 		auto &case_check = expr.case_checks[i];
-		auto &intermediate_result = state->intermediate_chunk.data[i * 2 + 1];
-		auto check_state = state->child_states[i * 2].get();
-		auto then_state = state->child_states[i * 2 + 1].get();
+		auto &intermediate_result = state.intermediate_chunk.data[i * 2 + 1];
+		auto check_state = state.child_states[i * 2].get();
+		auto then_state = state.child_states[i * 2 + 1].get();
 
 		idx_t tcount =
 		    Select(*case_check.when_expr, check_state, current_sel, current_count, current_true_sel, current_false_sel);
@@ -68,13 +68,13 @@ void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionStat
 		}
 	}
 	if (current_count > 0) {
-		auto else_state = state->child_states.back().get();
+		auto else_state = state.child_states.back().get();
 		if (current_count == count) {
 			// everything was false, we can just evaluate the else expression directly
 			Execute(*expr.else_expr, else_state, sel, count, result);
 			return;
 		} else {
-			auto &intermediate_result = state->intermediate_chunk.data[expr.case_checks.size() * 2];
+			auto &intermediate_result = state.intermediate_chunk.data[expr.case_checks.size() * 2];
 
 			D_ASSERT(current_sel);
 			Execute(*expr.else_expr, else_state, current_sel, current_count, intermediate_result);
@@ -105,7 +105,7 @@ void TemplatedFillLoop(Vector &vector, Vector &result, const SelectionVector &se
 	} else {
 		UnifiedVectorFormat vdata;
 		vector.ToUnifiedFormat(count, vdata);
-		auto data = (T *)vdata.data;
+		auto data = UnifiedVectorFormat::GetData<T>(vdata);
 		for (idx_t i = 0; i < count; i++) {
 			auto source_idx = vdata.sel->get_index(i);
 			auto res_idx = sel.get_index(i);

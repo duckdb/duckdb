@@ -16,6 +16,9 @@ namespace duckdb {
 
 class CallStatement : public SQLStatement {
 public:
+	static constexpr const StatementType TYPE = StatementType::CALL_STATEMENT;
+
+public:
 	CallStatement();
 
 	unique_ptr<ParsedExpression> function;

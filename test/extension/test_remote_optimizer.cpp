@@ -79,14 +79,14 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 			REQUIRE(buffer);
 			REQUIRE(read(connfd, buffer, bytes) == ssize_t(bytes));
 
-			BufferedDeserializer deserializer((data_ptr_t)buffer, bytes);
+			BufferedDeserializer deserializer(data_ptr_cast(buffer), bytes);
 			con2.BeginTransaction();
 			PlanDeserializationState state(*con2.context);
 			auto plan = LogicalOperator::Deserialize(deserializer, state);
 			plan->ResolveOperatorTypes();
 			con2.Commit();
 
-			auto statement = make_unique<LogicalPlanStatement>(std::move(plan));
+			auto statement = make_uniq<LogicalPlanStatement>(std::move(plan));
 			auto result = con2.Query(std::move(statement));
 			auto &collection = result->Collection();
 			idx_t num_chunks = collection.ChunkCount();

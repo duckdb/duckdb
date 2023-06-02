@@ -46,6 +46,8 @@ public:
 	string ToString() const;
 	idx_t GetCount() const;
 
+	static bool TypeIsSupported(const LogicalType &type);
+
 private:
 	//! For distinct statistics we sample the input to speed up insertions
 	static constexpr const double SAMPLE_RATE = 0.1;

@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// test_helpers.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #ifdef _MSC_VER
@@ -14,8 +23,8 @@
 #include "compare_result.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types.hpp"
-
 namespace duckdb {
 
 bool TestForceStorage();
@@ -28,17 +37,21 @@ void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);
 void TestDeleteFile(string path);
 void TestChangeDirectory(string path);
+string TestGetCurrentDirectory();
 string TestDirectoryPath();
 string TestCreatePath(string suffix);
 unique_ptr<DBConfig> GetTestConfig();
 bool TestIsInternalError(unordered_set<string> &internal_error_messages, const string &error);
-
+void SetTestDirectory(string path);
+void SetDebugInitialize(int value);
+void SetSingleThreaded();
+string GetTestDirectory();
 string GetCSVPath();
 void WriteCSV(string path, const char *csv);
 void WriteBinary(string path, const uint8_t *data, uint64_t length);
 
 bool NO_FAIL(QueryResult &result);
-bool NO_FAIL(unique_ptr<QueryResult> result);
+bool NO_FAIL(duckdb::unique_ptr<QueryResult> result);
 
 #define REQUIRE_NO_FAIL(result) REQUIRE(NO_FAIL((result)))
 #define REQUIRE_FAIL(result)    REQUIRE((result)->HasError())

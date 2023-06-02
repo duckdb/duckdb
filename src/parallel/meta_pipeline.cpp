@@ -18,7 +18,7 @@ PipelineBuildState &MetaPipeline::GetState() const {
 	return state;
 }
 
-PhysicalOperator *MetaPipeline::GetSink() const {
+optional_ptr<PhysicalOperator> MetaPipeline::GetSink() const {
 	return sink;
 }
 
@@ -67,11 +67,11 @@ void MetaPipeline::AssignNextBatchIndex(Pipeline *pipeline) {
 	pipeline->base_batch_index = next_batch_index++ * PipelineBuildState::BATCH_INCREMENT;
 }
 
-void MetaPipeline::Build(PhysicalOperator *op) {
+void MetaPipeline::Build(PhysicalOperator &op) {
 	D_ASSERT(pipelines.size() == 1);
 	D_ASSERT(children.empty());
 	D_ASSERT(final_pipelines.empty());
-	op->BuildPipelines(*pipelines.back(), *this);
+	op.BuildPipelines(*pipelines.back(), *this);
 }
 
 void MetaPipeline::Ready() {
@@ -83,18 +83,18 @@ void MetaPipeline::Ready() {
 	}
 }
 
-MetaPipeline *MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator *op) {
-	children.push_back(make_unique<MetaPipeline>(executor, state, op));
+MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op) {
+	children.push_back(make_shared<MetaPipeline>(executor, state, &op));
 	auto child_meta_pipeline = children.back().get();
 	// child MetaPipeline must finish completely before this MetaPipeline can start
 	current.AddDependency(child_meta_pipeline->GetBasePipeline());
 	// child meta pipeline is part of the recursive CTE too
 	child_meta_pipeline->recursive_cte = recursive_cte;
-	return child_meta_pipeline;
+	return *child_meta_pipeline;
 }
 
 Pipeline *MetaPipeline::CreatePipeline() {
-	pipelines.emplace_back(make_unique<Pipeline>(executor));
+	pipelines.emplace_back(make_shared<Pipeline>(executor));
 	state.SetPipelineSink(*pipelines.back(), sink, next_batch_index++);
 	return pipelines.back().get();
 }
@@ -133,10 +133,6 @@ bool MetaPipeline::HasFinishEvent(Pipeline *pipeline) {
 }
 
 Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matters) {
-	if (HasRecursiveCTE()) {
-		throw NotImplementedException("UNIONS are not supported in recursive CTEs yet");
-	}
-
 	// create the union pipeline (batch index 0, should be set correctly afterwards)
 	auto union_pipeline = CreatePipeline();
 	state.SetPipelineOperators(*union_pipeline, state.GetPipelineOperators(current));
@@ -157,12 +153,9 @@ Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matter
 	return union_pipeline;
 }
 
-void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator *op, Pipeline *last_pipeline) {
+void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator &op, Pipeline *last_pipeline) {
 	// rule 2: 'current' must be fully built (down to the source) before creating the child pipeline
 	D_ASSERT(current.source);
-	if (HasRecursiveCTE()) {
-		throw NotImplementedException("Child pipelines are not supported in recursive CTEs yet");
-	}
 
 	// create the child pipeline (same batch index)
 	pipelines.emplace_back(state.CreateChildPipeline(executor, current, op));

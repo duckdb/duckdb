@@ -1,4 +1,4 @@
-Checks:          '-*,clang-diagnostic-*,bugprone-*,performance-*,google-explicit-constructor,google-build-using-namespace,google-runtime-int,misc-definitions-in-headers,modernize-use-nullptr,modernize-use-override,-bugprone-macro-parentheses,readability-braces-around-statements,-bugprone-branch-clone,readability-identifier-naming,hicpp-exception-baseclass,misc-throw-by-value-catch-by-reference,-bugprone-signed-char-misuse,-bugprone-misplaced-widening-cast,-bugprone-sizeof-expression,-bugprone-narrowing-conversions,-bugprone-easily-swappable-parameters,google-global-names-in-headers,llvm-header-guard,misc-definitions-in-headers,modernize-use-emplace,modernize-use-bool-literals,-performance-inefficient-string-concatenation,-performance-no-int-to-ptr,readability-container-size-empty'
+Checks:          '-*,clang-diagnostic-*,bugprone-*,performance-*,google-explicit-constructor,google-build-using-namespace,google-runtime-int,misc-definitions-in-headers,modernize-use-nullptr,modernize-use-override,-bugprone-macro-parentheses,readability-braces-around-statements,-bugprone-branch-clone,readability-identifier-naming,hicpp-exception-baseclass,misc-throw-by-value-catch-by-reference,-bugprone-signed-char-misuse,-bugprone-misplaced-widening-cast,-bugprone-sizeof-expression,-bugprone-narrowing-conversions,-bugprone-easily-swappable-parameters,google-global-names-in-headers,llvm-header-guard,misc-definitions-in-headers,modernize-use-emplace,modernize-use-bool-literals,-performance-inefficient-string-concatenation,-performance-no-int-to-ptr,readability-container-size-empty,cppcoreguidelines-pro-type-cstyle-cast'
 WarningsAsErrors: '*'
 HeaderFilterRegex: '.*^(re2.h)'
 AnalyzeTemporaryDtors: false
@@ -46,3 +46,6 @@ CheckOptions:
     value:           UPPER_CASE
   - key:             readability-identifier-naming.VariableCase
     value:           lower_case
+  - key:             modernize-use-emplace.SmartPointers
+    value:           '::std::shared_ptr;::duckdb::unique_ptr;::std::auto_ptr;::std::weak_ptr'
+

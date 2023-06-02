@@ -15,6 +15,9 @@ namespace duckdb {
 
 class BoundParameterExpression : public Expression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_PARAMETER;
+
+public:
 	explicit BoundParameterExpression(idx_t parameter_nr);
 
 	idx_t parameter_nr;
@@ -32,7 +35,7 @@ public:
 
 	string ToString() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	bool Equals(const BaseExpression &other) const override;
 	hash_t Hash() const override;
 
 	unique_ptr<Expression> Copy() override;

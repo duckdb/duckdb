@@ -4,6 +4,10 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/string_util.hpp"
 
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 WindowExpression::WindowExpression(ExpressionType type, string catalog_name, string schema, const string &function_name)
@@ -28,57 +32,73 @@ WindowExpression::WindowExpression(ExpressionType type, string catalog_name, str
 	}
 }
 
+ExpressionType WindowExpression::WindowToExpressionType(string &fun_name) {
+	if (fun_name == "rank") {
+		return ExpressionType::WINDOW_RANK;
+	} else if (fun_name == "rank_dense" || fun_name == "dense_rank") {
+		return ExpressionType::WINDOW_RANK_DENSE;
+	} else if (fun_name == "percent_rank") {
+		return ExpressionType::WINDOW_PERCENT_RANK;
+	} else if (fun_name == "row_number") {
+		return ExpressionType::WINDOW_ROW_NUMBER;
+	} else if (fun_name == "first_value" || fun_name == "first") {
+		return ExpressionType::WINDOW_FIRST_VALUE;
+	} else if (fun_name == "last_value" || fun_name == "last") {
+		return ExpressionType::WINDOW_LAST_VALUE;
+	} else if (fun_name == "nth_value") {
+		return ExpressionType::WINDOW_NTH_VALUE;
+	} else if (fun_name == "cume_dist") {
+		return ExpressionType::WINDOW_CUME_DIST;
+	} else if (fun_name == "lead") {
+		return ExpressionType::WINDOW_LEAD;
+	} else if (fun_name == "lag") {
+		return ExpressionType::WINDOW_LAG;
+	} else if (fun_name == "ntile") {
+		return ExpressionType::WINDOW_NTILE;
+	}
+	return ExpressionType::WINDOW_AGGREGATE;
+}
+
 string WindowExpression::ToString() const {
 	return ToString<WindowExpression, ParsedExpression, OrderByNode>(*this, schema, function_name);
 }
 
-bool WindowExpression::Equal(const WindowExpression *a, const WindowExpression *b) {
+bool WindowExpression::Equal(const WindowExpression &a, const WindowExpression &b) {
 	// check if the child expressions are equivalent
-	if (b->children.size() != a->children.size()) {
+	if (a.ignore_nulls != b.ignore_nulls) {
 		return false;
 	}
-	if (a->ignore_nulls != b->ignore_nulls) {
+	if (!ParsedExpression::ListEquals(a.children, b.children)) {
 		return false;
 	}
-	for (idx_t i = 0; i < a->children.size(); i++) {
-		if (!a->children[i]->Equals(b->children[i].get())) {
-			return false;
-		}
-	}
-	if (a->start != b->start || a->end != b->end) {
+	if (a.start != b.start || a.end != b.end) {
 		return false;
 	}
 	// check if the framing expressions are equivalentbind_
-	if (!BaseExpression::Equals(a->start_expr.get(), b->start_expr.get()) ||
-	    !BaseExpression::Equals(a->end_expr.get(), b->end_expr.get()) ||
-	    !BaseExpression::Equals(a->offset_expr.get(), b->offset_expr.get()) ||
-	    !BaseExpression::Equals(a->default_expr.get(), b->default_expr.get())) {
+	if (!ParsedExpression::Equals(a.start_expr, b.start_expr) || !ParsedExpression::Equals(a.end_expr, b.end_expr) ||
+	    !ParsedExpression::Equals(a.offset_expr, b.offset_expr) ||
+	    !ParsedExpression::Equals(a.default_expr, b.default_expr)) {
 		return false;
 	}
 
 	// check if the partitions are equivalent
-	if (a->partitions.size() != b->partitions.size()) {
+	if (!ParsedExpression::ListEquals(a.partitions, b.partitions)) {
 		return false;
-	}
-	for (idx_t i = 0; i < a->partitions.size(); i++) {
-		if (!a->partitions[i]->Equals(b->partitions[i].get())) {
-			return false;
-		}
 	}
 	// check if the orderings are equivalent
-	if (a->orders.size() != b->orders.size()) {
+	if (a.orders.size() != b.orders.size()) {
 		return false;
 	}
-	for (idx_t i = 0; i < a->orders.size(); i++) {
-		if (a->orders[i].type != b->orders[i].type) {
+	for (idx_t i = 0; i < a.orders.size(); i++) {
+		if (a.orders[i].type != b.orders[i].type) {
 			return false;
 		}
-		if (!a->orders[i].expression->Equals(b->orders[i].expression.get())) {
+		if (!a.orders[i].expression->Equals(*b.orders[i].expression)) {
 			return false;
 		}
 	}
 	// check if the filter clauses are equivalent
-	if (!BaseExpression::Equals(a->filter_expr.get(), b->filter_expr.get())) {
+	if (!ParsedExpression::Equals(a.filter_expr, b.filter_expr)) {
 		return false;
 	}
 
@@ -86,7 +106,7 @@ bool WindowExpression::Equal(const WindowExpression *a, const WindowExpression *
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Copy() const {
-	auto new_window = make_unique<WindowExpression>(type, catalog, schema, function_name);
+	auto new_window = make_uniq<WindowExpression>(type, catalog, schema, function_name);
 	new_window->CopyProperties(*this);
 
 	for (auto &child : children) {
@@ -139,10 +159,49 @@ void WindowExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteString(catalog);
 }
 
+void WindowExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("function_name", function_name);
+	serializer.WriteProperty("schema", schema);
+	serializer.WriteProperty("children", children);
+	serializer.WriteProperty("partitions", partitions);
+	serializer.WriteProperty("orders", orders);
+	serializer.WriteProperty("start", start);
+	serializer.WriteProperty("end", end);
+	serializer.WriteOptionalProperty("start_expr", start_expr);
+	serializer.WriteOptionalProperty("end_expr", end_expr);
+	serializer.WriteOptionalProperty("offset_expr", offset_expr);
+	serializer.WriteOptionalProperty("default_expr", default_expr);
+	serializer.WriteProperty("ignore_nulls", ignore_nulls);
+	serializer.WriteOptionalProperty("filter_expr", filter_expr);
+	serializer.WriteProperty("catalog", catalog);
+}
+
+unique_ptr<ParsedExpression> WindowExpression::FormatDeserialize(ExpressionType type,
+                                                                 FormatDeserializer &deserializer) {
+	auto function_name = deserializer.ReadProperty<string>("function_name");
+	auto schema = deserializer.ReadProperty<string>("schema");
+	auto expr = make_uniq<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
+
+	deserializer.ReadProperty("children", expr->children);
+	deserializer.ReadProperty("partitions", expr->partitions);
+	deserializer.ReadProperty("orders", expr->orders);
+	deserializer.ReadProperty("start", expr->start);
+	deserializer.ReadProperty("end", expr->end);
+	deserializer.ReadOptionalProperty("start_expr", expr->start_expr);
+	deserializer.ReadOptionalProperty("end_expr", expr->end_expr);
+	deserializer.ReadOptionalProperty("offset_expr", expr->offset_expr);
+	deserializer.ReadOptionalProperty("default_expr", expr->default_expr);
+	deserializer.ReadProperty("ignore_nulls", expr->ignore_nulls);
+	deserializer.ReadOptionalProperty("filter_expr", expr->filter_expr);
+	deserializer.ReadProperty("catalog", expr->catalog);
+	return std::move(expr);
+}
+
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto function_name = reader.ReadRequired<string>();
 	auto schema = reader.ReadRequired<string>();
-	auto expr = make_unique<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
+	auto expr = make_uniq<WindowExpression>(type, INVALID_CATALOG, std::move(schema), function_name);
 	expr->children = reader.ReadRequiredSerializableList<ParsedExpression>();
 	expr->partitions = reader.ReadRequiredSerializableList<ParsedExpression>();
 

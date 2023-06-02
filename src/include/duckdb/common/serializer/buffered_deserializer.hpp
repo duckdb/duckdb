@@ -26,14 +26,16 @@ public:
 	void ReadData(data_ptr_t buffer, uint64_t read_size) override;
 };
 
-class BufferentContextDeserializer : public BufferedDeserializer {
+class BufferedContextDeserializer : public BufferedDeserializer {
 public:
-	BufferentContextDeserializer(ClientContext &context_p, data_ptr_t ptr, idx_t data_size)
+	BufferedContextDeserializer(ClientContext &context_p, data_ptr_t ptr, idx_t data_size)
 	    : BufferedDeserializer(ptr, data_size), context(context_p) {
 	}
 
 public:
 	ClientContext &context;
+
+	ClientContext &GetContext() override;
 };
 
 } // namespace duckdb

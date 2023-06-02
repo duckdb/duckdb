@@ -17,11 +17,11 @@ class DuckTableEntry;
 class TableCatalogEntry;
 
 struct TableScanBindData : public TableFunctionData {
-	explicit TableScanBindData(DuckTableEntry *table) : table(table), is_index_scan(false), is_create_index(false) {
+	explicit TableScanBindData(DuckTableEntry &table) : table(table), is_index_scan(false), is_create_index(false) {
 	}
 
 	//! The table to scan
-	DuckTableEntry *table;
+	DuckTableEntry &table;
 
 	//! Whether or not the table scan is an index scan
 	bool is_index_scan;
@@ -33,7 +33,7 @@ struct TableScanBindData : public TableFunctionData {
 public:
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = (const TableScanBindData &)other_p;
-		return other.table == table && result_ids == other.result_ids;
+		return &other.table == &table && result_ids == other.result_ids;
 	}
 };
 
@@ -42,7 +42,8 @@ struct TableScanFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 	static TableFunction GetFunction();
 	static TableFunction GetIndexScanFunction();
-	static TableCatalogEntry *GetTableEntry(const TableFunction &function, const FunctionData *bind_data);
+	static optional_ptr<TableCatalogEntry> GetTableEntry(const TableFunction &function,
+	                                                     const optional_ptr<FunctionData> bind_data);
 };
 
 } // namespace duckdb

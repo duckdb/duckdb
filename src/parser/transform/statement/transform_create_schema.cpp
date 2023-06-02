@@ -4,21 +4,19 @@
 
 namespace duckdb {
 
-unique_ptr<CreateStatement> Transformer::TransformCreateSchema(duckdb_libpgquery::PGNode *node) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateSchemaStmt *>(node);
-	D_ASSERT(stmt);
-	auto result = make_unique<CreateStatement>();
-	auto info = make_unique<CreateSchemaInfo>();
+unique_ptr<CreateStatement> Transformer::TransformCreateSchema(duckdb_libpgquery::PGCreateSchemaStmt &stmt) {
+	auto result = make_uniq<CreateStatement>();
+	auto info = make_uniq<CreateSchemaInfo>();
 
-	D_ASSERT(stmt->schemaname);
-	info->catalog = stmt->catalogname ? stmt->catalogname : INVALID_CATALOG;
-	info->schema = stmt->schemaname;
-	info->on_conflict = TransformOnConflict(stmt->onconflict);
+	D_ASSERT(stmt.schemaname);
+	info->catalog = stmt.catalogname ? stmt.catalogname : INVALID_CATALOG;
+	info->schema = stmt.schemaname;
+	info->on_conflict = TransformOnConflict(stmt.onconflict);
 
-	if (stmt->schemaElts) {
+	if (stmt.schemaElts) {
 		// schema elements
-		for (auto cell = stmt->schemaElts->head; cell != nullptr; cell = cell->next) {
-			auto node = reinterpret_cast<duckdb_libpgquery::PGNode *>(cell->data.ptr_value);
+		for (auto cell = stmt.schemaElts->head; cell != nullptr; cell = cell->next) {
+			auto node = PGPointerCast<duckdb_libpgquery::PGNode>(cell->data.ptr_value);
 			switch (node->type) {
 			case duckdb_libpgquery::T_PGCreateStmt:
 			case duckdb_libpgquery::T_PGViewStmt:

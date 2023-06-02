@@ -25,18 +25,42 @@ class RowGroupCollection;
 class UpdateSegment;
 class TableScanState;
 class ColumnSegment;
+class ColumnSegmentTree;
 class ValiditySegment;
 class TableFilterSet;
 class ColumnData;
 class DuckTransaction;
+class RowGroupSegmentTree;
 
 struct SegmentScanState {
 	virtual ~SegmentScanState() {
+	}
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
 struct IndexScanState {
 	virtual ~IndexScanState() {
+	}
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -45,6 +69,8 @@ typedef unordered_map<block_id_t, BufferHandle> buffer_handle_set_t;
 struct ColumnScanState {
 	//! The column segment that is currently being scanned
 	ColumnSegment *current = nullptr;
+	//! Column segment tree
+	ColumnSegmentTree *segment_tree = nullptr;
 	//! The current row index of the scan
 	idx_t row_index = 0;
 	//! The internal row index (i.e. the position of the SegmentScanState)
@@ -68,12 +94,11 @@ struct ColumnScanState {
 	idx_t last_offset = 0;
 
 public:
+	void Initialize(const LogicalType &type);
 	//! Move the scan state forward by "count" rows (including all child states)
 	void Next(idx_t count);
 	//! Move ONLY this state forward by "count" rows (i.e. not the child states)
 	void NextInternal(idx_t count);
-	//! Move the scan state forward by STANDARD_VECTOR_SIZE rows
-	void NextVector();
 };
 
 struct ColumnFetchState {
@@ -85,50 +110,33 @@ struct ColumnFetchState {
 	BufferHandle &GetOrInsertHandle(ColumnSegment &segment);
 };
 
-class RowGroupScanState {
-public:
-	RowGroupScanState(CollectionScanState &parent_p)
-	    : row_group(nullptr), vector_index(0), max_row(0), parent(parent_p) {
-	}
-
-	//! The current row_group we are scanning
-	RowGroup *row_group = nullptr;
-	//! The vector index within the row_group
-	idx_t vector_index = 0;
-	//! The maximum row index of this row_group scan
-	idx_t max_row = 0;
-	//! Child column scans
-	unique_ptr<ColumnScanState[]> column_scans;
-
-public:
-	const vector<column_t> &GetColumnIds();
-	TableFilterSet *GetFilters();
-	AdaptiveFilter *GetAdaptiveFilter();
-	idx_t GetParentMaxRow();
-
-private:
-	//! The parent scan state
-	CollectionScanState &parent;
-};
-
 class CollectionScanState {
 public:
-	CollectionScanState(TableScanState &parent_p)
-	    : row_group_state(*this), max_row(0), batch_index(0), parent(parent_p) {};
+	CollectionScanState(TableScanState &parent_p);
 
-	//! The row_group scan state
-	RowGroupScanState row_group_state;
+	//! The current row_group we are scanning
+	RowGroup *row_group;
+	//! The vector index within the row_group
+	idx_t vector_index;
+	//! The maximum row within the row group
+	idx_t max_row_group_row;
+	//! Child column scans
+	unsafe_unique_array<ColumnScanState> column_scans;
+	//! Row group segment tree
+	RowGroupSegmentTree *row_groups;
 	//! The total maximum row index
 	idx_t max_row;
 	//! The current batch index
 	idx_t batch_index;
 
 public:
-	const vector<column_t> &GetColumnIds();
+	void Initialize(const vector<LogicalType> &types);
+	const vector<storage_t> &GetColumnIds();
 	TableFilterSet *GetFilters();
 	AdaptiveFilter *GetAdaptiveFilter();
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool ScanCommitted(DataChunk &result, TableScanType type);
+	bool ScanCommitted(DataChunk &result, SegmentLock &l, TableScanType type);
 
 private:
 	TableScanState &parent;
@@ -144,15 +152,15 @@ public:
 	CollectionScanState local_state;
 
 public:
-	void Initialize(vector<column_t> column_ids, TableFilterSet *table_filters = nullptr);
+	void Initialize(vector<storage_t> column_ids, TableFilterSet *table_filters = nullptr);
 
-	const vector<column_t> &GetColumnIds();
+	const vector<storage_t> &GetColumnIds();
 	TableFilterSet *GetFilters();
 	AdaptiveFilter *GetAdaptiveFilter();
 
 private:
 	//! The column identifiers of the scan
-	vector<column_t> column_ids;
+	vector<storage_t> column_ids;
 	//! The table filters (if any)
 	TableFilterSet *table_filters;
 	//! Adaptive filter info (if any)
@@ -160,12 +168,16 @@ private:
 };
 
 struct ParallelCollectionScanState {
+	ParallelCollectionScanState();
+
 	//! The row group collection we are scanning
 	RowGroupCollection *collection;
 	RowGroup *current_row_group;
 	idx_t vector_index;
 	idx_t max_row;
 	idx_t batch_index;
+	atomic<idx_t> processed_rows;
+	mutex lock;
 };
 
 struct ParallelTableScanState {

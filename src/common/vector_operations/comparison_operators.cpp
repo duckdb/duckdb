@@ -22,12 +22,12 @@ bool EqualsFloat(T left, T right) {
 }
 
 template <>
-bool Equals::Operation(float left, float right) {
+bool Equals::Operation(const float &left, const float &right) {
 	return EqualsFloat<float>(left, right);
 }
 
 template <>
-bool Equals::Operation(double left, double right) {
+bool Equals::Operation(const double &left, const double &right) {
 	return EqualsFloat<double>(left, right);
 }
 
@@ -49,12 +49,12 @@ bool GreaterThanFloat(T left, T right) {
 }
 
 template <>
-bool GreaterThan::Operation(float left, float right) {
+bool GreaterThan::Operation(const float &left, const float &right) {
 	return GreaterThanFloat<float>(left, right);
 }
 
 template <>
-bool GreaterThan::Operation(double left, double right) {
+bool GreaterThan::Operation(const double &left, const double &right) {
 	return GreaterThanFloat<double>(left, right);
 }
 
@@ -77,12 +77,12 @@ bool GreaterThanEqualsFloat(T left, T right) {
 }
 
 template <>
-bool GreaterThanEquals::Operation(float left, float right) {
+bool GreaterThanEquals::Operation(const float &left, const float &right) {
 	return GreaterThanEqualsFloat<float>(left, right);
 }
 
 template <>
-bool GreaterThanEquals::Operation(double left, double right) {
+bool GreaterThanEquals::Operation(const double &left, const double &right) {
 	return GreaterThanEqualsFloat<double>(left, right);
 }
 
@@ -127,14 +127,14 @@ template <>
 inline idx_t ComparisonSelector::Select<duckdb::LessThan>(Vector &left, Vector &right, const SelectionVector *sel,
                                                           idx_t count, SelectionVector *true_sel,
                                                           SelectionVector *false_sel) {
-	return VectorOperations::LessThan(left, right, sel, count, true_sel, false_sel);
+	return VectorOperations::GreaterThan(right, left, sel, count, true_sel, false_sel);
 }
 
 template <>
 inline idx_t ComparisonSelector::Select<duckdb::LessThanEquals>(Vector &left, Vector &right, const SelectionVector *sel,
                                                                 idx_t count, SelectionVector *true_sel,
                                                                 SelectionVector *false_sel) {
-	return VectorOperations::LessThanEquals(left, right, sel, count, true_sel, false_sel);
+	return VectorOperations::GreaterThanEquals(right, left, sel, count, true_sel, false_sel);
 }
 
 static void ComparesNotNull(UnifiedVectorFormat &ldata, UnifiedVectorFormat &rdata, ValidityMask &vresult,
@@ -272,7 +272,7 @@ void VectorOperations::GreaterThanEquals(Vector &left, Vector &right, Vector &re
 }
 
 void VectorOperations::LessThanEquals(Vector &left, Vector &right, Vector &result, idx_t count) {
-	ComparisonExecutor::Execute<duckdb::LessThanEquals>(left, right, result, count);
+	ComparisonExecutor::Execute<duckdb::GreaterThanEquals>(right, left, result, count);
 }
 
 void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result, idx_t count) {
@@ -280,7 +280,7 @@ void VectorOperations::GreaterThan(Vector &left, Vector &right, Vector &result, 
 }
 
 void VectorOperations::LessThan(Vector &left, Vector &right, Vector &result, idx_t count) {
-	ComparisonExecutor::Execute<duckdb::LessThan>(left, right, result, count);
+	ComparisonExecutor::Execute<duckdb::GreaterThan>(right, left, result, count);
 }
 
 } // namespace duckdb

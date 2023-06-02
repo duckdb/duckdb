@@ -8,14 +8,17 @@
 
 #pragma once
 
-#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
 namespace duckdb {
 
 //! LogicalGet represents a scan operation from a data source
 class LogicalGet : public LogicalOperator {
+public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_GET;
+
 public:
 	LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
 	           vector<LogicalType> returned_types, vector<string> returned_names);
@@ -50,7 +53,7 @@ public:
 	string GetName() const override;
 	string ParamsToString() const override;
 	//! Returns the underlying table that is being scanned, or nullptr if there is none
-	TableCatalogEntry *GetTable() const;
+	optional_ptr<TableCatalogEntry> GetTable() const;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
@@ -59,6 +62,10 @@ public:
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 	vector<idx_t> GetTableIndex() const override;
+	//! Skips the serialization check in VerifyPlan
+	bool SupportSerialization() const override {
+		return function.verify_serialization;
+	};
 
 protected:
 	void ResolveTypes() override;

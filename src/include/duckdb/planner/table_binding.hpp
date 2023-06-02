@@ -54,34 +54,59 @@ public:
 	bool HasMatchingBinding(const string &column_name);
 	virtual string ColumnNotFoundError(const string &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
-	virtual StandardEntry *GetStandardEntry();
+	virtual optional_ptr<StandardEntry> GetStandardEntry();
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (binding_type != TARGET::TYPE) {
+			throw InternalException("Failed to cast binding to type - binding type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (binding_type != TARGET::TYPE) {
+			throw InternalException("Failed to cast binding to type - binding type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 struct EntryBinding : public Binding {
+public:
+	static constexpr const BindingType TYPE = BindingType::CATALOG_ENTRY;
+
 public:
 	EntryBinding(const string &alias, vector<LogicalType> types, vector<string> names, idx_t index,
 	             StandardEntry &entry);
 	StandardEntry &entry;
 
 public:
-	StandardEntry *GetStandardEntry() override;
+	optional_ptr<StandardEntry> GetStandardEntry() override;
 };
 
 //! TableBinding is exactly like the Binding, except it keeps track of which columns were bound in the linked LogicalGet
 //! node for projection pushdown purposes.
 struct TableBinding : public Binding {
+public:
+	static constexpr const BindingType TYPE = BindingType::TABLE;
+
+public:
 	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
-	             vector<column_t> &bound_column_ids, StandardEntry *entry, idx_t index, bool add_row_id = false);
+	             vector<column_t> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
+	             bool add_row_id = false);
 
 	//! A reference to the set of bound column ids
 	vector<column_t> &bound_column_ids;
 	//! The underlying catalog entry (if any)
-	StandardEntry *entry;
+	optional_ptr<StandardEntry> entry;
 
 public:
 	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &column_name);
 	BindResult Bind(ColumnRefExpression &colref, idx_t depth) override;
-	StandardEntry *GetStandardEntry() override;
+	optional_ptr<StandardEntry> GetStandardEntry() override;
 	string ColumnNotFoundError(const string &column_name) const override;
 	// These are columns that are present in the name_map, appearing in the order that they're bound
 	const vector<column_t> &GetBoundColumnIds() const;
@@ -93,6 +118,8 @@ protected:
 //! DummyBinding is like the Binding, except the alias and index are set by default. Used for binding lambdas and macro
 //! parameters.
 struct DummyBinding : public Binding {
+public:
+	static constexpr const BindingType TYPE = BindingType::DUMMY;
 	// NOTE: changing this string conflicts with the storage version
 	static constexpr const char *DUMMY_NAME = "0_macro_parameters";
 

@@ -40,7 +40,7 @@ VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity)
     : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
 	auto &child_types = StructType::GetChildTypes(type);
 	for (auto &child_type : child_types) {
-		auto vector = make_unique<Vector>(child_type.second, capacity);
+		auto vector = make_uniq<Vector>(child_type.second, capacity);
 		children.push_back(std::move(vector));
 	}
 }
@@ -49,7 +49,7 @@ VectorStructBuffer::VectorStructBuffer(Vector &other, const SelectionVector &sel
     : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
 	auto &other_vector = StructVector::GetEntries(other);
 	for (auto &child_vector : other_vector) {
-		auto vector = make_unique<Vector>(*child_vector, sel, count);
+		auto vector = make_uniq<Vector>(*child_vector, sel, count);
 		children.push_back(std::move(vector));
 	}
 }
@@ -58,12 +58,12 @@ VectorStructBuffer::~VectorStructBuffer() {
 }
 
 VectorListBuffer::VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER), capacity(initial_capacity), child(std::move(vector)) {
+    : VectorBuffer(VectorBufferType::LIST_BUFFER), child(std::move(vector)), capacity(initial_capacity) {
 }
 
 VectorListBuffer::VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity)
-    : VectorBuffer(VectorBufferType::LIST_BUFFER), capacity(initial_capacity),
-      child(make_unique<Vector>(ListType::GetChildType(list_type), initial_capacity)) {
+    : VectorBuffer(VectorBufferType::LIST_BUFFER),
+      child(make_uniq<Vector>(ListType::GetChildType(list_type), initial_capacity)), capacity(initial_capacity) {
 }
 
 void VectorListBuffer::Reserve(idx_t to_reserve) {
@@ -89,11 +89,19 @@ void VectorListBuffer::Append(const Vector &to_append, const SelectionVector &se
 }
 
 void VectorListBuffer::PushBack(const Value &insert) {
-	if (size + 1 > capacity) {
+	while (size + 1 > capacity) {
 		child->Resize(capacity, capacity * 2);
 		capacity *= 2;
 	}
 	child->SetValue(size++, insert);
+}
+
+void VectorListBuffer::SetCapacity(idx_t new_capacity) {
+	this->capacity = new_capacity;
+}
+
+void VectorListBuffer::SetSize(idx_t new_size) {
+	this->size = new_size;
 }
 
 VectorListBuffer::~VectorListBuffer() {

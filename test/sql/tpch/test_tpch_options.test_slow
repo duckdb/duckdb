@@ -1,0 +1,153 @@
+# name: test/sql/tpch/test_tpch_options.test_slow
+# description: Test TPC-H Generator Options
+# group: [tpch]
+
+require tpch
+
+#Test wrong parameters
+statement error
+CALL dbgen(sf=0.01, children=-1);
+----
+Invalid Input Error: Failed to cast value: Type INT32 with value -1 can't be cast because the value is out of range for the destination type UINT32
+
+statement error
+CALL dbgen(sf=0.01, children=2);
+----
+Step must be defined when children are defined
+
+
+statement ok
+CALL dbgen(sf=1, children =100, step = 0);
+
+query IIII
+select * from nation
+----
+0	ALGERIA	0	furiously regular requests. platelets affix furious
+
+query I
+select count(*) from lineitem
+----
+60175
+
+query I
+select count(*) from orders
+----
+15000
+
+query I
+select count(*) from customer
+----
+1500
+
+query I
+select count(*) from part
+----
+2000
+
+query I
+select count(*) from partsupp
+----
+8000
+
+query I
+select count(*) from region
+----
+1
+
+query I
+select count(*) from supplier
+----
+100
+
+statement ok
+CALL dbgen(sf=1, children =100, step = 1);
+
+
+
+query III
+select n_nationkey, n_name, n_regionkey from nation
+----
+0	ALGERIA	0
+1	ARGENTINA	1
+
+loop i 2 50
+
+statement ok
+CALL dbgen(sf=1, children =100, step = ${i});
+
+endloop
+
+query III
+select n_nationkey, n_name, n_regionkey from nation
+----
+0	ALGERIA	0
+1	ARGENTINA	1
+2	BRAZIL	1
+3	CANADA	1
+4	EGYPT	4
+5	ETHIOPIA	0
+6	FRANCE	3
+7	GERMANY	3
+8	INDIA	2
+9	INDONESIA	2
+10	IRAN	4
+11	IRAQ	4
+12	JAPAN	2
+13	JORDAN	4
+14	KENYA	0
+15	MOROCCO	0
+16	MOZAMBIQUE	0
+17	PERU	1
+18	CHINA	2
+19	ROMANIA	3
+20	SAUDI ARABIA	4
+21	VIETNAM	2
+22	RUSSIA	3
+23	UNITED KINGDOM	3
+24	UNITED STATES	1
+
+
+# Go over the number of children
+loop i 50 110
+
+statement ok
+CALL dbgen(sf=1, children =100, step = ${i});
+
+endloop
+
+statement ok
+CALL dbgen(sf=1, suffix='_og');
+
+foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
+
+query I
+select count(*) from (SELECT * FROM ${tpch_tbl} EXCEPT SELECT * FROM ${tpch_tbl}_og);
+----
+0
+
+query I
+select count (*) from (SELECT * FROM ${tpch_tbl}_og EXCEPT SELECT * FROM ${tpch_tbl});
+----
+0
+
+endloop
+
+statement ok
+ATTACH DATABASE ':memory:' AS db1;
+
+statement ok
+CALL dbgen(sf=1, catalog='db1');
+
+foreach tpch_tbl orders customer lineitem nation part partsupp region supplier
+
+query I
+select count(*) from (SELECT * FROM ${tpch_tbl} EXCEPT SELECT * FROM db1.${tpch_tbl});
+----
+0
+
+query I
+select count (*) from (SELECT * FROM db1.${tpch_tbl} EXCEPT SELECT * FROM ${tpch_tbl});
+----
+0
+
+endloop

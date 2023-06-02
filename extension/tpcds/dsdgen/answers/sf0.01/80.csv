@@ -1,5 +1,5 @@
 channel|id|sales|returns_|profit
-NULL|NULL|229240.98|25451.82|-73114.62
+NULL|NULL|223499.06|25451.82|-69404.12
 catalog channel|NULL|76852.71|10074.36|6945.78
 catalog channel|catalog_pageAAAAAAAAAHCBAAAA|209.44|0|-5017.32
 catalog channel|catalog_pageAAAAAAAABHABAAAA|6152.40|0|972.90
@@ -25,7 +25,7 @@ catalog channel|catalog_pageAAAAAAAANDCBAAAA|749.74|591.90|-516.53
 catalog channel|catalog_pageAAAAAAAAOOPAAAAA|9870.26|8495.92|2139.86
 catalog channel|catalog_pageAAAAAAAAOPPAAAAA|2031.48|0|146.52
 catalog channel|catalog_pageAAAAAAAAPNCBAAAA|454.68|0|25.92
-store channel|NULL|126481.26|13753.88|-64974.84
-store channel|storeAAAAAAAABAAAAAAA|126481.26|13753.88|-64974.84
+store channel|NULL|120739.34|13753.88|-61264.34
+store channel|storeAAAAAAAABAAAAAAA|120739.34|13753.88|-61264.34
 web channel|NULL|25907.01|1623.58|-15085.56
 web channel|web_siteAAAAAAAABAAAAAAA|25907.01|1623.58|-15085.56

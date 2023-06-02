@@ -131,6 +131,17 @@ SELECT COUNT(*) FROM glob('test/sql/copy/csv/data/glob/*/*.csv')
 ----
 5
 
+query I
+SELECT COUNT(*) FROM glob(['test/sql/copy/csv/data/glob/*/*.csv'])
+----
+5
+
+
+query I
+SELECT COUNT(*) FROM glob(['test/sql/copy/csv/data/glob/*/*.csv', 'test/sql/copy/csv/data/glob/*/*.csv'])
+----
+10
+
 # we can also use windows file slashes
 query I
 SELECT COUNT(*) FROM glob('test\sql\copy\csv\data\glob\*\*.csv')

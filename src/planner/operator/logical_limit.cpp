@@ -37,7 +37,7 @@ unique_ptr<LogicalOperator> LogicalLimit::Deserialize(LogicalDeserializationStat
 	auto offset_val = reader.ReadRequired<int64_t>();
 	auto limit = reader.ReadOptional<Expression>(nullptr, state.gstate);
 	auto offset = reader.ReadOptional<Expression>(nullptr, state.gstate);
-	return make_unique<LogicalLimit>(limit_val, offset_val, std::move(limit), std::move(offset));
+	return make_uniq<LogicalLimit>(limit_val, offset_val, std::move(limit), std::move(offset));
 }
 
 } // namespace duckdb

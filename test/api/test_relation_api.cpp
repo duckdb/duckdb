@@ -9,7 +9,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	shared_ptr<Relation> tbl, filter, proj, proj2, v1, v2, v3;
 
 	// create some tables
@@ -21,11 +21,11 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(result = tbl->Project("i + 1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
 
-	REQUIRE_NOTHROW(result = tbl->Project(vector<string> {"i + 1", "i + 2"})->Execute());
+	REQUIRE_NOTHROW(result = tbl->Project(duckdb::vector<string> {"i + 1", "i + 2"})->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {3, 4, 5}));
 
-	REQUIRE_NOTHROW(result = tbl->Project(vector<string> {"i + 1"}, {"i"})->Execute());
+	REQUIRE_NOTHROW(result = tbl->Project(duckdb::vector<string> {"i + 1"}, {"i"})->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
 
 	// we support * expressions
@@ -58,7 +58,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
 
 	// multi filter
-	REQUIRE_NOTHROW(result = tbl->Filter(vector<string> {"i <> 2", "i <> 3"})->Execute());
+	REQUIRE_NOTHROW(result = tbl->Filter(duckdb::vector<string> {"i <> 2", "i <> 3"})->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	// we can reuse the same filter again and perform a different projection
@@ -109,7 +109,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	// now test ordering
 	REQUIRE_NOTHROW(result = proj->Order("a DESC")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 2}));
-	REQUIRE_NOTHROW(result = proj->Order(vector<string> {"a DESC", "a ASC"})->Execute());
+	REQUIRE_NOTHROW(result = proj->Order(duckdb::vector<string> {"a DESC", "a ASC"})->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 2}));
 
 	// top n
@@ -178,16 +178,16 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_NO_FAIL(multi_join->Explain());
 
 	// incorrect API usage
-	REQUIRE_THROWS(tbl->Project(vector<string> {})->Execute());
-	REQUIRE_THROWS(tbl->Project(vector<string> {"1, 2, 3"})->Execute());
-	REQUIRE_THROWS(tbl->Project(vector<string> {""})->Execute());
+	REQUIRE_THROWS(tbl->Project(duckdb::vector<string> {})->Execute());
+	REQUIRE_THROWS(tbl->Project(duckdb::vector<string> {"1, 2, 3"})->Execute());
+	REQUIRE_THROWS(tbl->Project(duckdb::vector<string> {""})->Execute());
 	REQUIRE_THROWS(tbl->Filter("i=1, i=2")->Execute());
 	REQUIRE_THROWS(tbl->Filter("")->Execute());
-	REQUIRE_THROWS(tbl->Filter(vector<string> {})->Execute());
-	REQUIRE_THROWS(tbl->Filter(vector<string> {"1, 2, 3"})->Execute());
-	REQUIRE_THROWS(tbl->Filter(vector<string> {""})->Execute());
-	REQUIRE_THROWS(tbl->Order(vector<string> {})->Execute());
-	REQUIRE_THROWS(tbl->Order(vector<string> {"1, 2, 3"})->Execute());
+	REQUIRE_THROWS(tbl->Filter(duckdb::vector<string> {})->Execute());
+	REQUIRE_THROWS(tbl->Filter(duckdb::vector<string> {"1, 2, 3"})->Execute());
+	REQUIRE_THROWS(tbl->Filter(duckdb::vector<string> {""})->Execute());
+	REQUIRE_THROWS(tbl->Order(duckdb::vector<string> {})->Execute());
+	REQUIRE_THROWS(tbl->Order(duckdb::vector<string> {"1, 2, 3"})->Execute());
 	REQUIRE_THROWS(tbl->Order("1 LIMIT 3")->Execute());
 	REQUIRE_THROWS(tbl->Order("1; SELECT 42")->Execute());
 	REQUIRE_THROWS(tbl->Join(tbl, "")->Execute());
@@ -199,7 +199,7 @@ TEST_CASE("Test combinations of set operations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	shared_ptr<Relation> values, v1, v2, v3;
 
 	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
@@ -266,7 +266,7 @@ TEST_CASE("Test combinations of joins", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	shared_ptr<Relation> values, vjoin;
 
 	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
@@ -354,7 +354,7 @@ TEST_CASE("Test crossproduct relation", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	shared_ptr<Relation> values, vcross;
 
 	REQUIRE_NOTHROW(values = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"i", "j"}));
@@ -375,7 +375,7 @@ TEST_CASE("Test view creation of relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	shared_ptr<Relation> tbl, filter, proj, proj2;
 
 	// create some tables
@@ -445,7 +445,7 @@ TEST_CASE("Test table creations using the relation API", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	shared_ptr<Relation> values;
 
 	// create a table from a Values statement
@@ -476,7 +476,7 @@ TEST_CASE("Test table deletions and updates", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
@@ -512,7 +512,7 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 
 	// create a table
 	REQUIRE_NOTHROW(con.Values("(1, 5), (2, 6), (1, 7)", {"i", "j"})->Create("integers"));
@@ -525,7 +525,7 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {18}));
 
-	REQUIRE_NOTHROW(result = tbl->Aggregate(vector<string> {"SUM(i)", "SUM(j)"})->Execute());
+	REQUIRE_NOTHROW(result = tbl->Aggregate(duckdb::vector<string> {"SUM(i)", "SUM(j)"})->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {18}));
 
@@ -540,7 +540,9 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {12, 6}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
 	// explicitly grouped aggregate
-	REQUIRE_NOTHROW(result = tbl->Aggregate(vector<string> {"SUM(j)"}, vector<string> {"i"})->Order("1")->Execute());
+	REQUIRE_NOTHROW(
+	    result =
+	        tbl->Aggregate(duckdb::vector<string> {"SUM(j)"}, duckdb::vector<string> {"i"})->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {6, 12}));
 
 	// grouped aggregates can be expressions
@@ -609,7 +611,7 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 TEST_CASE("Test interaction of relations with transactions", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con1(db), con2(db);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 
 	con1.BeginTransaction();
 	con2.BeginTransaction();
@@ -644,7 +646,7 @@ TEST_CASE("Test interaction of relations with transactions", "[relation_api]") {
 TEST_CASE("Test interaction of relations with schema changes", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 
 	// create some tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -704,7 +706,7 @@ TEST_CASE("Test interaction of relations with schema changes", "[relation_api]")
 TEST_CASE("Test junk SQL in expressions", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
@@ -721,7 +723,7 @@ TEST_CASE("Test junk SQL in expressions", "[relation_api]") {
 TEST_CASE("We cannot mix statements from multiple databases", "[relation_api]") {
 	DuckDB db(nullptr), db2(nullptr);
 	Connection con(db), con2(db2);
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 
 	// create some tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -746,7 +748,7 @@ TEST_CASE("Test view relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
@@ -776,7 +778,7 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 
@@ -799,7 +801,7 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 
 	// table function that takes a relation as input
 	auto values = con.Values("(42)", {"i"});
-	auto summary = values->TableFunction("summary", vector<Value> {});
+	auto summary = values->TableFunction("summary", duckdb::vector<Value> {});
 	result = summary->Execute();
 	REQUIRE(CHECK_COLUMN(result, 0, {"[42]"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"42"}));
@@ -812,7 +814,7 @@ TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 
 	// write a bunch of values to a CSV
 	auto csv_file = TestCreatePath("relationtest.csv");
@@ -839,7 +841,7 @@ TEST_CASE("Test query relation", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	shared_ptr<Relation> tbl;
 
 	// create some tables
@@ -866,7 +868,7 @@ TEST_CASE("Test TopK relation", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	shared_ptr<Relation> tbl;
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (i integer,j VARCHAR, k varchar )"));

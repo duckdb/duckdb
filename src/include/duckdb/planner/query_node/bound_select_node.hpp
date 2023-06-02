@@ -25,8 +25,18 @@ public:
 	vector<GroupingSet> grouping_sets;
 };
 
+struct BoundUnnestNode {
+	//! The index of the UNNEST node
+	idx_t index;
+	//! The set of expressions
+	vector<unique_ptr<Expression>> expressions;
+};
+
 //! Bound equivalent of SelectNode
 class BoundSelectNode : public BoundQueryNode {
+public:
+	static constexpr const QueryNodeType TYPE = QueryNodeType::SELECT_NODE;
+
 public:
 	BoundSelectNode() : BoundQueryNode(QueryNodeType::SELECT_NODE) {
 	}
@@ -68,7 +78,7 @@ public:
 	vector<unique_ptr<Expression>> aggregates;
 
 	//! GROUPING function calls
-	vector<vector<idx_t>> grouping_functions;
+	vector<unsafe_vector<idx_t>> grouping_functions;
 
 	//! Map from aggregate function to aggregate index (used to eliminate duplicate aggregates)
 	expression_map_t<idx_t> aggregate_map;
@@ -78,9 +88,8 @@ public:
 	//! Window functions to compute (only used if HasWindow is true)
 	vector<unique_ptr<Expression>> windows;
 
-	idx_t unnest_index;
 	//! Unnest expression
-	vector<unique_ptr<Expression>> unnests;
+	unordered_map<idx_t, BoundUnnestNode> unnests;
 
 	//! Index of pruned node
 	idx_t prune_index;

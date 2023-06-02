@@ -10,57 +10,85 @@ using namespace duckdb;
 using namespace std;
 
 struct OptionValuePair {
+	OptionValuePair() {
+	}
+	OptionValuePair(Value val) : input(val), output(val) {
+	}
+	OptionValuePair(Value input, Value output) : input(std::move(input)), output(std::move(output)) {
+	}
+
 	Value input;
 	Value output;
 };
 
-void RequireValuDiff(ConfigurationOption *op, const Value &left, const Value &right, int line);
-#define REQUIRE_VALUE_DIFF(op, lhs, rhs) RequireValueDiff(op, lhs, rhs, __LINE__)
+struct OptionValueSet {
+	OptionValueSet() {
+	}
+	OptionValueSet(Value val) {
+		pairs.emplace_back(std::move(val));
+	}
+	OptionValueSet(Value input, Value output) {
+		pairs.emplace_back(std::move(input), std::move(output));
+	}
+	OptionValueSet(duckdb::vector<std::string> pairs_p) {
+		for (auto &pair : pairs_p) {
+			pairs.emplace_back(pair);
+		}
+	}
+	OptionValueSet(duckdb::vector<OptionValuePair> pairs_p) : pairs(std::move(pairs_p)) {
+	}
+
+	duckdb::vector<OptionValuePair> pairs;
+};
 
 void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &right, int line);
 #define REQUIRE_VALUE_EQUAL(op, lhs, rhs) RequireValueEqual(op, lhs, rhs, __LINE__)
 
-OptionValuePair &GetValueForOption(const string &name) {
-	static unordered_map<string, OptionValuePair> value_map = {
+OptionValueSet &GetValueForOption(const string &name) {
+	static unordered_map<string, OptionValueSet> value_map = {
 	    {"access_mode", {Value("READ_ONLY"), Value("read_only")}},
 	    {"threads", {Value::BIGINT(42), Value::BIGINT(42)}},
-	    {"checkpoint_threshold", {"4.2GB", "4.2GB"}},
-	    {"debug_checkpoint_abort", {"before_header", "before_header"}},
-	    {"default_collation", {"nocase", "nocase"}},
-	    {"default_order", {"desc", "desc"}},
-	    {"default_null_order", {"nulls_last", "nulls_last"}},
-	    {"disabled_optimizers", {"extension", "extension"}},
+	    {"checkpoint_threshold", {"4.2GB"}},
+	    {"debug_checkpoint_abort", {{"none", "before_truncate", "before_header", "after_free_list_write"}}},
+	    {"default_collation", {"nocase"}},
+	    {"default_order", {"desc"}},
+	    {"default_null_order", {"nulls_first"}},
+	    {"disabled_optimizers", {"extension"}},
+	    {"debug_asof_iejoin", {Value(true)}},
+	    {"debug_force_external", {Value(true)}},
+	    {"debug_force_no_cross_product", {Value(true)}},
+	    {"debug_force_external", {Value(true)}},
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
-	    {"enable_fsst_vectors", {true, true}},
-	    {"enable_object_cache", {true, true}},
-	    {"enable_profiling", {"json", "json"}},
-	    {"enable_progress_bar", {true, true}},
-	    {"experimental_parallel_csv", {true, true}},
-	    {"explain_output", {true, true}},
-	    {"external_threads", {8, 8}},
-	    {"file_search_path", {"test", "test"}},
+	    {"enable_fsst_vectors", {true}},
+	    {"enable_object_cache", {true}},
+	    {"enable_profiling", {"json"}},
+	    {"enable_progress_bar", {true}},
+	    {"explain_output", {{"all", "optimized_only", "physical_only"}}},
+	    {"external_threads", {8}},
+	    {"file_search_path", {"test"}},
 	    {"force_compression", {"uncompressed", "Uncompressed"}},
-	    {"home_directory", {"test", "test"}},
-	    {"extension_directory", {"test", "test"}},
-	    {"immediate_transaction_mode", {true, true}},
-	    {"log_query_path", {"test", "test"}},
-	    {"max_expression_depth", {50, 50}},
-	    {"max_memory", {"4.2GB", "4.2GB"}},
-	    {"memory_limit", {"4.2GB", "4.2GB"}},
-	    {"null_order", {"nulls_last", "nulls_last"}},
-	    {"perfect_ht_threshold", {0, 0}},
-	    {"preserve_identifier_case", {false, false}},
-	    {"preserve_insertion_order", {false, false}},
-	    {"profiler_history_size", {0, 0}},
-	    {"profile_output", {"test", "test"}},
-	    {"profiling_mode", {"detailed", "detailed"}},
-	    {"enable_progress_bar_print", {false, false}},
-	    {"progress_bar_time", {0, 0}},
-	    {"temp_directory", {"tmp", "tmp"}},
-	    {"wal_autocheckpoint", {"4.2GB", "4.2GB"}},
-	    {"worker_threads", {42, 42}},
-	    {"enable_http_metadata_cache", {true, true}},
-	    {"force_bitpacking_mode", {"constant", "constant"}},
+	    {"home_directory", {"test"}},
+	    {"integer_division", {true}},
+	    {"extension_directory", {"test"}},
+	    {"immediate_transaction_mode", {true}},
+	    {"max_expression_depth", {50}},
+	    {"max_memory", {"4.2GB"}},
+	    {"memory_limit", {"4.2GB"}},
+	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
+	    {"null_order", {"nulls_first"}},
+	    {"perfect_ht_threshold", {0}},
+	    {"pivot_limit", {999}},
+	    {"preserve_identifier_case", {false}},
+	    {"preserve_insertion_order", {false}},
+	    {"profile_output", {"test"}},
+	    {"profiling_mode", {"detailed"}},
+	    {"enable_progress_bar_print", {false}},
+	    {"progress_bar_time", {0}},
+	    {"temp_directory", {"tmp"}},
+	    {"wal_autocheckpoint", {"4.2GB"}},
+	    {"worker_threads", {42}},
+	    {"enable_http_metadata_cache", {true}},
+	    {"force_bitpacking_mode", {"constant"}},
 	};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
@@ -73,40 +101,22 @@ bool OptionIsExcludedFromTest(const string &name) {
 	static unordered_set<string> excluded_options = {
 	    "schema",
 	    "search_path",
-	    "debug_force_external",
-	    "debug_force_no_cross_product",
 	    "debug_window_mode",
+	    "experimental_parallel_csv",
+	    "lock_configuration",        // cant change this while db is running
 	    "enable_external_access",    // cant change this while db is running
 	    "allow_unsigned_extensions", // cant change this while db is running
+	    "log_query_path",
 	    "password",
 	    "username",
 	    "user",
 	    "profiling_output", // just an alias
-	};
+	    "profiler_history_size"};
 	return excluded_options.count(name) == 1;
 }
 
 bool ValueEqual(const Value &left, const Value &right) {
-	if (left.IsNull() != right.IsNull()) {
-		// Only one is NULL
-		return false;
-	}
-	if (!left.IsNull() && !right.IsNull()) {
-		// Neither are NULL
-		return left == right;
-	}
-	// Both are NULL
-	return true;
-}
-
-void RequireValueDiff(ConfigurationOption *op, const Value &left, const Value &right, int line) {
-	if (!ValueEqual(left, right)) {
-		return;
-	}
-	auto error = StringUtil::Format("\nLINE[%d] (Option:%s) | Expected left:'%s' and right:'%s' to be different", line,
-	                                op->name, left.ToString(), right.ToString());
-	cerr << error << endl;
-	REQUIRE(false);
+	return Value::NotDistinctFrom(left, right);
 }
 
 void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &right, int line) {
@@ -126,6 +136,8 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 	// Create a connection
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.Query("BEGIN TRANSACTION");
+	con.Query("PRAGMA disable_profiling");
 
 	auto &config = DBConfig::GetConfig(*db.instance);
 	// Get all configuration options
@@ -142,28 +154,50 @@ TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
 
 		// Get the current value of the option
 		auto original_value = op->get_setting(*con.context);
-		// Get the new value for the option
-		auto &value_pair = GetValueForOption(option.name);
 
-		// Verify that the new value is different, so we can test RESET
-		REQUIRE_VALUE_DIFF(op, original_value, value_pair.output);
-
-		if (!op->set_global) {
-			// TODO: add testing for local (client-config) settings
-			continue;
+		auto &value_set = GetValueForOption(option.name);
+		// verify that at least one value is different
+		bool any_different = false;
+		string options;
+		for (auto &value_pair : value_set.pairs) {
+			if (!ValueEqual(original_value, value_pair.output)) {
+				any_different = true;
+			} else {
+				if (!options.empty()) {
+					options += ", ";
+				}
+				options += value_pair.output.ToString();
+			}
 		}
-		// Set the new option
-		auto input = value_pair.input.DefaultCastAs(op->parameter_type);
-		op->set_global(db.instance.get(), config, input);
+		if (!any_different) {
+			auto error = StringUtil::Format(
+			    "\n(Option:%s) | Expected original value '%s' and provided option '%s' to be different", op->name,
+			    original_value.ToString(), options);
+			cerr << error << endl;
+			REQUIRE(false);
+		}
+		for (auto &value_pair : value_set.pairs) {
+			// Get the new value for the option
+			auto input = value_pair.input.DefaultCastAs(op->parameter_type);
+			// Set the new option
+			if (op->set_local) {
+				op->set_local(*con.context, input);
+			} else {
+				op->set_global(db.instance.get(), config, input);
+			}
+			// Get the value of the option again
+			auto changed_value = op->get_setting(*con.context);
+			REQUIRE_VALUE_EQUAL(op, changed_value, value_pair.output);
 
-		// Get the value of the option again
-		auto changed_value = op->get_setting(*con.context);
-		REQUIRE_VALUE_EQUAL(op, changed_value, value_pair.output);
+			if (op->reset_local) {
+				op->reset_local(*con.context);
+			} else {
+				op->reset_global(db.instance.get(), config);
+			}
 
-		op->reset_global(db.instance.get(), config);
-
-		// Get the reset value of the option
-		auto reset_value = op->get_setting(*con.context);
-		REQUIRE_VALUE_EQUAL(op, reset_value, original_value);
+			// Get the reset value of the option
+			auto reset_value = op->get_setting(*con.context);
+			REQUIRE_VALUE_EQUAL(op, reset_value, original_value);
+		}
 	}
 }

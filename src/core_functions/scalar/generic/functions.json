@@ -1,0 +1,109 @@
+[
+    {
+        "name": "alias",
+        "parameters": "expr",
+        "description": "Returns the name of a given expression",
+        "example": "alias(42 + 1)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "current_setting",
+        "parameters": "setting_name",
+        "description": "Return the current value of the configuration setting",
+        "example": "current_setting('access_mode')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "error",
+        "parameters": "message",
+        "description": "Throws the given error message",
+        "example": "error('access_mode')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "hash",
+        "parameters": "param",
+        "description": "Returns an integer with the hash of the value. Note that this is not a cryptographic hash.",
+        "example": "hash('\uD83E\uDD86')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "least",
+        "parameters": "arg1, arg2, ...",
+        "description": "Returns the lowest value of the set of input parameters.",
+        "example": "least(42, 84)",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "greatest",
+        "parameters": "arg1, arg2, ...",
+        "description": "Returns the highest value of the set of input parameters.",
+        "example": "greatest(42, 84)",
+        "type": "scalar_function_set"
+    },
+    {
+        "name": "stats",
+        "parameters": "expression",
+        "description": "Returns a string with statistics about the expression. Expression can be a column, constant, or SQL expression.",
+        "example": "stats(5)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "typeof",
+        "parameters": "expression",
+        "description": "Returns the name of the data type of the result of the expression.",
+        "example": "typeof('abc')",
+        "struct": "TypeOfFun",
+        "type": "scalar_function"
+    },
+    {
+        "name": "current_query",
+        "parameters": "",
+        "description": "Returns the current query as a string",
+        "example": "current_query()",
+        "type": "scalar_function"
+    },
+    {
+        "name": "current_schema",
+        "parameters": "",
+        "description": "Return the name of the currently active schema. Default is main.",
+        "example": "current_schema()",
+        "type": "scalar_function"
+    },
+    {
+        "name": "current_schemas",
+        "parameters": "include_implicit",
+        "description": "Return list of schemas. Pass a parameter of True to include implicit schemas.",
+        "example": "current_schemas(true)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "current_database",
+        "parameters": "",
+        "description": "Return the name of the currently active database.",
+        "example": "current_database()",
+        "type": "scalar_function"
+    },
+    {
+        "name": "in_search_path",
+        "parameters": "database_name,schema_name",
+        "description": "Returns whether or not the database/schema are in the search path.",
+        "example": "in_search_path('memory', 'main')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "txid_current",
+        "parameters": "",
+        "description": "Returns the current transaction’s ID (a BIGINT). It will assign a new one if the current transaction does not have one already.",
+        "example": "txid_current()",
+        "struct": "CurrentTransactionIdFun",
+        "type": "scalar_function"
+    },
+    {
+        "name": "version",
+        "parameters": "",
+        "description": "Return the currently active version of DuckDB in this format: v0.3.2\t",
+        "example": "version()",
+        "type": "scalar_function"
+    }
+]

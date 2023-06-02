@@ -70,12 +70,12 @@ unique_ptr<Expression> TemplatedCastToSmallestType(unique_ptr<Expression> expr, 
 
 	// Create expression to map to a smaller range
 	auto input_type = expr->return_type;
-	auto minimum_expr = make_unique<BoundConstantExpression>(Value::CreateValue(signed_min_val));
+	auto minimum_expr = make_uniq<BoundConstantExpression>(Value::CreateValue(signed_min_val));
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(expr));
 	arguments.push_back(std::move(minimum_expr));
-	auto minus_expr = make_unique<BoundFunctionExpression>(input_type, SubtractFun::GetFunction(input_type, input_type),
-	                                                       std::move(arguments), nullptr, true);
+	auto minus_expr = make_uniq<BoundFunctionExpression>(input_type, SubtractFun::GetFunction(input_type, input_type),
+	                                                     std::move(arguments), nullptr, true);
 
 	// Cast to smaller type
 	return BoundCastExpression::AddDefaultCastToType(std::move(minus_expr), cast_type);

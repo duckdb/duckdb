@@ -57,7 +57,7 @@ private:
 	void SimplifyListReplaceNull(vector<T> &list);
 
 	template <class T>
-	void SimplifyOptional(unique_ptr<T> &opt);
+	void SimplifyOptional(duckdb::unique_ptr<T> &opt);
 
 	void Simplify(TableRef &ref);
 
@@ -68,7 +68,7 @@ private:
 	void Simplify(ResultModifier &modifier);
 	void Simplify(OrderModifier &modifier);
 
-	void SimplifyExpression(unique_ptr<ParsedExpression> &expr);
+	void SimplifyExpression(duckdb::unique_ptr<ParsedExpression> &expr);
 	void Simplify(CommonTableExpressionMap &cte_map);
 
 	void Simplify(UpdateSetInfo &info);

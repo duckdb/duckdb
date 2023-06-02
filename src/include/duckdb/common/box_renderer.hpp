@@ -18,6 +18,7 @@ class ColumnDataCollection;
 class ColumnDataRowCollection;
 
 enum class ValueRenderAlignment { LEFT, MIDDLE, RIGHT };
+enum class RenderMode { ROWS, COLUMNS };
 
 struct BoxRendererConfig {
 	// a max_width of 0 means we default to the terminal width
@@ -30,7 +31,10 @@ struct BoxRendererConfig {
 	// the max col width determines the maximum size of a single column
 	// note that the max col width is only used if the result does not fit on the screen
 	idx_t max_col_width = 20;
+	//! how to render NULL values
 	string null_value = "NULL";
+	//! Whether or not to render row-wise or column-wise
+	RenderMode render_mode = RenderMode::ROWS;
 
 #ifndef DUCKDB_ASCII_TREE_RENDERER
 	const char *LTCORNER = "\342\224\214"; // "┌";
@@ -94,10 +98,12 @@ private:
 	string RenderType(const LogicalType &type);
 	ValueRenderAlignment TypeAlignment(const LogicalType &type);
 	string GetRenderValue(ColumnDataRowCollection &rows, idx_t c, idx_t r);
-
 	list<ColumnDataCollection> FetchRenderCollections(ClientContext &context, const ColumnDataCollection &result,
 	                                                  idx_t top_rows, idx_t bottom_rows);
-	vector<idx_t> ComputeRenderWidths(const vector<string> &names, const ColumnDataCollection &result,
+	list<ColumnDataCollection> PivotCollections(ClientContext &context, list<ColumnDataCollection> input,
+	                                            vector<string> &column_names, vector<LogicalType> &result_types,
+	                                            idx_t row_count);
+	vector<idx_t> ComputeRenderWidths(const vector<string> &names, const vector<LogicalType> &result_types,
 	                                  list<ColumnDataCollection> &collections, idx_t min_width, idx_t max_width,
 	                                  vector<idx_t> &column_map, idx_t &total_length);
 	void RenderHeader(const vector<string> &names, const vector<LogicalType> &result_types,

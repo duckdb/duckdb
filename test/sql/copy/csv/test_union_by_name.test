@@ -3,6 +3,11 @@
 # group: [csv]
 
 statement ok
+SET default_null_order='nulls_first';
+
+# Setup
+
+statement ok
 CREATE TABLE ubn1(a BIGINT);
 
 statement ok
@@ -10,6 +15,8 @@ CREATE TABLE ubn2(a INTEGER, b INTEGER);
 
 statement ok
 CREATE TABLE ubn3(a INTEGER, c INTEGER);
+
+# Populate the tables
 
 statement ok
 INSERT INTO ubn1 VALUES (1), (2), (9223372036854775807);
@@ -20,6 +27,8 @@ INSERT INTO ubn2 VALUES (3,4), (5, 6);
 statement ok
 INSERT INTO ubn3 VALUES (100,101), (102, 103);
 
+# Write them to temporary files
+
 statement ok
 COPY ubn1 TO '__TEST_DIR__/ubn1.csv' WITH (HEADER 1, DELIMITER ',');
 
@@ -29,12 +38,14 @@ COPY ubn2 TO '__TEST_DIR__/ubn2.csv' WITH (HEADER 1, DELIMITER ',');
 statement ok
 COPY ubn3 TO '__TEST_DIR__/ubn3.csv' WITH (HEADER 1, DELIMITER ',');
 
+# Read from them (the order matters)
+
 statement error
-SELECT * FROM read_csv_auto('__TEST_DIR__/ubn*.csv');
+SELECT * FROM read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv']);
 
 query III
 SELECT a, b, c
-FROM  read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE)
+FROM  read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv'], UNION_BY_NAME=TRUE)
 ORDER BY a;
 ----
 1	NULL	NULL
@@ -47,14 +58,16 @@ ORDER BY a;
 
 query TTT
 SELECT typeof(a), typeof(b), typeof(c)
-FROM read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE)
+FROM read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv'], UNION_BY_NAME=TRUE)
 LIMIT 1;
 ----
 BIGINT	BIGINT	BIGINT
 
 # Test timestamp type
 statement error
-SELECT * FROM read_csv_auto('data/csv/union-by-name/ubn*.csv')
+SELECT * FROM read_csv_auto(['data/csv/union-by-name/ubn1.csv', 'data/csv/union-by-name/ubn2.csv', 'data/csv/union-by-name/ubn3.csv', 'data/csv/union-by-name/ubn4.csv'])
+----
+Error in file
 
 query IIIII
 SELECT  a, b, c, ts, k  
@@ -82,6 +95,45 @@ LIMIT 1;
 ----
 VARCHAR	BIGINT	BIGINT	VARCHAR	BIGINT
 
+# projection pushdown
+query II
+SELECT  c, k
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+ORDER BY c NULLS LAST, k NULLS LAST
+----
+3	6
+3	NULL
+5	6
+5	NULL
+6	6
+6	NULL
+100	NULL
+200	NULL
+300	NULL
+NULL	NULL
+NULL	NULL
+NULL	NULL
+NULL	NULL
+
+# projection pushdown
+query I
+SELECT  ts
+FROM read_csv_auto('data/csv/union-by-name/ubn*.csv',UNION_BY_NAME=TRUE)
+ORDER BY ts NULLS LAST
+----
+2003-06-30 12:03:10
+2003-06-30 12:03:10
+2003-06-30 12:03:10
+2020-12-30 01:25:58.745232+01
+2020-12-30 02:25:58.745232+01
+2020-12-30 03:25:58.745232+01
+2020-12-30 04:25:58.745232+01
+Friday
+Monday
+Sunday
+NULL
+NULL
+NULL
 
 # Test glob pattern [12] and union_by_name with filename options
 query IIIII
@@ -128,7 +180,7 @@ NULL	300	Friday	data/csv/union-by-name/ubn4.csv
 
 # Test hive_partition with union_by_name 
 statement error
-SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE)
+SELECT * FROM read_csv_auto('data/csv/union-by-name/part=[ab]/*',HIVE_PARTITIONING=TRUE, null_padding=0)
 
 query IIII
 SELECT id, value, a, part
@@ -141,4 +193,3 @@ ORDER BY id
 # Test hive_partition with union_by_name 
 statement error
 SELECT * FROM read_csv_auto('data/csv/union-by-name/*[!a]/*',HIVE_PARTITIONING=TRUE ,UNION_BY_NAME=TRUE)
-

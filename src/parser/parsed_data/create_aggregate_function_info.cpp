@@ -19,7 +19,7 @@ CreateAggregateFunctionInfo::CreateAggregateFunctionInfo(AggregateFunctionSet se
 }
 
 unique_ptr<CreateInfo> CreateAggregateFunctionInfo::Copy() const {
-	auto result = make_unique<CreateAggregateFunctionInfo>(functions);
+	auto result = make_uniq<CreateAggregateFunctionInfo>(functions);
 	CopyProperties(*result);
 	return std::move(result);
 }

@@ -7,8 +7,8 @@ using namespace std;
 
 TEST_CASE("Test connection using a read only database", "[readonly]") {
 	auto dbdir = TestCreatePath("read_only_test");
-	unique_ptr<DuckDB> db, db2;
-	unique_ptr<Connection> con;
+	duckdb::unique_ptr<DuckDB> db, db2;
+	duckdb::unique_ptr<Connection> con;
 	// make sure the database does not exist
 	DeleteDatabase(dbdir);
 
@@ -17,21 +17,21 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 	readonly_config.options.access_mode = AccessMode::READ_ONLY;
 
 	// cannot create read-only memory database
-	REQUIRE_THROWS(db = make_unique<DuckDB>(nullptr, &readonly_config));
+	REQUIRE_THROWS(db = make_uniq<DuckDB>(nullptr, &readonly_config));
 	// cannot create a read-only database in a new directory
-	REQUIRE_THROWS(db = make_unique<DuckDB>(dbdir, &readonly_config));
+	REQUIRE_THROWS(db = make_uniq<DuckDB>(dbdir, &readonly_config));
 
 	// create the database file and initialize it with data
-	db = make_unique<DuckDB>(dbdir);
-	con = make_unique<Connection>(*db);
+	db = make_uniq<DuckDB>(dbdir);
+	con = make_uniq<Connection>(*db);
 	REQUIRE_NO_FAIL(con->Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NO_FAIL(con->Query("INSERT INTO integers VALUES (1), (2), (3), (4), (5)"));
 	con.reset();
 	db.reset();
 
 	// now connect in read-only mode
-	REQUIRE_NOTHROW(db = make_unique<DuckDB>(dbdir, &readonly_config));
-	con = make_unique<Connection>(*db);
+	REQUIRE_NOTHROW(db = make_uniq<DuckDB>(dbdir, &readonly_config));
+	con = make_uniq<Connection>(*db);
 
 	// we can query the database
 	auto result = con->Query("SELECT * FROM integers ORDER BY i");
@@ -85,20 +85,20 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 	// FIXME: these tests currently don't work as we don't do any locking of the database directory
 	// this should be fixed with the new storage
 	// we can connect multiple read only databases to the same dbdir
-	// REQUIRE_NOTHROW(db = make_unique<DuckDB>(dbdir, true));
-	// REQUIRE_NOTHROW(db2 = make_unique<DuckDB>(dbdir, true));
+	// REQUIRE_NOTHROW(db = make_uniq<DuckDB>(dbdir, true));
+	// REQUIRE_NOTHROW(db2 = make_uniq<DuckDB>(dbdir, true));
 	// db.reset();
 	// db2.reset();
 
 	// // however, if there is read-only database, we can't connect a read-write database
-	// REQUIRE_NOTHROW(db = make_unique<DuckDB>(dbdir, true));
-	// REQUIRE_THROWS(db2 = make_unique<DuckDB>(dbdir));
+	// REQUIRE_NOTHROW(db = make_uniq<DuckDB>(dbdir, true));
+	// REQUIRE_THROWS(db2 = make_uniq<DuckDB>(dbdir));
 	// db.reset();
 	// db2.reset();
 
 	// // if we add a read-write database first, we can't add a reading database afterwards either
-	// REQUIRE_NOTHROW(db = make_unique<DuckDB>(dbdir));
-	// REQUIRE_THROWS(db2 = make_unique<DuckDB>(dbdir, true));
+	// REQUIRE_NOTHROW(db = make_uniq<DuckDB>(dbdir));
+	// REQUIRE_THROWS(db2 = make_uniq<DuckDB>(dbdir, true));
 	// db.reset();
 	// db2.reset();
 	DeleteDatabase(dbdir);
@@ -106,8 +106,8 @@ TEST_CASE("Test connection using a read only database", "[readonly]") {
 
 TEST_CASE("Test view creation using a read only database", "[readonly]") {
 	auto dbdir = TestCreatePath("read_only_view_test");
-	unique_ptr<DuckDB> db;
-	unique_ptr<Connection> con;
+	duckdb::unique_ptr<DuckDB> db;
+	duckdb::unique_ptr<Connection> con;
 	// make sure the database does not exist
 	DeleteDatabase(dbdir);
 
@@ -117,9 +117,9 @@ TEST_CASE("Test view creation using a read only database", "[readonly]") {
 
 	// create db in first place
 	{ auto db_rw = DuckDB(dbdir); }
-	db = make_unique<DuckDB>(dbdir, &readonly_config);
+	db = make_uniq<DuckDB>(dbdir, &readonly_config);
 	// create the database file and initialize it with data
-	con = make_unique<Connection>(*db);
+	con = make_uniq<Connection>(*db);
 
 	REQUIRE_NOTHROW(con->TableFunction("duckdb_tables")->CreateView("boo", true, true));
 	con.reset();

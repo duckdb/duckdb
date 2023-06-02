@@ -68,24 +68,41 @@ void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
 	}
 }
 
-void ValidityMask::Slice(const ValidityMask &other, idx_t offset, idx_t end) {
+void ValidityMask::Slice(const ValidityMask &other, idx_t source_offset, idx_t count) {
 	if (other.AllValid()) {
 		validity_mask = nullptr;
 		validity_data.reset();
 		return;
 	}
-	if (offset == 0) {
+	if (source_offset == 0) {
 		Initialize(other);
 		return;
 	}
-	ValidityMask new_mask(end - offset);
-
-// FIXME THIS NEEDS FIXING!
-#if 1
-	for (idx_t i = offset; i < end; i++) {
-		new_mask.Set(i - offset, other.RowIsValid(i));
-	}
+	ValidityMask new_mask(count);
+	new_mask.SliceInPlace(other, 0, source_offset, count);
 	Initialize(new_mask);
+}
+
+bool ValidityMask::IsAligned(idx_t count) {
+	return count % BITS_PER_VALUE == 0;
+}
+
+void ValidityMask::SliceInPlace(const ValidityMask &other, idx_t target_offset, idx_t source_offset, idx_t count) {
+	if (IsAligned(source_offset) && IsAligned(target_offset)) {
+		auto target_validity = GetData();
+		auto source_validity = other.GetData();
+		auto source_offset_entries = EntryCount(source_offset);
+		auto target_offset_entries = EntryCount(target_offset);
+		memcpy(target_validity + target_offset_entries, source_validity + source_offset_entries,
+		       sizeof(validity_t) * EntryCount(count));
+		return;
+	}
+
+	// FIXME: use bitwise operations here
+#if 1
+	for (idx_t i = 0; i < count; i++) {
+		Set(target_offset + i, other.RowIsValid(source_offset + i));
+	}
 #else
 	// first shift the "whole" units
 	idx_t entire_units = offset / BITS_PER_VALUE;

@@ -24,9 +24,9 @@ public:
 
 public:
 	bool CheckQueryResult(const Query &query, ExecuteContext &context,
-	                      unique_ptr<MaterializedQueryResult> owned_result);
+	                      duckdb::unique_ptr<MaterializedQueryResult> owned_result);
 	bool CheckStatementResult(const Statement &statement, ExecuteContext &context,
-	                          unique_ptr<MaterializedQueryResult> owned_result);
+	                          duckdb::unique_ptr<MaterializedQueryResult> owned_result);
 
 	string SQLLogicTestConvertValue(Value value, LogicalType sql_type, bool original_sqlite_test);
 	void DuckDBConvertResult(MaterializedQueryResult &result, bool original_sqlite_test, vector<string> &out_result);

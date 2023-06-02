@@ -5,9 +5,9 @@
 
 namespace duckdb {
 
-unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *root) {
-	auto result = make_unique<JoinRef>(JoinRefType::REGULAR);
-	switch (root->jointype) {
+unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr &root) {
+	auto result = make_uniq<JoinRef>(JoinRefType::REGULAR);
+	switch (root.jointype) {
 	case duckdb_libpgquery::PG_JOIN_INNER: {
 		result->type = JoinType::INNER;
 		break;
@@ -37,21 +37,28 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 		break;
 	}
 	default: {
-		throw NotImplementedException("Join type %d not supported\n", root->jointype);
+		throw NotImplementedException("Join type %d not supported\n", root.jointype);
 	}
 	}
 
 	// Check the type of left arg and right arg before transform
-	result->left = TransformTableRefNode(root->larg);
-	result->right = TransformTableRefNode(root->rarg);
-	if (root->isNatural) {
+	result->left = TransformTableRefNode(*root.larg);
+	result->right = TransformTableRefNode(*root.rarg);
+	switch (root.joinreftype) {
+	case duckdb_libpgquery::PG_JOIN_NATURAL:
 		result->ref_type = JoinRefType::NATURAL;
+		break;
+	case duckdb_libpgquery::PG_JOIN_ASOF:
+		result->ref_type = JoinRefType::ASOF;
+		break;
+	default:
+		break;
 	}
-	result->query_location = root->location;
+	result->query_location = root.location;
 
-	if (root->usingClause && root->usingClause->length > 0) {
+	if (root.usingClause && root.usingClause->length > 0) {
 		// usingClause is a list of strings
-		for (auto node = root->usingClause->head; node != nullptr; node = node->next) {
+		for (auto node = root.usingClause->head; node != nullptr; node = node->next) {
 			auto target = reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value);
 			D_ASSERT(target->type == duckdb_libpgquery::T_PGString);
 			auto column_name = string(reinterpret_cast<duckdb_libpgquery::PGValue *>(target)->val.str);
@@ -60,10 +67,10 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 		return std::move(result);
 	}
 
-	if (!root->quals && result->using_columns.empty() && result->ref_type == JoinRefType::REGULAR) { // CROSS PRODUCT
+	if (!root.quals && result->using_columns.empty() && result->ref_type == JoinRefType::REGULAR) { // CROSS PRODUCT
 		result->ref_type = JoinRefType::CROSS;
 	}
-	result->condition = TransformExpression(root->quals);
+	result->condition = TransformExpression(root.quals);
 	return std::move(result);
 }
 

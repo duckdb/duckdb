@@ -6,6 +6,9 @@
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/types/hash.hpp"
 
+#include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/common/serializer/format_deserializer.hpp"
+
 namespace duckdb {
 
 FunctionExpression::FunctionExpression(string catalog, string schema, const string &function_name,
@@ -18,7 +21,7 @@ FunctionExpression::FunctionExpression(string catalog, string schema, const stri
       export_state(export_state_p) {
 	D_ASSERT(!function_name.empty());
 	if (!order_bys) {
-		order_bys = make_unique<OrderModifier>();
+		order_bys = make_uniq<OrderModifier>();
 	}
 }
 
@@ -34,26 +37,26 @@ string FunctionExpression::ToString() const {
 	                                                      filter.get(), order_bys.get(), export_state, true);
 }
 
-bool FunctionExpression::Equal(const FunctionExpression *a, const FunctionExpression *b) {
-	if (a->catalog != b->catalog || a->schema != b->schema || a->function_name != b->function_name ||
-	    b->distinct != a->distinct) {
+bool FunctionExpression::Equal(const FunctionExpression &a, const FunctionExpression &b) {
+	if (a.catalog != b.catalog || a.schema != b.schema || a.function_name != b.function_name ||
+	    b.distinct != a.distinct) {
 		return false;
 	}
-	if (b->children.size() != a->children.size()) {
+	if (b.children.size() != a.children.size()) {
 		return false;
 	}
-	for (idx_t i = 0; i < a->children.size(); i++) {
-		if (!a->children[i]->Equals(b->children[i].get())) {
+	for (idx_t i = 0; i < a.children.size(); i++) {
+		if (!a.children[i]->Equals(*b.children[i])) {
 			return false;
 		}
 	}
-	if (!BaseExpression::Equals(a->filter.get(), b->filter.get())) {
+	if (!ParsedExpression::Equals(a.filter, b.filter)) {
 		return false;
 	}
-	if (!a->order_bys->Equals(b->order_bys.get())) {
+	if (!OrderModifier::Equals(a.order_bys, b.order_bys)) {
 		return false;
 	}
-	if (a->export_state != b->export_state) {
+	if (a.export_state != b.export_state) {
 		return false;
 	}
 	return true;
@@ -71,20 +74,17 @@ hash_t FunctionExpression::Hash() const {
 unique_ptr<ParsedExpression> FunctionExpression::Copy() const {
 	vector<unique_ptr<ParsedExpression>> copy_children;
 	unique_ptr<ParsedExpression> filter_copy;
+	copy_children.reserve(children.size());
 	for (auto &child : children) {
 		copy_children.push_back(child->Copy());
 	}
 	if (filter) {
 		filter_copy = filter->Copy();
 	}
-	unique_ptr<OrderModifier> order_copy;
-	if (order_bys) {
-		order_copy.reset(static_cast<OrderModifier *>(order_bys->Copy().release()));
-	}
-
-	auto copy = make_unique<FunctionExpression>(catalog, schema, function_name, std::move(copy_children),
-	                                            std::move(filter_copy), std::move(order_copy), distinct, is_operator,
-	                                            export_state);
+	auto order_copy = order_bys ? unique_ptr_cast<ResultModifier, OrderModifier>(order_bys->Copy()) : nullptr;
+	auto copy =
+	    make_uniq<FunctionExpression>(catalog, schema, function_name, std::move(copy_children), std::move(filter_copy),
+	                                  std::move(order_copy), distinct, is_operator, export_state);
 	copy->CopyProperties(*this);
 	return std::move(copy);
 }
@@ -113,13 +113,45 @@ unique_ptr<ParsedExpression> FunctionExpression::Deserialize(ExpressionType type
 	auto catalog = reader.ReadField<string>(INVALID_CATALOG);
 
 	unique_ptr<FunctionExpression> function;
-	function = make_unique<FunctionExpression>(catalog, schema, function_name, std::move(children), std::move(filter),
-	                                           std::move(order_bys), distinct, is_operator, export_state);
+	function = make_uniq<FunctionExpression>(catalog, schema, function_name, std::move(children), std::move(filter),
+	                                         std::move(order_bys), distinct, is_operator, export_state);
 	return std::move(function);
 }
 
 void FunctionExpression::Verify() const {
 	D_ASSERT(!function_name.empty());
+}
+
+void FunctionExpression::FormatSerialize(FormatSerializer &serializer) const {
+	ParsedExpression::FormatSerialize(serializer);
+	serializer.WriteProperty("function_name", function_name);
+	serializer.WriteProperty("schema", schema);
+	serializer.WriteProperty("children", children);
+	serializer.WriteOptionalProperty("filter", filter);
+	serializer.WriteProperty("order_bys", (ResultModifier &)*order_bys);
+	serializer.WriteProperty("distinct", distinct);
+	serializer.WriteProperty("is_operator", is_operator);
+	serializer.WriteProperty("export_state", export_state);
+	serializer.WriteProperty("catalog", catalog);
+}
+
+unique_ptr<ParsedExpression> FunctionExpression::FormatDeserialize(ExpressionType type,
+                                                                   FormatDeserializer &deserializer) {
+	auto function_name = deserializer.ReadProperty<string>("function_name");
+	auto schema = deserializer.ReadProperty<string>("schema");
+	auto children = deserializer.ReadProperty<vector<unique_ptr<ParsedExpression>>>("children");
+	auto filter = deserializer.ReadOptionalProperty<unique_ptr<ParsedExpression>>("filter");
+	auto order_bys = unique_ptr_cast<ResultModifier, OrderModifier>(
+	    deserializer.ReadProperty<unique_ptr<ResultModifier>>("order_bys"));
+	auto distinct = deserializer.ReadProperty<bool>("distinct");
+	auto is_operator = deserializer.ReadProperty<bool>("is_operator");
+	auto export_state = deserializer.ReadProperty<bool>("export_state");
+	auto catalog = deserializer.ReadProperty<string>("catalog");
+
+	unique_ptr<FunctionExpression> function;
+	function = make_uniq<FunctionExpression>(catalog, schema, function_name, std::move(children), std::move(filter),
+	                                         std::move(order_bys), distinct, is_operator, export_state);
+	return std::move(function);
 }
 
 } // namespace duckdb

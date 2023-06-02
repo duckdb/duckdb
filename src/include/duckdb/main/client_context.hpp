@@ -86,7 +86,7 @@ public:
 	TransactionContext transaction;
 
 public:
-	DUCKDB_API MetaTransaction &ActiveTransaction() {
+	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
 	}
 
@@ -149,7 +149,7 @@ public:
 	DUCKDB_API double GetProgress();
 
 	//! Register function in the temporary schema
-	DUCKDB_API void RegisterFunction(CreateFunctionInfo *info);
+	DUCKDB_API void RegisterFunction(CreateFunctionInfo &info);
 
 	//! Parse statements from a query
 	DUCKDB_API vector<unique_ptr<SQLStatement>> ParseStatements(const string &query);
@@ -276,7 +276,7 @@ private:
 
 class ClientContextWrapper {
 public:
-	DUCKDB_API explicit ClientContextWrapper(const shared_ptr<ClientContext> &context)
+	explicit ClientContextWrapper(const shared_ptr<ClientContext> &context)
 	    : client_context(context) {
 
 	      };

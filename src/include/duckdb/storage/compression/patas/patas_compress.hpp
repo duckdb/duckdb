@@ -52,17 +52,13 @@ public:
 				NumericStats::Update<VALUE_TYPE>(state_wrapper->current_segment->stats.statistics, value);
 			}
 
-			state_wrapper->WriteValue(Load<EXACT_TYPE>((const_data_ptr_t)&value));
+			state_wrapper->WriteValue(Load<EXACT_TYPE>(const_data_ptr_cast(&value)));
 		}
 	};
 
 	explicit PatasCompressionState(ColumnDataCheckpointer &checkpointer, PatasAnalyzeState<T> *analyze_state)
-	    : checkpointer(checkpointer) {
-
-		auto &db = checkpointer.GetDatabase();
-		auto &type = checkpointer.GetType();
-		auto &config = DBConfig::GetConfig(db);
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_PATAS, type.InternalType());
+	    : checkpointer(checkpointer),
+	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_PATAS)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
 		state.data_ptr = (void *)this;
@@ -71,7 +67,7 @@ public:
 	}
 
 	ColumnDataCheckpointer &checkpointer;
-	CompressionFunction *function;
+	CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
 	idx_t group_idx = 0;
@@ -142,7 +138,7 @@ public:
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		auto data = (T *)vdata.data;
+		auto data = UnifiedVectorFormat::GetData<T>(vdata);
 
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
@@ -217,7 +213,7 @@ public:
 template <class T>
 unique_ptr<CompressionState> PatasInitCompression(ColumnDataCheckpointer &checkpointer,
                                                   unique_ptr<AnalyzeState> state) {
-	return make_unique<PatasCompressionState<T>>(checkpointer, (PatasAnalyzeState<T> *)state.get());
+	return make_uniq<PatasCompressionState<T>>(checkpointer, (PatasAnalyzeState<T> *)state.get());
 }
 
 template <class T>

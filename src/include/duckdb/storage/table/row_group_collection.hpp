@@ -15,13 +15,17 @@
 
 namespace duckdb {
 struct ParallelTableScanState;
-
+struct ParallelCollectionScanState;
+class CreateIndexScanState;
+class CollectionScanState;
 class PersistentTableData;
 class TableDataWriter;
 class TableIndexList;
 class TableStatistics;
-
+struct TableAppendState;
+class DuckTransaction;
 class BoundConstraint;
+class RowGroupSegmentTree;
 
 class RowGroupCollection {
 public:
@@ -40,14 +44,15 @@ public:
 	void AppendRowGroup(SegmentLock &l, idx_t start_row);
 	//! Get the nth row-group, negative numbers start from the back (so -1 is the last row group, etc)
 	RowGroup *GetRowGroup(int64_t index);
+	idx_t RowGroupCount();
 	void Verify();
 
 	void InitializeScan(CollectionScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters);
 	void InitializeCreateIndexScan(CreateIndexScanState &state);
 	void InitializeScanWithOffset(CollectionScanState &state, const vector<column_t> &column_ids, idx_t start_row,
 	                              idx_t end_row);
-	static bool InitializeScanInRowGroup(CollectionScanState &state, RowGroup *row_group, idx_t vector_index,
-	                                     idx_t max_row);
+	static bool InitializeScanInRowGroup(CollectionScanState &state, RowGroupCollection &collection,
+	                                     RowGroup &row_group, idx_t vector_index, idx_t max_row);
 	void InitializeParallelScan(ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
@@ -73,7 +78,7 @@ public:
 
 	void RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count);
 
-	idx_t Delete(TransactionData transaction, DataTable *table, row_t *ids, idx_t count);
+	idx_t Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count);
 	void Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids, DataChunk &updates);
 	void UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
 	                  DataChunk &updates);
@@ -97,6 +102,15 @@ public:
 	unique_ptr<BaseStatistics> CopyStats(column_t column_id);
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
+	AttachedDatabase &GetAttached();
+	DatabaseInstance &GetDatabase();
+	BlockManager &GetBlockManager() {
+		return block_manager;
+	}
+	DataTableInfo &GetTableInfo() {
+		return *info;
+	}
+
 private:
 	bool IsEmpty(SegmentLock &) const;
 
@@ -105,11 +119,13 @@ private:
 	BlockManager &block_manager;
 	//! The number of rows in the table
 	atomic<idx_t> total_rows;
+	//! The data table info
 	shared_ptr<DataTableInfo> info;
+	//! The column types of the row group collection
 	vector<LogicalType> types;
 	idx_t row_start;
 	//! The segment trees holding the various row_groups of the table
-	shared_ptr<SegmentTree> row_groups;
+	shared_ptr<RowGroupSegmentTree> row_groups;
 	//! Table statistics
 	TableStatistics stats;
 };

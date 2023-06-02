@@ -1,0 +1,72 @@
+# name: test/sql/types/nested/map/test_map_subscript_vector_types.test
+# description: Test cardinality function for maps
+# group: [map]
+
+statement ok
+PRAGMA enable_verification;
+
+# expected result
+query I nosort correct
+SELECT true as equal
+FROM test_vector_types(NULL::INT[]) t(c)
+WHERE c IS NOT NULL;
+----
+
+query I nosort correct
+SELECT map([c], [c])[c] = [c] as equal
+FROM test_vector_types(NULL::INT[]) t(c)
+WHERE c IS NOT NULL;
+----
+
+# Filter the list for NULLs and duplicates, get the list_position of the last element
+query I nosort expected
+SELECT filtered, last_element, pos, true
+from
+(
+	SELECT
+		list_distinct(c) as filtered,
+		filtered[-1] as last_element,
+		CASE
+			WHEN last_element = NULL
+				THEN 0
+			ELSE list_position(filtered, last_element)
+		END as pos,
+		CASE
+			WHEN last_element = NULL
+				THEN []
+			ELSE [list_position(filtered, last_element)]
+		END as expected_result,
+	FROM test_vector_types(NULL::INT[]) t(c)
+	WHERE c IS NOT NULL
+);
+----
+
+# Verify that the list_position result is correctly applied to the 'values' list of the MAP
+query IIII nosort expected
+SELECT
+	filtered,
+	last_element,
+	pos,
+	expected_result = result OR (result = [] AND expected_result = [NULL]) as equal
+from
+(
+	SELECT
+		list_distinct(c) as filtered,
+		map(filtered, range(1, len(filtered)+1)) as mymap,
+		filtered[-1] as last_element,
+		CASE
+			WHEN last_element = NULL
+				THEN 0
+			ELSE list_position(filtered, last_element)
+		END as pos,
+		CASE
+			WHEN last_element = NULL
+				THEN []
+			ELSE [list_position(filtered, last_element)]
+		END as expected_result,
+		mymap[last_element] as result,
+	FROM test_vector_types(NULL::INT[]) t(c)
+	WHERE c IS NOT NULL
+);
+----
+true

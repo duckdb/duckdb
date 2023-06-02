@@ -30,7 +30,7 @@ struct CAPIReplacementScanInfo {
 
 unique_ptr<TableRef> duckdb_capi_replacement_callback(ClientContext &context, const string &table_name,
                                                       ReplacementScanData *data) {
-	auto &scan_data = (CAPIReplacementScanData &)*data;
+	auto &scan_data = reinterpret_cast<CAPIReplacementScanData &>(*data);
 
 	CAPIReplacementScanInfo info(&scan_data);
 	scan_data.callback((duckdb_replacement_scan_info)&info, table_name.c_str(), scan_data.extra_data);
@@ -41,12 +41,12 @@ unique_ptr<TableRef> duckdb_capi_replacement_callback(ClientContext &context, co
 		// no function provided: bail-out
 		return nullptr;
 	}
-	auto table_function = make_unique<TableFunctionRef>();
+	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	for (auto &param : info.parameters) {
-		children.push_back(make_unique<ConstantExpression>(std::move(param)));
+		children.push_back(make_uniq<ConstantExpression>(std::move(param)));
 	}
-	table_function->function = make_unique<FunctionExpression>(info.function_name, std::move(children));
+	table_function->function = make_uniq<FunctionExpression>(info.function_name, std::move(children));
 	return std::move(table_function);
 }
 
@@ -57,8 +57,8 @@ void duckdb_add_replacement_scan(duckdb_database db, duckdb_replacement_callback
 	if (!db || !replacement) {
 		return;
 	}
-	auto wrapper = (duckdb::DatabaseData *)db;
-	auto scan_info = duckdb::make_unique<duckdb::CAPIReplacementScanData>();
+	auto wrapper = reinterpret_cast<duckdb::DatabaseData *>(db);
+	auto scan_info = duckdb::make_uniq<duckdb::CAPIReplacementScanData>();
 	scan_info->callback = replacement;
 	scan_info->extra_data = extra_data;
 	scan_info->delete_callback = delete_callback;
@@ -72,7 +72,7 @@ void duckdb_replacement_scan_set_function_name(duckdb_replacement_scan_info info
 	if (!info_p || !function_name) {
 		return;
 	}
-	auto info = (duckdb::CAPIReplacementScanInfo *)info_p;
+	auto info = reinterpret_cast<duckdb::CAPIReplacementScanInfo *>(info_p);
 	info->function_name = function_name;
 }
 
@@ -80,8 +80,8 @@ void duckdb_replacement_scan_add_parameter(duckdb_replacement_scan_info info_p, 
 	if (!info_p || !parameter) {
 		return;
 	}
-	auto info = (duckdb::CAPIReplacementScanInfo *)info_p;
-	auto val = (duckdb::Value *)parameter;
+	auto info = reinterpret_cast<duckdb::CAPIReplacementScanInfo *>(info_p);
+	auto val = reinterpret_cast<duckdb::Value *>(parameter);
 	info->parameters.push_back(*val);
 }
 
@@ -89,6 +89,6 @@ void duckdb_replacement_scan_set_error(duckdb_replacement_scan_info info_p, cons
 	if (!info_p || !error) {
 		return;
 	}
-	auto info = (duckdb::CAPIReplacementScanInfo *)info_p;
+	auto info = reinterpret_cast<duckdb::CAPIReplacementScanInfo *>(info_p);
 	info->error = error;
 }

@@ -1,0 +1,34 @@
+# name: test/fuzzer/pedro/pushdown_simplification_overflow.test
+# description: Blob wrong optimization
+# group: [pedro]
+
+#statement ok
+#PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE t1(c0 INT);
+
+statement ok
+INSERT INTO t1(c0) VALUES (1),(2),(3);
+
+query I
+SELECT 1 FROM t1;
+----
+1
+1
+1
+
+statement error
+SELECT 1 FROM t1 WHERE -9223372036854775808 >= (6892203265207104503 - (-7595956987701092486));
+----
+Overflow
+
+statement error
+SELECT 1 FROM t1 WHERE NOT (-9223372036854775808 >= (6892203265207104503 - (-7595956987701092486)));
+----
+Overflow
+
+statement error
+SELECT 1 FROM t1 WHERE (-9223372036854775808 >= (6892203265207104503 - (-7595956987701092486))) IS NULL;
+----
+Overflow

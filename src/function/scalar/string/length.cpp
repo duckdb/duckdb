@@ -138,23 +138,4 @@ void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(octet_length);
 }
 
-struct UnicodeOperator {
-	template <class TA, class TR>
-	static inline TR Operation(const TA &input) {
-		auto str = reinterpret_cast<const utf8proc_uint8_t *>(input.GetDataUnsafe());
-		auto len = input.GetSize();
-		utf8proc_int32_t codepoint;
-		(void)utf8proc_iterate(str, len, &codepoint);
-		return codepoint;
-	}
-};
-
-void UnicodeFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction unicode("unicode", {LogicalType::VARCHAR}, LogicalType::INTEGER,
-	                       ScalarFunction::UnaryFunction<string_t, int32_t, UnicodeOperator>);
-	set.AddFunction(unicode);
-	unicode.name = "ord";
-	set.AddFunction(unicode);
-}
-
 } // namespace duckdb

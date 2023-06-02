@@ -1,12 +1,14 @@
 #include "parquet_metadata.hpp"
+
 #include "parquet_statistics.hpp"
 
 #include <sstream>
 
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
 #endif
 
 namespace duckdb {
@@ -17,7 +19,7 @@ struct ParquetMetaDataBindData : public TableFunctionData {
 
 public:
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const ParquetMetaDataBindData &)other_p;
+		auto &other = other_p.Cast<ParquetMetaDataBindData>();
 		return other.return_types == return_types && files == other.files;
 	}
 };
@@ -51,6 +53,30 @@ string PrintParquetElementToString(T &&entry) {
 	std::stringstream ss;
 	entry.printTo(ss);
 	return ss.str();
+}
+
+template <class T>
+Value ParquetElementString(T &&value, bool is_set) {
+	if (!is_set) {
+		return Value();
+	}
+	return Value(ConvertParquetElementToString(value));
+}
+
+template <class T>
+Value ParquetElementInteger(T &&value, bool is_iset) {
+	if (!is_iset) {
+		return Value();
+	}
+	return Value::INTEGER(value);
+}
+
+template <class T>
+Value ParquetElementBigint(T &&value, bool is_iset) {
+	if (!is_iset) {
+		return Value();
+	}
+	return Value::BIGINT(value);
 }
 
 void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types, vector<string> &names) {
@@ -136,7 +162,7 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
                                                    const string &file_path) {
 	collection.Reset();
 	ParquetOptions parquet_options(context);
-	auto reader = make_unique<ParquetReader>(context, file_path, parquet_options);
+	auto reader = make_uniq<ParquetReader>(context, file_path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(context, return_types);
@@ -184,7 +210,7 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 			current_chunk.SetValue(5, count, Value::BIGINT(col_idx));
 
 			// file_offset, LogicalType::BIGINT
-			current_chunk.SetValue(6, count, Value::BIGINT(column.file_offset));
+			current_chunk.SetValue(6, count, ParquetElementBigint(column.file_offset, row_group.__isset.file_offset));
 
 			// num_values, LogicalType::BIGINT
 			current_chunk.SetValue(7, count, Value::BIGINT(col_meta.num_values));
@@ -204,13 +230,10 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 			                       ConvertParquetStats(column_type, schema_element, stats.__isset.max, stats.max));
 
 			// stats_null_count, LogicalType::BIGINT
-			current_chunk.SetValue(
-			    12, count, stats.__isset.null_count ? Value::BIGINT(stats.null_count) : Value(LogicalType::BIGINT));
+			current_chunk.SetValue(12, count, ParquetElementBigint(stats.null_count, stats.__isset.null_count));
 
 			// stats_distinct_count, LogicalType::BIGINT
-			current_chunk.SetValue(13, count,
-			                       stats.__isset.distinct_count ? Value::BIGINT(stats.distinct_count)
-			                                                    : Value(LogicalType::BIGINT));
+			current_chunk.SetValue(13, count, ParquetElementBigint(stats.distinct_count, stats.__isset.distinct_count));
 
 			// stats_min_value, LogicalType::VARCHAR
 			current_chunk.SetValue(
@@ -232,10 +255,13 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 			current_chunk.SetValue(17, count, Value(StringUtil::Join(encoding_string, ", ")));
 
 			// index_page_offset, LogicalType::BIGINT
-			current_chunk.SetValue(18, count, Value::BIGINT(col_meta.index_page_offset));
+			current_chunk.SetValue(
+			    18, count, ParquetElementBigint(col_meta.index_page_offset, col_meta.__isset.index_page_offset));
 
 			// dictionary_page_offset, LogicalType::BIGINT
-			current_chunk.SetValue(19, count, Value::BIGINT(col_meta.dictionary_page_offset));
+			current_chunk.SetValue(
+			    19, count,
+			    ParquetElementBigint(col_meta.dictionary_page_offset, col_meta.__isset.dictionary_page_offset));
 
 			// data_page_offset, LogicalType::BIGINT
 			current_chunk.SetValue(20, count, Value::BIGINT(col_meta.data_page_offset));
@@ -297,8 +323,10 @@ void ParquetMetaDataOperatorData::BindSchema(vector<LogicalType> &return_types, 
 	return_types.emplace_back(LogicalType::VARCHAR);
 }
 
-Value ParquetLogicalTypeToString(const duckdb_parquet::format::LogicalType &type) {
-
+Value ParquetLogicalTypeToString(const duckdb_parquet::format::LogicalType &type, bool is_set) {
+	if (!is_set) {
+		return Value();
+	}
 	if (type.__isset.STRING) {
 		return Value(PrintParquetElementToString(type.STRING));
 	}
@@ -345,7 +373,7 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
                                                  const string &file_path) {
 	collection.Reset();
 	ParquetOptions parquet_options(context);
-	auto reader = make_unique<ParquetReader>(context, file_path, parquet_options);
+	auto reader = make_uniq<ParquetReader>(context, file_path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(context, return_types);
@@ -360,31 +388,31 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
 		current_chunk.SetValue(1, count, column.name);
 
 		// type, LogicalType::VARCHAR
-		current_chunk.SetValue(2, count, ConvertParquetElementToString(column.type));
+		current_chunk.SetValue(2, count, ParquetElementString(column.type, column.__isset.type));
 
-		// type_length, LogicalType::VARCHAR
-		current_chunk.SetValue(3, count, Value::INTEGER(column.type_length));
+		// type_length, LogicalType::INTEGER
+		current_chunk.SetValue(3, count, ParquetElementInteger(column.type_length, column.__isset.type_length));
 
 		// repetition_type, LogicalType::VARCHAR
-		current_chunk.SetValue(4, count, ConvertParquetElementToString(column.repetition_type));
+		current_chunk.SetValue(4, count, ParquetElementString(column.repetition_type, column.__isset.repetition_type));
 
 		// num_children, LogicalType::BIGINT
-		current_chunk.SetValue(5, count, Value::BIGINT(column.num_children));
+		current_chunk.SetValue(5, count, ParquetElementBigint(column.num_children, column.__isset.num_children));
 
 		// converted_type, LogicalType::VARCHAR
-		current_chunk.SetValue(6, count, ConvertParquetElementToString(column.converted_type));
+		current_chunk.SetValue(6, count, ParquetElementString(column.converted_type, column.__isset.converted_type));
 
 		// scale, LogicalType::BIGINT
-		current_chunk.SetValue(7, count, Value::BIGINT(column.scale));
+		current_chunk.SetValue(7, count, ParquetElementBigint(column.scale, column.__isset.scale));
 
 		// precision, LogicalType::BIGINT
-		current_chunk.SetValue(8, count, Value::BIGINT(column.precision));
+		current_chunk.SetValue(8, count, ParquetElementBigint(column.precision, column.__isset.precision));
 
 		// field_id, LogicalType::BIGINT
-		current_chunk.SetValue(9, count, Value::BIGINT(column.field_id));
+		current_chunk.SetValue(9, count, ParquetElementBigint(column.field_id, column.__isset.field_id));
 
 		// logical_type, LogicalType::VARCHAR
-		current_chunk.SetValue(10, count, ParquetLogicalTypeToString(column.logicalType));
+		current_chunk.SetValue(10, count, ParquetLogicalTypeToString(column.logicalType, column.__isset.logicalType));
 
 		count++;
 		if (count >= STANDARD_VECTOR_SIZE) {
@@ -404,34 +432,24 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
 template <bool SCHEMA>
 unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, TableFunctionBindInput &input,
                                              vector<LogicalType> &return_types, vector<string> &names) {
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
-		throw PermissionException("Scanning Parquet files is disabled through configuration");
-	}
 	if (SCHEMA) {
 		ParquetMetaDataOperatorData::BindSchema(return_types, names);
 	} else {
 		ParquetMetaDataOperatorData::BindMetaData(return_types, names);
 	}
 
-	auto file_name = input.inputs[0].GetValue<string>();
-	auto result = make_unique<ParquetMetaDataBindData>();
-
-	FileSystem &fs = FileSystem::GetFileSystem(context);
+	auto result = make_uniq<ParquetMetaDataBindData>();
 	result->return_types = return_types;
-	result->files = fs.Glob(file_name, context);
-	if (result->files.empty()) {
-		throw IOException("No files found that match the pattern \"%s\"", file_name);
-	}
+	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "Parquet");
 	return std::move(result);
 }
 
 template <bool SCHEMA>
 unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = (ParquetMetaDataBindData &)*input.bind_data;
+	auto &bind_data = input.bind_data->Cast<ParquetMetaDataBindData>();
 	D_ASSERT(!bind_data.files.empty());
 
-	auto result = make_unique<ParquetMetaDataOperatorData>(context, bind_data.return_types);
+	auto result = make_uniq<ParquetMetaDataOperatorData>(context, bind_data.return_types);
 	if (SCHEMA) {
 		result->LoadSchemaData(context, bind_data.return_types, bind_data.files[0]);
 	} else {
@@ -443,8 +461,8 @@ unique_ptr<GlobalTableFunctionState> ParquetMetaDataInit(ClientContext &context,
 
 template <bool SCHEMA>
 void ParquetMetaDataImplementation(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (ParquetMetaDataOperatorData &)*data_p.global_state;
-	auto &bind_data = (ParquetMetaDataBindData &)*data_p.bind_data;
+	auto &data = data_p.global_state->Cast<ParquetMetaDataOperatorData>();
+	auto &bind_data = data_p.bind_data->Cast<ParquetMetaDataBindData>();
 
 	while (true) {
 		if (!data.collection.Scan(data.scan_state, output)) {

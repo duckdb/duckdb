@@ -92,7 +92,7 @@ void ChunkConstantInfo::Serialize(Serializer &serializer) {
 unique_ptr<ChunkInfo> ChunkConstantInfo::Deserialize(Deserializer &source) {
 	auto start = source.Read<idx_t>();
 
-	auto info = make_unique<ChunkConstantInfo>(start);
+	auto info = make_uniq<ChunkConstantInfo>(start);
 	info->insert_id = 0;
 	info->delete_id = 0;
 	return std::move(info);
@@ -241,16 +241,16 @@ void ChunkVectorInfo::Serialize(Serializer &serializer) {
 	for (idx_t i = 0; i < count; i++) {
 		deleted_tuples[sel.get_index(i)] = false;
 	}
-	serializer.WriteData((data_ptr_t)deleted_tuples, sizeof(bool) * STANDARD_VECTOR_SIZE);
+	serializer.WriteData(data_ptr_cast(deleted_tuples), sizeof(bool) * STANDARD_VECTOR_SIZE);
 }
 
 unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(Deserializer &source) {
 	auto start = source.Read<idx_t>();
 
-	auto result = make_unique<ChunkVectorInfo>(start);
+	auto result = make_uniq<ChunkVectorInfo>(start);
 	result->any_deleted = true;
 	bool deleted_tuples[STANDARD_VECTOR_SIZE];
-	source.ReadData((data_ptr_t)deleted_tuples, sizeof(bool) * STANDARD_VECTOR_SIZE);
+	source.ReadData(data_ptr_cast(deleted_tuples), sizeof(bool) * STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		if (deleted_tuples[i]) {
 			result->deleted[i] = 0;

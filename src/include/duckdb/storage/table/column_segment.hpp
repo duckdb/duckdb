@@ -9,14 +9,14 @@
 #pragma once
 
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/table/segment_tree.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 #include "duckdb/storage/storage_lock.hpp"
-#include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/table/segment_base.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
 class ColumnSegment;
@@ -35,9 +35,9 @@ struct ColumnAppendState;
 enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 //! TableFilter represents a filter pushed down into the table scan.
 
-class ColumnSegment : public SegmentBase {
+class ColumnSegment : public SegmentBase<ColumnSegment> {
 public:
-	~ColumnSegment() override;
+	~ColumnSegment();
 
 	//! The database instance
 	DatabaseInstance &db;
@@ -48,7 +48,7 @@ public:
 	//! The column segment type (transient or persistent)
 	ColumnSegmentType segment_type;
 	//! The compression function
-	CompressionFunction *function;
+	reference<CompressionFunction> function;
 	//! The statistics for the segment
 	SegmentStatistics stats;
 	//! The block that this segment relates to
@@ -93,7 +93,7 @@ public:
 
 	//! Convert a transient in-memory segment into a persistent segment blocked by an on-disk block.
 	//! Only used during checkpointing.
-	void ConvertToPersistent(BlockManager *block_manager, block_id_t block_id);
+	void ConvertToPersistent(optional_ptr<BlockManager> block_manager, block_id_t block_id);
 	//! Updates pointers to refer to the given block and offset. This is only used
 	//! when sharing a block among segments. This is invoked only AFTER the block is written.
 	void MarkAsPersistent(shared_ptr<BlockHandle> block, uint32_t offset_in_block);
@@ -124,7 +124,7 @@ public:
 
 public:
 	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, LogicalType type, ColumnSegmentType segment_type,
-	              idx_t start, idx_t count, CompressionFunction *function, BaseStatistics statistics,
+	              idx_t start, idx_t count, CompressionFunction &function, BaseStatistics statistics,
 	              block_id_t block_id, idx_t offset, idx_t segment_size);
 	ColumnSegment(ColumnSegment &other, idx_t start);
 

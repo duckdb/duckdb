@@ -14,14 +14,14 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &input, TableFi
 	// FIXME: update stats...
 	switch (filter.filter_type) {
 	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and = (ConjunctionAndFilter &)filter;
+		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
 		for (auto &child_filter : conjunction_and.child_filters) {
 			UpdateFilterStatistics(input, *child_filter);
 		}
 		break;
 	}
 	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = (ConstantFilter &)filter;
+		auto &constant_filter = filter.Cast<ConstantFilter>();
 		UpdateFilterStatistics(input, constant_filter.comparison_type, constant_filter.constant);
 		break;
 	}
@@ -86,7 +86,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalGet 
 		case FilterPropagateResult::FILTER_ALWAYS_FALSE:
 			// filter is always false; this entire filter should be replaced by an empty result block
 			ReplaceWithEmptyResult(*node_ptr);
-			return make_unique<NodeStatistics>(0, 0);
+			return make_uniq<NodeStatistics>(0, 0);
 		default:
 			// general case: filter can be true or false, update this columns' statistics
 			UpdateFilterStatistics(stats, *filter);

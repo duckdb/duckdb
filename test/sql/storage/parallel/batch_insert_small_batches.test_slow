@@ -15,10 +15,10 @@ statement ok
 CREATE VIEW v1 AS SELECT * FROM '__TEST_DIR__/small_batches.parquet'
 
 statement ok
-CREATE VIEW v2 AS FROM v1 WHERE (i/10000)%2=0;
+CREATE VIEW v2 AS FROM v1 WHERE (i//10000)%2=0;
 
 statement ok
-CREATE VIEW v3 AS FROM v1 WHERE (i/10000)%2=0 OR (i>200000 AND i < 400000) OR (i>600000 AND i < 800000);
+CREATE VIEW v3 AS FROM v1 WHERE (i//10000)%2=0 OR (i>200000 AND i < 400000) OR (i>600000 AND i < 800000);
 
 query I
 CREATE TABLE integers AS FROM v1;

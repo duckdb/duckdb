@@ -18,7 +18,7 @@ class VectorBuffer;
 struct SelectionData {
 	DUCKDB_API explicit SelectionData(idx_t count);
 
-	unique_ptr<sel_t[]> owned_data;
+	unsafe_unique_array<sel_t> owned_data;
 };
 
 struct SelectionVector {
@@ -70,7 +70,7 @@ public:
 		sel_vector = sel;
 	}
 	void Initialize(idx_t count = STANDARD_VECTOR_SIZE) {
-		selection_data = make_buffer<SelectionData>(count);
+		selection_data = make_shared<SelectionData>(count);
 		sel_vector = selection_data->owned_data.get();
 	}
 	void Initialize(buffer_ptr<SelectionData> data) {

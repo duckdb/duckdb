@@ -119,19 +119,19 @@ void VisualizerExtension::Load(DuckDB &db) {
 	auto vis_last_profiler_out_func = PragmaFunction::PragmaCall(
 	    "visualize_last_profiling_output", PragmaVisualizeLastProfilingOutput, {LogicalType::VARCHAR});
 	CreatePragmaFunctionInfo vis_last_profiler_out_info(vis_last_profiler_out_func);
-	catalog.CreatePragmaFunction(*con.context, &vis_last_profiler_out_info);
+	catalog.CreatePragmaFunction(*con.context, vis_last_profiler_out_info);
 
 	auto vis_json_func =
 	    PragmaFunction::PragmaCall("visualize_json_profiling_output", PragmaVisualizeJsonProfilingOutput,
 	                               {LogicalType::VARCHAR, LogicalType::VARCHAR});
 	CreatePragmaFunctionInfo vis_json_func_info(vis_json_func);
-	catalog.CreatePragmaFunction(*con.context, &vis_json_func_info);
+	catalog.CreatePragmaFunction(*con.context, vis_json_func_info);
 
 	auto vis_json_diff_func =
 	    PragmaFunction::PragmaCall("visualize_diff_profiling_output", PragmaVisualizeDiffProfilingOutput,
 	                               {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR});
 	CreatePragmaFunctionInfo vis_json_diff_func_info(vis_json_diff_func);
-	catalog.CreatePragmaFunction(*con.context, &vis_json_diff_func_info);
+	catalog.CreatePragmaFunction(*con.context, vis_json_diff_func_info);
 
 	con.Commit();
 }

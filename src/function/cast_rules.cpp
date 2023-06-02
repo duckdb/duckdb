@@ -207,6 +207,15 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 		// if aliases are different, an implicit cast is not possible
 		return -1;
 	}
+	if (from.id() == LogicalTypeId::LIST && to.id() == LogicalTypeId::LIST) {
+		// Lists can be cast if their child types can be cast
+		auto child_cost = ImplicitCast(ListType::GetChildType(from), ListType::GetChildType(to));
+		if (child_cost >= 100) {
+			// subtract one from the cost because we prefer LIST[X] -> LIST[VARCHAR] over LIST[X] -> VARCHAR
+			child_cost--;
+		}
+		return child_cost;
+	}
 	if (from.id() == to.id()) {
 		// arguments match: do nothing
 		return 0;
@@ -218,10 +227,6 @@ int64_t CastRules::ImplicitCast(const LogicalType &from, const LogicalType &to) 
 	if (to.id() == LogicalTypeId::VARCHAR) {
 		// everything can be cast to VARCHAR, but this cast has a high cost
 		return TargetTypeCost(to);
-	}
-	if (from.id() == LogicalTypeId::LIST && to.id() == LogicalTypeId::LIST) {
-		// Lists can be cast if their child types can be cast
-		return ImplicitCast(ListType::GetChildType(from), ListType::GetChildType(to));
 	}
 
 	if (from.id() == LogicalTypeId::UNION && to.id() == LogicalTypeId::UNION) {

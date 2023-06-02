@@ -18,25 +18,25 @@ statement ok
 CREATE TABLE Sales.SalesPerson( BusinessEntityID int NOT NULL, TerritoryID int, SalesQuota decimal(22,4), Bonus decimal(22,4) NOT NULL, CommissionPct decimal(10,4) NOT NULL, SalesYTD decimal(22,4) NOT NULL, SalesLastYear decimal(22,4) NOT NULL , rowguid string , ModifiedDate datetime NOT NULL );
 
 statement ok
-COPY Sales.SalesPerson FROM 'test/sqlserver/data/SalesPerson.csv.gz' DELIMITER '	';
+COPY Sales.SalesPerson FROM 'test/sqlserver/data/SalesPerson.csv.gz' (DELIMITER '	', AUTO_DETECT TRUE);
 
 statement ok
 CREATE TABLE Sales.SalesTaxRate( SalesTaxRateID int NOT NULL, StateProvinceID int NOT NULL, TaxType tinyint NOT NULL, TaxRate decimal(10,4) NOT NULL , Name string NOT NULL, rowguid string , ModifiedDate datetime NOT NULL );
 
 statement ok
-COPY Sales.SalesTaxRate FROM 'test/sqlserver/data/SalesTaxRate.csv.gz' DELIMITER '	';
+COPY Sales.SalesTaxRate FROM 'test/sqlserver/data/SalesTaxRate.csv.gz' (DELIMITER '	', AUTO_DETECT TRUE);
 
 statement ok
 CREATE TABLE Sales.SalesPersonQuotaHistory( BusinessEntityID int NOT NULL, QuotaDate datetime NOT NULL, SalesQuota decimal(22,4) NOT NULL, rowguid string , ModifiedDate datetime NOT NULL);
 
 statement ok
-COPY Sales.SalesPersonQuotaHistory FROM 'test/sqlserver/data/SalesPersonQuotaHistory.csv.gz' DELIMITER '	';
+COPY Sales.SalesPersonQuotaHistory FROM 'test/sqlserver/data/SalesPersonQuotaHistory.csv.gz' (DELIMITER '	', AUTO_DETECT TRUE);
 
 statement ok
 CREATE TABLE Sales.SalesTerritory( TerritoryID int NOT NULL, Name string NOT NULL, CountryRegionCode string NOT NULL, Group_ string NOT NULL, SalesYTD decimal(22,4) NOT NULL , SalesLastYear decimal(22,4) NOT NULL , CostYTD decimal(22,4) NOT NULL , CostLastYear decimal(22,4) NOT NULL , rowguid string , ModifiedDate datetime NOT NULL );
 
 statement ok
-COPY Sales.SalesTerritory FROM 'test/sqlserver/data/SalesTerritory.csv.gz' DELIMITER '	';
+COPY Sales.SalesTerritory FROM 'test/sqlserver/data/SalesTerritory.csv.gz' (DELIMITER '	', AUTO_DETECT TRUE);
 
 statement ok
 CREATE SCHEMA HumanResources;
@@ -45,31 +45,31 @@ statement ok
 CREATE TABLE HumanResources.Employee( BusinessEntityID int NOT NULL, NationalIDNumber string NOT NULL, LoginID string NOT NULL, OrganizationNode VARCHAR, 	OrganizationLevel integer not null, JobTitle string NOT NULL, BirthDate date NOT NULL, MaritalStatus string NOT NULL, Gender string NOT NULL, HireDate date NOT NULL, SalariedFlag string NOT NULL , VacationHours smallint NOT NULL , SickLeaveHours smallint NOT NULL, CurrentFlag string NOT NULL , rowguid string , ModifiedDate datetime NOT NULL);
 
 statement ok
-COPY HumanResources.Employee FROM 'test/sqlserver/data/Employee.csv.gz' DELIMITER '	';
+COPY HumanResources.Employee FROM 'test/sqlserver/data/Employee.csv.gz' (DELIMITER '	', AUTO_DETECT TRUE);
 
 statement ok
 CREATE TABLE HumanResources.EmployeePayHistory( BusinessEntityID int NOT NULL, RateChangeDate datetime NOT NULL, Rate decimal(22,4) NOT NULL, PayFrequency tinyint NOT NULL, ModifiedDate datetime NOT NULL);
 
 statement ok
-COPY HumanResources.EmployeePayHistory FROM 'test/sqlserver/data/EmployeePayHistory.csv.gz' DELIMITER '	';
+COPY HumanResources.EmployeePayHistory FROM 'test/sqlserver/data/EmployeePayHistory.csv.gz' (DELIMITER '	', AUTO_DETECT TRUE);
 
 statement ok
 CREATE TABLE HumanResources.EmployeeDepartmentHistory( BusinessEntityID int NOT NULL, DepartmentID smallint NOT NULL, ShiftID tinyint NOT NULL, StartDate date NOT NULL, EndDate date, ModifiedDate datetime NOT NULL );
 
 statement ok
-COPY HumanResources.EmployeeDepartmentHistory FROM 'test/sqlserver/data/EmployeeDepartmentHistory.csv.gz' DELIMITER '	';
+COPY HumanResources.EmployeeDepartmentHistory FROM 'test/sqlserver/data/EmployeeDepartmentHistory.csv.gz' (DELIMITER '	', AUTO_DETECT TRUE);
 
 statement ok
 CREATE TABLE HumanResources.Department( DepartmentID smallint NOT NULL, Name string NOT NULL, GroupName string NOT NULL, ModifiedDate datetime NOT NULL );
 
 statement ok
-COPY HumanResources.Department FROM 'test/sqlserver/data/Department.csv.gz' DELIMITER '	';
+COPY HumanResources.Department FROM 'test/sqlserver/data/Department.csv.gz' (DELIMITER '	', AUTO_DETECT TRUE);
 
 statement ok
 CREATE TABLE HumanResources.Shift( ShiftID tinyint NOT NULL, Name string NOT NULL, StartTime string NOT NULL, EndTime string NOT NULL, ModifiedDate datetime NOT NULL );
 
 statement ok
-COPY HumanResources.Shift FROM 'test/sqlserver/data/Shift.csv.gz' DELIMITER '	';
+COPY HumanResources.Shift FROM 'test/sqlserver/data/Shift.csv.gz' (DELIMITER '	', AUTO_DETECT TRUE);
 
 statement ok
 CREATE SCHEMA Person;
@@ -78,49 +78,49 @@ statement ok
 CREATE TABLE Person.Person( BusinessEntityID int NOT NULL, PersonType string NOT NULL, NameStyle string NOT NULL, Title string , FirstName string NOT NULL, MiddleName string, LastName string NOT NULL, Suffix string, EmailPromotion int NOT NULL, AdditionalContactInfo string, Demographics string, rowguid string, ModifiedDate datetime NOT NULL);
 
 statement ok
-COPY Person.Person FROM 'test/sqlserver/data/Person.csv.gz' (DELIMITER '|', QUOTE '*');
+COPY Person.Person FROM 'test/sqlserver/data/Person.csv.gz' (DELIMITER '|', QUOTE '*', AUTO_DETECT TRUE);
 
 statement ok
 CREATE TABLE Person.BusinessEntityAddress( BusinessEntityID int NOT NULL, AddressID int NOT NULL, AddressTypeID int NOT NULL, rowguid string, ModifiedDate datetime NOT NULL ) ;
 
 statement ok
-COPY Person.BusinessEntityAddress FROM 'test/sqlserver/data/BusinessEntityAddress.csv.gz' DELIMITER '|';
+COPY Person.BusinessEntityAddress FROM 'test/sqlserver/data/BusinessEntityAddress.csv.gz' (DELIMITER '|', AUTO_DETECT TRUE);
 
 statement ok
 CREATE TABLE Person.Address( AddressID int NOT NULL, AddressLine1 string NOT NULL, AddressLine2 string, City string NOT NULL, StateProvinceID int NOT NULL, PostalCode string NOT NULL, SpatialLocation string, rowguid string, ModifiedDate datetime NOT NULL );
 
 statement ok
-COPY Person.Address FROM 'test/sqlserver/data/Address.csv.gz' DELIMITER '	';
+COPY Person.Address FROM 'test/sqlserver/data/Address.csv.gz' (DELIMITER '	', AUTO_DETECT TRUE);
 
 statement ok
 CREATE TABLE Person.StateProvince( StateProvinceID int NOT NULL, StateProvinceCode string NOT NULL, CountryRegionCode string NOT NULL, IsOnlyStateProvinceFlag string NOT NULL , Name string NOT NULL, TerritoryID int NOT NULL, rowguid string , ModifiedDate datetime NOT NULL);
 
 statement ok
-COPY Person.StateProvince FROM 'test/sqlserver/data/StateProvince.csv.gz' DELIMITER '	';
+COPY Person.StateProvince FROM 'test/sqlserver/data/StateProvince.csv.gz' (DELIMITER '	', AUTO_DETECT TRUE);
 
 statement ok
 CREATE TABLE Person.CountryRegion( CountryRegionCode string NOT NULL, Name string NOT NULL, ModifiedDate datetime NOT NULL );
 
 statement ok
-COPY Person.CountryRegion FROM 'test/sqlserver/data/CountryRegion.csv.gz' DELIMITER '	';
+COPY Person.CountryRegion FROM 'test/sqlserver/data/CountryRegion.csv.gz' (DELIMITER '	', AUTO_DETECT TRUE);
 
 statement ok
 CREATE TABLE Person.EmailAddress( BusinessEntityID int NOT NULL, EmailAddressID int NOT NULL, EmailAddress string, rowguid string , ModifiedDate datetime NOT NULL );
 
 statement ok
-COPY Person.EmailAddress FROM 'test/sqlserver/data/EmailAddress.csv.gz' DELIMITER '|';
+COPY Person.EmailAddress FROM 'test/sqlserver/data/EmailAddress.csv.gz' (DELIMITER '|', AUTO_DETECT TRUE);
 
 statement ok
 CREATE TABLE Person.PersonPhone( BusinessEntityID int NOT NULL, PhoneNumber string NOT NULL, PhoneNumberTypeID int NOT NULL, ModifiedDate datetime NOT NULL );
 
 statement ok
-COPY Person.PersonPhone FROM 'test/sqlserver/data/PersonPhone.csv.gz' DELIMITER '|';
+COPY Person.PersonPhone FROM 'test/sqlserver/data/PersonPhone.csv.gz' (DELIMITER '|', AUTO_DETECT TRUE);
 
 statement ok
 CREATE TABLE Person.PhoneNumberType( PhoneNumberTypeID int NOT NULL, Name string NOT NULL, ModifiedDate datetime NOT NULL );
 
 statement ok
-COPY Person.PhoneNumberType FROM 'test/sqlserver/data/PhoneNumberType.csv.gz' DELIMITER '|';
+COPY Person.PhoneNumberType FROM 'test/sqlserver/data/PhoneNumberType.csv.gz' (DELIMITER '|', AUTO_DETECT TRUE);
 
 statement ok
 CREATE SCHEMA Production;
@@ -129,13 +129,13 @@ statement ok
 CREATE TABLE Production.Product( ProductID int NOT NULL, Name string NOT NULL, ProductNumber string NOT NULL, MakeFlag string NOT NULL , FinishedGoodsFlag string NOT NULL , Color string, SafetyStockLevel smallint NOT NULL, ReorderPoint smallint NOT NULL, StandardCost decimal(22,4) NOT NULL, ListPrice decimal(22,4) NOT NULL, Size string, SizeUnitMeasureCode string, WeightUnitMeasureCode string, Weight decimal(8, 2), DaysToManufacture int NOT NULL, ProductLine string, Class string, Style string, ProductSubcategoryID int, ProductModelID int, SellStartDate datetime NOT NULL, SellEndDate datetime, DiscontinuedDate datetime, rowguid string  , ModifiedDate datetime NOT NULL );
 
 statement ok
-COPY Production.Product FROM 'test/sqlserver/data/Product.csv.gz' DELIMITER '	';
+COPY Production.Product FROM 'test/sqlserver/data/Product.csv.gz' (DELIMITER '	', AUTO_DETECT TRUE);
 
 statement ok
  CREATE TABLE Production.ProductInventory( ProductID int NOT NULL, LocationID smallint NOT NULL, Shelf string NOT NULL, Bin tinyint NOT NULL, Quantity smallint NOT NULL , rowguid string , ModifiedDate datetime NOT NULL );
 
 statement ok
-COPY Production.ProductInventory FROM 'test/sqlserver/data/ProductInventory.csv.gz' DELIMITER '	';
+COPY Production.ProductInventory FROM 'test/sqlserver/data/ProductInventory.csv.gz' (DELIMITER '	', AUTO_DETECT TRUE);
 
 statement ok
 CREATE VIEW Sales.vSalesPerson AS SELECT s.BusinessEntityID ,p.Title ,p.FirstName ,p.MiddleName ,p.LastName ,p.Suffix ,e.JobTitle ,pp.PhoneNumber ,pnt.Name AS PhoneNumberType ,ea.EmailAddress ,p.EmailPromotion ,a.AddressLine1 ,a.AddressLine2 ,a.City ,sp.Name AS StateProvinceName ,a.PostalCode ,cr.Name AS CountryRegionName ,st.Name AS TerritoryName ,st.Group_ AS TerritoryGroup ,s.SalesQuota ,s.SalesYTD ,s.SalesLastYear FROM Sales.SalesPerson s INNER JOIN HumanResources.Employee e ON e.BusinessEntityID = s.BusinessEntityID INNER JOIN Person.Person p ON p.BusinessEntityID = s.BusinessEntityID INNER JOIN Person.BusinessEntityAddress bea ON bea.BusinessEntityID = s.BusinessEntityID INNER JOIN Person.Address a ON a.AddressID = bea.AddressID INNER JOIN Person.StateProvince sp ON sp.StateProvinceID = a.StateProvinceID INNER JOIN Person.CountryRegion cr ON cr.CountryRegionCode = sp.CountryRegionCode LEFT OUTER JOIN Sales.SalesTerritory st ON st.TerritoryID = s.TerritoryID LEFT OUTER JOIN Person.EmailAddress ea ON ea.BusinessEntityID = p.BusinessEntityID LEFT OUTER JOIN Person.PersonPhone pp ON pp.BusinessEntityID = p.BusinessEntityID LEFT OUTER JOIN Person.PhoneNumberType pnt ON pnt.PhoneNumberTypeID = pp.PhoneNumberTypeID;

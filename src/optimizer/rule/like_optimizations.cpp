@@ -10,12 +10,12 @@ namespace duckdb {
 
 LikeOptimizationRule::LikeOptimizationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a FunctionExpression that has a foldable ConstantExpression
-	auto func = make_unique<FunctionExpressionMatcher>();
-	func->matchers.push_back(make_unique<ExpressionMatcher>());
-	func->matchers.push_back(make_unique<ConstantExpressionMatcher>());
+	auto func = make_uniq<FunctionExpressionMatcher>();
+	func->matchers.push_back(make_uniq<ExpressionMatcher>());
+	func->matchers.push_back(make_uniq<ConstantExpressionMatcher>());
 	func->policy = SetMatcher::Policy::ORDERED;
 	// we match on LIKE ("~~") and NOT LIKE ("!~~")
-	func->function = make_unique<ManyFunctionMatcher>(unordered_set<string> {"!~~", "~~"});
+	func->function = make_uniq<ManyFunctionMatcher>(unordered_set<string> {"!~~", "~~"});
 	root = std::move(func);
 }
 
@@ -99,31 +99,31 @@ static bool PatternIsContains(const string &pattern) {
 	return true;
 }
 
-unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
+unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
                                                    bool &changes_made, bool is_root) {
-	auto root = (BoundFunctionExpression *)bindings[0];
-	auto constant_expr = (BoundConstantExpression *)bindings[2];
-	D_ASSERT(root->children.size() == 2);
+	auto &root = bindings[0].get().Cast<BoundFunctionExpression>();
+	auto &constant_expr = bindings[2].get().Cast<BoundConstantExpression>();
+	D_ASSERT(root.children.size() == 2);
 
-	if (constant_expr->value.IsNull()) {
-		return make_unique<BoundConstantExpression>(Value(root->return_type));
+	if (constant_expr.value.IsNull()) {
+		return make_uniq<BoundConstantExpression>(Value(root.return_type));
 	}
 
 	// the constant_expr is a scalar expression that we have to fold
-	if (!constant_expr->IsFoldable()) {
+	if (!constant_expr.IsFoldable()) {
 		return nullptr;
 	}
 
-	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), *constant_expr);
-	D_ASSERT(constant_value.type() == constant_expr->return_type);
+	auto constant_value = ExpressionExecutor::EvaluateScalar(GetContext(), constant_expr);
+	D_ASSERT(constant_value.type() == constant_expr.return_type);
 	auto &patt_str = StringValue::Get(constant_value);
 
-	bool is_not_like = root->function.name == "!~~";
+	bool is_not_like = root.function.name == "!~~";
 	if (PatternIsConstant(patt_str)) {
 		// Pattern is constant
-		return make_unique<BoundComparisonExpression>(is_not_like ? ExpressionType::COMPARE_NOTEQUAL
-		                                                          : ExpressionType::COMPARE_EQUAL,
-		                                              std::move(root->children[0]), std::move(root->children[1]));
+		return make_uniq<BoundComparisonExpression>(is_not_like ? ExpressionType::COMPARE_NOTEQUAL
+		                                                        : ExpressionType::COMPARE_EQUAL,
+		                                            std::move(root.children[0]), std::move(root.children[1]));
 	} else if (PatternIsPrefix(patt_str)) {
 		// Prefix LIKE pattern : [^%_]*[%]+, ignoring underscore
 		return ApplyRule(root, PrefixFun::GetFunction(), patt_str, is_not_like);
@@ -137,21 +137,21 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 	return nullptr;
 }
 
-unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression *expr, ScalarFunction function,
+unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression &expr, ScalarFunction function,
                                                        string pattern, bool is_not_like) {
 	// replace LIKE by an optimized function
 	unique_ptr<Expression> result;
-	auto new_function = make_unique<BoundFunctionExpression>(expr->return_type, std::move(function),
-	                                                         std::move(expr->children), nullptr);
+	auto new_function =
+	    make_uniq<BoundFunctionExpression>(expr.return_type, std::move(function), std::move(expr.children), nullptr);
 
 	// removing "%" from the pattern
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), '%'), pattern.end());
 
-	new_function->children[1] = make_unique<BoundConstantExpression>(Value(std::move(pattern)));
+	new_function->children[1] = make_uniq<BoundConstantExpression>(Value(std::move(pattern)));
 
 	result = std::move(new_function);
 	if (is_not_like) {
-		auto negation = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
+		auto negation = make_uniq<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
 		negation->children.push_back(std::move(result));
 		result = std::move(negation);
 	}

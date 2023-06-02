@@ -10,19 +10,23 @@
 
 #include "duckdb/execution/operator/persistent/csv_buffer.hpp"
 #include "duckdb/common/map.hpp"
-#include "duckdb/function/scalar/strftime.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/multi_file_reader_options.hpp"
 
 namespace duckdb {
 
-enum NewLineIdentifier {
+enum class NewLineIdentifier : uint8_t {
 	SINGLE = 1,   // Either \r or \n
 	CARRY_ON = 2, // \r\n
 	MIX = 3,      // Hippie-Land, can't run it multithreaded
 	NOT_SET = 4
 };
+
+enum class ParallelMode { AUTOMATIC = 0, PARALLEL = 1, SINGLE_THREADED = 2 };
 
 struct BufferedCSVReaderOptions {
 	//===--------------------------------------------------------------------===//
@@ -37,11 +41,6 @@ struct BufferedCSVReaderOptions {
 	bool has_newline = false;
 	//! New Line separator
 	NewLineIdentifier new_line = NewLineIdentifier::NOT_SET;
-
-	//! Whether or not an option was provided for parallel
-	bool has_parallel = false;
-	//! Whether or not the read will use the ParallelCSVReader
-	bool use_parallel = false;
 	//! Whether or not a quote was defined by the user
 	bool has_quote = false;
 	//! Quote used for columns that contain reserved characters, e.g., delimiter
@@ -65,8 +64,8 @@ struct BufferedCSVReaderOptions {
 	//! Whether file is compressed or not, and if so which compression type
 	//! AUTO_DETECT (default; infer from file extension)
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
-	//! The column names of the columns to read/write
-	vector<string> names;
+	//! Option to convert quoted values to NULL values
+	bool allow_quoted_nulls = true;
 
 	//===--------------------------------------------------------------------===//
 	// CSVAutoOptions
@@ -77,12 +76,19 @@ struct BufferedCSVReaderOptions {
 	vector<LogicalType> sql_type_list;
 	//! User-defined name list
 	vector<string> name_list;
+	//! Types considered as candidates for auto detection ordered by descending specificity (~ from high to low)
+	vector<LogicalType> auto_type_candidates = {LogicalType::VARCHAR, LogicalType::TIMESTAMP, LogicalType::DATE,
+	                                            LogicalType::TIME,    LogicalType::DOUBLE,    LogicalType::BIGINT,
+	                                            LogicalType::BOOLEAN, LogicalType::SQLNULL};
+
 	//===--------------------------------------------------------------------===//
 	// ReadCSVOptions
 	//===--------------------------------------------------------------------===//
 
 	//! How many leading rows to skip
 	idx_t skip_rows = 0;
+	//! Whether or not the skip_rows is set by the user
+	bool skip_rows_set = false;
 	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
 	//! note that this is the guaranteed line length that will succeed, longer lines may be accepted if slightly above
 	idx_t maximum_line_size = 2097152;
@@ -100,23 +106,28 @@ struct BufferedCSVReaderOptions {
 	bool auto_detect = false;
 	//! The file path of the CSV file to read
 	string file_path;
-	//! Whether or not to include a file name column
-	bool include_file_name = false;
-	//! Whether or not to include a parsed hive partition columns
-	bool include_parsed_hive_partitions = false;
-	//! Whether or not to union files with different (but compatible) columns
-	bool union_by_name = false;
+	//! Multi-file reader options
+	MultiFileReaderOptions file_options;
 	//! Buffer Size (Parallel Scan)
 	idx_t buffer_size = CSVBuffer::INITIAL_BUFFER_SIZE_COLOSSAL;
 	//! Decimal separator when reading as numeric
 	string decimal_separator = ".";
+	//! Whether or not to pad rows that do not have enough columns with NULL values
+	bool null_padding = false;
 
+	//! If we are running the parallel version of the CSV Reader. In general, the system should always auto-detect
+	//! When it can't execute a parallel run before execution. However, there are (rather specific) situations where
+	//! setting up this manually might be important
+	ParallelMode parallel_mode;
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//
-
 	//! True, if column with that index must be quoted
 	vector<bool> force_quote;
+	//! Prefix/suffix/custom newline the entire file once (enables writing of files as JSON arrays)
+	string prefix;
+	string suffix;
+	string write_newline;
 
 	//! The date format to use (if any is specified)
 	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
@@ -134,7 +145,6 @@ struct BufferedCSVReaderOptions {
 	void SetEscape(const string &escape);
 	void SetQuote(const string &quote);
 	void SetDelimiter(const string &delimiter);
-	void SetParallel(bool use_parallel);
 
 	void SetNewline(const string &input);
 	//! Set an option that is supported by both reading and writing functions, called by

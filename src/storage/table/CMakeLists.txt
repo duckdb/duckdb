@@ -9,7 +9,6 @@ add_library_unity(
   list_column_data.cpp
   update_segment.cpp
   persistent_table_data.cpp
-  segment_tree.cpp
   row_group.cpp
   row_group_collection.cpp
   scan_state.cpp

@@ -9,15 +9,15 @@ namespace duckdb {
 
 BoundStatement Binder::Bind(PragmaStatement &stmt) {
 	// bind the pragma function
-	auto entry =
-	    Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->name, false);
+	auto &entry =
+	    Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->name);
 	string error;
 	FunctionBinder function_binder(context);
-	idx_t bound_idx = function_binder.BindFunction(entry->name, entry->functions, *stmt.info, error);
+	idx_t bound_idx = function_binder.BindFunction(entry.name, entry.functions, *stmt.info, error);
 	if (bound_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(FormatError(stmt.stmt_location, error));
 	}
-	auto bound_function = entry->functions.GetFunctionByOffset(bound_idx);
+	auto bound_function = entry.functions.GetFunctionByOffset(bound_idx);
 	if (!bound_function.function) {
 		throw BinderException("PRAGMA function does not have a function specified");
 	}
@@ -30,7 +30,7 @@ BoundStatement Binder::Bind(PragmaStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
-	result.plan = make_unique<LogicalPragma>(bound_function, *stmt.info);
+	result.plan = make_uniq<LogicalPragma>(bound_function, *stmt.info);
 	properties.return_type = StatementReturnType::QUERY_RESULT;
 	return result;
 }

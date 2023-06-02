@@ -178,6 +178,11 @@ bool TryMultiplyOperator::Operation(int64_t left, int64_t right, int64_t &result
 	return true;
 }
 
+template <>
+bool TryMultiplyOperator::Operation(hugeint_t left, hugeint_t right, hugeint_t &result) {
+	return Hugeint::TryMultiply(left, right, result);
+}
+
 //===--------------------------------------------------------------------===//
 // multiply  decimal with overflow check
 //===--------------------------------------------------------------------===//

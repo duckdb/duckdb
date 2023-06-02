@@ -4,17 +4,29 @@
 
 statement ok
 PRAGMA explain_output = PHYSICAL_ONLY;
+
+statement ok
 PRAGMA force_index_join
 
 statement ok
 CREATE TABLE t1(i INTEGER);
+
+statement ok
 CREATE TABLE t2(i INTEGER);
+
+statement ok
 CREATE TABLE t3(i INTEGER PRIMARY KEY);
+
+statement ok
 CREATE INDEX i_index ON t1 using art(i);
 
 statement ok
 INSERT INTO t1 SELECT i+1 FROM range(0,100) tbl(i);
+
+statement ok
 INSERT INTO t2 SELECT i+1 FROM range(50,100) tbl(i);
+
+statement ok
 INSERT INTO t3 SELECT i+1 FROM range(0,100) tbl(i);
 
 # standalone limit
@@ -44,7 +56,11 @@ CREATE TABLE words(
     index INTEGER,
     doc INTEGER,
     word VARCHAR);
+
+statement ok
 CREATE INDEX w_index ON words using art(word);
+
+statement ok
 COPY words FROM 'benchmark/micro/index/indexjoin.csv.gz' (DELIMITER ',' , AUTO_DETECT FALSE)
 
 query II

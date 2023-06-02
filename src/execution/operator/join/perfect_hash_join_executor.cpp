@@ -1,6 +1,6 @@
 #include "duckdb/execution/operator/join/perfect_hash_join_executor.hpp"
 
-#include "duckdb/common/types/row_layout.hpp"
+#include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
 namespace duckdb {
@@ -23,32 +23,41 @@ bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	for (const auto &type : ht.build_types) {
 		perfect_hash_table.emplace_back(type, build_size);
 	}
+
 	// and for duplicate_checking
-	bitmap_build_idx = unique_ptr<bool[]>(new bool[build_size]);
+	bitmap_build_idx = make_unsafe_uniq_array<bool>(build_size);
 	memset(bitmap_build_idx.get(), 0, sizeof(bool) * build_size); // set false
 
-	// pin all fixed-size blocks (variable-sized should still be pinned)
-	ht.PinAllBlocks();
-
 	// Now fill columns with build data
-	JoinHTScanState join_ht_state;
-	return FullScanHashTable(join_ht_state, key_type);
+
+	return FullScanHashTable(key_type);
 }
 
-bool PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalType &key_type) {
-	Vector tuples_addresses(LogicalType::POINTER, ht.Count());              // allocate space for all the tuples
-	auto key_locations = FlatVector::GetData<data_ptr_t>(tuples_addresses); // get a pointer to vector data
+bool PerfectHashJoinExecutor::FullScanHashTable(LogicalType &key_type) {
+	auto &data_collection = ht.GetDataCollection();
+
 	// TODO: In a parallel finalize: One should exclusively lock and each thread should do one part of the code below.
-	// Go through all the blocks and fill the keys addresses
-	auto keys_count = ht.FillWithHTOffsets(key_locations, state);
+	Vector tuples_addresses(LogicalType::POINTER, ht.Count()); // allocate space for all the tuples
+
+	idx_t key_count = 0;
+	if (data_collection.ChunkCount() > 0) {
+		JoinHTScanState join_ht_state(data_collection, 0, data_collection.ChunkCount(),
+		                              TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+
+		// Go through all the blocks and fill the keys addresses
+		key_count = ht.FillWithHTOffsets(join_ht_state, tuples_addresses);
+	}
+
 	// Scan the build keys in the hash table
-	Vector build_vector(key_type, keys_count);
-	RowOperations::FullScanColumn(ht.layout, tuples_addresses, build_vector, keys_count, 0);
+	Vector build_vector(key_type, key_count);
+	RowOperations::FullScanColumn(ht.layout, tuples_addresses, build_vector, key_count, 0);
+
 	// Now fill the selection vector using the build keys and create a sequential vector
-	// todo: add check for fast pass when probe is part of build domain
-	SelectionVector sel_build(keys_count + 1);
-	SelectionVector sel_tuples(keys_count + 1);
-	bool success = FillSelectionVectorSwitchBuild(build_vector, sel_build, sel_tuples, keys_count);
+	// TODO: add check for fast pass when probe is part of build domain
+	SelectionVector sel_build(key_count + 1);
+	SelectionVector sel_tuples(key_count + 1);
+	bool success = FillSelectionVectorSwitchBuild(build_vector, sel_build, sel_tuples, key_count);
+
 	// early out
 	if (!success) {
 		return false;
@@ -56,16 +65,22 @@ bool PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 	if (unique_keys == perfect_join_statistics.build_range + 1 && !ht.has_null) {
 		perfect_join_statistics.is_build_dense = true;
 	}
-	keys_count = unique_keys; // do not consider keys out of the range
+	key_count = unique_keys; // do not consider keys out of the range
+
 	// Full scan the remaining build columns and fill the perfect hash table
+	const auto build_size = perfect_join_statistics.build_range + 1;
 	for (idx_t i = 0; i < ht.build_types.size(); i++) {
-		auto build_size = perfect_join_statistics.build_range + 1;
 		auto &vector = perfect_hash_table[i];
 		D_ASSERT(vector.GetType() == ht.build_types[i]);
+		if (build_size > STANDARD_VECTOR_SIZE) {
+			auto &col_mask = FlatVector::Validity(vector);
+			col_mask.Initialize(build_size);
+		}
+
 		const auto col_no = ht.condition_types.size() + i;
-		RowOperations::Gather(tuples_addresses, sel_tuples, vector, sel_build, keys_count, ht.layout, col_no,
-		                      build_size);
+		data_collection.Gather(tuples_addresses, sel_tuples, key_count, col_no, vector, sel_build);
 	}
+
 	return true;
 }
 
@@ -147,13 +162,13 @@ public:
 };
 
 unique_ptr<OperatorState> PerfectHashJoinExecutor::GetOperatorState(ExecutionContext &context) {
-	auto state = make_unique<PerfectHashJoinState>(context.client, join);
+	auto state = make_uniq<PerfectHashJoinState>(context.client, join);
 	return std::move(state);
 }
 
 OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, DataChunk &input,
                                                                   DataChunk &result, OperatorState &state_p) {
-	auto &state = (PerfectHashJoinState &)state_p;
+	auto &state = state_p.Cast<PerfectHashJoinState>();
 	// keeps track of how many probe keys have a match
 	idx_t probe_sel_count = 0;
 
