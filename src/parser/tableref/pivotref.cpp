@@ -269,40 +269,35 @@ string PivotRef::ToString() const {
 	return result;
 }
 
-bool PivotRef::Equals(const TableRef *other_p) const {
+bool PivotRef::Equals(const TableRef &other_p) const {
 	if (!TableRef::Equals(other_p)) {
 		return false;
 	}
-	auto other = (PivotRef *)other_p;
-	if (!source->Equals(other->source.get())) {
+	auto &other = other_p.Cast<PivotRef>();
+	if (!source->Equals(*other.source)) {
 		return false;
 	}
-	if (aggregates.size() != other->aggregates.size()) {
+	if (!ParsedExpression::ListEquals(aggregates, other.aggregates)) {
 		return false;
 	}
-	for (idx_t i = 0; i < aggregates.size(); i++) {
-		if (!BaseExpression::Equals(aggregates[i].get(), other->aggregates[i].get())) {
-			return false;
-		}
-	}
-	if (pivots.size() != other->pivots.size()) {
+	if (pivots.size() != other.pivots.size()) {
 		return false;
 	}
 	for (idx_t i = 0; i < pivots.size(); i++) {
-		if (!pivots[i].Equals(other->pivots[i])) {
+		if (!pivots[i].Equals(other.pivots[i])) {
 			return false;
 		}
 	}
-	if (unpivot_names != other->unpivot_names) {
+	if (unpivot_names != other.unpivot_names) {
 		return false;
 	}
-	if (alias != other->alias) {
+	if (alias != other.alias) {
 		return false;
 	}
-	if (groups != other->groups) {
+	if (groups != other.groups) {
 		return false;
 	}
-	if (include_nulls != other->include_nulls) {
+	if (include_nulls != other.include_nulls) {
 		return false;
 	}
 	return true;

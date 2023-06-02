@@ -1020,7 +1020,7 @@ string AWSListObjectV2::Request(string &path, HTTPParams &http_params, S3AuthPar
 		req_params += "&delimiter=%2F";
 	}
 
-	string listobjectv2_url = parsed_url.http_proto + parsed_url.host + req_path + "?" + req_params;
+	string listobjectv2_url = req_path + "?" + req_params;
 
 	auto header_map =
 	    create_s3_header(req_path, req_params, parsed_url.host, "s3", "GET", s3_auth_params, "", "", "", "");

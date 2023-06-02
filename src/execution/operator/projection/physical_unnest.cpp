@@ -65,7 +65,7 @@ void UnnestOperatorState::SetLongestListLength() {
 		if (vector_data.validity.RowIsValid(current_idx)) {
 
 			// check if this list is longer
-			auto list_data = (list_entry_t *)vector_data.data;
+			auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(vector_data);
 			auto list_entry = list_data[current_idx];
 			if (list_entry.length > longest_list_length) {
 				longest_list_length = list_entry.length;
@@ -98,7 +98,7 @@ static void UnnestNull(idx_t start, idx_t end, Vector &result) {
 template <class T>
 static void TemplatedUnnest(UnifiedVectorFormat &vector_data, idx_t start, idx_t end, Vector &result) {
 
-	auto source_data = (T *)vector_data.data;
+	auto source_data = UnifiedVectorFormat::GetData<T>(vector_data);
 	auto &source_mask = vector_data.validity;
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
@@ -314,7 +314,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 
 				} else {
 
-					auto list_data = (list_entry_t *)vector_data.data;
+					auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(vector_data);
 					auto list_entry = list_data[current_idx];
 
 					idx_t list_count = 0;

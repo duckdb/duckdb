@@ -249,9 +249,8 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 
 static void SerializeDecimalArithmetic(FieldWriter &writer, const FunctionData *bind_data_p,
                                        const ScalarFunction &function) {
-	D_ASSERT(bind_data_p);
-	auto bind_data = (DecimalArithmeticBindData *)bind_data_p;
-	writer.WriteField(bind_data->check_overflow);
+	auto &bind_data = bind_data_p->Cast<DecimalArithmeticBindData>();
+	writer.WriteField(bind_data.check_overflow);
 	writer.WriteSerializable(function.return_type);
 	writer.WriteRegularSerializableList(function.arguments);
 }

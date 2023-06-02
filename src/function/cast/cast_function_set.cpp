@@ -158,7 +158,7 @@ int64_t CastFunctionSet::ImplicitCastCost(const LogicalType &source, const Logic
 
 BoundCastInfo MapCastFunction(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 	D_ASSERT(input.info);
-	auto &map_info = (MapCastInfo &)*input.info;
+	auto &map_info = input.info->Cast<MapCastInfo>();
 	auto entry = map_info.GetEntry(source, target);
 	if (entry) {
 		if (entry->bind_function) {

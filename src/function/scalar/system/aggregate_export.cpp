@@ -23,7 +23,7 @@ struct ExportAggregateBindData : public FunctionData {
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const ExportAggregateBindData &)other_p;
+		auto &other = other_p.Cast<ExportAggregateBindData>();
 		return aggr == other.aggr && state_size == other.state_size;
 	}
 
@@ -42,14 +42,14 @@ struct CombineState : public FunctionLocalState {
 	explicit CombineState(idx_t state_size_p)
 	    : state_size(state_size_p), state_buffer0(make_unsafe_uniq_array<data_t>(state_size_p)),
 	      state_buffer1(make_unsafe_uniq_array<data_t>(state_size_p)),
-	      state_vector0(Value::POINTER((uintptr_t)state_buffer0.get())),
-	      state_vector1(Value::POINTER((uintptr_t)state_buffer1.get())) {
+	      state_vector0(Value::POINTER(CastPointerToValue(state_buffer0.get()))),
+	      state_vector1(Value::POINTER(CastPointerToValue(state_buffer1.get()))) {
 	}
 };
 
 static unique_ptr<FunctionLocalState> InitCombineState(ExpressionState &state, const BoundFunctionExpression &expr,
                                                        FunctionData *bind_data_p) {
-	auto &bind_data = *(ExportAggregateBindData *)bind_data_p;
+	auto &bind_data = bind_data_p->Cast<ExportAggregateBindData>();
 	return make_uniq<CombineState>(bind_data.state_size);
 }
 
@@ -67,13 +67,13 @@ struct FinalizeState : public FunctionLocalState {
 
 static unique_ptr<FunctionLocalState> InitFinalizeState(ExpressionState &state, const BoundFunctionExpression &expr,
                                                         FunctionData *bind_data_p) {
-	auto &bind_data = *(ExportAggregateBindData *)bind_data_p;
+	auto &bind_data = bind_data_p->Cast<ExportAggregateBindData>();
 	return make_uniq<FinalizeState>(bind_data.state_size);
 }
 
 static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, Vector &result) {
 	auto &bind_data = ExportAggregateBindData::GetFrom(state_p);
-	auto &local_state = (FinalizeState &)*((ExecuteFunctionState &)state_p).local_state;
+	auto &local_state = ExecuteFunctionState::GetFunctionState(state_p)->Cast<FinalizeState>();
 
 	D_ASSERT(bind_data.state_size == bind_data.aggr.state_size());
 	D_ASSERT(input.data.size() == 1);
@@ -86,8 +86,8 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 	input.data[0].ToUnifiedFormat(input.size(), state_data);
 	for (idx_t i = 0; i < input.size(); i++) {
 		auto state_idx = state_data.sel->get_index(i);
-		auto state_entry = &((string_t *)state_data.data)[state_idx];
-		auto target_ptr = (const char *)local_state.state_buffer.get() + aligned_state_size * i;
+		auto state_entry = UnifiedVectorFormat::GetData<string_t>(state_data) + state_idx;
+		auto target_ptr = char_ptr_cast(local_state.state_buffer.get()) + aligned_state_size * i;
 
 		if (state_data.validity.RowIsValid(state_idx)) {
 			D_ASSERT(state_entry->GetSize() == bind_data.state_size);
@@ -95,9 +95,9 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 		} else {
 			// create a dummy state because finalize does not understand NULLs in its input
 			// we put the NULL back in explicitly below
-			bind_data.aggr.initialize((data_ptr_t)target_ptr);
+			bind_data.aggr.initialize(data_ptr_cast(target_ptr));
 		}
-		state_vec_ptr[i] = (data_ptr_t)target_ptr;
+		state_vec_ptr[i] = data_ptr_cast(target_ptr);
 	}
 
 	AggregateInputData aggr_input_data(nullptr, Allocator::DefaultAllocator());
@@ -113,7 +113,7 @@ static void AggregateStateFinalize(DataChunk &input, ExpressionState &state_p, V
 
 static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Vector &result) {
 	auto &bind_data = ExportAggregateBindData::GetFrom(state_p);
-	auto &local_state = (CombineState &)*((ExecuteFunctionState &)state_p).local_state;
+	auto &local_state = ExecuteFunctionState::GetFunctionState(state_p)->Cast<CombineState>();
 
 	D_ASSERT(bind_data.state_size == bind_data.aggr.state_size());
 
@@ -136,8 +136,8 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 		auto state0_idx = state0_data.sel->get_index(i);
 		auto state1_idx = state1_data.sel->get_index(i);
 
-		auto &state0 = ((string_t *)state0_data.data)[state0_idx];
-		auto &state1 = ((string_t *)state1_data.data)[state1_idx];
+		auto &state0 = UnifiedVectorFormat::GetData<string_t>(state0_data)[state0_idx];
+		auto &state1 = UnifiedVectorFormat::GetData<string_t>(state1_data)[state1_idx];
 
 		// if both are NULL, we return NULL. If either of them is not, the result is that one
 		if (!state0_data.validity.RowIsValid(state0_idx) && !state1_data.validity.RowIsValid(state1_idx)) {
@@ -145,11 +145,13 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 			continue;
 		}
 		if (state0_data.validity.RowIsValid(state0_idx) && !state1_data.validity.RowIsValid(state1_idx)) {
-			result_ptr[i] = StringVector::AddStringOrBlob(result, (const char *)state0.GetData(), bind_data.state_size);
+			result_ptr[i] =
+			    StringVector::AddStringOrBlob(result, const_char_ptr_cast(state0.GetData()), bind_data.state_size);
 			continue;
 		}
 		if (!state0_data.validity.RowIsValid(state0_idx) && state1_data.validity.RowIsValid(state1_idx)) {
-			result_ptr[i] = StringVector::AddStringOrBlob(result, (const char *)state1.GetData(), bind_data.state_size);
+			result_ptr[i] =
+			    StringVector::AddStringOrBlob(result, const_char_ptr_cast(state1.GetData()), bind_data.state_size);
 			continue;
 		}
 
@@ -165,8 +167,8 @@ static void AggregateStateCombine(DataChunk &input, ExpressionState &state_p, Ve
 		AggregateInputData aggr_input_data(nullptr, Allocator::DefaultAllocator());
 		bind_data.aggr.combine(local_state.state_vector0, local_state.state_vector1, aggr_input_data, 1);
 
-		result_ptr[i] =
-		    StringVector::AddStringOrBlob(result, (const char *)local_state.state_buffer1.get(), bind_data.state_size);
+		result_ptr[i] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(local_state.state_buffer1.get()),
+		                                              bind_data.state_size);
 	}
 }
 
@@ -244,19 +246,19 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 static void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
                                     idx_t offset) {
 	D_ASSERT(offset == 0);
-	auto bind_data = (ExportAggregateFunctionBindData *)aggr_input_data.bind_data;
-	auto state_size = bind_data->aggregate->function.state_size();
+	auto &bind_data = aggr_input_data.bind_data->Cast<ExportAggregateFunctionBindData>();
+	auto state_size = bind_data.aggregate->function.state_size();
 	auto blob_ptr = FlatVector::GetData<string_t>(result);
 	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(state);
 	for (idx_t row_idx = 0; row_idx < count; row_idx++) {
 		auto data_ptr = addresses_ptr[row_idx];
-		blob_ptr[row_idx] = StringVector::AddStringOrBlob(result, (const char *)data_ptr, state_size);
+		blob_ptr[row_idx] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(data_ptr), state_size);
 	}
 }
 
 ExportAggregateFunctionBindData::ExportAggregateFunctionBindData(unique_ptr<Expression> aggregate_p) {
 	D_ASSERT(aggregate_p->type == ExpressionType::BOUND_AGGREGATE);
-	aggregate = unique_ptr<BoundAggregateExpression>((BoundAggregateExpression *)aggregate_p.release());
+	aggregate = unique_ptr_cast<Expression, BoundAggregateExpression>(std::move(aggregate_p));
 }
 
 unique_ptr<FunctionData> ExportAggregateFunctionBindData::Copy() const {
@@ -264,8 +266,8 @@ unique_ptr<FunctionData> ExportAggregateFunctionBindData::Copy() const {
 }
 
 bool ExportAggregateFunctionBindData::Equals(const FunctionData &other_p) const {
-	auto &other = (const ExportAggregateFunctionBindData &)other_p;
-	return aggregate->Equals(other.aggregate.get());
+	auto &other = other_p.Cast<ExportAggregateFunctionBindData>();
+	return aggregate->Equals(*other.aggregate);
 }
 
 static void ExportStateAggregateSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
