@@ -8,7 +8,7 @@ statement ok
 PRAGMA enable_verification
 
 query I
-select [x for x in c if x IS NOT NULL] FROM test_vector_types(NULL::INT[], false) t(c);
+select [x for x in c if x IS NOT NULL] FROM test_vector_types(NULL::INT[]) t(c);
 ----
 [-2147483648, 2147483647]
 []
@@ -23,7 +23,7 @@ select [x for x in c if x IS NOT NULL] FROM test_vector_types(NULL::INT[], false
 [7]
 
 query I
-select [x for x in c if x IS NULL] FROM test_vector_types(NULL::INT[], false) t(c);
+select [x for x in c if x IS NULL] FROM test_vector_types(NULL::INT[]) t(c);
 ----
 []
 []

@@ -1,6 +1,9 @@
 #include "fuzzyduck.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "statement_generator.hpp"
+#include <algorithm>
+#include <random>
+#include <thread>
 
 namespace duckdb {
 
@@ -10,7 +13,7 @@ FuzzyDuck::FuzzyDuck(ClientContext &context) : context(context) {
 FuzzyDuck::~FuzzyDuck() {
 }
 
-void FuzzyDuck::Fuzz() {
+void FuzzyDuck::BeginFuzzing() {
 	auto &random_engine = RandomEngine::Get(context);
 	if (seed == 0) {
 		seed = random_engine.NextRandomInteger();
@@ -24,14 +27,35 @@ void FuzzyDuck::Fuzz() {
 		complete_log_handle =
 		    fs.OpenFile(complete_log, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	}
+}
+
+void FuzzyDuck::EndFuzzing() {
+	if (complete_log_handle) {
+		complete_log_handle->Close();
+	}
+}
+
+void FuzzyDuck::Fuzz() {
+	BeginFuzzing();
 	for (idx_t i = 0; i < max_queries; i++) {
 		LogMessage("Query " + to_string(i) + "\n");
 		auto query = GenerateQuery();
 		RunQuery(std::move(query));
 	}
-	if (complete_log_handle) {
-		complete_log_handle->Close();
+	EndFuzzing();
+}
+
+void FuzzyDuck::FuzzAllFunctions() {
+	StatementGenerator generator(context);
+	auto queries = generator.GenerateAllFunctionCalls();
+
+	std::default_random_engine e(seed);
+	std::shuffle(std::begin(queries), std::end(queries), e);
+	BeginFuzzing();
+	for (auto &query : queries) {
+		RunQuery(std::move(query));
 	}
+	EndFuzzing();
 }
 
 string FuzzyDuck::GenerateQuery() {
@@ -48,12 +72,33 @@ string FuzzyDuck::GenerateQuery() {
 	return statement->ToString();
 }
 
+void sleep_thread(Connection *con, atomic<bool> *is_active, atomic<bool> *timed_out, idx_t timeout_duration) {
+	// timeout is given in seconds
+	// we wait 10ms per iteration, so timeout * 100 gives us the amount of
+	// iterations
+	for (size_t i = 0; i < (size_t)(timeout_duration * 100) && *is_active; i++) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	}
+	if (*is_active) {
+		*timed_out = true;
+		con->Interrupt();
+	}
+}
+
 void FuzzyDuck::RunQuery(string query) {
 	LogQuery(query + ";");
 
 	Connection con(*context.db);
+	atomic<bool> is_active(true);
+	atomic<bool> timed_out(false);
+	std::thread interrupt_thread(sleep_thread, &con, &is_active, &timed_out, timeout);
+
 	auto result = con.Query(query);
-	if (result->HasError()) {
+	is_active = false;
+	interrupt_thread.join();
+	if (timed_out) {
+		LogMessage("TIMEOUT");
+	} else if (result->HasError()) {
 		LogMessage("EXECUTION ERROR: " + result->GetError());
 	} else {
 		LogMessage("EXECUTION SUCCESS!");
