@@ -139,9 +139,7 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
 					string error_msg = "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found";
 					if (options.auto_detect_hive_partitioning == true) {
-						error_msg =
-						    "Hive partitioning was enabled automatically, but an error was encountered: " + error_msg +
-						    "\n\nTo switch off hive partitioning, set: HIVE_PARTITIONING=0";
+						throw InternalException(error_msg + " (HIVE_PARTITIONING was autodetected)");
 					}
 					throw BinderException(error_msg.c_str(), files[0], f, part_info.first);
 				}
@@ -149,9 +147,7 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 			if (partitions.size() != file_partitions.size()) {
 				string error_msg = "Hive partition mismatch between file \"%s\" and \"%s\"";
 				if (options.auto_detect_hive_partitioning == true) {
-					error_msg =
-					    "Hive partitioning was enabled automatically, but an error was encountered: " + error_msg +
-					    "\n\nTo switch off hive partitioninging, set: HIVE_PARTITIONING=0";
+					throw InternalException(error_msg + " (HIVE_PARTITIONING was autodetected)");
 				}
 				throw BinderException(error_msg.c_str(), files[0], f);
 			}
