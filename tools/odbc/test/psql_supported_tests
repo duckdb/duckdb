@@ -16,17 +16,22 @@ result-conversions-test
 row-wise-fetching-test
 select-test
 
-#TODO: boolsaschar-test
 #TODO: catalogfunctions-test
-#TODO: colattribute-test
+This file explores catalog-related functions, such as retrieving information about databases, tables, and columns. Other tests that involve querying and inspecting database metadata may rely on the catalog functions tested in this file.
+
+#TODO: select-test
+This file focuses on testing basic SELECT statements and fetching result sets. It forms the foundation for many other tests that involve executing queries and working with query results. Rewriting this file early on ensures a solid starting point for other tests.
+
+#TODO: row-wise-fetching-test
+This file specifically tests row-wise fetching of result sets, which can be essential for efficient handling of large result sets. While it may not be directly dependent on other tests, it complements the functionality provided by the select-test file and can be beneficial to rewrite early on.
+
+
+#TODO: boolsaschar-test
 #TODO: cte-test
 #TODO: cursor-commit-test
 #TODO: declare-fetch-block-test
 #TODO: dataatexecution-test
-#TODO: diagnostic-test
 #TODO: multicolumn-param-bind-test
 #TODO: numeric-test
 #TODO: quotes-test
 #TODO: result-conversions-test
-#TODO: row-wise-fetching-test
-#TODO: select-test

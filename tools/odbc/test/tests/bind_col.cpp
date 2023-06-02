@@ -4,14 +4,14 @@
 using namespace odbc_test;
 
 TEST_CASE("bindcol", "[odbc") {
-	SQLRETURN	ret;
-	SQLHANDLE	env;
-	SQLHANDLE	dbc;
-	HSTMT		hstmt = SQL_NULL_HSTMT;
-	SQLINTEGER	long_value;
-	SQLLEN		ind_long_value;
-	char		char_value[100];
-	SQLLEN		ind_char_value;
+	SQLRETURN ret;
+	SQLHANDLE env;
+	SQLHANDLE dbc;
+	HSTMT hstmt = SQL_NULL_HSTMT;
+	SQLINTEGER long_value;
+	SQLLEN ind_long_value;
+	char char_value[100];
+	SQLLEN ind_char_value;
 
 	// Connect to the database
 	CONNECT_TO_DATABASE(ret, env, dbc);
@@ -28,11 +28,11 @@ TEST_CASE("bindcol", "[odbc") {
 	ret = SQLExecDirect(hstmt, (SQLCHAR *)"SELECT id, 'foo' || id FROM generate_series(1, 10) id(id)", SQL_NTS);
 	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLExecDirect (HSTMT)");
 
-	SQLINTEGER	id = 0;
-	SQLINTEGER	foo = 0;
-	SQLINTEGER	rowno = 0;
-	bool		incr_id = true;
-	bool		incr_foo = true;
+	SQLINTEGER id = 0;
+	SQLINTEGER foo = 0;
+	SQLINTEGER rowno = 0;
+	bool incr_id = true;
+	bool incr_foo = true;
 
 	while (1) {
 

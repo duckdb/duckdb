@@ -4,11 +4,11 @@
 using namespace odbc_test;
 
 TEST_CASE("diagnostics", "[odbc") {
-	SQLRETURN	ret;
-	SQLHANDLE	env;
-	SQLHANDLE	dbc;
+	SQLRETURN ret;
+	SQLHANDLE env;
+	SQLHANDLE dbc;
 
-	HSTMT		hstmt = SQL_NULL_HSTMT;
+	HSTMT hstmt = SQL_NULL_HSTMT;
 
 	// Connect to the database using SQLConnect
 	CONNECT_TO_DATABASE(ret, env, dbc);
@@ -18,7 +18,7 @@ TEST_CASE("diagnostics", "[odbc") {
 
 	/* TEST 1: Execute a query that will fail and check the diagnostics */
 	// Execute a query that will fail
-	ret = SQLExecDirect(hstmt, (SQLCHAR *) "this is not a valid query", SQL_NTS);
+	ret = SQLExecDirect(hstmt, (SQLCHAR *)"this is not a valid query", SQL_NTS);
 	if (ret != SQL_ERROR) {
 		FAIL("SQLExecDirect should have failed because the query is invalid");
 	}
@@ -33,7 +33,8 @@ TEST_CASE("diagnostics", "[odbc") {
 	string second_message;
 	ACCESS_DIAGNOSTIC(second_state, second_message, hstmt, ret, SQL_HANDLE_STMT);
 
-	// Compare the diagnostics to make sure they are the same and that SQLGetDiagRec does not change the state of the statement
+	// Compare the diagnostics to make sure they are the same and that SQLGetDiagRec does not change the state of the
+	// statement
 	REQUIRE(::strcmp(first_state.c_str(), second_state.c_str()) == 0);
 	REQUIRE(::strcmp(first_message.c_str(), second_message.c_str()) == 0);
 
@@ -59,7 +60,7 @@ TEST_CASE("diagnostics", "[odbc") {
 	REQUIRE(long_message.length() > 0);
 	REQUIRE(long_state == "42000");
 
-	// TEST 3: Test SQLEndTran without a transaction
+	/* TEST 3: Test SQLEndTran without a transaction */
 	ret = SQLEndTran(SQL_HANDLE_DBC, dbc, SQL_ROLLBACK);
 	if (ret != SQL_ERROR) {
 		FAIL("SQLEndTran should have failed because there is no transaction");
@@ -75,7 +76,8 @@ TEST_CASE("diagnostics", "[odbc") {
 	string second_endtran_message;
 	ACCESS_DIAGNOSTIC(second_endtran_state, second_endtran_message, dbc, ret, SQL_HANDLE_DBC);
 
-	// Compare the diagnostics to make sure they are the same and that SQLGetDiagRec does not change the state of the statement
+	// Compare the diagnostics to make sure they are the same and that SQLGetDiagRec does not change the state of the
+	// statement
 	REQUIRE(::strcmp(first_endtran_state.c_str(), second_endtran_state.c_str()) == 0);
 	REQUIRE(::strcmp(first_endtran_message.c_str(), second_endtran_message.c_str()) == 0);
 

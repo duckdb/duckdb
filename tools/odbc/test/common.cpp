@@ -39,7 +39,7 @@ void ACCESS_DIAGNOSTIC(string &state, string &message, SQLHANDLE handle, SQLRETU
 	while (SQL_SUCCEEDED(ret)) {
 		recnum++;
 		ret = SQLGetDiagRec(handle_type, handle, recnum, sqlstate, &native_error, message_text, sizeof(message_text),
-	                              &text_length);
+		                    &text_length);
 		if (SQL_SUCCEEDED(ret)) {
 			state = (const char *)sqlstate;
 			message = (const char *)message_text;
@@ -89,7 +89,7 @@ void DRIVER_CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc, 
 	string default_dsn = "duckdbmemory";
 	SQLCHAR str[1024];
 	SQLSMALLINT strl;
-	auto tmp  = getenv("COMMON_CONNECTION_STRING_FOR_REGRESSION_TEST");
+	auto tmp = getenv("COMMON_CONNECTION_STRING_FOR_REGRESSION_TEST");
 	string envvar = tmp ? tmp : "";
 
 	if (!envvar.empty()) {
