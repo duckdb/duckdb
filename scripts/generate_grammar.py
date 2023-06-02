@@ -249,7 +249,7 @@ if run_update:
 cmd += ["-o", result_source, "-d", target_file]
 print(' '.join(cmd))
 proc = subprocess.Popen(cmd, stderr=subprocess.PIPE)
-res = proc.wait()
+res = proc.wait(timeout=10)
 
 if res != 0:
     text = proc.stderr.read().decode('utf8')
