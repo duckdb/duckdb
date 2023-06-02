@@ -68,7 +68,8 @@ void LogicalComparisonJoin::ExtractJoinConditions(
 				filter.expressions.push_back(std::move(expr));
 				continue;
 			}
-			// if it is a left join and the expression constantly evaluates to TRUE, then skip it
+			// if the join is a LEFT JOIN and the join expression constantly evaluates to TRUE,
+			// then we do not add it to the arbitrary expressions
 			if (type == JoinType::LEFT && expr->IsFoldable()) {
 				Value result;
 				ExpressionExecutor::TryEvaluateScalar(context, *expr, result);
