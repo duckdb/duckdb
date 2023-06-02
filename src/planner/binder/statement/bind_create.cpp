@@ -656,32 +656,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		}
 		break;
 	}
-	case CatalogType::DATABASE_ENTRY: {
-		// not supported in DuckDB yet but allow extensions to intercept and implement this functionality
-		auto &base = stmt.info->Cast<CreateDatabaseInfo>();
-		string database_name = base.name;
-		string source_path = base.path;
-
-		auto &config = DBConfig::GetConfig(context);
-
-		if (config.storage_extensions.empty()) {
-			throw NotImplementedException("CREATE DATABASE not supported in DuckDB yet");
-		}
-		// for now assume only one storage extension provides the custom create_database impl
-		for (auto &extension_entry : config.storage_extensions) {
-			if (extension_entry.second->create_database != nullptr) {
-				auto &storage_extension = extension_entry.second;
-				auto create_database_function_ref = storage_extension->create_database(
-				    storage_extension->storage_info.get(), context, database_name, source_path);
-				if (create_database_function_ref) {
-					auto bound_create_database_func = Bind(*create_database_function_ref);
-					result.plan = CreatePlan(*bound_create_database_func);
-					break;
-				}
-			}
-		}
-		break;
-	}
 	default:
 		throw Exception("Unrecognized type!");
 	}
