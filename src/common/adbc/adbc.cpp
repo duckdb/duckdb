@@ -44,6 +44,7 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 	driver->ConnectionRollback = duckdb_adbc::ConnectionRollback;
 	driver->ConnectionReadPartition = duckdb_adbc::ConnectionReadPartition;
 	driver->StatementExecutePartitions = duckdb_adbc::StatementExecutePartitions;
+	driver->ConnectionGetInfo = duckdb_adbc::ConnectionGetInfo;
 	return ADBC_STATUS_OK;
 }
 
