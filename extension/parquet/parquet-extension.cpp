@@ -599,8 +599,7 @@ static case_insensitive_map_t<LogicalType> GetChildNameToTypeMap(const LogicalTy
 	case LogicalTypeId::STRUCT:
 		for (auto &child_type : StructType::GetChildTypes(type)) {
 			if (child_type.first == FieldID::DUCKDB_FIELD_ID) {
-				throw BinderException("Cannot have a column named \"%s\" when writing FIELD_IDS",
-				                      FieldID::DUCKDB_FIELD_ID);
+				throw BinderException("Cannot have column named \"%s\" with FIELD_IDS", FieldID::DUCKDB_FIELD_ID);
 			}
 			name_to_type_map.emplace(child_type);
 		}
