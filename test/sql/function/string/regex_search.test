@@ -142,11 +142,11 @@ SELECT regexp_matches('asdf', '.*SD.*', ' i 	')
 ----
 1
 
-# NULL in options is ignored
-query T
+# NULL in options is an error
+statement error
 SELECT regexp_matches('asdf', '.*SD.*', NULL)
 ----
-0
+must not be NULL
 
 # this also works with tables
 statement ok

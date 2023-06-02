@@ -19,14 +19,14 @@ string CastExpression::ToString() const {
 	return ToString<CastExpression, ParsedExpression>(*this);
 }
 
-bool CastExpression::Equal(const CastExpression *a, const CastExpression *b) {
-	if (!a->child->Equals(b->child.get())) {
+bool CastExpression::Equal(const CastExpression &a, const CastExpression &b) {
+	if (!a.child->Equals(*b.child)) {
 		return false;
 	}
-	if (a->cast_type != b->cast_type) {
+	if (a.cast_type != b.cast_type) {
 		return false;
 	}
-	if (a->try_cast != b->try_cast) {
+	if (a.try_cast != b.try_cast) {
 		return false;
 	}
 	return true;

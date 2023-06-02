@@ -24,7 +24,7 @@ struct TemplatedValidityData {
 public:
 	inline explicit TemplatedValidityData(idx_t count) {
 		auto entry_count = EntryCount(count);
-		owned_data = make_unsafe_array<V>(entry_count);
+		owned_data = make_unsafe_uniq_array<V>(entry_count);
 		for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 			owned_data[entry_idx] = MAX_ENTRY;
 		}
@@ -32,13 +32,13 @@ public:
 	inline TemplatedValidityData(const V *validity_mask, idx_t count) {
 		D_ASSERT(validity_mask);
 		auto entry_count = EntryCount(count);
-		owned_data = make_unsafe_array<V>(entry_count);
+		owned_data = make_unsafe_uniq_array<V>(entry_count);
 		for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx++) {
 			owned_data[entry_idx] = validity_mask[entry_idx];
 		}
 	}
 
-	unsafe_array_ptr<V> owned_data;
+	unsafe_unique_array<V> owned_data;
 
 public:
 	static inline idx_t EntryCount(idx_t count) {

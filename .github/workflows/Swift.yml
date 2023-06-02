@@ -17,6 +17,7 @@ on:
       - '!tools/swift/**'
       - '.github/workflows/**'
       - '!.github/workflows/Swift.yml'
+      - '.github/config/uncovered_files.csv'
   pull_request:
     paths-ignore:
       - '**.md'
@@ -26,6 +27,7 @@ on:
       - '!tools/swift/**'
       - '.github/workflows/**'
       - '!.github/workflows/Swift.yml'
+      - '.github/config/uncovered_files.csv'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}

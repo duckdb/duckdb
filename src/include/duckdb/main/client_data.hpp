@@ -54,7 +54,7 @@ struct ClientData {
 	unique_ptr<FileOpener> file_opener;
 
 	//! HTTP State in this query
-	unique_ptr<HTTPState> http_state;
+	shared_ptr<HTTPState> http_state;
 
 	//! The clients' file system wrapper
 	unique_ptr<FileSystem> client_file_system;

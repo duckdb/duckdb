@@ -7,6 +7,7 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
+#include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
 
@@ -48,46 +49,46 @@ bool ParsedExpression::HasSubquery() const {
 	return has_subquery;
 }
 
-bool ParsedExpression::Equals(const BaseExpression *other) const {
+bool ParsedExpression::Equals(const BaseExpression &other) const {
 	if (!BaseExpression::Equals(other)) {
 		return false;
 	}
 	switch (expression_class) {
 	case ExpressionClass::BETWEEN:
-		return BetweenExpression::Equal((BetweenExpression *)this, (BetweenExpression *)other);
+		return BetweenExpression::Equal(Cast<BetweenExpression>(), other.Cast<BetweenExpression>());
 	case ExpressionClass::CASE:
-		return CaseExpression::Equal((CaseExpression *)this, (CaseExpression *)other);
+		return CaseExpression::Equal(Cast<CaseExpression>(), other.Cast<CaseExpression>());
 	case ExpressionClass::CAST:
-		return CastExpression::Equal((CastExpression *)this, (CastExpression *)other);
+		return CastExpression::Equal(Cast<CastExpression>(), other.Cast<CastExpression>());
 	case ExpressionClass::COLLATE:
-		return CollateExpression::Equal((CollateExpression *)this, (CollateExpression *)other);
+		return CollateExpression::Equal(Cast<CollateExpression>(), other.Cast<CollateExpression>());
 	case ExpressionClass::COLUMN_REF:
-		return ColumnRefExpression::Equal((ColumnRefExpression *)this, (ColumnRefExpression *)other);
+		return ColumnRefExpression::Equal(Cast<ColumnRefExpression>(), other.Cast<ColumnRefExpression>());
 	case ExpressionClass::COMPARISON:
-		return ComparisonExpression::Equal((ComparisonExpression *)this, (ComparisonExpression *)other);
+		return ComparisonExpression::Equal(Cast<ComparisonExpression>(), other.Cast<ComparisonExpression>());
 	case ExpressionClass::CONJUNCTION:
-		return ConjunctionExpression::Equal((ConjunctionExpression *)this, (ConjunctionExpression *)other);
+		return ConjunctionExpression::Equal(Cast<ConjunctionExpression>(), other.Cast<ConjunctionExpression>());
 	case ExpressionClass::CONSTANT:
-		return ConstantExpression::Equal((ConstantExpression *)this, (ConstantExpression *)other);
+		return ConstantExpression::Equal(Cast<ConstantExpression>(), other.Cast<ConstantExpression>());
 	case ExpressionClass::DEFAULT:
 		return true;
 	case ExpressionClass::FUNCTION:
-		return FunctionExpression::Equal((FunctionExpression *)this, (FunctionExpression *)other);
+		return FunctionExpression::Equal(Cast<FunctionExpression>(), other.Cast<FunctionExpression>());
 	case ExpressionClass::LAMBDA:
-		return LambdaExpression::Equal((LambdaExpression *)this, (LambdaExpression *)other);
+		return LambdaExpression::Equal(Cast<LambdaExpression>(), other.Cast<LambdaExpression>());
 	case ExpressionClass::OPERATOR:
-		return OperatorExpression::Equal((OperatorExpression *)this, (OperatorExpression *)other);
+		return OperatorExpression::Equal(Cast<OperatorExpression>(), other.Cast<OperatorExpression>());
 	case ExpressionClass::PARAMETER:
-		return ParameterExpression::Equal((ParameterExpression *)this, (ParameterExpression *)other);
+		return ParameterExpression::Equal(Cast<ParameterExpression>(), other.Cast<ParameterExpression>());
 	case ExpressionClass::POSITIONAL_REFERENCE:
-		return PositionalReferenceExpression::Equal((PositionalReferenceExpression *)this,
-		                                            (PositionalReferenceExpression *)other);
+		return PositionalReferenceExpression::Equal(Cast<PositionalReferenceExpression>(),
+		                                            other.Cast<PositionalReferenceExpression>());
 	case ExpressionClass::STAR:
-		return StarExpression::Equal((StarExpression *)this, (StarExpression *)other);
+		return StarExpression::Equal(Cast<StarExpression>(), other.Cast<StarExpression>());
 	case ExpressionClass::SUBQUERY:
-		return SubqueryExpression::Equal((SubqueryExpression *)this, (SubqueryExpression *)other);
+		return SubqueryExpression::Equal(Cast<SubqueryExpression>(), other.Cast<SubqueryExpression>());
 	case ExpressionClass::WINDOW:
-		return WindowExpression::Equal((WindowExpression *)this, (WindowExpression *)other);
+		return WindowExpression::Equal(Cast<WindowExpression>(), other.Cast<WindowExpression>());
 	default:
 		throw SerializationException("Unsupported type for expression comparison!");
 	}
@@ -244,6 +245,21 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 	result->alias = alias;
 	reader.Finalize();
 	return result;
+}
+
+bool ParsedExpression::Equals(const unique_ptr<ParsedExpression> &left, const unique_ptr<ParsedExpression> &right) {
+	if (left.get() == right.get()) {
+		return true;
+	}
+	if (!left || !right) {
+		return false;
+	}
+	return left->Equals(*right);
+}
+
+bool ParsedExpression::ListEquals(const vector<unique_ptr<ParsedExpression>> &left,
+                                  const vector<unique_ptr<ParsedExpression>> &right) {
+	return ExpressionUtil::ListEquals(left, right);
 }
 
 } // namespace duckdb

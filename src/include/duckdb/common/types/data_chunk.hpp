@@ -125,7 +125,7 @@ public:
 	DUCKDB_API void Flatten();
 
 	// FIXME: this is DUCKDB_API, might need conversion back to regular unique ptr?
-	DUCKDB_API unsafe_array_ptr<UnifiedVectorFormat> ToUnifiedFormat();
+	DUCKDB_API unsafe_unique_array<UnifiedVectorFormat> ToUnifiedFormat();
 
 	DUCKDB_API void Slice(const SelectionVector &sel_vector, idx_t count);
 

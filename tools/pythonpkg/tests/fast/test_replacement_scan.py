@@ -26,6 +26,19 @@ class TestReplacementScan(object):
 		assert (type(pyrel3) == duckdb.DuckDBPyRelation)
 		assert (pyrel3.fetchall() == [(142,), (184,)])
 
+	def test_replacement_scan_alias(self):
+		pyrel1 = duckdb.query('from (values (1, 2)) t(i, j)')
+		pyrel2 = duckdb.query('from (values (1, 10)) t(i, k)')
+		pyrel3 = duckdb.query('from pyrel1 join pyrel2 using(i)')
+		assert (type(pyrel3) == duckdb.DuckDBPyRelation)
+		assert (pyrel3.fetchall() == [(1, 2, 10)])
+
+	def test_replacement_scan_pandas_alias(self):
+		df1 = duckdb.query('from (values (1, 2)) t(i, j)').df()
+		df2 = duckdb.query('from (values (1, 10)) t(i, k)').df()
+		df3 = duckdb.query('from df1 join df2 using(i)')
+		assert (df3.fetchall() == [(1, 2, 10)])
+
 	def test_replacement_scan_fail(self, duckdb_cursor):
 		random_object = "I love salmiak rondos"
 		con = duckdb.connect()
