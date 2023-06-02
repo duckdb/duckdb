@@ -137,17 +137,18 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 			auto file_partitions = HivePartitioning::Parse(f);
 			for (auto &part_info : partitions) {
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
-					string error_msg = "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found";
+					string error = "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found";
 					if (options.auto_detect_hive_partitioning == true) {
-						throw InternalException(error_msg + " (HIVE_PARTITIONING was autodetected)");
+						throw InternalException(error + "(hive partitioning was autodetected)", files[0], f,
+						                        part_info.first);
 					}
-					throw BinderException(error_msg.c_str(), files[0], f, part_info.first);
+					throw BinderException(error.c_str(), files[0], f, part_info.first);
 				}
 			}
 			if (partitions.size() != file_partitions.size()) {
 				string error_msg = "Hive partition mismatch between file \"%s\" and \"%s\"";
 				if (options.auto_detect_hive_partitioning == true) {
-					throw InternalException(error_msg + " (HIVE_PARTITIONING was autodetected)");
+					throw InternalException(error_msg + "(hive partitioning was autodetected)", files[0], f);
 				}
 				throw BinderException(error_msg.c_str(), files[0], f);
 			}
