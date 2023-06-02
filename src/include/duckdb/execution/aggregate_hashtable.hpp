@@ -139,7 +139,7 @@ public:
 		return data_collection->Count();
 	}
 
-	idx_t SizeInBytes() const {
+	idx_t DataSize() const {
 		return data_collection->SizeInBytes();
 	}
 
@@ -149,18 +149,12 @@ public:
 	}
 
 	static idx_t FirstPartSize(idx_t count, HtEntryType entry_type) {
-		idx_t entry_size;
-		switch (entry_type) {
-		case HT_WIDTH_32:
-			entry_size = sizeof(aggr_ht_entry_32);
-			break;
-		case HT_WIDTH_64:
-			entry_size = sizeof(aggr_ht_entry_64);
-			break;
-		default:
-			throw InternalException("Unknown HT entry width");
-		}
-		return MaxValue<idx_t>(NextPowerOfTwo(count * 2) * entry_size, Storage::BLOCK_SIZE);
+		idx_t entry_size = entry_type == HT_WIDTH_32 ? sizeof(aggr_ht_entry_32) : sizeof(aggr_ht_entry_64);
+		return NextPowerOfTwo(count * 2L) * entry_size;
+	}
+
+	idx_t TotalSize() const {
+		return DataSize() + FirstPartSize(Count(), entry_type);
 	}
 
 	idx_t ResizeThreshold();

@@ -57,7 +57,7 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 // Sink
 //===--------------------------------------------------------------------===//
 class RadixHTGlobalState : public GlobalSinkState {
-	constexpr const static idx_t MAX_RADIX_PARTITIONS = 16;
+	constexpr const static idx_t MAX_RADIX_PARTITIONS = 32;
 
 public:
 	explicit RadixHTGlobalState(ClientContext &context)

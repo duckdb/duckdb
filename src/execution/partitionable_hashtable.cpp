@@ -47,11 +47,19 @@ HtEntryType PartitionableHashTable::GetHTEntrySize() {
 	return HtEntryType::HT_WIDTH_32;
 }
 
+bool OverMemoryLimit(ClientContext &context, const idx_t n_partitions, const GroupedAggregateHashTable &ht) {
+	const auto max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
+	const auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+	const auto memory_per_partition = 0.6 * max_memory / num_threads / n_partitions;
+	return ht.TotalSize() > memory_per_partition;
+}
+
 idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &groups, Vector &group_hashes,
                                            DataChunk &payload, const unsafe_vector<idx_t> &filter) {
 	// If this is false, a single AddChunk would overflow the max capacity
 	D_ASSERT(list.empty() || groups.size() <= list.back()->MaxCapacity());
-	if (list.empty() || list.back()->Count() + groups.size() >= list.back()->MaxCapacity()) {
+	if (list.empty() || list.back()->Count() + groups.size() >= list.back()->MaxCapacity() ||
+	    OverMemoryLimit(context, partition_info.n_partitions, *list.back())) {
 		idx_t new_capacity = GroupedAggregateHashTable::InitialCapacity();
 		if (!list.empty()) {
 			new_capacity = list.back()->Capacity();
@@ -164,7 +172,7 @@ idx_t PartitionableHashTable::GetPartitionCount(idx_t partition) const {
 idx_t PartitionableHashTable::GetPartitionSize(idx_t partition) const {
 	idx_t total_size = 0;
 	for (const auto &ht : radix_partitioned_hts[partition]) {
-		total_size += ht->SizeInBytes();
+		total_size += ht->DataSize();
 	}
 	return total_size;
 }
