@@ -134,9 +134,60 @@ static AdbcStatusCode ReleaseDriver(struct AdbcDriver *driver, struct AdbcError 
 
 // Default stubs
 
+enum class AdbcInfoCode : uint32_t {
+	VENDOR_NAME,
+	VENDOR_VERSION,
+	DRIVER_NAME,
+	DRIVER_VERSION,
+	DRIVER_ARROW_VERSION,
+	UNRECOGNIZED // always the last entry of the enum
+};
+
+static AdbcInfoCode ConvertToInfoCode(uint32_t info_code) {
+	switch (info_code) {
+		case 0: return AdbcInfoCode::VENDOR_NAME;
+		case 1: return AdbcInfoCode::VENDOR_VERSION;
+		case 2: return AdbcInfoCode::DRIVER_NAME;
+		case 3: return AdbcInfoCode::DRIVER_VERSION;
+		case 4: return AdbcInfoCode::DRIVER_ARROW_VERSION;
+		default: return AdbcInfoCode::UNRECOGNIZED;
+	}
+}
+
 AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *info_codes, size_t info_codes_length,
                                  struct ArrowArrayStream *out, struct AdbcError *error) {
-	return ADBC_STATUS_NOT_IMPLEMENTED;
+	auto &data = *(TempDatabase *)(connection->private_data);
+
+	// If 'info_codes' is NULL, all info codes should be output
+	size_t length = info_codes ? info_codes_length : (size_t)AdbcInfoCode::UNRECOGNIZED;
+	for (size_t i = 0; i < length; i++) {
+		uint32_t code = info_codes ? info_codes[i] : i;
+		auto info_code = ConvertToInfoCode(code);
+		switch (info_code) {
+			case AdbcInfoCode::VENDOR_NAME: {
+
+			}
+			case AdbcInfoCode::VENDOR_VERSION: {
+			}
+			case AdbcInfoCode::DRIVER_NAME: {
+				auto driver_name = data.driver;
+			}
+			case AdbcInfoCode::DRIVER_VERSION: {
+
+			}
+			case AdbcInfoCode::DRIVER_ARROW_VERSION: {
+
+			}
+			case AdbcInfoCode::UNRECOGNIZED: {
+				// Unrecognized codes are not an error, just ignored
+				continue;
+			}
+			default: {
+				// Codes that we have implemented but not handled here are a developer error
+				SetError(error, "InternalError: info code recognized but not handled");
+			}
+		}
+	}
 }
 
 AdbcStatusCode StatementBind(struct AdbcStatement *, struct ArrowArray *, struct ArrowSchema *,

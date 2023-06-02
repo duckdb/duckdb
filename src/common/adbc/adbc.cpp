@@ -47,6 +47,7 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 	driver->ConnectionGetTableSchema = duckdb_adbc::ConnectionGetTableSchema;
 	driver->StatementSetSubstraitPlan = duckdb_adbc::StatementSetSubstraitPlan;
 
+	driver->ConnectionGetInfo = duckdb_adbc::ConnectionGetInfo;
 	return ADBC_STATUS_OK;
 }
 
