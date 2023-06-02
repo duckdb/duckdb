@@ -343,6 +343,88 @@ AdbcStatusCode ConnectionRollback(struct AdbcConnection *connection, struct Adbc
 	return ExecuteQuery(conn, "START TRANSACTION", error);
 }
 
+enum class AdbcInfoCode : uint32_t {
+	VENDOR_NAME,
+	VENDOR_VERSION,
+	DRIVER_NAME,
+	DRIVER_VERSION,
+	DRIVER_ARROW_VERSION,
+	UNRECOGNIZED // always the last entry of the enum
+};
+
+static AdbcInfoCode ConvertToInfoCode(uint32_t info_code) {
+	switch (info_code) {
+	case 0:
+		return AdbcInfoCode::VENDOR_NAME;
+	case 1:
+		return AdbcInfoCode::VENDOR_VERSION;
+	case 2:
+		return AdbcInfoCode::DRIVER_NAME;
+	case 3:
+		return AdbcInfoCode::DRIVER_VERSION;
+	case 4:
+		return AdbcInfoCode::DRIVER_ARROW_VERSION;
+	default:
+		return AdbcInfoCode::UNRECOGNIZED;
+	}
+}
+
+AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *info_codes, size_t info_codes_length,
+                                 struct ArrowArrayStream *out, struct AdbcError *error) {
+	auto db_conn = (duckdb::Connection *)(connection->private_data);
+
+	std::string q = R"EOF(
+			create table tbl(
+				info union(
+					string_value VARCHAR,
+					bool_value BOOL,
+					int64_value BIGINT,
+					int32_bitmask INTEGER,
+					string_list VARCHAR[],
+					int32_to_int32_list_map MAP(INTEGER, INTEGER[])
+				)
+			);
+			insert into tbl values
+		)EOF";
+
+	// If 'info_codes' is NULL, all info codes should be output
+	size_t length = info_codes ? info_codes_length : (size_t)AdbcInfoCode::UNRECOGNIZED;
+	for (size_t i = 0; i < length; i++) {
+		uint32_t code = info_codes ? info_codes[i] : i;
+		auto info_code = ConvertToInfoCode(code);
+		switch (info_code) {
+		case AdbcInfoCode::VENDOR_NAME: {
+			q += R"EOF(
+					('duckdb'),
+				)EOF";
+		}
+		case AdbcInfoCode::VENDOR_VERSION: {
+			q += duckdb::StringUtil::Format("('%s'),", duckdb_library_version());
+		}
+		case AdbcInfoCode::DRIVER_NAME: {
+			q += "('ADBC DuckDB Driver'),";
+		}
+		case AdbcInfoCode::DRIVER_VERSION: {
+			// TODO: fill in driver version
+			q += "('(unknown)'),";
+		}
+		case AdbcInfoCode::DRIVER_ARROW_VERSION: {
+			// TODO: fill in arrow version
+			q += "('(unknown)'),";
+		}
+		case AdbcInfoCode::UNRECOGNIZED: {
+			// Unrecognized codes are not an error, just ignored
+			continue;
+		}
+		default: {
+			// Codes that we have implemented but not handled here are a developer error
+			SetError(error, "InternalError: info code recognized but not handled");
+		}
+		}
+	}
+	return QueryInternal(connection, out, q.c_str(), error);
+}
+
 AdbcStatusCode ConnectionInit(struct AdbcConnection *connection, struct AdbcDatabase *database,
                               struct AdbcError *error) {
 	auto status = SetErrorMaybe(database, error, "Missing database");

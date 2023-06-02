@@ -57,6 +57,15 @@ void GetWinError(std::string *buffer) {
 
 #endif // defined(_WIN32)
 
+/// Temporary state while the database is being configured.
+struct TempDatabase {
+	std::unordered_map<std::string, std::string> options;
+	std::string driver;
+	// Default name (see adbc.h)
+	std::string entrypoint = "AdbcDriverInit";
+	AdbcDriverInitFunc init_func = nullptr;
+};
+
 // Error handling
 
 void ReleaseError(struct AdbcError *error) {
@@ -188,6 +197,12 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *in
 			}
 		}
 	}
+	return ADBC_STATUS_NOT_IMPLEMENTED;
+}
+
+AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *, const char *, const char *, const char *,
+                                        struct ArrowSchema *, struct AdbcError *error) {
+	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 
 AdbcStatusCode StatementBind(struct AdbcStatement *, struct ArrowArray *, struct ArrowSchema *,
@@ -199,15 +214,6 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
                                            struct AdbcError *error) {
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
-
-/// Temporary state while the database is being configured.
-struct TempDatabase {
-	std::unordered_map<std::string, std::string> options;
-	std::string driver;
-	// Default name (see adbc.h)
-	std::string entrypoint = "AdbcDriverInit";
-	AdbcDriverInitFunc init_func = nullptr;
-};
 
 /// Temporary state while the database is being configured.
 struct TempConnection {
