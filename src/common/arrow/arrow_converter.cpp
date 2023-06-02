@@ -11,7 +11,6 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include <list>
-#include <utility>
 #include "duckdb/common/arrow/arrow_appender.hpp"
 
 namespace duckdb {
