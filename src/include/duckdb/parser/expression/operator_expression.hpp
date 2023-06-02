@@ -101,7 +101,11 @@ public:
 				auto &const_expr_end = entry.children[2]->template Cast<ConstantExpression>();
 				if (const_expr_end.value.type() == LogicalType::BIGINT &&
 				    const_expr_end.value.template GetValue<int64_t>() == NumericLimits<int64_t>::Maximum()) {
-					end = "";
+					if (entry.children.size() == 4) {
+						end = "-";
+					} else {
+						end = "";
+					}
 				}
 			}
 			if (entry.children.size() == 4) {
