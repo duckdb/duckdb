@@ -51,6 +51,7 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 	return ADBC_STATUS_OK;
 }
 
+
 namespace duckdb_adbc {
 
 struct DuckDBAdbcStatementWrapper {
@@ -60,8 +61,7 @@ struct DuckDBAdbcStatementWrapper {
 	char *ingestion_table_name;
 	ArrowArrayStream *ingestion_stream;
 };
-static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
-                                    struct AdbcError *error);
+
 AdbcStatusCode SetErrorMaybe(const void *result, AdbcError *error, const std::string &error_message) {
 	if (!error) {
 		return ADBC_STATUS_INVALID_ARGUMENT;
@@ -70,6 +70,29 @@ AdbcStatusCode SetErrorMaybe(const void *result, AdbcError *error, const std::st
 		SetError(error, error_message);
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
+	return ADBC_STATUS_OK;
+}
+
+static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
+                                    struct AdbcError *error) {
+	AdbcStatement statement;
+
+	auto status = StatementNew(connection, &statement, error);
+	if (status != ADBC_STATUS_OK) {
+		SetError(error, "unable to initialize statement");
+		return status;
+	}
+	status = StatementSetSqlQuery(&statement, query, error);
+	if (status != ADBC_STATUS_OK) {
+		SetError(error, "unable to initialize statement");
+		return status;
+	}
+	status = StatementExecuteQuery(&statement, out, nullptr, error);
+	if (status != ADBC_STATUS_OK) {
+		SetError(error, "unable to initialize statement");
+		return status;
+	}
+
 	return ADBC_STATUS_OK;
 }
 
@@ -727,29 +750,6 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 		return ADBC_STATUS_OK;
 	}
 	return ADBC_STATUS_INVALID_ARGUMENT;
-}
-
-AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
-                             struct AdbcError *error) {
-	AdbcStatement statement;
-
-	auto status = StatementNew(connection, &statement, error);
-	if (status != ADBC_STATUS_OK) {
-		SetError(error, "unable to initialize statement");
-		return status;
-	}
-	status = StatementSetSqlQuery(&statement, query, error);
-	if (status != ADBC_STATUS_OK) {
-		SetError(error, "unable to initialize statement");
-		return status;
-	}
-	status = StatementExecuteQuery(&statement, out, nullptr, error);
-	if (status != ADBC_STATUS_OK) {
-		SetError(error, "unable to initialize statement");
-		return status;
-	}
-
-	return ADBC_STATUS_OK;
 }
 
 AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth, const char *catalog,
