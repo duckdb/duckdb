@@ -96,9 +96,9 @@ duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_st
 	auto arrow_wrapper = new ArrowResultWrapper();
 	if (wrapper->statement->context->config.set_variables.find("TimeZone") ==
 	    wrapper->statement->context->config.set_variables.end()) {
-		arrow_wrapper->options.timezone = "UTC";
+		arrow_wrapper->options.time_zone = "UTC";
 	} else {
-		arrow_wrapper->options.timezone =
+		arrow_wrapper->options.time_zone =
 		    wrapper->statement->context->config.set_variables["TimeZone"].GetValue<std::string>();
 	}
 
