@@ -53,9 +53,12 @@ public:
 	                         const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
 	                         const vector<unique_ptr<BaseStatistics>> &partitions_stats, idx_t estimated_cardinality);
 
+	void SyncPartitioning(const PartitionGlobalSinkState &other);
+
 	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 
+	void BuildSortState(ColumnDataCollection &group_data, GlobalSortState &global_sort) const;
 	void BuildSortState(ColumnDataCollection &group_data, PartitionGlobalHashGroup &global_sort);
 
 	ClientContext &context;
@@ -67,6 +70,8 @@ public:
 	unique_ptr<RadixPartitionedColumnData> grouping_data;
 	//! Payload plus hash column
 	Types grouping_types;
+	//! The number of radix bits if this partition is being synced with another
+	idx_t fixed_bits;
 
 	// OVER(...) (sorting)
 	Orders partitions;
@@ -175,9 +180,17 @@ public:
 
 class PartitionGlobalMergeStates {
 public:
+	struct Callback {
+		virtual bool HasError() const {
+			return false;
+		}
+	};
+
 	using PartitionGlobalMergeStatePtr = unique_ptr<PartitionGlobalMergeState>;
 
 	explicit PartitionGlobalMergeStates(PartitionGlobalSinkState &sink);
+
+	bool ExecuteTask(PartitionLocalMergeState &local_state, Callback &callback);
 
 	vector<PartitionGlobalMergeStatePtr> states;
 };
