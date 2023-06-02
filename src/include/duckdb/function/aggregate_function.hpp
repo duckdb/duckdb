@@ -8,39 +8,12 @@
 
 #pragma once
 
-#include "duckdb/function/function.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/storage/statistics/node_statistics.hpp"
+#include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 
 namespace duckdb {
-
-enum class AggregateType : uint8_t { NON_DISTINCT = 1, DISTINCT = 2 };
-//! Whether or not the input order influences the result of the aggregate
-enum class AggregateOrderDependent : uint8_t { ORDER_DEPENDENT = 1, NOT_ORDER_DEPENDENT = 2 };
-
-class BoundAggregateExpression;
-
-struct AggregateInputData {
-	AggregateInputData(FunctionData *bind_data_p, Allocator &allocator_p)
-	    : bind_data(bind_data_p), allocator(allocator_p) {
-	}
-	FunctionData *bind_data;
-	Allocator &allocator;
-};
-
-struct AggregateStatisticsInput {
-	AggregateStatisticsInput(FunctionData *bind_data_p, vector<BaseStatistics> &child_stats_p,
-	                         NodeStatistics *node_stats_p)
-	    : bind_data(bind_data_p), child_stats(child_stats_p), node_stats(node_stats_p) {
-	}
-
-	FunctionData *bind_data;
-	vector<BaseStatistics> &child_stats;
-	NodeStatistics *node_stats;
-};
 
 //! The type used for sizing hashed aggregate function states
 typedef idx_t (*aggregate_size_t)();
@@ -215,7 +188,7 @@ public:
 
 	template <class STATE, class OP>
 	static void StateInitialize(data_ptr_t state) {
-		OP::Initialize((STATE *)state);
+		OP::Initialize(*reinterpret_cast<STATE *>(state));
 	}
 
 	template <class STATE, class OP>
@@ -279,6 +252,12 @@ public:
 	static void StateFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
 	                          idx_t offset) {
 		AggregateExecutor::Finalize<STATE, RESULT_TYPE, OP>(states, aggr_input_data, result, count, offset);
+	}
+
+	template <class STATE, class OP>
+	static void StateVoidFinalize(Vector &states, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
+	                              idx_t offset) {
+		AggregateExecutor::VoidFinalize<STATE, OP>(states, aggr_input_data, result, count, offset);
 	}
 
 	template <class STATE, class OP>

@@ -11,12 +11,13 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include <list>
+#include <utility>
 #include "duckdb/common/arrow/arrow_appender.hpp"
 
 namespace duckdb {
 
 void ArrowConverter::ToArrowArray(DataChunk &input, ArrowArray *out_array, ArrowOptions options) {
-	ArrowAppender appender(input.GetTypes(), input.size(), options);
+	ArrowAppender appender(input.GetTypes(), input.size(), std::move(options));
 	appender.Append(input, 0, input.size(), input.size());
 	*out_array = appender.Finalize();
 }
@@ -59,10 +60,10 @@ void InitializeChild(ArrowSchema &child, const string &name = "") {
 	child.dictionary = nullptr;
 }
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                    const string &config_timezone, ArrowOptions options);
+                    const ArrowOptions &options);
 
 void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                       const string &config_timezone, ArrowOptions options) {
+                       const ArrowOptions &options) {
 	child.format = "+m";
 	//! Map has one child which is a struct
 	child.n_children = 1;
@@ -73,11 +74,11 @@ void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 	InitializeChild(root_holder.nested_children.back()[0]);
 	child.children = &root_holder.nested_children_ptr.back()[0];
 	child.children[0]->name = "entries";
-	SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), config_timezone, options);
+	SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), options);
 }
 
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                    const string &config_timezone, ArrowOptions options) {
+                    const ArrowOptions &options) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		child.format = "b";
@@ -134,7 +135,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "tsu:";
 		break;
 	case LogicalTypeId::TIMESTAMP_TZ: {
-		string format = "tsu:" + config_timezone;
+		string format = "tsu:" + options.timezone;
 		auto format_ptr = make_unsafe_uniq_array<char>(format.size() + 1);
 		for (size_t i = 0; i < format.size(); i++) {
 			format_ptr[i] = format[i];
@@ -192,7 +193,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		InitializeChild(root_holder.nested_children.back()[0]);
 		child.children = &root_holder.nested_children_ptr.back()[0];
 		child.children[0]->name = "l";
-		SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), config_timezone, options);
+		SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), options);
 		break;
 	}
 	case LogicalTypeId::STRUCT: {
@@ -220,13 +221,12 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 			root_holder.owned_type_names.push_back(std::move(name_ptr));
 
 			child.children[type_idx]->name = root_holder.owned_type_names.back().get();
-			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, config_timezone,
-			               options);
+			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, options);
 		}
 		break;
 	}
 	case LogicalTypeId::MAP: {
-		SetArrowMapFormat(root_holder, child, type, config_timezone, options);
+		SetArrowMapFormat(root_holder, child, type, options);
 		break;
 	}
 	case LogicalTypeId::ENUM: {
@@ -259,7 +259,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 }
 
 void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<LogicalType> &types,
-                                   const vector<string> &names, const string &config_timezone, ArrowOptions options) {
+                                   const vector<string> &names, const ArrowOptions &options) {
 	D_ASSERT(out_schema);
 	D_ASSERT(types.size() == names.size());
 	idx_t column_count = types.size();
@@ -287,7 +287,7 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<Logical
 
 		auto &child = root_holder->children[col_idx];
 		InitializeChild(child, names[col_idx]);
-		SetArrowFormat(*root_holder, child, types[col_idx], config_timezone, options);
+		SetArrowFormat(*root_holder, child, types[col_idx], options);
 	}
 
 	// Release ownership to caller

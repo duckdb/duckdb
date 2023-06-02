@@ -19,7 +19,7 @@ string SelectNode::ToString() const {
 	// search for a distinct modifier
 	for (idx_t modifier_idx = 0; modifier_idx < modifiers.size(); modifier_idx++) {
 		if (modifiers[modifier_idx]->type == ResultModifierType::DISTINCT_MODIFIER) {
-			auto &distinct_modifier = (DistinctModifier &)*modifiers[modifier_idx];
+			auto &distinct_modifier = modifiers[modifier_idx]->Cast<DistinctModifier>();
 			result += "DISTINCT ";
 			if (!distinct_modifier.distinct_on_targets.empty()) {
 				result += "ON (";
@@ -120,22 +120,15 @@ bool SelectNode::Equals(const QueryNode *other_p) const {
 		return false;
 	}
 	// FROM
-	if (from_table) {
-		// we have a FROM clause, compare to the other one
-		if (!from_table->Equals(other.from_table.get())) {
-			return false;
-		}
-	} else if (other.from_table) {
-		// we don't have a FROM clause, if the other statement has one they are
-		// not equal
+	if (!TableRef::Equals(from_table, other.from_table)) {
 		return false;
 	}
 	// WHERE
-	if (!BaseExpression::Equals(where_clause.get(), other.where_clause.get())) {
+	if (!ParsedExpression::Equals(where_clause, other.where_clause)) {
 		return false;
 	}
 	// GROUP BY
-	if (!ExpressionUtil::ListEquals(groups.group_expressions, other.groups.group_expressions)) {
+	if (!ParsedExpression::ListEquals(groups.group_expressions, other.groups.group_expressions)) {
 		return false;
 	}
 	if (groups.grouping_sets != other.groups.grouping_sets) {
@@ -145,11 +138,11 @@ bool SelectNode::Equals(const QueryNode *other_p) const {
 		return false;
 	}
 	// HAVING
-	if (!BaseExpression::Equals(having.get(), other.having.get())) {
+	if (!ParsedExpression::Equals(having, other.having)) {
 		return false;
 	}
 	// QUALIFY
-	if (!BaseExpression::Equals(qualify.get(), other.qualify.get())) {
+	if (!ParsedExpression::Equals(qualify, other.qualify)) {
 		return false;
 	}
 	return true;

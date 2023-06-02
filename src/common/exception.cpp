@@ -73,8 +73,11 @@ string Exception::ConstructMessageRecursive(const string &msg, std::vector<Excep
 		parameter_count++;
 	}
 	if (parameter_count != values.size()) {
-		throw InternalException("Expected %d parameters, received %d", parameter_count, values.size());
+		throw InternalException("Primary exception: %s\nSecondary exception in ConstructMessageRecursive: Expected %d "
+		                        "parameters, received %d",
+		                        msg.c_str(), parameter_count, values.size());
 	}
+
 #endif
 	return ExceptionFormatValue::Format(msg, values);
 }

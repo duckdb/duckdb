@@ -151,7 +151,7 @@ void OrderedAggregateThreshold::ResetLocal(ClientContext &context) {
 
 void OrderedAggregateThreshold::SetLocal(ClientContext &context, const Value &input) {
 	const auto param = input.GetValue<uint64_t>();
-	if (!param) {
+	if (param <= 0) {
 		throw ParserException("Invalid option for PRAGMA ordered_aggregate_threshold, value must be positive");
 	}
 	ClientConfig::GetConfig(context).ordered_aggregate_threshold = param;
@@ -189,7 +189,7 @@ Value DebugWindowMode::GetSetting(ClientContext &context) {
 // Debug AsOf Join
 //===--------------------------------------------------------------------===//
 void DebugAsOfIEJoin::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).force_no_cross_product = ClientConfig().force_asof_iejoin;
+	ClientConfig::GetConfig(context).force_asof_iejoin = ClientConfig().force_asof_iejoin;
 }
 
 void DebugAsOfIEJoin::SetLocal(ClientContext &context, const Value &input) {
@@ -433,7 +433,6 @@ Value EnableHTTPMetadataCacheSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Enable Profiling
 //===--------------------------------------------------------------------===//
-
 void EnableProfilingSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.profiler_print_format = ClientConfig().profiler_print_format;
@@ -718,10 +717,10 @@ Value IntegerDivisionSetting::GetSetting(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	return Value(config.integer_division);
 }
+
 //===--------------------------------------------------------------------===//
 // Log Query Path
 //===--------------------------------------------------------------------===//
-
 void LogQueryPathSetting::ResetLocal(ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
 	// TODO: verify that this does the right thing
@@ -743,6 +742,23 @@ void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
 Value LogQueryPathSetting::GetSetting(ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
 	return client_data.log_query_writer ? Value(client_data.log_query_writer->path) : Value();
+}
+
+//===--------------------------------------------------------------------===//
+// Lock Configuration
+//===--------------------------------------------------------------------===//
+void LockConfigurationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<bool>();
+	config.options.lock_configuration = new_value;
+}
+
+void LockConfigurationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.lock_configuration = DBConfig().options.lock_configuration;
+}
+
+Value LockConfigurationSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.lock_configuration);
 }
 
 //===--------------------------------------------------------------------===//
@@ -880,6 +896,25 @@ Value PreserveInsertionOrder::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// ExportLargeBufferArrow
+//===--------------------------------------------------------------------===//
+void ExportLargeBufferArrow::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto export_large_buffers_arrow = input.GetValue<bool>();
+
+	config.options.arrow_offset_size = export_large_buffers_arrow ? ArrowOffsetSize::LARGE : ArrowOffsetSize::REGULAR;
+}
+
+void ExportLargeBufferArrow::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.arrow_offset_size = DBConfig().options.arrow_offset_size;
+}
+
+Value ExportLargeBufferArrow::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	bool export_large_buffers_arrow = config.options.arrow_offset_size == ArrowOffsetSize::LARGE;
+	return Value::BOOLEAN(export_large_buffers_arrow);
+}
+
+//===--------------------------------------------------------------------===//
 // Profiler History Size
 //===--------------------------------------------------------------------===//
 
@@ -988,7 +1023,7 @@ void SchemaSetting::ResetLocal(ClientContext &context) {
 void SchemaSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = input.ToString();
 	auto &client_data = ClientData::Get(context);
-	client_data.catalog_search_path->Set(CatalogSearchEntry::Parse(parameter), true);
+	client_data.catalog_search_path->Set(CatalogSearchEntry::Parse(parameter), CatalogSetPathType::SET_SCHEMA);
 }
 
 Value SchemaSetting::GetSetting(ClientContext &context) {
@@ -1008,7 +1043,7 @@ void SearchPathSetting::ResetLocal(ClientContext &context) {
 void SearchPathSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = input.ToString();
 	auto &client_data = ClientData::Get(context);
-	client_data.catalog_search_path->Set(CatalogSearchEntry::ParseList(parameter), false);
+	client_data.catalog_search_path->Set(CatalogSearchEntry::ParseList(parameter), CatalogSetPathType::SET_SCHEMAS);
 }
 
 Value SearchPathSetting::GetSetting(ClientContext &context) {

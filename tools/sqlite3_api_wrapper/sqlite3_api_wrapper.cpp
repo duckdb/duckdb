@@ -694,7 +694,7 @@ int sqlite3_bind_blob(sqlite3_stmt *stmt, int idx, const void *val, int length, 
 	if (length < 0) {
 		blob = Value::BLOB(string((const char *)val));
 	} else {
-		blob = Value::BLOB((const_data_ptr_t)val, length);
+		blob = Value::BLOB(const_data_ptr_cast(val), length);
 	}
 	if (free_func && ((ptrdiff_t)free_func) != -1) {
 		free_func((void *)val);
@@ -1527,7 +1527,7 @@ SQLITE_API void sqlite3_result_blob64(sqlite3_context *context, const void *blob
 	}
 	context->result.type = SQLiteTypeValue::BLOB;
 	context->result.str = string((char *)blob, n_bytes);
-	if (xDel) {
+	if (xDel && xDel != SQLITE_TRANSIENT) {
 		xDel((void *)blob);
 	}
 }

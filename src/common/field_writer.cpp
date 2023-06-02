@@ -29,7 +29,7 @@ template <>
 void FieldWriter::Write(const string &val) {
 	Write<uint32_t>((uint32_t)val.size());
 	if (!val.empty()) {
-		WriteData((const_data_ptr_t)val.c_str(), val.size());
+		WriteData(const_data_ptr_cast(val.c_str()), val.size());
 	}
 }
 

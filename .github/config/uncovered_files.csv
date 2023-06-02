@@ -26,15 +26,15 @@ common/enum_util.cpp	3512
 common/enums/expression_type.cpp	183
 common/enums/join_type.cpp	3
 common/exception.cpp	95
-common/exception_format_value.cpp	8
+common/exception_format_value.cpp	9
 common/field_writer.cpp	3
 common/file_buffer.cpp	5
 common/file_system.cpp	19
-common/fsst.cpp	5
+common/fsst.cpp	6
 common/gzip_file_system.cpp	40
 common/hive_partitioning.cpp	54
 common/local_file_system.cpp	16
-common/multi_file_reader.cpp	10
+common/multi_file_reader.cpp	11
 common/operator/cast_operators.cpp	72
 common/operator/convert_to_string.cpp	7
 common/pipe_file_system.cpp	4
@@ -53,7 +53,7 @@ common/serializer/buffered_deserializer.cpp	3
 common/serializer/buffered_file_reader.cpp	9
 common/serializer/buffered_file_writer.cpp	2
 common/sort/comparators.cpp	72
-common/sort/merge_sorter.cpp	99
+common/sort/merge_sorter.cpp	100
 common/sort/partition_state.cpp	43
 common/sort/sort_state.cpp	10
 common/sort/sorted_block.cpp	20
@@ -82,7 +82,7 @@ common/types/row/row_layout.cpp	4
 common/types/row/tuple_data_allocator.cpp	23
 common/types/row/tuple_data_collection.cpp	76
 common/types/row/tuple_data_iterator.cpp	5
-common/types/row/tuple_data_scatter_gather.cpp	15
+common/types/row/tuple_data_scatter_gather.cpp	16
 common/types/row/tuple_data_segment.cpp	10
 common/types/string_heap.cpp	11
 common/types/time.cpp	20
@@ -141,7 +141,7 @@ core_functions/scalar/struct/struct_insert.cpp	2
 core_functions/scalar/union/union_extract.cpp	11
 core_functions/scalar/union/union_tag.cpp	4
 core_functions/scalar/union/union_value.cpp	2
-execution/aggregate_hashtable.cpp	11
+execution/aggregate_hashtable.cpp	12
 execution/expression_executor.cpp	11
 execution/expression_executor/execute_between.cpp	30
 execution/expression_executor/execute_case.cpp	17
@@ -179,7 +179,7 @@ execution/operator/join/outer_join_marker.cpp	3
 execution/operator/join/perfect_hash_join_executor.cpp	2
 execution/operator/join/physical_asof_join.cpp	38
 execution/operator/join/physical_blockwise_nl_join.cpp	2
-execution/operator/join/physical_hash_join.cpp	7
+execution/operator/join/physical_hash_join.cpp	8
 execution/operator/join/physical_iejoin.cpp	32
 execution/operator/join/physical_index_join.cpp	2
 execution/operator/join/physical_nested_loop_join.cpp	4
@@ -258,7 +258,7 @@ function/scalar_function.cpp	7
 function/table/arrow.cpp	61
 function/table/arrow_conversion.cpp	225
 function/table/checkpoint.cpp	7
-function/table/copy_csv.cpp	14
+function/table/copy_csv.cpp	16
 function/table/pragma_detailed_profiling_output.cpp	86
 function/table/pragma_last_profiling_output.cpp	51
 function/table/range.cpp	5
@@ -390,7 +390,7 @@ include/duckdb/main/connection_manager.hpp	3
 include/duckdb/main/database.hpp	2
 include/duckdb/main/prepared_statement.hpp	9
 include/duckdb/main/query_profiler.hpp	9
-include/duckdb/main/query_result.hpp	9
+include/duckdb/main/query_result.hpp	11
 include/duckdb/main/relation.hpp	3
 include/duckdb/main/relation/subquery_relation.hpp	3
 include/duckdb/main/relation/write_parquet_relation.hpp	3
@@ -564,11 +564,11 @@ parser/statement/multi_statement.cpp	7
 parser/statement/select_statement.cpp	2
 parser/statement/set_statement.cpp	3
 parser/statement/update_statement.cpp	2
-parser/tableref.cpp	8
+parser/tableref.cpp	9
 parser/tableref/basetableref.cpp	2
 parser/tableref/emptytableref.cpp	3
 parser/tableref/expressionlistref.cpp	5
-parser/tableref/joinref.cpp	4
+parser/tableref/joinref.cpp	6
 parser/tableref/pivotref.cpp	26
 parser/tableref/subqueryref.cpp	2
 parser/tableref/table_function.cpp	2
@@ -684,6 +684,7 @@ planner/operator/logical_create_index.cpp	2
 planner/operator/logical_cross_product.cpp	2
 planner/operator/logical_cteref.cpp	2
 planner/operator/logical_delete.cpp	2
+planner/operator/logical_dependent_join.cpp	1
 planner/operator/logical_delim_get.cpp	2
 planner/operator/logical_dummy_scan.cpp	2
 planner/operator/logical_execute.cpp	3

@@ -5,10 +5,12 @@
 #include "duckdb/common/string_util.hpp"
 
 #include "duckdb.h"
-#include "duckdb/main/connection.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
+
+#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/main/connection.hpp"
+#endif
 
 #include <string.h>
 #include <stdlib.h>
