@@ -1098,10 +1098,16 @@ Value UsernameSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void FlushAllocatorSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	config.options.allocator_flush_threshold = DBConfig::ParseMemoryLimit(input.ToString());
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetAllocatorFlushTreshold(config.options.allocator_flush_threshold);
+	}
 }
 
 void FlushAllocatorSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 	config.options.allocator_flush_threshold = DBConfig().options.allocator_flush_threshold;
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetAllocatorFlushTreshold(config.options.allocator_flush_threshold);
+	}
 }
 
 Value FlushAllocatorSetting::GetSetting(ClientContext &context) {

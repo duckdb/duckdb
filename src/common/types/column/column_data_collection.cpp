@@ -930,6 +930,7 @@ void ColumnDataCollection::Verify() {
 #endif
 }
 
+// LCOV_EXCL_START
 string ColumnDataCollection::ToString() const {
 	DataChunk chunk;
 	InitializeScanChunk(chunk);
@@ -950,6 +951,7 @@ string ColumnDataCollection::ToString() const {
 
 	return result;
 }
+// LCOV_EXCL_STOP
 
 void ColumnDataCollection::Print() const {
 	Printer::Print(ToString());

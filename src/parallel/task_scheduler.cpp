@@ -94,7 +94,9 @@ ProducerToken::ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerT
 ProducerToken::~ProducerToken() {
 }
 
-TaskScheduler::TaskScheduler(DatabaseInstance &db) : db(db), queue(make_uniq<ConcurrentQueue>()) {
+TaskScheduler::TaskScheduler(DatabaseInstance &db)
+    : db(db), queue(make_uniq<ConcurrentQueue>()),
+      allocator_flush_threshold(db.config.options.allocator_flush_threshold) {
 }
 
 TaskScheduler::~TaskScheduler() {
@@ -149,7 +151,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 			}
 
 			// Flushes the outstanding allocator's outstanding allocations
-			Allocator::ThreadFlush(db.config.options.allocator_flush_threshold);
+			Allocator::ThreadFlush(allocator_flush_threshold);
 		}
 	}
 #else
@@ -243,6 +245,9 @@ void TaskScheduler::SetThreads(int32_t n) {
 		throw NotImplementedException("DuckDB was compiled without threads! Setting threads > 1 is not allowed.");
 	}
 #endif
+}
+
+void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
 }
 
 void TaskScheduler::Signal(idx_t n) {
