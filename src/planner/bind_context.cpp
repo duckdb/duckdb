@@ -286,15 +286,14 @@ string BindContext::BindColumn(PositionalReferenceExpression &ref, string &table
 	return StringUtil::Format("Positional reference %d out of range (total %d columns)", ref.index, total_columns);
 }
 
-BindResult BindContext::BindColumn(PositionalReferenceExpression &ref, idx_t depth) {
+unique_ptr<ColumnRefExpression> BindContext::PositionToColumn(PositionalReferenceExpression &ref) {
 	string table_name, column_name;
 
 	string error = BindColumn(ref, table_name, column_name);
 	if (!error.empty()) {
-		return BindResult(error);
+		throw BinderException(error);
 	}
-	auto column_ref = make_uniq<ColumnRefExpression>(column_name, table_name);
-	return BindColumn(*column_ref, depth);
+	return make_uniq<ColumnRefExpression>(column_name, table_name);
 }
 
 bool BindContext::CheckExclusionList(StarExpression &expr, const string &column_name,

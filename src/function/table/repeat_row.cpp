@@ -25,7 +25,14 @@ static unique_ptr<FunctionData> RepeatRowBind(ClientContext &context, TableFunct
 		return_types.push_back(inputs[input_idx].type());
 		names.push_back("column" + std::to_string(input_idx));
 	}
-	return make_uniq<RepeatRowFunctionData>(inputs, input.named_parameters["num_rows"].GetValue<int64_t>());
+	auto entry = input.named_parameters.find("num_rows");
+	if (entry == input.named_parameters.end()) {
+		throw BinderException("repeat_rows requires num_rows to be specified");
+	}
+	if (inputs.empty()) {
+		throw BinderException("repeat_rows requires at least one column to be specified");
+	}
+	return make_uniq<RepeatRowFunctionData>(inputs, entry->second.GetValue<int64_t>());
 }
 
 static unique_ptr<GlobalTableFunctionState> RepeatRowInit(ClientContext &context, TableFunctionInitInput &input) {

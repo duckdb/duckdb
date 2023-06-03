@@ -1,0 +1,264 @@
+[
+    {
+        "id": "DECIMAL",
+        "names": [
+			"decimal",
+            "dec",
+            "numeric"
+        ],
+        "description": "exact fixed-point decimal value"
+    },
+    {
+        "id": "TIME",
+        "names": [
+            "time"
+        ],
+        "description": "time of day (no time zone)"
+    },
+    {
+        "id": "DATE",
+        "names": [
+            "date"
+        ],
+        "description": "calendar date (year, month day)"
+    },
+    {
+        "id": "TIMESTAMP",
+        "names": [
+            "timestamp",
+            "datetime",
+            "timestamp_us"
+        ],
+        "description": "combination of time and date (microsecond precision)"
+    },
+    {
+        "id": "TIMESTAMP_MS",
+        "names": [
+            "timestamp_ms"
+        ],
+        "description": "combination of time and date (milisecond precision)"
+    },
+    {
+        "id": "TIMESTAMP_NS",
+        "names": [
+            "timestamp_ns"
+        ],
+        "description": "combination of time and date (nanosecond precision)"
+    },
+    {
+        "id": "TIMESTAMP_SEC",
+        "names": [
+            "timestamp_s"
+        ],
+        "description": "combination of time and date (second precision)"
+    },
+    {
+        "id": "TIMESTAMP_TZ",
+        "names": [
+            "timestamptz"
+        ],
+        "description": "combination of time and date (microsecond precision) that uses the current timezone"
+    },
+    {
+        "id": "TIME_TZ",
+        "names": [
+            "timetz"
+        ],
+        "description": "time of day that uses the current timezone"
+    },
+    {
+        "id": "INTERVAL",
+        "names": [
+            "interval"
+        ],
+        "description": "a period of time"
+    },
+    {
+        "id": "VARCHAR",
+        "names": [
+            "varchar",
+            "bpchar",
+            "string",
+            "char",
+            "nvarchar",
+            "text"
+        ],
+        "description": "variable-length character string (UTF8 encoded)"
+    },
+    {
+        "id": "BLOB",
+        "names": [
+            "blob",
+            "bytea",
+            "varbinary",
+            "binary"
+        ],
+        "description": "variable-length binary data (not UTF8 encoded)"
+    },
+    {
+        "id": "HUGEINT",
+        "names": [
+            "hugeint",
+            "int128"
+        ],
+        "description": "signed sixteen-byte integer"
+    },
+    {
+        "id": "BIGINT",
+        "names": [
+            "bigint",
+            "oid",
+            "long",
+            "int8",
+            "int64"
+        ],
+        "description": "signed eight-byte integer"
+    },
+    {
+        "id": "UBIGINT",
+        "names": [
+            "ubigint",
+            "uint64"
+        ],
+        "description": "unsigned eight-byte integer"
+    },
+    {
+        "id": "INTEGER",
+        "names": [
+            "integer",
+            "int",
+            "int4",
+            "signed",
+            "integral",
+            "int32"
+        ],
+        "description": "signed four-byte integer"
+    },
+    {
+        "id": "UINTEGER",
+        "names": [
+            "uinteger",
+            "uint32"
+        ],
+        "description": "unsigned four-byte integer"
+    },
+    {
+        "id": "SMALLINT",
+        "names": [
+            "smallint",
+            "int2",
+            "short",
+            "int16"
+        ],
+        "description": "signed two-byte integer"
+    },
+    {
+        "id": "USMALLINT",
+        "names": [
+            "usmallint",
+            "uint16"
+        ],
+        "description": "unsigned two-byte integer"
+    },
+    {
+        "id": "TINYINT",
+        "names": [
+            "tinyint",
+            "int1"
+        ],
+        "description": "signed one-byte integer"
+    },
+    {
+        "id": "UTINYINT",
+        "names": [
+            "utinyint",
+            "uint8"
+        ],
+        "description": "unsigned one-byte integer"
+    },
+    {
+        "id": "STRUCT",
+        "names": [
+            "struct",
+            "row"
+        ],
+        "description": "A dictionary of multiple named values, where each key is a string, but the value can be a different type for each key."
+    },
+    {
+        "id": "LIST",
+        "names": [
+            "list"
+        ],
+        "description": "An ordered sequence of data values of the same type."
+    },
+    {
+        "id": "MAP",
+        "names": [
+            "map"
+        ],
+        "description": "A dictionary of multiple named values, each key having the same type and each value having the same type. Keys and values can be any type and can be different types from one another."
+    },
+    {
+        "id": "UNION",
+        "names": [
+            "union"
+        ],
+        "description": "A union of multiple alternative data types, storing one of them in each value at a time. A union also contains a discriminator “tag” value to inspect and access the currently set member type."
+    },
+    {
+        "id": "BIT",
+        "names": [
+            "bit",
+            "bitstring"
+        ],
+        "description": "binary value"
+    },
+    {
+        "id": "BOOLEAN",
+        "names": [
+            "boolean",
+            "bool",
+            "logical"
+        ],
+        "description": "boolean value (true or false)"
+    },
+    {
+        "id": "UUID",
+        "names": [
+            "uuid",
+            "guid"
+        ],
+        "description": "UUID data type"
+    },
+    {
+        "id": "ENUM",
+        "names": [
+            "enum"
+        ],
+        "description": "Dictionary Encoding representing all possible string values of a column"
+    },
+    {
+        "id": "SQLNULL",
+        "names": [
+            "null"
+        ],
+        "description": "missing data"
+    },
+    {
+        "id": "FLOAT",
+        "names": [
+            "float",
+            "real",
+            "float4"
+        ],
+        "description": "single precision floating-point number (4 bytes)"
+    },
+    {
+        "id": "DOUBLE",
+        "names": [
+            "double",
+            "float8"
+        ],
+        "description": "double precision floating-point number (8 bytes)"
+    }
+]

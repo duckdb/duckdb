@@ -15,6 +15,8 @@ shell = None
 for param in sys.argv:
     if param == '--sqlsmith':
         fuzzer = 'sqlsmith'
+    elif param == '--duckfuzz':
+        fuzzer = 'duckfuzz'
     elif param == '--alltypes':
         db = 'alltypes'
     elif param == '--tpch':
@@ -25,7 +27,7 @@ for param in sys.argv:
         seed = int(param.replace('--seed=', ''))
 
 if fuzzer is None:
-    print("Unrecognized fuzzer to run, expected e.g. --sqlsmith")
+    print("Unrecognized fuzzer to run, expected e.g. --sqlsmith or --duckfuzz")
     exit(1)
 
 if db is None:
@@ -52,8 +54,22 @@ def create_db_script(db):
 def run_fuzzer_script(fuzzer):
     if fuzzer == 'sqlsmith':
         return "call sqlsmith(max_queries=${MAX_QUERIES}, seed=${SEED}, verbose_output=1, log='${LAST_LOG_FILE}', complete_log='${COMPLETE_LOG_FILE}');"
+    elif fuzzer == 'duckfuzz':
+        return "call fuzzyduck(max_queries=${MAX_QUERIES}, seed=${SEED}, verbose_output=1, log='${LAST_LOG_FILE}', complete_log='${COMPLETE_LOG_FILE}');"
+    elif fuzzer == 'duckfuzz_functions':
+        return "call fuzz_all_functions(seed=${SEED}, verbose_output=1, log='${LAST_LOG_FILE}', complete_log='${COMPLETE_LOG_FILE}');"
     else:
         raise Exception("Unknown fuzzer type")
+
+def get_fuzzer_name(fuzzer):
+    if fuzzer == 'sqlsmith':
+        return 'SQLSmith'
+    elif fuzzer == 'duckfuzz':
+        return 'DuckFuzz'
+    elif fuzzer == 'duckfuzz_functions':
+        return 'DuckFuzz (Functions)'
+    else:
+        return 'Unknown'
 
 def run_shell_command(cmd):
     command = [shell, '--batch', '-init', '/dev/null']
@@ -76,6 +92,7 @@ print(f'''==========================================
 ==========================================''')
 
 load_script = create_db_script(db)
+fuzzer_name = get_fuzzer_name(fuzzer)
 fuzzer = run_fuzzer_script(fuzzer).replace('${MAX_QUERIES}', str(max_queries)).replace('${LAST_LOG_FILE}', last_query_log_file).replace('${COMPLETE_LOG_FILE}', complete_log_file).replace('${SEED}', str(seed))
 
 print(load_script)
@@ -147,4 +164,4 @@ print("=========================================")
 last_query = reduce_sql.reduce(last_query, load_script, shell, error_msg)
 cmd = load_script + '\n' + last_query + "\n"
 
-fuzzer_helper.file_issue(cmd, error_msg, "SQLSmith", seed, git_hash)
+fuzzer_helper.file_issue(cmd, error_msg, fuzzer_name, seed, git_hash)

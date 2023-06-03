@@ -1201,13 +1201,14 @@ void DataTable::WALAddIndex(ClientContext &context, unique_ptr<Index> index,
 	// intermediate holds scanned chunks of the underlying data to create the index
 	DataChunk intermediate;
 	vector<LogicalType> intermediate_types;
-	auto column_ids = index->column_ids;
-	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
-	for (auto &id : index->column_ids) {
-		auto &col = column_definitions[id];
-		intermediate_types.push_back(col.Type());
+	vector<column_t> column_ids;
+	for (auto &it : column_definitions) {
+		intermediate_types.push_back(it.Type());
+		column_ids.push_back(it.Oid());
 	}
+	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	intermediate_types.emplace_back(LogicalType::ROW_TYPE);
+
 	intermediate.Initialize(allocator, intermediate_types);
 
 	// holds the result of executing the index expression on the intermediate chunks

@@ -45,7 +45,7 @@ static bool ReplaceUnicodeSpaces(const string &query, string &new_query, vector<
 // This function strips unicode space characters from the query and replaces them with regular spaces
 // It returns true if any unicode space characters were found and stripped
 // See here for a list of unicode space characters - https://jkorpela.fi/chars/spaces.html
-static bool StripUnicodeSpaces(const string &query_str, string &new_query) {
+bool Parser::StripUnicodeSpaces(const string &query_str, string &new_query) {
 	const idx_t NBSP_LEN = 2;
 	const idx_t USP_LEN = 3;
 	idx_t pos = 0;
