@@ -1100,11 +1100,15 @@ public:
 
 	static void GetSchema(uintptr_t factory_p, ArrowSchemaWrapper &schema) {
 		auto factory = (JavaArrowTabularStreamFactory *)factory_p;
-		if (!factory->stream_ptr->release) {
+		auto stream_ptr = factory->stream_ptr;
+		if (!stream_ptr->release) {
 			throw InvalidInputException("This stream has been released");
 		}
-		factory->stream_ptr->get_schema(factory->stream_ptr, &schema.arrow_schema);
-		return;
+		stream_ptr->get_schema(stream_ptr, &schema.arrow_schema);
+		auto error = stream_ptr->get_last_error(stream_ptr);
+		if (error != nullptr) {
+			throw InvalidInputException(error);
+		}
 	}
 
 	ArrowArrayStream *stream_ptr;
