@@ -141,7 +141,7 @@ core_functions/scalar/struct/struct_insert.cpp	2
 core_functions/scalar/union/union_extract.cpp	11
 core_functions/scalar/union/union_tag.cpp	4
 core_functions/scalar/union/union_value.cpp	2
-execution/aggregate_hashtable.cpp	12
+execution/aggregate_hashtable.cpp	14
 execution/expression_executor.cpp	11
 execution/expression_executor/execute_between.cpp	30
 execution/expression_executor/execute_case.cpp	17
@@ -153,12 +153,12 @@ execution/index/art/art.cpp	48
 execution/index/art/art_key.cpp	14
 execution/index/art/iterator.cpp	8
 execution/index/art/leaf.cpp	38
-execution/index/art/node.cpp	40
+execution/index/art/node.cpp	42
 execution/index/art/node48.cpp	8
 execution/index/art/node256.cpp	4
 execution/index/art/prefix.cpp	78
 execution/index/art/prefix_segment.cpp	2
-execution/join_hashtable.cpp	22
+execution/join_hashtable.cpp	23
 execution/nested_loop_join/nested_loop_join_inner.cpp	24
 execution/nested_loop_join/nested_loop_join_mark.cpp	30
 execution/operator/aggregate/aggregate_object.cpp	2
@@ -355,7 +355,7 @@ include/duckdb/common/types/hugeint.hpp	2
 include/duckdb/common/types/row/partitioned_tuple_data.hpp	11
 include/duckdb/common/types/string_type.hpp	5
 include/duckdb/common/types/uuid.hpp	4
-include/duckdb/common/types/validity_mask.hpp	4
+include/duckdb/common/types/validity_mask.hpp	5
 include/duckdb/common/types/value.hpp	6
 include/duckdb/common/vector_operations/aggregate_executor.hpp	16
 include/duckdb/common/vector_operations/binary_executor.hpp	14
