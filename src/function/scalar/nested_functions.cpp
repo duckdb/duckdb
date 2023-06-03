@@ -12,4 +12,3 @@ void BuiltinFunctions::RegisterNestedFunctions() {
 }
 
 } // namespace duckdb
-

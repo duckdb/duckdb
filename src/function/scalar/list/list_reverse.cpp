@@ -17,50 +17,41 @@ static void ListReverseFunction(DataChunk &args, ExpressionState &state, Vector 
 		return;
 	}
 
-	// get the child vector
-	auto input_list_list_size = ListVector::GetListSize(input_list);
-	auto &input_list_child = ListVector::GetEntry(input_list);
-
+	// get the input list data
 	UnifiedVectorFormat input_list_data;
 	input_list.ToUnifiedFormat(count, input_list_data);
-	auto input_list_entries = (list_entry_t *)input_list_data.data;
+	auto input_list_entries = UnifiedVectorFormat::GetData<list_entry_t>(input_list_data);
 
-	// get the child data
-	UnifiedVectorFormat input_list_child_data;
-	input_list_child.ToUnifiedFormat(input_list_list_size, input_list_child_data);
-
-	result.SetVectorType(VectorType::FLAT_VECTOR);
+	// get the result entires
 	auto result_entries = FlatVector::GetData<list_entry_t>(result);
+
+	// get the validity mask of the result to avoid complications later
 	auto &result_validity = FlatVector::Validity(result);
 
-	// create a selection vector for slicing the child vector
-	SelectionVector rev_sel(input_list_list_size);
+	// get the input child vector to slice it later
+	auto &input_list_child = ListVector::GetEntry(input_list);
 
-	idx_t offset = 0;
-	idx_t offset_per_new_row = 0;
+	// create a selection vector for slicing the child vector
+	SelectionVector rev_sel(ListVector::GetListSize(input_list));
 
 	for (idx_t i = 0; i < count; i++) {
 		auto input_list_list_index = input_list_data.sel->get_index(i);
 
+		// check if the input list is valid
 		if (!input_list_data.validity.RowIsValid(input_list_list_index)) {
 			result_validity.SetInvalid(i);
 			continue;
 		};
 
-		result_entries[i].offset = offset;
-		result_entries[i].length = 0;
-
 		D_ASSERT(input_list_data.validity.RowIsValid(input_list_list_index));
 		const auto &input_list_entry = input_list_entries[input_list_list_index];
 		result_entries[i].length += input_list_entry.length;
 
-		// set reverse selection vector indices
+		// populate the selection vector
 		// set index of selection vector in a way, that only the entries of the current row are reversed at once
 		for (idx_t j = 0; j < input_list_entry.length; j++) {
-			rev_sel.set_index(j + offset_per_new_row, input_list_entry.length - j - 1 + offset_per_new_row);
+			rev_sel.set_index(j + input_list_entry.offset, input_list_entry.length - j - 1 + input_list_entry.offset);
 		}
-		offset_per_new_row = offset_per_new_row + input_list_entry.length;
-		offset += result_entries[i].length;
 	}
 
 	result.Reference(input_list);
