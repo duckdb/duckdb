@@ -109,8 +109,10 @@ private:
 	Vector statep;
 	//! The frame boundaries, used for the window functions
 	FrameBounds frame;
-	//! Reused result state container for the window functions
-	Vector statev;
+	//! Reused state pointers for combining segment tree levels
+	Vector statel;
+	//! Reused result state container for finalizing window functions
+	Vector statef;
 
 	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
 	unsafe_unique_array<data_t> levels_flat_native;
