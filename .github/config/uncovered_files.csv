@@ -418,7 +418,6 @@ include/duckdb/planner/expression/bound_subquery_expression.hpp	5
 include/duckdb/planner/filter/conjunction_filter.hpp	3
 include/duckdb/planner/table_filter.hpp	3
 include/duckdb/storage/buffer/block_handle.hpp	7
-include/duckdb/storage/compression/chimp/algorithm/byte_reader.hpp	19
 include/duckdb/storage/compression/chimp/algorithm/chimp128.hpp	10
 include/duckdb/storage/compression/chimp/algorithm/leading_zero_buffer.hpp	3
 include/duckdb/storage/compression/chimp/algorithm/output_bit_stream.hpp	2
