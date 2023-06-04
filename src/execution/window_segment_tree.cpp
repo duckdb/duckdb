@@ -246,16 +246,38 @@ void WindowSegmentTree::AggegateFinal(Vector &result, idx_t rid) {
 }
 
 void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
-	const auto size = end - begin;
+	const auto count = end - begin;
 
-	auto &chunk = *input_ref;
-	const auto input_count = input_ref->ColumnCount();
-	inputs.SetCardinality(size);
-	for (idx_t i = 0; i < input_count; ++i) {
-		auto &v = inputs.data[i];
-		auto &vec = chunk.data[i];
-		v.Slice(vec, begin, end);
-		v.Verify(size);
+	auto &leaves = *input_ref;
+	const auto leaf_columns = leaves.ColumnCount();
+	inputs.SetCardinality(count);
+	for (idx_t i = 0; i < leaf_columns; ++i) {
+		auto &input = inputs.data[i];
+		auto &leaf = leaves.data[i];
+
+		if (!begin || leaf.GetVectorType() == VectorType::CONSTANT_VECTOR || FlatVector::Validity(leaf).AllValid()) {
+			input.Slice(leaf, begin, end);
+		} else {
+			//	Performance hack: We are the only users of input,
+			//	so we don't need to allocate a new validity mask each time
+			//	So set empty validity masks before slicing, slice in place and then restore it.
+			ValidityMask empty;
+
+			ValidityMask leaf_save;
+			leaf_save.Initialize(FlatVector::Validity(leaf));
+			FlatVector::SetValidity(leaf, empty);
+
+			ValidityMask input_save;
+			input_save.Initialize(FlatVector::Validity(input));
+
+			input.Slice(leaf, begin, end);
+			input_save.SliceInPlace(leaf_save, 0, begin, count);
+
+			FlatVector::SetValidity(input, input_save);
+			FlatVector::SetValidity(leaf, leaf_save);
+		}
+
+		input.Verify(count);
 	}
 
 	// Slice to any filtered rows
