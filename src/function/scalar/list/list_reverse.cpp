@@ -17,22 +17,20 @@ static void ListReverseFunction(DataChunk &args, ExpressionState &state, Vector 
 		return;
 	}
 
-	// get the input list data
-	UnifiedVectorFormat input_list_data;
-	input_list.ToUnifiedFormat(count, input_list_data);
-	auto input_list_entries = UnifiedVectorFormat::GetData<list_entry_t>(input_list_data);
+	// create a copy (result) of the input list
+	// this ensures that we do not change the order of the entries in the input chunk
+	VectorOperations::Copy(input_list, result, count, 0, 0);
 
-	// get the result entires
-	auto result_entries = FlatVector::GetData<list_entry_t>(result);
+	// get the input list data from the copy.
+	UnifiedVectorFormat input_list_data;
+	result.ToUnifiedFormat(count, input_list_data);
+	auto input_list_entries = UnifiedVectorFormat::GetData<list_entry_t>(input_list_data);
 
 	// get the validity mask of the result to avoid complications later
 	auto &result_validity = FlatVector::Validity(result);
 
-	// get the input child vector to slice it later
-	auto &input_list_child = ListVector::GetEntry(input_list);
-
 	// create a selection vector for slicing the child vector
-	SelectionVector rev_sel(ListVector::GetListSize(input_list));
+	SelectionVector rev_sel(ListVector::GetListSize(result));
 
 	for (idx_t i = 0; i < count; i++) {
 		auto input_list_list_index = input_list_data.sel->get_index(i);
@@ -45,7 +43,6 @@ static void ListReverseFunction(DataChunk &args, ExpressionState &state, Vector 
 
 		D_ASSERT(input_list_data.validity.RowIsValid(input_list_list_index));
 		const auto &input_list_entry = input_list_entries[input_list_list_index];
-		result_entries[i].length += input_list_entry.length;
 
 		// populate the selection vector
 		// set index of selection vector in a way, that only the entries of the current row are reversed at once
@@ -54,8 +51,8 @@ static void ListReverseFunction(DataChunk &args, ExpressionState &state, Vector 
 		}
 	}
 
-	result.Reference(input_list);
-	input_list_child.Slice(rev_sel, ListVector::GetListSize(input_list));
+	// slice the result vector
+	ListVector::GetEntry(result).Slice(rev_sel, ListVector::GetListSize(result));
 
 	if (input_list.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);

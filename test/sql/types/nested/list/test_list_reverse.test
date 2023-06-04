@@ -98,14 +98,13 @@ query I nosort q1
 select true from test_vector_types(null::int[], false);
 ----
 
-#TODO: make this test not fail.
-#query I nosort q1
-#select list_sort((list), 'desc') == list from (select list_reverse(test_vector) as list from test_vector_types(null::int[], false));
-#----
-#
-#query I nosort q1
-#select list_sort((list), 'desc') == list from (select list_reverse(test_vector) as list from test_vector_types(null::int[], true));
-#----
+query I nosort q1
+select list_sort((list), 'desc') == list from (select list_reverse(test_vector) as list from test_vector_types(null::int[], false));
+----
+
+query I nosort q1
+select list_sort((list), 'desc') == list from (select list_reverse(test_vector) as list from test_vector_types(null::int[], true));
+----
 
 statement error
 SELECT LIST_REVERSE()
