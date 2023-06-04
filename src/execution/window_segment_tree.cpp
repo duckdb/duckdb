@@ -321,6 +321,10 @@ void WindowSegmentTree::ConstructTree() {
 	// iterate over the levels of the segment tree
 	while ((level_size = (level_current == 0 ? input_ref->size()
 	                                         : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
+		// Initialise the combine buffer to hold enough values for the bottom level of the state tree
+		if (level_current == 1) {
+			statel.Initialize(false, level_size);
+		}
 		for (idx_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
 			// compute the aggregate for this entry in the segment tree
 			AggregateInit();
@@ -338,11 +342,6 @@ void WindowSegmentTree::ConstructTree() {
 	// Corner case: single element in the window
 	if (levels_flat_offset == 0) {
 		aggr.function.initialize(levels_flat_native.get());
-	}
-
-	// Initialise the combine buffer to hold enough values for the bottom level of the state tree
-	if (levels_flat_start.size() > 1) {
-		statel.Initialize(false, levels_flat_start[1] - levels_flat_start[0]);
 	}
 }
 
