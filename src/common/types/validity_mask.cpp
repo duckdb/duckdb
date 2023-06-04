@@ -115,9 +115,16 @@ void ValidityMask::SliceInPlace(const ValidityMask &other, idx_t target_offset, 
 		}
 		//	Finish last ragged entry
 		if (ragged) {
-			//	Start with ragged head of previous src
-			validity_t tgt_entry = (src_entry >> tail) & (ValidityBuffer::MAX_ENTRY >> (BITS_PER_VALUE - ragged));
-			//	Tail is from target, not source
+			//	Start with head of previous src
+			validity_t tgt_entry = (src_entry >> tail);
+			//  Add in the tail of the next src, if head was too small
+			if (head < ragged) {
+				src_entry = *source_validity++;
+				tgt_entry |= (src_entry << head);
+			}
+			//  Mask off the bits that go past the ragged end
+			tgt_entry &= (ValidityBuffer::MAX_ENTRY >> (BITS_PER_VALUE - ragged));
+			//	Restore the ragged end of the target
 			tgt_entry |= *target_validity & (ValidityBuffer::MAX_ENTRY << ragged);
 			*target_validity++ = tgt_entry;
 		}
