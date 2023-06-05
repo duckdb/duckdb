@@ -669,6 +669,55 @@ bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const 
 	return true;
 }
 
+bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result, const idx_t count,
+                             JSONTransformOptions &options) {
+	auto type = result.GetType();
+
+	auto fields = UnionType::CopyMemberTypes(type);
+	vector<string> names;
+	for (const auto &field : fields) {
+		names.push_back(field.first);
+	}
+
+	for (idx_t i = 0; i < count; i++) {
+		if (!yyjson_is_obj(vals[i])) {
+			if (options.error_missing_key) {
+				throw InvalidInputException("Expected an object representing a union");
+			} else {
+				result.SetValue(i, Value(nullptr));
+				continue;
+			}
+		}
+
+		yyjson_val *key, *val;
+		yyjson_obj_iter iter;
+		yyjson_obj_iter_init(vals[i], &iter);
+		key = yyjson_obj_iter_next(&iter);
+		if (key == nullptr) {
+			// empty object?
+			result.SetValue(i, Value(nullptr));
+			continue;
+		}
+
+		val = yyjson_obj_iter_get_val(key);
+
+		auto tag = std::find(names.begin(), names.end(), unsafe_yyjson_get_str(key));
+		if (tag == names.end()) {
+			throw InvalidInputException("Found object containing unknown key instead of union");
+		}
+
+		idx_t actualtag = tag - names.begin();
+
+		Vector single(UnionType::GetMemberType(type, actualtag), 1);
+		// should we use this return value
+		JSONTransform::Transform(&val, alc, single, 1, options);
+
+		result.SetValue(i, Value::UNION(fields, actualtag, single.GetValue(0)));
+	}
+
+	return true;
+}
+
 bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
                               JSONTransformOptions &options) {
 	auto result_type = result.GetType();
@@ -747,8 +796,10 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 		return TransformArray(vals, alc, result, count, options);
 	case LogicalTypeId::MAP:
 		return TransformObjectToMap(vals, alc, result, count, options);
+	case LogicalTypeId::UNION:
+		return TransformValueIntoUnion(vals, alc, result, count, options);
 	default:
-		throw InternalException("Unexpected type at JSON Transform %s", result_type.ToString());
+		throw NotImplementedException("Cannot read a value of type %s from a json file", result_type.ToString());
 	}
 }
 
