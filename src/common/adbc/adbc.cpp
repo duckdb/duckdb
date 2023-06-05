@@ -33,7 +33,7 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 	driver->ConnectionGetTableTypes = duckdb_adbc::ConnectionGetTableTypes;
 	driver->StatementNew = duckdb_adbc::StatementNew;
 	driver->StatementRelease = duckdb_adbc::StatementRelease;
-	//	driver->StatementBind = duckdb::adbc::StatementBind;
+	driver->StatementBind = duckdb::adbc::StatementBind;
 	driver->StatementBindStream = duckdb_adbc::StatementBindStream;
 	driver->StatementExecuteQuery = duckdb_adbc::StatementExecuteQuery;
 	driver->StatementPrepare = duckdb_adbc::StatementPrepare;
@@ -725,6 +725,25 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 	auto res = duckdb_prepare(wrapper->connection, query, &wrapper->statement);
 	auto error_msg = duckdb_prepare_error(wrapper->statement);
 	return CheckResult(res, error, error_msg);
+}
+
+AdbcStatusCode StatementBind(struct AdbcStatement *statement, struct ArrowArray *values, struct ArrowSchema *schemas,
+                             struct AdbcError *error) {
+	auto status = SetErrorMaybe(statement, error, "Missing statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	status = SetErrorMaybe(values, error, "Missing values object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	status = SetErrorMaybe(schemas, error, "Missing schemas object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
+	return ADBC_STATUS_INVALID_DATA;
+	// wrapper->ingestion_stream = values;
 }
 
 AdbcStatusCode StatementBindStream(struct AdbcStatement *statement, struct ArrowArrayStream *values,

@@ -205,11 +205,6 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *, const char *, c
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 
-AdbcStatusCode StatementBind(struct AdbcStatement *, struct ArrowArray *, struct ArrowSchema *,
-                             struct AdbcError *error) {
-	return ADBC_STATUS_NOT_IMPLEMENTED;
-}
-
 AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, struct ArrowSchema *schema,
                                            struct AdbcError *error) {
 	return ADBC_STATUS_NOT_IMPLEMENTED;
