@@ -9,7 +9,9 @@
 #pragma once
 
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include <cmath>
 
@@ -441,6 +443,14 @@ template <>
 bool TryCastWithOverflowCheck(hugeint_t value, double &result) {
 	return Hugeint::TryCast(value, result);
 }
+
+struct NumericTryCastToBit {
+	template<class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, bool strict = false) {
+		result = Bit::NumericToBit(input);
+		return true;		
+	}
+};
 
 struct NumericTryCast {
 	template <class SRC, class DST>

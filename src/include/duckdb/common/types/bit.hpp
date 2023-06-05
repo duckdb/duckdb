@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
 
@@ -37,7 +38,30 @@ public:
 	//! Convert a string to a bit. This function should ONLY be called after calling GetBitSize, since it does NOT
 	//! perform data validation.
 	DUCKDB_API static void ToBit(string_t str, string_t &output);
+
 	DUCKDB_API static string ToBit(string_t str);
+
+	template<class T>
+	DUCKDB_API static void NumericToBit(T numeric, string_t &output_str)  {
+		auto output = output_str.GetDataWriteable();
+		auto data = const_data_ptr_cast(&numeric);
+
+		*(output++) = 0;
+		for (idx_t idx = 0; idx < sizeof(T); ++idx) {
+			output[idx] = data[sizeof(T) - idx - 1];
+		}
+		Bit::Finalize(output_str);
+	}
+
+	template<class T>
+	DUCKDB_API static string NumericToBit(T numeric) {
+		auto bit_len = sizeof(T) + 1;
+		auto buffer = make_unsafe_uniq_array<char>(bit_len);
+		string_t output_str(buffer.get(), bit_len);
+		Bit::NumericToBit(numeric, output_str);
+		return output_str.GetString();
+	}
+
 	//! Creates a new bitstring of determined length
 	DUCKDB_API static void BitString(const string_t &input, const idx_t &len, string_t &result);
 	DUCKDB_API static void SetEmptyBitString(string_t &target, string_t &input);
