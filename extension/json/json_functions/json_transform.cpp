@@ -699,11 +699,13 @@ bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result,
 		names.push_back(field.first);
 	}
 
+	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		if (!yyjson_is_obj(vals[i])) {
 			if (options.error_missing_key) {
 				throw InvalidInputException("Expected an object representing a union");
 			} else {
+				validity.SetInvalid(i);
 				result.SetValue(i, Value(nullptr));
 				continue;
 			}
@@ -715,6 +717,7 @@ bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result,
 		key = yyjson_obj_iter_next(&iter);
 		if (key == nullptr) {
 			// empty object?
+			validity.SetInvalid(i);
 			result.SetValue(i, Value(nullptr));
 			continue;
 		}
