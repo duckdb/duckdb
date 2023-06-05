@@ -1154,7 +1154,7 @@ public:
 		input_chunk.Initialize(gsink.allocator, input_types);
 	}
 
-	void MaterializeSortedData(bool &external);
+	void MaterializeSortedData();
 	void GeneratePartition(WindowGlobalSinkState &gstate, const idx_t hash_bin);
 	void Scan(DataChunk &chunk);
 
@@ -1187,9 +1187,8 @@ public:
 	DataChunk output_chunk;
 };
 
-void WindowLocalSourceState::MaterializeSortedData(bool &external) {
+void WindowLocalSourceState::MaterializeSortedData() {
 	auto &global_sort_state = *hash_group->global_sort;
-	external = global_sort_state.external;
 	if (global_sort_state.sorted_blocks.empty()) {
 		return;
 	}
@@ -1271,7 +1270,8 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 		// Overwrite the collections with the sorted data
 		hash_group = std::move(gsink.hash_groups[hash_bin]);
 		hash_group->ComputeMasks(partition_mask, order_mask);
-		MaterializeSortedData(external);
+		external = hash_group->global_sort->external;
+		MaterializeSortedData();
 	} else {
 		return;
 	}
