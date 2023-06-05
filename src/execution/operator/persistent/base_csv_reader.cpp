@@ -593,13 +593,13 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 		}
 
 		// Now do a second pass to produce the reject table entries
-		if (!options.rejects_table_name.empty()) {
+		if (!failed_cells.empty() && !options.rejects_table_name.empty()) {
 			auto limit = options.rejects_limit;
 
 			auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_table_name);
 			lock_guard<mutex> lock(rejects->write_lock);
-			// short circuit if we already have too many rejects
 
+			// short circuit if we already have too many rejects
 			if (limit == 0 || rejects->count < limit) {
 				auto &table = rejects->GetTable(context);
 				InternalAppender appender(context, table);
@@ -636,7 +636,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 
 					if (!options.rejects_recovery_columns.empty()) {
 						child_list_t<Value> recovery_key;
-						for (auto &key_idx : options.rejects_recovery_columns) {
+						for (auto &key_idx : options.rejects_recovery_column_ids) {
 							// Figure out if the recovery key is valid.
 							// If not, error out for real.
 							auto &component_vector = parse_chunk.data[key_idx];

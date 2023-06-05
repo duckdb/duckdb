@@ -179,75 +179,28 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 		allow_quoted_nulls = ParseBoolean(value, loption);
 	} else if (loption == "parallel") {
 		parallel_mode = ParseBoolean(value, loption) ? ParallelMode::PARALLEL : ParallelMode::SINGLE_THREADED;
-	} else if (loption == "rejects_table" || loption == "rejects_recovery_columns" || loption == "rejects_limit") {
+	} else if (loption == "rejects_table") {
 		// skip, handled in SetRejectsOptions
+		auto table_name = ParseString(value, loption);
+		if (table_name.empty()) {
+			throw BinderException("REJECTS_TABLE option cannot be empty");
+		}
+		rejects_table_name = table_name;
+	} else if (loption == "rejects_recovery_columns") {
+		// Get the list of columns to use as a recovery key
+		auto &children = ListValue::GetChildren(value);
+		for (auto &child : children) {
+			auto col_name = child.GetValue<string>();
+			rejects_recovery_columns.push_back(col_name);
+		}
+	} else if (loption == "rejects_limit") {
+		int64_t limit = ParseInteger(value, loption);
+		if (limit < 0) {
+			throw BinderException("Unsupported parameter for REJECTS_LIMIT: cannot be negative");
+		}
+		rejects_limit = limit;
 	} else {
 		throw BinderException("Unrecognized option for CSV reader \"%s\"", loption);
-	}
-}
-
-void BufferedCSVReaderOptions::SetRejectsOptions(const named_parameter_map_t &params, const vector<string> &names,
-                                                 const vector<LogicalType> &types) {
-
-	for (auto &kv : params) {
-		auto loption = StringUtil::Lower(kv.first);
-		auto &value = kv.second;
-		if (loption == "rejects_table") {
-			if (!ignore_errors) {
-				throw BinderException("REJECTS_TABLE option is only supported when IGNORE_ERRORS is set to true");
-			}
-			if (file_options.union_by_name) {
-				throw BinderException("REJECTS_TABLE option is not supported when UNION_BY_NAME is set to true");
-			}
-			auto str = ParseString(value, loption);
-			if (str.empty()) {
-				throw BinderException("REJECTS_TABLE option cannot be empty");
-			}
-			rejects_table_name = str;
-		}
-	}
-
-	for (auto &kv : params) {
-		auto loption = StringUtil::Lower(kv.first);
-		auto &value = kv.second;
-		if (loption == "rejects_recovery_columns") {
-
-			if (rejects_table_name.empty()) {
-				throw BinderException(
-				    "REJECTS_RECOVERY_COLUMNS option is only supported when REJECTS_TABLE is set to a table name");
-			}
-
-			// Get the list of columns to use as a recovery key
-			auto &children = ListValue::GetChildren(value);
-			for (auto &child : children) {
-				auto col_name_raw = child.GetValue<string>();
-				auto col_name = StringUtil::Lower(child.GetValue<string>());
-				bool found = false;
-				for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
-					if (StringUtil::Lower(names[col_idx]) == col_name) {
-						rejects_recovery_columns.push_back(col_idx);
-						found = true;
-						break;
-					}
-				}
-				if (!found) {
-					throw BinderException("Unsupported parameter for REJECTS_RECOVERY_COLUMNS: column \"%s\" not found",
-					                      col_name_raw);
-				}
-			}
-		}
-
-		if (loption == "rejects_limit") {
-			if (rejects_table_name.empty()) {
-				throw BinderException(
-				    "REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
-			}
-			int64_t limit = ParseInteger(value, loption);
-			if (limit < 0) {
-				throw BinderException("Unsupported parameter for REJECTS_LIMIT: cannot be negative");
-			}
-			rejects_limit = limit;
-		}
 	}
 }
 

@@ -129,7 +129,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	for (auto &option : info.options) {
 		options_map[option.first] = ConvertVectorToValue(std::move(option.second));
 	}
-	options.SetRejectsOptions(options_map, expected_names, expected_types);
 
 	bind_data->FinalizeRead(context);
 	if (!bind_data->single_threaded && options.auto_detect) {

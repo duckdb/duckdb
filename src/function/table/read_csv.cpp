@@ -44,6 +44,46 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 		// not supported for parallel CSV reading
 		single_threaded = true;
 	}
+
+	// Validate rejects_table options
+	if (!options.rejects_table_name.empty()) {
+		if (!options.ignore_errors) {
+			throw BinderException("REJECTS_TABLE option is only supported when IGNORE_ERRORS is set to true");
+		}
+		if (options.file_options.union_by_name) {
+			throw BinderException("REJECTS_TABLE option is not supported when UNION_BY_NAME is set to true");
+		}
+	}
+
+	if (!options.rejects_recovery_columns.empty()) {
+		if (options.rejects_table_name.empty()) {
+			throw BinderException(
+			    "REJECTS_RECOVERY_COLUMNS option is only supported when REJECTS_TABLE is set to a table name");
+		}
+		for (auto &recovery_col : options.rejects_recovery_columns) {
+			bool found = false;
+			for (idx_t col_idx = 0; col_idx < return_names.size(); col_idx++) {
+				if (StringUtil::CIEquals(return_names[col_idx], recovery_col)) {
+					options.rejects_recovery_column_ids.push_back(col_idx);
+					found = true;
+					break;
+				}
+			}
+			if (!found) {
+				throw BinderException("Unsupported parameter for REJECTS_RECOVERY_COLUMNS: column \"%s\" not found",
+				                      recovery_col);
+			}
+		}
+	}
+
+	if (options.rejects_limit != 0) {
+		if (options.rejects_table_name.empty()) {
+			throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
+		}
+		if (options.rejects_limit < 0) {
+			throw BinderException("Unsupported parameter for REJECTS_LIMIT: cannot be negative");
+		}
+	}
 }
 
 uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
@@ -239,15 +279,14 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		result->reader_bind = MultiFileReader::BindOptions(options.file_options, result->files, return_types, names);
 	}
 
-	// Do this after the other options have been set and column types/names are resolved
-	options.SetRejectsOptions(input.named_parameters, names, return_types);
+	result->return_types = return_types;
+	result->return_names = names;
+	result->FinalizeRead(context);
+
 	if (options.auto_detect) {
 		result->initial_reader->options = options;
 	}
 
-	result->return_types = return_types;
-	result->return_names = names;
-	result->FinalizeRead(context);
 	return std::move(result);
 }
 
@@ -1104,7 +1143,8 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(csv_formats);
 	writer.WriteString(rejects_table_name);
 	writer.WriteField<idx_t>(rejects_limit);
-	writer.WriteList<idx_t>(rejects_recovery_columns);
+	writer.WriteList<string>(rejects_recovery_columns);
+	writer.WriteList<idx_t>(rejects_recovery_column_ids);
 }
 
 void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
@@ -1154,7 +1194,8 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 	}
 	rejects_table_name = reader.ReadRequired<string>();
 	rejects_limit = reader.ReadRequired<idx_t>();
-	rejects_recovery_columns = reader.ReadRequiredList<idx_t>();
+	rejects_recovery_columns = reader.ReadRequiredList<string>();
+	rejects_recovery_column_ids = reader.ReadRequiredList<idx_t>();
 }
 
 static void CSVReaderSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
