@@ -59,22 +59,12 @@ struct timestamp_t { // NOLINT
 	};
 
 	// arithmetic operators
-	inline timestamp_t operator+(const double &value) const {
-		return timestamp_t(this->value + int64_t(value));
-	};
-	inline int64_t operator-(const timestamp_t &other) const {
-		return this->value - other.value;
-	};
+	timestamp_t operator+(const double &value) const;
+	int64_t operator-(const timestamp_t &other) const;
 
 	// in-place operators
-	inline timestamp_t &operator+=(const int64_t &value) {
-		this->value += value;
-		return *this;
-	};
-	inline timestamp_t &operator-=(const int64_t &value) {
-		this->value -= value;
-		return *this;
-	};
+	timestamp_t &operator+=(const int64_t &delta);
+	timestamp_t &operator-=(const int64_t &delta);
 
 	// special values
 	static timestamp_t infinity() { // NOLINT
