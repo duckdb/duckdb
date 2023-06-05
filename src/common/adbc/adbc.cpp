@@ -396,44 +396,51 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *in
                                  struct ArrowArrayStream *out, struct AdbcError *error) {
 	auto db_conn = (duckdb::Connection *)(connection->private_data);
 
-	std::string q = R"EOF(
-			create table tbl(
-				info union(
-					string_value VARCHAR,
-					bool_value BOOL,
-					int64_value BIGINT,
-					int32_bitmask INTEGER,
-					string_list VARCHAR[],
-					int32_to_int32_list_map MAP(INTEGER, INTEGER[])
-				)
-			);
-			insert into tbl values
-		)EOF";
-
 	// If 'info_codes' is NULL, all info codes should be output
 	size_t length = info_codes ? info_codes_length : (size_t)AdbcInfoCode::UNRECOGNIZED;
+
+	if (length == 0) {
+		// Return empty result
+	}
+
+	std::string q = R"EOF(
+		select
+			name::UINTEGER as info_name,
+			info::UNION(
+				string_value VARCHAR,
+				bool_value BOOL,
+				int64_value BIGINT,
+				int32_bitmask INTEGER,
+				string_list VARCHAR[],
+				int32_to_int32_list_map MAP(INTEGER, INTEGER[])
+			) as info_value from values
+	)EOF";
+
 	for (size_t i = 0; i < length; i++) {
 		uint32_t code = info_codes ? info_codes[i] : i;
 		auto info_code = ConvertToInfoCode(code);
 		switch (info_code) {
 		case AdbcInfoCode::VENDOR_NAME: {
-			q += R"EOF(
-					('duckdb'),
-				)EOF";
+			q += "(0, 'duckdb'),";
+			break;
 		}
 		case AdbcInfoCode::VENDOR_VERSION: {
-			q += duckdb::StringUtil::Format("('%s'),", duckdb_library_version());
+			q += duckdb::StringUtil::Format("(1, '%s'),", duckdb_library_version());
+			break;
 		}
 		case AdbcInfoCode::DRIVER_NAME: {
-			q += "('ADBC DuckDB Driver'),";
+			q += "(2, 'ADBC DuckDB Driver'),";
+			break;
 		}
 		case AdbcInfoCode::DRIVER_VERSION: {
 			// TODO: fill in driver version
-			q += "('(unknown)'),";
+			q += "(3, '(unknown)'),";
+			break;
 		}
 		case AdbcInfoCode::DRIVER_ARROW_VERSION: {
 			// TODO: fill in arrow version
-			q += "('(unknown)'),";
+			q += "(4, '(unknown)'),";
+			break;
 		}
 		case AdbcInfoCode::UNRECOGNIZED: {
 			// Unrecognized codes are not an error, just ignored
@@ -442,9 +449,11 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *in
 		default: {
 			// Codes that we have implemented but not handled here are a developer error
 			SetError(error, "InternalError: info code recognized but not handled");
+			break;
 		}
 		}
 	}
+	q += " tbl(name, info);";
 	return QueryInternal(connection, out, q.c_str(), error);
 }
 
