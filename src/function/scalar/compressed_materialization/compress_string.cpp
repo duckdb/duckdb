@@ -8,20 +8,35 @@ static string StringCompressFunctionName(const LogicalType &result_type) {
 	                          StringUtil::Lower(LogicalTypeIdToString(result_type.id())));
 }
 
+template <class T>
+const uint8_t &FirstByteReference(const T &v) {
+	return reinterpret_cast<const uint8_t *>(&v)[0];
+}
+
+template <class T>
+uint8_t &LastByteReference(T &v) {
+	return reinterpret_cast<uint8_t *>(&v)[sizeof(T) - 1];
+}
+
+template <class T>
+const uint8_t &LastByteReference(const T &v) {
+	return reinterpret_cast<const uint8_t *>(&v)[sizeof(T) - 1];
+}
+
 template <class RESULT_TYPE>
 static inline RESULT_TYPE StringCompressInternal(const string_t &input) {
 	D_ASSERT(input.GetSize() < sizeof(RESULT_TYPE));
 	RESULT_TYPE result;
 	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
-		memcpy(&result, input.GetPrefixWriteable(), sizeof(RESULT_TYPE));
+		memcpy(&result, input.GetPrefix(), sizeof(RESULT_TYPE));
 	} else if (input.GetSize() <= string_t::INLINE_LENGTH) {
-		memcpy(&result, input.GetPrefixWriteable(), string_t::INLINE_LENGTH);
+		memcpy(&result, input.GetPrefix(), string_t::INLINE_LENGTH);
 		memset(data_ptr_t(&result) + string_t::INLINE_LENGTH, '\0', sizeof(RESULT_TYPE) - string_t::INLINE_LENGTH);
 	} else {
 		result = 0;
-		memcpy(&result, input.GetDataUnsafe(), input.GetSize());
+		memcpy(&result, input.GetData(), input.GetSize());
 	}
-	((uint8_t *)&result)[sizeof(RESULT_TYPE) - 1] = input.GetSize();
+	LastByteReference<RESULT_TYPE>(result) = input.GetSize();
 	return BSwap<RESULT_TYPE>(result);
 }
 
@@ -33,9 +48,9 @@ static inline RESULT_TYPE StringCompress(const string_t &input) {
 template <class RESULT_TYPE>
 static inline RESULT_TYPE MiniStringCompress(const string_t &input) {
 	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
-		return input.GetSize() + *input.GetPrefixWriteable();
+		return input.GetSize() + *reinterpret_cast<const uint8_t *>(input.GetPrefix());
 	} else {
-		return input.GetSize() + *input.GetDataUnsafe();
+		return input.GetSize() + *reinterpret_cast<const uint8_t *>(input.GetDataUnsafe());
 	}
 }
 
@@ -96,7 +111,7 @@ static inline string_t StringDecompress(const INPUT_TYPE &input, ArenaAllocator 
 		static constexpr const idx_t MEMSET_LENGTH = string_t::INLINE_LENGTH - MEMCPY_LENGTH + 1;
 
 		const auto input_swapped = BSwap<INPUT_TYPE>(input);
-		const uint32_t string_size = ((uint8_t *)&input_swapped)[sizeof(INPUT_TYPE) - 1];
+		const uint32_t string_size = LastByteReference<INPUT_TYPE>(input_swapped);
 
 		string_t result(string_size);
 		memcpy(result.GetPrefixWriteable(), &input_swapped, MEMCPY_LENGTH);
@@ -104,16 +119,16 @@ static inline string_t StringDecompress(const INPUT_TYPE &input, ArenaAllocator 
 		return result;
 	}
 
-	const uint32_t string_size = *((uint8_t *)&input);
+	const uint32_t string_size = FirstByteReference<INPUT_TYPE>(input);
 	if (string_size <= string_t::INLINE_LENGTH) {
 		string_t result(string_size);
 		const auto input_swapped = BSwap<INPUT_TYPE>(input);
 		memcpy(result.GetPrefixWriteable(), &input_swapped, string_t::INLINE_LENGTH);
 		return result;
 	} else {
-		auto ptr = (INPUT_TYPE *)allocator.Allocate(sizeof(INPUT_TYPE));
+		auto ptr = reinterpret_cast<INPUT_TYPE *>(allocator.Allocate(sizeof(INPUT_TYPE)));
 		*ptr = BSwap<INPUT_TYPE>(input);
-		return string_t((const char *)ptr, string_size);
+		return string_t(const_char_ptr_cast(ptr), string_size);
 	}
 }
 
@@ -123,7 +138,7 @@ static inline string_t MiniStringDecompress(const INPUT_TYPE &input, ArenaAlloca
 		const auto min = MinValue<INPUT_TYPE>(1, input);
 		string_t result(min);
 		memset(result.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
-		*result.GetPrefixWriteable() = input - min;
+		*reinterpret_cast<uint8_t *>(result.GetPrefixWriteable()) = input - min;
 		return result;
 	} else if (input == 0) {
 		return string_t(uint32_t(0));
@@ -170,39 +185,25 @@ static scalar_function_t GetStringDecompressFunctionSwitch(const LogicalType &in
 	}
 }
 
-template <CompressedMaterializationDirection DIRECTION>
-static void CMStringSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
-	writer.WriteField(DIRECTION);
-	writer.WriteSerializable(function.return_type);
+static void CMStringCompressSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
+                                      const ScalarFunction &function) {
 	writer.WriteRegularSerializableList(function.arguments);
+	writer.WriteSerializable(function.return_type);
 }
 
-unique_ptr<FunctionData> CMStringDeserialize(ClientContext &context, FieldReader &reader,
-                                             ScalarFunction &bound_function) {
-	auto direction = reader.ReadRequired<CompressedMaterializationDirection>();
-	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto arguments = reader.template ReadRequiredSerializableList<LogicalType, LogicalType>();
-
-	switch (direction) {
-	case CompressedMaterializationDirection::COMPRESS:
-		bound_function.function = GetStringCompressFunctionSwitch(return_type);
-		break;
-	case CompressedMaterializationDirection::DECOMPRESS:
-		bound_function.function = GetStringDecompressFunctionSwitch(arguments[0]);
-		break;
-	default:
-		throw InternalException("Invalid CompressedMaterializationDirection encountered in CMStringDeserialize");
-	}
-	bound_function.arguments = arguments;
-
+unique_ptr<FunctionData> CMStringCompressDeserialize(ClientContext &context, FieldReader &reader,
+                                                     ScalarFunction &bound_function) {
+	bound_function.arguments = reader.template ReadRequiredSerializableList<LogicalType, LogicalType>();
+	bound_function.function =
+	    GetStringCompressFunctionSwitch(reader.ReadRequiredSerializable<LogicalType, LogicalType>());
 	return nullptr;
 }
 
 ScalarFunction CMStringCompressFun::GetFunction(const LogicalType &result_type) {
 	ScalarFunction result(StringCompressFunctionName(result_type), {LogicalType::VARCHAR}, result_type,
 	                      GetStringCompressFunctionSwitch(result_type), CompressedMaterializationFunctions::Bind);
-	result.serialize = CMStringSerialize<CompressedMaterializationDirection::COMPRESS>;
-	result.deserialize = CMStringDeserialize;
+	result.serialize = CMStringCompressSerialize;
+	result.deserialize = CMStringCompressDeserialize;
 	return result;
 }
 
@@ -212,12 +213,24 @@ void CMStringCompressFun::RegisterFunction(BuiltinFunctions &set) {
 	}
 }
 
+static void CMStringDecompressSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
+                                        const ScalarFunction &function) {
+	writer.WriteRegularSerializableList(function.arguments);
+}
+
+unique_ptr<FunctionData> CMStringDecompressDeserialize(ClientContext &context, FieldReader &reader,
+                                                       ScalarFunction &bound_function) {
+	bound_function.arguments = reader.template ReadRequiredSerializableList<LogicalType, LogicalType>();
+	bound_function.function = GetStringDecompressFunctionSwitch(bound_function.arguments[0]);
+	return nullptr;
+}
+
 ScalarFunction CMStringDecompressFun::GetFunction(const LogicalType &input_type) {
 	ScalarFunction result(StringDecompressFunctionName(), {input_type}, LogicalType::VARCHAR,
 	                      GetStringDecompressFunctionSwitch(input_type), CompressedMaterializationFunctions::Bind,
 	                      nullptr, nullptr, StringDecompressLocalState::Init);
-	result.serialize = CMStringSerialize<CompressedMaterializationDirection::DECOMPRESS>;
-	result.deserialize = CMStringDeserialize;
+	result.serialize = CMStringDecompressSerialize;
+	result.deserialize = CMStringDecompressDeserialize;
 	return result;
 }
 

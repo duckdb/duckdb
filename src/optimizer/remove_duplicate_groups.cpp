@@ -111,7 +111,7 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 		auto it = column_references.find(map_entry.first);
 		if (it != column_references.end()) {
 			for (auto expr : it->second) {
-				expr->binding = map_entry.second;
+				expr.get().binding = map_entry.second;
 			}
 		}
 	}
@@ -120,7 +120,7 @@ void RemoveDuplicateGroups::VisitAggregate(LogicalAggregate &aggr) {
 unique_ptr<Expression> RemoveDuplicateGroups::VisitReplace(BoundColumnRefExpression &expr,
                                                            unique_ptr<Expression> *expr_ptr) {
 	// add a column reference
-	column_references[expr.binding].push_back(&expr);
+	column_references[expr.binding].push_back(expr);
 	return nullptr;
 }
 

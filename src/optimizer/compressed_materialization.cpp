@@ -236,11 +236,11 @@ void CompressedMaterialization::CreateDecompressProjection(unique_ptr<LogicalOpe
 	// Create decompress expressions for everything we compressed
 	auto &binding_map = info.binding_map;
 	vector<unique_ptr<Expression>> decompress_exprs;
-	vector<BaseStatistics *> statistics;
+	vector<optional_ptr<BaseStatistics>> statistics;
 	for (idx_t col_idx = 0; col_idx < bindings.size(); col_idx++) {
 		const auto &binding = bindings[col_idx];
 		auto decompress_expr = make_uniq_base<Expression, BoundColumnRefExpression>(types[col_idx], binding);
-		BaseStatistics *stats = nullptr;
+		optional_ptr<BaseStatistics> stats;
 		for (auto &entry : binding_map) {
 			auto &binding_info = entry.second;
 			if (binding_info.binding != binding) {
@@ -408,8 +408,15 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 	if (cast_type.id() == LogicalTypeId::USMALLINT) {
 		auto min_string = StringStats::Min(stats);
 		auto max_string = StringStats::Max(stats);
-		uint8_t min_numeric = max_string_length == 0 || min_string.length() == 0 ? 0 : *min_string.c_str();
-		uint8_t max_numeric = max_string_length == 0 || max_string.length() == 0 ? 0 : *max_string.c_str();
+
+		uint8_t min_numeric = 0;
+		if (max_string_length != 0 && min_string.length() != 0) {
+			min_numeric = *reinterpret_cast<const uint8_t *>(min_string.c_str());
+		}
+		uint8_t max_numeric = 0;
+		if (max_string_length != 0 && max_string.length() != 0) {
+			max_numeric = *reinterpret_cast<const uint8_t *>(max_string.c_str());
+		}
 
 		Value min_val = Value::USMALLINT(min_numeric);
 		Value max_val = Value::USMALLINT(max_numeric + 1);
@@ -539,6 +546,78 @@ bool UsesBinding(const Expression &expression, const ColumnBinding &binding) {
 	}
 }
 
+bool RemoveRedundantExpressionsProjection(LogicalOperator &current_op, ColumnBinding &current_binding,
+                                          idx_t &current_col_idx,
+                                          vector<reference<Expression>> &expressions_in_between) {
+	const auto current_bindings = current_op.GetColumnBindings();
+	for (const auto &expr : current_op.expressions) {
+		if (expr->type != ExpressionType::BOUND_COLUMN_REF && UsesBinding(*expr, current_binding)) {
+			return false;
+		}
+	}
+	bool found = false;
+	const auto current_binding_temp = current_binding;
+	for (idx_t expr_idx = 0; expr_idx < current_op.expressions.size(); expr_idx++) {
+		const auto &expr = current_op.expressions[expr_idx];
+		if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
+			continue;
+		}
+		const auto &colref = expr->Cast<BoundColumnRefExpression>();
+		if (colref.binding == current_binding_temp) {
+			if (found) {
+				return false; // Duplicate projection, don't remove (de)compression (for now)
+			}
+			current_col_idx = expr_idx;
+			current_binding = current_bindings[current_col_idx];
+			expressions_in_between.emplace_back(*expr);
+			found = true;
+		}
+	}
+	return found;
+}
+
+bool RemoveRedundantExpressionsComparisonJoin(LogicalOperator &current_op, ColumnBinding &current_binding) {
+	const auto &comparison_join = current_op.Cast<LogicalComparisonJoin>();
+	if (!comparison_join.left_projection_map.empty()) {
+		return false;
+	}
+	for (auto &cond : comparison_join.conditions) {
+		if (UsesBinding(*cond.left, current_binding)) {
+			return false;
+		}
+	}
+	if (comparison_join.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		auto &delim_join = comparison_join.Cast<LogicalDelimJoin>();
+		for (auto &dec : delim_join.duplicate_eliminated_columns) {
+			if (UsesBinding(*dec, current_binding)) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
+bool RemoveRedundantExpressionsFilter(LogicalOperator &current_op, ColumnBinding &current_binding,
+                                      idx_t &current_col_idx) {
+	const auto current_bindings = current_op.GetColumnBindings();
+	for (auto &expr : current_op.expressions) {
+		if (UsesBinding(*expr, current_binding)) {
+			return false;
+		}
+	}
+	idx_t filter_out_idx;
+	for (filter_out_idx = 0; filter_out_idx < current_bindings.size(); filter_out_idx++) {
+		if (current_bindings[filter_out_idx] == current_binding) {
+			current_col_idx = filter_out_idx;
+			break;
+		}
+	}
+	if (filter_out_idx == current_bindings.size()) { // Projected out
+		return false;
+	}
+	return true;
+}
+
 void CompressedMaterialization::RemoveRedundantExpressions(
     LogicalProjection &decompression, LogicalProjection &compression,
     const vector<reference<LogicalOperator>> &operators_in_between) {
@@ -556,65 +635,18 @@ void CompressedMaterialization::RemoveRedundantExpressions(
 		bool can_remove_current = true;
 		idx_t current_col_idx = col_idx;
 		auto current_binding = decompress_bindings[current_col_idx];
-		vector<Expression *> expressions_in_between;
+		vector<reference<Expression>> expressions_in_between;
 		for (auto current_op : operators_in_between) {
 			const auto current_bindings = current_op.get().GetColumnBindings();
 			switch (current_op.get().type) {
-			case LogicalOperatorType::LOGICAL_PROJECTION: {
-				for (const auto &expr : current_op.get().expressions) {
-					if (expr->type != ExpressionType::BOUND_COLUMN_REF && UsesBinding(*expr, current_binding)) {
-						can_remove_current = false;
-						break;
-					}
-				}
-				bool found = false;
-				const auto current_binding_temp = current_binding;
-				for (idx_t expr_idx = 0; expr_idx < current_op.get().expressions.size(); expr_idx++) {
-					const auto &expr = current_op.get().expressions[expr_idx];
-					if (expr->type != ExpressionType::BOUND_COLUMN_REF) {
-						continue;
-					}
-					const auto &colref = expr->Cast<BoundColumnRefExpression>();
-					if (colref.binding == current_binding_temp) {
-						if (found) {
-							can_remove_current = false; // Duplicate projection, don't remove (de)compression (for now)
-							break;
-						}
-						current_col_idx = expr_idx;
-						current_binding = current_bindings[current_col_idx];
-						expressions_in_between.emplace_back(expr.get());
-						found = true;
-					}
-				}
-				if (!found) { // Projected out
-					can_remove_current = false;
-				}
+			case LogicalOperatorType::LOGICAL_PROJECTION:
+				can_remove_current = RemoveRedundantExpressionsProjection(current_op, current_binding, current_col_idx,
+				                                                          expressions_in_between);
 				break;
-			}
 			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-			case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
-				const auto &comparison_join = current_op.get().Cast<LogicalComparisonJoin>();
-				if (!comparison_join.left_projection_map.empty()) {
-					can_remove_current = false;
-					break;
-				}
-				for (auto &cond : comparison_join.conditions) {
-					if (UsesBinding(*cond.left, current_binding)) {
-						can_remove_current = false;
-						break;
-					}
-				}
-				if (comparison_join.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-					auto &delim_join = comparison_join.Cast<LogicalDelimJoin>();
-					for (auto &dec : delim_join.duplicate_eliminated_columns) {
-						if (UsesBinding(*dec, current_binding)) {
-							can_remove_current = false;
-							break;
-						}
-					}
-				}
+			case LogicalOperatorType::LOGICAL_DELIM_JOIN:
+				can_remove_current = RemoveRedundantExpressionsComparisonJoin(current_op, current_binding);
 				break;
-			}
 			case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 				const auto &any_join = current_op.get().Cast<LogicalAnyJoin>();
 				if (UsesBinding(*any_join.condition, current_binding)) {
@@ -623,28 +655,9 @@ void CompressedMaterialization::RemoveRedundantExpressions(
 				}
 				break;
 			}
-			case LogicalOperatorType::LOGICAL_FILTER: {
-				for (auto &expr : current_op.get().expressions) {
-					if (UsesBinding(*expr, current_binding)) {
-						can_remove_current = false;
-						break;
-					}
-				}
-				if (!can_remove_current) {
-					break;
-				}
-				idx_t filter_out_idx;
-				for (filter_out_idx = 0; filter_out_idx < current_bindings.size(); filter_out_idx++) {
-					if (current_bindings[filter_out_idx] == current_binding) {
-						current_col_idx = filter_out_idx;
-						break;
-					}
-				}
-				if (filter_out_idx == current_bindings.size()) { // Projected out
-					can_remove_current = false;
-				}
+			case LogicalOperatorType::LOGICAL_FILTER:
+				can_remove_current = RemoveRedundantExpressionsFilter(current_op, current_binding, current_col_idx);
 				break;
-			}
 			case LogicalOperatorType::LOGICAL_LIMIT:
 				break;
 			default:
@@ -684,8 +697,8 @@ void CompressedMaterialization::RemoveRedundantExpressions(
 
 		// All references in between have to be updated with the compressed type
 		for (auto &expr : expressions_in_between) {
-			D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
-			expr->return_type = compressed_type;
+			D_ASSERT(expr.get().type == ExpressionType::BOUND_COLUMN_REF);
+			expr.get().return_type = compressed_type;
 		}
 
 		// Replace the compress with its child because it wasn't decompressed

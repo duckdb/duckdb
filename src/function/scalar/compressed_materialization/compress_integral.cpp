@@ -143,31 +143,17 @@ static scalar_function_t GetIntegralDecompressFunctionInputSwitch(const LogicalT
 	}
 }
 
-template <CompressedMaterializationDirection DIRECTION>
 static void CMIntegralSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
-	writer.WriteField(DIRECTION);
-	writer.WriteSerializable(function.return_type);
 	writer.WriteRegularSerializableList(function.arguments);
+	writer.WriteSerializable(function.return_type);
 }
 
+template <scalar_function_t (*GET_FUNCTION)(const LogicalType &, const LogicalType &)>
 unique_ptr<FunctionData> CMIntegralDeserialize(ClientContext &context, FieldReader &reader,
                                                ScalarFunction &bound_function) {
-	auto direction = reader.ReadRequired<CompressedMaterializationDirection>();
-	auto return_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-	auto arguments = reader.template ReadRequiredSerializableList<LogicalType, LogicalType>();
-
-	switch (direction) {
-	case CompressedMaterializationDirection::COMPRESS:
-		bound_function.function = GetIntegralCompressFunctionInputSwitch(arguments[0], return_type);
-		break;
-	case CompressedMaterializationDirection::DECOMPRESS:
-		bound_function.function = GetIntegralDecompressFunctionInputSwitch(arguments[0], return_type);
-		break;
-	default:
-		throw InternalException("Invalid CompressedMaterializationDirection encountered in CMIntegralDeserialize");
-	}
-	bound_function.arguments = arguments;
-
+	bound_function.arguments = reader.template ReadRequiredSerializableList<LogicalType, LogicalType>();
+	bound_function.function =
+	    GET_FUNCTION(bound_function.arguments[0], reader.ReadRequiredSerializable<LogicalType, LogicalType>());
 	return nullptr;
 }
 
@@ -175,8 +161,8 @@ ScalarFunction CMIntegralCompressFun::GetFunction(const LogicalType &input_type,
 	ScalarFunction result(IntegralCompressFunctionName(result_type), {input_type, input_type}, result_type,
 	                      GetIntegralCompressFunctionInputSwitch(input_type, result_type),
 	                      CompressedMaterializationFunctions::Bind);
-	result.serialize = CMIntegralSerialize<CompressedMaterializationDirection::COMPRESS>;
-	result.deserialize = CMIntegralDeserialize;
+	result.serialize = CMIntegralSerialize;
+	result.deserialize = CMIntegralDeserialize<GetIntegralCompressFunctionInputSwitch>;
 	return result;
 }
 
@@ -196,12 +182,26 @@ void CMIntegralCompressFun::RegisterFunction(BuiltinFunctions &set) {
 	}
 }
 
+static void CMIntegralDecompressSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
+                                          const ScalarFunction &function) {
+	writer.WriteRegularSerializableList(function.arguments);
+	writer.WriteSerializable(function.return_type);
+}
+
+unique_ptr<FunctionData> CMIntegralDecompressDeserialize(ClientContext &context, FieldReader &reader,
+                                                         ScalarFunction &bound_function) {
+	bound_function.arguments = reader.template ReadRequiredSerializableList<LogicalType, LogicalType>();
+	bound_function.function = GetIntegralDecompressFunctionInputSwitch(
+	    bound_function.arguments[0], reader.ReadRequiredSerializable<LogicalType, LogicalType>());
+	return nullptr;
+}
+
 ScalarFunction CMIntegralDecompressFun::GetFunction(const LogicalType &input_type, const LogicalType &result_type) {
 	ScalarFunction result(IntegralDecompressFunctionName(result_type), {input_type, result_type}, result_type,
 	                      GetIntegralDecompressFunctionInputSwitch(input_type, result_type),
 	                      CompressedMaterializationFunctions::Bind);
-	result.serialize = CMIntegralSerialize<CompressedMaterializationDirection::DECOMPRESS>;
-	result.deserialize = CMIntegralDeserialize;
+	result.serialize = CMIntegralSerialize;
+	result.deserialize = CMIntegralDeserialize<GetIntegralDecompressFunctionInputSwitch>;
 	return result;
 }
 

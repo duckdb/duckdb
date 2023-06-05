@@ -32,7 +32,7 @@ protected:
 
 private:
 	//! The map of column references
-	column_binding_map_t<vector<BoundColumnRefExpression *>> column_references;
+	column_binding_map_t<vector<reference<BoundColumnRefExpression>>> column_references;
 	//! Stored expressions (kept around so we don't have dangling pointers)
 	vector<unique_ptr<Expression>> stored_expressions;
 };
