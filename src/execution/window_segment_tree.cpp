@@ -255,28 +255,7 @@ void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
 		auto &input = inputs.data[i];
 		auto &leaf = leaves.data[i];
 
-		if (!begin || leaf.GetVectorType() == VectorType::CONSTANT_VECTOR || FlatVector::Validity(leaf).AllValid()) {
-			input.Slice(leaf, begin, end);
-		} else {
-			//	Performance hack: We are the only users of input,
-			//	so we don't need to allocate a new validity mask each time
-			//	So set empty validity masks before slicing, slice in place and then restore it.
-			ValidityMask empty;
-
-			ValidityMask leaf_save;
-			leaf_save.Initialize(FlatVector::Validity(leaf));
-			FlatVector::SetValidity(leaf, empty);
-
-			ValidityMask input_save;
-			input_save.Initialize(FlatVector::Validity(input));
-
-			input.Slice(leaf, begin, end);
-			input_save.SliceInPlace(leaf_save, 0, begin, count);
-
-			FlatVector::SetValidity(input, input_save);
-			FlatVector::SetValidity(leaf, leaf_save);
-		}
-
+		input.SliceInPlace(leaf, begin, end);
 		input.Verify(count);
 	}
 

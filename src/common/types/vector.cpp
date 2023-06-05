@@ -124,6 +124,41 @@ void Vector::ResetFromCache(const VectorCache &cache) {
 	cache.ResetFromCache(*this);
 }
 
+void Vector::SliceInPlace(Vector &other, idx_t offset, idx_t end) {
+	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		Reference(other);
+		return;
+	}
+	D_ASSERT(other.GetVectorType() == VectorType::FLAT_VECTOR);
+	vector_type = other.vector_type;
+
+	auto internal_type = GetType().InternalType();
+	if (internal_type == PhysicalType::STRUCT) {
+		auto &entries = StructVector::GetEntries(*this);
+		auto &other_entries = StructVector::GetEntries(other);
+		D_ASSERT(entries.size() == other_entries.size());
+		for (idx_t i = 0; i < entries.size(); i++) {
+			entries[i]->SliceInPlace(*other_entries[i], offset, end);
+		}
+		data = other.data;
+	} else {
+		data = other.data + GetTypeIdSize(internal_type) * offset;
+	}
+
+	//	Avoid reallocating the validity mask.
+	AssignSharedPointer(buffer, other.buffer);
+	AssignSharedPointer(auxiliary, other.auxiliary);
+	if (other.validity.AllValid() || !offset) {
+		validity = other.validity;
+	} else {
+		//	Need a validity mask. Make sure it is not the source's.
+		if (validity.AllValid() || validity.GetData() == other.validity.GetData()) {
+			validity.Initialize(end - offset);
+		}
+		validity.SliceInPlace(other.validity, 0, offset, end - offset);
+	}
+}
+
 void Vector::Slice(Vector &other, idx_t offset, idx_t end) {
 	if (other.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		Reference(other);
