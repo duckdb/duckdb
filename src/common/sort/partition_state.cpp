@@ -87,7 +87,7 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
                                                    const vector<unique_ptr<BaseStatistics>> &partition_stats,
                                                    idx_t estimated_cardinality)
     : context(context), buffer_manager(BufferManager::GetBufferManager(context)), allocator(Allocator::Get(context)),
-      payload_types(payload_types), memory_per_thread(0), count(0) {
+      fixed_bits(0), payload_types(payload_types), memory_per_thread(0), count(0) {
 
 	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
 
@@ -102,9 +102,19 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
 	}
 }
 
+void PartitionGlobalSinkState::SyncPartitioning(const PartitionGlobalSinkState &other) {
+	fixed_bits = other.grouping_data ? other.grouping_data->GetRadixBits() : 0;
+
+	const auto old_bits = grouping_data ? grouping_data->GetRadixBits() : 0;
+	if (fixed_bits != old_bits) {
+		const auto hash_col_idx = payload_types.size();
+		grouping_data = make_uniq<RadixPartitionedColumnData>(context, grouping_types, fixed_bits, hash_col_idx);
+	}
+}
+
 void PartitionGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
 	//	Have we started to combine? Then just live with it.
-	if (grouping_data && !grouping_data->GetPartitions().empty()) {
+	if (fixed_bits || (grouping_data && !grouping_data->GetPartitions().empty())) {
 		return;
 	}
 	//	Is the average partition size too large?
@@ -186,9 +196,7 @@ void PartitionGlobalSinkState::CombineLocalPartition(GroupingPartition &local_pa
 	grouping_data->Combine(*local_partition);
 }
 
-void PartitionGlobalSinkState::BuildSortState(ColumnDataCollection &group_data, PartitionGlobalHashGroup &hash_group) {
-	auto &global_sort = *hash_group.global_sort;
-
+void PartitionGlobalSinkState::BuildSortState(ColumnDataCollection &group_data, GlobalSortState &global_sort) const {
 	//	 Set up the sort expression computation.
 	vector<LogicalType> sort_types;
 	ExpressionExecutor executor(context);
@@ -234,6 +242,10 @@ void PartitionGlobalSinkState::BuildSortState(ColumnDataCollection &group_data, 
 	}
 
 	global_sort.AddLocalState(local_sort);
+}
+
+void PartitionGlobalSinkState::BuildSortState(ColumnDataCollection &group_data, PartitionGlobalHashGroup &hash_group) {
+	BuildSortState(group_data, *hash_group.global_sort);
 
 	hash_group.count += group_data.Count();
 }
@@ -482,18 +494,29 @@ public:
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override;
 
 private:
+	struct ExecutorCallback : public PartitionGlobalMergeStates::Callback {
+		explicit ExecutorCallback(Executor &executor) : executor(executor) {
+		}
+
+		bool HasError() const override {
+			return executor.HasError();
+		}
+
+		Executor &executor;
+	};
+
 	shared_ptr<Event> event;
 	PartitionLocalMergeState local_state;
 	PartitionGlobalMergeStates &hash_groups;
 };
 
-TaskExecutionResult PartitionMergeTask::ExecuteTask(TaskExecutionMode mode) {
+bool PartitionGlobalMergeStates::ExecuteTask(PartitionLocalMergeState &local_state, Callback &callback) {
 	// Loop until all hash groups are done
 	size_t sorted = 0;
-	while (sorted < hash_groups.states.size()) {
+	while (sorted < states.size()) {
 		// First check if there is an unfinished task for this thread
-		if (executor.HasError()) {
-			return TaskExecutionResult::TASK_ERROR;
+		if (callback.HasError()) {
+			return false;
 		}
 		if (!local_state.TaskFinished()) {
 			local_state.ExecuteTask();
@@ -501,8 +524,8 @@ TaskExecutionResult PartitionMergeTask::ExecuteTask(TaskExecutionMode mode) {
 		}
 
 		// Thread is done with its assigned task, try to fetch new work
-		for (auto group = sorted; group < hash_groups.states.size(); ++group) {
-			auto &global_state = hash_groups.states[group];
+		for (auto group = sorted; group < states.size(); ++group) {
+			auto &global_state = states[group];
 			if (global_state->IsSorted()) {
 				// This hash group is done
 				// Update the high water mark of densely completed groups
@@ -541,6 +564,16 @@ TaskExecutionResult PartitionMergeTask::ExecuteTask(TaskExecutionMode mode) {
 			// The tasks were assigned to other threads while this thread waited for the lock
 			// Go to the next iteration to see if another hash group has a task
 		}
+	}
+
+	return true;
+}
+
+TaskExecutionResult PartitionMergeTask::ExecuteTask(TaskExecutionMode mode) {
+	ExecutorCallback callback(executor);
+
+	if (!hash_groups.ExecuteTask(local_state, callback)) {
+		return TaskExecutionResult::TASK_ERROR;
 	}
 
 	event->FinishTask();

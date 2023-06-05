@@ -2740,10 +2740,9 @@ indirection_expr:		'?'
 				{
 					$$ = $2;
 				}
-			| '{' dict_arguments_opt_comma '}'
+			| struct_expr
 				{
-					PGFuncCall *f = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
-					$$ = (PGNode *) f;
+					$$ = $1;
 				}
 			| MAP '{' opt_map_arguments_opt_comma '}'
 				{
@@ -2767,6 +2766,17 @@ indirection_expr:		'?'
 					$$ = $1;
 				}
 		;
+
+
+
+struct_expr:		'{' dict_arguments_opt_comma '}'
+				{
+					PGFuncCall *f = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
+					$$ = (PGNode *) f;
+				}
+		;
+
+
 
 func_application:       func_name '(' ')'
 				{

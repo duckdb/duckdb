@@ -649,10 +649,11 @@ end
 # execute background tasks in a loop, until task execution is finished
 function execute_tasks(state::duckdb_task_state, con::Connection)
     while !duckdb_task_state_is_finished(state)
-        GC.safepoint()
         duckdb_execute_n_tasks_state(state, 1)
         if duckdb_execution_is_finished(con.handle)
             break
+            Base.yield()
+            GC.safepoint()
         end
     end
     return
@@ -704,6 +705,7 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
     if Threads.nthreads() != 1
         # When we have additional worker threads, don't execute using the main thread
         while duckdb_execution_is_finished(stmt.con.handle) == false
+            Base.yield()
             GC.safepoint()
         end
     else
