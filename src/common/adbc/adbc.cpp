@@ -51,7 +51,6 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 	return ADBC_STATUS_OK;
 }
 
-
 namespace duckdb_adbc {
 
 struct DuckDBAdbcStatementWrapper {
