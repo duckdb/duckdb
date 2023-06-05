@@ -57,3 +57,8 @@ SELECT * FROM repeat(INTERVAL '30 days', 2)
 ----
 30 days
 30 days
+
+statement error
+SELECT * FROM repeat(INTERVAL '30 days', NULL)
+----
+Binder Error: Repeat second parameter cannot be NULL
