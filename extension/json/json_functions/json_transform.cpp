@@ -702,15 +702,30 @@ bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result,
 	bool success = true;
 
 	auto &validity = FlatVector::Validity(result);
+
+	auto set_error = [&](idx_t i, const string &message) {
+		validity.SetInvalid(i);
+		result.SetValue(i, Value(nullptr));
+		if (success && options.strict_cast) {
+			options.error_message = message;
+			options.object_index = i;
+			success = false;
+		}
+	};
+
 	for (idx_t i = 0; i < count; i++) {
-		if (!yyjson_is_obj(vals[i])) {
-			if (options.error_missing_key) {
-				throw InvalidInputException("Expected an object representing a union");
-			} else {
-				validity.SetInvalid(i);
-				result.SetValue(i, Value(nullptr));
-				continue;
-			}
+		const auto &obj = vals[i];
+
+		if (!obj || unsafe_yyjson_is_null(vals[i])) {
+			validity.SetInvalid(i);
+			result.SetValue(i, Value(nullptr));
+			continue;
+		}
+
+		if (!unsafe_yyjson_is_obj(obj)) {
+			set_error(i,
+			          StringUtil::Format("Expected an object representing a union, got %s", yyjson_get_type_desc(obj)));
+			continue;
 		}
 
 		yyjson_val *key, *val;
@@ -718,9 +733,7 @@ bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result,
 		yyjson_obj_iter_init(vals[i], &iter);
 		key = yyjson_obj_iter_next(&iter);
 		if (key == nullptr) {
-			// empty object?
-			validity.SetInvalid(i);
-			result.SetValue(i, Value(nullptr));
+			set_error(i, "Found empty object instead of union");
 			continue;
 		}
 
@@ -728,7 +741,9 @@ bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result,
 
 		auto tag = std::find(names.begin(), names.end(), unsafe_yyjson_get_str(key));
 		if (tag == names.end()) {
-			throw InvalidInputException("Found object containing unknown key instead of union");
+			set_error(i, StringUtil::Format("Found object containing unknown key instead of union: %s",
+			                                unsafe_yyjson_get_str(key)));
+			continue;
 		}
 
 		idx_t actualtag = tag - names.begin();
