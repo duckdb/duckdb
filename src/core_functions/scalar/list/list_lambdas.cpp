@@ -11,6 +11,12 @@
 
 namespace duckdb {
 
+static unique_ptr<FunctionData> ListLambdaBindFailure(ScalarFunction &bound_function) {
+	bound_function.arguments[0] = LogicalType::SQLNULL;
+	bound_function.return_type = LogicalType::SQLNULL;
+	return make_uniq<VariableReturnBindData>(LogicalType::SQLNULL);
+}
+
 struct ListLambdaBindData : public FunctionData {
 	ListLambdaBindData(const LogicalType &stype_p, unique_ptr<Expression> lambda_expr);
 	~ListLambdaBindData() override;
@@ -22,11 +28,24 @@ public:
 	bool Equals(const FunctionData &other_p) const override;
 	unique_ptr<FunctionData> Copy() const override;
 	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
-		throw NotImplementedException("FIXME: list lambda serialize");
+		auto bind_data = dynamic_cast<const ListLambdaBindData *>(bind_data_p);
+		if (!bind_data) {
+			writer.WriteField<bool>(false);
+		} else {
+			writer.WriteField<bool>(true);
+			writer.WriteSerializable(bind_data->stype);
+			writer.WriteSerializable(*bind_data->lambda_expr);
+		}
 	}
 	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
 	                                            ScalarFunction &bound_function) {
-		throw NotImplementedException("FIXME: list lambda deserialize");
+		if (reader.ReadRequired<bool>()) {
+			auto s_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+			auto expr = reader.ReadRequiredSerializable<Expression>(state);
+			return make_uniq<ListLambdaBindData>(s_type, std::move(expr));
+		} else {
+			return ListLambdaBindFailure(bound_function);
+		}
 	}
 };
 
@@ -328,9 +347,7 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 	}
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
-		bound_function.return_type = LogicalType::SQLNULL;
-		return make_uniq<VariableReturnBindData>(bound_function.return_type);
+		return ListLambdaBindFailure(bound_function);
 	}
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
