@@ -369,6 +369,7 @@ void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
 }
 
 void SingleFileBlockManager::Truncate() {
+	BlockManager::Truncate();
 	idx_t blocks_to_truncate = 0;
 	// reverse iterate over the free-list
 	for (auto entry = free_list.rbegin(); entry != free_list.rend(); entry++) {
