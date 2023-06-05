@@ -1,7 +1,9 @@
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
@@ -529,11 +531,17 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 		bounds.window_start = bounds.peer_start;
 		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS: {
-		bounds.window_start = (int64_t)row_idx - boundary_start.GetCell<int64_t>(expr_idx);
+		if (!TrySubtractOperator::Operation(int64_t(row_idx), boundary_start.GetCell<int64_t>(expr_idx),
+		                                    bounds.window_start)) {
+			throw OutOfRangeException("Overflow computing ROWS PRECEDING start");
+		}
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_ROWS: {
-		bounds.window_start = row_idx + boundary_start.GetCell<int64_t>(expr_idx);
+		if (!TryAddOperator::Operation(int64_t(row_idx), boundary_start.GetCell<int64_t>(expr_idx),
+		                               bounds.window_start)) {
+			throw OutOfRangeException("Overflow computing ROWS FOLLOWING start");
+		}
 		break;
 	}
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {
@@ -569,10 +577,16 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 		bounds.window_end = bounds.partition_end;
 		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS:
-		bounds.window_end = (int64_t)row_idx - boundary_end.GetCell<int64_t>(expr_idx) + 1;
+		if (!TrySubtractOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(expr_idx),
+		                                    bounds.window_end)) {
+			throw OutOfRangeException("Overflow computing ROWS PRECEDING end");
+		}
 		break;
 	case WindowBoundary::EXPR_FOLLOWING_ROWS:
-		bounds.window_end = row_idx + boundary_end.GetCell<int64_t>(expr_idx) + 1;
+		if (!TryAddOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(expr_idx),
+		                               bounds.window_end)) {
+			throw OutOfRangeException("Overflow computing ROWS FOLLOWING end");
+		}
 		break;
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {
 		if (boundary_end.CellIsNull(expr_idx)) {
