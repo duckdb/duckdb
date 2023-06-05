@@ -29,6 +29,30 @@ using duckdb_parquet::format::PageType;
 using ParquetRowGroup = duckdb_parquet::format::RowGroup;
 using duckdb_parquet::format::Type;
 
+ChildFieldIDs::ChildFieldIDs() {
+	ids = make_uniq<case_insensitive_map_t<FieldID>>();
+}
+
+ChildFieldIDs ChildFieldIDs::Copy() const {
+	ChildFieldIDs result;
+	for (const auto &id : *ids) {
+		result.ids->emplace(id.first, id.second.Copy());
+	}
+	return result;
+}
+
+FieldID::FieldID() : set(false) {
+}
+
+FieldID::FieldID(int32_t field_id_p) : set(true), field_id(field_id_p) {
+}
+
+FieldID FieldID::Copy() const {
+	auto result = set ? FieldID(field_id) : FieldID();
+	result.child_field_ids = child_field_ids.Copy();
+	return result;
+}
+
 class MyTransport : public TTransport {
 public:
 	explicit MyTransport(Serializer &serializer) : serializer(serializer) {
@@ -226,8 +250,9 @@ void VerifyUniqueNames(const vector<string> &names) {
 }
 
 ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalType> types_p, vector<string> names_p,
-                             CompressionCodec::type codec)
-    : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec) {
+                             CompressionCodec::type codec, ChildFieldIDs field_ids_p)
+    : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec),
+      field_ids(std::move(field_ids_p)) {
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
 	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
@@ -257,7 +282,7 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
 	vector<string> schema_path;
 	for (idx_t i = 0; i < sql_types.size(); i++) {
 		column_writers.push_back(ColumnWriter::CreateWriterRecursive(file_meta_data.schema, *this, sql_types[i],
-		                                                             unique_names[i], schema_path));
+		                                                             unique_names[i], schema_path, &field_ids));
 	}
 }
 

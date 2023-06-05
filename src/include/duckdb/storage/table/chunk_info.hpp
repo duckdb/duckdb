@@ -41,6 +41,7 @@ public:
 	//! Returns whether or not a single row in the ChunkInfo should be used or not for the given transaction
 	virtual bool Fetch(TransactionData transaction, row_t row) = 0;
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
+	virtual idx_t GetCommittedDeletedCount(idx_t max_count) = 0;
 
 	virtual void Serialize(Serializer &serialize) = 0;
 	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
@@ -79,6 +80,7 @@ public:
 	                            SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
+	idx_t GetCommittedDeletedCount(idx_t max_count) override;
 
 	void Serialize(Serializer &serialize) override;
 	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
@@ -113,6 +115,7 @@ public:
 	                            SelectionVector &sel_vector, idx_t max_count) override;
 	bool Fetch(TransactionData transaction, row_t row) override;
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
+	idx_t GetCommittedDeletedCount(idx_t max_count) override;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
 
