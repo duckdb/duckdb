@@ -80,9 +80,6 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 		if (options.rejects_table_name.empty()) {
 			throw BinderException("REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name");
 		}
-		if (options.rejects_limit < 0) {
-			throw BinderException("Unsupported parameter for REJECTS_LIMIT: cannot be negative");
-		}
 	}
 }
 
