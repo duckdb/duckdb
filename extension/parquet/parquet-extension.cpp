@@ -665,6 +665,28 @@ unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ExecutionContext &cont
 	return make_uniq<ParquetWriteLocalState>(context.client, bind_data.sql_types);
 }
 
+// LCOV_EXCL_START
+static void ParquetCopySerialize(FieldWriter &writer, const FunctionData &bind_data_p, const CopyFunction &function) {
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
+	writer.WriteRegularSerializableList<LogicalType>(bind_data.sql_types);
+	writer.WriteList<string>(bind_data.column_names);
+	writer.WriteField<duckdb_parquet::format::CompressionCodec::type>(bind_data.codec);
+	writer.WriteField<idx_t>(bind_data.row_group_size);
+}
+
+static unique_ptr<FunctionData> ParquetCopyDeserialize(ClientContext &context, FieldReader &reader,
+                                                       CopyFunction &function) {
+	unique_ptr<ParquetWriteBindData> data = make_uniq<ParquetWriteBindData>();
+
+	data->sql_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	data->column_names = reader.ReadRequiredList<string>();
+	data->codec = reader.ReadRequired<duckdb_parquet::format::CompressionCodec::type>();
+	data->row_group_size = reader.ReadRequired<idx_t>();
+
+	return std::move(data);
+}
+// LCOV_EXCL_STOP
+
 //===--------------------------------------------------------------------===//
 // Execution Mode
 //===--------------------------------------------------------------------===//
@@ -764,6 +786,8 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.prepare_batch = ParquetWritePrepareBatch;
 	function.flush_batch = ParquetWriteFlushBatch;
 	function.desired_batch_size = ParquetWriteDesiredBatchSize;
+	function.serialize = ParquetCopySerialize;
+	function.deserialize = ParquetCopyDeserialize;
 
 	function.extension = "parquet";
 	ExtensionUtil::RegisterFunction(db_instance, function);

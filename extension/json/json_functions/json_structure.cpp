@@ -150,7 +150,8 @@ void JSONStructureNode::RefineCandidateTypesArray(yyjson_val *vals[], idx_t coun
 	}
 
 	idx_t offset = 0;
-	auto child_vals = (yyjson_val **)allocator.AllocateAligned(total_list_size * sizeof(yyjson_val *));
+	auto child_vals =
+	    reinterpret_cast<yyjson_val **>(allocator.AllocateAligned(total_list_size * sizeof(yyjson_val *)));
 
 	size_t idx, max;
 	yyjson_val *child_val;
@@ -173,11 +174,12 @@ void JSONStructureNode::RefineCandidateTypesObject(yyjson_val *vals[], idx_t cou
 	vector<yyjson_val **> child_vals;
 	child_vals.reserve(child_count);
 	for (idx_t child_idx = 0; child_idx < child_count; child_idx++) {
-		child_vals.emplace_back((yyjson_val **)allocator.AllocateAligned(count * sizeof(yyjson_val *)));
+		child_vals.emplace_back(
+		    reinterpret_cast<yyjson_val **>(allocator.AllocateAligned(count * sizeof(yyjson_val *))));
 	}
 
 	idx_t found_key_count;
-	auto found_keys = (bool *)allocator.AllocateAligned(sizeof(bool) * child_count);
+	auto found_keys = reinterpret_cast<bool *>(allocator.AllocateAligned(sizeof(bool) * child_count));
 
 	const auto &key_map = desc.key_map;
 	size_t idx, max;

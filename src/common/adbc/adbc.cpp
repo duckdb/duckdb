@@ -45,10 +45,20 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 	driver->ConnectionReadPartition = duckdb_adbc::ConnectionReadPartition;
 	driver->StatementExecutePartitions = duckdb_adbc::StatementExecutePartitions;
 	driver->ConnectionGetTableSchema = duckdb_adbc::ConnectionGetTableSchema;
+	driver->StatementSetSubstraitPlan = duckdb_adbc::StatementSetSubstraitPlan;
+
 	return ADBC_STATUS_OK;
 }
 
 namespace duckdb_adbc {
+
+struct DuckDBAdbcStatementWrapper {
+	::duckdb_connection connection;
+	::duckdb_arrow result;
+	::duckdb_prepared_statement statement;
+	char *ingestion_table_name;
+	ArrowArrayStream *ingestion_stream;
+};
 static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
                                     struct AdbcError *error);
 AdbcStatusCode SetErrorMaybe(const void *result, AdbcError *error, const std::string &error_message) {
@@ -111,6 +121,31 @@ AdbcStatusCode DatabaseNew(struct AdbcDatabase *database, struct AdbcError *erro
 	auto res = duckdb_create_config(&wrapper->config);
 	return CheckResult(res, error, "Failed to allocate");
 }
+
+AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement* statement,
+                                               const uint8_t* plan, size_t length,
+                                               struct AdbcError* error) {
+	if (!statement) {
+		SetError(error, "Statement is not set");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (!plan) {
+		SetError(error, "Substrait Plan is not set");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (length == 0){
+		SetError(error, "Can't execute plan with size = 0");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	auto wrapper = reinterpret_cast<DuckDBAdbcStatementWrapper*>(statement->private_data);
+	auto plan_str = std::string(reinterpret_cast<const char*>(plan), length);
+	auto query = "CALL from_substrait('" + plan_str + "'::BLOB)";
+	auto res = duckdb_prepare(wrapper->connection, query.c_str(), &wrapper->statement);
+	auto error_msg = duckdb_prepare_error(wrapper->statement);
+	return CheckResult(res, error, error_msg);
+
+}
+
 
 AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key, const char *value,
                                  struct AdbcError *error) {
@@ -440,14 +475,6 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, stru
 	}
 	return ADBC_STATUS_OK;
 }
-
-struct DuckDBAdbcStatementWrapper {
-	::duckdb_connection connection;
-	::duckdb_arrow result;
-	::duckdb_prepared_statement statement;
-	char *ingestion_table_name;
-	ArrowArrayStream *ingestion_stream;
-};
 
 AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatement *statement,
                             struct AdbcError *error) {
