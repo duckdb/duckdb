@@ -585,7 +585,6 @@ parser/transform/helpers/transform_typename.cpp	14
 parser/transform/statement/transform_alter_sequence.cpp	2
 parser/transform/statement/transform_alter_table.cpp	6
 parser/transform/statement/transform_copy.cpp	2
-parser/transform/statement/transform_create_database.cpp	2
 parser/transform/statement/transform_create_function.cpp	4
 parser/transform/statement/transform_create_index.cpp	2
 parser/transform/statement/transform_create_schema.cpp	4
