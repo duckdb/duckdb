@@ -728,16 +728,14 @@ bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result,
 			continue;
 		}
 
-		yyjson_val *key, *val;
-		yyjson_obj_iter iter;
-		yyjson_obj_iter_init(vals[i], &iter);
-		key = yyjson_obj_iter_next(&iter);
-		if (key == nullptr) {
-			set_error(i, "Found empty object instead of union");
+		auto len = unsafe_yyjson_get_len(obj);
+		if (len == 0) {
+			set_error(i, "Found empty object, instead of union");
 			continue;
 		}
 
-		val = yyjson_obj_iter_get_val(key);
+		auto key = unsafe_yyjson_get_first(obj);
+		auto val = yyjson_obj_iter_get_val(key);
 
 		auto tag = std::find(names.begin(), names.end(), unsafe_yyjson_get_str(key));
 		if (tag == names.end()) {
