@@ -152,9 +152,7 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
                                            struct AdbcError *error) {
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
-AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement *, const uint8_t *, size_t, struct AdbcError *error) {
-	return ADBC_STATUS_NOT_IMPLEMENTED;
-}
+
 
 /// Temporary state while the database is being configured.
 struct TempDatabase {
