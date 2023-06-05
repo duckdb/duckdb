@@ -399,7 +399,8 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *in
 	size_t length = info_codes ? info_codes_length : (size_t)AdbcInfoCode::UNRECOGNIZED;
 
 	if (length == 0) {
-		// Return empty result
+		// FIXME: Maybe just an empty result set is better?
+		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 
 	std::string q = R"EOF(

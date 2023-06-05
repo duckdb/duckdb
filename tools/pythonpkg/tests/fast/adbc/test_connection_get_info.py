@@ -17,7 +17,7 @@ class TestADBCConnectionGetInfo(object):
             res = cursor.fetchall()
             assert res == [(42,)]
 
-    def test_connection_get_info(self):
+    def test_connection_get_info_all(self):
         con = adbc_driver_duckdb.connect()
         adbc_con = con.adbc_connection
         res = adbc_con.get_info()
@@ -37,3 +37,8 @@ class TestADBCConnectionGetInfo(object):
         chunk = values.chunk(0)
         string_values = chunk.field(0)
         assert string_values == expected_result
+
+    # The code for 'get_info' will never call the ConnectionGetInfo function with an empty info_codes list,
+    # so we cant test that here
+    def test_connection_get_info_empty(self):
+        pass
