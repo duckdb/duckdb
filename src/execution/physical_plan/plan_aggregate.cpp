@@ -23,6 +23,11 @@ static uint32_t RequiredBitsForValue(uint32_t n) {
 	return required_bits;
 }
 
+template <class T>
+hugeint_t GetRangeHugeint(const BaseStatistics &nstats) {
+	return Hugeint::Convert(NumericStats::GetMax<T>(nstats)) - Hugeint::Convert(NumericStats::GetMin<T>(nstats));
+}
+
 static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate &op, vector<idx_t> &bits_per_group) {
 	if (op.grouping_sets.size() > 1 || !op.grouping_functions.empty()) {
 		return false;
@@ -86,36 +91,28 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		hugeint_t range_h;
 		switch (group_type.InternalType()) {
 		case PhysicalType::INT8:
-			range_h = Hugeint::Convert(NumericStats::GetMax<int8_t>(nstats)) -
-			          Hugeint::Convert(NumericStats::GetMin<int8_t>(nstats));
+			range_h = GetRangeHugeint<int8_t>(nstats);
 			break;
 		case PhysicalType::INT16:
-			range_h = Hugeint::Convert(NumericStats::GetMax<int16_t>(nstats)) -
-			          Hugeint::Convert(NumericStats::GetMin<int16_t>(nstats));
+			range_h = GetRangeHugeint<int16_t>(nstats);
 			break;
 		case PhysicalType::INT32:
-			range_h = Hugeint::Convert(NumericStats::GetMax<int32_t>(nstats)) -
-			          Hugeint::Convert(NumericStats::GetMin<int32_t>(nstats));
+			range_h = GetRangeHugeint<int32_t>(nstats);
 			break;
 		case PhysicalType::INT64:
-			range_h = Hugeint::Convert(NumericStats::GetMax<int64_t>(nstats)) -
-			          Hugeint::Convert(NumericStats::GetMin<int64_t>(nstats));
+			range_h = GetRangeHugeint<int64_t>(nstats);
 			break;
 		case PhysicalType::UINT8:
-			range_h = Hugeint::Convert(NumericStats::GetMax<uint8_t>(nstats)) -
-			          Hugeint::Convert(NumericStats::GetMin<uint8_t>(nstats));
+			range_h = GetRangeHugeint<uint8_t>(nstats);
 			break;
 		case PhysicalType::UINT16:
-			range_h = Hugeint::Convert(NumericStats::GetMax<uint16_t>(nstats)) -
-			          Hugeint::Convert(NumericStats::GetMin<uint16_t>(nstats));
+			range_h = GetRangeHugeint<uint16_t>(nstats);
 			break;
 		case PhysicalType::UINT32:
-			range_h = Hugeint::Convert(NumericStats::GetMax<uint32_t>(nstats)) -
-			          Hugeint::Convert(NumericStats::GetMin<uint32_t>(nstats));
+			range_h = GetRangeHugeint<uint32_t>(nstats);
 			break;
 		case PhysicalType::UINT64:
-			range_h = Hugeint::Convert(NumericStats::GetMax<uint64_t>(nstats)) -
-			          Hugeint::Convert(NumericStats::GetMin<uint64_t>(nstats));
+			range_h = GetRangeHugeint<uint64_t>(nstats);
 			break;
 		default:
 			throw InternalException("Unsupported type for perfect hash (should be caught before)");

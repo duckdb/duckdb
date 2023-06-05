@@ -1,4 +1,4 @@
-# name: test/sql/join/external/simple_external_join.test_slow
+# name: test/sql/join/external/simple_external_join.test_coverage
 # description: Test simple external join
 # group: [external]
 
@@ -18,10 +18,23 @@ insert into t1 select concat(range::VARCHAR, repeat('0', 50)) i from range(10000
 statement ok
 insert into t2 select concat(range::VARCHAR, repeat('0', 50)) j from range(90000, 500000) order by random()
 
-# tight memory settings for the external joins
+# we want tight memory settings for the external joins
 statement ok
 pragma verify_parallelism
 
+# with 1 thread we can do a tighter memory limit
+statement ok
+pragma threads=1
+
+statement ok
+pragma memory_limit='25mb'
+
+query I
+select count(*) from t1, t2 where i = j
+----
+10000
+
+# now with more threads and a slightly higher limit
 statement ok
 pragma threads=4
 

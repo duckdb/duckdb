@@ -14,7 +14,6 @@ namespace duckdb {
 
 struct ReplacementBinding {
 public:
-	ReplacementBinding();
 	ReplacementBinding(ColumnBinding old_binding, ColumnBinding new_binding);
 	ReplacementBinding(ColumnBinding old_binding, ColumnBinding new_binding, LogicalType new_type);
 

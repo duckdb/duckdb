@@ -1,4 +1,4 @@
-# name: test/optimizer/compressed_materialization.test_slow
+# name: test/optimizer/compressed_materialization.test_coverage
 # description: Compressed materialization test
 # group: [optimizer]
 

@@ -4,9 +4,6 @@
 
 namespace duckdb {
 
-ReplacementBinding::ReplacementBinding() : replace_type(false) {
-}
-
 ReplacementBinding::ReplacementBinding(ColumnBinding old_binding, ColumnBinding new_binding)
     : old_binding(old_binding), new_binding(new_binding), replace_type(false) {
 }

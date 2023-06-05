@@ -139,11 +139,6 @@ inline string_t StringDecompress(const uint8_t &input, ArenaAllocator &allocator
 	return MiniStringDecompress<uint8_t>(input, allocator);
 }
 
-template <>
-inline string_t StringDecompress(const uint16_t &input, ArenaAllocator &allocator) {
-	return MiniStringDecompress<uint16_t>(input, allocator);
-}
-
 template <class INPUT_TYPE>
 static void StringDecompressFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &allocator = ExecuteFunctionState::GetFunctionState(state)->Cast<StringDecompressLocalState>().allocator;

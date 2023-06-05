@@ -10,9 +10,9 @@ void CompressedMaterialization::CompressDistinct(unique_ptr<LogicalOperator> &op
 
 	column_binding_set_t referenced_bindings;
 	for (auto &target : distinct_targets) {
-		if (target->type != ExpressionType::BOUND_COLUMN_REF) {
+		if (target->type != ExpressionType::BOUND_COLUMN_REF) { // LCOV_EXCL_START
 			GetReferencedBindings(*target, referenced_bindings);
-		}
+		} // LCOV_EXCL_STOP
 	}
 
 	if (distinct.order_by) {

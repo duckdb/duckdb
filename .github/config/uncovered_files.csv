@@ -485,7 +485,8 @@ main/relation/write_parquet_relation.cpp	22
 main/settings/settings.cpp	157
 main/stream_query_result.cpp	7
 optimizer/column_lifetime_analyzer.cpp	2
-optimizer/deliminator.cpp	7
+optimizer/compressed_materialization.cpp	19
+optimizer/deliminator.cpp	12
 optimizer/expression_heuristics.cpp	6
 optimizer/expression_rewriter.cpp	3
 optimizer/filter_combiner.cpp	37

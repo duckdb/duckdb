@@ -144,11 +144,8 @@ bool CompressedMaterialization::TryCompressChild(CompressedMaterializationInfo &
 			compressed = true;
 		} else { // We did not compress, just push a colref
 			auto colref_expr = make_uniq<BoundColumnRefExpression>(child_type, child_binding);
-			unique_ptr<BaseStatistics> colref_stats;
 			auto it = statistics_map.find(colref_expr->binding);
-			if (it != statistics_map.end()) {
-				colref_stats = it->second->ToUnique();
-			}
+			unique_ptr<BaseStatistics> colref_stats = it != statistics_map.end() ? it->second->ToUnique() : nullptr;
 			compress_exprs.emplace_back(make_uniq<CompressExpression>(std::move(colref_expr), std::move(colref_stats)));
 		}
 		UpdateBindingInfo(info, child_binding, compressed);
