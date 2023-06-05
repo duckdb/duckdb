@@ -17,7 +17,7 @@ false
 statement error
 SELECT * FROM read_ndjson('data/json/malformed/union/bad_key.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})
 ----
-Found object containing unknown key instead of union
+Found object containing unknown key, instead of union
 
 statement error
 SELECT * FROM read_ndjson('data/json/malformed/union/empty_object.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})

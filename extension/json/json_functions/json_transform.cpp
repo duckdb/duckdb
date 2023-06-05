@@ -739,7 +739,7 @@ bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result,
 
 		auto tag = std::find(names.begin(), names.end(), unsafe_yyjson_get_str(key));
 		if (tag == names.end()) {
-			set_error(i, StringUtil::Format("Found object containing unknown key instead of union: %s",
+			set_error(i, StringUtil::Format("Found object containing unknown key, instead of union: %s",
 			                                unsafe_yyjson_get_str(key)));
 			continue;
 		}
