@@ -287,7 +287,8 @@ setup(
     data_files = data_files,
     packages=[
         'pyduckdb',
-        'duckdb-stubs'
+        'duckdb-stubs',
+        'adbc_driver_duckdb'
     ],
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'pybind11>=2.6.0'],
