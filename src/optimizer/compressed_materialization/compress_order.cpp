@@ -20,18 +20,6 @@ void CompressedMaterialization::CompressOrder(unique_ptr<LogicalOperator> &op) {
 
 		// Mark the bindings referenced by the non-colref expression so they won't be modified
 		GetReferencedBindings(order_expression, referenced_bindings);
-
-		// The non-colref expression won't be compressed generically, so try to compress it here
-		if (!bound_order.stats) {
-			continue; // Can't compress without stats
-		}
-
-		// Try to compress, if successful, replace the expression
-		auto compress_expr = GetCompressExpression(order_expression.Copy(), *bound_order.stats);
-		if (compress_expr) {
-			bound_order.expression = std::move(compress_expr->expression);
-			bound_order.stats = std::move(compress_expr->stats);
-		}
 	}
 
 	// Create info for compression

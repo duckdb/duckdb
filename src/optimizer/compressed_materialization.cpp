@@ -310,6 +310,9 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetCompressExpression(
 unique_ptr<CompressExpression> CompressedMaterialization::GetCompressExpression(unique_ptr<Expression> input,
                                                                                 const BaseStatistics &stats) {
 	const auto &type = input->return_type;
+	if (type != stats.GetType()) { // LCOV_EXCL_START
+		return nullptr;
+	} // LCOV_EXCL_STOP
 	if (type.IsIntegral()) {
 		return GetIntegralCompress(std::move(input), stats);
 	} else if (type.id() == LogicalTypeId::VARCHAR) {

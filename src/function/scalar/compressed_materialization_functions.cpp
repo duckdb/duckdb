@@ -11,11 +11,13 @@ const vector<LogicalType> CompressedMaterializationFunctions::StringTypes() {
 	        LogicalType::HUGEINT};
 }
 
+// LCOV_EXCL_START
 unique_ptr<FunctionData> CompressedMaterializationFunctions::Bind(ClientContext &context,
                                                                   ScalarFunction &bound_function,
                                                                   vector<unique_ptr<Expression>> &arguments) {
 	throw BinderException("Compressed materialization functions are for internal use only!");
 }
+// LCOV_EXCL_STOP
 
 void BuiltinFunctions::RegisterCompressedMaterializationFunctions() {
 	Register<CMIntegralCompressFun>();

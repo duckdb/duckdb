@@ -17,10 +17,10 @@ void CompressedMaterialization::CompressDistinct(unique_ptr<LogicalOperator> &op
 
 	if (distinct.order_by) {
 		for (auto &order : distinct.order_by->orders) {
-			if (order.expression->type != ExpressionType::BOUND_COLUMN_REF) {
+			if (order.expression->type != ExpressionType::BOUND_COLUMN_REF) { // LCOV_EXCL_START
 				GetReferencedBindings(*order.expression, referenced_bindings);
 			}
-		}
+		} // LCOV_EXCL_STOP
 	}
 
 	// Create info for compression

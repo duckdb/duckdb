@@ -179,7 +179,7 @@ execution/operator/join/outer_join_marker.cpp	3
 execution/operator/join/perfect_hash_join_executor.cpp	2
 execution/operator/join/physical_asof_join.cpp	38
 execution/operator/join/physical_blockwise_nl_join.cpp	2
-execution/operator/join/physical_hash_join.cpp	8
+execution/operator/join/physical_hash_join.cpp	9
 execution/operator/join/physical_iejoin.cpp	32
 execution/operator/join/physical_index_join.cpp	2
 execution/operator/join/physical_nested_loop_join.cpp	4
@@ -485,8 +485,7 @@ main/relation/write_parquet_relation.cpp	22
 main/settings/settings.cpp	157
 main/stream_query_result.cpp	7
 optimizer/column_lifetime_analyzer.cpp	2
-optimizer/compressed_materialization.cpp	19
-optimizer/deliminator.cpp	12
+optimizer/deliminator.cpp	7
 optimizer/expression_heuristics.cpp	6
 optimizer/expression_rewriter.cpp	3
 optimizer/filter_combiner.cpp	37

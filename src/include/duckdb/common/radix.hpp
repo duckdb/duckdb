@@ -123,19 +123,19 @@ inline void Radix::EncodeData(data_ptr_t dataptr, int8_t value) {
 
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, int16_t value) {
-	Store<uint16_t>(BSWAP16(value), dataptr);
+	Store<uint16_t>(BSwap<uint16_t>(value), dataptr);
 	dataptr[0] = FlipSign(dataptr[0]);
 }
 
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, int32_t value) {
-	Store<uint32_t>(BSWAP32(value), dataptr);
+	Store<uint32_t>(BSwap<uint32_t>(value), dataptr);
 	dataptr[0] = FlipSign(dataptr[0]);
 }
 
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, int64_t value) {
-	Store<uint64_t>(BSWAP64(value), dataptr);
+	Store<uint64_t>(BSwap<uint64_t>(value), dataptr);
 	dataptr[0] = FlipSign(dataptr[0]);
 }
 
@@ -146,17 +146,17 @@ inline void Radix::EncodeData(data_ptr_t dataptr, uint8_t value) {
 
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, uint16_t value) {
-	Store<uint16_t>(BSWAP16(value), dataptr);
+	Store<uint16_t>(BSwap<uint16_t>(value), dataptr);
 }
 
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, uint32_t value) {
-	Store<uint32_t>(BSWAP32(value), dataptr);
+	Store<uint32_t>(BSwap<uint32_t>(value), dataptr);
 }
 
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, uint64_t value) {
-	Store<uint64_t>(BSWAP64(value), dataptr);
+	Store<uint64_t>(BSwap<uint64_t>(value), dataptr);
 }
 
 template <>
@@ -168,13 +168,13 @@ inline void Radix::EncodeData(data_ptr_t dataptr, hugeint_t value) {
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, float value) {
 	uint32_t converted_value = EncodeFloat(value);
-	Store<uint32_t>(BSWAP32(converted_value), dataptr);
+	Store<uint32_t>(BSwap<uint32_t>(converted_value), dataptr);
 }
 
 template <>
 inline void Radix::EncodeData(data_ptr_t dataptr, double value) {
 	uint64_t converted_value = EncodeDouble(value);
-	Store<uint64_t>(BSWAP64(converted_value), dataptr);
+	Store<uint64_t>(BSwap<uint64_t>(converted_value), dataptr);
 }
 
 template <>
