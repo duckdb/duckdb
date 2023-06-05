@@ -12,6 +12,8 @@
 #include "duckdb/main/connection.hpp"
 #endif
 
+#include "duckdb/common/adbc/single_batch_array_stream.hpp"
+
 #include <string.h>
 #include <stdlib.h>
 
@@ -33,7 +35,7 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 	driver->ConnectionGetTableTypes = duckdb_adbc::ConnectionGetTableTypes;
 	driver->StatementNew = duckdb_adbc::StatementNew;
 	driver->StatementRelease = duckdb_adbc::StatementRelease;
-	driver->StatementBind = duckdb::adbc::StatementBind;
+	driver->StatementBind = duckdb_adbc::StatementBind;
 	driver->StatementBindStream = duckdb_adbc::StatementBindStream;
 	driver->StatementExecuteQuery = duckdb_adbc::StatementExecuteQuery;
 	driver->StatementPrepare = duckdb_adbc::StatementPrepare;
@@ -618,7 +620,7 @@ AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatem
 	statement_wrapper->connection = (duckdb_connection)connection->private_data;
 	statement_wrapper->statement = nullptr;
 	statement_wrapper->result = nullptr;
-	statement_wrapper->ingestion_stream = nullptr;
+	statement_wrapper->ingestion_stream.release = nullptr;
 	statement_wrapper->ingestion_table_name = nullptr;
 	return ADBC_STATUS_OK;
 }
@@ -635,10 +637,9 @@ AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcErro
 			duckdb_destroy_arrow(&wrapper->result);
 			wrapper->result = nullptr;
 		}
-		if (wrapper->ingestion_stream) {
-			wrapper->ingestion_stream->release(wrapper->ingestion_stream);
-			wrapper->ingestion_stream->release = nullptr;
-			wrapper->ingestion_stream = nullptr;
+		if (wrapper->ingestion_stream.release) {
+			wrapper->ingestion_stream.release(&wrapper->ingestion_stream);
+			wrapper->ingestion_stream.release = nullptr;
 		}
 		if (wrapper->ingestion_table_name) {
 			free(wrapper->ingestion_table_name);
@@ -669,10 +670,10 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		*rows_affected = 0;
 	}
 
-	if (wrapper->ingestion_stream && wrapper->ingestion_table_name) {
+	if (wrapper->ingestion_stream.release && wrapper->ingestion_table_name) {
 		auto stream = wrapper->ingestion_stream;
-		wrapper->ingestion_stream = nullptr;
-		return Ingest(wrapper->connection, wrapper->ingestion_table_name, stream, error);
+		wrapper->ingestion_stream.release = nullptr;
+		return Ingest(wrapper->connection, wrapper->ingestion_table_name, &stream, error);
 	}
 
 	auto res = duckdb_execute_prepared_arrow(wrapper->statement, &wrapper->result);
@@ -742,8 +743,13 @@ AdbcStatusCode StatementBind(struct AdbcStatement *statement, struct ArrowArray 
 		return status;
 	}
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
-	return ADBC_STATUS_INVALID_DATA;
-	// wrapper->ingestion_stream = values;
+	struct ArrowArrayStream stream;
+	memset(&stream, 0, sizeof(struct ArrowArrayStream));
+	status = BatchToArrayStream(values, schemas, &stream, error);
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	return StatementBindStream(statement, &stream, error);
 }
 
 AdbcStatusCode StatementBindStream(struct AdbcStatement *statement, struct ArrowArrayStream *values,
@@ -757,7 +763,11 @@ AdbcStatusCode StatementBindStream(struct AdbcStatement *statement, struct Arrow
 		return status;
 	}
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
-	wrapper->ingestion_stream = values;
+	if (wrapper->ingestion_stream.release) {
+		// Release any resources currently held by the ingestion stream before we overwrite it
+		wrapper->ingestion_stream.release(&wrapper->ingestion_stream);
+	}
+	wrapper->ingestion_stream = *values;
 	return ADBC_STATUS_OK;
 }
 
