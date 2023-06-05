@@ -333,7 +333,7 @@ struct StandardValueCopy : public BaseValueCopy<T> {
 
 struct StringValueCopy : public BaseValueCopy<string_t> {
 	static string_t Operation(ColumnDataMetaData &meta_data, string_t input) {
-		return input.IsInlined() ? input : meta_data.segment.heap.AddBlob(input);
+		return input.IsInlined() ? input : meta_data.segment.heap->AddBlob(input);
 	}
 };
 
@@ -930,6 +930,7 @@ void ColumnDataCollection::Verify() {
 #endif
 }
 
+// LCOV_EXCL_START
 string ColumnDataCollection::ToString() const {
 	DataChunk chunk;
 	InitializeScanChunk(chunk);
@@ -950,6 +951,7 @@ string ColumnDataCollection::ToString() const {
 
 	return result;
 }
+// LCOV_EXCL_STOP
 
 void ColumnDataCollection::Print() const {
 	Printer::Print(ToString());
@@ -1028,6 +1030,18 @@ bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const 
 		error_message = string();
 	}
 	return true;
+}
+
+vector<shared_ptr<StringHeap>> ColumnDataCollection::GetHeapReferences() {
+	vector<shared_ptr<StringHeap>> result(segments.size(), nullptr);
+	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
+		result[segment_idx] = segments[segment_idx]->heap;
+	}
+	return result;
+}
+
+ColumnDataAllocatorType ColumnDataCollection::GetAllocatorType() const {
+	return allocator->GetType();
 }
 
 const vector<unique_ptr<ColumnDataCollectionSegment>> &ColumnDataCollection::GetSegments() const {
