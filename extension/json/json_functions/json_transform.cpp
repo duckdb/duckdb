@@ -746,14 +746,14 @@ bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result,
 			continue;
 		}
 
-		idx_t actualtag = tag - names.begin();
+		idx_t actual_tag = tag - names.begin();
 
-		Vector single(UnionType::GetMemberType(type, actualtag), 1);
+		Vector single(UnionType::GetMemberType(type, actual_tag), 1);
 		if (!JSONTransform::Transform(&val, alc, single, 1, options)) {
 			success = false;
 		}
 
-		result.SetValue(i, Value::UNION(fields, actualtag, single.GetValue(0)));
+		result.SetValue(i, Value::UNION(fields, actual_tag, single.GetValue(0)));
 	}
 
 	return success;
