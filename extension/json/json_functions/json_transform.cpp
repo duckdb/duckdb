@@ -729,7 +729,10 @@ bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result,
 		}
 
 		auto len = unsafe_yyjson_get_len(obj);
-		if (len == 0) {
+		if (len > 1) {
+			set_error(i, "Found object containing more than one key, instead of union");
+			continue;
+		} else if (len == 0) {
 			set_error(i, "Found empty object, instead of union");
 			continue;
 		}
