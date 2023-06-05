@@ -149,7 +149,6 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 
-
 /// Temporary state while the database is being configured.
 struct TempDatabase {
 	std::unordered_map<std::string, std::string> options;

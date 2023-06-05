@@ -122,9 +122,8 @@ AdbcStatusCode DatabaseNew(struct AdbcDatabase *database, struct AdbcError *erro
 	return CheckResult(res, error, "Failed to allocate");
 }
 
-AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement* statement,
-                                               const uint8_t* plan, size_t length,
-                                               struct AdbcError* error) {
+AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement *statement, const uint8_t *plan, size_t length,
+                                         struct AdbcError *error) {
 	if (!statement) {
 		SetError(error, "Statement is not set");
 		return ADBC_STATUS_INVALID_ARGUMENT;
@@ -133,19 +132,17 @@ AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement* statement,
 		SetError(error, "Substrait Plan is not set");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	if (length == 0){
+	if (length == 0) {
 		SetError(error, "Can't execute plan with size = 0");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	auto wrapper = reinterpret_cast<DuckDBAdbcStatementWrapper*>(statement->private_data);
-	auto plan_str = std::string(reinterpret_cast<const char*>(plan), length);
+	auto wrapper = reinterpret_cast<DuckDBAdbcStatementWrapper *>(statement->private_data);
+	auto plan_str = std::string(reinterpret_cast<const char *>(plan), length);
 	auto query = "CALL from_substrait('" + plan_str + "'::BLOB)";
 	auto res = duckdb_prepare(wrapper->connection, query.c_str(), &wrapper->statement);
 	auto error_msg = duckdb_prepare_error(wrapper->statement);
 	return CheckResult(res, error, error_msg);
-
 }
-
 
 AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key, const char *value,
                                  struct AdbcError *error) {
