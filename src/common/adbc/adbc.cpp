@@ -672,6 +672,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 
 	if (wrapper->ingestion_stream.release && wrapper->ingestion_table_name) {
 		auto stream = wrapper->ingestion_stream;
+		stream.release = nullptr;
 		wrapper->ingestion_stream.release = nullptr;
 		return Ingest(wrapper->connection, wrapper->ingestion_table_name, &stream, error);
 	}
