@@ -48,7 +48,9 @@ if(NOT CLANG_TIDY)
       ../../third_party/zstd/compress/zstd_fast.cpp
       ../../third_party/zstd/compress/zstd_lazy.cpp
       ../../third_party/zstd/compress/zstd_ldm.cpp
-      ../../third_party/zstd/compress/zstd_opt.cpp)
+      ../../third_party/zstd/compress/zstd_opt.cpp
+      ../../third_party/zstd/dict/divsufsort.cpp
+      ../../third_party/zstd/dict/zdict.cpp)
 endif()
 
 add_library(parquet_extension STATIC ${PARQUET_EXTENSION_FILES})
