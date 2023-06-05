@@ -48,7 +48,6 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 	return ADBC_STATUS_OK;
 }
 
-
 namespace duckdb_adbc {
 AdbcStatusCode SetErrorMaybe(const void *result, AdbcError *error, const std::string &error_message) {
 	if (!error) {
