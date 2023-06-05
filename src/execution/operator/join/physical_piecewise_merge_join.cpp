@@ -208,6 +208,7 @@ public:
 	idx_t right_position;
 	idx_t right_chunk_index;
 	idx_t right_base;
+	idx_t prev_left_index;
 
 	// Secondary predicate shared data
 	SelectionVector sel;
@@ -431,7 +432,8 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 	}
 }
 
-static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const ExpressionType comparison) {
+static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const ExpressionType comparison,
+                                    idx_t &prev_left_index) {
 	const auto cmp = MergeJoinComparisonValue(comparison);
 
 	// The sort parameters should all be the same
@@ -465,7 +467,10 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 
 	idx_t result_count = 0;
 	while (true) {
-		if (l.entry_idx < l.not_null) {
+		bool left_smaller = false;
+		if (l.entry_idx < prev_left_index) {
+			left_smaller = true;
+		} else if (l.entry_idx < l.not_null) {
 			int comp_res;
 			if (all_constant) {
 				comp_res = FastMemcmp(l_ptr, r_ptr, cmp_size);
@@ -474,21 +479,22 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 				rread.entry_idx = r.entry_idx;
 				comp_res = Comparators::CompareTuple(lread, rread, l_ptr, r_ptr, l.state.sort_layout, external);
 			}
+			left_smaller = comp_res <= cmp;
+		}
 
-			if (comp_res <= cmp) {
-				// left side smaller: found match
-				l.result.set_index(result_count, sel_t(l.entry_idx));
-				r.result.set_index(result_count, sel_t(r.entry_idx));
-				result_count++;
-				// move left side forward
-				l.entry_idx++;
-				l_ptr += entry_size;
-				if (result_count == STANDARD_VECTOR_SIZE) {
-					// out of space!
-					break;
-				}
-				continue;
+		if (left_smaller) {
+			// left side smaller: found match
+			l.result.set_index(result_count, sel_t(l.entry_idx));
+			r.result.set_index(result_count, sel_t(r.entry_idx));
+			result_count++;
+			// move left side forward
+			l.entry_idx++;
+			l_ptr += entry_size;
+			if (result_count == STANDARD_VECTOR_SIZE) {
+				// out of space!
+				break;
 			}
+			continue;
 		}
 		// right side smaller or equal, or left side exhausted: move
 		// right pointer forward reset left side to start
@@ -499,6 +505,7 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 		r_ptr += entry_size;
 
 		l_ptr = l_start;
+		prev_left_index = l.entry_idx;
 		l.entry_idx = 0;
 	}
 
@@ -521,6 +528,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			state.right_chunk_index = 0;
 			state.right_base = 0;
 			state.left_position = 0;
+			state.prev_left_index = 0;
 			state.right_position = 0;
 			state.first_fetch = false;
 			state.finished = false;
@@ -547,7 +555,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		BlockMergeInfo right_info(gstate.table->global_sort_state, state.right_chunk_index, state.right_position,
 		                          rhs_not_null);
 
-		idx_t result_count = MergeJoinComplexBlocks(left_info, right_info, conditions[0].comparison);
+		idx_t result_count =
+		    MergeJoinComplexBlocks(left_info, right_info, conditions[0].comparison, state.prev_left_index);
 		if (result_count == 0) {
 			// exhausted this chunk on the right side
 			// move to the next right chunk
