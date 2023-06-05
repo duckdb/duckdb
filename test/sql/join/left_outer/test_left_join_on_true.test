@@ -81,4 +81,44 @@ LEFT JOIN UNNEST(s) AS s1(s) ON FALSE
 ----
 Binder Error: Join condition for non-inner LATERAL JOIN must be a comparison between the left and right side
 
+# test non-lateral left joins
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1, 2), (2, 3), (3, 4)
+
+statement ok
+CREATE TABLE integers2(k INTEGER, l INTEGER)
+
+statement ok
+INSERT INTO integers2 VALUES (1, 10), (2, 20)
+
+query IIII
+SELECT * FROM integers LEFT OUTER JOIN integers2 ON TRUE AND integers.i=integers2.k AND TRUE ORDER BY i
+----
+1	2	1	10
+2	3	2	20
+3	4	NULL	NULL
+
+query IIII
+SELECT * FROM integers LEFT OUTER JOIN integers2 ON TRUE AND integers.i=integers2.k AND FALSE ORDER BY i
+----
+1	2	NULL	NULL
+2	3	NULL	NULL
+3	4	NULL	NULL
+
+# this is just a cross product
+
+query IIII
+SELECT * FROM integers LEFT OUTER JOIN integers2 ON TRUE ORDER BY i
+----
+1	2	1	10
+1	2	2	20
+2	3	1	10
+2	3	2	20
+3	4	1	10
+3	4	2	20
+
 
