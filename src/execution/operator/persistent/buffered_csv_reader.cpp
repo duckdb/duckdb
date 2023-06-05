@@ -406,6 +406,7 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 
 	idx_t best_consistent_rows = 0;
 	idx_t prev_padding_count = 0;
+	idx_t rows_read = 0;
 	for (auto quoterule : quoterule_candidates) {
 		const auto &quote_candidates = quote_candidates_map[static_cast<uint8_t>(quoterule)];
 		for (const auto &quote : quote_candidates) {
@@ -431,6 +432,9 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 					idx_t num_cols = sniffed_column_counts.empty() ? 0 : sniffed_column_counts[0];
 					idx_t padding_count = 0;
 					bool allow_padding = original_options.null_padding;
+					if (sniffed_column_counts.size() > rows_read){
+						rows_read = sniffed_column_counts.size();
+					}
 					for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
 						if (sniffed_column_counts[row] == num_cols) {
 							consistent_rows++;
@@ -490,6 +494,10 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 			}
 		}
 	}
+	// Up to this point we have our candidates, but we only checked one chunk size with them, let's eliminate them running on sample size
+	int64_t remaining_sample = original_options.sample_chunks - 1;
+//	bool still_have_results =
+//	int x = 0;
 }
 
 void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_candidates,
