@@ -387,8 +387,7 @@ rel_from_table <- function(con, table_name, schema_name="MAIN") {
 #' @noRd
 #' @examples
 #' con <- DBI::dbConnect(duckdb())
-#' DBI::dbWriteTable(con, "mtcars", mtcars)
-#' rel <- rel_from_table(con, "mtcars")
+#' rel <- rel_from_table_function(con, 'generate_series', list(10L))
 rel_from_table_function <- function(con, function_name, positional_parameters = list(), named_parameters = list()) {
     rapi_rel_from_table_function(con@conn_ref, function_name, positional_parameters, named_parameters)
 }

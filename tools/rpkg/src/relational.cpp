@@ -480,8 +480,8 @@ static SEXP result_to_df(duckdb::unique_ptr<QueryResult> res) {
 	vector<Value> positional_parameters;
 
 	for (sexp parameter_sexp : positional_parameters_sexps) {
-		if (LENGTH(parameter_sexp) != 1) {
-			stop("rel_from_table_function: Need scalar parameter");
+		if (LENGTH(parameter_sexp) < 1) {
+			stop("rel_from_table_function: Can't have zero-length parameter");
 		}
 		positional_parameters.push_back(RApiTypes::SexpToValue(parameter_sexp, 0));
 	}
@@ -492,16 +492,15 @@ static SEXP result_to_df(duckdb::unique_ptr<QueryResult> res) {
 	if (names.size() != named_parameters_sexps.size()) {
 		stop("rel_from_table_function: Named parameters need names");
 	}
-	idx_t named_parameter_idx = 0;
+	R_xlen_t named_parameter_idx = 0;
 	for (sexp parameter_sexp : named_parameters_sexps) {
 		if (LENGTH(parameter_sexp) != 1) {
 			stop("rel_from_table_function: Need scalar parameter");
 		}
-		named_parameters[names[(const R_xlen_t)named_parameter_idx]] = RApiTypes::SexpToValue(parameter_sexp, 0);
+		named_parameters[names[named_parameter_idx]] = RApiTypes::SexpToValue(parameter_sexp, 0);
 		named_parameter_idx++;
 	}
 
 	auto rel = con->conn->TableFunction(function_name, std::move(positional_parameters), std::move(named_parameters));
-	cpp11::writable::list prot = {};
-	return make_external_prot<RelationWrapper>("duckdb_relation", prot, std::move(rel));
+	return make_external<RelationWrapper>("duckdb_relation", std::move(rel));
 }
