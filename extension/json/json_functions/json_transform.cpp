@@ -699,6 +699,8 @@ bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result,
 		names.push_back(field.first);
 	}
 
+	bool success = true;
+
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		if (!yyjson_is_obj(vals[i])) {
@@ -732,13 +734,14 @@ bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result,
 		idx_t actualtag = tag - names.begin();
 
 		Vector single(UnionType::GetMemberType(type, actualtag), 1);
-		// should we use this return value
-		JSONTransform::Transform(&val, alc, single, 1, options);
+		if (!JSONTransform::Transform(&val, alc, single, 1, options)) {
+			success = false;
+		}
 
 		result.SetValue(i, Value::UNION(fields, actualtag, single.GetValue(0)));
 	}
 
-	return true;
+	return success;
 }
 
 bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
