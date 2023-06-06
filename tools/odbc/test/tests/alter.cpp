@@ -29,8 +29,7 @@ TEST_CASE("Alter", "[odbc]") {
 	REQUIRE(num_cols == 1);
 
 	// Retrieve metadata from the column
-	METADATA_CHECK(ret, hstmt, num_cols, "t", sizeof('t'), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLDescribeCol");
+	METADATA_CHECK(hstmt, num_cols, "t", sizeof('t'), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
 
 	// Alter the table
 	ret = SQLExecDirect(hstmt, (SQLCHAR *)"ALTER TABLE testtbl ALTER t SET DATA TYPE varchar", SQL_NTS);
@@ -47,8 +46,7 @@ TEST_CASE("Alter", "[odbc]") {
 	REQUIRE(num_cols2 == 1);
 
 	// Retrieve metadata from the column
-	METADATA_CHECK(ret, hstmt, num_cols2, "t", sizeof('t'), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLDescribeCol");
+	METADATA_CHECK(hstmt, num_cols2, "t", sizeof('t'), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
 
 	ret = SQLFreeStmt(hstmt, SQL_CLOSE);
 	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFreeStmt (SQL_CLOSE)");

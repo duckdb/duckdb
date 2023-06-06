@@ -81,6 +81,10 @@ TEST_CASE("diagnostics", "[odbc") {
 	REQUIRE(::strcmp(first_endtran_state.c_str(), second_endtran_state.c_str()) == 0);
 	REQUIRE(::strcmp(first_endtran_message.c_str(), second_endtran_message.c_str()) == 0);
 
+	// Free the statement handle
+	ret = SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFreeHandle (HSTMT)");
+
 	// Disconnect from the database
 	DISCONNECT_FROM_DATABASE(ret, dbc, env);
 	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLDisconnect (HDBC)");
