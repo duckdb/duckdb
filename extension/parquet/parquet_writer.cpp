@@ -287,6 +287,9 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
 }
 
 void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result) {
+	// We want these to be in-memory so we don't have to copy over strings to the dictionary
+	D_ASSERT(buffer.GetAllocatorType() == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
+
 	// set up a new row group for this chunk collection
 	auto &row_group = result.row_group;
 	row_group.num_rows = buffer.Count();
@@ -297,7 +300,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 	D_ASSERT(buffer.ColumnCount() == column_writers.size());
 	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
 		const auto &col_writer = column_writers[col_idx];
-		auto write_state = col_writer->InitializeWriteState(row_group, buffer.GetAllocator());
+		auto write_state = col_writer->InitializeWriteState(row_group);
 		if (col_writer->HasAnalyze()) {
 			for (auto &chunk : buffer.Chunks()) {
 				col_writer->Analyze(*write_state, nullptr, chunk.data[col_idx], chunk.size());
@@ -313,6 +316,7 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 		}
 		states.push_back(std::move(write_state));
 	}
+	result.heaps = buffer.GetHeapReferences();
 }
 
 void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
