@@ -301,6 +301,54 @@ TEST_CASE("Test Not-Implemented Partition Functions", "[adbc]") {
 	adbc_error.release(&adbc_error);
 }
 
+TEST_CASE("Test ADBC Statement Bind", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	ADBCTestDatabase db;
+
+	// Create prepared parameter array
+	auto &input_data = db.Query("SELECT 42, true, 'this is a string'");
+	string query = "select ?, ?, ?";
+
+	duckdb_adbc::AdbcDatabase adbc_database;
+	duckdb_adbc::AdbcConnection adbc_connection;
+
+	duckdb_adbc::AdbcError adbc_error;
+	duckdb_adbc::InitiliazeADBCError(&adbc_error);
+
+	// Create connection - database and whatnot
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	duckdb_adbc::AdbcStatement adbc_statement;
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error)));
+	ArrowArray prepared_array;
+	ArrowSchema prepared_schema;
+	input_data.get_next(&input_data, &prepared_array);
+	input_data.get_schema(&input_data, &prepared_schema);
+	REQUIRE(SUCCESS(AdbcStatementBind(&adbc_statement, &prepared_array, &prepared_schema, &adbc_error)));
+
+	int64_t rows_affected;
+	ArrowArrayStream arrow_stream;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream, &rows_affected, &adbc_error)));
+
+	input_data.release(&input_data);
+
+	ArrowArray result_array;
+	arrow_stream.get_next(&arrow_stream, &result_array);
+	REQUIRE(((int32_t *)result_array.children[0]->buffers[1])[0] == 42);
+}
+
 TEST_CASE("Test ADBC Transactions", "[adbc]") {
 	if (!duckdb_lib) {
 		return;

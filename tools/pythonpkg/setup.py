@@ -124,6 +124,7 @@ for i in range(len(sys.argv)):
     elif sys.argv[i].startswith('--package_name=') :
         lib_name = sys.argv[i].split('=', 1)[1]
     elif sys.argv[i].startswith("--compile-flags="):
+		#FIXME: this is overwriting the previously set toolchain_args ?
         toolchain_args = ['-std=c++11'] + [x.strip() for x in sys.argv[i].split('=', 1)[1].split(' ') if len(x.strip()) > 0]
     elif sys.argv[i].startswith("--libs="):
         libraries = [x.strip() for x in sys.argv[i].split('=', 1)[1].split(' ') if len(x.strip()) > 0]

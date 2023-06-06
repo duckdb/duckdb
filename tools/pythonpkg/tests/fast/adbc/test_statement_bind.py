@@ -27,6 +27,11 @@ def _bind(stmt, batch):
 class TestADBCStatementBind(object):
     def test_statement_bind(self):
         
+        # We don't support preparing multiple rows yet
+        expected_result = pa.array([
+            8
+        ], type=pa.int64())
+
         data = pa.record_batch(
             [
                 [1, 2, 3, 4],
@@ -37,7 +42,7 @@ class TestADBCStatementBind(object):
         con = adbc_driver_duckdb.connect()
         with con.cursor() as cursor:
             statement = cursor.adbc_statement
-            statement.set_sql_query("select 42, ?")
+            statement.set_sql_query("select ? * 2 as i")
             statement.prepare()
             _bind(statement, data)
             res, number_of_rows = statement.execute_query()
@@ -45,6 +50,8 @@ class TestADBCStatementBind(object):
             table = _import(res).read_all()
             print("table", table)
 
-            bound_schema = statement.get_parameter_schema()
-            schema = _import(bound_schema)
-            print("schema", schema)
+            result = table['i']
+            assert result.num_chunks == 1
+            result_values = result.chunk(0)
+            assert result_values == expected_result
+

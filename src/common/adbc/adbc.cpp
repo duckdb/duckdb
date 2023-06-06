@@ -573,7 +573,7 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, stru
 			arrow_scan->Create(table_name);
 		} else {
 			arrow_scan->CreateView("temp_adbc_view", true, true);
-			auto query = "insert into " + std::string(table_name) + " select * from temp_adbc_view";
+			auto query = duckdb::StringUtil::Format("insert into \"%s\" select * from temp_adbc_view", table_name);
 			auto result = cconn->Query(query);
 		}
 		// After creating a table, the arrow array stream is released. Hence we must set it as released to avoid
@@ -651,6 +651,29 @@ AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcErro
 	return ADBC_STATUS_OK;
 }
 
+AdbcStatusCode GetPreparedParameters(duckdb_connection connection, duckdb::unique_ptr<duckdb::QueryResult> &result,
+                                     ArrowArrayStream *input, AdbcError *error) {
+	auto cconn = (duckdb::Connection *)connection;
+
+	try {
+		auto arrow_scan = cconn->TableFunction("arrow_scan", {duckdb::Value::POINTER((uintptr_t)input),
+		                                                      duckdb::Value::POINTER((uintptr_t)stream_produce),
+		                                                      duckdb::Value::POINTER((uintptr_t)input->get_schema)});
+		result = arrow_scan->Execute();
+		// After creating a table, the arrow array stream is released. Hence we must set it as released to avoid
+		// double-releasing it
+		input->release = nullptr;
+	} catch (std::exception &ex) {
+		if (error) {
+			error->message = strdup(ex.what());
+		}
+		return ADBC_STATUS_INTERNAL;
+	} catch (...) {
+		return ADBC_STATUS_INTERNAL;
+	}
+	return ADBC_STATUS_OK;
+}
+
 AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct ArrowArrayStream *out,
                                      int64_t *rows_affected, struct AdbcError *error) {
 	auto status = SetErrorMaybe(statement, error, "Missing statement object");
@@ -672,15 +695,49 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 
 	if (wrapper->ingestion_stream.release && wrapper->ingestion_table_name) {
 		auto stream = wrapper->ingestion_stream;
-		stream.release = nullptr;
 		wrapper->ingestion_stream.release = nullptr;
 		return Ingest(wrapper->connection, wrapper->ingestion_table_name, &stream, error);
 	}
 
-	auto res = duckdb_execute_prepared_arrow(wrapper->statement, &wrapper->result);
-	if (res != DuckDBSuccess) {
-		SetError(error, duckdb_query_arrow_error(wrapper->result));
-		return ADBC_STATUS_INVALID_ARGUMENT;
+	if (wrapper->ingestion_stream.release) {
+		duckdb::unique_ptr<duckdb::QueryResult> result;
+		ArrowArrayStream stream = wrapper->ingestion_stream;
+		wrapper->ingestion_stream.release = nullptr;
+		auto adbc_res = GetPreparedParameters(wrapper->connection, result, &stream, error);
+		if (adbc_res != ADBC_STATUS_OK) {
+			return adbc_res;
+		}
+		if (!result) {
+			return ADBC_STATUS_INVALID_ARGUMENT;
+		}
+		duckdb::unique_ptr<duckdb::DataChunk> chunk;
+		while ((chunk = result->Fetch()) != nullptr) {
+			for (idx_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
+				duckdb_clear_bindings(wrapper->statement);
+				for (idx_t col_idx = 0; col_idx < chunk->ColumnCount(); col_idx++) {
+					auto val = chunk->GetValue(col_idx, row_idx);
+					auto duck_val = (duckdb_value)&val;
+					auto res = duckdb_bind_value(wrapper->statement, 1 + col_idx, duck_val);
+					if (res != DuckDBSuccess) {
+						SetError(error, duckdb_prepare_error(wrapper->statement));
+						return ADBC_STATUS_INVALID_ARGUMENT;
+					}
+				}
+
+				// For every row of the prepared parameters, execute the query, only saving the last result
+				auto res = duckdb_execute_prepared_arrow(wrapper->statement, &wrapper->result);
+				if (res != DuckDBSuccess) {
+					SetError(error, duckdb_query_arrow_error(wrapper->result));
+					return ADBC_STATUS_INVALID_ARGUMENT;
+				}
+			}
+		}
+	} else {
+		auto res = duckdb_execute_prepared_arrow(wrapper->statement, &wrapper->result);
+		if (res != DuckDBSuccess) {
+			SetError(error, duckdb_query_arrow_error(wrapper->result));
+			return ADBC_STATUS_INVALID_ARGUMENT;
+		}
 	}
 
 	if (out) {
@@ -744,13 +801,15 @@ AdbcStatusCode StatementBind(struct AdbcStatement *statement, struct ArrowArray 
 		return status;
 	}
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
-	struct ArrowArrayStream stream;
-	memset(&stream, 0, sizeof(struct ArrowArrayStream));
-	status = BatchToArrayStream(values, schemas, &stream, error);
+	if (wrapper->ingestion_stream.release) {
+		// Free the stream that was previously bound
+		wrapper->ingestion_stream.release(&wrapper->ingestion_stream);
+	}
+	status = BatchToArrayStream(values, schemas, &wrapper->ingestion_stream, error);
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
-	return StatementBindStream(statement, &stream, error);
+	return ADBC_STATUS_OK;
 }
 
 AdbcStatusCode StatementBindStream(struct AdbcStatement *statement, struct ArrowArrayStream *values,
@@ -769,6 +828,7 @@ AdbcStatusCode StatementBindStream(struct AdbcStatement *statement, struct Arrow
 		wrapper->ingestion_stream.release(&wrapper->ingestion_stream);
 	}
 	wrapper->ingestion_stream = *values;
+	values->release = nullptr;
 	return ADBC_STATUS_OK;
 }
 
