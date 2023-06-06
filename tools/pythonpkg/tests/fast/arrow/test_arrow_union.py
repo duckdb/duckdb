@@ -1,3 +1,7 @@
+from pytest import importorskip
+
+importorskip('pyarrow')
+
 import duckdb
 from pyarrow import scalar, large_string, list_, int32, types
 
