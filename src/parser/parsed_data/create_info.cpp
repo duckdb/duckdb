@@ -9,6 +9,7 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
+#include "duckdb/parser/parsed_data/create_property_graph_info.hpp"
 
 namespace duckdb {
 
@@ -52,6 +53,8 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 		return CreateMacroInfo::Deserialize(deserializer);
 	case CatalogType::SEQUENCE_ENTRY:
 		return CreateSequenceInfo::Deserialize(deserializer);
+    case CatalogType::PROPERTY_GRAPH_ENTRY:
+        return CreatePropertyGraphInfo::Deserialize(deserializer);
 	default:
 		throw NotImplementedException("Cannot deserialize '%s'", CatalogTypeToString(type));
 	}

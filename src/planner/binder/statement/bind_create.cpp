@@ -137,7 +137,7 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	base.types = query_node.types;
 }
 
-static void CheckPropertyGraphTableLabels(shared_ptr<PropertyGraphTable> &pg_table, TableCatalogEntry &table) {
+static void CheckPropertyGraphTableLabels(unique_ptr<PropertyGraphTable> &pg_table, TableCatalogEntry &table) {
     if (!pg_table->discriminator.empty()) {
         if (!table.ColumnExists(pg_table->discriminator)) {
             throw BinderException("Column %s not found in table %s", pg_table->discriminator, pg_table->table_name);
@@ -150,7 +150,7 @@ static void CheckPropertyGraphTableLabels(shared_ptr<PropertyGraphTable> &pg_tab
     }
 }
 
-static void CheckPropertyGraphTableColumns(shared_ptr<PropertyGraphTable> &pg_table, TableCatalogEntry &table) {
+static void CheckPropertyGraphTableColumns(unique_ptr<PropertyGraphTable> &pg_table, TableCatalogEntry &table) {
     if (pg_table->no_columns) {
         return;
     }

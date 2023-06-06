@@ -62,8 +62,8 @@ namespace duckdb {
         }
     }
 
-    shared_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &source) {
-        auto pg_table = make_shared<PropertyGraphTable>();
+    unique_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &source) {
+        auto pg_table = make_uniq<PropertyGraphTable>();
 
         pg_table->table_name = source.Read<string>();
         source.ReadStringVector(pg_table->column_names);
@@ -87,8 +87,8 @@ namespace duckdb {
         return pg_table;
     }
 
-    shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() {
-        auto result = make_shared<PropertyGraphTable>();
+    unique_ptr<PropertyGraphTable> PropertyGraphTable::Copy() {
+        auto result = make_uniq<PropertyGraphTable>();
         result->table_name = table_name;
         for (auto &column_name : column_names) {
             result->column_names.push_back(column_name);
