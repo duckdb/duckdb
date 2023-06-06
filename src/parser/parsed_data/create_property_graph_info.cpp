@@ -22,7 +22,7 @@ void CreatePropertyGraphInfo::SerializeInternal(Serializer &serializer) const {
 	writer.WriteString(property_graph_name);
     writer.WriteSerializableList<PropertyGraphTable>(vertex_tables);
     writer.WriteSerializableList<PropertyGraphTable>(edge_tables);
-    writer.WriteRegularSerializableMap<PropertyGraphTable*>(label_map);
+//    writer.WriteRegularSerializableMap<PropertyGraphTable*>(label_map);
 	writer.Finalize();
 }
 
@@ -57,7 +57,7 @@ unique_ptr<CreateInfo> CreatePropertyGraphInfo::Copy() const {
         result->property_graph_name = reader.ReadRequired<string>();
         result->vertex_tables = reader.ReadRequiredSerializableList<PropertyGraphTable>();
         result->edge_tables = reader.ReadRequiredSerializableList<PropertyGraphTable>();
-        result->label_map = reader.ReadRequiredSerializableMap<PropertyGraphTable>();
+//        result->label_map = reader.ReadRequiredSerializableMap<PropertyGraphTable>();
         reader.Finalize();
         return result;
     }
