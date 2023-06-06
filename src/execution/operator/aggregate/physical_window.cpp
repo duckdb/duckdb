@@ -1270,6 +1270,7 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 		// Overwrite the collections with the sorted data
 		hash_group = std::move(gsink.hash_groups[hash_bin]);
 		hash_group->ComputeMasks(partition_mask, order_mask);
+		external = hash_group->global_sort->external;
 		MaterializeSortedData();
 	} else {
 		return;
