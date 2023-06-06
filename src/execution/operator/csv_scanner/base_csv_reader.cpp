@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/persistent/base_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/base_csv_reader.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -17,7 +17,7 @@
 #include "utf8proc.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/main/error_manager.hpp"
-#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/parallel_csv_reader.hpp"
 
 #include <algorithm>
 #include <cctype>

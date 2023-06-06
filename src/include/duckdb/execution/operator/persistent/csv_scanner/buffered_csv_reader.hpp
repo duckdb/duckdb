@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/execution/operator/persistent/base_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/base_csv_reader.hpp"
 
 namespace duckdb {
 struct CopyInfo;

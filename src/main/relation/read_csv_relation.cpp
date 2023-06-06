@@ -8,7 +8,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/buffered_csv_reader.hpp"
 
 namespace duckdb {
 

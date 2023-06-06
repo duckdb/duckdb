@@ -95,7 +95,7 @@
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/operator/persistent/base_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/base_csv_reader.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/config.hpp"

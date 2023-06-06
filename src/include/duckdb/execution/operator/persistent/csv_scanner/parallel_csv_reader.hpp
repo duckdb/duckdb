@@ -8,11 +8,11 @@
 
 #pragma once
 
-#include "duckdb/execution/operator/persistent/base_csv_reader.hpp"
-#include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
-#include "duckdb/execution/operator/persistent/csv_file_handle.hpp"
-#include "duckdb/execution/operator/persistent/csv_buffer.hpp"
-#include "duckdb/execution/operator/persistent/csv_line_info.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/base_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_file_handle.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_line_info.hpp"
 
 #include <sstream>
 #include <utility>

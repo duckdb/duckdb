@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
-#include "duckdb/execution/operator/persistent/csv_file_handle.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_file_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {

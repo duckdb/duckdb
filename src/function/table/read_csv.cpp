@@ -13,7 +13,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/main/client_data.hpp"
-#include "duckdb/execution/operator/persistent/csv_line_info.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_line_info.hpp"
 #include <limits>
 
 namespace duckdb {
