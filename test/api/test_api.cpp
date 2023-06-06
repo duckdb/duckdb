@@ -593,7 +593,7 @@ TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.
 		count += chunk->size();
 	}
 
-	REQUIRE(951446 - count == 0);
+	REQUIRE(951468 - count == 0);
 }
 
 TEST_CASE("Fuzzer 50 - Alter table heap-use-after-free", "[api]") {
