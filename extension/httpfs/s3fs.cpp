@@ -22,7 +22,7 @@ static HeaderMap create_s3_header(string url, string query, string host, string 
 
 	HeaderMap res;
 
-	// Host header should only include host and port not path which may be included for custom endpoints
+	// Host header should only include host and port
 	auto trimmed_host = host;
 	auto host_slash_pos = trimmed_host.find('/');
 	if (host_slash_pos != string::npos) {
@@ -611,8 +611,8 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 		throw IOException("URL needs to contain key");
 	}
 
-	// remove scheme if set by custom endpoint
-	host = param.endpoint.starts_with("https://") ? param.endpoint.substr(8) : param.endpoint;
+	// remove scheme from custom endpoint
+	host = params.endpoint.starts_with("https://") ? params.endpoint.substr(8) : params.endpoint;
 	host = host.starts_with("http://") ? host.substr(7) : host;
 	host = params.url_style == "vhost" || params.url_style == "" ? bucket + "." + host : host;
 
