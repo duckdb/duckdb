@@ -44,6 +44,11 @@ class TestADBCStatementBind(object):
             statement = cursor.adbc_statement
             statement.set_sql_query("select ? * 2 as i")
             statement.prepare()
+
+            raw_schema = statement.get_parameter_schema()
+            schema = _import(raw_schema);
+            print(schema)
+
             _bind(statement, data)
             res, number_of_rows = statement.execute_query()
             print(number_of_rows)

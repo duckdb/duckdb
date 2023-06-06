@@ -138,10 +138,6 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *, const char *, c
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 
-AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, struct ArrowSchema *schema,
-                                           struct AdbcError *error) {
-	return ADBC_STATUS_NOT_IMPLEMENTED;
-}
 AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement *, const uint8_t *, size_t, struct AdbcError *error) {
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
