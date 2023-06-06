@@ -124,4 +124,12 @@ Catalog &AttachedDatabase::ParentCatalog() {
 	return *parent_catalog;
 }
 
+bool AttachedDatabase::IsInitialDatabase() const {
+	return is_initial_database;
+}
+
+void AttachedDatabase::SetInitialDatabase() {
+	is_initial_database = true;
+}
+
 } // namespace duckdb
