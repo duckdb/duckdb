@@ -332,6 +332,12 @@ TEST_CASE("Test ADBC Statement Bind", "[adbc]") {
 	duckdb_adbc::AdbcStatement adbc_statement;
 	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcStatementSetSqlQuery(&adbc_statement, query.c_str(), &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementPrepare(&adbc_statement, &adbc_error)));
+
+	ArrowSchema expected_schema;
+	REQUIRE(SUCCESS(AdbcStatementGetParameterSchema(&adbc_statement, &expected_schema, &adbc_error)));
+	REQUIRE(expected_schema.n_children == 3);
+
 	ArrowArray prepared_array;
 	ArrowSchema prepared_schema;
 	input_data.get_next(&input_data, &prepared_array);

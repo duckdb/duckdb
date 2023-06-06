@@ -50,6 +50,7 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 	driver->StatementSetSubstraitPlan = duckdb_adbc::StatementSetSubstraitPlan;
 
 	driver->ConnectionGetInfo = duckdb_adbc::ConnectionGetInfo;
+	driver->StatementGetParameterSchema = duckdb_adbc::StatementGetParameterSchema;
 	return ADBC_STATUS_OK;
 }
 
@@ -651,6 +652,25 @@ AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcErro
 	return ADBC_STATUS_OK;
 }
 
+AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, struct ArrowSchema *schema,
+                                           struct AdbcError *error) {
+	auto status = SetErrorMaybe(statement, error, "Missing statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	status = SetErrorMaybe(statement, error, "Missing schema object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
+	// TODO: we might want to cache this, but then we need to return a deep copy anyways.., so I'm not sure if that would be worth the extra management
+	auto res = duckdb_prepared_arrow_schema(wrapper->statement, (duckdb_arrow_schema *)&schema);
+	if (res != DuckDBSuccess) {
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	return status;
+}
+
 AdbcStatusCode GetPreparedParameters(duckdb_connection connection, duckdb::unique_ptr<duckdb::QueryResult> &result,
                                      ArrowArrayStream *input, AdbcError *error) {
 	auto cconn = (duckdb::Connection *)connection;
@@ -719,7 +739,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 					auto duck_val = (duckdb_value)&val;
 					auto res = duckdb_bind_value(wrapper->statement, 1 + col_idx, duck_val);
 					if (res != DuckDBSuccess) {
-						SetError(error, duckdb_prepare_error(wrapper->statement));
+						//SetError(error, duckdb_prepare_error(wrapper->statement));
 						return ADBC_STATUS_INVALID_ARGUMENT;
 					}
 				}
@@ -766,7 +786,6 @@ AdbcStatusCode StatementPrepare(struct AdbcStatement *statement, struct AdbcErro
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
-
 	return ADBC_STATUS_OK;
 }
 

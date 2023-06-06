@@ -2290,6 +2290,15 @@ Fetch the internal arrow schema from the arrow result.
 DUCKDB_API duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema);
 
 /*!
+Fetch the internal arrow schema from the prepared statement.
+
+* result: The prepared statement to fetch the schema from.
+* out_schema: The output schema.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, duckdb_arrow_schema *out_schema);
+
+/*!
 Fetch an internal arrow array from the arrow result.
 
 This function can be called multiple time to get next chunks, which will free the previous out_array.

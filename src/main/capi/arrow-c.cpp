@@ -1,6 +1,7 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/main/capi/capi_internal.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
 
 using duckdb::ArrowConverter;
 using duckdb::ArrowResultWrapper;
@@ -27,6 +28,35 @@ duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema 
 	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
 	ArrowConverter::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names,
 	                              wrapper->options);
+	return DuckDBSuccess;
+}
+
+duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, duckdb_arrow_schema *out_schema) {
+	if (!out_schema) {
+		return DuckDBSuccess;
+	}
+	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared);
+	if (!wrapper || !wrapper->statement || !wrapper->statement->data) {
+		return DuckDBError;
+	}
+	auto properties = wrapper->statement->context->GetClientProperties();
+	duckdb::vector<duckdb::LogicalType> prepared_types;
+	duckdb::vector<duckdb::string> prepared_names;
+
+	auto count = wrapper->statement->data->properties.parameter_count;
+	for (idx_t i = 0; i < count; i++) {
+		// Every prepared parameter type is UNKNOWN, which we need to map to NULL according to the spec of 'AdbcStatementGetParameterSchema'
+		auto type = LogicalType::SQLNULL;
+
+		// FIXME: we don't support named parameters yet, but when we do, this needs to be updated
+		auto name = std::to_string(i);
+		prepared_types.push_back(std::move(type));
+		prepared_names.push_back(name);
+	}
+
+	//FIXME: names are currently not owned, so they are just random memory after this function ends..
+	ArrowConverter::ToArrowSchema((ArrowSchema *)*out_schema, prepared_types, prepared_names,
+	                              properties.time_zone);
 	return DuckDBSuccess;
 }
 

@@ -205,10 +205,18 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *, const char *, c
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 
-AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, struct ArrowSchema *schema,
-                                           struct AdbcError *error) {
+AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement *, const uint8_t *, size_t, struct AdbcError *error) {
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
+
+/// Temporary state while the database is being configured.
+struct TempDatabase {
+	std::unordered_map<std::string, std::string> options;
+	std::string driver;
+	// Default name (see adbc.h)
+	std::string entrypoint = "AdbcDriverInit";
+	AdbcDriverInitFunc init_func = nullptr;
+};
 
 /// Temporary state while the database is being configured.
 struct TempConnection {
