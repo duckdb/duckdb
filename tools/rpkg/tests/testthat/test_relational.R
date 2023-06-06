@@ -639,7 +639,7 @@ test_that("rel_from_table_function works", {
     expect_equal(df$generate_series, c(1,3,5,7,9))
 
     # make sure we can pass named paramters
-    rel <- duckdb:::rel_from_table_function(duckdb:::default_connection(), 'read_parquet', list('data/userdata1.parquet'), list('filename' = TRUE))
+    rel <- duckdb:::rel_from_table_function(duckdb:::default_connection(), 'read_parquet', list('data/userdata1.parquet'), list(filename=TRUE, hive_partitioning=FALSE))
     df <- as.data.frame(rel)
     expect_equal(df$filename[1], 'data/userdata1.parquet')
 })
