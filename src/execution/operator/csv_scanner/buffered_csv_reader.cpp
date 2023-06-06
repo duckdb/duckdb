@@ -7,15 +7,16 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/parser/column_definition.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "utf8proc_wrapper.hpp"
-#include "utf8proc.hpp"
-#include "duckdb/parser/keyword_helper.hpp"
-#include "duckdb/main/error_manager.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/error_manager.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "utf8proc.hpp"
+#include "utf8proc_wrapper.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -407,98 +408,89 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 	idx_t best_consistent_rows = 0;
 	idx_t prev_padding_count = 0;
 	idx_t rows_read = 0;
+	vector<CSVStateMachine> csv_state_machines;
+	vector<CSVStateMachine *> candidates;
+	// Generate state machines for all option combinations
 	for (auto quoterule : quoterule_candidates) {
 		const auto &quote_candidates = quote_candidates_map[static_cast<uint8_t>(quoterule)];
 		for (const auto &quote : quote_candidates) {
 			for (const auto &delim : delim_candidates) {
 				const auto &escape_candidates = escape_candidates_map[static_cast<uint8_t>(quoterule)];
 				for (const auto &escape : escape_candidates) {
-					BufferedCSVReaderOptions sniff_info = original_options;
-					sniff_info.delimiter = delim;
-					sniff_info.quote = quote;
-					sniff_info.escape = escape;
-
-					options = sniff_info;
-					PrepareComplexParser();
-
-					JumpToBeginning(original_options.skip_rows);
-					sniffed_column_counts.clear();
-					if (!TryParseCSV(ParserMode::SNIFFING_DIALECT)) {
-						continue;
-					}
-
-					idx_t start_row = original_options.skip_rows;
-					idx_t consistent_rows = 0;
-					idx_t num_cols = sniffed_column_counts.empty() ? 0 : sniffed_column_counts[0];
-					idx_t padding_count = 0;
-					bool allow_padding = original_options.null_padding;
-					if (sniffed_column_counts.size() > rows_read) {
-						rows_read = sniffed_column_counts.size();
-					}
-					for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
-						if (sniffed_column_counts[row] == num_cols) {
-							consistent_rows++;
-						} else if (num_cols < sniffed_column_counts[row] && !original_options.skip_rows_set) {
-							// we use the maximum amount of num_cols that we find
-							num_cols = sniffed_column_counts[row];
-							start_row = row + original_options.skip_rows;
-							consistent_rows = 1;
-							padding_count = 0;
-						} else if (num_cols >= sniffed_column_counts[row] && allow_padding) {
-							// we are missing some columns, we can parse this as long as we add padding
-							padding_count++;
-						}
-					}
-
-					// some logic
-					consistent_rows += padding_count;
-					bool more_values = (consistent_rows > best_consistent_rows && num_cols >= best_num_cols);
-					bool require_more_padding = padding_count > prev_padding_count;
-					bool require_less_padding = padding_count < prev_padding_count;
-					bool single_column_before = best_num_cols < 2 && num_cols > best_num_cols;
-					bool rows_consistent =
-					    start_row + consistent_rows - original_options.skip_rows == sniffed_column_counts.size();
-					bool more_than_one_row = (consistent_rows > 1);
-					bool more_than_one_column = (num_cols > 1);
-					bool start_good = !info_candidates.empty() && (start_row <= info_candidates.front().skip_rows);
-
-					if (!requested_types.empty() && requested_types.size() != num_cols) {
-						continue;
-					} else if (rows_consistent && (single_column_before || (more_values && !require_more_padding) ||
-					                               (more_than_one_column && require_less_padding))) {
-						sniff_info.skip_rows = start_row;
-						sniff_info.num_cols = num_cols;
-						sniff_info.new_line = options.new_line;
-						best_consistent_rows = consistent_rows;
-						best_num_cols = num_cols;
-						prev_padding_count = padding_count;
-
-						info_candidates.clear();
-						info_candidates.push_back(sniff_info);
-					} else if (more_than_one_row && more_than_one_column && start_good && rows_consistent &&
-					           !require_more_padding) {
-						bool same_quote_is_candidate = false;
-						for (auto &info_candidate : info_candidates) {
-							if (quote.compare(info_candidate.quote) == 0) {
-								same_quote_is_candidate = true;
-							}
-						}
-						if (!same_quote_is_candidate) {
-							sniff_info.skip_rows = start_row;
-							sniff_info.num_cols = num_cols;
-							sniff_info.new_line = options.new_line;
-							info_candidates.push_back(sniff_info);
-						}
-					}
+					// FIXME: record separator
+					CSVStateMachineConfiguration configuration(delim, "\n", quote, escape);
+					csv_state_machines.emplace_back(configuration);
 				}
 			}
 		}
 	}
-	// Up to this point we have our candidates, but we only checked one chunk size with them, let's eliminate them
-	// running on sample size
-	int64_t remaining_sample = original_options.sample_chunks - 1;
-	//	bool still_have_results =
-	//	int x = 0;
+	// Run and eliminate worst option combinations
+	JumpToBeginning(original_options.skip_rows);
+	StateBuffer state_buffer(buffer.get(), buffer_size, position);
+	for (auto &state_machine : csv_state_machines) {
+		vector<idx_t> sniffed_column_counts;
+		// original_options.sample_chunks
+		state_machine.SniffColumns(state_buffer, sniffed_column_counts, STANDARD_VECTOR_SIZE);
+
+		idx_t start_row = original_options.skip_rows;
+		idx_t consistent_rows = 0;
+		idx_t num_cols = sniffed_column_counts.empty() ? 0 : sniffed_column_counts[0];
+		idx_t padding_count = 0;
+		bool allow_padding = original_options.null_padding;
+		if (sniffed_column_counts.size() > rows_read) {
+			rows_read = sniffed_column_counts.size();
+		}
+		for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
+			if (sniffed_column_counts[row] == num_cols) {
+				consistent_rows++;
+			} else if (num_cols < sniffed_column_counts[row] && !original_options.skip_rows_set) {
+				// we use the maximum amount of num_cols that we find
+				num_cols = sniffed_column_counts[row];
+				start_row = row + original_options.skip_rows;
+				consistent_rows = 1;
+				padding_count = 0;
+			} else if (num_cols >= sniffed_column_counts[row] && allow_padding) {
+				// we are missing some columns, we can parse this as long as we add padding
+				padding_count++;
+			}
+		}
+
+		// some logic
+		consistent_rows += padding_count;
+		bool more_values = (consistent_rows > best_consistent_rows && num_cols >= best_num_cols);
+		bool require_more_padding = padding_count > prev_padding_count;
+		bool require_less_padding = padding_count < prev_padding_count;
+		bool single_column_before = best_num_cols < 2 && num_cols > best_num_cols;
+		bool rows_consistent = start_row + consistent_rows - original_options.skip_rows == sniffed_column_counts.size();
+		bool more_than_one_row = (consistent_rows > 1);
+		bool more_than_one_column = (num_cols > 1);
+		bool start_good = !info_candidates.empty() && (start_row <= info_candidates.front().skip_rows);
+
+		if (!requested_types.empty() && requested_types.size() != num_cols) {
+			continue;
+		} else if (rows_consistent && (single_column_before || (more_values && !require_more_padding) ||
+		                               (more_than_one_column && require_less_padding))) {
+			best_consistent_rows = consistent_rows;
+			best_num_cols = num_cols;
+			prev_padding_count = padding_count;
+
+			candidates.clear();
+			candidates.push_back(&state_machine);
+		} else if (more_than_one_row && more_than_one_column && start_good && rows_consistent &&
+		           !require_more_padding) {
+			bool same_quote_is_candidate = false;
+			for (auto &candidate : candidates) {
+				if (state_machine.configuration.quote.compare(candidate->configuration.quote) == 0) {
+					same_quote_is_candidate = true;
+				}
+			}
+			if (!same_quote_is_candidate) {
+				candidates.push_back(&state_machine);
+			}
+		}
+	}
+	//
+	int x = 0;
 }
 
 void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_candidates,

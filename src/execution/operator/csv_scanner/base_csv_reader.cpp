@@ -256,10 +256,6 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 		// skip a single trailing delimiter in last column
 		return;
 	}
-	if (mode == ParserMode::SNIFFING_DIALECT) {
-		column++;
-		return;
-	}
 	if (column >= return_types.size()) {
 		if (options.ignore_errors) {
 			error_column_overflow = true;
@@ -331,7 +327,7 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 		return false;
 	}
 
-	if (column < return_types.size() && mode != ParserMode::SNIFFING_DIALECT) {
+	if (column < return_types.size()) {
 		if (options.null_padding) {
 			for (; column < return_types.size(); column++) {
 				FlatVector::SetNull(parse_chunk.data[column], parse_chunk.size(), true);
@@ -352,15 +348,7 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 		}
 	}
 
-	if (mode == ParserMode::SNIFFING_DIALECT) {
-		sniffed_column_counts.push_back(column);
-
-		if (sniffed_column_counts.size() == options.sample_chunk_size) {
-			return true;
-		}
-	} else {
-		parse_chunk.SetCardinality(parse_chunk.size() + 1);
-	}
+	parse_chunk.SetCardinality(parse_chunk.size() + 1);
 
 	if (mode == ParserMode::PARSING_HEADER) {
 		return true;
@@ -579,8 +567,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 }
 
 void BaseCSVReader::SetNewLineDelimiter(bool carry, bool carry_followed_by_nl) {
-	if ((mode == ParserMode::SNIFFING_DIALECT && !options.has_newline) ||
-	    options.new_line == NewLineIdentifier::NOT_SET) {
+	if ((!options.has_newline) || options.new_line == NewLineIdentifier::NOT_SET) {
 		if (options.new_line == NewLineIdentifier::MIX) {
 			return;
 		}

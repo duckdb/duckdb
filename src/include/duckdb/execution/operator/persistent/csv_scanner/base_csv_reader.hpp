@@ -30,7 +30,7 @@ struct StrpTimeFormat;
 class FileOpener;
 class FileSystem;
 
-enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DATATYPES = 2, PARSING_HEADER = 3 };
+enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DATATYPES = 1, PARSING_HEADER = 2 };
 
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
 class BaseCSVReader {
@@ -113,7 +113,6 @@ protected:
 	//! Whether or not the current row's columns have overflown return_types.size()
 	bool error_column_overflow = false;
 	//! Number of sniffed columns - only used when auto-detecting
-	vector<idx_t> sniffed_column_counts;
 };
 
 } // namespace duckdb

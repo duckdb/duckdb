@@ -5694,8 +5694,6 @@ const char *EnumUtil::ToChars<ParserMode>(ParserMode value) {
 	switch (value) {
 	case ParserMode::PARSING:
 		return "PARSING";
-	case ParserMode::SNIFFING_DIALECT:
-		return "SNIFFING_DIALECT";
 	case ParserMode::SNIFFING_DATATYPES:
 		return "SNIFFING_DATATYPES";
 	case ParserMode::PARSING_HEADER:
@@ -5709,9 +5707,6 @@ template <>
 ParserMode EnumUtil::FromString<ParserMode>(const char *value) {
 	if (StringUtil::Equals(value, "PARSING")) {
 		return ParserMode::PARSING;
-	}
-	if (StringUtil::Equals(value, "SNIFFING_DIALECT")) {
-		return ParserMode::SNIFFING_DIALECT;
 	}
 	if (StringUtil::Equals(value, "SNIFFING_DATATYPES")) {
 		return ParserMode::SNIFFING_DATATYPES;
