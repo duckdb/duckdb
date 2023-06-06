@@ -1,8 +1,7 @@
 #include "duckdb/execution/operator/schema/physical_create_property_graph.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/client_data.hpp"
-
-#include "../../../extension/sqlpgq/include/sqlpgq_common.hpp"
+#include "../../../../../duckpgq/include/duckpgq_extension.hpp"
 
 namespace duckdb {
 
@@ -21,24 +20,23 @@ PhysicalCreatePropertyGraph::PhysicalCreatePropertyGraph(unique_ptr<CreateProper
 }
 
 unique_ptr<GlobalSourceState> PhysicalCreatePropertyGraph::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<CreatePropertyGraphSourceState>();
+	return make_uniq<CreatePropertyGraphSourceState>();
 }
 
-void PhysicalCreatePropertyGraph::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                          LocalSourceState &lstate) const {
-	auto &state = (CreatePropertyGraphSourceState &)gstate;
-	if (state.finished) {
-		return;
-	}
+SourceResultType PhysicalCreatePropertyGraph::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
+    auto &gstate = input.global_state.Cast<CreatePropertyGraphSourceState>();
+    if (gstate.finished) {
+        return SourceResultType::FINISHED;
+    }
 
 	//! During the binder we already check if the property graph exists
-	auto sqlpgq_state_entry = context.client.registered_state.find("sqlpgq");
-	if (sqlpgq_state_entry == context.client.registered_state.end()) {
+	auto duckpgq_state_entry = context.client.registered_state.find("duckpgq");
+	if (duckpgq_state_entry == context.client.registered_state.end()) {
 		throw MissingExtensionException("The SQL/PGQ extension has not been loaded");
 	}
-	auto sqlpgq_state = reinterpret_cast<SQLPGQContext *>(sqlpgq_state_entry->second.get());
-	sqlpgq_state->registered_property_graphs[info->property_graph_name] = info->Copy();
-	state.finished = true;
+	auto duckpgq_state = reinterpret_cast<DuckPGQState *>(duckpgq_state_entry->second.get());
+	duckpgq_state->registered_property_graphs[info->property_graph_name] = info->Copy();
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

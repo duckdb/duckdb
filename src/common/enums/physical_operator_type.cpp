@@ -146,7 +146,9 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 	case PhysicalOperatorType::EXTENSION:
 		return "EXTENSION";
 	case PhysicalOperatorType::PIVOT:
-		return "PIVOT";
+        return "PIVOT";
+    case PhysicalOperatorType::CREATE_PROPERTY_GRAPH:
+        return "CREATE_PROPERTY_GRAPH";
 	case PhysicalOperatorType::INVALID:
 		break;
 	}
