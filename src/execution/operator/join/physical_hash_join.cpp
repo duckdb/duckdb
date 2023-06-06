@@ -532,7 +532,18 @@ public:
 	bool AssignTask(HashJoinGlobalSinkState &sink, HashJoinLocalSourceState &lstate);
 
 	idx_t MaxThreads() override {
-		return probe_count / ((idx_t)STANDARD_VECTOR_SIZE * parallel_scan_chunk_count);
+		D_ASSERT(op.sink_state);
+		auto &gstate = op.sink_state->Cast<HashJoinGlobalSinkState>();
+
+		idx_t count;
+		if (gstate.probe_spill) {
+			count = probe_count;
+		} else if (IsRightOuterJoin(op.join_type)) {
+			count = gstate.hash_table->Count();
+		} else {
+			return 0;
+		}
+		return count / ((idx_t)STANDARD_VECTOR_SIZE * parallel_scan_chunk_count);
 	}
 
 public:
