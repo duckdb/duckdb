@@ -9,3 +9,28 @@ statement error
 SELECT make_time(64, 64, 157);
 ----
 Time out of range
+
+statement error
+SELECT make_time(-1, 64, 157);
+----
+Time out of range
+
+statement error
+SELECT make_time(1, 64, 157);
+----
+Time out of range
+
+statement error
+SELECT make_time(1, -1, 157);
+----
+Time out of range
+
+statement error
+SELECT make_time(1, 64, -1);
+----
+Time out of range
+
+statement error
+SELECT make_time(1, 64, 9999999);
+----
+Time out of range
