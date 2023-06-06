@@ -54,7 +54,7 @@ common/serializer/buffered_file_reader.cpp	9
 common/serializer/buffered_file_writer.cpp	2
 common/sort/comparators.cpp	72
 common/sort/merge_sorter.cpp	100
-common/sort/partition_state.cpp	44
+common/sort/partition_state.cpp	43
 common/sort/sort_state.cpp	10
 common/sort/sorted_block.cpp	20
 common/string_util.cpp	15
@@ -86,7 +86,7 @@ common/types/row/tuple_data_scatter_gather.cpp	16
 common/types/row/tuple_data_segment.cpp	10
 common/types/string_heap.cpp	11
 common/types/time.cpp	20
-common/types/timestamp.cpp	7
+common/types/timestamp.cpp	18
 common/types/uuid.cpp	3
 common/types/validity_mask.cpp	6
 common/types/value.cpp	180
@@ -141,7 +141,7 @@ core_functions/scalar/struct/struct_insert.cpp	2
 core_functions/scalar/union/union_extract.cpp	11
 core_functions/scalar/union/union_tag.cpp	4
 core_functions/scalar/union/union_value.cpp	2
-execution/aggregate_hashtable.cpp	12
+execution/aggregate_hashtable.cpp	14
 execution/expression_executor.cpp	11
 execution/expression_executor/execute_between.cpp	30
 execution/expression_executor/execute_case.cpp	17
@@ -149,7 +149,7 @@ execution/expression_executor/execute_comparison.cpp	5
 execution/expression_executor/execute_conjunction.cpp	3
 execution/expression_executor/execute_operator.cpp	3
 execution/expression_executor_state.cpp	2
-execution/join_hashtable.cpp	22
+execution/join_hashtable.cpp	23
 execution/nested_loop_join/nested_loop_join_inner.cpp	24
 execution/nested_loop_join/nested_loop_join_mark.cpp	30
 execution/operator/aggregate/aggregate_object.cpp	2
@@ -346,7 +346,7 @@ include/duckdb/common/types/hugeint.hpp	2
 include/duckdb/common/types/row/partitioned_tuple_data.hpp	11
 include/duckdb/common/types/string_type.hpp	5
 include/duckdb/common/types/uuid.hpp	4
-include/duckdb/common/types/validity_mask.hpp	4
+include/duckdb/common/types/validity_mask.hpp	5
 include/duckdb/common/types/value.hpp	6
 include/duckdb/common/vector_operations/aggregate_executor.hpp	16
 include/duckdb/common/vector_operations/binary_executor.hpp	14
@@ -409,7 +409,6 @@ include/duckdb/planner/expression/bound_subquery_expression.hpp	5
 include/duckdb/planner/filter/conjunction_filter.hpp	3
 include/duckdb/planner/table_filter.hpp	3
 include/duckdb/storage/buffer/block_handle.hpp	7
-include/duckdb/storage/compression/chimp/algorithm/byte_reader.hpp	19
 include/duckdb/storage/compression/chimp/algorithm/chimp128.hpp	10
 include/duckdb/storage/compression/chimp/algorithm/leading_zero_buffer.hpp	3
 include/duckdb/storage/compression/chimp/algorithm/output_bit_stream.hpp	2
@@ -576,7 +575,6 @@ parser/transform/helpers/transform_typename.cpp	14
 parser/transform/statement/transform_alter_sequence.cpp	2
 parser/transform/statement/transform_alter_table.cpp	6
 parser/transform/statement/transform_copy.cpp	2
-parser/transform/statement/transform_create_database.cpp	2
 parser/transform/statement/transform_create_function.cpp	4
 parser/transform/statement/transform_create_index.cpp	2
 parser/transform/statement/transform_create_schema.cpp	4
@@ -628,7 +626,7 @@ planner/binder/statement/bind_update.cpp	4
 planner/binder/statement/bind_vacuum.cpp	3
 planner/binder/tableref/bind_basetableref.cpp	4
 planner/binder/tableref/bind_joinref.cpp	3
-planner/binder/tableref/bind_pivot.cpp	6
+planner/binder/tableref/bind_pivot.cpp	5
 planner/binder/tableref/bind_table_function.cpp	18
 planner/binder/tableref/plan_joinref.cpp	2
 planner/binder/tableref/plan_subqueryref.cpp	2
@@ -652,7 +650,7 @@ planner/expression_binder/alter_binder.cpp	3
 planner/expression_binder/base_select_binder.cpp	3
 planner/expression_binder/check_binder.cpp	5
 planner/expression_binder/constant_binder.cpp	3
-planner/expression_binder/group_binder.cpp	5
+planner/expression_binder/group_binder.cpp	4
 planner/expression_binder/having_binder.cpp	4
 planner/expression_binder/index_binder.cpp	7
 planner/expression_binder/insert_binder.cpp	5
