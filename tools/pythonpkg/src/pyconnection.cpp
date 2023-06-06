@@ -1585,13 +1585,14 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter() {
 	return shared_from_this();
 }
 
-bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
+void DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
                               const py::object &traceback) {
 	self.Close();
 	if (exc_type.ptr() != Py_None) {
-		return false;
+		// Propagate the exception if any occurred
+		PyErr_SetObject(exc_type.ptr(), exc.ptr());
+		throw py::error_already_set();
 	}
-	return true;
 }
 
 void DuckDBPyConnection::Cleanup() {
