@@ -21,7 +21,15 @@ static HeaderMap create_s3_header(string url, string query, string host, string 
                                   string payload_hash = "", string content_type = "") {
 
 	HeaderMap res;
-	res["Host"] = host;
+
+	// Host header should only include host and port not path which may be included for custom endpoints
+	auto trimmed_host = host;
+	auto host_slash_pos = trimmed_host.find('/');
+	if (host_slash_pos != string::npos) {
+		trimmed_host = trimmed_host.substr(0, host_slash_pos);
+	}
+	res["Host"] = trimmed_host;
+
 	// If access key is not set, we don't set the headers at all to allow accessing public files through s3 urls
 	if (auth_params.secret_access_key.empty() && auth_params.access_key_id.empty()) {
 		return res;
@@ -603,11 +611,10 @@ ParsedS3Url S3FileSystem::S3UrlParse(string url, S3AuthParams &params) {
 		throw IOException("URL needs to contain key");
 	}
 
-	if (params.url_style == "vhost" || params.url_style == "") {
-		host = bucket + "." + params.endpoint;
-	} else {
-		host = params.endpoint;
-	}
+	// remove scheme if set by custom endpoint
+	host = param.endpoint.starts_with("https://") ? param.endpoint.substr(8) : param.endpoint;
+	host = host.starts_with("http://") ? host.substr(7) : host;
+	host = params.url_style == "vhost" || params.url_style == "" ? bucket + "." + host : host;
 
 	http_proto = params.use_ssl ? "https://" : "http://";
 
