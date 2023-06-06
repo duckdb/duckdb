@@ -216,7 +216,7 @@ static inline bool GetValueString(yyjson_val *val, yyjson_alc *alc, string_t &re
 
 template <class T>
 static bool TransformNumerical(yyjson_val *vals[], Vector &result, const idx_t count, JSONTransformOptions &options) {
-	auto data = (T *)FlatVector::GetData(result);
+	auto data = FlatVector::GetData<T>(result);
 	auto &validity = FlatVector::Validity(result);
 
 	bool success = true;
@@ -238,7 +238,7 @@ static bool TransformNumerical(yyjson_val *vals[], Vector &result, const idx_t c
 template <class T>
 static bool TransformDecimal(yyjson_val *vals[], Vector &result, const idx_t count, uint8_t width, uint8_t scale,
                              JSONTransformOptions &options) {
-	auto data = (T *)FlatVector::GetData(result);
+	auto data = FlatVector::GetData<T>(result);
 	auto &validity = FlatVector::Validity(result);
 
 	bool success = true;
@@ -373,7 +373,7 @@ static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, co
 }
 
 static bool TransformToString(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count) {
-	auto data = (string_t *)FlatVector::GetData(result);
+	auto data = FlatVector::GetData<string_t>(result);
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
@@ -400,11 +400,11 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 	nested_vals.reserve(column_count);
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		key_map.insert({{names[col_idx].c_str(), names[col_idx].length()}, col_idx});
-		nested_vals.push_back((yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * count));
+		nested_vals.push_back(JSONCommon::AllocateArray<yyjson_val *>(alc, count));
 	}
 
 	idx_t found_key_count;
-	auto found_keys = (bool *)alc->malloc(alc->ctx, sizeof(bool) * column_count);
+	auto found_keys = JSONCommon::AllocateArray<bool>(alc, column_count);
 
 	bool success = true;
 
@@ -558,7 +558,7 @@ static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 	ListVector::Reserve(result, offset);
 
 	// Initialize array for the nested values
-	auto nested_vals = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * offset);
+	auto nested_vals = JSONCommon::AllocateArray<yyjson_val *>(alc, offset);
 
 	// Get array values
 	size_t idx, max;
@@ -617,8 +617,8 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 	auto list_entries = FlatVector::GetData<list_entry_t>(result);
 	auto &list_validity = FlatVector::Validity(result);
 
-	auto keys = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * list_size);
-	auto vals = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * list_size);
+	auto keys = JSONCommon::AllocateArray<yyjson_val *>(alc, list_size);
+	auto vals = JSONCommon::AllocateArray<yyjson_val *>(alc, list_size);
 
 	bool success = true;
 	idx_t list_offset = 0;
@@ -675,7 +675,7 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 }
 
 bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count) {
-	auto data = (string_t *)FlatVector::GetData(result);
+	auto data = FlatVector::GetData<string_t>(result);
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
@@ -779,8 +779,8 @@ static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &
 	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	// Read documents
-	auto docs = (yyjson_doc **)alc->malloc(alc->ctx, sizeof(yyjson_doc *) * count);
-	auto vals = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * count);
+	auto docs = JSONCommon::AllocateArray<yyjson_doc *>(alc, count);
+	auto vals = JSONCommon::AllocateArray<yyjson_val *>(alc, count);
 	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);

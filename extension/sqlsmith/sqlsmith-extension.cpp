@@ -157,6 +157,16 @@ static void FuzzyDuckFunction(ClientContext &context, TableFunctionInput &data_p
 	data.finished = true;
 }
 
+static void FuzzAllFunctions(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = data_p.bind_data->CastNoConst<FuzzyDuckFunctionData>();
+	if (data.finished) {
+		return;
+	}
+
+	data.fuzzer.FuzzAllFunctions();
+	data.finished = true;
+}
+
 void SQLSmithExtension::Load(DuckDB &db) {
 	auto &db_instance = *db.instance;
 
@@ -178,6 +188,13 @@ void SQLSmithExtension::Load(DuckDB &db) {
 	fuzzy_duck_fun.named_parameters["complete_log"] = LogicalType::VARCHAR;
 	fuzzy_duck_fun.named_parameters["verbose_output"] = LogicalType::BOOLEAN;
 	ExtensionUtil::RegisterFunction(db_instance, fuzzy_duck_fun);
+
+	TableFunction fuzz_all_functions("fuzz_all_functions", {}, FuzzAllFunctions, FuzzyDuckBind);
+	fuzz_all_functions.named_parameters["seed"] = LogicalType::INTEGER;
+	fuzz_all_functions.named_parameters["log"] = LogicalType::VARCHAR;
+	fuzz_all_functions.named_parameters["complete_log"] = LogicalType::VARCHAR;
+	fuzz_all_functions.named_parameters["verbose_output"] = LogicalType::BOOLEAN;
+	ExtensionUtil::RegisterFunction(db_instance, fuzz_all_functions);
 
 	TableFunction reduce_sql_function("reduce_sql_statement", {LogicalType::VARCHAR}, ReduceSQLFunction, ReduceSQLBind);
 	ExtensionUtil::RegisterFunction(db_instance, reduce_sql_function);
