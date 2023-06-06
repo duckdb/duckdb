@@ -41,7 +41,7 @@ public:
 	vector<ReplacementBinding> replacement_bindings;
 
 	//! Do not recurse further than this operator (optional)
-	optional_ptr<LogicalOperator> stop_operator = nullptr;
+	optional_ptr<LogicalOperator> stop_operator;
 	//! Extra callback (optional)
 	std::function<void(BoundColumnRefExpression &, const ReplacementBinding &)> column_binding_callback = nullptr;
 };

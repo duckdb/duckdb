@@ -16,7 +16,7 @@ ColumnBindingReplacer::ColumnBindingReplacer() {
 }
 
 void ColumnBindingReplacer::VisitOperator(LogicalOperator &op) {
-	if (stop_operator && stop_operator == &op) {
+	if (stop_operator && stop_operator.get() == &op) {
 		return;
 	}
 	VisitOperatorChildren(op);

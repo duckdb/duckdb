@@ -576,7 +576,8 @@ bool RemoveRedundantExpressionsProjection(LogicalOperator &current_op, ColumnBin
 			found = true;
 		}
 	}
-	return found;
+
+	return !found; // Projected out
 }
 
 bool RemoveRedundantExpressionsComparisonJoin(LogicalOperator &current_op, ColumnBinding &current_binding) {
@@ -642,10 +643,11 @@ void CompressedMaterialization::RemoveRedundantExpressions(
 		for (auto current_op : operators_in_between) {
 			const auto current_bindings = current_op.get().GetColumnBindings();
 			switch (current_op.get().type) {
-			case LogicalOperatorType::LOGICAL_PROJECTION:
+			case LogicalOperatorType::LOGICAL_PROJECTION: {
 				can_remove_current = RemoveRedundantExpressionsProjection(current_op, current_binding, current_col_idx,
 				                                                          expressions_in_between);
 				break;
+			}
 			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 			case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 				can_remove_current = RemoveRedundantExpressionsComparisonJoin(current_op, current_binding);
@@ -654,7 +656,6 @@ void CompressedMaterialization::RemoveRedundantExpressions(
 				const auto &any_join = current_op.get().Cast<LogicalAnyJoin>();
 				if (UsesBinding(*any_join.condition, current_binding)) {
 					can_remove_current = false;
-					break;
 				}
 				break;
 			}
@@ -664,7 +665,11 @@ void CompressedMaterialization::RemoveRedundantExpressions(
 			case LogicalOperatorType::LOGICAL_LIMIT:
 				break;
 			default:
-				can_remove_current = false;
+				continue;
+			}
+
+			if (!can_remove_current) {
+				break;
 			}
 		}
 
