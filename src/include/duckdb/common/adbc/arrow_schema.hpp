@@ -44,7 +44,7 @@ enum class ArrowErrorCode : int8_t {
 	RESULT_TOO_LARGE = 34
 };
 
-static void* ArrowMalloc(int64_t size) {
+static void *ArrowMalloc(int64_t size) {
 	return malloc(size);
 }
 
@@ -284,8 +284,8 @@ static const char *ArrowTimeUnitString(ArrowTimeUnit time_unit) {
 	}
 }
 
-ArrowErrorCode ArrowSchemaInitDateTime(struct ArrowSchema *schema, ArrowType data_type,
-                                       ArrowTimeUnit time_unit, const char *timezone) {
+ArrowErrorCode ArrowSchemaInitDateTime(struct ArrowSchema *schema, ArrowType data_type, ArrowTimeUnit time_unit,
+                                       const char *timezone) {
 	auto result = ArrowSchemaInit(schema, ArrowType::UNINITIALIZED);
 	if (result != ArrowErrorCode::OK) {
 		return result;

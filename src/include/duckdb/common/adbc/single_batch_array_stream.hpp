@@ -93,4 +93,4 @@ AdbcStatusCode BatchToArrayStream(struct ArrowArray *values, struct ArrowSchema 
 	return ADBC_STATUS_OK;
 }
 
-} //namespace duckdb_adbc
+} // namespace duckdb_adbc
