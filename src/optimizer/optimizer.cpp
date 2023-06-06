@@ -53,6 +53,10 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 #endif
 }
 
+ClientContext &Optimizer::GetContext() {
+	return context;
+}
+
 void Optimizer::RunOptimizer(OptimizerType type, const std::function<void()> &callback) {
 	auto &config = DBConfig::GetConfig(context);
 	if (config.options.disabled_optimizers.find(type) != config.options.disabled_optimizers.end()) {
