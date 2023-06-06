@@ -60,16 +60,10 @@ void Leaf::Free(ART &art, Node &node) {
 	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
 
+	// free leaf segments
 	auto &leaf = Leaf::Get(art, node);
-
-	// delete all leaf segments
 	if (!leaf.IsInlined()) {
-		auto ptr = leaf.row_ids.ptr;
-		while (ptr.IsSet()) {
-			auto next_ptr = LeafSegment::Get(art, ptr).next;
-			Node::Free(art, ptr);
-			ptr = next_ptr;
-		}
+		Node::Free(art, leaf.row_ids.ptr);
 	}
 }
 
@@ -275,10 +269,10 @@ uint32_t Leaf::FindRowId(const ART &art, Node &ptr, const row_t row_id) const {
 	return (uint32_t)DConstants::INVALID_INDEX;
 }
 
-string Leaf::ToString(const ART &art) const {
+string Leaf::VerifyAndToString(const ART &art, const bool only_verify) const {
 
 	if (IsInlined()) {
-		return "Leaf (" + to_string(count) + "): [" + to_string(row_ids.inlined) + "]";
+		return only_verify ? "" : "Leaf [count: 1, row ID: " + to_string(row_ids.inlined) + "]";
 	}
 
 	auto ptr = row_ids.ptr;
@@ -296,7 +290,10 @@ string Leaf::ToString(const ART &art) const {
 		remaining -= to_string_count;
 		ptr = segment.next;
 	}
-	return "Leaf (" + to_string(this_count) + ", " + to_string(count) + "): [" + str + "] \n";
+
+	D_ASSERT(remaining == 0);
+	D_ASSERT(this_count == count);
+	return only_verify ? "" : "Leaf [count: " + to_string(count) + ", row IDs: " + str + "] \n";
 }
 
 BlockPointer Leaf::Serialize(const ART &art, MetaBlockWriter &writer) const {
@@ -366,6 +363,7 @@ void Leaf::Vacuum(ART &art) {
 	auto &allocator = Node::GetAllocator(art, NType::LEAF_SEGMENT);
 	if (allocator.NeedsVacuum(row_ids.ptr)) {
 		row_ids.ptr.SetPtr(allocator.VacuumPointer(row_ids.ptr));
+		row_ids.ptr.type = (uint8_t)NType::LEAF_SEGMENT;
 	}
 
 	auto ptr = row_ids.ptr;
@@ -374,6 +372,7 @@ void Leaf::Vacuum(ART &art) {
 		ptr = segment.next;
 		if (ptr.IsSet() && allocator.NeedsVacuum(ptr)) {
 			segment.next.SetPtr(allocator.VacuumPointer(ptr));
+			segment.next.type = (uint8_t)NType::LEAF_SEGMENT;
 			ptr = segment.next;
 		}
 	}
