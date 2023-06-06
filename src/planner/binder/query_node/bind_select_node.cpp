@@ -288,6 +288,9 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	// expand the stars for this expression
 	vector<unique_ptr<ParsedExpression>> new_conditions;
 	ExpandStarExpression(std::move(expr), new_conditions);
+	if (new_conditions.empty()) {
+		throw ParserException("COLUMNS expansion resulted in empty set of columns");
+	}
 
 	// set up an AND conjunction between the expanded conditions
 	expr = std::move(new_conditions[0]);
