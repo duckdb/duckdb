@@ -12,5 +12,8 @@ add_executable(
         tests/catalog_functions.cpp
         tests/col_attribute.cpp
         tests/connect.cpp
-        tests/diagnostics.cpp)
+        tests/diagnostics.cpp
+        tests/select.cpp
+)
+
 target_link_libraries(test_odbc duckdb_odbc ODBC::ODBC)
