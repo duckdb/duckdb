@@ -36,7 +36,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreate &op
 		return create;
 	}
     case LogicalOperatorType::LOGICAL_CREATE_PROPERTY_GRAPH: {
-        return make_unique<PhysicalCreatePropertyGraph>(
+        return make_uniq<PhysicalCreatePropertyGraph>(
                 unique_ptr_cast<CreateInfo, CreatePropertyGraphInfo>(std::move(op.info)), op.estimated_cardinality);
     }
 	default:
