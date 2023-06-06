@@ -197,4 +197,14 @@ void INITIALIZE_DATABASE(HSTMT hstmt) {
 	EXEC_SQL(hstmt, "CREATE TABLE lo_test_table (id int4, large_data blob);");
 }
 
+map<SQLSMALLINT, SQLULEN> InitializeTypesMap() {
+	map<SQLSMALLINT, SQLULEN> types_map;
+
+	types_map[SQL_VARCHAR] = 256;
+	types_map[SQL_BIGINT] = 20;
+	types_map[SQL_INTEGER] = 11;
+	types_map[SQL_SMALLINT] = 5;
+	return types_map;
+}
+
 } // namespace odbc_test

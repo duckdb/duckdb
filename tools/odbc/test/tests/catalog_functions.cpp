@@ -7,101 +7,87 @@ using namespace odbc_test;
 /* Tests the following catalog functions:
  * SQLGetTypeInfo
  * SQLTables
+ * SQLColumns
+ * SQLGetInfo
  *
- *
+ * TODO: Test the following catalog functions:
+ * - SQLSpecialColumns
+ * - SQLStatistics
+ * - SQLPrimaryKeys
+ * - SQLForeignKeys
+ * - SQLProcedureColumns
+ * - SQLTablePrivileges
+ * - SQLColumnPrivileges
+ * - SQLProcedures
  */
 
 void TestGetTypeInfo(HSTMT &hstmt) {
 	SQLRETURN ret;
-	SQLSMALLINT num_cols;
+	SQLSMALLINT col_count;
 
 	// Check for SQLGetTypeInfo
 	ret = SQLGetTypeInfo(hstmt, SQL_VARCHAR);
 	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLGetTypeInfo");
 
-	ret = SQLNumResultCols(hstmt, &num_cols);
+	ret = SQLNumResultCols(hstmt, &col_count);
 	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLNumResultCols");
-	REQUIRE(num_cols == 19);
+	REQUIRE(col_count == 19);
 
 	ret = SQLFetch(hstmt);
 	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFetch");
 
-	// Retrieve metadata & data from the column
-	string col_name = "TYPE_NAME";
-	METADATA_CHECK(hstmt, 1, col_name.c_str(), col_name.length(), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 1, "VARCHAR");
+	map<SQLSMALLINT, SQLULEN> types_map = InitializeTypesMap();
+	vector<metadata_data> expected_metadata;
+	vector<string> expected_data;
+	expected_metadata.push_back({"TYPE_NAME", SQL_VARCHAR});
+	expected_data.emplace_back("VARCHAR");
+	expected_metadata.push_back({"DATA_TYPE", SQL_SMALLINT});
+	expected_data.emplace_back("12");
+	expected_metadata.push_back({"COLUMN_SIZE", SQL_INTEGER});
+	expected_data.emplace_back("-1");
+	expected_metadata.push_back({"LITERAL_PREFIX", SQL_VARCHAR});
+	expected_data.emplace_back("'");
+	expected_metadata.push_back({"LITERAL_SUFFIX", SQL_VARCHAR});
+	expected_data.emplace_back("'");
+	expected_metadata.push_back({"CREATE_PARAMS", SQL_VARCHAR});
+	expected_data.emplace_back("length");
+	expected_metadata.push_back({"NULLABLE", SQL_SMALLINT});
+	expected_data.emplace_back("1");
+	expected_metadata.push_back({"CASE_SENSITIVE", SQL_SMALLINT});
+	expected_data.emplace_back("1");
+	expected_metadata.push_back({"SEARCHABLE", SQL_SMALLINT});
+	expected_data.emplace_back("3");
+	expected_metadata.push_back({"UNSIGNED_ATTRIBUTE", SQL_SMALLINT});
+	expected_data.emplace_back("-1");
+	expected_metadata.push_back({"FIXED_PREC_SCALE", SQL_SMALLINT});
+	expected_data.emplace_back("0");
+	expected_metadata.push_back({"AUTO_UNIQUE_VALUE", SQL_SMALLINT});
+	expected_data.emplace_back("-1");
+	expected_metadata.push_back({"LOCAL_TYPE_NAME", SQL_VARCHAR});
+	expected_data.emplace_back("");
+	expected_metadata.push_back({"MINIMUM_SCALE", SQL_SMALLINT});
+	expected_data.emplace_back("-1");
+	expected_metadata.push_back({"MAXIMUM_SCALE", SQL_SMALLINT});
+	expected_data.emplace_back("-1");
+	expected_metadata.push_back({"SQL_DATA_TYPE", SQL_SMALLINT});
+	expected_data.emplace_back("12");
+	expected_metadata.push_back({"SQL_DATETIME_SUB", SQL_SMALLINT});
+	expected_data.emplace_back("-1");
+	expected_metadata.push_back({"NUM_PREC_RADIX", SQL_INTEGER});
+	expected_data.emplace_back("-1");
+	expected_metadata.push_back({"INTERVAL_PRECISION", SQL_SMALLINT});
+	expected_data.emplace_back("-1");
 
-	col_name = "DATA_TYPE";
-	METADATA_CHECK(hstmt, 2, col_name.c_str(), col_name.length(), SQL_SMALLINT, 5, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 2, "12");
-
-	col_name = "COLUMN_SIZE";
-	METADATA_CHECK(hstmt, 3, col_name.c_str(), col_name.length(), SQL_INTEGER, 11, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 3, "-1");
-
-	col_name = "LITERAL_PREFIX";
-	METADATA_CHECK(hstmt, 4, col_name.c_str(), col_name.length(), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 4, "'");
-
-	col_name = "LITERAL_SUFFIX";
-	METADATA_CHECK(hstmt, 5, col_name.c_str(), col_name.length(), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 5, "'");
-
-	col_name = "CREATE_PARAMS";
-	METADATA_CHECK(hstmt, 6, col_name.c_str(), col_name.length(), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 6, "length");
-
-	col_name = "NULLABLE";
-	METADATA_CHECK(hstmt, 7, col_name.c_str(), col_name.length(), SQL_SMALLINT, 5, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 7, "1");
-
-	col_name = "CASE_SENSITIVE";
-	METADATA_CHECK(hstmt, 8, col_name.c_str(), col_name.length(), SQL_SMALLINT, 5, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 8, "1");
-
-	col_name = "SEARCHABLE";
-	METADATA_CHECK(hstmt, 9, col_name.c_str(), col_name.length(), SQL_SMALLINT, 5, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 9, "3");
-
-	col_name = "UNSIGNED_ATTRIBUTE";
-	METADATA_CHECK(hstmt, 10, col_name.c_str(), col_name.length(), SQL_SMALLINT, 5, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 10, "-1");
-
-	col_name = "FIXED_PREC_SCALE";
-	METADATA_CHECK(hstmt, 11, col_name.c_str(), col_name.length(), SQL_SMALLINT, 5, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 11, "0");
-
-	col_name = "AUTO_UNIQUE_VALUE";
-	METADATA_CHECK(hstmt, 12, col_name.c_str(), col_name.length(), SQL_SMALLINT, 5, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 12, "-1");
-
-	col_name = "LOCAL_TYPE_NAME";
-	METADATA_CHECK(hstmt, 13, col_name.c_str(), col_name.length(), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 13, nullptr);
-
-	col_name = "MINIMUM_SCALE";
-	METADATA_CHECK(hstmt, 14, col_name.c_str(), col_name.length(), SQL_SMALLINT, 5, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 14, "-1");
-
-	col_name = "MAXIMUM_SCALE";
-	METADATA_CHECK(hstmt, 15, col_name.c_str(), col_name.length(), SQL_SMALLINT, 5, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 15, "-1");
-
-	col_name = "SQL_DATA_TYPE";
-	METADATA_CHECK(hstmt, 16, col_name.c_str(), col_name.length(), SQL_SMALLINT, 5, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 16, "12");
-
-	col_name = "SQL_DATETIME_SUB";
-	METADATA_CHECK(hstmt, 17, col_name.c_str(), col_name.length(), SQL_SMALLINT, 5, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 17, "-1");
-
-	col_name = "NUM_PREC_RADIX";
-	METADATA_CHECK(hstmt, 18, col_name.c_str(), col_name.length(), SQL_INTEGER, 11, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 18, "-1");
-
-	col_name = "INTERVAL_PRECISION";
-	METADATA_CHECK(hstmt, 19, col_name.c_str(), col_name.length(), SQL_SMALLINT, 5, 0, SQL_NULLABLE_UNKNOWN);
-	DATA_CHECK(hstmt, 19, "-1");
+	for (int i = 0; i < col_count; i++) {
+		auto &entry = expected_metadata[i];
+		METADATA_CHECK(hstmt, i + 1, entry.col_name.c_str(), entry.col_name.length(), entry.col_type,
+		               types_map[entry.col_type], 0, SQL_NULLABLE_UNKNOWN);
+		if (expected_data[i].empty()) {
+			DATA_CHECK(hstmt, i + 1, nullptr);
+			continue;
+		}
+		DATA_CHECK(hstmt, i + 1, expected_data[i].c_str());
+	}
 }
 
 static void TestSQLTables(HSTMT &hstmt) {
@@ -116,20 +102,19 @@ static void TestSQLTables(HSTMT &hstmt) {
 	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLNumResultCols");
 	REQUIRE(col_count == 5);
 
-	string col_name = "TABLE_CAT";
-	METADATA_CHECK(hstmt, 1, col_name.c_str(), col_name.length(), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
+	map<SQLSMALLINT, SQLULEN> types_map = InitializeTypesMap();
+	vector<metadata_data> expected_metadata;
+	expected_metadata.push_back({"TABLE_CAT", SQL_VARCHAR});
+	expected_metadata.push_back({"TABLE_SCHEM", SQL_VARCHAR});
+	expected_metadata.push_back({"TABLE_NAME", SQL_VARCHAR});
+	expected_metadata.push_back({"TABLE_TYPE", SQL_VARCHAR});
+	expected_metadata.push_back({"REMARKS", SQL_VARCHAR});
 
-	col_name = "TABLE_SCHEM";
-	METADATA_CHECK(hstmt, 2, col_name.c_str(), col_name.length(), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
-
-	col_name = "TABLE_NAME";
-	METADATA_CHECK(hstmt, 3, col_name.c_str(), col_name.length(), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
-
-	col_name = "TABLE_TYPE";
-	METADATA_CHECK(hstmt, 4, col_name.c_str(), col_name.length(), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
-
-	col_name = "REMARKS";
-	METADATA_CHECK(hstmt, 5, col_name.c_str(), col_name.length(), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
+	for (int i = 0; i < col_count; i++) {
+		auto &entry = expected_metadata[i];
+		METADATA_CHECK(hstmt, i + 1, entry.col_name.c_str(), entry.col_name.length(), entry.col_type,
+		               types_map[entry.col_type], 0, SQL_NULLABLE_UNKNOWN);
+	}
 
 	int fetch_count = 0;
 	do {
@@ -164,6 +149,91 @@ static void TestSQLTables(HSTMT &hstmt) {
 	} while (ret == SQL_SUCCESS);
 }
 
+// static void TestSQLTablesLong(HSTMT &hstmt) {
+//	SQLRETURN ret;
+//
+//	ret = SQLTables(hstmt, (SQLCHAR *) "", SQL_NTS,
+//	                (SQLCHAR *) "main", SQL_NTS,
+//	                (SQLCHAR *) "test_table_%", SQL_NTS,
+//	                (SQLCHAR *) "1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5, 'TABLE'",
+//SQL_NTS); 	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLTables");
+//
+//	DATA_CHECK(hstmt, 1, "memory");
+//	DATA_CHECK(hstmt, 2, "main");
+//	DATA_CHECK(hstmt, 3, "test_table_1");
+//	DATA_CHECK(hstmt, 4, "TABLE");
+// }
+
+static void TestSQLColumns(HSTMT &hstmt) {
+	SQLRETURN ret;
+
+	ret = SQLColumns(hstmt, NULL, 0, (SQLCHAR *)"main", SQL_NTS, (SQLCHAR *)"%", SQL_NTS, NULL, 0);
+	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLColumns");
+
+	SQLSMALLINT col_count;
+
+	ret = SQLNumResultCols(hstmt, &col_count);
+	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLNumResultCols");
+	REQUIRE(col_count == 18);
+
+	// Create a map of column types and a vector of expected metadata
+	map<SQLSMALLINT, SQLULEN> types_map = InitializeTypesMap();
+	vector<metadata_data> expected_metadata;
+	expected_metadata.push_back({"TABLE_CAT", SQL_INTEGER});
+	expected_metadata.push_back({"TABLE_SCHEM", SQL_VARCHAR});
+	expected_metadata.push_back({"TABLE_NAME", SQL_VARCHAR});
+	expected_metadata.push_back({"COLUMN_NAME", SQL_VARCHAR});
+	expected_metadata.push_back({"DATA_TYPE", SQL_BIGINT});
+	expected_metadata.push_back({"TYPE_NAME", SQL_VARCHAR});
+	expected_metadata.push_back({"COLUMN_SIZE", SQL_INTEGER});
+	expected_metadata.push_back({"BUFFER_LENGTH", SQL_INTEGER});
+	expected_metadata.push_back({"DECIMAL_DIGITS", SQL_INTEGER});
+	expected_metadata.push_back({"NUM_PREC_RADIX", SQL_INTEGER});
+	expected_metadata.push_back({"NULLABLE", SQL_INTEGER});
+	expected_metadata.push_back({"REMARKS", SQL_INTEGER});
+	expected_metadata.push_back({"COLUMN_DEF", SQL_VARCHAR});
+	expected_metadata.push_back({"SQL_DATA_TYPE", SQL_BIGINT});
+	expected_metadata.push_back({"SQL_DATETIME_SUB", SQL_BIGINT});
+	expected_metadata.push_back({"CHAR_OCTET_LENGTH", SQL_INTEGER});
+	expected_metadata.push_back({"ORDINAL_POSITION", SQL_INTEGER});
+	expected_metadata.push_back({"IS_NULLABLE", SQL_VARCHAR});
+
+	for (int i = 0; i < col_count; i++) {
+		auto &entry = expected_metadata[i];
+		METADATA_CHECK(hstmt, i + 1, entry.col_name.c_str(), entry.col_name.length(), entry.col_type,
+		               types_map[entry.col_type], 0, SQL_NULLABLE_UNKNOWN);
+	}
+
+	vector<array<string, 4>> expected_data;
+	expected_data.emplace_back(array<string, 4> {"bool_table", "id", "13", "INTEGER"});
+	expected_data.emplace_back(array<string, 4> {"bool_table", "t", "25", "VARCHAR"});
+	expected_data.emplace_back(array<string, 4> {"bool_table", "b", "10", "BOOLEAN"});
+	expected_data.emplace_back(array<string, 4> {"byte_table", "id", "13", "INTEGER"});
+	expected_data.emplace_back(array<string, 4> {"byte_table", "t", "26", "BLOB"});
+	expected_data.emplace_back(array<string, 4> {"interval_table", "id", "13", "INTEGER"});
+	expected_data.emplace_back(array<string, 4> {"interval_table", "iv", "27", "INTERVAL"});
+	expected_data.emplace_back(array<string, 4> {"interval_table", "d", "25", "VARCHAR"});
+	expected_data.emplace_back(array<string, 4> {"lo_test_table", "id", "13", "INTEGER"});
+	expected_data.emplace_back(array<string, 4> {"lo_test_table", "large_data", "26", "BLOB"});
+	expected_data.emplace_back(array<string, 4> {"test_table_1", "id", "13", "INTEGER"});
+	expected_data.emplace_back(array<string, 4> {"test_table_1", "t", "25", "VARCHAR"});
+	expected_data.emplace_back(array<string, 4> {"test_view", "id", "13", "INTEGER"});
+	expected_data.emplace_back(array<string, 4> {"test_view", "t", "25", "VARCHAR"});
+
+	for (int i = 0; i < expected_data.size(); i++) {
+		ret = SQLFetch(hstmt);
+		ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFetch");
+
+		auto &entry = expected_data[i];
+		DATA_CHECK(hstmt, 1, nullptr);
+		DATA_CHECK(hstmt, 2, "main");
+		DATA_CHECK(hstmt, 3, entry[0].c_str());
+		DATA_CHECK(hstmt, 4, entry[1].c_str());
+		DATA_CHECK(hstmt, 5, entry[2].c_str());
+		DATA_CHECK(hstmt, 6, entry[3].c_str());
+	}
+}
+
 TEST_CASE("catalog_functions", "[odbc") {
 	SQLRETURN ret;
 	SQLHANDLE env;
@@ -188,6 +258,17 @@ TEST_CASE("catalog_functions", "[odbc") {
 
 	// Check for SQLTables
 	TestSQLTables(hstmt);
+	//	TestSQLTablesLong(hstmt);
+
+	// Check for SQLColumns
+	TestSQLColumns(hstmt);
+
+	// Test SQLGetInfo
+	char database_name[128];
+	SQLSMALLINT len;
+	ret = SQLGetInfo(hstmt, SQL_TABLE_TERM, database_name, sizeof(database_name), &len);
+	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLGetInfo (SQL_DATABASE_NAME)");
+	REQUIRE(strcmp(database_name, "table") == 0);
 
 	// Free the statement handle
 	ret = SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
@@ -197,12 +278,3 @@ TEST_CASE("catalog_functions", "[odbc") {
 	DISCONNECT_FROM_DATABASE(ret, dbc, env);
 	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLDisconnect (HDBC)");
 }
-
-// SELECT "LOCAL_TYPE_NAME" FROM (SELECT * FROM (VALUES (CAST('VARCHAR' AS VARCHAR),CAST(12 AS SMALLINT),CAST(-1 AS
-// INTEGER),CAST('''' AS VARCHAR),CAST('''' AS VARCHAR),CAST('length' AS VARCHAR),CAST(1 AS SMALLINT),CAST(1 AS
-// SMALLINT),CAST(3 AS SMALLINT),CAST(-1 AS SMALLINT),CAST(0 AS SMALLINT),CAST(-1 AS SMALLINT),CAST(NULL AS
-// VARCHAR),CAST(-1 AS SMALLINT),CAST(-1 AS SMALLINT),CAST(12 AS SMALLINT),CAST(-1 AS SMALLINT),CAST(-1 AS
-// integer),CAST(-1 AS SMALLINT))) AS odbc_types ("TYPE_NAME", "DATA_TYPE", "COLUMN_SIZE", "LITERAL_PREFIX",
-// "LITERAL_SUFFIX", "CREATE_PARAMS", "NULLABLE", "CASE_SENSITIVE", "SEARCHABLE", "UNSIGNED_ATTRIBUTE",
-// "FIXED_PREC_SCALE", "AUTO_UNIQUE_VALUE", "LOCAL_TYPE_NAME", "MINIMUM_SCALE", "MAXIMUM_SCALE", "SQL_DATA_TYPE",
-// "SQL_DATETIME_SUB", "NUM_PREC_RADIX", "INTERVAL_PRECISION")) as result;

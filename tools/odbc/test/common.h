@@ -14,6 +14,11 @@
 using namespace std;
 
 namespace odbc_test {
+struct metadata_data {
+	string col_name;
+	SQLSMALLINT col_type;
+};
+
 void ODBC_CHECK(SQLRETURN ret, SQLSMALLINT tpe, SQLHANDLE hnd, const char *func);
 void ACCESS_DIAGNOSTIC(string &state, string &message, SQLHANDLE handle, SQLRETURN &ret, SQLSMALLINT handle_type);
 void DATA_CHECK(HSTMT hstmt, SQLSMALLINT col_num, const char *expected_content);
@@ -24,6 +29,8 @@ void DRIVER_CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc, 
 void CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc);
 void DISCONNECT_FROM_DATABASE(SQLRETURN &ret, SQLHANDLE &dbc, SQLHANDLE &env);
 void INITIALIZE_DATABASE(HSTMT hstmt);
+
+map<SQLSMALLINT, SQLULEN> InitializeTypesMap();
 } // namespace odbc_test
 
 #endif // ODBC_TEST_COMMON_H
