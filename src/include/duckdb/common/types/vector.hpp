@@ -119,9 +119,6 @@ public:
 	//! Slice the vector, keeping the result around in a cache or potentially using the cache instead of slicing
 	DUCKDB_API void Slice(const SelectionVector &sel, idx_t count, SelCache &cache);
 
-	//! Creates a reference to a slice of the other vector without allocating memory
-	DUCKDB_API void SliceInPlace(Vector &other, idx_t offset, idx_t end);
-
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
 	DUCKDB_API void Initialize(bool zero_data = false, idx_t capacity = STANDARD_VECTOR_SIZE);

@@ -255,7 +255,7 @@ void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
 		auto &input = inputs.data[i];
 		auto &leaf = leaves.data[i];
 
-		input.SliceInPlace(leaf, begin, end);
+		input.Slice(leaf, begin, end);
 		input.Verify(count);
 	}
 
