@@ -168,8 +168,10 @@ static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::L
 	case duckdb::LogicalTypeId::HUGEINT: {
 		auto val = duckdb::HugeIntValue::Get(dval);
 		auto negative = val.upper < 0;
-		auto upper = negative ? val.upper * -1 : val.upper; // remove signing bit
-		const uint64_t words[] = {val.lower, upper};
+		if (negative) {
+			duckdb::Hugeint::NegateInPlace(val);  // remove signing bit
+		}
+		const uint64_t words[] = {val.lower, val.upper};
 		value = Napi::BigInt::New(env, negative, 2, words);
 	} break;
 	case duckdb::LogicalTypeId::DECIMAL: {
