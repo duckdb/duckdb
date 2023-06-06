@@ -368,89 +368,6 @@ bool BufferedCSVReader::JumpToNextSample() {
 	return true;
 }
 
-enum class CSVState {
-    STANDARD = 0,
-    FIELD_SEPARATOR = 1,
-    RECORD_SEPARATOR = 2,
-    QUOTED = 3,
-    ESCAPED = 4
-};
-
-void fillTransitionArray(int transitionArray[5][256]) {
-    // Initialize transition array with default values
-    for (int i = 0; i < 5; i++) {
-        for (int j = 0; j < 256; j++) {
-            transitionArray[i][j] = 0; // Default state is STANDARD (0)
-        }
-    }
-
-    // Set specific transitions based on CSV rules
-    transitionArray[static_cast<int>(CSVState::STANDARD)][','] = static_cast<int>(CSVState::FIELD_SEPARATOR);
-    transitionArray[static_cast<int>(CSVState::STANDARD)]['\n'] = static_cast<int>(CSVState::RECORD_SEPARATOR);
-    // Set other transitions based on the CSV format rules
-
-    // Repeat the process for other states as needed
-    // transitionArray[static_cast<int>(CSVState::FIELD_SEPARATOR)][character] = next state;
-    // transitionArray[static_cast<int>(CSVState::RECORD_SEPARATOR)][character] = next state;
-    // transitionArray[static_cast<int>(CSVState::QUOTED)][character] = next state;
-    // transitionArray[static_cast<int>(CSVState::ESCAPED)][character] = next state;
-}
-
-
-void parseCSV(const std::string& csvString) {
-    const int transitionArray[5][256] = {
-        /* STANDARD state */
-        {0, 1, 2, 3, 4, 0, 0, /* ... */},
-
-        /* FIELD_SEPARATOR state */
-        {0, 1, 2, 3, 4, 0, 0, /* ... */},
-
-        /* RECORD_SEPARATOR state */
-        {0, 1, 2, 3, 4, 0, 0, /* ... */},
-
-        /* QUOTED state */
-        {0, 1, 2, 3, 4, 0, 0, /* ... */},
-
-        /* ESCAPED state */
-        {0, 1, 2, 3, 4, 0, 0, /* ... */}
-    };
-
-    std::vector<size_t> fieldStarts;
-    std::vector<size_t> recordStarts;
-    CSVState state = CSVState::STANDARD;
-    size_t fieldIdx = 0;
-    size_t recordIdx = 0;
-
-    for (size_t i = 0; i < csvString.size(); i++) {
-        char c = csvString[i];
-        state = static_cast<CSVState>(transitionArray[static_cast<int>(state)][static_cast<int>(c)]);
-
-        if (state == CSVState::FIELD_SEPARATOR) {
-            fieldStarts.push_back(i);
-            fieldIdx++;
-        } else if (state == CSVState::RECORD_SEPARATOR) {
-            recordStarts.push_back(i);
-            recordIdx++;
-        }
-    }
-
-    // Print the extracted fields and values
-    for (size_t i = 0; i < fieldStarts.size(); i++) {
-        size_t fieldStart = fieldStarts[i];
-        size_t fieldEnd = (i + 1 < fieldStarts.size()) ? fieldStarts[i + 1] : csvString.size();
-        std::string field = csvString.substr(fieldStart, fieldEnd - fieldStart);
-        std::cout << "Field " << i << ": " << field << std::endl;
-    }
-
-    // Print the extracted records
-    for (size_t i = 0; i < recordStarts.size(); i++) {
-        size_t recordStart = recordStarts[i];
-        size_t recordEnd = (i + 1 < recordStarts.size()) ? recordStarts[i + 1] : csvString.size();
-        std::string record = csvString.substr(recordStart, recordEnd - recordStart);
-        std::cout << "Record " << i << ": " << record << std::endl;
-    }
-}
-
 void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types,
                                       BufferedCSVReaderOptions &original_options,
                                       vector<BufferedCSVReaderOptions> &info_candidates, idx_t &best_num_cols) {
@@ -515,7 +432,7 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 					idx_t num_cols = sniffed_column_counts.empty() ? 0 : sniffed_column_counts[0];
 					idx_t padding_count = 0;
 					bool allow_padding = original_options.null_padding;
-					if (sniffed_column_counts.size() > rows_read){
+					if (sniffed_column_counts.size() > rows_read) {
 						rows_read = sniffed_column_counts.size();
 					}
 					for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
@@ -577,10 +494,11 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 			}
 		}
 	}
-	// Up to this point we have our candidates, but we only checked one chunk size with them, let's eliminate them running on sample size
+	// Up to this point we have our candidates, but we only checked one chunk size with them, let's eliminate them
+	// running on sample size
 	int64_t remaining_sample = original_options.sample_chunks - 1;
-//	bool still_have_results =
-//	int x = 0;
+	//	bool still_have_results =
+	//	int x = 0;
 }
 
 void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_candidates,

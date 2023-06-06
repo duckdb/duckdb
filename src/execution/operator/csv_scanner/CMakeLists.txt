@@ -3,11 +3,11 @@ add_library_unity(
   OBJECT
   base_csv_reader.cpp
   buffered_csv_reader.cpp
-  parallel_csv_reader.cpp
   csv_buffer.cpp
   csv_file_handle.cpp
   csv_reader_options.cpp
- )
+  csv_state_machine.cpp
+  parallel_csv_reader.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_operator_csv_scanner>
     PARENT_SCOPE)
