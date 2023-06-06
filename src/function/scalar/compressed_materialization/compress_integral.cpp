@@ -182,20 +182,6 @@ void CMIntegralCompressFun::RegisterFunction(BuiltinFunctions &set) {
 	}
 }
 
-static void CMIntegralDecompressSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
-                                          const ScalarFunction &function) {
-	writer.WriteRegularSerializableList(function.arguments);
-	writer.WriteSerializable(function.return_type);
-}
-
-unique_ptr<FunctionData> CMIntegralDecompressDeserialize(ClientContext &context, FieldReader &reader,
-                                                         ScalarFunction &bound_function) {
-	bound_function.arguments = reader.template ReadRequiredSerializableList<LogicalType, LogicalType>();
-	bound_function.function = GetIntegralDecompressFunctionInputSwitch(
-	    bound_function.arguments[0], reader.ReadRequiredSerializable<LogicalType, LogicalType>());
-	return nullptr;
-}
-
 ScalarFunction CMIntegralDecompressFun::GetFunction(const LogicalType &input_type, const LogicalType &result_type) {
 	ScalarFunction result(IntegralDecompressFunctionName(result_type), {input_type, result_type}, result_type,
 	                      GetIntegralDecompressFunctionInputSwitch(input_type, result_type),
