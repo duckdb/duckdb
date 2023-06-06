@@ -21,12 +21,8 @@ void CreatePropertyGraphInfo::SerializeInternal(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteString(property_graph_name);
     writer.WriteSerializableList<PropertyGraphTable>(vertex_tables);
-
     writer.WriteSerializableList<PropertyGraphTable>(edge_tables);
-	for (auto &label_entry : label_map) {
-		writer.WriteString(label_entry.first);
-		label_entry.second->Serialize(serializer);
-	}
+    writer.WriteRegularSerializableMap<PropertyGraphTable*>(label_map);
 	writer.Finalize();
 }
 
@@ -35,15 +31,21 @@ unique_ptr<CreateInfo> CreatePropertyGraphInfo::Copy() const {
 	CopyProperties(*result);
 
 	for (auto &vertex_table : vertex_tables) {
-		result->vertex_tables.push_back(vertex_table->Copy());
+        auto copied_vertex_table = vertex_table->Copy();
+        for (auto &label : copied_vertex_table->sub_labels) {
+            result->label_map[label] = copied_vertex_table.get();
+        }
+        result->label_map[copied_vertex_table->main_label] = copied_vertex_table.get();
+		result->vertex_tables.push_back(std::move(copied_vertex_table));
 	}
 	for (auto &edge_table : edge_tables) {
-		result->edge_tables.push_back(edge_table->Copy());
+        auto copied_edge_table = edge_table->Copy();
+        for (auto &label : copied_edge_table->sub_labels) {
+            result->label_map[label] = copied_edge_table.get();
+        }
+        result->label_map[copied_edge_table->main_label] = copied_edge_table.get();
+        result->edge_tables.push_back(std::move(copied_edge_table));
 	}
-	for (auto &label_entry : label_map) {
-		result->label_map[label_entry.first] = label_entry.second;
-	}
-
 	return std::move(result);
 }
 
@@ -55,8 +57,8 @@ unique_ptr<CreateInfo> CreatePropertyGraphInfo::Copy() const {
         result->property_graph_name = reader.ReadRequired<string>();
         result->vertex_tables = reader.ReadRequiredSerializableList<PropertyGraphTable>();
         result->edge_tables = reader.ReadRequiredSerializableList<PropertyGraphTable>();
-
-
+        result->label_map = reader.ReadRequiredSerializableMap<PropertyGraphTable>();
+        reader.Finalize();
         return result;
     }
 

@@ -11,6 +11,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include <type_traits>
 
 namespace duckdb {
@@ -111,6 +112,16 @@ public:
 			elements[i].Serialize(*buffer);
 		}
 	}
+
+    template <class T>
+    void WriteRegularSerializableMap(const case_insensitive_map_t<T> &elements) {
+        AddField();
+        Write<uint32_t>(elements.size());
+        for (auto &entry : elements) {
+            WriteString(entry.first);
+            entry.second->Serialize(*buffer);
+        }
+    }
 
 	template <class T>
 	void WriteOptional(const unique_ptr<T> &element) {
@@ -349,6 +360,23 @@ public:
 		}
 		return result;
 	}
+
+    template <class T, class RETURN_TYPE = T*, typename... ARGS>
+    case_insensitive_map_t<RETURN_TYPE> ReadRequiredSerializableMap(ARGS &&... args) {
+        if (field_count >= max_field_count) {
+            // field is not there, throw an exception
+            throw SerializationException("Attempting to read mandatory field, but field is missing");
+        }
+        // field is there, read the actual value
+        AddField();
+        auto result_count = source.Read<uint32_t>();
+
+        case_insensitive_map_t<RETURN_TYPE> result;
+        for (idx_t i = 0; i < result_count; i++) {
+            result[ReadRequired<string>()] = T::Deserialize(source, std::forward<ARGS>(args)...).get();
+        }
+        return result;
+    }
 
 	void ReadBlob(data_ptr_t result, idx_t read_size) {
 		if (field_count >= max_field_count) {
