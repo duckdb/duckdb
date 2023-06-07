@@ -23,6 +23,8 @@ public:
 		UNORDERED,
 		//! Only some entries have to be matched, the order of the matches does not matter
 		SOME,
+		//! Only some entries have to be matched. The order of the matches does matter.
+		SOME_ORDERED,
 		//! Not initialized
 		INVALID
 	};
@@ -73,6 +75,17 @@ public:
 				return false;
 			}
 			// now entries have to match in order
+			for (idx_t i = 0; i < matchers.size(); i++) {
+				if (!matchers[i]->Match(entries[i], bindings)) {
+					return false;
+				}
+			}
+			return true;
+		} else if (policy == Policy::SOME_ORDERED) {
+			if (entries.size() < matchers.size()) {
+				return false;
+			}
+			// now provided entries have to match in order
 			for (idx_t i = 0; i < matchers.size(); i++) {
 				if (!matchers[i]->Match(entries[i], bindings)) {
 					return false;
