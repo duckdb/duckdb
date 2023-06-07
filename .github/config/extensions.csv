@@ -11,5 +11,5 @@ visualizer,,,
 sqlite_scanner,https://github.com/duckdblabs/sqlite_scanner,e607f30160260a5d3152087e001967ece39c36c0,
 postgres_scanner,https://github.com/duckdblabs/postgres_scanner,cd043b49cdc9e0d3752535b8333c9433e1007a48,
 substrait,https://github.com/duckdblabs/substrait,48d64b27c7a6985d6f6c3e65044038544608c03b,no-windows
-arrow,https://github.com/duckdblabs/arrow,3e28c07a866c082a6aacf7d894f1b0d987c6365a,no-windows
+arrow,https://github.com/duckdblabs/arrow,1a43a5513b96e4c6ffd92026775ffeb648e71dac,no-windows
 spatial,https://github.com/duckdblabs/duckdb_spatial.git,eaa44f9733b7f4a9f53791536ed8219ef39813f5,
