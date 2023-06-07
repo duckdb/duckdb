@@ -739,7 +739,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 					auto duck_val = (duckdb_value)&val;
 					auto res = duckdb_bind_value(wrapper->statement, 1 + col_idx, duck_val);
 					if (res != DuckDBSuccess) {
-						//SetError(error, duckdb_prepare_error(wrapper->statement));
+						SetError(error, duckdb_prepare_error(wrapper->statement));
 						return ADBC_STATUS_INVALID_ARGUMENT;
 					}
 				}

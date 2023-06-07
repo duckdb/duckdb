@@ -77,7 +77,7 @@ void ReleaseError(struct AdbcError *error) {
 		error->release = nullptr;
 	}
 }
-
+//! Passing NULL as 'message' will cause a segfault during construction of the 'std::string'!
 void SetError(struct AdbcError *error, const std::string &message) {
 	if (!error) {
 		return;

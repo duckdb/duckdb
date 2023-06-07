@@ -60,3 +60,126 @@ class TestADBCStatementBind(object):
             result_values = result.chunk(0)
             assert result_values == expected_result
 
+    def test_multiple_parameters(self):
+        int_data = pa.array([5])
+        varchar_data = pa.array(['not a short string'])
+        bool_data = pa.array([True])
+
+        # Create the schema
+        schema = pa.schema([
+            ('a', pa.int64()),
+            ('b', pa.large_string()),
+            ('c', pa.bool_())
+        ])
+
+        # Create the PyArrow table
+        expected_res = pa.Table.from_arrays([int_data, varchar_data, bool_data], schema=schema)
+
+        data = pa.record_batch(
+            [
+                [5],
+                ['not a short string'],
+                [True]
+            ],
+            names=["ints", "strings", "bools"],
+        )
+
+        con = adbc_driver_duckdb.connect()
+        with con.cursor() as cursor:
+            statement = cursor.adbc_statement
+            statement.set_sql_query("select ? as a, ? as b, ? as c")
+            statement.prepare()
+
+            #raw_schema = statement.get_parameter_schema()
+            #schema = _import(raw_schema);
+            #print(schema)
+
+            _bind(statement, data)
+            res, _ = statement.execute_query()
+            table = _import(res).read_all()
+
+            assert table == expected_res
+
+    def test_bind_composite_type(self):
+        data_dict = {
+            'field1': pa.array([10], type=pa.int64()),
+            'field2': pa.array([3.14], type=pa.float64()),
+            'field3': pa.array(['example with long string'], type=pa.large_string())
+        }
+        # Create the StructArray
+        struct_array = pa.StructArray.from_arrays(arrays=data_dict.values(), names=data_dict.keys())
+
+        schema = pa.schema([
+            (name, array.type) for name, array in zip(['a'], [struct_array])
+        ])
+
+        # Create the RecordBatch
+        record_batch = pa.RecordBatch.from_arrays([struct_array], schema=schema)
+
+        con = adbc_driver_duckdb.connect()
+        with con.cursor() as cursor:
+            statement = cursor.adbc_statement
+            statement.set_sql_query("select ? as a")
+            statement.prepare()
+
+            #raw_schema = statement.get_parameter_schema()
+            #schema = _import(raw_schema);
+            #print(schema)
+
+            _bind(statement, record_batch)
+            res, _ = statement.execute_query()
+            table = _import(res).read_all()
+            result = table['a']
+            result = result.chunk(0)
+            assert result == struct_array
+
+    def test_too_many_parameters(self):
+        data = pa.record_batch(
+            [
+                [12423],
+                ['not a short string']
+            ],
+            names=["ints", "strings"],
+        )
+
+        con = adbc_driver_duckdb.connect()
+        with con.cursor() as cursor:
+            statement = cursor.adbc_statement
+            statement.set_sql_query("select ? as a")
+            statement.prepare()
+
+            #raw_schema = statement.get_parameter_schema()
+            #schema = _import(raw_schema);
+            #print(schema)
+
+            array = adbc_driver_manager.ArrowArrayHandle()
+            schema = adbc_driver_manager.ArrowSchemaHandle()
+            data._export_to_c(array.address, schema.address)
+            statement.bind(array, schema)
+            with pytest.raises(adbc_driver_manager.ProgrammingError, match="Can not bind to param"):
+                res, _ = statement.execute_query()
+
+    def test_not_enough_parameters(self):
+        data = pa.record_batch(
+            [
+                ['not a short string']
+            ],
+            names=["strings"],
+        )
+
+        con = adbc_driver_duckdb.connect()
+        with con.cursor() as cursor:
+            statement = cursor.adbc_statement
+            statement.set_sql_query("select ? as a, ? as b")
+            statement.prepare()
+
+            #raw_schema = statement.get_parameter_schema()
+            #schema = _import(raw_schema);
+            #print(schema)
+
+            array = adbc_driver_manager.ArrowArrayHandle()
+            schema = adbc_driver_manager.ArrowSchemaHandle()
+            data._export_to_c(array.address, schema.address)
+            statement.bind(array, schema)
+            with pytest.raises(adbc_driver_manager.ProgrammingError, match="Parameter/argument count mismatch for prepared statement. Expected 2, got 1"):
+                res, _ = statement.execute_query()
