@@ -54,8 +54,18 @@ duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, du
 		prepared_names.push_back(name);
 	}
 
-	// FIXME: names are currently not owned, so they are just random memory after this function ends..
-	ArrowConverter::ToArrowSchema((ArrowSchema *)*out_schema, prepared_types, prepared_names, properties.time_zone);
+	auto result_schema = (ArrowSchema *)*out_schema;
+	if (!result_schema) {
+		return DuckDBError;
+	}
+
+	if (result_schema->release) {
+		// Need to release the existing schema before we overwrite it
+		result_schema->release(result_schema);
+		result_schema->release = nullptr;
+	}
+
+	ArrowConverter::ToArrowSchema(result_schema, prepared_types, prepared_names, properties.time_zone);
 	return DuckDBSuccess;
 }
 

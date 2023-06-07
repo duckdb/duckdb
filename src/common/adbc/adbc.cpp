@@ -95,12 +95,17 @@ struct DuckDBAdbcDatabaseWrapper {
 	std::string path;
 };
 
+static void EmptyErrorRelease(AdbcError *error) {
+	return;
+}
+
 void InitiliazeADBCError(AdbcError *error) {
 	if (!error) {
 		return;
 	}
 	error->message = nullptr;
-	error->release = nullptr;
+	// Don't set to nullptr, as that indicates that it's invalid
+	error->release = EmptyErrorRelease;
 	std::memset(error->sqlstate, '\0', sizeof(error->sqlstate));
 	error->vendor_code = -1;
 }
@@ -324,7 +329,21 @@ static AdbcInfoCode ConvertToInfoCode(uint32_t info_code) {
 
 AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *info_codes, size_t info_codes_length,
                                  struct ArrowArrayStream *out, struct AdbcError *error) {
-	auto db_conn = (duckdb::Connection *)(connection->private_data);
+	if (!error) {
+		return ADBC_STATUS_UNKNOWN;
+	}
+	auto status_code = SetErrorMaybe(connection, error, "Connection is missing");
+	if (status_code != ADBC_STATUS_OK) {
+		return status_code;
+	}
+	status_code = SetErrorMaybe(connection->private_data, error, "Connection is invalid");
+	if (status_code != ADBC_STATUS_OK) {
+		return status_code;
+	}
+	status_code = SetErrorMaybe(out, error, "Output parameter was not provided");
+	if (status_code != ADBC_STATUS_OK) {
+		return status_code;
+	}
 
 	// If 'info_codes' is NULL, we should output all the info codes we recognize
 	size_t length = info_codes ? info_codes_length : (size_t)AdbcInfoCode::UNRECOGNIZED;
@@ -376,8 +395,8 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *in
 		}
 		default: {
 			// Codes that we have implemented but not handled here are a developer error
-			SetError(error, "InternalError: info code recognized but not handled");
-			break;
+			SetError(error, "Info code recognized but not handled");
+			return ADBC_STATUS_INTERNAL;
 		}
 		}
 	}
@@ -536,7 +555,9 @@ struct DuckDBAdbcStatementWrapper {
 
 AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatement *statement,
                             struct AdbcError *error) {
-
+	if (!error) {
+		return ADBC_STATUS_UNKNOWN;
+	}
 	auto status = SetErrorMaybe(connection, error, "Missing connection object");
 	if (status != ADBC_STATUS_OK) {
 		return status;
@@ -570,7 +591,9 @@ AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatem
 }
 
 AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcError *error) {
-
+	if (!error) {
+		return ADBC_STATUS_UNKNOWN;
+	}
 	if (statement && statement->private_data) {
 		auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
 		if (wrapper->statement) {
@@ -597,11 +620,18 @@ AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcErro
 
 AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, struct ArrowSchema *schema,
                                            struct AdbcError *error) {
+	if (!error) {
+		return ADBC_STATUS_UNKNOWN;
+	}
 	auto status = SetErrorMaybe(statement, error, "Missing statement object");
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
-	status = SetErrorMaybe(statement, error, "Missing schema object");
+	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	status = SetErrorMaybe(schema, error, "Missing schema object");
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
@@ -617,6 +647,7 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 
 AdbcStatusCode GetPreparedParameters(duckdb_connection connection, duckdb::unique_ptr<duckdb::QueryResult> &result,
                                      ArrowArrayStream *input, AdbcError *error) {
+
 	auto cconn = (duckdb::Connection *)connection;
 
 	try {
@@ -640,6 +671,9 @@ AdbcStatusCode GetPreparedParameters(duckdb_connection connection, duckdb::uniqu
 
 AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct ArrowArrayStream *out,
                                      int64_t *rows_affected, struct AdbcError *error) {
+	if (!error) {
+		return ADBC_STATUS_UNKNOWN;
+	}
 	auto status = SetErrorMaybe(statement, error, "Missing statement object");
 	if (status != ADBC_STATUS_OK) {
 		return status;
@@ -725,6 +759,9 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 
 // this is a nop for us
 AdbcStatusCode StatementPrepare(struct AdbcStatement *statement, struct AdbcError *error) {
+	if (!error) {
+		return ADBC_STATUS_UNKNOWN;
+	}
 	auto status = SetErrorMaybe(statement, error, "Missing statement object");
 	if (status != ADBC_STATUS_OK) {
 		return status;
@@ -738,7 +775,14 @@ AdbcStatusCode StatementPrepare(struct AdbcStatement *statement, struct AdbcErro
 }
 
 AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char *query, struct AdbcError *error) {
+	if (!error) {
+		return ADBC_STATUS_UNKNOWN;
+	}
 	auto status = SetErrorMaybe(statement, error, "Missing statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
@@ -755,7 +799,14 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 
 AdbcStatusCode StatementBind(struct AdbcStatement *statement, struct ArrowArray *values, struct ArrowSchema *schemas,
                              struct AdbcError *error) {
+	if (!error) {
+		return ADBC_STATUS_UNKNOWN;
+	}
 	auto status = SetErrorMaybe(statement, error, "Missing statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
@@ -785,6 +836,10 @@ AdbcStatusCode StatementBindStream(struct AdbcStatement *statement, struct Arrow
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
+	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
 	status = SetErrorMaybe(values, error, "Missing stream object");
 	if (status != ADBC_STATUS_OK) {
 		return status;
@@ -802,6 +857,10 @@ AdbcStatusCode StatementBindStream(struct AdbcStatement *statement, struct Arrow
 AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *key, const char *value,
                                   struct AdbcError *error) {
 	auto status = SetErrorMaybe(statement, error, "Missing statement object");
+	if (status != ADBC_STATUS_OK) {
+		return status;
+	}
+	status = SetErrorMaybe(statement->private_data, error, "Invalid statement object");
 	if (status != ADBC_STATUS_OK) {
 		return status;
 	}
