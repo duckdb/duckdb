@@ -143,7 +143,7 @@ static void TestSQLTables(HSTMT &hstmt, map<SQLSMALLINT, SQLULEN> &types_map) {
 }
 
 // TODO: fix this test
-//static void TestSQLTablesLong(HSTMT &hstmt) {
+// static void TestSQLTablesLong(HSTMT &hstmt) {
 //	SQLRETURN ret;
 //
 //	ExecuteCmdAndCheckODBC(
