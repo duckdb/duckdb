@@ -44,6 +44,13 @@ const test_httpfs = async function (db: duckdb.Database) {
         }
     }));
 
+    await new Promise<void>((resolve, reject) => {
+        db.exec(`SELECT *
+                 FROM parquet_scan('http://localhost:1234/whatever.parquet')`, function (err: DuckDbError | null) {
+            err ? reject(err) : resolve()
+        });
+    })
+
     await new Promise<void>((resolve) => {
         db.exec("select * from read_csv_auto('https://example.com/hello.csv')", (err: DuckDbError | null) => {
             assert.ok(err);
