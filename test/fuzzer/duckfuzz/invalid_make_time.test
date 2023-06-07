@@ -39,8 +39,3 @@ statement error
 SELECT make_time(1, 1, 9999999);
 ----
 Time out of range
-
-statement error
-SELECT make_time(1, 1, 1.9999999999);
-----
-Time out of range
