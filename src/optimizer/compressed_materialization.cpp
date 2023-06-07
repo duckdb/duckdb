@@ -577,7 +577,7 @@ bool RemoveRedundantExpressionsProjection(LogicalOperator &current_op, ColumnBin
 		}
 	}
 
-	return !found; // Projected out
+	return found; // Return false if projected out
 }
 
 bool RemoveRedundantExpressionsComparisonJoin(LogicalOperator &current_op, ColumnBinding &current_binding) {
