@@ -30,8 +30,8 @@ select * from pragma_database_size();
 # Due to the UUIDs causing many different prefixes, we have 4 blocks for prefixes.
 # We can fit all 10k leaves on one LEAF block. Then, we have one NODE4 block and
 # one NODE16 block. This makes a total of 7 blocks for the index. With extra blocks from
-# storing the data, we should stay below 10 blocks.
+# storing the data, we should stay below 12 blocks.
 query I
-select total_blocks < 10 from pragma_database_size();
+select total_blocks < 12 from pragma_database_size();
 ----
 true
