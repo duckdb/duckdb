@@ -294,6 +294,7 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 	}
 	// Run and eliminate worst option combinations
 	JumpToBeginning(original_options.skip_rows);
+	// We need to read the buffer
 	StateBuffer state_buffer(buffer.get(), buffer_size, position);
 	for (auto &state_machine : csv_state_machines) {
 		vector<idx_t> sniffed_column_counts;
