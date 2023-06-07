@@ -12,28 +12,25 @@ TEST_CASE("col_atribute", "[odbc") {
 	HSTMT hstmt = SQL_NULL_HSTMT;
 
 	// Connect to the database using SQLConnect
-	CONNECT_TO_DATABASE(ret, env, dbc);
+	CONNECT_TO_DATABASE(env, dbc);
 
-	ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc, &hstmt);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLAllocHandle (HSTMT)");
+	// Allocate a statement handle
+	ExecuteCmdAndCheckODBC("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
 
 	// Get column attributes of a simple query
-	ret = SQLExecDirect(hstmt,
-	                    (SQLCHAR *)"SELECT "
-	                               "'1'::int AS intcol, "
-	                               "'foobar'::text AS textcol, "
-	                               "'varchar string'::varchar as varcharcol, "
-	                               "''::varchar as empty_varchar_col, "
-	                               "'varchar-5-col'::varchar(5) as varchar5col, "
-	                               "'5 days'::interval day to second",
-	                    SQL_NTS);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLExecDirect");
+	ExecuteCmdAndCheckODBC("SQLExectDirect", SQLExecDirect, hstmt,
+	                       ConvertToSQLCHAR("SELECT "
+	                                        "'1'::int AS intcol, "
+	                                        "'foobar'::text AS textcol, "
+	                                        "'varchar string'::varchar as varcharcol, "
+	                                        "''::varchar as empty_varchar_col, "
+	                                        "'varchar-5-col'::varchar(5) as varchar5col, "
+	                                        "'5 days'::interval day to second"),
+	                       SQL_NTS);
 
 	// Get the number of columns
 	SQLSMALLINT num_cols;
-	ret = SQLNumResultCols(hstmt, &num_cols);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLNumResultCols");
-
+	ExecuteCmdAndCheckODBC("SQLNumResultCols", SQLNumResultCols, hstmt, &num_cols);
 	REQUIRE(num_cols == 6);
 
 	// Loop through the columns
@@ -42,8 +39,8 @@ TEST_CASE("col_atribute", "[odbc") {
 		SQLLEN number;
 
 		// Get the column label
-		ret = SQLColAttribute(hstmt, i, SQL_DESC_LABEL, buffer, sizeof(buffer), nullptr, nullptr);
-		ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLColAttribute");
+		ExecuteCmdAndCheckODBC("SQLColAttribute", SQLColAttribute, hstmt, i, SQL_DESC_LABEL, buffer, sizeof(buffer),
+		                       nullptr, nullptr);
 		switch (i) {
 		case 1:
 			REQUIRE(strcmp(buffer, "intcol") == 0);
@@ -66,13 +63,13 @@ TEST_CASE("col_atribute", "[odbc") {
 		}
 
 		// Get the column octet length
-		ret = SQLColAttribute(hstmt, i, SQL_DESC_OCTET_LENGTH, nullptr, SQL_IS_INTEGER, nullptr, &number);
-		ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLColAttribute");
+		ExecuteCmdAndCheckODBC("SQLColAttribute", SQLColAttribute, hstmt, i, SQL_DESC_OCTET_LENGTH, nullptr,
+		                       SQL_IS_INTEGER, nullptr, &number);
 		REQUIRE(number == 0);
 
 		// Get the column type name
-		ret = SQLColAttribute(hstmt, i, SQL_DESC_TYPE_NAME, buffer, sizeof(buffer), nullptr, nullptr);
-		ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLColAttribute");
+		ExecuteCmdAndCheckODBC("SQLColAttribute", SQLColAttribute, hstmt, i, SQL_DESC_TYPE_NAME, buffer, sizeof(buffer),
+		                       nullptr, nullptr);
 		switch (i) {
 		case 1:
 			REQUIRE(strcmp(buffer, "INT32") == 0);
@@ -94,9 +91,9 @@ TEST_CASE("col_atribute", "[odbc") {
 	REQUIRE(ret == SQL_ERROR);
 
 	// Free the statement handle
-	ret = SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFreeHandle (HSTMT)");
+	ExecuteCmdAndCheckODBC("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
+	ExecuteCmdAndCheckODBC("SQLFreeHandle (HSTMT)", SQLFreeHandle, SQL_HANDLE_STMT, hstmt);
 
 	// Disconnect from the database
-	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLDisconnect (HDBC)");
+	DISCONNECT_FROM_DATABASE(env, dbc);
 }

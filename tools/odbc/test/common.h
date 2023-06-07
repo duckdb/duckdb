@@ -27,17 +27,23 @@ void ExecuteCmdAndCheckODBC(MSG msg, FUNC func, ARGS... args) {
 	ODBC_CHECK(ret, msg);
 }
 
-void ACCESS_DIAGNOSTIC(string &state, string &message, SQLHANDLE handle, SQLRETURN &ret, SQLSMALLINT handle_type);
+void ACCESS_DIAGNOSTIC(string &state, string &message, SQLHANDLE handle, SQLSMALLINT handle_type);
 void DATA_CHECK(HSTMT hstmt, SQLSMALLINT col_num, const char *expected_content);
-void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const char *expected_col_name, SQLSMALLINT expected_col_name_len,
-                    SQLSMALLINT expected_col_data_type, SQLULEN expected_col_size,
+void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const string &expected_col_name,
+                    SQLSMALLINT expected_col_name_len, SQLSMALLINT expected_col_data_type, SQLULEN expected_col_size,
                     SQLSMALLINT expected_col_decimal_digits, SQLSMALLINT expected_col_nullable);
-void DRIVER_CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc, const string &extra_params);
-void CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc);
-void DISCONNECT_FROM_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc);
+void DRIVER_CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc, const string &extra_params);
+void CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc);
+void DISCONNECT_FROM_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc);
+void EXEC_SQL(HSTMT hstmt, const string &query);
 void INITIALIZE_DATABASE(HSTMT hstmt);
 
 map<SQLSMALLINT, SQLULEN> InitializeTypesMap();
+SQLCHAR *ConvertToSQLCHAR(const char *str);
+string ConvertToString(SQLCHAR *str);
+const char *ConvertToCString(SQLCHAR *str);
+SQLPOINTER ConvertToSQLPOINTER(uint64_t ptr);
+
 } // namespace odbc_test
 
 #endif // ODBC_TEST_COMMON_H

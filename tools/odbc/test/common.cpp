@@ -1,7 +1,6 @@
 #define CATCH_CONFIG_MAIN
 #include "common.h"
 
-using namespace std;
 namespace odbc_test {
 
 void ODBC_CHECK(SQLRETURN ret, const char *msg) {
@@ -28,21 +27,21 @@ void ODBC_CHECK(SQLRETURN ret, const char *msg) {
 	REQUIRE(ret == SQL_SUCCESS);
 }
 
-void ACCESS_DIAGNOSTIC(string &state, string &message, SQLHANDLE handle, SQLRETURN &ret, SQLSMALLINT handle_type) {
+void ACCESS_DIAGNOSTIC(string &state, string &message, SQLHANDLE handle, SQLSMALLINT handle_type) {
 	SQLCHAR sqlstate[6];
 	SQLINTEGER native_error;
 	SQLCHAR message_text[256];
 	SQLSMALLINT text_length;
 	SQLSMALLINT recnum = 0;
+	SQLRETURN ret = SQL_SUCCESS;
 
-	ret = SQL_SUCCESS;
 	while (SQL_SUCCEEDED(ret)) {
 		recnum++;
 		ret = SQLGetDiagRec(handle_type, handle, recnum, sqlstate, &native_error, message_text, sizeof(message_text),
 		                    &text_length);
 		if (SQL_SUCCEEDED(ret)) {
-			state = (const char *)sqlstate;
-			message = (const char *)message_text;
+			state = ConvertToString(sqlstate);
+			message = ConvertToString(message_text);
 		}
 	}
 
@@ -61,11 +60,11 @@ void DATA_CHECK(HSTMT hstmt, SQLSMALLINT col_num, const char *expected_content) 
 		REQUIRE(expected_content == nullptr);
 		return;
 	}
-	REQUIRE(!::strcmp((const char *)content, expected_content));
+	REQUIRE(!::strcmp(ConvertToCString(content), expected_content));
 }
 
-void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const char *expected_col_name, SQLSMALLINT expected_col_name_len,
-                    SQLSMALLINT expected_col_data_type, SQLULEN expected_col_size,
+void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const string &expected_col_name,
+                    SQLSMALLINT expected_col_name_len, SQLSMALLINT expected_col_data_type, SQLULEN expected_col_size,
                     SQLSMALLINT expected_col_decimal_digits, SQLSMALLINT expected_col_nullable) {
 	SQLCHAR col_name[256];
 	SQLSMALLINT col_name_len;
@@ -78,27 +77,27 @@ void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const char *expected_col_
 	                               &col_decimal_digits, &col_nullable);
 	ODBC_CHECK(ret, "SQLDescribeCol");
 
-	if (sizeof(expected_col_name) > 0) {
-		REQUIRE(!::strcmp((const char *)col_name, expected_col_name));
+	if (!expected_col_name.empty()) {
+		REQUIRE(expected_col_name.compare(ConvertToString(col_name)) == 0);
 	}
-	if (col_name_len) {
+	if (expected_col_name_len) {
 		REQUIRE(col_name_len == expected_col_name_len);
 	}
-	if (col_type) {
+	if (expected_col_data_type) {
 		REQUIRE(col_type == expected_col_data_type);
 	}
-	if (col_size) {
+	if (expected_col_size) {
 		REQUIRE(col_size == expected_col_size);
 	}
-	if (col_decimal_digits) {
+	if (expected_col_decimal_digits) {
 		REQUIRE(col_decimal_digits == expected_col_decimal_digits);
 	}
-	if (col_nullable) {
+	if (expected_col_nullable) {
 		REQUIRE(col_nullable == expected_col_nullable);
 	}
 }
 
-void DRIVER_CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc, const string &extra_params) {
+void DRIVER_CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc, const string &extra_params) {
 	string dsn;
 	string default_dsn = "duckdbmemory";
 	SQLCHAR str[1024];
@@ -120,33 +119,34 @@ void DRIVER_CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc, 
 		}
 	}
 
-	ret = SQLAllocHandle(SQL_HANDLE_ENV, nullptr, &env);
+	SQLRETURN ret = SQLAllocHandle(SQL_HANDLE_ENV, nullptr, &env);
 	REQUIRE(ret == SQL_SUCCESS);
 
 	ExecuteCmdAndCheckODBC("SQLSetEnvAttr (SQL_ATTR_ODBC_VERSION ODBC3)", SQLSetEnvAttr, env, SQL_ATTR_ODBC_VERSION,
-	                       (SQLPOINTER)(uintptr_t)SQL_OV_ODBC3, 0);
+	                       ConvertToSQLPOINTER(SQL_OV_ODBC3), 0);
 
 	ExecuteCmdAndCheckODBC("SQLAllocHandle (DBC)", SQLAllocHandle, SQL_HANDLE_DBC, env, &dbc);
 
-	ExecuteCmdAndCheckODBC("SQLDriverConnect", SQLDriverConnect, dbc, nullptr, (SQLCHAR *)dsn.c_str(), SQL_NTS, str,
-	                       sizeof(str), &strl, SQL_DRIVER_COMPLETE);
+	ExecuteCmdAndCheckODBC("SQLDriverConnect", SQLDriverConnect, dbc, nullptr, ConvertToSQLCHAR(dsn.c_str()), SQL_NTS,
+	                       str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
 }
 
-void CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc) {
+void CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc) {
 	string dsn = "DuckDB";
 
-	ret = SQLAllocHandle(SQL_HANDLE_ENV, nullptr, &env);
+	SQLRETURN ret = SQLAllocHandle(SQL_HANDLE_ENV, nullptr, &env);
 	REQUIRE(ret == SQL_SUCCESS);
 
 	ExecuteCmdAndCheckODBC("SQLSetEnvAttr (SQL_ATTR_ODBC_VERSION ODBC3)", SQLSetEnvAttr, env, SQL_ATTR_ODBC_VERSION,
-	                       (SQLPOINTER)(uintptr_t)SQL_OV_ODBC3, 0);
+	                       ConvertToSQLPOINTER(SQL_OV_ODBC3), 0);
 
 	ExecuteCmdAndCheckODBC("SQLAllocHandle (DBC)", SQLAllocHandle, SQL_HANDLE_DBC, env, &dbc);
 
-	ExecuteCmdAndCheckODBC("SQLConnect", SQLConnect, dbc, (SQLCHAR *)dsn.c_str(), SQL_NTS, nullptr, 0, nullptr, 0);
+	ExecuteCmdAndCheckODBC("SQLConnect", SQLConnect, dbc, ConvertToSQLCHAR(dsn.c_str()), SQL_NTS, nullptr, 0, nullptr,
+	                       0);
 }
 
-void DISCONNECT_FROM_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc) {
+void DISCONNECT_FROM_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc) {
 	ExecuteCmdAndCheckODBC("SQLFreeHandle(SQL_HANDLE_ENV)", SQLFreeHandle, SQL_HANDLE_ENV, env);
 
 	ExecuteCmdAndCheckODBC("SQLDisconnect", SQLDisconnect, dbc);
@@ -154,11 +154,8 @@ void DISCONNECT_FROM_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc) {
 	ExecuteCmdAndCheckODBC("SQLFreeHandle(SQL_HANDLE_DBC)", SQLFreeHandle, SQL_HANDLE_DBC, dbc);
 }
 
-void EXEC_SQL(HSTMT hstmt, string query) {
-	SQLRETURN ret;
-
-	ret = SQLExecDirect(hstmt, (SQLCHAR *)query.c_str(), SQL_NTS);
-	ODBC_CHECK(ret, "SQLExecDirect");
+void EXEC_SQL(HSTMT hstmt, const string &query) {
+	ExecuteCmdAndCheckODBC("SQLExecDirect", SQLExecDirect, hstmt, ConvertToSQLCHAR(query.c_str()), SQL_NTS);
 }
 
 void INITIALIZE_DATABASE(HSTMT hstmt) {
@@ -199,6 +196,22 @@ map<SQLSMALLINT, SQLULEN> InitializeTypesMap() {
 	types_map[SQL_INTEGER] = 11;
 	types_map[SQL_SMALLINT] = 5;
 	return types_map;
+}
+
+SQLCHAR *ConvertToSQLCHAR(const char *str) {
+	return reinterpret_cast<SQLCHAR *>(const_cast<char *>(str));
+}
+
+string ConvertToString(SQLCHAR *str) {
+	return string(reinterpret_cast<char *>(str));
+}
+
+const char *ConvertToCString(SQLCHAR *str) {
+	return reinterpret_cast<const char *>(str);
+}
+
+SQLPOINTER ConvertToSQLPOINTER(uint64_t ptr) {
+	return reinterpret_cast<SQLPOINTER>(static_cast<uintptr_t>(ptr));
 }
 
 } // namespace odbc_test

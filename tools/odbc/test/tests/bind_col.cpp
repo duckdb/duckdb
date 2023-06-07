@@ -15,33 +15,36 @@ TEST_CASE("bind_col", "[odbc") {
 	SQLLEN ind_char_value;
 
 	// Connect to the database
-	CONNECT_TO_DATABASE(ret, env, dbc);
+	CONNECT_TO_DATABASE(env, dbc);
 
-	ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc, &hstmt);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLAllocHandle (HSTMT)");
+	// Allocate a statement handle
+	ExecuteCmdAndCheckODBC("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
 
-	ret = SQLBindCol(hstmt, 1, SQL_C_LONG, &long_value, sizeof(SQLINTEGER), &ind_long_value);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLBindCol (HSTMT)");
+	// Bind the first column (long_value) to a long
+	ExecuteCmdAndCheckODBC("SQLBindCol (HSTMT)", SQLBindCol, hstmt, 1, SQL_C_LONG, &long_value, sizeof(SQLINTEGER),
+	                       &ind_long_value);
 
-	ret = SQLBindCol(hstmt, 2, SQL_C_CHAR, &char_value, sizeof(char_value), &ind_char_value);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLBindCol (HSTMT)");
+	// Bind the second column (char_value) to a string
+	ExecuteCmdAndCheckODBC("SQLBindCol (HSTMT)", SQLBindCol, hstmt, 2, SQL_C_CHAR, &char_value, sizeof(char_value),
+	                       &ind_char_value);
 
-	ret = SQLExecDirect(hstmt, (SQLCHAR *)"SELECT id, 'foo' || id FROM generate_series(1, 10) id(id)", SQL_NTS);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLExecDirect (HSTMT)");
+	// Execute the query
+	ExecuteCmdAndCheckODBC("SQLExecDirect (HSTMT)", SQLExecDirect, hstmt,
+	                       ConvertToSQLCHAR("SELECT id, 'foo' || id FROM generate_series(1, 10) id(id)"), SQL_NTS);
 
 	SQLINTEGER id = 0;
 	SQLINTEGER foo = 0;
-	SQLINTEGER rowno = 0;
+	SQLINTEGER row_num = 0;
 	bool incr_id = true;
 	bool incr_foo = true;
 
-	while (1) {
+	while (true) {
 
 		if (incr_id) {
-			id = rowno + 1;
+			id = row_num + 1;
 		}
 		if (incr_foo) {
-			foo = rowno + 1;
+			foo = row_num + 1;
 		}
 
 		ret = SQLFetch(hstmt);
@@ -50,39 +53,33 @@ TEST_CASE("bind_col", "[odbc") {
 		}
 		if (ret == SQL_SUCCESS) {
 			REQUIRE(long_value == id);
-			auto expected = "foo" + std::to_string(foo);
 			REQUIRE(strcmp(char_value, ("foo" + std::to_string(foo)).c_str()) == 0);
-			ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFetch (HSTMT)");
 		}
 
-		rowno++;
+		row_num++;
 
 		// unbind the text field on row 3
-		if (rowno == 3) {
-			ret = SQLBindCol(hstmt, 2, SQL_C_CHAR, NULL, 0, NULL);
-			ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLBindCol (HSTMT)");
+		if (row_num == 3) {
+			ExecuteCmdAndCheckODBC("SQLBindCol (HSTMT)", SQLBindCol, hstmt, 2, SQL_C_CHAR, nullptr, 0, nullptr);
 			incr_foo = false;
 		}
 		// rebind the text field on row 5 and 9
-		if (rowno == 5 || rowno == 9) {
-			ret = SQLBindCol(hstmt, 2, SQL_C_CHAR, &char_value, sizeof(char_value), &ind_char_value);
-			ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLBindCol (HSTMT)");
+		if (row_num == 5 || row_num == 9) {
+			ExecuteCmdAndCheckODBC("SQLBindCol (HSTMT)", SQLBindCol, hstmt, 2, SQL_C_CHAR, &char_value,
+			                       sizeof(char_value), &ind_char_value);
 			incr_foo = true;
 		}
 		// unbind both fields on row 7 using SQLFreeStmt(SQL_UNBIND)
-		if (rowno == 7) {
-			ret = SQLFreeStmt(hstmt, SQL_UNBIND);
-			ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFreeStmt (HSTMT)");
+		if (row_num == 7) {
+			ExecuteCmdAndCheckODBC("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_UNBIND);
 			incr_id = false;
 			incr_foo = false;
 		}
 	}
 
-	ret = SQLFreeStmt(hstmt, SQL_CLOSE);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFreeStmt (HSTMT)");
+	// Free the statement handle
+	ExecuteCmdAndCheckODBC("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
+	ExecuteCmdAndCheckODBC("SQLFreeHandle (HSTMT)", SQLFreeHandle, SQL_HANDLE_STMT, hstmt);
 
-	ret = SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFreeHandle (HSTMT)");
-
-	DISCONNECT_FROM_DATABASE(ret, env, dbc);
+	DISCONNECT_FROM_DATABASE(env, dbc);
 }
