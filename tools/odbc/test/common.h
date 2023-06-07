@@ -19,12 +19,12 @@ struct MetadataData {
 	SQLSMALLINT col_type;
 };
 
-void ODBC_CHECK(SQLRETURN ret, SQLSMALLINT tpe, SQLHANDLE hnd, const char *func);
+void ODBC_CHECK(SQLRETURN ret, const char *func);
 
-template <typename MSG, typename FUNC, typename HANDLE, typename... ARGS>
-void ExecuteCmdAndCheckODBC(MSG msg, FUNC func, HANDLE hnd, ARGS... args) {
+template <typename MSG, typename FUNC, typename... ARGS>
+void ExecuteCmdAndCheckODBC(MSG msg, FUNC func, ARGS... args) {
 	SQLRETURN ret = func(args...);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hnd, msg);
+	ODBC_CHECK(ret, msg);
 }
 
 void ACCESS_DIAGNOSTIC(string &state, string &message, SQLHANDLE handle, SQLRETURN &ret, SQLSMALLINT handle_type);
@@ -34,7 +34,7 @@ void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const char *expected_col_
                     SQLSMALLINT expected_col_decimal_digits, SQLSMALLINT expected_col_nullable);
 void DRIVER_CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc, const string &extra_params);
 void CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc);
-void DISCONNECT_FROM_DATABASE(SQLRETURN &ret, SQLHANDLE &dbc, SQLHANDLE &env);
+void DISCONNECT_FROM_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc);
 void INITIALIZE_DATABASE(HSTMT hstmt);
 
 map<SQLSMALLINT, SQLULEN> InitializeTypesMap();

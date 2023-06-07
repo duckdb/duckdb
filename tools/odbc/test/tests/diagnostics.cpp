@@ -86,6 +86,5 @@ TEST_CASE("diagnostics", "[odbc") {
 	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFreeHandle (HSTMT)");
 
 	// Disconnect from the database
-	DISCONNECT_FROM_DATABASE(ret, dbc, env);
 	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLDisconnect (HDBC)");
 }

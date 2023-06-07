@@ -10,11 +10,9 @@ TEST_CASE("connect", "[odbc") {
 
 	// Connect to the database using SQLConnect
 	CONNECT_TO_DATABASE(ret, env, dbc);
-	DISCONNECT_FROM_DATABASE(ret, dbc, env);
-	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLDisconnect");
+	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLDisconnect (HDBC)");
 
 	// Connect to the database using SQLDriverConnect
 	DRIVER_CONNECT_TO_DATABASE(ret, env, dbc, "");
-	DISCONNECT_FROM_DATABASE(ret, dbc, env);
-	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLDisconnect");
+	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLDisconnect (HDBC)");
 }

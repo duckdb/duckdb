@@ -27,14 +27,14 @@ void TestGetTypeInfo(HSTMT &hstmt) {
 
 	// Check for SQLGetTypeInfo
 	ret = SQLGetTypeInfo(hstmt, SQL_VARCHAR);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLGetTypeInfo");
+	ODBC_CHECK(ret, "SQLGetTypeInfo");
 
 	ret = SQLNumResultCols(hstmt, &col_count);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLNumResultCols");
+	ODBC_CHECK(ret, "SQLNumResultCols");
 	REQUIRE(col_count == 19);
 
 	ret = SQLFetch(hstmt);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFetch");
+	ODBC_CHECK(ret, "SQLFetch");
 
 	map<SQLSMALLINT, SQLULEN> types_map = InitializeTypesMap();
 	vector<MetadataData> expected_metadata;
@@ -94,12 +94,12 @@ static void TestSQLTables(HSTMT &hstmt) {
 	SQLRETURN ret;
 
 	ret = SQLTables(hstmt, NULL, 0, (SQLCHAR *)"main", SQL_NTS, (SQLCHAR *)"%", SQL_NTS, (SQLCHAR *)"TABLE", SQL_NTS);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLTables");
+	ODBC_CHECK(ret, "SQLTables");
 
 	SQLSMALLINT col_count;
 
 	ret = SQLNumResultCols(hstmt, &col_count);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLNumResultCols");
+	ODBC_CHECK(ret, "SQLNumResultCols");
 	REQUIRE(col_count == 5);
 
 	map<SQLSMALLINT, SQLULEN> types_map = InitializeTypesMap();
@@ -122,7 +122,7 @@ static void TestSQLTables(HSTMT &hstmt) {
 		if (ret == SQL_NO_DATA) {
 			break;
 		}
-		ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFetch");
+		ODBC_CHECK(ret, "SQLFetch");
 		fetch_count++;
 
 		DATA_CHECK(hstmt, 1, "memory");
@@ -149,31 +149,30 @@ static void TestSQLTables(HSTMT &hstmt) {
 	} while (ret == SQL_SUCCESS);
 }
 
-// static void TestSQLTablesLong(HSTMT &hstmt) {
-//	SQLRETURN ret;
-//
-//	ret = SQLTables(hstmt, (SQLCHAR *) "", SQL_NTS,
-//	                (SQLCHAR *) "main", SQL_NTS,
-//	                (SQLCHAR *) "test_table_%", SQL_NTS,
-//	                (SQLCHAR *) "1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5, 'TABLE'",
-//SQL_NTS); 	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLTables");
-//
-//	DATA_CHECK(hstmt, 1, "memory");
-//	DATA_CHECK(hstmt, 2, "main");
-//	DATA_CHECK(hstmt, 3, "test_table_1");
-//	DATA_CHECK(hstmt, 4, "TABLE");
-// }
+static void TestSQLTablesLong(HSTMT &hstmt) {
+	SQLRETURN ret;
+
+	ret =
+	    SQLTables(hstmt, (SQLCHAR *)"", SQL_NTS, (SQLCHAR *)"main", SQL_NTS, (SQLCHAR *)"test_table_%", SQL_NTS,
+	              (SQLCHAR *)"1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5, 'TABLE'", SQL_NTS);
+	ODBC_CHECK(ret, "SQLTables");
+
+	DATA_CHECK(hstmt, 1, "memory");
+	DATA_CHECK(hstmt, 2, "main");
+	DATA_CHECK(hstmt, 3, "test_table_1");
+	DATA_CHECK(hstmt, 4, "TABLE");
+}
 
 static void TestSQLColumns(HSTMT &hstmt) {
 	SQLRETURN ret;
 
 	ret = SQLColumns(hstmt, NULL, 0, (SQLCHAR *)"main", SQL_NTS, (SQLCHAR *)"%", SQL_NTS, NULL, 0);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLColumns");
+	ODBC_CHECK(ret, "SQLColumns");
 
 	SQLSMALLINT col_count;
 
 	ret = SQLNumResultCols(hstmt, &col_count);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLNumResultCols");
+	ODBC_CHECK(ret, "SQLNumResultCols");
 	REQUIRE(col_count == 18);
 
 	// Create a map of column types and a vector of expected metadata
@@ -222,7 +221,7 @@ static void TestSQLColumns(HSTMT &hstmt) {
 
 	for (int i = 0; i < expected_data.size(); i++) {
 		ret = SQLFetch(hstmt);
-		ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFetch");
+		ODBC_CHECK(ret, "SQLFetch");
 
 		auto &entry = expected_data[i];
 		DATA_CHECK(hstmt, 1, nullptr);
@@ -245,20 +244,20 @@ TEST_CASE("catalog_functions", "[odbc") {
 	CONNECT_TO_DATABASE(ret, env, dbc);
 
 	ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc, &hstmt);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLAllocHandle (HSTMT)");
+	ODBC_CHECK(ret, "SQLAllocHandle (HSTMT)");
 
 	// Initializes the database with dummy data
 	INITIALIZE_DATABASE(hstmt);
 
 	SQLExecDirect(hstmt, (SQLCHAR *)"DROP TABLE IF EXISTS test_table", SQL_NTS);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLExecDirect (DROP TABLE)");
+	ODBC_CHECK(ret, "SQLExecDirect (DROP TABLE)");
 
 	// Check for SQLGetTypeInfo
 	TestGetTypeInfo(hstmt);
 
 	// Check for SQLTables
 	TestSQLTables(hstmt);
-	//	TestSQLTablesLong(hstmt);
+	TestSQLTablesLong(hstmt);
 
 	// Check for SQLColumns
 	TestSQLColumns(hstmt);
@@ -267,14 +266,13 @@ TEST_CASE("catalog_functions", "[odbc") {
 	char database_name[128];
 	SQLSMALLINT len;
 	ret = SQLGetInfo(hstmt, SQL_TABLE_TERM, database_name, sizeof(database_name), &len);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLGetInfo (SQL_DATABASE_NAME)");
+	ODBC_CHECK(ret, "SQLGetInfo (SQL_DATABASE_NAME)");
 	REQUIRE(strcmp(database_name, "table") == 0);
 
 	// Free the statement handle
 	ret = SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFreeHandle (HSTMT)");
+	ODBC_CHECK(ret, "SQLFreeHandle (HSTMT)");
 
 	// Disconnect from the database
-	DISCONNECT_FROM_DATABASE(ret, dbc, env);
-	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLDisconnect (HDBC)");
+	DISCONNECT_FROM_DATABASE(ret, env, dbc);
 }

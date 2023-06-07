@@ -84,6 +84,5 @@ TEST_CASE("bind_col", "[odbc") {
 	ret = SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
 	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFreeHandle (HSTMT)");
 
-	DISCONNECT_FROM_DATABASE(ret, dbc, env);
-	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLDisconnect (HDBC)");
+	DISCONNECT_FROM_DATABASE(ret, env, dbc);
 }

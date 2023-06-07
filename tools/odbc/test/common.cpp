@@ -4,25 +4,25 @@
 using namespace std;
 namespace odbc_test {
 
-void ODBC_CHECK(SQLRETURN ret, SQLSMALLINT tpe, SQLHANDLE hnd, const char *func) {
+void ODBC_CHECK(SQLRETURN ret, const char *msg) {
 	switch (ret) {
 	case SQL_SUCCESS:
 		REQUIRE(1 == 1);
 		return;
 	case SQL_SUCCESS_WITH_INFO:
-		fprintf(stderr, "%s: Error: Success with info\n", func);
+		fprintf(stderr, "%s: Error: Success with info\n", msg);
 		break;
 	case SQL_ERROR:
-		fprintf(stderr, "%s: Error: Error\n", func);
+		fprintf(stderr, "%s: Error: Error\n", msg);
 		break;
 	case SQL_NO_DATA:
-		fprintf(stderr, "%s: Error: no data\n", func);
+		fprintf(stderr, "%s: Error: no data\n", msg);
 		break;
 	case SQL_INVALID_HANDLE:
-		fprintf(stderr, "%s: Error: invalid handle\n", func);
+		fprintf(stderr, "%s: Error: invalid handle\n", msg);
 		break;
 	default:
-		fprintf(stderr, "%s: Unexpected return value\n", func);
+		fprintf(stderr, "%s: Unexpected return value\n", msg);
 		break;
 	}
 	REQUIRE(ret == SQL_SUCCESS);
@@ -47,7 +47,7 @@ void ACCESS_DIAGNOSTIC(string &state, string &message, SQLHANDLE handle, SQLRETU
 	}
 
 	if (ret != SQL_NO_DATA) {
-		ODBC_CHECK(ret, handle_type, handle, "SQLGetDiagRec");
+		ODBC_CHECK(ret, "SQLGetDiagRec");
 	}
 }
 
@@ -56,7 +56,7 @@ void DATA_CHECK(HSTMT hstmt, SQLSMALLINT col_num, const char *expected_content) 
 	SQLLEN content_len;
 
 	SQLRETURN ret = SQLGetData(hstmt, col_num, SQL_C_CHAR, content, sizeof(content), &content_len);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLGetData");
+	ODBC_CHECK(ret, "SQLGetData");
 	if (content_len == SQL_NULL_DATA) {
 		REQUIRE(expected_content == nullptr);
 		return;
@@ -76,7 +76,7 @@ void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const char *expected_col_
 
 	SQLRETURN ret = SQLDescribeCol(hstmt, col_num, col_name, sizeof(col_name), &col_name_len, &col_type, &col_size,
 	                               &col_decimal_digits, &col_nullable);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLDescribeCol");
+	ODBC_CHECK(ret, "SQLDescribeCol");
 
 	if (sizeof(expected_col_name) > 0) {
 		REQUIRE(!::strcmp((const char *)col_name, expected_col_name));
@@ -123,14 +123,13 @@ void DRIVER_CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc, 
 	ret = SQLAllocHandle(SQL_HANDLE_ENV, nullptr, &env);
 	REQUIRE(ret == SQL_SUCCESS);
 
-	ret = SQLSetEnvAttr(env, SQL_ATTR_ODBC_VERSION, (SQLPOINTER)(uintptr_t)SQL_OV_ODBC3, 0);
-	ODBC_CHECK(ret, SQL_HANDLE_ENV, env, "SQLSetEnvAttr (SQL_ATTR_ODBC_VERSION ODBC3)");
+	ExecuteCmdAndCheckODBC("SQLSetEnvAttr (SQL_ATTR_ODBC_VERSION ODBC3)", SQLSetEnvAttr, env, SQL_ATTR_ODBC_VERSION,
+	                       (SQLPOINTER)(uintptr_t)SQL_OV_ODBC3, 0);
 
-	ret = SQLAllocHandle(SQL_HANDLE_DBC, env, &dbc);
-	ODBC_CHECK(ret, SQL_HANDLE_ENV, env, "SQLAllocHandle (DBC)");
+	ExecuteCmdAndCheckODBC("SQLAllocHandle (DBC)", SQLAllocHandle, SQL_HANDLE_DBC, env, &dbc);
 
-	ret = SQLDriverConnect(dbc, nullptr, (SQLCHAR *)dsn.c_str(), SQL_NTS, str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
-	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLDriverConnect");
+	ExecuteCmdAndCheckODBC("SQLDriverConnect", SQLDriverConnect, dbc, nullptr, (SQLCHAR *)dsn.c_str(), SQL_NTS, str,
+	                       sizeof(str), &strl, SQL_DRIVER_COMPLETE);
 }
 
 void CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc) {
@@ -139,33 +138,27 @@ void CONNECT_TO_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc) {
 	ret = SQLAllocHandle(SQL_HANDLE_ENV, nullptr, &env);
 	REQUIRE(ret == SQL_SUCCESS);
 
-	ExecuteCmdAndCheckODBC("SQLSetEnvAttr (SQL_ATTR_ODBC_VERSION ODBC3)", SQLSetEnvAttr, env, env,
-	                       SQL_ATTR_ODBC_VERSION, (SQLPOINTER)(uintptr_t)SQL_OV_ODBC3, 0);
+	ExecuteCmdAndCheckODBC("SQLSetEnvAttr (SQL_ATTR_ODBC_VERSION ODBC3)", SQLSetEnvAttr, env, SQL_ATTR_ODBC_VERSION,
+	                       (SQLPOINTER)(uintptr_t)SQL_OV_ODBC3, 0);
 
-	ExecuteCmdAndCheckODBC("SQLAllocHandle (DBC)", SQLAllocHandle, env, SQL_HANDLE_DBC, env, &dbc);
-	ret = SQLAllocHandle(SQL_HANDLE_DBC, env, &dbc);
-	ODBC_CHECK(ret, SQL_HANDLE_ENV, env, "SQLAllocHandle (DBC)");
+	ExecuteCmdAndCheckODBC("SQLAllocHandle (DBC)", SQLAllocHandle, SQL_HANDLE_DBC, env, &dbc);
 
-	ret = SQLConnect(dbc, (SQLCHAR *)dsn.c_str(), SQL_NTS, nullptr, 0, nullptr, 0);
-	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLConnect");
+	ExecuteCmdAndCheckODBC("SQLConnect", SQLConnect, dbc, (SQLCHAR *)dsn.c_str(), SQL_NTS, nullptr, 0, nullptr, 0);
 }
 
-void DISCONNECT_FROM_DATABASE(SQLRETURN &ret, SQLHANDLE &dbc, SQLHANDLE &env) {
-	ret = SQLFreeHandle(SQL_HANDLE_ENV, env);
-	ODBC_CHECK(ret, SQL_HANDLE_ENV, env, "SQLFreeEnv");
+void DISCONNECT_FROM_DATABASE(SQLRETURN &ret, SQLHANDLE &env, SQLHANDLE &dbc) {
+	ExecuteCmdAndCheckODBC("SQLFreeHandle(SQL_HANDLE_ENV)", SQLFreeHandle, SQL_HANDLE_ENV, env);
 
-	ret = SQLDisconnect(dbc);
-	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLDisconnect");
+	ExecuteCmdAndCheckODBC("SQLDisconnect", SQLDisconnect, dbc);
 
-	ret = SQLFreeHandle(SQL_HANDLE_DBC, dbc);
-	ODBC_CHECK(ret, SQL_HANDLE_DBC, dbc, "SQLFreeHandle (DBC)");
+	ExecuteCmdAndCheckODBC("SQLFreeHandle(SQL_HANDLE_DBC)", SQLFreeHandle, SQL_HANDLE_DBC, dbc);
 }
 
 void EXEC_SQL(HSTMT hstmt, string query) {
 	SQLRETURN ret;
 
 	ret = SQLExecDirect(hstmt, (SQLCHAR *)query.c_str(), SQL_NTS);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLExecDirect");
+	ODBC_CHECK(ret, "SQLExecDirect");
 }
 
 void INITIALIZE_DATABASE(HSTMT hstmt) {

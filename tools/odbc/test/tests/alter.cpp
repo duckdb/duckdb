@@ -11,45 +11,42 @@ TEST_CASE("Alter", "[odbc]") {
 	// Connect to the database
 	CONNECT_TO_DATABASE(ret, env, dbc);
 
-	ret = SQLAllocHandle(SQL_HANDLE_STMT, dbc, &hstmt);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLAllocHandle (HSTMT)");
+	ExecuteCmdAndCheckODBC("SQLAllocHandle (HSTMT)", SQL_HANDLE_STMT, hstmt, SQLAllocHandle, SQL_HANDLE_STMT, dbc,
+	                       &hstmt);
 
 	// Create a table to test with
-	ret = SQLExecDirect(hstmt, (SQLCHAR *)"CREATE TABLE testtbl(t varchar(40))", SQL_NTS);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLExecDirect (CREATE TABLE)");
+	ExecuteCmdAndCheckODBC("SQLExecDirect (CREATE TABLE)", SQL_HANDLE_STMT, hstmt, SQLExecDirect, hstmt,
+	                       (SQLCHAR *)"CREATE TABLE testtbl(t varchar(40))", SQL_NTS);
 
 	// A simple query against the table, fetch column info
-	ret = SQLExecDirect(hstmt, (SQLCHAR *)"SELECT * FROM testtbl", SQL_NTS);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLExecDirect (SELECT)");
+	ExecuteCmdAndCheckODBC("SQLExecDirect (SELECT)", SQL_HANDLE_STMT, hstmt, SQLExecDirect, hstmt,
+	                       (SQLCHAR *)"SELECT * FROM testtbl", SQL_NTS);
 
 	// Get column metadata
 	SQLSMALLINT num_cols;
-	ret = SQLNumResultCols(hstmt, &num_cols);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLNumResultCols");
+	ExecuteCmdAndCheckODBC("SQLNumResultCols", SQL_HANDLE_STMT, hstmt, SQLNumResultCols, hstmt, &num_cols);
 	REQUIRE(num_cols == 1);
 
 	// Retrieve metadata from the column
 	METADATA_CHECK(hstmt, num_cols, "t", sizeof('t'), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
 
 	// Alter the table
-	ret = SQLExecDirect(hstmt, (SQLCHAR *)"ALTER TABLE testtbl ALTER t SET DATA TYPE varchar", SQL_NTS);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLExecDirect (ALTER TABLE)");
+	ExecuteCmdAndCheckODBC("SQLExecDirect (ALTER TABLE)", SQL_HANDLE_STMT, hstmt, SQLExecDirect, hstmt,
+	                       (SQLCHAR *)"ALTER TABLE testtbl ALTER t SET DATA TYPE int", SQL_NTS);
 
 	// Rerun the query to check if the metadata was updated
-	ret = SQLExecDirect(hstmt, (SQLCHAR *)"SELECT * FROM testtbl", SQL_NTS);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLExecDirect (SELECT)");
+	ExecuteCmdAndCheckODBC("SQLExecDirect (SELECT)", SQL_HANDLE_STMT, hstmt, SQLExecDirect, hstmt,
+	                       (SQLCHAR *)"SELECT * FROM testtbl", SQL_NTS);
 
 	// Get column metadata
 	SQLSMALLINT num_cols2;
-	ret = SQLNumResultCols(hstmt, &num_cols2);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLNumResultCols");
+	ExecuteCmdAndCheckODBC("SQLNumResultCols", SQL_HANDLE_STMT, hstmt, SQLNumResultCols, hstmt, &num_cols2);
 	REQUIRE(num_cols2 == 1);
 
 	// Retrieve metadata from the column
 	METADATA_CHECK(hstmt, num_cols2, "t", sizeof('t'), SQL_VARCHAR, 256, 0, SQL_NULLABLE_UNKNOWN);
 
-	ret = SQLFreeStmt(hstmt, SQL_CLOSE);
-	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFreeStmt (SQL_CLOSE)");
+	ExecuteCmdAndCheckODBC("SQLFreeStmt (SQL_CLOSE)", SQL_HANDLE_STMT, hstmt, SQLFreeStmt, hstmt, SQL_CLOSE);
 
-	DISCONNECT_FROM_DATABASE(ret, dbc, env);
+	DISCONNECT_FROM_DATABASE(ret, env, dbc);
 }
