@@ -287,7 +287,7 @@ struct WindowBoundariesState {
 	      needs_peer(BoundaryNeedsPeer(wexpr.end) || wexpr.type == ExpressionType::WINDOW_CUME_DIST) {
 	}
 
-	void Update(const idx_t row_idx, WindowInputColumn &range_collection, const idx_t source_offset,
+	void Update(const idx_t row_idx, WindowInputColumn &range_collection, const idx_t chunk_idx,
 	            WindowInputExpression &boundary_start, WindowInputExpression &boundary_end,
 	            const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
@@ -313,6 +313,7 @@ struct WindowBoundariesState {
 	int64_t window_end = -1;
 	bool is_same_partition = false;
 	bool is_peer = false;
+	FrameBounds range;
 };
 
 static bool WindowNeedsRank(const BoundWindowExpression &wexpr) {
@@ -343,7 +344,7 @@ static void CopyCell(DataChunk &chunk, idx_t column, idx_t index, Vector &target
 template <typename T>
 struct WindowColumnIterator {
 	using iterator = WindowColumnIterator<T>;
-	using iterator_category = std::forward_iterator_tag;
+	using iterator_category = std::random_access_iterator_tag;
 	using difference_type = std::ptrdiff_t;
 	using value_type = T;
 	using reference = T;
@@ -352,6 +353,7 @@ struct WindowColumnIterator {
 	explicit WindowColumnIterator(WindowInputColumn &coll_p, pointer pos_p = 0) : coll(&coll_p), pos(pos_p) {
 	}
 
+	//	Forward iterator
 	inline reference operator*() const {
 		return coll->GetCell<T>(pos);
 	}
@@ -369,11 +371,63 @@ struct WindowColumnIterator {
 		return result;
 	}
 
+	//	Bidirectional iterator
+	inline iterator &operator--() {
+		--pos;
+		return *this;
+	}
+	inline iterator operator--(int) {
+		auto result = *this;
+		--(*this);
+		return result;
+	}
+
+	//	Random Access
+	inline iterator &operator+=(difference_type n) {
+		pos += n;
+		return *this;
+	}
+	inline iterator &operator-=(difference_type n) {
+		pos -= n;
+		return *this;
+	}
+
+	inline reference operator[](difference_type m) const {
+		return coll->GetCell<T>(pos + m);
+	}
+
+	friend inline iterator &operator+(const iterator &a, difference_type n) {
+		return iterator(a.coll, a.pos + n);
+	}
+
+	friend inline iterator &operator-(const iterator &a, difference_type n) {
+		return iterator(a.coll, a.pos - n);
+	}
+
+	friend inline iterator &operator+(difference_type n, const iterator &a) {
+		return a + n;
+	}
+	friend inline difference_type operator-(const iterator &a, const iterator &b) {
+		return difference_type(a.pos - b.pos);
+	}
+
 	friend inline bool operator==(const iterator &a, const iterator &b) {
 		return a.pos == b.pos;
 	}
 	friend inline bool operator!=(const iterator &a, const iterator &b) {
 		return a.pos != b.pos;
+	}
+	friend inline bool operator<(const iterator &a, const iterator &b) {
+		return a.pos < b.pos;
+	}
+	friend inline bool operator<=(const iterator &a, const iterator &b) {
+		return a.pos <= b.pos;
+	}
+	friend inline bool operator>(const iterator &a, const iterator &b) {
+		return a.pos > b.pos;
+	}
+	friend inline bool operator>=(const iterator &a, const iterator &b) {
+		return a.pos >= b.pos;
 	}
 
 private:
@@ -390,13 +444,30 @@ struct OperationCompare : public std::function<bool(T, T)> {
 
 template <typename T, typename OP, bool FROM>
 static idx_t FindTypedRangeBound(WindowInputColumn &over, const idx_t order_begin, const idx_t order_end,
-                                 WindowInputExpression &boundary, const idx_t boundary_row) {
-	D_ASSERT(!boundary.CellIsNull(boundary_row));
-	const auto val = boundary.GetCell<T>(boundary_row);
+                                 WindowInputExpression &boundary, const idx_t chunk_idx, const FrameBounds &prev) {
+	D_ASSERT(!boundary.CellIsNull(chunk_idx));
+	const auto val = boundary.GetCell<T>(chunk_idx);
 
 	OperationCompare<T, OP> comp;
 	WindowColumnIterator<T> begin(over, order_begin);
 	WindowColumnIterator<T> end(over, order_end);
+
+	if (order_begin < prev.first && prev.first < order_end) {
+		const auto first = over.GetCell<T>(prev.first);
+		if (!comp(val, first)) {
+			//	prev.first <= val, so we can start further forward
+			begin += (prev.first - order_begin);
+		}
+	}
+	if (order_begin <= prev.second && prev.second < order_end) {
+		const auto second = over.GetCell<T>(prev.second);
+		if (!comp(second, val)) {
+			//	val <= prev.second, so we can end further back
+			// (prev.second is the largest peer)
+			end -= (order_end - prev.second - 1);
+		}
+	}
+
 	if (FROM) {
 		return idx_t(std::lower_bound(begin, end, val, comp));
 	} else {
@@ -406,35 +477,35 @@ static idx_t FindTypedRangeBound(WindowInputColumn &over, const idx_t order_begi
 
 template <typename OP, bool FROM>
 static idx_t FindRangeBound(WindowInputColumn &over, const idx_t order_begin, const idx_t order_end,
-                            WindowInputExpression &boundary, const idx_t expr_idx) {
+                            WindowInputExpression &boundary, const idx_t chunk_idx, const FrameBounds &prev) {
 	D_ASSERT(boundary.chunk.ColumnCount() == 1);
 	D_ASSERT(boundary.chunk.data[0].GetType().InternalType() == over.input_expr.ptype);
 
 	switch (over.input_expr.ptype) {
 	case PhysicalType::INT8:
-		return FindTypedRangeBound<int8_t, OP, FROM>(over, order_begin, order_end, boundary, expr_idx);
+		return FindTypedRangeBound<int8_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::INT16:
-		return FindTypedRangeBound<int16_t, OP, FROM>(over, order_begin, order_end, boundary, expr_idx);
+		return FindTypedRangeBound<int16_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::INT32:
-		return FindTypedRangeBound<int32_t, OP, FROM>(over, order_begin, order_end, boundary, expr_idx);
+		return FindTypedRangeBound<int32_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::INT64:
-		return FindTypedRangeBound<int64_t, OP, FROM>(over, order_begin, order_end, boundary, expr_idx);
+		return FindTypedRangeBound<int64_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::UINT8:
-		return FindTypedRangeBound<uint8_t, OP, FROM>(over, order_begin, order_end, boundary, expr_idx);
+		return FindTypedRangeBound<uint8_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::UINT16:
-		return FindTypedRangeBound<uint16_t, OP, FROM>(over, order_begin, order_end, boundary, expr_idx);
+		return FindTypedRangeBound<uint16_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::UINT32:
-		return FindTypedRangeBound<uint32_t, OP, FROM>(over, order_begin, order_end, boundary, expr_idx);
+		return FindTypedRangeBound<uint32_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::UINT64:
-		return FindTypedRangeBound<uint64_t, OP, FROM>(over, order_begin, order_end, boundary, expr_idx);
+		return FindTypedRangeBound<uint64_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::INT128:
-		return FindTypedRangeBound<hugeint_t, OP, FROM>(over, order_begin, order_end, boundary, expr_idx);
+		return FindTypedRangeBound<hugeint_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::FLOAT:
-		return FindTypedRangeBound<float, OP, FROM>(over, order_begin, order_end, boundary, expr_idx);
+		return FindTypedRangeBound<float, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::DOUBLE:
-		return FindTypedRangeBound<double, OP, FROM>(over, order_begin, order_end, boundary, expr_idx);
+		return FindTypedRangeBound<double, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::INTERVAL:
-		return FindTypedRangeBound<interval_t, OP, FROM>(over, order_begin, order_end, boundary, expr_idx);
+		return FindTypedRangeBound<interval_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	default:
 		throw InternalException("Unsupported column type for RANGE");
 	}
@@ -442,18 +513,19 @@ static idx_t FindRangeBound(WindowInputColumn &over, const idx_t order_begin, co
 
 template <bool FROM>
 static idx_t FindOrderedRangeBound(WindowInputColumn &over, const OrderType range_sense, const idx_t order_begin,
-                                   const idx_t order_end, WindowInputExpression &boundary, const idx_t expr_idx) {
+                                   const idx_t order_end, WindowInputExpression &boundary, const idx_t chunk_idx,
+                                   const FrameBounds &prev) {
 	switch (range_sense) {
 	case OrderType::ASCENDING:
-		return FindRangeBound<LessThan, FROM>(over, order_begin, order_end, boundary, expr_idx);
+		return FindRangeBound<LessThan, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case OrderType::DESCENDING:
-		return FindRangeBound<GreaterThan, FROM>(over, order_begin, order_end, boundary, expr_idx);
+		return FindRangeBound<GreaterThan, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	default:
 		throw InternalException("Unsupported ORDER BY sense for RANGE");
 	}
 }
 
-void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range_collection, const idx_t expr_idx,
+void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range_collection, const idx_t chunk_idx,
                                    WindowInputExpression &boundary_start, WindowInputExpression &boundary_end,
                                    const ValidityMask &partition_mask, const ValidityMask &order_mask) {
 
@@ -495,8 +567,11 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 					idx_t n = 1;
 					bounds.valid_end = FindPrevStart(order_mask, bounds.valid_start, bounds.valid_end, n);
 				}
-			}
 
+				//	Reset range hints
+				bounds.range.first = bounds.valid_start;
+				bounds.range.second = bounds.valid_end;
+			}
 		} else if (!bounds.is_peer) {
 			bounds.peer_start = row_idx;
 		}
@@ -531,34 +606,36 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 		bounds.window_start = bounds.peer_start;
 		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS: {
-		if (!TrySubtractOperator::Operation(int64_t(row_idx), boundary_start.GetCell<int64_t>(expr_idx),
+		if (!TrySubtractOperator::Operation(int64_t(row_idx), boundary_start.GetCell<int64_t>(chunk_idx),
 		                                    bounds.window_start)) {
 			throw OutOfRangeException("Overflow computing ROWS PRECEDING start");
 		}
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_ROWS: {
-		if (!TryAddOperator::Operation(int64_t(row_idx), boundary_start.GetCell<int64_t>(expr_idx),
+		if (!TryAddOperator::Operation(int64_t(row_idx), boundary_start.GetCell<int64_t>(chunk_idx),
 		                               bounds.window_start)) {
 			throw OutOfRangeException("Overflow computing ROWS FOLLOWING start");
 		}
 		break;
 	}
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {
-		if (boundary_start.CellIsNull(expr_idx)) {
+		if (boundary_start.CellIsNull(chunk_idx)) {
 			bounds.window_start = bounds.peer_start;
 		} else {
-			bounds.window_start = FindOrderedRangeBound<true>(range_collection, bounds.range_sense, bounds.valid_start,
-			                                                  row_idx, boundary_start, expr_idx);
+			bounds.range.first = FindOrderedRangeBound<true>(range_collection, bounds.range_sense, bounds.valid_start,
+			                                                 row_idx, boundary_start, chunk_idx, bounds.range);
+			bounds.window_start = bounds.range.first;
 		}
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_RANGE: {
-		if (boundary_start.CellIsNull(expr_idx)) {
+		if (boundary_start.CellIsNull(chunk_idx)) {
 			bounds.window_start = bounds.peer_start;
 		} else {
-			bounds.window_start = FindOrderedRangeBound<true>(range_collection, bounds.range_sense, row_idx,
-			                                                  bounds.valid_end, boundary_start, expr_idx);
+			bounds.range.first = FindOrderedRangeBound<true>(range_collection, bounds.range_sense, row_idx,
+			                                                 bounds.valid_end, boundary_start, chunk_idx, bounds.range);
+			bounds.window_start = bounds.range.first;
 		}
 		break;
 	}
@@ -577,32 +654,34 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 		bounds.window_end = bounds.partition_end;
 		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS:
-		if (!TrySubtractOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(expr_idx),
+		if (!TrySubtractOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx),
 		                                    bounds.window_end)) {
 			throw OutOfRangeException("Overflow computing ROWS PRECEDING end");
 		}
 		break;
 	case WindowBoundary::EXPR_FOLLOWING_ROWS:
-		if (!TryAddOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(expr_idx),
+		if (!TryAddOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(chunk_idx),
 		                               bounds.window_end)) {
 			throw OutOfRangeException("Overflow computing ROWS FOLLOWING end");
 		}
 		break;
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {
-		if (boundary_end.CellIsNull(expr_idx)) {
+		if (boundary_end.CellIsNull(chunk_idx)) {
 			bounds.window_end = bounds.peer_end;
 		} else {
-			bounds.window_end = FindOrderedRangeBound<false>(range_collection, bounds.range_sense, bounds.valid_start,
-			                                                 row_idx, boundary_end, expr_idx);
+			bounds.range.second = FindOrderedRangeBound<false>(range_collection, bounds.range_sense, bounds.valid_start,
+			                                                   row_idx, boundary_end, chunk_idx, bounds.range);
+			bounds.window_end = bounds.range.second;
 		}
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_RANGE: {
-		if (boundary_end.CellIsNull(expr_idx)) {
+		if (boundary_end.CellIsNull(chunk_idx)) {
 			bounds.window_end = bounds.peer_end;
 		} else {
-			bounds.window_end = FindOrderedRangeBound<false>(range_collection, bounds.range_sense, row_idx,
-			                                                 bounds.valid_end, boundary_end, expr_idx);
+			bounds.range.second = FindOrderedRangeBound<false>(range_collection, bounds.range_sense, row_idx,
+			                                                   bounds.valid_end, boundary_end, chunk_idx, bounds.range);
+			bounds.window_end = bounds.range.second;
 		}
 		break;
 	}
@@ -866,9 +945,9 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 	leadlag_default.Execute(input_chunk);
 
 	// this is the main loop, go through all sorted rows and compute window function result
-	for (idx_t output_offset = 0; output_offset < input_chunk.size(); ++output_offset, ++row_idx) {
+	for (idx_t chunk_idx = 0; chunk_idx < input_chunk.size(); ++chunk_idx, ++row_idx) {
 		// special case, OVER (), aggregate over everything
-		bounds.Update(row_idx, range, output_offset, boundary_start, boundary_end, partition_mask, order_mask);
+		bounds.Update(row_idx, range, chunk_idx, boundary_start, boundary_end, partition_mask, order_mask);
 		if (WindowNeedsRank(wexpr)) {
 			if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
 				dense_rank = 1;
@@ -884,52 +963,52 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 
 		// if no values are read for window, result is NULL
 		if (bounds.window_start >= bounds.window_end) {
-			FlatVector::SetNull(result, output_offset, true);
+			FlatVector::SetNull(result, chunk_idx, true);
 			continue;
 		}
 
 		switch (wexpr.type) {
 		case ExpressionType::WINDOW_AGGREGATE: {
 			if (constant_aggregate) {
-				constant_aggregate->Compute(result, output_offset, bounds.window_start, bounds.window_end);
+				constant_aggregate->Compute(result, chunk_idx, bounds.window_start, bounds.window_end);
 			} else {
-				segment_tree->Compute(result, output_offset, bounds.window_start, bounds.window_end);
+				segment_tree->Compute(result, chunk_idx, bounds.window_start, bounds.window_end);
 			}
 			break;
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
 			auto rdata = FlatVector::GetData<int64_t>(result);
-			rdata[output_offset] = row_idx - bounds.partition_start + 1;
+			rdata[chunk_idx] = row_idx - bounds.partition_start + 1;
 			break;
 		}
 		case ExpressionType::WINDOW_RANK_DENSE: {
 			auto rdata = FlatVector::GetData<int64_t>(result);
-			rdata[output_offset] = dense_rank;
+			rdata[chunk_idx] = dense_rank;
 			break;
 		}
 		case ExpressionType::WINDOW_RANK: {
 			auto rdata = FlatVector::GetData<int64_t>(result);
-			rdata[output_offset] = rank;
+			rdata[chunk_idx] = rank;
 			break;
 		}
 		case ExpressionType::WINDOW_PERCENT_RANK: {
 			int64_t denom = (int64_t)bounds.partition_end - bounds.partition_start - 1;
 			double percent_rank = denom > 0 ? ((double)rank - 1) / denom : 0;
 			auto rdata = FlatVector::GetData<double>(result);
-			rdata[output_offset] = percent_rank;
+			rdata[chunk_idx] = percent_rank;
 			break;
 		}
 		case ExpressionType::WINDOW_CUME_DIST: {
 			int64_t denom = (int64_t)bounds.partition_end - bounds.partition_start;
 			double cume_dist = denom > 0 ? ((double)(bounds.peer_end - bounds.partition_start)) / denom : 0;
 			auto rdata = FlatVector::GetData<double>(result);
-			rdata[output_offset] = cume_dist;
+			rdata[chunk_idx] = cume_dist;
 			break;
 		}
 		case ExpressionType::WINDOW_NTILE: {
 			D_ASSERT(payload_collection.ColumnCount() == 1);
 			if (CellIsNull(payload_collection, 0, row_idx)) {
-				FlatVector::SetNull(result, output_offset, true);
+				FlatVector::SetNull(result, chunk_idx, true);
 			} else {
 				auto n_param = GetCell<int64_t>(payload_collection, 0, row_idx);
 				if (n_param < 1) {
@@ -961,7 +1040,7 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 				// result has to be between [1, NTILE]
 				D_ASSERT(result_ntile >= 1 && result_ntile <= n_param);
 				auto rdata = FlatVector::GetData<int64_t>(result);
-				rdata[output_offset] = result_ntile;
+				rdata[chunk_idx] = result_ntile;
 			}
 			break;
 		}
@@ -969,7 +1048,7 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 		case ExpressionType::WINDOW_LAG: {
 			int64_t offset = 1;
 			if (wexpr.offset_expr) {
-				offset = leadlag_offset.GetCell<int64_t>(output_offset);
+				offset = leadlag_offset.GetCell<int64_t>(chunk_idx);
 			}
 			int64_t val_idx = (int64_t)row_idx;
 			if (wexpr.type == ExpressionType::WINDOW_LEAD) {
@@ -990,11 +1069,11 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 			// else offset is zero, so don't move.
 
 			if (!delta) {
-				CopyCell(payload_collection, 0, val_idx, result, output_offset);
+				CopyCell(payload_collection, 0, val_idx, result, chunk_idx);
 			} else if (wexpr.default_expr) {
-				leadlag_default.CopyCell(result, output_offset);
+				leadlag_default.CopyCell(result, chunk_idx);
 			} else {
-				FlatVector::SetNull(result, output_offset, true);
+				FlatVector::SetNull(result, chunk_idx, true);
 			}
 			break;
 		}
@@ -1003,9 +1082,9 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 			idx_t n = 1;
 			const auto first_idx = FindNextStart(ignore_nulls, bounds.window_start, bounds.window_end, n);
 			if (!n) {
-				CopyCell(payload_collection, 0, first_idx, result, output_offset);
+				CopyCell(payload_collection, 0, first_idx, result, chunk_idx);
 			} else {
-				FlatVector::SetNull(result, output_offset, true);
+				FlatVector::SetNull(result, chunk_idx, true);
 			}
 			break;
 		}
@@ -1013,9 +1092,9 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 			idx_t n = 1;
 			const auto last_idx = FindPrevStart(ignore_nulls, bounds.window_start, bounds.window_end, n);
 			if (!n) {
-				CopyCell(payload_collection, 0, last_idx, result, output_offset);
+				CopyCell(payload_collection, 0, last_idx, result, chunk_idx);
 			} else {
-				FlatVector::SetNull(result, output_offset, true);
+				FlatVector::SetNull(result, chunk_idx, true);
 			}
 			break;
 		}
@@ -1024,18 +1103,18 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 			// Returns value evaluated at the row that is the n'th row of the window frame (counting from 1);
 			// returns NULL if there is no such row.
 			if (CellIsNull(payload_collection, 1, row_idx)) {
-				FlatVector::SetNull(result, output_offset, true);
+				FlatVector::SetNull(result, chunk_idx, true);
 			} else {
 				auto n_param = GetCell<int64_t>(payload_collection, 1, row_idx);
 				if (n_param < 1) {
-					FlatVector::SetNull(result, output_offset, true);
+					FlatVector::SetNull(result, chunk_idx, true);
 				} else {
 					auto n = idx_t(n_param);
 					const auto nth_index = FindNextStart(ignore_nulls, bounds.window_start, bounds.window_end, n);
 					if (!n) {
-						CopyCell(payload_collection, 0, nth_index, result, output_offset);
+						CopyCell(payload_collection, 0, nth_index, result, chunk_idx);
 					} else {
-						FlatVector::SetNull(result, output_offset, true);
+						FlatVector::SetNull(result, chunk_idx, true);
 					}
 				}
 			}
