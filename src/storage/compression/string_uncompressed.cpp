@@ -2,7 +2,7 @@
 
 #include "duckdb/common/pair.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
-#include "miniz_wrapper.hpp"
+#include "zstd_wrapper.hpp"
 
 namespace duckdb {
 
@@ -321,16 +321,20 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		}
 
 		// overflow strings on disk are gzipped, decompress here
-		auto decompressed_target_handle =
-		    buffer_manager.Allocate(MaxValue<idx_t>(Storage::BLOCK_SIZE, uncompressed_size));
-		auto decompressed_target_ptr = decompressed_target_handle.Ptr();
-		MiniZStream s;
-		s.Decompress(const_char_ptr_cast(decompression_ptr), compressed_size, char_ptr_cast(decompressed_target_ptr),
-		             uncompressed_size);
+		if (compressed_size < uncompressed_size) {
+			auto decompressed_target_handle =
+				buffer_manager.Allocate(MaxValue<idx_t>(Storage::BLOCK_SIZE, uncompressed_size));
+			auto decompressed_target_ptr = decompressed_target_handle.Ptr();
+			ZSTDWrapper s;
+			s.Decompress(const_char_ptr_cast(decompression_ptr), compressed_size, char_ptr_cast(decompressed_target_ptr),
+						 uncompressed_size);
 
-		auto final_buffer = decompressed_target_handle.Ptr();
-		StringVector::AddHandle(result, std::move(decompressed_target_handle));
-		return ReadString(final_buffer, 0, uncompressed_size);
+			auto final_buffer = decompressed_target_handle.Ptr();
+			StringVector::AddHandle(result, std::move(decompressed_target_handle));
+			return ReadString(final_buffer, 0, uncompressed_size);
+		} else {
+			return StringVector::AddString(result, const_char_ptr_cast(decompression_ptr), compressed_size);
+		}
 	} else {
 		// read the overflow string from memory
 		// first pin the handle, if it is not pinned yet

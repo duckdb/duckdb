@@ -53,4 +53,9 @@ struct FSSTFun {
 	static bool TypeIsSupported(PhysicalType type);
 };
 
+struct ZSTDFun {
+	static CompressionFunction GetFunction(PhysicalType type);
+	static bool TypeIsSupported(PhysicalType type);
+};
+
 } // namespace duckdb

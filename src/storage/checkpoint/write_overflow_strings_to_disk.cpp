@@ -1,7 +1,7 @@
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
-#include "miniz_wrapper.hpp"
+#include "zstd_wrapper.hpp"
 
 namespace duckdb {
 
@@ -29,12 +29,21 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 
 	// GZIP the string
 	auto uncompressed_size = string.GetSize();
-	MiniZStream s;
+	unsafe_unique_array<data_t> compressed_buf;
+	string_t compressed_string;
 	size_t compressed_size = 0;
-	compressed_size = s.MaxCompressedLength(uncompressed_size);
-	auto compressed_buf = make_unsafe_uniq_array<data_t>(compressed_size);
-	s.Compress(string.GetData(), uncompressed_size, char_ptr_cast(compressed_buf.get()), &compressed_size);
-	string_t compressed_string(const_char_ptr_cast(compressed_buf.get()), compressed_size);
+	if (uncompressed_size >= Storage::BLOCK_SIZE) {
+		ZSTDWrapper s;
+		compressed_size = s.MaxCompressedLength(uncompressed_size);
+		compressed_buf = make_unsafe_uniq_array<data_t>(compressed_size);
+		s.Compress(string.GetData(), uncompressed_size, char_ptr_cast(compressed_buf.get()), &compressed_size);
+		compressed_string = string_t(const_char_ptr_cast(compressed_buf.get()), compressed_size);
+	} else {
+		compressed_size = uncompressed_size;
+	}
+	if (compressed_size >= uncompressed_size) {
+		compressed_string = string;
+	}
 
 	// store sizes
 	auto data_ptr = handle.Ptr();
