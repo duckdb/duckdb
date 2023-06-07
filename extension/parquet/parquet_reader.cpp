@@ -48,7 +48,7 @@ using duckdb_parquet::format::SchemaElement;
 using duckdb_parquet::format::Statistics;
 using duckdb_parquet::format::Type;
 
-static duckdb::unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
+static unique_ptr<duckdb_apache::thrift::protocol::TProtocol>
 CreateThriftProtocol(Allocator &allocator, FileHandle &file_handle, bool prefetch_mode) {
 	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle, prefetch_mode);
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
@@ -271,7 +271,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 	}
 	if (s_ele.__isset.num_children && s_ele.num_children > 0) { // inner node
 		child_list_t<LogicalType> child_types;
-		vector<duckdb::unique_ptr<ColumnReader>> child_readers;
+		vector<unique_ptr<ColumnReader>> child_readers;
 
 		idx_t c_idx = 0;
 		while (c_idx < (idx_t)s_ele.num_children) {
@@ -287,7 +287,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 			c_idx++;
 		}
 		D_ASSERT(!child_types.empty());
-		duckdb::unique_ptr<ColumnReader> result;
+		unique_ptr<ColumnReader> result;
 		LogicalType result_type;
 
 		bool is_repeated = repetition_type == FieldRepetitionType::REPEATED;
