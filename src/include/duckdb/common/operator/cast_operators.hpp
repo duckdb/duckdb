@@ -654,6 +654,15 @@ struct CastFromBlob {
 template <>
 duckdb::string_t CastFromBlob::Operation(duckdb::string_t input, Vector &vector);
 
+struct CastFromBlobToBit {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		throw NotImplementedException("Cast from blob could not be performed!");
+	}
+};
+template <>
+string_t CastFromBlobToBit::Operation(string_t input, Vector &result);
+
 struct TryCastToBlob {
 	template <class SRC, class DST>
 	static inline bool Operation(SRC input, DST &result, Vector &result_vector, string *error_message,

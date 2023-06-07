@@ -41,6 +41,10 @@ public:
 
 	DUCKDB_API static string ToBit(string_t str);
 
+	DUCKDB_API static void BlobToBit(string_t blob, string_t &output);
+
+	DUCKDB_API static string BlobToBit(string_t blob);
+
 	template<class T>
 	DUCKDB_API static void NumericToBit(T numeric, string_t &output_str)  {
 		auto output = output_str.GetDataWriteable();

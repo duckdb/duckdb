@@ -1425,6 +1425,15 @@ string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 	return result;
 }
 
+template <>
+string_t CastFromBlobToBit::Operation(string_t input, Vector &vector) {
+	idx_t result_size = input.GetSize() + 1;
+
+	string_t result = StringVector::EmptyString(vector, result_size);
+	Bit::BlobToBit(input, result);
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // Cast From Bit
 //===--------------------------------------------------------------------===//
