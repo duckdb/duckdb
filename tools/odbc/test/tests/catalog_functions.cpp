@@ -143,13 +143,13 @@ static void TestSQLTables(HSTMT &hstmt, map<SQLSMALLINT, SQLULEN> &types_map) {
 }
 
 // TODO: fix this test
-// static void TestSQLTablesLong(HSTMT &hstmt) {
+//static void TestSQLTablesLong(HSTMT &hstmt) {
 //	SQLRETURN ret;
 //
-//	ExecuteCmdAndCheckODBC("SQLTables", SQLTables, hstmt, ConvertToSQLCHAR(""), SQL_NTS, ConvertToSQLCHAR("main"),
-//SQL_NTS, ConvertToSQLCHAR("test_table_%"), SQL_NTS,
-//                                                                           ConvertToSQLCHAR("1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,
-//                                                                           'TABLE'"), SQL_NTS);
+//	ExecuteCmdAndCheckODBC(
+//	    "SQLTables", SQLTables, hstmt, ConvertToSQLCHAR(""), SQL_NTS, ConvertToSQLCHAR("main"), SQL_NTS,
+//	    ConvertToSQLCHAR("test_table_%"), SQL_NTS,
+//	    ConvertToSQLCHAR("1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,6,7,8,9,0,1,2,3,4,5,'TABLE'"), SQL_NTS);
 //
 //	DATA_CHECK(hstmt, 1, "memory");
 //	DATA_CHECK(hstmt, 2, "main");
