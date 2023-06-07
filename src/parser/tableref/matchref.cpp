@@ -118,19 +118,16 @@ unique_ptr<TableRef> MatchRef::Copy() {
 	return std::move(copy);
 }
 
-void MatchRef::Serialize(Serializer &serializer) const {
-    FieldWriter writer(serializer);
+void MatchRef::Serialize(FieldWriter &writer) const {
 	writer.WriteString(pg_name);
 	writer.WriteString(alias);
 	writer.WriteSerializableList<PathPattern>(path_list);
 	writer.WriteSerializableList<ParsedExpression>(column_list);
 	writer.WriteOptional(where_clause);
-    writer.Finalize();
 }
 
-unique_ptr<TableRef> MatchRef::Deserialize(Deserializer &deserializer) {
+unique_ptr<TableRef> MatchRef::Deserialize(FieldReader &reader) {
 	auto result = make_uniq<MatchRef>();
-    FieldReader reader(deserializer);
 	result->pg_name = reader.ReadRequired<string>();
 	result->alias = reader.ReadRequired<string>();
 	result->path_list = reader.ReadRequiredSerializableList<PathPattern>();
