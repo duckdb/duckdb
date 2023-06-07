@@ -6,6 +6,7 @@ add_library_unity(
   csv_buffer.cpp
   csv_file_handle.cpp
   csv_reader_options.cpp
+  csv_sniffer.cpp
   csv_state_machine.cpp
   parallel_csv_reader.cpp)
 set(ALL_OBJECT_FILES
