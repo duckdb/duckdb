@@ -37,7 +37,7 @@ void TestGetTypeInfo(HSTMT &hstmt) {
 	ODBC_CHECK(ret, SQL_HANDLE_STMT, hstmt, "SQLFetch");
 
 	map<SQLSMALLINT, SQLULEN> types_map = InitializeTypesMap();
-	vector<metadata_data> expected_metadata;
+	vector<MetadataData> expected_metadata;
 	vector<string> expected_data;
 	expected_metadata.push_back({"TYPE_NAME", SQL_VARCHAR});
 	expected_data.emplace_back("VARCHAR");
@@ -103,7 +103,7 @@ static void TestSQLTables(HSTMT &hstmt) {
 	REQUIRE(col_count == 5);
 
 	map<SQLSMALLINT, SQLULEN> types_map = InitializeTypesMap();
-	vector<metadata_data> expected_metadata;
+	vector<MetadataData> expected_metadata;
 	expected_metadata.push_back({"TABLE_CAT", SQL_VARCHAR});
 	expected_metadata.push_back({"TABLE_SCHEM", SQL_VARCHAR});
 	expected_metadata.push_back({"TABLE_NAME", SQL_VARCHAR});
@@ -178,7 +178,7 @@ static void TestSQLColumns(HSTMT &hstmt) {
 
 	// Create a map of column types and a vector of expected metadata
 	map<SQLSMALLINT, SQLULEN> types_map = InitializeTypesMap();
-	vector<metadata_data> expected_metadata;
+	vector<MetadataData> expected_metadata;
 	expected_metadata.push_back({"TABLE_CAT", SQL_INTEGER});
 	expected_metadata.push_back({"TABLE_SCHEM", SQL_VARCHAR});
 	expected_metadata.push_back({"TABLE_NAME", SQL_VARCHAR});

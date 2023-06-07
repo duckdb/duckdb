@@ -14,12 +14,19 @@
 using namespace std;
 
 namespace odbc_test {
-struct metadata_data {
+struct MetadataData {
 	string col_name;
 	SQLSMALLINT col_type;
 };
 
 void ODBC_CHECK(SQLRETURN ret, SQLSMALLINT tpe, SQLHANDLE hnd, const char *func);
+
+template <typename MSG, typename FUNC, typename HANDLE, typename... ARGS>
+void ExecuteCmdAndCheckODBC(MSG msg, FUNC func, HANDLE hnd, ARGS... args) {
+	SQLRETURN ret = func(args...);
+	ODBC_CHECK(ret, SQL_HANDLE_STMT, hnd, msg);
+}
+
 void ACCESS_DIAGNOSTIC(string &state, string &message, SQLHANDLE handle, SQLRETURN &ret, SQLSMALLINT handle_type);
 void DATA_CHECK(HSTMT hstmt, SQLSMALLINT col_num, const char *expected_content);
 void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const char *expected_col_name, SQLSMALLINT expected_col_name_len,
