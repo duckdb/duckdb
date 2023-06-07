@@ -1,14 +1,14 @@
+#include "duckdb/core_functions/scalar/list_functions.hpp"
+#include "duckdb/core_functions/aggregate/nested_functions.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/core_functions/aggregate/nested_functions.hpp"
-#include "duckdb/core_functions/scalar/list_functions.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
@@ -46,30 +46,23 @@ ListAggregatesBindData::ListAggregatesBindData(const LogicalType &stype_p, uniqu
 ListAggregatesBindData::~ListAggregatesBindData() {
 }
 
-struct StateVector : public FunctionLocalState {
-	explicit StateVector()
-	    : allocator(Allocator::DefaultAllocator()), count(DConstants::INVALID_INDEX),
-	      state_vector(Vector(LogicalType::POINTER)) {
-	}
-
-	static unique_ptr<FunctionLocalState> Init(ExpressionState &state, const BoundFunctionExpression &expr,
-	                                           FunctionData *bind_data) {
-		return make_uniq<StateVector>();
+struct StateVector {
+	StateVector(idx_t count_p, unique_ptr<Expression> aggr_expr_p)
+	    : count(count_p), aggr_expr(std::move(aggr_expr_p)), state_vector(Vector(LogicalType::POINTER, count_p)) {
 	}
 
 	~StateVector() { // NOLINT
 		// destroy objects within the aggregate states
 		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
 		if (aggr.function.destructor) {
+			ArenaAllocator allocator(Allocator::DefaultAllocator());
 			AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
 			aggr.function.destructor(state_vector, aggr_input_data, count);
 		}
 	}
 
-	ArenaAllocator allocator;
-	unique_ptr<Expression> aggr_expr;
-
 	idx_t count;
+	unique_ptr<Expression> aggr_expr;
 	Vector state_vector;
 };
 
@@ -166,22 +159,12 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 		return;
 	}
 
-	// state vector for initialize and finalize
-	auto &state_vector = ExecuteFunctionState::GetFunctionState(state)->Cast<StateVector>();
-	state_vector.allocator.Reset();
-	state_vector.count = count;
-	state_vector.state_vector.Initialize(count);
-	auto states = FlatVector::GetData<data_ptr_t>(state_vector.state_vector);
-
 	// get the aggregate function
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<ListAggregatesBindData>();
 	auto &aggr = info.aggr_expr->Cast<BoundAggregateExpression>();
-	AggregateInputData aggr_input_data(aggr.bind_info.get(), state_vector.allocator);
-
-	if (!state_vector.aggr_expr) {
-		state_vector.aggr_expr = aggr.Copy();
-	}
+	ArenaAllocator allocator(Allocator::DefaultAllocator());
+	AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
 
 	D_ASSERT(aggr.function.update);
 
@@ -199,6 +182,10 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	// state_buffer holds the state for each list of this chunk
 	idx_t size = aggr.function.state_size();
 	auto state_buffer = make_unsafe_uniq_array<data_t>(size * count);
+
+	// state vector for initialize and finalize
+	StateVector state_vector(count, info.aggr_expr->Copy());
+	auto states = FlatVector::GetData<data_ptr_t>(state_vector.state_vector);
 
 	// state vector of STANDARD_VECTOR_SIZE holds the pointers to the states
 	Vector state_vector_update = Vector(LogicalType::POINTER);
@@ -501,7 +488,7 @@ static unique_ptr<FunctionData> ListUniqueBind(ClientContext &context, ScalarFun
 
 ScalarFunction ListAggregateFun::GetFunction() {
 	auto result = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
-	                             ListAggregateFunction, ListAggregateBind, nullptr, nullptr, StateVector::Init);
+	                             ListAggregateFunction, ListAggregateBind);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	result.varargs = LogicalType::ANY;
 	result.serialize = ListAggregatesBindData::Serialize;
@@ -511,12 +498,12 @@ ScalarFunction ListAggregateFun::GetFunction() {
 
 ScalarFunction ListDistinctFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY),
-	                      ListDistinctFunction, ListDistinctBind, nullptr, nullptr, StateVector::Init);
+	                      ListDistinctFunction, ListDistinctBind);
 }
 
 ScalarFunction ListUniqueFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::UBIGINT, ListUniqueFunction,
-	                      ListUniqueBind, nullptr, nullptr, StateVector::Init);
+	                      ListUniqueBind);
 }
 
 } // namespace duckdb
