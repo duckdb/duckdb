@@ -144,6 +144,10 @@ rapi_rel_from_table <- function(con, schema_name, table_name) {
   .Call(`_duckdb_rapi_rel_from_table`, con, schema_name, table_name)
 }
 
+rapi_rel_from_table_function <- function(con, function_name, positional_parameters_sexps, named_parameters_sexps) {
+  .Call(`_duckdb_rapi_rel_from_table_function`, con, function_name, positional_parameters_sexps, named_parameters_sexps)
+}
+
 rapi_rel_to_altrep <- function(rel) {
   .Call(`_duckdb_rapi_rel_to_altrep`, rel)
 }

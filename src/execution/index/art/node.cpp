@@ -69,6 +69,9 @@ void Node::Free(ART &art, Node &node) {
 
 		// free the prefixes and children of the nodes
 		switch (type) {
+		case NType::LEAF_SEGMENT:
+			LeafSegment::Free(art, node);
+			break;
 		case NType::LEAF:
 			Leaf::Free(art, node);
 			break;
@@ -159,65 +162,57 @@ void Node::DeleteChild(ART &art, Node &node, const uint8_t byte) {
 
 optional_ptr<Node> Node::GetChild(ART &art, const uint8_t byte) const {
 
-	D_ASSERT(!IsSwizzled());
+	D_ASSERT(IsSet() && !IsSwizzled());
 
 	optional_ptr<Node> child;
 	switch (DecodeARTNodeType()) {
-	case NType::NODE_4: {
+	case NType::NODE_4:
 		child = Node4::Get(art, *this).GetChild(byte);
 		break;
-	}
-	case NType::NODE_16: {
+	case NType::NODE_16:
 		child = Node16::Get(art, *this).GetChild(byte);
 		break;
-	}
-	case NType::NODE_48: {
+	case NType::NODE_48:
 		child = Node48::Get(art, *this).GetChild(byte);
 		break;
-	}
-	case NType::NODE_256: {
+	case NType::NODE_256:
 		child = Node256::Get(art, *this).GetChild(byte);
 		break;
-	}
 	default:
 		throw InternalException("Invalid node type for GetChild.");
 	}
 
-	// unswizzle the ART node before returning it
+	// deserialize the ART node before returning it
 	if (child && child->IsSwizzled()) {
 		child->Deserialize(art);
 	}
 	return child;
 }
 
-optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte) const {
+optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte, const bool deserialize) const {
 
-	D_ASSERT(!IsSwizzled());
+	D_ASSERT(IsSet() && !IsSwizzled());
 
 	optional_ptr<Node> child;
 	switch (DecodeARTNodeType()) {
-	case NType::NODE_4: {
+	case NType::NODE_4:
 		child = Node4::Get(art, *this).GetNextChild(byte);
 		break;
-	}
-	case NType::NODE_16: {
+	case NType::NODE_16:
 		child = Node16::Get(art, *this).GetNextChild(byte);
 		break;
-	}
-	case NType::NODE_48: {
+	case NType::NODE_48:
 		child = Node48::Get(art, *this).GetNextChild(byte);
 		break;
-	}
-	case NType::NODE_256: {
+	case NType::NODE_256:
 		child = Node256::Get(art, *this).GetNextChild(byte);
 		break;
-	}
 	default:
 		throw InternalException("Invalid node type for GetNextChild.");
 	}
 
-	// unswizzle the ART node before returning it
-	if (child && child->IsSwizzled()) {
+	// deserialize the ART node before returning it
+	if (child && deserialize && child->IsSwizzled()) {
 		child->Deserialize(art);
 	}
 	return child;
@@ -260,10 +255,11 @@ void Node::Deserialize(ART &art) {
 	type = reader.Read<uint8_t>();
 	swizzle_flag = 0;
 
-	auto type = DecodeARTNodeType();
-	SetPtr(Node::GetAllocator(art, type).New());
+	auto decoded_type = DecodeARTNodeType();
+	SetPtr(Node::GetAllocator(art, decoded_type).New());
+	type = (uint8_t)decoded_type;
 
-	switch (type) {
+	switch (decoded_type) {
 	case NType::LEAF:
 		return Leaf::Get(art, *this).Deserialize(art, reader);
 	case NType::NODE_4:
@@ -283,28 +279,43 @@ void Node::Deserialize(ART &art) {
 // Utility
 //===--------------------------------------------------------------------===//
 
-string Node::ToString(ART &art) const {
+string Node::VerifyAndToString(ART &art, const bool only_verify) {
 
-	D_ASSERT(!IsSwizzled());
+	D_ASSERT(IsSet());
+	if (IsSwizzled()) {
+		return only_verify ? "" : "swizzled";
+	}
 
-	if (DecodeARTNodeType() == NType::LEAF) {
-		return Leaf::Get(art, *this).ToString(art);
+	auto type = DecodeARTNodeType();
+	if (type == NType::LEAF) {
+		auto str = Leaf::Get(art, *this).VerifyAndToString(art, only_verify);
+		return only_verify ? "" : "\n" + str;
 	}
 
 	string str = "Node" + to_string(GetCapacity()) + ": [";
 
+	idx_t child_count = 0;
 	uint8_t byte = 0;
-	auto child = GetNextChild(art, byte);
+	auto child = GetNextChild(art, byte, false);
 	while (child) {
-		str += "(" + to_string(byte) + ", " + child->ToString(art) + ")";
-		if (byte == NumericLimits<uint8_t>::Maximum()) {
-			break;
+		child_count++;
+		if (child->IsSwizzled()) {
+			if (!only_verify) {
+				str += "(swizzled)";
+			}
+		} else {
+			str += "(" + to_string(byte) + ", " + child->VerifyAndToString(art, only_verify) + ")";
+			if (byte == NumericLimits<uint8_t>::Maximum()) {
+				break;
+			}
 		}
 		byte++;
-		child = GetNextChild(art, byte);
+		child = GetNextChild(art, byte, false);
 	}
 
-	return str + "]";
+	// ensure that the child count is at least two
+	D_ASSERT(child_count > 1);
+	return only_verify ? "" : "\n" + str + "]";
 }
 
 idx_t Node::GetCapacity() const {
@@ -567,6 +578,7 @@ void Node::Vacuum(ART &art, Node &node, const ARTFlags &flags) {
 	needs_vacuum = flags.vacuum_flags[node.type - 1] && allocator.NeedsVacuum(node);
 	if (needs_vacuum) {
 		node.SetPtr(allocator.VacuumPointer(node));
+		node.type = (uint8_t)type;
 	}
 
 	switch (type) {

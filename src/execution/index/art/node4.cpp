@@ -37,6 +37,7 @@ Node4 &Node4::ShrinkNode16(ART &art, Node &node4, Node &node16) {
 	auto &n4 = Node4::New(art, node4);
 	auto &n16 = Node16::Get(art, node16);
 
+	D_ASSERT(n16.count <= Node::NODE_4_CAPACITY);
 	n4.count = n16.count;
 	n4.prefix.Move(n16.prefix);
 
@@ -145,6 +146,7 @@ optional_ptr<Node> Node4::GetChild(const uint8_t byte) {
 
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] == byte) {
+			D_ASSERT(children[i].IsSet());
 			return &children[i];
 		}
 	}
@@ -156,6 +158,7 @@ optional_ptr<Node> Node4::GetNextChild(uint8_t &byte) {
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] >= byte) {
 			byte = key[i];
+			D_ASSERT(children[i].IsSet());
 			return &children[i];
 		}
 	}
