@@ -47,7 +47,7 @@ class TestADBCStatementBind(object):
 
             raw_schema = statement.get_parameter_schema()
             schema = _import(raw_schema);
-            print(schema)
+            assert schema.names == ['0']
 
             _bind(statement, data)
             res, number_of_rows = statement.execute_query()
@@ -90,9 +90,9 @@ class TestADBCStatementBind(object):
             statement.set_sql_query("select ? as a, ? as b, ? as c")
             statement.prepare()
 
-            #raw_schema = statement.get_parameter_schema()
-            #schema = _import(raw_schema);
-            #print(schema)
+            raw_schema = statement.get_parameter_schema()
+            schema = _import(raw_schema);
+            assert schema.names == ['0', '1', '2']
 
             _bind(statement, data)
             res, _ = statement.execute_query()
@@ -122,9 +122,9 @@ class TestADBCStatementBind(object):
             statement.set_sql_query("select ? as a")
             statement.prepare()
 
-            #raw_schema = statement.get_parameter_schema()
-            #schema = _import(raw_schema);
-            #print(schema)
+            raw_schema = statement.get_parameter_schema()
+            schema = _import(raw_schema);
+            assert schema.names == ['0']
 
             _bind(statement, record_batch)
             res, _ = statement.execute_query()
@@ -148,9 +148,9 @@ class TestADBCStatementBind(object):
             statement.set_sql_query("select ? as a")
             statement.prepare()
 
-            #raw_schema = statement.get_parameter_schema()
-            #schema = _import(raw_schema);
-            #print(schema)
+            raw_schema = statement.get_parameter_schema()
+            schema = _import(raw_schema);
+            assert schema.names == ['0']
 
             array = adbc_driver_manager.ArrowArrayHandle()
             schema = adbc_driver_manager.ArrowSchemaHandle()
@@ -173,9 +173,9 @@ class TestADBCStatementBind(object):
             statement.set_sql_query("select ? as a, ? as b")
             statement.prepare()
 
-            #raw_schema = statement.get_parameter_schema()
-            #schema = _import(raw_schema);
-            #print(schema)
+            raw_schema = statement.get_parameter_schema()
+            schema = _import(raw_schema);
+            assert schema.names == ['0', '1']
 
             array = adbc_driver_manager.ArrowArrayHandle()
             schema = adbc_driver_manager.ArrowSchemaHandle()

@@ -34,6 +34,7 @@ struct DuckDBArrowSchemaHolder {
 	std::list<vector<ArrowSchema *>> nested_children_ptr;
 	//! This holds strings created to represent decimal types
 	vector<unsafe_unique_array<char>> owned_type_names;
+	vector<unsafe_unique_array<char>> owned_column_names;
 };
 
 static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
@@ -45,19 +46,21 @@ static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
 	delete holder;
 }
 
-void InitializeChild(ArrowSchema &child, const string &name = "") {
-	//! Child is cleaned up by parent
+void InitializeChild(ArrowSchema &child, const char *name = "") {
+	// Child is cleaned up by parent
 	child.private_data = nullptr;
 	child.release = ReleaseDuckDBArrowSchema;
 
-	//! Store the child schema
+	// Store the child schema
 	child.flags = ARROW_FLAG_NULLABLE;
-	child.name = name.c_str();
+	// The memory for the name is owned by the parent
+	child.name = name;
 	child.n_children = 0;
 	child.children = nullptr;
 	child.metadata = nullptr;
 	child.dictionary = nullptr;
 }
+
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
                     const ArrowOptions &options);
 
@@ -308,9 +311,9 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<Logical
 
 	// Configure all child schemas
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
-
+		root_holder->owned_column_names.push_back(AddName(names[col_idx]));
 		auto &child = root_holder->children[col_idx];
-		InitializeChild(child, names[col_idx]);
+		InitializeChild(child, root_holder->owned_column_names.back().get());
 		SetArrowFormat(*root_holder, child, types[col_idx], options);
 	}
 

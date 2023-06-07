@@ -398,19 +398,8 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *in
                                  struct ArrowArrayStream *out, struct AdbcError *error) {
 	auto db_conn = (duckdb::Connection *)(connection->private_data);
 
-	// If 'info_codes' is NULL, all info codes should be output
+	// If 'info_codes' is NULL, we should output all the info codes we recognize
 	size_t length = info_codes ? info_codes_length : (size_t)AdbcInfoCode::UNRECOGNIZED;
-
-	duckdb::string schema = R"EOF(
-		UNION(
-			string_value VARCHAR,
-			bool_value BOOL,
-			int64_value BIGINT,
-			int32_bitmask INTEGER,
-			string_list VARCHAR[],
-			int32_to_int32_list_map MAP(INTEGER, INTEGER[])
-		)
-	)EOF";
 
 	duckdb::string q = R"EOF(
 		select
