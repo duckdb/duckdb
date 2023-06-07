@@ -18,17 +18,17 @@ unique_ptr<GlobalSourceState> PhysicalDropPropertyGraph::GetGlobalSourceState(Cl
 }
 
 SourceResultType PhysicalDropPropertyGraph::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
-    auto &gstate = input.global_state.Cast<CreatePropertyGraphSourceState>();
+    auto &gstate = input.global_state.Cast<DropPropertyGraphSourceState>();
     if (gstate.finished) {
 		return SourceResultType::FINISHED;
 	}
 
 	//! During the binder we already check if the property graph exists
-	auto sqlpgq_state_entry = context.client.registered_state.find("sqlpgq");
-	if (sqlpgq_state_entry == context.client.registered_state.end()) {
-		throw MissingExtensionException("The SQL/PGQ extension has not been loaded");
+	auto duckpgq_state_entry = context.client.registered_state.find("duckpgq");
+	if (duckpgq_state_entry == context.client.registered_state.end()) {
+		throw MissingExtensionException("The DuckPGQ extension has not been loaded");
 	}
-	auto duckpgq_state = reinterpret_cast<DuckPGQState *>(sqlpgq_state_entry->second.get());
+	auto duckpgq_state = reinterpret_cast<DuckPGQState *>(duckpgq_state_entry->second.get());
 	duckpgq_state->registered_property_graphs.erase(info->name);
 	return SourceResultType::FINISHED;
 }

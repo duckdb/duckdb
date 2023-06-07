@@ -6,6 +6,7 @@
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/parser/parsed_data/detach_info.hpp"
+#include "duckdb/parser/parsed_data/drop_property_graph_info.hpp"
 
 namespace duckdb {
 
@@ -66,6 +67,9 @@ unique_ptr<LogicalOperator> LogicalSimple::Deserialize(LogicalDeserializationSta
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 		parse_info = TransactionInfo::Deserialize(reader.GetSource());
 		break;
+    case LogicalOperatorType::LOGICAL_DROP_PROPERTY_GRAPH:
+        parse_info = DropPropertyGraphInfo::Deserialize(reader.GetSource());
+        break;
 	default:
 		throw InternalException(LogicalOperatorToString(state.type));
 	}

@@ -7,7 +7,9 @@
 namespace duckdb {
 
 struct DropPropertyGraphInfo : public ParseInfo {
-	DropPropertyGraphInfo() = default;
+	DropPropertyGraphInfo() {
+        type = CatalogType::PROPERTY_GRAPH_ENTRY;
+    };
 
 	//! The catalog type to drop
 	CatalogType type;
@@ -32,9 +34,10 @@ public:
 
 	static unique_ptr<ParseInfo> Deserialize(Deserializer &deserializer) {
 		FieldReader reader(deserializer);
-		auto drop_pg_info = make_uniq<DropInfo>();
+		auto drop_pg_info = make_uniq<DropPropertyGraphInfo>();
 		drop_pg_info->type = reader.ReadRequired<CatalogType>();
 		drop_pg_info->name = reader.ReadRequired<string>();
+        reader.Finalize();
 		return drop_pg_info;
 	}
 };
