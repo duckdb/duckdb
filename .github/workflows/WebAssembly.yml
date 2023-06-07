@@ -35,7 +35,7 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  DUCKDB_WASM_VERSION: 2bed2fd
+  DUCKDB_WASM_VERSION: 2564ea4
 
 jobs:
  linux-wasm-experimental:
