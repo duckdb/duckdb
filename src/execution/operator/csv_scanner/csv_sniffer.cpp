@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/persistent/csv_scanner/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
 
 namespace duckdb {
 
@@ -237,9 +238,68 @@ bool BufferedCSVReader::JumpToNextSample() {
 	return true;
 }
 
-void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types,
-                                      BufferedCSVReaderOptions &original_options,
-                                      vector<BufferedCSVReaderOptions> &info_candidates, idx_t &best_num_cols) {
+void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine) {
+	vector<idx_t> sniffed_column_counts;
+	state_machine.SniffColumns(buffer, sniffed_column_counts, STANDARD_VECTOR_SIZE);
+
+	idx_t start_row = options.skip_rows;
+	idx_t consistent_rows = 0;
+	idx_t num_cols = sniffed_column_counts.empty() ? 0 : sniffed_column_counts[0];
+	idx_t padding_count = 0;
+	bool allow_padding = options.null_padding;
+	if (sniffed_column_counts.size() > rows_read) {
+		rows_read = sniffed_column_counts.size();
+	}
+	for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
+		if (sniffed_column_counts[row] == num_cols) {
+			consistent_rows++;
+		} else if (num_cols < sniffed_column_counts[row] && !options.skip_rows_set) {
+			// we use the maximum amount of num_cols that we find
+			num_cols = sniffed_column_counts[row];
+			start_row = row + options.skip_rows;
+			consistent_rows = 1;
+			padding_count = 0;
+		} else if (num_cols >= sniffed_column_counts[row] && allow_padding) {
+			// we are missing some columns, we can parse this as long as we add padding
+			padding_count++;
+		}
+	}
+
+	// some logic
+	consistent_rows += padding_count;
+	bool more_values = (consistent_rows > best_consistent_rows && num_cols >= best_num_cols);
+	bool require_more_padding = padding_count > prev_padding_count;
+	bool require_less_padding = padding_count < prev_padding_count;
+	bool single_column_before = best_num_cols < 2 && num_cols > best_num_cols;
+	bool rows_consistent = start_row + consistent_rows - options.skip_rows == sniffed_column_counts.size();
+	bool more_than_one_row = (consistent_rows > 1);
+	bool more_than_one_column = (num_cols > 1);
+	bool start_good = !candidates.empty() && (start_row <= options.skip_rows);
+
+	if (!requested_types.empty() && requested_types.size() != num_cols) {
+		return;
+	} else if (rows_consistent && (single_column_before || (more_values && !require_more_padding) ||
+	                               (more_than_one_column && require_less_padding))) {
+		best_consistent_rows = consistent_rows;
+		best_num_cols = num_cols;
+		prev_padding_count = padding_count;
+
+		candidates.clear();
+		candidates.push_back(&state_machine);
+	} else if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding) {
+		bool same_quote_is_candidate = false;
+		for (auto &candidate : candidates) {
+			if (state_machine.configuration.quote.compare(candidate->configuration.quote) == 0) {
+				same_quote_is_candidate = true;
+			}
+		}
+		if (!same_quote_is_candidate) {
+			candidates.push_back(&state_machine);
+		}
+	}
+}
+
+vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 	// set up the candidates we consider for delimiter and quote rules based on user input
 	vector<string> delim_candidates;
 	vector<QuoteRule> quoterule_candidates;
@@ -273,11 +333,6 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 		quoterule_candidates = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
 	}
 
-	idx_t best_consistent_rows = 0;
-	idx_t prev_padding_count = 0;
-	idx_t rows_read = 0;
-	vector<CSVStateMachine> csv_state_machines;
-	vector<CSVStateMachine *> candidates;
 	// Generate state machines for all option combinations
 	for (auto quoterule : quoterule_candidates) {
 		const auto &quote_candidates = quote_candidates_map[static_cast<uint8_t>(quoterule)];
@@ -292,84 +347,39 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 			}
 		}
 	}
-	// Run and eliminate worst option combinations
-	JumpToBeginning(original_options.skip_rows);
-	// We need to read the buffer
-	StateBuffer state_buffer(buffer.get(), buffer_size, position);
+	// Analyze All candidates
 	for (auto &state_machine : csv_state_machines) {
-		vector<idx_t> sniffed_column_counts;
-		// original_options.sample_chunks
-		state_machine.SniffColumns(state_buffer, sniffed_column_counts, STANDARD_VECTOR_SIZE);
+		AnalyzeDialectCandidate(state_machine);
+	}
 
-		idx_t start_row = original_options.skip_rows;
-		idx_t consistent_rows = 0;
-		idx_t num_cols = sniffed_column_counts.empty() ? 0 : sniffed_column_counts[0];
-		idx_t padding_count = 0;
-		bool allow_padding = original_options.null_padding;
-		if (sniffed_column_counts.size() > rows_read) {
-			rows_read = sniffed_column_counts.size();
-		}
-		for (idx_t row = 0; row < sniffed_column_counts.size(); row++) {
-			if (sniffed_column_counts[row] == num_cols) {
-				consistent_rows++;
-			} else if (num_cols < sniffed_column_counts[row] && !original_options.skip_rows_set) {
-				// we use the maximum amount of num_cols that we find
-				num_cols = sniffed_column_counts[row];
-				start_row = row + original_options.skip_rows;
-				consistent_rows = 1;
-				padding_count = 0;
-			} else if (num_cols >= sniffed_column_counts[row] && allow_padding) {
-				// we are missing some columns, we can parse this as long as we add padding
-				padding_count++;
-			}
-		}
-
-		// some logic
-		consistent_rows += padding_count;
-		bool more_values = (consistent_rows > best_consistent_rows && num_cols >= best_num_cols);
-		bool require_more_padding = padding_count > prev_padding_count;
-		bool require_less_padding = padding_count < prev_padding_count;
-		bool single_column_before = best_num_cols < 2 && num_cols > best_num_cols;
-		bool rows_consistent = start_row + consistent_rows - original_options.skip_rows == sniffed_column_counts.size();
-		bool more_than_one_row = (consistent_rows > 1);
-		bool more_than_one_column = (num_cols > 1);
-		bool start_good = !info_candidates.empty() && (start_row <= info_candidates.front().skip_rows);
-
-		if (!requested_types.empty() && requested_types.size() != num_cols) {
-			continue;
-		} else if (rows_consistent && (single_column_before || (more_values && !require_more_padding) ||
-		                               (more_than_one_column && require_less_padding))) {
-			best_consistent_rows = consistent_rows;
-			best_num_cols = num_cols;
-			prev_padding_count = padding_count;
-
-			candidates.clear();
-			candidates.push_back(&state_machine);
-		} else if (more_than_one_row && more_than_one_column && start_good && rows_consistent &&
-		           !require_more_padding) {
-			bool same_quote_is_candidate = false;
-			for (auto &candidate : candidates) {
-				if (state_machine.configuration.quote.compare(candidate->configuration.quote) == 0) {
-					same_quote_is_candidate = true;
-				}
-			}
-			if (!same_quote_is_candidate) {
-				candidates.push_back(&state_machine);
-			}
+	for (idx_t i = 1; options.buffer_sample_size; i++) {
+		auto cur_candidates = candidates;
+		for (auto &cur_candidate : cur_candidates) {
+			// Have to store the max position here
 		}
 	}
-	//
-	int x = 0;
+
+	// Produce ze result
+	vector<CSVReaderOptions> result;
+	for (auto &candidate : candidates) {
+		auto option = options;
+		option.quote = candidate->configuration.quote;
+		option.escape = candidate->configuration.escape;
+		option.delimiter = candidate->configuration.field_separator;
+		//		option.new_line =candidate->configuration.record_separator;
+		result.emplace_back(option);
+	}
+	return result;
 }
 
 void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_candidates,
                                              const map<LogicalTypeId, vector<const char *>> &format_template_candidates,
-                                             const vector<BufferedCSVReaderOptions> &info_candidates,
-                                             BufferedCSVReaderOptions &original_options, idx_t best_num_cols,
+                                             const vector<CSVReaderOptions> &info_candidates,
+                                             CSVReaderOptions &original_options, idx_t best_num_cols,
                                              vector<vector<LogicalType>> &best_sql_types_candidates,
                                              std::map<LogicalTypeId, vector<string>> &best_format_candidates,
                                              DataChunk &best_header_row) {
-	BufferedCSVReaderOptions best_options;
+	CSVReaderOptions best_options;
 	idx_t min_varchar_cols = best_num_cols + 1;
 
 	// check which info candidate leads to minimum amount of non-varchar columns...
@@ -687,11 +697,15 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	// #######
 	// ### dialect detection
 	// #######
-	BufferedCSVReaderOptions original_options = options;
-	vector<BufferedCSVReaderOptions> info_candidates;
+	ReadBuffer(start, start);
+	StateBuffer state_buffer(buffer.get(), buffer_size, position);
+	CSVSniffer sniffer(options, std::move(state_buffer), requested_types);
+
+	CSVReaderOptions original_options = options;
+	vector<CSVReaderOptions> info_candidates;
 	idx_t best_num_cols = 0;
 
-	DetectDialect(requested_types, original_options, info_candidates, best_num_cols);
+	info_candidates = sniffer.DetectDialect();
 
 	// if no dialect candidate was found, then file was most likely empty and we throw an exception
 	if (info_candidates.empty()) {

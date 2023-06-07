@@ -309,7 +309,7 @@ bool compare_result(string csv, ColumnDataCollection &collection, vector<Logical
 	f.close();
 
 	// set up the CSV reader
-	BufferedCSVReaderOptions options;
+	CSVReaderOptions options;
 	options.auto_detect = false;
 	options.delimiter = "|";
 	options.header = has_header;

@@ -53,9 +53,9 @@ class BufferedCSVReader : public BaseCSVReader {
 	static constexpr idx_t INITIAL_BUFFER_SIZE_LARGE = 10000000; // 10MB
 
 public:
-	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
+	BufferedCSVReader(ClientContext &context, CSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
-	BufferedCSVReader(ClientContext &context, string filename, BufferedCSVReaderOptions options,
+	BufferedCSVReader(ClientContext &context, string filename, CSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 	virtual ~BufferedCSVReader() {
 	}
@@ -107,15 +107,11 @@ private:
 	//! Sniffs CSV dialect and determines skip rows, header row, column types and column names
 	vector<LogicalType> SniffCSV(const vector<LogicalType> &requested_types);
 
-	//! First phase of auto detection: detect CSV dialect (i.e. delimiter, quote rules, etc)
-	void DetectDialect(const vector<LogicalType> &requested_types, BufferedCSVReaderOptions &original_options,
-	                   vector<BufferedCSVReaderOptions> &info_candidates, idx_t &best_num_cols);
 	//! Second phase of auto detection: detect candidate types for each column
 	void DetectCandidateTypes(const vector<LogicalType> &type_candidates,
 	                          const map<LogicalTypeId, vector<const char *>> &format_template_candidates,
-	                          const vector<BufferedCSVReaderOptions> &info_candidates,
-	                          BufferedCSVReaderOptions &original_options, idx_t best_num_cols,
-	                          vector<vector<LogicalType>> &best_sql_types_candidates,
+	                          const vector<CSVReaderOptions> &info_candidates, CSVReaderOptions &original_options,
+	                          idx_t best_num_cols, vector<vector<LogicalType>> &best_sql_types_candidates,
 	                          std::map<LogicalTypeId, vector<string>> &best_format_candidates,
 	                          DataChunk &best_header_row);
 	//! Third phase of auto detection: detect header of CSV file

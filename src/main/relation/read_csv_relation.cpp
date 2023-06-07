@@ -32,7 +32,7 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 }
 
 ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, const string &csv_file,
-                                 BufferedCSVReaderOptions options, string alias_p)
+                                 CSVReaderOptions options, string alias_p)
     : TableFunctionRelation(context, "read_csv_auto", {Value(csv_file)}, nullptr, false), alias(std::move(alias_p)),
       auto_detect(true) {
 

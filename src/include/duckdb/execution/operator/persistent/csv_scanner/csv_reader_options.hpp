@@ -28,7 +28,7 @@ enum class NewLineIdentifier : uint8_t {
 
 enum class ParallelMode { AUTOMATIC = 0, PARALLEL = 1, SINGLE_THREADED = 2 };
 
-struct BufferedCSVReaderOptions {
+struct CSVReaderOptions {
 	//===--------------------------------------------------------------------===//
 	// CommonCSVOptions
 	//===--------------------------------------------------------------------===//

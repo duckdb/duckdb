@@ -35,6 +35,13 @@ struct StateBuffer {
 	StateBuffer(char *buffer_p, idx_t buffer_size_p, idx_t position_p)
 	    : buffer(buffer_p), buffer_size(buffer_size_p), position(position_p) {
 	}
+
+	StateBuffer(StateBuffer &&other) noexcept
+	    : buffer(std::move(other.buffer)), buffer_size(other.buffer_size), position(other.position) {
+		other.buffer = nullptr;
+		other.buffer_size = 0;
+		other.position = 0;
+	}
 	//! The Buffer
 	unsafe_unique_array<char> buffer;
 	//! The Size Of The Buffer
@@ -48,10 +55,11 @@ public:
 	explicit CSVStateMachine(CSVStateMachineConfiguration configuration_p);
 
 	//! This Parse Function Finds where the lines and values start within the CSV Buffer
-	//! start_row_idx stores the buffer idx where rows start.
+	//! sniff_column_count stores the number of columns for each row.
 	//! start_value_idx stores the buffer idx where values start.
 	//! max_rows is the maximum number of rows to be parsed by this function.
-	void SniffColumns(StateBuffer &buffer, vector<idx_t> &sniff_column_count, idx_t max_rows);
+	//! It returns the number of rows sniffed
+	idx_t SniffColumns(StateBuffer &buffer, vector<idx_t> &sniff_column_count, idx_t max_rows);
 
 	const CSVStateMachineConfiguration configuration;
 

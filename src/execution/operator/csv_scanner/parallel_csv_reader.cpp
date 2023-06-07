@@ -24,7 +24,7 @@
 
 namespace duckdb {
 
-ParallelCSVReader::ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
+ParallelCSVReader::ParallelCSVReader(ClientContext &context, CSVReaderOptions options_p,
                                      unique_ptr<CSVBufferRead> buffer_p, idx_t first_pos_first_buffer_p,
                                      const vector<LogicalType> &requested_types, idx_t file_idx_p)
     : BaseCSVReader(context, std::move(options_p), requested_types), file_idx(file_idx_p),

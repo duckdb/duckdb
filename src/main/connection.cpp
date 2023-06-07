@@ -219,11 +219,11 @@ shared_ptr<Relation> Connection::Values(const string &values, const vector<strin
 }
 
 shared_ptr<Relation> Connection::ReadCSV(const string &csv_file) {
-	BufferedCSVReaderOptions options;
+	CSVReaderOptions options;
 	return ReadCSV(csv_file, options);
 }
 
-shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, BufferedCSVReaderOptions &options) {
+shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, CSVReaderOptions &options) {
 	options.file_path = csv_file;
 	options.auto_detect = true;
 	return make_shared<ReadCSVRelation>(context, csv_file, options);

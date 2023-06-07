@@ -32,7 +32,7 @@ string BaseCSVReader::GetLineNumberStr(idx_t line_error, bool is_line_estimated,
 	return to_string(GetLineError(line_error, buffer_idx)) + estimated;
 }
 
-BaseCSVReader::BaseCSVReader(ClientContext &context_p, BufferedCSVReaderOptions options_p,
+BaseCSVReader::BaseCSVReader(ClientContext &context_p, CSVReaderOptions options_p,
                              const vector<LogicalType> &requested_types)
     : context(context_p), fs(FileSystem::GetFileSystem(context)), allocator(BufferAllocator::Get(context)),
       options(std::move(options_p)) {
@@ -41,7 +41,7 @@ BaseCSVReader::BaseCSVReader(ClientContext &context_p, BufferedCSVReaderOptions 
 BaseCSVReader::~BaseCSVReader() {
 }
 
-unique_ptr<CSVFileHandle> BaseCSVReader::OpenCSV(const BufferedCSVReaderOptions &options_p) {
+unique_ptr<CSVFileHandle> BaseCSVReader::OpenCSV(const CSVReaderOptions &options_p) {
 	return CSVFileHandle::OpenFile(fs, allocator, options_p.file_path, options_p.compression, true);
 }
 
@@ -148,20 +148,19 @@ bool BaseCSVReader::TryCastValue(const Value &value, const LogicalType &sql_type
 }
 
 struct TryCastDateOperator {
-	static bool Operation(BufferedCSVReaderOptions &options, string_t input, date_t &result, string &error_message) {
+	static bool Operation(CSVReaderOptions &options, string_t input, date_t &result, string &error_message) {
 		return options.date_format[LogicalTypeId::DATE].TryParseDate(input, result, error_message);
 	}
 };
 
 struct TryCastTimestampOperator {
-	static bool Operation(BufferedCSVReaderOptions &options, string_t input, timestamp_t &result,
-	                      string &error_message) {
+	static bool Operation(CSVReaderOptions &options, string_t input, timestamp_t &result, string &error_message) {
 		return options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(input, result, error_message);
 	}
 };
 
 template <class OP, class T>
-static bool TemplatedTryCastDateVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
+static bool TemplatedTryCastDateVector(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
                                        idx_t count, string &error_message, idx_t &line_error) {
 	D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 	bool all_converted = true;
@@ -178,13 +177,13 @@ static bool TemplatedTryCastDateVector(BufferedCSVReaderOptions &options, Vector
 	return all_converted;
 }
 
-bool TryCastDateVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
+bool TryCastDateVector(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
                        string &error_message, idx_t &line_error) {
 	return TemplatedTryCastDateVector<TryCastDateOperator, date_t>(options, input_vector, result_vector, count,
 	                                                               error_message, line_error);
 }
 
-bool TryCastTimestampVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
+bool TryCastTimestampVector(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
                             string &error_message) {
 	idx_t line_error;
 	return TemplatedTryCastDateVector<TryCastTimestampOperator, timestamp_t>(options, input_vector, result_vector,
@@ -192,8 +191,8 @@ bool TryCastTimestampVector(BufferedCSVReaderOptions &options, Vector &input_vec
 }
 
 template <class OP, class T>
-bool TemplatedTryCastFloatingVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
-                                    idx_t count, string &error_message, idx_t &line_error) {
+bool TemplatedTryCastFloatingVector(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
+                                    string &error_message, idx_t &line_error) {
 	D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 	bool all_converted = true;
 	idx_t row = 0;
@@ -211,8 +210,8 @@ bool TemplatedTryCastFloatingVector(BufferedCSVReaderOptions &options, Vector &i
 }
 
 template <class OP, class T>
-bool TemplatedTryCastDecimalVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
-                                   idx_t count, string &error_message, uint8_t width, uint8_t scale) {
+bool TemplatedTryCastDecimalVector(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
+                                   string &error_message, uint8_t width, uint8_t scale) {
 	D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 	bool all_converted = true;
 	UnaryExecutor::Execute<string_t, T>(input_vector, result_vector, count, [&](string_t input) {
@@ -399,7 +398,7 @@ void BaseCSVReader::VerifyUTF8(idx_t col_idx) {
 	}
 }
 
-bool TryCastDecimalVectorCommaSeparated(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
+bool TryCastDecimalVectorCommaSeparated(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
                                         idx_t count, string &error_message, const LogicalType &result_type) {
 	auto width = DecimalType::GetWidth(result_type);
 	auto scale = DecimalType::GetScale(result_type);
@@ -421,7 +420,7 @@ bool TryCastDecimalVectorCommaSeparated(BufferedCSVReaderOptions &options, Vecto
 	}
 }
 
-bool TryCastFloatingVectorCommaSeparated(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
+bool TryCastFloatingVectorCommaSeparated(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
                                          idx_t count, string &error_message, const LogicalType &result_type,
                                          idx_t &line_error) {
 	switch (result_type.InternalType()) {

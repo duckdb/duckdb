@@ -25,14 +25,14 @@
 
 namespace duckdb {
 
-BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
+BufferedCSVReader::BufferedCSVReader(ClientContext &context, CSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
     : BaseCSVReader(context, std::move(options_p), requested_types), buffer_size(0), position(0), start(0) {
 	file_handle = OpenCSV(options);
 	Initialize(requested_types);
 }
 
-BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, BufferedCSVReaderOptions options_p,
+BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, CSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
     : BaseCSVReader(context, std::move(options_p), requested_types), buffer_size(0), position(0), start(0) {
 	options.file_path = std::move(filename);
@@ -649,8 +649,7 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start, idx_t &line_start) {
 	// the remaining part of the last buffer
 	idx_t remaining = buffer_size - start;
 
-	bool large_buffers = mode == ParserMode::PARSING && !file_handle->OnDiskFile() && file_handle->CanSeek();
-	idx_t buffer_read_size = large_buffers ? INITIAL_BUFFER_SIZE_LARGE : INITIAL_BUFFER_SIZE;
+	idx_t buffer_read_size = INITIAL_BUFFER_SIZE_LARGE;
 
 	while (remaining > buffer_read_size) {
 		buffer_read_size *= 2;

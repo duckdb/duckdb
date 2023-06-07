@@ -59,25 +59,27 @@ CSVStateMachine::CSVStateMachine(CSVStateMachineConfiguration configuration_p) :
 	transition_array[escape_state][static_cast<uint8_t>(configuration.escape[0])] = quoted_state;
 }
 
-void CSVStateMachine::SniffColumns(StateBuffer &buffer, vector<idx_t> &sniffed_column_counts, idx_t max_rows) {
+idx_t CSVStateMachine::SniffColumns(StateBuffer &buffer, vector<idx_t> &sniffed_column_counts, idx_t max_rows) {
 	idx_t cur_rows = 0;
 	idx_t cur_pos = buffer.position;
 	idx_t column_count = 0;
-	idx_t record_idx = 0;
-	// FIXME: Guessing there are not more than 100 columns, should probably do a check on the first line or sth
 	if (sniffed_column_counts.size() != STANDARD_VECTOR_SIZE) {
 		sniffed_column_counts.resize(STANDARD_VECTOR_SIZE);
 	}
 	CSVState state {CSVState::STANDARD};
 	while (cur_pos < buffer.buffer_size && cur_rows < max_rows) {
+		if (state == CSVState::INVALID) {
+			return 0;
+		}
 		auto c = (buffer.buffer.get())[cur_pos];
 		column_count += state == CSVState::FIELD_SEPARATOR;
-		sniffed_column_counts[record_idx] = column_count;
-		record_idx += state == CSVState::RECORD_SEPARATOR;
+		sniffed_column_counts[cur_rows] = column_count;
+		cur_rows += state == CSVState::RECORD_SEPARATOR;
 		column_count -= column_count * (state == CSVState::RECORD_SEPARATOR);
-		state = static_cast<CSVState>(transition_array[static_cast<idx_t>(state)][static_cast<idx_t>(c)]);
+		state = static_cast<CSVState>(transition_array[static_cast<uint8_t>(state)][static_cast<uint8_t>(c)]);
 		cur_pos++;
 	}
+	return cur_rows;
 }
 
 } // namespace duckdb

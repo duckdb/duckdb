@@ -35,14 +35,14 @@ enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DATATYPES = 1, PARSING_H
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
 class BaseCSVReader {
 public:
-	BaseCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
+	BaseCSVReader(ClientContext &context, CSVReaderOptions options,
 	              const vector<LogicalType> &requested_types = vector<LogicalType>());
 	~BaseCSVReader();
 
 	ClientContext &context;
 	FileSystem &fs;
 	Allocator &allocator;
-	BufferedCSVReaderOptions options;
+	CSVReaderOptions options;
 	vector<LogicalType> return_types;
 	vector<string> names;
 	MultiFileReaderData reader_data;
@@ -100,7 +100,7 @@ protected:
 	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk
 	bool Flush(DataChunk &insert_chunk, idx_t buffer_idx = 0, bool try_add_line = false);
 
-	unique_ptr<CSVFileHandle> OpenCSV(const BufferedCSVReaderOptions &options);
+	unique_ptr<CSVFileHandle> OpenCSV(const CSVReaderOptions &options);
 
 	void VerifyUTF8(idx_t col_idx);
 	void VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, int64_t offset = 0);

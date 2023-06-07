@@ -754,7 +754,7 @@ struct SingleThreadedCSVState : public GlobalTableFunctionState {
 private:
 	unique_ptr<BufferedCSVReader> GetCSVReaderInternal(ClientContext &context, ReadCSVData &bind_data,
 	                                                   idx_t &file_index, idx_t &total_size) {
-		BufferedCSVReaderOptions options;
+		CSVReaderOptions options;
 		{
 			lock_guard<mutex> l(csv_lock);
 			if (initial_reader) {
@@ -1021,7 +1021,7 @@ unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const Fu
 	return make_uniq<NodeStatistics>(bind_data.files.size() * per_file_cardinality);
 }
 
-void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
+void CSVReaderOptions::Serialize(FieldWriter &writer) const {
 	// common options
 	writer.WriteField<bool>(has_delimiter);
 	writer.WriteString(delimiter);
@@ -1063,7 +1063,7 @@ void BufferedCSVReaderOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteList<string>(csv_formats);
 }
 
-void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
+void CSVReaderOptions::Deserialize(FieldReader &reader) {
 	// common options
 	has_delimiter = reader.ReadRequired<bool>();
 	delimiter = reader.ReadRequired<string>();

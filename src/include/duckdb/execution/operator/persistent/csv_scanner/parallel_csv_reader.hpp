@@ -103,7 +103,7 @@ struct VerificationPositions {
 //! CSV Reader for Parallel Reading
 class ParallelCSVReader : public BaseCSVReader {
 public:
-	ParallelCSVReader(ClientContext &context, BufferedCSVReaderOptions options, unique_ptr<CSVBufferRead> buffer,
+	ParallelCSVReader(ClientContext &context, CSVReaderOptions options, unique_ptr<CSVBufferRead> buffer,
 	                  idx_t first_pos_first_buffer, const vector<LogicalType> &requested_types, idx_t file_idx_p);
 	virtual ~ParallelCSVReader() {
 	}

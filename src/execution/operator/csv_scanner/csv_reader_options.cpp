@@ -60,21 +60,21 @@ static int64_t ParseInteger(const Value &value, const string &loption) {
 	return value.GetValue<int64_t>();
 }
 
-void BufferedCSVReaderOptions::SetHeader(bool input) {
+void CSVReaderOptions::SetHeader(bool input) {
 	this->header = input;
 	this->has_header = true;
 }
 
-void BufferedCSVReaderOptions::SetCompression(const string &compression_p) {
+void CSVReaderOptions::SetCompression(const string &compression_p) {
 	this->compression = FileCompressionTypeFromString(compression_p);
 }
 
-void BufferedCSVReaderOptions::SetEscape(const string &input) {
+void CSVReaderOptions::SetEscape(const string &input) {
 	this->escape = input;
 	this->has_escape = true;
 }
 
-void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
+void CSVReaderOptions::SetDelimiter(const string &input) {
 	this->delimiter = StringUtil::Replace(input, "\\t", "\t");
 	this->has_delimiter = true;
 	if (input.empty()) {
@@ -82,12 +82,12 @@ void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 	}
 }
 
-void BufferedCSVReaderOptions::SetQuote(const string &quote_p) {
+void CSVReaderOptions::SetQuote(const string &quote_p) {
 	this->quote = quote_p;
 	this->has_quote = true;
 }
 
-void BufferedCSVReaderOptions::SetNewline(const string &input) {
+void CSVReaderOptions::SetNewline(const string &input) {
 	if (input == "\\n" || input == "\\r") {
 		new_line = NewLineIdentifier::SINGLE;
 	} else if (input == "\\r\\n") {
@@ -98,7 +98,7 @@ void BufferedCSVReaderOptions::SetNewline(const string &input) {
 	has_newline = true;
 }
 
-void BufferedCSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
+void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
 	string error;
 	if (read_format) {
 		error = StrTimeFormat::ParseFormatSpecifier(format, date_format[type]);
@@ -112,8 +112,7 @@ void BufferedCSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &f
 	has_format[type] = true;
 }
 
-void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value &value,
-                                             vector<string> &expected_names) {
+void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, vector<string> &expected_names) {
 	if (SetBaseOption(loption, value)) {
 		return;
 	}
@@ -184,7 +183,7 @@ void BufferedCSVReaderOptions::SetReadOption(const string &loption, const Value 
 	}
 }
 
-void BufferedCSVReaderOptions::SetWriteOption(const string &loption, const Value &value) {
+void CSVReaderOptions::SetWriteOption(const string &loption, const Value &value) {
 	if (loption == "new_line") {
 		// Steal this from SetBaseOption so we can write different newlines (e.g., format JSON ARRAY)
 		write_newline = ParseString(value, loption);
@@ -216,7 +215,7 @@ void BufferedCSVReaderOptions::SetWriteOption(const string &loption, const Value
 	}
 }
 
-bool BufferedCSVReaderOptions::SetBaseOption(const string &loption, const Value &value) {
+bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value) {
 	// Make sure this function was only called after the option was turned into lowercase
 	D_ASSERT(!std::any_of(loption.begin(), loption.end(), ::isupper));
 
@@ -246,7 +245,7 @@ bool BufferedCSVReaderOptions::SetBaseOption(const string &loption, const Value 
 	return true;
 }
 
-std::string BufferedCSVReaderOptions::ToString() const {
+std::string CSVReaderOptions::ToString() const {
 	return "  file=" + file_path + "\n  delimiter='" + delimiter +
 	       (has_delimiter ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  quote='" + quote +
 	       (has_quote ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) + "\n  escape='" + escape +
