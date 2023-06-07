@@ -147,3 +147,54 @@ class TestADBCStatementBind(object):
             result = table['a']
             result = result.chunk(0)
             assert result == struct_array
+
+    def test_too_many_parameters(self):
+        data = pa.record_batch(
+            [
+                [12423],
+                ['not a short string']
+            ],
+            names=["ints", "strings"],
+        )
+
+        con = adbc_driver_duckdb.connect()
+        with con.cursor() as cursor:
+            statement = cursor.adbc_statement
+            statement.set_sql_query("select ? as a")
+            statement.prepare()
+
+            #raw_schema = statement.get_parameter_schema()
+            #schema = _import(raw_schema);
+            #print(schema)
+
+            array = adbc_driver_manager.ArrowArrayHandle()
+            schema = adbc_driver_manager.ArrowSchemaHandle()
+            data._export_to_c(array.address, schema.address)
+            statement.bind(array, schema)
+            with pytest.raises(adbc_driver_manager.ProgrammingError, match="Can not bind to param"):
+                res, _ = statement.execute_query()
+
+    def test_not_enough_parameters(self):
+        data = pa.record_batch(
+            [
+                ['not a short string']
+            ],
+            names=["strings"],
+        )
+
+        con = adbc_driver_duckdb.connect()
+        with con.cursor() as cursor:
+            statement = cursor.adbc_statement
+            statement.set_sql_query("select ? as a, ? as b")
+            statement.prepare()
+
+            #raw_schema = statement.get_parameter_schema()
+            #schema = _import(raw_schema);
+            #print(schema)
+
+            array = adbc_driver_manager.ArrowArrayHandle()
+            schema = adbc_driver_manager.ArrowSchemaHandle()
+            data._export_to_c(array.address, schema.address)
+            statement.bind(array, schema)
+            with pytest.raises(adbc_driver_manager.ProgrammingError, match="Parameter/argument count mismatch for prepared statement. Expected 2, got 1"):
+                res, _ = statement.execute_query()

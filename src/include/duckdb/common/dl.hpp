@@ -24,7 +24,7 @@ namespace duckdb {
 
 inline void *dlopen(const char *file, int mode) {
 	D_ASSERT(file);
-	return (void *)LoadLibrary(file);
+	return (void *)LoadLibraryW(file);
 }
 
 inline void *dlsym(void *handle, const char *name) {
