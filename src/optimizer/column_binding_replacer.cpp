@@ -34,10 +34,6 @@ void ColumnBindingReplacer::VisitExpression(unique_ptr<Expression> *expression) 
 					bound_column_ref.return_type = replace_binding.new_type;
 				}
 			}
-
-			if (column_binding_callback) {
-				column_binding_callback(bound_column_ref, replace_binding);
-			}
 		}
 	}
 

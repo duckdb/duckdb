@@ -156,7 +156,7 @@ execution/index/art/leaf.cpp	38
 execution/index/art/node.cpp	42
 execution/index/art/node48.cpp	8
 execution/index/art/node256.cpp	4
-execution/index/art/prefix.cpp	78
+execution/index/art/prefix.cpp	4
 execution/index/art/prefix_segment.cpp	2
 execution/join_hashtable.cpp	23
 execution/nested_loop_join/nested_loop_join_inner.cpp	24
