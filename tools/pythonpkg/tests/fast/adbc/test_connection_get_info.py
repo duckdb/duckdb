@@ -1,5 +1,6 @@
 import sys
 
+import duckdb
 import pytest
 pa = pytest.importorskip("pyarrow")
 
@@ -27,7 +28,7 @@ class TestADBCConnectionGetInfo(object):
 
         expected_result = pa.array([
             "duckdb",
-            "0.8.1-dev559",
+            duckdb.__version__, # don't hardcode this, as it will change every version
             "ADBC DuckDB Driver",
             "(unknown)",
             "(unknown)"
