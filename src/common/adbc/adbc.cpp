@@ -599,7 +599,8 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 		return status;
 	}
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
-	// TODO: we might want to cache this, but then we need to return a deep copy anyways.., so I'm not sure if that would be worth the extra management
+	// TODO: we might want to cache this, but then we need to return a deep copy anyways.., so I'm not sure if that
+	// would be worth the extra management
 	auto res = duckdb_prepared_arrow_schema(wrapper->statement, (duckdb_arrow_schema *)&schema);
 	if (res != DuckDBSuccess) {
 		return ADBC_STATUS_INVALID_ARGUMENT;
@@ -668,6 +669,11 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 		}
 		duckdb::unique_ptr<duckdb::DataChunk> chunk;
 		while ((chunk = result->Fetch()) != nullptr) {
+			if (chunk->size() != 1) {
+				// TODO: add support for binding multiple rows
+				SetError(error, "Binding multiple rows at once is not supported yet");
+				return ADBC_STATUS_INVALID_ARGUMENT;
+			}
 			for (idx_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
 				duckdb_clear_bindings(wrapper->statement);
 				for (idx_t col_idx = 0; col_idx < chunk->ColumnCount(); col_idx++) {
@@ -675,12 +681,11 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 					auto duck_val = (duckdb_value)&val;
 					auto res = duckdb_bind_value(wrapper->statement, 1 + col_idx, duck_val);
 					if (res != DuckDBSuccess) {
-						//SetError(error, duckdb_prepare_error(wrapper->statement));
+						// SetError(error, duckdb_prepare_error(wrapper->statement));
 						return ADBC_STATUS_INVALID_ARGUMENT;
 					}
 				}
 
-				// For every row of the prepared parameters, execute the query, only saving the last result
 				auto res = duckdb_execute_prepared_arrow(wrapper->statement, &wrapper->result);
 				if (res != DuckDBSuccess) {
 					SetError(error, duckdb_query_arrow_error(wrapper->result));
