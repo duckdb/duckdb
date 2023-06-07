@@ -90,6 +90,7 @@ struct MultiFileReader {
 	DUCKDB_API static bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options);
 	//! Perform complex filter pushdown into the multi-file reader, potentially filtering out files that should be read
 	//! If "true" the first file has been eliminated
+
 	DUCKDB_API static bool ComplexFilterPushdown(ClientContext &context, vector<string> &files,
 	                                             const MultiFileReaderOptions &options, LogicalGet &get,
 	                                             vector<unique_ptr<Expression>> &filters);

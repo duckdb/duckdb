@@ -470,7 +470,9 @@ unique_ptr<RenderTree> TreeRenderer::CreateRenderTree(const T &op) {
 }
 
 unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const LogicalOperator &op) {
-	return CreateRenderNode(op.GetName(), op.ParamsToString());
+	auto first = op.GetName();
+	auto second = op.ParamsToString();
+	return CreateRenderNode(first, second);
 }
 
 unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const PhysicalOperator &op) {

@@ -22,7 +22,7 @@ optional_ptr<TableCatalogEntry> LogicalGet::GetTable() const {
 }
 
 string LogicalGet::ParamsToString() const {
-	string result;
+	string result = "";
 	for (auto &kv : table_filters.filters) {
 		auto &column_index = kv.first;
 		auto &filter = kv.second;
@@ -32,9 +32,9 @@ string LogicalGet::ParamsToString() const {
 		result += "\n";
 	}
 	if (!function.to_string) {
-		return string();
+		return result;
 	}
-	return function.to_string(bind_data.get());
+	return result + function.to_string(bind_data.get());
 }
 
 vector<ColumnBinding> LogicalGet::GetColumnBindings() {

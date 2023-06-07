@@ -30,9 +30,9 @@ public:
 	//! pushdown_complex_filter function to skip files with filename-based filters. Also removes the filters that always
 	//! evaluate to true.
 	DUCKDB_API static void ApplyFiltersToFileList(ClientContext &context, vector<string> &files,
-	                                              vector<unique_ptr<Expression>> &filters,
-	                                              unordered_map<string, column_t> &column_map, idx_t table_index,
-	                                              bool hive_enabled, bool filename_enabled);
+												   vector<unique_ptr<Expression>> &filters,
+												   unordered_map<string, column_t> &column_map, LogicalGet &get,
+												   bool hive_enabled, bool filename_enabled);
 
 	//! Returns the compiled regex pattern to match hive partitions
 	DUCKDB_API static const string REGEX_STRING;

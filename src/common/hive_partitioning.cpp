@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "re2/re2.h"
 
@@ -86,12 +87,14 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 //		 currently, only expressions that cannot be evaluated during pushdown are removed.
 void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<string> &files,
                                               vector<unique_ptr<Expression>> &filters,
-                                              unordered_map<string, column_t> &column_map, idx_t table_index,
+                                              unordered_map<string, column_t> &column_map, LogicalGet &get,
                                               bool hive_enabled, bool filename_enabled) {
+
 	vector<string> pruned_files;
-	vector<bool> have_preserved_filter(filters.size(), false);
 	vector<unique_ptr<Expression>> pruned_filters;
+	vector<bool> have_preserved_filter(filters.size(), false);
 	duckdb_re2::RE2 regex(REGEX_STRING);
+	auto table_index = get.table_index;
 
 	if ((!filename_enabled && !hive_enabled) || filters.empty()) {
 		return;
@@ -135,7 +138,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 	}
 
 	D_ASSERT(filters.size() >= pruned_filters.size());
-
+	get.other_table_filters = std::move(filters);
 	filters = std::move(pruned_filters);
 	files = std::move(pruned_files);
 }

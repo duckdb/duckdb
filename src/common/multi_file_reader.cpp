@@ -74,16 +74,33 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 		return false;
 	}
 
+	// create map of string all filters
+	unordered_set<std::string> pushed_filters;
+	for (auto &filter : filters) {
+		pushed_filters.insert(filter->ToString());
+	}
+
 	unordered_map<string, column_t> column_map;
 	for (idx_t i = 0; i < get.column_ids.size(); i++) {
 		column_map.insert({get.names[get.column_ids[i]], i});
 	}
 
+	vector<unique_ptr<Expression>> pruned_filters;
 	auto start_files = files.size();
-	HivePartitioning::ApplyFiltersToFileList(context, files, filters, column_map, get.table_index,
+	HivePartitioning::ApplyFiltersToFileList(context, files, filters, column_map, get,
 	                                         options.hive_partitioning, options.filename);
+
+
+
 	if (files.size() != start_files) {
 		// we have pruned files
+		for (auto &filter : filters) {
+			auto it = pushed_filters.find(filter->ToString());
+			pushed_filters.erase(it);
+		}
+//		get.bind_data.num_files_pruned = start_files - files.size();
+//		pruned_files.filters = pushed_filters;
+
 		return true;
 	}
 	return false;

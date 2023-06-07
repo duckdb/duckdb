@@ -34,9 +34,15 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #endif
 
 namespace duckdb {
+
+struct pruned_info {
+	idx_t num_files_pruned;
+	unordered_set<string> filters;
+};
 
 struct ParquetReadBindData : public TableFunctionData {
 	shared_ptr<ParquetReader> initial_reader;
@@ -55,6 +61,8 @@ struct ParquetReadBindData : public TableFunctionData {
 	idx_t initial_file_row_groups;
 	ParquetOptions parquet_options;
 	MultiFileReaderBindData reader_bind;
+
+	pruned_info pruned_files;
 
 	void Initialize(shared_ptr<ParquetReader> reader) {
 		initial_reader = std::move(reader);
@@ -156,6 +164,24 @@ BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
 	return bind_info;
 }
 
+static string ParquetScanPrintPartitionedHive(const FunctionData *bind_data) {
+	auto &parquet_bind_data = bind_data->Cast<ParquetReadBindData>();
+	if (parquet_bind_data.pruned_files.num_files_pruned == 0) {
+		return string();
+	}
+	string result = "pruned " + to_string(parquet_bind_data.pruned_files.num_files_pruned) + " files \n";
+	result += " Where NOT ";
+	bool not_first = false;
+	for (auto &filter : parquet_bind_data.pruned_files.filters) {
+		if (not_first) {
+			result += " OR \n";
+		}
+		result += filter;
+		not_first = true;
+	}
+	return result;
+}
+
 class ParquetScanFunction {
 public:
 	static TableFunctionSet GetFunctionSet() {
@@ -172,7 +198,7 @@ public:
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
 		table_function.get_batch_info = ParquetGetBatchInfo;
-
+		table_function.to_string = ParquetScanPrintPartitionedHive;
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
 		table_function.filter_prune = true;
@@ -519,9 +545,30 @@ public:
 	static void ParquetComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                         vector<unique_ptr<Expression>> &filters) {
 		auto &data = bind_data_p->Cast<ParquetReadBindData>();
+
+		auto original_file_count = data.files.size();
+
+		// create map of string all filters
+		duckdb::unordered_set<std::string> pushed_filters;
+		for (auto &filter : filters) {
+			pushed_filters.insert(filter->ToString());
+		}
+
 		auto reset_reader = MultiFileReader::ComplexFilterPushdown(context, data.files,
 		                                                           data.parquet_options.file_options, get, filters);
 		if (reset_reader) {
+
+			// remove the filters that were allplied in complex filter pushdown
+			for (auto &filter : filters) {
+				auto it = pushed_filters.find(filter->ToString());
+				pushed_filters.erase(it);
+			}
+			auto new_file_count = data.files.size();
+			auto &parquet_bind_data = bind_data_p->Cast<ParquetReadBindData>();
+
+			parquet_bind_data.pruned_files.num_files_pruned = original_file_count - new_file_count;
+			parquet_bind_data.pruned_files.filters = pushed_filters;
+
 			MultiFileReader::PruneReaders(data);
 		}
 	}

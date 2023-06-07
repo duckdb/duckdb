@@ -39,6 +39,8 @@ public:
 	vector<idx_t> projection_ids;
 	//! Filters pushed down for table scan
 	TableFilterSet table_filters;
+	//! Filters pushed down for table scan
+	vector<unique_ptr<Expression>> other_table_filters;
 	//! The set of input parameters for the table function
 	vector<Value> parameters;
 	//! The set of named input parameters for the table function
