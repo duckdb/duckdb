@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   transform_base_tableref.cpp
   transform_join.cpp
+  transform_match.cpp
   transform_from.cpp
   transform_pivot.cpp
   transform_subquery.cpp

@@ -48,7 +48,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op
         return make_uniq<PhysicalDropPropertyGraph>(unique_ptr_cast<ParseInfo, DropPropertyGraphInfo>(std::move(op.info)),
                                         op.estimated_cardinality);
     default:
-    throw NotImplementedException("Unimplemented type for logical simple operator");
+        throw NotImplementedException("Unimplemented type for logical simple operator");
 	}
 }
 
