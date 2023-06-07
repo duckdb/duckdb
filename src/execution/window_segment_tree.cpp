@@ -185,7 +185,7 @@ WindowSegmentTree::WindowSegmentTree(AggregateObject aggr_p, const LogicalType &
                                      const ValidityMask &filter_mask_p, WindowAggregationMode mode_p)
     : aggr(std::move(aggr_p)), result_type(result_type_p), state(aggr.function.state_size()),
       statep(Value::POINTER(CastPointerToValue(state.data()))), frame(0, 0), statel(LogicalType::POINTER),
-      statef(Value::POINTER(CastPointerToValue(state.data()))), internal_nodes(0), input_ref(input),
+      statef(Value::POINTER(CastPointerToValue(state.data()))), flush_count(0), internal_nodes(0), input_ref(input),
       filter_mask(filter_mask_p), mode(mode_p) {
 	statep.Flatten(input->size());
 	statef.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
@@ -290,6 +290,22 @@ void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
 	}
 }
 
+void WindowSegmentTree::FlushStates(idx_t l_idx) {
+	if (!flush_count) {
+		return;
+	}
+
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+	if (l_idx) {
+		statel.Verify(flush_count);
+		aggr.function.combine(statel, statep, aggr_input_data, flush_count);
+	} else {
+		aggr.function.update(&inputs.data[0], aggr_input_data, inputs.ColumnCount(), statep, flush_count);
+	}
+
+	flush_count = 0;
+}
+
 void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) {
 	D_ASSERT(begin <= end);
 	if (begin == end || inputs.ColumnCount() == 0) {
@@ -297,25 +313,22 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 	}
 
 	const auto count = end - begin;
-	auto &s = statep; // Vector s(statep, 0, count);
 	if (l_idx == 0) {
 		ExtractFrame(begin, end);
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
 		D_ASSERT(!inputs.data.empty());
-		aggr.function.update(&inputs.data[0], aggr_input_data, input_ref->ColumnCount(), s, inputs.size());
+		flush_count += inputs.size();
 	} else {
 		// find out where the states begin
 		data_ptr_t begin_ptr = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
 		// set up a vector of pointers that point towards the set of states
 		auto pdata = FlatVector::GetData<data_ptr_t>(statel);
 		for (idx_t i = 0; i < count; i++) {
-			pdata[i] = begin_ptr;
+			pdata[flush_count++] = begin_ptr;
 			begin_ptr += state.size();
 		}
-		statel.Verify(count);
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
-		aggr.function.combine(statel, s, aggr_input_data, count);
 	}
+
+	FlushStates(l_idx);
 }
 
 void WindowSegmentTree::ConstructTree() {
