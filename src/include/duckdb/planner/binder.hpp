@@ -23,6 +23,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/parsed_data/create_property_graph_info.hpp"
+#include "duckdb/parser/statement/drop_property_graph_statement.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -258,6 +259,7 @@ private:
 	BoundStatement Bind(LogicalPlanStatement &stmt);
 	BoundStatement Bind(AttachStatement &stmt);
 	BoundStatement Bind(DetachStatement &stmt);
+    BoundStatement Bind(DropPropertyGraphStatement &stmt);
 
 	BoundStatement BindReturning(vector<unique_ptr<ParsedExpression>> returning_list, TableCatalogEntry &table,
 	                             const string &alias, idx_t update_table_index,
