@@ -401,12 +401,18 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *in
 	// If 'info_codes' is NULL, all info codes should be output
 	size_t length = info_codes ? info_codes_length : (size_t)AdbcInfoCode::UNRECOGNIZED;
 
-	if (length == 0) {
-		// FIXME: Maybe just an empty result set is better?
-		return ADBC_STATUS_INVALID_ARGUMENT;
-	}
+	duckdb::string schema = R"EOF(
+		UNION(
+			string_value VARCHAR,
+			bool_value BOOL,
+			int64_value BIGINT,
+			int32_bitmask INTEGER,
+			string_list VARCHAR[],
+			int32_to_int32_list_map MAP(INTEGER, INTEGER[])
+		)
+	)EOF";
 
-	std::string q = R"EOF(
+	duckdb::string q = R"EOF(
 		select
 			name::UINTEGER as info_name,
 			info::UNION(
@@ -419,30 +425,32 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *in
 			) as info_value from values
 	)EOF";
 
+	duckdb::string results = "";
+
 	for (size_t i = 0; i < length; i++) {
 		uint32_t code = info_codes ? info_codes[i] : i;
 		auto info_code = ConvertToInfoCode(code);
 		switch (info_code) {
 		case AdbcInfoCode::VENDOR_NAME: {
-			q += "(0, 'duckdb'),";
+			results += "(0, 'duckdb'),";
 			break;
 		}
 		case AdbcInfoCode::VENDOR_VERSION: {
-			q += duckdb::StringUtil::Format("(1, '%s'),", duckdb_library_version());
+			results += duckdb::StringUtil::Format("(1, '%s'),", duckdb_library_version());
 			break;
 		}
 		case AdbcInfoCode::DRIVER_NAME: {
-			q += "(2, 'ADBC DuckDB Driver'),";
+			results += "(2, 'ADBC DuckDB Driver'),";
 			break;
 		}
 		case AdbcInfoCode::DRIVER_VERSION: {
 			// TODO: fill in driver version
-			q += "(3, '(unknown)'),";
+			results += "(3, '(unknown)'),";
 			break;
 		}
 		case AdbcInfoCode::DRIVER_ARROW_VERSION: {
 			// TODO: fill in arrow version
-			q += "(4, '(unknown)'),";
+			results += "(4, '(unknown)'),";
 			break;
 		}
 		case AdbcInfoCode::UNRECOGNIZED: {
@@ -456,7 +464,17 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *in
 		}
 		}
 	}
-	q += " tbl(name, info);";
+	if (results.empty()) {
+		// Add a group of values so the query parses
+		q += "(NULL, NULL)";
+	} else {
+		q += results;
+	}
+	q += " tbl(name, info)";
+	if (results.empty()) {
+		// Add an impossible where clause to return an empty result set
+		q += " where true = false";
+	}
 	return QueryInternal(connection, out, q.c_str(), error);
 }
 

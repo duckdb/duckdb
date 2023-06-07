@@ -38,7 +38,36 @@ class TestADBCConnectionGetInfo(object):
         string_values = chunk.field(0)
         assert string_values == expected_result
 
-    # The code for 'get_info' will never call the ConnectionGetInfo function with an empty info_codes list,
-    # so we cant test that here
-    def test_connection_get_info_empty(self):
-        pass
+    def test_empty_result(self):
+        con = adbc_driver_duckdb.connect()
+        adbc_con = con.adbc_connection
+        res = adbc_con.get_info([1337])
+        reader = pa.RecordBatchReader._import_from_c(res.address)
+        table = reader.read_all()
+        values = table["info_value"]
+
+        # Because all the codes we asked for were unrecognized, the result set is empty
+        assert values.num_chunks == 0
+
+    def test_unrecognized_codes(self):
+        con = adbc_driver_duckdb.connect()
+        adbc_con = con.adbc_connection
+        res = adbc_con.get_info([
+            0,
+            1000,
+            4,
+            2000
+        ])
+        reader = pa.RecordBatchReader._import_from_c(res.address)
+        table = reader.read_all()
+        values = table["info_value"]
+
+        expected_result = pa.array([
+            "duckdb",
+            "(unknown)"
+        ], type=pa.large_string())
+
+        assert values.num_chunks == 1
+        chunk = values.chunk(0)
+        string_values = chunk.field(0)
+        assert string_values == expected_result
