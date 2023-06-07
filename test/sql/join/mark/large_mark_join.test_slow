@@ -1,0 +1,56 @@
+# name: test/sql/join/mark/large_mark_join.test_slow
+# description: Test large mark join
+# group: [mark]
+
+statement ok
+CREATE TABLE IF NOT EXISTS "names"(origin VARCHAR);
+
+statement ok
+INSERT INTO "names" VALUES('DFW'), ('ATL'), ('MSY'), ('ANC'), ('LAS'), ('SEA'), ('DTW'), ('LAX'), ('JFK'), ('FLL'), ('TPA'),
+('SAN'), ('SLC'), ('MSP'), ('IAH'), ('SFO'), ('MCO'), ('DEN'), ('RDU'), ('BOS'), ('BHM'), ('LGA'), ('RSW'), ('BNA'), ('SNA'),
+('DCA'), ('PHX'), ('MSN'), ('PHL'), ('MIA'), ('PBI'), ('BDL'), ('TLH'), ('SJU'), ('MCI'), ('TRI'), ('STT'), ('GRB'), ('PIT'),
+ ('ORD'), ('SAV'), ('SDF'), ('BWI'), ('PDX'), ('SJC'), ('CHS'), ('JAC'), ('ORF'), ('CLE'), ('EWR'), ('OAK'), ('VPS'), ('CLT'),
+ ('HSV'), ('GRR'), ('CAE'), ('MTJ'), ('GEG'), ('BIL'), ('SMF'), ('PHF'), ('JAN'), ('MDW'), ('MKE'), ('ATW'), ('MOB'), ('CMH'),
+ ('CVG'), ('STL'), ('MLB'), ('SAT'), ('HNL'), ('ELP'), ('JAX'), ('SRQ'), ('OKC'), ('ROC'), ('LIT'), ('FNT'), ('IND'), ('MEM'),
+ ('IAD'), ('OMA'), ('AUS'), ('GSP'), ('ONT'), ('BZN'), ('GSO'), ('SHV'), ('ILM'), ('PNS'), ('DAB'), ('CID'), ('EYW'), ('BUF'),
+ ('DAY'), ('CAK'), ('ABQ'), ('RIC'), ('DAL'), ('MDT'), ('ECP'), ('TUS'), ('PWM'), ('GPT'), ('PVD'), ('KOA'), ('AGS'), ('TYS'),
+ ('BOI'), ('FSD'), ('OGG'), ('TUL'), ('HDN'), ('HOU'), ('MYR'), ('DSM'), ('LFT'), ('CRW'), ('MHT'), ('PSP'), ('FAY'), ('ABE'),
+ ('CHO'), ('SYR'), ('ALB'), ('RNO'), ('COS'), ('OAJ'), ('MSO'), ('ROA'), ('FAR'), ('LIH'), ('EGE'), ('ICT'), ('XNA'), ('BTR'),
+ ('SGF'), ('AVL'), ('BIS'), ('STX'), ('LEX'), ('MFE'), ('LBB'), ('AMA'), ('FAT'), ('CRP'), ('GUC'), ('AEX'), ('ABI'), ('TYR'),
+ ('LAW'), ('MLU'), ('LCH'), ('SAF'), ('GRK'), ('LRD'), ('GRI'), ('MAF'), ('MGM'), ('GCK'), ('SPS'), ('SPI'), ('FSM'), ('TXK'),
+ ('CLL'), ('ACT'), ('ROW'), ('MEI'), ('PIB'), ('BTV'), ('CWA'), ('ERI'), ('EVV'), ('BRO'), ('HRL'), ('MLI'), ('LAN'), ('HOB'),
+ ('SCE'), ('FWA'), ('AVP'), ('LNK'), ('AZO'), ('TVC'), ('PIA'), ('RST'), ('BMI'), ('DHN'), ('GNV'), ('ISP'), ('LGB'), ('BUR'),
+ ('PSC'), ('SWF'), ('FCA'), ('GTF'), ('IDA'), ('ISN'), ('GFK'), ('MBS'), ('LSE'), ('ASE'), ('CMX'), ('EAU'), ('SBP'), ('SBA'),
+ ('RKS'), ('GCC'), ('MKG'), ('MRY'), ('PAH'), ('DLH'), ('DVL'), ('JMS'), ('OTH'), ('LAR'), ('HYS'), ('SGU'), ('HLN'), ('MOT'),
+ ('RDD'), ('GJT'), ('ACV'), ('MFR'), ('RDM'), ('MMH'), ('BFL'), ('SUN'), ('EUG'), ('RAP'), ('LWS'), ('COD'), ('TWF'), ('IMT'),
+ ('APN'), ('ESC'), ('BJI'), ('CPR'), ('BTM'), ('ITH'), ('CIU'), ('EKO'), ('MQT'), ('INL'), ('BGM'), ('PIH'), ('ABR'), ('HIB'),
+ ('CDC'), ('RHI'), ('BRD'), ('YUM'), ('FLG'), ('IFP'), ('STS'), ('BQN'), ('ORH'), ('ITO'), ('PPG'), ('ACY'), ('LBE'), ('IAG'),
+ ('PBG'), ('CHA'), ('DRO'), ('HPN'), ('SBN'), ('PLN'), ('TOL'), ('COU'), ('MHK'), ('PSE'), ('CSG'), ('ELM'), ('BQK'), ('ABY'),
+ ('VLD'), ('EWN'), ('TTN'), ('PGD'), ('WYS'), ('SIT'), ('KTN'), ('BGR'), ('FAI'), ('JNU'), ('ACK'), ('MVY'), ('ADQ'), ('BET'),
+ ('SCC'), ('BRW'), ('CDV'), ('YAK'), ('PSG'), ('WRG'), ('OME'), ('OTZ'), ('ADK'), ('GUM'), ('ALO'), ('GTR'), ('BLI'), ('SJT'),
+ ('BPT'), ('GGG'), ('JLN'), ('UST'), ('HYA'), ('SUX'), ('GST'), ('AKN'), ('DLG'), ('TKI');
+
+statement ok
+CREATE TABLE ontime AS
+SELECT
+	n1.origin AS origin,
+	n2.origin as dest,
+	CASE WHEN i%97=0 THEN NULL ELSE (-235 + i % 3000) END AS depdelay
+FROM range(427645) t(i)
+JOIN names n1 ON (n1.rowid = i % 315)
+JOIN names n2 ON (n2.rowid = (i + 97) % 315);
+
+loop i 0 10
+
+query III
+SELECT *
+FROM ontime AS ontime_outer
+WHERE NOT(depdelay < ANY (
+	SELECT depdelay
+	FROM ontime
+	WHERE ontime.origin=ontime_outer.origin AND ontime.dest=ontime_outer.dest
+));
+----
+
+
+endloop
