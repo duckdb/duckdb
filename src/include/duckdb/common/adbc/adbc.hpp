@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/adbc/adbc.h"
-#include "duckdb/main/external_dependencies.hpp"
 
 #include <string>
 
