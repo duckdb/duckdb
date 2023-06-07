@@ -679,43 +679,65 @@ bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result,
 		names.push_back(field.first);
 	}
 
-	for (idx_t i = 0; i < count; i++) {
-		if (!yyjson_is_obj(vals[i])) {
-			if (options.error_missing_key) {
-				throw InvalidInputException("Expected an object representing a union");
-			} else {
-				result.SetValue(i, Value(nullptr));
-				continue;
-			}
-		}
+	bool success = true;
 
-		yyjson_val *key, *val;
-		yyjson_obj_iter iter;
-		yyjson_obj_iter_init(vals[i], &iter);
-		key = yyjson_obj_iter_next(&iter);
-		if (key == nullptr) {
-			// empty object?
+	auto &validity = FlatVector::Validity(result);
+
+	auto set_error = [&](idx_t i, const string &message) {
+		validity.SetInvalid(i);
+		result.SetValue(i, Value(nullptr));
+		if (success && options.strict_cast) {
+			options.error_message = message;
+			options.object_index = i;
+			success = false;
+		}
+	};
+
+	for (idx_t i = 0; i < count; i++) {
+		const auto &obj = vals[i];
+
+		if (!obj || unsafe_yyjson_is_null(vals[i])) {
+			validity.SetInvalid(i);
 			result.SetValue(i, Value(nullptr));
 			continue;
 		}
 
-		val = yyjson_obj_iter_get_val(key);
+		if (!unsafe_yyjson_is_obj(obj)) {
+			set_error(i,
+			          StringUtil::Format("Expected an object representing a union, got %s", yyjson_get_type_desc(obj)));
+			continue;
+		}
+
+		auto len = unsafe_yyjson_get_len(obj);
+		if (len > 1) {
+			set_error(i, "Found object containing more than one key, instead of union");
+			continue;
+		} else if (len == 0) {
+			set_error(i, "Found empty object, instead of union");
+			continue;
+		}
+
+		auto key = unsafe_yyjson_get_first(obj);
+		auto val = yyjson_obj_iter_get_val(key);
 
 		auto tag = std::find(names.begin(), names.end(), unsafe_yyjson_get_str(key));
 		if (tag == names.end()) {
-			throw InvalidInputException("Found object containing unknown key instead of union");
+			set_error(i, StringUtil::Format("Found object containing unknown key, instead of union: %s",
+			                                unsafe_yyjson_get_str(key)));
+			continue;
 		}
 
-		idx_t actualtag = tag - names.begin();
+		idx_t actual_tag = tag - names.begin();
 
-		Vector single(UnionType::GetMemberType(type, actualtag), 1);
-		// should we use this return value
-		JSONTransform::Transform(&val, alc, single, 1, options);
+		Vector single(UnionType::GetMemberType(type, actual_tag), 1);
+		if (!JSONTransform::Transform(&val, alc, single, 1, options)) {
+			success = false;
+		}
 
-		result.SetValue(i, Value::UNION(fields, actualtag, single.GetValue(0)));
+		result.SetValue(i, Value::UNION(fields, actual_tag, single.GetValue(0)));
 	}
 
-	return true;
+	return success;
 }
 
 bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,

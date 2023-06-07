@@ -17,14 +17,19 @@ false
 statement error
 SELECT * FROM read_ndjson('data/json/malformed/union/bad_key.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})
 ----
-Invalid Input Error: Found object containing unknown key instead of union
+Found object containing unknown key, instead of union
 
-query I
+statement error
 SELECT * FROM read_ndjson('data/json/malformed/union/empty_object.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})
 ----
-NULL
+Found empty object, instead of union
 
-query I
+statement error
 SELECT * FROM read_ndjson('data/json/malformed/union/non_object.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})
 ----
-NULL
+Expected an object representing a union, got uint
+
+statement error
+SELECT * FROM read_ndjson('data/json/malformed/union/too_many_keys.ndjson', columns={data: 'UNION(name VARCHAR, age INT, veteran BOOL)'})
+----
+Found object containing more than one key, instead of union
