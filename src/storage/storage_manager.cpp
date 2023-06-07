@@ -12,6 +12,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -98,6 +99,11 @@ void SingleFileStorageManager::LoadDatabase() {
 	auto &fs = FileSystem::Get(db);
 	auto &config = DBConfig::Get(db);
 	bool truncate_wal = false;
+	if (!config.options.enable_external_access) {
+		if (!db.IsInitialDatabase()) {
+			throw PermissionException("Attaching on-disk databases is disabled through configuration");
+		}
+	}
 
 	StorageManagerOptions options;
 	options.read_only = read_only;
