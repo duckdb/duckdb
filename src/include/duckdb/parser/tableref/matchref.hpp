@@ -9,7 +9,7 @@ namespace duckdb {
 
 class MatchRef : public TableRef {
 public:
-	MatchRef() : TableRef(TableReferenceType::TABLE_FUNCTION) {
+	MatchRef() : TableRef(TableReferenceType::MATCH) {
 	}
 
 	string pg_name;

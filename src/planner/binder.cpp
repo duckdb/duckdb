@@ -17,6 +17,7 @@
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/parser/query_node/list.hpp"
 #include "duckdb/parser/statement/drop_property_graph_statement.hpp"
+#include "duckdb/parser/tableref/matchref.hpp"
 
 #include <algorithm>
 
@@ -177,6 +178,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 	case TableReferenceType::PIVOT:
 		result = Bind(ref.Cast<PivotRef>());
 		break;
+    case TableReferenceType::MATCH:
+        result = Bind(ref.Cast<MatchRef>());
+        break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
 	default:
