@@ -33,6 +33,9 @@ void LogicalSimple::Serialize(FieldWriter &writer) const {
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 		info->Cast<TransactionInfo>().Serialize(writer.GetSerializer());
 		break;
+    case LogicalOperatorType::LOGICAL_DROP_PROPERTY_GRAPH:
+        info->Cast<DropPropertyGraphInfo>().Serialize(writer.GetSerializer());
+        break;
 	default:
 		throw InternalException(LogicalOperatorToString(type));
 	}
