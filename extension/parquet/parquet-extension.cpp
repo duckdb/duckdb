@@ -125,7 +125,7 @@ struct ParquetWriteGlobalState : public GlobalFunctionData {
 
 struct ParquetWriteLocalState : public LocalFunctionData {
 	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
-	    : buffer(Allocator::Get(context), types) {
+	    : buffer(BufferAllocator::Get(context), types) {
 	}
 
 	ColumnDataCollection buffer;

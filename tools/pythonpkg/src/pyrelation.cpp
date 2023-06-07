@@ -22,6 +22,7 @@ DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel_p) : rel(std::move(r
 	if (!rel) {
 		throw InternalException("DuckDBPyRelation created without a relation");
 	}
+	this->executed = false;
 	auto &columns = rel->Columns();
 	for (auto &col : columns) {
 		names.push_back(col.GetName());
@@ -33,6 +34,7 @@ DuckDBPyRelation::DuckDBPyRelation(unique_ptr<DuckDBPyResult> result_p) : rel(nu
 	if (!result) {
 		throw InternalException("DuckDBPyRelation created without a result");
 	}
+	this->executed = true;
 	this->types = result->GetTypes();
 	this->names = result->GetNames();
 }
@@ -401,6 +403,7 @@ static unique_ptr<QueryResult> PyExecuteRelation(const shared_ptr<Relation> &rel
 }
 
 unique_ptr<QueryResult> DuckDBPyRelation::ExecuteInternal(bool stream_result) {
+	this->executed = true;
 	return PyExecuteRelation(rel, stream_result);
 }
 
@@ -572,14 +575,17 @@ duckdb::pyarrow::RecordBatchReader DuckDBPyRelation::ToRecordBatch(idx_t batch_s
 }
 
 void DuckDBPyRelation::Close() {
-	if (!result) {
+	// We always want to execute the query at least once, for side-effect purposes.
+	// if it has already been executed, we don't need to do it again.
+	if (!executed && !result) {
 		if (!rel) {
 			return;
 		}
 		ExecuteOrThrow();
 	}
-	AssertResultOpen();
-	result->Close();
+	if (result) {
+		result->Close();
+	}
 }
 
 bool DuckDBPyRelation::ContainsColumnByName(const string &name) const {

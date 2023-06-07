@@ -109,7 +109,6 @@ data_ptr_t ArenaAllocator::ReallocateAligned(data_ptr_t pointer, idx_t old_size,
 }
 
 void ArenaAllocator::Reset() {
-
 	if (head) {
 		// destroy all chunks except the current one
 		if (head->next) {
