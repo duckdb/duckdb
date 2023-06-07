@@ -11,10 +11,12 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/operator/convert_to_string.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/bit.hpp"
 
 namespace duckdb {
 struct ValidityMask;
@@ -667,14 +669,26 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
 //===--------------------------------------------------------------------===//
 // Bits
 //===--------------------------------------------------------------------===//
-struct CastFromBit {
+struct CastFromBitToString {
 	template <class SRC>
 	static inline string_t Operation(SRC input, Vector &result) {
 		throw duckdb::NotImplementedException("Cast from bit could not be performed!");
 	}
 };
 template <>
-duckdb::string_t CastFromBit::Operation(duckdb::string_t input, Vector &vector);
+duckdb::string_t CastFromBitToString::Operation(duckdb::string_t input, Vector &vector);
+
+struct CastFromBitToNumeric {
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, bool strict = false) {
+		// Only allow bitstring -> numeric if the full bitstring fits inside the numeric type
+		if (input.GetSize() - 1 > sizeof(DST)) {
+			throw ConversionException("Bitstring doesn't fit inside of %s", GetTypeId<DST>());
+		}
+		Bit::BitToNumeric(input, result);
+		return (true);
+	}
+};
 
 struct TryCastToBit {
 	template <class SRC, class DST>

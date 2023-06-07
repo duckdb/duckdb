@@ -62,6 +62,31 @@ public:
 		return output_str.GetString();
 	}
 
+	template<class T>
+	DUCKDB_API static void BitToNumeric(string_t bit, T &output_num) {
+		output_num = 0;
+		auto data = const_data_ptr_cast(bit.GetData());
+		auto output = data_ptr_cast(&output_num);
+
+		uint8_t padded_byte = data[1] & ((1 << (8 - data[0])) - 1);
+
+		idx_t start = sizeof(T) - bit.GetSize() + 1;
+
+		output[sizeof(T) - 1 - start] = padded_byte;
+
+		for (idx_t idx = start + 1; idx < sizeof(T); ++idx) {
+			output[sizeof(T) - 1 - idx] = data[1 + idx - start];
+		}
+
+	}
+
+	template<class T>
+	DUCKDB_API static T BitToNumeric(string_t bit) {
+		T output;
+		Bit::BitToNumeric(bit, output);
+		return (output);
+	}
+
 	//! Creates a new bitstring of determined length
 	DUCKDB_API static void BitString(const string_t &input, const idx_t &len, string_t &result);
 	DUCKDB_API static void SetEmptyBitString(string_t &target, string_t &input);

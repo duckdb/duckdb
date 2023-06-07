@@ -1429,7 +1429,7 @@ string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 // Cast From Bit
 //===--------------------------------------------------------------------===//
 template <>
-string_t CastFromBit::Operation(string_t input, Vector &vector) {
+string_t CastFromBitToString::Operation(string_t input, Vector &vector) {
 
 	idx_t result_size = Bit::BitLength(input);
 	string_t result = StringVector::EmptyString(vector, result_size);
