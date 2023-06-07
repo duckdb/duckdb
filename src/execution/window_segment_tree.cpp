@@ -191,14 +191,27 @@ WindowSegmentTree::WindowSegmentTree(AggregateObject aggr_p, const LogicalType &
 	statef.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
 
 	if (input_ref && input_ref->ColumnCount() > 0) {
-		filter_sel.Initialize(input->size());
 		inputs.Initialize(Allocator::DefaultAllocator(), input_ref->GetTypes());
-		// if we have a frame-by-frame method, share the single state
+		inputs.Reference(*input_ref);
 		if (aggr.function.window && UseWindowAPI()) {
+			// if we have a frame-by-frame method, share the single state
 			AggregateInit();
-			inputs.Reference(*input_ref);
 		} else {
-			inputs.SetCapacity(*input_ref);
+			//	In order to share the SV, we can't have any inputs that are already dictionaries.
+			for (column_t i = 0; i < inputs.ColumnCount(); i++) {
+				auto &v = inputs.data[i];
+				switch (v.GetVectorType()) {
+				case VectorType::DICTIONARY_VECTOR:
+				case VectorType::FSST_VECTOR:
+					v.Flatten(input->size());
+				default:
+					break;
+				}
+			}
+			//	The inputs share an SV so we can quickly pick out values
+			filter_sel.Initialize(TREE_FANOUT);
+			//	What we slice to is not important now - we just want the SV to be shared.
+			inputs.Slice(filter_sel, TREE_FANOUT);
 			if (aggr.function.combine && UseCombineAPI()) {
 				ConstructTree();
 			}
@@ -247,29 +260,33 @@ void WindowSegmentTree::AggegateFinal(Vector &result, idx_t rid) {
 
 void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
 	const auto count = end - begin;
+	D_ASSERT(count <= TREE_FANOUT);
 
-	auto &leaves = *input_ref;
-	const auto leaf_columns = leaves.ColumnCount();
-	inputs.SetCardinality(count);
-	for (idx_t i = 0; i < leaf_columns; ++i) {
-		auto &input = inputs.data[i];
-		auto &leaf = leaves.data[i];
-
-		input.Slice(leaf, begin, end);
-		input.Verify(count);
+	//	Some update functions (I'm looking at YOU, ListUpdateFunction!) mangle our dictionaries.
+	//	so we have to check and unmangle them...
+	for (column_t i = 0; i < inputs.ColumnCount(); i++) {
+		auto &v = inputs.data[i];
+		if (v.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+			v.Slice(input_ref->data[i], filter_sel, TREE_FANOUT);
+		}
 	}
 
-	// Slice to any filtered rows
-	if (!filter_mask.AllValid()) {
+	//	If we are not filtering,
+	//	just update the shared dictionary selection to the range
+	//	Otherwise set it to the input rows that pass the filter
+	if (filter_mask.AllValid()) {
+		for (idx_t i = 0; i < count; ++i) {
+			filter_sel.set_index(i, begin + i);
+		}
+		inputs.SetCardinality(count);
+	} else {
 		idx_t filtered = 0;
 		for (idx_t i = begin; i < end; ++i) {
 			if (filter_mask.RowIsValid(i)) {
-				filter_sel.set_index(filtered++, i - begin);
+				filter_sel.set_index(filtered++, i);
 			}
 		}
-		if (filtered != inputs.size()) {
-			inputs.Slice(filter_sel, filtered);
-		}
+		inputs.SetCardinality(filtered);
 	}
 }
 

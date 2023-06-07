@@ -309,7 +309,7 @@ void DataChunk::Hash(Vector &result) {
 
 void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalType::HASH);
-	D_ASSERT(column_ids.size() > 0);
+	D_ASSERT(!column_ids.empty());
 
 	VectorOperations::Hash(data[column_ids[0]], result, size());
 	for (idx_t i = 1; i < column_ids.size(); i++) {
