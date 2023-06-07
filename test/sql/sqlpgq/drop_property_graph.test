@@ -1,0 +1,80 @@
+# name: test/sql/sqlpgq/drop_property_graph.test
+# group: [sqlpgq]
+
+require duckpgq
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE Student(id BIGINT, name VARCHAR);
+
+statement ok
+CREATE TABLE know(src BIGINT, dst BIGINT, createDate BIGINT);
+
+statement ok
+CREATE TABLE School(name VARCHAR, Id BIGINT, Kind VARCHAR);
+
+statement ok
+CREATE TABLE StudyAt(personId BIGINT, schoolId BIGINT);
+
+statement ok
+INSERT INTO Student VALUES (0, 'Daniel'), (1, 'Tavneet'), (2, 'Gabor'), (3, 'Peter'), (4, 'David');
+
+statement ok
+INSERT INTO know VALUES (0,1, 10), (0,2, 11), (0,3, 12), (3,0, 13), (1,2, 14), (1,3, 15), (2,3, 16), (4,3, 17);
+
+statement ok
+INSERT INTO School VALUES ('VU', 0, 'University'), ('UVA', 1, 'University');
+
+statement ok
+INSERT INTO StudyAt VALUES (0, 0), (1, 0), (2, 1), (3, 1), (4, 1);
+
+statement ok
+-CREATE PROPERTY GRAPH pg
+VERTEX TABLES (
+    Student PROPERTIES ( id, name ) LABEL Person,
+    School LABEL SCHOOL
+    )
+EDGE TABLES (
+    know    SOURCE KEY ( src ) REFERENCES Student ( id )
+            DESTINATION KEY ( dst ) REFERENCES Student ( id )
+            LABEL Knows,
+    studyAt SOURCE KEY ( personId ) REFERENCES Student ( id )
+            DESTINATION KEY ( SchoolId ) REFERENCES School ( id )
+            LABEL StudyAt
+    );
+
+statement ok
+-DROP PROPERTY GRAPH pg;
+
+statement error
+-SELECT study.id
+FROM GRAPH_TABLE (pg
+    MATCH
+    (a:Person)
+    COLUMNS (a.id)
+    ) study;
+
+statement ok
+-CREATE PROPERTY GRAPH pg
+VERTEX TABLES (
+    Student PROPERTIES ( id, name ) LABEL Person,
+    School LABEL SCHOOL
+    )
+EDGE TABLES (
+    know    SOURCE KEY ( src ) REFERENCES Student ( id )
+            DESTINATION KEY ( dst ) REFERENCES Student ( id )
+            LABEL Knows,
+    studyAt SOURCE KEY ( personId ) REFERENCES Student ( id )
+            DESTINATION KEY ( SchoolId ) REFERENCES School ( id )
+            LABEL StudyAt
+    );
+
+statement ok
+-SELECT *
+FROM GRAPH_TABLE (pg
+    MATCH
+    (a:Person)
+    COLUMNS (a.id)
+    ) study;
