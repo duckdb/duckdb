@@ -197,7 +197,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 		// Cast the resulting native python to DuckDB, using the return type
 		// result.Resize(input.size());
 		NumpyScan::ScanObjectColumn(python_results.data(), input.size(), 0, result);
-		if (input.AllConstant()) {
+		if (input.size() == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	};
@@ -320,7 +320,7 @@ public:
 			func = CreateNativeFunction(udf.ptr(), exception_handling);
 		}
 		ScalarFunction scalar_function(name, std::move(parameters), return_type, func, nullptr, nullptr, nullptr,
-		                               nullptr, varargs, FunctionSideEffects::NO_SIDE_EFFECTS, null_handling);
+		                               nullptr, varargs, FunctionSideEffects::HAS_SIDE_EFFECTS, null_handling);
 		return scalar_function;
 	}
 };
