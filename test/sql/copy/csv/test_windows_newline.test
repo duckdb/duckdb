@@ -21,10 +21,10 @@ statement ok
 DELETE FROM test;
 
 # now do the same with a multi-byte quote that is not actually used
-query I
+statement error
 COPY test FROM 'test/sql/copy/csv/data/test/windows_newline.csv' (QUOTE 'BLABLABLA', AUTO_DETECT FALSE);
 ----
-20000
+CSV Reader does not accept multi-byte quotes, escapes or delimiters
 
 query RIIRR
 SELECT SUM(a), MIN(LENGTH(b)), MAX(LENGTH(b)), SUM(LENGTH(b)), SUM(c) FROM test;

@@ -19,32 +19,6 @@ struct StrpTimeFormat;
 class FileOpener;
 class FileSystem;
 
-//! The shifts array allows for linear searching of multi-byte values. For each position, it determines the next
-//! position given that we encounter a byte with the given value.
-/*! For example, if we have a string "ABAC", the shifts array will have the following values:
- *  [0] --> ['A'] = 1, all others = 0
- *  [1] --> ['B'] = 2, ['A'] = 1, all others = 0
- *  [2] --> ['A'] = 3, all others = 0
- *  [3] --> ['C'] = 4 (match), 'B' = 2, 'A' = 1, all others = 0
- * Suppose we then search in the following string "ABABAC", our progression will be as follows:
- * 'A' -> [1], 'B' -> [2], 'A' -> [3], 'B' -> [2], 'A' -> [3], 'C' -> [4] (match!)
- */
-struct TextSearchShiftArray {
-	TextSearchShiftArray();
-	explicit TextSearchShiftArray(string search_term);
-
-	inline bool Match(uint8_t &position, uint8_t byte_value) {
-		if (position >= length) {
-			return false;
-		}
-		position = shifts[position * 255 + byte_value];
-		return position == length;
-	}
-
-	idx_t length;
-	unique_ptr<uint8_t[]> shifts;
-};
-
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
 class BufferedCSVReader : public BaseCSVReader {
 	//! Initial buffer read size; can be extended for long lines
@@ -69,8 +43,6 @@ public:
 
 	unique_ptr<CSVFileHandle> file_handle;
 
-	TextSearchShiftArray delimiter_search, escape_search, quote_search;
-
 public:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	void ParseCSV(DataChunk &insert_chunk);
@@ -91,8 +63,6 @@ private:
 	bool ReadBuffer(idx_t &start, idx_t &line_start);
 	//! Jumps back to the beginning of input stream and resets necessary internal states
 	bool JumpToNextSample();
-	//! Initializes the TextSearchShiftArrays for complex parser
-	void PrepareComplexParser();
 	//! Try to parse a single datachunk from the file. Throws an exception if anything goes wrong.
 	void ParseCSV(ParserMode mode);
 	//! Try to parse a single datachunk from the file. Returns whether or not the parsing is successful
@@ -102,8 +72,6 @@ private:
 
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message);
-	//! Parses more complex CSV files with multi-byte delimiters, escapes or quotes
-	bool TryParseComplexCSV(DataChunk &insert_chunk, string &error_message);
 	//! Sniffs CSV dialect and determines skip rows, header row, column types and column names
 	vector<LogicalType> SniffCSV(const vector<LogicalType> &requested_types);
 

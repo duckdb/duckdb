@@ -7,10 +7,10 @@
 statement ok
 CREATE TABLE long_escaped_value (a INTEGER, b INTEGER, c VARCHAR);
 
-query I
+statement error
 COPY long_escaped_value FROM 'test/sql/copy/csv/data/test/long_escaped_value.csv' (DELIMITER '🦆', AUTO_DETECT FALSE);
 ----
-1
+CSV Reader does not accept multi-byte quotes, escapes or delimiters
 
 query IIT
 SELECT * FROM long_escaped_value

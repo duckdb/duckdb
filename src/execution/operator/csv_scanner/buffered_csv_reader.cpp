@@ -40,39 +40,8 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, CS
 	Initialize(requested_types);
 }
 
-TextSearchShiftArray::TextSearchShiftArray() {
-}
-
-TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_term.size()) {
-	if (length > 255) {
-		throw InvalidInputException("Size of delimiter/quote/escape in CSV reader is limited to 255 bytes");
-	}
-	// initialize the shifts array
-	shifts = unique_ptr<uint8_t[]>(new uint8_t[length * 255]);
-	memset(shifts.get(), 0, length * 255 * sizeof(uint8_t));
-	// iterate over each of the characters in the array
-	for (idx_t main_idx = 0; main_idx < length; main_idx++) {
-		uint8_t current_char = (uint8_t)search_term[main_idx];
-		// now move over all the remaining positions
-		for (idx_t i = main_idx; i < length; i++) {
-			bool is_match = true;
-			// check if the prefix matches at this position
-			// if it does, we move to this position after encountering the current character
-			for (idx_t j = 0; j < main_idx; j++) {
-				if (search_term[i - main_idx + j] != search_term[j]) {
-					is_match = false;
-				}
-			}
-			if (!is_match) {
-				continue;
-			}
-			shifts[i * 255 + current_char] = main_idx + 1;
-		}
-	}
-}
 
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
-	PrepareComplexParser();
 	if (options.auto_detect) {
 		return_types = SniffCSV(requested_types);
 		if (return_types.empty()) {
@@ -128,11 +97,6 @@ void BufferedCSVReader::SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header)
 	}
 }
 
-void BufferedCSVReader::PrepareComplexParser() {
-	delimiter_search = TextSearchShiftArray(options.delimiter);
-	escape_search = TextSearchShiftArray(options.escape);
-	quote_search = TextSearchShiftArray(options.quote);
-}
 
 string BufferedCSVReader::ColumnTypesError(case_insensitive_map_t<idx_t> sql_types_per_column,
                                            const vector<string> &names) {
@@ -153,248 +117,6 @@ string BufferedCSVReader::ColumnTypesError(case_insensitive_map_t<idx_t> sql_typ
 	exception.pop_back();
 	exception += " do not exist in the CSV File";
 	return exception;
-}
-
-bool BufferedCSVReader::TryParseComplexCSV(DataChunk &insert_chunk, string &error_message) {
-	// used for parsing algorithm
-	bool finished_chunk = false;
-	idx_t column = 0;
-	vector<idx_t> escape_positions;
-	bool has_quotes = false;
-	uint8_t delimiter_pos = 0, escape_pos = 0, quote_pos = 0;
-	idx_t offset = 0;
-	idx_t line_start = 0;
-	// read values into the buffer (if any)
-	if (position >= buffer_size) {
-		if (!ReadBuffer(start, line_start)) {
-			return true;
-		}
-	}
-	// start parsing the first value
-	start = position;
-	goto value_start;
-value_start:
-	/* state: value_start */
-	// this state parses the first characters of a value
-	offset = 0;
-	delimiter_pos = 0;
-	quote_pos = 0;
-	do {
-		idx_t count = 0;
-		for (; position < buffer_size; position++) {
-			quote_search.Match(quote_pos, buffer[position]);
-			delimiter_search.Match(delimiter_pos, buffer[position]);
-			count++;
-			if (delimiter_pos == options.delimiter.size()) {
-				// found a delimiter, add the value
-				offset = options.delimiter.size() - 1;
-				goto add_value;
-			} else if (StringUtil::CharacterIsNewline(buffer[position])) {
-				// found a newline, add the row
-				goto add_row;
-			}
-			if (count > quote_pos) {
-				// did not find a quote directly at the start of the value, stop looking for the quote now
-				goto normal;
-			}
-			if (quote_pos == options.quote.size()) {
-				// found a quote, go to quoted loop and skip the initial quote
-				start += options.quote.size();
-				goto in_quotes;
-			}
-		}
-	} while (ReadBuffer(start, line_start));
-	// file ends while scanning for quote/delimiter, go to final state
-	goto final_state;
-normal:
-	/* state: normal parsing state */
-	// this state parses the remainder of a non-quoted value until we reach a delimiter or newline
-	position++;
-	do {
-		for (; position < buffer_size; position++) {
-			delimiter_search.Match(delimiter_pos, buffer[position]);
-			if (delimiter_pos == options.delimiter.size()) {
-				offset = options.delimiter.size() - 1;
-				goto add_value;
-			} else if (StringUtil::CharacterIsNewline(buffer[position])) {
-				goto add_row;
-			}
-		}
-	} while (ReadBuffer(start, line_start));
-	goto final_state;
-add_value:
-	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
-	// increase position by 1 and move start to the new position
-	offset = 0;
-	has_quotes = false;
-	start = ++position;
-	if (position >= buffer_size && !ReadBuffer(start, line_start)) {
-		// file ends right after delimiter, go to final state
-		goto final_state;
-	}
-	goto value_start;
-add_row : {
-	// check type of newline (\r or \n)
-	bool carriage_return = buffer[position] == '\r';
-	AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
-	finished_chunk = AddRow(insert_chunk, column, error_message);
-
-	if (!error_message.empty()) {
-		return false;
-	}
-	// increase position by 1 and move start to the new position
-	offset = 0;
-	has_quotes = false;
-	position++;
-	SkipEmptyLines();
-	start = position;
-	if (position >= buffer_size && !ReadBuffer(start, line_start)) {
-		// file ends right after newline, go to final state
-		goto final_state;
-	}
-	if (carriage_return) {
-		// \r newline, go to special state that parses an optional \n afterwards
-		goto carriage_return;
-	} else {
-		// \n newline, move to value start
-		if (finished_chunk) {
-			return true;
-		}
-		goto value_start;
-	}
-}
-in_quotes:
-	/* state: in_quotes */
-	// this state parses the remainder of a quoted value
-	quote_pos = 0;
-	escape_pos = 0;
-	has_quotes = true;
-	position++;
-	do {
-		for (; position < buffer_size; position++) {
-			quote_search.Match(quote_pos, buffer[position]);
-			escape_search.Match(escape_pos, buffer[position]);
-			if (quote_pos == options.quote.size()) {
-				goto unquote;
-			} else if (escape_pos == options.escape.size()) {
-				escape_positions.push_back(position - start - (options.escape.size() - 1));
-				goto handle_escape;
-			}
-		}
-	} while (ReadBuffer(start, line_start));
-	// still in quoted state at the end of the file, error:
-	error_message = StringUtil::Format("Error in file \"%s\" on line %s: unterminated quotes. (%s)", options.file_path,
-	                                   GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
-	return false;
-unquote:
-	/* state: unquote */
-	// this state handles the state directly after we unquote
-	// in this state we expect either another quote (entering the quoted state again, and escaping the quote)
-	// or a delimiter/newline, ending the current value and moving on to the next value
-	delimiter_pos = 0;
-	quote_pos = 0;
-	position++;
-	if (position >= buffer_size && !ReadBuffer(start, line_start)) {
-		// file ends right after unquote, go to final state
-		offset = options.quote.size();
-		goto final_state;
-	}
-	if (StringUtil::CharacterIsNewline(buffer[position])) {
-		// quote followed by newline, add row
-		offset = options.quote.size();
-		goto add_row;
-	}
-	do {
-		idx_t count = 0;
-		for (; position < buffer_size; position++) {
-			quote_search.Match(quote_pos, buffer[position]);
-			delimiter_search.Match(delimiter_pos, buffer[position]);
-			count++;
-			if (count > delimiter_pos && count > quote_pos) {
-				error_message = StringUtil::Format(
-				    "Error in file \"%s\" on line %s: quote should be followed by end of value, end "
-				    "of row or another quote. (%s)",
-				    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
-				return false;
-			}
-			if (delimiter_pos == options.delimiter.size()) {
-				// quote followed by delimiter, add value
-				offset = options.quote.size() + options.delimiter.size() - 1;
-				goto add_value;
-			} else if (quote_pos == options.quote.size() &&
-			           (options.escape.empty() || options.escape == options.quote)) {
-				// quote followed by quote, go back to quoted state and add to escape
-				escape_positions.push_back(position - start - (options.quote.size() - 1));
-				goto in_quotes;
-			}
-		}
-	} while (ReadBuffer(start, line_start));
-	error_message = StringUtil::Format(
-	    "Error in file \"%s\" on line %s: quote should be followed by end of value, end of row or another quote. (%s)",
-	    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
-	return false;
-handle_escape:
-	escape_pos = 0;
-	quote_pos = 0;
-	position++;
-	do {
-		idx_t count = 0;
-		for (; position < buffer_size; position++) {
-			quote_search.Match(quote_pos, buffer[position]);
-			escape_search.Match(escape_pos, buffer[position]);
-			count++;
-			if (count > escape_pos && count > quote_pos) {
-				error_message = StringUtil::Format(
-				    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)",
-				    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
-				return false;
-			}
-			if (quote_pos == options.quote.size() || escape_pos == options.escape.size()) {
-				// found quote or escape: move back to quoted state
-				goto in_quotes;
-			}
-		}
-	} while (ReadBuffer(start, line_start));
-	error_message =
-	    StringUtil::Format("Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)",
-	                       options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
-	return false;
-carriage_return:
-	/* state: carriage_return */
-	// this stage optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
-	if (buffer[position] == '\n') {
-		// newline after carriage return: skip
-		start = ++position;
-		if (position >= buffer_size && !ReadBuffer(start, line_start)) {
-			// file ends right after newline, go to final state
-			goto final_state;
-		}
-	}
-	if (finished_chunk) {
-		return true;
-	}
-	goto value_start;
-final_state:
-	if (finished_chunk) {
-		return true;
-	}
-	if (column > 0 || position > start) {
-		// remaining values to be added to the chunk
-		AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
-		finished_chunk = AddRow(insert_chunk, column, error_message);
-		SkipEmptyLines();
-		if (!error_message.empty()) {
-			return false;
-		}
-	}
-	// final stage, only reached after parsing the file is finished
-	// flush the parsed chunk and finalize parsing
-	if (mode == ParserMode::PARSING) {
-		Flush(insert_chunk);
-	}
-
-	end_of_file_reached = true;
-	return true;
 }
 
 void BufferedCSVReader::SkipEmptyLines() {
@@ -716,7 +438,7 @@ bool BufferedCSVReader::TryParseCSV(ParserMode parser_mode, DataChunk &insert_ch
 	if (options.quote.size() <= 1 && options.escape.size() <= 1 && options.delimiter.size() == 1) {
 		return TryParseSimpleCSV(insert_chunk, error_message);
 	} else {
-		return TryParseComplexCSV(insert_chunk, error_message);
+		throw InvalidInputException("CSV Reader does not accept multi-byte quotes, escapes or delimiters");
 	}
 }
 

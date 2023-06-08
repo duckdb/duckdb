@@ -17,10 +17,10 @@ CREATE TABLE test_unicode_4 (col_a VARCHAR, col_b VARCHAR);
 
 # test COPY ... FROM ...
 # test unicode delimiter/quote/escape
-query I
+statement error
 COPY test_unicode_1 FROM 'test/sql/copy/csv/data/test/multi_char.csv' (DELIMITER '🦆', QUOTE 'ˮ', ESCAPE '˧');
 ----
-4
+CSV Reader does not accept multi-byte quotes, escapes or delimiters
 
 query ITTT
 SELECT * FROM test_unicode_1 ORDER BY 1 LIMIT 4;
