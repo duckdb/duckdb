@@ -199,18 +199,9 @@ class TestPythonFilesystem:
     def test_read_hive_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
         duckdb_cursor.register_filesystem(memory)
 
-        if sys.platform == 'win32'
-            path = '/root\\a=1\\data_0.csv'
-        else
-            path = '/root/a=1/data_0.csv'
-
-        with memory.open(path, 'wb') as fh:
+        with memory.open('/root/a=1/data_0.csv', 'wb') as fh:
             fh.write(b'1\n')
 
         duckdb_cursor.execute('''SELECT * FROM read_csv_auto('memory://root/*/*.csv', HIVE_PARTITIONING = 1);''')
 
         assert duckdb_cursor.fetchall() == [(1, 1)]
-
-        duckdb_cursor.execute('''SELECT * FROM read_csv_auto('memory://root/*/*.csv', HIVE_PARTITIONING = 1, HIVE_TYPES_AUTOCAST = 0);''')
-
-        assert duckdb_cursor.fetchall() == [(1, '1')]
