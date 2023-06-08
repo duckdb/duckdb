@@ -9,8 +9,6 @@ statement ok
 CREATE TABLE test AS SELECT 1 as id, 'value1' as value;
 CREATE TABLE test2 AS SELECT 2 as id, 'value2' as value;
 
-mode skip
-
 # filenames could allow you to parse hive partitions manually using SQL
 query III
 select id, value, replace(filename, '\', '/') from read_csv_auto('data/csv/hive-partitioning/simple/*/*/test.csv', FILENAME=1, HEADER=1) order by id
@@ -98,17 +96,11 @@ EXPLAIN select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as 
 ----
 physical_plan	<!REGEX>:.*FILTER.*
 
-mode unskip
-
-mode output_result
-
 # Query filtering out first file
 query IIII
-explain select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == 'foobar') OR (part_cast=9000) ORDER BY date_cast;
+select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == 'foobar') OR (part_cast=9000) ORDER BY date_cast;
 ----
 2	value2	9000	2013-01-01
-
-mode skip
 
 # Again, we should not have a filter operator here
 query II

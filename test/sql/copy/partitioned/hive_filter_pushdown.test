@@ -8,8 +8,6 @@ require parquet
 statement ok
 COPY (SELECT i::VARCHAR as a, (i*10)::VARCHAR as b, (i*100)::VARCHAR as c from range(0,10) tbl(i)) TO '__TEST_DIR__/hive_pushdown_bug' (FORMAT PARQUET, PARTITION_BY c);
 
-mode skip
-
 query II
 explain SELECT * FROM parquet_scan('__TEST_DIR__/hive_pushdown_bug/*/*.parquet', HIVE_PARTITIONING=1) where a > b;
 ----
@@ -36,18 +34,16 @@ query II nosort q2
 explain SELECT * FROM parquet_scan('__TEST_DIR__/hive_pushdown_bug/*/*.parquet') where a > c;
 ----
 
-mode unskip
-
 # Check that hive specific filters are pushed down into the explain plan regardless of format type
 query II
 explain SELECT * FROM parquet_scan('__TEST_DIR__/hive_pushdown_bug/*/*.parquet', HIVE_PARTITIONING=1) where c=500;
 ----
-physical_plan	<REGEX>:.*Filters:\s*c=500.*
+physical_plan	<REGEX>:.*\) = 500\).*
 
 query II
 explain SELECT * FROM parquet_scan('__TEST_DIR__/hive_pushdown_bug/*/*.parquet', HIVE_PARTITIONING=1) where c=500 and b=20;
 ----
-physical_plan	<REGEX>:.*Filters:\s*c=500.*
+physical_plan	<REGEX>:.*\) = 500\).*
 
 # same for csv
 statement ok
@@ -56,7 +52,7 @@ COPY (SELECT i::VARCHAR as a, (i*10)::VARCHAR as b, (i*100)::VARCHAR as c from r
 query II
 explain SELECT * FROM read_csv_auto('__TEST_DIR__/hive_pushdown_bug_csv/*/*.csv', HIVE_PARTITIONING=1, names=['a','b','c']) where c=500;
 ----
-physical_plan	<REGEX>:.*Filters:\s*c=500.*
+physical_plan	<REGEX>:.*Filters:.*\) = 500\).*
 
 # same for json paritioned files
 #statement ok
