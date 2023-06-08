@@ -424,6 +424,7 @@ bool ParallelCSVGlobalState::Finished() {
 
 void ParallelCSVGlobalState::Verify() {
 	// All threads are done, we run some magic sweet verification code
+	lock_guard<mutex> parallel_lock(main_mutex);
 	if (running_threads == 0) {
 		D_ASSERT(tuple_end.size() == tuple_start.size());
 		for (idx_t i = 0; i < tuple_start.size(); i++) {
