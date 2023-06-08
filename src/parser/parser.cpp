@@ -182,7 +182,7 @@ void Parser::ParseQuery(const string &query) {
 		// using ';' as the delimiter so that parser extensions can parse the statement
 		if (parsing_succeed) {
 			return;
-		} else if (!options.extensions) {
+		} else if (!options.extensions || options.extensions->empty()) {
 			throw ParserException(parser_error);
 		} else {
 			// split sql string into statements and re-parse using extension
