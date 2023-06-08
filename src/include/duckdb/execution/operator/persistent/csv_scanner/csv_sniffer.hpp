@@ -13,6 +13,15 @@
 
 namespace duckdb {
 
+//! Struct to store candidates for the CSV State, with the last position they read in the buffer
+struct CSVStateCandidates {
+	CSVStateCandidates(CSVStateMachine *state_p, idx_t last_pos_p, idx_t max_num_columns_p)
+	    : state(state_p), last_pos(last_pos_p), max_num_columns(max_num_columns_p) {};
+	CSVStateMachine *state = nullptr;
+	idx_t last_pos = 0;
+	idx_t max_num_columns = 0;
+};
+
 //! Sniffer that detects Header, Dialect and Types of CSV Files
 class CSVSniffer {
 public:
@@ -20,6 +29,8 @@ public:
 	    : requested_types(requested_types_p), options(options_p), buffer(std::move(buffer_p)) {};
 	//! First phase of auto detection: detect CSV dialect (i.e. delimiter, quote rules, etc)
 	vector<CSVReaderOptions> DetectDialect();
+	//! Resets stats so it can analyze the next chunk
+	void NextChunk();
 
 private:
 	//! Number of rows read
@@ -35,13 +46,13 @@ private:
 	//! Vector of CSV State Machines
 	vector<CSVStateMachine> csv_state_machines;
 	//! Current Candidates being considered
-	vector<CSVStateMachine *> candidates;
+	vector<CSVStateCandidates> candidates;
 	//! Original Options set
 	CSVReaderOptions options;
 	//! Buffer being used on sniffer
 	StateBuffer buffer;
 	//! Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
-	void AnalyzeDialectCandidate(CSVStateMachine &state_machine);
+	void AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t buffer_start_pos = 0);
 };
 
 } // namespace duckdb

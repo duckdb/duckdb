@@ -8,3 +8,4 @@ query I
 select count(*)
 from  read_csv_auto('data/csv/CrashStatistics.csv')
 ----
+4980

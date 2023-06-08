@@ -238,9 +238,10 @@ bool BufferedCSVReader::JumpToNextSample() {
 	return true;
 }
 
-void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine) {
+void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t buffer_start_pos) {
 	vector<idx_t> sniffed_column_counts;
-	state_machine.SniffColumns(buffer, sniffed_column_counts, STANDARD_VECTOR_SIZE);
+	buffer.position = buffer_start_pos;
+	idx_t buffer_pos = state_machine.SniffColumns(buffer, sniffed_column_counts, STANDARD_VECTOR_SIZE);
 
 	idx_t start_row = options.skip_rows;
 	idx_t consistent_rows = 0;
@@ -285,18 +286,25 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine) {
 		prev_padding_count = padding_count;
 
 		candidates.clear();
-		candidates.push_back(&state_machine);
+		candidates.emplace_back(&state_machine, buffer_pos, best_num_cols);
 	} else if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding) {
 		bool same_quote_is_candidate = false;
 		for (auto &candidate : candidates) {
-			if (state_machine.configuration.quote.compare(candidate->configuration.quote) == 0) {
+			if (state_machine.configuration.quote.compare(candidate.state->configuration.quote) == 0) {
 				same_quote_is_candidate = true;
 			}
 		}
 		if (!same_quote_is_candidate) {
-			candidates.push_back(&state_machine);
+			candidates.emplace_back(&state_machine, buffer_pos, best_num_cols);
 		}
 	}
+}
+
+void CSVSniffer::NextChunk() {
+	rows_read = 0;
+	best_consistent_rows = 0;
+	best_num_cols = 0;
+	prev_padding_count = 0;
 }
 
 vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
@@ -352,10 +360,22 @@ vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 		AnalyzeDialectCandidate(state_machine);
 	}
 
-	for (idx_t i = 1; options.buffer_sample_size; i++) {
+	// hacky
+	for (idx_t i = 1; i < options.sample_chunks; i++) {
+		if (!candidates.empty()) {
+			// We read the whole buffer
+			// FIXME: Continue reading? for now one 10Mb buffer for sniffing I think it's fine
+			if (candidates[0].last_pos >= buffer.buffer_size) {
+				break;
+			}
+		}
+		NextChunk();
 		auto cur_candidates = candidates;
+		candidates.clear();
+
 		for (auto &cur_candidate : cur_candidates) {
 			// Have to store the max position here
+			AnalyzeDialectCandidate(*cur_candidate.state, cur_candidate.last_pos);
 		}
 	}
 
@@ -363,9 +383,10 @@ vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 	vector<CSVReaderOptions> result;
 	for (auto &candidate : candidates) {
 		auto option = options;
-		option.quote = candidate->configuration.quote;
-		option.escape = candidate->configuration.escape;
-		option.delimiter = candidate->configuration.field_separator;
+		option.quote = candidate.state->configuration.quote;
+		option.escape = candidate.state->configuration.escape;
+		option.delimiter = candidate.state->configuration.field_separator;
+		option.num_cols = candidate.max_num_columns + 1;
 		//		option.new_line =candidate->configuration.record_separator;
 		result.emplace_back(option);
 	}
@@ -712,6 +733,9 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 		throw InvalidInputException(
 		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
 		    options.file_path);
+	}
+	for (auto &candidate : info_candidates) {
+		best_num_cols = std::max(best_num_cols, candidate.num_cols);
 	}
 
 	// #######

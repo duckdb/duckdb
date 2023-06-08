@@ -69,9 +69,10 @@ idx_t CSVStateMachine::SniffColumns(StateBuffer &buffer, vector<idx_t> &sniffed_
 	CSVState state {CSVState::STANDARD};
 	while (cur_pos < buffer.buffer_size && cur_rows < max_rows) {
 		if (state == CSVState::INVALID) {
-			return 0;
+			sniffed_column_counts.clear();
+			return buffer.buffer_size;
 		}
-		auto c = (buffer.buffer.get())[cur_pos];
+		auto c = buffer.buffer[cur_pos];
 		column_count += state == CSVState::FIELD_SEPARATOR;
 		sniffed_column_counts[cur_rows] = column_count;
 		cur_rows += state == CSVState::RECORD_SEPARATOR;
@@ -79,7 +80,9 @@ idx_t CSVStateMachine::SniffColumns(StateBuffer &buffer, vector<idx_t> &sniffed_
 		state = static_cast<CSVState>(transition_array[static_cast<uint8_t>(state)][static_cast<uint8_t>(c)]);
 		cur_pos++;
 	}
-	return cur_rows;
+	sniffed_column_counts.erase(sniffed_column_counts.end() - (STANDARD_VECTOR_SIZE - cur_rows),
+	                            sniffed_column_counts.end());
+	return cur_pos;
 }
 
 } // namespace duckdb

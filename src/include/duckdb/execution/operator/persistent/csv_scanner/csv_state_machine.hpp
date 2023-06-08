@@ -43,7 +43,7 @@ struct StateBuffer {
 		other.position = 0;
 	}
 	//! The Buffer
-	unsafe_unique_array<char> buffer;
+	char *buffer;
 	//! The Size Of The Buffer
 	idx_t buffer_size;
 	//! The Start Position of the buffer
