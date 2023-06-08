@@ -519,7 +519,7 @@ struct SortedAggregateFunction {
 	static void Serialize(FieldWriter &writer, const FunctionData *bind_data, const AggregateFunction &function) {
 		throw NotImplementedException("FIXME: serialize sorted aggregate not supported");
 	}
-	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
 	                                            AggregateFunction &function) {
 		throw NotImplementedException("FIXME: deserialize sorted aggregate not supported");
 	}
