@@ -45,8 +45,6 @@ public:
 		return true;
 	}
 
-	void BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update) override;
-
 private:
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
 	unique_ptr<CatalogEntry> AddColumn(ClientContext &context, AddColumnInfo &info);

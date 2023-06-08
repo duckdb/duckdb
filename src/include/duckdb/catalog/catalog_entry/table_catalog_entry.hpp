@@ -106,7 +106,8 @@ public:
 	//! Returns the storage info of this table
 	virtual TableStorageInfo GetStorageInfo(ClientContext &context) = 0;
 
-	DUCKDB_API virtual void BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update);
+	DUCKDB_API virtual void BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
+	                                              ClientContext &context);
 
 protected:
 	// This is used to serialize the entry by #Serialize(Serializer& ). It is virtual to allow
