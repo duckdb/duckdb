@@ -39,7 +39,6 @@ autoconf/aclocal.m4
 autoconf/autom4te.cache
 /compile_commands.json
 /.wasm
-/test/api/serialized_plans/serialized_plans.temp.binary
 
 #==============================================================================#
 # Directories to ignore (do not add trailing '/'s, they skip symlinks).

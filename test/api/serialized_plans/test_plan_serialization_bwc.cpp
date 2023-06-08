@@ -27,26 +27,27 @@ void load_db(Connection &con) {
 	}
 }
 
-void test_deserialization(const string &file_name);
+void test_deserialization(const string &file_location);
 
 const char *PERSISTENT_FILE_NAME = "serialized_plans.binary";
-const char *TEMPORARY_FILE_NAME = "serialized_plans.temp.binary";
 
 TEST_CASE("Generate serialized plans file", "[.][serialization]") {
-	string file_name = TEMPORARY_FILE_NAME;
+	string file_location;
 	if (std::getenv("GEN_PLAN_STORAGE") != nullptr) {
 		// there is no way in catch2 to only run a test if explicitly requested. Hidden tests will
 		// run when "*" is used - which we do to run slow tests. To avoid re-generating the bin file
 		// we require an env variable to be explicitly set.
 		//
 		// set `GEN_PLAN_STORAGE` as an environment variable to generate the serialized file
-		file_name = PERSISTENT_FILE_NAME;
+		file_location = get_full_file_name(PERSISTENT_FILE_NAME);
+	} else {
+		file_location = TestCreatePath("serialized_plans.new.binary");
 	}
 
 	DuckDB db;
 	Connection con(db);
 	load_db(con);
-	BufferedFileWriter serializer(db.GetFileSystem(), get_full_file_name(file_name));
+	BufferedFileWriter serializer(db.GetFileSystem(), file_location);
 	serializer.SetVersion(PLAN_SERIALIZATION_VERSION);
 	serializer.Write(serializer.GetVersion());
 	std::ifstream queries(get_full_file_name("queries.sql"));
@@ -67,18 +68,18 @@ TEST_CASE("Generate serialized plans file", "[.][serialization]") {
 
 	serializer.Sync();
 
-	test_deserialization(file_name);
+	test_deserialization(file_location);
 }
 
 TEST_CASE("Test deserialized plans from file", "[.][serialization]") {
-	test_deserialization(PERSISTENT_FILE_NAME);
+	test_deserialization(get_full_file_name(PERSISTENT_FILE_NAME));
 }
 
-void test_deserialization(const string &file_name) {
+void test_deserialization(const string &file_location) {
 	DuckDB db;
 	Connection con(db);
 	load_db(con);
-	BufferedFileReader deserializer(db.GetFileSystem(), get_full_file_name(file_name).c_str(), con.context.get());
+	BufferedFileReader deserializer(db.GetFileSystem(), file_location.c_str(), con.context.get());
 	deserializer.SetVersion(deserializer.Read<uint64_t>());
 
 	std::ifstream queries(get_full_file_name("queries.sql"));
