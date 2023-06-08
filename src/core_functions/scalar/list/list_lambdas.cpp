@@ -328,7 +328,6 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 	}
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments.pop_back();
 		bound_function.arguments[0] = LogicalType::SQLNULL;
 		bound_function.return_type = LogicalType::SQLNULL;
 		return make_uniq<VariableReturnBindData>(bound_function.return_type);
