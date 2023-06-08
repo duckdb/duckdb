@@ -1,12 +1,13 @@
 #include "parquet_statistics.hpp"
+
+#include "duckdb.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "parquet_timestamp.hpp"
 #include "string_column_reader.hpp"
-#include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/blob.hpp"
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/value.hpp"
 #endif
 
 namespace duckdb {
@@ -14,9 +15,9 @@ namespace duckdb {
 using duckdb_parquet::format::ConvertedType;
 using duckdb_parquet::format::Type;
 
-static duckdb::unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
-                                                             const duckdb_parquet::format::SchemaElement &schema_ele,
-                                                             const duckdb_parquet::format::Statistics &parquet_stats) {
+static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
+                                                     const duckdb_parquet::format::SchemaElement &schema_ele,
+                                                     const duckdb_parquet::format::Statistics &parquet_stats) {
 	auto stats = NumericStats::CreateUnknown(type);
 
 	// for reasons unknown to science, Parquet defines *both* `min` and `min_value` as well as `max` and
@@ -226,7 +227,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 		return nullptr;
 	}
 	auto &parquet_stats = column_chunk.meta_data.statistics;
-	duckdb::unique_ptr<BaseStatistics> row_group_stats;
+	unique_ptr<BaseStatistics> row_group_stats;
 
 	switch (type.id()) {
 	case LogicalTypeId::UTINYINT:

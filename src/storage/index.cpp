@@ -59,6 +59,19 @@ bool Index::MergeIndexes(Index &other_index) {
 	}
 }
 
+string Index::VerifyAndToString(const bool only_verify) {
+
+	IndexLock state;
+	InitializeLock(state);
+
+	switch (this->type) {
+	case IndexType::ART:
+		return Cast<ART>().VerifyAndToString(state, only_verify);
+	default:
+		throw InternalException("Unimplemented index type for VerifyAndToString");
+	}
+}
+
 void Index::Vacuum() {
 
 	IndexLock state;

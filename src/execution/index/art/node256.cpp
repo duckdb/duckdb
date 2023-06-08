@@ -83,6 +83,7 @@ void Node256::InsertChild(ART &art, Node &node, const uint8_t byte, const Node c
 	D_ASSERT(!n256.children[byte].IsSet());
 
 	n256.count++;
+	D_ASSERT(n256.count <= Node::NODE_256_CAPACITY);
 	n256.children[byte] = child;
 }
 
