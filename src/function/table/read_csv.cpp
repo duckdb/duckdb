@@ -1113,6 +1113,7 @@ void BufferedCSVReaderOptions::Deserialize(FieldReader &reader) {
 
 static void CSVReaderSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function) {
 	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
+	writer.WriteString(function.extra_info);
 	writer.WriteList<string>(bind_data.files);
 	writer.WriteRegularSerializableList<LogicalType>(bind_data.csv_types);
 	writer.WriteList<string>(bind_data.csv_names);
@@ -1131,6 +1132,7 @@ static void CSVReaderSerialize(FieldWriter &writer, const FunctionData *bind_dat
 
 static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, FieldReader &reader,
                                                      TableFunction &function) {
+	function.extra_info = reader.ReadRequired<string>();
 	auto result_data = make_uniq<ReadCSVData>();
 	result_data->files = reader.ReadRequiredList<string>();
 	result_data->csv_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();

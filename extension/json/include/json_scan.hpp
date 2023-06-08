@@ -232,6 +232,8 @@ private:
 	void ThrowObjectSizeError(const idx_t object_size);
 	void ThrowInvalidAtEndError();
 
+	bool IsParallel(JSONScanGlobalState &gstate) const;
+
 private:
 	//! Bind data
 	const JSONScanData &bind_data;
@@ -245,7 +247,7 @@ private:
 	bool is_last;
 
 	//! Current buffer read info
-	const char *buffer_ptr;
+	char *buffer_ptr;
 	idx_t buffer_size;
 	idx_t buffer_offset;
 	idx_t prev_buffer_remainder;
