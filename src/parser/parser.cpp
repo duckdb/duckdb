@@ -123,6 +123,27 @@ end:
 	return ReplaceUnicodeSpaces(query_str, new_query, unicode_spaces);
 }
 
+vector<string> SplitQueryStringIntoStatements(const string &query) {
+	// Break sql string down into sql statements using the tokenizer
+	vector<string> query_statements;
+	auto tokens = Parser::Tokenize(query);
+	auto next_statement_start = 0;
+	for (idx_t i = 1; i < tokens.size(); ++i) {
+		auto &t_prev = tokens[i - 1];
+		auto &t = tokens[i];
+		if (t_prev.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR) {
+			for (idx_t c = t_prev.start; c <= t.start; ++c) {
+				if (query.c_str()[c] == ';') {
+					query_statements.emplace_back(query.substr(next_statement_start, t.start - next_statement_start));
+					next_statement_start = tokens[i].start;
+				}
+			}
+		}
+	}
+	query_statements.emplace_back(query.substr(next_statement_start, query.size() - next_statement_start));
+	return query_statements;
+}
+
 void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options);
 	string parser_error;
@@ -137,7 +158,7 @@ void Parser::ParseQuery(const string &query) {
 	}
 	{
 		PostgresParser::SetPreserveIdentifierCase(options.preserve_identifier_case);
-		bool parsing_failed = false;
+		bool parsing_succeed = false;
 		// Creating a new scope to prevent multiple PostgresParser destructors being called
 		// which led to some memory issues
 		{
@@ -152,33 +173,20 @@ void Parser::ParseQuery(const string &query) {
 				// if it succeeded, we transform the Postgres parse tree into a list of
 				// SQLStatements
 				transformer.TransformParseTree(parser.parse_tree, statements);
+				parsing_succeed = true;
 			} else {
-				parsing_failed = true;
 				parser_error = QueryErrorContext::Format(query, parser.error_message, parser.error_location - 1);
 			}
 		}
 		// If DuckDB fails to parse the entire sql string, break the string down into individual statements
-		// using ; as the delimiter so that parser extensions can parse the statement
-		if (parsing_failed && options.extensions) {
-			// Break sql string down into sql statements using the tokenizer
-			vector<string> query_statements;
-			auto tokens = Tokenize(query);
-			auto next_statement_start = 0;
-			for (idx_t i = 1; i < tokens.size(); ++i) {
-				auto &t_prev = tokens[i - 1];
-				auto &t = tokens[i];
-				if (t_prev.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR) {
-					for (idx_t c = t_prev.start; c <= t.start; ++c) {
-						if (query.c_str()[c] == ';') {
-							query_statements.emplace_back(
-							    query.substr(next_statement_start, t.start - next_statement_start));
-							next_statement_start = tokens[i].start;
-						}
-					}
-				}
-			}
-			query_statements.emplace_back(query.substr(next_statement_start, query.size() - next_statement_start));
-
+		// using ';' as the delimiter so that parser extensions can parse the statement
+		if (parsing_succeed) {
+			return;
+		} else if (!options.extensions) {
+			throw ParserException(parser_error);
+		} else {
+			// split sql string into statements and re-parse using extension
+			auto query_statements = SplitQueryStringIntoStatements(query);
 			for (auto const &query_statement : query_statements) {
 				PostgresParser another_parser;
 				another_parser.Parse(query_statement);
