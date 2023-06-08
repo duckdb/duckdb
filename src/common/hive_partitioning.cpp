@@ -98,7 +98,7 @@ static bool GetColumnName(Expression &expression, string &column_name, idx_t &co
 	return ret;
 }
 
-static bool GetCastedValue(Expression &expression, Value &constant_value) {
+static bool GetConstantExpression(Expression &expression, Value &constant_value) {
 	if (expression.expression_class == ExpressionClass::BOUND_CONSTANT) {
 		auto &val = expression.Cast<BoundConstantExpression>();
 		constant_value = val.value;
@@ -109,6 +109,80 @@ static bool GetCastedValue(Expression &expression, Value &constant_value) {
 		ret = GetCastedValue(expr, constant_value);
 	});
 	return ret;
+}
+
+static void ConvertToTableFilter(ClientContext &context, LogicalGet &get, const Expression *filter) {
+//	D_ASSERT(filter->expression_class == ExpressionClass::BOUND_COMPARISON);
+	// look into the filter copy and find the column name (either on the left or the right)
+	// with the column name, look into the column_map and find the index
+	if (filter->expression_class == ExpressionClass::BOUND_COMPARISON) {
+		auto &comparison = filter->Cast<BoundComparisonExpression>();
+
+		string column_name;
+		idx_t column_index = DConstants::INVALID_INDEX;
+		Value partitioned_file_val = Value(nullptr);
+		auto left = comparison.left->Copy();
+		auto right = comparison.right->Copy();
+		// try to get the column name from the left and value from the right
+		if (!(GetColumnName(*left, column_name, column_index) && GetConstantExpression(*right, partitioned_file_val))) {
+			GetColumnName(*right, column_name, column_index);
+			GetConstantExpression(*left, partitioned_file_val);
+		}
+		// The filter is already applied (technically) but we get
+		// the column_index of get.names because if EXPLAIN is called
+		// ParamsToString() in LogicalGet will look at the names array.
+		for (idx_t i = 0; i < get.names.size(); i++) {
+			if (get.names.at(i) == column_name) {
+				column_index = i;
+				break;
+			}
+		}
+
+		D_ASSERT(column_index != DConstants::INVALID_INDEX);
+		D_ASSERT(!partitioned_file_val.IsNull());
+		//	partitioned_file_val.CastAs(context, LogicalType::VARCHAR);
+		auto constant_filter = make_uniq<ConstantFilter>(comparison.type, partitioned_file_val);
+		get.table_filters.PushFilter(column_index, std::move(constant_filter));
+	} else if (filter->expression_class == ExpressionClass::BOUND_BETWEEN) {
+		auto &comparison = filter->Cast<BoundBetweenExpression>();
+
+		string column_name;
+		idx_t column_index = DConstants::INVALID_INDEX;
+		Value lower, higher;
+
+		GetConstantExpression(*comparison.lower, lower);
+		GetConstantExpression(*comparison.upper, higher);
+
+		ExpressionType lower_type = ExpressionType::COMPARE_GREATERTHAN;
+		if (comparison.lower_inclusive) {
+			lower_type = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+		}
+
+		ExpressionType upper_type = ExpressionType::COMPARE_GREATERTHAN;
+		if (comparison.upper_inclusive) {
+			upper_type = ExpressionType::COMPARE_GREATERTHANOREQUALTO;
+		}
+
+
+
+		// try to get the column name from the left and value from the right
+
+		// The filter is already applied (technically) but we get
+		// the column_index of get.names because if EXPLAIN is called
+		// ParamsToString() in LogicalGet will look at the names array.
+		for (idx_t i = 0; i < get.names.size(); i++) {
+			if (get.names.at(i) == column_name) {
+				column_index = i;
+				break;
+			}
+		}
+
+		D_ASSERT(column_index != DConstants::INVALID_INDEX);
+		//	partitioned_file_val.CastAs(context, LogicalType::VARCHAR);
+		auto bound_filter = make_uniq<ConjunctionAndFilter>();
+		auto constant_filter = make_uniq<ConstantFilter>(comparison.type);
+		get.table_filters.PushFilter(column_index, std::move(constant_filter));
+	}
 }
 
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
@@ -152,46 +226,11 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 				}
 			} else if (!result_value.GetValue<bool>()) {
 				// filter evaluates to false
-//				should_prune_file = true;
-
+				should_prune_file = true;
+				get.function.filter_pushdown = true;
 				// convert the filter to a table filter.
 				if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
-
-					// look into the filter and find the constant value,
-					// create a constantFilter with the column index and the the value.
-					if (filter->expression_class == ExpressionClass::BOUND_COMPARISON) {
-						// csv reader for some reason doesn't have filter_pushdown = true
-						get.function.filter_pushdown = true;
-
-						// look into the filter copy and find the column name (either on the left or the right)
-						// with the column name, look into the column_map and find the index
-						auto &comparison = filter->Cast<BoundComparisonExpression>();
-
-						string column_name;
-						idx_t column_index = DConstants::INVALID_INDEX;
-						Value partitioned_file_val;
-						auto left = comparison.left->Copy();
-						auto right = comparison.right->Copy();
-						// try to get the column name from the left and value from the right
-						if (!(GetColumnName(*left, column_name, column_index) && GetCastedValue(*right, partitioned_file_val))) {
-							GetColumnName(*right, column_name, column_index);
-							GetCastedValue(*left, partitioned_file_val);
-						}
-						for (idx_t i = 0; i < get.names.size(); i++) {
-							if (get.names.at(i) == column_name) {
-								column_index = i;
-								break;
-							}
-						}
-
-
-
-						D_ASSERT(column_index != DConstants::INVALID_INDEX);
-						auto constant_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL,
-																			 partitioned_file_val);
-						get.table_filters.PushFilter(column_index, std::move(constant_filter));
-
-					}
+					ConvertToConstantFilter(context, get, filters.at(j).get());
 					filters_applied_to_files.insert(j);
 				}
 			}
@@ -199,7 +238,11 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 			// Use filter combiner to determine that this filter makes
 			if (!should_prune_file && combiner.AddFilter(std::move(filter_copy)) == FilterResult::UNSATISFIABLE) {
 				should_prune_file = true;
-				filters_applied_to_files.insert(j);
+				get.function.filter_pushdown = true;
+				if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
+					ConvertToConstantFilter(context, get, filters.at(j).get());
+					filters_applied_to_files.insert(j);
+				}
 			}
 		}
 
