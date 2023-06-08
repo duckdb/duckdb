@@ -31,9 +31,6 @@ void Node::New(ART &art, Node &node, const NType type) {
 	// NOTE: leaves and prefixes should not pass through this function
 
 	switch (type) {
-	case NType::LEAF_SEGMENT:
-		LeafSegment::New(art, node);
-		break;
 	case NType::NODE_4:
 		Node4::New(art, node);
 		break;
@@ -364,12 +361,8 @@ FixedSizeAllocator &Node::GetAllocator(const ART &art, NType type) {
 
 void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 
-	if (!IsSet()) {
-		return;
-	}
-	if (IsSwizzled()) {
-		Deserialize(art);
-	}
+	// the whole index is in memory during CREATE [UNIQUE] INDEX statements
+	D_ASSERT(IsSet() && !IsSwizzled());
 
 	auto type = DecodeARTNodeType();
 	switch (type) {

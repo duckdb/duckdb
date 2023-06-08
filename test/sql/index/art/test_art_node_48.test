@@ -78,3 +78,18 @@ DROP INDEX i_index
 
 statement ok
 DROP TABLE integers
+
+statement ok
+CREATE TABLE n48_tbl(i varchar, k integer)
+
+statement ok
+INSERT INTO n48_tbl SELECT 'a', range FROM range(10000);
+
+statement ok
+INSERT INTO n48_tbl SELECT 'b', range FROM range(25);
+
+statement ok
+INSERT INTO n48_tbl SELECT 'c', range FROM range(25);
+
+statement ok
+CREATE INDEX n48_tbl_idx ON n48_tbl(i, k);

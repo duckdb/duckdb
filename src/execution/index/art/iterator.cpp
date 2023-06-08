@@ -30,9 +30,9 @@ bool IteratorKey::operator>=(const ARTKey &k) const {
 }
 
 bool IteratorKey::operator==(const ARTKey &k) const {
-	if (key_bytes.size() != k.len) {
-		return false;
-	}
+	// NOTE: we only use this for finding the LowerBound, in which case the length
+	// has to be equal
+	D_ASSERT(key_bytes.size() == k.len);
 	for (idx_t i = 0; i < key_bytes.size(); i++) {
 		if (key_bytes[i] != k.data[i]) {
 			return false;

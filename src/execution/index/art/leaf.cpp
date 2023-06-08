@@ -23,10 +23,7 @@ Leaf &Leaf::New(ART &art, Node &node, const row_t row_id) {
 Leaf &Leaf::New(ART &art, Node &node, const row_t *row_ids, const idx_t count) {
 
 	// inlined leaf
-	D_ASSERT(count >= 1);
-	if (count == 1) {
-		return Leaf::New(art, node, row_ids[0]);
-	}
+	D_ASSERT(count > 1);
 
 	node.SetPtr(Node::GetAllocator(art, NType::LEAF).New());
 	node.type = (uint8_t)NType::LEAF;
@@ -117,12 +114,7 @@ void Leaf::Merge(ART &art, Node &other) {
 
 void Leaf::Insert(ART &art, const row_t row_id) {
 
-	if (count == 0) {
-		row_ids.inlined = row_id;
-		count++;
-		return;
-	}
-
+	D_ASSERT(count != 0);
 	if (count == 1) {
 		MoveInlinedToSegment(art);
 	}
@@ -149,10 +141,7 @@ void Leaf::Remove(ART &art, const row_t row_id) {
 	// possibly inline the row ID
 	if (count == 2) {
 		auto &segment = LeafSegment::Get(art, row_ids.ptr);
-		if (segment.row_ids[0] != row_id && segment.row_ids[1] != row_id) {
-			return;
-		}
-
+		D_ASSERT(segment.row_ids[0] == row_id || segment.row_ids[1] == row_id);
 		auto remaining_row_id = segment.row_ids[0] == row_id ? segment.row_ids[1] : segment.row_ids[0];
 		Node::Free(art, row_ids.ptr);
 		row_ids.inlined = remaining_row_id;
@@ -163,9 +152,7 @@ void Leaf::Remove(ART &art, const row_t row_id) {
 	// find the row ID, and the segment containing that row ID (stored in ptr)
 	auto ptr = row_ids.ptr;
 	auto copy_idx = FindRowId(art, ptr, row_id);
-	if (copy_idx == (uint32_t)DConstants::INVALID_INDEX) {
-		return;
-	}
+	D_ASSERT(copy_idx != (uint32_t)DConstants::INVALID_INDEX);
 	copy_idx++;
 
 	// iterate all remaining segments and move the row IDs one field to the left

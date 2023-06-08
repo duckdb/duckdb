@@ -46,6 +46,8 @@ SELECT sum(i) FROM integers WHERE i > 15
 # delete an element and reinsert it
 statement ok
 DELETE FROM integers WHERE i=16;
+
+statement ok
 INSERT INTO integers VALUES (16);
 
 query I
