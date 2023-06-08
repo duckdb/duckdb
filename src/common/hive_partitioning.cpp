@@ -83,6 +83,34 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 	return Parse(filename, regex);
 }
 
+
+static bool GetColumnName(Expression &expression, string &column_name, idx_t &col_binding) {
+	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+		auto &col_ref = expression.Cast<BoundColumnRefExpression>();
+		col_binding = col_ref.binding.column_index;
+		column_name = expression.ToString();
+		return true;
+	}
+	auto ret = false;
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) {
+		ret = GetColumnName(expr, column_name, col_binding);
+	});
+	return ret;
+}
+
+static bool GetCastedValue(Expression &expression, Value &constant_value) {
+	if (expression.expression_class == ExpressionClass::BOUND_CONSTANT) {
+		auto &val = expression.Cast<BoundConstantExpression>();
+		constant_value = val.value;
+		return true;
+	}
+	auto ret = false;
+	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) {
+		ret = GetCastedValue(expr, constant_value);
+	});
+	return ret;
+}
+
 // TODO: this can still be improved by removing the parts of filter expressions that are true for all remaining files.
 //		 currently, only expressions that cannot be evaluated during pushdown are removed.
 void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<string> &files,
@@ -91,8 +119,9 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
                                               bool hive_enabled, bool filename_enabled) {
 
 	vector<string> pruned_files;
-	vector<unique_ptr<Expression>> pruned_filters;
 	vector<bool> have_preserved_filter(filters.size(), false);
+	vector<unique_ptr<Expression>> pruned_filters;
+	unordered_set<idx_t> filters_applied_to_files;
 	duckdb_re2::RE2 regex(REGEX_STRING);
 	auto table_index = get.table_index;
 
@@ -123,12 +152,54 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 				}
 			} else if (!result_value.GetValue<bool>()) {
 				// filter evaluates to false
-				should_prune_file = true;
+//				should_prune_file = true;
+
+				// convert the filter to a table filter.
+				if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
+
+					// look into the filter and find the constant value,
+					// create a constantFilter with the column index and the the value.
+					if (filter->expression_class == ExpressionClass::BOUND_COMPARISON) {
+						// csv reader for some reason doesn't have filter_pushdown = true
+						get.function.filter_pushdown = true;
+
+						// look into the filter copy and find the column name (either on the left or the right)
+						// with the column name, look into the column_map and find the index
+						auto &comparison = filter->Cast<BoundComparisonExpression>();
+
+						string column_name;
+						idx_t column_index = DConstants::INVALID_INDEX;
+						Value partitioned_file_val;
+						auto left = comparison.left->Copy();
+						auto right = comparison.right->Copy();
+						// try to get the column name from the left and value from the right
+						if (!(GetColumnName(*left, column_name, column_index) && GetCastedValue(*right, partitioned_file_val))) {
+							GetColumnName(*right, column_name, column_index);
+							GetCastedValue(*left, partitioned_file_val);
+						}
+						for (idx_t i = 0; i < get.names.size(); i++) {
+							if (get.names.at(i) == column_name) {
+								column_index = i;
+								break;
+							}
+						}
+
+
+
+						D_ASSERT(column_index != DConstants::INVALID_INDEX);
+						auto constant_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL,
+																			 partitioned_file_val);
+						get.table_filters.PushFilter(column_index, std::move(constant_filter));
+
+					}
+					filters_applied_to_files.insert(j);
+				}
 			}
 
 			// Use filter combiner to determine that this filter makes
 			if (!should_prune_file && combiner.AddFilter(std::move(filter_copy)) == FilterResult::UNSATISFIABLE) {
 				should_prune_file = true;
+				filters_applied_to_files.insert(j);
 			}
 		}
 
@@ -138,7 +209,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 	}
 
 	D_ASSERT(filters.size() >= pruned_filters.size());
-	get.other_table_filters = std::move(filters);
+
 	filters = std::move(pruned_filters);
 	files = std::move(pruned_files);
 }

@@ -8,11 +8,6 @@
 
 namespace duckdb {
 
-struct PushedFilterInformation : TableFunctionInfo {
-	string filters;
-
-};
-
 unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_GET);
 	auto &get = op->Cast<LogicalGet>();
