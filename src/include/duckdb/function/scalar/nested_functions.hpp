@@ -68,7 +68,7 @@ struct VariableReturnBindData : public FunctionData {
 		writer.WriteSerializable(info.stype);
 	}
 
-	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &context, FieldReader &reader,
 	                                            ScalarFunction &bound_function) {
 		auto stype = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 		return make_uniq<VariableReturnBindData>(std::move(stype));
