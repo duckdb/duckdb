@@ -69,6 +69,23 @@ void BaseCSVData::Finalize() {
 	}
 }
 
+static void WriteCSVDataFinalize(unique_ptr<WriteCSVData> &bind_data) {
+	bind_data->Finalize();
+	bind_data->is_simple = bind_data->options.delimiter.size() == 1 && bind_data->options.escape.size() == 1 &&
+	                       bind_data->options.quote.size() == 1;
+	if (bind_data->is_simple) {
+		bind_data->requires_quotes = make_unsafe_uniq_array<bool>(256);
+		memset(bind_data->requires_quotes.get(), 0, sizeof(bool) * 256);
+		bind_data->requires_quotes['\n'] = true;
+		bind_data->requires_quotes['\r'] = true;
+		bind_data->requires_quotes[bind_data->options.delimiter[0]] = true;
+		bind_data->requires_quotes[bind_data->options.quote[0]] = true;
+	}
+	if (!bind_data->options.write_newline.empty()) {
+		bind_data->newline = bind_data->options.write_newline;
+	}
+}
+
 static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &info, vector<string> &names,
                                              vector<LogicalType> &sql_types) {
 	auto bind_data = make_uniq<WriteCSVData>(info.file_path, sql_types, names);
@@ -84,20 +101,9 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 		// no FORCE_QUOTE specified: initialize to false
 		bind_data->options.force_quote.resize(names.size(), false);
 	}
-	bind_data->Finalize();
-	bind_data->is_simple = bind_data->options.delimiter.size() == 1 && bind_data->options.escape.size() == 1 &&
-	                       bind_data->options.quote.size() == 1;
-	if (bind_data->is_simple) {
-		bind_data->requires_quotes = make_unsafe_uniq_array<bool>(256);
-		memset(bind_data->requires_quotes.get(), 0, sizeof(bool) * 256);
-		bind_data->requires_quotes['\n'] = true;
-		bind_data->requires_quotes['\r'] = true;
-		bind_data->requires_quotes[bind_data->options.delimiter[0]] = true;
-		bind_data->requires_quotes[bind_data->options.quote[0]] = true;
-	}
-	if (!bind_data->options.write_newline.empty()) {
-		bind_data->newline = bind_data->options.write_newline;
-	}
+
+	WriteCSVDataFinalize(bind_data);
+
 	return std::move(bind_data);
 }
 
@@ -499,6 +505,30 @@ unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, Funct
 	return std::move(batch);
 }
 
+static void CSVCopySerialize(FieldWriter &writer, const FunctionData &bind_data_p, const CopyFunction &function) {
+	auto &bind_data = bind_data_p.Cast<WriteCSVData>();
+
+	writer.WriteString(bind_data.files[0]);
+	writer.WriteRegularSerializableList<LogicalType>(bind_data.sql_types);
+	writer.WriteList<string>(bind_data.options.name_list);
+
+	bind_data.options.Serialize(writer);
+}
+
+static unique_ptr<FunctionData> CSVCopyDeserialize(ClientContext &context, FieldReader &reader,
+                                                   CopyFunction &function) {
+	auto file_path = reader.ReadRequired<string>();
+	auto sql_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	auto names = reader.ReadRequiredList<string>();
+
+	auto bind_data = make_uniq<WriteCSVData>(file_path, sql_types, names);
+	bind_data->options.Deserialize(reader);
+
+	WriteCSVDataFinalize(bind_data);
+
+	return std::move(bind_data);
+}
+
 //===--------------------------------------------------------------------===//
 // Flush Batch
 //===--------------------------------------------------------------------===//
@@ -526,6 +556,9 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 
 	info.copy_from_bind = ReadCSVBind;
 	info.copy_from_function = ReadCSVTableFunction::GetFunction();
+
+	info.serialize = CSVCopySerialize;
+	info.deserialize = CSVCopyDeserialize;
 
 	info.extension = "csv";
 
