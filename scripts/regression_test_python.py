@@ -32,14 +32,14 @@ main_con = duckdb.connect()
 main_con.execute('CALL dbgen(sf=1)')
 
 tables = [
- "customer",
- "lineitem",
- "nation",
- "orders",
- "part",
- "partsupp",
- "region",
- "supplier",
+    "customer",
+    "lineitem",
+    "nation",
+    "orders",
+    "part",
+    "partsupp",
+    "region",
+    "supplier",
 ]
 
 def open_connection():

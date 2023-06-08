@@ -23,7 +23,7 @@ struct RegisteredArray {
 struct RawArrayWrapper {
 
 	explicit RawArrayWrapper(const LogicalType &type);
-	explicit RawArrayWrapper(py::array array, idx_t count, const LogicalType &type);
+	explicit RawArrayWrapper(py::array array, const LogicalType &type);
 	~RawArrayWrapper() {
 		D_ASSERT(py::gil_check());
 	}
@@ -32,7 +32,6 @@ struct RawArrayWrapper {
 	data_ptr_t data;
 	LogicalType type;
 	idx_t type_width;
-	idx_t count;
 
 public:
 	static string DuckDBToNumpyDtype(const LogicalType &type);

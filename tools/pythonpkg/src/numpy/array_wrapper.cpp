@@ -472,12 +472,12 @@ static bool ConvertDecimal(const LogicalType &decimal_type, idx_t target_offset,
 	}
 }
 
-RawArrayWrapper::RawArrayWrapper(py::array array_p, idx_t count_p, const LogicalType &type)
-    : array(std::move(array_p)), data(data_ptr_cast(array.mutable_data())), type(type), count(count_p) {
+RawArrayWrapper::RawArrayWrapper(py::array array_p, const LogicalType &type)
+    : array(std::move(array_p)), data(data_ptr_cast(array.mutable_data())), type(type) {
 	type_width = DuckDBToNumpyTypeWidth(type);
 }
 
-RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : array(), data(nullptr), type(type), count(0) {
+RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : array(), data(nullptr), type(type) {
 	type_width = DuckDBToNumpyTypeWidth(type);
 }
 
@@ -770,8 +770,6 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	if (may_have_null) {
 		requires_mask = true;
 	}
-	data->count += count;
-	mask->count += count;
 }
 
 const LogicalType &ArrayWrapper::Type() const {
@@ -781,11 +779,11 @@ const LogicalType &ArrayWrapper::Type() const {
 py::object ArrayWrapper::ToArray(idx_t count) const {
 	D_ASSERT(py::gil_check());
 	D_ASSERT(data->array && mask->array);
-	data->Resize(data->count);
+	data->Resize(count);
 	if (!requires_mask) {
 		return std::move(data->array);
 	}
-	mask->Resize(mask->count);
+	mask->Resize(count);
 	// construct numpy arrays from the data and the mask
 	auto values = std::move(data->array);
 	auto nullmask = std::move(mask->array);
@@ -824,7 +822,7 @@ NumpyResultConversion::NumpyResultConversion(vector<unique_ptr<NumpyResultConver
 			requires_mask = requires_mask || source.requires_mask;
 
 			// Shrink to fit
-			source.Resize(source.data->count);
+			source.Resize(collection->count);
 
 			arrays[i] = *source.data->array;
 			masks[i] = *source.mask->array;
@@ -833,8 +831,8 @@ NumpyResultConversion::NumpyResultConversion(vector<unique_ptr<NumpyResultConver
 		D_ASSERT(arrays.size() == masks.size());
 		py::array result_array = concatenate_func(arrays);
 		py::array result_mask = concatenate_func(masks);
-		auto array_wrapper = make_uniq<RawArrayWrapper>(std::move(result_array), count, types[col_idx]);
-		auto mask_wrapper = make_uniq<RawArrayWrapper>(std::move(result_mask), count, types[col_idx]);
+		auto array_wrapper = make_uniq<RawArrayWrapper>(std::move(result_array), types[col_idx]);
+		auto mask_wrapper = make_uniq<RawArrayWrapper>(std::move(result_mask), types[col_idx]);
 		owned_data.emplace_back(std::move(array_wrapper), std::move(mask_wrapper), requires_mask);
 	}
 
@@ -897,12 +895,6 @@ void NumpyResultConversion::Append(DataChunk &chunk) {
 	}
 	Append(chunk, count);
 	count += chunk.size();
-#ifdef DEBUG
-	for (auto &data : owned_data) {
-		D_ASSERT(data.data->count == count);
-		D_ASSERT(data.mask->count == count);
-	}
-#endif
 }
 
 } // namespace duckdb

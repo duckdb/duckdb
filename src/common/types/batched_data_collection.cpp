@@ -11,8 +11,8 @@ BatchedDataCollection::BatchedDataCollection(ClientContext &context_p, vector<Lo
     : context(context_p), types(std::move(types_p)), buffer_managed(buffer_managed_p) {
 }
 
-BatchedDataCollection::BatchedDataCollection(ClientContext &context_p, vector<LogicalType> types_p,
-                                             batch_map_t batches, bool buffer_managed_p)
+BatchedDataCollection::BatchedDataCollection(ClientContext &context_p, vector<LogicalType> types_p, batch_map_t batches,
+                                             bool buffer_managed_p)
     : context(context_p), types(std::move(types_p)), buffer_managed(buffer_managed_p), data(std::move(batches)) {
 }
 

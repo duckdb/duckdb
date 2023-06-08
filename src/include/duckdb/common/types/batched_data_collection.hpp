@@ -33,7 +33,8 @@ struct BatchedChunkScanState {
 class BatchedDataCollection {
 public:
 	DUCKDB_API BatchedDataCollection(ClientContext &context, vector<LogicalType> types, bool buffer_managed = false);
-	DUCKDB_API BatchedDataCollection(ClientContext &context, vector<LogicalType> types, batch_map_t batches, bool buffer_managed = false);
+	DUCKDB_API BatchedDataCollection(ClientContext &context, vector<LogicalType> types, batch_map_t batches,
+	                                 bool buffer_managed = false);
 
 	//! Appends a datachunk with the given batch index to the batched collection
 	DUCKDB_API void Append(DataChunk &input, idx_t batch_index);

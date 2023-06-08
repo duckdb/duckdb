@@ -32,10 +32,7 @@ public:
 			if (intermediate.size() == 0) {
 				break;
 			}
-			{
-				py::gil_scoped_acquire gil;
-				result.Append(intermediate, offset);
-			}
+			result.Append(intermediate, offset);
 			offset += intermediate.size();
 		}
 	}
