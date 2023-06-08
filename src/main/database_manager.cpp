@@ -88,16 +88,9 @@ const string &DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 }
 
 void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &new_value) {
-	auto has_active_transaction = context.transaction.HasActiveTransaction();
-	if (!has_active_transaction) {
-		context.transaction.BeginTransaction();
-	}
+	optional_ptr<AttachedDatabase> db_entry;
 
-	auto db_entry = GetDatabase(context, new_value);
-
-	if (!has_active_transaction) {
-		context.transaction.ClearTransaction();
-	}
+	context.RunFunctionInTransaction([&]() { db_entry = GetDatabase(context, new_value); });
 
 	if (!db_entry) {
 		throw InternalException("Database \"%s\" not found", new_value);
