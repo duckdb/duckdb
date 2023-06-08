@@ -1,0 +1,17 @@
+# name: test/sql/attach/attach_external_access.test
+# description: Test ATTACH with enable external access set to false
+# group: [attach]
+
+require skip_reload
+
+statement ok
+SET enable_external_access=false
+
+# we can attach in-memory databases
+statement ok
+ATTACH ':memory:' AS db1
+
+statement error
+ATTACH 'mydb.db' AS db2
+----
+Attaching on-disk databases is disabled through configuration

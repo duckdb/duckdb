@@ -170,6 +170,16 @@ public:
 	}
 
 public:
+	template <class T>
+	static T *AllocateArray(yyjson_alc *alc, idx_t count) {
+		return reinterpret_cast<T *>(alc->malloc(alc->ctx, sizeof(T) * count));
+	}
+
+	template <class T>
+	static T *AllocateArray(yyjson_mut_doc *doc, idx_t count) {
+		return AllocateArray<T>(&doc->alc, count);
+	}
+
 	static inline yyjson_mut_doc *CreateDocument(yyjson_alc *alc) {
 		D_ASSERT(alc);
 		return yyjson_mut_doc_new(alc);
@@ -419,11 +429,11 @@ private:
 
 template <>
 inline char *JSONCommon::WriteVal(yyjson_val *val, yyjson_alc *alc, idx_t &len) {
-	return yyjson_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, (size_t *)&len, nullptr);
+	return yyjson_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, reinterpret_cast<size_t *>(&len), nullptr);
 }
 template <>
 inline char *JSONCommon::WriteVal(yyjson_mut_val *val, yyjson_alc *alc, idx_t &len) {
-	return yyjson_mut_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, (size_t *)&len, nullptr);
+	return yyjson_mut_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, reinterpret_cast<size_t *>(&len), nullptr);
 }
 
 template <>
