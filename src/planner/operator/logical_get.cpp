@@ -31,6 +31,10 @@ string LogicalGet::ParamsToString() const {
 		}
 		result += "\n";
 	}
+	for (auto &filter : table_filters_applied_via_files) {
+		result += filter->ToString();
+		result += "\n";
+	}
 	if (!function.to_string) {
 		return result;
 	}

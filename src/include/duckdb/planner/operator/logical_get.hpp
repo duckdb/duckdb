@@ -41,7 +41,7 @@ public:
 	TableFilterSet table_filters;
 	//! Filters applied by hive partitioning/complex filter pushdown
 	//! Depending on different file readers, we don't want to apply these filters
-	TableFilterSet table_filters_applied_via_files;
+	vector<unique_ptr<Expression>> table_filters_applied_via_files;
 	//! The set of input parameters for the table function
 	vector<Value> parameters;
 	//! The set of named input parameters for the table function

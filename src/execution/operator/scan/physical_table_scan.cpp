@@ -22,11 +22,11 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
                                      unique_ptr<FunctionData> bind_data_p, vector<LogicalType> returned_types_p,
                                      vector<column_t> column_ids_p, vector<idx_t> projection_ids_p,
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
-                                     idx_t estimated_cardinality)
+                                     idx_t estimated_cardinality, vector<unique_ptr<Expression>> table_filters_applied_via_files)
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), returned_types(std::move(returned_types_p)),
       column_ids(std::move(column_ids_p)), projection_ids(std::move(projection_ids_p)), names(std::move(names_p)),
-      table_filters(std::move(table_filters_p)) {
+      table_filters(std::move(table_filters_p)), table_filters_applied_via_files(std::move(table_filters_applied_via_files)){
 }
 
 class TableScanGlobalSourceState : public GlobalSourceState {
@@ -137,16 +137,22 @@ string PhysicalTableScan::ParamsToString() const {
 			}
 		}
 	}
-	if (function.filter_pushdown && table_filters) {
+	if (function.filter_pushdown && (table_filters || table_filters_applied_via_files.size() > 0)) {
 		result += "\n[INFOSEPARATOR]\n";
 		result += "Filters: ";
-		for (auto &f : table_filters->filters) {
-			auto &column_index = f.first;
-			auto &filter = f.second;
-			if (column_index < names.size()) {
-				result += filter->ToString(names[column_ids[column_index]]);
-				result += "\n";
+		if (table_filters) {
+			for (auto &f : table_filters->filters) {
+				auto &column_index = f.first;
+				auto &filter = f.second;
+				if (column_index < names.size()) {
+					result += filter->ToString(names[column_ids[column_index]]);
+					result += "\n";
+				}
 			}
+		}
+		for (auto &filter : table_filters_applied_via_files) {
+			result += filter->ToString();
+			result += "\n";
 		}
 	}
 	result += "\n[INFOSEPARATOR]\n";

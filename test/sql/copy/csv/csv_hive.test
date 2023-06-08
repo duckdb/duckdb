@@ -55,7 +55,6 @@ select id, value, part, date from read_csv_auto('data/csv/hive-partitioning/diff
 ----
 2	value2	b	2013-01-01
 
-mode unskip
 
 query IIII
 select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) where part_cast > 0 and part_cast < 5000;
@@ -99,11 +98,17 @@ EXPLAIN select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as 
 ----
 physical_plan	<!REGEX>:.*FILTER.*
 
+mode unskip
+
+mode output_result
+
 # Query filtering out first file
 query IIII
-select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == 'foobar') OR (part_cast=9000) ORDER BY date_cast;
+explain select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) where (date_cast=CAST('2012-01-01' as DATE) AND concat(date_cast::VARCHAR, part_cast::VARCHAR) == 'foobar') OR (part_cast=9000) ORDER BY date_cast;
 ----
 2	value2	9000	2013-01-01
+
+mode skip
 
 # Again, we should not have a filter operator here
 query II

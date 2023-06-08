@@ -28,7 +28,7 @@ public:
 	//! Table scan that immediately projects out filter columns that are unused in the remainder of the query plan
 	PhysicalTableScan(vector<LogicalType> types, TableFunction function, unique_ptr<FunctionData> bind_data,
 	                  vector<LogicalType> returned_types, vector<column_t> column_ids, vector<idx_t> projection_ids,
-	                  vector<string> names, unique_ptr<TableFilterSet> table_filters, idx_t estimated_cardinality);
+	                  vector<string> names, unique_ptr<TableFilterSet> table_filters, idx_t estimated_cardinality, vector<unique_ptr<Expression>> table_filters_applied_via_files);
 
 	//! The table function
 	TableFunction function;
@@ -44,6 +44,8 @@ public:
 	vector<string> names;
 	//! The table filters
 	unique_ptr<TableFilterSet> table_filters;
+	//! The table filters applied to file names
+	vector<unique_ptr<Expression>> table_filters_applied_via_files;
 
 public:
 	string GetName() const override;
