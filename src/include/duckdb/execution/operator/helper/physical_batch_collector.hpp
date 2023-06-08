@@ -49,7 +49,7 @@ public:
 //===--------------------------------------------------------------------===//
 class BatchCollectorGlobalState : public GlobalSinkState {
 public:
-	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op) : data(op.types) {
+	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
 	}
 
 	mutex glock;
@@ -59,10 +59,9 @@ public:
 
 class BatchCollectorLocalState : public LocalSinkState {
 public:
-	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op) : data(op.types) {
+	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
 	}
 
 	BatchedDataCollection data;
 };
-
 } // namespace duckdb

@@ -427,6 +427,7 @@ void Prefix::Vacuum(ART &art) {
 	auto &allocator = Node::GetAllocator(art, NType::PREFIX_SEGMENT);
 	if (allocator.NeedsVacuum(data.ptr)) {
 		data.ptr.SetPtr(allocator.VacuumPointer(data.ptr));
+		data.ptr.type = (uint8_t)NType::PREFIX_SEGMENT;
 	}
 
 	auto ptr = data.ptr;
@@ -435,6 +436,7 @@ void Prefix::Vacuum(ART &art) {
 		ptr = segment.next;
 		if (ptr.IsSet() && allocator.NeedsVacuum(ptr)) {
 			segment.next.SetPtr(allocator.VacuumPointer(ptr));
+			segment.next.type = (uint8_t)NType::PREFIX_SEGMENT;
 			ptr = segment.next;
 		}
 	}

@@ -60,7 +60,7 @@ SinkFinalizeType PhysicalNumpyCollector::Finalize(Pipeline &pipeline, Event &eve
 	auto &gstate = gstate_p.Cast<NumpyCollectorGlobalState>();
 	D_ASSERT(gstate.collection == nullptr);
 
-	gstate.collection = make_uniq<BatchedDataCollection>(types, std::move(gstate.batches));
+	gstate.collection = make_uniq<BatchedDataCollection>(context, types, std::move(gstate.batches), true);
 
 	// Pre-allocate the conversion result
 	unique_ptr<NumpyResultConversion> result;

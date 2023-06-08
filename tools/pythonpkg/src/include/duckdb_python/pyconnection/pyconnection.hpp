@@ -59,7 +59,7 @@ public:
 
 	shared_ptr<DuckDBPyConnection> Enter();
 
-	static bool Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
+	static void Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
 	                 const py::object &traceback);
 
 	static bool DetectAndGetEnvironment();

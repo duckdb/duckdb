@@ -1153,16 +1153,27 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType 
 
 static void QuantileSerialize(FieldWriter &writer, const FunctionData *bind_data_p, const AggregateFunction &function) {
 	D_ASSERT(bind_data_p);
-	throw NotImplementedException("FIXME: serializing quantiles is not supported right now");
-	//
-	//	auto bind_data = (QuantileBindData *)bind_data_p;
-	//	writer.WriteList<Value>(bind_data->quantiles);
+	auto bind_data = dynamic_cast<const QuantileBindData *>(bind_data_p);
+	D_ASSERT(bind_data);
+	writer.WriteRegularSerializableList<Value>(bind_data->quantiles);
+	writer.WriteList<idx_t>(bind_data->order);
+	writer.WriteField<bool>(bind_data->desc);
 }
 
 unique_ptr<FunctionData> QuantileDeserialize(ClientContext &context, FieldReader &reader,
                                              AggregateFunction &bound_function) {
-	auto quantiles = reader.ReadRequiredList<Value>();
-	return make_uniq<QuantileBindData>(std::move(quantiles));
+	auto quantiles = reader.ReadRequiredSerializableList<Value, Value>();
+	auto bind_data = make_uniq<QuantileBindData>(quantiles);
+	bind_data->quantiles = quantiles;
+	bind_data->order = reader.ReadRequiredList<idx_t>();
+	bind_data->desc = reader.ReadRequired<bool>();
+
+	return std::move(bind_data);
+}
+
+static void QuantileDecimalSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
+                                     const AggregateFunction &function) {
+	throw NotImplementedException("FIXME: serializing quantiles with decimals is not supported right now");
 }
 
 unique_ptr<FunctionData> BindMedian(ClientContext &context, AggregateFunction &function,
@@ -1176,7 +1187,7 @@ unique_ptr<FunctionData> BindMedianDecimal(ClientContext &context, AggregateFunc
 
 	function = GetDiscreteQuantileAggregateFunction(arguments[0]->return_type);
 	function.name = "median";
-	function.serialize = QuantileSerialize;
+	function.serialize = QuantileDecimalSerialize;
 	function.deserialize = QuantileDeserialize;
 	function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	return bind_data;
@@ -1225,11 +1236,6 @@ unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction 
 
 	Function::EraseArgument(function, arguments, arguments.size() - 1);
 	return make_uniq<QuantileBindData>(quantiles);
-}
-
-static void QuantileDecimalSerialize(FieldWriter &writer, const FunctionData *bind_data_p,
-                                     const AggregateFunction &function) {
-	throw NotImplementedException("FIXME: serializing quantiles with decimals is not supported right now");
 }
 
 unique_ptr<FunctionData> BindDiscreteQuantileDecimal(ClientContext &context, AggregateFunction &function,
