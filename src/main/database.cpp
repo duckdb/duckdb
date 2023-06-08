@@ -171,6 +171,7 @@ void DatabaseInstance::CreateMainDatabase() {
 	}
 
 	// initialize the database
+	initial_database->SetInitialDatabase();
 	initial_database->Initialize();
 }
 

@@ -54,7 +54,7 @@ common/serializer/buffered_file_reader.cpp	9
 common/serializer/buffered_file_writer.cpp	2
 common/sort/comparators.cpp	72
 common/sort/merge_sorter.cpp	100
-common/sort/partition_state.cpp	43
+common/sort/partition_state.cpp	44
 common/sort/sort_state.cpp	10
 common/sort/sorted_block.cpp	20
 common/string_util.cpp	15
@@ -85,7 +85,7 @@ common/types/row/tuple_data_iterator.cpp	5
 common/types/row/tuple_data_scatter_gather.cpp	16
 common/types/row/tuple_data_segment.cpp	10
 common/types/string_heap.cpp	11
-common/types/time.cpp	20
+common/types/time.cpp	21
 common/types/timestamp.cpp	18
 common/types/uuid.cpp	3
 common/types/validity_mask.cpp	6
@@ -211,7 +211,7 @@ execution/physical_plan/plan_set_operation.cpp	2
 execution/physical_plan/plan_show_select.cpp	3
 execution/physical_plan_generator.cpp	6
 execution/radix_partitioned_hashtable.cpp	3
-execution/reservoir_sample.cpp	52
+execution/reservoir_sample.cpp	60
 execution/window_segment_tree.cpp	10
 function/aggregate/sorted_aggregate_function.cpp	85
 function/built_in_functions.cpp	6
@@ -626,7 +626,7 @@ planner/binder/statement/bind_update.cpp	4
 planner/binder/statement/bind_vacuum.cpp	3
 planner/binder/tableref/bind_basetableref.cpp	4
 planner/binder/tableref/bind_joinref.cpp	3
-planner/binder/tableref/bind_pivot.cpp	5
+planner/binder/tableref/bind_pivot.cpp	6
 planner/binder/tableref/bind_table_function.cpp	18
 planner/binder/tableref/plan_joinref.cpp	2
 planner/binder/tableref/plan_subqueryref.cpp	2
@@ -650,7 +650,7 @@ planner/expression_binder/alter_binder.cpp	3
 planner/expression_binder/base_select_binder.cpp	3
 planner/expression_binder/check_binder.cpp	5
 planner/expression_binder/constant_binder.cpp	3
-planner/expression_binder/group_binder.cpp	4
+planner/expression_binder/group_binder.cpp	5
 planner/expression_binder/having_binder.cpp	4
 planner/expression_binder/index_binder.cpp	7
 planner/expression_binder/insert_binder.cpp	5
