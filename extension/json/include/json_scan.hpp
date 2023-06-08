@@ -292,7 +292,8 @@ public:
 	                                  vector<unique_ptr<Expression>> &filters);
 
 	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const TableFunction &function);
-	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader, TableFunction &function);
+	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
+	                                            TableFunction &function);
 
 	static void TableFunctionDefaults(TableFunction &table_function);
 };
