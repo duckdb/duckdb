@@ -43,7 +43,7 @@ public:
 	idx_t EstimateCardinality(ClientContext &context) override;
 	//! Skips the serialization check in VerifyPlan
 	bool SupportSerialization() const override {
-		return false;
+		return partition_columns.empty() && !per_thread_output;
 	}
 
 protected:
