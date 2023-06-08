@@ -154,56 +154,58 @@ void Parser::ParseQuery(const string &query) {
 				transformer.TransformParseTree(parser.parse_tree, statements);
 			} else {
 				parsing_failed = true;
+				parser_error = QueryErrorContext::Format(query, parser.error_message, parser.error_location - 1);
 			}
 		}
-		// if DuckDB fails to parse the entire sql string, break the string down into individual statements
-		// so that parser extensions can help parse some statements
-		if (parsing_failed) {
+		// If DuckDB fails to parse the entire sql string, break the string down into individual statements
+		// using ; as the delimiter so that parser extensions can parse the statement
+		if (parsing_failed && options.extensions) {
+			// Break sql string down into sql statements using the tokenizer
 			vector<string> query_statements;
 			auto tokens = Tokenize(query);
 			auto next_statement_start = 0;
-			for (size_t i = 1; i < tokens.size(); ++i) {
+			for (idx_t i = 1; i < tokens.size(); ++i) {
 				auto &t_prev = tokens[i - 1];
 				auto &t = tokens[i];
 				if (t_prev.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR) {
-					if (StringUtil::Contains(query.substr(t_prev.start, t.start - t_prev.start), ";")) {
-						query_statements.emplace_back(
-						    query.substr(next_statement_start, t.start - next_statement_start));
-						next_statement_start = tokens[i].start;
+					for (idx_t c = t_prev.start; c <= t.start; ++c) {
+						if (query.c_str()[c] == ';') {
+							query_statements.emplace_back(
+							    query.substr(next_statement_start, t.start - next_statement_start));
+							next_statement_start = tokens[i].start;
+						}
 					}
 				}
 			}
 			query_statements.emplace_back(query.substr(next_statement_start, query.size() - next_statement_start));
-			for (auto const &s : query_statements) {
+
+			for (auto const &query_statement : query_statements) {
 				PostgresParser another_parser;
-				another_parser.Parse(s);
+				another_parser.Parse(query_statement);
 				// first see if DuckDB can parse this individual query statement
 				if (another_parser.success) {
 					if (!another_parser.parse_tree) {
 						// empty statement
-						return;
+						continue;
 					}
-
 					transformer.TransformParseTree(another_parser.parse_tree, statements);
 				} else {
 					// let the extension parse the statement which DuckDB failed to parse
-					if (options.extensions) {
-						for (auto &ext : *options.extensions) {
-							D_ASSERT(ext.parse_function);
-							auto result = ext.parse_function(ext.parser_info.get(), s);
-							if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
-								auto statement = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
-								statement->stmt_length = s.size();
-								statement->stmt_location = 0;
-								statements.push_back(std::move(statement));
-							}
-							if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-								throw ParserException(result.error);
-							} else if (result.type == ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {
-								parser_error = QueryErrorContext::Format(query, another_parser.error_message,
-								                                         another_parser.error_location - 1);
-								throw ParserException(parser_error);
-							}
+					for (auto &ext : *options.extensions) {
+						D_ASSERT(ext.parse_function);
+						auto result = ext.parse_function(ext.parser_info.get(), query_statement);
+						if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
+							auto statement = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
+							statement->stmt_length = query_statement.size();
+							statement->stmt_location = 0;
+							statements.push_back(std::move(statement));
+						}
+						if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+							throw ParserException(result.error);
+						} else if (result.type == ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {
+							parser_error = QueryErrorContext::Format(query, another_parser.error_message,
+							                                         another_parser.error_location - 1);
+							throw ParserException(parser_error);
 						}
 					}
 				}
