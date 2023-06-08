@@ -60,8 +60,6 @@ static void test_helper_multi_db(string sql, duckdb::vector<string> fixtures = d
 
 	for (auto &statement : p.statements) {
 		con.context->transaction.BeginTransaction();
-		// Should that be the default "ToString"?
-		string statement_sql(statement->query.c_str() + statement->stmt_location, statement->stmt_length);
 		Planner planner(*con.context);
 		planner.CreatePlan(std::move(statement));
 		auto plan = std::move(planner.plan);
