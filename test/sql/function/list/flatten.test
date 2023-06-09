@@ -103,7 +103,7 @@ CREATE TABLE lists AS SELECT i % 4 i, list(j ORDER BY rowid) j FROM nums GROUP B
 statement ok
 CREATE TABLE nested_lists AS SELECT i, list(j ORDER BY rowid) j FROM lists GROUP BY i
 
-query II
+query II rowsort
 FROM nested_lists
 ----
 0	[[0, 8], [4, 12]]
