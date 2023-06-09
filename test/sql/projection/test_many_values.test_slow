@@ -1,4 +1,4 @@
-# name: test/sql/projection/test_many_values.test_coverage
+# name: test/sql/projection/test_many_values.test_slow
 # description: Test value list in selection
 # group: [projection]
 

@@ -1,4 +1,4 @@
-# name: test/sql/types/test_all_types.test_coverage
+# name: test/sql/types/test_all_types.test_slow
 # description: Test all types function
 # group: [types]
 

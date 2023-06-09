@@ -1,4 +1,4 @@
-# name: test/sql/upsert/insert_or_replace.test_coverage
+# name: test/sql/upsert/insert_or_replace.test_slow
 # group: [upsert]
 
 statement ok

@@ -1,4 +1,4 @@
-# name: test/issues/monetdb/analytics13.test_coverage
+# name: test/issues/monetdb/analytics13.test_slow
 # description: MonetDB Test for grouping sets
 # group: [monetdb]
 

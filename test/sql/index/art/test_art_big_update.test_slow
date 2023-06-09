@@ -1,4 +1,4 @@
-# name: test/sql/index/art/test_art_big_update.test_coverage
+# name: test/sql/index/art/test_art_big_update.test_slow
 # description: Test updates resulting from big index scans
 # group: [art]
 

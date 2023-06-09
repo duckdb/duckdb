@@ -1,4 +1,4 @@
-# name: test/sql/vector_types/struct_vector_types.test_coverage
+# name: test/sql/vector_types/struct_vector_types.test_slow
 # description: Vector Types test: structs
 # group: [vector_types]
 

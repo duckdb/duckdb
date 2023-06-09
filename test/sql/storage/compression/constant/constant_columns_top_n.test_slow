@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/constant/constant_columns_top_n.test_coverage
+# name: test/sql/storage/compression/constant/constant_columns_top_n.test_slow
 # description: Test Top-N operation on constant columns
 # group: [constant]
 

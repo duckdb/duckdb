@@ -1,4 +1,4 @@
-# name: test/sql/window/test_window_wide_frame.test_coverage
+# name: test/sql/window/test_window_wide_frame.test_slow
 # description: Test wide temporal range frames
 # group: [window]
 

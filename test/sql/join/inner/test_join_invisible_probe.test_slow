@@ -1,4 +1,4 @@
-# name: test/sql/join/inner/test_join_invisible_probe.test_coverage
+# name: test/sql/join/inner/test_join_invisible_probe.test_slow
 # description: Test joins that would generate a perfect hashtable
 # group: [inner]
 

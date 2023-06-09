@@ -58,7 +58,7 @@ static string ParseGroupFromPath(string file) {
 		// "slow" in the name indicates a slow test (i.e. only run as part of allunit)
 		extension = "[.]";
 	}
-	if (file.find(".test_coverage") != std::string::npos) {
+	if (file.find(".test_slow") != std::string::npos) {
 		// "slow" in the name indicates a slow test (i.e. only run as part of allunit)
 		return "[coverage][.]";
 	}
@@ -173,7 +173,7 @@ void RegisterSqllogictests() {
 		}
 	});
 	listFiles(*fs, "test", [&](const string &path) {
-		if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
+		if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_slow")) {
 			// parse the name / group from the test
 			REGISTER_TEST_CASE(testRunner<false>, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
 		}

@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/bitpacking/bitpacking_fatal_forced.test_coverage
+# name: test/sql/storage/compression/bitpacking/bitpacking_fatal_forced.test_slow
 # description: Test forced bitpacking, with value ranges that are rejected by the bitpacking compression analyze step
 # group: [bitpacking]
 

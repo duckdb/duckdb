@@ -1,4 +1,4 @@
-# name: test/sql/update/string_update_issue_2471.test_coverage
+# name: test/sql/update/string_update_issue_2471.test_slow
 # description: Repeated update of string values
 # group: [update]
 

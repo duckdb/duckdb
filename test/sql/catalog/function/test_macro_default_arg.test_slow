@@ -1,4 +1,4 @@
-# name: test/sql/catalog/function/test_macro_default_arg.test_coverage
+# name: test/sql/catalog/function/test_macro_default_arg.test_slow
 # group: [function]
 
 statement ok

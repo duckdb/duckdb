@@ -1,4 +1,4 @@
-# name: test/sql/subquery/table/test_nested_table_subquery.test_coverage
+# name: test/sql/subquery/table/test_nested_table_subquery.test_slow
 # description: Nested table subquery
 # group: [table]
 

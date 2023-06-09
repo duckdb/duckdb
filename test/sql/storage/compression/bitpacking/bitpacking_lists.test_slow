@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/bitpacking/bitpacking_lists.test_coverage
+# name: test/sql/storage/compression/bitpacking/bitpacking_lists.test_slow
 # description: Test storage with Bitpacking inside lists
 # group: [bitpacking]
 

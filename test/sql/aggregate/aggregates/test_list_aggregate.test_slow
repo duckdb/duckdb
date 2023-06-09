@@ -1,4 +1,4 @@
-# name: test/sql/aggregate/aggregates/test_list_aggregate.test_coverage
+# name: test/sql/aggregate/aggregates/test_list_aggregate.test_slow
 # description: Test aggregate list
 # group: [aggregates]
 

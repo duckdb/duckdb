@@ -1,4 +1,4 @@
-# name: test/sql/subquery/complex/correlated_list_aggregate.test_coverage
+# name: test/sql/subquery/complex/correlated_list_aggregate.test_slow
 # description: Test correlated aggregate subqueries
 # group: [complex]
 

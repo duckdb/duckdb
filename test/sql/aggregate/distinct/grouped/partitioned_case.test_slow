@@ -1,4 +1,4 @@
-# name: test/sql/aggregate/distinct/grouped/partitioned_case.test_coverage
+# name: test/sql/aggregate/distinct/grouped/partitioned_case.test_slow
 # group: [grouped]
 
 # force parallelism of the queries

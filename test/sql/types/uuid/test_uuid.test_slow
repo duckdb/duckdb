@@ -1,4 +1,4 @@
-# name: test/sql/types/uuid/test_uuid.test_coverage
+# name: test/sql/types/uuid/test_uuid.test_slow
 # description: Test UUID type
 # group: [uuid]
 

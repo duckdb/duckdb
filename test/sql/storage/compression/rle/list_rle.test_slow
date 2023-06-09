@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/rle/list_rle.test_coverage
+# name: test/sql/storage/compression/rle/list_rle.test_slow
 # description: Test storage with RLE inside lists
 # group: [rle]
 

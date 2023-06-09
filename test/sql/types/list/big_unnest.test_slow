@@ -1,4 +1,4 @@
-# name: test/sql/types/list/big_unnest.test_coverage
+# name: test/sql/types/list/big_unnest.test_slow
 # description: Test large unnests
 # group: [list]
 

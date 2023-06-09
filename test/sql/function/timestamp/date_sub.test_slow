@@ -1,4 +1,4 @@
-# name: test/sql/function/timestamp/date_sub.test_coverage
+# name: test/sql/function/timestamp/date_sub.test_slow
 # description: Test the DATESUB function
 # group: [timestamp]
 

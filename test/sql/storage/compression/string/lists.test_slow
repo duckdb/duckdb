@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/string/lists.test_coverage
+# name: test/sql/storage/compression/string/lists.test_slow
 # description: Test storage with string compression inside lists
 # group: [string]
 

@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/patas/patas_compression_ratio.test_coverage
+# name: test/sql/storage/compression/patas/patas_compression_ratio.test_slow
 # description: Assert patas compression ratio is within reasonable margins
 # group: [patas]
 

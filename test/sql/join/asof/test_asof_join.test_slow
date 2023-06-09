@@ -1,4 +1,4 @@
-# name: test/sql/join/asof/test_asof_join.test_coverage
+# name: test/sql/join/asof/test_asof_join.test_slow
 # description: Coverage tests for AsOf Joins
 # group: [asof]
 

@@ -1,4 +1,4 @@
-# name: test/sql/subquery/scalar/expression_get.test_coverage
+# name: test/sql/subquery/scalar/expression_get.test_slow
 # description: Issue #2701: Nested selecting max from column values gives dependent join internal error
 # group: [scalar]
 

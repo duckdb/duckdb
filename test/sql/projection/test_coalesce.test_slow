@@ -1,4 +1,4 @@
-# name: test/sql/projection/test_coalesce.test_coverage
+# name: test/sql/projection/test_coalesce.test_slow
 # description: Test COALESCE expression
 # group: [projection]
 

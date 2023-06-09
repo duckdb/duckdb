@@ -1,4 +1,4 @@
-# name: test/sql/join/inner/test_join_types.test_coverage
+# name: test/sql/join/inner/test_join_types.test_slow
 # description: Test joins with different types
 # group: [inner]
 

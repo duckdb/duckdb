@@ -1,4 +1,4 @@
-# name: test/sql/join/test_not_distinct_from.test_coverage
+# name: test/sql/join/test_not_distinct_from.test_slow
 # description: Test join on is not distinct from query
 # group: [join]
 

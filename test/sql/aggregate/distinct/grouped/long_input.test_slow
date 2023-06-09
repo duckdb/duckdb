@@ -1,4 +1,4 @@
-# name: test/sql/aggregate/distinct/grouped/long_input.test_coverage
+# name: test/sql/aggregate/distinct/grouped/long_input.test_slow
 # description: DISTINCT aggregations
 # group: [grouped]
 

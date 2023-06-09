@@ -1,4 +1,4 @@
-# name: test/sql/order/test_order_nested.test_coverage
+# name: test/sql/order/test_order_nested.test_slow
 # description: Test ORDER BY keyword (nested types)
 # group: [order]
 

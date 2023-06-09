@@ -1,4 +1,4 @@
-# name: test/parquet/test_parquet_reader.test_coverage
+# name: test/parquet/test_parquet_reader.test_slow
 # description: Test Parquet Reader with files on data/parquet-testing
 # group: [parquet]
 

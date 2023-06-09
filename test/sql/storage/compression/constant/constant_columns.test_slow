@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/constant/constant_columns.test_coverage
+# name: test/sql/storage/compression/constant/constant_columns.test_slow
 # description: Test storage of constant columns (columns that all have the same value)
 # group: [constant]
 

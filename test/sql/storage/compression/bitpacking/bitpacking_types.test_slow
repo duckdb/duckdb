@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/bitpacking/bitpacking_types.test_coverage
+# name: test/sql/storage/compression/bitpacking/bitpacking_types.test_slow
 # description: Test bitpacking with different types, especially around the numerical limits
 # group: [bitpacking]
 

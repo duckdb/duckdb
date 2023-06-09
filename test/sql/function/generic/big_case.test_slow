@@ -1,4 +1,4 @@
-# name: test/sql/function/generic/big_case.test_coverage
+# name: test/sql/function/generic/big_case.test_slow
 # description: Test large case statement
 # group: [generic]
 

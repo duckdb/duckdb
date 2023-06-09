@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/writer/list_of_bools.test_coverage
+# name: test/sql/copy/parquet/writer/list_of_bools.test_slow
 # description: Parquet write list of bools
 # group: [writer]
 

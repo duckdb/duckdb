@@ -1,4 +1,4 @@
-# name: test/sql/join/full_outer/test_full_outer_join_many_matches.test_coverage
+# name: test/sql/join/full_outer/test_full_outer_join_many_matches.test_slow
 # description: Test FULL OUTER JOIN with many matches
 # group: [full_outer]
 

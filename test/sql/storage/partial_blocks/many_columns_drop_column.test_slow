@@ -1,4 +1,4 @@
-# name: test/sql/storage/partial_blocks/many_columns_drop_column.test_coverage
+# name: test/sql/storage/partial_blocks/many_columns_drop_column.test_slow
 # description: Verify that dropping columns with multi-use blocks does not leak memory
 # group: [partial_blocks]
 

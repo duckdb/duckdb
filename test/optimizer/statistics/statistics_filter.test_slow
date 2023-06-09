@@ -1,4 +1,4 @@
-# name: test/optimizer/statistics/statistics_filter.test_coverage
+# name: test/optimizer/statistics/statistics_filter.test_slow
 # description: Statistics propagation test with filters
 # group: [statistics]
 

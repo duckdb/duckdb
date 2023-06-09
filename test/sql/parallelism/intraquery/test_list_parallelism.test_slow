@@ -1,4 +1,4 @@
-# name: test/sql/parallelism/intraquery/test_list_parallelism.test_coverage
+# name: test/sql/parallelism/intraquery/test_list_parallelism.test_slow
 # description: Test list aggregates on a small-ish tables in parallel(few thousand rows)
 # group: [intraquery]
 

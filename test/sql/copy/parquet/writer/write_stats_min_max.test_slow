@@ -1,4 +1,4 @@
-# name: test/sql/copy/parquet/writer/write_stats_min_max.test_coverage
+# name: test/sql/copy/parquet/writer/write_stats_min_max.test_slow
 # description: Write min/max stats to Parquet files
 # group: [writer]
 

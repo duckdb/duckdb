@@ -1,4 +1,4 @@
-# name: test/sql/subquery/complex/expensive_deduplication_3593.test_coverage
+# name: test/sql/subquery/complex/expensive_deduplication_3593.test_slow
 # description: Issue #3593: Macros causes crash: memory consumption or recursion or something
 # group: [complex]
 

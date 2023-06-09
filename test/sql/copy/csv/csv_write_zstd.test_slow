@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/csv_write_zstd.test_coverage
+# name: test/sql/copy/csv/csv_write_zstd.test_slow
 # description: Test round-trip writing of zstd CSV files
 # group: [csv]
 

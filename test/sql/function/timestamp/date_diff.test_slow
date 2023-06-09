@@ -1,4 +1,4 @@
-# name: test/sql/function/timestamp/date_diff.test_coverage
+# name: test/sql/function/timestamp/date_diff.test_slow
 # description: Test the DATEDIFF function
 # group: [timestamp]
 

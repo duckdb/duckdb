@@ -1,4 +1,4 @@
-# name: test/sqlite/select1.test_coverage
+# name: test/sqlite/select1.test_slow
 # group: [sqlite]
 
 statement ok

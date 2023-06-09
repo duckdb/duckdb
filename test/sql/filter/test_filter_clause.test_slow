@@ -1,4 +1,4 @@
-# name: test/sql/filter/test_filter_clause.test_coverage
+# name: test/sql/filter/test_filter_clause.test_slow
 # description: Test aggregation with filter clause
 # group: [filter]
 

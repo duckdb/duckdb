@@ -1,4 +1,4 @@
-# name: test/sql/storage/all_types_storage_large.test_coverage
+# name: test/sql/storage/all_types_storage_large.test_slow
 # description: Test all types storage (large)
 # group: [storage]
 

@@ -1,4 +1,4 @@
-# name: test/sql/subquery/scalar/test_correlated_aggregate_subquery.test_coverage
+# name: test/sql/subquery/scalar/test_correlated_aggregate_subquery.test_slow
 # description: Test correlated aggregate subqueries
 # group: [scalar]
 

@@ -1,4 +1,4 @@
-# name: test/sql/join/external/simple_external_join.test_coverage
+# name: test/sql/join/external/simple_external_join.test_slow
 # description: Test simple external join
 # group: [external]
 

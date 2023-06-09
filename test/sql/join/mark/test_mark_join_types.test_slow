@@ -1,4 +1,4 @@
-# name: test/sql/join/mark/test_mark_join_types.test_coverage
+# name: test/sql/join/mark/test_mark_join_types.test_slow
 # description: Test mark join with different types
 # group: [mark]
 

@@ -1,4 +1,4 @@
-# name: test/sql/pragma/test_pragma_output.test_coverage
+# name: test/sql/pragma/test_pragma_output.test_slow
 # description: Test last_profiling_output, detailed_profiling_output and all_profiling_output pragma
 # group: [pragma]
 

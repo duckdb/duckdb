@@ -1,4 +1,4 @@
-# name: test/sql/storage/all_types_storage.test_coverage
+# name: test/sql/storage/all_types_storage.test_slow
 # description: Test all types function
 # group: [storage]
 
