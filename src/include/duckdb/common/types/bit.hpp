@@ -91,6 +91,10 @@ public:
 		return (output);
 	}
 
+	DUCKDB_API static void BitToBlob(string_t bit, string_t &output);
+
+	DUCKDB_API static string BitToBlob(string_t bit);
+
 	//! Creates a new bitstring of determined length
 	DUCKDB_API static void BitString(const string_t &input, const idx_t &len, string_t &result);
 	DUCKDB_API static void SetEmptyBitString(string_t &target, string_t &input);

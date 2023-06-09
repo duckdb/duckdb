@@ -35,6 +35,9 @@ BoundCastInfo DefaultCasts::BitCastSwitch(BindCastInput &input, const LogicalTyp
 	case LogicalTypeId::DOUBLE:
 		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, double, duckdb::CastFromBitToNumeric>);
 
+	case LogicalTypeId::BLOB:
+		return BoundCastInfo(&VectorCastHelpers::TryCastLoop<string_t, string_t, duckdb::CastFromBitToBlob>);
+
 	case LogicalTypeId::VARCHAR:
 		return BoundCastInfo(&VectorCastHelpers::StringCast<string_t, duckdb::CastFromBitToString>);
 

@@ -164,6 +164,25 @@ string Bit::BlobToBit(string_t blob) {
 	return output_str.GetString();
 }
 
+void Bit::BitToBlob(string_t bit, string_t &output_str) {
+	auto data = const_data_ptr_cast(bit.GetData());
+	auto output = output_str.GetDataWriteable();
+	idx_t size = output_str.GetSize();
+
+	output[0] = data[1] & ((1 << (8 - data[0])) - 1);
+
+	for (idx_t idx = 1; idx < size; ++idx) {
+		output[idx] = data[idx + 1];
+	}
+}
+
+string Bit::BitToBlob(string_t bit) {
+	auto buffer = make_unsafe_uniq_array<char>(bit.GetSize() - 1);
+	string_t output_str(buffer.get(), bit.GetSize() - 1);
+	Bit::BitToBlob(bit, output_str);
+	return output_str.GetString();
+}
+
 // **** scalar functions ****
 void Bit::BitString(const string_t &input, const idx_t &bit_length, string_t &result) {
 	char *res_buf = result.GetDataWriteable();

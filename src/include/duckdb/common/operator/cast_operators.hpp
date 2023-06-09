@@ -688,7 +688,7 @@ template <>
 duckdb::string_t CastFromBitToString::Operation(duckdb::string_t input, Vector &vector);
 
 struct CastFromBitToNumeric {
-	template <class SRC, class DST>
+	template <class SRC = string_t, class DST>
 	static inline bool Operation(SRC input, DST &result, bool strict = false) {
 		// Only allow bitstring -> numeric if the full bitstring fits inside the numeric type
 		if (input.GetSize() - 1 > sizeof(DST)) {
@@ -696,6 +696,14 @@ struct CastFromBitToNumeric {
 		}
 		Bit::BitToNumeric(input, result);
 		return (true);
+	}
+};
+
+struct CastFromBitToBlob {
+	template <class SRC = string_t, class DST = string_t>
+	static inline bool Operation(SRC input, DST &result, bool string = false) {
+		result = Bit::BitToBlob(input);
+		return true;
 	}
 };
 
