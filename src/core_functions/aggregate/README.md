@@ -4,14 +4,17 @@ Aggregate functions combine a set of values into a single value.
 In DuckDB, they appear in several contexts:
 
 * As part of the `SELECT` list of a query with a `GROUP BY` clause (ordinary aggregation)
-* As the only elements of a query _without_ a `GROUP BY` clause (simple aggregation)
+* As the only elements of the `SELECT` list of a query _without_ a `GROUP BY` clause (simple aggregation)
 * Modified by an `OVER` clause (windowed aggregation)
 * As an argument to the `list_aggregate` function (list aggregation)
 
 ## Aggregation Operations
 
 In order to define an aggregate function, you need to define some operations.
-These operations accumulate data into a _state_ object that is specific to the aggregate.
+These operations accumulate data into a `State` object that is specific to the aggregate.
+Each `State` represents the accumulated values for a single result,
+so if (say) there are multiple groups in a `GROUP BY`, 
+each result value would need its own `State` object.
 Unlike simple scalar functions, there are several of these:
 
 | Operation | Description | Required | 
@@ -78,9 +81,11 @@ Destroy(State &state, AggregateInputData &info)
 update(Vector inputs[], AggregateInputData &info, idx_t ninputs, Vector &states, idx_t count)
 ```
 
-Accumulate the input arguments for each row into the corresponding `State`.
-The template generator methods for `update` operations are (a bit confusingly) called `ScatterUpdate`s
-because the arguments are scattered to the various states.
+Accumulate the input values for each row into the `State` object for that row.
+The `states` argument contains pointers to the states, 
+which allows different rows to be accumulated into the same row if they are in the same group.
+This type of operations is called "scattering", which is why
+the template generator methods for `update` operations are called `ScatterUpdate`s.
 
 ```cpp
 simple_update(Vector inputs[], AggregateInputData &info, idx_t ninputs, State *state, idx_t count)
@@ -126,6 +131,9 @@ Note that the `sources` should _not_ be modified for efficiency because the call
 for multiple operations(e.g., window segment trees).
 If you wish to combine destructively, you _must_ define a `window` function.
 
+The `combine` operation is optional, but it is needed for multi-threaded aggregation.
+If it is not provided, then _all_ aggregate functions in the grouping must be computed on a single thread. 
+
 ### Finalize
 
 ```cpp
@@ -155,10 +163,17 @@ to compute moving aggregates via segment trees or simply computing the aggregate
 In some situations, this is either overkill (`COUNT(*)`) or too slow (`MODE`) 
 and an optional window function can be defined.
 This function will be passed the values in the window frame, 
-along with the current frame, the previous frame (for deltas),
+along with the current frame, the previous frame 
 the result `Vector` and the result row number being computed.
-The `bias` argument is used for handling large input partitions,
-and indicates the partition index where the `inputs` start.
+
+The previous frame is provided so the function can use 
+the delta from the previous frame to update the `State`.
+This could be kept in the `State` itself.
+
+The `bias` argument was used for handling large input partitions,
+and contains the partition offset where the `inputs` rows start.
+Currently, it is always zero, but this could change in the future 
+to handle constrained memory situations.
 
 The template generator method for windowing is:
 
@@ -212,8 +227,9 @@ so the template generators require the `IgnoreNull` static method to be defined.
 Some aggregates (e.g., `STRING_AGG`) are order-sensitive.
 Unless marked otherwise by setting the `order_dependent` flag to `NOT_ORDER_DEPENDENT`,
 the aggregate will be assumed to be order-sensitive.
-If the aggregate is order-sensitive and the user specifies and `ORDER BY` clause in the arguments,
-then it will be wrapped to make sure that the arguments are cached and sorted before being passed to the aggregate operations:
+If the aggregate is order-sensitive and the user specifies an `ORDER BY` clause in the arguments,
+then it will be wrapped to make sure that the arguments are cached and sorted 
+before being passed to the aggregate operations:
 
 ```sql
 -- Concatenate the strings in alphabetical order 
