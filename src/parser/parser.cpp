@@ -132,12 +132,14 @@ vector<string> SplitQueryStringIntoStatements(const string &query) {
 		auto &t_prev = tokens[i - 1];
 		auto &t = tokens[i];
 		if (t_prev.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR) {
+			// LCOV_EXCL_START
 			for (idx_t c = t_prev.start; c <= t.start; ++c) {
 				if (query.c_str()[c] == ';') {
 					query_statements.emplace_back(query.substr(next_statement_start, t.start - next_statement_start));
 					next_statement_start = tokens[i].start;
 				}
 			}
+			// LCOV_EXCL_STOP
 		}
 	}
 	query_statements.emplace_back(query.substr(next_statement_start, query.size() - next_statement_start));
@@ -187,7 +189,6 @@ void Parser::ParseQuery(const string &query) {
 		} else if (!options.extensions || options.extensions->empty()) {
 			throw ParserException(parser_error);
 		} else {
-			// LCOV_EXCL_START
 			// split sql string into statements and re-parse using extension
 			auto query_statements = SplitQueryStringIntoStatements(query);
 			for (auto const &query_statement : query_statements) {
@@ -227,7 +228,6 @@ void Parser::ParseQuery(const string &query) {
 					}
 				}
 			}
-			// LCOV_EXCL_STOP
 		}
 	}
 	if (!statements.empty()) {
