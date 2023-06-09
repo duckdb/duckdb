@@ -652,13 +652,6 @@ void CompressedMaterialization::RemoveRedundantExpressions(
 			case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 				can_remove_current = RemoveRedundantExpressionsComparisonJoin(current_op, current_binding);
 				break;
-			case LogicalOperatorType::LOGICAL_ANY_JOIN: {
-				const auto &any_join = current_op.get().Cast<LogicalAnyJoin>();
-				if (UsesBinding(*any_join.condition, current_binding)) {
-					can_remove_current = false;
-				}
-				break;
-			}
 			case LogicalOperatorType::LOGICAL_FILTER:
 				can_remove_current = RemoveRedundantExpressionsFilter(current_op, current_binding, current_col_idx);
 				break;
@@ -687,16 +680,18 @@ void CompressedMaterialization::RemoveRedundantExpressions(
 		auto &compress_fun = compress_expr->Cast<BoundFunctionExpression>();
 		D_ASSERT(decompress_fun.return_type == compress_fun.children[0]->return_type);
 
-		if (decompress_fun.children[0]->return_type != compress_fun.return_type) {
-			continue; // Different statistics, different type
-		}
+		// Check if statistics are consistent (just in case)
+		if (decompress_fun.children[0]->return_type != compress_fun.return_type) { // LCOV_EXCL_START
+			continue;
+		} // LCOV_EXCL_STOP
 
+		// Check if min values are consistent (just in case)
 		if (decompress_fun.return_type.IsIntegral()) {
 			const auto &decompress_constant = decompress_fun.children[1]->Cast<BoundConstantExpression>();
 			const auto &compress_constant = compress_fun.children[1]->Cast<BoundConstantExpression>();
-			if (decompress_constant.value != compress_constant.value) {
-				continue; // Different min value
-			}
+			if (decompress_constant.value != compress_constant.value) { // LCOV_EXCL_START
+				continue;
+			} // LCOV_EXCL_STOP
 		}
 
 		// Replace the decompress with its child so it stays compressed
