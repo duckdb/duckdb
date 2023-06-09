@@ -88,9 +88,7 @@ const string &DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 }
 
 void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &new_value) {
-	optional_ptr<AttachedDatabase> db_entry;
-
-	context.RunFunctionInTransaction([&]() { db_entry = GetDatabase(context, new_value); });
+	auto db_entry = GetDatabase(context, new_value);
 
 	if (!db_entry) {
 		throw InternalException("Database \"%s\" not found", new_value);
