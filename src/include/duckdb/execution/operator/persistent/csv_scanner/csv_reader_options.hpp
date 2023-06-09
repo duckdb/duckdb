@@ -36,7 +36,7 @@ struct CSVReaderOptions {
 	//! Whether or not a delimiter was defined by the user
 	bool has_delimiter = false;
 	//! Delimiter to separate columns within each line
-	string delimiter = ",";
+	char delimiter = ',';
 	//! Whether or not a new_line was defined by the user
 	bool has_newline = false;
 	//! New Line separator
@@ -44,11 +44,11 @@ struct CSVReaderOptions {
 	//! Whether or not a quote was defined by the user
 	bool has_quote = false;
 	//! Quote used for columns that contain reserved characters, e.g., delimiter
-	string quote = "\"";
+	char quote = '\"';
 	//! Whether or not an escape character was defined by the user
 	bool has_escape = false;
 	//! Escape character to escape quote character
-	string escape;
+	char escape;
 	//! Whether or not a header information was given by the user
 	bool has_header = false;
 	//! Whether or not the file has a header line

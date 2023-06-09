@@ -241,7 +241,7 @@ bool BufferedCSVReader::JumpToNextSample() {
 void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t buffer_start_pos) {
 	vector<idx_t> sniffed_column_counts;
 	buffer.position = buffer_start_pos;
-	idx_t buffer_pos = state_machine.SniffColumns(buffer, sniffed_column_counts, STANDARD_VECTOR_SIZE);
+	idx_t buffer_pos = state_machine.SniffDialect(buffer, sniffed_column_counts, STANDARD_VECTOR_SIZE);
 
 	idx_t start_row = options.skip_rows;
 	idx_t consistent_rows = 0;
@@ -348,8 +348,7 @@ vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 			for (const auto &delim : delim_candidates) {
 				const auto &escape_candidates = escape_candidates_map[static_cast<uint8_t>(quoterule)];
 				for (const auto &escape : escape_candidates) {
-					// FIXME: record separator
-					CSVStateMachineConfiguration configuration(delim, "\n", quote, escape);
+					CSVStateMachineConfiguration configuration(delim, quote, escape);
 					csv_state_machines.emplace_back(configuration);
 				}
 			}
@@ -387,7 +386,7 @@ vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 		option.escape = candidate.state->configuration.escape;
 		option.delimiter = candidate.state->configuration.field_separator;
 		option.num_cols = candidate.max_num_columns + 1;
-		//		option.new_line =candidate->configuration.record_separator;
+		option.new_line = candidate.state->configuration.record_separator;
 		result.emplace_back(option);
 	}
 	return result;

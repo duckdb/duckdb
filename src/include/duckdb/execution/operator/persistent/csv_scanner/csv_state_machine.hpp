@@ -15,19 +15,21 @@ enum class CSVState : uint8_t {
 	STANDARD = 0,         //! Regular unquoted field state
 	FIELD_SEPARATOR = 1,  //! State after encountering a field separator (e.g., ;)
 	RECORD_SEPARATOR = 2, //! State after encountering a record separator (e.g., \n)
-	QUOTED = 3,           //! State when inside a quoted field
-	ESCAPE = 4,           //! State when encountering an escape character (e.g., \)
-	INVALID = 5           //! Got to an Invalid State, this should error.
+	CARRIAGE_RETURN = 3,  //! State after encountering a record separator (e.g., \n)
+	QUOTED = 4,           //! State when inside a quoted field
+	ESCAPE = 5,           //! State when encountering an escape character (e.g., \)
+	INVALID = 6           //! Got to an Invalid State, this should error.
 };
 
 struct CSVStateMachineConfiguration {
-	CSVStateMachineConfiguration(string field_separator_p, string record_separator_p, string quote_p, string escape_p)
-	    : field_separator(field_separator_p), record_separator(record_separator_p), quote(quote_p), escape(escape_p) {
+	CSVStateMachineConfiguration(string field_separator_p, string quote_p, string escape_p)
+	    : field_separator(field_separator_p), quote(quote_p), escape(escape_p) {
 	}
 	string field_separator;
-	string record_separator;
 	string quote;
 	string escape;
+	// We set the record separator through the state machine
+	NewLineIdentifier record_separator;
 };
 
 //! The buffer that will be parsed by the CSV State Machine
@@ -59,13 +61,13 @@ public:
 	//! start_value_idx stores the buffer idx where values start.
 	//! max_rows is the maximum number of rows to be parsed by this function.
 	//! It returns the number of rows sniffed
-	idx_t SniffColumns(StateBuffer &buffer, vector<idx_t> &sniff_column_count, idx_t max_rows);
+	idx_t SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_column_counts, idx_t max_rows);
 
-	const CSVStateMachineConfiguration configuration;
+	CSVStateMachineConfiguration configuration;
 
 private:
 	//! The Transition Array is a Finite State Machine
 	//! It holds the transitions of all states, on all 256 possible different characters
-	uint8_t transition_array[5][256];
+	uint8_t transition_array[6][256];
 };
 } // namespace duckdb

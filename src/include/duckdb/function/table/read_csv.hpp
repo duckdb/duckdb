@@ -50,8 +50,6 @@ struct WriteCSVData : public BaseCSVData {
 	vector<LogicalType> sql_types;
 	//! The newline string to write
 	string newline = "\n";
-	//! Whether or not we are writing a simple CSV (delimiter, quote and escape are all 1 byte in length)
-	bool is_simple;
 	//! The size of the CSV file (in bytes) that we buffer before we flush it to disk
 	idx_t flush_size = 4096 * 8;
 	//! For each byte whether or not the CSV file requires quotes when containing the byte

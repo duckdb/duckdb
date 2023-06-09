@@ -211,28 +211,15 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 	if (force_quote) {
 		// quoting is enabled: we might need to escape things in the string
 		bool requires_escape = false;
-		if (csv_data.is_simple) {
-			// simple CSV
-			// do a single loop to check for a quote or escape value
-			for (idx_t i = 0; i < len; i++) {
-				if (str[i] == options.quote[0] || str[i] == options.escape[0]) {
-					requires_escape = true;
-					break;
-				}
-			}
-		} else {
-			// complex CSV
-			// check for quote or escape separately
-			if (options.quote.length() != 0 &&
-			    ContainsFun::Find(const_uchar_ptr_cast(str), len, const_uchar_ptr_cast(options.quote.c_str()),
-			                      options.quote.size()) != DConstants::INVALID_INDEX) {
+		// simple CSV
+		// do a single loop to check for a quote or escape value
+		for (idx_t i = 0; i < len; i++) {
+			if (str[i] == options.quote[0] || str[i] == options.escape[0]) {
 				requires_escape = true;
-			} else if (options.escape.length() != 0 &&
-			           ContainsFun::Find(const_uchar_ptr_cast(str), len, const_uchar_ptr_cast(options.escape.c_str()),
-			                             options.escape.size()) != DConstants::INVALID_INDEX) {
-				requires_escape = true;
+				break;
 			}
 		}
+
 		if (!requires_escape) {
 			// fast path: no need to escape anything
 			serializer.WriteBufferData(options.quote);
