@@ -262,7 +262,7 @@ function/table/copy_csv.cpp	16
 function/table/pragma_detailed_profiling_output.cpp	86
 function/table/pragma_last_profiling_output.cpp	51
 function/table/range.cpp	5
-function/table/read_csv.cpp	48
+function/table/read_csv.cpp	51
 function/table/system/duckdb_constraints.cpp	3
 function/table/system/duckdb_dependencies.cpp	4
 function/table/system/duckdb_extensions.cpp	20
