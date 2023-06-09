@@ -16,6 +16,20 @@ BoundOrderByNode::BoundOrderByNode(OrderType type, OrderByNullType null_order, u
                                    unique_ptr<BaseStatistics> stats)
     : type(type), null_order(null_order), expression(std::move(expression)), stats(std::move(stats)) {
 }
+void BoundOrderModifier::Serialize(Serializer &serializer) const {
+	FieldWriter writer(serializer);
+	writer.WriteRegularSerializableList(orders);
+	writer.Finalize();
+}
+unique_ptr<BoundOrderModifier> BoundOrderModifier::Deserialize(Deserializer &source, PlanDeserializationState &state) {
+	auto x = make_uniq<BoundOrderModifier>();
+
+	FieldReader reader(source);
+	x->orders = reader.ReadRequiredSerializableList<BoundOrderByNode, BoundOrderByNode>(state);
+	reader.Finalize();
+
+	return x;
+}
 
 BoundOrderByNode BoundOrderByNode::Copy() const {
 	if (stats) {

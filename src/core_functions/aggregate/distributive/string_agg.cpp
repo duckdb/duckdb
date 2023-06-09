@@ -147,7 +147,7 @@ static void StringAggSerialize(FieldWriter &writer, const FunctionData *bind_dat
 	writer.WriteString(bind_data.sep);
 }
 
-unique_ptr<FunctionData> StringAggDeserialize(ClientContext &context, FieldReader &reader,
+unique_ptr<FunctionData> StringAggDeserialize(PlanDeserializationState &state, FieldReader &reader,
                                               AggregateFunction &bound_function) {
 	auto sep = reader.ReadRequired<string>();
 	return make_uniq<StringAggBindData>(std::move(sep));

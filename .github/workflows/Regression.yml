@@ -69,7 +69,7 @@ jobs:
       shell: bash
       run: |
         make
-        git clone https://github.com/duckdb/duckdb.git --depth=1
+        git clone --branch ${GITHUB_BASE_REF:-master} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb
         make
         cd ..
@@ -224,7 +224,7 @@ jobs:
       shell: bash
       run: |
         make
-        git clone https://github.com/duckdb/duckdb.git --depth=1
+        git clone --branch ${GITHUB_BASE_REF:-master} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb
         make
         cd ..
@@ -285,7 +285,7 @@ jobs:
     - name: Build Current
       shell: bash
       run: |
-        git clone https://github.com/duckdb/duckdb.git --depth=1
+        git clone --branch ${GITHUB_BASE_REF:-master} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb/tools/pythonpkg
         python setup.py install --user
         cd ../../..
@@ -334,7 +334,7 @@ jobs:
       shell: bash
       run: |
         make
-        git clone https://github.com/duckdb/duckdb.git --depth=1
+        git clone --branch ${GITHUB_BASE_REF:-master} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb
         make
         cd ..

@@ -962,9 +962,10 @@ void JSONScan::Serialize(FieldWriter &writer, const FunctionData *bind_data_p, c
 	bind_data.Serialize(writer);
 }
 
-unique_ptr<FunctionData> JSONScan::Deserialize(ClientContext &context, FieldReader &reader, TableFunction &function) {
+unique_ptr<FunctionData> JSONScan::Deserialize(PlanDeserializationState &state, FieldReader &reader,
+                                               TableFunction &function) {
 	auto result = make_uniq<JSONScanData>();
-	result->Deserialize(context, reader);
+	result->Deserialize(state.context, reader);
 	return std::move(result);
 }
 
