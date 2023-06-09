@@ -411,8 +411,9 @@ public:
 		bind_data.parquet_options.Serialize(writer);
 	}
 
-	static unique_ptr<FunctionData> ParquetScanDeserialize(ClientContext &context, FieldReader &reader,
+	static unique_ptr<FunctionData> ParquetScanDeserialize(PlanDeserializationState &state, FieldReader &reader,
 	                                                       TableFunction &function) {
+		auto &context = state.context;
 		auto files = reader.ReadRequiredList<string>();
 		auto types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 		auto names = reader.ReadRequiredList<string>();
