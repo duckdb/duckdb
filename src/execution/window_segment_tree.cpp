@@ -266,7 +266,8 @@ void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
 	//	so we have to check and unmangle them...
 	for (column_t i = 0; i < inputs.ColumnCount(); i++) {
 		auto &v = inputs.data[i];
-		if (v.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+		if (v.GetVectorType() != VectorType::DICTIONARY_VECTOR ||
+		    DictionaryVector::SelVector(v).data() != filter_sel.data()) {
 			v.Slice(input_ref->data[i], filter_sel, TREE_FANOUT);
 		}
 	}
