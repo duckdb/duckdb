@@ -313,6 +313,7 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) {
 		child = GetNextChild(art, byte, false);
 	}
 
+	(void)child_count;
 	// ensure that the child count is at least two
 	D_ASSERT(child_count > 1);
 	return only_verify ? "" : "\n" + str + "]";

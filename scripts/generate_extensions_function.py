@@ -88,7 +88,7 @@ for extension in reader:
 
 if args.validate:
     file = open(ext_hpp,'r')
-    pattern = re.compile("{\"(.*?)\", \"(.*?)\"},")
+    pattern = re.compile("{\"(.*?)\", \"(.*?)\"}[,}\n]")
     cur_function_map = dict(pattern.findall(file.read()))
     function_map.update(settings_map)
     print("Cur Function + Settings Map: ")
