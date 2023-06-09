@@ -4,7 +4,7 @@
 statement ok
 pragma enable_verification
 
-require sqlpgq
+require duckpgq
 
 statement ok
 CREATE TABLE Student(id BIGINT, name VARCHAR);
@@ -31,7 +31,7 @@ statement ok
 INSERT INTO StudyAt VALUES (0, 0), (1, 0), (2, 1), (3, 1), (4, 1);
 
 statement ok
-CREATE PROPERTY GRAPH pg
+-CREATE PROPERTY GRAPH pg
 VERTEX TABLES (
     Student PROPERTIES ( id, name ) LABEL Person,
     School LABEL SCHOOL
@@ -46,7 +46,7 @@ EDGE TABLES (
     );
 
 query II
-SELECT study.name, study.school
+-SELECT study.name, study.school
 FROM GRAPH_TABLE (pg
     MATCH
     (a:Person)-[s:StudyAt]->(b:School)
@@ -57,7 +57,7 @@ FROM GRAPH_TABLE (pg
 Daniel	VU
 
 query III
-SELECT study.name, study.school, study.know_name
+-SELECT study.name, study.school, study.know_name
 FROM GRAPH_TABLE (pg
     MATCH
     (a2:Person)-[s2:StudyAt]->(b:School)<-[s:StudyAt]-(a:Person)
@@ -69,7 +69,7 @@ Daniel	VU	Tavneet
 
 
 query I
-SELECT study.id
+-SELECT study.id
 FROM GRAPH_TABLE (pg
     MATCH
     (a:Person)
@@ -83,7 +83,7 @@ FROM GRAPH_TABLE (pg
 4
 
 query II
-SELECT study.a_id, study.name
+-SELECT study.a_id, study.name
 FROM GRAPH_TABLE (pg
     MATCH
     (a:Person)
@@ -95,7 +95,7 @@ FROM GRAPH_TABLE (pg
 
 
 query II
-SELECT study.a_name, study.b_name
+-SELECT study.a_name, study.b_name
 FROM GRAPH_TABLE (pg
     MATCH
     (a:Person)-[k:Knows]->(b:Person)
@@ -108,7 +108,7 @@ Daniel	Gabor
 Daniel	Peter
 
 query II
-SELECT study.a_name, study.b_name
+-SELECT study.a_name, study.b_name
 FROM GRAPH_TABLE (pg
     MATCH
     (a:Person)-[k:Knows]->(b:Person)
@@ -119,7 +119,7 @@ FROM GRAPH_TABLE (pg
 Daniel	Gabor
 
 query II
-SELECT study.a_name, study.b_name
+-SELECT study.a_name, study.b_name
 FROM GRAPH_TABLE (pg
     MATCH
     (a:Person)<-[k:Knows]-(b:Person)
@@ -133,7 +133,7 @@ Peter	Gabor
 Peter	David
 
 query II
-SELECT study.a_name, study.b_name
+-SELECT study.a_name, study.b_name
 FROM GRAPH_TABLE (pg
     MATCH
     (a:Person)-[k:Knows]-(b:Person)
@@ -147,7 +147,7 @@ Peter	Gabor
 Peter	David
 
 query II
-SELECT study.a_name, study.b_name
+-SELECT study.a_name, study.b_name
 FROM GRAPH_TABLE (pg
     MATCH
     (a:Person)<-[k:Knows]->(b:Person)
@@ -158,7 +158,7 @@ FROM GRAPH_TABLE (pg
 Peter	Daniel
 
 query II
-SELECT study.a_name, count(study.b_name)
+-SELECT study.a_name, count(study.b_name)
 FROM GRAPH_TABLE (pg
     MATCH
     (a:Person)-[k:Knows]->(b:Person)

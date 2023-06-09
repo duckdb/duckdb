@@ -52,7 +52,7 @@ string MatchRef::ToString() const {
 }
 
 bool MatchRef::Equals(const TableRef *other_p) const {
-	if (!TableRef::Equals(other_p)) {
+	if (!TableFunctionRef::Equals(other_p)) {
 		return false;
 	}
 

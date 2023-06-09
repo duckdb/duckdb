@@ -1,15 +1,15 @@
-
 #pragma once
 
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/path_pattern.hpp"
 #include "duckdb/parser/tableref.hpp"
+#include "table_function_ref.hpp"
 
 namespace duckdb {
 
-class MatchRef : public TableRef {
+class MatchRef : public TableFunctionRef {
 public:
-	MatchRef() : TableRef(TableReferenceType::MATCH) {
+	MatchRef() : TableFunctionRef() {
 	}
 
 	string pg_name;
