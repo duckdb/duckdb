@@ -191,11 +191,10 @@ static void CMStringCompressSerialize(FieldWriter &writer, const FunctionData *b
 	writer.WriteSerializable(function.return_type);
 }
 
-unique_ptr<FunctionData> CMStringCompressDeserialize(ClientContext &context, FieldReader &reader,
-                                                     ScalarFunction &bound_function) {
-	bound_function.arguments = reader.template ReadRequiredSerializableList<LogicalType, LogicalType>();
-	bound_function.function =
-	    GetStringCompressFunctionSwitch(reader.ReadRequiredSerializable<LogicalType, LogicalType>());
+unique_ptr<FunctionData> CMStringCompressDeserialize(PlanDeserializationState &state, FieldReader &reader,
+                                                     ScalarFunction &function) {
+	function.arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	function.function = GetStringCompressFunctionSwitch(reader.ReadRequiredSerializable<LogicalType, LogicalType>());
 	return nullptr;
 }
 
@@ -218,10 +217,10 @@ static void CMStringDecompressSerialize(FieldWriter &writer, const FunctionData 
 	writer.WriteRegularSerializableList(function.arguments);
 }
 
-unique_ptr<FunctionData> CMStringDecompressDeserialize(ClientContext &context, FieldReader &reader,
-                                                       ScalarFunction &bound_function) {
-	bound_function.arguments = reader.template ReadRequiredSerializableList<LogicalType, LogicalType>();
-	bound_function.function = GetStringDecompressFunctionSwitch(bound_function.arguments[0]);
+unique_ptr<FunctionData> CMStringDecompressDeserialize(PlanDeserializationState &state, FieldReader &reader,
+                                                       ScalarFunction &function) {
+	function.arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	function.function = GetStringDecompressFunctionSwitch(function.arguments[0]);
 	return nullptr;
 }
 

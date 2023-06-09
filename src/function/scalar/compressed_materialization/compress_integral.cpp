@@ -149,11 +149,11 @@ static void CMIntegralSerialize(FieldWriter &writer, const FunctionData *bind_da
 }
 
 template <scalar_function_t (*GET_FUNCTION)(const LogicalType &, const LogicalType &)>
-unique_ptr<FunctionData> CMIntegralDeserialize(ClientContext &context, FieldReader &reader,
-                                               ScalarFunction &bound_function) {
-	bound_function.arguments = reader.template ReadRequiredSerializableList<LogicalType, LogicalType>();
-	bound_function.function =
-	    GET_FUNCTION(bound_function.arguments[0], reader.ReadRequiredSerializable<LogicalType, LogicalType>());
+unique_ptr<FunctionData> CMIntegralDeserialize(PlanDeserializationState &state, FieldReader &reader,
+                                               ScalarFunction &function) {
+	function.arguments = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	function.function =
+	    GET_FUNCTION(function.arguments[0], reader.ReadRequiredSerializable<LogicalType, LogicalType>());
 	return nullptr;
 }
 
