@@ -311,7 +311,6 @@ struct WindowBoundariesState {
 	idx_t valid_end = 0;
 	int64_t window_start = -1;
 	int64_t window_end = -1;
-	bool is_same_partition = false;
 	FrameBounds range;
 };
 
@@ -532,11 +531,11 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 	if (bounds.partition_count + bounds.order_count > 0) {
 
 		// determine partition and peer group boundaries to ultimately figure out window size
-		bounds.is_same_partition = !partition_mask.RowIsValidUnsafe(row_idx);
-		bool is_peer = !order_mask.RowIsValidUnsafe(row_idx);
+		const auto is_same_partition = !partition_mask.RowIsValidUnsafe(row_idx);
+		const auto is_peer = !order_mask.RowIsValidUnsafe(row_idx);
 
 		// when the partition changes, recompute the boundaries
-		if (!bounds.is_same_partition) {
+		if (!is_same_partition) {
 			bounds.partition_start = row_idx;
 			bounds.peer_start = row_idx;
 
@@ -585,7 +584,6 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 
 	} else {
 		//	OVER()
-		bounds.is_same_partition = false;
 		bounds.partition_end = bounds.input_size;
 		bounds.peer_end = bounds.partition_end;
 	}
@@ -948,7 +946,7 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 		// special case, OVER (), aggregate over everything
 		bounds.Update(row_idx, range, chunk_idx, boundary_start, boundary_end, partition_mask, order_mask);
 		if (WindowNeedsRank(wexpr)) {
-			if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
+			if (bounds.partition_start == row_idx) {
 				dense_rank = 1;
 				rank = 1;
 				rank_equal = 0;
