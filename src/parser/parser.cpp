@@ -187,6 +187,7 @@ void Parser::ParseQuery(const string &query) {
 		} else if (!options.extensions || options.extensions->empty()) {
 			throw ParserException(parser_error);
 		} else {
+			// LCOV_EXCL_START
 			// split sql string into statements and re-parse using extension
 			auto query_statements = SplitQueryStringIntoStatements(query);
 			for (auto const &query_statement : query_statements) {
@@ -200,8 +201,10 @@ void Parser::ParseQuery(const string &query) {
 					}
 					transformer.TransformParseTree(another_parser.parse_tree, statements);
 				} else {
-					// let the extension parse the statement which DuckDB failed to parse
+					// let extensions parse the statement which DuckDB failed to parse
+					bool parsed_single_statement = false;
 					for (auto &ext : *options.extensions) {
+						D_ASSERT(!parsed_single_statement);
 						D_ASSERT(ext.parse_function);
 						auto result = ext.parse_function(ext.parser_info.get(), query_statement);
 						if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
@@ -209,17 +212,22 @@ void Parser::ParseQuery(const string &query) {
 							statement->stmt_length = query_statement.size();
 							statement->stmt_location = 0;
 							statements.push_back(std::move(statement));
-						}
-						if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+							parsed_single_statement = true;
+							break;
+						} else if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
 							throw ParserException(result.error);
-						} else if (result.type == ParserExtensionResultType::DISPLAY_ORIGINAL_ERROR) {
-							parser_error = QueryErrorContext::Format(query, another_parser.error_message,
-							                                         another_parser.error_location - 1);
-							throw ParserException(parser_error);
+						} else {
+							// We move to the next one!
 						}
+					}
+					if (!parsed_single_statement) {
+						parser_error = QueryErrorContext::Format(query, another_parser.error_message,
+						                                         another_parser.error_location - 1);
+						throw ParserException(parser_error);
 					}
 				}
 			}
+			// LCOV_EXCL_STOP
 		}
 	}
 	if (!statements.empty()) {
