@@ -793,55 +793,6 @@ py::object ArrayWrapper::ToArray(idx_t count) const {
 	return masked_array;
 }
 
-NumpyResultConversion::NumpyResultConversion(vector<unique_ptr<NumpyResultConversion>> collections,
-                                             const vector<LogicalType> &types) {
-	D_ASSERT(py::gil_check());
-
-	// Calculate the size of the resulting arrays
-	count = 0;
-	for (auto &collection : collections) {
-		count += collection->Count();
-	}
-	capacity = count;
-
-	auto concatenate_func = py::module_::import("numpy").attr("concatenate");
-
-	D_ASSERT(owned_data.empty());
-	D_ASSERT(!collections.empty());
-	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
-		// Collect all the arrays of the collections for this column
-		py::tuple arrays(collections.size());
-		py::tuple masks(collections.size());
-
-		bool requires_mask = false;
-		for (idx_t i = 0; i < collections.size(); i++) {
-			auto &collection = collections[i];
-
-			// Check if the result array requires a mask
-			auto &source = collection->owned_data[col_idx];
-			requires_mask = requires_mask || source.requires_mask;
-
-			// Shrink to fit
-			source.Resize(collection->count);
-
-			arrays[i] = *source.data->array;
-			masks[i] = *source.mask->array;
-		}
-		D_ASSERT(!arrays.empty());
-		D_ASSERT(arrays.size() == masks.size());
-		py::array result_array = concatenate_func(arrays);
-		py::array result_mask = concatenate_func(masks);
-		auto array_wrapper = make_uniq<RawArrayWrapper>(std::move(result_array), types[col_idx]);
-		auto mask_wrapper = make_uniq<RawArrayWrapper>(std::move(result_mask), types[col_idx]);
-		owned_data.emplace_back(std::move(array_wrapper), std::move(mask_wrapper), requires_mask);
-	}
-
-	// Delete the input arrays, we don't need them anymore
-	for (auto &collection : collections) {
-		collection->Reset();
-	}
-}
-
 NumpyResultConversion::NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity)
     : count(0), capacity(0) {
 	owned_data.reserve(types.size());
@@ -886,6 +837,10 @@ void NumpyResultConversion::Append(DataChunk &chunk, idx_t offset) {
 	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
 		owned_data[col_idx].Append(offset, chunk.data[col_idx], chunk.size());
 	}
+}
+
+void NumpyResultConversion::SetCardinality(idx_t cardinality) {
+	count = cardinality;
 }
 
 void NumpyResultConversion::Append(DataChunk &chunk) {

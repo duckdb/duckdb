@@ -60,11 +60,12 @@ public:
 class NumpyResultConversion {
 public:
 	NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity);
-	NumpyResultConversion(vector<unique_ptr<NumpyResultConversion>> collections, const vector<LogicalType> &types);
 
+public:
 	void SetCategories();
 	void Append(DataChunk &chunk, idx_t offset);
 	void Append(DataChunk &chunk);
+	void SetCardinality(idx_t cardinality);
 
 	vector<LogicalType> Types() const {
 		vector<LogicalType> types;

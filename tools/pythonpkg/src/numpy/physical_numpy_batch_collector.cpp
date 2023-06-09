@@ -21,6 +21,7 @@ SinkFinalizeType PhysicalNumpyBatchCollector::Finalize(Pipeline &pipeline, Event
 	{
 		py::gil_scoped_acquire gil;
 		result = make_uniq<NumpyResultConversion>(types, total_tuple_count);
+		result->SetCardinality(total_tuple_count);
 	}
 	if (total_tuple_count == 0) {
 		// Create the result containing a single empty result conversion
