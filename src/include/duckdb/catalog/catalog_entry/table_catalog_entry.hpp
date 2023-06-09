@@ -107,7 +107,7 @@ public:
 	virtual TableStorageInfo GetStorageInfo(ClientContext &context) = 0;
 
 	virtual void BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
-	                                              ClientContext &context);
+	                                   ClientContext &context);
 
 protected:
 	// This is used to serialize the entry by #Serialize(Serializer& ). It is virtual to allow
