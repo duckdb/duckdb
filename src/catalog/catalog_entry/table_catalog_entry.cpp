@@ -9,6 +9,11 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/planner/operator/logical_update.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/constraints/bound_check_constraint.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
 #include <sstream>
 
