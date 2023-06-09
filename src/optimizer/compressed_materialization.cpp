@@ -589,14 +589,6 @@ bool RemoveRedundantExpressionsComparisonJoin(LogicalOperator &current_op, Colum
 			return false;
 		}
 	}
-	if (comparison_join.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-		auto &delim_join = comparison_join.Cast<LogicalDelimJoin>();
-		for (auto &dec : delim_join.duplicate_eliminated_columns) {
-			if (UsesBinding(*dec, current_binding)) {
-				return false;
-			}
-		}
-	}
 	return true;
 }
 
@@ -615,10 +607,7 @@ bool RemoveRedundantExpressionsFilter(LogicalOperator &current_op, ColumnBinding
 			break;
 		}
 	}
-	if (filter_out_idx == current_bindings.size()) { // Projected out
-		return false;
-	}
-	return true;
+	return filter_out_idx != current_bindings.size(); // Return false if projected out
 }
 
 void CompressedMaterialization::RemoveRedundantExpressions(
@@ -648,7 +637,6 @@ void CompressedMaterialization::RemoveRedundantExpressions(
 				break;
 			}
 			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-			case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 				can_remove_current = RemoveRedundantExpressionsComparisonJoin(current_op, current_binding);
 				break;
 			case LogicalOperatorType::LOGICAL_FILTER:
