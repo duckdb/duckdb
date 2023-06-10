@@ -367,7 +367,7 @@ rel_to_sql <- rapi_rel_to_sql
 
 
 
-#' Convert a duckdb table relation
+#' Create a duckdb table relation from a table name
 #' @param table the table name
 #' @return a duckdb relation
 #' @noRd
@@ -377,5 +377,18 @@ rel_to_sql <- rapi_rel_to_sql
 #' rel <- rel_from_table(con, "mtcars")
 rel_from_table <- function(con, table_name, schema_name="MAIN") {
     rapi_rel_from_table(con@conn_ref, schema_name, table_name)
+}
+
+#' Convert a duckdb relation from a table-producing function
+#' @param name the table function name
+#' @param positional_parameters the table function positional parameters list
+#' @param named_parameters the table function named parameters list
+#' @return a duckdb relation
+#' @noRd
+#' @examples
+#' con <- DBI::dbConnect(duckdb())
+#' rel <- rel_from_table_function(con, 'generate_series', list(10L))
+rel_from_table_function <- function(con, function_name, positional_parameters = list(), named_parameters = list()) {
+    rapi_rel_from_table_function(con@conn_ref, function_name, positional_parameters, named_parameters)
 }
 

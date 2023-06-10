@@ -257,7 +257,7 @@ static void SerializeDecimalArithmetic(FieldWriter &writer, const FunctionData *
 
 // TODO this is partially duplicated from the bind
 template <class OP, class OPOVERFLOWCHECK, bool IS_SUBTRACT = false>
-unique_ptr<FunctionData> DeserializeDecimalArithmetic(ClientContext &context, FieldReader &reader,
+unique_ptr<FunctionData> DeserializeDecimalArithmetic(PlanDeserializationState &state, FieldReader &reader,
                                                       ScalarFunction &bound_function) {
 	// re-change the function pointers
 	auto check_overflow = reader.ReadRequired<bool>();

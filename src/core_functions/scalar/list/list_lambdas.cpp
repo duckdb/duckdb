@@ -24,7 +24,7 @@ public:
 	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
 		throw NotImplementedException("FIXME: list lambda serialize");
 	}
-	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
 	                                            ScalarFunction &bound_function) {
 		throw NotImplementedException("FIXME: list lambda deserialize");
 	}
@@ -328,7 +328,6 @@ static unique_ptr<FunctionData> ListLambdaBind(ClientContext &context, ScalarFun
 	}
 
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments.pop_back();
 		bound_function.arguments[0] = LogicalType::SQLNULL;
 		bound_function.return_type = LogicalType::SQLNULL;
 		return make_uniq<VariableReturnBindData>(bound_function.return_type);

@@ -122,7 +122,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      "Create a DuckDB function out of the passing in python function so it can be used in queries",
 	      py::arg("name"), py::arg("function"), py::arg("return_type") = py::none(), py::arg("parameters") = py::none(),
 	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0,
-	      py::arg("exception_handling") = 0);
+	      py::arg("exception_handling") = 0, py::arg("side_effects") = false);
 
 	m.def("remove_function", &DuckDBPyConnection::UnregisterUDF, "Remove a previously created function",
 	      py::arg("name"));
@@ -327,7 +327,8 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterUDF(const string &n
 shared_ptr<DuckDBPyConnection>
 DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &udf, const py::object &parameters_p,
                                       const shared_ptr<DuckDBPyType> &return_type_p, PythonUDFType type,
-                                      FunctionNullHandling null_handling, PythonExceptionHandling exception_handling) {
+                                      FunctionNullHandling null_handling, PythonExceptionHandling exception_handling,
+                                      bool side_effects) {
 	if (!connection) {
 		throw ConnectionException("Connection already closed!");
 	}
@@ -339,7 +340,7 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &ud
 		                              name);
 	}
 	auto scalar_function = CreateScalarUDF(name, udf, parameters_p, return_type_p, type == PythonUDFType::ARROW,
-	                                       null_handling, exception_handling);
+	                                       null_handling, exception_handling, side_effects);
 	CreateScalarFunctionInfo info(scalar_function);
 
 	context.RegisterFunction(info);
@@ -1585,13 +1586,14 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter() {
 	return shared_from_this();
 }
 
-bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
+void DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
                               const py::object &traceback) {
 	self.Close();
 	if (exc_type.ptr() != Py_None) {
-		return false;
+		// Propagate the exception if any occurred
+		PyErr_SetObject(exc_type.ptr(), exc.ptr());
+		throw py::error_already_set();
 	}
-	return true;
 }
 
 void DuckDBPyConnection::Cleanup() {

@@ -593,7 +593,7 @@ TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.
 		count += chunk->size();
 	}
 
-	REQUIRE(951446 - count == 0);
+	REQUIRE(951468 - count == 0);
 }
 
 TEST_CASE("Fuzzer 50 - Alter table heap-use-after-free", "[api]") {
@@ -604,4 +604,14 @@ TEST_CASE("Fuzzer 50 - Alter table heap-use-after-free", "[api]") {
 
 	con.SendQuery("CREATE TABLE t0(c0 INT);");
 	con.SendQuery("ALTER TABLE t0 ADD c1 TIMESTAMP_SEC;");
+}
+
+TEST_CASE("Test loading database with enable_external_access set to false", "[api]") {
+	DBConfig config;
+	config.options.enable_external_access = false;
+	auto path = TestCreatePath("external_access_test");
+	DuckDB db(path, &config);
+	Connection con(db);
+
+	REQUIRE_FAIL(con.Query("ATTACH 'mydb.db' AS external_access_test"));
 }
