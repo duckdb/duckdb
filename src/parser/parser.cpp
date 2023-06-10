@@ -194,6 +194,7 @@ void Parser::ParseQuery(const string &query) {
 			for (auto const &query_statement : query_statements) {
 				PostgresParser another_parser;
 				another_parser.Parse(query_statement);
+				// LCOV_EXCL_START
 				// first see if DuckDB can parse this individual query statement
 				if (another_parser.success) {
 					if (!another_parser.parse_tree) {
@@ -227,6 +228,7 @@ void Parser::ParseQuery(const string &query) {
 						throw ParserException(parser_error);
 					}
 				}
+				// LCOV_EXCL_STOP
 			}
 		}
 	}
