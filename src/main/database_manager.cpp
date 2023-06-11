@@ -87,6 +87,7 @@ const string &DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 	return default_entry.catalog;
 }
 
+// LCOV_EXCL_START
 void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &new_value) {
 	auto db_entry = GetDatabase(context, new_value);
 
@@ -100,6 +101,7 @@ void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &n
 
 	default_database = new_value;
 }
+// LCOV_EXCL_STOP
 
 vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context) {
 	vector<reference<AttachedDatabase>> result;
