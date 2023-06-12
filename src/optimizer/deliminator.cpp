@@ -271,18 +271,15 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalDelimJoin &delim_join,
 		}
 
 		switch (current_op.get().type) {
-		case LogicalOperatorType::LOGICAL_PROJECTION: {
-			reference<vector<unique_ptr<Expression>>> expressions = current_op.get().expressions;
-			const auto current_bindings = current_op.get().GetColumnBindings();
-			FindAndReplaceBindings(traced_bindings, expressions.get(), current_bindings);
-			current_op = *current_op.get().children[0];
+		case LogicalOperatorType::LOGICAL_PROJECTION:
+			FindAndReplaceBindings(traced_bindings, current_op.get().expressions, current_op.get().GetColumnBindings());
 			break;
-		}
 		case LogicalOperatorType::LOGICAL_FILTER:
 			break; // Doesn't change bindings
 		default:
 			return false;
 		}
+		current_op = *current_op.get().children[0];
 	}
 
 	// Get the index (left or right) of the DelimGet side of the join

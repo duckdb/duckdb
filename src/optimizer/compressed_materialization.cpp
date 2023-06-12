@@ -589,6 +589,14 @@ bool RemoveRedundantExpressionsComparisonJoin(LogicalOperator &current_op, Colum
 			return false;
 		}
 	}
+	if (comparison_join.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+		auto &delim_join = comparison_join.Cast<LogicalDelimJoin>();
+		for (auto &dec : delim_join.duplicate_eliminated_columns) {
+			if (UsesBinding(*dec, current_binding)) {
+				return false;
+			}
+		}
+	}
 	return true;
 }
 
@@ -629,14 +637,13 @@ void CompressedMaterialization::RemoveRedundantExpressions(
 		auto current_binding = decompress_bindings[current_col_idx];
 		vector<reference<Expression>> expressions_in_between;
 		for (auto current_op : operators_in_between) {
-			const auto current_bindings = current_op.get().GetColumnBindings();
 			switch (current_op.get().type) {
-			case LogicalOperatorType::LOGICAL_PROJECTION: {
+			case LogicalOperatorType::LOGICAL_PROJECTION:
 				can_remove_current = RemoveRedundantExpressionsProjection(current_op, current_binding, current_col_idx,
 				                                                          expressions_in_between);
 				break;
-			}
 			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+			case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 				can_remove_current = RemoveRedundantExpressionsComparisonJoin(current_op, current_binding);
 				break;
 			case LogicalOperatorType::LOGICAL_FILTER:
