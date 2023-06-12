@@ -523,7 +523,7 @@ public class TestDuckDBJDBC {
         }
     }
 
-	public static void test_throw_wrong_datatype() throws Exception {
+	public static void test_read_timestamp_tz() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 		ResultSet rs;
@@ -533,12 +533,9 @@ public class TestDuckDBJDBC {
 
 		rs = stmt.executeQuery("SELECT * FROM t");
 		rs.next();
-
-		try {
-			rs.getTimestamp(2);
-			fail();
-		} catch (IllegalArgumentException e) {
-		}
+		
+		//	This succeeds now,
+		rs.getTimestamp(2);
 
 		rs.close();
 		stmt.close();
