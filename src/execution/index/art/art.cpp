@@ -1143,6 +1143,9 @@ bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 //===--------------------------------------------------------------------===//
 
 string ART::VerifyAndToString(IndexLock &state, const bool only_verify) {
+	// FIXME: this can be improved by counting the allocations of each node type,
+	// FIXME: and by asserting that each fixed-size allocator lists an equal number of
+	// FIXME: allocations of that type
 	return VerifyAndToStringInternal(only_verify);
 }
 

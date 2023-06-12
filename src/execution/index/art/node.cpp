@@ -413,47 +413,67 @@ bool Node::ResolvePrefixes(ART &art, Node &other) {
 	D_ASSERT(IsSet());
 	D_ASSERT(other.IsSet());
 
+	// case 1: both nodes have no prefix or the same prefix
+	if (DecodeARTNodeType() != NType::PREFIX && other.DecodeARTNodeType() != NType::PREFIX) {
+		return MergeInternal(art, other);
+	}
+
 	reference<Node> l_node(*this);
 	reference<Node> r_node(other);
 
-	// traverse prefixes
-	idx_t mismatch_position = 0;
-	if (l_node.get().DecodeARTNodeType() == NType::PREFIX && r_node.get().DecodeARTNodeType() == NType::PREFIX) {
-		mismatch_position = Prefix::Traverse(art, l_node, r_node);
-	}
-	auto l_type = l_node.get().DecodeARTNodeType();
-	auto r_type = r_node.get().DecodeARTNodeType();
+	idx_t mismatch_position = DConstants::INVALID_INDEX;
 
-	// case 1: both nodes have no prefix or the same prefix
-	if (l_type != NType::PREFIX && r_type != NType::PREFIX) {
-		return l_node.get().MergeInternal(art, r_node);
+	// traverse prefixes
+	if (l_node.get().DecodeARTNodeType() == NType::PREFIX && r_node.get().DecodeARTNodeType() == NType::PREFIX) {
+
+		// get the two prefixes
+		auto &l_prefix = Prefix::Get(art, l_node.get());
+		auto &r_prefix = Prefix::Get(art, r_node.get());
+
+		// compare prefix bytes
+		idx_t max_count = MinValue(l_prefix.data[Node::PREFIX_SIZE], r_prefix.data[Node::PREFIX_SIZE]);
+		for (idx_t i = 0; i < max_count; i++) {
+			if (l_prefix.data[i] != r_prefix.data[i]) {
+				mismatch_position = i;
+				break;
+			}
+		}
+
+		if (mismatch_position == DConstants::INVALID_INDEX) {
+
+			// prefixes match (so far)
+			if (l_prefix.data[Node::PREFIX_SIZE] == r_prefix.data[Node::PREFIX_SIZE]) {
+				return l_prefix.ptr.ResolvePrefixes(art, r_prefix.ptr);
+			}
+
+			mismatch_position = max_count;
+
+			// l_prefix contains r_prefix
+			if (r_prefix.ptr.DecodeARTNodeType() != NType::PREFIX && r_prefix.data[Node::PREFIX_SIZE] == max_count) {
+				swap(*this, other);
+				l_node = r_prefix.ptr;
+
+			} else {
+				// r_prefix contains l_prefix
+				l_node = l_prefix.ptr;
+			}
+		}
+	} else {
+
+		// l_prefix contains r_prefix
+		if (l_node.get().DecodeARTNodeType() == NType::PREFIX) {
+			swap(*this, other);
+		}
+		mismatch_position = 0;
 	}
+	D_ASSERT(mismatch_position != DConstants::INVALID_INDEX);
 
 	// case 2: one prefix contains the other prefix
-	// make sure that the r_node's prefix has the longer prefix
-	if (l_type == NType::PREFIX && r_type != NType::PREFIX) {
-		swap(l_type, r_type);
-		if (*this == l_node && other == r_node) {
-			swap(*this, other);
-		} else if (*this == l_node) {
-			swap(*this, other);
-			l_node = r_node;
-			r_node = other;
-		} else if (other == r_node) {
-			swap(*this, other);
-			r_node = l_node;
-			l_node = *this;
-		} else {
-			swap(*this, other);
-			swap(l_node, r_node);
-		}
-	}
-
-	if (l_type != NType::PREFIX && r_type == NType::PREFIX) {
+	if (l_node.get().DecodeARTNodeType() != NType::PREFIX && r_node.get().DecodeARTNodeType() == NType::PREFIX) {
 		// r_node's prefix contains l_node's prefix
 		// l_node cannot be a leaf, otherwise the key represented by l_node would be a subset of another key
 		// which is not possible by our construction
-		D_ASSERT(l_type != NType::LEAF);
+		D_ASSERT(l_node.get().DecodeARTNodeType() != NType::LEAF);
 
 		// test if the next byte (mismatch_position) in r_node (prefix) exists in l_node
 		auto mismatch_byte = Prefix::GetByte(art, r_node, mismatch_position);

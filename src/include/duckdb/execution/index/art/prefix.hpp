@@ -49,10 +49,6 @@ public:
 	//! byte on top of child_prefix. If there is no child_prefix, then it creates a new
 	//! prefix node containing that byte
 	static void Concatenate(ART &art, Node &prefix_node, const uint8_t byte, Node &child_prefix_node);
-	//! Traverse prefixes until (1) encountering two non-prefix nodes,
-	//! (2) encountering one non-prefix node, (3) encountering a mismatching byte.
-	//! Also frees all fully traversed r_node prefixes
-	static idx_t Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node);
 	//! Traverse a prefix and a key until (1) encountering a non-prefix node, or (2) encountering
 	//! a mismatching byte, in which case depth indexes the mismatching byte in the key
 	static idx_t Traverse(ART &art, reference<Node> &prefix_node, const ARTKey &key, idx_t &depth);
