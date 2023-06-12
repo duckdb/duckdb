@@ -83,6 +83,27 @@ namespace duckdb {
                 }
             }
         }
+        result += "\n";
+        result += "PROPERTIES (";
+        for (idx_t i = 0; i < column_names.size(); i++) {
+            if (i != column_names.size() - 1) {
+                result += column_names[i] + (column_aliases[i].empty() ? "" : "AS " + column_aliases[i]) + ", ";
+            } else {
+                result = column_names[i] + (column_aliases[i].empty() ? "" : "AS " + column_aliases[i]) + ") ";
+            }
+        }
+
+        result += "LABEL " + main_label;
+        if (!sub_labels.empty()) {
+            result += " IN " + discriminator + "( ";
+            for (idx_t i = 0; i < sub_labels.size(); i++) {
+                if (i != sub_labels.size() - 1) {
+                    result += sub_labels[i] + ", ";
+                } else {
+                    result = sub_labels[i] + ") ";
+                }
+            }
+        }
 
         return result;
     }
