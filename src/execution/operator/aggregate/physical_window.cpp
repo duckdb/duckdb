@@ -729,19 +729,21 @@ void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, WindowInput
 }
 
 struct WindowExecutor {
-	static bool IsConstantAggregate(const BoundWindowExpression &wexpr);
+	bool IsConstantAggregate();
+	bool IsCustomAggregate();
 
 	WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
-	               const idx_t count);
+	               const idx_t count, WindowAggregationMode mode);
 
 	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count);
-	void Finalize(WindowAggregationMode mode);
+	void Finalize();
 
 	void Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &result, const ValidityMask &partition_mask,
 	              const ValidityMask &order_mask);
 
 	// The function
 	BoundWindowExpression &wexpr;
+	const WindowAggregationMode mode;
 
 	// Frame management
 	WindowBoundariesState state;
@@ -779,7 +781,7 @@ struct WindowExecutor {
 	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
 
 	// all aggregate values are the same for each partition
-	unique_ptr<WindowConstantAggregate> constant_aggregate = nullptr;
+	unique_ptr<WindowAggregateState> aggregate_state = nullptr;
 
 protected:
 	void NextRank(idx_t partition_begin, idx_t peer_begin, idx_t row_idx);
@@ -796,7 +798,7 @@ protected:
 	void NthValue(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx);
 };
 
-bool WindowExecutor::IsConstantAggregate(const BoundWindowExpression &wexpr) {
+bool WindowExecutor::IsConstantAggregate() {
 	if (!wexpr.aggregate) {
 		return false;
 	}
@@ -850,11 +852,24 @@ bool WindowExecutor::IsConstantAggregate(const BoundWindowExpression &wexpr) {
 	return true;
 }
 
+bool WindowExecutor::IsCustomAggregate() {
+	if (!wexpr.aggregate) {
+		return false;
+	}
+
+	if (!AggregateObject(wexpr).function.window) {
+		return false;
+	}
+
+	return (mode < WindowAggregationMode::COMBINE);
+}
+
 WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
-                               const idx_t count)
-    : wexpr(wexpr), state(wexpr, count), payload_collection(), payload_executor(context), filter_executor(context),
-      leadlag_offset(wexpr.offset_expr.get(), context), leadlag_default(wexpr.default_expr.get(), context),
-      boundary_start(wexpr.start_expr.get(), context), boundary_end(wexpr.end_expr.get(), context),
+                               const idx_t count, WindowAggregationMode mode)
+    : wexpr(wexpr), mode(mode), state(wexpr, count), payload_collection(), payload_executor(context),
+      filter_executor(context), leadlag_offset(wexpr.offset_expr.get(), context),
+      leadlag_default(wexpr.default_expr.get(), context), boundary_start(wexpr.start_expr.get(), context),
+      boundary_end(wexpr.end_expr.get(), context),
       range((state.has_preceding_range || state.has_following_range) ? wexpr.orders[0].expression.get() : nullptr,
             context, count)
 
@@ -862,9 +877,11 @@ WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &cont
 	// TODO we could evaluate those expressions in parallel
 
 	//	Check for constant aggregate
-	if (IsConstantAggregate(wexpr)) {
-		constant_aggregate =
+	if (IsConstantAggregate()) {
+		aggregate_state =
 		    make_uniq<WindowConstantAggregate>(AggregateObject(wexpr), wexpr.return_type, partition_mask, count);
+	} else if (IsCustomAggregate()) {
+		aggregate_state = make_uniq<WindowCustomAggregate>(AggregateObject(wexpr), wexpr.return_type, count);
 	}
 
 	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
@@ -926,8 +943,8 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 		payload_chunk.Reset();
 		payload_executor.Execute(input_chunk, payload_chunk);
 		payload_chunk.Verify();
-		if (constant_aggregate) {
-			constant_aggregate->Sink(payload_chunk, filtering, filtered);
+		if (aggregate_state) {
+			aggregate_state->Sink(payload_chunk, filtering, filtered);
 		} else {
 			payload_collection.Append(payload_chunk, true);
 		}
@@ -957,16 +974,19 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 				}
 			}
 		}
+	} else if (aggregate_state) {
+		//	Zero-argument aggregate (e.g., COUNT(*)
+		aggregate_state->Sink(payload_chunk, filtering, filtered);
 	}
 
 	range.Append(input_chunk);
 }
 
-void WindowExecutor::Finalize(WindowAggregationMode mode) {
+void WindowExecutor::Finalize() {
 	// build a segment tree for frame-adhering aggregates
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
-	if (constant_aggregate) {
-		constant_aggregate->Finalize();
+	if (aggregate_state) {
+		aggregate_state->Finalize();
 	} else if (wexpr.aggregate) {
 		segment_tree = make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, &payload_collection,
 		                                            filter_mask, mode);
@@ -1050,8 +1070,8 @@ void WindowExecutor::Aggregate(DataChunk &bounds, Vector &result, idx_t count, i
 			rmask.SetInvalid(i);
 			continue;
 		}
-		if (constant_aggregate) {
-			constant_aggregate->Compute(result, i, window_begin[i], window_end[i]);
+		if (aggregate_state) {
+			aggregate_state->Compute(result, i, window_begin[i], window_end[i]);
 		} else {
 			segment_tree->Compute(result, i, window_begin[i], window_end[i]);
 		}
@@ -1495,7 +1515,7 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
-		auto wexec = make_uniq<WindowExecutor>(wexpr, context, partition_mask, count);
+		auto wexec = make_uniq<WindowExecutor>(wexpr, context, partition_mask, count, gstate.mode);
 		window_execs.emplace_back(std::move(wexec));
 	}
 
@@ -1519,7 +1539,7 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 
 	//	TODO: Parallelization opportunity
 	for (auto &wexec : window_execs) {
-		wexec->Finalize(gstate.mode);
+		wexec->Finalize();
 	}
 
 	// External scanning assumes all blocks are swizzled.
