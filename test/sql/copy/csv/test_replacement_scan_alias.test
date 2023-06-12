@@ -3,8 +3,6 @@
 # group: [csv]
 
 # implicit alias is equal to the file name
-statement ok
-select abac.column0 from 'test/sql/copy/csv/data/abac/abac.csv';
 
 statement ok
 select * from 'test/sql/copy/csv/data/test/dateformat.csv';

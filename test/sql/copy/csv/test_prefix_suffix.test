@@ -15,4 +15,4 @@ HEADER cannot be combined with PREFIX/SUFFIX
 statement error
 copy (select 42) to '__TEST_DIR__/file.csv' (escape 'null', null 'null');
 ----
-ESCAPE must not appear in the NULL
+The escape option cannot exceed a size of 1 byte.
