@@ -11,7 +11,7 @@ include_directories(jemalloc/include)
 
 add_subdirectory(jemalloc)
 
-set(JEMALLOC_EXTENSION_FILES jemalloc-extension.cpp ${JEMALLOC_OBJECT_FILES})
+set(JEMALLOC_EXTENSION_FILES jemalloc_extension.cpp ${JEMALLOC_OBJECT_FILES})
 
 add_library(jemalloc_extension STATIC ${JEMALLOC_EXTENSION_FILES})
 
