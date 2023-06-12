@@ -49,7 +49,7 @@ typedef void (*aggregate_window_t)(Vector inputs[], const ValidityMask &filter_m
 
 typedef void (*aggregate_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
                                       const AggregateFunction &function);
-typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(ClientContext &context, FieldReader &reader,
+typedef unique_ptr<FunctionData> (*aggregate_deserialize_t)(PlanDeserializationState &context, FieldReader &reader,
                                                             AggregateFunction &function);
 
 class AggregateFunction : public BaseScalarFunction {
