@@ -101,7 +101,7 @@ statement ok
 CREATE TABLE lists AS SELECT i % 4 i, list(j ORDER BY rowid) j FROM nums GROUP BY i
 
 statement ok
-CREATE TABLE nested_lists AS SELECT i, list(j ORDER BY rowid) j FROM lists GROUP BY i
+CREATE TABLE nested_lists AS SELECT i, list_sort(list(j ORDER BY rowid)) j FROM lists GROUP BY i ORDER BY i
 
 query II
 FROM nested_lists

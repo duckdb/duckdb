@@ -23,7 +23,7 @@ common/checksum.cpp	2
 common/compressed_file_system.cpp	14
 common/crypto/md5.cpp	2
 common/enum_util.cpp	3512
-common/enums/expression_type.cpp	183
+common/enums/expression_type.cpp	184
 common/enums/join_type.cpp	3
 common/exception.cpp	95
 common/exception_format_value.cpp	9
@@ -475,7 +475,7 @@ main/pending_query_result.cpp	5
 main/prepared_statement.cpp	16
 main/prepared_statement_data.cpp	8
 main/query_profiler.cpp	32
-main/query_result.cpp	18
+main/query_result.cpp	19
 main/relation.cpp	29
 main/relation/create_view_relation.cpp	7
 main/relation/cross_product_relation.cpp	2
