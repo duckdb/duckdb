@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-string MatchRef::ToString() const {
+string MatchExpression::ToString() const {
 	string result = "GRAPH_TABLE (";
 	result += pg_name + " MATCH";
 
@@ -51,12 +51,12 @@ string MatchRef::ToString() const {
 	return result;
 }
 
-bool MatchRef::Equals(const TableRef *other_p) const {
-	if (!TableFunctionRef::Equals(other_p)) {
+bool MatchExpression::Equals(const BaseExpression *other_p) const {
+	if (!ParsedExpression::Equals(other_p)) {
 		return false;
 	}
 
-	auto other = (MatchRef *)other_p;
+	auto other = (MatchExpression *)other_p;
 	if (pg_name != other->pg_name) {
 		return false;
 	}
@@ -100,8 +100,8 @@ bool MatchRef::Equals(const TableRef *other_p) const {
 	return true;
 }
 
-unique_ptr<TableRef> MatchRef::Copy() {
-	auto copy = make_uniq<MatchRef>();
+unique_ptr<ParsedExpression> MatchExpression::Copy() const {
+	auto copy = make_uniq<MatchExpression>();
 	copy->pg_name = pg_name;
 	copy->alias = alias;
 
@@ -118,7 +118,7 @@ unique_ptr<TableRef> MatchRef::Copy() {
 	return std::move(copy);
 }
 
-void MatchRef::Serialize(FieldWriter &writer) const {
+void MatchExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteString(pg_name);
 	writer.WriteString(alias);
 	writer.WriteSerializableList<PathPattern>(path_list);
@@ -126,8 +126,8 @@ void MatchRef::Serialize(FieldWriter &writer) const {
 	writer.WriteOptional(where_clause);
 }
 
-unique_ptr<TableRef> MatchRef::Deserialize(FieldReader &reader) {
-	auto result = make_uniq<MatchRef>();
+unique_ptr<ParsedExpression> MatchExpression::Deserialize(FieldReader &reader) {
+	auto result = make_uniq<MatchExpression>();
 	result->pg_name = reader.ReadRequired<string>();
 	result->alias = reader.ReadRequired<string>();
 	result->path_list = reader.ReadRequiredSerializableList<PathPattern>();

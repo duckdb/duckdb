@@ -3,13 +3,13 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/parser/path_pattern.hpp"
 #include "duckdb/parser/tableref.hpp"
-#include "table_function_ref.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 
 namespace duckdb {
 
-class MatchRef : public TableFunctionRef {
+class MatchExpression : public ParsedExpression {
 public:
-	MatchRef() : TableFunctionRef() {
+	MatchExpression() : ParsedExpression(ExpressionType::FUNCTION_REF, ExpressionClass::BOUND_EXPRESSION) {
 	}
 
 	string pg_name;
@@ -22,14 +22,14 @@ public:
 
 public:
 	string ToString() const override;
-	bool Equals(const TableRef *other_p) const override;
+	bool Equals(const BaseExpression *other_p) const override;
 
-	unique_ptr<TableRef> Copy() override;
+	unique_ptr<ParsedExpression> Copy() const override;
 
 	//! Serializes a blob into a MatchRef
 	void Serialize(FieldWriter &writer) const override;
 	//! Deserializes a blob back into a MatchRef
-	static unique_ptr<TableRef> Deserialize(FieldReader &reader);
+	static unique_ptr<ParsedExpression> Deserialize(FieldReader &reader);
 };
 
 } // namespace duckdb
