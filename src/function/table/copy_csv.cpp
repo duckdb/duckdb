@@ -153,8 +153,11 @@ static string AddEscapes(char &to_be_escaped, const char &escape, const string &
 			new_val += val[i];
 			i++;
 		}
-		new_val += escape;
-		found = val.find(to_be_escaped, found + escape != '\0');
+		if (escape != '\0'){
+			new_val += escape;
+			found = val.find(to_be_escaped, found + 1);
+		}
+
 	}
 	while (i < val.length()) {
 		new_val += val[i];

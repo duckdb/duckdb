@@ -3,7 +3,7 @@
 namespace duckdb {
 CSVStateMachine::CSVStateMachine(CSVStateMachineConfiguration configuration_p) : configuration(configuration_p) {
 	// Initialize transition array with default values to the Standard option
-	for (int i = 0; i < 6; i++) {
+	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 256; j++) {
 			transition_array[i][j] = static_cast<uint8_t>(CSVState::STANDARD);
 		}
@@ -39,9 +39,16 @@ CSVStateMachine::CSVStateMachine(CSVStateMachineConfiguration configuration_p) :
 	transition_array[carriage_return_state][static_cast<uint8_t>('\r')] = carriage_return_state;
 	transition_array[carriage_return_state][static_cast<uint8_t>(configuration.escape)] = escape_state;
 	// 5) Quoted State
+	for (int j = 0; j < 256; j++) {
+		transition_array[quoted_state][j] = quoted_state;
+	}
 	transition_array[quoted_state][static_cast<uint8_t>(configuration.quote)] = standard_state;
 	transition_array[quoted_state][static_cast<uint8_t>(configuration.escape)] = escape_state;
 	// 6) Escaped State
+	for (int j = 0; j < 256; j++) {
+		// Escape is always invalid if not proceeded by another escape or quoted char
+		transition_array[escape_state][j] = invalid_state;
+	}
 	transition_array[escape_state][static_cast<uint8_t>(configuration.quote)] = quoted_state;
 	transition_array[escape_state][static_cast<uint8_t>(configuration.escape)] = quoted_state;
 }

@@ -71,17 +71,17 @@ void CSVReaderOptions::SetCompression(const string &compression_p) {
 
 void CSVReaderOptions::SetEscape(const string &input) {
 	if (input.size() > 1) {
-		throw InvalidInputException("Escape can not be bigger than 1 byte");
+		throw InvalidInputException("The escape option cannot exceed a size of 1 byte.");
 	}
 	this->escape = input[0];
 	this->has_escape = true;
 }
 
 void CSVReaderOptions::SetDelimiter(const string &input) {
-	if (input.size() > 1) {
-		throw InvalidInputException("Delimiter can not be bigger than 1 byte");
-	}
 	auto delim_str = StringUtil::Replace(input, "\\t", "\t");
+	if (delim_str.size() > 1) {
+		throw InvalidInputException("The delimiter option cannot exceed a size of 1 byte.");
+	}
 	this->has_delimiter = true;
 	if (input.empty()) {
 		delim_str = string("\0", 1);
@@ -91,7 +91,7 @@ void CSVReaderOptions::SetDelimiter(const string &input) {
 
 void CSVReaderOptions::SetQuote(const string &quote_p) {
 	if (quote_p.size() > 1) {
-		throw InvalidInputException("Delimiter can not be bigger than 1 byte");
+		throw InvalidInputException("The quote option cannot exceed a size of 1 byte.");
 	}
 	this->quote = quote_p[0];
 	this->has_quote = true;
