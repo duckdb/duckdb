@@ -99,7 +99,7 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 		auto finish_group = meta_pipeline->GetFinishGroup(pipeline.get());
 		if (finish_group) {
 			// this pipeline is part of a finish group
-			const auto group_entry = event_map.find(*finish_group.get());
+			const auto group_entry = event_map.findc(*finish_group.get());
 			D_ASSERT(group_entry != event_map.end());
 			auto &group_stack = group_entry->second;
 			PipelineEventStack pipeline_stack(base_stack.pipeline_initialize_event, *pipeline_event,

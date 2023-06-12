@@ -3,15 +3,12 @@
 # group: [iejoin]
 
 statement ok
-SELECT SETSEED(0.8675309);
-
-statement ok
 create temp table calendar as
 	SELECT
 		start_ts,
 		start_ts + interval '12 hours' as end_ts,
-		date_part('yearweek',start_ts)::bigint as yyyyww
-	FROM range(TIMESTAMP '2023-01-01 06:00:00', TIMESTAMP '2023-06-01 00:00:00', INTERVAL '12 hours') tbl(start_ts)
+		date_part('year',start_ts)::bigint * 100 + date_part('week',start_ts)::bigint  as yyyyww
+	FROM generate_series(TIMESTAMP '2023-01-01 06:00:00', TIMESTAMP '2023-06-01 00:00:00', INTERVAL '12 hours') tbl(start_ts)
 ;
 
 statement ok
@@ -19,10 +16,8 @@ create temp table snapshot_data as
 	select
 		TIMESTAMP '2023-03-01 08:00:00' as snapshot_ts,
 		1 as snapshot_value
-	from generate_series(100) t(i)
+	from generate_series(1,1000) t(i)
 ;
-
-loop i 0 10
 
 query I
 with cal_last_13 as (
@@ -30,12 +25,48 @@ with cal_last_13 as (
 	FROM calendar)
 )
 select
-	count(*),
+	count(*)
 from snapshot_data data
 join cal_last_13 cal
 	on data.snapshot_ts >= cal.start_ts
 	and data.snapshot_ts <= cal.end_ts
 ----
-101
+1000
 
-endloop
+query I
+with cal_last_13 as (
+	select * from calendar where yyyyww in (SELECT yyyyww
+	FROM calendar)
+	union all
+	select * from calendar where yyyyww in (SELECT yyyyww
+	FROM calendar)
+)
+select
+	count(*)
+from snapshot_data data
+join cal_last_13 cal
+	on data.snapshot_ts >= cal.start_ts
+	and data.snapshot_ts <= cal.end_ts
+----
+2000
+
+query I
+with cal_last_13 as (
+	select * from calendar where yyyyww in (SELECT yyyyww
+	FROM calendar)
+	union all
+	select * from calendar where yyyyww in (SELECT yyyyww
+	FROM calendar)
+	union all
+	select * from calendar where yyyyww in (SELECT yyyyww
+	FROM calendar)
+)
+select
+	count(*)
+from snapshot_data data
+join cal_last_13 cal
+	on data.snapshot_ts >= cal.start_ts
+	and data.snapshot_ts <= cal.end_ts
+----
+3000
+
