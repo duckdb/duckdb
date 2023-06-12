@@ -2,6 +2,7 @@
 
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb/common/types.hpp"
+#include <unistd.h>
 
 namespace duckdb {
 
@@ -52,6 +53,18 @@ struct PyUtil {
 
 	static Py_UCS4 *PyUnicode4ByteData(PyObject *obj) {
 		return PyUnicode_4BYTE_DATA(obj);
+	}
+
+	static idx_t CurrentMemoryUsage() {
+		py::gil_scoped_acquire gil;
+
+		auto psutil = py::module_::import("psutil");
+
+		auto pid = getpid();
+		auto process = psutil.attr("Process")(pid);
+		auto memory = process.attr("memory_full_info")();
+		py::int_ used_memory_p = memory.attr("uss");
+		return py::cast<idx_t>(used_memory_p);
 	}
 };
 
