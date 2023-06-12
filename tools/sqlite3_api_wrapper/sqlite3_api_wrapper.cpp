@@ -16,7 +16,7 @@
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/box_renderer.hpp"
 #ifdef SHELL_INLINE_AUTOCOMPLETE
-#include "sql_auto_complete-extension.hpp"
+#include "autocomplete_extension.hpp"
 #endif
 
 #include <ctype.h>

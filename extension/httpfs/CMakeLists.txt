@@ -11,10 +11,10 @@ add_extension_definitions()
 include_directories(include ../../third_party/httplib ../parquet/include)
 
 add_library(httpfs_extension STATIC s3fs.cpp httpfs.cpp crypto.cpp
-                                    httpfs-extension.cpp)
+        httpfs_extension.cpp)
 set(PARAMETERS "-warnings")
 build_loadable_extension(httpfs ${PARAMETERS} s3fs.cpp httpfs.cpp crypto.cpp
-                         httpfs-extension.cpp)
+        httpfs_extension.cpp)
 
 if(MINGW)
   set(OPENSSL_USE_STATIC_LIBS TRUE)

@@ -4,7 +4,7 @@ endif()
 
 cmake_minimum_required(VERSION 2.8.12)
 
-project(JEMallocExtension)
+project(JemallocExtension)
 
 include_directories(include)
 include_directories(jemalloc/include)
