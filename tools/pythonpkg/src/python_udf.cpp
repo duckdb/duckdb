@@ -198,7 +198,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 		// Cast the resulting native python to DuckDB, using the return type
 		// result.Resize(input.size());
 		NumpyScan::ScanObjectColumn(python_results.data(), input.size(), 0, result);
-		if (input.AllConstant()) {
+		if (input.size() == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	};
@@ -313,15 +313,17 @@ public:
 		}
 	}
 
-	ScalarFunction GetFunction(const py::function &udf, PythonExceptionHandling exception_handling) {
+	ScalarFunction GetFunction(const py::function &udf, PythonExceptionHandling exception_handling, bool side_effects) {
 		scalar_function_t func;
 		if (vectorized) {
 			func = CreateVectorizedFunction(udf.ptr(), exception_handling);
 		} else {
 			func = CreateNativeFunction(udf.ptr(), exception_handling);
 		}
+		FunctionSideEffects function_side_effects =
+		    side_effects ? FunctionSideEffects::HAS_SIDE_EFFECTS : FunctionSideEffects::NO_SIDE_EFFECTS;
 		ScalarFunction scalar_function(name, std::move(parameters), return_type, func, nullptr, nullptr, nullptr,
-		                               nullptr, varargs, FunctionSideEffects::NO_SIDE_EFFECTS, null_handling);
+		                               nullptr, varargs, function_side_effects, null_handling);
 		return scalar_function;
 	}
 };
@@ -332,7 +334,7 @@ ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const py:
                                                    const py::object &parameters,
                                                    const shared_ptr<DuckDBPyType> &return_type, bool vectorized,
                                                    FunctionNullHandling null_handling,
-                                                   PythonExceptionHandling exception_handling) {
+                                                   PythonExceptionHandling exception_handling, bool side_effects) {
 	PythonUDFData data(name, vectorized, null_handling);
 
 	data.AnalyzeSignature(udf);
@@ -340,7 +342,7 @@ ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const py:
 	data.OverrideReturnType(return_type);
 	data.Verify();
 
-	return data.GetFunction(udf, exception_handling);
+	return data.GetFunction(udf, exception_handling, side_effects);
 }
 
 } // namespace duckdb
