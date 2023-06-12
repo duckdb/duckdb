@@ -31,7 +31,7 @@ class RowGroupCollection;
 class RowGroupWriter;
 class UpdateSegment;
 class TableStatistics;
-class ColumnSegmentInfo;
+struct ColumnSegmentInfo;
 class Vector;
 struct ColumnCheckpointState;
 struct RowGroupPointer;

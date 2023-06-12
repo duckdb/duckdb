@@ -26,7 +26,7 @@ struct TableAppendState;
 class DuckTransaction;
 class BoundConstraint;
 class RowGroupSegmentTree;
-class ColumnSegmentInfo;
+struct ColumnSegmentInfo;
 
 class RowGroupCollection {
 public:
