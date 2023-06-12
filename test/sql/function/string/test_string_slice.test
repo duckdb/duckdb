@@ -191,8 +191,8 @@ NULL
 query T
 SELECT s[-4:-2] FROM strings
 ----
-el
-or
+ell
+orl
 (empty)
 NULL
 

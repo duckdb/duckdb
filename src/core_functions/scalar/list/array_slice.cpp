@@ -8,6 +8,28 @@
 
 namespace duckdb {
 
+static int CalculateSliceLength(int64_t &begin, int64_t &end, int64_t step, bool svalid) {
+	if (end < begin) {
+		step = 1;
+		return 0;
+	}
+    if (step < 0) {
+		step *= -1;
+	}
+	if (step == 0 && svalid) {
+		throw Exception("Slice step cannot be zero");
+	}
+	if (step == 1) {
+		return end - begin;
+	} else if (step >= (end - begin)) {
+		return 1;
+	}
+    if ((end - begin) % step != 0) {
+        return (end - begin) / step + 1;
+    }
+	return (end - begin) / step;
+}
+
 template <typename INPUT_TYPE, typename INDEX_TYPE>
 INDEX_TYPE ValueLength(const INPUT_TYPE &value) {
 	return 0;
@@ -24,13 +46,13 @@ int64_t ValueLength(const string_t &value) {
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
-bool ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value) {
-	const auto length = ValueLength<INPUT_TYPE, INDEX_TYPE>(value);
+bool ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value, const INDEX_TYPE length) {
 	if (index < 0) {
 		if (-index > length) {
 			return false;
 		}
-		index = length + index;
+		index = length + index + 1;
+		return true;
 	} else if (index > length) {
 		index = length;
 	}
@@ -40,14 +62,14 @@ bool ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value) {
 template <typename INPUT_TYPE, typename INDEX_TYPE>
 static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &end, bool begin_valid, bool end_valid) {
 	// Clamp offsets
-	begin = (begin > 0) ? begin - 1 : begin;
+	begin = (begin != 0) ? begin - 1 : 0;
 	const auto length = ValueLength<INPUT_TYPE, INDEX_TYPE>(value);
 	if (begin < 0 && -begin > length && end < 0 && -end > length) {
 		begin = 0;
 		end = 0;
 		return true;
 	}
-	if (!ClampIndex(begin, value) || !ClampIndex(end, value)) {
+	if (!ClampIndex(begin, value, length) || !ClampIndex(end, value, length)) {
 		return false;
 	}
 	end = MaxValue<INDEX_TYPE>(begin, end);
@@ -62,7 +84,11 @@ INPUT_TYPE SliceValue(Vector &result, INPUT_TYPE input, INDEX_TYPE begin, INDEX_
 
 template <>
 list_entry_t SliceValue(Vector &result, list_entry_t input, int64_t begin, int64_t end) {
-
+	if (end < begin) {
+        input.length = 0;
+        input.offset = 0;
+        return input;
+    }
 	input.offset += begin;
 	input.length = end - begin;
 	return input;
@@ -87,13 +113,16 @@ list_entry_t SliceValueWithSteps(Vector &result, SelectionVector &sel, list_entr
 		input.length = 0;
 		input.offset = sel_idx;
 		return input;
-	}
-	if (step == 1) {
-		input.length = end - begin;
-	} else {
-		input.length = step < (end - begin) ? (end - begin + step) / step : 1;
-	}
+	} else if (end < begin) {
+        input.length = 0;
+        input.offset = 0;
+        return input;
+    }
+    input.length = CalculateSliceLength(begin, end, step, true);
 	idx_t child_idx = input.offset + begin;
+	if (step < 0) {
+        child_idx = input.offset + end - 1;
+    }
 	input.offset = sel_idx;
 	for (idx_t i = 0; i < input.length; i++) {
 		sel.set_index(sel_idx, child_idx);
@@ -101,6 +130,16 @@ list_entry_t SliceValueWithSteps(Vector &result, SelectionVector &sel, list_entr
 		sel_idx++;
 	}
 	return input;
+}
+
+template <>
+string_t SliceValueWithSteps(Vector &result, SelectionVector &sel, string_t input, int64_t begin, int64_t end,
+                                 int64_t step, idx_t &sel_idx) {
+	// this should never be called
+	throw NotImplementedException(
+	    "Slice with steps has not been implemented for string types, you can consider rewriting your query as "
+	    "follows:\n SELECT array_to_string((str_split(string, '')[begin:end:step], '');");
+	return "";
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
@@ -133,6 +172,10 @@ static void ExecuteConstantSlice(Vector &result, Vector &v, Vector &b, Vector &e
 	auto end = edata[0];
 	auto step = sdata ? sdata[0] : 1;
 
+	if (step < 0) {
+		std::swap(begin, end);
+	}
+
 	if (begin == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
 		begin = 0;
 	}
@@ -146,22 +189,24 @@ static void ExecuteConstantSlice(Vector &result, Vector &v, Vector &b, Vector &e
 	auto evalid = !ConstantVector::IsNull(e);
 	auto svalid = s && !ConstantVector::IsNull(*s);
 
-	if (step == 0 && svalid) {
-		throw ValueOutOfRangeException("Slice step cannot be zero");
-	}
-
 	// Clamp offsets
 	bool clamp_result = false;
 	if (vvalid && bvalid && evalid && (svalid || step == 1)) {
 		clamp_result = ClampSlice(sliced, begin, end, bvalid, evalid);
 	}
 
-	if (s && svalid && vvalid && bvalid && evalid && step > 1 && end - begin > 0) {
-		sel.Initialize((end - begin + step) / step);
+	auto sel_length = 0;
+	if (s && svalid && vvalid && bvalid && evalid && step != 1 && end - begin > 0) {
+		sel_length = CalculateSliceLength(begin, end, step, svalid);
+		if (sel_length > 0) {
+    		sel.Initialize(sel_length);
+        } else {
+			s = nullptr;
+		}
 	}
 
 	// Try to slice
-	if (!vvalid || !bvalid || !evalid || (s && !svalid) || step < 0 || !clamp_result) {
+	if (!vvalid || !bvalid || !evalid || (s && !svalid) || !clamp_result) {
 		ConstantVector::SetNull(result, true);
 	} else if (step == 1) {
 		rdata[0] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
@@ -169,34 +214,28 @@ static void ExecuteConstantSlice(Vector &result, Vector &v, Vector &b, Vector &e
 		rdata[0] = SliceValueWithSteps<INPUT_TYPE, INDEX_TYPE>(result, sel, sliced, begin, end, step, sel_idx);
 	}
 
-	if (s && step > 0 && end - begin > 0) {
-		result_child_vector->Slice(sel, (end - begin + 1) / step);
+	if (s && step != 0 && end - begin > 0) {
+		result_child_vector->Slice(sel, sel_length);
 	}
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
-static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, const idx_t count, optional_ptr<Vector> s,
-                             SelectionVector &sel, idx_t &sel_idx, optional_ptr<Vector> result_child_vector) {
-	UnifiedVectorFormat vdata, bdata, edata, sdata;
-
-	v.ToUnifiedFormat(count, vdata);
-	b.ToUnifiedFormat(count, bdata);
-	e.ToUnifiedFormat(count, edata);
-	if (s) {
-		s->ToUnifiedFormat(count, sdata);
-	}
-
-	idx_t new_size = 0;
-	for (idx_t i = 0; s && i < count; ++i) {
+static void FindSelLength(UnifiedVectorFormat &vdata, UnifiedVectorFormat &bdata, UnifiedVectorFormat &edata,
+                          UnifiedVectorFormat &sdata, const idx_t count, idx_t &sel_length) {
+	for (idx_t i = 0; i < count; ++i) {
 		auto vidx = vdata.sel->get_index(i);
 		auto bidx = bdata.sel->get_index(i);
 		auto eidx = edata.sel->get_index(i);
-		auto sidx = s ? sdata.sel->get_index(i) : 0;
+		auto sidx = sdata.sel->get_index(i);
 
 		auto sliced = ((INPUT_TYPE *)vdata.data)[vidx];
 		auto begin = ((INDEX_TYPE *)bdata.data)[bidx];
 		auto end = ((INDEX_TYPE *)edata.data)[eidx];
-		auto step = s ? ((INDEX_TYPE *)sdata.data)[sidx] : 1;
+		auto step = ((INDEX_TYPE *)sdata.data)[sidx];
+
+		if (step < 0) {
+			std::swap(begin, end);
+		}
 
 		if (begin == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
 			begin = 0;
@@ -206,21 +245,29 @@ static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, co
 			end = SliceLength<INPUT_TYPE, INDEX_TYPE>(sliced);
 		}
 
-		auto step_valid = s && sdata.validity.RowIsValid(sidx);
+		auto step_valid = sdata.validity.RowIsValid(sidx);
 
-		if (step == 0 && step_valid) {
-			throw ValueOutOfRangeException("Slice step cannot be zero");
+		auto length = 0;
+		if (step_valid && ClampSlice(sliced, begin, end, bidx, eidx)) {
+			length = CalculateSliceLength(begin, end, step, step_valid);
 		}
-
-		if (s && step_valid && ClampSlice(sliced, begin, end, bidx, eidx)) {
-			new_size += (end - begin + step) / step;
-		} else {
-			new_size += end - begin;
-		}
+		sel_length += length;
 	}
+}
 
+template <typename INPUT_TYPE, typename INDEX_TYPE>
+static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, const idx_t count, optional_ptr<Vector> s,
+                             SelectionVector &sel, idx_t &sel_idx, optional_ptr<Vector> result_child_vector) {
+	UnifiedVectorFormat vdata, bdata, edata, sdata;
+    idx_t sel_length = 0;
+
+	v.ToUnifiedFormat(count, vdata);
+	b.ToUnifiedFormat(count, bdata);
+	e.ToUnifiedFormat(count, edata);
 	if (s) {
-		sel.Initialize(new_size);
+		s->ToUnifiedFormat(count, sdata);
+	    FindSelLength<INPUT_TYPE, INDEX_TYPE>(vdata, bdata, edata, sdata, count, sel_length);
+		sel.Initialize(sel_length);
 	}
 
 	auto rdata = FlatVector::GetData<INPUT_TYPE>(result);
@@ -237,6 +284,10 @@ static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, co
 		auto end = ((INDEX_TYPE *)edata.data)[eidx];
 		auto step = s ? ((INDEX_TYPE *)sdata.data)[sidx] : 1;
 
+		if (step < 0) {
+			std::swap(begin, end);
+		}
+
 		if (begin == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
 			begin = 0;
 		}
@@ -250,7 +301,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, co
 		auto evalid = edata.validity.RowIsValid(eidx);
 		auto svalid = s && sdata.validity.RowIsValid(sidx);
 
-		if (!vvalid || !bvalid || !evalid || (s && !svalid) || step < 0 ||
+		if (!vvalid || !bvalid || !evalid || (s && !svalid) ||
 		    !ClampSlice(sliced, begin, end, bvalid, evalid)) {
 			rmask.SetInvalid(i);
 		} else if (!s) {
@@ -260,7 +311,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, co
 		}
 	}
 	if (s) {
-		result_child_vector->Slice(sel, new_size);
+		result_child_vector->Slice(sel, sel_length);
 	}
 }
 
@@ -308,11 +359,6 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 		break;
 	}
 	case LogicalTypeId::VARCHAR: {
-		D_ASSERT(b.GetType().id() == LogicalTypeId::BIGINT);
-		D_ASSERT(e.GetType().id() == LogicalTypeId::BIGINT);
-		if (s) {
-			D_ASSERT(s->GetType().id() == LogicalTypeId::BIGINT);
-		}
 		ExecuteSlice<string_t, int64_t>(result, v, b, e, count, s);
 		break;
 	}

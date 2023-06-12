@@ -11,7 +11,7 @@ import difflib
 import re
 from python_helpers import open_utf8
 
-cpp_format_command = 'clang-format --sort-includes=0 -style=file'
+cpp_format_command = 'clang-format-11 --sort-includes=0 -style=file'
 cmake_format_command = 'cmake-format'
 extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', 'CMakeLists.txt', '.test', '.test_slow', '.test_coverage', '.benchmark']
 formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples', 'extension']

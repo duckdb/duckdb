@@ -215,8 +215,8 @@ NULL
 query T
 SELECT s[-4:-2] FROM lists
 ----
-[e, l]
-[o, r]
+[e, l, l]
+[o, r, l]
 []
 NULL
 
@@ -296,3 +296,6 @@ SELECT ARRAY_POP_FRONT(s) FROM lists;
 [o, r, l, d]
 []
 NULL
+
+statement error
+SELECT (1)[1:2];

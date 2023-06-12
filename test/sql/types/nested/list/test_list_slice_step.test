@@ -50,7 +50,7 @@ SELECT ([1,2,3,4,5])[-1:3];
 query I
 SELECT ([1,2,3,4,5])[1:-3];
 ----
-[1, 2]
+[1, 2, 3]
 
 # OUT OF BOUNDS
 query I
@@ -127,6 +127,22 @@ SELECT a[start:stop:step] FROM tbl;
 [2, 4]
 [1, 2, 3]
 
+query I
+select a[:stop:step] from tbl;
+----
+[1, 3]
+[1, 5]
+[1, 3, 5]
+[1, 2, 3]
+
+query I
+select a[start:-:step] from tbl;
+----
+[1, 3, 5]
+[1, 5, 7]
+[2, 4]
+[1, 2, 3, 4, 5]
+
 # ERROR's
 statement error
 SELECT '12345'[1:3:2];
@@ -134,12 +150,19 @@ SELECT '12345'[1:3:2];
 statement error
 SELECT ([1,2,3,4,5])[1:3:0];
 
-# NULL's
-query I
-SELECT ([1,2,3,4,5])[1:3:-1];
-----
-NULL
+statement ok
+CREATE TABLE err(a INT[], start int, stop int, step int);
 
+statement ok
+INSERT INTO err VALUES ([1,2,3,4,5], 1, 3, 0);
+
+statement ok
+INSERT INTO err VALUES ([1,4,5,6,7,8], 1, 3, 0);
+
+statement error
+SELECT a[start:stop:step] from err;
+
+# NULL's
 query I
 SELECT ([1,2,3,4,5])[1:3:NULL];
 ----
