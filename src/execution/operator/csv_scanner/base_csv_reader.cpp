@@ -566,7 +566,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 }
 
 void BaseCSVReader::SetNewLineDelimiter(bool carry, bool carry_followed_by_nl) {
-	if ((!options.has_newline) || options.new_line == NewLineIdentifier::NOT_SET) {
+	if (options.new_line == NewLineIdentifier::NOT_SET) {
 		if (options.new_line == NewLineIdentifier::MIX) {
 			return;
 		}

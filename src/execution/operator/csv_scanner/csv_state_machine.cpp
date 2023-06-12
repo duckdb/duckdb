@@ -73,9 +73,10 @@ idx_t CSVStateMachine::SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_
 		cur_rows += state != CSVState::RECORD_SEPARATOR && carriage_return;
 		column_count -= column_count * (state != CSVState::RECORD_SEPARATOR && carriage_return);
 		// Identify what is our line separator
-		carry_on_separator = state == CSVState::RECORD_SEPARATOR && carriage_return;
-		single_record_separator = (state != CSVState::RECORD_SEPARATOR && carriage_return) ||
-		                          (state == CSVState::RECORD_SEPARATOR && !carriage_return);
+		carry_on_separator = (state == CSVState::RECORD_SEPARATOR && carriage_return) || carry_on_separator;
+		single_record_separator = ((state != CSVState::RECORD_SEPARATOR && carriage_return) ||
+		                           (state == CSVState::RECORD_SEPARATOR && !carriage_return)) ||
+		                          single_record_separator;
 		cur_pos++;
 	}
 	sniffed_column_counts.erase(sniffed_column_counts.end() - (STANDARD_VECTOR_SIZE - cur_rows),
