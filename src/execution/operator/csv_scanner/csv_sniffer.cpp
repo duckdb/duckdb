@@ -239,9 +239,9 @@ bool BufferedCSVReader::JumpToNextSample() {
 }
 
 void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t buffer_start_pos) {
-	vector<idx_t> sniffed_column_counts;
+	vector<idx_t> sniffed_column_counts(STANDARD_VECTOR_SIZE);
 	buffer.position = buffer_start_pos;
-	idx_t buffer_pos = state_machine.SniffDialect(buffer, sniffed_column_counts, STANDARD_VECTOR_SIZE);
+	idx_t buffer_pos = state_machine.SniffDialect(buffer, sniffed_column_counts);
 
 	idx_t start_row = options.skip_rows;
 	idx_t consistent_rows = 0;
@@ -385,7 +385,7 @@ vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 		option.quote = candidate.state->configuration.quote;
 		option.escape = candidate.state->configuration.escape;
 		option.delimiter = candidate.state->configuration.field_separator;
-		option.num_cols = candidate.max_num_columns + 1;
+		option.num_cols = candidate.max_num_columns;
 		option.new_line = candidate.state->configuration.record_separator;
 		result.emplace_back(option);
 	}

@@ -53,18 +53,17 @@ CSVStateMachine::CSVStateMachine(CSVStateMachineConfiguration configuration_p) :
 	transition_array[escape_state][static_cast<uint8_t>(configuration.escape)] = quoted_state;
 }
 
-idx_t CSVStateMachine::SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_column_counts, idx_t max_rows) {
+idx_t CSVStateMachine::SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_column_counts) {
 	idx_t cur_rows = 0;
 	idx_t cur_pos = buffer.position;
-	idx_t column_count = 0;
-	if (sniffed_column_counts.size() != STANDARD_VECTOR_SIZE) {
-		sniffed_column_counts.resize(STANDARD_VECTOR_SIZE);
-	}
+	idx_t column_count = 1;
+	D_ASSERT(sniffed_column_counts.size() == STANDARD_VECTOR_SIZE);
+
 	CSVState state {CSVState::STANDARD};
 	// Both these variables are used for new line identifier detection
 	bool single_record_separator = false;
 	bool carry_on_separator = false;
-	while (cur_pos < buffer.buffer_size && cur_rows < max_rows) {
+	while (cur_pos < buffer.buffer_size && cur_rows < STANDARD_VECTOR_SIZE) {
 		if (state == CSVState::INVALID) {
 			sniffed_column_counts.clear();
 			return buffer.buffer_size;
@@ -74,17 +73,20 @@ idx_t CSVStateMachine::SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_
 		column_count += state == CSVState::FIELD_SEPARATOR;
 		sniffed_column_counts[cur_rows] = column_count;
 		cur_rows += state == CSVState::RECORD_SEPARATOR;
-		column_count -= column_count * (state == CSVState::RECORD_SEPARATOR);
+		column_count -= (column_count - 1) * (state == CSVState::RECORD_SEPARATOR);
 		state = static_cast<CSVState>(transition_array[static_cast<uint8_t>(state)][static_cast<uint8_t>(c)]);
-		// It means our carriage return is  actually a record separator
+		// It means our carriage return is actually a record separator
 		cur_rows += state != CSVState::RECORD_SEPARATOR && carriage_return;
-		column_count -= column_count * (state != CSVState::RECORD_SEPARATOR && carriage_return);
+		column_count -= (column_count - 1) * (state != CSVState::RECORD_SEPARATOR && carriage_return);
 		// Identify what is our line separator
 		carry_on_separator = (state == CSVState::RECORD_SEPARATOR && carriage_return) || carry_on_separator;
 		single_record_separator = ((state != CSVState::RECORD_SEPARATOR && carriage_return) ||
 		                           (state == CSVState::RECORD_SEPARATOR && !carriage_return)) ||
 		                          single_record_separator;
 		cur_pos++;
+	}
+	if (cur_rows < STANDARD_VECTOR_SIZE && state == CSVState::RECORD_SEPARATOR) {
+		sniffed_column_counts[cur_rows++] = column_count;
 	}
 	sniffed_column_counts.erase(sniffed_column_counts.end() - (STANDARD_VECTOR_SIZE - cur_rows),
 	                            sniffed_column_counts.end());

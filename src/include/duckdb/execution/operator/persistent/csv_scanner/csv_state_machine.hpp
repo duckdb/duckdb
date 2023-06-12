@@ -59,9 +59,8 @@ public:
 	//! This Parse Function Finds where the lines and values start within the CSV Buffer
 	//! sniff_column_count stores the number of columns for each row.
 	//! start_value_idx stores the buffer idx where values start.
-	//! max_rows is the maximum number of rows to be parsed by this function.
 	//! It returns the number of rows sniffed
-	idx_t SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_column_counts, idx_t max_rows);
+	idx_t SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_column_counts);
 
 	CSVStateMachineConfiguration configuration;
 
