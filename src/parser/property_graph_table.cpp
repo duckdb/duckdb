@@ -5,13 +5,10 @@
 
 namespace duckdb {
 
-    PropertyGraphTable::PropertyGraphTable() : ParsedExpression(ExpressionType::FUNCTION_REF, ExpressionClass::BOUND_EXPRESSION) {
-
-    }
+    PropertyGraphTable::PropertyGraphTable() = default;
 
     PropertyGraphTable::PropertyGraphTable(string table_name_p, vector<string> column_names_p, vector<string> labels_p)
-            : ParsedExpression(ExpressionType::FUNCTION_REF, ExpressionClass::BOUND_EXPRESSION),
-                table_name(std::move(table_name_p)), column_names(std::move(column_names_p)),
+            : table_name(std::move(table_name_p)), column_names(std::move(column_names_p)),
                 sub_labels(std::move(labels_p)) {
 
 #ifdef DEBUG
@@ -27,8 +24,7 @@ namespace duckdb {
 
     PropertyGraphTable::PropertyGraphTable(string table_name_p, string table_name_alias_p, vector<string> column_names_p,
                                            vector<string> labels_p)
-            : ParsedExpression(ExpressionType::FUNCTION_REF, ExpressionClass::BOUND_EXPRESSION),
-                table_name(std::move(table_name_p)), table_name_alias(std::move(table_name_alias_p)),
+            : table_name(std::move(table_name_p)), table_name_alias(std::move(table_name_alias_p)),
                 column_names(std::move(column_names_p)), sub_labels(std::move(labels_p)) {
 #ifdef DEBUG
         for (auto &col_name : column_names) {
@@ -108,10 +104,7 @@ namespace duckdb {
         return result;
     }
 
-        bool PropertyGraphTable::Equals(const BaseExpression *other_p) const {
-        if (!ParsedExpression::Equals(other_p)) {
-            return false;
-        }
+        bool PropertyGraphTable::Equals(const PropertyGraphTable *other_p) const {
 
         auto other = (PropertyGraphTable *)other_p;
         if (table_name != other->table_name) {
@@ -237,7 +230,7 @@ namespace duckdb {
         }
     }
 
-    unique_ptr<ParsedExpression> PropertyGraphTable::Deserialize(FieldReader &reader) {
+    unique_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(FieldReader &reader) {
         auto pg_table = make_uniq<PropertyGraphTable>();
 
         pg_table->table_name = reader.ReadRequired<string>();
@@ -262,7 +255,7 @@ namespace duckdb {
         return pg_table;
     }
 
-    unique_ptr<ParsedExpression> PropertyGraphTable::Copy() const {
+    unique_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
         auto result = make_uniq<PropertyGraphTable>();
 
         result->table_name = table_name;
@@ -301,7 +294,7 @@ namespace duckdb {
         for (auto &key : destination_pk) {
             result->destination_pk.push_back(key);
         }
-        return std::move(result);
+        return result;
     }
 
 } // namespace duckdb

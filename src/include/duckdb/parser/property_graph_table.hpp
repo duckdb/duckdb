@@ -13,7 +13,7 @@
 namespace duckdb {
 
 //! Represents a reference to a graph table from the CREATE PROPERTY GRAPH
-class PropertyGraphTable : public ParsedExpression {
+class PropertyGraphTable {
 public:
 	//! Used for Copy
 	PropertyGraphTable();
@@ -57,13 +57,13 @@ public:
 	string destination_reference;
 
 public:
-    string ToString() const override;
-    bool Equals(const BaseExpression *other_p) const override;
+    string ToString() const;
+    bool Equals(const PropertyGraphTable *other_p) const;
 
-    unique_ptr<ParsedExpression> Copy() const override;
+    unique_ptr<PropertyGraphTable> Copy() const;
 
-    void Serialize(FieldWriter &writer) const override;
+    void Serialize(FieldWriter &writer) const;
 
-	static unique_ptr<ParsedExpression> Deserialize(FieldReader &reader);
+	static unique_ptr<PropertyGraphTable> Deserialize(FieldReader &reader);
 };
 } // namespace duckdb
