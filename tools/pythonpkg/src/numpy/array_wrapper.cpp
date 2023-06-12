@@ -604,6 +604,11 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 void RawArrayWrapper::Resize(idx_t new_capacity) {
 	D_ASSERT(py::gil_check());
 	vector<py::ssize_t> new_shape {py::ssize_t(new_capacity)};
+	const long *current_shape = array.shape();
+	if (current_shape && *current_shape == (long)new_capacity) {
+		// Already correct shape
+		return;
+	}
 	array.resize(new_shape, false);
 	data = data_ptr_cast(array.mutable_data());
 }
