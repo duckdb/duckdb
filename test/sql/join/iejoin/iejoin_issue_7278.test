@@ -3,6 +3,9 @@
 # group: [iejoin]
 
 statement ok
+pragma enable_verification
+
+statement ok
 create temp table calendar as
 	SELECT
 		start_ts,
