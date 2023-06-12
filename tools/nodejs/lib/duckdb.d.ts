@@ -185,6 +185,8 @@ export class Statement {
   finalize(callback?: Callback<void>): void;
 
   run(...args: [...any, Callback<void>] | any[]): Statement;
+
+  columns(): {name: string, type: string}[];
 }
 
 export const ERROR: number;

@@ -690,6 +690,14 @@ Statement.prototype.stream;
 Statement.prototype.sql;
 
 /**
+ * @method
+ * @param {...*} params
+ * @param callback
+ * @return {void}
+ */
+Statement.prototype.columns;
+
+/**
  * @typedef DuckDbError
  * @type {object}
  * @property {number} errno - -1 for DuckDB errors
