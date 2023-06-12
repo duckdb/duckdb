@@ -298,6 +298,16 @@ void WindowSegmentTree::FlushStates(idx_t l_idx) {
 	} else {
 		leaves.SetCardinality(flush_count);
 		aggr.function.update(&leaves.data[0], aggr_input_data, leaves.ColumnCount(), statep, flush_count);
+
+		//	Some update functions mangle our dictionaries.
+		//	so we have to check and unmangle them...
+		for (column_t i = 0; i < leaves.ColumnCount(); i++) {
+			auto &leaf = leaves.data[i];
+			if (leaf.GetVectorType() != VectorType::DICTIONARY_VECTOR ||
+			    DictionaryVector::SelVector(leaf).data() != filter_sel.data()) {
+				leaf.Slice(inputs.data[i], filter_sel, STANDARD_VECTOR_SIZE);
+			}
+		}
 	}
 
 	flush_count = 0;
@@ -306,16 +316,6 @@ void WindowSegmentTree::FlushStates(idx_t l_idx) {
 void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
 	const auto count = end - begin;
 	D_ASSERT(count <= TREE_FANOUT);
-
-	//	Some update functions mangle our dictionaries.
-	//	so we have to check and unmangle them...
-	for (column_t i = 0; i < leaves.ColumnCount(); i++) {
-		auto &leaf = leaves.data[i];
-		if (leaf.GetVectorType() != VectorType::DICTIONARY_VECTOR ||
-		    DictionaryVector::SelVector(leaf).data() != filter_sel.data()) {
-			leaf.Slice(inputs.data[i], filter_sel, STANDARD_VECTOR_SIZE);
-		}
-	}
 
 	//	If we are not filtering,
 	//	just update the shared dictionary selection to the range
