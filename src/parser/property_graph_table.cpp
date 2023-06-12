@@ -44,7 +44,50 @@ namespace duckdb {
 #endif
     }
 
-    bool PropertyGraphTable::Equals(const BaseExpression *other_p) const {
+    string PropertyGraphTable::ToString() const {
+        string result = table_name + " " + (table_name_alias.empty() ? "" : "AS " + table_name_alias);
+        if (!is_vertex_table) {
+            result += "SOURCE KEY (";
+            for (idx_t i = 0; i < source_fk.size(); i++) {
+                if (i != source_fk.size() - 1) {
+                    result += source_fk[i] + ", ";
+                } else {
+                    // Last element should be without a trailing , instead )
+                    result = source_fk[i] + ") ";
+                }
+            }
+            result += "REFERENCES " + source_reference + " (";
+            for (idx_t i = 0; i < source_pk.size(); i++) {
+                if (i != source_pk.size() - 1) {
+                    result += source_pk[i] + ", ";
+                } else {
+                    result = source_pk[i] + ") ";
+                }
+            }
+            result += "\n";
+            result += "DESTINATION KEY (";
+            for (idx_t i = 0; i < destination_fk.size(); i++) {
+                if (i != destination_fk.size() - 1) {
+                    result += destination_fk[i] + ", ";
+                } else {
+                    // Last element should be without a trailing , instead )
+                    result = destination_fk[i] + ") ";
+                }
+            }
+            result += "REFERENCES " + destination_reference + " (";
+            for (idx_t i = 0; i < destination_pk.size(); i++) {
+                if (i != destination_pk.size() - 1) {
+                    result += destination_pk[i] + ", ";
+                } else {
+                    result = destination_pk[i] + ") ";
+                }
+            }
+        }
+
+        return result;
+    }
+
+        bool PropertyGraphTable::Equals(const BaseExpression *other_p) const {
         if (!ParsedExpression::Equals(other_p)) {
             return false;
         }
