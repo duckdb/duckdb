@@ -47,17 +47,17 @@ public:
 	DUCKDB_API static string BlobToBit(string_t blob);
 
 	//! output_str needs to have enough space allocated before calling this function (sizeof(T) + 1)
-	template<class T>
+	template <class T>
 	DUCKDB_API static void NumericToBit(T numeric, string_t &output_str);
 
-	template<class T>
+	template <class T>
 	DUCKDB_API static string NumericToBit(T numeric);
 
 	//! bit is expected to fit inside of output num (bit size <= sizeof(T) + 1)
-	template<class T>
+	template <class T>
 	DUCKDB_API static void BitToNumeric(string_t bit, T &output_num);
 
-	template<class T>
+	template <class T>
 	DUCKDB_API static T BitToNumeric(string_t bit);
 
 	//! bit is expected to fit inside of output_blob (bit size = output_blob + 1)
@@ -90,8 +90,8 @@ private:
 //===--------------------------------------------------------------------===//
 // Bit Template definitions
 //===--------------------------------------------------------------------===//
-template<class T>
-void Bit::NumericToBit(T numeric, string_t &output_str)  {
+template <class T>
+void Bit::NumericToBit(T numeric, string_t &output_str) {
 	auto output = output_str.GetDataWriteable();
 	auto data = const_data_ptr_cast(&numeric);
 
@@ -103,7 +103,7 @@ void Bit::NumericToBit(T numeric, string_t &output_str)  {
 	Bit::Finalize(output_str);
 }
 
-template<class T>
+template <class T>
 string Bit::NumericToBit(T numeric) {
 	auto bit_len = sizeof(T) + 1;
 	auto buffer = make_unsafe_uniq_array<char>(bit_len);
@@ -112,14 +112,14 @@ string Bit::NumericToBit(T numeric) {
 	return output_str.GetString();
 }
 
-template<class T>
+template <class T>
 T Bit::BitToNumeric(string_t bit) {
 	T output;
 	Bit::BitToNumeric(bit, output);
 	return (output);
 }
 
-template<class T>
+template <class T>
 void Bit::BitToNumeric(string_t bit, T &output_num) {
 	D_ASSERT(bit.GetSize() <= sizeof(T) + 1);
 
@@ -135,6 +135,5 @@ void Bit::BitToNumeric(string_t bit, T &output_num) {
 		output[sizeof(T) - 1 - idx] = data[1 + idx - padded_byte_idx];
 	}
 }
-
 
 } // namespace duckdb

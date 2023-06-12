@@ -446,9 +446,9 @@ bool TryCastWithOverflowCheck(hugeint_t value, double &result) {
 }
 
 struct NumericTryCastToBit {
-	template<class SRC>
+	template <class SRC>
 	static inline string_t Operation(SRC input, Vector &result) {
-		return StringVector::AddStringOrBlob(result, Bit::NumericToBit(input));	
+		return StringVector::AddStringOrBlob(result, Bit::NumericToBit(input));
 	}
 };
 

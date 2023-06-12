@@ -1,6 +1,6 @@
 # name: test/sql/cast/test_bit_cast.test
 # description: Test casting from and to BitString
-# group [cast]
+# group: [cast]
 
 statement ok
 PRAGMA enable_verification
