@@ -13,7 +13,7 @@ static int CalculateSliceLength(int64_t &begin, int64_t &end, int64_t step, bool
 		step = 1;
 		return 0;
 	}
-    if (step < 0) {
+	if (step < 0) {
 		step *= -1;
 	}
 	if (step == 0 && svalid) {
@@ -24,9 +24,9 @@ static int CalculateSliceLength(int64_t &begin, int64_t &end, int64_t step, bool
 	} else if (step >= (end - begin)) {
 		return 1;
 	}
-    if ((end - begin) % step != 0) {
-        return (end - begin) / step + 1;
-    }
+	if ((end - begin) % step != 0) {
+		return (end - begin) / step + 1;
+	}
 	return (end - begin) / step;
 }
 
@@ -85,10 +85,10 @@ INPUT_TYPE SliceValue(Vector &result, INPUT_TYPE input, INDEX_TYPE begin, INDEX_
 template <>
 list_entry_t SliceValue(Vector &result, list_entry_t input, int64_t begin, int64_t end) {
 	if (end < begin) {
-        input.length = 0;
-        input.offset = 0;
-        return input;
-    }
+		input.length = 0;
+		input.offset = 0;
+		return input;
+	}
 	input.offset += begin;
 	input.length = end - begin;
 	return input;
@@ -114,15 +114,15 @@ list_entry_t SliceValueWithSteps(Vector &result, SelectionVector &sel, list_entr
 		input.offset = sel_idx;
 		return input;
 	} else if (end < begin) {
-        input.length = 0;
-        input.offset = 0;
-        return input;
-    }
-    input.length = CalculateSliceLength(begin, end, step, true);
+		input.length = 0;
+		input.offset = 0;
+		return input;
+	}
+	input.length = CalculateSliceLength(begin, end, step, true);
 	idx_t child_idx = input.offset + begin;
 	if (step < 0) {
-        child_idx = input.offset + end - 1;
-    }
+		child_idx = input.offset + end - 1;
+	}
 	input.offset = sel_idx;
 	for (idx_t i = 0; i < input.length; i++) {
 		sel.set_index(sel_idx, child_idx);
@@ -134,7 +134,7 @@ list_entry_t SliceValueWithSteps(Vector &result, SelectionVector &sel, list_entr
 
 template <>
 string_t SliceValueWithSteps(Vector &result, SelectionVector &sel, string_t input, int64_t begin, int64_t end,
-                                 int64_t step, idx_t &sel_idx) {
+                             int64_t step, idx_t &sel_idx) {
 	// this should never be called
 	throw NotImplementedException(
 	    "Slice with steps has not been implemented for string types, you can consider rewriting your query as "
@@ -199,8 +199,8 @@ static void ExecuteConstantSlice(Vector &result, Vector &v, Vector &b, Vector &e
 	if (s && svalid && vvalid && bvalid && evalid && step != 1 && end - begin > 0) {
 		sel_length = CalculateSliceLength(begin, end, step, svalid);
 		if (sel_length > 0) {
-    		sel.Initialize(sel_length);
-        } else {
+			sel.Initialize(sel_length);
+		} else {
 			s = nullptr;
 		}
 	}
@@ -259,14 +259,14 @@ template <typename INPUT_TYPE, typename INDEX_TYPE>
 static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, const idx_t count, optional_ptr<Vector> s,
                              SelectionVector &sel, idx_t &sel_idx, optional_ptr<Vector> result_child_vector) {
 	UnifiedVectorFormat vdata, bdata, edata, sdata;
-    idx_t sel_length = 0;
+	idx_t sel_length = 0;
 
 	v.ToUnifiedFormat(count, vdata);
 	b.ToUnifiedFormat(count, bdata);
 	e.ToUnifiedFormat(count, edata);
 	if (s) {
 		s->ToUnifiedFormat(count, sdata);
-	    FindSelLength<INPUT_TYPE, INDEX_TYPE>(vdata, bdata, edata, sdata, count, sel_length);
+		FindSelLength<INPUT_TYPE, INDEX_TYPE>(vdata, bdata, edata, sdata, count, sel_length);
 		sel.Initialize(sel_length);
 	}
 
@@ -301,8 +301,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, co
 		auto evalid = edata.validity.RowIsValid(eidx);
 		auto svalid = s && sdata.validity.RowIsValid(sidx);
 
-		if (!vvalid || !bvalid || !evalid || (s && !svalid) ||
-		    !ClampSlice(sliced, begin, end, bvalid, evalid)) {
+		if (!vvalid || !bvalid || !evalid || (s && !svalid) || !ClampSlice(sliced, begin, end, bvalid, evalid)) {
 			rmask.SetInvalid(i);
 		} else if (!s) {
 			rdata[i] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
