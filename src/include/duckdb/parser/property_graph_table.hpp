@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckPGQ
 //
-// duckdb/parser/expression/property_graph_table_expression.hpp
+// duckdb/parser/property_graph_table.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -57,10 +57,13 @@ public:
 	string destination_reference;
 
 public:
-	void Serialize(Serializer &serializer) const;
+    string ToString() const override;
+    bool Equals(const BaseExpression *other_p) const override;
 
-	static unique_ptr<PropertyGraphTable> Deserialize(Deserializer &source);
+    unique_ptr<ParsedExpression> Copy() const override;
 
-	unique_ptr<PropertyGraphTable> Copy();
+    void Serialize(FieldWriter &writer) const override;
+
+	static unique_ptr<ParsedExpression> Deserialize(FieldReader &reader);
 };
 } // namespace duckdb

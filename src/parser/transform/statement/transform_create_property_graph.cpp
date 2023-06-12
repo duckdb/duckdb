@@ -1,6 +1,7 @@
 #include "duckdb/parser/parsed_data/create_property_graph_info.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
+#include "duckdb/parser/property_graph_table.hpp"
 
 namespace duckdb {
 
@@ -58,7 +59,7 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 
 
 
-	unique_ptr<PropertyGraphTable> pg_table =
+	auto pg_table =
 	    make_uniq<PropertyGraphTable>(graph_table_name.name, table_name_alias, column_names, label_names);
 
 	pg_table->is_vertex_table = graph_table->is_vertex_table;

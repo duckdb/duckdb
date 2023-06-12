@@ -44,56 +44,163 @@ namespace duckdb {
 #endif
     }
 
-    void PropertyGraphTable::Serialize(Serializer &serializer) const {
-        serializer.WriteString(table_name);
+    bool PropertyGraphTable::Equals(const BaseExpression *other_p) const {
+        if (!ParsedExpression::Equals(other_p)) {
+            return false;
+        }
 
-        serializer.WriteStringVector(column_names);
-        serializer.WriteStringVector(column_aliases);
-        serializer.WriteStringVector(except_columns);
-        serializer.WriteStringVector(sub_labels);
-        serializer.WriteString(main_label);
+        auto other = (PropertyGraphTable *)other_p;
+        if (table_name != other->table_name) {
+            return false;
+        }
 
-        serializer.Write<bool>(is_vertex_table);
-        serializer.Write<bool>(all_columns);
-        serializer.Write<bool>(no_columns);
+        if (table_name_alias != other->table_name_alias) {
+            return false;
+        }
+
+        if (column_names.size() != other->column_names.size()) {
+            return false;
+        }
+        for (idx_t i = 0; i < column_names.size(); i++) {
+            if (column_names[i] != other->column_names[i]) {
+                return false;
+            }
+        }
+        if (column_aliases.size() != other->column_aliases.size()) {
+            return false;
+        }
+        for (idx_t i = 0; i < column_aliases.size(); i++) {
+            if (column_aliases[i] != other->column_aliases[i]) {
+                return false;
+            }
+        }
+        if (except_columns.size() != other->except_columns.size()) {
+            return false;
+        }
+        for (idx_t i = 0; i < except_columns.size(); i++) {
+            if (except_columns[i] != other->except_columns[i]) {
+                return false;
+            }
+        }
+        if (sub_labels.size() != other->sub_labels.size()) {
+            return false;
+        }
+        for (idx_t i = 0; i < sub_labels.size(); i++) {
+            if (sub_labels[i] != other->sub_labels[i]) {
+                return false;
+            }
+        }
+
+        if (main_label != other->main_label) {
+            return false;
+        }
+        if (all_columns != other->all_columns) {
+            return false;
+        }
+        if (no_columns != other->no_columns) {
+            return false;
+        }
+        if (is_vertex_table != other->is_vertex_table) {
+            return false;
+        }
+        if (discriminator != other->discriminator) {
+            return false;
+        }
+        if (source_fk.size() != other->source_fk.size()) {
+            return false;
+        }
+        for (idx_t i = 0; i < source_fk.size(); i++) {
+            if (source_fk[i] != other->source_fk[i]) {
+                return false;
+            }
+        }
+        if (source_pk.size() != other->source_pk.size()) {
+            return false;
+        }
+        for (idx_t i = 0; i < source_pk.size(); i++) {
+            if (source_pk[i] != other->source_pk[i]) {
+                return false;
+            }
+        }
+        if (source_reference != other->source_reference) {
+            return false;
+        }
+
+        if (destination_fk.size() != other->destination_fk.size()) {
+            return false;
+        }
+        for (idx_t i = 0; i < destination_fk.size(); i++) {
+            if (destination_fk[i] != other->destination_fk[i]) {
+                return false;
+            }
+        }
+
+        if (destination_pk.size() != other->destination_pk.size()) {
+            return false;
+        }
+        for (idx_t i = 0; i < destination_pk.size(); i++) {
+            if (destination_pk[i] != other->destination_pk[i]) {
+                return false;
+            }
+        }
+        if (destination_reference != other->destination_reference) {
+            return false;
+        }
+
+        return true;
+    }
+
+    void PropertyGraphTable::Serialize(FieldWriter &writer) const {
+        writer.WriteString(table_name);
+
+        writer.WriteList<string>(column_names);
+        writer.WriteList<string>(column_aliases);
+        writer.WriteList<string>(except_columns);
+        writer.WriteList<string>(sub_labels);
+        writer.WriteString(main_label);
+
+        writer.WriteField<bool>(is_vertex_table);
+        writer.WriteField<bool>(all_columns);
+        writer.WriteField<bool>(no_columns);
         if (!is_vertex_table) {
-            serializer.WriteStringVector(source_pk);
-            serializer.WriteStringVector(source_fk);
-            serializer.WriteString(source_reference);
+            writer.WriteList<string>(source_pk);
+            writer.WriteList<string>(source_fk);
+            writer.WriteString(source_reference);
 
-            serializer.WriteStringVector(destination_pk);
-            serializer.WriteStringVector(destination_fk);
-            serializer.WriteString(destination_reference);
+            writer.WriteList<string>(destination_pk);
+            writer.WriteList<string>(destination_fk);
+            writer.WriteString(destination_reference);
         }
     }
 
-    unique_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &source) {
+    unique_ptr<ParsedExpression> PropertyGraphTable::Deserialize(FieldReader &reader) {
         auto pg_table = make_uniq<PropertyGraphTable>();
 
-        pg_table->table_name = source.Read<string>();
-        source.ReadStringVector(pg_table->column_names);
-        source.ReadStringVector(pg_table->column_aliases);
-        source.ReadStringVector(pg_table->except_columns);
-        source.ReadStringVector(pg_table->sub_labels);
-        pg_table->main_label = source.Read<string>();
+        pg_table->table_name = reader.ReadRequired<string>();
+        reader.ReadList<string>(pg_table->column_names);
+        reader.ReadList<string>(pg_table->column_aliases);
+        reader.ReadList<string>(pg_table->except_columns);
+        reader.ReadList<string>(pg_table->sub_labels);
+        pg_table->main_label = reader.ReadRequired<string>();
 
-        pg_table->is_vertex_table = source.Read<bool>();
-        pg_table->all_columns = source.Read<bool>();
-        pg_table->no_columns = source.Read<bool>();
+        pg_table->is_vertex_table = reader.ReadRequired<bool>();
+        pg_table->all_columns = reader.ReadRequired<bool>();
+        pg_table->no_columns = reader.ReadRequired<bool>();
         if (!pg_table->is_vertex_table) {
-            source.ReadStringVector(pg_table->source_pk);
-            source.ReadStringVector(pg_table->source_fk);
-            pg_table->source_reference = source.Read<string>();
+            reader.ReadList<string>(pg_table->source_pk);
+            reader.ReadList<string>(pg_table->source_fk);
+            pg_table->source_reference = reader.ReadRequired<string>();
 
-            source.ReadStringVector(pg_table->destination_pk);
-            source.ReadStringVector(pg_table->destination_fk);
-            pg_table->destination_reference = source.Read<string>();
+            reader.ReadList<string>(pg_table->destination_pk);
+            reader.ReadList<string>(pg_table->destination_fk);
+            pg_table->destination_reference = reader.ReadRequired<string>();
         }
         return pg_table;
     }
 
-    unique_ptr<PropertyGraphTable> PropertyGraphTable::Copy() {
+    unique_ptr<ParsedExpression> PropertyGraphTable::Copy() const {
         auto result = make_uniq<PropertyGraphTable>();
+
         result->table_name = table_name;
         for (auto &column_name : column_names) {
             result->column_names.push_back(column_name);
@@ -130,7 +237,7 @@ namespace duckdb {
         for (auto &key : destination_pk) {
             result->destination_pk.push_back(key);
         }
-        return result;
+        return std::move(result);
     }
 
 } // namespace duckdb
