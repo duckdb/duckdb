@@ -48,22 +48,22 @@ public:
 
 	//! output_str needs to have enough space allocated before calling this function (sizeof(T) + 1)
 	template <class T>
-	DUCKDB_API static void NumericToBit(T numeric, string_t &output_str);
+	static void NumericToBit(T numeric, string_t &output_str);
 
 	template <class T>
-	DUCKDB_API static string NumericToBit(T numeric);
+	static string NumericToBit(T numeric);
 
 	//! bit is expected to fit inside of output num (bit size <= sizeof(T) + 1)
 	template <class T>
-	DUCKDB_API static void BitToNumeric(string_t bit, T &output_num);
+	static void BitToNumeric(string_t bit, T &output_num);
 
 	template <class T>
-	DUCKDB_API static T BitToNumeric(string_t bit);
+	static T BitToNumeric(string_t bit);
 
 	//! bit is expected to fit inside of output_blob (bit size = output_blob + 1)
-	DUCKDB_API static void BitToBlob(string_t bit, string_t &output_blob);
+	static void BitToBlob(string_t bit, string_t &output_blob);
 
-	DUCKDB_API static string BitToBlob(string_t bit);
+	static string BitToBlob(string_t bit);
 
 	//! Creates a new bitstring of determined length
 	DUCKDB_API static void BitString(const string_t &input, const idx_t &len, string_t &result);
