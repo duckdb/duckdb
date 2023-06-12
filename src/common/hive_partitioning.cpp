@@ -125,10 +125,9 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 			} else if (!result_value.GetValue<bool>()) {
 				// filter evaluates to false
 				should_prune_file = true;
-				get.function.filter_pushdown = true;
 				// convert the filter to a table filter.
 				if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
-					get.table_filters_applied_via_files.push_back(filter->Copy());
+					get.file_filters.push_back(filter->Copy());
 					filters_applied_to_files.insert(j);
 				}
 			}
@@ -136,9 +135,8 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 			// Use filter combiner to determine that this filter makes
 			if (!should_prune_file && combiner.AddFilter(std::move(filter_copy)) == FilterResult::UNSATISFIABLE) {
 				should_prune_file = true;
-				get.function.filter_pushdown = true;
 				if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
-					get.table_filters_applied_via_files.push_back(filter->Copy());
+					get.file_filters.push_back(filter->Copy());
 					filters_applied_to_files.insert(j);
 				}
 			}

@@ -53,7 +53,6 @@ select id, value, part, date from read_csv_auto('data/csv/hive-partitioning/diff
 ----
 2	value2	b	2013-01-01
 
-
 query IIII
 select id, value, CAST(part AS INT) as part_cast, CAST(date AS DATE) as date_cast from read_csv_auto('data/csv/hive-partitioning/types/*/*/test.csv', HIVE_PARTITIONING=1, HEADER=1) where part_cast > 0 and part_cast < 5000;
 ----

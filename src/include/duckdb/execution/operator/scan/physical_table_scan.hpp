@@ -46,7 +46,7 @@ public:
 	//! The table filters
 	unique_ptr<TableFilterSet> table_filters;
 	//! The table filters applied to file names
-	vector<unique_ptr<Expression>> table_filters_applied_via_files;
+	vector<unique_ptr<Expression>> file_filters;
 
 public:
 	string GetName() const override;

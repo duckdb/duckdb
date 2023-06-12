@@ -31,14 +31,14 @@ string LogicalGet::ParamsToString() const {
 		}
 		result += "\n";
 	}
-	for (auto &filter : table_filters_applied_via_files) {
+	for (auto &filter : file_filters) {
 		result += filter->ToString();
 		result += "\n";
 	}
 	if (!function.to_string) {
 		return result;
 	}
-	return result + function.to_string(bind_data.get());
+	return result + "\n" + function.to_string(bind_data.get());
 }
 
 vector<ColumnBinding> LogicalGet::GetColumnBindings() {
