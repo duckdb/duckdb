@@ -100,6 +100,17 @@ Allocator &ColumnDataCollection::GetAllocator() const {
 	return allocator->GetAllocator();
 }
 
+idx_t ColumnDataCollection::AllocatedSize() const {
+	idx_t total_size = 0;
+	for (auto &segment : segments) {
+		// This only works during append and non-shared allocators (otherwise the size gets fuzzy)
+		D_ASSERT(!segment->allocator->IsShared());
+		total_size += segment->allocator->AllocatedSize();
+		total_size += segment->heap->AllocatedSize();
+	}
+	return total_size;
+}
+
 //===--------------------------------------------------------------------===//
 // ColumnDataRow
 //===--------------------------------------------------------------------===//
@@ -423,7 +434,8 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
                               idx_t offset, idx_t copy_count) {
 
 	const auto &allocator_type = meta_data.segment.allocator->GetType();
-	if (allocator_type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+	if (allocator_type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ||
+	    allocator_type == ColumnDataAllocatorType::HYBRID) {
 		// strings cannot be spilled to disk - use StringHeap
 		TemplatedColumnDataCopy<StringValueCopy>(meta_data, source_data, source, offset, copy_count);
 		return;

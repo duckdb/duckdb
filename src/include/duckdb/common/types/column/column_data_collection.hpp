@@ -61,6 +61,9 @@ public:
 		return types.size();
 	}
 
+	//! The allocated size of the ColumnDataCollection
+	idx_t AllocatedSize() const;
+
 	//! Get the allocator
 	DUCKDB_API Allocator &GetAllocator() const;
 
