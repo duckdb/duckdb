@@ -25,7 +25,7 @@ duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema 
 	}
 	auto wrapper = reinterpret_cast<ArrowResultWrapper *>(result);
 	ArrowConverter::ToArrowSchema((ArrowSchema *)*out_schema, wrapper->result->types, wrapper->result->names,
-	                              wrapper->timezone_config);
+	                              wrapper->options);
 	return DuckDBSuccess;
 }
 
@@ -41,7 +41,7 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
 		return DuckDBSuccess;
 	}
-	ArrowConverter::ToArrowArray(*wrapper->current_chunk, reinterpret_cast<ArrowArray *>(*out_array));
+	ArrowConverter::ToArrowArray(*wrapper->current_chunk, reinterpret_cast<ArrowArray *>(*out_array), wrapper->options);
 	return DuckDBSuccess;
 }
 
@@ -96,9 +96,9 @@ duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_st
 	auto arrow_wrapper = new ArrowResultWrapper();
 	if (wrapper->statement->context->config.set_variables.find("TimeZone") ==
 	    wrapper->statement->context->config.set_variables.end()) {
-		arrow_wrapper->timezone_config = "UTC";
+		arrow_wrapper->options.time_zone = "UTC";
 	} else {
-		arrow_wrapper->timezone_config =
+		arrow_wrapper->options.time_zone =
 		    wrapper->statement->context->config.set_variables["TimeZone"].GetValue<std::string>();
 	}
 

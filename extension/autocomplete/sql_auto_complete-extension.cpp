@@ -361,6 +361,9 @@ standard_suggestion:
 
 static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
                                                             vector<LogicalType> &return_types, vector<string> &names) {
+	if (input.inputs[0].IsNull()) {
+		throw BinderException("sql_auto_complete first parameter cannot be NULL");
+	}
 	names.emplace_back("suggestion");
 	return_types.emplace_back(LogicalType::VARCHAR);
 

@@ -85,6 +85,7 @@ Node48 &Node48::ShrinkNode256(ART &art, Node &node48, Node &node256) {
 	n48.prefix.Move(n256.prefix);
 
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
+		D_ASSERT(n48.count <= Node::NODE_48_CAPACITY);
 		if (n256.children[i].IsSet()) {
 			n48.child_index[i] = n48.count;
 			n48.children[n48.count] = n256.children[i];
@@ -168,6 +169,7 @@ optional_ptr<Node> Node48::GetNextChild(uint8_t &byte) {
 	for (idx_t i = byte; i < Node::NODE_256_CAPACITY; i++) {
 		if (child_index[i] != Node::EMPTY_MARKER) {
 			byte = i;
+			D_ASSERT(children[child_index[i]].IsSet());
 			return &children[child_index[i]];
 		}
 	}

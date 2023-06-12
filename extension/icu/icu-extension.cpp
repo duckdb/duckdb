@@ -145,7 +145,7 @@ static void ICUCollateSerialize(FieldWriter &writer, const FunctionData *bind_da
 	throw NotImplementedException("FIXME: serialize icu-collate");
 }
 
-static duckdb::unique_ptr<FunctionData> ICUCollateDeserialize(ClientContext &context, FieldReader &reader,
+static duckdb::unique_ptr<FunctionData> ICUCollateDeserialize(PlanDeserializationState &state, FieldReader &reader,
                                                               ScalarFunction &bound_function) {
 	throw NotImplementedException("FIXME: serialize icu-collate");
 }
