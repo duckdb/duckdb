@@ -288,7 +288,8 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
 
 void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result) {
 	// We want these to be in-memory so we don't have to copy over strings to the dictionary
-	D_ASSERT(buffer.GetAllocatorType() == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
+	D_ASSERT(buffer.GetAllocatorType() == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ||
+	         buffer.GetAllocatorType() == ColumnDataAllocatorType::HYBRID);
 
 	// set up a new row group for this chunk collection
 	auto &row_group = result.row_group;
@@ -302,17 +303,17 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 		const auto &col_writer = column_writers[col_idx];
 		auto write_state = col_writer->InitializeWriteState(row_group);
 		if (col_writer->HasAnalyze()) {
-			for (auto &chunk : buffer.Chunks()) {
-				col_writer->Analyze(*write_state, nullptr, chunk.data[col_idx], chunk.size());
+			for (auto &chunk : buffer.Chunks({col_idx})) {
+				col_writer->Analyze(*write_state, nullptr, chunk.data[0], chunk.size());
 			}
 			col_writer->FinalizeAnalyze(*write_state);
 		}
-		for (auto &chunk : buffer.Chunks()) {
-			col_writer->Prepare(*write_state, nullptr, chunk.data[col_idx], chunk.size());
+		for (auto &chunk : buffer.Chunks({col_idx})) {
+			col_writer->Prepare(*write_state, nullptr, chunk.data[0], chunk.size());
 		}
 		col_writer->BeginWrite(*write_state);
-		for (auto &chunk : buffer.Chunks()) {
-			col_writer->Write(*write_state, chunk.data[col_idx], chunk.size());
+		for (auto &chunk : buffer.Chunks({col_idx})) {
+			col_writer->Write(*write_state, chunk.data[0], chunk.size());
 		}
 		states.push_back(std::move(write_state));
 	}
@@ -336,6 +337,8 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	// append the row group to the file meta data
 	file_meta_data.row_groups.push_back(row_group);
 	file_meta_data.num_rows += row_group.num_rows;
+
+	prepared.heaps.clear();
 }
 
 void ParquetWriter::Flush(ColumnDataCollection &buffer) {
