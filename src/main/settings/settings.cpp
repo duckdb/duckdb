@@ -2,18 +2,18 @@
 
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/main/database_manager.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -112,7 +112,6 @@ Value DebugCheckpointAbort::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Debug Force External
 //===--------------------------------------------------------------------===//
-
 void DebugForceExternal::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).force_external = ClientConfig().force_external;
 }
@@ -128,7 +127,6 @@ Value DebugForceExternal::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Debug Force NoCrossProduct
 //===--------------------------------------------------------------------===//
-
 void DebugForceNoCrossProduct::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).force_no_cross_product = ClientConfig().force_no_cross_product;
 }
@@ -144,7 +142,6 @@ Value DebugForceNoCrossProduct::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Ordered Aggregate Threshold
 //===--------------------------------------------------------------------===//
-
 void OrderedAggregateThreshold::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).ordered_aggregate_threshold = ClientConfig().ordered_aggregate_threshold;
 }
@@ -478,7 +475,6 @@ Value EnableProfilingSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Custom Extension Repository
 //===--------------------------------------------------------------------===//
-
 void CustomExtensionRepository::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).custom_extension_repo = ClientConfig().custom_extension_repo;
 }
@@ -494,7 +490,6 @@ Value CustomExtensionRepository::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Enable Progress Bar
 //===--------------------------------------------------------------------===//
-
 void EnableProgressBarSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
@@ -548,7 +543,6 @@ Value ExperimentalParallelCSVSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Explain Output
 //===--------------------------------------------------------------------===//
-
 void ExplainOutputSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).explain_output_type = ClientConfig().explain_output_type;
 }
@@ -686,7 +680,6 @@ Value ForceBitpackingModeSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Home Directory
 //===--------------------------------------------------------------------===//
-
 void HomeDirectorySetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).home_directory = ClientConfig().home_directory;
 }
@@ -780,7 +773,6 @@ Value ImmediateTransactionModeSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Maximum Expression Depth
 //===--------------------------------------------------------------------===//
-
 void MaximumExpressionDepthSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).max_expression_depth = ClientConfig().max_expression_depth;
 }
@@ -830,7 +822,6 @@ Value PasswordSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Perfect Hash Threshold
 //===--------------------------------------------------------------------===//
-
 void PerfectHashThresholdSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).perfect_ht_threshold = ClientConfig().perfect_ht_threshold;
 }
@@ -848,9 +839,23 @@ Value PerfectHashThresholdSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Pivot Filter Threshold
+//===--------------------------------------------------------------------===//
+void PivotFilterThreshold::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).pivot_filter_threshold = ClientConfig().pivot_filter_threshold;
+}
+
+void PivotFilterThreshold::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).pivot_filter_threshold = input.GetValue<uint64_t>();
+}
+
+Value PivotFilterThreshold::GetSetting(ClientContext &context) {
+	return Value::BIGINT(ClientConfig::GetConfig(context).pivot_filter_threshold);
+}
+
+//===--------------------------------------------------------------------===//
 // Pivot Limit
 //===--------------------------------------------------------------------===//
-
 void PivotLimitSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).pivot_limit = ClientConfig().pivot_limit;
 }
@@ -866,7 +871,6 @@ Value PivotLimitSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // PreserveIdentifierCase
 //===--------------------------------------------------------------------===//
-
 void PreserveIdentifierCase::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).preserve_identifier_case = ClientConfig().preserve_identifier_case;
 }
@@ -917,7 +921,6 @@ Value ExportLargeBufferArrow::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Profiler History Size
 //===--------------------------------------------------------------------===//
-
 void ProfilerHistorySize::ResetLocal(ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
 	client_data.query_profiler_history->ResetProfilerHistorySize();
@@ -939,7 +942,6 @@ Value ProfilerHistorySize::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Profile Output
 //===--------------------------------------------------------------------===//
-
 void ProfileOutputSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).profiler_save_location = ClientConfig().profiler_save_location;
 }
@@ -958,7 +960,6 @@ Value ProfileOutputSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Profiling Mode
 //===--------------------------------------------------------------------===//
-
 void ProfilingModeSetting::ResetLocal(ClientContext &context) {
 	ClientConfig::GetConfig(context).enable_profiler = ClientConfig().enable_profiler;
 	ClientConfig::GetConfig(context).enable_detailed_profiling = ClientConfig().enable_detailed_profiling;
@@ -992,7 +993,6 @@ Value ProfilingModeSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Progress Bar Time
 //===--------------------------------------------------------------------===//
-
 void ProgressBarTimeSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	ProgressBar::SystemOverrideCheck(config);
@@ -1110,6 +1110,28 @@ void UsernameSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 
 Value UsernameSetting::GetSetting(ClientContext &context) {
 	return Value();
+}
+
+//===--------------------------------------------------------------------===//
+// Allocator Flush Threshold
+//===--------------------------------------------------------------------===//
+void FlushAllocatorSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.allocator_flush_threshold = DBConfig::ParseMemoryLimit(input.ToString());
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetAllocatorFlushTreshold(config.options.allocator_flush_threshold);
+	}
+}
+
+void FlushAllocatorSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.allocator_flush_threshold = DBConfig().options.allocator_flush_threshold;
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetAllocatorFlushTreshold(config.options.allocator_flush_threshold);
+	}
+}
+
+Value FlushAllocatorSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(StringUtil::BytesToHumanReadableString(config.options.allocator_flush_threshold));
 }
 
 } // namespace duckdb
