@@ -1194,7 +1194,8 @@ public class DuckDBResultSet implements ResultSet {
 			}
 		} else if (type == Long.class) {
 			if (sqlType == DuckDBColumnType.BIGINT
-					|| sqlType == DuckDBColumnType.TIMESTAMP) {
+					|| sqlType == DuckDBColumnType.TIMESTAMP
+					|| sqlType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE) {
 				return type.cast(getLong(columnIndex));
 			} else if (sqlType == DuckDBColumnType.UINTEGER) {
 				throw new SQLException("Can't convert value to long " + type.toString());
@@ -1227,13 +1228,13 @@ public class DuckDBResultSet implements ResultSet {
 				throw new SQLException("Can't convert value to Time " + type.toString());
 			}
 		} else if (type == Timestamp.class) {
-			if (sqlType == DuckDBColumnType.TIMESTAMP) {
+			if (sqlType == DuckDBColumnType.TIMESTAMP || sqlType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE) {
 				return type.cast(getTimestamp(columnIndex));
 			} else {
 				throw new SQLException("Can't convert value to Timestamp " + type.toString());
 			}
 		} else if (type == LocalDateTime.class) {
-			if (sqlType == DuckDBColumnType.TIMESTAMP) {
+			if (sqlType == DuckDBColumnType.TIMESTAMP || sqlType == DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE) {
 				return type.cast(getLocalDateTime(columnIndex));
 			} else {
 				throw new SQLException("Can't convert value to LocalDateTime " + type.toString());
