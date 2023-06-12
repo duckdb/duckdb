@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-unique_ptr<PropertyGraphTable>
+unique_ptr<TableRef>
 Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable *graph_table,
                                          case_insensitive_set_t &global_label_set) {
 	vector<string> column_names;
@@ -55,6 +55,8 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 		global_label_set.insert(label_str);
 		label_names.emplace_back(label_str);
 	}
+
+
 
 	unique_ptr<PropertyGraphTable> pg_table =
 	    make_uniq<PropertyGraphTable>(graph_table_name.name, table_name_alias, column_names, label_names);

@@ -309,7 +309,7 @@ private:
     // SQL/PGQ Property graph transform
     //===--------------------------------------------------------------------===//
     //! Transform a node/edge table create (SQL/PGQ)
-    unique_ptr<PropertyGraphTable> TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable *node,
+    unique_ptr<TableRef> TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable *node,
                                                                case_insensitive_set_t &global_label_set);
     //! Transform a path pattern (SQL/PGQ)
     unique_ptr<PathPattern> TransformPath(duckdb_libpgquery::PGPathPattern *root);
@@ -320,7 +320,6 @@ private:
 
     //! Transform a Postgres duckdb_libpgquery::T_PGDropPropertyGraphStmt node into a Drop[Table,Schema]Statement
     unique_ptr<SQLStatement> TransformDropPropertyGraph(duckdb_libpgquery::PGNode *node);
-
 
     //! Transform a range var into a (schema) qualified name
 	QualifiedName TransformQualifiedName(duckdb_libpgquery::PGRangeVar *root);

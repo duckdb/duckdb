@@ -13,7 +13,7 @@
 namespace duckdb {
 
 //! Represents a reference to a graph table from the CREATE PROPERTY GRAPH
-class PropertyGraphTable {
+class PropertyGraphTable : public ParsedExpression {
 public:
 	//! Used for Copy
 	PropertyGraphTable();
