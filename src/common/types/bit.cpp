@@ -1,3 +1,4 @@
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -164,13 +165,14 @@ string Bit::BlobToBit(string_t blob) {
 	return output_str.GetString();
 }
 
-void Bit::BitToBlob(string_t bit, string_t &output_str) {
+void Bit::BitToBlob(string_t bit, string_t &output_blob) {
+	D_ASSERT(bit.GetSize() == output_blob.GetSize() + 1);
+
 	auto data = const_data_ptr_cast(bit.GetData());
-	auto output = output_str.GetDataWriteable();
-	idx_t size = output_str.GetSize();
+	auto output = output_blob.GetDataWriteable();
+	idx_t size = output_blob.GetSize();
 
 	output[0] = data[1] & ((1 << (8 - data[0])) - 1);
-
 	for (idx_t idx = 1; idx < size; ++idx) {
 		output[idx] = data[idx + 1];
 	}

@@ -41,57 +41,27 @@ public:
 
 	DUCKDB_API static string ToBit(string_t str);
 
+	//! output needs to have enough space allocated before calling this function (blob size + 1)
 	DUCKDB_API static void BlobToBit(string_t blob, string_t &output);
 
 	DUCKDB_API static string BlobToBit(string_t blob);
 
+	//! output_str needs to have enough space allocated before calling this function (sizeof(T) + 1)
 	template<class T>
-	DUCKDB_API static void NumericToBit(T numeric, string_t &output_str)  {
-		auto output = output_str.GetDataWriteable();
-		auto data = const_data_ptr_cast(&numeric);
-
-		*(output++) = 0;
-		for (idx_t idx = 0; idx < sizeof(T); ++idx) {
-			output[idx] = data[sizeof(T) - idx - 1];
-		}
-		Bit::Finalize(output_str);
-	}
+	DUCKDB_API static void NumericToBit(T numeric, string_t &output_str);
 
 	template<class T>
-	DUCKDB_API static string NumericToBit(T numeric) {
-		auto bit_len = sizeof(T) + 1;
-		auto buffer = make_unsafe_uniq_array<char>(bit_len);
-		string_t output_str(buffer.get(), bit_len);
-		Bit::NumericToBit(numeric, output_str);
-		return output_str.GetString();
-	}
+	DUCKDB_API static string NumericToBit(T numeric);
+
+	//! bit is expected to fit inside of output num (bit size <= sizeof(T) + 1)
+	template<class T>
+	DUCKDB_API static void BitToNumeric(string_t bit, T &output_num);
 
 	template<class T>
-	DUCKDB_API static void BitToNumeric(string_t bit, T &output_num) {
-		output_num = 0;
-		auto data = const_data_ptr_cast(bit.GetData());
-		auto output = data_ptr_cast(&output_num);
+	DUCKDB_API static T BitToNumeric(string_t bit);
 
-		uint8_t padded_byte = data[1] & ((1 << (8 - data[0])) - 1);
-
-		idx_t start = sizeof(T) - bit.GetSize() + 1;
-
-		output[sizeof(T) - 1 - start] = padded_byte;
-
-		for (idx_t idx = start + 1; idx < sizeof(T); ++idx) {
-			output[sizeof(T) - 1 - idx] = data[1 + idx - start];
-		}
-
-	}
-
-	template<class T>
-	DUCKDB_API static T BitToNumeric(string_t bit) {
-		T output;
-		Bit::BitToNumeric(bit, output);
-		return (output);
-	}
-
-	DUCKDB_API static void BitToBlob(string_t bit, string_t &output);
+	//! bit is expected to fit inside of output_blob (bit size = output_blob + 1)
+	DUCKDB_API static void BitToBlob(string_t bit, string_t &output_blob);
 
 	DUCKDB_API static string BitToBlob(string_t bit);
 
@@ -116,4 +86,55 @@ private:
 	static void SetBitInternal(string_t &bit_string, idx_t n, idx_t new_value);
 	static idx_t GetBitIndex(idx_t n);
 };
+
+//===--------------------------------------------------------------------===//
+// Bit Template definitions
+//===--------------------------------------------------------------------===//
+template<class T>
+void Bit::NumericToBit(T numeric, string_t &output_str)  {
+	auto output = output_str.GetDataWriteable();
+	auto data = const_data_ptr_cast(&numeric);
+
+	// set padding to 0
+	*(output++) = 0;
+	for (idx_t idx = 0; idx < sizeof(T); ++idx) {
+		output[idx] = data[sizeof(T) - idx - 1];
+	}
+	Bit::Finalize(output_str);
+}
+
+template<class T>
+string Bit::NumericToBit(T numeric) {
+	auto bit_len = sizeof(T) + 1;
+	auto buffer = make_unsafe_uniq_array<char>(bit_len);
+	string_t output_str(buffer.get(), bit_len);
+	Bit::NumericToBit(numeric, output_str);
+	return output_str.GetString();
+}
+
+template<class T>
+T Bit::BitToNumeric(string_t bit) {
+	T output;
+	Bit::BitToNumeric(bit, output);
+	return (output);
+}
+
+template<class T>
+void Bit::BitToNumeric(string_t bit, T &output_num) {
+	D_ASSERT(bit.GetSize() <= sizeof(T) + 1);
+
+	output_num = 0;
+	auto data = const_data_ptr_cast(bit.GetData());
+	auto output = data_ptr_cast(&output_num);
+
+	uint8_t padded_byte = data[1] & ((1 << (8 - data[0])) - 1);
+	idx_t padded_byte_idx = sizeof(T) - bit.GetSize() + 1;
+
+	output[sizeof(T) - 1 - padded_byte_idx] = padded_byte;
+	for (idx_t idx = padded_byte_idx + 1; idx < sizeof(T); ++idx) {
+		output[sizeof(T) - 1 - idx] = data[1 + idx - padded_byte_idx];
+	}
+}
+
+
 } // namespace duckdb

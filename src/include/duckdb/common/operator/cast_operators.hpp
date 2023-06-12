@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/exception.hpp"
@@ -17,6 +18,7 @@
 #include "duckdb/common/operator/convert_to_string.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/bit.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 struct ValidityMask;
@@ -670,7 +672,6 @@ struct TryCastToBlob {
 		throw InternalException("Unsupported type for try cast to blob");
 	}
 };
-
 template <>
 bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
                               bool strict);
@@ -690,6 +691,8 @@ duckdb::string_t CastFromBitToString::Operation(duckdb::string_t input, Vector &
 struct CastFromBitToNumeric {
 	template <class SRC = string_t, class DST>
 	static inline bool Operation(SRC input, DST &result, bool strict = false) {
+		D_ASSERT(input.GetSize() > 1);
+
 		// Only allow bitstring -> numeric if the full bitstring fits inside the numeric type
 		if (input.GetSize() - 1 > sizeof(DST)) {
 			throw ConversionException("Bitstring doesn't fit inside of %s", GetTypeId<DST>());
@@ -698,12 +701,14 @@ struct CastFromBitToNumeric {
 		return (true);
 	}
 };
+template <>
+bool CastFromBitToNumeric::Operation(string_t input, bool &result, bool strict);
 
 struct CastFromBitToBlob {
-	template <class SRC = string_t, class DST = string_t>
-	static inline bool Operation(SRC input, DST &result, bool string = false) {
-		result = Bit::BitToBlob(input);
-		return true;
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		D_ASSERT(input.GetSize() > 1);
+		return StringVector::AddStringOrBlob(result, Bit::BitToBlob(input));
 	}
 };
 

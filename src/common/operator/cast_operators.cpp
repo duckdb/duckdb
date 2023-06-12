@@ -1425,9 +1425,12 @@ string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 	return result;
 }
 
-template <>
+template<>
 string_t CastFromBlobToBit::Operation(string_t input, Vector &vector) {
 	idx_t result_size = input.GetSize() + 1;
+	if (result_size <= 1) {
+		throw ConversionException("Cannot cast empty BLOB to BIT");
+	}
 
 	string_t result = StringVector::EmptyString(vector, result_size);
 	Bit::BlobToBit(input, result);
@@ -1490,6 +1493,16 @@ bool TryCastToBit::Operation(string_t input, string_t &result, Vector &result_ve
 	result.Finalize();
 	return true;
 }
+
+template <>
+bool CastFromBitToNumeric::Operation(string_t input, bool &result, bool strict) {
+		D_ASSERT(input.GetSize() > 1);
+
+		uint8_t value;
+		CastFromBitToNumeric::Operation(input, value, strict);
+		result = (value > 0);
+		return (true);
+	}
 
 //===--------------------------------------------------------------------===//
 // Cast From UUID

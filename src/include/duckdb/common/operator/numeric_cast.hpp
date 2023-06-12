@@ -13,6 +13,7 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include <cmath>
 
 namespace duckdb {
@@ -445,10 +446,9 @@ bool TryCastWithOverflowCheck(hugeint_t value, double &result) {
 }
 
 struct NumericTryCastToBit {
-	template<class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, bool strict = false) {
-		result = Bit::NumericToBit(input);
-		return true;		
+	template<class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		return StringVector::AddStringOrBlob(result, Bit::NumericToBit(input));	
 	}
 };
 

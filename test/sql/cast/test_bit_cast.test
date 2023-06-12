@@ -1,0 +1,206 @@
+# name: test/sql/cast/test_bit_cast.test
+# description: Test casting from and to BitString
+# group [cast]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE bits (b bit);
+
+statement ok
+INSERT INTO bits VALUES('00001111');
+
+#                   cast to bool
+# ---------------------------------------------------
+statement error
+SELECT bitstring('1', 9)::BOOL;
+----
+Conversion Error: Bitstring doesn't fit inside of UINT8
+
+query I
+SELECT b::BOOLEAN FROM bits;
+----
+true
+
+query I
+SELECT '1'::BIT::BOOL;
+----
+true
+
+query I
+SELECT '0'::BIT::BOOL;
+----
+false
+
+#              casting to numerical types
+# ---------------------------------------------------
+query I
+SELECT b::TINYINT FROM bits;
+----
+15
+
+query I
+SELECT b::SMALLINT FROM bits;
+----
+15
+
+query I
+SELECT b::INTEGER FROM bits;
+----
+15
+
+query I
+SELECT b::BIGINT FROM bits;
+----
+15
+
+query I
+SELECT b::UTINYINT FROM bits;
+----
+15
+
+query I
+SELECT b::USMALLINT FROM bits;
+----
+15
+
+query I
+SELECT b::UBIGINT FROM bits;
+----
+15
+
+query I
+SELECT b::HUGEINT FROM bits;
+----
+15
+
+query I
+SELECT b::FLOAT FROM bits;
+----
+2.1e-44
+
+query I
+SELECT b::DOUBLE FROM bits;
+----
+7.4e-323
+
+#                numeric to bitstring
+# ---------------------------------------------------
+query I
+SELECT 15::BOOLEAN::BIT;
+----
+00000001
+
+query I
+SELECT 15::TINYINT::BIT;
+----
+00001111
+
+query I
+SELECT 15::SMALLINT::BIT;
+----
+0000000000001111
+
+query I
+SELECT 15::BIT;
+----
+00000000000000000000000000001111
+
+query I
+SELECT 15::BIGINT::BIT;
+----
+0000000000000000000000000000000000000000000000000000000000001111
+
+query I
+SELECT 15::HUGEINT::BIT;
+----
+00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001111
+
+query I
+SELECT 2.1e-44::FLOAT::BIT;
+----
+00000000000000000000000000001111
+
+query I
+SELECT 7.4e-323::BIT;
+----
+0000000000000000000000000000000000000000000000000000000000001111
+
+#  bitstrings that are too large for casted-to type
+# ---------------------------------------------------
+statement error
+SELECT bitstring('1', 9)::TINYINT;
+----
+Conversion Error: Bitstring doesn't fit inside of INT8
+
+statement error
+SELECT bitstring('1', 17)::SMALLINT;
+----
+Conversion Error: Bitstring doesn't fit inside of INT16
+
+statement error
+SELECT bitstring('1', 33)::INT;
+----
+Conversion Error: Bitstring doesn't fit inside of INT32
+
+statement error
+SELECT bitstring('1', 65)::BIGINT;
+----
+Conversion Error: Bitstring doesn't fit inside of INT64
+
+statement error
+SELECT bitstring('1', 33)::FLOAT;
+----
+Conversion Error: Bitstring doesn't fit inside of FLOAT
+
+statement error
+SELECT bitstring('1', 65)::DOUBLE;
+----
+Conversion Error: Bitstring doesn't fit inside of DOUBLE
+
+#               casting to BLOB type
+# ---------------------------------------------------
+query I
+SELECT b::BLOB FROM bits;
+----
+\x0F
+
+query I
+SELECT bitstring('1111', 32)::BLOB;
+----
+\x00\x00\x00\x0F
+
+query I
+SELECT '1111'::BIT::BLOB;
+----
+\x0F
+
+query I
+SELECT bitstring('1111', 33)::BLOB;
+----
+\x00\x00\x00\x00\x0F
+
+#             casting from BLOB type
+# ---------------------------------------------------
+query I
+SELECT 'AAAA'::BLOB::BIT;
+----
+01000001010000010100000101000001
+
+statement error
+SELECT ''::BLOB::BIT;
+----
+Conversion Error: Cannot cast empty BLOB to BIT
+
+#               negative numbers
+# ---------------------------------------------------
+query I
+SELECT (-15)::TINYINT::BIT;
+----
+11110001
+
+query I
+SELECT (-15)::HUGEINT::BIT;
+----
+11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111110001
