@@ -4,7 +4,7 @@ project(FTSExtension)
 
 include_directories(include ../../third_party/snowball/libstemmer)
 set(FTS_SOURCES
-        fts_extension.cpp
+    fts_extension.cpp
     fts_indexing.cpp
     ../../third_party/snowball/libstemmer/libstemmer.cpp
     ../../third_party/snowball/runtime/utilities.cpp

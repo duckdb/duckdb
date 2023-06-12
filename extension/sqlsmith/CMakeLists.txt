@@ -7,7 +7,7 @@ include_directories(third_party/sqlsmith/include)
 add_subdirectory(third_party)
 
 set(SQLSMITH_SOURCES
-        sqlsmith_extension.cpp statement_generator.cpp statement_simplifier.cpp
+    sqlsmith_extension.cpp statement_generator.cpp statement_simplifier.cpp
     fuzzyduck.cpp ${SQLSMITH_OBJECT_FILES})
 
 add_library(sqlsmith_extension STATIC ${SQLSMITH_SOURCES})
