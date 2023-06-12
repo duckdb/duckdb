@@ -6,7 +6,7 @@ statement ok
 pragma enable_verification
 
 statement ok
-create temp table calendar as
+create table calendar as
 	SELECT
 		start_ts,
 		start_ts + interval '12 hours' as end_ts,
@@ -15,7 +15,7 @@ create temp table calendar as
 ;
 
 statement ok
-create temp table snapshot_data as
+create table snapshot_data as
 	select
 		TIMESTAMP '2023-03-01 08:00:00' as snapshot_ts,
 		1 as snapshot_value
