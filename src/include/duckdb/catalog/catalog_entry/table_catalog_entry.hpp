@@ -37,7 +37,7 @@ class TableFunction;
 struct FunctionData;
 
 class TableColumnInfo;
-class TableIndexInfo;
+class ColumnSegmentInfo;
 class TableStorageInfo;
 
 class LogicalGet;
@@ -102,6 +102,9 @@ public:
 	}
 
 	DUCKDB_API static string ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints);
+
+	//! Returns a list of segment information for this table, if exists
+	virtual vector<ColumnSegmentInfo> GetColumnSegmentInfo();
 
 	//! Returns the storage info of this table
 	virtual TableStorageInfo GetStorageInfo(ClientContext &context) = 0;

@@ -277,6 +277,10 @@ static bool TypeSupportsRegularUpdate(const LogicalType &type) {
 	}
 }
 
+vector<ColumnSegmentInfo> TableCatalogEntry::GetColumnSegmentInfo() {
+	return {};
+}
+
 void TableCatalogEntry::BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
                                               ClientContext &context) {
 	// check the constraints and indexes of the table to see if we need to project any additional columns
