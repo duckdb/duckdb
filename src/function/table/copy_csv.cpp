@@ -15,11 +15,20 @@
 
 namespace duckdb {
 
-void SubstringDetection(string &str_1, string &str_2, const string &name_str_1, const string &name_str_2) {
-	if (str_1.empty() || str_2.empty()) {
+void AreOptionsEqual(char &str_1, char &str_2, const string &name_str_1, const string &name_str_2) {
+	if (str_1 == '\0' || str_2 == '\0') {
 		return;
 	}
-	if ((str_1.find(str_2) != string::npos || str_2.find(str_1) != std::string::npos)) {
+	if (str_1 == str_2) {
+		throw BinderException("%s must not appear in the %s specification and vice versa", name_str_1, name_str_2);
+	}
+}
+
+void SubstringDetection(char &str_1, string &str_2, const string &name_str_1, const string &name_str_2) {
+	if (str_1 == '\0' || str_2.empty()) {
+		return;
+	}
+	if (str_2.find(str_1) != std::string::npos) {
 		throw BinderException("%s must not appear in the %s specification and vice versa", name_str_1, name_str_2);
 	}
 }
@@ -30,20 +39,20 @@ void SubstringDetection(string &str_1, string &str_2, const string &name_str_1, 
 
 void BaseCSVData::Finalize() {
 	// verify that the options are correct in the final pass
-	if (options.escape.empty()) {
+	if (options.escape == '\0') {
 		options.escape = options.quote;
 	}
 	// escape and delimiter must not be substrings of each other
 	if (options.has_delimiter && options.has_escape) {
-		SubstringDetection(options.delimiter, options.escape, "DELIMITER", "ESCAPE");
+		AreOptionsEqual(options.delimiter, options.escape, "DELIMITER", "ESCAPE");
 	}
 	// delimiter and quote must not be substrings of each other
 	if (options.has_quote && options.has_delimiter) {
-		SubstringDetection(options.quote, options.delimiter, "DELIMITER", "QUOTE");
+		AreOptionsEqual(options.quote, options.delimiter, "DELIMITER", "QUOTE");
 	}
 	// escape and quote must not be substrings of each other (but can be the same)
 	if (options.quote != options.escape && options.has_quote && options.has_escape) {
-		SubstringDetection(options.quote, options.escape, "QUOTE", "ESCAPE");
+		AreOptionsEqual(options.quote, options.escape, "QUOTE", "ESCAPE");
 	}
 	if (!options.null_str.empty()) {
 		// null string and delimiter must not be substrings of each other
@@ -85,16 +94,14 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyInfo &i
 		bind_data->options.force_quote.resize(names.size(), false);
 	}
 	bind_data->Finalize();
-	bind_data->is_simple = bind_data->options.delimiter.size() == 1 && bind_data->options.escape.size() == 1 &&
-	                       bind_data->options.quote.size() == 1;
-	if (bind_data->is_simple) {
-		bind_data->requires_quotes = make_unsafe_uniq_array<bool>(256);
-		memset(bind_data->requires_quotes.get(), 0, sizeof(bool) * 256);
-		bind_data->requires_quotes['\n'] = true;
-		bind_data->requires_quotes['\r'] = true;
-		bind_data->requires_quotes[bind_data->options.delimiter[0]] = true;
-		bind_data->requires_quotes[bind_data->options.quote[0]] = true;
-	}
+
+	bind_data->requires_quotes = make_unsafe_uniq_array<bool>(256);
+	memset(bind_data->requires_quotes.get(), 0, sizeof(bool) * 256);
+	bind_data->requires_quotes['\n'] = true;
+	bind_data->requires_quotes['\r'] = true;
+	bind_data->requires_quotes[bind_data->options.delimiter] = true;
+	bind_data->requires_quotes[bind_data->options.quote] = true;
+
 	if (!bind_data->options.write_newline.empty()) {
 		bind_data->newline = bind_data->options.write_newline;
 	}
@@ -136,7 +143,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 //===--------------------------------------------------------------------===//
 // Helper writing functions
 //===--------------------------------------------------------------------===//
-static string AddEscapes(string &to_be_escaped, const string &escape, const string &val) {
+static string AddEscapes(char &to_be_escaped, const char &escape, const string &val) {
 	idx_t i = 0;
 	string new_val = "";
 	idx_t found = val.find(to_be_escaped);
@@ -147,7 +154,7 @@ static string AddEscapes(string &to_be_escaped, const string &escape, const stri
 			i++;
 		}
 		new_val += escape;
-		found = val.find(to_be_escaped, found + escape.length());
+		found = val.find(to_be_escaped, found + escape != '\0');
 	}
 	while (i < val.length()) {
 		new_val += val[i];
@@ -162,43 +169,16 @@ static bool RequiresQuotes(WriteCSVData &csv_data, const char *str, idx_t len) {
 	if (len == options.null_str.size() && memcmp(str, options.null_str.c_str(), len) == 0) {
 		return true;
 	}
-	if (csv_data.is_simple) {
-		// simple CSV: check for newlines, quotes and delimiter all at once
-		auto str_data = reinterpret_cast<const_data_ptr_t>(str);
-		for (idx_t i = 0; i < len; i++) {
-			if (csv_data.requires_quotes[str_data[i]]) {
-				// this byte requires quotes - write a quoted string
-				return true;
-			}
-		}
-		// no newline, quote or delimiter in the string
-		// no quoting or escaping necessary
-		return false;
-	} else {
-		// CSV with complex quotes/delimiter (multiple bytes)
-
-		// first check for \n, \r, \n\r in string
-		for (idx_t i = 0; i < len; i++) {
-			if (str[i] == '\n' || str[i] == '\r') {
-				// newline, write a quoted string
-				return true;
-			}
-		}
-
-		// check for delimiter
-		if (options.delimiter.length() != 0 &&
-		    ContainsFun::Find(const_uchar_ptr_cast(str), len, const_uchar_ptr_cast(options.delimiter.c_str()),
-		                      options.delimiter.size()) != DConstants::INVALID_INDEX) {
+	auto str_data = reinterpret_cast<const_data_ptr_t>(str);
+	for (idx_t i = 0; i < len; i++) {
+		if (csv_data.requires_quotes[str_data[i]]) {
+			// this byte requires quotes - write a quoted string
 			return true;
 		}
-		// check for quote
-		if (options.quote.length() != 0 &&
-		    ContainsFun::Find(const_uchar_ptr_cast(str), len, const_uchar_ptr_cast(options.quote.c_str()),
-		                      options.quote.size()) != DConstants::INVALID_INDEX) {
-			return true;
-		}
-		return false;
 	}
+	// no newline, quote or delimiter in the string
+	// no quoting or escaping necessary
+	return false;
 }
 
 static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, const char *str, idx_t len,
@@ -214,7 +194,7 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 		// simple CSV
 		// do a single loop to check for a quote or escape value
 		for (idx_t i = 0; i < len; i++) {
-			if (str[i] == options.quote[0] || str[i] == options.escape[0]) {
+			if (str[i] == options.quote || str[i] == options.escape) {
 				requires_escape = true;
 				break;
 			}
@@ -222,9 +202,9 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 
 		if (!requires_escape) {
 			// fast path: no need to escape anything
-			serializer.WriteBufferData(options.quote);
+			serializer.Write(options.quote);
 			serializer.WriteData(const_data_ptr_cast(str), len);
-			serializer.WriteBufferData(options.quote);
+			serializer.Write(options.quote);
 			return;
 		}
 
@@ -235,9 +215,9 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 			// need to escape quotes separately
 			new_val = AddEscapes(options.quote, options.escape, new_val);
 		}
-		serializer.WriteBufferData(options.quote);
+		serializer.Write(options.quote);
 		serializer.WriteBufferData(new_val);
-		serializer.WriteBufferData(options.quote);
+		serializer.Write(options.quote);
 	} else {
 		serializer.WriteData(const_data_ptr_cast(str), len);
 	}
@@ -320,7 +300,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 		// write the header line to the file
 		for (idx_t i = 0; i < csv_data.options.name_list.size(); i++) {
 			if (i != 0) {
-				serializer.WriteBufferData(options.delimiter);
+				serializer.Write(options.delimiter);
 			}
 			WriteQuotedString(serializer, csv_data, csv_data.options.name_list[i].c_str(),
 			                  csv_data.options.name_list[i].size(), false);
@@ -372,7 +352,7 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 		// write values
 		for (idx_t col_idx = 0; col_idx < cast_chunk.ColumnCount(); col_idx++) {
 			if (col_idx != 0) {
-				writer.WriteBufferData(options.delimiter);
+				writer.Write(options.delimiter);
 			}
 			if (FlatVector::IsNull(cast_chunk.data[col_idx], row_idx)) {
 				// write null value

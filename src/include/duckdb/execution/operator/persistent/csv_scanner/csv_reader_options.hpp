@@ -48,7 +48,7 @@ struct CSVReaderOptions {
 	//! Whether or not an escape character was defined by the user
 	bool has_escape = false;
 	//! Escape character to escape quote character
-	char escape;
+	char escape = '\0';
 	//! Whether or not a header information was given by the user
 	bool has_header = false;
 	//! Whether or not the file has a header line

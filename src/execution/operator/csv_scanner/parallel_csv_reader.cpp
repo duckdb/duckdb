@@ -31,9 +31,6 @@ ParallelCSVReader::ParallelCSVReader(ClientContext &context, CSVReaderOptions op
       first_pos_first_buffer(first_pos_first_buffer_p) {
 	Initialize(requested_types);
 	SetBufferRead(std::move(buffer_p));
-	if (options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1) {
-		throw InternalException("Parallel CSV reader cannot handle CSVs with multi-byte delimiters/escapes/quotes");
-	}
 }
 
 void ParallelCSVReader::Initialize(const vector<LogicalType> &requested_types) {
@@ -324,7 +321,7 @@ value_start : {
 	offset = 0;
 
 	// this state parses the first character of a value
-	if ((*buffer)[position_buffer] == options.quote[0]) {
+	if ((*buffer)[position_buffer] == options.quote) {
 		// quote: actual value starts in the next position
 		// move to in_quotes state
 		start_buffer = position_buffer + 1;
@@ -341,10 +338,10 @@ normal : {
 	// this state parses the remainder of a non-quoted value until we reach a delimiter or newline
 	for (; position_buffer < end_buffer; position_buffer++) {
 		auto c = (*buffer)[position_buffer];
-		if (c == options.delimiter[0]) {
+		if (c == options.delimiter) {
 			// delimiter: end the value and add it to the chunk
 			goto add_value;
-		} else if (c == options.quote[0] && try_add_line) {
+		} else if (c == options.quote && try_add_line) {
 			return false;
 		} else if (StringUtil::CharacterIsNewline(c)) {
 			// newline: add row
@@ -467,10 +464,10 @@ in_quotes:
 	position_buffer++;
 	for (; position_buffer < end_buffer; position_buffer++) {
 		auto c = (*buffer)[position_buffer];
-		if (c == options.quote[0]) {
+		if (c == options.quote) {
 			// quote: move to unquoted state
 			goto unquote;
-		} else if (c == options.escape[0]) {
+		} else if (c == options.escape) {
 			// escape: store the escaped position and move to handle_escape state
 			escape_positions.push_back(position_buffer - start_buffer);
 			goto handle_escape;
@@ -504,11 +501,11 @@ unquote : {
 		goto final_state;
 	}
 	auto c = (*buffer)[position_buffer];
-	if (c == options.quote[0] && (options.escape.empty() || options.escape[0] == options.quote[0])) {
+	if (c == options.quote && (options.escape == '\0' || options.escape == options.quote)) {
 		// escaped quote, return to quoted state and store escape position
 		escape_positions.push_back(position_buffer - start_buffer);
 		goto in_quotes;
-	} else if (c == options.delimiter[0]) {
+	} else if (c == options.delimiter) {
 		// delimiter, add value
 		offset = 1;
 		goto add_value;
@@ -543,7 +540,7 @@ handle_escape : {
 		    GetLineNumberStr(linenr, linenr_estimated, buffer->local_batch_index).c_str(), options.ToString());
 		return false;
 	}
-	if ((*buffer)[position_buffer] != options.quote[0] && (*buffer)[position_buffer] != options.escape[0]) {
+	if ((*buffer)[position_buffer] != options.quote && (*buffer)[position_buffer] != options.escape) {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
 		    GetLineNumberStr(linenr, linenr_estimated, buffer->local_batch_index).c_str(), options.ToString());

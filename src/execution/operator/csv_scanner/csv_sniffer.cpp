@@ -290,7 +290,7 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t b
 	} else if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding) {
 		bool same_quote_is_candidate = false;
 		for (auto &candidate : candidates) {
-			if (state_machine.configuration.quote.compare(candidate.state->configuration.quote) == 0) {
+			if (state_machine.configuration.quote == candidate.state->configuration.quote) {
 				same_quote_is_candidate = true;
 			}
 		}
@@ -309,28 +309,28 @@ void CSVSniffer::NextChunk() {
 
 vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 	// set up the candidates we consider for delimiter and quote rules based on user input
-	vector<string> delim_candidates;
+	vector<char> delim_candidates;
 	vector<QuoteRule> quoterule_candidates;
-	vector<vector<string>> quote_candidates_map;
-	vector<vector<string>> escape_candidates_map = {{""}, {"\\"}, {""}};
+	vector<vector<char>> quote_candidates_map;
+	vector<vector<char>> escape_candidates_map = {{'\0'}, {'\\'}, {'\0'}};
 
 	if (options.has_delimiter) {
 		// user provided a delimiter: use that delimiter
 		delim_candidates = {options.delimiter};
 	} else {
 		// no delimiter provided: try standard/common delimiters
-		delim_candidates = {",", "|", ";", "\t"};
+		delim_candidates = {',', '|', ';', '\t'};
 	}
 	if (options.has_quote) {
 		// user provided quote: use that quote rule
 		quote_candidates_map = {{options.quote}, {options.quote}, {options.quote}};
 	} else {
 		// no quote rule provided: use standard/common quotes
-		quote_candidates_map = {{"\""}, {"\"", "'"}, {""}};
+		quote_candidates_map = {{'\"'}, {'\"', '\''}, {'\0'}};
 	}
 	if (options.has_escape) {
 		// user provided escape: use that escape rule
-		if (options.escape.empty()) {
+		if (options.escape == '\0') {
 			quoterule_candidates = {QuoteRule::QUOTES_RFC};
 		} else {
 			quoterule_candidates = {QuoteRule::QUOTES_OTHER};

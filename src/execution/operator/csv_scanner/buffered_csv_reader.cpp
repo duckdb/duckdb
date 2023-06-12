@@ -342,7 +342,7 @@ unquote:
 		offset = 1;
 		goto final_state;
 	}
-	if (buffer[position] == options.quote && (options.escape.empty() || options.escape[0] == options.quote)) {
+	if (buffer[position] == options.quote && (options.escape == '\0' || options.escape == options.quote)) {
 		// escaped quote, return to quoted state and store escape position
 		escape_positions.push_back(position - start);
 		goto in_quotes;
@@ -370,7 +370,7 @@ handle_escape:
 		    GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());
 		return false;
 	}
-	if (buffer[position] != options.quote && buffer[position] != options.escape[0]) {
+	if (buffer[position] != options.quote && buffer[position] != options.escape) {
 		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
 		    GetLineNumberStr(linenr, linenr_estimated).c_str(), options.ToString());

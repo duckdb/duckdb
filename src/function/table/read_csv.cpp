@@ -28,17 +28,15 @@ unique_ptr<CSVFileHandle> ReadCSV::OpenCSV(const string &file_path, FileCompress
 void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
 	// Here we identify if we can run this CSV file on parallel or not.
-	bool null_or_empty = options.delimiter.empty() || options.escape.empty() || options.quote.empty() ||
-	                     options.delimiter[0] == '\0' || options.escape[0] == '\0' || options.quote[0] == '\0';
-	bool complex_options = options.delimiter.size() > 1 || options.escape.size() > 1 || options.quote.size() > 1;
+	bool empty_options = options.delimiter == '\0' || options.escape == '\0' || options.quote == '\0';
 	bool not_supported_options = options.null_padding;
 
 	auto number_of_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	if (options.parallel_mode != ParallelMode::PARALLEL && int64_t(files.size() * 2) >= number_of_threads) {
 		single_threaded = true;
 	}
-	if (options.parallel_mode == ParallelMode::SINGLE_THREADED || null_or_empty || not_supported_options ||
-	    complex_options || options.new_line == NewLineIdentifier::MIX) {
+	if (options.parallel_mode == ParallelMode::SINGLE_THREADED || empty_options || not_supported_options ||
+	    options.new_line == NewLineIdentifier::MIX) {
 		// not supported for parallel CSV reading
 		single_threaded = true;
 	}
@@ -1024,11 +1022,11 @@ unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const Fu
 void CSVReaderOptions::Serialize(FieldWriter &writer) const {
 	// common options
 	writer.WriteField<bool>(has_delimiter);
-	writer.WriteString(delimiter);
+	writer.WriteField<char>(delimiter);
 	writer.WriteField<bool>(has_quote);
-	writer.WriteString(quote);
+	writer.WriteField<char>(quote);
 	writer.WriteField<bool>(has_escape);
-	writer.WriteString(escape);
+	writer.WriteField<char>(escape);
 	writer.WriteField<bool>(has_header);
 	writer.WriteField<bool>(header);
 	writer.WriteField<bool>(ignore_errors);
@@ -1066,11 +1064,11 @@ void CSVReaderOptions::Serialize(FieldWriter &writer) const {
 void CSVReaderOptions::Deserialize(FieldReader &reader) {
 	// common options
 	has_delimiter = reader.ReadRequired<bool>();
-	delimiter = reader.ReadRequired<string>();
+	delimiter = reader.ReadRequired<char>();
 	has_quote = reader.ReadRequired<bool>();
-	quote = reader.ReadRequired<string>();
+	quote = reader.ReadRequired<char>();
 	has_escape = reader.ReadRequired<bool>();
-	escape = reader.ReadRequired<string>();
+	escape = reader.ReadRequired<char>();
 	has_header = reader.ReadRequired<bool>();
 	header = reader.ReadRequired<bool>();
 	ignore_errors = reader.ReadRequired<bool>();

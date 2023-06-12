@@ -73,7 +73,7 @@ void CSVReaderOptions::SetEscape(const string &input) {
 	if (input.size() > 1) {
 		throw InvalidInputException("Escape can not be bigger than 1 byte");
 	}
-	this->escape = input;
+	this->escape = input[0];
 	this->has_escape = true;
 }
 

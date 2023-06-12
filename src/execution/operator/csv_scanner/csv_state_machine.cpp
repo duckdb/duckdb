@@ -18,32 +18,32 @@ CSVStateMachine::CSVStateMachine(CSVStateMachineConfiguration configuration_p) :
 
 	// Now set values depending on configuration
 	// 1) Standard State
-	transition_array[standard_state][static_cast<uint8_t>(configuration.field_separator[0])] = field_separator_state;
+	transition_array[standard_state][static_cast<uint8_t>(configuration.field_separator)] = field_separator_state;
 	transition_array[standard_state][static_cast<uint8_t>('\n')] = record_separator_state;
 	transition_array[standard_state][static_cast<uint8_t>('\r')] = carriage_return_state;
-	transition_array[standard_state][static_cast<uint8_t>(configuration.quote[0])] = quoted_state;
+	transition_array[standard_state][static_cast<uint8_t>(configuration.quote)] = quoted_state;
 	// 2) Field Separator State
-	transition_array[field_separator_state][static_cast<uint8_t>(configuration.field_separator[0])] =
+	transition_array[field_separator_state][static_cast<uint8_t>(configuration.field_separator)] =
 	    field_separator_state;
 	transition_array[field_separator_state][static_cast<uint8_t>('\n')] = record_separator_state;
 	transition_array[field_separator_state][static_cast<uint8_t>('\r')] = carriage_return_state;
-	transition_array[field_separator_state][static_cast<uint8_t>(configuration.quote[0])] = quoted_state;
+	transition_array[field_separator_state][static_cast<uint8_t>(configuration.quote)] = quoted_state;
 	// 3) Record Separator State
-	transition_array[record_separator_state][static_cast<uint8_t>(configuration.field_separator[0])] =
+	transition_array[record_separator_state][static_cast<uint8_t>(configuration.field_separator)] =
 	    field_separator_state;
 	transition_array[record_separator_state][static_cast<uint8_t>('\n')] = record_separator_state;
 	transition_array[record_separator_state][static_cast<uint8_t>('\r')] = carriage_return_state;
-	transition_array[record_separator_state][static_cast<uint8_t>(configuration.quote[0])] = quoted_state;
+	transition_array[record_separator_state][static_cast<uint8_t>(configuration.quote)] = quoted_state;
 	// 4) Carriage Return State
 	transition_array[carriage_return_state][static_cast<uint8_t>('\n')] = record_separator_state;
 	transition_array[carriage_return_state][static_cast<uint8_t>('\r')] = carriage_return_state;
-	transition_array[carriage_return_state][static_cast<uint8_t>(configuration.escape[0])] = escape_state;
+	transition_array[carriage_return_state][static_cast<uint8_t>(configuration.escape)] = escape_state;
 	// 5) Quoted State
-	transition_array[quoted_state][static_cast<uint8_t>(configuration.quote[0])] = standard_state;
-	transition_array[quoted_state][static_cast<uint8_t>(configuration.escape[0])] = escape_state;
+	transition_array[quoted_state][static_cast<uint8_t>(configuration.quote)] = standard_state;
+	transition_array[quoted_state][static_cast<uint8_t>(configuration.escape)] = escape_state;
 	// 6) Escaped State
-	transition_array[escape_state][static_cast<uint8_t>(configuration.quote[0])] = quoted_state;
-	transition_array[escape_state][static_cast<uint8_t>(configuration.escape[0])] = quoted_state;
+	transition_array[escape_state][static_cast<uint8_t>(configuration.quote)] = quoted_state;
+	transition_array[escape_state][static_cast<uint8_t>(configuration.escape)] = quoted_state;
 }
 
 idx_t CSVStateMachine::SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_column_counts, idx_t max_rows) {

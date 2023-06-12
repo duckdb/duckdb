@@ -22,12 +22,12 @@ enum class CSVState : uint8_t {
 };
 
 struct CSVStateMachineConfiguration {
-	CSVStateMachineConfiguration(string field_separator_p, string quote_p, string escape_p)
+	CSVStateMachineConfiguration(char field_separator_p, char quote_p, char escape_p)
 	    : field_separator(field_separator_p), quote(quote_p), escape(escape_p) {
 	}
-	string field_separator;
-	string quote;
-	string escape;
+	char field_separator;
+	char quote;
+	char escape;
 	// We set the record separator through the state machine
 	NewLineIdentifier record_separator;
 };
