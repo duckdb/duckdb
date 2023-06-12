@@ -758,8 +758,6 @@ struct WindowExecutor {
 	DataChunk payload_chunk;
 
 	ExpressionExecutor filter_executor;
-	ValidityMask filter_mask;
-	vector<validity_t> filter_bits;
 	SelectionVector filter_sel;
 
 	// LEAD/LAG Evaluation
@@ -776,11 +774,7 @@ struct WindowExecutor {
 	// IGNORE NULLS
 	ValidityMask ignore_nulls;
 
-	// build a segment tree for frame-adhering aggregates
-	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
-	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
-
-	// all aggregate values are the same for each partition
+	// aggregate computation algorithm
 	unique_ptr<WindowAggregateState> aggregate_state = nullptr;
 
 protected:
@@ -882,13 +876,14 @@ WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &cont
 		    make_uniq<WindowConstantAggregate>(AggregateObject(wexpr), wexpr.return_type, partition_mask, count);
 	} else if (IsCustomAggregate()) {
 		aggregate_state = make_uniq<WindowCustomAggregate>(AggregateObject(wexpr), wexpr.return_type, count);
+	} else if (wexpr.aggregate) {
+		// build a segment tree for frame-adhering aggregates
+		// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
+		aggregate_state = make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, count, mode);
 	}
 
 	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
 	if (wexpr.filter_expr) {
-		// 	Start with all invalid and set the ones that pass
-		filter_bits.resize(ValidityMask::ValidityMaskSize(count), 0);
-		filter_mask.Initialize(filter_bits.data());
 		filter_executor.AddExpression(*wexpr.filter_expr);
 		filter_sel.Initialize(STANDARD_VECTOR_SIZE);
 	}
@@ -934,9 +929,6 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 	if (wexpr.filter_expr) {
 		filtering = &filter_sel;
 		filtered = filter_executor.SelectExpression(input_chunk, filter_sel);
-		for (idx_t f = 0; f < filtered; ++f) {
-			filter_mask.SetValid(input_idx + filter_sel[f]);
-		}
 	}
 
 	if (!wexpr.children.empty()) {
@@ -983,13 +975,8 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 }
 
 void WindowExecutor::Finalize() {
-	// build a segment tree for frame-adhering aggregates
-	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
 	if (aggregate_state) {
 		aggregate_state->Finalize();
-	} else if (wexpr.aggregate) {
-		segment_tree = make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, &payload_collection,
-		                                            filter_mask, mode);
 	}
 }
 
@@ -1062,6 +1049,7 @@ void WindowExecutor::NextRank(idx_t partition_begin, idx_t peer_begin, idx_t row
 }
 
 void WindowExecutor::Aggregate(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) {
+	D_ASSERT(aggregate_state);
 	auto window_begin = FlatVector::GetData<const int64_t>(bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const int64_t>(bounds.data[WINDOW_END]);
 	auto &rmask = FlatVector::Validity(result);
@@ -1070,11 +1058,7 @@ void WindowExecutor::Aggregate(DataChunk &bounds, Vector &result, idx_t count, i
 			rmask.SetInvalid(i);
 			continue;
 		}
-		if (aggregate_state) {
-			aggregate_state->Compute(result, i, window_begin[i], window_end[i]);
-		} else {
-			segment_tree->Compute(result, i, window_begin[i], window_end[i]);
-		}
+		aggregate_state->Compute(result, i, window_begin[i], window_end[i]);
 	}
 }
 

@@ -18,7 +18,7 @@ namespace duckdb {
 
 class WindowAggregateState {
 public:
-	WindowAggregateState(AggregateObject aggr, const LogicalType &result_type_p);
+	WindowAggregateState(AggregateObject aggr, const LogicalType &result_type_p, idx_t partition_count);
 	virtual ~WindowAggregateState();
 
 	virtual void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered);
@@ -33,12 +33,18 @@ protected:
 	//! The result type of the window function
 	LogicalType result_type;
 
+	//! The size of the partition
+	const idx_t partition_count;
 	//! Data pointer that contains a single state, used for intermediate window segment aggregation
 	vector<data_t> state;
 	//! Reused result state container for the window functions
-	Vector statev;
+	Vector statef;
 	//! Partition data chunk
 	DataChunk inputs;
+	//! The filtered rows in inputs.
+	vector<validity_t> filter_bits;
+	ValidityMask filter_mask;
+	idx_t filter_count;
 };
 
 class WindowConstantAggregate : public WindowAggregateState {
@@ -70,53 +76,36 @@ public:
 	WindowCustomAggregate(AggregateObject aggr, const LogicalType &result_type_p, idx_t partition_count);
 	~WindowCustomAggregate() override;
 
-	void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered) override;
 	void Compute(Vector &result, idx_t rid, idx_t start, idx_t end) override;
 
 private:
-	//! The size of the partition
-	const idx_t partition_count;
-	//! The filtered rows in inputs.
-	vector<validity_t> filter_bits;
-	ValidityMask filter_mask;
-	idx_t filter_count;
 	//! The frame boundaries, used for the window functions
 	FrameBounds frame;
 };
 
-class WindowSegmentTree {
+class WindowSegmentTree : public WindowAggregateState {
 public:
 	using FrameBounds = std::pair<idx_t, idx_t>;
 
-	WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, DataChunk *input,
-	                  const ValidityMask &filter_mask, WindowAggregationMode mode);
-	~WindowSegmentTree();
+	WindowSegmentTree(AggregateObject aggr, const LogicalType &result_type, idx_t count, WindowAggregationMode mode_p);
+	~WindowSegmentTree() override;
 
-	//! First row contains the result.
-	void Compute(Vector &result, idx_t rid, idx_t start, idx_t end);
+	void Finalize() override;
+	void Compute(Vector &result, idx_t rid, idx_t start, idx_t end) override;
 
 private:
 	void ConstructTree();
 	void ExtractFrame(idx_t begin, idx_t end);
 	void FlushStates(idx_t l_idx);
 	void WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end);
-	void AggregateInit();
-	void AggegateFinal(Vector &result, idx_t rid);
 
 	//! Use the combine API, if available
 	inline bool UseCombineAPI() const {
 		return mode < WindowAggregationMode::SEPARATE;
 	}
 
-	//! The aggregate that the window function is computed over
-	AggregateObject aggr;
-	//! The result type of the window function
-	LogicalType result_type;
-
-	//! Data pointer that contains a single state, used for intermediate window segment aggregation
-	vector<data_t> state;
-	//! Input data chunk, used for intermediate window segment aggregation
-	DataChunk inputs;
+	//! Input data chunk, used for leaf segment aggregation
+	DataChunk leaves;
 	//! The filtered rows in inputs.
 	SelectionVector filter_sel;
 	//! A vector of pointers to "state", used for intermediate window segment aggregation
@@ -125,8 +114,6 @@ private:
 	FrameBounds frame;
 	//! Reused state pointers for combining segment tree levels
 	Vector statel;
-	//! Reused result state container for finalizing window functions
-	Vector statef;
 	//! Count of buffered values
 	idx_t flush_count;
 
@@ -137,12 +124,6 @@ private:
 
 	//! The total number of internal nodes of the tree, stored in levels_flat_native
 	idx_t internal_nodes;
-
-	//! The (sorted) input chunk collection on which the tree is built
-	DataChunk *input_ref;
-
-	//! The filtered rows in input_ref.
-	const ValidityMask &filter_mask;
 
 	//! Use the window API, if available
 	WindowAggregationMode mode;
