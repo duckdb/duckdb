@@ -37,7 +37,7 @@ class TableFunction;
 struct FunctionData;
 
 class TableColumnInfo;
-class ColumnSegmentInfo;
+struct ColumnSegmentInfo;
 class TableStorageInfo;
 
 class LogicalGet;
