@@ -139,7 +139,7 @@ string PhysicalTableScan::ParamsToString() const {
 			}
 		}
 	}
-	if (function.filter_pushdown && (table_filters || table_filters_applied_via_files.size() > 0)) {
+	if (function.filter_pushdown && table_filters) {
 		result += "\n[INFOSEPARATOR]\n";
 		result += "Filters: ";
 		if (table_filters) {
@@ -152,6 +152,10 @@ string PhysicalTableScan::ParamsToString() const {
 				}
 			}
 		}
+	}
+	if (!table_filters_applied_via_files.empty()) {
+		result += "\n[INFOSEPARATOR]\n";
+		result += "File Filters: ";
 		for (auto &filter : table_filters_applied_via_files) {
 			result += filter->ToString();
 			result += "\n";
