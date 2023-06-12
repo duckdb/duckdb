@@ -541,7 +541,16 @@ static Napi::Value TypeToObject(Napi::Env &env, const duckdb::LogicalType &type)
 			obj.Set("value", TypeToObject(env, value_type));
 		} break;
 		case duckdb::LogicalTypeId::ENUM: {
-			throw std::runtime_error("enum not supported yet");
+			auto name = duckdb::EnumType::GetTypeName(type);
+			auto &values_vec = duckdb::EnumType::GetValuesInsertOrder(type);
+			auto enum_size = duckdb::EnumType::GetSize(type);
+			auto arr = Napi::Array::New(env, enum_size);
+			for (size_t i = 0; i < enum_size; i++) {
+				auto child_name = values_vec.GetValue(i).GetValue<duckdb::string>();
+				arr.Set(i, child_name);
+			}
+			obj.Set("name", name);
+			obj.Set("values", arr);
 		} break;
 		case duckdb::LogicalTypeId::UNION: {
 			auto child_count = duckdb::UnionType::GetMemberCount(type);

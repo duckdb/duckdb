@@ -196,6 +196,11 @@ type TypeInfo = {
   alias?: string,
   width: number,
   scale: number,
+} | {
+  id: "ENUM",
+  alias?: string,
+  name: string,
+  values: string[],
 }
 
 export class Statement {
