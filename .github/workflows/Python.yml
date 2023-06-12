@@ -124,7 +124,7 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        arch: [i686, x86_64]
+        arch: [i686, x86_64, aarch64]
         python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*]
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
@@ -138,7 +138,8 @@ jobs:
     needs: manylinux-extensions
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
-      CIBW_ARCHS: ${{ matrix.arch == 'i686' && 'auto32' || 'auto64'}}
+      CIBW_SKIP: '*-musllinux_aarch64'
+      CIBW_ARCHS: ${{ matrix.arch == 'i686' && 'auto32' || matrix.arch == 'aarch64' && 'aarch64' || 'auto64' }}
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       PYTEST_TIMEOUT: '600'
       DUCKDB_BUILD_UNITY: 1
@@ -147,6 +148,10 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v2
+      if: ${{ matrix.arch == 'aarch64' }}
 
     - uses: actions/setup-python@v4
       with:
