@@ -348,6 +348,7 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 
 	PreparedRowGroup prepared_row_group;
 	PrepareRowGroup(buffer, prepared_row_group);
+	buffer.Reset();
 
 	FlushRowGroup(prepared_row_group);
 }

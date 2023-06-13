@@ -817,8 +817,6 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 		// if the chunk collection exceeds a certain size we flush it to the parquet file
 		local_state.append_state.current_chunk_state.handles.clear();
 		global_state.writer->Flush(local_state.buffer);
-		// and reset the buffer
-		local_state.buffer.Reset();
 		local_state.buffer.InitializeAppend(local_state.append_state);
 	}
 }
