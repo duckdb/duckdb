@@ -285,12 +285,7 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 			for (idx_t i = 0; i < escape_positions.size(); i++) {
 				idx_t next_pos = escape_positions[i];
 				new_val += old_val.substr(prev_pos, next_pos - prev_pos);
-
-				if (options.escape == '\0' || options.escape == options.quote) {
-					prev_pos = next_pos++;
-				} else {
-					prev_pos = next_pos + 1;
-				}
+				prev_pos = ++next_pos;
 			}
 			new_val += old_val.substr(prev_pos, old_val.size() - prev_pos);
 			escape_positions.clear();
