@@ -169,7 +169,7 @@ static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::L
 		auto val = duckdb::HugeIntValue::Get(dval);
 		auto negative = val.upper < 0;
 		if (negative) {
-			duckdb::Hugeint::NegateInPlace(val);  // remove signing bit
+			duckdb::Hugeint::NegateInPlace(val); // remove signing bit
 		}
 		const uint64_t words[] = {val.lower, val.upper};
 		value = Napi::BigInt::New(env, negative, 2, words);
