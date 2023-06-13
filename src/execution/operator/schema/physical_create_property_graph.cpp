@@ -35,7 +35,7 @@ SourceResultType PhysicalCreatePropertyGraph::GetData(ExecutionContext &context,
 		throw MissingExtensionException("The SQL/PGQ extension has not been loaded");
 	}
 	auto duckpgq_state = reinterpret_cast<DuckPGQState *>(duckpgq_state_entry->second.get());
-	duckpgq_state->registered_property_graphs[info->property_graph_name] = info->Copy();
+//	duckpgq_state->registered_property_graphs[info->property_graph_name] = property_graph_nameinfo->Copy();
 	return SourceResultType::FINISHED;
 }
 
