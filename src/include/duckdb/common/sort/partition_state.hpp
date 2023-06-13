@@ -42,8 +42,8 @@ public:
 	using Orders = vector<BoundOrderByNode>;
 	using Types = vector<LogicalType>;
 
-	using GroupingPartition = unique_ptr<PartitionedColumnData>;
-	using GroupingAppend = unique_ptr<PartitionedColumnDataAppendState>;
+	using GroupingPartition = unique_ptr<PartitionedTupleData>;
+	using GroupingAppend = unique_ptr<PartitionedTupleDataAppendState>;
 
 	static void GenerateOrderings(Orders &partitions, Orders &orders,
 	                              const vector<unique_ptr<Expression>> &partition_bys, const Orders &order_bys,
@@ -58,8 +58,8 @@ public:
 	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 	void CombineLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
 
-	void BuildSortState(ColumnDataCollection &group_data, GlobalSortState &global_sort) const;
-	void BuildSortState(ColumnDataCollection &group_data, PartitionGlobalHashGroup &global_sort);
+	void BuildSortState(TupleDataCollection &group_data, GlobalSortState &global_sort) const;
+	void BuildSortState(TupleDataCollection &group_data, PartitionGlobalHashGroup &global_sort);
 
 	ClientContext &context;
 	BufferManager &buffer_manager;
@@ -67,9 +67,9 @@ public:
 	mutex lock;
 
 	// OVER(PARTITION BY...) (hash grouping)
-	unique_ptr<RadixPartitionedColumnData> grouping_data;
+	unique_ptr<RadixPartitionedTupleData> grouping_data;
 	//! Payload plus hash column
-	Types grouping_types;
+	TupleDataLayout grouping_types;
 	//! The number of radix bits if this partition is being synced with another
 	idx_t fixed_bits;
 
@@ -107,8 +107,8 @@ public:
 	ExpressionExecutor executor;
 	DataChunk group_chunk;
 	DataChunk payload_chunk;
-	unique_ptr<PartitionedColumnData> local_partition;
-	unique_ptr<PartitionedColumnDataAppendState> local_append;
+	unique_ptr<PartitionedTupleData> local_partition;
+	unique_ptr<PartitionedTupleDataAppendState> local_append;
 
 	// OVER(...) (sorting)
 	size_t sort_cols;
@@ -132,7 +132,7 @@ class PartitionLocalMergeState;
 
 class PartitionGlobalMergeState {
 public:
-	using GroupDataPtr = unique_ptr<ColumnDataCollection>;
+	using GroupDataPtr = unique_ptr<TupleDataCollection>;
 
 	PartitionGlobalMergeState(PartitionGlobalSinkState &sink, GroupDataPtr group_data, hash_t hash_bin);
 
