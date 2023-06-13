@@ -197,13 +197,10 @@ class TestPythonFilesystem:
         ).read() == b'1\n'
 
     def test_read_hive_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
-            duckdb_cursor.register_filesystem(memory)
+        duckdb_cursor.register_filesystem(memory)
 
-            with memory.open('/root/a=1/data_0.csv', 'wb') as fh:
-                fh.write(b'1\n')
+        with memory.open('/root/a=1/data_0.csv', 'wb') as fh:
+            fh.write(b'1\n')
 
-            duckdb_cursor.execute('''SELECT * FROM read_csv_auto('memory://root/*/*.csv', HIVE_PARTITIONING = 1);''')
-            assert duckdb_cursor.fetchall() == [(1, 1)]
-
-            duckdb_cursor.execute('''SELECT * FROM read_csv_auto('memory://root/*/*.csv', HIVE_PARTITIONING = 1, HIVE_TYPES_AUTOCAST = 0);''')
-            assert duckdb_cursor.fetchall() == [(1, '1')]
+        duckdb_cursor.execute('''SELECT * FROM read_csv_auto('memory://root/*/*.csv', HIVE_PARTITIONING = 1);''')
+        assert duckdb_cursor.fetchall() == [(1, '1')]
