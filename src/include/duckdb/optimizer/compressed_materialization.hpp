@@ -120,15 +120,6 @@ private:
 	                                             const BaseStatistics &stats);
 	unique_ptr<Expression> GetStringDecompress(unique_ptr<Expression> input, const BaseStatistics &stats);
 
-	//! Finds compress/decompress projections and removes redundant compress/decompress expressions
-	void RemoveRedundantExpressions(unique_ptr<LogicalOperator> &op);
-	//! Finds a potentially redundant decompress projection corresponding to the given compress projection
-	optional_ptr<LogicalOperator> FindDecompression(LogicalOperator &compression,
-	                                                vector<reference<LogicalOperator>> &operators_in_between);
-	//! Removes redundant compress/decompress expressions in projections
-	void RemoveRedundantExpressions(LogicalProjection &decompression, LogicalProjection &compression,
-	                                const vector<reference<LogicalOperator>> &operators_in_between);
-
 private:
 	ClientContext &context;
 	Binder &binder;

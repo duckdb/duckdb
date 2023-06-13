@@ -192,15 +192,8 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalDelimJoin &delim_join, const idx
 }
 
 static bool InequalityDelimJoinCanBeEliminated(JoinType &join_type) {
-	switch (join_type) {
-	case JoinType::ANTI:
-	case JoinType::MARK:
-	case JoinType::SEMI:
-	case JoinType::SINGLE:
-		return true;
-	default:
-		return false;
-	}
+	return join_type == JoinType::ANTI || join_type == JoinType::MARK || join_type == JoinType::SEMI ||
+	       join_type == JoinType::SINGLE;
 }
 
 bool FindAndReplaceBindings(vector<ColumnBinding> &traced_bindings, const vector<unique_ptr<Expression>> &expressions,
@@ -226,19 +219,12 @@ bool FindAndReplaceBindings(vector<ColumnBinding> &traced_bindings, const vector
 bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalDelimJoin &delim_join, const idx_t delim_get_count,
                                                    unique_ptr<LogicalOperator> &join,
                                                    const vector<ReplacementBinding> &replacement_bindings) {
-	if (delim_get_count != 1) {
-		return false;
-	}
-
-	if (!InequalityDelimJoinCanBeEliminated(delim_join.join_type)) {
-		return false;
-	}
-
 	auto &comparison_join = join->Cast<LogicalComparisonJoin>();
 	auto &delim_conditions = delim_join.conditions;
 	const auto &join_conditions = comparison_join.conditions;
-	if (delim_conditions.size() != join_conditions.size()) {
-		return false; // Different number of conditions, can't replace
+	if (delim_get_count != 1 || !InequalityDelimJoinCanBeEliminated(delim_join.join_type) ||
+	    delim_conditions.size() != join_conditions.size()) {
+		return false;
 	}
 
 	// TODO: we cannot perform the optimization here because our pure inequality joins don't implement
@@ -285,6 +271,7 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalDelimJoin &delim_join,
 	// Get the index (left or right) of the DelimGet side of the join
 	const idx_t delim_idx = OperatorIsDelimGet(*join->children[0]) ? 0 : 1;
 
+	bool found_all = true;
 	for (idx_t cond_idx = 0; cond_idx < delim_conditions.size(); cond_idx++) {
 		auto &delim_condition = delim_conditions[cond_idx];
 		const auto &traced_binding = traced_bindings[cond_idx];
@@ -299,13 +286,10 @@ bool Deliminator::RemoveInequalityJoinWithDelimGet(LogicalDelimJoin &delim_join,
 				break;
 			}
 		}
-
-		if (!found) {
-			return false;
-		}
+		found_all = found_all && found;
 	}
 
-	return true;
+	return found_all;
 }
 
 } // namespace duckdb
