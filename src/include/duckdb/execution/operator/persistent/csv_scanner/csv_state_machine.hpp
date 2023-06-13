@@ -22,8 +22,8 @@ enum class CSVState : uint8_t {
 };
 
 struct CSVStateMachineConfiguration {
-	CSVStateMachineConfiguration(char field_separator_p, char quote_p, char escape_p)
-	    : field_separator(field_separator_p), quote(quote_p), escape(escape_p) {
+	CSVStateMachineConfiguration(char field_separator_p, char quote_p, char escape_p, NewLineIdentifier record_separator_p)
+	    : field_separator(field_separator_p), quote(quote_p), escape(escape_p), record_separator(record_separator_p) {
 	}
 	char field_separator;
 	char quote;

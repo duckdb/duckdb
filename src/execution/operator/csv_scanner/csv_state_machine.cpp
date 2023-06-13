@@ -89,17 +89,26 @@ idx_t CSVStateMachine::SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_
 	if (cur_rows < STANDARD_VECTOR_SIZE ) {
 		sniffed_column_counts[cur_rows++] = column_count;
 	}
-	sniffed_column_counts.erase(sniffed_column_counts.end() - (STANDARD_VECTOR_SIZE - cur_rows),
-	                            sniffed_column_counts.end());
+	NewLineIdentifier suggested_newline;
 	if (carry_on_separator) {
 		if (single_record_separator) {
-			configuration.record_separator = NewLineIdentifier::MIX;
+			suggested_newline = NewLineIdentifier::MIX;
 		} else {
-			configuration.record_separator = NewLineIdentifier::CARRY_ON;
+			suggested_newline = NewLineIdentifier::CARRY_ON;
 		}
 	} else {
-		configuration.record_separator = NewLineIdentifier::SINGLE;
+		suggested_newline = NewLineIdentifier::SINGLE;
 	}
+	if (configuration.record_separator == NewLineIdentifier::NOT_SET){
+		configuration.record_separator = suggested_newline;
+	} else{
+		if (configuration.record_separator != suggested_newline){
+			// Invalidate this whole detection
+			cur_rows = 0;
+		}
+	}
+	sniffed_column_counts.erase(sniffed_column_counts.end() - (STANDARD_VECTOR_SIZE - cur_rows),
+	                            sniffed_column_counts.end());
 	return cur_pos;
 }
 

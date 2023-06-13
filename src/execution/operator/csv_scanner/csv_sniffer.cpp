@@ -350,7 +350,7 @@ vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 			for (const auto &delim : delim_candidates) {
 				const auto &escape_candidates = escape_candidates_map[static_cast<uint8_t>(quoterule)];
 				for (const auto &escape : escape_candidates) {
-					CSVStateMachineConfiguration configuration(delim, quote, escape);
+					CSVStateMachineConfiguration configuration(delim, quote, escape,options.new_line);
 					csv_state_machines.emplace_back(configuration);
 				}
 			}
