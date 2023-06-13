@@ -1,0 +1,34 @@
+# name: test/sql/aggregate/simple_external_aggregate.test_slow
+# description: Test simple external aggregate
+# group: [aggregate]
+
+load __TEST_DIR__/simple_external_aggregate.db
+
+statement ok
+create table t1 (i varchar)
+
+# should be around 65mb
+statement ok
+insert into t1 select concat(range::VARCHAR, repeat('0', 50)) i from range(1000000) order by random()
+
+statement ok
+pragma threads=4
+
+statement ok
+pragma memory_limit='35mb'
+
+query I
+select count(*) from (select distinct i from t1)
+----
+1000000
+
+mode skip
+
+# add some strings that are longer than Storage::BLOCK_SIZE (another 30MB, for a total of ~95MB)
+statement ok
+insert into t1 select concat(range::VARCHAR, repeat('0', 300000)) i from range(100)
+
+query I
+select count(*) from (select distinct i from t1)
+----
+1000100
