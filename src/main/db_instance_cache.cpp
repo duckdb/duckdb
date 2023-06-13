@@ -50,8 +50,13 @@ shared_ptr<DuckDB> DBInstanceCache::GetInstance(const string &database, const DB
 
 shared_ptr<DuckDB> DBInstanceCache::CreateInstanceInternal(const string &database, DBConfig &config,
                                                            bool cache_instance) {
-	auto& fs = *config.file_system;
-	auto abs_database_path = GetDBAbsolutePath(database, fs);
+	string abs_database_path;
+	if (config.file_system) {
+		abs_database_path = GetDBAbsolutePath(database, *config.file_system);
+	} else {
+		auto tmp_fs = FileSystem::CreateLocal();
+		abs_database_path = GetDBAbsolutePath(database, *tmp_fs);
+	}
 	if (db_instances.find(abs_database_path) != db_instances.end()) {
 		throw duckdb::Exception(ExceptionType::CONNECTION,
 		                        "Instance with path: " + abs_database_path + " already exists.");
