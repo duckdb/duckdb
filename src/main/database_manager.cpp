@@ -87,6 +87,22 @@ const string &DatabaseManager::GetDefaultDatabase(ClientContext &context) {
 	return default_entry.catalog;
 }
 
+// LCOV_EXCL_START
+void DatabaseManager::SetDefaultDatabase(ClientContext &context, const string &new_value) {
+	auto db_entry = GetDatabase(context, new_value);
+
+	if (!db_entry) {
+		throw InternalException("Database \"%s\" not found", new_value);
+	} else if (db_entry->IsTemporary()) {
+		throw InternalException("Cannot set the default database to a temporary database");
+	} else if (db_entry->IsSystem()) {
+		throw InternalException("Cannot set the default database to a system database");
+	}
+
+	default_database = new_value;
+}
+// LCOV_EXCL_STOP
+
 vector<reference<AttachedDatabase>> DatabaseManager::GetDatabases(ClientContext &context) {
 	vector<reference<AttachedDatabase>> result;
 	databases->Scan(context, [&](CatalogEntry &entry) { result.push_back(entry.Cast<AttachedDatabase>()); });
