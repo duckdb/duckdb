@@ -20,7 +20,7 @@
 
 namespace duckdb {
 
-    struct CreatePropertyGraphInfo : public ParsedExpression {
+    struct CreatePropertyGraphInfo : public CreateInfo {
         CreatePropertyGraphInfo();
         CreatePropertyGraphInfo(string property_graph_name);
 
@@ -35,15 +35,15 @@ namespace duckdb {
         case_insensitive_map_t<PropertyGraphTable*> label_map;
 
     public:
-        string ToString() const override;
-        bool Equals(const BaseExpression *other_p) const override;
+//        string ToString() const;
+//        bool Equals(const BaseExpression *other_p) const;
+        void SerializeInternal(Serializer &serializer) const override;
+        unique_ptr<CreateInfo> Copy() const override;
 
-        unique_ptr<ParsedExpression> Copy() const override;
-
-        //! Serializes a blob into a MatchRef
-        void Serialize(FieldWriter &writer) const override;
-        //! Deserializes a blob back into a MatchRef
-        static unique_ptr<ParsedExpression> Deserialize(FieldReader &reader);
+        //! Serializes a blob into a CreatePropertyGraphInfo
+//        void Serialize(FieldWriter &writer) const;
+        //! Deserializes a blob back into a CreatePropertyGraphInfo
+        static unique_ptr<CreateInfo> Deserialize(FieldReader &reader);
 
     };
 } // namespace duckdb

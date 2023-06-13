@@ -6,80 +6,78 @@
 namespace duckdb {
 
 CreatePropertyGraphInfo::CreatePropertyGraphInfo() :
-        ParsedExpression(ExpressionType::FUNCTION_REF, ExpressionClass::BOUND_EXPRESSION)) {
+        CreateInfo(CatalogType::VIEW_ENTRY) {
 }
 
 
 CreatePropertyGraphInfo::CreatePropertyGraphInfo(string property_graph_name) :
-        ParsedExpression(ExpressionType::FUNCTION_REF, ExpressionClass::BOUND_EXPRESSION),
+        CreateInfo(CatalogType::VIEW_ENTRY),
         property_graph_name(std::move(property_graph_name)) {
 }
-
-string CreatePropertyGraphInfo::ToString() const {
-    string result;
-    result += "CREATE PROPERTY GRAPH " + property_graph_name + "\n";
-    result += "VERTEX TABLES (\n";
-    for (idx_t i = 0; i < vertex_tables.size(); i++) {
-        if (i != vertex_tables.size() - 1) {
-            result += vertex_tables[i]->ToString() + ", ";
-        } else {
-            // Last element should be without a trailing , instead )
-            result = vertex_tables[i]->ToString() + ")\n";
-        }
-    }
-
-    result += "EDGE TABLES (\n";
-    for (idx_t i = 0; i < edge_tables.size(); i++) {
-        if (i != edge_tables.size() - 1) {
-            result += edge_tables[i]->ToString() + ", ";
-        } else {
-            // Last element should be without a trailing , instead )
-            result = edge_tables[i]->ToString() + ")\n";
-        }
-    }
-    return result;
-}
-
-bool CreatePropertyGraphInfo::Equals(const BaseExpression *other_p) const {
-    // TODO Check label map in this method as well
-    if (!ParsedExpression::Equals(other_p)) {
-        return false;
-    }
-
-    auto other = (CreatePropertyGraphInfo *)other_p;
-    if (property_graph_name != other->property_graph_name) {
-        return false;
-    }
-
-    if (vertex_tables.size() != other->vertex_tables.size()) {
-        return false;
-    }
-    for (idx_t i = 0; i < vertex_tables.size(); i++) {
-        if (vertex_tables[i]->Equals(other->vertex_tables[i].get())) {
-            return false;
-        }
-    }
-
-    if (edge_tables.size() != other->edge_tables.size()) {
-        return false;
-    }
-    for (idx_t i = 0; i < edge_tables.size(); i++) {
-        if (edge_tables[i]->Equals(other->edge_tables[i].get())) {
-            return false;
-        }
-    }
-    return true;
-}
+//
+//string CreatePropertyGraphInfo::ToString() const {
+//    string result;
+//    result += "CREATE PROPERTY GRAPH " + property_graph_name + "\n";
+//    result += "VERTEX TABLES (\n";
+//    for (idx_t i = 0; i < vertex_tables.size(); i++) {
+//        if (i != vertex_tables.size() - 1) {
+//            result += vertex_tables[i]->ToString() + ", ";
+//        } else {
+//            // Last element should be without a trailing , instead )
+//            result = vertex_tables[i]->ToString() + ")\n";
+//        }
+//    }
+//
+//    result += "EDGE TABLES (\n";
+//    for (idx_t i = 0; i < edge_tables.size(); i++) {
+//        if (i != edge_tables.size() - 1) {
+//            result += edge_tables[i]->ToString() + ", ";
+//        } else {
+//            // Last element should be without a trailing , instead )
+//            result = edge_tables[i]->ToString() + ")\n";
+//        }
+//    }
+//    return result;
+//}
+//
+//bool CreatePropertyGraphInfo::Equals(const BaseExpression *other_p) const {
+//    auto other = (CreatePropertyGraphInfo *)other_p;
+//    if (property_graph_name != other->property_graph_name) {
+//        return false;
+//    }
+//
+//    if (vertex_tables.size() != other->vertex_tables.size()) {
+//        return false;
+//    }
+//    for (idx_t i = 0; i < vertex_tables.size(); i++) {
+//        if (vertex_tables[i]->Equals(other->vertex_tables[i].get())) {
+//            return false;
+//        }
+//    }
+//
+//    if (edge_tables.size() != other->edge_tables.size()) {
+//        return false;
+//    }
+//    for (idx_t i = 0; i < edge_tables.size(); i++) {
+//        if (edge_tables[i]->Equals(other->edge_tables[i].get())) {
+//            return false;
+//        }
+//    }
+//    return true;
+//}
 
 
-void CreatePropertyGraphInfo::Serialize(FieldWriter &writer) const {
+void CreatePropertyGraphInfo::SerializeInternal(Serializer &serializer) const {
+    FieldWriter writer(serializer);
 	writer.WriteString(property_graph_name);
     writer.WriteSerializableList<PropertyGraphTable>(vertex_tables);
     writer.WriteSerializableList<PropertyGraphTable>(edge_tables);
 //    writer.WriteRegularSerializableMap<PropertyGraphTable*>(label_map);
+
+    writer.Finalize();
 }
 
-unique_ptr<ParsedExpression> CreatePropertyGraphInfo::Copy() const {
+unique_ptr<CreateInfo> CreatePropertyGraphInfo::Copy() const {
 	auto result = make_uniq<CreatePropertyGraphInfo>(property_graph_name);
 
 	for (auto &vertex_table : vertex_tables) {
@@ -101,7 +99,7 @@ unique_ptr<ParsedExpression> CreatePropertyGraphInfo::Copy() const {
 	return std::move(result);
 }
 
-    unique_ptr<ParsedExpression> CreatePropertyGraphInfo::Deserialize(FieldReader &reader) {
+    unique_ptr<CreateInfo> CreatePropertyGraphInfo::Deserialize(FieldReader &reader) {
         auto result = make_uniq<CreatePropertyGraphInfo>();
         result->property_graph_name = reader.ReadRequired<string>();
         result->vertex_tables = reader.ReadRequiredSerializableList<PropertyGraphTable>();
