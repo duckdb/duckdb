@@ -8,7 +8,7 @@ namespace duckdb {
 
 struct DropPropertyGraphInfo : public ParseInfo {
 	DropPropertyGraphInfo() {
-        type = CatalogType::PROPERTY_GRAPH_ENTRY;
+        type = CatalogType::DATABASE_ENTRY; // TODO changee
     };
 
 	//! The catalog type to drop

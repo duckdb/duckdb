@@ -207,7 +207,8 @@ namespace duckdb {
         return true;
     }
 
-    void PropertyGraphTable::Serialize(FieldWriter &writer) const {
+    void PropertyGraphTable::Serialize(Serializer &serializer) const {
+        FieldWriter writer(serializer);
         writer.WriteString(table_name);
 
         writer.WriteList<string>(column_names);
@@ -228,11 +229,12 @@ namespace duckdb {
             writer.WriteList<string>(destination_fk);
             writer.WriteString(destination_reference);
         }
+        writer.Finalize();
     }
 
-    unique_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(FieldReader &reader) {
+    unique_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &deserializer) {
         auto pg_table = make_uniq<PropertyGraphTable>();
-
+        FieldReader reader(deserializer);
         pg_table->table_name = reader.ReadRequired<string>();
         reader.ReadList<string>(pg_table->column_names);
         reader.ReadList<string>(pg_table->column_aliases);
@@ -252,6 +254,7 @@ namespace duckdb {
             reader.ReadList<string>(pg_table->destination_fk);
             pg_table->destination_reference = reader.ReadRequired<string>();
         }
+        reader.Finalize();
         return pg_table;
     }
 

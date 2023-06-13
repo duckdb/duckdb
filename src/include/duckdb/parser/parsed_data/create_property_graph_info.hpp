@@ -20,12 +20,9 @@
 
 namespace duckdb {
 
-    struct CreatePropertyGraphInfo : public CreateInfo {
+    struct CreatePropertyGraphInfo : public ParsedExpression {
         CreatePropertyGraphInfo();
-        CreatePropertyGraphInfo(string catalog, string schema, string name);
-        //	explicit CreatePropertyGraphInfo(string property_graph_name);
-
-        CreatePropertyGraphInfo(SchemaCatalogEntry &schema, string pg_name);
+        CreatePropertyGraphInfo(string property_graph_name);
 
         //! Property graph name
         string property_graph_name;
@@ -37,13 +34,16 @@ namespace duckdb {
         //! Dictionary to point label to vector or edge table
         case_insensitive_map_t<PropertyGraphTable*> label_map;
 
-    protected:
-        void SerializeInternal(Serializer &serializer) const override;
-
     public:
-        DUCKDB_API static unique_ptr<CreatePropertyGraphInfo> Deserialize(Deserializer &deserializer);
+        string ToString() const override;
+        bool Equals(const BaseExpression *other_p) const override;
 
-        DUCKDB_API unique_ptr<CreateInfo> Copy() const override;
+        unique_ptr<ParsedExpression> Copy() const override;
+
+        //! Serializes a blob into a MatchRef
+        void Serialize(FieldWriter &writer) const override;
+        //! Deserializes a blob back into a MatchRef
+        static unique_ptr<ParsedExpression> Deserialize(FieldReader &reader);
 
     };
 } // namespace duckdb
