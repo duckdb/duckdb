@@ -173,32 +173,39 @@ export class Database {
 
 type TypeInfo = {
   id: string,
+  sql_type: string,
   alias?: string,
 } | {
   id: "STRUCT",
   alias?: string,
+  sql_type: string,
   children: {name: string, type: TypeInfo}[],
 } | {
   id: "LIST",
   alias?: string,
+  sql_type: string,
   child: TypeInfo,
 } | {
   id: "MAP",
   alias?: string,
+  sql_type: string,
   key: TypeInfo,
   value: TypeInfo,
 } | {
   id: "UNION",
   alias?: string,
+  sql_type: string,
   children: {name: string, type: TypeInfo}[],
 } | {
   id: "DECIMAL",
   alias?: string,
+  sql_type: string,
   width: number,
   scale: number,
 } | {
   id: "ENUM",
   alias?: string,
+  sql_type: string,
   name: string,
   values: string[],
 }
@@ -218,7 +225,7 @@ export class Statement {
 
   run(...args: [...any, Callback<void>] | any[]): Statement;
 
-  columns(): {name: string, sql_type: string, type: TypeInfo}[];
+  columns(): {name: string, type: TypeInfo}[];
 }
 
 export const ERROR: number;

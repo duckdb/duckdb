@@ -511,6 +511,7 @@ static Napi::Value TypeToObject(Napi::Env &env, const duckdb::LogicalType &type)
 
 	auto id = duckdb::LogicalTypeIdToString(type.id());
 	obj.Set("id", id);
+	obj.Set("sql_type", type.ToString());
 
 	if(type.HasAlias()) {
 		obj.Set("alias", type.GetAlias());
@@ -590,7 +591,6 @@ Napi::Value Statement::Columns(const Napi::CallbackInfo &info) {
 	for (size_t i = 0; i < names.size(); i++) {
 		auto obj = Napi::Object::New(env);
 		obj.Set("name", Napi::String::New(env, names[i]));
-		obj.Set("sql_type", Napi::String::New(env, types[i].ToString()));
 		obj.Set("type", TypeToObject(env, types[i]));
 		arr.Set(i, obj);
 	}
