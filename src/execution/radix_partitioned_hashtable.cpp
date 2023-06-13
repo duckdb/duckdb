@@ -517,11 +517,11 @@ void RadixPartitionedHashTable::GetRepartitionInfo(ClientContext &context, Globa
 		// In-memory finalize
 		if (num_partitions >= n_threads) {
 			// Can already keep all threads busy
-			repartition_radix_bits = num_partitions;
+			repartition_radix_bits = radix_bits;
 			tasks_per_partition = 1;
 		} else {
 			// Repartition to keep all threads busy
-			repartition_radix_bits = n_threads;
+			repartition_radix_bits = RadixPartitioning::RadixBits(NextPowerOfTwo(n_threads));
 			tasks_per_partition = n_threads / num_partitions;
 		}
 		concurrent_repartitions = num_partitions;
