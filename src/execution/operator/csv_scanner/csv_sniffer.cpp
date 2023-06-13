@@ -255,12 +255,14 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t b
 		if (sniffed_column_counts[row] == num_cols) {
 			consistent_rows++;
 		} else if (num_cols < sniffed_column_counts[row] && !options.skip_rows_set) {
+			// all rows up to this point will need padding
+			padding_count += (num_cols - sniffed_column_counts[row]) * row;
 			// we use the maximum amount of num_cols that we find
 			num_cols = sniffed_column_counts[row];
 			start_row = row + options.skip_rows;
 			consistent_rows = 1;
-			padding_count = 0;
-		} else if (num_cols >= sniffed_column_counts[row] && allow_padding) {
+
+		} else if (num_cols >= sniffed_column_counts[row]) {
 			// we are missing some columns, we can parse this as long as we add padding
 			padding_count++;
 		}
@@ -277,7 +279,7 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t b
 	bool more_than_one_column = (num_cols > 1);
 	bool start_good = !candidates.empty() && (start_row <= options.skip_rows);
 
-	if (!requested_types.empty() && requested_types.size() != num_cols) {
+	if (!requested_types.empty() && requested_types.size() != num_cols && (!allow_padding && padding_count > 0)) {
 		return;
 	} else if (rows_consistent && (single_column_before || (more_values && !require_more_padding) ||
 	                               (more_than_one_column && require_less_padding))) {
