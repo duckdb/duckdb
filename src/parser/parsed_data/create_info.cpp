@@ -53,8 +53,8 @@ unique_ptr<CreateInfo> CreateInfo::Deserialize(Deserializer &deserializer) {
 		return CreateMacroInfo::Deserialize(deserializer);
 	case CatalogType::SEQUENCE_ENTRY:
 		return CreateSequenceInfo::Deserialize(deserializer);
-    case CatalogType::PROPERTY_GRAPH_ENTRY:
-        return CreatePropertyGraphInfo::Deserialize(deserializer);
+//    case CatalogType::PROPERTY_GRAPH_ENTRY:
+//        return CreatePropertyGraphInfo::Deserialize(deserializer);
 	default:
 		throw NotImplementedException("Cannot deserialize '%s'", CatalogTypeToString(type));
 	}
