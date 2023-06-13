@@ -66,6 +66,11 @@ SELECT b::USMALLINT FROM bits;
 15
 
 query I
+SELECT b::UINTEGER FROM bits;
+----
+15
+
+query I
 SELECT b::UBIGINT FROM bits;
 ----
 15
@@ -84,6 +89,11 @@ query I
 SELECT b::DOUBLE FROM bits;
 ----
 7.4e-323
+
+query I
+SELECT '100001111000011110000111100001111'::BIT::BIGINT;
+----
+4547612431
 
 #                numeric to bitstring
 # ---------------------------------------------------
