@@ -813,9 +813,7 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 
 	// append data to the local (buffered) chunk collection
 	local_state.buffer.Append(local_state.append_state, input);
-	const idx_t limit = double(0.25) * BufferManager::GetBufferManager(context.client).GetMaxMemory() /
-	                    TaskScheduler::GetScheduler(context.client).NumberOfThreads();
-	if (local_state.buffer.Count() > bind_data.row_group_size || local_state.buffer.AllocatedSize() > limit) {
+	if (local_state.buffer.Count() > bind_data.row_group_size) {
 		// if the chunk collection exceeds a certain size we flush it to the parquet file
 		local_state.append_state.current_chunk_state.handles.clear();
 		global_state.writer->Flush(local_state.buffer);

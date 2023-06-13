@@ -46,7 +46,6 @@ public:
 	DUCKDB_API ArenaChunk *GetTail();
 
 	DUCKDB_API bool IsEmpty() const;
-	DUCKDB_API idx_t AllocatedSize() const;
 
 	//! Returns an "Allocator" wrapper for this arena allocator
 	Allocator &GetAllocator() {

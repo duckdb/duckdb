@@ -100,17 +100,6 @@ Allocator &ColumnDataCollection::GetAllocator() const {
 	return allocator->GetAllocator();
 }
 
-idx_t ColumnDataCollection::AllocatedSize() const {
-	idx_t total_size = 0;
-	for (auto &segment : segments) {
-		// This only works during append and non-shared allocators (otherwise the size gets fuzzy)
-		D_ASSERT(!segment->allocator->IsShared());
-		total_size += segment->allocator->AllocatedSize();
-		total_size += segment->heap->AllocatedSize();
-	}
-	return total_size;
-}
-
 //===--------------------------------------------------------------------===//
 // ColumnDataRow
 //===--------------------------------------------------------------------===//
