@@ -1431,7 +1431,7 @@ string_t CastFromBlobToBit::Operation(string_t input, Vector &vector) {
 	if (result_size <= 1) {
 		throw ConversionException("Cannot cast empty BLOB to BIT");
 	}
-	return StringVector::AddStringOrBlob(result, Bit::BitToBlob(input));
+	return StringVector::AddStringOrBlob(vector, Bit::BlobToBit(input));
 }
 
 //===--------------------------------------------------------------------===//
