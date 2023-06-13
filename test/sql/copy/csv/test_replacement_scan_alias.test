@@ -8,14 +8,14 @@ statement ok
 select * from 'test/sql/copy/csv/data/test/dateformat.csv';
 
 statement ok
-select * from 'test/sql/copy/csv/data/abac/abac.csv', 'test/sql/copy/csv/data/test/dateformat.csv';
+select * from 'test/sql/copy/csv/data/test/dateformat.csv', 'test/sql/copy/csv/data/test/dateformat_2.csv';
 
 # explicit alias
 statement ok
-select mytbl.column0 from 'test/sql/copy/csv/data/abac/abac.csv' mytbl;
+select mytbl.column0 from 'test/sql/copy/csv/data/test/dateformat.csv'mytbl;
 
 statement ok
-select mytbl.mycol from 'test/sql/copy/csv/data/abac/abac.csv' mytbl(mycol);
+select mytbl.mycol from 'test/sql/copy/csv/data/test/dateformat.csv' mytbl(mycol);
 
 require parquet
 

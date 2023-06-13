@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/buffered_csv_reader.hpp"
 
 namespace duckdb {
 CSVStateMachine::CSVStateMachine(CSVStateMachineConfiguration configuration_p) : configuration(configuration_p) {
@@ -85,7 +86,7 @@ idx_t CSVStateMachine::SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_
 		                          single_record_separator;
 		cur_pos++;
 	}
-	if (cur_rows < STANDARD_VECTOR_SIZE && state == CSVState::RECORD_SEPARATOR) {
+	if (cur_rows < STANDARD_VECTOR_SIZE ) {
 		sniffed_column_counts[cur_rows++] = column_count;
 	}
 	sniffed_column_counts.erase(sniffed_column_counts.end() - (STANDARD_VECTOR_SIZE - cur_rows),
