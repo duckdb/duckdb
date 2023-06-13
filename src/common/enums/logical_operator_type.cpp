@@ -100,8 +100,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CREATE_VIEW";
 	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
 		return "CREATE_SCHEMA";
-    case LogicalOperatorType::LOGICAL_CREATE_PROPERTY_GRAPH:
-        return "CREATE_PROPERTY_GRAPH";
 	case LogicalOperatorType::LOGICAL_ATTACH:
 		return "ATTACH";
 	case LogicalOperatorType::LOGICAL_DETACH:
@@ -126,8 +124,6 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CUSTOM_OP";
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		return "PIVOT";
-    case LogicalOperatorType::LOGICAL_DROP_PROPERTY_GRAPH:
-        return "DROP_PROPERTY_GRAPH";
 	}
 	return "INVALID";
 }
