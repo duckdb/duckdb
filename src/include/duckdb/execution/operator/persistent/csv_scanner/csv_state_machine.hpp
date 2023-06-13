@@ -17,12 +17,14 @@ enum class CSVState : uint8_t {
 	RECORD_SEPARATOR = 2, //! State after encountering a record separator (e.g., \n)
 	CARRIAGE_RETURN = 3,  //! State after encountering a record separator (e.g., \n)
 	QUOTED = 4,           //! State when inside a quoted field
-	ESCAPE = 5,           //! State when encountering an escape character (e.g., \)
-	INVALID = 6           //! Got to an Invalid State, this should error.
+	UNQUOTED = 5,         //! State when leaving a quoted field
+	ESCAPE = 6,           //! State when encountering an escape character (e.g., \)
+	INVALID = 7           //! Got to an Invalid State, this should error.
 };
 
 struct CSVStateMachineConfiguration {
-	CSVStateMachineConfiguration(char field_separator_p, char quote_p, char escape_p, NewLineIdentifier record_separator_p)
+	CSVStateMachineConfiguration(char field_separator_p, char quote_p, char escape_p,
+	                             NewLineIdentifier record_separator_p)
 	    : field_separator(field_separator_p), quote(quote_p), escape(escape_p), record_separator(record_separator_p) {
 	}
 	char field_separator;
@@ -67,6 +69,6 @@ public:
 private:
 	//! The Transition Array is a Finite State Machine
 	//! It holds the transitions of all states, on all 256 possible different characters
-	uint8_t transition_array[6][256];
+	uint8_t transition_array[7][256];
 };
 } // namespace duckdb

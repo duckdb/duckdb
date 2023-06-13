@@ -314,7 +314,7 @@ vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 	vector<char> delim_candidates;
 	vector<QuoteRule> quoterule_candidates;
 	vector<vector<char>> quote_candidates_map;
-	vector<vector<char>> escape_candidates_map = {{'\0'}, {'\\'}, {'\0'}};
+	vector<vector<char>> escape_candidates_map = {{'\0', '\"'}, {'\\'}, {'\0'}};
 
 	if (options.has_delimiter) {
 		// user provided a delimiter: use that delimiter
@@ -350,7 +350,7 @@ vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 			for (const auto &delim : delim_candidates) {
 				const auto &escape_candidates = escape_candidates_map[static_cast<uint8_t>(quoterule)];
 				for (const auto &escape : escape_candidates) {
-					CSVStateMachineConfiguration configuration(delim, quote, escape,options.new_line);
+					CSVStateMachineConfiguration configuration(delim, quote, escape, options.new_line);
 					csv_state_machines.emplace_back(configuration);
 				}
 			}
@@ -719,9 +719,9 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	// #######
 	// ### dialect detection
 	// #######
-	if (options.skip_rows_set){
+	if (options.skip_rows_set) {
 		// Skip rows if they are set
-		SkipRowsAndReadHeader(options.skip_rows,false);
+		SkipRowsAndReadHeader(options.skip_rows, false);
 	}
 	ReadBuffer(start, start);
 
