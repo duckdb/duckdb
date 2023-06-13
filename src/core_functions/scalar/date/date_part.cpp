@@ -1502,7 +1502,7 @@ struct StructDatePart {
 		writer.WriteList<DatePartSpecifier>(info.part_codes);
 	}
 
-	static unique_ptr<FunctionData> DeserializeFunction(ClientContext &context, FieldReader &reader,
+	static unique_ptr<FunctionData> DeserializeFunction(PlanDeserializationState &state, FieldReader &reader,
 	                                                    ScalarFunction &bound_function) {
 		auto stype = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 		auto part_codes = reader.ReadRequiredList<DatePartSpecifier>();
