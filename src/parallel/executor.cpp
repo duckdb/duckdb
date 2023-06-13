@@ -95,26 +95,50 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 
 		// create events/stack for this pipeline
 		auto pipeline_event = make_shared<PipelineEvent>(pipeline);
-		optional_ptr<Event> pipeline_finish_event_ptr;
-		if (meta_pipeline->HasFinishEvent(pipeline.get())) {
+
+		auto finish_group = meta_pipeline->GetFinishGroup(pipeline.get());
+		if (finish_group) {
+			// this pipeline is part of a finish group
+			const auto group_entry = event_map.find(*finish_group.get());
+			D_ASSERT(group_entry != event_map.end());
+			auto &group_stack = group_entry->second;
+			PipelineEventStack pipeline_stack(base_stack.pipeline_initialize_event, *pipeline_event,
+			                                  group_stack.pipeline_finish_event, base_stack.pipeline_complete_event);
+
+			// dependencies: base_finish -> pipeline_event -> group_finish
+			pipeline_stack.pipeline_event.AddDependency(base_stack.pipeline_event);
+			group_stack.pipeline_finish_event.AddDependency(pipeline_stack.pipeline_event);
+
+			// add pipeline stack to event map
+			event_map.insert(make_pair(reference<Pipeline>(*pipeline), pipeline_stack));
+		} else if (meta_pipeline->HasFinishEvent(pipeline.get())) {
 			// this pipeline has its own finish event (despite going into the same sink - Finalize twice!)
 			auto pipeline_finish_event = make_shared<PipelineFinishEvent>(pipeline);
-			pipeline_finish_event_ptr = pipeline_finish_event.get();
+			PipelineEventStack pipeline_stack(base_stack.pipeline_initialize_event, *pipeline_event,
+			                                  *pipeline_finish_event, base_stack.pipeline_complete_event);
 			events.push_back(std::move(pipeline_finish_event));
-			base_stack.pipeline_complete_event.AddDependency(*pipeline_finish_event_ptr);
+
+			// dependencies: base_finish -> pipeline_event -> pipeline_finish -> base_complete
+			pipeline_stack.pipeline_event.AddDependency(base_stack.pipeline_finish_event);
+			pipeline_stack.pipeline_finish_event.AddDependency(pipeline_stack.pipeline_event);
+			base_stack.pipeline_complete_event.AddDependency(pipeline_stack.pipeline_finish_event);
+
+			// add pipeline stack to event map
+			event_map.insert(make_pair(reference<Pipeline>(*pipeline), pipeline_stack));
+
 		} else {
-			pipeline_finish_event_ptr = &base_stack.pipeline_finish_event;
+			// no additional finish event
+			PipelineEventStack pipeline_stack(base_stack.pipeline_initialize_event, *pipeline_event,
+			                                  base_stack.pipeline_finish_event, base_stack.pipeline_complete_event);
+
+			// dependencies: base_initialize -> pipeline_event -> base_finish
+			pipeline_stack.pipeline_event.AddDependency(base_stack.pipeline_initialize_event);
+			base_stack.pipeline_finish_event.AddDependency(pipeline_stack.pipeline_event);
+
+			// add pipeline stack to event map
+			event_map.insert(make_pair(reference<Pipeline>(*pipeline), pipeline_stack));
 		}
-		PipelineEventStack pipeline_stack(base_stack.pipeline_initialize_event, *pipeline_event,
-		                                  *pipeline_finish_event_ptr, base_stack.pipeline_complete_event);
 		events.push_back(std::move(pipeline_event));
-
-		// dependencies: base_initialize -> pipeline_event -> base_finish
-		pipeline_stack.pipeline_event.AddDependency(base_stack.pipeline_initialize_event);
-		pipeline_stack.pipeline_finish_event.AddDependency(pipeline_stack.pipeline_event);
-
-		// add pipeline stack to event map
-		event_map.insert(make_pair(reference<Pipeline>(*pipeline), pipeline_stack));
 	}
 
 	// add base stack to the event data too
