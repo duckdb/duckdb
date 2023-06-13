@@ -71,6 +71,7 @@ public:
 struct JSONFileHandle {
 public:
 	JSONFileHandle(unique_ptr<FileHandle> file_handle, Allocator &allocator);
+	bool IsOpen() const;
 	void Close();
 
 	idx_t FileSize() const;
@@ -80,15 +81,15 @@ public:
 	void Seek(idx_t position);
 
 	idx_t GetPositionAndSize(idx_t &position, idx_t requested_size);
-	void ReadAtPosition(const char *pointer, idx_t size, idx_t position, bool sample_run);
-	idx_t Read(const char *pointer, idx_t requested_size, bool sample_run);
+	void ReadAtPosition(char *pointer, idx_t size, idx_t position, bool sample_run);
+	idx_t Read(char *pointer, idx_t requested_size, bool sample_run);
 
 	void Reset();
 	bool RequestedReadsComplete();
 
 private:
-	idx_t ReadFromCache(const char *&pointer, idx_t &size, idx_t &position);
-	idx_t ReadInternal(const char *pointer, const idx_t requested_size);
+	idx_t ReadFromCache(char *&pointer, idx_t &size, idx_t &position);
+	idx_t ReadInternal(char *pointer, const idx_t requested_size);
 
 private:
 	//! The JSON file handle
@@ -139,6 +140,7 @@ public:
 	void OpenJSONFile();
 	void CloseJSONFile();
 	bool IsOpen() const;
+	bool IsDone() const;
 
 	BufferedJSONReaderOptions &GetOptions();
 	const BufferedJSONReaderOptions &GetOptions() const;
@@ -147,8 +149,6 @@ public:
 	void SetFormat(JSONFormat format);
 	JSONRecordType GetRecordType() const;
 	void SetRecordType(JSONRecordType type);
-
-	bool IsParallel() const;
 
 	const string &GetFileName() const;
 	JSONFileHandle &GetFileHandle() const;

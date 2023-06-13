@@ -1,10 +1,9 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
-#include <set>
-#include <map>
-
 #include <iostream>
+#include <map>
+#include <set>
 
 using namespace duckdb;
 using namespace std;
@@ -90,6 +89,8 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"worker_threads", {42}},
 	    {"enable_http_metadata_cache", {true}},
 	    {"force_bitpacking_mode", {"constant"}},
+	    {"arrow_large_buffer_size", {true}},
+	    {"allocator_flush_threshold", {"4.2GB"}}
 	};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {

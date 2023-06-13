@@ -407,6 +407,16 @@ struct PreserveInsertionOrder {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct ExportLargeBufferArrow {
+	static constexpr const char *Name = "arrow_large_buffer_size";
+	static constexpr const char *Description =
+	    "If arrow buffers for strings, blobs, uuids and bits should be exported using large buffers";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct ProfilerHistorySize {
 	static constexpr const char *Name = "profiler_history_size";
 	static constexpr const char *Description = "Sets the profiler history size";
@@ -486,6 +496,16 @@ struct ThreadsSetting {
 struct UsernameSetting {
 	static constexpr const char *Name = "username";
 	static constexpr const char *Description = "The username to use. Ignored for legacy compatibility.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct FlushAllocatorSetting {
+	static constexpr const char *Name = "allocator_flush_threshold";
+	static constexpr const char *Description =
+	    "Peak allocation threshold at which to flush the allocator after completing a task.";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
