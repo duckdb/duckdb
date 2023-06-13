@@ -422,6 +422,7 @@ bool ParallelCSVGlobalState::Finished() {
 
 void ParallelCSVGlobalState::Verify() {
 	// All threads are done, we run some magic sweet verification code
+	lock_guard<mutex> parallel_lock(main_mutex);
 	if (running_threads == 0) {
 		D_ASSERT(tuple_end.size() == tuple_start.size());
 		for (idx_t i = 0; i < tuple_start.size(); i++) {
@@ -1127,7 +1128,7 @@ static void CSVReaderSerialize(FieldWriter &writer, const FunctionData *bind_dat
 	}
 }
 
-static unique_ptr<FunctionData> CSVReaderDeserialize(ClientContext &context, FieldReader &reader,
+static unique_ptr<FunctionData> CSVReaderDeserialize(PlanDeserializationState &state, FieldReader &reader,
                                                      TableFunction &function) {
 	function.extra_info = reader.ReadRequired<string>();
 	auto result_data = make_uniq<ReadCSVData>();

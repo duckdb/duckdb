@@ -1,18 +1,17 @@
 #include "duckdb/parser/parser.hpp"
 
-#include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parser_extension.hpp"
+#include "duckdb/parser/query_error_context.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/statement/extension_statement.hpp"
 #include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/statement/update_statement.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/expressionlistref.hpp"
-#include "postgres_parser.hpp"
-#include "duckdb/parser/query_error_context.hpp"
-#include "duckdb/parser/parser_extension.hpp"
-
+#include "duckdb/parser/transformer.hpp"
 #include "parser/parser.hpp"
+#include "postgres_parser.hpp"
 
 namespace duckdb {
 
@@ -124,6 +123,29 @@ end:
 	return ReplaceUnicodeSpaces(query_str, new_query, unicode_spaces);
 }
 
+vector<string> SplitQueryStringIntoStatements(const string &query) {
+	// Break sql string down into sql statements using the tokenizer
+	vector<string> query_statements;
+	auto tokens = Parser::Tokenize(query);
+	auto next_statement_start = 0;
+	for (idx_t i = 1; i < tokens.size(); ++i) {
+		auto &t_prev = tokens[i - 1];
+		auto &t = tokens[i];
+		if (t_prev.type == SimplifiedTokenType::SIMPLIFIED_TOKEN_OPERATOR) {
+			// LCOV_EXCL_START
+			for (idx_t c = t_prev.start; c <= t.start; ++c) {
+				if (query.c_str()[c] == ';') {
+					query_statements.emplace_back(query.substr(next_statement_start, t.start - next_statement_start));
+					next_statement_start = tokens[i].start;
+				}
+			}
+			// LCOV_EXCL_STOP
+		}
+	}
+	query_statements.emplace_back(query.substr(next_statement_start, query.size() - next_statement_start));
+	return query_statements;
+}
+
 void Parser::ParseQuery(const string &query) {
 	Transformer transformer(options);
 	string parser_error;
@@ -138,39 +160,77 @@ void Parser::ParseQuery(const string &query) {
 	}
 	{
 		PostgresParser::SetPreserveIdentifierCase(options.preserve_identifier_case);
-		PostgresParser parser;
-		parser.Parse(query);
-		if (parser.success) {
-			if (!parser.parse_tree) {
-				// empty statement
-				return;
-			}
-
-			// if it succeeded, we transform the Postgres parse tree into a list of
-			// SQLStatements
-			transformer.TransformParseTree(parser.parse_tree, statements);
-		} else {
-			parser_error = QueryErrorContext::Format(query, parser.error_message, parser.error_location - 1);
-		}
-	}
-	if (!parser_error.empty()) {
-		if (options.extensions) {
-			for (auto &ext : *options.extensions) {
-				D_ASSERT(ext.parse_function);
-				auto result = ext.parse_function(ext.parser_info.get(), query);
-				if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
-					auto statement = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
-					statement->stmt_length = query.size();
-					statement->stmt_location = 0;
-					statements.push_back(std::move(statement));
+		bool parsing_succeed = false;
+		// Creating a new scope to prevent multiple PostgresParser destructors being called
+		// which led to some memory issues
+		{
+			PostgresParser parser;
+			parser.Parse(query);
+			if (parser.success) {
+				if (!parser.parse_tree) {
+					// empty statement
 					return;
 				}
-				if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
-					throw ParserException(result.error);
-				}
+
+				// if it succeeded, we transform the Postgres parse tree into a list of
+				// SQLStatements
+				transformer.TransformParseTree(parser.parse_tree, statements);
+				parsing_succeed = true;
+			} else {
+				parser_error = QueryErrorContext::Format(query, parser.error_message, parser.error_location - 1);
 			}
 		}
-		throw ParserException(parser_error);
+		// If DuckDB fails to parse the entire sql string, break the string down into individual statements
+		// using ';' as the delimiter so that parser extensions can parse the statement
+		if (parsing_succeed) {
+			// no-op
+			// return here would require refactoring into another function. o.w. will just no-op in order to run wrap up
+			// code at the end of this function
+		} else if (!options.extensions || options.extensions->empty()) {
+			throw ParserException(parser_error);
+		} else {
+			// split sql string into statements and re-parse using extension
+			auto query_statements = SplitQueryStringIntoStatements(query);
+			for (auto const &query_statement : query_statements) {
+				PostgresParser another_parser;
+				another_parser.Parse(query_statement);
+				// LCOV_EXCL_START
+				// first see if DuckDB can parse this individual query statement
+				if (another_parser.success) {
+					if (!another_parser.parse_tree) {
+						// empty statement
+						continue;
+					}
+					transformer.TransformParseTree(another_parser.parse_tree, statements);
+				} else {
+					// let extensions parse the statement which DuckDB failed to parse
+					bool parsed_single_statement = false;
+					for (auto &ext : *options.extensions) {
+						D_ASSERT(!parsed_single_statement);
+						D_ASSERT(ext.parse_function);
+						auto result = ext.parse_function(ext.parser_info.get(), query_statement);
+						if (result.type == ParserExtensionResultType::PARSE_SUCCESSFUL) {
+							auto statement = make_uniq<ExtensionStatement>(ext, std::move(result.parse_data));
+							statement->stmt_length = query_statement.size();
+							statement->stmt_location = 0;
+							statements.push_back(std::move(statement));
+							parsed_single_statement = true;
+							break;
+						} else if (result.type == ParserExtensionResultType::DISPLAY_EXTENSION_ERROR) {
+							throw ParserException(result.error);
+						} else {
+							// We move to the next one!
+						}
+					}
+					if (!parsed_single_statement) {
+						parser_error = QueryErrorContext::Format(query, another_parser.error_message,
+						                                         another_parser.error_location - 1);
+						throw ParserException(parser_error);
+					}
+				}
+				// LCOV_EXCL_STOP
+			}
+		}
 	}
 	if (!statements.empty()) {
 		auto &last_statement = statements.back();
