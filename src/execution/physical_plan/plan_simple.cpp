@@ -11,7 +11,6 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
-#include "duckdb/execution/operator/schema/physical_drop_property_graph.hpp"
 
 namespace duckdb {
 
