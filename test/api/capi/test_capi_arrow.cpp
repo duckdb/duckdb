@@ -118,7 +118,8 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		const auto column_names = duckdb::vector<string> {"value"};
 
 		ArrowSchema *arrow_schema = new ArrowSchema();
-		duckdb::ArrowConverter::ToArrowSchema(arrow_schema, logical_types, column_names, "");
+		ArrowOptions options;
+		duckdb::ArrowConverter::ToArrowSchema(arrow_schema, logical_types, column_names, options);
 
 		ArrowArray *arrow_array = new ArrowArray();
 
@@ -154,7 +155,8 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		SECTION("big array") {
 			// Create a view with a `value` column containing 4096 values.
 			int num_buffers = 2, size = STANDARD_VECTOR_SIZE * num_buffers;
-			ArrowAppender appender(logical_types, size);
+			ArrowOptions options;
+			ArrowAppender appender(logical_types, size, options);
 			Allocator allocator;
 
 			auto data_chunks = std::vector<DataChunk>(num_buffers);
