@@ -717,7 +717,10 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	// #######
 	// ### dialect detection
 	// #######
-	SkipRowsAndReadHeader(options.skip_rows,false);
+	if (options.skip_rows_set){
+		// Skip rows if they are set
+		SkipRowsAndReadHeader(options.skip_rows,false);
+	}
 	ReadBuffer(start, start);
 
 	StateBuffer state_buffer(buffer.get(), buffer_size, position);
