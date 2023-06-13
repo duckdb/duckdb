@@ -48,10 +48,11 @@ int64_t ValueLength(const string_t &value) {
 template <typename INPUT_TYPE, typename INDEX_TYPE>
 bool ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value, const INDEX_TYPE length) {
 	if (index < 0) {
+		index += 1;
 		if (-index > length) {
 			return false;
 		}
-		index = length + index + 1;
+		index = length + index;
 		return true;
 	} else if (index > length) {
 		index = length;
