@@ -397,6 +397,16 @@ struct PreserveInsertionOrder {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct ExportLargeBufferArrow {
+	static constexpr const char *Name = "arrow_large_buffer_size";
+	static constexpr const char *Description =
+	    "If arrow buffers for strings, blobs, uuids and bits should be exported using large buffers";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct ProfilerHistorySize {
 	static constexpr const char *Name = "profiler_history_size";
 	static constexpr const char *Description = "Sets the profiler history size";

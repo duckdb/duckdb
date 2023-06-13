@@ -49,7 +49,7 @@ template <typename INPUT_TYPE, typename INDEX_TYPE>
 bool ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value, const INDEX_TYPE length) {
 	if (index < 0) {
 		index += 1;
-		if (-index > length) {
+		if (index < -length) {
 			return false;
 		}
 		index = length + index;

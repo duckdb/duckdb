@@ -43,8 +43,6 @@ public:
 	idx_t cardinality = DConstants::INVALID_INDEX;
 	//! Info of the indexes of a table
 	vector<IndexInfo> index_info;
-	//! Info of the column segments of the table
-	vector<ColumnSegmentInfo> column_segments;
 };
 
 } // namespace duckdb
