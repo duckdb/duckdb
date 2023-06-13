@@ -2,6 +2,7 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/property_graph_table.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
 
@@ -111,7 +112,6 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 unique_ptr<CreateStatement> Transformer::TransformCreatePropertyGraph(duckdb_libpgquery::PGNode *root) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreatePropertyGraphStmt *>(root);
 	D_ASSERT(stmt);
-	auto result = make_uniq<CreateStatement>();
 	auto info = make_uniq<CreatePropertyGraphInfo>();
 
 	case_insensitive_set_t global_label_set;
@@ -154,7 +154,10 @@ unique_ptr<CreateStatement> Transformer::TransformCreatePropertyGraph(duckdb_lib
 		}
 	}
 
-	result->info = std::move(info);
+//    auto children = vector<unique_ptr<ParsedExpression>>();
+//    children.push_back(std::move(info));
+    auto result = make_uniq<CreateStatement>();
+    result->info = std::move(info);
 
 	return result;
 }

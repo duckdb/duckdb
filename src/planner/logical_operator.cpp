@@ -311,9 +311,6 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
 		result = LogicalCreate::Deserialize(state, reader);
 		break;
-    case LogicalOperatorType::LOGICAL_CREATE_PROPERTY_GRAPH:
-        result = LogicalCreate::Deserialize(state, reader);
-        break;
 	case LogicalOperatorType::LOGICAL_PRAGMA:
 		result = LogicalPragma::Deserialize(state, reader);
 		break;
@@ -348,9 +345,6 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 	case LogicalOperatorType::LOGICAL_DROP:
 	case LogicalOperatorType::LOGICAL_DETACH:
-    case LogicalOperatorType::LOGICAL_DROP_PROPERTY_GRAPH:
-		result = LogicalSimple::Deserialize(state, reader);
-		break;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		result = LogicalExtensionOperator::Deserialize(state, reader);
 		break;

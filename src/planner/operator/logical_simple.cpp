@@ -34,9 +34,6 @@ void LogicalSimple::Serialize(FieldWriter &writer) const {
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 		info->Cast<TransactionInfo>().Serialize(writer.GetSerializer());
 		break;
-    case LogicalOperatorType::LOGICAL_DROP_PROPERTY_GRAPH:
-        info->Cast<DropPropertyGraphInfo>().Serialize(writer.GetSerializer());
-        break;
 	default:
 		throw InternalException(LogicalOperatorToString(type));
 	}
@@ -67,9 +64,6 @@ unique_ptr<LogicalOperator> LogicalSimple::Deserialize(LogicalDeserializationSta
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 		parse_info = TransactionInfo::Deserialize(reader.GetSource());
 		break;
-    case LogicalOperatorType::LOGICAL_DROP_PROPERTY_GRAPH:
-        parse_info = DropPropertyGraphInfo::Deserialize(reader.GetSource());
-        break;
 	default:
 		throw InternalException(LogicalOperatorToString(state.type));
 	}

@@ -177,9 +177,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
 	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
-    case LogicalOperatorType::LOGICAL_CREATE_PROPERTY_GRAPH:
-            plan = CreatePlan(op.Cast<LogicalCreate>());
-		break;
 	case LogicalOperatorType::LOGICAL_PRAGMA:
 		plan = CreatePlan(op.Cast<LogicalPragma>());
 		break;
@@ -190,9 +187,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_LOAD:
 	case LogicalOperatorType::LOGICAL_ATTACH:
 	case LogicalOperatorType::LOGICAL_DETACH:
-    case LogicalOperatorType::LOGICAL_DROP_PROPERTY_GRAPH:
-        plan = CreatePlan(op.Cast<LogicalSimple>());
-		break;
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		plan = CreatePlan(op.Cast<LogicalRecursiveCTE>());
 		break;
