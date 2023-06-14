@@ -221,7 +221,7 @@ execution/physical_plan/plan_show_select.cpp	3
 execution/physical_plan_generator.cpp	6
 execution/radix_partitioned_hashtable.cpp	3
 execution/reservoir_sample.cpp	60
-execution/window_segment_tree.cpp	10
+execution/window_segment_tree.cpp	14
 function/aggregate/sorted_aggregate_function.cpp	85
 function/built_in_functions.cpp	6
 function/cast/bit_cast.cpp	2
@@ -309,7 +309,7 @@ extension/parquet/include/row_number_column_reader.hpp	10
 extension/parquet/include/templated_column_reader.hpp	5
 extension/parquet/include/thrift_tools.hpp	27
 extension/parquet/include/zstd_file_system.hpp	3
-extension/parquet/parquet-extension.cpp	30
+extension/parquet/parquet-extension.cpp	31
 extension/parquet/parquet_metadata.cpp	29
 extension/parquet/parquet_reader.cpp	113
 extension/parquet/parquet_statistics.cpp	12
