@@ -22,7 +22,7 @@ namespace duckdb {
 
     struct CreatePropertyGraphInfo : public CreateInfo {
         CreatePropertyGraphInfo();
-        CreatePropertyGraphInfo(string property_graph_name);
+        explicit CreatePropertyGraphInfo(string property_graph_name);
 
         //! Property graph name
         string property_graph_name;
