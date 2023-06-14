@@ -232,6 +232,10 @@ private:
 	unique_ptr<ParsedExpression> TransformParamRef(duckdb_libpgquery::PGParamRef &node);
 	unique_ptr<ParsedExpression> TransformNamedArg(duckdb_libpgquery::PGNamedArgExpr &root);
 
+	//! Transform multi assignment reference into an Expression
+	unique_ptr<ParsedExpression> TransformMultiAssignRef(duckdb_libpgquery::PGMultiAssignRef &root);
+
+
 	unique_ptr<ParsedExpression> TransformSQLValueFunction(duckdb_libpgquery::PGSQLValueFunction &node);
 
 	unique_ptr<ParsedExpression> TransformSubquery(duckdb_libpgquery::PGSubLink &root);
