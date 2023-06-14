@@ -62,6 +62,20 @@ void WindowAggregateState::Finalize() {
 void WindowAggregateState::Compute(Vector &result, idx_t rid, idx_t start, idx_t end) {
 }
 
+void WindowAggregateState::Evaluate(const idx_t *begins, const idx_t *ends, Vector &result, idx_t count,
+                                    idx_t row_idx) {
+	auto &rmask = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; ++i, ++row_idx) {
+		const auto begin = begins[i];
+		const auto end = ends[i];
+		if (begin >= end) {
+			rmask.SetInvalid(i);
+			continue;
+		}
+		Compute(result, i, begin, end);
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // WindowConstantAggregate
 //===--------------------------------------------------------------------===//

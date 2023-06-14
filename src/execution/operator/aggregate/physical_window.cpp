@@ -1050,16 +1050,9 @@ void WindowExecutor::NextRank(idx_t partition_begin, idx_t peer_begin, idx_t row
 
 void WindowExecutor::Aggregate(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) {
 	D_ASSERT(aggregate_state);
-	auto window_begin = FlatVector::GetData<const int64_t>(bounds.data[WINDOW_BEGIN]);
-	auto window_end = FlatVector::GetData<const int64_t>(bounds.data[WINDOW_END]);
-	auto &rmask = FlatVector::Validity(result);
-	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		if (window_begin[i] >= window_end[i]) {
-			rmask.SetInvalid(i);
-			continue;
-		}
-		aggregate_state->Compute(result, i, window_begin[i], window_end[i]);
-	}
+	auto window_begin = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_BEGIN]);
+	auto window_end = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_END]);
+	aggregate_state->Evaluate(window_begin, window_end, result, count, row_idx);
 }
 
 void WindowExecutor::RowNumber(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) {

@@ -24,6 +24,7 @@ public:
 	virtual void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered);
 	virtual void Finalize();
 	virtual void Compute(Vector &result, idx_t rid, idx_t start, idx_t end);
+	virtual void Evaluate(const idx_t *begins, const idx_t *ends, Vector &result, idx_t count, idx_t row_idx);
 
 protected:
 	void AggregateInit();
