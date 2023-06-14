@@ -490,7 +490,7 @@ struct QuantileOperation {
 
 	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		// nop
+		state.~STATE();
 	}
 
 	static bool IgnoreNull() {
