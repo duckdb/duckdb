@@ -30,13 +30,8 @@ struct FlushMoveState;
 // two part hash table
 // hashes and payload
 // hashes layout:
-// [SALT][PAGE_NR][PAGE_OFFSET]
-// [SALT] are the high bits of the hash value, e.g. 16 for 64 bit hashes
-// [PAGE_NR] is the buffer managed payload page index
-// [PAGE_OFFSET] is the logical entry offset into said payload page
-
-// NOTE: PAGE_NR and PAGE_OFFSET are reversed for 64 bit HTs because struct packing
-
+// [48 BIT POINTER][16 BIT SALT]
+//
 // payload layout
 // [VALIDITY][GROUPS][HASH][PADDING][PAYLOAD]
 // [VALIDITY] is the validity bits of the data columns (including the HASH)
@@ -44,19 +39,49 @@ struct FlushMoveState;
 // [HASH] is the hash data of the groups
 // [PADDING] is gunk data to align payload properly
 // [PAYLOAD] is the payload (i.e. the aggregate states)
-struct aggr_ht_entry_64 {
-	uint16_t salt;
-	uint16_t page_offset;
-	uint32_t page_nr; // this has to come last because alignment
-};
 
-struct aggr_ht_entry_32 {
-	uint8_t salt;
-	uint8_t page_nr;
-	uint16_t page_offset;
-};
+struct aggr_ht_entry_t {
+public:
+	inline bool IsOccupied() const {
+		return value.hash.hash != 0;
+	}
+	inline void SetOccupied() {
+		value.entry.pointer = 1;
+	}
 
-enum HtEntryType { HT_WIDTH_32, HT_WIDTH_64 };
+	inline data_ptr_t GetPointer() const {
+		return reinterpret_cast<data_ptr_t>(value.entry.pointer);
+	}
+	inline void SetPointer(data_ptr_t pointer_p) {
+		value.entry.pointer = reinterpret_cast<uint64_t>(pointer_p);
+	}
+
+	constexpr static auto HASH_WIDTH = sizeof(hash_t);
+	static constexpr const auto HASH_PREFIX_SHIFT = (HASH_WIDTH - sizeof(uint16_t)) * 8;
+	inline void SetSalt(hash_t hash) {
+		value.entry.salt = ExtractSalt(hash);
+	}
+	inline void SetSaltOverwrite(hash_t hash) {
+		value.hash.hash = hash;
+	}
+	inline uint16_t GetSalt() const {
+		return value.entry.salt;
+	}
+	static inline uint16_t ExtractSalt(hash_t hash) {
+		return hash >> HASH_PREFIX_SHIFT;
+	}
+
+private:
+	union {
+		struct {
+			uint64_t pointer : 48;
+			uint16_t salt;
+		} entry;
+		struct {
+			hash_t hash;
+		} hash;
+	} value;
+};
 
 struct AggregateHTScanState {
 	mutex lock;
@@ -82,23 +107,27 @@ struct AggregateHTAppendState {
 
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
-	//! The hash table load factor, when a resize is triggered
-	constexpr static float LOAD_FACTOR = 1.5;
-	constexpr static uint8_t HASH_WIDTH = sizeof(hash_t);
-
-public:
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, const vector<BoundAggregateExpression *> &aggregates,
-	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64,
 	                          idx_t initial_capacity = InitialCapacity());
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregates,
-	                          HtEntryType entry_type = HtEntryType::HT_WIDTH_64,
 	                          idx_t initial_capacity = InitialCapacity());
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types);
 	~GroupedAggregateHashTable() override;
 
 public:
+	idx_t Count() const;
+	static idx_t InitialCapacity();
+	static idx_t SinkCapacity();
+	idx_t Capacity() const;
+	idx_t ResizeThreshold() const;
+
+	TupleDataCollection &GetDataCollection();
+	idx_t DataSize() const;
+	static idx_t FirstPartSize(idx_t count);
+	idx_t TotalSize() const;
+
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
@@ -131,43 +160,16 @@ public:
 	//! Appends the data in the other HT to this one
 	void Append(GroupedAggregateHashTable &other);
 
-	TupleDataCollection &GetDataCollection() {
-		return *data_collection;
-	}
-
-	idx_t Count() const {
-		return data_collection->Count();
-	}
-
-	idx_t DataSize() const {
-		return data_collection->SizeInBytes();
-	}
-
-	static idx_t InitialCapacity();
-	idx_t Capacity() {
-		return capacity;
-	}
-
-	static idx_t FirstPartSize(idx_t count, HtEntryType entry_type) {
-		idx_t entry_size = entry_type == HT_WIDTH_32 ? sizeof(aggr_ht_entry_32) : sizeof(aggr_ht_entry_64);
-		return NextPowerOfTwo(count * 2L) * entry_size;
-	}
-
-	idx_t TotalSize() const {
-		return DataSize() + FirstPartSize(Count(), entry_type);
-	}
-
-	idx_t ResizeThreshold();
-	idx_t MaxCapacity();
-	static idx_t GetMaxCapacity(HtEntryType entry_type, idx_t tuple_size);
-
 	void Partition(vector<GroupedAggregateHashTable *> &partition_hts, idx_t radix_bits, bool sink_done);
 	void InitializeFirstPart();
 
 	void Finalize();
 
 private:
-	HtEntryType entry_type;
+	//! The hash table load factor, when a resize is triggered
+	constexpr static float LOAD_FACTOR = 1.5;
+	//! The size of the first part of the HT, should fit in L2 cache
+	constexpr static idx_t FIRST_PART_SINK_SIZE = 1048576;
 
 	//! The capacity of the HT. This can be increased using GroupedAggregateHashTable::Resize
 	idx_t capacity;
@@ -178,11 +180,10 @@ private:
 	//! The data of the HT
 	unique_ptr<TupleDataCollection> data_collection;
 	TupleDataPinState td_pin_state;
-	vector<data_ptr_t> payload_hds_ptrs;
 
 	//! The hashes of the HT
-	AllocatedData hashes_hdl;
-	data_ptr_t hashes_hdl_ptr;
+	AllocatedData hash_map;
+	aggr_ht_entry_t *entries;
 	idx_t hash_offset; // Offset into the layout of the hash column
 
 	hash_t hash_prefix_shift;
@@ -204,21 +205,11 @@ private:
 
 	void Destroy();
 	void Verify();
-	template <class ENTRY>
-	void VerifyInternal();
 	//! Resize the HT to the specified size. Must be larger than the current size.
-	template <class ENTRY>
 	void Resize(idx_t size);
-	//! Initializes the first part of the HT
-	template <class ENTRY>
-	void InitializeHashes();
 	//! Does the actual group matching / creation
-	template <class ENTRY>
 	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v, Vector &addresses_v,
 	                                 SelectionVector &new_groups);
-	//! Updates payload_hds_ptrs with the new pointers (after appending to data_collection)
-	void UpdateBlockPointers();
-	template <class ENTRY>
 	idx_t FindOrCreateGroupsInternal(AggregateHTAppendState &state, DataChunk &groups, Vector &group_hashes,
 	                                 Vector &addresses, SelectionVector &new_groups);
 };

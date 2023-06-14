@@ -158,8 +158,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		if (gstate.finalized_hts.empty()) {
 			// Create a finalized ht in the global state, that we can populate
 			gstate.finalized_hts.push_back(make_shared<GroupedAggregateHashTable>(
-			    context.client, BufferAllocator::Get(context.client), group_types, op.payload_types, op.bindings,
-			    HtEntryType::HT_WIDTH_64));
+			    context.client, BufferAllocator::Get(context.client), group_types, op.payload_types, op.bindings));
 		}
 		D_ASSERT(gstate.finalized_hts.size() == 1);
 		D_ASSERT(gstate.finalized_hts[0]);
@@ -226,8 +225,8 @@ void RadixPartitionedHashTable::InitializeFinalizedHTs(ClientContext &context, G
 	auto &allocator = BufferAllocator::Get(context);
 	gstate.finalized_hts.resize(gstate.partition_info->n_partitions);
 	for (idx_t r = 0; r < gstate.partition_info->n_partitions; r++) {
-		gstate.finalized_hts[r] = make_shared<GroupedAggregateHashTable>(
-		    context, allocator, group_types, op.payload_types, op.bindings, HtEntryType::HT_WIDTH_64);
+		gstate.finalized_hts[r] =
+		    make_shared<GroupedAggregateHashTable>(context, allocator, group_types, op.payload_types, op.bindings);
 	}
 }
 
@@ -262,8 +261,8 @@ bool RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 		     // TODO possible optimization, if total count < limit for 32 bit ht, use that one
 		     // create this ht here so finalize needs no lock on gstate
 
-		gstate.finalized_hts.push_back(make_shared<GroupedAggregateHashTable>(
-		    context, allocator, group_types, op.payload_types, op.bindings, HtEntryType::HT_WIDTH_64));
+		gstate.finalized_hts.push_back(
+		    make_shared<GroupedAggregateHashTable>(context, allocator, group_types, op.payload_types, op.bindings));
 		for (auto &pht : gstate.intermediate_hts) {
 			auto unpartitioned = pht->GetUnpartitioned();
 			for (auto &unpartitioned_ht : unpartitioned) {
@@ -512,8 +511,7 @@ void RadixPartitionedHashTable::GetRepartitionInfo(ClientContext &context, Globa
 	for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
 		const auto &partition_count = partition_counts[partition_idx];
 		const auto &partition_size = partition_sizes[partition_idx];
-		auto partition_ht_size =
-		    partition_size + GroupedAggregateHashTable::FirstPartSize(partition_count, HtEntryType::HT_WIDTH_64);
+		auto partition_ht_size = partition_size + GroupedAggregateHashTable::FirstPartSize(partition_count);
 		if (partition_ht_size > max_partition_size) {
 			max_partition_idx = partition_idx;
 			max_partition_size = partition_ht_size;
@@ -551,8 +549,7 @@ void RadixPartitionedHashTable::GetRepartitionInfo(ClientContext &context, Globa
 
 		auto new_estimated_count = double(partition_count) / partition_multiplier;
 		auto new_estimated_size = double(partition_size) / partition_multiplier;
-		auto new_estimated_ht_size = new_estimated_size + GroupedAggregateHashTable::FirstPartSize(
-		                                                      new_estimated_count, HtEntryType::HT_WIDTH_64);
+		auto new_estimated_ht_size = new_estimated_size + GroupedAggregateHashTable::FirstPartSize(new_estimated_count);
 
 		if (new_estimated_ht_size <= max_ht_size / n_threads) {
 			break; // Max HT size is safe

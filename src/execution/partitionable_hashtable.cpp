@@ -39,14 +39,6 @@ PartitionableHashTable::PartitionableHashTable(ClientContext &context, Allocator
 	tuple_size = layout.GetRowWidth();
 }
 
-HtEntryType PartitionableHashTable::GetHTEntrySize() {
-	// we need at least STANDARD_VECTOR_SIZE entries to fit in the hash table
-	if (GroupedAggregateHashTable::GetMaxCapacity(HtEntryType::HT_WIDTH_32, tuple_size) < STANDARD_VECTOR_SIZE) {
-		return HtEntryType::HT_WIDTH_64;
-	}
-	return HtEntryType::HT_WIDTH_32;
-}
-
 bool OverMemoryLimit(ClientContext &context, const bool is_partitioned, const RadixPartitionInfo &partition_info,
                      const GroupedAggregateHashTable &ht) {
 	const auto n_partitions = is_partitioned ? partition_info.n_partitions : 1;
@@ -59,8 +51,8 @@ bool OverMemoryLimit(ClientContext &context, const bool is_partitioned, const Ra
 idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &groups, Vector &group_hashes,
                                            DataChunk &payload, const unsafe_vector<idx_t> &filter) {
 	// If this is false, a single AddChunk would overflow the max capacity
-	D_ASSERT(list.empty() || groups.size() <= list.back()->MaxCapacity());
-	if (list.empty() || list.back()->Count() + groups.size() >= list.back()->MaxCapacity() ||
+	D_ASSERT(list.empty() || groups.size() <= GroupedAggregateHashTable::SinkCapacity());
+	if (list.empty() || list.back()->Count() + groups.size() >= GroupedAggregateHashTable::SinkCapacity() ||
 	    OverMemoryLimit(context, is_partitioned, partition_info, *list.back())) {
 		idx_t new_capacity = GroupedAggregateHashTable::InitialCapacity();
 		if (!list.empty()) {
@@ -69,7 +61,7 @@ idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &group
 			list.back()->Finalize();
 		}
 		list.push_back(make_uniq<GroupedAggregateHashTable>(context, allocator, group_types, payload_types, bindings,
-		                                                    GetHTEntrySize(), new_capacity));
+		                                                    new_capacity));
 	}
 	return list.back()->AddChunk(append_state, groups, group_hashes, payload, filter);
 }
@@ -136,8 +128,8 @@ void PartitionableHashTable::Partition(bool sink_done) {
 	radix_partitioned_hts.resize(partition_info.n_partitions);
 	for (auto &unpartitioned_ht : unpartitioned_hts) {
 		for (idx_t r = 0; r < partition_info.n_partitions; r++) {
-			radix_partitioned_hts[r].push_back(make_uniq<GroupedAggregateHashTable>(
-			    context, allocator, group_types, payload_types, bindings, GetHTEntrySize()));
+			radix_partitioned_hts[r].push_back(
+			    make_uniq<GroupedAggregateHashTable>(context, allocator, group_types, payload_types, bindings));
 			partition_hts[r] = radix_partitioned_hts[r].back().get();
 		}
 		unpartitioned_ht->Partition(partition_hts, partition_info.radix_bits, sink_done);
@@ -197,9 +189,8 @@ void PartitionableHashTable::Finalize() {
 
 void PartitionableHashTable::Append(GroupedAggregateHashTable &ht) {
 	if (unpartitioned_hts.empty()) {
-		unpartitioned_hts.push_back(make_uniq<GroupedAggregateHashTable>(context, allocator, group_types, payload_types,
-		                                                                 bindings, GetHTEntrySize(),
-		                                                                 GroupedAggregateHashTable::InitialCapacity()));
+		unpartitioned_hts.push_back(make_uniq<GroupedAggregateHashTable>(
+		    context, allocator, group_types, payload_types, bindings, GroupedAggregateHashTable::InitialCapacity()));
 	}
 	unpartitioned_hts.back()->Append(ht);
 }
