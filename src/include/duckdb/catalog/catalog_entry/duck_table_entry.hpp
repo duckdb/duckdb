@@ -39,13 +39,13 @@ public:
 
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo() override;
+
 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
 
 	bool IsDuckTable() const override {
 		return true;
 	}
-
-	void BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update) override;
 
 private:
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);
