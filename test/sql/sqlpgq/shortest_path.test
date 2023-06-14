@@ -4,7 +4,7 @@
 statement ok
 pragma enable_verification
 
-require sqlpgq
+require duckpgq
 
 statement ok
 CREATE TABLE Student(id BIGINT, name VARCHAR);

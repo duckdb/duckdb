@@ -1,7 +1,7 @@
 # name: test/sql/sqlpgq/delete_csr.test
 # group: [sqlpgq]
 
-require sqlpgq
+require duckpgq
 
 statement ok
 CREATE TABLE Student(id BIGINT, name VARCHAR);
