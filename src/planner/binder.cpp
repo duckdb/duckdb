@@ -16,8 +16,6 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_sample.hpp"
 #include "duckdb/parser/query_node/list.hpp"
-#include "duckdb/parser/statement/drop_property_graph_statement.hpp"
-#include "duckdb/parser/tableref/matchref.hpp"
 
 #include <algorithm>
 
@@ -95,8 +93,6 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind(statement.Cast<AttachStatement>());
 	case StatementType::DETACH_STATEMENT:
 		return Bind(statement.Cast<DetachStatement>());
-    case StatementType::DROP_PROPERTY_GRAPH_STATEMENT:
-        return Bind(statement.Cast<DropPropertyGraphStatement>());
 	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));

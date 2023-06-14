@@ -9,7 +9,6 @@ add_library_unity(
   bind_delete.cpp
   bind_detach.cpp
   bind_drop.cpp
-  bind_drop_property_graph.cpp
   bind_execute.cpp
   bind_explain.cpp
   bind_export.cpp
