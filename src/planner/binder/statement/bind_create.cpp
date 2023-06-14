@@ -40,8 +40,6 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
-#include "duckdb/parser/parsed_data/create_property_graph_info.hpp"
-#include "../../../../../duckpgq/include/duckpgq_extension.hpp"
 
 namespace duckdb {
 
@@ -679,16 +677,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		}
 		break;
 	}
-//    case CatalogType::PROPERTY_GRAPH_ENTRY: {
-//        auto &create_pg_info = (CreatePropertyGraphInfo &)*stmt.info;
-//
-//        auto &schema = BindSchema(*stmt.info);
-//        BindCreatePropertyGraphInfo(create_pg_info);
-//
-//        result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_PROPERTY_GRAPH,
-//                                                 std::move(stmt.info));
-//        break;
-//    }
 	default:
 		throw Exception("Unrecognized type!");
 	}
