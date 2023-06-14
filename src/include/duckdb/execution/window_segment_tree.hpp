@@ -24,7 +24,7 @@ public:
 	virtual void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered);
 	virtual void Finalize();
 	virtual void Compute(Vector &result, idx_t rid, idx_t start, idx_t end);
-	virtual void Evaluate(const idx_t *begins, const idx_t *ends, Vector &result, idx_t count, idx_t row_idx);
+	virtual void Evaluate(const idx_t *begins, const idx_t *ends, Vector &result, idx_t count);
 
 protected:
 	void AggregateInit();
@@ -57,7 +57,7 @@ public:
 
 	void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered) override;
 	void Finalize() override;
-	void Compute(Vector &result, idx_t rid, idx_t start, idx_t end) override;
+	void Evaluate(const idx_t *begins, const idx_t *ends, Vector &result, idx_t count) override;
 
 private:
 	//! Partition starts
@@ -70,6 +70,8 @@ private:
 	idx_t row;
 	//! A vector of pointers to "state", used for intermediate window segment aggregation
 	Vector statep;
+	//! Shared SV for evaluation
+	SelectionVector matches;
 };
 
 class WindowCustomAggregate : public WindowAggregateState {

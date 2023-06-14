@@ -62,10 +62,9 @@ void WindowAggregateState::Finalize() {
 void WindowAggregateState::Compute(Vector &result, idx_t rid, idx_t start, idx_t end) {
 }
 
-void WindowAggregateState::Evaluate(const idx_t *begins, const idx_t *ends, Vector &result, idx_t count,
-                                    idx_t row_idx) {
+void WindowAggregateState::Evaluate(const idx_t *begins, const idx_t *ends, Vector &result, idx_t count) {
 	auto &rmask = FlatVector::Validity(result);
-	for (idx_t i = 0; i < count; ++i, ++row_idx) {
+	for (idx_t i = 0; i < count; ++i) {
 		const auto begin = begins[i];
 		const auto end = ends[i];
 		if (begin >= end) {
@@ -85,14 +84,15 @@ WindowConstantAggregate::WindowConstantAggregate(AggregateObject aggr, const Log
     : WindowAggregateState(std::move(aggr), result_type, count), partition(0), row(0),
       statep(Value::POINTER(CastPointerToValue(state.data()))) {
 
+	matches.Initialize();
+
 	// Locate the partition boundaries
-	idx_t start = 0;
 	if (partition_mask.AllValid()) {
 		partition_offsets.emplace_back(0);
 	} else {
 		idx_t entry_idx;
 		idx_t shift;
-		while (start < count) {
+		for (idx_t start = 0; start < count;) {
 			partition_mask.GetEntryIndex(start, entry_idx, shift);
 
 			//	If start is aligned with the start of a block,
@@ -200,17 +200,30 @@ void WindowConstantAggregate::Finalize() {
 	row = 0;
 }
 
-void WindowConstantAggregate::Compute(Vector &target, idx_t rid, idx_t start, idx_t end) {
-	//	Find the partition containing [start, end)
-	while (start < partition_offsets[partition] || partition_offsets[partition + 1] <= start) {
-		++partition;
-	}
-	D_ASSERT(partition_offsets[partition] <= start);
-	D_ASSERT(partition + 1 < partition_offsets.size());
-	D_ASSERT(end <= partition_offsets[partition + 1]);
+void WindowConstantAggregate::Evaluate(const idx_t *begins, const idx_t *ends, Vector &target, idx_t count) {
+	//	Chunk up the constants and copy them one at a time
+	idx_t matched = 0;
+	idx_t target_offset = 0;
+	for (idx_t i = 0; i < count; ++i) {
+		const auto begin = begins[i];
+		//	Find the partition containing [begin, end)
+		while (partition_offsets[partition + 1] <= begin) {
+			//	Flush the previous partition's data
+			if (matched) {
+				VectorOperations::Copy(*results, target, matches, matched, 0, target_offset);
+				target_offset += matched;
+				matched = 0;
+			}
+			++partition;
+		}
 
-	// Copy the value
-	VectorOperations::Copy(*results, target, partition + 1, partition, rid);
+		matches.set_index(matched++, partition);
+	}
+
+	//	Flush the last partition
+	if (matched) {
+		VectorOperations::Copy(*results, target, matches, matched, 0, target_offset);
+	}
 }
 
 //===--------------------------------------------------------------------===//

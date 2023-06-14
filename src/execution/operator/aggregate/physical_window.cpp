@@ -1052,7 +1052,7 @@ void WindowExecutor::Aggregate(DataChunk &bounds, Vector &result, idx_t count, i
 	D_ASSERT(aggregate_state);
 	auto window_begin = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_BEGIN]);
 	auto window_end = FlatVector::GetData<const idx_t>(bounds.data[WINDOW_END]);
-	aggregate_state->Evaluate(window_begin, window_end, result, count, row_idx);
+	aggregate_state->Evaluate(window_begin, window_end, result, count);
 }
 
 void WindowExecutor::RowNumber(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) {
