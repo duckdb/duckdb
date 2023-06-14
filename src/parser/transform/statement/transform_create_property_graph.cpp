@@ -153,9 +153,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreatePropertyGraph(duckdb_lib
 			info->edge_tables.push_back(std::move(pg_table));
 		}
 	}
-
-//    auto children = vector<unique_ptr<ParsedExpression>>();
-//    children.push_back(std::move(info));
+    
     auto result = make_uniq<CreateStatement>();
     result->info = std::move(info);
 
