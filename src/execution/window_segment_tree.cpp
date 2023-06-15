@@ -15,7 +15,8 @@ namespace duckdb {
 WindowAggregateState::WindowAggregateState(AggregateObject aggr, const LogicalType &result_type_p,
                                            idx_t partition_count_p)
     : aggr(std::move(aggr)), result_type(result_type_p), partition_count(partition_count_p),
-      state_size(aggr.function.state_size()), state(state_size), statef(Value::POINTER(CastPointerToValue(state.data()))), filter_count(0) {
+      state_size(aggr.function.state_size()), state(state_size),
+      statef(Value::POINTER(CastPointerToValue(state.data()))), filter_count(0) {
 	statef.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
 }
 
@@ -279,19 +280,7 @@ WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const LogicalType &re
 void WindowSegmentTree::Finalize() {
 	if (inputs.ColumnCount() > 0) {
 		leaves.Initialize(Allocator::DefaultAllocator(), inputs.GetTypes());
-		leaves.Reference(inputs);
-
-		//	In order to share the SV, we can't have any leaves that are already dictionaries.
-		for (auto &leaf : inputs.data) {
-			D_ASSERT(leaf.GetVectorType() == VectorType::FLAT_VECTOR);
-		}
-
-		//	The inputs share an SV so we can quickly pick out values
-		//	TODO: Check after full vectorisation that this is still needed
-		//	instad of just Slice/Reference.
 		filter_sel.Initialize();
-		//	What we slice to is not important now - we just want the SV to be shared.
-		leaves.Slice(filter_sel, STANDARD_VECTOR_SIZE);
 		if (aggr.function.combine && UseCombineAPI()) {
 			ConstructTree();
 		}
@@ -330,18 +319,9 @@ void WindowSegmentTree::FlushStates(bool combining) {
 		statel.Verify(flush_count);
 		aggr.function.combine(statel, statep, aggr_input_data, flush_count);
 	} else {
-		leaves.SetCardinality(flush_count);
+		leaves.Reference(inputs);
+		leaves.Slice(filter_sel, flush_count);
 		aggr.function.update(&leaves.data[0], aggr_input_data, leaves.ColumnCount(), statep, flush_count);
-
-		//	Some update functions mangle our dictionaries.
-		//	so we have to check and unmangle them...
-		for (column_t i = 0; i < leaves.ColumnCount(); i++) {
-			auto &leaf = leaves.data[i];
-			if (leaf.GetVectorType() != VectorType::DICTIONARY_VECTOR ||
-			    DictionaryVector::SelVector(leaf).data() != filter_sel.data()) {
-				leaf.Slice(inputs.data[i], filter_sel, STANDARD_VECTOR_SIZE);
-			}
-		}
 	}
 
 	flush_count = 0;
@@ -474,7 +454,6 @@ void WindowSegmentTree::Evaluate(const idx_t *begins, const idx_t *ends, Vector 
 		if (end != group_end) {
 			WindowSegmentValue(0, group_end, end, state_ptr);
 		}
-
 	}
 	FlushStates(false);
 
