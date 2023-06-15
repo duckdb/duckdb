@@ -271,17 +271,13 @@ void WindowSegmentTree::Finalize() {
 		leaves.Reference(inputs);
 
 		//	In order to share the SV, we can't have any leaves that are already dictionaries.
-		for (column_t i = 0; i < leaves.ColumnCount(); i++) {
-			auto &leaf = leaves.data[i];
-			switch (leaf.GetVectorType()) {
-			case VectorType::DICTIONARY_VECTOR:
-			case VectorType::FSST_VECTOR:
-				leaf.Flatten(leaves.size());
-			default:
-				break;
-			}
+		for (auto &leaf : inputs.data) {
+			D_ASSERT(leaf.GetVectorType() == VectorType::FLAT_VECTOR);
 		}
+
 		//	The inputs share an SV so we can quickly pick out values
+		//	TODO: Check after full vectorisation that this is still needed
+		//	instad of just Slice/Reference.
 		filter_sel.Initialize();
 		//	What we slice to is not important now - we just want the SV to be shared.
 		leaves.Slice(filter_sel, STANDARD_VECTOR_SIZE);
