@@ -691,11 +691,24 @@ Statement.prototype.sql;
 
 /**
  * @method
- * @param {...*} params
- * @param callback
- * @return {void}
+ * @return {ColumnInfo[]} - Array of column names and types
  */
 Statement.prototype.columns;
+
+/**
+ * @typedef ColumnInfo
+ * @type {object}
+ * @property {string} name - Column name
+ * @property {TypeInfo} type - Column type
+ */
+
+/**
+ * @typedef TypeInfo
+ * @type {object}
+ * @property {string} id - Type ID
+ * @property {string} [alias] - SQL type alias
+ * @property {string} sql_type - SQL type name
+ */
 
 /**
  * @typedef DuckDbError
