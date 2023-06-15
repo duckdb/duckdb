@@ -130,10 +130,12 @@ shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const str
 			}
 			using_columns.push_back(colref.column_names[0]);
 		}
-		return make_shared<JoinRelation>(shared_from_this(), other, std::move(using_columns), type, JoinRefType::REGULAR);
+		return make_shared<JoinRelation>(shared_from_this(), other, std::move(using_columns), type,
+		                                 JoinRefType::REGULAR);
 	} else {
 		// single expression that is not a column reference: use the expression as a join condition
-		return make_shared<JoinRelation>(shared_from_this(), other, std::move(expression_list[0]), type, JoinRefType::REGULAR);
+		return make_shared<JoinRelation>(shared_from_this(), other, std::move(expression_list[0]), type,
+		                                 JoinRefType::REGULAR);
 	}
 }
 

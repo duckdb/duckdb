@@ -221,6 +221,10 @@ rel_join <- function(left, right, conds, join) {
     rel_join_(left, right, conds, join, "regular")
 }
 
+rel_rolling_join <- function(left, right, conds) {
+    rel_join_(left, right, conds, "inner", "asof")
+}
+
 join_types = c("inner", "left", "right", "outer", "cross", "semi", "anti", "asof")
 join_ref_types = c("regular", "natural", "cross", "positional", "asof", "dependent")
 rel_join_ <- function(left, right, conds, join = join_types, join_ref_type=join_ref_types) {
