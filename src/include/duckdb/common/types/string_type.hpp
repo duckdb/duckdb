@@ -99,6 +99,11 @@ public:
 		return GetString();
 	}
 
+	char *GetPointer() const {
+		D_ASSERT(!IsInlined());
+		return value.pointer.ptr;
+	}
+
 	void SetPointer(char *new_ptr) {
 		D_ASSERT(!IsInlined());
 		value.pointer.ptr = new_ptr;

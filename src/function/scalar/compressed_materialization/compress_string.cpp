@@ -8,40 +8,41 @@ static string StringCompressFunctionName(const LogicalType &result_type) {
 	                          StringUtil::Lower(LogicalTypeIdToString(result_type.id())));
 }
 
-template <class T>
-const uint8_t &FirstByteReference(const T &v) {
-	return reinterpret_cast<const uint8_t *>(&v)[0];
+template <idx_t LENGTH>
+static inline void TemplatedReverseMemCpy(const data_ptr_t __restrict &dest, const const_data_ptr_t __restrict &src) {
+	for (idx_t i = 0; i < LENGTH; i++) {
+		dest[i] = src[LENGTH - 1 - i];
+	}
 }
 
-template <class T>
-uint8_t &LastByteReference(T &v) {
-	return reinterpret_cast<uint8_t *>(&v)[sizeof(T) - 1];
-}
-
-template <class T>
-const uint8_t &LastByteReference(const T &v) {
-	return reinterpret_cast<const uint8_t *>(&v)[sizeof(T) - 1];
+static inline void ReverseMemCpy(const data_ptr_t __restrict &dest, const const_data_ptr_t __restrict &src,
+                                 const idx_t &length) {
+	for (idx_t i = 0; i < length; i++) {
+		dest[i] = src[length - 1 - i];
+	}
 }
 
 template <class RESULT_TYPE>
 static inline RESULT_TYPE StringCompressInternal(const string_t &input) {
-	D_ASSERT(input.GetSize() < sizeof(RESULT_TYPE));
 	RESULT_TYPE result;
+	auto result_ptr = data_ptr_cast(&result);
+	result_ptr[0] = input.GetSize();
+	result_ptr++;
+
 	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
-		memcpy(&result, input.GetPrefix(), sizeof(RESULT_TYPE));
+		TemplatedReverseMemCpy<sizeof(RESULT_TYPE) - 1>(result_ptr, const_data_ptr_cast(input.GetPrefix()));
 	} else if (input.GetSize() <= string_t::INLINE_LENGTH) {
-		memcpy(&result, input.GetPrefix(), string_t::INLINE_LENGTH);
-		memset(data_ptr_t(&result) + string_t::INLINE_LENGTH, '\0', sizeof(RESULT_TYPE) - string_t::INLINE_LENGTH);
+		TemplatedReverseMemCpy<string_t::INLINE_LENGTH>(result_ptr, const_data_ptr_cast(input.GetPrefix()));
 	} else {
 		result = 0;
-		memcpy(&result, input.GetData(), input.GetSize());
+		ReverseMemCpy(result_ptr, data_ptr_cast(input.GetPointer()), input.GetSize());
 	}
-	LastByteReference<RESULT_TYPE>(result) = input.GetSize();
-	return BSwap<RESULT_TYPE>(result);
+	return result;
 }
 
 template <class RESULT_TYPE>
 static inline RESULT_TYPE StringCompress(const string_t &input) {
+	D_ASSERT(input.GetSize() < sizeof(RESULT_TYPE));
 	return StringCompressInternal<RESULT_TYPE>(input);
 }
 
@@ -56,6 +57,7 @@ static inline RESULT_TYPE MiniStringCompress(const string_t &input) {
 
 template <>
 inline uint8_t StringCompress(const string_t &input) {
+	D_ASSERT(input.GetSize() < sizeof(uint8_t));
 	return MiniStringCompress<uint8_t>(input);
 }
 
@@ -106,30 +108,17 @@ public:
 
 template <class INPUT_TYPE>
 static inline string_t StringDecompress(const INPUT_TYPE &input, ArenaAllocator &allocator) {
-	if (sizeof(INPUT_TYPE) <= string_t::INLINE_LENGTH) {
-		static constexpr const idx_t MEMCPY_LENGTH = sizeof(INPUT_TYPE);
-		static constexpr const idx_t MEMSET_LENGTH = string_t::INLINE_LENGTH - MEMCPY_LENGTH + 1;
+	auto input_ptr = const_data_ptr_cast(&input);
+	string_t result(input_ptr[0]);
+	input_ptr++;
 
-		const auto input_swapped = BSwap<INPUT_TYPE>(input);
-		const uint32_t string_size = LastByteReference<INPUT_TYPE>(input_swapped);
-
-		string_t result(string_size);
-		memcpy(result.GetPrefixWriteable(), &input_swapped, MEMCPY_LENGTH);
-		memset(result.GetPrefixWriteable() + MEMCPY_LENGTH - 1, '\0', MEMSET_LENGTH);
-		return result;
-	}
-
-	const uint32_t string_size = FirstByteReference<INPUT_TYPE>(input);
-	if (string_size <= string_t::INLINE_LENGTH) {
-		string_t result(string_size);
-		const auto input_swapped = BSwap<INPUT_TYPE>(input);
-		memcpy(result.GetPrefixWriteable(), &input_swapped, string_t::INLINE_LENGTH);
-		return result;
+	if (sizeof(INPUT_TYPE) <= string_t::INLINE_LENGTH || result.GetSize() <= string_t::INLINE_LENGTH) {
+		TemplatedReverseMemCpy<sizeof(INPUT_TYPE) - 1>(data_ptr_cast(result.GetPrefixWriteable()), input_ptr);
 	} else {
-		auto ptr = reinterpret_cast<INPUT_TYPE *>(allocator.Allocate(sizeof(INPUT_TYPE)));
-		*ptr = BSwap<INPUT_TYPE>(input);
-		return string_t(const_char_ptr_cast(ptr), string_size);
+		result.SetPointer(char_ptr_cast(allocator.Allocate(sizeof(INPUT_TYPE))));
+		TemplatedReverseMemCpy<sizeof(INPUT_TYPE) - 1>(data_ptr_cast(result.GetPointer()), input_ptr);
 	}
+	return result;
 }
 
 template <class INPUT_TYPE>
