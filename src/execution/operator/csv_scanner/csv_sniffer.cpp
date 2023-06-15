@@ -1,5 +1,9 @@
 #include "duckdb/execution/operator/persistent/csv_scanner/buffered_csv_reader.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/common/types/cast_helpers.hpp"
+#include "utf8proc.hpp"
+#include "utf8proc_wrapper.hpp"
+#include <cmath>
 
 namespace duckdb {
 

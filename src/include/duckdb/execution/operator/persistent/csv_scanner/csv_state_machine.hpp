@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
+
 namespace duckdb {
 
 //! All States of CSV Parsing
