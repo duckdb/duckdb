@@ -152,14 +152,6 @@ endif
 ifneq ("${FORCE_QUERY_LOG}a", "a")
 	CMAKE_VARS:=${CMAKE_VARS} -DFORCE_QUERY_LOG=${FORCE_QUERY_LOG}
 endif
-# TODO: deprecated, can be removed once all extensions are built using the same mechanism
-ifneq ($(BUILD_OUT_OF_TREE_EXTENSION),)
-	$(error DEPRECATED OPTION USED)
-endif
-# TODO: deprecated, can be removed once all extensions are built using the same mechanism
-ifneq ($(BUILD_OUT_OF_TREE_EXTENSIONS),)
-	$(error DEPRECATED OPTION USED)
-endif
 ifneq ($(BUILD_EXTENSIONS),)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_EXTENSIONS="$(BUILD_EXTENSIONS)"
 endif
@@ -182,7 +174,7 @@ ifeq (${DISABLE_MEMORY_SAFETY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_MEMORY_SAFETY=1
 endif
 ifeq (${DISABLE_ASSERTIONS}, 1)
-	EXTENSIONS:=${EXTENSIONS} -DDISABLE_ASSERTIONS=1
+	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_ASSERTIONS=1
 endif
 ifeq (${DESTROY_UNPINNED_BLOCKS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DDESTROY_UNPINNED_BLOCKS=1
