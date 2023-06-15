@@ -65,8 +65,8 @@ void UnnestOperatorState::SetLongestListLength() {
 		if (vector_data.validity.RowIsValid(current_idx)) {
 
 			// check if this list is longer
-			auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(vector_data);
-			auto list_entry = list_data[current_idx];
+			auto list_data_entries = UnifiedVectorFormat::GetData<list_entry_t>(vector_data);
+			auto list_entry = list_data_entries[current_idx];
 			if (list_entry.length > longest_list_length) {
 				longest_list_length = list_entry.length;
 			}
@@ -259,6 +259,11 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 	auto &state = state_p.Cast<UnnestOperatorState>();
 
 	do {
+		// reset validities, if previous loop iteration contained UNNEST(NULL)
+		if (include_input) {
+			chunk.Reset();
+		}
+
 		// prepare the input data by executing any expressions and getting the
 		// UnifiedVectorFormat of each LIST vector (list_vector_data) and its child vector (list_child_data)
 		if (state.first_fetch) {
@@ -271,7 +276,7 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			return OperatorResultType::NEED_MORE_INPUT;
 		}
 
-		// each UNNEST in the select_list contains a list (or NULL) for this row, find longest list
+		// each UNNEST in the select_list contains a list (or NULL) for this row, find the longest list
 		// because this length determines how many times we need to repeat for the current row
 		if (state.longest_list_length == DConstants::INVALID_INDEX) {
 			state.SetLongestListLength();

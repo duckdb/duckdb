@@ -184,11 +184,11 @@ void WindowConstantAggregate::Compute(Vector &target, idx_t rid, idx_t start, id
 WindowSegmentTree::WindowSegmentTree(AggregateObject aggr_p, const LogicalType &result_type_p, DataChunk *input,
                                      const ValidityMask &filter_mask_p, WindowAggregationMode mode_p)
     : aggr(std::move(aggr_p)), result_type(result_type_p), state(aggr.function.state_size()),
-      statep(Value::POINTER(CastPointerToValue(state.data()))), frame(0, 0),
-      statev(Value::POINTER(CastPointerToValue(state.data()))), internal_nodes(0), input_ref(input),
+      statep(Value::POINTER(CastPointerToValue(state.data()))), frame(0, 0), statel(LogicalType::POINTER),
+      statef(Value::POINTER(CastPointerToValue(state.data()))), internal_nodes(0), input_ref(input),
       filter_mask(filter_mask_p), mode(mode_p) {
 	statep.Flatten(input->size());
-	statev.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
+	statef.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
 
 	if (input_ref && input_ref->ColumnCount() > 0) {
 		filter_sel.Initialize(input->size());
@@ -228,7 +228,7 @@ WindowSegmentTree::~WindowSegmentTree() {
 	}
 
 	if (aggr.function.window && UseWindowAPI()) {
-		aggr.function.destructor(statev, aggr_input_data, 1);
+		aggr.function.destructor(statef, aggr_input_data, 1);
 	}
 }
 
@@ -238,24 +238,25 @@ void WindowSegmentTree::AggregateInit() {
 
 void WindowSegmentTree::AggegateFinal(Vector &result, idx_t rid) {
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
-	aggr.function.finalize(statev, aggr_input_data, result, 1, rid);
+	aggr.function.finalize(statef, aggr_input_data, result, 1, rid);
 
 	if (aggr.function.destructor) {
-		aggr.function.destructor(statev, aggr_input_data, 1);
+		aggr.function.destructor(statef, aggr_input_data, 1);
 	}
 }
 
 void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
-	const auto size = end - begin;
+	const auto count = end - begin;
 
-	auto &chunk = *input_ref;
-	const auto input_count = input_ref->ColumnCount();
-	inputs.SetCardinality(size);
-	for (idx_t i = 0; i < input_count; ++i) {
-		auto &v = inputs.data[i];
-		auto &vec = chunk.data[i];
-		v.Slice(vec, begin, end);
-		v.Verify(size);
+	auto &leaves = *input_ref;
+	const auto leaf_columns = leaves.ColumnCount();
+	inputs.SetCardinality(count);
+	for (idx_t i = 0; i < leaf_columns; ++i) {
+		auto &input = inputs.data[i];
+		auto &leaf = leaves.data[i];
+
+		input.Slice(leaf, begin, end);
+		input.Verify(count);
 	}
 
 	// Slice to any filtered rows
@@ -279,7 +280,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 	}
 
 	const auto count = end - begin;
-	Vector s(statep, 0, count);
+	auto &s = statep; // Vector s(statep, 0, count);
 	if (l_idx == 0) {
 		ExtractFrame(begin, end);
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
@@ -289,14 +290,14 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 		// find out where the states begin
 		data_ptr_t begin_ptr = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
 		// set up a vector of pointers that point towards the set of states
-		Vector v(LogicalType::POINTER, count);
-		auto pdata = FlatVector::GetData<data_ptr_t>(v);
+		auto pdata = FlatVector::GetData<data_ptr_t>(statel);
 		for (idx_t i = 0; i < count; i++) {
-			pdata[i] = begin_ptr + i * state.size();
+			pdata[i] = begin_ptr;
+			begin_ptr += state.size();
 		}
-		v.Verify(count);
+		statel.Verify(count);
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
-		aggr.function.combine(v, s, aggr_input_data, count);
+		aggr.function.combine(statel, s, aggr_input_data, count);
 	}
 }
 
@@ -321,6 +322,10 @@ void WindowSegmentTree::ConstructTree() {
 	// iterate over the levels of the segment tree
 	while ((level_size = (level_current == 0 ? input_ref->size()
 	                                         : levels_flat_offset - levels_flat_start[level_current - 1])) > 1) {
+		// Initialise the combine buffer to hold enough values for the bottom level of the state tree
+		if (level_current == 1) {
+			statel.Initialize(false, level_size);
+		}
 		for (idx_t pos = 0; pos < level_size; pos += TREE_FANOUT) {
 			// compute the aggregate for this entry in the segment tree
 			AggregateInit();

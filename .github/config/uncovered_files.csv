@@ -5,6 +5,7 @@ catalog/catalog_entry/duck_table_entry.cpp	7
 catalog/catalog_entry/index_catalog_entry.cpp	2
 catalog/catalog_entry/scalar_function_catalog_entry.cpp	3
 catalog/catalog_entry/schema_catalog_entry.cpp	10
+catalog/catalog_entry/table_catalog_entry.cpp	3
 catalog/catalog_entry/table_function_catalog_entry.cpp	3
 catalog/catalog_entry/type_catalog_entry.cpp	2
 catalog/catalog_search_path.cpp	9
@@ -23,7 +24,7 @@ common/checksum.cpp	2
 common/compressed_file_system.cpp	14
 common/crypto/md5.cpp	2
 common/enum_util.cpp	3512
-common/enums/expression_type.cpp	183
+common/enums/expression_type.cpp	184
 common/enums/join_type.cpp	3
 common/exception.cpp	95
 common/exception_format_value.cpp	9
@@ -85,7 +86,7 @@ common/types/row/tuple_data_iterator.cpp	5
 common/types/row/tuple_data_scatter_gather.cpp	16
 common/types/row/tuple_data_segment.cpp	10
 common/types/string_heap.cpp	11
-common/types/time.cpp	20
+common/types/time.cpp	21
 common/types/timestamp.cpp	18
 common/types/uuid.cpp	3
 common/types/validity_mask.cpp	6
@@ -154,9 +155,9 @@ execution/index/art/art_key.cpp	14
 execution/index/art/iterator.cpp	8
 execution/index/art/leaf.cpp	38
 execution/index/art/node.cpp	42
-execution/index/art/node48.cpp	8
+execution/index/art/node48.cpp	13
 execution/index/art/node256.cpp	4
-execution/index/art/prefix.cpp	78
+execution/index/art/prefix.cpp	4
 execution/index/art/prefix_segment.cpp	2
 execution/join_hashtable.cpp	23
 execution/nested_loop_join/nested_loop_join_inner.cpp	24
@@ -221,7 +222,7 @@ execution/physical_plan/plan_set_operation.cpp	2
 execution/physical_plan/plan_show_select.cpp	3
 execution/physical_plan_generator.cpp	6
 execution/radix_partitioned_hashtable.cpp	3
-execution/reservoir_sample.cpp	52
+execution/reservoir_sample.cpp	60
 execution/window_segment_tree.cpp	10
 function/aggregate/sorted_aggregate_function.cpp	85
 function/built_in_functions.cpp	6
@@ -263,7 +264,7 @@ function/table/copy_csv.cpp	16
 function/table/pragma_detailed_profiling_output.cpp	86
 function/table/pragma_last_profiling_output.cpp	51
 function/table/range.cpp	5
-function/table/read_csv.cpp	48
+function/table/read_csv.cpp	51
 function/table/system/duckdb_constraints.cpp	3
 function/table/system/duckdb_dependencies.cpp	4
 function/table/system/duckdb_extensions.cpp	20
@@ -279,7 +280,7 @@ function/udf_function.cpp	6
 extension/json/buffered_json_reader.cpp	35
 extension/json/include/json_common.hpp	8
 extension/json/include/json_executors.hpp	3
-extension/json/json-extension.cpp	7
+extension/json/json_extension.cpp	7
 extension/json/json_deserializer.cpp	136
 extension/json/json_functions.cpp	9
 extension/json/json_functions/copy_json.cpp	32
@@ -310,7 +311,7 @@ extension/parquet/include/row_number_column_reader.hpp	10
 extension/parquet/include/templated_column_reader.hpp	5
 extension/parquet/include/thrift_tools.hpp	27
 extension/parquet/include/zstd_file_system.hpp	3
-extension/parquet/parquet-extension.cpp	30
+extension/parquet/parquet_extension.cpp	30
 extension/parquet/parquet_metadata.cpp	29
 extension/parquet/parquet_reader.cpp	113
 extension/parquet/parquet_statistics.cpp	12
@@ -476,7 +477,7 @@ main/pending_query_result.cpp	5
 main/prepared_statement.cpp	16
 main/prepared_statement_data.cpp	8
 main/query_profiler.cpp	32
-main/query_result.cpp	18
+main/query_result.cpp	19
 main/relation.cpp	29
 main/relation/create_view_relation.cpp	7
 main/relation/cross_product_relation.cpp	2
