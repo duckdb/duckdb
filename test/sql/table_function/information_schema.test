@@ -8,8 +8,18 @@ require skip_reload
 statement ok
 SELECT * FROM INFORMATION_SCHEMA.SCHEMATA;
 
-statement ok
+query IIIIIII
 SELECT * FROM information_schema.schemata;
+----
+memory	information_schema	duckdb	NULL	NULL	NULL	:memory:
+memory	main				duckdb	NULL	NULL	NULL	:memory:
+memory	pg_catalog			duckdb	NULL	NULL	NULL	:memory:
+system	information_schema	duckdb	NULL	NULL	NULL	NULL
+system	main				duckdb	NULL	NULL	NULL	NULL
+system	pg_catalog			duckdb	NULL	NULL	NULL	NULL
+temp	information_schema	duckdb	NULL	NULL	NULL	:memory:
+temp	main				duckdb	NULL	NULL	NULL	:memory:
+temp	pg_catalog			duckdb	NULL	NULL	NULL	:memory:
 
 statement ok
 CREATE SCHEMA scheme;

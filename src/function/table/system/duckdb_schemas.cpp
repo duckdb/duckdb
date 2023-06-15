@@ -33,7 +33,7 @@ static unique_ptr<FunctionData> DuckDBSchemasBind(ClientContext &context, TableF
 	names.emplace_back("internal");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
-	names.emplace_back("sql");
+	names.emplace_back("sql_path");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
@@ -59,21 +59,22 @@ void DuckDBSchemasFunction(ClientContext &context, TableFunctionInput &data_p, D
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset].get();
+		auto &catalog = entry.catalog;
 
 		// return values:
 		idx_t col = 0;
 		// "oid", PhysicalType::BIGINT
 		output.SetValue(col++, count, Value::BIGINT(entry.oid));
 		// database_name, VARCHAR
-		output.SetValue(col++, count, entry.catalog.GetName());
+		output.SetValue(col++, count, catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(entry.catalog.GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(catalog.GetOid()));
 		// "schema_name", PhysicalType::VARCHAR
 		output.SetValue(col++, count, Value(entry.name));
 		// "internal", PhysicalType::BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(entry.internal));
-		// "sql", PhysicalType::VARCHAR
-		output.SetValue(col++, count, Value());
+		// "sql_path", PhysicalType::VARCHAR
+		output.SetValue(col++, count, catalog.IsSystemCatalog() ? Value() : Value(catalog.GetDBPath()));
 
 		data.offset++;
 		count++;
