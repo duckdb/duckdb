@@ -346,7 +346,8 @@ void MultiFileReaderOptions::Serialize(Serializer &serializer) const {
 	writer.WriteField<bool>(union_by_name);
 	writer.WriteField<bool>(hive_types_autocast);
 	// serialize hive_types_schema
-	writer.WriteField<uint32_t>((uint32_t)hive_types_schema.size());
+	const uint32_t schema_size = hive_types_schema.size();
+	writer.WriteField<uint32_t>(schema_size);
 	for (auto &hive_type : hive_types_schema) {
 		writer.WriteString(hive_type.first);
 		writer.WriteString(hive_type.second.ToString());
