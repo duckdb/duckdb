@@ -1,0 +1,9 @@
+{
+    "description": "Auto-generated vcpkg.json for combined DuckDB extension build",
+    "dependencies": [
+        "azure-identity-cpp",
+        "aws-sdk-cpp",
+        "azure-storage-blobs-cpp",
+        "zlib"
+    ]
+}
