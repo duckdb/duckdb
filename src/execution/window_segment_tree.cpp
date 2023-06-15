@@ -198,9 +198,11 @@ WindowSegmentTree::WindowSegmentTree(AggregateObject aggr_p, const LogicalType &
 			AggregateInit();
 		} else {
 			//	In order to share the SV, we can't have any leaves that are already dictionaries.
+#ifdef DEBUG
 			for (auto &leaf : inputs.data) {
 				D_ASSERT(leaf.GetVectorType() == VectorType::FLAT_VECTOR);
 			}
+#endif
 			//	The inputs share an SV so we can quickly pick out values
 			//	TODO: Check after full vectorisation that this is still needed
 			//	instad of just Slice/Reference.
