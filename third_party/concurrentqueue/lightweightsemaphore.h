@@ -27,6 +27,8 @@ extern "C" {
 #elif defined(__unix__)
 #include <semaphore.h>
 #include <chrono>
+#elif defined(__MVS__)
+#include <zos-semaphore.h>
 #endif
 
 namespace duckdb_moodycamel
@@ -233,6 +235,80 @@ public:
 			ts.tv_nsec -= nsecs_in_1_sec;
 			++ts.tv_sec;
 		}
+
+		int rc;
+		do {
+			rc = sem_timedwait(&m_sema, &ts);
+		} while (rc == -1 && errno == EINTR);
+		return rc == 0;
+	}
+
+	void signal()
+	{
+		while (sem_post(&m_sema) == -1);
+	}
+
+	void signal(int count)
+	{
+		while (count-- > 0)
+		{
+			while (sem_post(&m_sema) == -1);
+		}
+	}
+};
+#elif defined(__MVS__)
+//---------------------------------------------------------
+// Semaphore (MVS aka z/OS)
+//---------------------------------------------------------
+class Semaphore
+{
+private:
+	sem_t m_sema;
+
+	Semaphore(const Semaphore& other) MOODYCAMEL_DELETE_FUNCTION;
+	Semaphore& operator=(const Semaphore& other) MOODYCAMEL_DELETE_FUNCTION;
+
+public:
+	Semaphore(int initialCount = 0)
+	{
+		assert(initialCount >= 0);
+		int rc = sem_init(&m_sema, 0, initialCount);
+		assert(rc == 0);
+		(void)rc;
+	}
+
+	~Semaphore()
+	{
+		sem_destroy(&m_sema);
+	}
+
+	bool wait()
+	{
+		// http://stackoverflow.com/questions/2013181/gdb-causes-sem-wait-to-fail-with-eintr-error
+		int rc;
+		do {
+			rc = sem_wait(&m_sema);
+		} while (rc == -1 && errno == EINTR);
+		return rc == 0;
+	}
+
+	bool try_wait()
+	{
+		int rc;
+		do {
+			rc = sem_trywait(&m_sema);
+		} while (rc == -1 && errno == EINTR);
+		return rc == 0;
+	}
+
+	bool timed_wait(std::uint64_t usecs)
+	{
+		struct timespec ts;
+		const int usecs_in_1_sec = 1000000;
+		const int nsecs_in_1_sec = 1000000000;
+
+		ts.tv_sec = usecs / usecs_in_1_sec;
+		ts.tv_nsec = (usecs % usecs_in_1_sec) * 1000;
 
 		int rc;
 		do {
