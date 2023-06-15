@@ -256,6 +256,63 @@ test_that("Union all keeps duplicates", {
     expect_equal(rel_df, expected_result)
 })
 
+test_that("Inner join returns all inner relations", {
+    dbExecute(con, "CREATE OR REPLACE MACRO eq(a, b) AS a = b")
+    left <- rel_from_df(con, data.frame(left_a=c(1, 2, 3), left_b=c(1, 1, 2)))
+    right <- rel_from_df(con, data.frame(right_b=c(1, 3), right_c=c(4, 5)))
+    cond <- list(expr_function("eq", list(expr_reference("left_b"), expr_reference("right_b"))))
+    rel2 <- rel_join(left, right, cond, "inner")
+    rel_df <- rel_to_altrep(rel2)
+    dim(rel_df)
+    expected_result <- data.frame(left_a=c(1, 2), left_b=c(1, 1), right_b=c(1, 1), right_c=c(4, 4))
+    expect_equal(rel_df, expected_result)
+})
+
+test_that("ASOF join works", {
+    dbExecute(con, "CREATE OR REPLACE MACRO gte(a, b) AS a >= b")
+    test_df1 <- duckdb:::rel_from_df(con, data.frame(ts=c(1, 2, 3, 4, 5, 6, 7, 8, 9)))
+    test_df2 <- duckdb:::rel_from_df(con, data.frame(event_ts=c(1, 3, 6, 8), event_id=c(0, 1, 2, 3)))
+    cond <- list(duckdb:::expr_function("gte", list(duckdb:::expr_reference("ts"), duckdb:::expr_reference("event_ts"))))
+    rel <- duckdb:::rel_join_(test_df1, test_df2, cond, "inner", "asof")
+    rel_proj <- duckdb:::rel_project(rel, list(duckdb:::expr_reference("ts"), duckdb:::expr_reference("event_id")))
+    rel_df <- duckdb:::rel_to_altrep(rel_proj)
+    expected_result <- data.frame(ts=c(1, 2, 3, 4, 5, 6, 7, 8, 9), event_id=c(0, 0, 1, 1, 1, 2, 2, 3, 3))
+    expect_equal(expected_result, rel_df)
+})
+
+test_that("Invalid asof join condition throws error", {
+    dbExecute(con, "CREATE OR REPLACE MACRO neq(a, b) AS a <> b")
+    test_df1 <- duckdb:::rel_from_df(con, data.frame(ts=c(1, 2, 3, 4, 5, 6, 7, 8, 9)))
+    test_df2 <- duckdb:::rel_from_df(con, data.frame(begin=c(1, 3, 6, 8), value=c(0, 1, 2, 3)))
+    cond <- list(duckdb:::expr_function("neq", list(duckdb:::expr_reference("ts"), duckdb:::expr_reference("begin"))))
+    expect_error(duckdb:::rel_join_(test_df1, test_df2, cond, "inner", "asof"), "Binder Error")
+})
+
+test_that("multiple conditions for asof join throws error", {
+    dbExecute(con, "CREATE OR REPLACE MACRO gte(a, b) AS a >= b")
+    test_df1 <- duckdb:::rel_from_df(con, data.frame(ts=c(1, 2, 3, 4, 5, 6, 7, 8, 9)))
+    test_df2 <- duckdb:::rel_from_df(con, data.frame(begin=c(1, 3, 6, 8), value=c(0, 1, 2, 3)))
+    cond1 <- duckdb:::expr_function("gte", list(duckdb:::expr_reference("ts"), duckdb:::expr_reference("begin")))
+    cond2 <- duckdb:::expr_function("gte", list(duckdb:::expr_reference("ts"), duckdb:::expr_reference("value")))
+    conds <- list(cond1, cond2)
+    expect_error(duckdb:::rel_join_(test_df1, test_df2, conds, "inner", "asof"), "Binder Error")
+})
+
+
+test_that("Inequality joins work", {
+    dbExecute(con, "CREATE OR REPLACE MACRO gte(a, b) AS a >= b")
+    timing_df <- duckdb:::rel_from_df(con, data.frame(ts=c(1, 2, 3, 4, 5, 6)))
+    events_df <- duckdb:::rel_from_df(con, data.frame(event_ts=c(1, 3, 6, 8), event_id=c(0, 1, 2, 3)))
+    cond <- list(duckdb:::expr_function("gte", list(duckdb:::expr_reference("ts"), duckdb:::expr_reference("event_ts"))))
+    rel <- duckdb:::rel_join_(timing_df, events_df, cond, "inner")
+    rel_proj <- duckdb:::rel_project(rel, list(duckdb:::expr_reference("ts"), duckdb:::expr_reference("event_ts")))
+    rel_order <- duckdb:::rel_order(rel_proj, list(duckdb:::expr_reference("ts"), duckdb:::expr_reference("event_ts")))
+    rel_df <- duckdb:::rel_to_altrep(rel_order)
+    expected_result <- data.frame(ts=c(1, 2, 3, 3, 4, 4, 5, 5, 6, 6, 6), event_ts=c(1, 1, 1, 3, 1, 3, 1, 3, 1, 3, 6))
+    expect_equal(expected_result, rel_df)
+})
+
+
 # nobody should do this in reality. It's a pretty dumb idea
 test_that("we can union the same relation to itself", {
      test_df_a2 <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))
@@ -631,7 +688,6 @@ test_that("rel_to_sql works for row_number", {
     sub_str_sql <- substr(sql, 0, 44)
     expect_equal(sub_str_sql, "SELECT row_number() OVER () AS ___row_number")
 })
-
 
 test_that("rel_from_table_function works", {
     rel <- duckdb:::rel_from_table_function(duckdb:::default_connection(), 'generate_series', list(1L, 10L, 2L))

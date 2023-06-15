@@ -26,6 +26,8 @@
 #include "duckdb/main/relation/distinct_relation.hpp"
 #include "duckdb/main/relation/table_function_relation.hpp"
 
+#include "duckdb/common/enums/joinref_type.hpp"
+
 using namespace duckdb;
 using namespace cpp11;
 
@@ -300,23 +302,48 @@ bool constant_expression_is_not_null(duckdb::expr_extptr_t expr) {
 }
 
 [[cpp11::register]] SEXP rapi_rel_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds,
-                                       std::string join) {
+                                       std::string join, std::string join_ref_type) {
 	auto join_type = JoinType::INNER;
+	auto join_ref = JoinRefType::REGULAR;
 	unique_ptr<ParsedExpression> cond;
 
 	if (join == "left") {
 		join_type = JoinType::LEFT;
-	} else if (join == "right") {
+	}
+	else if (join == "right") {
 		join_type = JoinType::RIGHT;
-	} else if (join == "outer") {
+	}
+	else if (join == "outer") {
 		join_type = JoinType::OUTER;
-	} else if (join == "semi") {
+	}
+	else if (join == "semi") {
 		join_type = JoinType::SEMI;
-	} else if (join == "anti") {
+	}
+	else if (join == "anti") {
 		join_type = JoinType::ANTI;
-	} else if (join == "cross") {
+	}
+	else if (join == "cross") {
 		auto res = std::make_shared<CrossProductRelation>(left->rel, right->rel);
 		return make_external<RelationWrapper>("duckdb_relation", res);
+	}
+
+	if (join_ref_type == "regular") {
+		join_ref = JoinRefType::REGULAR;
+	}
+	else if (join_ref_type == "natural") {
+		join_ref = JoinRefType::NATURAL;
+	}
+	else if (join_ref_type == "cross") {
+		join_ref = JoinRefType::CROSS;
+	}
+	else if (join_ref_type == "positional") {
+		join_ref = JoinRefType::POSITIONAL;
+	}
+	else if (join_ref_type == "asof") {
+		join_ref = JoinRefType::ASOF;
+	}
+	else if (join_ref_type == "dependent") {
+		join_ref = JoinRefType::DEPENDENT;
 	}
 
 	if (conds.size() == 1) {
@@ -329,7 +356,7 @@ bool constant_expression_is_not_null(duckdb::expr_extptr_t expr) {
 		cond = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(cond_args));
 	}
 
-	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, std::move(cond), join_type);
+	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, std::move(cond), join_type, join_ref);
 
 	cpp11::writable::list prot = {left, right};
 
