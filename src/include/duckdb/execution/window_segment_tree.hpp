@@ -34,8 +34,10 @@ protected:
 	//! The result type of the window function
 	LogicalType result_type;
 
-	//! The size of the partition
+	//! The cardinality of the partition
 	const idx_t partition_count;
+	//! The size of a single aggregate state
+	const idx_t state_size;
 	//! Data pointer that contains a single state, used for intermediate window segment aggregation
 	vector<data_t> state;
 	//! Reused result state container for the window functions
@@ -94,13 +96,13 @@ public:
 	~WindowSegmentTree() override;
 
 	void Finalize() override;
-	void Compute(Vector &result, idx_t rid, idx_t start, idx_t end) override;
+	void Evaluate(const idx_t *begins, const idx_t *ends, Vector &result, idx_t count) override;
 
 private:
 	void ConstructTree();
-	void ExtractFrame(idx_t begin, idx_t end);
-	void FlushStates(idx_t l_idx);
-	void WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end);
+	void ExtractFrame(idx_t begin, idx_t end, data_ptr_t current_state);
+	void FlushStates(bool combining);
+	void WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end, data_ptr_t current_state);
 
 	//! Use the combine API, if available
 	inline bool UseCombineAPI() const {
