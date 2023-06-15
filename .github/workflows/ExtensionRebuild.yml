@@ -189,7 +189,7 @@ jobs:
 
     - uses: ./.github/actions/build_extensions
       with:
-        build_out_of_tree_extensions: 0
+        build_in_tree_extensions: 0
         run_tests: 0
         build_dir: duckdb-old
         deploy_as: linux_amd64_gcc4
