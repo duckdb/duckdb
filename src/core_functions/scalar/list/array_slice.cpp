@@ -63,7 +63,10 @@ bool ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value, const INDEX_TYPE len
 template <typename INPUT_TYPE, typename INDEX_TYPE>
 static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &end, bool begin_valid, bool end_valid) {
 	// Clamp offsets
-	begin = (begin != 0) ? begin - 1 : 0;
+	if (begin == INT64_MIN) {
+		return false;
+	}
+    begin = (begin != 0) ? begin - 1 : 0;
 	const auto length = ValueLength<INPUT_TYPE, INDEX_TYPE>(value);
 	if (begin < 0 && -begin > length && end < 0 && -end > length) {
 		begin = 0;
