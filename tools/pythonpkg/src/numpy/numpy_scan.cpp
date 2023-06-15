@@ -13,6 +13,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb_python/numpy/numpy_scan.hpp"
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
+#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -173,17 +174,33 @@ void VerifyTypeConstraints(Vector &vec, idx_t count) {
 	}
 }
 
-void NumpyScan::ScanObjectColumn(PyObject **col, idx_t count, idx_t offset, Vector &out) {
+void NumpyScan::ScanObjectColumn(PyObject **col, idx_t stride, idx_t count, idx_t offset, Vector &out) {
 	// numpy_col is a sequential list of objects, that make up one "column" (Vector)
 	out.SetVectorType(VectorType::FLAT_VECTOR);
-	{
-		PythonGILWrapper gil; // We're creating python objects here, so we need the GIL
+	auto &mask = FlatVector::Validity(out);
+	PythonGILWrapper gil; // We're creating python objects here, so we need the GIL
+
+	if (stride == sizeof(PyObject*)) {
+		auto src_ptr = col + offset;
 		for (idx_t i = 0; i < count; i++) {
-			idx_t source_idx = offset + i;
-			ScanNumpyObject(col[source_idx], i, out);
+			ScanNumpyObject(src_ptr[i], i, out);
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			auto src_ptr = col[stride / sizeof(PyObject*) * (i + offset)];
+			ScanNumpyObject(src_ptr, i, out);
 		}
 	}
 	VerifyTypeConstraints(out, count);
+}
+
+static void PrintNumpyArray(const py::array &array) {
+	Printer::Print(StringUtil::Format("strides: %d", array.strides(0)));
+	Printer::Print(StringUtil::Format("itemsize: %d", array.itemsize()));
+	Printer::Print(StringUtil::Format("size: %d", array.size()));
+	Printer::Print(StringUtil::Format("owndata: %d", array.owndata()));
+	Printer::Print(StringUtil::Format("flags: %d", array.flags()));
+	Printer::Print(StringUtil::Format("offset_at: %d", array.offset_at()));
 }
 
 //! 'offset' is the offset within the column
@@ -192,6 +209,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 	D_ASSERT(bind_data.pandas_col->Backend() == PandasColumnBackend::NUMPY);
 	auto &numpy_col = reinterpret_cast<PandasNumpyColumn &>(*bind_data.pandas_col);
 	auto &array = numpy_col.array;
+	PrintNumpyArray(array);
 
 	switch (bind_data.numpy_type) {
 	case NumpyNullableType::BOOL:
@@ -274,7 +292,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		// Get the source pointer of the numpy array
 		auto src_ptr = (PyObject **)array.data(); // NOLINT
 		if (out.GetType().id() != LogicalTypeId::VARCHAR) {
-			return NumpyScan::ScanObjectColumn(src_ptr, count, offset, out);
+			return NumpyScan::ScanObjectColumn(src_ptr, numpy_col.stride, count, offset, out);
 		}
 
 		// Get the data pointer and the validity mask of the result vector
