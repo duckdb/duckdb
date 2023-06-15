@@ -76,6 +76,8 @@ idx_t CSVStateMachine::SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_
 	D_ASSERT(sniffed_column_counts.size() == STANDARD_VECTOR_SIZE);
 
 	CSVState state {CSVState::STANDARD};
+	CSVState previous_state;
+
 	// Both these variables are used for new line identifier detection
 	bool single_record_separator = false;
 	bool carry_on_separator = false;
@@ -84,16 +86,22 @@ idx_t CSVStateMachine::SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_
 			sniffed_column_counts.clear();
 			return buffer.buffer_size;
 		}
+		previous_state = state;
 		auto c = buffer.buffer[cur_pos];
-		bool carriage_return = state == CSVState::CARRIAGE_RETURN;
-		column_count += state == CSVState::FIELD_SEPARATOR;
-		sniffed_column_counts[cur_rows] = column_count;
-		cur_rows += state == CSVState::RECORD_SEPARATOR;
-		column_count -= (column_count - 1) * (state == CSVState::RECORD_SEPARATOR);
 		state = static_cast<CSVState>(transition_array[static_cast<uint8_t>(state)][static_cast<uint8_t>(c)]);
+		bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
+		                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
+
+		bool carriage_return = previous_state == CSVState::CARRIAGE_RETURN;
+		column_count += previous_state == CSVState::FIELD_SEPARATOR;
+		sniffed_column_counts[cur_rows] = column_count;
+		cur_rows += previous_state == CSVState::RECORD_SEPARATOR && !empty_line;
+		column_count -= (column_count - 1) * (previous_state == CSVState::RECORD_SEPARATOR);
+
 		// It means our carriage return is actually a record separator
 		cur_rows += state != CSVState::RECORD_SEPARATOR && carriage_return;
 		column_count -= (column_count - 1) * (state != CSVState::RECORD_SEPARATOR && carriage_return);
+
 		// Identify what is our line separator
 		carry_on_separator = (state == CSVState::RECORD_SEPARATOR && carriage_return) || carry_on_separator;
 		single_record_separator = ((state != CSVState::RECORD_SEPARATOR && carriage_return) ||
@@ -101,7 +109,9 @@ idx_t CSVStateMachine::SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_
 		                          single_record_separator;
 		cur_pos++;
 	}
-	if (cur_rows < STANDARD_VECTOR_SIZE) {
+	bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
+	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
+	if (cur_rows < STANDARD_VECTOR_SIZE && !empty_line) {
 		sniffed_column_counts[cur_rows++] = column_count;
 	}
 	NewLineIdentifier suggested_newline;

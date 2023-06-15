@@ -256,7 +256,7 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t b
 			consistent_rows++;
 		} else if (num_cols < sniffed_column_counts[row] && !options.skip_rows_set) {
 			// all rows up to this point will need padding
-			padding_count += (num_cols - sniffed_column_counts[row]) * row;
+			padding_count = 0;
 			// we use the maximum amount of num_cols that we find
 			num_cols = sniffed_column_counts[row];
 			start_row = row + options.skip_rows;
@@ -277,19 +277,23 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t b
 	bool rows_consistent = start_row + consistent_rows - options.skip_rows == sniffed_column_counts.size();
 	bool more_than_one_row = (consistent_rows > 1);
 	bool more_than_one_column = (num_cols > 1);
-	bool start_good = !candidates.empty() && (start_row <= options.skip_rows);
+	bool start_good = !candidates.empty() && (start_row <= candidates.front().state->configuration.start_row);
+	bool invalid_padding = !allow_padding && padding_count > 0;
 
-	if (!requested_types.empty() && requested_types.size() != num_cols && (!allow_padding && padding_count > 0)) {
+	if (!requested_types.empty() && requested_types.size() != num_cols && !invalid_padding) {
 		return;
-	} else if (rows_consistent && (single_column_before || (more_values && !require_more_padding) ||
-	                               (more_than_one_column && require_less_padding))) {
+	} else if (rows_consistent &&
+	           (single_column_before || (more_values && !require_more_padding) ||
+	            (more_than_one_column && require_less_padding)) &&
+	           !invalid_padding) {
 		best_consistent_rows = consistent_rows;
 		best_num_cols = num_cols;
 		prev_padding_count = padding_count;
-
+		state_machine.configuration.start_row = start_row;
 		candidates.clear();
 		candidates.emplace_back(&state_machine, buffer_pos, best_num_cols);
-	} else if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding) {
+	} else if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding &&
+	           !invalid_padding) {
 		bool same_quote_is_candidate = false;
 		for (auto &candidate : candidates) {
 			if (state_machine.configuration.quote == candidate.state->configuration.quote) {
@@ -297,6 +301,7 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t b
 			}
 		}
 		if (!same_quote_is_candidate) {
+			state_machine.configuration.start_row = start_row;
 			candidates.emplace_back(&state_machine, buffer_pos, best_num_cols);
 		}
 	}
@@ -389,6 +394,7 @@ vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 		option.delimiter = candidate.state->configuration.field_separator;
 		option.num_cols = candidate.max_num_columns;
 		option.new_line = candidate.state->configuration.record_separator;
+		option.skip_rows = candidate.state->configuration.start_row;
 		result.emplace_back(option);
 	}
 	return result;

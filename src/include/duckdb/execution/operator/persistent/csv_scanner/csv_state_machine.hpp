@@ -32,6 +32,8 @@ struct CSVStateMachineConfiguration {
 	char escape;
 	// We set the record separator through the state machine
 	NewLineIdentifier record_separator;
+	// Which one was the identified start row for this file
+	idx_t start_row = 0;
 };
 
 //! The buffer that will be parsed by the CSV State Machine
