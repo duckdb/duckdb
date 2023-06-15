@@ -54,7 +54,7 @@ static T GetJemallocCTL(const char *name) {
 	return result;
 }
 
-void JEMallocExtension::ThreadFlush(idx_t threshold) {
+void JemallocExtension::ThreadFlush(idx_t threshold) {
 	// We flush after exceeding the threshold
 	if (GetJemallocCTL<uint64_t>("thread.peak.read") < threshold) {
 		return;
