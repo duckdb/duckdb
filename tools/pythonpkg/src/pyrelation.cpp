@@ -297,6 +297,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Count(const string &count_columns
 	return GenericAggregator("count", count_columns, groups);
 }
 
+int64_t DuckDBPyRelation::RowCount() {
+	return result ? result->RowCount() : -1;
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Median(const string &median_columns, const string &groups) {
 	return GenericAggregator("median", median_columns, groups);
 }

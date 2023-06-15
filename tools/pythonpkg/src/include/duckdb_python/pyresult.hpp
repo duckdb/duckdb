@@ -41,6 +41,8 @@ public:
 
 	py::dict FetchTF();
 
+	int64_t RowCount();
+
 	duckdb::pyarrow::RecordBatchReader FetchRecordBatchReader(idx_t rows_per_batch);
 
 	static py::list GetDescription(const vector<string> &names, const vector<LogicalType> &types);

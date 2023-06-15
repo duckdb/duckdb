@@ -157,6 +157,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	    .def("fetchmany", &DuckDBPyConnection::FetchMany, "Fetch the next set of rows from a result following execute",
 	         py::arg("size") = 1)
 	    .def("fetchall", &DuckDBPyConnection::FetchAll, "Fetch all rows from a result following execute")
+	    .def_property_readonly("rowcount", &DuckDBPyConnection::RowCount)
 	    .def("fetchnumpy", &DuckDBPyConnection::FetchNumpy, "Fetch a result as list of NumPy arrays following execute")
 	    .def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as DataFrame following execute()", py::kw_only(),
 	         py::arg("date_as_object") = false)
@@ -515,6 +516,10 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Execute(const string &query, 
 		result = make_uniq<DuckDBPyRelation>(std::move(py_result));
 	}
 	return shared_from_this();
+}
+
+int64_t DuckDBPyConnection::RowCount() {
+	return result ? result->RowCount() : -1;
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, const PandasDataFrame &value,

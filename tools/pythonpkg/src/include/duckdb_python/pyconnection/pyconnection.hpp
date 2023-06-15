@@ -160,6 +160,8 @@ public:
 
 	shared_ptr<DuckDBPyConnection> Rollback();
 
+	int64_t RowCount();
+
 	void Close();
 
 	void Interrupt();

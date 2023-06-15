@@ -25,6 +25,20 @@ DuckDBPyResult::DuckDBPyResult(unique_ptr<QueryResult> result_p) : result(std::m
 	}
 }
 
+int64_t DuckDBPyResult::RowCount() {
+	if (result->type != QueryResultType::MATERIALIZED_RESULT) {
+		return -1;
+	}
+
+	auto res = FetchNext(*result);
+	if (result->properties.return_type == StatementReturnType::CHANGED_ROWS) {
+		return res->GetValue(0, 0).GetValue<int64_t>();
+	}
+
+	auto &materialized = reinterpret_cast<MaterializedQueryResult &>(result);
+	return materialized.RowCount();
+}
+
 const vector<string> &DuckDBPyResult::GetNames() {
 	if (!result) {
 		throw InternalException("Calling GetNames without a result object");

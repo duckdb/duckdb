@@ -81,6 +81,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> Sum(const string &sum_columns, const string &groups = "");
 
+	int64_t RowCount();
 	unique_ptr<DuckDBPyRelation> Count(const string &count_columns, const string &groups = "");
 
 	unique_ptr<DuckDBPyRelation> Median(const string &median_columns, const string &groups = "");
