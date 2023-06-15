@@ -197,18 +197,13 @@ WindowSegmentTree::WindowSegmentTree(AggregateObject aggr_p, const LogicalType &
 			// if we have a frame-by-frame method, share the single state
 			AggregateInit();
 		} else {
-			//	In order to share the SV, we can't have any inputs that are already dictionaries.
-			for (column_t i = 0; i < inputs.ColumnCount(); i++) {
-				auto &v = inputs.data[i];
-				switch (v.GetVectorType()) {
-				case VectorType::DICTIONARY_VECTOR:
-				case VectorType::FSST_VECTOR:
-					v.Flatten(input->size());
-				default:
-					break;
-				}
+			//	In order to share the SV, we can't have any leaves that are already dictionaries.
+			for (auto &leaf : inputs.data) {
+				D_ASSERT(leaf.GetVectorType() == VectorType::FLAT_VECTOR);
 			}
 			//	The inputs share an SV so we can quickly pick out values
+			//	TODO: Check after full vectorisation that this is still needed
+			//	instad of just Slice/Reference.
 			filter_sel.Initialize();
 			//	What we slice to is not important now - we just want the SV to be shared.
 			inputs.Slice(filter_sel, STANDARD_VECTOR_SIZE);
