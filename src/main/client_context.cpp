@@ -319,6 +319,8 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 			planner.parameter_data.emplace_back(value);
 		}
 	}
+
+	client_data->http_state = make_shared<HTTPState>();
 	planner.CreatePlan(std::move(statement));
 	D_ASSERT(planner.plan || !planner.properties.bound_all_parameters);
 	profiler.EndPhase();
@@ -1153,9 +1155,8 @@ ParserOptions ClientContext::GetParserOptions() const {
 }
 
 ClientProperties ClientContext::GetClientProperties() const {
-	ClientProperties properties;
-	properties.time_zone = ClientConfig::GetConfig(*this).ExtractTimezone();
-	return properties;
+	auto client_context = ClientConfig::GetConfig(*this);
+	return {client_context.ExtractTimezone(), db->config.options.arrow_offset_size};
 }
 
 bool ClientContext::ExecutionIsFinished() {

@@ -1160,7 +1160,7 @@ static void QuantileSerialize(FieldWriter &writer, const FunctionData *bind_data
 	writer.WriteField<bool>(bind_data->desc);
 }
 
-unique_ptr<FunctionData> QuantileDeserialize(ClientContext &context, FieldReader &reader,
+unique_ptr<FunctionData> QuantileDeserialize(PlanDeserializationState &state, FieldReader &reader,
                                              AggregateFunction &bound_function) {
 	auto quantiles = reader.ReadRequiredSerializableList<Value, Value>();
 	auto bind_data = make_uniq<QuantileBindData>(quantiles);

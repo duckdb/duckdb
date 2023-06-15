@@ -9,6 +9,7 @@
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
 
 namespace duckdb {
 
@@ -627,12 +628,14 @@ void RowGroupCollection::CommitDropTable() {
 }
 
 //===--------------------------------------------------------------------===//
-// GetStorageInfo
+// GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::GetStorageInfo(TableStorageInfo &result) {
+vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo() {
+	vector<ColumnSegmentInfo> result;
 	for (auto &row_group : row_groups->Segments()) {
-		row_group.GetStorageInfo(row_group.index, result);
+		row_group.GetColumnSegmentInfo(row_group.index, result);
 	}
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
