@@ -187,7 +187,7 @@ Allocator &Allocator::DefaultAllocator() {
 
 void Allocator::ThreadFlush(idx_t threshold) {
 #ifdef USE_JEMALLOC
-	JEMallocExtension::ThreadFlush(threshold);
+	JemallocExtension::ThreadFlush(threshold);
 #endif
 }
 
