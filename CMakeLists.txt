@@ -317,6 +317,7 @@ option(DEBUG_STACKTRACE "Debug setting: print a stracktrace on asserts and when 
 option(DEBUG_MOVE "Debug setting: Ensure std::move is being used" FALSE)
 option(CLANG_TIDY "Enable build for clang-tidy, this disables all source files excluding the core database. This does not produce a working build." FALSE)
 option(BUILD_UNITTESTS "Build the C++ Unit Tests." TRUE)
+option(MERGE_EXTENSION_VCPKG_MANIFESTS "Produces a shared vcpkg.json file" FALSE)
 option(
   ASSERT_EXCEPTION
   "Throw an exception on an assert failing, instead of triggering a sigabort"
@@ -330,6 +331,10 @@ option(TEST_REMOTE_INSTALL "Test installation of specific extensions." FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
+endif()
+
+if(MERGE_EXTENSION_VCPKG_MANIFESTS)
+  set(BUILD_MAIN_DUCKDB_LIBRARY FALSE)
 endif()
 
 if (NOT BUILD_MAIN_DUCKDB_LIBRARY)
@@ -844,7 +849,7 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
   string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
 
   # Skip explicitly disabled extensions
-  if (NOT ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD})
+  if (NOT ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD} OR ${MERGE_EXTENSION_VCPKG_MANIFESTS})
     continue()
   endif()
 
@@ -887,6 +892,27 @@ endif()
 if(NOT "${SKIPPED_EXTENSIONS}" STREQUAL "")
   string(REPLACE ";"  ", " EXT_LIST_DEBUG_MESSAGE "${SKIPPED_EXTENSIONS}")
   message(STATUS "Extensions explicitly skipped: ${EXT_LIST_DEBUG_MESSAGE}")
+endif()
+
+# Special case where instead of building, we only want to produce a merged vcpg.json file
+if(${MERGE_EXTENSION_VCPKG_MANIFESTS})
+  set(VCPKG_PATHS "")
+  set(VCPKG_NAMES "")
+  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+    if (EXISTS "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}/vcpkg.json")
+      list(APPEND VCPKG_NAMES ${EXT_NAME})
+      list(APPEND VCPKG_PATHS ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}vcpkg.json)
+    endif()
+  endforeach()
+
+  add_custom_target(
+          duckdb_merge_vcpkg_manifests ALL
+          COMMAND  python3 scripts/merge_vcpkg_deps.py ${VCPKG_PATHS} ${EXT_NAMES}
+          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+          COMMENT Generates a shared vcpkg manifest from the individual extensions)
+  string(REPLACE ";"  ", " VCPKG_NAMES_COMMAS "${VCPKG_NAMES}")
+  Message(STATUS "Combined vcpkg manifest created from extensions: ${VCPKG_NAMES_COMMAS}")
 endif()
 
 if(BUILD_PYTHON
@@ -992,10 +1018,12 @@ if(NOT CLANG_TIDY)
       add_subdirectory(benchmark)
     endif()
   endif()
-  add_subdirectory(third_party)
+  if (NOT MERGE_EXTENSION_VCPKG_MANIFESTS)
+    add_subdirectory(third_party)
+  endif()
 endif()
 
-if (CMAKE_VERSION VERSION_GREATER "3.0") # this does not work with 2.8
+if (CMAKE_VERSION VERSION_GREATER "3.0" AND NOT MERGE_EXTENSION_VCPKG_MANIFESTS ) # this does not work with 2.8
 # Write the export set for build and install tree
 install(EXPORT "${DUCKDB_EXPORT_SET}" DESTINATION "${INSTALL_CMAKE_DIR}")
 export(EXPORT "${DUCKDB_EXPORT_SET}"
