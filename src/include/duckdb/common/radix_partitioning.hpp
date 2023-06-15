@@ -49,9 +49,6 @@ public:
 	//! Select using a cutoff on the radix bits of the hash
 	static idx_t Select(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits, idx_t cutoff,
 	                    SelectionVector *true_sel, SelectionVector *false_sel);
-
-	//! Convert hashes to bins
-	static void HashesToBins(Vector &hashes, idx_t radix_bits, Vector &bins, idx_t count);
 };
 
 //! Templated radix partitioning constants, can be templated to the number of radix bits

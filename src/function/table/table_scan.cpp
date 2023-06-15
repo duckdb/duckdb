@@ -417,7 +417,7 @@ static void TableScanSerialize(FieldWriter &writer, const FunctionData *bind_dat
 	writer.WriteString(bind_data.table.schema.catalog.GetName());
 }
 
-static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, FieldReader &reader,
+static unique_ptr<FunctionData> TableScanDeserialize(PlanDeserializationState &state, FieldReader &reader,
                                                      TableFunction &function) {
 	auto schema_name = reader.ReadRequired<string>();
 	auto table_name = reader.ReadRequired<string>();
@@ -426,7 +426,7 @@ static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, Fie
 	auto result_ids = reader.ReadRequiredList<row_t>();
 	auto catalog_name = reader.ReadField<string>(INVALID_CATALOG);
 
-	auto &catalog_entry = Catalog::GetEntry<TableCatalogEntry>(context, catalog_name, schema_name, table_name);
+	auto &catalog_entry = Catalog::GetEntry<TableCatalogEntry>(state.context, catalog_name, schema_name, table_name);
 	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
 		throw SerializationException("Cant find table for %s.%s", schema_name, table_name);
 	}

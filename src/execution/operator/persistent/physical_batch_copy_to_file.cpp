@@ -1,9 +1,11 @@
 #include "duckdb/execution/operator/persistent/physical_batch_copy_to_file.hpp"
+
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/types/batched_data_collection.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/persistent/physical_copy_to_file.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/batched_data_collection.hpp"
-#include "duckdb/common/allocator.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -67,7 +69,7 @@ public:
 	optional_idx batch_index;
 
 	void InitializeCollection(ClientContext &context, const PhysicalOperator &op) {
-		collection = make_uniq<ColumnDataCollection>(Allocator::Get(context), op.children[0]->types);
+		collection = make_uniq<ColumnDataCollection>(BufferAllocator::Get(context), op.children[0]->types);
 		collection->InitializeAppend(append_state);
 	}
 };
