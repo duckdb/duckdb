@@ -89,9 +89,14 @@ public:
 	};
 
 public:
-	PhysicalRangeJoin(LogicalOperator &op, PhysicalOperatorType type, unique_ptr<PhysicalOperator> left,
+	PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperatorType type, unique_ptr<PhysicalOperator> left,
 	                  unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
 	                  idx_t estimated_cardinality);
+
+	// Projection mappings
+	using ProjectionMapping = vector<column_t>;
+	ProjectionMapping left_projection_map;
+	ProjectionMapping right_projection_map;
 
 public:
 	// Gather the result values and slice the payload columns to those values.

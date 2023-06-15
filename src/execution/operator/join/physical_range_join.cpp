@@ -159,9 +159,9 @@ void PhysicalRangeJoin::GlobalSortedTable::Finalize(Pipeline &pipeline, Event &e
 	}
 }
 
-PhysicalRangeJoin::PhysicalRangeJoin(LogicalOperator &op, PhysicalOperatorType type, unique_ptr<PhysicalOperator> left,
-                                     unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                                     idx_t estimated_cardinality)
+PhysicalRangeJoin::PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperatorType type,
+                                     unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
+                                     vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality)
     : PhysicalComparisonJoin(op, type, std::move(cond), join_type, estimated_cardinality) {
 	// Reorder the conditions so that ranges are at the front.
 	// TODO: use stats to improve the choice?
@@ -188,6 +188,25 @@ PhysicalRangeJoin::PhysicalRangeJoin(LogicalOperator &op, PhysicalOperatorType t
 
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
+
+	//	Fill out the left projection map.
+	left_projection_map = op.left_projection_map;
+	if (left_projection_map.empty()) {
+		const auto left_count = children[0]->types.size();
+		left_projection_map.reserve(left_count);
+		for (column_t i = 0; i < left_count; ++i) {
+			left_projection_map.emplace_back(i);
+		}
+	}
+	//	Fill out the right projection map.
+	right_projection_map = op.right_projection_map;
+	if (right_projection_map.empty()) {
+		const auto right_count = children[1]->types.size();
+		right_projection_map.reserve(right_count);
+		for (column_t i = 0; i < right_count; ++i) {
+			right_projection_map.emplace_back(i);
+		}
+	}
 }
 
 idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition> &conditions) {

@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-PhysicalIEJoin::PhysicalIEJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
+PhysicalIEJoin::PhysicalIEJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> left,
                                unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                idx_t estimated_cardinality)
     : PhysicalRangeJoin(op, PhysicalOperatorType::IE_JOIN, std::move(left), std::move(right), std::move(cond),
@@ -659,6 +659,13 @@ public:
 
 		left_keys.Initialize(allocator, left_types);
 		right_keys.Initialize(allocator, right_types);
+
+		{
+			auto wide_types = op.children[0]->GetTypes();
+			auto &types = op.children[1]->GetTypes();
+			wide_types.insert(wide_types.end(), types.begin(), types.end());
+			wide.Initialize(Allocator::DefaultAllocator(), wide_types);
+		}
 	}
 
 	idx_t SelectOuterRows(bool *matches) {
@@ -696,6 +703,8 @@ public:
 	ExpressionExecutor right_executor;
 	DataChunk right_keys;
 
+	DataChunk wide;
+
 	// Outer joins
 	idx_t outer_idx;
 	idx_t outer_count;
@@ -703,13 +712,14 @@ public:
 	bool *right_matches;
 };
 
-void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk, LocalSourceState &state_p) const {
+void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &result, LocalSourceState &state_p) const {
 	auto &state = state_p.Cast<IEJoinLocalSourceState>();
 	auto &ie_sink = sink_state->Cast<IEJoinGlobalState>();
 	auto &left_table = *ie_sink.tables[0];
 	auto &right_table = *ie_sink.tables[1];
 
 	const auto left_cols = children[0]->GetTypes().size();
+	auto &chunk = state.wide;
 	do {
 		SelectionVector lsel(STANDARD_VECTOR_SIZE);
 		SelectionVector rsel(STANDARD_VECTOR_SIZE);
@@ -720,7 +730,18 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &ch
 		}
 
 		// found matches: extract them
+
+		//	We need all of the data to compute other predicates,
+		//	but we only return what is in the projection map
 		chunk.Reset();
+		const auto left_result = left_projection_map.size();
+		for (idx_t i = 0; i < left_result; ++i) {
+			chunk.data[left_projection_map[i]].Reference(result.data[i]);
+		}
+		for (idx_t i = 0; i < right_projection_map.size(); ++i) {
+			chunk.data[right_projection_map[i]].Reference(result.data[left_result + i]);
+		}
+
 		SliceSortedPayload(chunk, left_table.global_sort_state, state.left_block_index, lsel, result_count, 0);
 		SliceSortedPayload(chunk, right_table.global_sort_state, state.right_block_index, rsel, result_count,
 		                   left_cols);
