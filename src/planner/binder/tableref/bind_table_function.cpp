@@ -97,6 +97,8 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			subquery = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(node));
 			seen_subquery = true;
 			arguments.emplace_back(LogicalTypeId::TABLE);
+			parameters.emplace_back(
+			    Value(LogicalType::INVALID)); // this is a dummy value so the lengths of arguments and parameter match
 			continue;
 		}
 

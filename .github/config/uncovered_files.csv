@@ -5,6 +5,7 @@ catalog/catalog_entry/duck_table_entry.cpp	7
 catalog/catalog_entry/index_catalog_entry.cpp	2
 catalog/catalog_entry/scalar_function_catalog_entry.cpp	3
 catalog/catalog_entry/schema_catalog_entry.cpp	10
+catalog/catalog_entry/table_catalog_entry.cpp	3
 catalog/catalog_entry/table_function_catalog_entry.cpp	3
 catalog/catalog_entry/type_catalog_entry.cpp	2
 catalog/catalog_search_path.cpp	9
@@ -221,7 +222,7 @@ execution/physical_plan/plan_show_select.cpp	3
 execution/physical_plan_generator.cpp	6
 execution/radix_partitioned_hashtable.cpp	3
 execution/reservoir_sample.cpp	60
-execution/window_segment_tree.cpp	14
+execution/window_segment_tree.cpp	10
 function/aggregate/sorted_aggregate_function.cpp	85
 function/built_in_functions.cpp	6
 function/cast/bit_cast.cpp	2
@@ -278,7 +279,7 @@ function/udf_function.cpp	6
 extension/json/buffered_json_reader.cpp	35
 extension/json/include/json_common.hpp	8
 extension/json/include/json_executors.hpp	3
-extension/json/json-extension.cpp	7
+extension/json/json_extension.cpp	7
 extension/json/json_deserializer.cpp	136
 extension/json/json_functions.cpp	9
 extension/json/json_functions/copy_json.cpp	32
@@ -309,7 +310,7 @@ extension/parquet/include/row_number_column_reader.hpp	10
 extension/parquet/include/templated_column_reader.hpp	5
 extension/parquet/include/thrift_tools.hpp	27
 extension/parquet/include/zstd_file_system.hpp	3
-extension/parquet/parquet-extension.cpp	31
+extension/parquet/parquet_extension.cpp	30
 extension/parquet/parquet_metadata.cpp	29
 extension/parquet/parquet_reader.cpp	113
 extension/parquet/parquet_statistics.cpp	12

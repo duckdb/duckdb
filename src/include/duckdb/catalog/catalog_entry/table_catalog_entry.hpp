@@ -37,7 +37,7 @@ class TableFunction;
 struct FunctionData;
 
 class TableColumnInfo;
-class TableIndexInfo;
+struct ColumnSegmentInfo;
 class TableStorageInfo;
 
 class LogicalGet;
@@ -103,10 +103,14 @@ public:
 
 	DUCKDB_API static string ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints);
 
+	//! Returns a list of segment information for this table, if exists
+	virtual vector<ColumnSegmentInfo> GetColumnSegmentInfo();
+
 	//! Returns the storage info of this table
 	virtual TableStorageInfo GetStorageInfo(ClientContext &context) = 0;
 
-	DUCKDB_API virtual void BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update);
+	virtual void BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
+	                                   ClientContext &context);
 
 protected:
 	// This is used to serialize the entry by #Serialize(Serializer& ). It is virtual to allow

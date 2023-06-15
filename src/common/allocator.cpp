@@ -23,7 +23,7 @@
 #endif
 
 #ifdef USE_JEMALLOC
-#include "jemalloc-extension.hpp"
+#include "jemalloc_extension.hpp"
 #endif
 
 namespace duckdb {

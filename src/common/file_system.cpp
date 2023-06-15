@@ -23,6 +23,14 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#ifdef __MVS__
+#define _XOPEN_SOURCE_EXTENDED 1
+#include <sys/resource.h>
+// enjoy - https://reviews.llvm.org/D92110
+#define PATH_MAX _XOPEN_PATH_MAX
+#endif
+
 #else
 #include <string>
 #include <sysinfoapi.h>
@@ -79,7 +87,14 @@ void FileSystem::SetWorkingDirectory(const string &path) {
 
 idx_t FileSystem::GetAvailableMemory() {
 	errno = 0;
+
+#ifdef __MVS__
+	struct rlimit limit;
+	int rlim_rc = getrlimit(RLIMIT_AS, &limit);
+	idx_t max_memory = MinValue<idx_t>(limit.rlim_max, UINTPTR_MAX);
+#else
 	idx_t max_memory = MinValue<idx_t>((idx_t)sysconf(_SC_PHYS_PAGES) * (idx_t)sysconf(_SC_PAGESIZE), UINTPTR_MAX);
+#endif
 	if (errno != 0) {
 		return DConstants::INVALID_INDEX;
 	}

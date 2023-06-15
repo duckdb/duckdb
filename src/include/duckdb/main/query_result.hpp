@@ -12,6 +12,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/arrow/arrow_options.hpp"
 
 namespace duckdb {
 struct BoxRendererConfig;
@@ -20,7 +21,11 @@ enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDI
 
 //! A set of properties from the client context that can be used to interpret the query result
 struct ClientProperties {
+	ClientProperties(string time_zone_p, ArrowOffsetSize arrow_offset_size_p)
+	    : time_zone(std::move(time_zone_p)), arrow_offset_size(arrow_offset_size_p) {
+	}
 	string time_zone;
+	ArrowOffsetSize arrow_offset_size;
 };
 
 class BaseQueryResult {
@@ -141,6 +146,7 @@ public:
 		}
 	}
 
+	static ArrowOptions GetArrowOptions(QueryResult &query_result);
 	static string GetConfigTimezone(QueryResult &query_result);
 
 private:
