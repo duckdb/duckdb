@@ -366,7 +366,7 @@ vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 		if (!candidates.empty()) {
 			// We read the whole buffer
 			// FIXME: Continue reading? for now one 10Mb buffer for sniffing I think it's fine
-			if (candidates[0].last_pos >= buffer.buffer_size) {
+			if (candidates[0].last_pos + 1 >= buffer.buffer_size) {
 				break;
 			}
 		}

@@ -124,7 +124,7 @@ idx_t CSVStateMachine::SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_
 	}
 	sniffed_column_counts.erase(sniffed_column_counts.end() - (STANDARD_VECTOR_SIZE - cur_rows),
 	                            sniffed_column_counts.end());
-	return cur_pos;
+	return cur_pos - 1;
 }
 
 } // namespace duckdb
