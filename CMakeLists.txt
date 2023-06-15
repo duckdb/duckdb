@@ -332,11 +332,6 @@ if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
 endif()
 
-# TODO: how to handle these extension dependencies? Should we register here already?
-# The thing is there are so many places now where we specify which extensions are loaded..
-# setup.py, Makefile, CmakeLists, workflow CI.
-# I would kindof like to have only 1: the extension configs. CI should be able to overwrite these, but i think the others
-# can be removed?
 if (NOT BUILD_MAIN_DUCKDB_LIBRARY)
   set(BUILD_UNITTESTS FALSE)
   set(BUILD_SHELL FALSE)
@@ -557,8 +552,6 @@ function(add_extension_definitions)
     add_definitions(-DDISABLE_BUILTIN_EXTENSIONS=${DISABLE_BUILTIN_EXTENSIONS})
   endif()
 
-  # TODO add_definitions to detect installed extensions from C++ automatically?
-
   # Include paths for any registered out-of-tree extensions
   foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
@@ -566,7 +559,7 @@ function(add_extension_definitions)
       if (DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_INCLUDE_PATH)
         include_directories("${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_INCLUDE_PATH}")
       else()
-        # We try the default locations for headers TODO do we even need include?
+        # We try the default locations for headers
         include_directories("${PROJECT_SOURCE_DIR}/extension_external/${EXT_NAME}/src/include")
         include_directories("${PROJECT_SOURCE_DIR}/extension_external/${EXT_NAME}/include")
       endif()
@@ -728,6 +721,7 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD PATH INCL
           ${NAME}_extension_fc
           GIT_REPOSITORY ${URL}
           GIT_TAG ${COMMIT}
+          GIT_SUBMODULES ""
   )
   message(STATUS "Building extension '${NAME}' from ${URL} @ ${COMMIT}")
   FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
@@ -845,7 +839,7 @@ if (BUILD_MAIN_DUCKDB_LIBRARY)
   add_subdirectory(tools)
 endif()
 
-# Add Out-of-tree extensions
+# Add subdirectories for registered extensions
 foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
   string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
 
@@ -863,9 +857,7 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
   if (DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH)
     add_subdirectory(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH} extension/${EXT_NAME})
   else()
-    # By default, we assume third-party extensions to by (symlinked) in extensions/ with <name>_clone as path
-    # TODO make sensible?
-    add_subdirectory("extension/${EXT_NAME}_clone" extension/${EXT_NAME})
+    message(FATAL_ERROR "No path found for registered extension '${EXT_NAME}'")
   endif()
 endforeach()
 
