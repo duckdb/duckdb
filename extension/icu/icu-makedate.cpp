@@ -1,3 +1,4 @@
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -67,7 +68,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	static inline timestamp_t Operation(icu::Calendar *calendar, T yyyy, T mm, T dd, T hr, T mn, double ss) {
 		const auto year = yyyy + (yyyy < 0);
 
-		const auto secs = int32_t(ss);
+		const auto secs = Cast::Operation<double, int32_t>(ss);
 		ss -= secs;
 		ss *= Interval::MSECS_PER_SEC;
 		const auto millis = int32_t(ss);

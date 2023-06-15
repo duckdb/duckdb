@@ -69,10 +69,6 @@ struct HashsToBinsFunctor {
 	}
 };
 
-void RadixPartitioning::HashesToBins(Vector &hashes, idx_t radix_bits, Vector &bins, idx_t count) {
-	return RadixBitsSwitch<HashsToBinsFunctor, void>(radix_bits, hashes, bins, count);
-}
-
 //===--------------------------------------------------------------------===//
 // Row Data Partitioning
 //===--------------------------------------------------------------------===//

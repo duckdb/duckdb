@@ -6,7 +6,7 @@ build
 /duckdb_tarball/
 duckdb.cpp
 duckdb.hpp
-parquet-extension.cpp
+parquet_extension.cpp
 parquet_extension.hpp
 duckdb/
 githash.list

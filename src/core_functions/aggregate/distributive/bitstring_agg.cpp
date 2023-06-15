@@ -199,7 +199,7 @@ unique_ptr<BaseStatistics> BitstringPropagateStats(ClientContext &context, Bound
 unique_ptr<FunctionData> BindBitstringAgg(ClientContext &context, AggregateFunction &function,
                                           vector<unique_ptr<Expression>> &arguments) {
 	if (arguments.size() == 3) {
-		if (!arguments[1]->IsFoldable() && !arguments[2]->IsFoldable()) {
+		if (!arguments[1]->IsFoldable() || !arguments[2]->IsFoldable()) {
 			throw BinderException("bitstring_agg requires a constant min and max argument");
 		}
 		auto min = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);

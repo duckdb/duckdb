@@ -488,7 +488,8 @@ shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, Data
 	return entry;
 }
 
-void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) {
+void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_path,
+                                      vector<ColumnSegmentInfo> &result) {
 	D_ASSERT(!col_path.empty());
 
 	// convert the column path to a string
@@ -515,7 +516,10 @@ void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, T
 		column_info.segment_count = segment->count;
 		column_info.compression_type = CompressionTypeToString(segment->function.get().type);
 		column_info.segment_stats = segment->stats.statistics.ToString();
-		column_info.has_updates = updates ? true : false;
+		{
+			lock_guard<mutex> ulock(update_lock);
+			column_info.has_updates = updates ? true : false;
+		}
 		// persistent
 		// block_id
 		// block_offset
@@ -526,7 +530,7 @@ void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, T
 		} else {
 			column_info.persistent = false;
 		}
-		result.column_segments.push_back(std::move(column_info));
+		result.emplace_back(column_info);
 
 		segment_idx++;
 		segment = (ColumnSegment *)data.GetNextSegment(segment);

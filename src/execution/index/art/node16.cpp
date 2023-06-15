@@ -60,6 +60,7 @@ Node16 &Node16::ShrinkNode48(ART &art, Node &node16, Node &node48) {
 	n16.prefix.Move(n48.prefix);
 
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
+		D_ASSERT(n16.count <= Node::NODE_16_CAPACITY);
 		if (n48.child_index[i] != Node::EMPTY_MARKER) {
 			n16.key[n16.count] = i;
 			n16.children[n16.count] = n48.children[n48.child_index[i]];
@@ -160,6 +161,7 @@ optional_ptr<Node> Node16::GetChild(const uint8_t byte) {
 
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] == byte) {
+			D_ASSERT(children[i].IsSet());
 			return &children[i];
 		}
 	}
@@ -171,6 +173,7 @@ optional_ptr<Node> Node16::GetNextChild(uint8_t &byte) {
 	for (idx_t i = 0; i < count; i++) {
 		if (key[i] >= byte) {
 			byte = key[i];
+			D_ASSERT(children[i].IsSet());
 			return &children[i];
 		}
 	}

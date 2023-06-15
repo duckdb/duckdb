@@ -7,6 +7,8 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/execution/index/art/art_key.hpp"
+#include "duckdb/execution/index/art/node.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
 
 namespace duckdb {
 
@@ -106,6 +108,28 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	if (!lstate.local_index->MergeIndexes(*art)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
+
+#ifdef DEBUG
+	// ensure that all row IDs of this chunk exist in the ART
+	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
+	for (idx_t i = 0; i < lstate.key_chunk.size(); i++) {
+		auto leaf_node =
+		    lstate.local_index->Cast<ART>().Lookup(*lstate.local_index->Cast<ART>().tree, lstate.keys[i], 0);
+		D_ASSERT(leaf_node.IsSet());
+		auto &leaf = Leaf::Get(lstate.local_index->Cast<ART>(), leaf_node);
+
+		if (leaf.IsInlined()) {
+			D_ASSERT(row_ids[i] == leaf.row_ids.inlined);
+			continue;
+		}
+
+		D_ASSERT(leaf.row_ids.ptr.IsSet());
+		Node leaf_segment = leaf.row_ids.ptr;
+		auto position = leaf.FindRowId(lstate.local_index->Cast<ART>(), leaf_segment, row_ids[i]);
+		D_ASSERT(position != (uint32_t)DConstants::INVALID_INDEX);
+	}
+#endif
+
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -119,6 +143,9 @@ void PhysicalCreateIndex::Combine(ExecutionContext &context, GlobalSinkState &gs
 	if (!gstate.global_index->MergeIndexes(*lstate.local_index)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
+
+	// vacuum excess memory
+	gstate.global_index->Vacuum();
 }
 
 SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -127,6 +154,8 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	// here, we just set the resulting global index as the newly created index of the table
 
 	auto &state = gstate_p.Cast<CreateIndexGlobalSinkState>();
+	D_ASSERT(!state.global_index->VerifyAndToString(true).empty());
+
 	auto &storage = table.GetStorage();
 	if (!storage.IsRoot()) {
 		throw TransactionException("Transaction conflict: cannot add an index to a table that has been altered!");
@@ -146,9 +175,6 @@ SinkFinalizeType PhysicalCreateIndex::Finalize(Pipeline &pipeline, Event &event,
 	for (auto &parsed_expr : info->parsed_expressions) {
 		index.parsed_expressions.push_back(parsed_expr->Copy());
 	}
-
-	// vacuum excess memory
-	state.global_index->Vacuum();
 
 	// add index to storage
 	storage.info->indexes.AddIndex(std::move(state.global_index));

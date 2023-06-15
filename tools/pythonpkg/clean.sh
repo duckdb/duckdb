@@ -12,7 +12,7 @@ rm -rf	$SCRIPTPATH/.eggs \
 		$SCRIPTPATH/duckdb.egg-info \
 		$SCRIPTPATH/duckdb.cpp \
 		$SCRIPTPATH/duckdb.hpp \
-		$SCRIPTPATH/parquet-extension.cpp \
+		$SCRIPTPATH/parquet_extension.cpp \
 		$SCRIPTPATH/parquet_extension.hpp \
 		$SCRIPTPATH/duckdb \
 		$SCRIPTPATH/duckdb_tarball

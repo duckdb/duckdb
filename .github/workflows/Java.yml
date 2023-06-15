@@ -278,7 +278,7 @@ jobs:
         with:
           name: java-jars
           path: |
-            jdbc-artifacts/results
+            jdbc-artifacts
 
   jdbc-compliance:
     name: JDBC Compliance

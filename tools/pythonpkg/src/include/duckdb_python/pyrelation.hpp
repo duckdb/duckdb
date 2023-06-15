@@ -213,6 +213,8 @@ private:
 	unique_ptr<QueryResult> ExecuteInternal(bool stream_result = false);
 
 private:
+	//! Whether the relation has been executed at least once
+	bool executed;
 	shared_ptr<Relation> rel;
 	vector<LogicalType> types;
 	vector<string> names;

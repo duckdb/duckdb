@@ -1,5 +1,6 @@
 #define DUCKDB_EXTENSION_MAIN
 
+#include "autocomplete_extension.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
@@ -9,10 +10,9 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "autocomplete_extension.hpp"
-#include "duckdb/main/extension_util.hpp"
 
 namespace duckdb {
 
@@ -361,6 +361,9 @@ standard_suggestion:
 
 static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
                                                             vector<LogicalType> &return_types, vector<string> &names) {
+	if (input.inputs[0].IsNull()) {
+		throw BinderException("sql_auto_complete first parameter cannot be NULL");
+	}
 	names.emplace_back("suggestion");
 	return_types.emplace_back(LogicalType::VARCHAR);
 

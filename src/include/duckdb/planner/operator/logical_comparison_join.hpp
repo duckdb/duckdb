@@ -38,25 +38,25 @@ public:
 	                        FieldReader &reader);
 
 public:
-	static unique_ptr<LogicalOperator> CreateJoin(JoinType type, JoinRefType ref_type,
+	static unique_ptr<LogicalOperator> CreateJoin(ClientContext &context, JoinType type, JoinRefType ref_type,
 	                                              unique_ptr<LogicalOperator> left_child,
 	                                              unique_ptr<LogicalOperator> right_child,
 	                                              unique_ptr<Expression> condition);
-	static unique_ptr<LogicalOperator> CreateJoin(JoinType type, JoinRefType ref_type,
+	static unique_ptr<LogicalOperator> CreateJoin(ClientContext &context, JoinType type, JoinRefType ref_type,
 	                                              unique_ptr<LogicalOperator> left_child,
 	                                              unique_ptr<LogicalOperator> right_child,
 	                                              vector<JoinCondition> conditions,
 	                                              vector<unique_ptr<Expression>> arbitrary_expressions);
 
-	static void ExtractJoinConditions(JoinType type, unique_ptr<LogicalOperator> &left_child,
+	static void ExtractJoinConditions(ClientContext &context, JoinType type, unique_ptr<LogicalOperator> &left_child,
 	                                  unique_ptr<LogicalOperator> &right_child, unique_ptr<Expression> condition,
 	                                  vector<JoinCondition> &conditions,
 	                                  vector<unique_ptr<Expression>> &arbitrary_expressions);
-	static void ExtractJoinConditions(JoinType type, unique_ptr<LogicalOperator> &left_child,
+	static void ExtractJoinConditions(ClientContext &context, JoinType type, unique_ptr<LogicalOperator> &left_child,
 	                                  unique_ptr<LogicalOperator> &right_child,
 	                                  vector<unique_ptr<Expression>> &expressions, vector<JoinCondition> &conditions,
 	                                  vector<unique_ptr<Expression>> &arbitrary_expressions);
-	static void ExtractJoinConditions(JoinType type, unique_ptr<LogicalOperator> &left_child,
+	static void ExtractJoinConditions(ClientContext &context, JoinType type, unique_ptr<LogicalOperator> &left_child,
 	                                  unique_ptr<LogicalOperator> &right_child,
 	                                  const unordered_set<idx_t> &left_bindings,
 	                                  const unordered_set<idx_t> &right_bindings,

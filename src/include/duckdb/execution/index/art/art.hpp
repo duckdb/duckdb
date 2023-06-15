@@ -97,8 +97,11 @@ public:
 	//! Performs constraint checking for a chunk of input data
 	void CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_manager) override;
 
-	//! Returns the string representation of the ART
-	string ToString() override;
+	//! Returns the string representation of the ART, or only traverses and verifies the index
+	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
+
+	//! Find the node with a matching key, or return nullptr if not found
+	Node Lookup(Node node, const ARTKey &key, idx_t depth);
 
 private:
 	//! Insert a row ID into a leaf
@@ -107,8 +110,7 @@ private:
 	bool Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id);
 	//! Erase a key from the tree (if a leaf has more than one value) or erase the leaf itself
 	void Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id);
-	//! Find the node with a matching key, or return nullptr if not found
-	Node Lookup(Node node, const ARTKey &key, idx_t depth);
+
 	//! Returns all row IDs belonging to a key greater (or equal) than the search key
 	bool SearchGreater(ARTIndexScanState &state, ARTKey &key, bool inclusive, idx_t max_count,
 	                   vector<row_t> &result_ids);
@@ -129,6 +131,10 @@ private:
 	//! Finalizes a vacuum operation by calling the finalize operation of all qualifying
 	//! fixed size allocators
 	void FinalizeVacuum(const ARTFlags &flags);
+
+	//! Internal function to return the string representation of the ART,
+	//! or only traverses and verifies the index
+	string VerifyAndToStringInternal(const bool only_verify);
 };
 
 } // namespace duckdb
