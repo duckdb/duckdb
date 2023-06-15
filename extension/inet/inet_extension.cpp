@@ -9,12 +9,12 @@
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/config.hpp"
-#include "inet-extension.hpp"
+#include "inet_extension.hpp"
 #include "inet_functions.hpp"
 
 namespace duckdb {
 
-void INETExtension::Load(DuckDB &db) {
+void InetExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
 
@@ -53,7 +53,7 @@ void INETExtension::Load(DuckDB &db) {
 	con.Commit();
 }
 
-std::string INETExtension::Name() {
+std::string InetExtension::Name() {
 	return "inet";
 }
 
@@ -63,7 +63,7 @@ extern "C" {
 
 DUCKDB_EXTENSION_API void inet_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::INETExtension>();
+	db_wrapper.LoadExtension<duckdb::InetExtension>();
 }
 
 DUCKDB_EXTENSION_API const char *inet_version() {
