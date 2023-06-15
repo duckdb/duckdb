@@ -152,7 +152,7 @@ string FileSystem::NormalizeAbsolutePath(const string &path) {
 	return result;
 }
 
-string FileSystem::PathSeparator() {
+string FileSystem::PathSeparator() const {
 	return "\\";
 }
 
