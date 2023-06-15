@@ -766,7 +766,7 @@ Node ART::Lookup(Node node, const ARTKey &key, idx_t depth) {
 		D_ASSERT(depth < key.len);
 		auto child = next_node.get().GetChild(*this, key[depth]);
 		if (!child) {
-			// prefix matches key, but no child at byte, does not contain key
+			// prefix matches key, but no child at byte, ART/subtree does not contain key
 			return Node();
 		}
 

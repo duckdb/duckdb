@@ -15,12 +15,12 @@ namespace duckdb {
 // classes
 class ARTKey;
 
-//! The Prefix is a special node type that contains up to PREFIX_SIZE bytes, one byte for the count,
+//! The Prefix is a special node type that contains up to PREFIX_SIZE bytes, and one byte for the count,
 //! and a Node pointer. This pointer either points to another prefix
 //! node or the 'actual' ART node.
 class Prefix {
 public:
-	//! Up to seven bytes of prefix data and the count
+	//! Up to PREFIX_SIZE bytes of prefix data and the count
 	uint8_t data[Node::PREFIX_SIZE + 1];
 	//! A pointer to the next ART node
 	Node ptr;
@@ -40,7 +40,7 @@ public:
 		return *Node::GetAllocator(art, NType::PREFIX).Get<Prefix>(ptr);
 	}
 
-	//! Initializes a merge by incrementing the buffer ID of the child node
+	//! Initializes a merge by incrementing the buffer ID of the child node(s)
 	inline void InitializeMerge(ART &art, const ARTFlags &flags) {
 		ptr.InitializeMerge(art, flags);
 	}
@@ -62,12 +62,12 @@ public:
 	//! Removes the first n bytes from the prefix and shifts all subsequent bytes in the
 	//! prefix node(s) by n. Frees empty prefix nodes
 	static void Reduce(ART &art, Node &prefix_node, const idx_t n);
-	//! Splits the prefix at position. prefix then references the ptr (if any bytes left before
-	//! the split), or stays unchanged (no bytes left before the split). child references
-	//! the node after the split, which is either a new Prefix node, or ptr
+	//! Splits the prefix at position. prefix_node then references the ptr (if any bytes left before
+	//! the split), or stays unchanged (no bytes left before the split). child_node references
+	//! the node after the split, which is either a new prefix node, or ptr
 	static void Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx_t position);
 
-	//! Returns the string representation of a prefix node
+	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	string VerifyAndToString(ART &art, const bool only_verify);
 
 	//! Serialize this node

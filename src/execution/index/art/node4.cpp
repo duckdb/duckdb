@@ -120,7 +120,7 @@ void Node4::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte) 
 	if (n4.count == 1) {
 
 		// we need to keep track of the old node pointer
-		// because concatenate might overwrite it while appending bytes to
+		// because Concatenate() might overwrite that pointer while appending bytes to
 		// the prefix (and by doing so overwriting the subsequent node with
 		// new prefix nodes)
 		auto old_n4_node = node;

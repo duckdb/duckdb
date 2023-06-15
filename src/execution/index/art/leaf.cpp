@@ -22,7 +22,6 @@ Leaf &Leaf::New(ART &art, Node &node, const row_t row_id) {
 
 Leaf &Leaf::New(ART &art, Node &node, const row_t *row_ids, const idx_t count) {
 
-	// inlined leaf
 	D_ASSERT(count > 1);
 
 	node.SetPtr(Node::GetAllocator(art, NType::LEAF).New());

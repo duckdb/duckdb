@@ -361,7 +361,7 @@ FixedSizeAllocator &Node::GetAllocator(const ART &art, NType type) {
 
 void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 
-	// the whole index is in memory during CREATE [UNIQUE] INDEX statements
+	// the index is fully in memory during CREATE [UNIQUE] INDEX statements
 	D_ASSERT(IsSet() && !IsSwizzled());
 
 	auto type = DecodeARTNodeType();
@@ -413,7 +413,7 @@ bool Node::ResolvePrefixes(ART &art, Node &other) {
 	D_ASSERT(IsSet());
 	D_ASSERT(other.IsSet());
 
-	// case 1: both nodes have no prefix or the same prefix
+	// case 1: both nodes have no prefix
 	if (DecodeARTNodeType() != NType::PREFIX && other.DecodeARTNodeType() != NType::PREFIX) {
 		return MergeInternal(art, other);
 	}
@@ -426,7 +426,6 @@ bool Node::ResolvePrefixes(ART &art, Node &other) {
 	// traverse prefixes
 	if (l_node.get().DecodeARTNodeType() == NType::PREFIX && r_node.get().DecodeARTNodeType() == NType::PREFIX) {
 
-		// get the two prefixes
 		auto &l_prefix = Prefix::Get(art, l_node.get());
 		auto &r_prefix = Prefix::Get(art, r_node.get());
 
@@ -513,8 +512,7 @@ bool Node::ResolvePrefixes(ART &art, Node &other) {
 
 bool Node::MergeInternal(ART &art, Node &other) {
 
-	D_ASSERT(IsSet());
-	D_ASSERT(other.IsSet());
+	D_ASSERT(IsSet() && other.IsSet());
 	D_ASSERT(DecodeARTNodeType() != NType::PREFIX && DecodeARTNodeType() != NType::LEAF_SEGMENT);
 	D_ASSERT(other.DecodeARTNodeType() != NType::PREFIX && other.DecodeARTNodeType() != NType::LEAF_SEGMENT);
 

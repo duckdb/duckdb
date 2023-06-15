@@ -64,7 +64,7 @@ public:
 	//! Get the first child that is greater or equal to the specific byte
 	optional_ptr<Node> GetNextChild(uint8_t &byte);
 
-	//! Serialize an ART node
+	//! Serialize this node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
 	//! Deserialize this node
 	void Deserialize(MetaBlockReader &reader);

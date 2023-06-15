@@ -64,7 +64,7 @@ public:
 	//! and sets the ptr to point to the segment containing the row ID
 	uint32_t FindRowId(const ART &art, Node &ptr, const row_t row_id) const;
 
-	//! Returns the string representation of a leaf
+	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	string VerifyAndToString(const ART &art, const bool only_verify) const;
 
 	//! Serialize this leaf

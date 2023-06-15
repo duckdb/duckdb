@@ -24,7 +24,6 @@ endloop
 
 restart
 
-
 # verify counts
 loop i 0 6
 

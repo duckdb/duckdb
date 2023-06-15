@@ -24,8 +24,6 @@ Prefix &Prefix::New(ART &art, Node &node, uint8_t byte, Node next) {
 	node.type = (uint8_t)NType::PREFIX;
 
 	auto &prefix = Prefix::Get(art, node);
-
-	// set fields
 	prefix.data[Node::PREFIX_SIZE] = 1;
 	prefix.data[0] = byte;
 	prefix.ptr = next;
@@ -59,7 +57,6 @@ void Prefix::Free(ART &art, Node &node) {
 	D_ASSERT(node.IsSet());
 	D_ASSERT(!node.IsSwizzled());
 
-	// free child node
 	auto &child = Prefix::Get(art, node).ptr;
 	Node::Free(art, child);
 }
@@ -103,17 +100,17 @@ void Prefix::Concatenate(ART &art, Node &prefix_node, const uint8_t byte, Node &
 		return;
 	}
 
-	// create a new prefix node containing byte, then append the child_prefix to it
+	// create a new prefix node containing the byte, then append the child_prefix to it
 	if (prefix_node.DecodeARTNodeType() != NType::PREFIX && child_prefix_node.DecodeARTNodeType() == NType::PREFIX) {
 
 		auto child_prefix = child_prefix_node;
 		auto &prefix = Prefix::New(art, prefix_node, byte, Node());
-
 		prefix.Append(art, child_prefix);
 		return;
 	}
 
 	// neither prefix nor child_prefix are prefix nodes
+	// create a new prefix containing the byte
 	Prefix::New(art, prefix_node, byte, child_prefix_node);
 }
 
@@ -177,7 +174,7 @@ void Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx
 
 	// the split is at the last byte of this prefix, so the child_node contains all subsequent
 	// prefix nodes (prefix.ptr) (if any), and the count of this prefix decreases by one,
-	// then, we reference prefix.ptr, to overwrite is with a new node later
+	// then, we reference prefix.ptr, to overwrite it with a new node later
 	if (position + 1 == Node::PREFIX_SIZE) {
 		prefix.data[Node::PREFIX_SIZE]--;
 		prefix_node = prefix.ptr;
@@ -239,7 +236,6 @@ string Prefix::VerifyAndToString(ART &art, const bool only_verify) {
 	if (only_verify) {
 		return ptr.VerifyAndToString(art, only_verify);
 	}
-
 	return str + ptr.VerifyAndToString(art, only_verify);
 }
 
