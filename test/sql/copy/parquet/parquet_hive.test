@@ -98,12 +98,6 @@ EXPLAIN select id, date from parquet_scan('data/parquet-testing/hive-partitionin
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters: \(date = '2012.*-01.*-01'\).*
 
-# There should be Table Filters (id < 10 AND ID NOT NULL) and File Filters (dat = '2013-01-01') 
-query II
-EXPLAIN select id, date from parquet_scan('data/parquet-testing/hive-partitioning/simple/*/*/test.parquet', HIVE_PARTITIONING=1) where date = '2013-01-01' and id < 10;
-----
-physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters.*id<10 AND id IS.*NOT NULL.*File Filters: \(date = '2013.*-01.*-01'\).*
-
 # Complex filter filtering first file
 query IIII
 select id, value, part, CAST(date AS DATE) as date_cast from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where concat(date_cast::VARCHAR, part) == '2013-01-01b';
@@ -165,3 +159,23 @@ order by id
 ----
 3	value3	c	2014-01-01
 4	value4	d	2015-01-01
+
+# Confirm
+statement ok
+Create table t1 (a int, b int, c int);
+
+foreach i 0 1 2 3 4 5 6 7 8 9
+
+statement ok
+insert into t1 (select range, ${i}*10, ${i}*100 from range(0,10));
+
+endloop
+
+statement ok
+COPY (SELECT * FROM t1) TO '__TEST_DIR__/hive_filters' (FORMAT PARQUET, PARTITION_BY c);
+
+# There should be Table Filters (id < 50
+query II
+EXPLAIN select a from parquet_scan('__TEST_DIR__/hive_filters/*/*.parquet', HIVE_PARTITIONING=1) where c=500 and a < 4;
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters:.*a<4 AND a IS NOT.*NULL.*File Filters: \(CAST\(c AS.*INTEGER\) = 500\).*

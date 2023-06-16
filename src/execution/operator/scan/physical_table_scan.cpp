@@ -141,14 +141,12 @@ string PhysicalTableScan::ParamsToString() const {
 	if (function.filter_pushdown && table_filters) {
 		result += "\n[INFOSEPARATOR]\n";
 		result += "Filters: ";
-		if (table_filters) {
-			for (auto &f : table_filters->filters) {
-				auto &column_index = f.first;
-				auto &filter = f.second;
-				if (column_index < names.size()) {
-					result += filter->ToString(names[column_ids[column_index]]);
-					result += "\n";
-				}
+		for (auto &f : table_filters->filters) {
+			auto &column_index = f.first;
+			auto &filter = f.second;
+			if (column_index < names.size()) {
+				result += filter->ToString(names[column_ids[column_index]]);
+				result += "\n";
 			}
 		}
 	}
