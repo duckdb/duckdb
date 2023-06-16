@@ -13,7 +13,6 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb_python/numpy/numpy_scan.hpp"
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
-#include "duckdb/common/printer.hpp"
 
 namespace duckdb {
 
@@ -180,27 +179,18 @@ void NumpyScan::ScanObjectColumn(PyObject **col, idx_t stride, idx_t count, idx_
 	auto &mask = FlatVector::Validity(out);
 	PythonGILWrapper gil; // We're creating python objects here, so we need the GIL
 
-	if (stride == sizeof(PyObject*)) {
+	if (stride == sizeof(PyObject *)) {
 		auto src_ptr = col + offset;
 		for (idx_t i = 0; i < count; i++) {
 			ScanNumpyObject(src_ptr[i], i, out);
 		}
 	} else {
 		for (idx_t i = 0; i < count; i++) {
-			auto src_ptr = col[stride / sizeof(PyObject*) * (i + offset)];
+			auto src_ptr = col[stride / sizeof(PyObject *) * (i + offset)];
 			ScanNumpyObject(src_ptr, i, out);
 		}
 	}
 	VerifyTypeConstraints(out, count);
-}
-
-static void PrintNumpyArray(const py::array &array) {
-	Printer::Print(StringUtil::Format("strides: %d", array.strides(0)));
-	Printer::Print(StringUtil::Format("itemsize: %d", array.itemsize()));
-	Printer::Print(StringUtil::Format("size: %d", array.size()));
-	Printer::Print(StringUtil::Format("owndata: %d", array.owndata()));
-	Printer::Print(StringUtil::Format("flags: %d", array.flags()));
-	Printer::Print(StringUtil::Format("offset_at: %d", array.offset_at()));
 }
 
 //! 'offset' is the offset within the column
@@ -209,7 +199,6 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 	D_ASSERT(bind_data.pandas_col->Backend() == PandasColumnBackend::NUMPY);
 	auto &numpy_col = reinterpret_cast<PandasNumpyColumn &>(*bind_data.pandas_col);
 	auto &array = numpy_col.array;
-	PrintNumpyArray(array);
 
 	switch (bind_data.numpy_type) {
 	case NumpyNullableType::BOOL:
