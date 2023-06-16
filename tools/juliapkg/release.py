@@ -12,8 +12,10 @@ if not os.path.isfile(os.path.join('tools', 'juliapkg', 'release.py')):
     print('This script must be run from the root DuckDB directory (i.e. `python3 tools/juliapkg/release.py`)')
     exit(1)
 
-def run_syscall(syscall):
+def run_syscall(syscall, ignore_failure = False):
     res = os.system(syscall)
+    if ignore_failure:
+        return
     if res != 0:
         print(f'Failed to execute {syscall}: got exit code {str(res)}')
         exit(1)
@@ -42,7 +44,7 @@ print('> Creating a PR to the Yggdrassil repository (https://github.com/JuliaPac
 os.chdir(args.yggdrassil)
 run_syscall('git checkout master')
 run_syscall('git pull upstream master')
-run_syscall(f'git branch -D {tag}')
+run_syscall(f'git branch -D {tag}', True)
 run_syscall(f'git checkout -b {tag}')
 tarball_build = os.path.join('D', 'DuckDB', 'build_tarballs.jl')
 with open(tarball_build, 'r') as f:

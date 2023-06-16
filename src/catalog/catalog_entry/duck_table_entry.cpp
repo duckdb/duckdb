@@ -16,6 +16,9 @@
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_update.hpp"
 
 namespace duckdb {
 
@@ -714,10 +717,13 @@ TableFunction DuckTableEntry::GetScanFunction(ClientContext &context, unique_ptr
 	return TableScanFunction::GetFunction();
 }
 
+vector<ColumnSegmentInfo> DuckTableEntry::GetColumnSegmentInfo() {
+	return storage->GetColumnSegmentInfo();
+}
+
 TableStorageInfo DuckTableEntry::GetStorageInfo(ClientContext &context) {
 	TableStorageInfo result;
 	result.cardinality = storage->info->cardinality.load();
-	storage->GetStorageInfo(result);
 	storage->info->indexes.Scan([&](Index &index) {
 		IndexInfo info;
 		info.is_primary = index.IsPrimary();

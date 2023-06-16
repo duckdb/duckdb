@@ -329,7 +329,7 @@ struct ICUDatePart : public ICUDateFunc {
 			input.ToUnifiedFormat(count, rdata);
 
 			const auto &arg_valid = rdata.validity;
-			auto tdata = (const INPUT_TYPE *)rdata.data;
+			auto tdata = UnifiedVectorFormat::GetData<INPUT_TYPE>(rdata);
 
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			auto &child_entries = StructVector::GetEntries(result);
@@ -432,7 +432,7 @@ struct ICUDatePart : public ICUDateFunc {
 		throw NotImplementedException("FIXME: serialize icu-datepart");
 	}
 
-	static duckdb::unique_ptr<FunctionData> DeserializeFunction(ClientContext &context, FieldReader &reader,
+	static duckdb::unique_ptr<FunctionData> DeserializeFunction(PlanDeserializationState &state, FieldReader &reader,
 	                                                            ScalarFunction &bound_function) {
 		throw NotImplementedException("FIXME: serialize icu-datepart");
 	}

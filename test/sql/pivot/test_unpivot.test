@@ -159,6 +159,24 @@ Feb	400
 Mar	100
 April	50
 
+# unpivot over subquery
+query IIIII
+UNPIVOT (SELECT * FROM monthly_sales)
+    ON jan, feb, mar april
+    INTO
+        NAME month
+        VALUE sales;
+----
+1	electronics	100	Jan	100
+1	electronics	100	Feb	200
+1	electronics	100	april	300
+2	clothes	200	Jan	100
+2	clothes	200	Feb	300
+2	clothes	200	april	150
+3	cars	50	Jan	200
+3	cars	50	Feb	400
+3	cars	50	april	100
+
 # empty IN clause
 statement error
 SELECT * FROM monthly_sales

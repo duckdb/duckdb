@@ -319,6 +319,8 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 			planner.parameter_data.emplace_back(value);
 		}
 	}
+
+	client_data->http_state = make_shared<HTTPState>();
 	planner.CreatePlan(std::move(statement));
 	D_ASSERT(planner.plan || !planner.properties.bound_all_parameters);
 	profiler.EndPhase();
@@ -774,8 +776,8 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 #endif
 	}
 	// log query path is set: log the query
-	client_data->log_query_writer->WriteData((const_data_ptr_t)query.c_str(), query.size());
-	client_data->log_query_writer->WriteData((const_data_ptr_t) "\n", 1);
+	client_data->log_query_writer->WriteData(const_data_ptr_cast(query.c_str()), query.size());
+	client_data->log_query_writer->WriteData(const_data_ptr_cast("\n"), 1);
 	client_data->log_query_writer->Flush();
 	client_data->log_query_writer->Sync();
 }
@@ -918,7 +920,7 @@ void ClientContext::RegisterFunction(CreateFunctionInfo &info) {
 		auto existing_function = Catalog::GetEntry<ScalarFunctionCatalogEntry>(*this, INVALID_CATALOG, info.schema,
 		                                                                       info.name, OnEntryNotFound::RETURN_NULL);
 		if (existing_function) {
-			auto &new_info = (CreateScalarFunctionInfo &)info;
+			auto &new_info = info.Cast<CreateScalarFunctionInfo>();
 			if (new_info.functions.MergeFunctionSet(existing_function->functions)) {
 				// function info was updated from catalog entry, rewrite is needed
 				info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
@@ -1153,9 +1155,8 @@ ParserOptions ClientContext::GetParserOptions() const {
 }
 
 ClientProperties ClientContext::GetClientProperties() const {
-	ClientProperties properties;
-	properties.time_zone = ClientConfig::GetConfig(*this).ExtractTimezone();
-	return properties;
+	auto client_context = ClientConfig::GetConfig(*this);
+	return {client_context.ExtractTimezone(), db->config.options.arrow_offset_size};
 }
 
 bool ClientContext::ExecutionIsFinished() {

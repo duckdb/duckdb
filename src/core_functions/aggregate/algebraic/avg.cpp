@@ -59,21 +59,21 @@ public:
 
 struct AverageSetOperation {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->Initialize();
+	static void Initialize(STATE &state) {
+		state.Initialize();
 	}
 	template <class STATE>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
-		target->Combine(source);
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		target.Combine(source);
 	}
 	template <class STATE>
-	static void AddValues(STATE *state, idx_t count) {
-		state->count += count;
+	static void AddValues(STATE &state, idx_t count) {
+		state.count += count;
 	}
 };
 
 template <class T>
-static T GetAverageDivident(uint64_t count, FunctionData *bind_data) {
+static T GetAverageDivident(uint64_t count, optional_ptr<FunctionData> bind_data) {
 	T divident = T(count);
 	if (bind_data) {
 		auto &avg_bind_data = bind_data->Cast<AverageDecimalBindData>();
@@ -84,61 +84,58 @@ static T GetAverageDivident(uint64_t count, FunctionData *bind_data) {
 
 struct IntegerAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target,
-	                     ValidityMask &mask, idx_t idx) {
-		if (state->count == 0) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
 		} else {
-			double divident = GetAverageDivident<double>(state->count, aggr_input_data.bind_data);
-			target[idx] = double(state->value) / divident;
+			double divident = GetAverageDivident<double>(state.count, finalize_data.input.bind_data);
+			target = double(state.value) / divident;
 		}
 	}
 };
 
 struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperation, HugeintAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target,
-	                     ValidityMask &mask, idx_t idx) {
-		if (state->count == 0) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
 		} else {
-			long double divident = GetAverageDivident<long double>(state->count, aggr_input_data.bind_data);
-			target[idx] = Hugeint::Cast<long double>(state->value) / divident;
+			long double divident = GetAverageDivident<long double>(state.count, finalize_data.input.bind_data);
+			target = Hugeint::Cast<long double>(state.value) / divident;
 		}
 	}
 };
 
 struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &aggr_input_data, STATE *state, T *target,
-	                     ValidityMask &mask, idx_t idx) {
-		if (state->count == 0) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
 		} else {
-			long double divident = GetAverageDivident<long double>(state->count, aggr_input_data.bind_data);
-			target[idx] = Hugeint::Cast<long double>(state->value) / divident;
+			long double divident = GetAverageDivident<long double>(state.count, finalize_data.input.bind_data);
+			target = Hugeint::Cast<long double>(state.value) / divident;
 		}
 	}
 };
 
 struct NumericAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (state->count == 0) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = (state->value / state->count);
+			target = state.value / state.count;
 		}
 	}
 };
 
 struct KahanAverageOperation : public BaseSumOperation<AverageSetOperation, KahanAdd> {
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (state->count == 0) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = (state->value / state->count) + (state->err / state->count);
+			target = (state.value / state.count) + (state.err / state.count);
 		}
 	}
 };

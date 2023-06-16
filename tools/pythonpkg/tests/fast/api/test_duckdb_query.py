@@ -127,3 +127,12 @@ class TestDuckDBQuery(object):
                 'NAME3': 'a'
             }).fetchall()
         assert res == [(5,3,'a'),]
+
+    def test_named_param_keyword(self):
+        con = duckdb.connect()
+
+        result = con.execute("SELECT $val", {"val": 42}).fetchone()
+        assert result == (42,)
+
+        result = con.execute("SELECT $value", {"value": 42}).fetchone()
+        assert result == (42,)

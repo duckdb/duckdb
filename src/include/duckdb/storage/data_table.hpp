@@ -181,7 +181,7 @@ public:
 
 	idx_t GetTotalRows();
 
-	void GetStorageInfo(TableStorageInfo &result);
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo();
 	static bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &index, ForeignKeyType fk_type);
 
 	//! Initializes a special scan that is used to create an index on the table, it keeps locks on the table

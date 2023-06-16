@@ -207,10 +207,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		plan = CreatePlan(op.Cast<LogicalReset>());
 		break;
 	case LogicalOperatorType::LOGICAL_PIVOT:
-		plan = CreatePlan((LogicalPivot &)op);
+		plan = CreatePlan(op.Cast<LogicalPivot>());
 		break;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
-		plan = ((LogicalExtensionOperator &)op).CreatePlan(context, *this);
+		plan = op.Cast<LogicalExtensionOperator>().CreatePlan(context, *this);
 
 		if (!plan) {
 			throw InternalException("Missing PhysicalOperator for Extension Operator");

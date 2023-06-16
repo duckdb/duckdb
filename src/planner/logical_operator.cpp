@@ -109,13 +109,12 @@ void LogicalOperator::Verify(ClientContext &context) {
 		// copy should be identical to original
 		D_ASSERT(expressions[expr_idx]->ToString() == copy->ToString());
 		D_ASSERT(original_hash == copy_hash);
-		D_ASSERT(Expression::Equals(expressions[expr_idx].get(), copy.get()));
+		D_ASSERT(Expression::Equals(expressions[expr_idx], copy));
 
-		D_ASSERT(!Expression::Equals(expressions[expr_idx].get(), nullptr));
 		for (idx_t other_idx = 0; other_idx < expr_idx; other_idx++) {
 			// comparison with other expressions
 			auto other_hash = expressions[other_idx]->Hash();
-			bool expr_equal = Expression::Equals(expressions[expr_idx].get(), expressions[other_idx].get());
+			bool expr_equal = Expression::Equals(expressions[expr_idx], expressions[other_idx]);
 			if (original_hash != other_hash) {
 				// if the hashes are not equal the expressions should not be equal either
 				D_ASSERT(!expr_equal);
@@ -144,7 +143,7 @@ void LogicalOperator::Verify(ClientContext &context) {
 		auto deserialized_expression = Expression::Deserialize(deserializer, state);
 		// FIXME: expressions might not be equal yet because of statistics propagation
 		continue;
-		D_ASSERT(Expression::Equals(expressions[expr_idx].get(), deserialized_expression.get()));
+		D_ASSERT(Expression::Equals(expressions[expr_idx], deserialized_expression));
 		D_ASSERT(expressions[expr_idx]->Hash() == deserialized_expression->Hash());
 	}
 	D_ASSERT(!ToString().empty());

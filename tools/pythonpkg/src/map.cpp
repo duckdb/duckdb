@@ -25,7 +25,7 @@ struct MapFunctionData : public TableFunctionData {
 	vector<string> in_names, out_names;
 };
 
-static py::handle FunctionCall(NumpyResultConversion &conversion, vector<string> &names, PyObject *function) {
+static py::handle FunctionCall(NumpyResultConversion &conversion, const vector<string> &names, PyObject *function) {
 	py::dict in_numpy_dict;
 	for (idx_t col_idx = 0; col_idx < names.size(); col_idx++) {
 		in_numpy_dict[names[col_idx].c_str()] = conversion.ToArray(col_idx);
@@ -131,8 +131,8 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, Ta
 
 	auto data_uptr = make_uniq<MapFunctionData>();
 	auto &data = *data_uptr;
-	data.function = (PyObject *)input.inputs[0].GetPointer();
-	auto explicit_schema = (PyObject *)input.inputs[1].GetPointer();
+	data.function = reinterpret_cast<PyObject *>(input.inputs[1].GetPointer());
+	auto explicit_schema = reinterpret_cast<PyObject *>(input.inputs[2].GetPointer());
 
 	data.in_names = input.input_table_names;
 	data.in_types = input.input_table_types;
@@ -154,7 +154,7 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, Ta
 	return std::move(data_uptr);
 }
 
-static string TypeVectorToString(vector<LogicalType> &types) {
+static string TypeVectorToString(const vector<LogicalType> &types) {
 	return StringUtil::Join(types, types.size(), ", ", [](const LogicalType &argument) { return argument.ToString(); });
 }
 
@@ -166,7 +166,7 @@ OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, Table
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
-	auto &data = (MapFunctionData &)*data_p.bind_data;
+	auto &data = data_p.bind_data->Cast<MapFunctionData>();
 
 	D_ASSERT(input.GetTypes() == data.in_types);
 	NumpyResultConversion conversion(data.in_types, input.size());

@@ -33,7 +33,7 @@ struct SQLAutoCompleteData : public GlobalTableFunctionState {
 };
 
 struct AutoCompleteCandidate {
-	AutoCompleteCandidate(string candidate_p, int32_t score_bonus = 0)
+	explicit AutoCompleteCandidate(string candidate_p, int32_t score_bonus = 0)
 	    : candidate(std::move(candidate_p)), score_bonus(score_bonus) {
 	}
 
@@ -361,6 +361,9 @@ standard_suggestion:
 
 static duckdb::unique_ptr<FunctionData> SQLAutoCompleteBind(ClientContext &context, TableFunctionBindInput &input,
                                                             vector<LogicalType> &return_types, vector<string> &names) {
+	if (input.inputs[0].IsNull()) {
+		throw BinderException("sql_auto_complete first parameter cannot be NULL");
+	}
 	names.emplace_back("suggestion");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -408,7 +411,7 @@ void SQLAutoCompleteExtension::Load(DuckDB &db) {
 }
 
 std::string SQLAutoCompleteExtension::Name() {
-	return "sql_auto_complete";
+	return "autocomplete";
 }
 
 } // namespace duckdb
