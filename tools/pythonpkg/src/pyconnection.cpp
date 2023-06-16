@@ -152,6 +152,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
 	         py::arg("query"), py::arg("parameters") = py::none())
 	    .def("close", &DuckDBPyConnection::Close, "Close the connection")
+	    .def("interrupt", &DuckDBPyConnection::Interrupt, "Interrupt pending operations")
 	    .def("fetchone", &DuckDBPyConnection::FetchOne, "Fetch a single row from a result following execute")
 	    .def("fetchmany", &DuckDBPyConnection::FetchMany, "Fetch the next set of rows from a result following execute",
 	         py::arg("size") = 1)
@@ -1200,6 +1201,13 @@ void DuckDBPyConnection::Close() {
 		cur->Close();
 	}
 	cursors.clear();
+}
+
+void DuckDBPyConnection::Interrupt() {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
+	connection->Interrupt();
 }
 
 void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install) {

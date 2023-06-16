@@ -279,7 +279,7 @@ function/udf_function.cpp	6
 extension/json/buffered_json_reader.cpp	35
 extension/json/include/json_common.hpp	8
 extension/json/include/json_executors.hpp	3
-extension/json/json-extension.cpp	7
+extension/json/json_extension.cpp	7
 extension/json/json_deserializer.cpp	136
 extension/json/json_functions.cpp	9
 extension/json/json_functions/copy_json.cpp	32
@@ -310,7 +310,7 @@ extension/parquet/include/row_number_column_reader.hpp	10
 extension/parquet/include/templated_column_reader.hpp	5
 extension/parquet/include/thrift_tools.hpp	27
 extension/parquet/include/zstd_file_system.hpp	3
-extension/parquet/parquet-extension.cpp	30
+extension/parquet/parquet_extension.cpp	30
 extension/parquet/parquet_metadata.cpp	29
 extension/parquet/parquet_reader.cpp	113
 extension/parquet/parquet_statistics.cpp	12
