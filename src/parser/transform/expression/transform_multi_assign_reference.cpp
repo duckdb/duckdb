@@ -17,7 +17,7 @@ unique_ptr<ParsedExpression> Transformer::TransformMultiAssignRef(duckdb_libpgqu
 
 		// Too many columns (ie. (x, y) = (1, 2, 3) )
 		if (root.ncolumns < func.args->length) {
-			throw ParserException("Too many columns for Multi Assignment");
+			throw ParserException("Too many columns for Multiple Assignment");
 		}
 
 		// Get the expression corresponding with the current column
@@ -30,7 +30,7 @@ unique_ptr<ParsedExpression> Transformer::TransformMultiAssignRef(duckdb_libpgqu
 
 		// Not enough columns (ie. (x, y, z) = (1, 2) )
 		if (!list) {
-			throw ParserException("Not enough columns for Multi Assignment");
+			throw ParserException("Too few columns for Multiple Assignment");
 		}
 		return TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(list->data.ptr_value));
 	}
