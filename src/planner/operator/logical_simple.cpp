@@ -6,7 +6,6 @@
 #include "duckdb/parser/parsed_data/transaction_info.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 #include "duckdb/parser/parsed_data/detach_info.hpp"
-#include "duckdb/parser/parsed_data/drop_property_graph_info.hpp"
 
 namespace duckdb {
 
