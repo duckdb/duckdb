@@ -51,6 +51,8 @@ template <class RESULT_TYPE>
 static inline RESULT_TYPE MiniStringCompress(const string_t &input) {
 	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
 		return input.GetSize() + *const_data_ptr_cast(input.GetPrefix());
+	} else if (input.GetSize() == 0) {
+		return 0;
 	} else {
 		return input.GetSize() + *const_data_ptr_cast(input.GetPointer());
 	}
@@ -122,6 +124,7 @@ static inline string_t StringDecompress(const INPUT_TYPE &input, ArenaAllocator 
 	} else {
 		result.SetPointer(char_ptr_cast(allocator.Allocate(sizeof(INPUT_TYPE))));
 		TemplatedReverseMemCpy<sizeof(INPUT_TYPE)>(data_ptr_cast(result.GetPointer()), input_ptr);
+		memcpy(result.GetPrefixWriteable(), result.GetPointer(), string_t::PREFIX_LENGTH);
 	}
 	return result;
 }
@@ -141,6 +144,8 @@ static inline string_t MiniStringDecompress(const INPUT_TYPE &input, ArenaAlloca
 	} else {
 		result.SetPointer(char_ptr_cast(allocator.Allocate(1)));
 		*data_ptr_cast(result.GetPointer()) = input - 1;
+		memset(result.GetPrefixWriteable(), '\0', string_t::PREFIX_LENGTH);
+		*result.GetPrefixWriteable() = *result.GetPointer();
 	}
 	return result;
 }
