@@ -204,12 +204,10 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return TransformDetach(PGCast<duckdb_libpgquery::PGDetachStmt>(stmt));
 	case duckdb_libpgquery::T_PGUseStmt:
 		return TransformUse(PGCast<duckdb_libpgquery::PGUseStmt>(stmt));
-	case duckdb_libpgquery::T_PGCreateDatabaseStmt:
-		return TransformCreateDatabase(stmt);
     case duckdb_libpgquery::T_PGCreatePropertyGraphStmt:
-        return TransformCreatePropertyGraph(stmt);
+        return TransformCreatePropertyGraph(PGCast<duckdb_libpgquery::PGCreatePropertyGraphStmt>(stmt));
     case duckdb_libpgquery::T_PGDropPropertyGraphStmt:
-        return TransformDropPropertyGraph(stmt);
+        return TransformDropPropertyGraph(PGCast<duckdb_libpgquery::PGDropPropertyGraphStmt>(stmt));
 	default:
 		throw NotImplementedException(NodetypeToString(stmt.type));
 	}

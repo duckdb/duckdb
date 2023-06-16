@@ -17,7 +17,7 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 	auto table_name = reinterpret_cast<duckdb_libpgquery::PGRangeVar *>(graph_table->table->head->data.ptr_value);
 	auto table_name_alias =
 	    reinterpret_cast<duckdb_libpgquery::PGValue *>(graph_table->table->head->next->data.ptr_value)->val.str;
-	auto graph_table_name = TransformQualifiedName(table_name);
+	auto graph_table_name = TransformQualifiedName(*table_name);
 
 	bool all_columns = false;
 	bool no_columns = graph_table->properties == nullptr;
@@ -69,7 +69,7 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 	if (graph_table->discriminator) {
 		//! In this case there is a list with length > 1 of labels
 		//! of which the last element in the list is the main label
-		auto discriminator = TransformQualifiedName(graph_table->discriminator);
+		auto discriminator = TransformQualifiedName(*graph_table->discriminator);
 		pg_table->discriminator = discriminator.name;
 	}
 	pg_table->main_label = pg_table->sub_labels[pg_table->sub_labels.size() - 1];
@@ -78,11 +78,11 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 	//! Everything from this point is only related to edge tables
 	if (!graph_table->is_vertex_table) {
 		D_ASSERT(graph_table->src_name);
-		auto src_name = TransformQualifiedName(graph_table->src_name);
+		auto src_name = TransformQualifiedName(*graph_table->src_name);
 		pg_table->source_reference = src_name.name;
 
 		D_ASSERT(graph_table->dst_name);
-		auto dst_name = TransformQualifiedName(graph_table->dst_name);
+		auto dst_name = TransformQualifiedName(*graph_table->dst_name);
 		pg_table->destination_reference = dst_name.name;
 
 		for (auto &src_key = graph_table->src_pk->head; src_key != nullptr; src_key = lnext(src_key)) {
@@ -109,18 +109,16 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 	return pg_table;
 }
 
-unique_ptr<CreateStatement> Transformer::TransformCreatePropertyGraph(duckdb_libpgquery::PGNode *root) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreatePropertyGraphStmt *>(root);
-	D_ASSERT(stmt);
+unique_ptr<CreateStatement> Transformer::TransformCreatePropertyGraph(duckdb_libpgquery::PGCreatePropertyGraphStmt &stmt) {
 	auto info = make_uniq<CreatePropertyGraphInfo>();
 
 	case_insensitive_set_t global_label_set;
 
-	auto property_graph_name = TransformQualifiedName(stmt->name);
+	auto property_graph_name = TransformQualifiedName(*stmt.name);
 	info->property_graph_name = property_graph_name.name;
 
-	D_ASSERT(stmt->vertex_tables);
-	for (auto &vertex_table = stmt->vertex_tables->head; vertex_table != nullptr; vertex_table = lnext(vertex_table)) {
+	D_ASSERT(stmt.vertex_tables);
+	for (auto &vertex_table = stmt.vertex_tables->head; vertex_table != nullptr; vertex_table = lnext(vertex_table)) {
 		auto node = reinterpret_cast<duckdb_libpgquery::PGNode *>(vertex_table->data.ptr_value);
 
 		if (node->type != duckdb_libpgquery::T_PGPropertyGraphTable) {
@@ -136,8 +134,8 @@ unique_ptr<CreateStatement> Transformer::TransformCreatePropertyGraph(duckdb_lib
 		info->vertex_tables.push_back(std::move(pg_table));
 	}
 
-	if (stmt->edge_tables) {
-		for (auto &edge_table = stmt->edge_tables->head; edge_table != nullptr; edge_table = lnext(edge_table)) {
+	if (stmt.edge_tables) {
+		for (auto &edge_table = stmt.edge_tables->head; edge_table != nullptr; edge_table = lnext(edge_table)) {
 			auto node = reinterpret_cast<duckdb_libpgquery::PGNode *>(edge_table->data.ptr_value);
 
 			if (node->type != duckdb_libpgquery::T_PGPropertyGraphTable) {

@@ -29,7 +29,7 @@ unique_ptr<PathPattern> PathPattern::Deserialize(Deserializer &deserializer) {
 
 bool PathPattern::Equals(const PathPattern *other_p) const {
 	if (where_clause && other_p->where_clause.get()) {
-		if (!where_clause->Equals(other_p->where_clause.get())) {
+        if (!ParsedExpression::Equals(where_clause, other_p->where_clause)) {
 			return false;
 		}
 	}

@@ -51,27 +51,27 @@ string MatchExpression::ToString() const {
 	return result;
 }
 
-bool MatchExpression::Equals(const BaseExpression *other_p) const {
+bool MatchExpression::Equals(const BaseExpression &other_p) const {
 	if (!ParsedExpression::Equals(other_p)) {
 		return false;
 	}
 
-	auto other = (MatchExpression *)other_p;
-	if (pg_name != other->pg_name) {
+	auto &other = other_p.Cast<MatchExpression>();
+	if (pg_name != other.pg_name) {
 		return false;
 	}
 
-	if (alias != other->alias) {
+	if (alias != other.alias) {
 		return false;
 	}
 
-	if (path_list.size() != other->path_list.size()) {
+	if (path_list.size() != other.path_list.size()) {
 		return false;
 	}
 
 	// path_list
 	for (idx_t i = 0; i < path_list.size(); i++) {
-		if (!path_list[i]->Equals(other->path_list[i].get())) {
+		if (!path_list[i]->Equals(other.path_list[i].get())) {
 			return false;
 		}
 	}
@@ -82,18 +82,18 @@ bool MatchExpression::Equals(const BaseExpression *other_p) const {
 
 	// columns
 	for (idx_t i = 0; i < column_list.size(); i++) {
-		if (!column_list[i]->Equals(other->column_list[i].get())) {
+        if (!ParsedExpression::Equals(column_list[i], other.column_list[i])) {
 			return false;
 		}
 	}
 
 	// where clause
-	if (where_clause && other->where_clause.get()) {
-		if (!where_clause->Equals(other->where_clause.get())) {
-			return false;
+	if (where_clause && other.where_clause.get()) {
+        if (!ParsedExpression::Equals(where_clause, other.where_clause)) {
+            return false;
 		}
 	}
-	if ((where_clause && !other->where_clause.get()) || (!where_clause && other->where_clause.get())) {
+	if ((where_clause && !other.where_clause.get()) || (!where_clause && other.where_clause.get())) {
 		return false;
 	}
 

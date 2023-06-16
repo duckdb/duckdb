@@ -35,8 +35,8 @@ bool SubPath::Equals(const PathReference *other_p) const {
 	}
 
 	if (where_clause && other->where_clause.get()) {
-		if (!where_clause->Equals(other->where_clause.get())) {
-			return false;
+        if (!ParsedExpression::Equals(where_clause, other->where_clause)) {
+            return false;
 		}
 	}
 	if ((where_clause && !other->where_clause.get()) || (!where_clause && other->where_clause.get())) {

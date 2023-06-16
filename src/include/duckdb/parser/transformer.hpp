@@ -302,9 +302,9 @@ private:
 	unique_ptr<TableRef> TransformValuesList(duckdb_libpgquery::PGList *list);
 
     //! Transform a match clause (SQL/PGQ)
-    unique_ptr<TableRef> TransformMatch(duckdb_libpgquery::PGMatchClause *root);
+    unique_ptr<TableRef> TransformMatch(duckdb_libpgquery::PGMatchClause &root);
     //! Transform a SQL/PGQ duckdb_libpgquery::T_PGCreatePropertyGraphStmt node into a CreatePropertyGraphStatement
-    unique_ptr<CreateStatement> TransformCreatePropertyGraph(duckdb_libpgquery::PGNode *node);
+    unique_ptr<CreateStatement> TransformCreatePropertyGraph(duckdb_libpgquery::PGCreatePropertyGraphStmt &node);
 
     //===--------------------------------------------------------------------===//
     // SQL/PGQ Property graph transform
@@ -320,7 +320,7 @@ private:
     unique_ptr<SubPath> TransformSubPathElement(duckdb_libpgquery::PGSubPath *element);
 
     //! Transform a Postgres duckdb_libpgquery::T_PGDropPropertyGraphStmt node into a Drop[Table,Schema]Statement
-    unique_ptr<SQLStatement> TransformDropPropertyGraph(duckdb_libpgquery::PGNode *node);
+    unique_ptr<SQLStatement> TransformDropPropertyGraph(duckdb_libpgquery::PGDropPropertyGraphStmt &node);
 
 	//! Transform a range var into a (schema) qualified name
 	QualifiedName TransformQualifiedName(duckdb_libpgquery::PGRangeVar &root);

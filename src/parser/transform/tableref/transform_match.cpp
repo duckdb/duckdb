@@ -109,27 +109,27 @@ unique_ptr<PathPattern> Transformer::TransformPath(duckdb_libpgquery::PGPathPatt
 	return result;
 }
 
-unique_ptr<TableRef> Transformer::TransformMatch(duckdb_libpgquery::PGMatchClause *root) {
+unique_ptr<TableRef> Transformer::TransformMatch(duckdb_libpgquery::PGMatchClause &root) {
     auto match_info = make_uniq<MatchExpression>();
-    match_info->pg_name = root->pg_name; // Name of the property graph to bind to
+    match_info->pg_name = root.pg_name; // Name of the property graph to bind to
 
-    auto alias = TransformQualifiedName(root->graph_table);
+    auto alias = TransformQualifiedName(*root.graph_table);
     match_info->alias = alias.name;
 
-    if (root->where_clause) {
-        match_info->where_clause = TransformExpression(root->where_clause);
+    if (root.where_clause) {
+        match_info->where_clause = TransformExpression(root.where_clause);
     }
 
-    for (auto node = root->paths->head; node != nullptr; node = lnext(node)) {
+    for (auto node = root.paths->head; node != nullptr; node = lnext(node)) {
         auto path = reinterpret_cast<duckdb_libpgquery::PGPathPattern *>(node->data.ptr_value);
         auto transformed_path = TransformPath(path);
         match_info->path_list.push_back(std::move(transformed_path));
     }
 
-    for (auto node = root->columns->head; node != nullptr; node = lnext(node)) {
+    for (auto node = root.columns->head; node != nullptr; node = lnext(node)) {
         auto column = reinterpret_cast<duckdb_libpgquery::PGList *>(node->data.ptr_value);
         auto target = reinterpret_cast<duckdb_libpgquery::PGResTarget *>(column->head->next->data.ptr_value);
-        auto res_target = TransformResTarget(target);
+        auto res_target = TransformResTarget(*target);
         match_info->column_list.push_back(std::move(res_target));
     }
 

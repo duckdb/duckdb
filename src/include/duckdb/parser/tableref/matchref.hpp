@@ -9,6 +9,9 @@ namespace duckdb {
 
 class MatchExpression : public ParsedExpression {
 public:
+    static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_EXPRESSION;
+
+public:
 	MatchExpression() : ParsedExpression(ExpressionType::FUNCTION_REF, ExpressionClass::BOUND_EXPRESSION) {
 	}
 
@@ -22,7 +25,7 @@ public:
 
 public:
 	string ToString() const override;
-	bool Equals(const BaseExpression *other_p) const override;
+	bool Equals(const BaseExpression &other_p) const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
