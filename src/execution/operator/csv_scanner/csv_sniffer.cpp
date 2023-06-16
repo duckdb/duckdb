@@ -295,7 +295,7 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t b
 		prev_padding_count = padding_count;
 		state_machine.configuration.start_row = start_row;
 		candidates.clear();
-		candidates.emplace_back(&state_machine, buffer_pos, best_num_cols);
+		candidates.emplace_back(&state_machine, buffer_pos, num_cols);
 	} else if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding &&
 	           !invalid_padding) {
 		bool same_quote_is_candidate = false;
@@ -306,7 +306,7 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t b
 		}
 		if (!same_quote_is_candidate) {
 			state_machine.configuration.start_row = start_row;
-			candidates.emplace_back(&state_machine, buffer_pos, best_num_cols);
+			candidates.emplace_back(&state_machine, buffer_pos, num_cols);
 		}
 	}
 }
@@ -314,7 +314,6 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t b
 void CSVSniffer::NextChunk() {
 	rows_read = 0;
 	best_consistent_rows = 0;
-	best_num_cols = 0;
 	prev_padding_count = 0;
 }
 
@@ -780,7 +779,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	// #######
 	// ### header detection
 	// #######
-	options.num_cols = best_num_cols;
+	options.num_cols = best_sql_types_candidates.size();
 	DetectHeader(best_sql_types_candidates, best_header_row);
 	if (!options.sql_type_list.empty()) {
 		// user-defined types were supplied for certain columns
