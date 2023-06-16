@@ -84,6 +84,15 @@ struct DebugAsOfIEJoin {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct PreferRangeJoins {
+	static constexpr const char *Name = "prefer_range_joins";                                    // NOLINT
+	static constexpr const char *Description = "Force use of range joins with mixed predicates"; // NOLINT
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;                     // NOLINT
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct DebugWindowMode {
 	static constexpr const char *Name = "debug_window_mode";
 	static constexpr const char *Description = "DEBUG SETTING: switch window mode to use";

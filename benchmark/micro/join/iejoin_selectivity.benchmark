@@ -7,22 +7,23 @@ group join
 
 load
 SELECT SETSEED(0.8675309);
+PRAGMA prefer_range_joins=True;
 CREATE TABLE df AS
     SELECT 
         (random() * 1000)::INTEGER + 1 as id,
         (random() * 10)::INTEGER + 1 as id2,
         (random() * 500)::INTEGER + 1 as id3,
         random() as value,
-    FROM range(5000000)
+    FROM range(5000000);
 
 run
 SELECT id2, id3, id3_right, corr(value, value_right) as value
 FROM (
-    SELECT df.*, df2.id3 as id3_right, df2.value as value_right
-    FROM df JOIN df as df2
-        ON (df.id = df2.id
-        AND df.id2 = df2.id2
-        AND df.id3 > df2.id3
-        AND df.id3 < df2.id3 + 30)
-    ) tbl
+	SELECT df.*, df2.id3 as id3_right, df2.value as value_right
+	FROM df JOIN df as df2
+		ON (df.id = df2.id
+		AND df.id2 = df2.id2
+		AND df.id3 > df2.id3
+		AND df.id3 < df2.id3 + 30)
+	) tbl
 GROUP BY ALL

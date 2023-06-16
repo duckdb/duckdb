@@ -291,8 +291,11 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		break;
 	}
 
+	//	TODO: Extend PWMJ to handle all comparisons and projection maps
+	const auto prefer_range_joins = (ClientConfig::GetConfig(context).prefer_range_joins && can_iejoin);
+
 	unique_ptr<PhysicalOperator> plan;
-	if (has_equality) {
+	if (has_equality && !prefer_range_joins) {
 		// check if we can use an index join
 		if (PlanIndexJoin(context, op, plan, left, right)) {
 			return plan;
