@@ -287,7 +287,10 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
 }
 
 void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result) {
-	// We want these to be in-memory so we don't have to copy over strings to the dictionary
+	// We write 8 columns at a time so that iterating over ColumnDataCollection is more efficient
+	static constexpr idx_t COLUMNS_PER_PASS = 8;
+
+	// We want these to be in-memory/hybrid so we don't have to copy over strings to the dictionary
 	D_ASSERT(buffer.GetAllocatorType() == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ||
 	         buffer.GetAllocatorType() == ColumnDataAllocatorType::HYBRID);
 
@@ -299,23 +302,53 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 	auto &states = result.states;
 	// iterate over each of the columns of the chunk collection and write them
 	D_ASSERT(buffer.ColumnCount() == column_writers.size());
-	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
-		const auto &col_writer = column_writers[col_idx];
-		auto write_state = col_writer->InitializeWriteState(row_group);
-		if (col_writer->HasAnalyze()) {
-			for (auto &chunk : buffer.Chunks({col_idx})) {
-				col_writer->Analyze(*write_state, nullptr, chunk.data[0], chunk.size());
+	idx_t col_start = 0;
+	while (col_start < buffer.ColumnCount()) {
+		const auto col_end = MinValue<idx_t>(buffer.ColumnCount(), col_start + COLUMNS_PER_PASS);
+
+		vector<column_t> column_ids;
+		vector<unique_ptr<ColumnWriterState>> write_states;
+		for (idx_t col_idx = col_start; col_idx < col_end; col_idx++) {
+			column_ids.emplace_back(col_idx);
+			write_states.emplace_back(column_writers[col_idx]->InitializeWriteState(row_group));
+		}
+		col_start = col_end;
+
+		for (auto &chunk : buffer.Chunks({column_ids})) {
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				auto &col_writer = *column_writers[column_ids[i]];
+				auto &write_state = *write_states[i];
+				if (col_writer.HasAnalyze()) {
+					col_writer.Analyze(write_state, nullptr, chunk.data[i], chunk.size());
+				}
 			}
-			col_writer->FinalizeAnalyze(*write_state);
 		}
-		for (auto &chunk : buffer.Chunks({col_idx})) {
-			col_writer->Prepare(*write_state, nullptr, chunk.data[0], chunk.size());
+
+		for (auto &chunk : buffer.Chunks({column_ids})) {
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				auto &col_writer = *column_writers[column_ids[i]];
+				auto &write_state = *write_states[i];
+				col_writer.Prepare(write_state, nullptr, chunk.data[i], chunk.size());
+			}
 		}
-		col_writer->BeginWrite(*write_state);
-		for (auto &chunk : buffer.Chunks({col_idx})) {
-			col_writer->Write(*write_state, chunk.data[0], chunk.size());
+
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			auto &col_writer = *column_writers[column_ids[i]];
+			auto &write_state = *write_states[i];
+			col_writer.BeginWrite(write_state);
 		}
-		states.push_back(std::move(write_state));
+
+		for (auto &chunk : buffer.Chunks({column_ids})) {
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				auto &col_writer = *column_writers[column_ids[i]];
+				auto &write_state = *write_states[i];
+				col_writer.Write(write_state, chunk.data[i], chunk.size());
+			}
+		}
+
+		for (auto &write_state : write_states) {
+			states.push_back(std::move(write_state));
+		}
 	}
 	result.heaps = buffer.GetHeapReferences();
 }
