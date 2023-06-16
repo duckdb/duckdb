@@ -894,7 +894,6 @@ void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data) {
 void Vector::RecursiveToUnifiedFormat(Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data) {
 
 	input.ToUnifiedFormat(count, data.format);
-	data.count = count;
 
 	if (input.GetType().InternalType() == PhysicalType::LIST) {
 		auto &child = ListVector::GetEntry(input);

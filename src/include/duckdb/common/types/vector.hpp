@@ -36,7 +36,6 @@ struct UnifiedVectorFormat {
 };
 
 struct RecursiveUnifiedVectorFormat {
-	idx_t count;
 	UnifiedVectorFormat format;
 	vector<RecursiveUnifiedVectorFormat> child_formats;
 };
