@@ -1,6 +1,6 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
-#include "visualizer-extension.hpp"
+#include "visualizer_extension.hpp"
 #include "duckdb/parser/parsed_data/create_pragma_function_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/fstream.hpp"

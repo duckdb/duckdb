@@ -54,6 +54,9 @@ jobs:
         git clone --recurse-submodules https://github.com/duckdb/duckdb-wasm
         cd duckdb-wasm
         git checkout ${{ env.DUCKDB_WASM_VERSION }}
+        for filename in ../.github/patches/duckdb-wasm/*.patch; do
+          git apply $filename
+        done
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -96,6 +99,9 @@ jobs:
         git clone --recurse-submodules https://github.com/duckdb/duckdb-wasm
         cd duckdb-wasm
         git checkout ${{ env.DUCKDB_WASM_VERSION }}
+        for filename in ../.github/patches/duckdb-wasm/*.patch; do
+          git apply $filename
+        done
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
