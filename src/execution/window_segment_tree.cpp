@@ -16,7 +16,7 @@ WindowAggregateState::WindowAggregateState(AggregateObject aggr, const LogicalTy
                                            idx_t partition_count_p)
     : aggr(std::move(aggr)), result_type(result_type_p), partition_count(partition_count_p),
       state_size(aggr.function.state_size()), state(state_size),
-      statef(Value::POINTER(CastPointerToValue(state.data()))), filter_count(0) {
+      statef(Value::POINTER(CastPointerToValue(state.data()))), filter_pos(0) {
 	statef.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
 }
 
@@ -51,9 +51,9 @@ void WindowAggregateState::Sink(DataChunk &payload_chunk, SelectionVector *filte
 			filter_mask.Initialize(filter_bits.data());
 		}
 		for (idx_t f = 0; f < filtered; ++f) {
-			filter_mask.SetValid(filter_count + filter_sel->get_index(f));
+			filter_mask.SetValid(filter_pos + filter_sel->get_index(f));
 		}
-		filter_count += filtered;
+		filter_pos += payload_chunk.size();
 	}
 }
 

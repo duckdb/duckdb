@@ -968,6 +968,7 @@ void WindowExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx, const i
 		}
 	} else if (aggregate_state) {
 		//	Zero-argument aggregate (e.g., COUNT(*)
+		payload_chunk.SetCardinality(input_chunk);
 		aggregate_state->Sink(payload_chunk, filtering, filtered);
 	}
 

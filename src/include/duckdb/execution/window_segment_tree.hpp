@@ -47,7 +47,7 @@ protected:
 	//! The filtered rows in inputs.
 	vector<validity_t> filter_bits;
 	ValidityMask filter_mask;
-	idx_t filter_count;
+	idx_t filter_pos;
 };
 
 class WindowConstantAggregate : public WindowAggregateState {
