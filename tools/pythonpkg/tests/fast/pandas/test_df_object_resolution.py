@@ -403,6 +403,7 @@ class TestResolveObjectColumns(object):
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_numpy_object_with_stride(self, pandas):
+        con = duckdb.connect()
         df = pandas.DataFrame(columns=["idx", "evens", "zeros"])
 
         df["idx"] = list(range(10))
@@ -414,7 +415,7 @@ class TestResolveObjectColumns(object):
             df.loc[df["idx"] == i, "evens"] += counter
             counter += 2
 
-        res = duckdb.sql("select * from df").fetchall()
+        res = con.sql("select * from df").fetchall()
         assert res == [
             (0, 0, 0),
             (1, 2, 0),
