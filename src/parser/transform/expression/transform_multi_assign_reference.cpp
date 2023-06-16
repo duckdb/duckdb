@@ -11,7 +11,7 @@ unique_ptr<ParsedExpression> Transformer::TransformMultiAssignRef(duckdb_libpgqu
 		// Explicitly only allow ROW function
 		char const *function_name =
 		    PGPointerCast<duckdb_libpgquery::PGValue>(func.funcname->tail->data.ptr_value)->val.str;
-		if (function_name == nullptr || strlen(function_name) != 3 || strncasecmp(function_name, "row", 3) != 0) {
+		if (function_name == nullptr || strlen(function_name) != 3 || strncmp(function_name, "row", 3) != 0) {
 			return TransformExpression(root.source);
 		}
 
