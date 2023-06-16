@@ -95,7 +95,7 @@ jobs:
 
  win-release-32:
     name: Windows (32 Bit)
-    runs-on: windows-latest
+    runs-on: windows-2019
     needs: win-release-64
 
     steps:
