@@ -16,8 +16,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundExpressionListRef &ref) {
 	// now create a LogicalExpressionGet from the set of expressions
 	// fetch the types
 	vector<LogicalType> types;
-	for (auto &expr : ref.values[0]) {
-		types.push_back(expr->return_type);
+	for (auto &type : ref.types) {
+		types.push_back(type);
 	}
 	auto expr_get = make_uniq<LogicalExpressionGet>(ref.bind_index, types, std::move(ref.values));
 	expr_get->AddChild(std::move(root));
