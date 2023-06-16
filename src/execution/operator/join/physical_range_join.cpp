@@ -207,6 +207,11 @@ PhysicalRangeJoin::PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperator
 			right_projection_map.emplace_back(i);
 		}
 	}
+
+	//	Construct the unprojected type layout from the children's types
+	unprojected_types = children[0]->GetTypes();
+	auto &types = children[1]->GetTypes();
+	unprojected_types.insert(unprojected_types.end(), types.begin(), types.end());
 }
 
 idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition> &conditions) {
@@ -282,6 +287,17 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 		return count - pvalidity.CountValid(count);
 	} else {
 		return count - VectorOperations::CountNotNull(primary, count);
+	}
+}
+
+void PhysicalRangeJoin::ResetUnprojectedChunk(DataChunk &unprojected, DataChunk &result) const {
+	unprojected.Reset();
+	const auto left_result = left_projection_map.size();
+	for (idx_t i = 0; i < left_result; ++i) {
+		unprojected.data[left_projection_map[i]].Reference(result.data[i]);
+	}
+	for (idx_t i = 0; i < right_projection_map.size(); ++i) {
+		unprojected.data[right_projection_map[i]].Reference(result.data[left_result + i]);
 	}
 }
 

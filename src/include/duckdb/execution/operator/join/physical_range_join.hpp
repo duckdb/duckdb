@@ -98,6 +98,9 @@ public:
 	ProjectionMapping left_projection_map;
 	ProjectionMapping right_projection_map;
 
+	//!	The full set of types (left + right child)
+	vector<LogicalType> unprojected_types;
+
 public:
 	// Gather the result values and slice the payload columns to those values.
 	// Returns a buffer handle to the pinned heap block (if any)
@@ -107,6 +110,9 @@ public:
 	// Apply a tail condition to the current selection
 	static idx_t SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,
 	                            const SelectionVector *sel, idx_t count, SelectionVector *true_sel);
+
+	//!	Utility to
+	void ResetUnprojectedChunk(DataChunk &chunk, DataChunk &result) const;
 };
 
 } // namespace duckdb

@@ -660,12 +660,7 @@ public:
 		left_keys.Initialize(allocator, left_types);
 		right_keys.Initialize(allocator, right_types);
 
-		{
-			auto wide_types = op.children[0]->GetTypes();
-			auto &types = op.children[1]->GetTypes();
-			wide_types.insert(wide_types.end(), types.begin(), types.end());
-			wide.Initialize(Allocator::DefaultAllocator(), wide_types);
-		}
+		unprojected.Initialize(Allocator::DefaultAllocator(), op.unprojected_types);
 	}
 
 	idx_t SelectOuterRows(bool *matches) {
@@ -703,7 +698,7 @@ public:
 	ExpressionExecutor right_executor;
 	DataChunk right_keys;
 
-	DataChunk wide;
+	DataChunk unprojected;
 
 	// Outer joins
 	idx_t outer_idx;
@@ -719,7 +714,7 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 	auto &right_table = *ie_sink.tables[1];
 
 	const auto left_cols = children[0]->GetTypes().size();
-	auto &chunk = state.wide;
+	auto &chunk = state.unprojected;
 	do {
 		SelectionVector lsel(STANDARD_VECTOR_SIZE);
 		SelectionVector rsel(STANDARD_VECTOR_SIZE);
@@ -733,14 +728,7 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 
 		//	We need all of the data to compute other predicates,
 		//	but we only return what is in the projection map
-		chunk.Reset();
-		const auto left_result = left_projection_map.size();
-		for (idx_t i = 0; i < left_result; ++i) {
-			chunk.data[left_projection_map[i]].Reference(result.data[i]);
-		}
-		for (idx_t i = 0; i < right_projection_map.size(); ++i) {
-			chunk.data[right_projection_map[i]].Reference(result.data[left_result + i]);
-		}
+		ResetUnprojectedChunk(chunk, result);
 
 		SliceSortedPayload(chunk, left_table.global_sort_state, state.left_block_index, lsel, result_count, 0);
 		SliceSortedPayload(chunk, right_table.global_sort_state, state.right_block_index, rsel, result_count,
@@ -982,13 +970,15 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 			ie_gstate.GetNextPair(context.client, ie_sink, ie_lstate);
 			continue;
 		}
-		SliceSortedPayload(result, ie_sink.tables[0]->global_sort_state, ie_lstate.left_block_index, ie_lstate.true_sel,
+		auto &chunk = ie_lstate.unprojected;
+		ResetUnprojectedChunk(chunk, result);
+		SliceSortedPayload(chunk, ie_sink.tables[0]->global_sort_state, ie_lstate.left_block_index, ie_lstate.true_sel,
 		                   count);
 
 		// Fill in NULLs to the right
-		for (auto col_idx = left_cols; col_idx < result.ColumnCount(); ++col_idx) {
-			result.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result.data[col_idx], true);
+		for (auto col_idx = left_cols; col_idx < chunk.ColumnCount(); ++col_idx) {
+			chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(chunk.data[col_idx], true);
 		}
 
 		result.SetCardinality(count);
@@ -1005,13 +995,15 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 			continue;
 		}
 
-		SliceSortedPayload(result, ie_sink.tables[1]->global_sort_state, ie_lstate.right_block_index,
-		                   ie_lstate.true_sel, count, left_cols);
+		auto &chunk = ie_lstate.unprojected;
+		ResetUnprojectedChunk(chunk, result);
+		SliceSortedPayload(chunk, ie_sink.tables[1]->global_sort_state, ie_lstate.right_block_index, ie_lstate.true_sel,
+		                   count, left_cols);
 
 		// Fill in NULLs to the left
 		for (idx_t col_idx = 0; col_idx < left_cols; ++col_idx) {
-			result.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result.data[col_idx], true);
+			chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(chunk.data[col_idx], true);
 		}
 
 		result.SetCardinality(count);
