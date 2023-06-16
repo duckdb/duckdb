@@ -8,6 +8,16 @@
 namespace duckdb {
 
 JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p,
+                           unique_ptr<ParsedExpression> condition_p, JoinType type)
+    : Relation(left_p->context, RelationType::JOIN_RELATION), left(std::move(left_p)), right(std::move(right_p)),
+      condition(std::move(condition_p)), join_type(type), join_ref_type(JoinRefType::REGULAR) {
+	if (left->context.GetContext() != right->context.GetContext()) {
+		throw Exception("Cannot combine LEFT and RIGHT relations of different connections!");
+	}
+	context.GetContext()->TryBindRelation(*this, this->columns);
+}
+
+JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p,
                            unique_ptr<ParsedExpression> condition_p, JoinType type, JoinRefType join_ref_type)
     : Relation(left_p->context, RelationType::JOIN_RELATION), left(std::move(left_p)), right(std::move(right_p)),
       condition(std::move(condition_p)), join_type(type), join_ref_type(join_ref_type) {
