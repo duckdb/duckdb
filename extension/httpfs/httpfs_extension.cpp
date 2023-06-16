@@ -1,8 +1,7 @@
 #define DUCKDB_EXTENSION_MAIN
 
 #include "duckdb.hpp"
-#include "httpfs-extension.hpp"
-
+#include "httpfs_extension.hpp"
 #include "s3fs.hpp"
 
 namespace duckdb {
@@ -56,10 +55,10 @@ static void LoadInternal(DatabaseInstance &instance) {
 	provider->SetAll();
 }
 
-void HTTPFsExtension::Load(DuckDB &db) {
+void HttpfsExtension::Load(DuckDB &db) {
 	LoadInternal(*db.instance);
 }
-std::string HTTPFsExtension::Name() {
+std::string HttpfsExtension::Name() {
 	return "httpfs";
 }
 

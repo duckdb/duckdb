@@ -107,6 +107,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
 	         py::arg("query"), py::arg("parameters") = py::none(), py::arg("connection") = py::none())
 	    .def("close", &PyConnectionWrapper::Close, "Close the connection", py::arg("connection") = py::none())
+	    .def("interrupt", &PyConnectionWrapper::Interrupt, "Interrupt pending operations",
+	         py::arg("connection") = py::none())
 	    .def("fetchone", &PyConnectionWrapper::FetchOne, "Fetch a single row from a result following execute",
 	         py::arg("connection") = py::none())
 	    .def("fetchmany", &PyConnectionWrapper::FetchMany, "Fetch the next set of rows from a result following execute",
