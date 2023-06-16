@@ -215,33 +215,32 @@ static ListSegment *GetSegment(const ListSegmentFunctions &functions, Allocator 
 //===--------------------------------------------------------------------===//
 template <class T>
 static void WriteDataToPrimitiveSegment(const ListSegmentFunctions &functions, Allocator &allocator,
-                                        ListSegment *segment, Vector &input, idx_t &entry_idx, idx_t &count) {
+                                        ListSegment *segment, RecursiveUnifiedVectorFormat &input_data,
+                                        idx_t &entry_idx) {
 
-	// get the vector data and the source index of the entry that we want to write
-	auto input_data = FlatVector::GetData(input);
+	auto sel_entry_idx = input_data.format.sel->get_index(entry_idx);
 
 	// write null validity
 	auto null_mask = GetNullMask(segment);
-	auto is_null = FlatVector::IsNull(input, entry_idx);
-	null_mask[segment->count] = is_null;
+	auto valid = input_data.format.validity.RowIsValid(sel_entry_idx);
+	null_mask[segment->count] = !valid;
 
 	// write value
-	if (!is_null) {
+	if (valid) {
 		auto data = GetPrimitiveData<T>(segment);
-		Store<T>(((T *)input_data)[entry_idx], data_ptr_cast(data + segment->count));
+		Store<T>(((T *)input_data.format.data)[sel_entry_idx], data_ptr_cast(data + segment->count));
 	}
 }
 
 static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, Allocator &allocator, ListSegment *segment,
-                                      Vector &input, idx_t &entry_idx, idx_t &count) {
+                                      RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
 
-	// get the vector data and the source index of the entry that we want to write
-	auto input_data = FlatVector::GetData<string_t>(input);
+	auto sel_entry_idx = input_data.format.sel->get_index(entry_idx);
 
 	// write null validity
 	auto null_mask = GetNullMask(segment);
-	auto is_null = FlatVector::IsNull(input, entry_idx);
-	null_mask[segment->count] = is_null;
+	auto valid = input_data.format.validity.RowIsValid(sel_entry_idx);
+	null_mask[segment->count] = !valid;
 
 	// set the length of this string
 	auto str_length_data = GetListLengthData(segment);
@@ -249,15 +248,14 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, All
 
 	// get the string
 	string_t str_t;
-	if (!is_null) {
-		str_t = input_data[entry_idx];
+	if (valid) {
+		str_t = ((string_t *)input_data.format.data)[sel_entry_idx];
 		str_length = str_t.GetSize();
 	}
 
 	// we can reconstruct the offset from the length
 	Store<uint64_t>(str_length, data_ptr_cast(str_length_data + segment->count));
-
-	if (is_null) {
+	if (!valid) {
 		return;
 	}
 
@@ -276,37 +274,31 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, All
 }
 
 static void WriteDataToListSegment(const ListSegmentFunctions &functions, Allocator &allocator, ListSegment *segment,
-                                   Vector &input, idx_t &entry_idx, idx_t &count) {
+                                   RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
 
-	// get the vector data and the source index of the entry that we want to write
-	auto input_data = FlatVector::GetData<list_entry_t>(input);
+	auto sel_entry_idx = input_data.format.sel->get_index(entry_idx);
 
 	// write null validity
 	auto null_mask = GetNullMask(segment);
-	auto is_null = FlatVector::IsNull(input, entry_idx);
-	null_mask[segment->count] = is_null;
+	auto valid = input_data.format.validity.RowIsValid(sel_entry_idx);
+	null_mask[segment->count] = !valid;
 
 	// set the length of this list
 	auto list_length_data = GetListLengthData(segment);
 	uint64_t list_length = 0;
 
-	if (!is_null) {
+	if (valid) {
 		// get list entry information
-		auto list_entries = input_data;
-		const auto &list_entry = list_entries[entry_idx];
+		const auto &list_entry = ((list_entry_t *)input_data.format.data)[sel_entry_idx];
 		list_length = list_entry.length;
-
-		// get the child vector and its data
-		auto lists_size = ListVector::GetListSize(input);
-		auto &child_vector = ListVector::GetEntry(input);
 
 		// loop over the child vector entries and recurse on them
 		auto child_segments = Load<LinkedList>(data_ptr_cast(GetListChildData(segment)));
 		D_ASSERT(functions.child_functions.size() == 1);
 		for (idx_t child_idx = 0; child_idx < list_entry.length; child_idx++) {
 			auto source_idx_child = list_entry.offset + child_idx;
-			functions.child_functions[0].AppendRow(allocator, child_segments, child_vector, source_idx_child,
-			                                       lists_size);
+			functions.child_functions[0].AppendRow(allocator, child_segments, input_data.child_formats.back(),
+			                                       source_idx_child);
 		}
 		// store the updated linked list
 		Store<LinkedList>(child_segments, data_ptr_cast(GetListChildData(segment)));
@@ -316,35 +308,35 @@ static void WriteDataToListSegment(const ListSegmentFunctions &functions, Alloca
 }
 
 static void WriteDataToStructSegment(const ListSegmentFunctions &functions, Allocator &allocator, ListSegment *segment,
-                                     Vector &input, idx_t &entry_idx, idx_t &count) {
+                                     RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
+
+	auto sel_entry_idx = input_data.format.sel->get_index(entry_idx);
 
 	// write null validity
 	auto null_mask = GetNullMask(segment);
-	auto is_null = FlatVector::IsNull(input, entry_idx);
-	null_mask[segment->count] = is_null;
+	auto valid = input_data.format.validity.RowIsValid(sel_entry_idx);
+	null_mask[segment->count] = !valid;
 
 	// write value
-	auto &children = StructVector::GetEntries(input);
-	D_ASSERT(children.size() == functions.child_functions.size());
+	D_ASSERT(input_data.child_formats.size() == functions.child_functions.size());
 	auto child_list = GetStructData(segment);
 
 	// write the data of each of the children of the struct
-	for (idx_t child_count = 0; child_count < children.size(); child_count++) {
-		auto child_list_segment = Load<ListSegment *>(data_ptr_cast(child_list + child_count));
-		auto &child_function = functions.child_functions[child_count];
-		child_function.write_data(child_function, allocator, child_list_segment, *children[child_count], entry_idx,
-		                          count);
+	for (idx_t i = 0; i < input_data.child_formats.size(); i++) {
+		auto child_list_segment = Load<ListSegment *>(data_ptr_cast(child_list + i));
+		auto &child_function = functions.child_functions[i];
+		child_function.write_data(child_function, allocator, child_list_segment, input_data.child_formats[i],
+		                          sel_entry_idx);
 		child_list_segment->count++;
 	}
 }
 
-void ListSegmentFunctions::AppendRow(Allocator &allocator, LinkedList &linked_list, Vector &input, idx_t &entry_idx,
-                                     idx_t &count) const {
+void ListSegmentFunctions::AppendRow(Allocator &allocator, LinkedList &linked_list,
+                                     RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) const {
 
-	D_ASSERT(input.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto &write_data_to_segment = *this;
 	auto segment = GetSegment(write_data_to_segment, allocator, linked_list);
-	write_data_to_segment.write_data(write_data_to_segment, allocator, segment, input, entry_idx, count);
+	write_data_to_segment.write_data(write_data_to_segment, allocator, segment, input_data, entry_idx);
 
 	linked_list.total_capacity++;
 	segment->count++;

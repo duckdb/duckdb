@@ -5,24 +5,6 @@
 
 namespace duckdb {
 
-static void RecursiveFlatten(Vector &vector, idx_t &count) {
-	if (vector.GetVectorType() != VectorType::FLAT_VECTOR) {
-		vector.Flatten(count);
-	}
-
-	auto internal_type = vector.GetType().InternalType();
-	if (internal_type == PhysicalType::LIST) {
-		auto &child_vector = ListVector::GetEntry(vector);
-		auto child_vector_count = ListVector::GetListSize(vector);
-		RecursiveFlatten(child_vector, child_vector_count);
-	} else if (internal_type == PhysicalType::STRUCT) {
-		auto &children = StructVector::GetEntries(vector);
-		for (auto &child : children) {
-			RecursiveFlatten(*child, count);
-		}
-	}
-}
-
 struct ListBindData : public FunctionData {
 	explicit ListBindData(const LogicalType &stype_p);
 	~ListBindData() override;
@@ -76,17 +58,18 @@ static void ListUpdateFunction(Vector inputs[], AggregateInputData &aggr_input_d
 	D_ASSERT(input_count == 1);
 
 	auto &input = inputs[0];
-	UnifiedVectorFormat sdata;
-	state_vector.ToUnifiedFormat(count, sdata);
+	RecursiveUnifiedVectorFormat input_data;
+	Vector::RecursiveToUnifiedFormat(input, count, input_data);
 
-	auto states = UnifiedVectorFormat::GetData<ListAggState *>(sdata);
-	RecursiveFlatten(input, count);
+	UnifiedVectorFormat state_data;
+	state_vector.ToUnifiedFormat(count, state_data);
+	auto states = UnifiedVectorFormat::GetData<ListAggState *>(state_data);
 
 	auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
 
 	for (idx_t i = 0; i < count; i++) {
-		auto &state = *states[sdata.sel->get_index(i)];
-		list_bind_data.functions.AppendRow(aggr_input_data.allocator, state.linked_list, input, i, count);
+		auto &state = *states[state_data.sel->get_index(i)];
+		list_bind_data.functions.AppendRow(aggr_input_data.allocator, state.linked_list, input_data, i);
 	}
 }
 
