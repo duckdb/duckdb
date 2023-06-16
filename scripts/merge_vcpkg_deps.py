@@ -18,5 +18,5 @@ data = {
     "description": f"Auto-generated vcpkg.json for combined DuckDB extension build",
     "dependencies": deduplicated_dependencies
 }
-with open('vcpkg.json', 'w', encoding='utf-8') as f:
+with open('build/vcpkg_merged_manifest/vcpkg.json', 'w', encoding='utf-8') as f:
     json.dump(data, f, ensure_ascii=False, indent=4)

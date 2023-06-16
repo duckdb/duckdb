@@ -13,6 +13,9 @@ DISABLE_SANITIZER_FLAG ?=
 OSX_BUILD_UNIVERSAL_FLAG ?=
 FORCE_32_BIT_FLAG ?=
 
+MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
+PROJ_DIR := $(dir $(MKFILE_PATH))
+
 ifeq ($(GEN),ninja)
 	GENERATOR=-G "Ninja"
 	FORCE_COLOR=-DFORCE_COLORED_OUTPUT=1
@@ -194,15 +197,16 @@ endif
 ifeq (${DISABLE_CORE_FUNCTIONS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_CORE_FUNCTIONS_EXTENSION=0
 endif
-ifeq (${MERGE_EXTENSION_VCPKG_MANIFESTS}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DMERGE_EXTENSION_VCPKG_MANIFESTS=TRUE
-endif
-VCPKG_TOOLCHAIN_PATH?=
+
+# Enable VCPKG for this build
 ifneq ("${VCPKG_TOOLCHAIN_PATH}", "")
-	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_TOOLCHAIN_FILE='${VCPKG_TOOLCHAIN_PATH}'
+	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_TOOLCHAIN_FILE='${VCPKG_TOOLCHAIN_PATH}' -DVCPKG_BUILD=1
 endif
 ifneq ("${VCPKG_TARGET_TRIPLET}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_TARGET_TRIPLET='${VCPKG_TARGET_TRIPLET}'
+endif
+ifeq (${USE_MERGED_VCPKG_MANIFEST}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build/vcpkg_merged_manifest'
 endif
 
 clean:
@@ -234,6 +238,12 @@ clreldebug:
 	mkdir -p ./build/clreldebug && \
 	cd build/clreldebug && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake --build . --config RelWithDebInfo
+
+merged_vcpkg:
+	mkdir -p ./build/vcpkg_merged_manifest && \
+	cd build/vcpkg_merged_manifest && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${CMAKE_VARS} -DMERGE_EXTENSION_VCPKG_MANIFESTS=TRUE -DVCPKG_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config RelWithDebInfo
 
 unittest: debug
