@@ -31,10 +31,10 @@ struct CorrOperation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const A_TYPE &x_input, const B_TYPE &y_input, AggregateBinaryInput &idata) {
-		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(state.cov_pop, x_input, y_input, idata);
-		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.dev_pop_x, x_input);
-		STDDevBaseOperation::Execute<B_TYPE, StddevState>(state.dev_pop_y, y_input);
+	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
+		CovarOperation::Operation<A_TYPE, B_TYPE, CovarState, OP>(state.cov_pop, y, x, idata);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.dev_pop_x, x);
+		STDDevBaseOperation::Execute<B_TYPE, StddevState>(state.dev_pop_y, y);
 	}
 
 	template <class STATE, class OP>

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// jemalloc-extension.hpp
+// jemalloc_extension.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-class JEMallocExtension : public Extension {
+class JemallocExtension : public Extension {
 public:
 	void Load(DuckDB &db) override;
 	std::string Name() override;
