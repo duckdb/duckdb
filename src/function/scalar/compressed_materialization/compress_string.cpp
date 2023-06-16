@@ -25,18 +25,19 @@ static inline void ReverseMemCpy(const data_ptr_t __restrict &dest, const const_
 template <class RESULT_TYPE>
 static inline RESULT_TYPE StringCompressInternal(const string_t &input) {
 	RESULT_TYPE result;
-	auto result_ptr = data_ptr_cast(&result);
-	result_ptr[0] = input.GetSize();
-	result_ptr++;
-
+	const auto result_ptr = data_ptr_cast(&result);
 	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
-		TemplatedReverseMemCpy<sizeof(RESULT_TYPE) - 1>(result_ptr, const_data_ptr_cast(input.GetPrefix()));
-	} else if (input.GetSize() <= string_t::INLINE_LENGTH) {
-		TemplatedReverseMemCpy<string_t::INLINE_LENGTH>(result_ptr, const_data_ptr_cast(input.GetPrefix()));
+		TemplatedReverseMemCpy<sizeof(RESULT_TYPE)>(result_ptr, const_data_ptr_cast(input.GetPrefix()));
+	} else if (input.IsInlined()) {
+		static constexpr auto REMAINDER = sizeof(RESULT_TYPE) - string_t::INLINE_LENGTH;
+		TemplatedReverseMemCpy<string_t::INLINE_LENGTH>(result_ptr + REMAINDER, const_data_ptr_cast(input.GetPrefix()));
+		memset(result_ptr, '\0', REMAINDER);
 	} else {
-		result = 0;
-		ReverseMemCpy(result_ptr, data_ptr_cast(input.GetPointer()), input.GetSize());
+		const auto remainder = sizeof(RESULT_TYPE) - input.GetSize();
+		ReverseMemCpy(result_ptr + remainder, data_ptr_cast(input.GetPointer()), input.GetSize());
+		memset(result_ptr, '\0', remainder);
 	}
+	result_ptr[0] = input.GetSize();
 	return result;
 }
 
@@ -49,15 +50,15 @@ static inline RESULT_TYPE StringCompress(const string_t &input) {
 template <class RESULT_TYPE>
 static inline RESULT_TYPE MiniStringCompress(const string_t &input) {
 	if (sizeof(RESULT_TYPE) <= string_t::INLINE_LENGTH) {
-		return input.GetSize() + *reinterpret_cast<const uint8_t *>(input.GetPrefix());
+		return input.GetSize() + *const_data_ptr_cast(input.GetPrefix());
 	} else {
-		return input.GetSize() + *reinterpret_cast<const uint8_t *>(input.GetDataUnsafe());
+		return input.GetSize() + *const_data_ptr_cast(input.GetPointer());
 	}
 }
 
 template <>
 inline uint8_t StringCompress(const string_t &input) {
-	D_ASSERT(input.GetSize() < sizeof(uint8_t));
+	D_ASSERT(input.GetSize() <= sizeof(uint8_t));
 	return MiniStringCompress<uint8_t>(input);
 }
 
@@ -108,34 +109,40 @@ public:
 
 template <class INPUT_TYPE>
 static inline string_t StringDecompress(const INPUT_TYPE &input, ArenaAllocator &allocator) {
-	auto input_ptr = const_data_ptr_cast(&input);
+	const auto input_ptr = const_data_ptr_cast(&input);
 	string_t result(input_ptr[0]);
-	input_ptr++;
-
-	if (sizeof(INPUT_TYPE) <= string_t::INLINE_LENGTH || result.GetSize() <= string_t::INLINE_LENGTH) {
-		TemplatedReverseMemCpy<sizeof(INPUT_TYPE) - 1>(data_ptr_cast(result.GetPrefixWriteable()), input_ptr);
+	if (sizeof(INPUT_TYPE) <= string_t::INLINE_LENGTH) {
+		const auto result_ptr = data_ptr_cast(result.GetPrefixWriteable());
+		TemplatedReverseMemCpy<sizeof(INPUT_TYPE)>(result_ptr, input_ptr);
+		memset(result_ptr + sizeof(INPUT_TYPE) - 1, '\0', string_t::INLINE_LENGTH - sizeof(INPUT_TYPE) + 1);
+	} else if (result.GetSize() <= string_t::INLINE_LENGTH) {
+		static constexpr auto REMAINDER = sizeof(INPUT_TYPE) - string_t::INLINE_LENGTH;
+		const auto result_ptr = data_ptr_cast(result.GetPrefixWriteable());
+		TemplatedReverseMemCpy<string_t::INLINE_LENGTH>(result_ptr, input_ptr + REMAINDER);
 	} else {
 		result.SetPointer(char_ptr_cast(allocator.Allocate(sizeof(INPUT_TYPE))));
-		TemplatedReverseMemCpy<sizeof(INPUT_TYPE) - 1>(data_ptr_cast(result.GetPointer()), input_ptr);
+		TemplatedReverseMemCpy<sizeof(INPUT_TYPE)>(data_ptr_cast(result.GetPointer()), input_ptr);
 	}
 	return result;
 }
 
 template <class INPUT_TYPE>
 static inline string_t MiniStringDecompress(const INPUT_TYPE &input, ArenaAllocator &allocator) {
-	if (sizeof(INPUT_TYPE) <= string_t::INLINE_LENGTH) {
-		const auto min = MinValue<INPUT_TYPE>(1, input);
-		string_t result(min);
+	if (input == 0) {
+		string_t result(uint32_t(0));
 		memset(result.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
-		*reinterpret_cast<uint8_t *>(result.GetPrefixWriteable()) = input - min;
 		return result;
-	} else if (input == 0) {
-		return string_t(uint32_t(0));
-	} else {
-		auto ptr = allocator.Allocate(1);
-		*ptr = input - 1;
-		return string_t(const_char_ptr_cast(ptr), 1);
 	}
+
+	string_t result(1);
+	if (sizeof(INPUT_TYPE) <= string_t::INLINE_LENGTH) {
+		memset(result.GetPrefixWriteable(), '\0', string_t::INLINE_BYTES);
+		*data_ptr_cast(result.GetPrefixWriteable()) = input - 1;
+	} else {
+		result.SetPointer(char_ptr_cast(allocator.Allocate(1)));
+		*data_ptr_cast(result.GetPointer()) = input - 1;
+	}
+	return result;
 }
 
 template <>
