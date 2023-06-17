@@ -119,6 +119,10 @@
 #include "utf8proc_wrapper.hpp"
 #include <unordered_set>
 #include <vector>
+#ifdef __MVS__
+#include <strings.h>
+#include <sys/time.h>
+#endif
 
 #if defined(_WIN32) || defined(__WIN32__) || defined(WIN32)
 // disable highlighting on windows (for now?)
