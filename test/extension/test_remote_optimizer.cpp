@@ -18,8 +18,8 @@
 #include <arpa/inet.h>
 
 #ifdef __MVS__
-#define PATH_MAX _XOPEN_PATH_MAX
-#include <zos-sys-info.h>
+#define _XOPEN_SOURCE_EXTENDED 1
+#include <strings.h>
 #endif
 
 using namespace duckdb;
