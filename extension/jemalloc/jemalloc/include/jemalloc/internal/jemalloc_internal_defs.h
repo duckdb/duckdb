@@ -348,7 +348,9 @@ namespace duckdb_jemalloc {
  *                                 system overhead.
  */
 //#define JEMALLOC_PURGE_MADVISE_FREE
+#ifndef __MVS__
 #define JEMALLOC_PURGE_MADVISE_DONTNEED 
+#endif
 /* #undef JEMALLOC_PURGE_MADVISE_DONTNEED_ZEROS */
 
 /* Defined if madvise(2) is available but MADV_FREE is not (x86 Linux only). */

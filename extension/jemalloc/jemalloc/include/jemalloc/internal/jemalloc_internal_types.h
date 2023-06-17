@@ -112,7 +112,7 @@ typedef enum malloc_init_e malloc_init_t;
 	(((s) + (alignment - 1)) & ((~(alignment)) + 1))
 
 /* Declare a variable-length array. */
-#if __STDC_VERSION__ < 199901L
+#if (__STDC_VERSION__ < 199901L) && !defined(__MVS__)
 #  ifdef _MSC_VER
 #    include <malloc.h>
 #    define alloca _alloca

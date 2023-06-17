@@ -22,6 +22,11 @@ using namespace duckdb;
 #include <sys/types.h>
 #include <arpa/inet.h>
 
+#ifdef __MVS__
+#define PATH_MAX _XOPEN_PATH_MAX
+#include <zos-sys-info.h>
+#endif
+
 class WaggleExtension : public OptimizerExtension {
 public:
 	WaggleExtension() {
