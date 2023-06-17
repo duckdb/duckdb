@@ -855,38 +855,39 @@ void Vector::Flatten(const SelectionVector &sel, idx_t count) {
 	}
 }
 
-void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data) {
+void Vector::ToUnifiedFormat(idx_t count, UnifiedVectorFormat &format) {
 	switch (GetVectorType()) {
 	case VectorType::DICTIONARY_VECTOR: {
 		auto &sel = DictionaryVector::SelVector(*this);
+		format.owned_sel.Initialize(sel);
+		format.sel = &format.owned_sel;
+
 		auto &child = DictionaryVector::Child(*this);
 		if (child.GetVectorType() == VectorType::FLAT_VECTOR) {
-			data.sel = &sel;
-			data.data = FlatVector::GetData(child);
-			data.validity = FlatVector::Validity(child);
+			format.data = FlatVector::GetData(child);
+			format.validity = FlatVector::Validity(child);
 		} else {
-			// dictionary with non-flat child: create a new reference to the child and normalify it
+			// dictionary with non-flat child: create a new reference to the child and flatten it
 			Vector child_vector(child);
 			child_vector.Flatten(sel, count);
 			auto new_aux = make_buffer<VectorChildBuffer>(std::move(child_vector));
 
-			data.sel = &sel;
-			data.data = FlatVector::GetData(new_aux->data);
-			data.validity = FlatVector::Validity(new_aux->data);
+			format.data = FlatVector::GetData(new_aux->data);
+			format.validity = FlatVector::Validity(new_aux->data);
 			this->auxiliary = std::move(new_aux);
 		}
 		break;
 	}
 	case VectorType::CONSTANT_VECTOR:
-		data.sel = ConstantVector::ZeroSelectionVector(count, data.owned_sel);
-		data.data = ConstantVector::GetData(*this);
-		data.validity = ConstantVector::Validity(*this);
+		format.sel = ConstantVector::ZeroSelectionVector(count, format.owned_sel);
+		format.data = ConstantVector::GetData(*this);
+		format.validity = ConstantVector::Validity(*this);
 		break;
 	default:
 		Flatten(count);
-		data.sel = FlatVector::IncrementalSelectionVector();
-		data.data = FlatVector::GetData(*this);
-		data.validity = FlatVector::Validity(*this);
+		format.sel = FlatVector::IncrementalSelectionVector();
+		format.data = FlatVector::GetData(*this);
+		format.validity = FlatVector::Validity(*this);
 		break;
 	}
 }
