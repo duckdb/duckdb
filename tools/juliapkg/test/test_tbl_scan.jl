@@ -1,4 +1,4 @@
-# test_df_scan.jl
+# test_tbl_scan.jl
 
 @testset "Test standard DataFrame scan" begin
     con = DBInterface.connect(DuckDB.DB)

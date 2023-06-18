@@ -12,7 +12,7 @@ test_files = [
     "test_big_nested.jl",
     "test_config.jl",
     "test_connection.jl",
-    "test_df_scan.jl",
+    "test_tbl_scan.jl",
     "test_prepare.jl",
     "test_transaction.jl",
     "test_sqlite.jl",
