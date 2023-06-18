@@ -4,7 +4,7 @@ mutable struct QueryResult
     handle::Ref{duckdb_result}
     names::Vector{Symbol}
     types::Vector{Type}
-    df::Union{Missing, NamedTuple}
+    tbl::Union{Missing, NamedTuple}
     chunk_index::UInt64
 
     function QueryResult(handle::Ref{duckdb_result})
@@ -552,9 +552,9 @@ function convert_column(column_data::ColumnConversionData)
 end
 
 function Tables.columns(q::QueryResult)
-    if q.df === missing
+    if q.tbl === missing
         if q.chunk_index != 1
-            throw(NotImplementedException("Converting to a DataFrame is not supported after calling nextDataChunk"))
+            throw(NotImplementedException("Materializing into a Julia table is not supported after calling nextDataChunk"))
         end
         # gather all the data chunks
         column_count = duckdb_column_count(q.handle)
@@ -569,14 +569,13 @@ function Tables.columns(q::QueryResult)
             push!(chunks, chunk)
         end
 
-        df = NamedTuple{Tuple(q.names)}(ntuple(column_count) do i
+        q.tbl = NamedTuple{Tuple(q.names)}(ntuple(column_count) do i
             logical_type = LogicalType(duckdb_column_logical_type(q.handle, i))
             column_data = ColumnConversionData(chunks, i, logical_type, nothing)
             convert_column(column_data)
         end)
-        q.df = df
     end
-    return q.df
+    return q.tbl
 end
 
 mutable struct PendingQueryResult

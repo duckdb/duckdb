@@ -4,7 +4,7 @@
     con = DBInterface.connect(DuckDB.DB)
     df = DataFrame(a = [1, 2, 3], b = [42, 84, 42])
 
-    DuckDB.register_data_frame(con, df, "my_df")
+    DuckDB.register_table(con, df, "my_df")
     GC.gc()
 
     results = DBInterface.execute(con, "SELECT * FROM my_df")
@@ -22,7 +22,7 @@ end
     con = DBInterface.connect(DuckDB.DB)
     df = (a = [1, 2, 3], b = [42, 84, 42])
 
-    DuckDB.register_data_frame(con, df, "my_df")
+    DuckDB.register_table(con, df, "my_df")
     GC.gc()
 
     results = DBInterface.execute(con, "SELECT * FROM my_df")
@@ -40,7 +40,7 @@ end
     con = DBInterface.connect(DuckDB.DB)
     df = DataFrame(a = [1, missing, 3], b = [missing, 84, missing])
 
-    DuckDB.register_data_frame(con, df, "my_df")
+    DuckDB.register_table(con, df, "my_df")
 
     results = DBInterface.execute(con, "SELECT * FROM my_df")
     df = DataFrame(results)
@@ -56,7 +56,7 @@ end
     con = DBInterface.connect(DuckDB.DB)
     df = (a = [1, missing, 3], b = [missing, 84, missing])
 
-    DuckDB.register_data_frame(con, df, "my_df")
+    DuckDB.register_table(con, df, "my_df")
 
     results = DBInterface.execute(con, "SELECT * FROM my_df")
     df = columntable(results)
@@ -76,7 +76,7 @@ end
         my_df[!, :a] = convert.(Union{type, Missing}, my_df[!, :a])
         my_df[!, :b] = convert.(Union{type, Missing}, my_df[!, :b])
 
-        DuckDB.register_data_frame(con, my_df, "my_df")
+        DuckDB.register_table(con, my_df, "my_df")
 
         results = DBInterface.execute(con, "SELECT * FROM my_df")
         df = DataFrame(results)
@@ -95,7 +95,7 @@ end
             convert.(Union{type, Missing}, col)
         end
 
-        DuckDB.register_data_frame(con, my_df, "my_df")
+        DuckDB.register_table(con, my_df, "my_df")
 
         results = DBInterface.execute(con, "SELECT * FROM my_df")
         df = columntable(results)
@@ -111,7 +111,7 @@ end
     # boolean
     my_df = DataFrame(a = [true, false, missing])
 
-    DuckDB.register_data_frame(con, my_df, "my_df")
+    DuckDB.register_table(con, my_df, "my_df")
 
     results = DBInterface.execute(con, "SELECT * FROM my_df")
     df = DataFrame(results)
@@ -124,7 +124,7 @@ end
         timestamp = [DateTime(1992, 9, 20, 23, 3, 1), DateTime(1950, 2, 3, 11, 49, 3), missing]
     )
 
-    DuckDB.register_data_frame(con, my_df, "my_df")
+    DuckDB.register_table(con, my_df, "my_df")
 
     results = DBInterface.execute(con, "SELECT * FROM my_df")
     df = DataFrame(results)
@@ -139,7 +139,7 @@ end
     # boolean
     my_df = (a = [true, false, missing],)
 
-    DuckDB.register_data_frame(con, my_df, "my_df")
+    DuckDB.register_table(con, my_df, "my_df")
 
     results = DBInterface.execute(con, "SELECT * FROM my_df")
     df = columntable(results)
@@ -152,7 +152,7 @@ end
         timestamp = [DateTime(1992, 9, 20, 23, 3, 1), DateTime(1950, 2, 3, 11, 49, 3), missing]
     )
 
-    DuckDB.register_data_frame(con, my_df, "my_df")
+    DuckDB.register_table(con, my_df, "my_df")
 
     results = DBInterface.execute(con, "SELECT * FROM my_df")
     df = columntable(results)
@@ -167,7 +167,7 @@ end
     # date/time/timestamp
     my_df = DataFrame(str = ["hello", "this is a very long string", missing, "obligatory mühleisen"])
 
-    DuckDB.register_data_frame(con, my_df, "my_df")
+    DuckDB.register_table(con, my_df, "my_df")
 
     results = DBInterface.execute(con, "SELECT * FROM my_df")
     df = DataFrame(results)
@@ -182,7 +182,7 @@ end
     # date/time/timestamp
     my_df = (str = ["hello", "this is a very long string", missing, "obligatory mühleisen"],)
 
-    DuckDB.register_data_frame(con, my_df, "my_df")
+    DuckDB.register_table(con, my_df, "my_df")
 
     results = DBInterface.execute(con, "SELECT * FROM my_df")
     df = columntable(results)
@@ -195,7 +195,7 @@ end
     con = DBInterface.connect(DuckDB.DB)
     df = DataFrame(a = [1, 2, 3], b = [42, 84, 42], c = [3, 7, 18])
 
-    DuckDB.register_data_frame(con, df, "my_df")
+    DuckDB.register_table(con, df, "my_df")
     GC.gc()
 
     results = DBInterface.execute(con, "SELECT b FROM my_df")
@@ -238,7 +238,7 @@ end
     con = DBInterface.connect(DuckDB.DB)
     df = (a = [1, 2, 3], b = [42, 84, 42], c = [3, 7, 18],)
 
-    DuckDB.register_data_frame(con, df, "my_df")
+    DuckDB.register_table(con, df, "my_df")
     GC.gc()
 
     results = DBInterface.execute(con, "SELECT b FROM my_df")
@@ -282,7 +282,7 @@ end
 
     my_df = DataFrame(DBInterface.execute(con, "SELECT i%5 AS i FROM range(10000000) tbl(i)"))
 
-    DuckDB.register_data_frame(con, my_df, "my_df")
+    DuckDB.register_table(con, my_df, "my_df")
     GC.gc()
 
     results = DBInterface.execute(con, "SELECT SUM(i) AS sum FROM my_df")
@@ -300,7 +300,7 @@ end
 
     my_df = DataFrame(DBInterface.execute(con, "SELECT i%5 AS i FROM range(10000000) tbl(i)"))
 
-    DuckDB.register_data_frame(con, my_df, "my_df")
+    DuckDB.register_table(con, my_df, "my_df")
     GC.gc()
 
     results = DBInterface.execute(con, "SELECT SUM(i) AS sum FROM my_df")

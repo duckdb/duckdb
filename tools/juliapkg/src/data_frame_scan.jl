@@ -1,27 +1,27 @@
-struct DFBindInfo
-    df::Any
+struct TableBindInfo
+    tbl::Any
     input_columns::Vector
     scan_types::Vector{Type}
     result_types::Vector{Type}
     scan_functions::Vector{Function}
 
-    function DFBindInfo(
-        df,
+    function TableBindInfo(
+        tbl,
         input_columns::Vector,
         scan_types::Vector{Type},
         result_types::Vector{Type},
         scan_functions::Vector{Function}
     )
-        return new(df, input_columns, scan_types, result_types, scan_functions)
+        return new(tbl, input_columns, scan_types, result_types, scan_functions)
     end
 end
 
-df_result_type(df, entry) = Core.Compiler.typesubtract(eltype(df[entry]), Missing, 1)
+table_result_type(tbl, entry) = Core.Compiler.typesubtract(eltype(tbl[entry]), Missing, 1)
 
-df_julia_type(::Type{Date}) = Int32
-df_julia_type(::Type{Time}) = Int64
-df_julia_type(::Type{DateTime}) = Int64
-df_julia_type(::Type{T}) where {T} = T
+julia_to_duck_type(::Type{Date}) = Int32
+julia_to_duck_type(::Type{Time}) = Int64
+julia_to_duck_type(::Type{DateTime}) = Int64
+julia_to_duck_type(::Type{T}) where {T} = T
 
 value_to_duckdb(val::Date) = convert(Int32, Dates.date2epochdays(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS)
 value_to_duckdb(val::Time) = convert(Int64, Dates.value(val) / 1000)
@@ -34,21 +34,21 @@ value_to_duckdb(val::AbstractString) =
     )
 value_to_duckdb(val) = val
 
-function df_scan_column(
-    input_column::AbstractVector{DF_TYPE},
-    df_offset::Int64,
+function tbl_scan_column(
+    input_column::AbstractVector{JL_TYPE},
+    row_offset::Int64,
     col_idx::Int64,
     result_idx::Int64,
     scan_count::Int64,
     output::DuckDB.DataChunk,
     ::Type{DUCK_TYPE},
-    ::Type{DF_TYPE}
-) where {DUCK_TYPE, DF_TYPE}
+    ::Type{JL_TYPE}
+) where {DUCK_TYPE, JL_TYPE}
     vector::Vec = DuckDB.get_vector(output, result_idx)
     result_array::Vector{DUCK_TYPE} = DuckDB.get_array(vector, DUCK_TYPE)
     validity::ValidityMask = DuckDB.get_validity(vector)
     for i::Int64 in 1:scan_count
-        val = getindex(input_column, df_offset + i)
+        val = getindex(input_column, row_offset + i)
         if val === missing
             DuckDB.setinvalid(validity, i)
         else
@@ -57,20 +57,20 @@ function df_scan_column(
     end
 end
 
-function df_scan_string_column(
-    input_column::AbstractVector{DF_TYPE},
-    df_offset::Int64,
+function tbl_scan_string_column(
+    input_column::AbstractVector{JL_TYPE},
+    row_offset::Int64,
     col_idx::Int64,
     result_idx::Int64,
     scan_count::Int64,
     output::DuckDB.DataChunk,
     ::Type{DUCK_TYPE},
-    ::Type{DF_TYPE}
-) where {DUCK_TYPE, DF_TYPE}
+    ::Type{JL_TYPE}
+) where {DUCK_TYPE, JL_TYPE}
     vector::Vec = DuckDB.get_vector(output, result_idx)
     validity::ValidityMask = DuckDB.get_validity(vector)
     for i::Int64 in 1:scan_count
-        val = getindex(input_column, df_offset + i)
+        val = getindex(input_column, row_offset + i)
         if val === missing
             DuckDB.setinvalid(validity, i)
         else
@@ -79,24 +79,24 @@ function df_scan_string_column(
     end
 end
 
-function df_scan_function(df, entry)
-    result_type = df_result_type(df, entry)
+function tbl_scan_function(tbl, entry)
+    result_type = table_result_type(tbl, entry)
     if result_type <: AbstractString
-        return df_scan_string_column
+        return tbl_scan_string_column
     end
-    return df_scan_column
+    return tbl_scan_column
 end
 
-function df_bind_function(info::DuckDB.BindInfo)
-    # fetch the df name from the function parameters
+function tbl_bind_function(info::DuckDB.BindInfo)
+    # fetch the tbl name from the function parameters
     parameter = DuckDB.get_parameter(info, 0)
     name = DuckDB.getvalue(parameter, String)
-    # fetch the actual df using the function name
+    # fetch the actual tbl using the function name
     extra_data = DuckDB.get_extra_data(info)
-    df = extra_data[name]
+    tbl = extra_data[name]
 
     # set the cardinality
-    row_count::UInt64 = Tables.rowcount(df)
+    row_count::UInt64 = Tables.rowcount(tbl)
     DuckDB.set_stats_cardinality(info, row_count, true)
 
     # register the result columns
@@ -104,62 +104,62 @@ function df_bind_function(info::DuckDB.BindInfo)
     scan_types::Vector{Type} = Vector()
     result_types::Vector{Type} = Vector()
     scan_functions::Vector{Function} = Vector()
-    for entry in Tables.columnnames(df)
-        result_type = df_result_type(df, entry)
-        scan_function = df_scan_function(df, entry)
-        push!(input_columns, df[entry])
-        push!(scan_types, eltype(df[entry]))
-        push!(result_types, df_julia_type(result_type))
+    for entry in Tables.columnnames(tbl)
+        result_type = table_result_type(tbl, entry)
+        scan_function = tbl_scan_function(tbl, entry)
+        push!(input_columns, tbl[entry])
+        push!(scan_types, eltype(tbl[entry]))
+        push!(result_types, julia_to_duck_type(result_type))
         push!(scan_functions, scan_function)
 
         DuckDB.add_result_column(info, string(entry), result_type)
     end
-    return DFBindInfo(df, input_columns, scan_types, result_types, scan_functions)
+    return TableBindInfo(tbl, input_columns, scan_types, result_types, scan_functions)
 end
 
-mutable struct DFGlobalInfo
+mutable struct TableGlobalInfo
     pos::Int64
     global_lock::ReentrantLock
 
-    function DFGlobalInfo()
+    function TableGlobalInfo()
         return new(0, ReentrantLock())
     end
 end
 
-mutable struct DFLocalInfo
+mutable struct TableLocalInfo
     columns::Vector{Int64}
     current_pos::Int64
     end_pos::Int64
 
-    function DFLocalInfo(columns)
+    function TableLocalInfo(columns)
         return new(columns, 0, 0)
     end
 end
 
-function df_global_init_function(info::DuckDB.InitInfo)
-    bind_info = DuckDB.get_bind_info(info, DFBindInfo)
-    # figure out the maximum number of threads to launch from the DF size
-    row_count::Int64 = Tables.rowcount(bind_info.df)
+function tbl_global_init_function(info::DuckDB.InitInfo)
+    bind_info = DuckDB.get_bind_info(info, TableBindInfo)
+    # figure out the maximum number of threads to launch from the tbl size
+    row_count::Int64 = Tables.rowcount(bind_info.tbl)
     max_threads::Int64 = ceil(row_count / DuckDB.ROW_GROUP_SIZE)
     DuckDB.set_max_threads(info, max_threads)
-    return DFGlobalInfo()
+    return TableGlobalInfo()
 end
 
-function df_local_init_function(info::DuckDB.InitInfo)
+function tbl_local_init_function(info::DuckDB.InitInfo)
     columns = DuckDB.get_projected_columns(info)
-    return DFLocalInfo(columns)
+    return TableLocalInfo(columns)
 end
 
-function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
-    bind_info = DuckDB.get_bind_info(info, DFBindInfo)
-    global_info = DuckDB.get_init_info(info, DFGlobalInfo)
-    local_info = DuckDB.get_local_info(info, DFLocalInfo)
+function tbl_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
+    bind_info = DuckDB.get_bind_info(info, TableBindInfo)
+    global_info = DuckDB.get_init_info(info, TableGlobalInfo)
+    local_info = DuckDB.get_local_info(info, TableLocalInfo)
 
     if local_info.current_pos >= local_info.end_pos
         # ran out of data to scan in the local info: fetch new rows from the global state (if any)
         # we can in increments of 100 vectors
         lock(global_info.global_lock) do
-            row_count::Int64 = Tables.rowcount(bind_info.df)
+            row_count::Int64 = Tables.rowcount(bind_info.tbl)
             local_info.current_pos = global_info.pos
             total_scan_amount::Int64 = DuckDB.ROW_GROUP_SIZE
             if local_info.current_pos + total_scan_amount >= row_count
@@ -198,36 +198,40 @@ function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
     return
 end
 
-function register_data_frame(con::Connection, df, name::AbstractString)
-    con.db.registered_objects[name] = columntable(df)
+function register_table(con::Connection, tbl, name::AbstractString)
+    con.db.registered_objects[name] = columntable(tbl)
     DBInterface.execute(
         con,
-        string("CREATE OR REPLACE VIEW \"", name, "\" AS SELECT * FROM julia_df_scan('", name, "')")
+        string("CREATE OR REPLACE VIEW \"", name, "\" AS SELECT * FROM julia_tbl_scan('", name, "')")
     )
     return
 end
-register_data_frame(db::DB, df, name::AbstractString) = register_data_frame(db.main_connection, df, name)
+register_table(db::DB, tbl, name::AbstractString) = register_table(db.main_connection, tbl, name)
 
-function unregister_data_frame(con::Connection, name::AbstractString)
+function unregister_table(con::Connection, name::AbstractString)
     pop!(con.db.registered_objects, name)
     DBInterface.execute(con, string("DROP VIEW IF EXISTS \"", name, "\""))
     return
 end
-unregister_data_frame(db::DB, name::AbstractString) = unregister_data_frame(db.main_connection, name)
+unregister_table(db::DB, name::AbstractString) = unregister_table(db.main_connection, name)
+
+# for backwards compatibility:
+const register_data_frame = register_table
+const unregister_data_frame = unregister_table
 
 
-function _add_data_frame_scan(db::DB)
-    # add the data frame scan function
+function _add_table_scan(db::DB)
+    # add the table scan function
     DuckDB.create_table_function(
         db.main_connection,
-        "julia_df_scan",
+        "julia_tbl_scan",
         [String],
-        df_bind_function,
-        df_global_init_function,
-        df_scan_function,
+        tbl_bind_function,
+        tbl_global_init_function,
+        tbl_scan_function,
         db.handle.registered_objects,
         true,
-        df_local_init_function
+        tbl_local_init_function
     )
     return
 end
