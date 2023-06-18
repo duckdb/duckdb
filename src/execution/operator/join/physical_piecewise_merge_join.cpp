@@ -385,7 +385,7 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 
 void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    OperatorState &state_p) const {
-	auto &state = (PiecewiseMergeJoinState &)state_p;
+	auto &state = state_p.Cast<PiecewiseMergeJoinState>();
 	auto &gstate = sink_state->Cast<MergeJoinGlobalState>();
 
 	state.ResolveJoinKeys(input);
@@ -507,7 +507,7 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 
 OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &input,
                                                                   DataChunk &chunk, OperatorState &state_p) const {
-	auto &state = (PiecewiseMergeJoinState &)state_p;
+	auto &state = state_p.Cast<PiecewiseMergeJoinState>();
 	auto &gstate = sink_state->Cast<MergeJoinGlobalState>();
 	auto &rsorted = *gstate.table->global_sort_state.sorted_blocks[0];
 	const auto left_cols = input.ColumnCount();
@@ -682,7 +682,7 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, 
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = sink_state->Cast<MergeJoinGlobalState>();
-	auto &state = (PiecewiseJoinScanState &)input.global_state;
+	auto &state = input.global_state.Cast<PiecewiseJoinScanState>();
 
 	lock_guard<mutex> l(state.lock);
 	if (!state.scanner) {

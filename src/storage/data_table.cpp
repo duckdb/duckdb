@@ -13,6 +13,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
@@ -302,7 +303,7 @@ static void VerifyCheckConstraint(ClientContext &context, TableCatalogEntry &tab
 	UnifiedVectorFormat vdata;
 	result.ToUnifiedFormat(chunk.size(), vdata);
 
-	auto dataptr = (int32_t *)vdata.data;
+	auto dataptr = UnifiedVectorFormat::GetData<int32_t>(vdata);
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (vdata.validity.RowIsValid(idx) && dataptr[idx] == 0) {
@@ -834,7 +835,7 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 	if (!info->indexes.Empty()) {
 		idx_t current_row_base = start_row;
 		row_t row_data[STANDARD_VECTOR_SIZE];
-		Vector row_identifiers(LogicalType::ROW_TYPE, (data_ptr_t)row_data);
+		Vector row_identifiers(LogicalType::ROW_TYPE, data_ptr_cast(row_data));
 		ScanTableSegment(start_row, count, [&](DataChunk &chunk) {
 			for (idx_t i = 0; i < chunk.size(); i++) {
 				row_data[i] = current_row_base + i;
@@ -1201,13 +1202,14 @@ void DataTable::WALAddIndex(ClientContext &context, unique_ptr<Index> index,
 	// intermediate holds scanned chunks of the underlying data to create the index
 	DataChunk intermediate;
 	vector<LogicalType> intermediate_types;
-	auto column_ids = index->column_ids;
-	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
-	for (auto &id : index->column_ids) {
-		auto &col = column_definitions[id];
-		intermediate_types.push_back(col.Type());
+	vector<column_t> column_ids;
+	for (auto &it : column_definitions) {
+		intermediate_types.push_back(it.Type());
+		column_ids.push_back(it.Oid());
 	}
+	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	intermediate_types.emplace_back(LogicalType::ROW_TYPE);
+
 	intermediate.Initialize(allocator, intermediate_types);
 
 	// holds the result of executing the index expression on the intermediate chunks
@@ -1299,10 +1301,10 @@ void DataTable::CommitDropTable() {
 }
 
 //===--------------------------------------------------------------------===//
-// GetStorageInfo
+// GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
-void DataTable::GetStorageInfo(TableStorageInfo &result) {
-	row_groups->GetStorageInfo(result);
+vector<ColumnSegmentInfo> DataTable::GetColumnSegmentInfo() {
+	return row_groups->GetColumnSegmentInfo();
 }
 
 } // namespace duckdb

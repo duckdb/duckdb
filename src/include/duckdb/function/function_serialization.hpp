@@ -25,8 +25,10 @@ public:
 		bool serialize = function.serialize;
 		writer.WriteField(serialize);
 		if (serialize) {
-			D_ASSERT(function.deserialize);
 			function.serialize(writer, bind_info, function);
+			// First check if serialize throws a NotImplementedException, in which case it doesn't require a deserialize
+			// function
+			D_ASSERT(function.deserialize);
 		}
 	}
 
@@ -64,7 +66,7 @@ public:
 				throw SerializationException("Function requires deserialization but no deserialization function for %s",
 				                             function.name);
 			}
-			bind_info = function.deserialize(context, reader, function);
+			bind_info = function.deserialize(state, reader, function);
 		} else {
 			D_ASSERT(!function.serialize);
 			D_ASSERT(!function.deserialize);

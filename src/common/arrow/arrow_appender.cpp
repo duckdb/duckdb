@@ -162,8 +162,8 @@ struct ArrowScalarBaseData {
 
 		// append the main data
 		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(TGT) * size);
-		auto data = (SRC *)format.data;
-		auto result_data = (TGT *)append_data.main_buffer.data();
+		auto data = UnifiedVectorFormat::GetData<SRC>(format);
+		auto result_data = append_data.main_buffer.GetData<TGT>();
 
 		for (idx_t i = from; i < to; i++) {
 			auto source_idx = format.sel->get_index(i);
@@ -210,8 +210,8 @@ struct ArrowEnumData : public ArrowScalarBaseData<TGT> {
 
 		// resize the offset buffer - the offset buffer holds the offsets into the child array
 		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(uint32_t) * (size + 1));
-		auto data = (string_t *)FlatVector::GetData<string_t>(input);
-		auto offset_data = (uint32_t *)append_data.main_buffer.data();
+		auto data = FlatVector::GetData<string_t>(input);
+		auto offset_data = append_data.main_buffer.GetData<uint32_t>();
 		if (append_data.row_count == 0) {
 			// first entry
 			offset_data[0] = 0;
@@ -269,10 +269,10 @@ struct ArrowBoolData {
 		// we initialize both the validity and the bit set to 1's
 		ResizeValidity(append_data.validity, append_data.row_count + size);
 		ResizeValidity(append_data.main_buffer, append_data.row_count + size);
-		auto data = (bool *)format.data;
+		auto data = UnifiedVectorFormat::GetData<bool>(format);
 
-		auto result_data = (uint8_t *)append_data.main_buffer.data();
-		auto validity_data = (uint8_t *)append_data.validity.data();
+		auto result_data = append_data.main_buffer.GetData<uint8_t>();
+		auto validity_data = append_data.validity.GetData<uint8_t>();
 		uint8_t current_bit;
 		idx_t current_byte;
 		GetBitPosition(append_data.row_count, current_byte, current_bit);
@@ -318,7 +318,7 @@ struct ArrowUUIDConverter {
 
 	template <class SRC>
 	static void WriteData(data_ptr_t target, SRC input) {
-		UUID::ToString(input, (char *)target);
+		UUID::ToString(input, char_ptr_cast(target));
 	}
 };
 
@@ -341,8 +341,8 @@ struct ArrowVarcharData {
 
 		// resize the offset buffer - the offset buffer holds the offsets into the child array
 		append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(BUFTYPE) * (size + 1));
-		auto data = (SRC *)format.data;
-		auto offset_data = (BUFTYPE *)append_data.main_buffer.data();
+		auto data = UnifiedVectorFormat::GetData<SRC>(format);
+		auto offset_data = append_data.main_buffer.GetData<BUFTYPE>();
 		if (append_data.row_count == 0) {
 			// first entry
 			offset_data[0] = 0;
@@ -441,8 +441,8 @@ void AppendListOffsets(ArrowAppendData &append_data, UnifiedVectorFormat &format
 	// resize the offset buffer - the offset buffer holds the offsets into the child array
 	idx_t size = to - from;
 	append_data.main_buffer.resize(append_data.main_buffer.size() + sizeof(uint32_t) * (size + 1));
-	auto data = (list_entry_t *)format.data;
-	auto offset_data = (uint32_t *)append_data.main_buffer.data();
+	auto data = UnifiedVectorFormat::GetData<list_entry_t>(format);
+	auto offset_data = append_data.main_buffer.GetData<uint32_t>();
 	if (append_data.row_count == 0) {
 		// first entry
 		offset_data[0] = 0;

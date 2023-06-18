@@ -33,12 +33,12 @@ void PipeFileSystem::Reset(FileHandle &handle) {
 }
 
 int64_t PipeFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &pipe = (PipeFile &)handle;
+	auto &pipe = handle.Cast<PipeFile>();
 	return pipe.ReadChunk(buffer, nr_bytes);
 }
 
 int64_t PipeFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	auto &pipe = (PipeFile &)handle;
+	auto &pipe = handle.Cast<PipeFile>();
 	return pipe.WriteChunk(buffer, nr_bytes);
 }
 

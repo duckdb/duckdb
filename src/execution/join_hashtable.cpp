@@ -102,9 +102,9 @@ void JoinHashTable::ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx
 	UnifiedVectorFormat hdata;
 	hashes.ToUnifiedFormat(count, hdata);
 
-	auto hash_data = (hash_t *)hdata.data;
+	auto hash_data = UnifiedVectorFormat::GetData<hash_t>(hdata);
 	auto result_data = FlatVector::GetData<data_ptr_t *>(pointers);
-	auto main_ht = (data_ptr_t *)hash_map.get();
+	auto main_ht = reinterpret_cast<data_ptr_t *>(hash_map.get());
 	for (idx_t i = 0; i < count; i++) {
 		auto rindex = sel.get_index(i);
 		auto hindex = hdata.sel->get_index(rindex);
@@ -269,7 +269,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	hashes.Flatten(count);
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 
-	auto pointers = (atomic<data_ptr_t> *)hash_map.get();
+	auto pointers = reinterpret_cast<atomic<data_ptr_t> *>(hash_map.get());
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 
 	if (parallel) {
@@ -300,7 +300,7 @@ void JoinHashTable::InitializePointerTable() {
 	D_ASSERT(hash_map.GetSize() == capacity * sizeof(data_ptr_t));
 
 	// initialize HT with all-zero entries
-	std::fill_n((data_ptr_t *)hash_map.get(), capacity, nullptr);
+	std::fill_n(reinterpret_cast<data_ptr_t *>(hash_map.get()), capacity, nullptr);
 
 	bitmask = capacity - 1;
 }
@@ -627,6 +627,8 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 		ConstructMarkJoinResult(keys, input, result);
 	} else {
 		auto &info = ht.correlated_mark_join_info;
+		lock_guard<mutex> mj_lock(info.mj_lock);
+
 		// there are correlated columns
 		// first we fetch the counts from the aggregate hashtable corresponding to these entries
 		D_ASSERT(keys.ColumnCount() == info.group_chunk.ColumnCount() + 1);

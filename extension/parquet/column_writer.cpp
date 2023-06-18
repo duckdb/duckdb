@@ -193,8 +193,8 @@ void ColumnWriter::CompressPage(BufferedSerializer &temp_writer, size_t &compres
 	case CompressionCodec::SNAPPY: {
 		compressed_size = duckdb_snappy::MaxCompressedLength(temp_writer.blob.size);
 		compressed_buf = duckdb::unique_ptr<data_t[]>(new data_t[compressed_size]);
-		duckdb_snappy::RawCompress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size,
-		                           (char *)compressed_buf.get(), &compressed_size);
+		duckdb_snappy::RawCompress(const_char_ptr_cast(temp_writer.blob.data.get()), temp_writer.blob.size,
+		                           char_ptr_cast(compressed_buf.get()), &compressed_size);
 		compressed_data = compressed_buf.get();
 		D_ASSERT(compressed_size <= duckdb_snappy::MaxCompressedLength(temp_writer.blob.size));
 		break;
@@ -203,8 +203,8 @@ void ColumnWriter::CompressPage(BufferedSerializer &temp_writer, size_t &compres
 		MiniZStream s;
 		compressed_size = s.MaxCompressedLength(temp_writer.blob.size);
 		compressed_buf = duckdb::unique_ptr<data_t[]>(new data_t[compressed_size]);
-		s.Compress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size, (char *)compressed_buf.get(),
-		           &compressed_size);
+		s.Compress(const_char_ptr_cast(temp_writer.blob.data.get()), temp_writer.blob.size,
+		           char_ptr_cast(compressed_buf.get()), &compressed_size);
 		compressed_data = compressed_buf.get();
 		break;
 	}
@@ -279,6 +279,18 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 class ColumnWriterPageState {
 public:
 	virtual ~ColumnWriterPageState() {
+	}
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -412,7 +424,7 @@ void BasicColumnWriter::FlushPageState(Serializer &temp_writer, ColumnWriterPage
 }
 
 void BasicColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
-	auto &state = (BasicColumnWriterState &)state_p;
+	auto &state = state_p.Cast<BasicColumnWriterState>();
 	auto &col_chunk = state.row_group.columns[state.col_idx];
 
 	idx_t start = 0;
@@ -448,7 +460,7 @@ duckdb_parquet::format::Encoding::type BasicColumnWriter::GetEncoding(BasicColum
 }
 
 void BasicColumnWriter::BeginWrite(ColumnWriterState &state_p) {
-	auto &state = (BasicColumnWriterState &)state_p;
+	auto &state = state_p.Cast<BasicColumnWriterState>();
 
 	// set up the page write info
 	state.stats_state = InitializeStatsState();
@@ -576,7 +588,7 @@ idx_t BasicColumnWriter::GetRowSize(Vector &vector, idx_t index, BasicColumnWrit
 }
 
 void BasicColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
-	auto &state = (BasicColumnWriterState &)state_p;
+	auto &state = state_p.Cast<BasicColumnWriterState>();
 
 	idx_t remaining = count;
 	idx_t offset = 0;
@@ -640,7 +652,7 @@ void BasicColumnWriter::SetParquetStatistics(BasicColumnWriterState &state,
 }
 
 void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
-	auto &state = (BasicColumnWriterState &)state_p;
+	auto &state = state_p.Cast<BasicColumnWriterState>();
 	auto &column_chunk = state.row_group.columns[state.col_idx];
 
 	// flush the last page (if any remains)
@@ -863,10 +875,10 @@ public:
 		return GetMaxValue();
 	}
 	string GetMinValue() override {
-		return HasStats() ? string((char *)&min, sizeof(bool)) : string();
+		return HasStats() ? string(const_char_ptr_cast(&min), sizeof(bool)) : string();
 	}
 	string GetMaxValue() override {
-		return HasStats() ? string((char *)&max, sizeof(bool)) : string();
+		return HasStats() ? string(const_char_ptr_cast(&max), sizeof(bool)) : string();
 	}
 };
 
@@ -891,8 +903,8 @@ public:
 
 	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
-		auto &stats = (BooleanStatisticsState &)*stats_p;
-		auto &state = (BooleanWriterPageState &)*state_p;
+		auto &stats = stats_p->Cast<BooleanStatisticsState>();
+		auto &state = state_p->Cast<BooleanWriterPageState>();
 		auto &mask = FlatVector::Validity(input_column);
 
 		auto *ptr = FlatVector::GetData<bool>(input_column);
@@ -921,7 +933,7 @@ public:
 	}
 
 	void FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state_p) override {
-		auto &state = (BooleanWriterPageState &)*state_p;
+		auto &state = state_p->Cast<BooleanWriterPageState>();
 		if (state.byte_pos > 0) {
 			temp_writer.Write<uint8_t>(state.byte);
 			state.byte = 0;
@@ -971,7 +983,7 @@ public:
 	string GetStats(hugeint_t &input) {
 		data_t buffer[16];
 		WriteParquetDecimal(input, buffer);
-		return string((char *)buffer, 16);
+		return string(const_char_ptr_cast(buffer), 16);
 	}
 
 	bool HasStats() {
@@ -1018,7 +1030,7 @@ public:
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
 		auto &mask = FlatVector::Validity(input_column);
 		auto *ptr = FlatVector::GetData<hugeint_t>(input_column);
-		auto &stats = (FixedDecimalStatistics &)*stats_p;
+		auto &stats = stats_p->Cast<FixedDecimalStatistics>();
 
 		data_t temp_buffer[16];
 		for (idx_t r = chunk_start; r < chunk_end; r++) {
@@ -1247,7 +1259,7 @@ public:
 	}
 
 	void Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) override {
-		auto &state = (StringColumnWriterState &)state_p;
+		auto &state = state_p.Cast<StringColumnWriterState>();
 
 		idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
 		idx_t parent_index = state.definition_levels.size();
@@ -1295,7 +1307,7 @@ public:
 	}
 
 	void FinalizeAnalyze(ColumnWriterState &state_p) override {
-		auto &state = (StringColumnWriterState &)state_p;
+		auto &state = state_p.Cast<StringColumnWriterState>();
 
 		// check if a dictionary will require more space than a plain write, or if the dictionary page is going to
 		// be too large
@@ -1311,9 +1323,9 @@ public:
 
 	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
-		auto &page_state = (StringWriterPageState &)*page_state_p;
+		auto &page_state = page_state_p->Cast<StringWriterPageState>();
 		auto &mask = FlatVector::Validity(input_column);
-		auto &stats = (StringStatisticsState &)*stats_p;
+		auto &stats = stats_p->Cast<StringStatisticsState>();
 
 		auto *ptr = FlatVector::GetData<string_t>(input_column);
 		if (page_state.IsDictionaryEncoded()) {
@@ -1342,18 +1354,18 @@ public:
 				}
 				stats.Update(ptr[r]);
 				temp_writer.Write<uint32_t>(ptr[r].GetSize());
-				temp_writer.WriteData((const_data_ptr_t)ptr[r].GetData(), ptr[r].GetSize());
+				temp_writer.WriteData(const_data_ptr_cast(ptr[r].GetData()), ptr[r].GetSize());
 			}
 		}
 	}
 
 	duckdb::unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state_p) override {
-		auto &state = (StringColumnWriterState &)state_p;
+		auto &state = state_p.Cast<StringColumnWriterState>();
 		return make_uniq<StringWriterPageState>(state.key_bit_width, state.dictionary);
 	}
 
 	void FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state_p) override {
-		auto &page_state = (StringWriterPageState &)*state_p;
+		auto &page_state = state_p->Cast<StringWriterPageState>();
 		if (page_state.bit_width != 0) {
 			if (!page_state.written_value) {
 				// all values are null
@@ -1366,24 +1378,24 @@ public:
 	}
 
 	duckdb_parquet::format::Encoding::type GetEncoding(BasicColumnWriterState &state_p) override {
-		auto &state = (StringColumnWriterState &)state_p;
+		auto &state = state_p.Cast<StringColumnWriterState>();
 		return state.IsDictionaryEncoded() ? Encoding::RLE_DICTIONARY : Encoding::PLAIN;
 	}
 
 	bool HasDictionary(BasicColumnWriterState &state_p) override {
-		auto &state = (StringColumnWriterState &)state_p;
+		auto &state = state_p.Cast<StringColumnWriterState>();
 		return state.IsDictionaryEncoded();
 	}
 
 	idx_t DictionarySize(BasicColumnWriterState &state_p) override {
-		auto &state = (StringColumnWriterState &)state_p;
+		auto &state = state_p.Cast<StringColumnWriterState>();
 		D_ASSERT(state.IsDictionaryEncoded());
 		return state.dictionary.size();
 	}
 
 	void FlushDictionary(BasicColumnWriterState &state_p, ColumnWriterStatistics *stats_p) override {
-		auto &stats = (StringStatisticsState &)*stats_p;
-		auto &state = (StringColumnWriterState &)state_p;
+		auto &stats = stats_p->Cast<StringStatisticsState>();
+		auto &state = state_p.Cast<StringColumnWriterState>();
 		if (!state.IsDictionaryEncoded()) {
 			return;
 		}
@@ -1401,14 +1413,14 @@ public:
 			stats.Update(value);
 			// write this string value to the dictionary
 			temp_writer->Write<uint32_t>(value.GetSize());
-			temp_writer->WriteData((const_data_ptr_t)(value.GetData()), value.GetSize());
+			temp_writer->WriteData(const_data_ptr_cast((value.GetData())), value.GetSize());
 		}
 		// flush the dictionary page and add it to the to-be-written pages
 		WriteDictionary(state, std::move(temp_writer), values.size());
 	}
 
 	idx_t GetRowSize(Vector &vector, idx_t index, BasicColumnWriterState &state_p) override {
-		auto &state = (StringColumnWriterState &)state_p;
+		auto &state = state_p.Cast<StringColumnWriterState>();
 		if (state.IsDictionaryEncoded()) {
 			return (state.key_bit_width + 7) / 8;
 		} else {
@@ -1471,7 +1483,7 @@ public:
 
 	void WriteVector(Serializer &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
-		auto &page_state = (EnumWriterPageState &)*page_state_p;
+		auto &page_state = page_state_p->Cast<EnumWriterPageState>();
 		switch (enum_type.InternalType()) {
 		case PhysicalType::UINT8:
 			WriteEnumInternal<uint8_t>(temp_writer, input_column, chunk_start, chunk_end, page_state);
@@ -1492,7 +1504,7 @@ public:
 	}
 
 	void FlushPageState(Serializer &temp_writer, ColumnWriterPageState *state_p) override {
-		auto &page_state = (EnumWriterPageState &)*state_p;
+		auto &page_state = state_p->Cast<EnumWriterPageState>();
 		if (!page_state.written_value) {
 			// all values are null
 			// just write the bit width
@@ -1515,7 +1527,7 @@ public:
 	}
 
 	void FlushDictionary(BasicColumnWriterState &state, ColumnWriterStatistics *stats_p) override {
-		auto &stats = (StringStatisticsState &)*stats_p;
+		auto &stats = stats_p->Cast<StringStatisticsState>();
 		// write the enum values to a dictionary page
 		auto &enum_values = EnumType::GetValuesInsertOrder(enum_type);
 		auto enum_count = EnumType::GetSize(enum_type);
@@ -1528,7 +1540,7 @@ public:
 			stats.Update(string_values[r]);
 			// write this string value to the dictionary
 			temp_writer->Write<uint32_t>(string_values[r].GetSize());
-			temp_writer->WriteData((const_data_ptr_t)string_values[r].GetData(), string_values[r].GetSize());
+			temp_writer->WriteData(const_data_ptr_cast(string_values[r].GetData()), string_values[r].GetSize());
 		}
 		// flush the dictionary page and add it to the to-be-written pages
 		WriteDictionary(state, std::move(temp_writer), enum_count);
@@ -1599,7 +1611,7 @@ bool StructColumnWriter::HasAnalyze() {
 }
 
 void StructColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
-	auto &state = (StructColumnWriterState &)state_p;
+	auto &state = state_p.Cast<StructColumnWriterState>();
 	auto &child_vectors = StructVector::GetEntries(vector);
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		// Need to check again. It might be that just one child needs it but the rest not
@@ -1611,7 +1623,7 @@ void StructColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *
 }
 
 void StructColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
-	auto &state = (StructColumnWriterState &)state_p;
+	auto &state = state_p.Cast<StructColumnWriterState>();
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		// Need to check again. It might be that just one child needs it but the rest not
 		if (child_writers[child_idx]->HasAnalyze()) {
@@ -1621,7 +1633,7 @@ void StructColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
 }
 
 void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
-	auto &state = (StructColumnWriterState &)state_p;
+	auto &state = state_p.Cast<StructColumnWriterState>();
 
 	auto &validity = FlatVector::Validity(vector);
 	if (parent) {
@@ -1639,14 +1651,14 @@ void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *
 }
 
 void StructColumnWriter::BeginWrite(ColumnWriterState &state_p) {
-	auto &state = (StructColumnWriterState &)state_p;
+	auto &state = state_p.Cast<StructColumnWriterState>();
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		child_writers[child_idx]->BeginWrite(*state.child_states[child_idx]);
 	}
 }
 
 void StructColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
-	auto &state = (StructColumnWriterState &)state_p;
+	auto &state = state_p.Cast<StructColumnWriterState>();
 	auto &child_vectors = StructVector::GetEntries(vector);
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		child_writers[child_idx]->Write(*state.child_states[child_idx], *child_vectors[child_idx], count);
@@ -1654,7 +1666,7 @@ void StructColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t
 }
 
 void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
-	auto &state = (StructColumnWriterState &)state_p;
+	auto &state = state_p.Cast<StructColumnWriterState>();
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		// we add the null count of the struct to the null count of the children
 		child_writers[child_idx]->null_count += null_count;
@@ -1713,19 +1725,19 @@ bool ListColumnWriter::HasAnalyze() {
 	return child_writer->HasAnalyze();
 }
 void ListColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
-	auto &state = (ListColumnWriterState &)state_p;
+	auto &state = state_p.Cast<ListColumnWriterState>();
 	auto &list_child = ListVector::GetEntry(vector);
 	auto list_count = ListVector::GetListSize(vector);
 	child_writer->Analyze(*state.child_state, &state_p, list_child, list_count);
 }
 
 void ListColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
-	auto &state = (ListColumnWriterState &)state_p;
+	auto &state = state_p.Cast<ListColumnWriterState>();
 	child_writer->FinalizeAnalyze(*state.child_state);
 }
 
 void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
-	auto &state = (ListColumnWriterState &)state_p;
+	auto &state = state_p.Cast<ListColumnWriterState>();
 
 	auto list_data = FlatVector::GetData<list_entry_t>(vector);
 	auto &validity = FlatVector::Validity(vector);
@@ -1782,12 +1794,12 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 }
 
 void ListColumnWriter::BeginWrite(ColumnWriterState &state_p) {
-	auto &state = (ListColumnWriterState &)state_p;
+	auto &state = state_p.Cast<ListColumnWriterState>();
 	child_writer->BeginWrite(*state.child_state);
 }
 
 void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
-	auto &state = (ListColumnWriterState &)state_p;
+	auto &state = state_p.Cast<ListColumnWriterState>();
 
 	auto &list_child = ListVector::GetEntry(vector);
 	Vector child_list(list_child);
@@ -1796,7 +1808,7 @@ void ListColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t c
 }
 
 void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
-	auto &state = (ListColumnWriterState &)state_p;
+	auto &state = state_p.Cast<ListColumnWriterState>();
 	child_writer->FinalizeWrite(*state.child_state);
 }
 

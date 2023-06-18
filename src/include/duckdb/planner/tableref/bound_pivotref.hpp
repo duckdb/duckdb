@@ -29,6 +29,9 @@ struct BoundPivotInfo {
 
 class BoundPivotRef : public BoundTableRef {
 public:
+	static constexpr const TableReferenceType TYPE = TableReferenceType::PIVOT;
+
+public:
 	explicit BoundPivotRef() : BoundTableRef(TableReferenceType::PIVOT) {
 	}
 

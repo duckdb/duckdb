@@ -6,23 +6,23 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery::PGAIndirection *indirection_node) {
+unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery::PGAIndirection &indirection_node) {
 	// transform the source expression
 	unique_ptr<ParsedExpression> result;
-	result = TransformExpression(indirection_node->arg);
+	result = TransformExpression(indirection_node.arg);
 
 	// now go over the indices
 	// note that a single indirection node can contain multiple indices
 	// this happens for e.g. more complex accesses (e.g. (foo).field1[42])
 	idx_t list_size = 0;
-	for (auto node = indirection_node->indirection->head; node != nullptr; node = node->next) {
+	for (auto node = indirection_node.indirection->head; node != nullptr; node = node->next) {
 		auto target = reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value);
 		D_ASSERT(target);
 
 		switch (target->type) {
 		case duckdb_libpgquery::T_PGAIndices: {
 			// index access (either slice or extract)
-			auto index = (duckdb_libpgquery::PGAIndices *)target;
+			auto index = PGPointerCast<duckdb_libpgquery::PGAIndices>(target);
 			vector<unique_ptr<ParsedExpression>> children;
 			children.push_back(std::move(result));
 			if (index->is_slice) {
@@ -42,7 +42,7 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 			break;
 		}
 		case duckdb_libpgquery::T_PGString: {
-			auto val = (duckdb_libpgquery::PGValue *)target;
+			auto val = PGPointerCast<duckdb_libpgquery::PGValue>(target);
 			vector<unique_ptr<ParsedExpression>> children;
 			children.push_back(std::move(result));
 			children.push_back(TransformValue(*val));
@@ -50,8 +50,8 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 			break;
 		}
 		case duckdb_libpgquery::T_PGFuncCall: {
-			auto func = (duckdb_libpgquery::PGFuncCall *)target;
-			auto function = TransformFuncCall(func);
+			auto func = PGPointerCast<duckdb_libpgquery::PGFuncCall>(target);
+			auto function = TransformFuncCall(*func);
 			if (function->type != ExpressionType::FUNCTION) {
 				throw ParserException("%s.%s() call must be a function", result->ToString(), function->ToString());
 			}

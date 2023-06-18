@@ -59,6 +59,7 @@ public:
 	//! Get the child for the respective byte in the node
 	inline optional_ptr<Node> GetChild(const uint8_t byte) {
 		if (child_index[byte] != Node::EMPTY_MARKER) {
+			D_ASSERT(children[child_index[byte]].IsSet());
 			return &children[child_index[byte]];
 		}
 		return nullptr;

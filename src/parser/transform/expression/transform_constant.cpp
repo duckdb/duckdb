@@ -72,8 +72,8 @@ unique_ptr<ConstantExpression> Transformer::TransformValue(duckdb_libpgquery::PG
 	}
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformConstant(duckdb_libpgquery::PGAConst *c) {
-	return TransformValue(c->val);
+unique_ptr<ParsedExpression> Transformer::TransformConstant(duckdb_libpgquery::PGAConst &c) {
+	return TransformValue(c.val);
 }
 
 } // namespace duckdb

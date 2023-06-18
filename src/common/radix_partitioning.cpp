@@ -219,8 +219,8 @@ void RadixPartitionedTupleData::RepartitionFinalizeStates(PartitionedTupleData &
                                                           idx_t finished_partition_idx) const {
 	D_ASSERT(old_partitioned_data.GetType() == PartitionedTupleDataType::RADIX &&
 	         new_partitioned_data.GetType() == PartitionedTupleDataType::RADIX);
-	const auto &old_radix_partitions = (RadixPartitionedTupleData &)old_partitioned_data;
-	const auto &new_radix_partitions = (RadixPartitionedTupleData &)new_partitioned_data;
+	const auto &old_radix_partitions = old_partitioned_data.Cast<RadixPartitionedTupleData>();
+	const auto &new_radix_partitions = new_partitioned_data.Cast<RadixPartitionedTupleData>();
 	const auto old_radix_bits = old_radix_partitions.GetRadixBits();
 	const auto new_radix_bits = new_radix_partitions.GetRadixBits();
 	D_ASSERT(new_radix_bits > old_radix_bits);

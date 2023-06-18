@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -502,7 +503,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					if (column == COLUMN_IDENTIFIER_ROW_ID) {
 						D_ASSERT(result.data[i].GetType().InternalType() == PhysicalType::INT64);
 						result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
-						auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
+						auto result_data = FlatVector::GetData<int64_t>(result.data[i]);
 						for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
 							result_data[sel_idx] = this->start + current_row + sel.get_index(sel_idx);
 						}
@@ -650,7 +651,7 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
 			} else {
 				D_ASSERT(version_info->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
 				// use existing vector
-				info = (ChunkVectorInfo *)version_info->info[vector_idx].get();
+				info = &version_info->info[vector_idx]->Cast<ChunkVectorInfo>();
 			}
 			info->Append(start, end, transaction.transaction_id);
 		}
@@ -912,12 +913,12 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<Lo
 }
 
 //===--------------------------------------------------------------------===//
-// GetStorageInfo
+// GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
-void RowGroup::GetStorageInfo(idx_t row_group_index, TableStorageInfo &result) {
+void RowGroup::GetColumnSegmentInfo(idx_t row_group_index, vector<ColumnSegmentInfo> &result) {
 	for (idx_t col_idx = 0; col_idx < GetColumnCount(); col_idx++) {
 		auto &col_data = GetColumn(col_idx);
-		col_data.GetStorageInfo(row_group_index, {col_idx}, result);
+		col_data.GetColumnSegmentInfo(row_group_index, {col_idx}, result);
 	}
 }
 
@@ -985,7 +986,7 @@ void VersionDeleteState::Delete(row_t row_id) {
 			info.version_info->info[vector_idx] =
 			    make_uniq<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE);
 		} else if (info.version_info->info[vector_idx]->type == ChunkInfoType::CONSTANT_INFO) {
-			auto &constant = (ChunkConstantInfo &)*info.version_info->info[vector_idx];
+			auto &constant = info.version_info->info[vector_idx]->Cast<ChunkConstantInfo>();
 			// info exists but it's a constant info: convert to a vector info
 			auto new_info = make_uniq<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE);
 			new_info->insert_id = constant.insert_id.load();
@@ -995,7 +996,7 @@ void VersionDeleteState::Delete(row_t row_id) {
 			info.version_info->info[vector_idx] = std::move(new_info);
 		}
 		D_ASSERT(info.version_info->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
-		current_info = (ChunkVectorInfo *)info.version_info->info[vector_idx].get();
+		current_info = &info.version_info->info[vector_idx]->Cast<ChunkVectorInfo>();
 		current_chunk = vector_idx;
 		chunk_row = vector_idx * STANDARD_VECTOR_SIZE;
 	}

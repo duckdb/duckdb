@@ -51,7 +51,7 @@ PerfectAggregateHashTable::~PerfectAggregateHashTable() {
 template <class T>
 static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value &min, uintptr_t *address_data,
                                           idx_t current_shift, idx_t count) {
-	auto data = (T *)group_data.data;
+	auto data = UnifiedVectorFormat::GetData<T>(group_data);
 	auto min_val = min.GetValueUnsafe<T>();
 	if (!group_data.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {

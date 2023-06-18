@@ -25,7 +25,14 @@ static unique_ptr<FunctionData> RepeatRowBind(ClientContext &context, TableFunct
 		return_types.push_back(inputs[input_idx].type());
 		names.push_back("column" + std::to_string(input_idx));
 	}
-	return make_uniq<RepeatRowFunctionData>(inputs, input.named_parameters["num_rows"].GetValue<int64_t>());
+	auto entry = input.named_parameters.find("num_rows");
+	if (entry == input.named_parameters.end()) {
+		throw BinderException("repeat_rows requires num_rows to be specified");
+	}
+	if (inputs.empty()) {
+		throw BinderException("repeat_rows requires at least one column to be specified");
+	}
+	return make_uniq<RepeatRowFunctionData>(inputs, entry->second.GetValue<int64_t>());
 }
 
 static unique_ptr<GlobalTableFunctionState> RepeatRowInit(ClientContext &context, TableFunctionInitInput &input) {
@@ -33,7 +40,7 @@ static unique_ptr<GlobalTableFunctionState> RepeatRowInit(ClientContext &context
 }
 
 static void RepeatRowFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = (const RepeatRowFunctionData &)*data_p.bind_data;
+	auto &bind_data = data_p.bind_data->Cast<RepeatRowFunctionData>();
 	auto &state = data_p.global_state->Cast<RepeatRowOperatorData>();
 
 	idx_t remaining = MinValue<idx_t>(bind_data.target_count - state.current_count, STANDARD_VECTOR_SIZE);
@@ -45,7 +52,7 @@ static void RepeatRowFunction(ClientContext &context, TableFunctionInput &data_p
 }
 
 static unique_ptr<NodeStatistics> RepeatRowCardinality(ClientContext &context, const FunctionData *bind_data_p) {
-	auto &bind_data = (const RepeatRowFunctionData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<RepeatRowFunctionData>();
 	return make_uniq<NodeStatistics>(bind_data.target_count, bind_data.target_count);
 }
 
