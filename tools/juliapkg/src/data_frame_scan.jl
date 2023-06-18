@@ -1,14 +1,14 @@
 using DataFrames
 
 struct DFBindInfo
-    df::DataFrame
+    df::Any
     input_columns::Vector
     scan_types::Vector{Type}
     result_types::Vector{Type}
     scan_functions::Vector{Function}
 
     function DFBindInfo(
-        df::DataFrame,
+        df,
         input_columns::Vector,
         scan_types::Vector{Type},
         result_types::Vector{Type},
@@ -19,7 +19,7 @@ struct DFBindInfo
 end
 
 function df_input_type(df, entry)
-    return eltype(df[!, entry])
+    return eltype(df[entry])
 end
 
 function df_result_type(df, entry)
@@ -120,7 +120,7 @@ function df_bind_function(info::DuckDB.BindInfo)
     df = extra_data[name]
 
     # set the cardinality
-    row_count::UInt64 = size(df, 1)
+    row_count::UInt64 = Tables.rowcount(df)
     DuckDB.set_stats_cardinality(info, row_count, true)
 
     # register the result columns
@@ -128,15 +128,15 @@ function df_bind_function(info::DuckDB.BindInfo)
     scan_types::Vector{Type} = Vector()
     result_types::Vector{Type} = Vector()
     scan_functions::Vector{Function} = Vector()
-    for entry in names(df)
+    for entry in Tables.columnnames(df)
         result_type = df_result_type(df, entry)
         scan_function = df_scan_function(df, entry)
-        push!(input_columns, df[!, entry])
+        push!(input_columns, df[entry])
         push!(scan_types, df_input_type(df, entry))
         push!(result_types, df_julia_type(result_type))
         push!(scan_functions, scan_function)
 
-        DuckDB.add_result_column(info, entry, result_type)
+        DuckDB.add_result_column(info, string(entry), result_type)
     end
     return DFBindInfo(df, input_columns, scan_types, result_types, scan_functions)
 end
@@ -163,7 +163,7 @@ end
 function df_global_init_function(info::DuckDB.InitInfo)
     bind_info = DuckDB.get_bind_info(info, DFBindInfo)
     # figure out the maximum number of threads to launch from the DF size
-    row_count::Int64 = size(bind_info.df, 1)
+    row_count::Int64 = Tables.rowcount(bind_info.df)
     max_threads::Int64 = ceil(row_count / DuckDB.ROW_GROUP_SIZE)
     DuckDB.set_max_threads(info, max_threads)
     return DFGlobalInfo()
@@ -183,7 +183,7 @@ function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
         # ran out of data to scan in the local info: fetch new rows from the global state (if any)
         # we can in increments of 100 vectors
         lock(global_info.global_lock) do
-            row_count::Int64 = size(bind_info.df, 1)
+            row_count::Int64 = Tables.rowcount(bind_info.df)
             local_info.current_pos = global_info.pos
             total_scan_amount::Int64 = DuckDB.ROW_GROUP_SIZE
             if local_info.current_pos + total_scan_amount >= row_count
@@ -222,15 +222,15 @@ function df_scan_function(info::DuckDB.FunctionInfo, output::DuckDB.DataChunk)
     return
 end
 
-function register_data_frame(con::Connection, df::DataFrame, name::AbstractString)
-    con.db.registered_objects[name] = df
+function register_data_frame(con::Connection, df, name::AbstractString)
+    con.db.registered_objects[name] = columntable(df)
     DBInterface.execute(
         con,
         string("CREATE OR REPLACE VIEW \"", name, "\" AS SELECT * FROM julia_df_scan('", name, "')")
     )
     return
 end
-register_data_frame(db::DB, df::DataFrame, name::AbstractString) = register_data_frame(db.main_connection, df, name)
+register_data_frame(db::DB, df, name::AbstractString) = register_data_frame(db.main_connection, df, name)
 
 function unregister_data_frame(con::Connection, name::AbstractString)
     pop!(con.db.registered_objects, name)
