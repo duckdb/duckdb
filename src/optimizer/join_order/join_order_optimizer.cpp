@@ -603,7 +603,6 @@ bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 	return true;
 }
 
-
 void JoinOrderOptimizer::UpdateDPTree(JoinNode &new_plan) {
 	if (!NodeInFullPlan(new_plan)) {
 		// if the new node is not in the full plan, feel free to return
