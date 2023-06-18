@@ -111,14 +111,17 @@ void DuckTransactionManager::LockClients(vector<ClientLockWrapper> &client_locks
 	}
 }
 
-void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
+void DuckTransactionManager::Checkpoint(ClientContext &context, bool force, std::function<void()> on_checkpoint) {
 	auto &storage_manager = db.GetStorageManager();
+	auto lock = unique_lock<mutex>(transaction_lock);
+	// Checkpointing the in-memory DB is trivial.
 	if (storage_manager.InMemory()) {
+		if (on_checkpoint) {
+			on_checkpoint();
+		}
 		return;
 	}
-
 	// first check if no other thread is checkpointing right now
-	auto lock = unique_lock<mutex>(transaction_lock);
 	if (thread_is_checkpointing) {
 		throw TransactionException("Cannot CHECKPOINT: another thread is checkpointing right now");
 	}
@@ -162,6 +165,9 @@ void DuckTransactionManager::Checkpoint(ClientContext &context, bool force) {
 		}
 	}
 	storage_manager.CreateCheckpoint();
+	if (on_checkpoint) {
+		on_checkpoint();
+	}
 }
 
 bool DuckTransactionManager::CanCheckpoint(optional_ptr<DuckTransaction> current) {

@@ -32,7 +32,10 @@ public:
 	//! Rollback the given transaction
 	void RollbackTransaction(Transaction *transaction) override;
 
-	void Checkpoint(ClientContext &context, bool force = false) override;
+	//! Checkpoint the DB. If the checkpoint is successful, invoke the callback while still holding the checkpoint lock.
+	//! No other transactions will start or commit between checkpoint begin and callback completion. The callback,
+	//! obviously, should not try to start or commit transactions.
+	void Checkpoint(ClientContext &context, bool force = false, std::function<void()> on_checkpoint = nullptr) override;
 
 	transaction_t LowestActiveId() {
 		return lowest_active_id;
