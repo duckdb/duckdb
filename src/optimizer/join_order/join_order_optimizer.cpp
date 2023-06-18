@@ -324,7 +324,7 @@ void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode &node) {
 	}
 }
 
-static vector<unordered_set<idx_t>> AddSuperSets(vector<unordered_set<idx_t>> current,
+static vector<unordered_set<idx_t>> AddSuperSets(const vector<unordered_set<idx_t>> &current,
                                                  const vector<idx_t> &all_neighbors) {
 	vector<unordered_set<idx_t>> ret;
 
