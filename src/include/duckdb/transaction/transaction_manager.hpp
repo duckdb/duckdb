@@ -39,7 +39,7 @@ public:
 	virtual void RollbackTransaction(Transaction *transaction) = 0;
 
 	virtual void Checkpoint(ClientContext &context, bool force = false,
-		std::function<void()> on_checkpoint = nullptr) = 0;
+	                        std::function<void()> on_checkpoint = nullptr) = 0;
 
 	static TransactionManager &Get(AttachedDatabase &db);
 
