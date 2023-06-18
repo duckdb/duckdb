@@ -92,7 +92,7 @@ end
     for type in numeric_types
         my_df = (a = [1, missing, 3], b = [missing, 84, missing])
         my_df = map(my_df) do col
-            convert.(Union{type, Missing}, col)
+            return convert.(Union{type, Missing}, col)
         end
 
         DuckDB.register_table(con, my_df, "my_df")
@@ -236,7 +236,7 @@ end
 
 @testset "Test table scan projection pushdown" begin
     con = DBInterface.connect(DuckDB.DB)
-    df = (a = [1, 2, 3], b = [42, 84, 42], c = [3, 7, 18],)
+    df = (a = [1, 2, 3], b = [42, 84, 42], c = [3, 7, 18])
 
     DuckDB.register_table(con, df, "my_df")
     GC.gc()

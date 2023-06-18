@@ -554,7 +554,11 @@ end
 function Tables.columns(q::QueryResult)
     if q.tbl === missing
         if q.chunk_index != 1
-            throw(NotImplementedException("Materializing into a Julia table is not supported after calling nextDataChunk"))
+            throw(
+                NotImplementedException(
+                    "Materializing into a Julia table is not supported after calling nextDataChunk"
+                )
+            )
         end
         # gather all the data chunks
         column_count = duckdb_column_count(q.handle)
@@ -572,7 +576,7 @@ function Tables.columns(q::QueryResult)
         q.tbl = NamedTuple{Tuple(q.names)}(ntuple(column_count) do i
             logical_type = LogicalType(duckdb_column_logical_type(q.handle, i))
             column_data = ColumnConversionData(chunks, i, logical_type, nothing)
-            convert_column(column_data)
+            return convert_column(column_data)
         end)
     end
     return q.tbl

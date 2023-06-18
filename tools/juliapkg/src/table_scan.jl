@@ -26,12 +26,11 @@ julia_to_duck_type(::Type{T}) where {T} = T
 value_to_duckdb(val::Date) = convert(Int32, Dates.date2epochdays(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS)
 value_to_duckdb(val::Time) = convert(Int64, Dates.value(val) / 1000)
 value_to_duckdb(val::DateTime) = convert(Int64, (Dates.datetime2epochms(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_MS) * 1000)
-value_to_duckdb(val::AbstractString) = 
-    throw(
-        NotImplementedException(
-            "Cannot use value_to_duckdb to convert string values - use DuckDB.assign_string_element on a vector instead"
-        )
+value_to_duckdb(val::AbstractString) = throw(
+    NotImplementedException(
+        "Cannot use value_to_duckdb to convert string values - use DuckDB.assign_string_element on a vector instead"
     )
+)
 value_to_duckdb(val) = val
 
 function tbl_scan_column(
