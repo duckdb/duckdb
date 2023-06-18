@@ -61,9 +61,7 @@ mutable struct StructConversionData
     child_conversion_data::Vector{ListConversionData}
 end
 
-function nop_convert(column_data::ColumnConversionData, val)
-    return val
-end
+nop_convert(column_data::ColumnConversionData, val) = val
 
 function convert_string(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::UInt64)
     base_ptr = val + (idx - 1) * sizeof(duckdb_string_t)
@@ -746,9 +744,7 @@ function execute(stmt::Stmt, params::DBInterface.StatementParams = ())
 end
 
 # explicitly close prepared statement
-function DBInterface.close!(stmt::Stmt)
-    return _close_stmt(stmt)
-end
+DBInterface.close!(stmt::Stmt) = _close_stmt(stmt)
 
 function execute(con::Connection, sql::AbstractString, params::DBInterface.StatementParams)
     stmt = Stmt(con, sql, MaterializedResult)
@@ -777,17 +773,10 @@ Tables.columns(q::QueryResult) = toDataFrame(q)
 Base.IteratorSize(::Type{QueryResult}) = Base.SizeUnknown()
 Base.eltype(q::QueryResult) = Any
 
-function DBInterface.close!(q::QueryResult)
-    return _close_result(q)
-end
+DBInterface.close!(q::QueryResult) = _close_result(q)
 
-function Base.iterate(q::QueryResult)
-    return Base.iterate(Tables.rows(toDataFrame(q)))
-end
-
-function Base.iterate(q::QueryResult, state)
-    return Base.iterate(Tables.rows(toDataFrame(q)), state)
-end
+Base.iterate(q::QueryResult) = iterate(Tables.rows(Tables.columns(q)))
+Base.iterate(q::QueryResult, state) = iterate(Tables.rows(Tables.columns(q)), state)
 
 function nextDataChunk(q::QueryResult)::Union{Missing, DataChunk}
     if duckdb_result_is_streaming(q.handle[])
@@ -812,10 +801,7 @@ function nextDataChunk(q::QueryResult)::Union{Missing, DataChunk}
 end
 
 "Return the last row insert id from the executed statement"
-function DBInterface.lastrowid(con::Connection)
-    throw(NotImplementedException("Unimplemented: lastrowid"))
-end
-
+DBInterface.lastrowid(con::Connection) = throw(NotImplementedException("Unimplemented: lastrowid"))
 DBInterface.lastrowid(db::DB) = DBInterface.lastrowid(db.main_connection)
 
 """
@@ -844,14 +830,8 @@ Calling `SQLite.reset!(result)` will re-execute the query and reset the iterator
 The resultset iterator supports the [Tables.jl](https://github.com/JuliaData/Tables.jl) interface, so results can be collected in any Tables.jl-compatible sink,
 like `DataFrame(results)`, `CSV.write("results.csv", results)`, etc.
 """
-function DBInterface.execute(stmt::Stmt, params::DBInterface.StatementParams)
-    return execute(stmt, params)
-end
-
-function DBInterface.execute(con::Connection, sql::AbstractString, result_type::Type)
-    return execute(Stmt(con, sql, result_type))
-end
-
+DBInterface.execute(stmt::Stmt, params::DBInterface.StatementParams) = execute(stmt, params)
+DBInterface.execute(con::Connection, sql::AbstractString, result_type::Type) = execute(Stmt(con, sql, result_type))
 DBInterface.execute(con::Connection, sql::AbstractString) = DBInterface.execute(con, sql, MaterializedResult)
 DBInterface.execute(db::DB, sql::AbstractString, result_type::Type) =
     DBInterface.execute(db.main_connection, sql, result_type)

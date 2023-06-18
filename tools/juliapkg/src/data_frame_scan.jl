@@ -16,45 +16,23 @@ struct DFBindInfo
     end
 end
 
-function df_input_type(df, entry)
-    return eltype(df[entry])
-end
+df_result_type(df, entry) = Core.Compiler.typesubtract(eltype(df[entry]), Missing, 1)
 
-function df_result_type(df, entry)
-    column_type = df_input_type(df, entry)
-    if typeof(column_type) == Union
-        # remove Missing type from the union
-        column_type = Core.Compiler.typesubtract(column_type, Missing, 1)
-    end
-    return column_type
-end
+df_julia_type(::Type{Date}) = Int32
+df_julia_type(::Type{Time}) = Int64
+df_julia_type(::Type{DateTime}) = Int64
+df_julia_type(::Type{T}) where {T} = T
 
-function df_julia_type(column_type)
-    if column_type == Date
-        column_type = Int32
-    elseif column_type == Time
-        column_type = Int64
-    elseif column_type == DateTime
-        column_type = Int64
-    end
-    return column_type
-end
-
-value_to_duckdb(val::T) where {T <: Date} =
-    convert(Int32, Dates.date2epochdays(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS)
-value_to_duckdb(val::T) where {T <: Time} = convert(Int64, Dates.value(val) / 1000)
-value_to_duckdb(val::T) where {T <: DateTime} =
-    convert(Int64, (Dates.datetime2epochms(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_MS) * 1000)
-function value_to_duckdb(val::T) where {T <: AbstractString}
+value_to_duckdb(val::Date) = convert(Int32, Dates.date2epochdays(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS)
+value_to_duckdb(val::Time) = convert(Int64, Dates.value(val) / 1000)
+value_to_duckdb(val::DateTime) = convert(Int64, (Dates.datetime2epochms(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_MS) * 1000)
+value_to_duckdb(val::AbstractString) = 
     throw(
         NotImplementedException(
             "Cannot use value_to_duckdb to convert string values - use DuckDB.assign_string_element on a vector instead"
         )
     )
-end
-function value_to_duckdb(val::T) where {T}
-    return val
-end
+value_to_duckdb(val) = val
 
 function df_scan_column(
     input_column::AbstractVector{DF_TYPE},
@@ -130,7 +108,7 @@ function df_bind_function(info::DuckDB.BindInfo)
         result_type = df_result_type(df, entry)
         scan_function = df_scan_function(df, entry)
         push!(input_columns, df[entry])
-        push!(scan_types, df_input_type(df, entry))
+        push!(scan_types, eltype(df[entry]))
         push!(result_types, df_julia_type(result_type))
         push!(scan_functions, scan_function)
 
