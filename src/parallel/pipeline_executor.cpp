@@ -18,9 +18,9 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		if (requires_batch_index) {
 			auto &partition_info = local_sink_state->partition_info;
 			D_ASSERT(!partition_info.batch_index.IsValid());
-				// batch index is not set yet - initialize before fetching anything
-				partition_info.batch_index = pipeline.RegisterNewBatchIndex();
-				partition_info.min_batch_index = partition_info.batch_index;
+			// batch index is not set yet - initialize before fetching anything
+			partition_info.batch_index = pipeline.RegisterNewBatchIndex();
+			partition_info.min_batch_index = partition_info.batch_index;
 		}
 	}
 	local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
