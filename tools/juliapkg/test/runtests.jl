@@ -27,7 +27,7 @@ test_files = [
     "test_stream_data_chunk.jl"
 ]
 
-if size(ARGS)[1] > 0
+if length(ARGS) > 0 && !isempty(ARGS[1])
     filtered_test_files = []
     for test_file in test_files
         if test_file == ARGS[1]
