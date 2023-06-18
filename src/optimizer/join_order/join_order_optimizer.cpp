@@ -324,6 +324,65 @@ void JoinOrderOptimizer::UpdateJoinNodesInFullPlan(JoinNode &node) {
 	}
 }
 
+static vector<unordered_set<idx_t>> AddSuperSets(vector<unordered_set<idx_t>> current,
+                                                 const vector<idx_t> &all_neighbors) {
+	vector<unordered_set<idx_t>> ret;
+
+	for (const auto &neighbor_set : current) {
+		auto max_val = std::max_element(neighbor_set.begin(), neighbor_set.end());
+		for (const auto &neighbor : all_neighbors) {
+			if (*max_val >= neighbor) {
+				continue;
+			}
+			if (neighbor_set.count(neighbor) == 0) {
+				unordered_set<idx_t> new_set;
+				for (auto &n : neighbor_set) {
+					new_set.insert(n);
+				}
+				new_set.insert(neighbor);
+				ret.push_back(new_set);
+			}
+		}
+	}
+
+	return ret;
+}
+
+// works by first creating all sets with cardinality 1
+// then iterates over each previously created group of subsets and will only add a neighbor if the neighbor
+// is greater than all relations in the set.
+static vector<unordered_set<idx_t>> GetAllNeighborSets(vector<idx_t> neighbors) {
+	vector<unordered_set<idx_t>> ret;
+	sort(neighbors.begin(), neighbors.end());
+	vector<unordered_set<idx_t>> added;
+	for (auto &neighbor : neighbors) {
+		added.push_back(unordered_set<idx_t>({neighbor}));
+		ret.push_back(unordered_set<idx_t>({neighbor}));
+	}
+	do {
+		added = AddSuperSets(added, neighbors);
+		for (auto &d : added) {
+			ret.push_back(d);
+		}
+	} while (!added.empty());
+#if DEBUG
+	// drive by test to make sure we have an accurate amount of
+	// subsets, and that each neighbor is in a correct amount
+	// of those subsets.
+	D_ASSERT(ret.size() == pow(2, neighbors.size()) - 1);
+	for (auto &n : neighbors) {
+		idx_t count = 0;
+		for (auto &set : ret) {
+			if (set.count(n) >= 1) {
+				count += 1;
+			}
+		}
+		D_ASSERT(count == pow(2, neighbors.size() - 1));
+	}
+#endif
+	return ret;
+}
+
 JoinNode &JoinOrderOptimizer::EmitPair(JoinRelationSet &left, JoinRelationSet &right,
                                        const vector<reference<NeighborInfo>> &info) {
 	// get the left and right join plans
@@ -544,64 +603,6 @@ bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 	return true;
 }
 
-static vector<unordered_set<idx_t>> AddSuperSets(vector<unordered_set<idx_t>> current,
-                                                 const vector<idx_t> &all_neighbors) {
-	vector<unordered_set<idx_t>> ret;
-
-	for (const auto &neighbor_set : current) {
-		auto max_val = std::max_element(neighbor_set.begin(), neighbor_set.end());
-		for (const auto &neighbor : all_neighbors) {
-			if (*max_val >= neighbor) {
-				continue;
-			}
-			if (neighbor_set.count(neighbor) == 0) {
-				unordered_set<idx_t> new_set;
-				for (auto &n : neighbor_set) {
-					new_set.insert(n);
-				}
-				new_set.insert(neighbor);
-				ret.push_back(new_set);
-			}
-		}
-	}
-
-	return ret;
-}
-
-// works by first creating all sets with cardinality 1
-// then iterates over each previously created group of subsets and will only add a neighbor if the neighbor
-// is greater than all relations in the set.
-static vector<unordered_set<idx_t>> GetAllNeighborSets(vector<idx_t> neighbors) {
-	vector<unordered_set<idx_t>> ret;
-	sort(neighbors.begin(), neighbors.end());
-	vector<unordered_set<idx_t>> added;
-	for (auto &neighbor : neighbors) {
-		added.push_back(unordered_set<idx_t>({neighbor}));
-		ret.push_back(unordered_set<idx_t>({neighbor}));
-	}
-	do {
-		added = AddSuperSets(added, neighbors);
-		for (auto &d : added) {
-			ret.push_back(d);
-		}
-	} while (!added.empty());
-#if DEBUG
-	// drive by test to make sure we have an accurate amount of
-	// subsets, and that each neighbor is in a correct amount
-	// of those subsets.
-	D_ASSERT(ret.size() == pow(2, neighbors.size()) - 1);
-	for (auto &n : neighbors) {
-		idx_t count = 0;
-		for (auto &set : ret) {
-			if (set.count(n) >= 1) {
-				count += 1;
-			}
-		}
-		D_ASSERT(count == pow(2, neighbors.size() - 1));
-	}
-#endif
-	return ret;
-}
 
 void JoinOrderOptimizer::UpdateDPTree(JoinNode &new_plan) {
 	if (!NodeInFullPlan(new_plan)) {
