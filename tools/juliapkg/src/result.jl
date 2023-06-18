@@ -4,7 +4,7 @@ mutable struct QueryResult
     handle::Ref{duckdb_result}
     names::Vector{Symbol}
     types::Vector{Type}
-    df::Union{Missing, DataFrame}
+    df::Union{Missing, NamedTuple}
     chunk_index::UInt64
 
     function QueryResult(handle::Ref{duckdb_result})
@@ -553,7 +553,7 @@ function convert_column(column_data::ColumnConversionData)
     return convert_column_loop(column_data, conversion_func, internal_type, target_type, conversion_loop_func)
 end
 
-function toDataFrame(q::QueryResult)::DataFrame
+function toDataFrame(q::QueryResult)
     if q.df === missing
         if q.chunk_index != 1
             throw(NotImplementedException("Converting to a DataFrame is not supported after calling nextDataChunk"))
@@ -571,13 +571,11 @@ function toDataFrame(q::QueryResult)::DataFrame
             push!(chunks, chunk)
         end
 
-        df = DataFrame()
-        for i in 1:column_count
-            name = q.names[i]
+        df = NamedTuple{Tuple(q.names)}(ntuple(column_count) do i
             logical_type = LogicalType(duckdb_column_logical_type(q.handle, i))
             column_data = ColumnConversionData(chunks, i, logical_type, nothing)
-            df[!, name] = convert_column(column_data)
-        end
+            convert_column(column_data)
+        end)
         q.df = df
     end
     return q.df
@@ -765,12 +763,16 @@ execute(con::Connection, sql::AbstractString; kwargs...) = execute(con, sql, val
 execute(db::DB, sql::AbstractString, params::DBInterface.StatementParams) = execute(db.main_connection, sql, params)
 execute(db::DB, sql::AbstractString; kwargs...) = execute(db.main_connection, sql, values(kwargs))
 
+
+Tables.istable(::Type{QueryResult}) = true
 Tables.isrowtable(::Type{QueryResult}) = true
-Tables.columnnames(q::QueryResult) = q.names
+Tables.columnaccess(::Type{QueryResult}) = true
 
 function Tables.schema(q::QueryResult)
     return Tables.Schema(q.names, q.types)
 end
+
+Tables.columns(q::QueryResult) = toDataFrame(q)
 
 Base.IteratorSize(::Type{QueryResult}) = Base.SizeUnknown()
 Base.eltype(q::QueryResult) = Any
@@ -780,11 +782,11 @@ function DBInterface.close!(q::QueryResult)
 end
 
 function Base.iterate(q::QueryResult)
-    return Base.iterate(eachrow(toDataFrame(q)))
+    return Base.iterate(Tables.rows(toDataFrame(q)))
 end
 
 function Base.iterate(q::QueryResult, state)
-    return Base.iterate(eachrow(toDataFrame(q)), state)
+    return Base.iterate(Tables.rows(toDataFrame(q)), state)
 end
 
 function nextDataChunk(q::QueryResult)::Union{Missing, DataChunk}
@@ -808,8 +810,6 @@ function nextDataChunk(q::QueryResult)::Union{Missing, DataChunk}
     q.chunk_index += 1
     return chunk
 end
-
-DataFrames.DataFrame(q::QueryResult) = toDataFrame(q)
 
 "Return the last row insert id from the executed statement"
 function DBInterface.lastrowid(con::Connection)

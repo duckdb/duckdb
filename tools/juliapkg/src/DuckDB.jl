@@ -5,7 +5,6 @@ using WeakRefStrings
 using Tables
 using Base.Libc
 using Dates
-using DataFrames
 using Tables
 using UUIDs
 using FixedPointDecimals

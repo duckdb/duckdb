@@ -1,5 +1,3 @@
-using DataFrames
-
 struct DFBindInfo
     df::Any
     input_columns::Vector

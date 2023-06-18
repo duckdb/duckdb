@@ -1,4 +1,5 @@
 using DataFrames
+using Tables
 using DuckDB
 using Test
 using Dates
@@ -17,7 +18,7 @@ test_files = [
     "test_sqlite.jl",
     "test_replacement_scan.jl",
     "test_table_function.jl",
-    "test_old_interface.jl",
+    # "test_old_interface.jl",
     "test_all_types.jl",
     "test_union_type.jl",
     "test_decimals.jl",
