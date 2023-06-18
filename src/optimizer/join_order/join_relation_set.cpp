@@ -112,27 +112,6 @@ JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelati
 	return GetJoinRelation(std::move(relations), count);
 }
 
-NeighborSubset::NeighborSubset(const vector<idx_t> &neighbors) {
-
-	for (idx_t i = 0; i < neighbors.size(); ++i) {
-		unordered_set<idx_t> rel_set = {neighbors[i]};
-		all_subsets.push_back(make_pair(std::move(rel_set), i));
-	}
-
-	idx_t index = 0;
-
-	while (index < all_subsets.size()) {
-		auto rel_set_pair = all_subsets[index];
-
-		for (idx_t i = rel_set_pair.second + 1; i < neighbors.size(); ++i) {
-			rel_set_pair.first.insert(neighbors[i]);
-			all_subsets.push_back(std::make_pair(rel_set_pair.first, i));
-			rel_set_pair.first.erase(neighbors[i]);
-		}
-		index++;
-	}
-}
-
 // JoinRelationSet *JoinRelationSetManager::Difference(JoinRelationSet *left, JoinRelationSet *right) {
 // 	auto relations = unsafe_unique_array<idx_t>(new idx_t[left->count]);
 // 	idx_t count = 0;

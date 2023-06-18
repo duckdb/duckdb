@@ -447,11 +447,11 @@ bool JoinOrderOptimizer::EnumerateCmpRecursive(JoinRelationSet &left, JoinRelati
 		return true;
 	}
 
-	NeighborSubset all_subset(neighbors);
+	auto all_subset = GetAllNeighborSets(neighbors);
 	vector<reference<JoinRelationSet>> union_sets;
-	union_sets.reserve(all_subset.Size());
-	for (auto rel_set = all_subset.Begin(); rel_set != all_subset.End(); ++rel_set) {
-		auto &neighbor = set_manager.GetJoinRelation(*rel_set);
+	union_sets.reserve(all_subset.size());
+	for (const auto &rel_set : all_subset) {
+		auto &neighbor = set_manager.GetJoinRelation(rel_set);
 		// emit the combinations of this node and its neighbors
 		auto &combined_set = set_manager.Union(right, neighbor);
 		// If combined_set.count == right.count, This means we found a neighbor that has been present before
@@ -490,11 +490,11 @@ bool JoinOrderOptimizer::EnumerateCSGRecursive(JoinRelationSet &node, unordered_
 		return true;
 	}
 
-	NeighborSubset all_subset(neighbors);
+	auto all_subset = GetAllNeighborSets(neighbors);
 	vector<reference<JoinRelationSet>> union_sets;
-	union_sets.reserve(all_subset.Size());
-	for (auto rel_set = all_subset.Begin(); rel_set != all_subset.End(); ++rel_set) {
-		auto &neighbor = set_manager.GetJoinRelation(*rel_set);
+	union_sets.reserve(all_subset.size());
+	for (const auto &rel_set : all_subset) {
+		auto &neighbor = set_manager.GetJoinRelation(rel_set);
 		// emit the combinations of this node and its neighbors
 		auto &new_set = set_manager.Union(node, neighbor);
 		D_ASSERT(new_set.count > node.count);
@@ -547,9 +547,10 @@ bool JoinOrderOptimizer::SolveJoinOrderExactly() {
 static vector<unordered_set<idx_t>> AddSuperSets(vector<unordered_set<idx_t>> current,
                                                  const vector<idx_t> &all_neighbors) {
 	vector<unordered_set<idx_t>> ret;
-	for (auto &neighbor : all_neighbors) {
-		for (auto &neighbor_set : current) {
-			auto max_val = std::max_element(neighbor_set.begin(), neighbor_set.end());
+
+	for (const auto &neighbor_set : current) {
+		auto max_val = std::max_element(neighbor_set.begin(), neighbor_set.end());
+		for (const auto &neighbor : all_neighbors) {
 			if (*max_val >= neighbor) {
 				continue;
 			}
@@ -563,13 +564,14 @@ static vector<unordered_set<idx_t>> AddSuperSets(vector<unordered_set<idx_t>> cu
 			}
 		}
 	}
+
 	return ret;
 }
 
 // works by first creating all sets with cardinality 1
 // then iterates over each previously created group of subsets and will only add a neighbor if the neighbor
 // is greater than all relations in the set.
-static vector<unordered_set<idx_t>> GetAllNeighborSets(unordered_set<idx_t> &exclusion_set, vector<idx_t> neighbors) {
+static vector<unordered_set<idx_t>> GetAllNeighborSets(vector<idx_t> neighbors) {
 	vector<unordered_set<idx_t>> ret;
 	sort(neighbors.begin(), neighbors.end());
 	vector<unordered_set<idx_t>> added;
@@ -614,7 +616,7 @@ void JoinOrderOptimizer::UpdateDPTree(JoinNode &new_plan) {
 		exclusion_set.insert(new_set.relations[i]);
 	}
 	auto neighbors = query_graph.GetNeighbors(new_set, exclusion_set);
-	auto all_neighbors = GetAllNeighborSets(exclusion_set, neighbors);
+	auto all_neighbors = GetAllNeighborSets(neighbors);
 	for (const auto &neighbor : all_neighbors) {
 		auto &neighbor_relation = set_manager.GetJoinRelation(neighbor);
 		auto &combined_set = set_manager.Union(new_set, neighbor_relation);
