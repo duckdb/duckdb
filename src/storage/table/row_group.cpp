@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -912,12 +913,12 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<Lo
 }
 
 //===--------------------------------------------------------------------===//
-// GetStorageInfo
+// GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
-void RowGroup::GetStorageInfo(idx_t row_group_index, TableStorageInfo &result) {
+void RowGroup::GetColumnSegmentInfo(idx_t row_group_index, vector<ColumnSegmentInfo> &result) {
 	for (idx_t col_idx = 0; col_idx < GetColumnCount(); col_idx++) {
 		auto &col_data = GetColumn(col_idx);
-		col_data.GetStorageInfo(row_group_index, {col_idx}, result);
+		col_data.GetColumnSegmentInfo(row_group_index, {col_idx}, result);
 	}
 }
 

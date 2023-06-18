@@ -204,7 +204,7 @@ typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
 
 typedef void (*table_function_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
                                            const TableFunction &function);
-typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(ClientContext &context, FieldReader &reader,
+typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(PlanDeserializationState &context, FieldReader &reader,
                                                                  TableFunction &function);
 
 class TableFunction : public SimpleNamedParameterFunction {

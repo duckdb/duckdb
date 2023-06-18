@@ -223,8 +223,8 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 	bool success = true;
 	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
 	    source, result, count, [&](string_t input, ValidityMask &mask, idx_t idx) {
-		    auto data = (char *)(input.GetData());
-		    auto length = input.GetSize();
+		    auto data = input.GetDataWriteable();
+		    const auto length = input.GetSize();
 
 		    yyjson_read_err error;
 		    auto doc = JSONCommon::ReadDocumentUnsafe(data, length, JSONCommon::READ_FLAG, alc, &error);
@@ -239,7 +239,7 @@ static bool CastVarcharToJSON(Vector &source, Vector &result, idx_t count, CastP
 		    }
 		    return input;
 	    });
-	result.Reinterpret(source);
+	StringVector::AddHeapReference(result, source);
 	return success;
 }
 

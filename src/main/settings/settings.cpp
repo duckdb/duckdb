@@ -896,6 +896,25 @@ Value PreserveInsertionOrder::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// ExportLargeBufferArrow
+//===--------------------------------------------------------------------===//
+void ExportLargeBufferArrow::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto export_large_buffers_arrow = input.GetValue<bool>();
+
+	config.options.arrow_offset_size = export_large_buffers_arrow ? ArrowOffsetSize::LARGE : ArrowOffsetSize::REGULAR;
+}
+
+void ExportLargeBufferArrow::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.arrow_offset_size = DBConfig().options.arrow_offset_size;
+}
+
+Value ExportLargeBufferArrow::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	bool export_large_buffers_arrow = config.options.arrow_offset_size == ArrowOffsetSize::LARGE;
+	return Value::BOOLEAN(export_large_buffers_arrow);
+}
+
+//===--------------------------------------------------------------------===//
 // Profiler History Size
 //===--------------------------------------------------------------------===//
 
