@@ -551,7 +551,7 @@ function convert_column(column_data::ColumnConversionData)
     return convert_column_loop(column_data, conversion_func, internal_type, target_type, conversion_loop_func)
 end
 
-function toDataFrame(q::QueryResult)
+function Tables.columns(q::QueryResult)
     if q.df === missing
         if q.chunk_index != 1
             throw(NotImplementedException("Converting to a DataFrame is not supported after calling nextDataChunk"))
@@ -763,13 +763,7 @@ execute(db::DB, sql::AbstractString; kwargs...) = execute(db.main_connection, sq
 Tables.istable(::Type{QueryResult}) = true
 Tables.isrowtable(::Type{QueryResult}) = true
 Tables.columnaccess(::Type{QueryResult}) = true
-
-function Tables.schema(q::QueryResult)
-    return Tables.Schema(q.names, q.types)
-end
-
-Tables.columns(q::QueryResult) = toDataFrame(q)
-
+Tables.schema(q::QueryResult) = Tables.Schema(q.names, q.types)
 Base.IteratorSize(::Type{QueryResult}) = Base.SizeUnknown()
 Base.eltype(q::QueryResult) = Any
 
@@ -836,4 +830,4 @@ DBInterface.execute(con::Connection, sql::AbstractString) = DBInterface.execute(
 DBInterface.execute(db::DB, sql::AbstractString, result_type::Type) =
     DBInterface.execute(db.main_connection, sql, result_type)
 
-Base.show(io::IO, result::DuckDB.QueryResult) = print(io, toDataFrame(result))
+Base.show(io::IO, result::DuckDB.QueryResult) = print(io, Tables.rows(result))

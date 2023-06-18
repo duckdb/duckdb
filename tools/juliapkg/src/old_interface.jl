@@ -6,6 +6,9 @@ connect(db::DB) = DBInterface.connect(db)
 disconnect(con::Connection) = DBInterface.close!(con)
 close(db::DB) = DBInterface.close!(db)
 
+# not really a dataframe anymore
+# if needed for backwards compatibility, can add through Requires/1.9 extension
+toDataFrame(r::QueryResult) = Tables.columntable(r)
 toDataFrame(con::Connection, sql::AbstractString) = toDataFrame(DBInterface.execute(con, sql))
 
 function appendDataFrame(input_df, con::Connection, table::AbstractString, schema::String = "main")
