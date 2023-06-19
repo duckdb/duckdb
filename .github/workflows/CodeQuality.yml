@@ -11,12 +11,14 @@ on:
       - '**'
     paths-ignore:
       - '**.md'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/CodeQuality.yml'
 
   pull_request:
     paths-ignore:
       - '**.md'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/CodeQuality.yml'
 
