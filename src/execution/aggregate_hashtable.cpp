@@ -374,12 +374,14 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 			RowOperations::InitializeStates(layout, state.chunk_state.row_locations,
 			                                *FlatVector::IncrementalSelectionVector(), new_entry_count);
 
-			// Set the page nrs/offsets in the 1st part of the HT now that the data has been appended
+			// Set the entry pointers in the 1st part of the HT now that the data has been appended
 			const auto row_locations = FlatVector::GetData<data_ptr_t>(state.chunk_state.row_locations);
 			for (idx_t new_entry_idx = 0; new_entry_idx < new_entry_count; new_entry_idx++) {
+				const auto &row_location = row_locations[new_entry_idx];
 				const auto index = state.empty_vector.get_index(new_entry_idx);
 				auto &entry = entries[ht_offsets[index]];
-				entry.SetPointer(row_locations[new_entry_idx]);
+				entry.SetPointer(row_location);
+				addresses[index] = row_location;
 			}
 		}
 
