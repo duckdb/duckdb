@@ -53,7 +53,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - uses: ./.github/actions/ubuntu_16_setup
+      - uses: ./.github/actions/centos_7_setup
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
         with:
