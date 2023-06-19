@@ -220,7 +220,7 @@ static void TestSQLColumns(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_m
 	}
 }
 
-TEST_CASE("catalog_functions", "[odbc]") {
+TEST_CASE("Test Catalog Functions (SQLGetTypeInfo, SQLTables, SQLColumns, SQLGetInfo)", "[odbc]") {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 

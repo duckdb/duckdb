@@ -2,7 +2,7 @@
 
 using namespace odbc_test;
 
-TEST_CASE("diagnostics", "[odbc]") {
+TEST_CASE("Test SQLGetDiagRec (returns diagnostic record)", "[odbc]") {
 	SQLRETURN ret;
 	SQLHANDLE env;
 	SQLHANDLE dbc;

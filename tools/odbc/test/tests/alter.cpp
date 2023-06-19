@@ -2,7 +2,7 @@
 
 using namespace odbc_test;
 
-TEST_CASE("Alter", "[odbc]") {
+TEST_CASE("Test ALTER TABLE statement", "[odbc]") {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 	HSTMT hstmt = SQL_NULL_HSTMT;
@@ -21,7 +21,7 @@ TEST_CASE("Alter", "[odbc]") {
 	ExecuteCmdAndCheckODBC("SQLExecDirect (SELECT)", SQLExecDirect, hstmt, ConvertToSQLCHAR("SELECT * FROM testtbl"),
 	                       SQL_NTS);
 
-	// Get column metadata
+	// Get number of columns
 	SQLSMALLINT num_cols;
 	ExecuteCmdAndCheckODBC("SQLNumResultCols", SQLNumResultCols, hstmt, &num_cols);
 	REQUIRE(num_cols == 1);
@@ -37,13 +37,13 @@ TEST_CASE("Alter", "[odbc]") {
 	ExecuteCmdAndCheckODBC("SQLExecDirect (SELECT)", SQLExecDirect, hstmt, ConvertToSQLCHAR("SELECT * FROM testtbl"),
 	                       SQL_NTS);
 
-	// Get column metadata
-	SQLSMALLINT num_cols2;
-	ExecuteCmdAndCheckODBC("SQLNumResultCols", SQLNumResultCols, hstmt, &num_cols2);
-	REQUIRE(num_cols2 == 1);
+	// Get number of columns
+	SQLSMALLINT num_cols_updated;
+	ExecuteCmdAndCheckODBC("SQLNumResultCols", SQLNumResultCols, hstmt, &num_cols_updated);
+	REQUIRE(num_cols_updated == 1);
 
 	// Retrieve metadata from the column
-	METADATA_CHECK(hstmt, num_cols2, "t", sizeof('t'), SQL_INTEGER, types_map[SQL_INTEGER], 0, SQL_NULLABLE_UNKNOWN);
+	METADATA_CHECK(hstmt, num_cols_updated, "t", sizeof('t'), SQL_INTEGER, types_map[SQL_INTEGER], 0, SQL_NULLABLE_UNKNOWN);
 
 	ExecuteCmdAndCheckODBC("SQLFreeStmt (SQL_CLOSE)", SQLFreeStmt, hstmt, SQL_CLOSE);
 

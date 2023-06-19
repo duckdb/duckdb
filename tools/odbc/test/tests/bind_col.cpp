@@ -2,7 +2,7 @@
 
 using namespace odbc_test;
 
-TEST_CASE("bind_col", "[odbc]") {
+TEST_CASE("Test SQLBindCol (binding columns to application buffers)", "[odbc]") {
 	SQLRETURN ret;
 	SQLHANDLE env;
 	SQLHANDLE dbc;

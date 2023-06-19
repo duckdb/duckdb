@@ -2,7 +2,7 @@
 
 using namespace odbc_test;
 
-TEST_CASE("connect", "[odbc]") {
+TEST_CASE("Test SQLConnect and SQLDriverConnect", "[odbc]") {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 
