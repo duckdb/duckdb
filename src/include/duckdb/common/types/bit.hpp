@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -93,11 +94,13 @@ private:
 //===--------------------------------------------------------------------===//
 template <class T>
 void Bit::NumericToBit(T numeric, string_t &output_str) {
+	D_ASSERT(output_str.GetSize() >= sizeof(T) + 1);
+
 	auto output = output_str.GetDataWriteable();
 	auto data = const_data_ptr_cast(&numeric);
 
-	// set padding to 0
-	*(output++) = 0;
+	*output = 0; // set padding to 0
+	++output;
 	for (idx_t idx = 0; idx < sizeof(T); ++idx) {
 		output[idx] = data[sizeof(T) - idx - 1];
 	}
