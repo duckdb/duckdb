@@ -20,10 +20,6 @@ void StringHeap::Move(StringHeap &other) {
 	other.allocator.Move(allocator);
 }
 
-idx_t StringHeap::AllocatedSize() const {
-	return allocator.AllocatedSize();
-}
-
 string_t StringHeap::AddString(const char *data, idx_t len) {
 	D_ASSERT(Utf8Proc::Analyze(data, len) != UnicodeType::INVALID);
 	return AddBlob(data, len);
