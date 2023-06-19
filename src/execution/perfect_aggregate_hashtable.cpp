@@ -11,7 +11,8 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
                                                      vector<Value> group_minima_p, vector<idx_t> required_bits_p)
     : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)),
       addresses(LogicalType::POINTER), required_bits(std::move(required_bits_p)), total_required_bits(0),
-      group_minima(std::move(group_minima_p)), sel(STANDARD_VECTOR_SIZE), aggregate_allocator(allocator) {
+      group_minima(std::move(group_minima_p)), sel(STANDARD_VECTOR_SIZE),
+      aggregate_allocator(make_uniq<ArenaAllocator>(allocator)) {
 	for (auto &group_bits : required_bits) {
 		total_required_bits += group_bits;
 	}
@@ -123,7 +124,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	// after finding the group location we update the aggregates
 	idx_t payload_idx = 0;
 	auto &aggregates = layout.GetAggregates();
-	RowOperationsState row_state(aggregate_allocator.GetAllocator());
+	RowOperationsState row_state(aggregate_allocator->GetAllocator());
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = aggregates[aggr_idx];
 		auto input_count = (idx_t)aggregate.child_count;
@@ -152,7 +153,7 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 	data_ptr_t source_ptr = other.data;
 	data_ptr_t target_ptr = data;
 	idx_t combine_count = 0;
-	RowOperationsState row_state(aggregate_allocator.GetAllocator());
+	RowOperationsState row_state(aggregate_allocator->GetAllocator());
 	for (idx_t i = 0; i < total_groups; i++) {
 		auto has_entry_source = other.group_is_set[i];
 		// we only have any work to do if the source has an entry for this group
@@ -170,6 +171,7 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 		target_ptr += tuple_size;
 	}
 	RowOperations::CombineStates(row_state, layout, source_addresses, target_addresses, combine_count);
+	stored_allocators.push_back(std::move(other.aggregate_allocator));
 }
 
 template <class T>
@@ -243,7 +245,7 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	}
 	// then construct the payloads
 	result.SetCardinality(entry_count);
-	RowOperationsState row_state(aggregate_allocator.GetAllocator());
+	RowOperationsState row_state(aggregate_allocator->GetAllocator());
 	RowOperations::FinalizeStates(row_state, layout, addresses, result, grouping_columns);
 }
 
@@ -264,7 +266,7 @@ void PerfectAggregateHashTable::Destroy() {
 	idx_t count = 0;
 
 	// iterate over all initialised slots of the hash table
-	RowOperationsState row_state(aggregate_allocator.GetAllocator());
+	RowOperationsState row_state(aggregate_allocator->GetAllocator());
 	data_ptr_t payload_ptr = data;
 	for (idx_t i = 0; i < total_groups; i++) {
 		if (group_is_set[i]) {

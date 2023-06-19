@@ -17,6 +17,7 @@ namespace duckdb {
 
 struct AggregateInputData;
 
+// TODO: make this a struct for clarity?
 typedef std::pair<idx_t, idx_t> FrameBounds;
 
 class AggregateExecutor {

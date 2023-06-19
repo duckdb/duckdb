@@ -57,7 +57,9 @@ protected:
 	SelectionVector sel;
 
 	//! The arena allocator used by the aggregates for their internal state
-	ArenaAllocator aggregate_allocator;
+	unique_ptr<ArenaAllocator> aggregate_allocator;
+	//! The arena allocators that we combined into this state
+	vector<unique_ptr<ArenaAllocator>> stored_allocators;
 
 private:
 	//! Destroy the perfect aggregate HT (called automatically by the destructor)
