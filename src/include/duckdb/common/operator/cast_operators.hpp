@@ -10,6 +10,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/typedefs.hpp"
@@ -693,7 +694,8 @@ struct CastFromBitToNumeric {
 	static inline bool Operation(SRC input, DST &result, bool strict = false) {
 		D_ASSERT(input.GetSize() > 1);
 
-		// Only allow bitstring -> numeric if the full bitstring fits inside the numeric type
+		// TODO: Allow conversion if the significant bytes of the bitstring can be cast to the target type
+		// Currently only allows bitstring -> numeric if the full bitstring fits inside the numeric type
 		if (input.GetSize() - 1 > sizeof(DST)) {
 			throw ConversionException("Bitstring doesn't fit inside of %s", GetTypeId<DST>());
 		}
@@ -703,6 +705,8 @@ struct CastFromBitToNumeric {
 };
 template <>
 bool CastFromBitToNumeric::Operation(string_t input, bool &result, bool strict);
+template <>
+bool CastFromBitToNumeric::Operation(string_t input, hugeint_t &result, bool strict);
 
 struct CastFromBitToBlob {
 	template <class SRC>

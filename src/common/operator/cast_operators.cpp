@@ -1,4 +1,5 @@
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/operator/numeric_cast.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
@@ -1498,6 +1499,20 @@ bool CastFromBitToNumeric::Operation(string_t input, bool &result, bool strict) 
 	uint8_t value;
 	CastFromBitToNumeric::Operation(input, value, strict);
 	result = (value > 0);
+	return (true);
+}
+
+template <>
+bool CastFromBitToNumeric::Operation(string_t input, hugeint_t &result, bool strict) {
+	D_ASSERT(input.GetSize() > 1);
+
+	if (input.GetSize() - 1 > sizeof(hugeint_t)) {
+		throw ConversionException("Bitstring doesn't fit inside of %s", GetTypeId<hugeint_t>());
+	}
+	Bit::BitToNumeric(input, result);
+	if (result < NumericLimits<hugeint_t>::Minimum()) {
+		throw ConversionException("Minimum limit for HUGEINT is %s", NumericLimits<hugeint_t>::Minimum().ToString());
+	}
 	return (true);
 }
 
