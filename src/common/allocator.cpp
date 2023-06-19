@@ -23,7 +23,7 @@
 #endif
 
 #ifdef USE_JEMALLOC
-#include "jemalloc-extension.hpp"
+#include "jemalloc_extension.hpp"
 #endif
 
 namespace duckdb {
@@ -99,7 +99,7 @@ PrivateAllocatorData::~PrivateAllocatorData() {
 //===--------------------------------------------------------------------===//
 #ifdef USE_JEMALLOC
 Allocator::Allocator()
-    : Allocator(JEMallocExtension::Allocate, JEMallocExtension::Free, JEMallocExtension::Reallocate, nullptr) {
+    : Allocator(JemallocExtension::Allocate, JemallocExtension::Free, JemallocExtension::Reallocate, nullptr) {
 }
 #else
 Allocator::Allocator()
@@ -187,7 +187,7 @@ Allocator &Allocator::DefaultAllocator() {
 
 void Allocator::ThreadFlush(idx_t threshold) {
 #ifdef USE_JEMALLOC
-	JEMallocExtension::ThreadFlush(threshold);
+	JemallocExtension::ThreadFlush(threshold);
 #endif
 }
 

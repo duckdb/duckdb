@@ -107,13 +107,12 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 		// owning references
 		py::object python_object;
 		// Convert the input datachunk to pyarrow
-		string timezone_config = "UTC";
 		ArrowOptions options;
 
 		if (state.HasContext()) {
 			auto &context = state.GetContext();
 			auto client_properties = context.GetClientProperties();
-			options.timezone = client_properties.time_zone;
+			options.time_zone = client_properties.time_zone;
 			options.offset_size = client_properties.arrow_offset_size;
 		}
 

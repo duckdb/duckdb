@@ -11,7 +11,6 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include <list>
-#include <utility>
 #include "duckdb/common/arrow/arrow_appender.hpp"
 
 namespace duckdb {
@@ -135,7 +134,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "tsu:";
 		break;
 	case LogicalTypeId::TIMESTAMP_TZ: {
-		string format = "tsu:" + options.timezone;
+		string format = "tsu:" + options.time_zone;
 		auto format_ptr = make_unsafe_uniq_array<char>(format.size() + 1);
 		for (size_t i = 0; i < format.size(); i++) {
 			format_ptr[i] = format[i];

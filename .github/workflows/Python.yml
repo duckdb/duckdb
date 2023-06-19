@@ -258,7 +258,7 @@ jobs:
 
    win-python3:
       name: Python 3 Windows
-      runs-on: windows-latest
+      runs-on: windows-2019
       strategy:
        matrix:
         python_build: [cp36-*, cp37-*, cp38-*, cp39-*, cp310-*, cp311-*]
