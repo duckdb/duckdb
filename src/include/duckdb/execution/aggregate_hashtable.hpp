@@ -50,35 +50,35 @@ public:
 		return value.hash.hash != 0;
 	}
 	inline void SetOccupied() {
-		value.entry.pointer = 1;
+		D_ASSERT(GetSalt() == 0); // Should set occupied before setting salt
+		value.hash.hash = 1;
 	}
 
 	inline data_ptr_t GetPointer() const {
+		D_ASSERT(IsOccupied());
 		return reinterpret_cast<data_ptr_t>(value.entry.pointer);
 	}
 	inline void SetPointer(data_ptr_t pointer_p) {
 		value.entry.pointer = reinterpret_cast<uint64_t>(pointer_p);
 	}
 
-	static constexpr const auto HASH_PREFIX_SHIFT = (sizeof(hash_t) - sizeof(uint16_t)) * 8;
 	static inline uint16_t ExtractSalt(hash_t hash) {
 		return hash >> HASH_PREFIX_SHIFT;
 	}
 	inline void SetSalt(uint16_t salt) {
 		value.entry.salt = salt;
 	}
-	inline void SetSaltOverwrite(hash_t hash) {
-		value.hash.hash = hash;
-	}
 	inline uint16_t GetSalt() const {
 		return value.entry.salt;
 	}
 
 private:
+	static constexpr const auto HASH_PREFIX_SHIFT = (sizeof(hash_t) - sizeof(uint16_t)) * 8;
+
 	union {
 		struct {
-			uint64_t pointer : 48;
 			uint16_t salt;
+			uint64_t pointer : 48;
 		} entry;
 		struct {
 			hash_t hash;

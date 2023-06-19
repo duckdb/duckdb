@@ -173,7 +173,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 				}
 				auto &entry = entries[entry_idx];
 				D_ASSERT(!entry.IsOccupied());
-				entry.SetSaltOverwrite(hash);
+				entry.SetSalt(aggr_ht_entry_t::ExtractSalt(hash));
 				entry.SetPointer(row_location);
 				D_ASSERT(entry.IsOccupied());
 			}
@@ -358,8 +358,8 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 				}
 			} else { // Cell is unoccupied
 				// Set salt and mark as occupied
-				entry.SetSalt(salt);
 				entry.SetOccupied();
+				entry.SetSalt(salt);
 
 				// Update selection lists for outer loops
 				state.empty_vector.set_index(new_entry_count++, index);
