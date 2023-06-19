@@ -485,6 +485,10 @@ py::dict DuckDBPyRelation::FetchNumpy() {
 		if (!rel) {
 			return py::none();
 		}
+		auto &context = *rel->context.GetContext();
+		ScopedConfigSetting setting(
+		    context.config, [](ClientConfig &config) { config.result_collector = PhysicalNumpyCollector::Create; },
+		    [](ClientConfig &config) { config.result_collector = nullptr; });
 		ExecuteOrThrow();
 	}
 	if (result->IsClosed()) {

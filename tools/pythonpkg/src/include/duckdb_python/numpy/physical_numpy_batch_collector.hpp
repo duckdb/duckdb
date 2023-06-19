@@ -11,8 +11,12 @@ public:
 	    : BatchCollectorGlobalState(context, op) {
 	}
 	~NumpyBatchGlobalState() override {
-		// If an exception occurred, we need to grab the gil so we can destroy this
-		py::gil_scoped_acquire gil;
+		if (!py::gil_check()) {
+			// If an exception occurred, we need to grab the gil so we can destroy this
+			py::gil_scoped_acquire gil;
+			result.reset();
+			return;
+		}
 		result.reset();
 	}
 };

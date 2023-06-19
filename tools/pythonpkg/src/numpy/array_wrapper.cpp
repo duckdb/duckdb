@@ -644,6 +644,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	input.ToUnifiedFormat(count, idata);
 	switch (input.GetType().id()) {
 	case LogicalTypeId::ENUM: {
+		py::gil_scoped_acquire gil;
 		auto size = EnumType::GetSize(input.GetType());
 		auto physical_type = input.GetType().InternalType();
 		if (size <= (idx_t)NumericLimits<int8_t>::Maximum()) {

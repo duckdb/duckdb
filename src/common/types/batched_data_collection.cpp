@@ -77,6 +77,7 @@ void BatchedDataCollection::Scan(BatchedChunkScanState &state, DataChunk &output
 			return;
 		}
 		// there isn't! move to the next collection
+		state.range.begin->second.reset();
 		state.range.begin++;
 		if (state.range.begin == state.range.end) {
 			return;
