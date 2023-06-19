@@ -302,47 +302,44 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 	auto &states = result.states;
 	// iterate over each of the columns of the chunk collection and write them
 	D_ASSERT(buffer.ColumnCount() == column_writers.size());
-	idx_t col_start = 0;
-	while (col_start < buffer.ColumnCount()) {
-		const auto col_end = MinValue<idx_t>(buffer.ColumnCount(), col_start + COLUMNS_PER_PASS);
-
+	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx += COLUMNS_PER_PASS) {
+		const auto next = MinValue<idx_t>(buffer.ColumnCount() - col_idx, COLUMNS_PER_PASS);
 		vector<column_t> column_ids;
+		vector<reference<ColumnWriter>> col_writers;
 		vector<unique_ptr<ColumnWriterState>> write_states;
-		for (idx_t col_idx = col_start; col_idx < col_end; col_idx++) {
-			column_ids.emplace_back(col_idx);
-			write_states.emplace_back(column_writers[col_idx]->InitializeWriteState(row_group));
+		for (idx_t i = 0; i < next; i++) {
+			column_ids.emplace_back(col_idx + i);
+			col_writers.emplace_back(*column_writers[column_ids.back()]);
+			write_states.emplace_back(col_writers.back().get().InitializeWriteState(row_group));
 		}
-		col_start = col_end;
 
 		for (auto &chunk : buffer.Chunks({column_ids})) {
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				auto &col_writer = *column_writers[column_ids[i]];
-				auto &write_state = *write_states[i];
-				if (col_writer.HasAnalyze()) {
-					col_writer.Analyze(write_state, nullptr, chunk.data[i], chunk.size());
+			for (idx_t i = 0; i < next; i++) {
+				if (col_writers[i].get().HasAnalyze()) {
+					col_writers[i].get().Analyze(*write_states[i], nullptr, chunk.data[i], chunk.size());
 				}
 			}
 		}
 
-		for (auto &chunk : buffer.Chunks({column_ids})) {
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				auto &col_writer = *column_writers[column_ids[i]];
-				auto &write_state = *write_states[i];
-				col_writer.Prepare(write_state, nullptr, chunk.data[i], chunk.size());
+		for (idx_t i = 0; i < next; i++) {
+			if (col_writers[i].get().HasAnalyze()) {
+				col_writers[i].get().FinalizeAnalyze(*write_states[i]);
 			}
 		}
 
-		for (idx_t i = 0; i < column_ids.size(); i++) {
-			auto &col_writer = *column_writers[column_ids[i]];
-			auto &write_state = *write_states[i];
-			col_writer.BeginWrite(write_state);
+		for (auto &chunk : buffer.Chunks({column_ids})) {
+			for (idx_t i = 0; i < next; i++) {
+				col_writers[i].get().Prepare(*write_states[i], nullptr, chunk.data[i], chunk.size());
+			}
+		}
+
+		for (idx_t i = 0; i < next; i++) {
+			col_writers[i].get().BeginWrite(*write_states[i]);
 		}
 
 		for (auto &chunk : buffer.Chunks({column_ids})) {
-			for (idx_t i = 0; i < column_ids.size(); i++) {
-				auto &col_writer = *column_writers[column_ids[i]];
-				auto &write_state = *write_states[i];
-				col_writer.Write(write_state, chunk.data[i], chunk.size());
+			for (idx_t i = 0; i < next; i++) {
+				col_writers[i].get().Write(*write_states[i], chunk.data[i], chunk.size());
 			}
 		}
 
