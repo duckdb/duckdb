@@ -222,7 +222,7 @@ static void TestSQLColumns(HSTMT &hstmt, map<SQLSMALLINT, SQLULEN> &types_map) {
 	}
 }
 
-TEST_CASE("catalog_functions", "[odbc") {
+TEST_CASE("catalog_functions", "[odbc]") {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 

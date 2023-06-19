@@ -24,7 +24,7 @@ static void TestMicrosoftExample(HSTMT &hstmt) {
 	                       reinterpret_cast<SQLPOINTER>(ROW_ARRAY_SIZE), 0);
 }
 
-TEST_CASE("row_wise_fetching", "[odbc") {
+TEST_CASE("row_wise_fetching", "[odbc]") {
 	SQLRETURN ret;
 	SQLHANDLE env;
 	SQLHANDLE dbc;

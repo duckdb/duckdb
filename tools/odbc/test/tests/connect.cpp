@@ -3,7 +3,7 @@
 
 using namespace odbc_test;
 
-TEST_CASE("connect", "[odbc") {
+TEST_CASE("connect", "[odbc]") {
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 

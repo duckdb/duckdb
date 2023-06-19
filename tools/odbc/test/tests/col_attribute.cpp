@@ -4,7 +4,7 @@
 
 using namespace odbc_test;
 
-TEST_CASE("col_atribute", "[odbc") {
+TEST_CASE("col_atribute", "[odbc]") {
 	SQLRETURN ret;
 	SQLHANDLE env;
 	SQLHANDLE dbc;
