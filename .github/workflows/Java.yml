@@ -40,7 +40,8 @@ jobs:
   java-linux-amd64:
     name: Java Linux (amd64)
     runs-on: ubuntu-latest
-    container: ubuntu:16.04
+    container:
+      image: quay.io/pypa/manylinux2014_x86_64
     env:
       GEN: ninja
       BUILD_JDBC: 1
@@ -48,7 +49,6 @@ jobs:
       BUILD_JSON: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
-      STATIC_LIBCPP: 1
     steps:
       - uses: actions/checkout@v3
         with:
