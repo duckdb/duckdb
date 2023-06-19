@@ -1,5 +1,4 @@
 #include "../common.h"
-#include <iostream>
 
 using namespace odbc_test;
 
@@ -24,13 +23,13 @@ TEST_CASE("diagnostics", "[odbc]") {
 	}
 
 	// Get the diagnostics
-	string first_state;
-	string first_message;
+	std::string first_state;
+	std::string first_message;
 	ACCESS_DIAGNOSTIC(first_state, first_message, hstmt, SQL_HANDLE_STMT);
 
 	// Get the diagnostics again to make sure they are the same
-	string second_state;
-	string second_message;
+	std::string second_state;
+	std::string second_message;
 	ACCESS_DIAGNOSTIC(second_state, second_message, hstmt, SQL_HANDLE_STMT);
 
 	// Compare the diagnostics to make sure they are the same and that SQLGetDiagRec does not change the state of the
@@ -39,8 +38,8 @@ TEST_CASE("diagnostics", "[odbc]") {
 	REQUIRE(::strcmp(first_message.c_str(), second_message.c_str()) == 0);
 
 	/* TEST 2: Test a veeery long error message */
-	// Create and fill a string with 1000 characters
-	string long_string;
+	// Create and fill a std::string with 1000 characters
+	std::string long_string;
 	for (int i = 0; i < 1000; i++) {
 		long_string += "x";
 	}
@@ -53,8 +52,8 @@ TEST_CASE("diagnostics", "[odbc]") {
 	}
 
 	// Get the diagnostics
-	string long_state;
-	string long_message;
+	std::string long_state;
+	std::string long_message;
 	ACCESS_DIAGNOSTIC(long_state, long_message, hstmt, SQL_HANDLE_STMT);
 
 	REQUIRE(long_message.length() > 0);
@@ -67,13 +66,13 @@ TEST_CASE("diagnostics", "[odbc]") {
 	}
 
 	// Get the diagnostics
-	string first_endtran_state;
-	string first_endtran_message;
+	std::string first_endtran_state;
+	std::string first_endtran_message;
 	ACCESS_DIAGNOSTIC(first_endtran_state, first_endtran_message, dbc, SQL_HANDLE_DBC);
 
 	// Get the diagnostics again to make sure they are the same
-	string second_endtran_state;
-	string second_endtran_message;
+	std::string second_endtran_state;
+	std::string second_endtran_message;
 	ACCESS_DIAGNOSTIC(second_endtran_state, second_endtran_message, dbc, SQL_HANDLE_DBC);
 
 	// Compare the diagnostics to make sure they are the same and that SQLGetDiagRec does not change the state of the

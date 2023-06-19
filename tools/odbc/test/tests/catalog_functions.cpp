@@ -1,7 +1,5 @@
 #include "../common.h"
 
-#include <iostream>
-
 using namespace odbc_test;
 
 /* Tests the following catalog functions:
@@ -21,7 +19,7 @@ using namespace odbc_test;
  * - SQLProcedures
  */
 
-void TestGetTypeInfo(HSTMT &hstmt, map<SQLSMALLINT, SQLULEN> &types_map) {
+void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 	SQLSMALLINT col_count;
 
 	// Check for SQLGetTypeInfo
@@ -32,8 +30,8 @@ void TestGetTypeInfo(HSTMT &hstmt, map<SQLSMALLINT, SQLULEN> &types_map) {
 
 	ExecuteCmdAndCheckODBC("SQLFetch", SQLFetch, hstmt);
 
-	vector<MetadataData> expected_metadata;
-	vector<string> expected_data;
+	std::vector<MetadataData> expected_metadata;
+	std::vector<std::string> expected_data;
 	expected_metadata.push_back({"TYPE_NAME", SQL_VARCHAR});
 	expected_data.emplace_back("VARCHAR");
 	expected_metadata.push_back({"DATA_TYPE", SQL_SMALLINT});
@@ -85,7 +83,7 @@ void TestGetTypeInfo(HSTMT &hstmt, map<SQLSMALLINT, SQLULEN> &types_map) {
 	}
 }
 
-static void TestSQLTables(HSTMT &hstmt, map<SQLSMALLINT, SQLULEN> &types_map) {
+static void TestSQLTables(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 	SQLRETURN ret;
 
 	ExecuteCmdAndCheckODBC("SQLTables", SQLTables, hstmt, nullptr, 0, ConvertToSQLCHAR("main"), SQL_NTS,
@@ -96,7 +94,7 @@ static void TestSQLTables(HSTMT &hstmt, map<SQLSMALLINT, SQLULEN> &types_map) {
 	ExecuteCmdAndCheckODBC("SQLNumResultCols", SQLNumResultCols, hstmt, &col_count);
 	REQUIRE(col_count == 5);
 
-	vector<MetadataData> expected_metadata;
+	std::vector<MetadataData> expected_metadata;
 	expected_metadata.push_back({"TABLE_CAT", SQL_VARCHAR});
 	expected_metadata.push_back({"TABLE_SCHEM", SQL_VARCHAR});
 	expected_metadata.push_back({"TABLE_NAME", SQL_VARCHAR});
@@ -157,7 +155,7 @@ static void TestSQLTables(HSTMT &hstmt, map<SQLSMALLINT, SQLULEN> &types_map) {
 //	DATA_CHECK(hstmt, 4, "TABLE");
 //}
 
-static void TestSQLColumns(HSTMT &hstmt, map<SQLSMALLINT, SQLULEN> &types_map) {
+static void TestSQLColumns(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 	ExecuteCmdAndCheckODBC("SQLColumns", SQLColumns, hstmt, nullptr, 0, ConvertToSQLCHAR("main"), SQL_NTS,
 	                       ConvertToSQLCHAR("%"), SQL_NTS, nullptr, 0);
 
@@ -167,7 +165,7 @@ static void TestSQLColumns(HSTMT &hstmt, map<SQLSMALLINT, SQLULEN> &types_map) {
 	REQUIRE(col_count == 18);
 
 	// Create a map of column types and a vector of expected metadata
-	vector<MetadataData> expected_metadata;
+	std::vector<MetadataData> expected_metadata;
 	expected_metadata.push_back({"TABLE_CAT", SQL_INTEGER});
 	expected_metadata.push_back({"TABLE_SCHEM", SQL_VARCHAR});
 	expected_metadata.push_back({"TABLE_NAME", SQL_VARCHAR});
@@ -193,21 +191,21 @@ static void TestSQLColumns(HSTMT &hstmt, map<SQLSMALLINT, SQLULEN> &types_map) {
 		               types_map[entry.col_type], 0, SQL_NULLABLE_UNKNOWN);
 	}
 
-	vector<array<string, 4>> expected_data;
-	expected_data.emplace_back(array<string, 4> {"bool_table", "id", "13", "INTEGER"});
-	expected_data.emplace_back(array<string, 4> {"bool_table", "t", "25", "VARCHAR"});
-	expected_data.emplace_back(array<string, 4> {"bool_table", "b", "10", "BOOLEAN"});
-	expected_data.emplace_back(array<string, 4> {"byte_table", "id", "13", "INTEGER"});
-	expected_data.emplace_back(array<string, 4> {"byte_table", "t", "26", "BLOB"});
-	expected_data.emplace_back(array<string, 4> {"interval_table", "id", "13", "INTEGER"});
-	expected_data.emplace_back(array<string, 4> {"interval_table", "iv", "27", "INTERVAL"});
-	expected_data.emplace_back(array<string, 4> {"interval_table", "d", "25", "VARCHAR"});
-	expected_data.emplace_back(array<string, 4> {"lo_test_table", "id", "13", "INTEGER"});
-	expected_data.emplace_back(array<string, 4> {"lo_test_table", "large_data", "26", "BLOB"});
-	expected_data.emplace_back(array<string, 4> {"test_table_1", "id", "13", "INTEGER"});
-	expected_data.emplace_back(array<string, 4> {"test_table_1", "t", "25", "VARCHAR"});
-	expected_data.emplace_back(array<string, 4> {"test_view", "id", "13", "INTEGER"});
-	expected_data.emplace_back(array<string, 4> {"test_view", "t", "25", "VARCHAR"});
+	std::vector<std::array<std::string, 4>> expected_data;
+	expected_data.emplace_back(std::array<std::string, 4> {"bool_table", "id", "13", "INTEGER"});
+	expected_data.emplace_back(std::array<std::string, 4> {"bool_table", "t", "25", "VARCHAR"});
+	expected_data.emplace_back(std::array<std::string, 4> {"bool_table", "b", "10", "BOOLEAN"});
+	expected_data.emplace_back(std::array<std::string, 4> {"byte_table", "id", "13", "INTEGER"});
+	expected_data.emplace_back(std::array<std::string, 4> {"byte_table", "t", "26", "BLOB"});
+	expected_data.emplace_back(std::array<std::string, 4> {"interval_table", "id", "13", "INTEGER"});
+	expected_data.emplace_back(std::array<std::string, 4> {"interval_table", "iv", "27", "INTERVAL"});
+	expected_data.emplace_back(std::array<std::string, 4> {"interval_table", "d", "25", "VARCHAR"});
+	expected_data.emplace_back(std::array<std::string, 4> {"lo_test_table", "id", "13", "INTEGER"});
+	expected_data.emplace_back(std::array<std::string, 4> {"lo_test_table", "large_data", "26", "BLOB"});
+	expected_data.emplace_back(std::array<std::string, 4> {"test_table_1", "id", "13", "INTEGER"});
+	expected_data.emplace_back(std::array<std::string, 4> {"test_table_1", "t", "25", "VARCHAR"});
+	expected_data.emplace_back(std::array<std::string, 4> {"test_view", "id", "13", "INTEGER"});
+	expected_data.emplace_back(std::array<std::string, 4> {"test_view", "t", "25", "VARCHAR"});
 
 	for (int i = 0; i < expected_data.size(); i++) {
 		ExecuteCmdAndCheckODBC("SQLFetch", SQLFetch, hstmt);
@@ -236,7 +234,7 @@ TEST_CASE("catalog_functions", "[odbc]") {
 	ExecuteCmdAndCheckODBC("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
 
 	// Initializes the database with dummy data
-	INITIALIZE_DATABASE(hstmt);
+	initializeDatabase(hstmt);
 
 	// Drop the test table if it exists
 	ExecuteCmdAndCheckODBC("SQLExecDirect (DROP TABLE)", SQLExecDirect, hstmt,

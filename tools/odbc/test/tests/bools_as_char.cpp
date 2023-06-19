@@ -1,7 +1,5 @@
 #include "../common.h"
 
-#include <iostream>
-
 using namespace odbc_test;
 
 TEST_CASE("bools_as_char", "[odbc]") {

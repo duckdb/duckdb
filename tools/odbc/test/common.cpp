@@ -6,10 +6,10 @@ namespace odbc_test {
 void ODBC_CHECK(SQLRETURN ret, const char *msg) {
 	switch (ret) {
 	case SQL_SUCCESS:
-		REQUIRE(1 == 1);
+		REQUIRE(TRUE);
 		return;
 	case SQL_SUCCESS_WITH_INFO:
-		fprintf(stderr, "%s: Error: Success with info\n", msg);
+		fprintf(stderr, "%s: Success with info\n", msg);
 		break;
 	case SQL_ERROR:
 		fprintf(stderr, "%s: Error: Error\n", msg);
@@ -27,7 +27,7 @@ void ODBC_CHECK(SQLRETURN ret, const char *msg) {
 	REQUIRE(ret == SQL_SUCCESS);
 }
 
-void ACCESS_DIAGNOSTIC(string &state, string &message, SQLHANDLE handle, SQLSMALLINT handle_type) {
+void ACCESS_DIAGNOSTIC(std::string &state, std::string &message, SQLHANDLE handle, SQLSMALLINT handle_type) {
 	SQLCHAR sqlstate[6];
 	SQLINTEGER native_error;
 	SQLCHAR message_text[256];
@@ -37,8 +37,13 @@ void ACCESS_DIAGNOSTIC(string &state, string &message, SQLHANDLE handle, SQLSMAL
 
 	while (SQL_SUCCEEDED(ret)) {
 		recnum++;
+		// SQLGetDiagRec returns the current values of multiple fields of a diagnostic record that contains error,
+		// warning, and status information.
 		ret = SQLGetDiagRec(handle_type, handle, recnum, sqlstate, &native_error, message_text, sizeof(message_text),
 		                    &text_length);
+		// The function overwrites the previous contents of state and message so only the last diagnostic record is
+		// available. Because this function usually is called on one diagnostic record, or used to confirm that two
+		// calls to SQLGetDiagRec does not change the state of the statement, this is not a problem.
 		if (SQL_SUCCEEDED(ret)) {
 			state = ConvertToString(sqlstate);
 			message = ConvertToString(message_text);
@@ -54,6 +59,7 @@ void DATA_CHECK(HSTMT hstmt, SQLSMALLINT col_num, const char *expected_content) 
 	SQLCHAR content[256];
 	SQLLEN content_len;
 
+	// SQLGetData returns data for a single column in the result set.
 	SQLRETURN ret = SQLGetData(hstmt, col_num, SQL_C_CHAR, content, sizeof(content), &content_len);
 	ODBC_CHECK(ret, "SQLGetData");
 	if (content_len == SQL_NULL_DATA) {
@@ -63,7 +69,7 @@ void DATA_CHECK(HSTMT hstmt, SQLSMALLINT col_num, const char *expected_content) 
 	REQUIRE(!::strcmp(ConvertToCString(content), expected_content));
 }
 
-void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const string &expected_col_name,
+void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const std::string &expected_col_name,
                     SQLSMALLINT expected_col_name_len, SQLSMALLINT expected_col_data_type, SQLULEN expected_col_size,
                     SQLSMALLINT expected_col_decimal_digits, SQLSMALLINT expected_col_nullable) {
 	SQLCHAR col_name[256];
@@ -73,6 +79,7 @@ void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const string &expected_co
 	SQLSMALLINT col_decimal_digits;
 	SQLSMALLINT col_nullable;
 
+	// SQLDescribeCol returns the result descriptor (column name, column size, decimal digits, and nullability) for one column in a result set.
 	SQLRETURN ret = SQLDescribeCol(hstmt, col_num, col_name, sizeof(col_name), &col_name_len, &col_type, &col_size,
 	                               &col_decimal_digits, &col_nullable);
 	ODBC_CHECK(ret, "SQLDescribeCol");
@@ -97,13 +104,13 @@ void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const string &expected_co
 	}
 }
 
-void DRIVER_CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc, const string &extra_params) {
-	string dsn;
-	string default_dsn = "duckdbmemory";
+void DRIVER_CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc, const std::string &extra_params) {
+	std::string dsn;
+	std::string default_dsn = "duckdbmemory";
 	SQLCHAR str[1024];
 	SQLSMALLINT strl;
 	auto tmp = getenv("COMMON_CONNECTION_STRING_FOR_REGRESSION_TEST");
-	string envvar = tmp ? tmp : "";
+	std::string envvar = tmp ? tmp : "";
 
 	if (!envvar.empty()) {
 		if (!extra_params.empty()) {
@@ -127,12 +134,14 @@ void DRIVER_CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc, const string &ex
 
 	ExecuteCmdAndCheckODBC("SQLAllocHandle (DBC)", SQLAllocHandle, SQL_HANDLE_DBC, env, &dbc);
 
+	// SQLDriverConnect establishes connections to a driver and a data source.
+	// Supports data sources that require more connection information than the three arguments in SQLConnect.
 	ExecuteCmdAndCheckODBC("SQLDriverConnect", SQLDriverConnect, dbc, nullptr, ConvertToSQLCHAR(dsn.c_str()), SQL_NTS,
 	                       str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
 }
 
 void CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc) {
-	string dsn = "DuckDB";
+	std::string dsn = "DuckDB";
 
 	SQLRETURN ret = SQLAllocHandle(SQL_HANDLE_ENV, nullptr, &env);
 	REQUIRE(ret == SQL_SUCCESS);
@@ -142,6 +151,7 @@ void CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc) {
 
 	ExecuteCmdAndCheckODBC("SQLAllocHandle (DBC)", SQLAllocHandle, SQL_HANDLE_DBC, env, &dbc);
 
+	// SQLConnect establishes connections to a driver and a data source.
 	ExecuteCmdAndCheckODBC("SQLConnect", SQLConnect, dbc, ConvertToSQLCHAR(dsn.c_str()), SQL_NTS, nullptr, 0, nullptr,
 	                       0);
 }
@@ -154,8 +164,8 @@ void DISCONNECT_FROM_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc) {
 	ExecuteCmdAndCheckODBC("SQLFreeHandle(SQL_HANDLE_DBC)", SQLFreeHandle, SQL_HANDLE_DBC, dbc);
 }
 
-void EXEC_SQL(HSTMT hstmt, const string &query) {
-	ExecuteCmdAndCheckODBC("SQLExecDirect", SQLExecDirect, hstmt, ConvertToSQLCHAR(query.c_str()), SQL_NTS);
+void execSql(HSTMT hstmt, const std::string &query) {
+	ExecuteCmdAndCheckODBC("SQLExecDirect (" + query + ")", SQLExecDirect, hstmt, ConvertToSQLCHAR(query.c_str()), SQL_NTS);
 }
 
 void INITIALIZE_DATABASE(HSTMT hstmt) {
@@ -188,8 +198,8 @@ void INITIALIZE_DATABASE(HSTMT hstmt) {
 	EXEC_SQL(hstmt, "CREATE TABLE lo_test_table (id int4, large_data blob);");
 }
 
-map<SQLSMALLINT, SQLULEN> InitializeTypesMap() {
-	map<SQLSMALLINT, SQLULEN> types_map;
+std::map<SQLSMALLINT, SQLULEN> InitializeTypesMap() {
+	std::map<SQLSMALLINT, SQLULEN> types_map;
 
 	types_map[SQL_VARCHAR] = 256;
 	types_map[SQL_BIGINT] = 20;
@@ -202,8 +212,8 @@ SQLCHAR *ConvertToSQLCHAR(const char *str) {
 	return reinterpret_cast<SQLCHAR *>(const_cast<char *>(str));
 }
 
-string ConvertToString(SQLCHAR *str) {
-	return string(reinterpret_cast<char *>(str));
+std::string ConvertToString(SQLCHAR *str) {
+	return std::string(reinterpret_cast<char *>(str));
 }
 
 const char *ConvertToCString(SQLCHAR *str) {
