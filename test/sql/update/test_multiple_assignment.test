@@ -67,3 +67,15 @@ SELECT * FROM tbl;
 ----
 6	6	6
 6	6	6
+
+#                   empty lists
+# ---------------------------------------------------
+statement error
+UPDATE tbl SET () = (key, fruit);
+----
+Parser Error: syntax error at or near ")"
+
+statement error
+UPDATE tbl SET (key, fruit) = ();
+----
+Parser Error: syntax error at or near ")"
