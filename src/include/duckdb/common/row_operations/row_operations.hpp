@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-class Allocator;
+class ArenaAllocator;
 struct AggregateObject;
 struct AggregateFilterData;
 class DataChunk;
@@ -26,7 +26,7 @@ class Vector;
 struct UnifiedVectorFormat;
 
 struct RowOperationsState {
-	RowOperationsState(ArenaAllocator &allocator) : allocator(allocator) {
+	explicit RowOperationsState(ArenaAllocator &allocator) : allocator(allocator) {
 	}
 
 	ArenaAllocator &allocator;
