@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/simple_external_aggregate.test_slow
+# name: test/sql/aggregate/external/simple_external_aggregate.test_slow
 # description: Test simple external aggregate
-# group: [aggregate]
+# group: [external]
 
 load __TEST_DIR__/simple_external_aggregate.db
 
