@@ -217,12 +217,8 @@ rel_inner_join <- function(left, right, conds) {
   rel_join_(left, right, conds, "inner", "regular")
 }
 
-rel_join <- function(left, right, conds, join) {
-    rel_join_(left, right, conds, join, "regular")
-}
-
-rel_rolling_join <- function(left, right, conds) {
-    rel_join_(left, right, conds, "inner", "asof")
+rel_join <- function(left, right, conds, join = "inner", ref_type = "regular") {
+    rel_join_(left, right, conds, join, ref_type)
 }
 
 join_types = c("inner", "left", "right", "outer", "cross", "semi", "anti", "asof")

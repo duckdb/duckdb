@@ -273,7 +273,7 @@ test_that("ASOF join works", {
     test_df1 <- rel_from_df(con, data.frame(ts=c(1, 2, 3, 4, 5, 6, 7, 8, 9)))
     test_df2 <- rel_from_df(con, data.frame(event_ts=c(1, 3, 6, 8), event_id=c(0, 1, 2, 3)))
     cond <- list(expr_function("gte", list(expr_reference("ts"), expr_reference("event_ts"))))
-    rel <- rel_rolling_join(test_df1, test_df2, cond)
+    rel <- rel_join(test_df1, test_df2, cond, ref_type="asof")
     rel_proj <- rel_project(rel, list(expr_reference("ts"), expr_reference("event_id")))
     rel_df <- rel_to_altrep(rel_proj)
     expected_result <- data.frame(ts=c(1, 2, 3, 4, 5, 6, 7, 8, 9), event_id=c(0, 0, 1, 1, 1, 2, 2, 3, 3))
@@ -285,7 +285,7 @@ test_that("Invalid asof join condition throws error", {
     test_df1 <- rel_from_df(con, data.frame(ts=c(1, 2, 3, 4, 5, 6, 7, 8, 9)))
     test_df2 <- rel_from_df(con, data.frame(begin=c(1, 3, 6, 8), value=c(0, 1, 2, 3)))
     cond <- list(expr_function("neq", list(expr_reference("ts"), expr_reference("begin"))))
-    expect_error(rel_rolling_join(test_df1, test_df2, cond), "Binder Error")
+    expect_error(rel_join(test_df1, test_df2, cond, ref_type="asof"), "Binder Error")
 })
 
 test_that("multiple conditions for asof join throws error", {
@@ -295,7 +295,7 @@ test_that("multiple conditions for asof join throws error", {
     cond1 <- expr_function("gte", list(expr_reference("ts"), expr_reference("begin")))
     cond2 <- expr_function("gte", list(expr_reference("ts"), expr_reference("value")))
     conds <- list(cond1, cond2)
-    expect_error(rel_rolling_join(test_df1, test_df2, conds), "Binder Error")
+    expect_error(rel_join(test_df1, test_df2, conds, ref_type="asof"), "Binder Error")
 })
 
 
