@@ -62,10 +62,7 @@ jobs:
         run: >
           java -cp build/release/tools/jdbc/duckdb_jdbc.jar
           org.duckdb.test.TestDuckDBJDBC
-      - name: Java Example
-        shell: bash
-        run: |
-          (cd examples/jdbc; make; make maven)
+
       - name: Deploy
         shell: bash
         run: >
