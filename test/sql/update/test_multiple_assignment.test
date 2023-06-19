@@ -48,14 +48,14 @@ SELECT * FROM tbl;
 statement error
 UPDATE tbl SET (key, fruit, cost) = (1, 2);
 ----
-Parser Error: Too few columns for Multiple Assignment
+Parser Error: Could not perform multiple assignment, target expects 3 values, only 2 were provided
 
 #                  too many values
 # ---------------------------------------------------
 statement error
 UPDATE tbl SET (key, fruit, cost) = (1, 2, 3, 4);
 ----
-Parser Error: Too many columns for Multiple Assignment
+Parser Error: Could not perform multiple assignment, target only expects 3 values, 4 were provided
 
 #            functions should still work
 # ---------------------------------------------------
