@@ -214,7 +214,6 @@ idx_t GroupedAggregateHashTable::AddChunk(AggregateHTAppendState &state, DataChu
 
 #ifdef DEBUG
 	D_ASSERT(groups.ColumnCount() + 1 == layout.ColumnCount());
-	D_ASSERT(groups.GetTypes() == layout.GetTypes());
 	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
 		D_ASSERT(groups.GetTypes()[i] == layout.GetTypes()[i]);
 	}
@@ -349,16 +348,17 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 		// For each remaining entry, figure out whether or not it belongs to a full or empty group
 		for (idx_t i = 0; i < remaining_entries; i++) {
 			const auto index = sel_vector->get_index(i);
-			auto &entry = entries[index];
+			const auto &salt = hash_salts[index];
+			auto &entry = entries[ht_offsets[index]];
 			if (entry.IsOccupied()) { // Cell is occupied: Compare salts
-				if (entry.GetSalt() == hash_salts[index]) {
+				if (entry.GetSalt() == salt) {
 					state.group_compare_vector.set_index(need_compare_count++, index);
 				} else {
 					state.no_match_vector.set_index(no_match_count++, index);
 				}
 			} else { // Cell is unoccupied
 				// Set salt and mark as occupied
-				entry.SetSaltOverwrite(hash_salts[index]);
+				entry.SetSalt(salt);
 				entry.SetOccupied();
 
 				// Update selection lists for outer loops
@@ -377,10 +377,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 			// Set the page nrs/offsets in the 1st part of the HT now that the data has been appended
 			const auto row_locations = FlatVector::GetData<data_ptr_t>(state.chunk_state.row_locations);
 			for (idx_t new_entry_idx = 0; new_entry_idx < new_entry_count; new_entry_idx++) {
-				const auto &row_location = row_locations[new_entry_idx];
 				const auto index = state.empty_vector.get_index(new_entry_idx);
 				auto &entry = entries[ht_offsets[index]];
-				entry.SetPointer(row_location);
+				entry.SetPointer(row_locations[new_entry_idx]);
 			}
 		}
 

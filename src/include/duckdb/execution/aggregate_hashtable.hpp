@@ -64,6 +64,9 @@ public:
 	static inline uint16_t ExtractSalt(hash_t hash) {
 		return hash >> HASH_PREFIX_SHIFT;
 	}
+	inline void SetSalt(uint16_t salt) {
+		value.entry.salt = salt;
+	}
 	inline void SetSaltOverwrite(hash_t hash) {
 		value.hash.hash = hash;
 	}
