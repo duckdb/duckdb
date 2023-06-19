@@ -1,7 +1,9 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include <_types/_uint8_t.h>
 #include <cstring>
 
 namespace duckdb {
@@ -34,6 +36,13 @@ static inline idx_t GetBitSize(const string_t &str) {
 		throw ConversionException(error_message);
 	}
 	return str_len;
+}
+
+uint8_t Bit::GetFirstByte(const string_t &str) {
+	D_ASSERT(str.GetSize() > 1);
+	
+	auto data = const_data_ptr_cast(str.GetData());
+	return data[1] & ((1 << (8 - data[0])) - 1);
 }
 
 void Bit::Finalize(string_t &str) {
@@ -171,9 +180,13 @@ void Bit::BitToBlob(string_t bit, string_t &output_blob) {
 	auto output = output_blob.GetDataWriteable();
 	idx_t size = output_blob.GetSize();
 
-	output[0] = data[1] & ((1 << (8 - data[0])) - 1);
-	for (idx_t idx = 1; idx < size; ++idx) {
-		output[idx] = data[idx + 1];
+	output[0] = GetFirstByte(bit);
+	if (size > 2) {
+		++output;
+		// First byte in bitstring contains amount of padded bits,
+		// second byte in bitstring is the padded byte,
+		// therefore the rest of the data starts at data + 2 (third byte)
+		memcpy(output, data + 2, size - 1);
 	}
 }
 

@@ -85,6 +85,7 @@ private:
 	static idx_t GetBitInternal(string_t bit_string, idx_t n);
 	static void SetBitInternal(string_t &bit_string, idx_t n, idx_t new_value);
 	static idx_t GetBitIndex(idx_t n);
+	static uint8_t GetFirstByte(const string_t &str);
 };
 
 //===--------------------------------------------------------------------===//
@@ -127,10 +128,8 @@ void Bit::BitToNumeric(string_t bit, T &output_num) {
 	auto data = const_data_ptr_cast(bit.GetData());
 	auto output = data_ptr_cast(&output_num);
 
-	uint8_t padded_byte = data[1] & ((1 << (8 - data[0])) - 1);
 	idx_t padded_byte_idx = sizeof(T) - bit.GetSize() + 1;
-
-	output[sizeof(T) - 1 - padded_byte_idx] = padded_byte;
+	output[sizeof(T) - 1 - padded_byte_idx] = GetFirstByte(bit);
 	for (idx_t idx = padded_byte_idx + 1; idx < sizeof(T); ++idx) {
 		output[sizeof(T) - 1 - idx] = data[1 + idx - padded_byte_idx];
 	}
