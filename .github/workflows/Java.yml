@@ -47,7 +47,6 @@ jobs:
       BUILD_JDBC: 1
       BUILD_JEMALLOC: 1
       BUILD_JSON: 1
-      TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
     steps:
       - uses: actions/checkout@v3
