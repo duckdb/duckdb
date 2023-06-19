@@ -10,7 +10,6 @@ namespace duckdb {
 
 static int CalculateSliceLength(int64_t &begin, int64_t &end, int64_t step, bool svalid) {
 	if (end < begin) {
-		step = 1;
 		return 0;
 	}
 	if (step < 0) {
@@ -133,16 +132,6 @@ list_entry_t SliceValueWithSteps(Vector &result, SelectionVector &sel, list_entr
 		sel_idx++;
 	}
 	return input;
-}
-
-template <>
-string_t SliceValueWithSteps(Vector &result, SelectionVector &sel, string_t input, int64_t begin, int64_t end,
-                             int64_t step, idx_t &sel_idx) {
-	// this should never be called
-	throw NotImplementedException(
-	    "Slice with steps has not been implemented for string types, you can consider rewriting your query as "
-	    "follows:\n SELECT array_to_string((str_split(string, '')[begin:end:step], '');");
-	return "";
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
