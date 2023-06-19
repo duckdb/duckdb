@@ -162,6 +162,8 @@ public:
 
 	void Close();
 
+	void Interrupt();
+
 	ModifiedMemoryFileSystem &GetObjectFileSystem();
 
 	// cursor() is stupid

@@ -16,6 +16,13 @@
 
 #ifndef USE_JEMALLOC
 #if defined(BUILD_JEMALLOC_EXTENSION) && !defined(WIN32)
+#define USE_JEMALLOC
+#else
+#define USE JEMALLOC 0
+#endif
+#endif
+
+#ifdef USE_JEMALLOC
 #include "jemalloc_extension.hpp"
 #endif
 
@@ -180,7 +187,7 @@ Allocator &Allocator::DefaultAllocator() {
 
 void Allocator::ThreadFlush(idx_t threshold) {
 #ifdef USE_JEMALLOC
-	JEMallocExtension::ThreadFlush(threshold);
+	JemallocExtension::ThreadFlush(threshold);
 #endif
 }
 
