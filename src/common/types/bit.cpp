@@ -191,6 +191,8 @@ void Bit::BitToBlob(string_t bit, string_t &output_blob) {
 }
 
 string Bit::BitToBlob(string_t bit) {
+	D_ASSERT(bit.GetSize() > 1);
+
 	auto buffer = make_unsafe_uniq_array<char>(bit.GetSize() - 1);
 	string_t output_str(buffer.get(), bit.GetSize() - 1);
 	Bit::BitToBlob(bit, output_str);
