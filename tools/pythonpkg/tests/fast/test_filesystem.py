@@ -202,7 +202,18 @@ class TestPythonFilesystem:
         with memory.open('/root/a=1/data_0.csv', 'wb') as fh:
             fh.write(b'1\n')
 
-        duckdb_cursor.execute('''SELECT * FROM read_csv_auto('memory://root/*/*.csv', HIVE_PARTITIONING = 1);''')
+        # hive partitioning
+        duckdb_cursor.execute('''SELECT * FROM read_csv_auto('memory://root/*/*.csv', HIVE_PARTITIONING=1);''')
         assert duckdb_cursor.fetchall() == [(1, 1)]
-        duckdb_cursor.execute('''SELECT * FROM read_csv_auto('memory://root/*/*.csv', HIVE_PARTITIONING = 1, HIVE_TYPES_AUTOCAST=0);''')
+
+        # hive partitioning: auto detection
+        duckdb_cursor.execute('''SELECT * FROM read_csv_auto('memory://root/*/*.csv');''')
+        assert duckdb_cursor.fetchall() == [(1, 1)]
+
+        # hive partitioning: cast to int
+        duckdb_cursor.execute('''SELECT * FROM read_csv_auto('memory://root/*/*.csv', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=1);''')
+        assert duckdb_cursor.fetchall() == [(1, 1)]
+
+        # hive partitioning: no cast to int
+        duckdb_cursor.execute('''SELECT * FROM read_csv_auto('memory://root/*/*.csv', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0);''')
         assert duckdb_cursor.fetchall() == [(1, '1')]
