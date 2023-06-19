@@ -221,9 +221,9 @@ rel_join <- function(left, right, conds, join = "inner", ref_type = "regular") {
     rel_join_(left, right, conds, join, ref_type)
 }
 
-join_types = c("inner", "left", "right", "outer", "cross", "semi", "anti", "asof")
-join_ref_types = c("regular", "natural", "cross", "positional", "asof", "dependent")
-rel_join_ <- function(left, right, conds, join = join_types, join_ref_type=join_ref_types) {
+rel_join_ <- function(left, right, conds,
+                      join = c("inner", "left", "right", "outer", "cross", "semi", "anti", "asof"),
+                      join_ref_type = c("regular", "natural", "cross", "positional", "asof", "dependent")) {
   join <- match.arg(join)
   join_ref_type <- match.arg(join_ref_type)
   rapi_rel_join(left, right, conds, join, join_ref_type)

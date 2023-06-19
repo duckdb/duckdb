@@ -313,6 +313,27 @@ test_that("Inequality joins work", {
 })
 
 
+test_that("Inequality join works to perform between operation", {
+    dbExecute(con, "CREATE OR REPLACE MACRO gt(a, b) AS a > b")
+    dbExecute(con, "CREATE OR REPLACE MACRO lt(a, b) AS a < b")
+    timing_df <- rel_from_df(con, data.frame(ts=c(1, 2, 3, 4, 5, 6, 7, 8, 9)))
+    events_df <- rel_from_df(con, data.frame(event_ts=c(1, 3, 6, 8), event_id=c(0, 1, 2, 3)))
+    lead <- expr_function("lead", list(expr_reference("event_ts")))
+    window_lead <- expr_window(lead, offset_expr=expr_constant(1))
+    expr_set_alias(window_lead, "lead")
+    proj_window <- rel_project(events_df, list(expr_reference("event_ts"), window_lead, expr_reference("event_id")))
+    cond1 <- expr_function("gt", list(expr_reference("ts"), expr_reference("event_ts")))
+    cond2 <- expr_function("lt", list(expr_reference("ts"), expr_reference("lead")))
+    conds <- list(cond1, cond2)
+    rel <- rel_inner_join(timing_df, proj_window, conds)
+    rel_proj <- rel_project(rel, list(expr_reference("ts")))
+    rel_order <- rel_order(rel_proj, list(expr_reference("ts")))
+    rel_df <- rel_to_altrep(rel_order)
+    expected_result <- data.frame(ts=c(2, 4, 5, 7))
+    expect_equal(expected_result, rel_df)
+})
+
+
 # nobody should do this in reality. It's a pretty dumb idea
 test_that("we can union the same relation to itself", {
      test_df_a2 <- rel_from_df(con, data.frame(a=c('1', '2'), b=c('3', '4')))
