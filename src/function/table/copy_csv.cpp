@@ -116,13 +116,20 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	for (auto &option : info.options) {
 		auto loption = StringUtil::Lower(option.first);
 		auto &set = option.second;
-		options.SetReadOption(loption, ConvertVectorToValue(std::move(set)), expected_names);
+		options.SetReadOption(loption, ConvertVectorToValue(set), expected_names);
 	}
 	// verify the parsed options
 	if (options.force_not_null.empty()) {
 		// no FORCE_QUOTE specified: initialize to false
 		options.force_not_null.resize(expected_types.size(), false);
 	}
+
+	// Look for rejects table options last
+	named_parameter_map_t options_map;
+	for (auto &option : info.options) {
+		options_map[option.first] = ConvertVectorToValue(std::move(option.second));
+	}
+
 	bind_data->FinalizeRead(context);
 	if (!bind_data->single_threaded && options.auto_detect) {
 		options.file_path = bind_data->files[0];
