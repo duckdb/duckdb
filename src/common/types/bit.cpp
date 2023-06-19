@@ -2,6 +2,7 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include <cstring>
 
 namespace duckdb {
 
@@ -153,9 +154,7 @@ void Bit::BlobToBit(string_t blob, string_t &output_str) {
 	idx_t size = blob.GetSize();
 
 	*output = 0; // No padding
-	for (idx_t idx = 0; idx < size; ++idx) {
-		output[1 + idx] = data[idx];
-	}
+	memcpy(output + 1, data, size);
 }
 
 string Bit::BlobToBit(string_t blob) {
