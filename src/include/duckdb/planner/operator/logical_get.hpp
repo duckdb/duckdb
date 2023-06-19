@@ -39,8 +39,9 @@ public:
 	vector<idx_t> projection_ids;
 	//! Filters pushed down for table scan
 	TableFilterSet table_filters;
-	//! Filters applied by hive partitioning/complex filter pushdown
-	//! Depending on different file readers, we don't want to apply these filters
+	//! File Filters applied by hive partitioning/complex filter pushdown
+	//! Separate from table_filters since they can more complex (eg. year extraction)
+	//! and are not applied during execution
 	vector<unique_ptr<Expression>> file_filters;
 	//! The set of input parameters for the table function
 	vector<Value> parameters;
