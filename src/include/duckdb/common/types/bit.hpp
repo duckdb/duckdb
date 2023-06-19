@@ -140,21 +140,4 @@ void Bit::BitToNumeric(string_t bit, T &output_num) {
 	}
 }
 
-// template <>
-// void Bit::BitToNumeric(string_t bit, hugeint_t &output_num) {
-// 	D_ASSERT(bit.GetSize() <= sizeof(hugeint_t) + 1);
-
-// 	output_num = 0;
-// 	auto data = const_data_ptr_cast(bit.GetData());
-// 	auto output = data_ptr_cast(&output_num);
-
-// 	idx_t padded_byte_idx = sizeof(hugeint_t) - bit.GetSize() + 1;
-// 	output[sizeof(hugeint_t) - 1 - padded_byte_idx] = GetFirstByte(bit);
-// 	for (idx_t idx = padded_byte_idx + 1; idx < sizeof(hugeint_t); ++idx) {
-// 		output[sizeof(hugeint_t) - 1 - idx] = data[1 + idx - padded_byte_idx];
-// 	}
-
-	
-// }
-
 } // namespace duckdb

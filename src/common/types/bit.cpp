@@ -38,7 +38,7 @@ static inline idx_t GetBitSize(const string_t &str) {
 
 uint8_t Bit::GetFirstByte(const string_t &str) {
 	D_ASSERT(str.GetSize() > 1);
-	
+
 	auto data = const_data_ptr_cast(str.GetData());
 	return data[1] & ((1 << (8 - data[0])) - 1);
 }
