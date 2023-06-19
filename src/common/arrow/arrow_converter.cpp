@@ -241,8 +241,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 			root_holder.owned_type_names.push_back(AddName(child_types[type_idx].first));
 
 			child.children[type_idx]->name = root_holder.owned_type_names.back().get();
-			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, config_timezone,
-			               options);
+			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, options);
 
 			format += to_string(type_idx) + ",";
 		}
