@@ -3,8 +3,6 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include <_types/_uint8_t.h>
-#include <cstring>
 
 namespace duckdb {
 
