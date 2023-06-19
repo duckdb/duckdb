@@ -94,16 +94,12 @@ JoinRelationSet &JoinRelationSetManager::Union(JoinRelationSet &left, JoinRelati
 				relations[count++] = left.relations[i];
 			}
 			break;
-		} else if (left.relations[i] == right.relations[j]) {
-			// equivalent, add only one of the two pairs
-			relations[count++] = left.relations[i];
-			i++;
-			j++;
 		} else if (left.relations[i] < right.relations[j]) {
 			// left is smaller, progress left and add it to the set
 			relations[count++] = left.relations[i];
 			i++;
 		} else {
+			D_ASSERT(left.relations[i] > right.relations[j]);
 			// right is smaller, progress right and add it to the set
 			relations[count++] = right.relations[j];
 			j++;
