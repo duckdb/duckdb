@@ -16,14 +16,7 @@
 
 #ifndef USE_JEMALLOC
 #if defined(BUILD_JEMALLOC_EXTENSION) && !defined(WIN32)
-#define USE_JEMALLOC
-#else
-#define USE JEMALLOC 0
-#endif
-#endif
-
-#ifdef USE_JEMALLOC
-#include "jemalloc-extension.hpp"
+#include "jemalloc_extension.hpp"
 #endif
 
 namespace duckdb {
@@ -99,7 +92,7 @@ PrivateAllocatorData::~PrivateAllocatorData() {
 //===--------------------------------------------------------------------===//
 #ifdef USE_JEMALLOC
 Allocator::Allocator()
-    : Allocator(JEMallocExtension::Allocate, JEMallocExtension::Free, JEMallocExtension::Reallocate, nullptr) {
+    : Allocator(JemallocExtension::Allocate, JemallocExtension::Free, JemallocExtension::Reallocate, nullptr) {
 }
 #else
 Allocator::Allocator()

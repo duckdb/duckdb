@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// visualizer-extension.hpp
+// sqlsmith_extension.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,7 +12,7 @@
 
 namespace duckdb {
 
-class VisualizerExtension : public Extension {
+class SqlsmithExtension : public Extension {
 public:
 	void Load(DuckDB &db) override;
 	std::string Name() override;
