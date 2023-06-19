@@ -64,7 +64,7 @@ static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &e
 	// Clamp offsets
 	if (begin == INT64_MIN) {
 		return false;
-    }
+	}
 	begin = (begin > 0) ? begin - 1 : begin;
 	const auto length = ValueLength<INPUT_TYPE, INDEX_TYPE>(value);
 	if (begin < 0 && -begin > length && end < 0 && -end > length) {
