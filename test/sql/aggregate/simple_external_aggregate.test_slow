@@ -22,8 +22,6 @@ select count(*) from (select distinct i from t1)
 ----
 1000000
 
-mode skip
-
 # add some strings that are longer than Storage::BLOCK_SIZE (another 30MB, for a total of ~95MB)
 statement ok
 insert into t1 select concat(range::VARCHAR, repeat('0', 300000)) i from range(100)
