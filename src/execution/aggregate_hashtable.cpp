@@ -41,12 +41,10 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      idx_t initial_capacity)
     : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)), capacity(0),
-      is_finalized(false), aggregate_allocator(make_shared<ArenaAllocator>(allocator)) {
+      aggregate_allocator(make_shared<ArenaAllocator>(allocator)), is_finalized(false) {
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
 	layout.Initialize(std::move(group_types_p), std::move(aggregate_objects_p));
-	tuple_size = layout.GetRowWidth();
-	tuples_per_block = Storage::BLOCK_SIZE / tuple_size;
 
 	// HT layout
 	hash_offset = layout.GetOffsets()[layout.ColumnCount() - 1];
@@ -124,6 +122,10 @@ idx_t GroupedAggregateHashTable::TotalSize() const {
 	return DataSize() + FirstPartSize(Count());
 }
 
+idx_t GroupedAggregateHashTable::ApplyBitMask(hash_t hash) const {
+	return hash & bitmask;
+}
+
 void GroupedAggregateHashTable::Verify() {
 	idx_t count = 0;
 	for (idx_t i = 0; i < capacity; i++) {
@@ -147,11 +149,9 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	}
 
 	capacity = size;
-	const auto byte_size = capacity * sizeof(aggr_ht_entry_t);
-	hash_map = buffer_manager.GetBufferAllocator().Allocate(byte_size);
+	hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(aggr_ht_entry_t));
 	entries = reinterpret_cast<aggr_ht_entry_t *>(hash_map.get());
-	memset(entries, 0, byte_size);
-
+	std::fill_n(entries, capacity, aggr_ht_entry_t(0));
 	bitmask = capacity - 1;
 
 	if (Count() != 0) {
@@ -161,11 +161,10 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 			for (idx_t i = 0; i < iterator.GetCurrentChunkCount(); i++) {
 				const auto &row_location = row_locations[i];
 				const auto hash = Load<hash_t>(row_location + hash_offset);
-				D_ASSERT((hash & bitmask) == (hash % capacity));
-				D_ASSERT(hash >> hash_prefix_shift <= NumericLimits<uint16_t>::Maximum());
 
 				// Find an empty entry
-				auto entry_idx = (idx_t)hash & bitmask;
+				auto entry_idx = ApplyBitMask(hash);
+				D_ASSERT(entry_idx == hash % capacity);
 				while (entries[entry_idx].IsOccupied() > 0) {
 					entry_idx++;
 					if (entry_idx >= capacity) {
@@ -215,12 +214,13 @@ idx_t GroupedAggregateHashTable::AddChunk(AggregateHTAppendState &state, DataChu
 
 #ifdef DEBUG
 	D_ASSERT(groups.ColumnCount() + 1 == layout.ColumnCount());
+	D_ASSERT(groups.GetTypes() == layout.GetTypes());
 	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
 		D_ASSERT(groups.GetTypes()[i] == layout.GetTypes()[i]);
 	}
 #endif
 
-	auto new_group_count = FindOrCreateGroups(state, groups, group_hashes, state.addresses, state.new_groups);
+	const auto new_group_count = FindOrCreateGroups(state, groups, group_hashes, state.addresses, state.new_groups);
 	VectorOperations::AddInPlace(state.addresses, layout.GetAggrOffset(), payload.size());
 
 	// Now every cell has an entry, update the aggregates
@@ -256,11 +256,14 @@ idx_t GroupedAggregateHashTable::AddChunk(AggregateHTAppendState &state, DataChu
 }
 
 void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &result) {
+#ifdef DEBUG
 	groups.Verify();
 	D_ASSERT(groups.ColumnCount() + 1 == layout.ColumnCount());
 	for (idx_t i = 0; i < result.ColumnCount(); i++) {
 		D_ASSERT(result.data[i].GetType() == payload_types[i]);
 	}
+#endif
+
 	result.SetCardinality(groups);
 	if (groups.size() == 0) {
 		return;
@@ -295,7 +298,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 	D_ASSERT(capacity - Count() >= groups.size()); // we need to be able to fit at least one vector of data
 
 	group_hashes_v.Flatten(groups.size());
-	auto group_hashes = FlatVector::GetData<hash_t>(group_hashes_v);
+	auto hashes = FlatVector::GetData<hash_t>(group_hashes_v);
 
 	addresses_v.Flatten(groups.size());
 	auto addresses = FlatVector::GetData<data_ptr_t>(addresses_v);
@@ -305,10 +308,10 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 	auto ht_offsets = FlatVector::GetData<uint64_t>(state.ht_offsets);
 	auto hash_salts = FlatVector::GetData<uint16_t>(state.hash_salts);
 	for (idx_t r = 0; r < groups.size(); r++) {
-		auto element = group_hashes[r];
-		D_ASSERT((element & bitmask) == (element % capacity));
-		ht_offsets[r] = element & bitmask;
-		hash_salts[r] = element >> hash_prefix_shift;
+		const auto &hash = hashes[r];
+		ht_offsets[r] = ApplyBitMask(hash);
+		D_ASSERT(ht_offsets[r] == hash % capacity);
+		hash_salts[r] = aggr_ht_entry_t::ExtractSalt(hash);
 	}
 
 	// we start out with all entries [0, 1, 2, ..., groups.size()]
@@ -447,7 +450,16 @@ struct FlushMoveState {
 		hash_col_idx = layout.ColumnCount() - 1;
 	}
 
-	bool Scan();
+	bool Scan() {
+		if (collection.Scan(scan_state, groups)) {
+			collection.Gather(scan_state.chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(),
+			                  groups.size(), hash_col_idx, hashes, *FlatVector::IncrementalSelectionVector());
+			return true;
+		}
+
+		collection.FinalizePinState(scan_state.pin_state);
+		return false;
+	}
 
 	TupleDataCollection &collection;
 	TupleDataScanState scan_state;
@@ -460,17 +472,6 @@ struct FlushMoveState {
 	Vector group_addresses;
 	SelectionVector new_groups_sel;
 };
-
-bool FlushMoveState::Scan() {
-	if (collection.Scan(scan_state, groups)) {
-		collection.Gather(scan_state.chunk_state.row_locations, *FlatVector::IncrementalSelectionVector(),
-		                  groups.size(), hash_col_idx, hashes, *FlatVector::IncrementalSelectionVector());
-		return true;
-	}
-
-	collection.FinalizePinState(scan_state.pin_state);
-	return false;
-}
 
 void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 	D_ASSERT(!is_finalized);

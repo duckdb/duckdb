@@ -42,6 +42,10 @@ struct FlushMoveState;
 
 struct aggr_ht_entry_t {
 public:
+	explicit aggr_ht_entry_t(hash_t hash) {
+		value.hash.hash = hash;
+	}
+
 	inline bool IsOccupied() const {
 		return value.hash.hash != 0;
 	}
@@ -56,19 +60,15 @@ public:
 		value.entry.pointer = reinterpret_cast<uint64_t>(pointer_p);
 	}
 
-	constexpr static auto HASH_WIDTH = sizeof(hash_t);
-	static constexpr const auto HASH_PREFIX_SHIFT = (HASH_WIDTH - sizeof(uint16_t)) * 8;
-	inline void SetSalt(hash_t hash) {
-		value.entry.salt = ExtractSalt(hash);
+	static constexpr const auto HASH_PREFIX_SHIFT = (sizeof(hash_t) - sizeof(uint16_t)) * 8;
+	static inline uint16_t ExtractSalt(hash_t hash) {
+		return hash >> HASH_PREFIX_SHIFT;
 	}
 	inline void SetSaltOverwrite(hash_t hash) {
 		value.hash.hash = hash;
 	}
 	inline uint16_t GetSalt() const {
 		return value.entry.salt;
-	}
-	static inline uint16_t ExtractSalt(hash_t hash) {
-		return hash >> HASH_PREFIX_SHIFT;
 	}
 
 private:
@@ -81,11 +81,6 @@ private:
 			hash_t hash;
 		} hash;
 	} value;
-};
-
-struct AggregateHTScanState {
-	mutex lock;
-	TupleDataScanState scan_state;
 };
 
 struct AggregateHTAppendState {
@@ -117,15 +112,22 @@ public:
 	~GroupedAggregateHashTable() override;
 
 public:
+	//! Number of groups in the HT
 	idx_t Count() const;
+	//! Initial capacity of the HT
 	static idx_t InitialCapacity();
+	//! Max capacity while sinking data into the HT
 	static idx_t SinkCapacity();
+	//! Currenty capacity of the HT
 	idx_t Capacity() const;
-	idx_t ResizeThreshold() const;
 
+	//! Get the data collection of the HT
 	TupleDataCollection &GetDataCollection();
+	//! The size (in bytes) of the data collection
 	idx_t DataSize() const;
+	//! The size (in bytes) of the first part of the HT
 	static idx_t FirstPartSize(idx_t count);
+	//! The total size (first part and data) of the HT
 	idx_t TotalSize() const;
 
 	//! Add the given data to the HT, computing the aggregates grouped by the
@@ -160,9 +162,10 @@ public:
 	//! Appends the data in the other HT to this one
 	void Append(GroupedAggregateHashTable &other);
 
+	//! Radix partition the HT into multiple HTs
 	void Partition(vector<GroupedAggregateHashTable *> &partition_hts, idx_t radix_bits, bool sink_done);
-	void InitializeFirstPart();
 
+	//! Unpin the first part and data blocks
 	void Finalize();
 
 private:
@@ -171,47 +174,52 @@ private:
 	//! The size of the first part of the HT, should fit in L2 cache
 	constexpr static idx_t FIRST_PART_SINK_SIZE = 1048576;
 
-	//! The capacity of the HT. This can be increased using GroupedAggregateHashTable::Resize
-	idx_t capacity;
-	//! Tuple width
-	idx_t tuple_size;
-	//! Tuples per block
-	idx_t tuples_per_block;
 	//! The data of the HT
 	unique_ptr<TupleDataCollection> data_collection;
+	//! Block pin state of the HT (for appending data)
 	TupleDataPinState td_pin_state;
+	//! Predicates for matching groups (always ExpressionType::COMPARE_EQUAL)
+	vector<ExpressionType> predicates;
 
-	//! The hashes of the HT
+	//! The capacity of the HT. This can be increased using GroupedAggregateHashTable::Resize
+	idx_t capacity;
+	//! The hash map (first part) of the HT: allocated data and pointer into it
 	AllocatedData hash_map;
 	aggr_ht_entry_t *entries;
-	idx_t hash_offset; // Offset into the layout of the hash column
-
-	hash_t hash_prefix_shift;
-
+	//! Offset of the hash column in the rows
+	idx_t hash_offset;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	hash_t bitmask;
-
-	bool is_finalized;
-
-	vector<ExpressionType> predicates;
 
 	//! The active arena allocator used by the aggregates for their internal state
 	shared_ptr<ArenaAllocator> aggregate_allocator;
 	//! Owning arena allocators that this HT has data from
 	vector<shared_ptr<ArenaAllocator>> stored_allocators;
 
-private:
-	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
+	//! Whether this HT has been finalized (first part and data blocks have been unpinned)
+	bool is_finalized;
 
+private:
+	//! Disabled the copy constructor
+	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
+	//! Destroy the HT
 	void Destroy();
-	void Verify();
+
+	//! Apply bitmask to get the entry in the HT
+	inline idx_t ApplyBitMask(hash_t hash) const;
+	//! Threshold at which to resize the HT
+	idx_t ResizeThreshold() const;
 	//! Resize the HT to the specified size. Must be larger than the current size.
 	void Resize(idx_t size);
+	//! Initializes the hashes of the HT
+	void InitializeFirstPart();
+
 	//! Does the actual group matching / creation
-	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v, Vector &addresses_v,
-	                                 SelectionVector &new_groups);
 	idx_t FindOrCreateGroupsInternal(AggregateHTAppendState &state, DataChunk &groups, Vector &group_hashes,
 	                                 Vector &addresses, SelectionVector &new_groups);
+
+	//! Verify the first part of the HT
+	void Verify();
 };
 
 } // namespace duckdb
