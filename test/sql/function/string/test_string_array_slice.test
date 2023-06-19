@@ -181,8 +181,8 @@ NULL
 query T
 SELECT array_slice(s, -4, -2) FROM strings
 ----
-ell
-orl
+el
+or
 (empty)
 NULL
 

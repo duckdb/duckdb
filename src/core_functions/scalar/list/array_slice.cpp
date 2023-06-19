@@ -48,7 +48,6 @@ int64_t ValueLength(const string_t &value) {
 template <typename INPUT_TYPE, typename INDEX_TYPE>
 bool ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value, const INDEX_TYPE length) {
 	if (index < 0) {
-		index += 1;
 		if (index < -length) {
 			return false;
 		}
@@ -61,9 +60,12 @@ bool ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value, const INDEX_TYPE len
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
-static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &end, bool begin_valid, bool end_valid) {
+static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &end) {
 	// Clamp offsets
-	begin = (begin != 0) ? begin - 1 : 0;
+	if (begin == INT64_MIN) {
+		return false;
+    }
+	begin = (begin > 0) ? begin - 1 : begin;
 	const auto length = ValueLength<INPUT_TYPE, INDEX_TYPE>(value);
 	if (begin < 0 && -begin > length && end < 0 && -end > length) {
 		begin = 0;
@@ -144,21 +146,6 @@ string_t SliceValueWithSteps(Vector &result, SelectionVector &sel, string_t inpu
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
-INDEX_TYPE SliceLength(const INPUT_TYPE &value) {
-	return 0;
-}
-
-template <>
-int64_t SliceLength(const list_entry_t &value) {
-	return value.length;
-}
-
-template <>
-int64_t SliceLength(const string_t &value) {
-	return value.GetSize();
-}
-
-template <typename INPUT_TYPE, typename INDEX_TYPE>
 static void ExecuteConstantSlice(Vector &result, Vector &v, Vector &b, Vector &e, const idx_t count,
                                  optional_ptr<Vector> s, SelectionVector &sel, idx_t &sel_idx,
                                  optional_ptr<Vector> result_child_vector) {
@@ -182,7 +169,7 @@ static void ExecuteConstantSlice(Vector &result, Vector &v, Vector &b, Vector &e
 	}
 
 	if (end == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
-		end = SliceLength<INPUT_TYPE, INDEX_TYPE>(sliced);
+		end = ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced);
 	}
 
 	auto vvalid = !ConstantVector::IsNull(v);
@@ -193,7 +180,7 @@ static void ExecuteConstantSlice(Vector &result, Vector &v, Vector &b, Vector &e
 	// Clamp offsets
 	bool clamp_result = false;
 	if (vvalid && bvalid && evalid && (svalid || step == 1)) {
-		clamp_result = ClampSlice(sliced, begin, end, bvalid, evalid);
+		clamp_result = ClampSlice(sliced, begin, end);
 	}
 
 	auto sel_length = 0;
@@ -243,13 +230,13 @@ static void FindSelLength(UnifiedVectorFormat &vdata, UnifiedVectorFormat &bdata
 		}
 
 		if (end == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
-			end = SliceLength<INPUT_TYPE, INDEX_TYPE>(sliced);
+			end = ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced);
 		}
 
 		auto step_valid = sdata.validity.RowIsValid(sidx);
 
 		auto length = 0;
-		if (step_valid && ClampSlice(sliced, begin, end, bidx, eidx)) {
+		if (step_valid && ClampSlice(sliced, begin, end)) {
 			length = CalculateSliceLength(begin, end, step, step_valid);
 		}
 		sel_length += length;
@@ -294,7 +281,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, co
 		}
 
 		if (end == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
-			end = SliceLength<INPUT_TYPE, INDEX_TYPE>(sliced);
+			end = ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced);
 		}
 
 		auto vvalid = vdata.validity.RowIsValid(vidx);
@@ -302,7 +289,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, co
 		auto evalid = edata.validity.RowIsValid(eidx);
 		auto svalid = s && sdata.validity.RowIsValid(sidx);
 
-		if (!vvalid || !bvalid || !evalid || (s && !svalid) || !ClampSlice(sliced, begin, end, bvalid, evalid)) {
+		if (!vvalid || !bvalid || !evalid || (s && !svalid) || !ClampSlice(sliced, begin, end)) {
 			rmask.SetInvalid(i);
 		} else if (!s) {
 			rdata[i] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
