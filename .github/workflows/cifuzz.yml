@@ -12,6 +12,7 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/cifuzz.yml'
       - '.github/config/uncovered_files.csv'
