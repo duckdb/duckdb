@@ -36,7 +36,7 @@ jobs:
  linux-release-64:
     name: Linux (64 Bit)
     runs-on: ubuntu-latest
-    container: ubuntu:16.04
+    container: quay.io/pypa/manylinux2014_x86_64
     env:
       GEN: ninja
       BUILD_BENCHMARK: 1
@@ -52,19 +52,18 @@ jobs:
       BUILD_AUTOCOMPLETE: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
-      STATIC_LIBCPP: 1
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-    - uses: ./.github/actions/ubuntu_16_setup
+    - uses: ./.github/actions/centos_7_setup
 
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+#    - name: Setup Ccache
+#      uses: hendrikmuhs/ccache-action@main
+#      with:
+#        key: ${{ github.job }}
+#        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
@@ -178,14 +177,14 @@ jobs:
  linux-extensions-64:
     name: Linux Extensions (64 Bit)
     runs-on: ubuntu-latest
-    container: ubuntu:16.04
-    needs: linux-release-64
+    container: quay.io/pypa/manylinux2014_x86_64
+#   needs: linux-release-64
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
-    - uses: ./.github/actions/ubuntu_16_setup
+    - uses: ./.github/actions/centos_7_setup
       with:
         openssl: 1
 
@@ -294,99 +293,6 @@ jobs:
       run: |
         python scripts/generate_extensions_function.py --validate
 
- linux-release-32:
-    name: Linux (32 Bit)
-    runs-on: ubuntu-latest
-    container: ubuntu:16.04
-    needs: linux-release-64
-    env:
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v3
-    - uses: ./.github/actions/ubuntu_16_setup
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: |
-        mkdir -p build/release
-        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
-
-    - name: Test
-      shell: bash
-      run: build/release/test/unittest "*"
-
-    - name: Deploy
-      shell: bash
-      run: |
-        python3.7 scripts/amalgamation.py
-        zip -j duckdb_cli-linux-i386.zip build/release/duckdb
-        zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python3.7 scripts/asset-upload-gha.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip
-
-    - uses: actions/upload-artifact@v3
-      with:
-        name: duckdb-binaries-linux-32bit
-        path: |
-          libduckdb-linux-i386.zip
-          duckdb_cli-linux-i386.zip
-
- linux-rpi:
-    name: Linux (Raspberry Pi)
-    runs-on: ubuntu-20.04
-    needs: linux-release-64
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Install
-      shell: bash
-      run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        git clone https://github.com/raspberrypi/tools --depth=1 rpi-tools
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: |
-        export TOOLCHAIN=`pwd`/rpi-tools
-        mkdir -p build/release
-        cd build/release
-        cmake -G Ninja -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
-        cmake --build .
-        file duckdb
-
-    - name: Deploy
-      shell: bash
-      run: |
-        python scripts/amalgamation.py
-        zip -j duckdb_cli-linux-rpi.zip build/release/duckdb
-        zip -j libduckdb-linux-rpi.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python scripts/asset-upload-gha.py libduckdb-linux-rpi.zip duckdb_cli-linux-rpi.zip
-
-    - uses: actions/upload-artifact@v3
-      with:
-        name: duckdb-binaries-rpi
-        path: |
-          libduckdb-linux-rpi.zip
-          duckdb_cli-linux-rpi.zip
-
 
  linux-clang:
     name: Clang 14
@@ -434,15 +340,15 @@ jobs:
  old-gcc:
     name: GCC 4.8
     runs-on: ubuntu-20.04
-    container: ubuntu:16.04
-    needs: linux-release-64
+    container: quay.io/pypa/manylinux2014_x86_64
+  #  needs: linux-release-64
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
-    - uses: ./.github/actions/ubuntu_16_setup
+    - uses: ./.github/actions/centos_7_setup
 
     - uses: actions/setup-python@v4
       with:
