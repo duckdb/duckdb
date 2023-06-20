@@ -74,7 +74,6 @@ unique_ptr<ParsedExpression> ParsedExpression::FormatDeserialize(FormatDeseriali
 	}
 	result->alias = std::move(alias);
 	return result;
-
 }
 
 void BetweenExpression::FormatSerialize(FormatSerializer &serializer) const {
