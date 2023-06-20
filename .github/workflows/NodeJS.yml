@@ -21,7 +21,7 @@ on:
       - '!.github/workflows/NodeJS.yml'
       - '.github/config/uncovered_files.csv'
   pull_request:
-    types: [review_requested]
+    types: [labeled]
     paths-ignore:
       - '**.md'
       - 'data/**'

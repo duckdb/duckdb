@@ -19,7 +19,7 @@ on:
       - '!.github/workflows/WebAssembly.yml'
       - '.github/config/uncovered_files.csv'
   pull_request:
-    types: [review_requested]
+    types: [labeled]
     paths-ignore:
       - '**.md'
       - 'script/**'
