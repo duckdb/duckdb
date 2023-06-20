@@ -11,6 +11,7 @@
 namespace duckdb {
 
 FunctionData::~FunctionData() {
+
 }
 
 bool FunctionData::Equals(const FunctionData *left, const FunctionData *right) {
