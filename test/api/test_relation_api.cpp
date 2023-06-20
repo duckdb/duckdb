@@ -143,21 +143,6 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(result = tbl->Union(tbl)->Union(tbl)->Distinct()->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 
-	// empty
-	REQUIRE_NOTHROW(v1 = con.EmptyValues({LogicalType::VARCHAR, LogicalType::BOOLEAN}, {"v1", "v2"}));
-	REQUIRE_NOTHROW(result = v1->Execute());
-	auto empty_chunk = result->Fetch();
-	REQUIRE(empty_chunk == nullptr);
-
-	auto empty_result_types = result->types;
-	auto empty_result_names = result->names;
-	REQUIRE(empty_result_types.size() == 2);
-	REQUIRE(empty_result_names.size() == 2);
-	REQUIRE(empty_result_names[0] == "v1");
-	REQUIRE(empty_result_names[1] == "v2");
-	REQUIRE(empty_result_types[0] == LogicalType::VARCHAR);
-	REQUIRE(empty_result_types[1] == LogicalType::BOOLEAN);
-
 	// join
 	REQUIRE_NOTHROW(v1 = con.Values({{1, 10}, {2, 5}, {3, 4}}, {"id", "j"}, "v1"));
 	REQUIRE_NOTHROW(v2 = con.Values({{1, 27}, {2, 8}, {3, 20}}, {"id", "k"}, "v2"));

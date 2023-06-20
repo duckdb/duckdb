@@ -12,26 +12,14 @@ ValueRelation::ValueRelation(const std::shared_ptr<ClientContext> &context, cons
                              vector<string> names_p, string alias_p)
     : Relation(context, RelationType::VALUE_LIST_RELATION), names(std::move(names_p)), alias(std::move(alias_p)) {
 	// create constant expressions for the values
-	D_ASSERT(!values.empty());
 	for (idx_t row_idx = 0; row_idx < values.size(); row_idx++) {
 		auto &list = values[row_idx];
 		vector<unique_ptr<ParsedExpression>> expressions;
 		for (idx_t col_idx = 0; col_idx < list.size(); col_idx++) {
-			if (row_idx == 0) {
-				this->types.push_back(list[col_idx].type());
-			}
 			expressions.push_back(make_uniq<ConstantExpression>(list[col_idx]));
 		}
 		this->expressions.push_back(std::move(expressions));
 	}
-	context->TryBindRelation(*this, this->columns);
-}
-
-// Empty value relation
-ValueRelation::ValueRelation(const std::shared_ptr<ClientContext> &context, vector<LogicalType> types_p,
-                             vector<string> names_p, string alias_p)
-    : Relation(context, RelationType::VALUE_LIST_RELATION), names(std::move(names_p)), types(std::move(types_p)),
-      alias(std::move(alias_p)) {
 	context->TryBindRelation(*this, this->columns);
 }
 
@@ -52,14 +40,6 @@ unique_ptr<QueryNode> ValueRelation::GetQueryNode() {
 unique_ptr<TableRef> ValueRelation::GetTableRef() {
 	auto table_ref = make_uniq<ExpressionListRef>();
 	// set the expected types/names
-	if (expressions.empty()) {
-		// This is an empty value relation
-		table_ref->expected_names = this->names;
-		table_ref->expected_types = this->types;
-		table_ref->alias = GetAlias();
-		return std::move(table_ref);
-	}
-
 	if (columns.empty()) {
 		// no columns yet: only set up names
 		for (idx_t i = 0; i < names.size(); i++) {

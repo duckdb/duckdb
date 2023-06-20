@@ -17,15 +17,11 @@ class ValueRelation : public Relation {
 public:
 	ValueRelation(const std::shared_ptr<ClientContext> &context, const vector<vector<Value>> &values,
 	              vector<string> names, string alias = "values");
-	//! Empty value relation
-	ValueRelation(const std::shared_ptr<ClientContext> &context, vector<LogicalType> types, vector<string> names,
-	              string alias = "values");
 	ValueRelation(const std::shared_ptr<ClientContext> &context, const string &values, vector<string> names,
 	              string alias = "values");
 
 	vector<vector<unique_ptr<ParsedExpression>>> expressions;
 	vector<string> names;
-	vector<LogicalType> types;
 	vector<ColumnDefinition> columns;
 	string alias;
 
