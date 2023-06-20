@@ -13,4 +13,4 @@ jobs:
       - name: Mark as draft
         uses: voiceflow/draft-pr@latest
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_TOKEN }}
