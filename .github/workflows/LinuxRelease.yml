@@ -106,8 +106,8 @@ jobs:
  linux-release-aarch64:
    name: Linux (AARCH64)
    runs-on: ubuntu-latest
-#   needs: linux-release-64
-   container: quay.io/pypa/manylinux2014_aarch64
+   needs: linux-release-64
+   container: ubuntu:18.04 # cross compiler not available in 16
    env:
      GEN: ninja
      BUILD_BENCHMARK: 1
@@ -128,7 +128,13 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: ./.github/actions/centos_7_setup
+     - uses: ./.github/actions/ubuntu_16_setup
+
+     - name: Setup Ccache
+       uses: hendrikmuhs/ccache-action@main
+       with:
+         key: ${{ github.job }}
+         save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
      - name: Install Stuff
        shell: bash
