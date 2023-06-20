@@ -16,9 +16,6 @@ on:
       - '.github/workflows/**'
       - '!.github/workflows/OSX.yml'
       - '.github/config/uncovered_files.csv'
-  pull_request:
-    branches-ignore:
-      - '**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
