@@ -247,6 +247,7 @@ string Pipeline::ToString() const {
 }
 
 void Pipeline::Print() const {
+	Printer::Print("\n");
 	Printer::Print(ToString());
 }
 
