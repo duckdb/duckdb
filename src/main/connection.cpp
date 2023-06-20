@@ -219,7 +219,7 @@ shared_ptr<Relation> Connection::Values(const string &values, const vector<strin
 }
 
 shared_ptr<Relation> Connection::EmptyValues(vector<LogicalType> types, vector<string> names, const string &alias) {
-	return make_shared<ValueRelation>(context, types, names, alias);
+	return make_shared<ValueRelation>(context, std::move(types), std::move(names), alias);
 }
 
 shared_ptr<Relation> Connection::ReadCSV(const string &csv_file) {
