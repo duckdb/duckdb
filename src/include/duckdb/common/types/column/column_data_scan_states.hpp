@@ -20,9 +20,7 @@ enum class ColumnDataAllocatorType : uint8_t {
 	BUFFER_MANAGER_ALLOCATOR,
 	//! Use an in-memory allocator, allocating data for every chunk
 	//! This causes the column data collection to allocate blocks that are not tied to a buffer manager
-	IN_MEMORY_ALLOCATOR,
-	//! Use a buffer manager to allocate vectors, but use a StringHeap for strings
-	HYBRID
+	IN_MEMORY_ALLOCATOR
 };
 
 enum class ColumnDataScanProperties : uint8_t {

@@ -43,21 +43,8 @@ public:
 	void MakeShared() {
 		shared = true;
 	}
-	bool IsShared() const {
-		return shared;
-	}
 	idx_t BlockCount() const {
 		return blocks.size();
-	}
-	idx_t AllocatedSize() const {
-		idx_t total_size = 0;
-		for (auto &block : blocks) {
-			total_size += block.capacity;
-		}
-		for (auto &data : allocated_data) {
-			total_size += data.GetSize();
-		}
-		return total_size;
 	}
 
 public:
