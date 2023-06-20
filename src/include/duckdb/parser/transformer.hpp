@@ -18,6 +18,7 @@
 #include "duckdb/parser/group_by_node.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/parser/query_node/cte_node.hpp"
 
 #include "pg_definitions.hpp"
 #include "nodes/parsenodes.hpp"
@@ -272,8 +273,11 @@ private:
 	OnCreateConflict TransformOnConflict(duckdb_libpgquery::PGOnCreateConflict conflict);
 	string TransformAlias(duckdb_libpgquery::PGAlias *root, vector<string> &column_name_alias);
 	vector<string> TransformStringList(duckdb_libpgquery::PGList *list);
-	void TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, CommonTableExpressionMap &cte_map);
-	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr &cte,
+	void TransformCTE(duckdb_libpgquery::PGWithClause &de_with_clause, CommonTableExpressionMap &cte_map,
+	                  vector<unique_ptr<CTENode>> &materialized_ctes);
+	static unique_ptr<QueryNode> TransformMaterializedCTE(unique_ptr<QueryNode> root,
+	                                                      vector<unique_ptr<CTENode>> &materialized_ctes);
+	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr &node,
 	                                                  CommonTableExpressionInfo &info);
 
 	unique_ptr<ParsedExpression> TransformUnaryOperator(const string &op, unique_ptr<ParsedExpression> child);
