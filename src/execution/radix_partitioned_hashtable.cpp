@@ -364,7 +364,9 @@ public:
 				{
 					lock_guard<mutex> guard(state.lock);
 					if (state.finalize_assigned[finalize_radix]) {
+						// LCOV_EXCL_START
 						continue; // Check again with lock, but already assigned
+						          // LCOV_EXCL_STOP
 					}
 					state.finalize_assigned[finalize_radix] = true;
 				}
@@ -525,14 +527,15 @@ void RadixPartitionedHashTable::GetRepartitionInfo(ClientContext &context, Globa
 	D_ASSERT(IsPowerOfTwo(n_threads));
 	if (!context.config.force_external && total_size < max_ht_size) {
 		// In-memory finalize
-		if (num_partitions >= n_threads) {
-			// Can already keep all threads busy
+		if (num_partitions >= n_threads) { // Can already keep all threads busy
 			repartition_radix_bits = radix_bits;
 			tasks_per_partition = 1;
-		} else {
-			// Repartition to keep all threads busy
+		} else { // Repartition to keep all threads busy
+			// Can't have coverage because RadixHTGlobalState::MAX_RADIX_PARTITIONS > threads on github actions
+			// LCOV_EXCL_START
 			repartition_radix_bits = RadixPartitioning::RadixBits(NextPowerOfTwo(n_threads));
 			tasks_per_partition = n_threads / num_partitions;
+			// LCOV_EXCL_STOP
 		}
 		concurrent_repartitions = num_partitions;
 		return;

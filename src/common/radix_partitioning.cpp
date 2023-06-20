@@ -37,7 +37,7 @@ RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&...args) {
 		return OP::template Operation<3>(std::forward<ARGS>(args)...);
 	case 4:
 		return OP::template Operation<4>(std::forward<ARGS>(args)...);
-	case 5:
+	case 5: // LCOV_EXCL_START
 		return OP::template Operation<5>(std::forward<ARGS>(args)...);
 	case 6:
 		return OP::template Operation<6>(std::forward<ARGS>(args)...);
@@ -56,7 +56,7 @@ RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&...args) {
 	default:
 		throw InternalException(
 		    "radix_bits higher than RadixPartitioning::MAX_RADIX_BITS encountered in RadixBitsSwitch");
-	}
+	} // LCOV_EXCL_STOP
 }
 
 template <idx_t radix_bits>
