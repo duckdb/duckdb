@@ -194,9 +194,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 			python_results.push_back(ret);
 		}
 
-		// Cast the resulting native python to DuckDB, using the return type
-		// result.Resize(input.size());
-		NumpyScan::ScanObjectColumn(python_results.data(), input.size(), 0, result);
+		NumpyScan::ScanObjectColumn(python_results.data(), sizeof(PyObject *), input.size(), 0, result);
 		if (input.size() == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
