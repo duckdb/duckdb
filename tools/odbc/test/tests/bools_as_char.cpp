@@ -4,7 +4,7 @@ using namespace odbc_test;
 
 TEST_CASE("bools_as_char", "[odbc]") {
 	// FIXME: add actual test body
-	return ;
+	return;
 	SQLRETURN ret;
 	SQLHANDLE env;
 	SQLHANDLE dbc;

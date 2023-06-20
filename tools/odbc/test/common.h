@@ -81,7 +81,8 @@ void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const std::string &expect
  * It also allocates the environment and connection handles.
  * @param env The environment handle, allocated by the function
  * @param dbc The connection handle, allocated by the function
- * @param extra_params The extra parameters to pass to SQLDriverConnect, can be UserId/Username, Password, Port, driver/database specific options, SSL, ReadOnly, etc
+ * @param extra_params The extra parameters to pass to SQLDriverConnect, can be UserId/Username, Password, Port,
+ * driver/database specific options, SSL, ReadOnly, etc
  */
 void DRIVER_CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc, const std::string &extra_params);
 

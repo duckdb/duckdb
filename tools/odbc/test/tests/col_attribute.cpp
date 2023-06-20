@@ -61,8 +61,8 @@ TEST_CASE("Test SQLColAttribute (descriptor information for a column)", "[odbc]"
 		}
 
 		// Get the column octet length
-		EXECUTE_AND_CHECK("SQLColAttribute", SQLColAttribute, hstmt, i, SQL_DESC_OCTET_LENGTH, nullptr,
-		                       SQL_IS_INTEGER, nullptr, &number);
+		EXECUTE_AND_CHECK("SQLColAttribute", SQLColAttribute, hstmt, i, SQL_DESC_OCTET_LENGTH, nullptr, SQL_IS_INTEGER,
+		                  nullptr, &number);
 		REQUIRE(number == 0);
 
 		// Get the column type name

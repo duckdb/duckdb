@@ -31,7 +31,7 @@ TEST_CASE("Test SQLBindCol (binding columns to application buffers)", "[odbc]") 
 	                  ConvertToSQLCHAR("SELECT id, 'foo' || id FROM generate_series(1, 10) id(id)"), SQL_NTS);
 
 	SQLINTEGER row_num = 0;
-    std::array<int, 10> id = {1, 2, 3, 4, 5, 6, 7, 7, 7, 7};
+	std::array<int, 10> id = {1, 2, 3, 4, 5, 6, 7, 7, 7, 7};
 	std::array<std::string, 10> foo = {"foo1", "foo2", "foo3", "foo3", "foo3", "foo6", "foo7", "foo7", "foo7", "foo10"};
 
 	while (true) {

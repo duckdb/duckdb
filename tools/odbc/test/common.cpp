@@ -79,7 +79,8 @@ void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const std::string &expect
 	SQLSMALLINT col_decimal_digits;
 	SQLSMALLINT col_nullable;
 
-	// SQLDescribeCol returns the result descriptor (column name, column size, decimal digits, and nullability) for one column in a result set.
+	// SQLDescribeCol returns the result descriptor (column name, column size, decimal digits, and nullability) for one
+	// column in a result set.
 	SQLRETURN ret = SQLDescribeCol(hstmt, col_num, col_name, sizeof(col_name), &col_name_len, &col_type, &col_size,
 	                               &col_decimal_digits, &col_nullable);
 	ODBC_CHECK(ret, "SQLDescribeCol");

@@ -31,26 +31,16 @@ void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 	EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
 
 	std::vector<std::pair<MetadataData, std::string>> expected_data = {
-	    {{"TYPE_NAME",			SQL_VARCHAR},		"VARCHAR"},
-	    {{"DATA_TYPE",			SQL_SMALLINT},		"12"},
-        {{"COLUMN_SIZE",		SQL_INTEGER},		"-1"},
-        {{"LITERAL_PREFIX",	SQL_VARCHAR},		"'"},
-        {{"LITERAL_SUFFIX",	SQL_VARCHAR},		"'"},
-        {{"CREATE_PARAMS",		SQL_VARCHAR},		"length"},
-        {{"NULLABLE",			SQL_SMALLINT},		"1"},
-        {{"CASE_SENSITIVE",	SQL_SMALLINT},		"1"},
-        {{"SEARCHABLE",		SQL_SMALLINT},		"3"},
-        {{"UNSIGNED_ATTRIBUTE", SQL_SMALLINT},		"-1"},
-        {{"FIXED_PREC_SCALE",	SQL_SMALLINT},		"0"},
-        {{"AUTO_UNIQUE_VALUE",	SQL_SMALLINT},		"-1"},
-        {{"LOCAL_TYPE_NAME",	SQL_VARCHAR},		""},
-        {{"MINIMUM_SCALE",		SQL_SMALLINT},		"-1"},
-        {{"MAXIMUM_SCALE",		SQL_SMALLINT},		"-1"},
-        {{"SQL_DATA_TYPE",		SQL_SMALLINT},		"12"},
-        {{"SQL_DATETIME_SUB",	SQL_SMALLINT},		"-1"},
-        {{"NUM_PREC_RADIX",	SQL_INTEGER},		"-1"},
-        {{"INTERVAL_PRECISION", SQL_SMALLINT},		"-1"}
-	};
+	    {{"TYPE_NAME", SQL_VARCHAR}, "VARCHAR"},     {{"DATA_TYPE", SQL_SMALLINT}, "12"},
+	    {{"COLUMN_SIZE", SQL_INTEGER}, "-1"},        {{"LITERAL_PREFIX", SQL_VARCHAR}, "'"},
+	    {{"LITERAL_SUFFIX", SQL_VARCHAR}, "'"},      {{"CREATE_PARAMS", SQL_VARCHAR}, "length"},
+	    {{"NULLABLE", SQL_SMALLINT}, "1"},           {{"CASE_SENSITIVE", SQL_SMALLINT}, "1"},
+	    {{"SEARCHABLE", SQL_SMALLINT}, "3"},         {{"UNSIGNED_ATTRIBUTE", SQL_SMALLINT}, "-1"},
+	    {{"FIXED_PREC_SCALE", SQL_SMALLINT}, "0"},   {{"AUTO_UNIQUE_VALUE", SQL_SMALLINT}, "-1"},
+	    {{"LOCAL_TYPE_NAME", SQL_VARCHAR}, ""},      {{"MINIMUM_SCALE", SQL_SMALLINT}, "-1"},
+	    {{"MAXIMUM_SCALE", SQL_SMALLINT}, "-1"},     {{"SQL_DATA_TYPE", SQL_SMALLINT}, "12"},
+	    {{"SQL_DATETIME_SUB", SQL_SMALLINT}, "-1"},  {{"NUM_PREC_RADIX", SQL_INTEGER}, "-1"},
+	    {{"INTERVAL_PRECISION", SQL_SMALLINT}, "-1"}};
 
 	for (int i = 0; i < col_count; i++) {
 		auto &entry = expected_data[i].first;
@@ -75,13 +65,11 @@ static void TestSQLTables(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_ma
 	EXECUTE_AND_CHECK("SQLNumResultCols", SQLNumResultCols, hstmt, &col_count);
 	REQUIRE(col_count == 5);
 
-	std::vector<MetadataData> expected_metadata = {
-		{"TABLE_CAT", SQL_VARCHAR},
-		{"TABLE_SCHEM", SQL_VARCHAR},
-		{"TABLE_NAME", SQL_VARCHAR},
-		{"TABLE_TYPE", SQL_VARCHAR},
-		{"REMARKS", SQL_VARCHAR}
-	};
+	std::vector<MetadataData> expected_metadata = {{"TABLE_CAT", SQL_VARCHAR},
+	                                               {"TABLE_SCHEM", SQL_VARCHAR},
+	                                               {"TABLE_NAME", SQL_VARCHAR},
+	                                               {"TABLE_TYPE", SQL_VARCHAR},
+	                                               {"REMARKS", SQL_VARCHAR}};
 
 	for (int i = 0; i < col_count; i++) {
 		auto &entry = expected_metadata[i];
@@ -122,8 +110,8 @@ static void TestSQLTables(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_ma
 	} while (ret == SQL_SUCCESS);
 }
 
- static void TestSQLTablesLong(HSTMT &hstmt) {
-	//FIXME: this test is broken
+static void TestSQLTablesLong(HSTMT &hstmt) {
+	// FIXME: this test is broken
 	return;
 	SQLRETURN ret;
 
@@ -149,25 +137,12 @@ static void TestSQLColumns(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_m
 
 	// Create a map of column types and a vector of expected metadata
 	std::vector<MetadataData> expected_metadata = {
-		{"TABLE_CAT", SQL_INTEGER},
-		{"TABLE_SCHEM", SQL_VARCHAR},
-		{"TABLE_NAME", SQL_VARCHAR},
-		{"COLUMN_NAME", SQL_VARCHAR},
-		{"DATA_TYPE", SQL_BIGINT},
-		{"TYPE_NAME", SQL_VARCHAR},
-		{"COLUMN_SIZE", SQL_INTEGER},
-		{"BUFFER_LENGTH", SQL_INTEGER},
-		{"DECIMAL_DIGITS", SQL_INTEGER},
-		{"NUM_PREC_RADIX", SQL_INTEGER},
-		{"NULLABLE", SQL_INTEGER},
-		{"REMARKS", SQL_INTEGER},
-		{"COLUMN_DEF", SQL_VARCHAR},
-		{"SQL_DATA_TYPE", SQL_BIGINT},
-		{"SQL_DATETIME_SUB", SQL_BIGINT},
-		{"CHAR_OCTET_LENGTH", SQL_INTEGER},
-		{"ORDINAL_POSITION", SQL_INTEGER},
-		{"IS_NULLABLE", SQL_VARCHAR}
-	};
+	    {"TABLE_CAT", SQL_INTEGER},         {"TABLE_SCHEM", SQL_VARCHAR},      {"TABLE_NAME", SQL_VARCHAR},
+	    {"COLUMN_NAME", SQL_VARCHAR},       {"DATA_TYPE", SQL_BIGINT},         {"TYPE_NAME", SQL_VARCHAR},
+	    {"COLUMN_SIZE", SQL_INTEGER},       {"BUFFER_LENGTH", SQL_INTEGER},    {"DECIMAL_DIGITS", SQL_INTEGER},
+	    {"NUM_PREC_RADIX", SQL_INTEGER},    {"NULLABLE", SQL_INTEGER},         {"REMARKS", SQL_INTEGER},
+	    {"COLUMN_DEF", SQL_VARCHAR},        {"SQL_DATA_TYPE", SQL_BIGINT},     {"SQL_DATETIME_SUB", SQL_BIGINT},
+	    {"CHAR_OCTET_LENGTH", SQL_INTEGER}, {"ORDINAL_POSITION", SQL_INTEGER}, {"IS_NULLABLE", SQL_VARCHAR}};
 
 	for (int i = 0; i < col_count; i++) {
 		auto &entry = expected_metadata[i];
@@ -176,21 +151,13 @@ static void TestSQLColumns(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_m
 	}
 
 	std::vector<std::array<std::string, 4>> expected_data = {
-		{"bool_table", "id", "13", "INTEGER"},
-		{"bool_table", "t", "25", "VARCHAR"},
-		{"bool_table", "b", "10", "BOOLEAN"},
-		{"byte_table", "id", "13", "INTEGER"},
-		{"byte_table", "t", "26", "BLOB"},
-		{"interval_table", "id", "13", "INTEGER"},
-		{"interval_table", "iv", "27", "INTERVAL"},
-		{"interval_table", "d", "25", "VARCHAR"},
-		{"lo_test_table", "id", "13", "INTEGER"},
-		{"lo_test_table", "large_data", "26", "BLOB"},
-		{"test_table_1", "id", "13", "INTEGER"},
-		{"test_table_1", "t", "25", "VARCHAR"},
-		{"test_view", "id", "13", "INTEGER"},
-		{"test_view", "t", "25", "VARCHAR"}
-	};
+	    {"bool_table", "id", "13", "INTEGER"},      {"bool_table", "t", "25", "VARCHAR"},
+	    {"bool_table", "b", "10", "BOOLEAN"},       {"byte_table", "id", "13", "INTEGER"},
+	    {"byte_table", "t", "26", "BLOB"},          {"interval_table", "id", "13", "INTEGER"},
+	    {"interval_table", "iv", "27", "INTERVAL"}, {"interval_table", "d", "25", "VARCHAR"},
+	    {"lo_test_table", "id", "13", "INTEGER"},   {"lo_test_table", "large_data", "26", "BLOB"},
+	    {"test_table_1", "id", "13", "INTEGER"},    {"test_table_1", "t", "25", "VARCHAR"},
+	    {"test_view", "id", "13", "INTEGER"},       {"test_view", "t", "25", "VARCHAR"}};
 
 	for (int i = 0; i < expected_data.size(); i++) {
 		EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);

@@ -43,7 +43,8 @@ TEST_CASE("Test ALTER TABLE statement", "[odbc]") {
 	REQUIRE(num_cols_updated == 1);
 
 	// Retrieve metadata from the column
-	METADATA_CHECK(hstmt, num_cols_updated, "t", sizeof('t'), SQL_INTEGER, types_map[SQL_INTEGER], 0, SQL_NULLABLE_UNKNOWN);
+	METADATA_CHECK(hstmt, num_cols_updated, "t", sizeof('t'), SQL_INTEGER, types_map[SQL_INTEGER], 0,
+	               SQL_NULLABLE_UNKNOWN);
 
 	EXECUTE_AND_CHECK("SQLFreeStmt (SQL_CLOSE)", SQLFreeStmt, hstmt, SQL_CLOSE);
 
