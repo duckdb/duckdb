@@ -20,6 +20,7 @@ on:
       - '!.github/workflows/R.yml'
       - '.github/config/uncovered_files.csv'
   pull_request:
+    types: [review_requested]
     paths-ignore:
       - '**.md'
       - 'examples/**'
