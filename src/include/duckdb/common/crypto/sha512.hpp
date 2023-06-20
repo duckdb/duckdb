@@ -29,7 +29,6 @@ public:
 	void Finish(char *out);
 
 private:
-	void DigestToBase16(const_data_ptr_t digest, char *zbuf);
 	mbedtls_sha512_context sha_context;
 };
 
