@@ -1,0 +1,19 @@
+# name: test/sql/aggregate/group/test_group_by_error.test
+# description: Test GROUP BY errors
+# group: [group]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl(i INT)
+
+statement error
+SELECT * FROM tbl GROUP BY DEFAULT
+----
+cannot contain DEFAULT
+
+statement error
+SELECT * FROM tbl GROUP BY SUM(41)
+----
+cannot contain aggregates

@@ -81,6 +81,7 @@ public:
 private:
 	void ConstructTree();
 	void ExtractFrame(idx_t begin, idx_t end);
+	void FlushStates(idx_t l_idx);
 	void WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end);
 	void AggregateInit();
 	void AggegateFinal(Vector &result, idx_t rid);
@@ -109,8 +110,12 @@ private:
 	Vector statep;
 	//! The frame boundaries, used for the window functions
 	FrameBounds frame;
-	//! Reused result state container for the window functions
-	Vector statev;
+	//! Reused state pointers for combining segment tree levels
+	Vector statel;
+	//! Reused result state container for finalizing window functions
+	Vector statef;
+	//! Count of buffered values
+	idx_t flush_count;
 
 	//! The actual window segment tree: an array of aggregate states that represent all the intermediate nodes
 	unsafe_unique_array<data_t> levels_flat_native;

@@ -85,10 +85,14 @@ string ExceptionFormatValue::Format(const string &msg, std::vector<ExceptionForm
 		}
 		return duckdb_fmt::vsprintf(msg, duckdb_fmt::basic_format_args<duckdb_fmt::printf_context>(
 		                                     format_args.data(), static_cast<int>(format_args.size())));
-	} catch (std::exception &ex) {
+	} catch (std::exception &ex) { // LCOV_EXCL_START
+		// work-around for oss-fuzz limiting memory which causes issues here
+		if (StringUtil::Contains(ex.what(), "fuzz mode")) {
+			throw Exception(msg);
+		}
 		throw InternalException(std::string("Primary exception: ") + msg +
 		                        "\nSecondary exception in ExceptionFormatValue: " + ex.what());
-	}
+	} // LCOV_EXCL_STOP
 }
 
 } // namespace duckdb

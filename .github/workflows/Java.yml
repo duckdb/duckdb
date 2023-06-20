@@ -15,16 +15,19 @@ on:
       - 'test/**'
       - 'tools/**'
       - '!tools/jdbc/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Java.yml'
       - '.github/config/uncovered_files.csv'
   pull_request:
+    types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
       - 'examples/**'
       - 'test/**'
       - 'tools/**'
       - '!tools/jdbc/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Java.yml'
       - '.github/config/uncovered_files.csv'
@@ -278,7 +281,7 @@ jobs:
         with:
           name: java-jars
           path: |
-            jdbc-artifacts/results
+            jdbc-artifacts
 
   jdbc-compliance:
     name: JDBC Compliance

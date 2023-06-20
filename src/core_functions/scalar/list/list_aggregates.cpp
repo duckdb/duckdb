@@ -15,6 +15,12 @@ namespace duckdb {
 // FIXME: use a local state for each thread to increase performance?
 // FIXME: benchmark the use of simple_update against using update (if applicable)
 
+static unique_ptr<FunctionData> ListAggregatesBindFailure(ScalarFunction &bound_function) {
+	bound_function.arguments[0] = LogicalType::SQLNULL;
+	bound_function.return_type = LogicalType::SQLNULL;
+	return make_uniq<VariableReturnBindData>(LogicalType::SQLNULL);
+}
+
 struct ListAggregatesBindData : public FunctionData {
 	ListAggregatesBindData(const LogicalType &stype_p, unique_ptr<Expression> aggr_expr_p);
 	~ListAggregatesBindData() override;
@@ -31,11 +37,24 @@ struct ListAggregatesBindData : public FunctionData {
 		return stype == other.stype && aggr_expr->Equals(*other.aggr_expr);
 	}
 	static void Serialize(FieldWriter &writer, const FunctionData *bind_data_p, const ScalarFunction &function) {
-		throw NotImplementedException("FIXME: list aggr serialize");
+		auto bind_data = dynamic_cast<const ListAggregatesBindData *>(bind_data_p);
+		if (!bind_data) {
+			writer.WriteField<bool>(false);
+		} else {
+			writer.WriteField<bool>(true);
+			writer.WriteSerializable(bind_data->stype);
+			writer.WriteSerializable(*bind_data->aggr_expr);
+		}
 	}
-	static unique_ptr<FunctionData> Deserialize(ClientContext &context, FieldReader &reader,
+	static unique_ptr<FunctionData> Deserialize(PlanDeserializationState &state, FieldReader &reader,
 	                                            ScalarFunction &bound_function) {
-		throw NotImplementedException("FIXME: list aggr deserialize");
+		if (reader.ReadRequired<bool>()) {
+			auto s_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
+			auto expr = reader.ReadRequiredSerializable<Expression>(state);
+			return make_uniq<ListAggregatesBindData>(s_type, std::move(expr));
+		} else {
+			return ListAggregatesBindFailure(bound_function);
+		}
 	}
 };
 
@@ -396,9 +415,7 @@ template <bool IS_AGGR = false>
 static unique_ptr<FunctionData> ListAggregatesBind(ClientContext &context, ScalarFunction &bound_function,
                                                    vector<unique_ptr<Expression>> &arguments) {
 	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
-		bound_function.return_type = LogicalType::SQLNULL;
-		return make_uniq<VariableReturnBindData>(bound_function.return_type);
+		return ListAggregatesBindFailure(bound_function);
 	}
 
 	bool is_parameter = arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN;

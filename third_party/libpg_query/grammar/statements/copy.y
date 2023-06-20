@@ -103,6 +103,7 @@ copy_generic_opt_arg:
 			| NumericOnly					{ $$ = (PGNode *) $1; }
 			| '*'							{ $$ = (PGNode *) makeNode(PGAStar); }
 			| '(' copy_generic_opt_arg_list ')'		{ $$ = (PGNode *) $2; }
+			| struct_expr					{ $$ = (PGNode *) $1; }
 			| /* EMPTY */					{ $$ = NULL; }
 		;
 

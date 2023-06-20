@@ -184,21 +184,31 @@ void WindowConstantAggregate::Compute(Vector &target, idx_t rid, idx_t start, id
 WindowSegmentTree::WindowSegmentTree(AggregateObject aggr_p, const LogicalType &result_type_p, DataChunk *input,
                                      const ValidityMask &filter_mask_p, WindowAggregationMode mode_p)
     : aggr(std::move(aggr_p)), result_type(result_type_p), state(aggr.function.state_size()),
-      statep(Value::POINTER(CastPointerToValue(state.data()))), frame(0, 0),
-      statev(Value::POINTER(CastPointerToValue(state.data()))), internal_nodes(0), input_ref(input),
+      statep(Value::POINTER(CastPointerToValue(state.data()))), frame(0, 0), statel(LogicalType::POINTER),
+      statef(Value::POINTER(CastPointerToValue(state.data()))), flush_count(0), internal_nodes(0), input_ref(input),
       filter_mask(filter_mask_p), mode(mode_p) {
-	statep.Flatten(input->size());
-	statev.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
+	statep.Flatten(STANDARD_VECTOR_SIZE);
+	statef.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
 
 	if (input_ref && input_ref->ColumnCount() > 0) {
-		filter_sel.Initialize(input->size());
 		inputs.Initialize(Allocator::DefaultAllocator(), input_ref->GetTypes());
-		// if we have a frame-by-frame method, share the single state
+		inputs.Reference(*input_ref);
 		if (aggr.function.window && UseWindowAPI()) {
+			// if we have a frame-by-frame method, share the single state
 			AggregateInit();
-			inputs.Reference(*input_ref);
 		} else {
-			inputs.SetCapacity(*input_ref);
+			//	In order to share the SV, we can't have any leaves that are already dictionaries.
+#ifdef DEBUG
+			for (auto &leaf : inputs.data) {
+				D_ASSERT(leaf.GetVectorType() == VectorType::FLAT_VECTOR);
+			}
+#endif
+			//	The inputs share an SV so we can quickly pick out values
+			//	TODO: Check after full vectorisation that this is still needed
+			//	instad of just Slice/Reference.
+			filter_sel.Initialize();
+			//	What we slice to is not important now - we just want the SV to be shared.
+			inputs.Slice(filter_sel, STANDARD_VECTOR_SIZE);
 			if (aggr.function.combine && UseCombineAPI()) {
 				ConstructTree();
 			}
@@ -228,7 +238,7 @@ WindowSegmentTree::~WindowSegmentTree() {
 	}
 
 	if (aggr.function.window && UseWindowAPI()) {
-		aggr.function.destructor(statev, aggr_input_data, 1);
+		aggr.function.destructor(statef, aggr_input_data, 1);
 	}
 }
 
@@ -238,36 +248,62 @@ void WindowSegmentTree::AggregateInit() {
 
 void WindowSegmentTree::AggegateFinal(Vector &result, idx_t rid) {
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
-	aggr.function.finalize(statev, aggr_input_data, result, 1, rid);
+	aggr.function.finalize(statef, aggr_input_data, result, 1, rid);
 
 	if (aggr.function.destructor) {
-		aggr.function.destructor(statev, aggr_input_data, 1);
+		aggr.function.destructor(statef, aggr_input_data, 1);
 	}
 }
 
-void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
-	const auto size = end - begin;
-
-	auto &chunk = *input_ref;
-	const auto input_count = input_ref->ColumnCount();
-	inputs.SetCardinality(size);
-	for (idx_t i = 0; i < input_count; ++i) {
-		auto &v = inputs.data[i];
-		auto &vec = chunk.data[i];
-		v.Slice(vec, begin, end);
-		v.Verify(size);
+void WindowSegmentTree::FlushStates(idx_t l_idx) {
+	if (!flush_count) {
+		return;
 	}
 
-	// Slice to any filtered rows
-	if (!filter_mask.AllValid()) {
-		idx_t filtered = 0;
-		for (idx_t i = begin; i < end; ++i) {
-			if (filter_mask.RowIsValid(i)) {
-				filter_sel.set_index(filtered++, i - begin);
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+	if (l_idx) {
+		statel.Verify(flush_count);
+		aggr.function.combine(statel, statep, aggr_input_data, flush_count);
+	} else {
+		inputs.SetCardinality(flush_count);
+		aggr.function.update(&inputs.data[0], aggr_input_data, inputs.ColumnCount(), statep, flush_count);
+
+		//	Some update functions mangle our dictionaries.
+		//	so we have to check and unmangle them...
+		for (column_t i = 0; i < inputs.ColumnCount(); i++) {
+			auto &v = inputs.data[i];
+			if (v.GetVectorType() != VectorType::DICTIONARY_VECTOR ||
+			    DictionaryVector::SelVector(v).data() != filter_sel.data()) {
+				v.Slice(input_ref->data[i], filter_sel, STANDARD_VECTOR_SIZE);
 			}
 		}
-		if (filtered != inputs.size()) {
-			inputs.Slice(filter_sel, filtered);
+	}
+
+	flush_count = 0;
+}
+
+void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
+	const auto count = end - begin;
+	D_ASSERT(count <= TREE_FANOUT);
+
+	//	If we are not filtering,
+	//	just update the shared dictionary selection to the range
+	//	Otherwise set it to the input rows that pass the filter
+	if (filter_mask.AllValid()) {
+		for (idx_t i = 0; i < count; ++i) {
+			filter_sel.set_index(flush_count++, begin + i);
+			if (flush_count >= STANDARD_VECTOR_SIZE) {
+				FlushStates(0);
+			}
+		}
+	} else {
+		for (idx_t i = begin; i < end; ++i) {
+			if (filter_mask.RowIsValid(i)) {
+				filter_sel.set_index(flush_count++, i);
+				if (flush_count >= STANDARD_VECTOR_SIZE) {
+					FlushStates(0);
+				}
+			}
 		}
 	}
 }
@@ -279,24 +315,20 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 	}
 
 	const auto count = end - begin;
-	Vector s(statep, 0, count);
 	if (l_idx == 0) {
 		ExtractFrame(begin, end);
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
-		D_ASSERT(!inputs.data.empty());
-		aggr.function.update(&inputs.data[0], aggr_input_data, input_ref->ColumnCount(), s, inputs.size());
 	} else {
 		// find out where the states begin
 		data_ptr_t begin_ptr = levels_flat_native.get() + state.size() * (begin + levels_flat_start[l_idx - 1]);
 		// set up a vector of pointers that point towards the set of states
-		Vector v(LogicalType::POINTER, count);
-		auto pdata = FlatVector::GetData<data_ptr_t>(v);
+		auto pdata = FlatVector::GetData<data_ptr_t>(statel);
 		for (idx_t i = 0; i < count; i++) {
-			pdata[i] = begin_ptr + i * state.size();
+			pdata[flush_count++] = begin_ptr;
+			begin_ptr += state.size();
+			if (flush_count >= STANDARD_VECTOR_SIZE) {
+				FlushStates(l_idx);
+			}
 		}
-		v.Verify(count);
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
-		aggr.function.combine(v, s, aggr_input_data, count);
 	}
 }
 
@@ -325,6 +357,7 @@ void WindowSegmentTree::ConstructTree() {
 			// compute the aggregate for this entry in the segment tree
 			AggregateInit();
 			WindowSegmentValue(level_current, pos, MinValue(level_size, pos + TREE_FANOUT));
+			FlushStates(level_current);
 
 			memcpy(levels_flat_native.get() + (levels_flat_offset * state.size()), state.data(), state.size());
 
@@ -345,6 +378,7 @@ void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t en
 	D_ASSERT(input_ref);
 
 	// If we have a window function, use that
+	// TODO: Move another accelerator
 	if (aggr.function.window && UseWindowAPI()) {
 		// Frame boundaries
 		auto prev = frame;
@@ -358,15 +392,18 @@ void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t en
 	}
 
 	AggregateInit();
+	idx_t l_idx = 0;
 
 	// Aggregate everything at once if we can't combine states
+	// TODO: Move to another accelerator?
 	if (!aggr.function.combine || !UseCombineAPI()) {
-		WindowSegmentValue(0, begin, end);
+		WindowSegmentValue(l_idx, begin, end);
+		FlushStates(l_idx);
 		AggegateFinal(result, rid);
 		return;
 	}
 
-	for (idx_t l_idx = 0; l_idx < levels_flat_start.size() + 1; l_idx++) {
+	for (; l_idx < levels_flat_start.size() + 1; l_idx++) {
 		idx_t parent_begin = begin / TREE_FANOUT;
 		idx_t parent_end = end / TREE_FANOUT;
 		if (parent_begin == parent_end) {
@@ -384,7 +421,14 @@ void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t en
 		}
 		begin = parent_begin;
 		end = parent_end;
+
+		//	Flush leaf values separately.
+		if (!l_idx) {
+			FlushStates(l_idx);
+		}
 	}
+
+	FlushStates(l_idx);
 
 	AggegateFinal(result, rid);
 }

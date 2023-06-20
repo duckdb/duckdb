@@ -18,20 +18,20 @@
 
 namespace duckdb {
 
-static py::list ConvertToSingleBatch(const string &timezone_config, vector<LogicalType> &types, vector<string> &names,
-                                     DataChunk &input) {
+static py::list ConvertToSingleBatch(vector<LogicalType> &types, vector<string> &names, DataChunk &input,
+                                     const ArrowOptions &options) {
 	ArrowSchema schema;
-	ArrowConverter::ToArrowSchema(&schema, types, names, timezone_config);
+	ArrowConverter::ToArrowSchema(&schema, types, names, options);
 
 	py::list single_batch;
-	ArrowAppender appender(types, STANDARD_VECTOR_SIZE);
+	ArrowAppender appender(types, STANDARD_VECTOR_SIZE, options);
 	appender.Append(input, 0, input.size(), input.size());
 	auto array = appender.Finalize();
 	TransformDuckToArrowChunk(schema, array, single_batch);
 	return single_batch;
 }
 
-static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const string &timezone_config) {
+static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ArrowOptions &options) {
 	auto types = input.GetTypes();
 	vector<string> names;
 	names.reserve(types.size());
@@ -39,8 +39,7 @@ static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const string 
 		names.push_back(StringUtil::Format("c%d", i));
 	}
 
-	return pyarrow::ToArrowTable(types, names, timezone_config,
-	                             ConvertToSingleBatch(timezone_config, types, names, input));
+	return pyarrow::ToArrowTable(types, names, ConvertToSingleBatch(types, names, input, options), options);
 }
 
 static void ConvertPyArrowToDataChunk(const py::object &table, Vector &out, ClientContext &context, idx_t count) {
@@ -108,20 +107,22 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 		// owning references
 		py::object python_object;
 		// Convert the input datachunk to pyarrow
-		string timezone_config = "UTC";
+		ArrowOptions options;
+
 		if (state.HasContext()) {
 			auto &context = state.GetContext();
 			auto client_properties = context.GetClientProperties();
-			timezone_config = client_properties.time_zone;
+			options.time_zone = client_properties.time_zone;
+			options.offset_size = client_properties.arrow_offset_size;
 		}
-		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, timezone_config);
+
+		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, options);
 		py::tuple column_list = pyarrow_table.attr("columns");
 
 		auto count = input.size();
 
 		// Call the function
-		PyObject *ret = nullptr;
-		ret = PyObject_CallObject(function, column_list.ptr());
+		auto ret = PyObject_CallObject(function, column_list.ptr());
 		if (ret == nullptr && PyErr_Occurred()) {
 			if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
 				auto exception = py::error_already_set();
@@ -176,8 +177,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 			}
 
 			// Call the function
-			PyObject *ret = nullptr;
-			ret = PyObject_CallObject(function, bundled_parameters.ptr());
+			auto ret = PyObject_CallObject(function, bundled_parameters.ptr());
 			if (ret == nullptr && PyErr_Occurred()) {
 				if (exception_handling == PythonExceptionHandling::FORWARD_ERROR) {
 					auto exception = py::error_already_set();
@@ -194,10 +194,8 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 			python_results.push_back(ret);
 		}
 
-		// Cast the resulting native python to DuckDB, using the return type
-		// result.Resize(input.size());
-		NumpyScan::ScanObjectColumn(python_results.data(), input.size(), 0, result);
-		if (input.AllConstant()) {
+		NumpyScan::ScanObjectColumn(python_results.data(), sizeof(PyObject *), input.size(), 0, result);
+		if (input.size() == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	};
@@ -312,15 +310,17 @@ public:
 		}
 	}
 
-	ScalarFunction GetFunction(const py::function &udf, PythonExceptionHandling exception_handling) {
+	ScalarFunction GetFunction(const py::function &udf, PythonExceptionHandling exception_handling, bool side_effects) {
 		scalar_function_t func;
 		if (vectorized) {
 			func = CreateVectorizedFunction(udf.ptr(), exception_handling);
 		} else {
 			func = CreateNativeFunction(udf.ptr(), exception_handling);
 		}
+		FunctionSideEffects function_side_effects =
+		    side_effects ? FunctionSideEffects::HAS_SIDE_EFFECTS : FunctionSideEffects::NO_SIDE_EFFECTS;
 		ScalarFunction scalar_function(name, std::move(parameters), return_type, func, nullptr, nullptr, nullptr,
-		                               nullptr, varargs, FunctionSideEffects::NO_SIDE_EFFECTS, null_handling);
+		                               nullptr, varargs, function_side_effects, null_handling);
 		return scalar_function;
 	}
 };
@@ -331,7 +331,7 @@ ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const py:
                                                    const py::object &parameters,
                                                    const shared_ptr<DuckDBPyType> &return_type, bool vectorized,
                                                    FunctionNullHandling null_handling,
-                                                   PythonExceptionHandling exception_handling) {
+                                                   PythonExceptionHandling exception_handling, bool side_effects) {
 	PythonUDFData data(name, vectorized, null_handling);
 
 	data.AnalyzeSignature(udf);
@@ -339,7 +339,7 @@ ScalarFunction DuckDBPyConnection::CreateScalarUDF(const string &name, const py:
 	data.OverrideReturnType(return_type);
 	data.Verify();
 
-	return data.GetFunction(udf, exception_handling);
+	return data.GetFunction(udf, exception_handling, side_effects);
 }
 
 } // namespace duckdb

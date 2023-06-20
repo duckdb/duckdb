@@ -257,6 +257,9 @@ class TestDuckDBConnection(object):
     def test_close(self):
         assert None != duckdb.close
 
+    def test_interrupt(self):
+        assert None != duckdb.interrupt
+
     def test_wrap_coverage(self):
         con = duckdb.default_connection
         assert str(con.__class__) == "<class 'duckdb.DuckDBPyConnection'>"

@@ -73,7 +73,7 @@ public:
 	uint32_t FindRowId(const ART &art, Node &ptr, const row_t row_id) const;
 
 	//! Returns the string representation of a leaf
-	string ToString(const ART &art) const;
+	string VerifyAndToString(const ART &art, const bool only_verify) const;
 
 	//! Serialize this leaf
 	BlockPointer Serialize(const ART &art, MetaBlockWriter &writer) const;
