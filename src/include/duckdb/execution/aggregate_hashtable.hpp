@@ -42,48 +42,43 @@ struct FlushMoveState;
 
 struct aggr_ht_entry_t {
 public:
-	explicit aggr_ht_entry_t(hash_t hash) {
-		value.hash.hash = hash;
+	explicit aggr_ht_entry_t(hash_t value_p) : value(value_p) {
 	}
 
 	inline bool IsOccupied() const {
-		return value.hash.hash != 0;
-	}
-	inline void SetOccupied() {
-		D_ASSERT(GetSalt() == 0); // Should set occupied before setting salt
-		value.hash.hash = 1;
+		return value != 0;
 	}
 
 	inline data_ptr_t GetPointer() const {
 		D_ASSERT(IsOccupied());
-		return reinterpret_cast<data_ptr_t>(value.entry.pointer);
+		return reinterpret_cast<data_ptr_t>(value & POINTER_MASK);
 	}
-	inline void SetPointer(data_ptr_t pointer_p) {
-		value.entry.pointer = reinterpret_cast<uint64_t>(pointer_p);
+	inline void SetPointer(data_ptr_t pointer) {
+		// Pointer shouldn't use upper bits
+		D_ASSERT((reinterpret_cast<uint64_t>(pointer) & SALT_MASK) == 0);
+		// Value should have all 1's in the pointer area
+		D_ASSERT((value & POINTER_MASK) == POINTER_MASK);
+		value &= reinterpret_cast<uint64_t>(pointer) | SALT_MASK;
 	}
 
-	static inline uint16_t ExtractSalt(hash_t hash) {
-		return hash >> HASH_PREFIX_SHIFT;
+	static inline hash_t ExtractSalt(hash_t hash) {
+		return hash | POINTER_MASK;
 	}
-	inline void SetSalt(uint16_t salt) {
-		value.entry.salt = salt;
+	inline hash_t GetSalt() const {
+		return ExtractSalt(value);
 	}
-	inline uint16_t GetSalt() const {
-		return value.entry.salt;
+	inline void SetSalt(hash_t salt) {
+		// Shouldn't be occupied when we set this
+		D_ASSERT(!IsOccupied());
+		// Salt should have all 1's in the pointer field
+		D_ASSERT((salt & POINTER_MASK) == POINTER_MASK);
+		value = salt;
 	}
 
 private:
-	static constexpr const auto HASH_PREFIX_SHIFT = (sizeof(hash_t) - sizeof(uint16_t)) * 8;
-
-	union {
-		struct {
-			uint16_t salt;
-			uint64_t pointer : 48;
-		} entry;
-		struct {
-			hash_t hash;
-		} hash;
-	} value;
+	static constexpr const hash_t SALT_MASK = 0xFFFF000000000000;
+	static constexpr const hash_t POINTER_MASK = 0x0000FFFFFFFFFFFF;
+	hash_t value;
 };
 
 struct AggregateHTAppendState {

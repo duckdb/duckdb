@@ -29,10 +29,9 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 }
 
 AggregateHTAppendState::AggregateHTAppendState()
-    : ht_offsets(LogicalTypeId::BIGINT), hash_salts(LogicalTypeId::SMALLINT),
-      group_compare_vector(STANDARD_VECTOR_SIZE), no_match_vector(STANDARD_VECTOR_SIZE),
-      empty_vector(STANDARD_VECTOR_SIZE), new_groups(STANDARD_VECTOR_SIZE), addresses(LogicalType::POINTER),
-      chunk_state_initialized(false) {
+    : ht_offsets(LogicalType::UBIGINT), hash_salts(LogicalType::HASH), group_compare_vector(STANDARD_VECTOR_SIZE),
+      no_match_vector(STANDARD_VECTOR_SIZE), empty_vector(STANDARD_VECTOR_SIZE), new_groups(STANDARD_VECTOR_SIZE),
+      addresses(LogicalType::POINTER), chunk_state_initialized(false) {
 }
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, Allocator &allocator,
@@ -285,9 +284,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 	D_ASSERT(groups.ColumnCount() + 1 == layout.ColumnCount());
 	D_ASSERT(group_hashes_v.GetType() == LogicalType::HASH);
 	D_ASSERT(state.ht_offsets.GetVectorType() == VectorType::FLAT_VECTOR);
-	D_ASSERT(state.ht_offsets.GetType() == LogicalType::BIGINT);
+	D_ASSERT(state.ht_offsets.GetType() == LogicalType::UBIGINT);
 	D_ASSERT(addresses_v.GetType() == LogicalType::POINTER);
-	D_ASSERT(state.hash_salts.GetType() == LogicalType::SMALLINT);
+	D_ASSERT(state.hash_salts.GetType() == LogicalType::HASH);
 
 	// Resize at 50% capacity, also need to fit the entire vector
 	if (capacity - Count() <= groups.size() || Count() > ResizeThreshold()) {
@@ -305,7 +304,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 	// Compute the entry in the table based on the hash using a modulo,
 	// and precompute the hash salts for faster comparison below
 	auto ht_offsets = FlatVector::GetData<uint64_t>(state.ht_offsets);
-	auto hash_salts = FlatVector::GetData<uint16_t>(state.hash_salts);
+	auto hash_salts = FlatVector::GetData<hash_t>(state.hash_salts);
 	for (idx_t r = 0; r < groups.size(); r++) {
 		const auto &hash = hashes[r];
 		ht_offsets[r] = ApplyBitMask(hash);
@@ -357,8 +356,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 					state.no_match_vector.set_index(no_match_count++, index);
 				}
 			} else { // Cell is unoccupied
-				// Set salt and mark as occupied
-				entry.SetOccupied();
+				// Set salt (also marks as occupied)
 				entry.SetSalt(salt);
 
 				// Update selection lists for outer loops
