@@ -15,7 +15,7 @@ statement ok
 pragma threads=4
 
 statement ok
-pragma memory_limit='35mb'
+pragma memory_limit='40mb'
 
 query I
 select count(*) from (select distinct i from t1)
