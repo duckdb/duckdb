@@ -111,8 +111,8 @@ public:
 	static idx_t SelectJoinTail(const ExpressionType &condition, Vector &left, Vector &right,
 	                            const SelectionVector *sel, idx_t count, SelectionVector *true_sel);
 
-	//!	Utility to
-	void ResetUnprojectedChunk(DataChunk &chunk, DataChunk &result) const;
+	//!	Utility to project full width internal chunks to projected results
+	void ProjectResult(DataChunk &chunk, DataChunk &result) const;
 };
 
 } // namespace duckdb

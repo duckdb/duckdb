@@ -641,6 +641,8 @@ public:
 	    : op(op), true_sel(STANDARD_VECTOR_SIZE), left_executor(context), right_executor(context),
 	      left_matches(nullptr), right_matches(nullptr) {
 		auto &allocator = Allocator::Get(context);
+		unprojected.Initialize(allocator, op.unprojected_types);
+
 		if (op.conditions.size() < 3) {
 			return;
 		}
@@ -659,8 +661,6 @@ public:
 
 		left_keys.Initialize(allocator, left_types);
 		right_keys.Initialize(allocator, right_types);
-
-		unprojected.Initialize(Allocator::DefaultAllocator(), op.unprojected_types);
 	}
 
 	idx_t SelectOuterRows(bool *matches) {
@@ -726,10 +726,7 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 
 		// found matches: extract them
 
-		//	We need all of the data to compute other predicates,
-		//	but we only return what is in the projection map
-		ResetUnprojectedChunk(chunk, result);
-
+		chunk.Reset();
 		SliceSortedPayload(chunk, left_table.global_sort_state, state.left_block_index, lsel, result_count, 0);
 		SliceSortedPayload(chunk, right_table.global_sort_state, state.right_block_index, rsel, result_count,
 		                   left_cols);
@@ -771,6 +768,10 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 			}
 		}
 
+		//	We need all of the data to compute other predicates,
+		//	but we only return what is in the projection map
+		ProjectResult(chunk, result);
+
 		// found matches: mark the found matches if required
 		if (left_table.found_match) {
 			for (idx_t i = 0; i < result_count; i++) {
@@ -782,8 +783,8 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 				right_table.found_match[state.right_base + rsel[sel->get_index(i)]] = true;
 			}
 		}
-		chunk.Verify();
-	} while (chunk.size() == 0);
+		result.Verify();
+	} while (result.size() == 0);
 }
 
 class IEJoinGlobalSourceState : public GlobalSourceState {
@@ -971,7 +972,7 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 			continue;
 		}
 		auto &chunk = ie_lstate.unprojected;
-		ResetUnprojectedChunk(chunk, result);
+		chunk.Reset();
 		SliceSortedPayload(chunk, ie_sink.tables[0]->global_sort_state, ie_lstate.left_block_index, ie_lstate.true_sel,
 		                   count);
 
@@ -981,6 +982,7 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 			ConstantVector::SetNull(chunk.data[col_idx], true);
 		}
 
+		ProjectResult(chunk, result);
 		result.SetCardinality(count);
 		result.Verify();
 
@@ -996,7 +998,7 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 		}
 
 		auto &chunk = ie_lstate.unprojected;
-		ResetUnprojectedChunk(chunk, result);
+		chunk.Reset();
 		SliceSortedPayload(chunk, ie_sink.tables[1]->global_sort_state, ie_lstate.right_block_index, ie_lstate.true_sel,
 		                   count, left_cols);
 
@@ -1006,6 +1008,7 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 			ConstantVector::SetNull(chunk.data[col_idx], true);
 		}
 
+		ProjectResult(chunk, result);
 		result.SetCardinality(count);
 		result.Verify();
 

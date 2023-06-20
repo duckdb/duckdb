@@ -7,7 +7,7 @@ group join
 
 load
 SELECT SETSEED(0.8675309);
-PRAGMA prefer_range_joins=True;
+PRAGMA prefer_range_joins=False;
 CREATE TABLE df AS
     SELECT 
         (random() * 1000)::INTEGER + 1 as id,

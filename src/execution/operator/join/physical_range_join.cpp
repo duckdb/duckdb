@@ -290,15 +290,16 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 	}
 }
 
-void PhysicalRangeJoin::ResetUnprojectedChunk(DataChunk &unprojected, DataChunk &result) const {
-	unprojected.Reset();
-	const auto left_result = left_projection_map.size();
-	for (idx_t i = 0; i < left_result; ++i) {
-		unprojected.data[left_projection_map[i]].Reference(result.data[i]);
+void PhysicalRangeJoin::ProjectResult(DataChunk &chunk, DataChunk &result) const {
+	const auto left_projected = left_projection_map.size();
+	for (idx_t i = 0; i < left_projected; ++i) {
+		result.data[i].Reference(chunk.data[left_projection_map[i]]);
 	}
+	const auto left_width = children[0]->types.size();
 	for (idx_t i = 0; i < right_projection_map.size(); ++i) {
-		unprojected.data[right_projection_map[i]].Reference(result.data[left_result + i]);
+		result.data[left_projected + i].Reference(chunk.data[left_width + right_projection_map[i]]);
 	}
+	result.SetCardinality(chunk);
 }
 
 BufferHandle PhysicalRangeJoin::SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const idx_t block_idx,
