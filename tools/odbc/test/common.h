@@ -11,13 +11,15 @@
 #include <sql.h>
 #include <sqlext.h>
 
+#define STR_EQUAL(a, b) (std::strcmp(a, b) == 0)
+
 namespace odbc_test {
 struct MetadataData {
 	std::string col_name;
 	SQLSMALLINT col_type;
 };
 
-void ODBC_CHECK(SQLRETURN ret, const char *func);
+void ODBC_CHECK(SQLRETURN ret, std::string func);
 
 /**
  * @brief
@@ -27,7 +29,7 @@ void ODBC_CHECK(SQLRETURN ret, const char *func);
  * @param args The arguments to pass to the function
  */
 template <typename MSG, typename FUNC, typename... ARGS>
-void ExecuteCmdAndCheckODBC(MSG msg, FUNC func, ARGS... args) {
+void EXECUTE_AND_CHECK(MSG msg, FUNC func, ARGS... args) {
 	SQLRETURN ret = func(args...);
 	ODBC_CHECK(ret, msg);
 }
@@ -108,7 +110,7 @@ void DISCONNECT_FROM_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc);
  */
 void EXEC_SQL(HSTMT hstmt, const std::string &query);
 
-void initializeDatabase(HSTMT hstmt);
+void InitializeDatabase(HSTMT hstmt);
 
 std::map<SQLSMALLINT, SQLULEN> InitializeTypesMap();
 

@@ -13,7 +13,7 @@ TEST_CASE("Test SQLGetDiagRec (returns diagnostic record)", "[odbc]") {
 	CONNECT_TO_DATABASE(env, dbc);
 
 	// Allocate a statement handle
-	ExecuteCmdAndCheckODBC("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
+	EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
 
 	/* TEST 1: Execute a query that will fail and check the diagnostics */
 	// Execute a query that will fail
@@ -34,8 +34,8 @@ TEST_CASE("Test SQLGetDiagRec (returns diagnostic record)", "[odbc]") {
 
 	// Compare the diagnostics to make sure they are the same and that SQLGetDiagRec does not change the state of the
 	// statement
-	REQUIRE(::strcmp(first_state.c_str(), second_state.c_str()) == 0);
-	REQUIRE(::strcmp(first_message.c_str(), second_message.c_str()) == 0);
+	REQUIRE(STR_EQUAL(first_state.c_str(), second_state.c_str()));
+	REQUIRE(STR_EQUAL(first_message.c_str(), second_message.c_str()));
 
 	/* TEST 2: Test a veeery long error message */
 	// Create and fill a std::string with 1000 characters
@@ -77,12 +77,12 @@ TEST_CASE("Test SQLGetDiagRec (returns diagnostic record)", "[odbc]") {
 
 	// Compare the diagnostics to make sure they are the same and that SQLGetDiagRec does not change the state of the
 	// statement
-	REQUIRE(first_endtran_state.compare(second_endtran_state) == 0);
-	REQUIRE(first_endtran_message.compare(second_endtran_message) == 0);
+	REQUIRE(!first_endtran_state.compare(second_endtran_state));
+	REQUIRE(!first_endtran_message.compare(second_endtran_message));
 
 	// Free the statement handle
-	ExecuteCmdAndCheckODBC("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
-	ExecuteCmdAndCheckODBC("SQLFreeHandle (HSTMT)", SQLFreeHandle, SQL_HANDLE_STMT, hstmt);
+	EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
+	EXECUTE_AND_CHECK("SQLFreeHandle (HSTMT)", SQLFreeHandle, SQL_HANDLE_STMT, hstmt);
 
 	DISCONNECT_FROM_DATABASE(env, dbc);
 }

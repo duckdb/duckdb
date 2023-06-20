@@ -3,25 +3,25 @@
 
 namespace odbc_test {
 
-void ODBC_CHECK(SQLRETURN ret, const char *msg) {
+void ODBC_CHECK(SQLRETURN ret, std::string msg) {
 	switch (ret) {
 	case SQL_SUCCESS:
 		REQUIRE(TRUE);
 		return;
 	case SQL_SUCCESS_WITH_INFO:
-		fprintf(stderr, "%s: Success with info\n", msg);
+		fprintf(stderr, "%s: Success with info\n", msg.c_str());
 		break;
 	case SQL_ERROR:
-		fprintf(stderr, "%s: Error: Error\n", msg);
+		fprintf(stderr, "%s: Error: Error\n", msg.c_str());
 		break;
 	case SQL_NO_DATA:
-		fprintf(stderr, "%s: Error: no data\n", msg);
+		fprintf(stderr, "%s: Error: no data\n", msg.c_str());
 		break;
 	case SQL_INVALID_HANDLE:
-		fprintf(stderr, "%s: Error: invalid handle\n", msg);
+		fprintf(stderr, "%s: Error: invalid handle\n", msg.c_str());
 		break;
 	default:
-		fprintf(stderr, "%s: Unexpected return value\n", msg);
+		fprintf(stderr, "%s: Unexpected return value\n", msg.c_str());
 		break;
 	}
 	REQUIRE(ret == SQL_SUCCESS);
@@ -66,7 +66,7 @@ void DATA_CHECK(HSTMT hstmt, SQLSMALLINT col_num, const char *expected_content) 
 		REQUIRE(expected_content == nullptr);
 		return;
 	}
-	REQUIRE(!::strcmp(ConvertToCString(content), expected_content));
+	REQUIRE(STR_EQUAL(ConvertToCString(content), expected_content));
 }
 
 void METADATA_CHECK(HSTMT hstmt, SQLUSMALLINT col_num, const std::string &expected_col_name,
@@ -129,15 +129,15 @@ void DRIVER_CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc, const std::strin
 	SQLRETURN ret = SQLAllocHandle(SQL_HANDLE_ENV, nullptr, &env);
 	REQUIRE(ret == SQL_SUCCESS);
 
-	ExecuteCmdAndCheckODBC("SQLSetEnvAttr (SQL_ATTR_ODBC_VERSION ODBC3)", SQLSetEnvAttr, env, SQL_ATTR_ODBC_VERSION,
-	                       ConvertToSQLPOINTER(SQL_OV_ODBC3), 0);
+	EXECUTE_AND_CHECK("SQLSetEnvAttr (SQL_ATTR_ODBC_VERSION ODBC3)", SQLSetEnvAttr, env, SQL_ATTR_ODBC_VERSION,
+	                  ConvertToSQLPOINTER(SQL_OV_ODBC3), 0);
 
-	ExecuteCmdAndCheckODBC("SQLAllocHandle (DBC)", SQLAllocHandle, SQL_HANDLE_DBC, env, &dbc);
+	EXECUTE_AND_CHECK("SQLAllocHandle (DBC)", SQLAllocHandle, SQL_HANDLE_DBC, env, &dbc);
 
 	// SQLDriverConnect establishes connections to a driver and a data source.
 	// Supports data sources that require more connection information than the three arguments in SQLConnect.
-	ExecuteCmdAndCheckODBC("SQLDriverConnect", SQLDriverConnect, dbc, nullptr, ConvertToSQLCHAR(dsn.c_str()), SQL_NTS,
-	                       str, sizeof(str), &strl, SQL_DRIVER_COMPLETE);
+	EXECUTE_AND_CHECK("SQLDriverConnect", SQLDriverConnect, dbc, nullptr, ConvertToSQLCHAR(dsn.c_str()), SQL_NTS, str,
+	                  sizeof(str), &strl, SQL_DRIVER_COMPLETE);
 }
 
 void CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc) {
@@ -146,29 +146,28 @@ void CONNECT_TO_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc) {
 	SQLRETURN ret = SQLAllocHandle(SQL_HANDLE_ENV, nullptr, &env);
 	REQUIRE(ret == SQL_SUCCESS);
 
-	ExecuteCmdAndCheckODBC("SQLSetEnvAttr (SQL_ATTR_ODBC_VERSION ODBC3)", SQLSetEnvAttr, env, SQL_ATTR_ODBC_VERSION,
-	                       ConvertToSQLPOINTER(SQL_OV_ODBC3), 0);
+	EXECUTE_AND_CHECK("SQLSetEnvAttr (SQL_ATTR_ODBC_VERSION ODBC3)", SQLSetEnvAttr, env, SQL_ATTR_ODBC_VERSION,
+	                  ConvertToSQLPOINTER(SQL_OV_ODBC3), 0);
 
-	ExecuteCmdAndCheckODBC("SQLAllocHandle (DBC)", SQLAllocHandle, SQL_HANDLE_DBC, env, &dbc);
+	EXECUTE_AND_CHECK("SQLAllocHandle (DBC)", SQLAllocHandle, SQL_HANDLE_DBC, env, &dbc);
 
 	// SQLConnect establishes connections to a driver and a data source.
-	ExecuteCmdAndCheckODBC("SQLConnect", SQLConnect, dbc, ConvertToSQLCHAR(dsn.c_str()), SQL_NTS, nullptr, 0, nullptr,
-	                       0);
+	EXECUTE_AND_CHECK("SQLConnect", SQLConnect, dbc, ConvertToSQLCHAR(dsn.c_str()), SQL_NTS, nullptr, 0, nullptr, 0);
 }
 
 void DISCONNECT_FROM_DATABASE(SQLHANDLE &env, SQLHANDLE &dbc) {
-	ExecuteCmdAndCheckODBC("SQLFreeHandle(SQL_HANDLE_ENV)", SQLFreeHandle, SQL_HANDLE_ENV, env);
+	EXECUTE_AND_CHECK("SQLFreeHandle(SQL_HANDLE_ENV)", SQLFreeHandle, SQL_HANDLE_ENV, env);
 
-	ExecuteCmdAndCheckODBC("SQLDisconnect", SQLDisconnect, dbc);
+	EXECUTE_AND_CHECK("SQLDisconnect", SQLDisconnect, dbc);
 
-	ExecuteCmdAndCheckODBC("SQLFreeHandle(SQL_HANDLE_DBC)", SQLFreeHandle, SQL_HANDLE_DBC, dbc);
+	EXECUTE_AND_CHECK("SQLFreeHandle(SQL_HANDLE_DBC)", SQLFreeHandle, SQL_HANDLE_DBC, dbc);
 }
 
-void execSql(HSTMT hstmt, const std::string &query) {
-	ExecuteCmdAndCheckODBC("SQLExecDirect (" + query + ")", SQLExecDirect, hstmt, ConvertToSQLCHAR(query.c_str()), SQL_NTS);
+void EXEC_SQL(HSTMT hstmt, const std::string &query) {
+	EXECUTE_AND_CHECK("SQLExecDirect (" + query + ")", SQLExecDirect, hstmt, ConvertToSQLCHAR(query.c_str()), SQL_NTS);
 }
 
-void INITIALIZE_DATABASE(HSTMT hstmt) {
+void InitializeDatabase(HSTMT hstmt) {
 	EXEC_SQL(hstmt, "CREATE TABLE test_table_1 (id integer PRIMARY KEY, t varchar(20));");
 	EXEC_SQL(hstmt, "INSERT INTO test_table_1 VALUES (1, 'foo');");
 	EXEC_SQL(hstmt, "INSERT INTO test_table_1 VALUES (2, 'bar');");
