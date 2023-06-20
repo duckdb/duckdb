@@ -136,6 +136,8 @@ public:
 
 	//! Reads Parquet file
 	DUCKDB_API shared_ptr<Relation> ReadParquet(const string &parquet_file, bool binary_as_string);
+	DUCKDB_API shared_ptr<Relation> ReadParquetFiles(const vector<string> &parquet_files, bool binary_as_string);
+
 	//! Returns a relation from a query
 	DUCKDB_API shared_ptr<Relation> RelationFromQuery(const string &query, const string &alias = "queryrelation",
 	                                                  const string &error = "Expected a single SELECT statement");

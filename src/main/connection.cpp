@@ -249,6 +249,16 @@ shared_ptr<Relation> Connection::ReadParquet(const string &parquet_file, bool bi
 	return TableFunction("parquet_scan", params, named_parameters)->Alias(parquet_file);
 }
 
+shared_ptr<Relation> Connection::ReadParquetFiles(const vector<string> &parquet_files, bool binary_as_string) {
+	vector<Value> values;
+	for (auto &parquet_file : parquet_files) {
+		values.emplace_back(parquet_file);
+	}
+	string name = "parquet_" + StringUtil::GenerateRandomName();
+	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
+	return TableFunction("parquet_scan", {Value::LIST(values)}, named_parameters)->Alias(name);
+}
+
 unordered_set<string> Connection::GetTableNames(const string &query) {
 	return context->GetTableNames(query);
 }
