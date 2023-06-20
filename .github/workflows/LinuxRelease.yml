@@ -293,6 +293,30 @@ jobs:
       run: |
         python scripts/generate_extensions_function.py --validate
 
+ linux-release-32:
+    name: Linux (32 Bit)
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
+ #   needs: linux-release-64
+    env:
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: ./.github/actions/centos_7_setup
+
+    - name: Build
+      shell: bash
+      run: |
+        mkdir -p build/release
+        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+
+    - name: Test
+      shell: bash
+      run: build/release/test/unittest "*"
+
+
+
 
  linux-clang:
     name: Clang 14
@@ -341,7 +365,7 @@ jobs:
     name: GCC 4.8
     runs-on: ubuntu-20.04
     container: quay.io/pypa/manylinux2014_x86_64
-  #  needs: linux-release-64
+#    needs: linux-release-64
 
     steps:
     - uses: actions/checkout@v3
@@ -354,30 +378,13 @@ jobs:
       with:
         python-version: '3.7'
 
-    - name: Install
-      shell: bash
-      run: apt-get update -y -qq && apt-get install -y -qq g++-4.8 binutils
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
     - name: Build
       shell: bash
       run: make release
-      env:
-        CC: gcc-4.8
-        CXX: g++-4.8
-
 
     - name: Test
       shell: bash
       run: make allunit
-      env:
-        CC: gcc-4.8
-        CXX: g++-4.8
 
  release-assert:
     name: Release Assertions
