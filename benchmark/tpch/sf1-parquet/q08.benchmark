@@ -1,0 +1,7 @@
+# name: benchmark/tpch/sf1-parquet/q08.benchmark
+# description: Run query 08 from the TPC-H benchmark (single-threaded)
+# group: [sf1-parquet]
+
+template benchmark/tpch/sf1-parquet/tpch_sf1_parquet.benchmark.in
+QUERY_NUMBER=8
+QUERY_NUMBER_PADDED=08
