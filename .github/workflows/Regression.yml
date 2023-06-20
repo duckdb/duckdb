@@ -18,7 +18,7 @@ on:
       - '!.github/workflows/Regression.yml'
       - '.github/config/uncovered_files.csv'
   pull_request:
-    types: [labeled]
+    types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
       - 'tools/**'

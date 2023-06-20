@@ -16,7 +16,7 @@ on:
       - '!.github/workflows/CodeQuality.yml'
 
   pull_request:
-    types: [labeled]
+    types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
       - '.github/patches/duckdb-wasm/**'
