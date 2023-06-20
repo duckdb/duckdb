@@ -304,8 +304,20 @@ bool constant_expression_is_not_null(duckdb::expr_extptr_t expr) {
 [[cpp11::register]] SEXP rapi_rel_join(duckdb::rel_extptr_t left, duckdb::rel_extptr_t right, list conds,
                                        std::string join, std::string join_ref_type) {
 	auto join_type = JoinType::INNER;
-	auto join_ref = JoinRefType::REGULAR;
+	auto ref_type = JoinRefType::REGULAR;
 	unique_ptr<ParsedExpression> cond;
+
+	if (join_ref_type == "regular") {
+		ref_type = JoinRefType::REGULAR;
+	} else if (join_ref_type == "natural") {
+		ref_type = JoinRefType::NATURAL;
+	} else if (join_ref_type == "cross") {
+		ref_type = JoinRefType::CROSS;
+	} else if (join_ref_type == "positional") {
+		ref_type = JoinRefType::POSITIONAL;
+	} else if (join_ref_type == "asof") {
+		ref_type = JoinRefType::ASOF;
+	}
 
 	if (join == "left") {
 		join_type = JoinType::LEFT;
@@ -317,23 +329,16 @@ bool constant_expression_is_not_null(duckdb::expr_extptr_t expr) {
 		join_type = JoinType::SEMI;
 	} else if (join == "anti") {
 		join_type = JoinType::ANTI;
-	} else if (join == "cross") {
-		auto res = std::make_shared<CrossProductRelation>(left->rel, right->rel);
-		return make_external<RelationWrapper>("duckdb_relation", res);
-	}
-
-	if (join_ref_type == "regular") {
-		join_ref = JoinRefType::REGULAR;
-	} else if (join_ref_type == "natural") {
-		join_ref = JoinRefType::NATURAL;
-	} else if (join_ref_type == "cross") {
-		join_ref = JoinRefType::CROSS;
-	} else if (join_ref_type == "positional") {
-		join_ref = JoinRefType::POSITIONAL;
-	} else if (join_ref_type == "asof") {
-		join_ref = JoinRefType::ASOF;
-	} else if (join_ref_type == "dependent") {
-		join_ref = JoinRefType::DEPENDENT;
+	} else if (join == "cross" || ref_type == JoinRefType::POSITIONAL) {
+		if (ref_type != JoinRefType::POSITIONAL) {
+			ref_type = JoinRefType::CROSS;
+		}
+		auto res = std::make_shared<CrossProductRelation>(left->rel, right->rel, ref_type);
+		auto rel = make_external<RelationWrapper>("duckdb_relation", res);
+		// if the user described filters, apply them on top of the cross product relation
+		if (conds.size() > 0) {
+			return rapi_rel_filter(rel, conds);
+		}
 	}
 
 	if (conds.size() == 1) {
@@ -346,7 +351,7 @@ bool constant_expression_is_not_null(duckdb::expr_extptr_t expr) {
 		cond = make_uniq<ConjunctionExpression>(ExpressionType::CONJUNCTION_AND, std::move(cond_args));
 	}
 
-	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, std::move(cond), join_type, join_ref);
+	auto res = std::make_shared<JoinRelation>(left->rel, right->rel, std::move(cond), join_type, ref_type);
 
 	cpp11::writable::list prot = {left, right};
 

@@ -9,15 +9,18 @@
 #pragma once
 
 #include "duckdb/main/relation.hpp"
+#include "duckdb/common/enums/joinref_type.hpp"
 
 namespace duckdb {
 
 class CrossProductRelation : public Relation {
 public:
+	DUCKDB_API CrossProductRelation(shared_ptr<Relation> left, shared_ptr<Relation> right, JoinRefType ref_type);
 	DUCKDB_API CrossProductRelation(shared_ptr<Relation> left, shared_ptr<Relation> right);
 
 	shared_ptr<Relation> left;
 	shared_ptr<Relation> right;
+	JoinRefType ref_type;
 	vector<ColumnDefinition> columns;
 
 public:
