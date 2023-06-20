@@ -12,6 +12,7 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
+      - '!tools/odbc/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
       - '.github/config/uncovered_files.csv'
@@ -19,6 +20,7 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
+      - '!tools/odbc/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
       - '.github/config/uncovered_files.csv'
