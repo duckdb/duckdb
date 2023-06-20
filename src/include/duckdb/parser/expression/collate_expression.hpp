@@ -18,6 +18,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::COLLATE;
 
 public:
+	CollateExpression();
 	CollateExpression(string collation, unique_ptr<ParsedExpression> child);
 
 	//! The child of the cast expression

@@ -41,7 +41,8 @@
         "name": "upper",
         "type": "ParsedExpression*"
       }
-    ]
+    ],
+    "constructor": []
   },
   {
     "class": "CaseExpression",
@@ -76,7 +77,8 @@
         "name": "try_cast",
         "type": "bool"
       }
-    ]
+    ],
+    "constructor": []
   },
   {
     "class": "CollateExpression",
@@ -92,10 +94,7 @@
         "type": "string"
       }
     ],
-    "constructor": [
-      "collation",
-      "child"
-    ]
+    "constructor": []
   },
   {
     "class": "ColumnRefExpression",
@@ -106,7 +105,8 @@
         "name": "column_names",
         "type": "vector<string>"
       }
-    ]
+    ],
+    "constructor": []
   },
   {
     "class": "ComparisonExpression",
@@ -143,14 +143,16 @@
         "name": "value",
         "type": "Value"
       }
-    ]
+    ],
+    "constructor": []
   },
   {
     "class": "DefaultExpression",
     "base": "ParsedExpression",
     "enum": "DEFAULT",
     "members": [
-    ]
+    ],
+    "constructor": []
   },
   {
     "class": "FunctionExpression",
@@ -180,8 +182,8 @@
       },
       {
         "name": "order_bys",
-        "optional": true,
-        "type": "ResultModifier"
+        "type": "OrderModifier*",
+        "base": "ResultModifier"
       },
       {
         "name": "distinct",
@@ -195,7 +197,8 @@
         "name": "export_state",
         "type": "bool"
       }
-    ]
+    ],
+    "constructor": []
   },
   {
     "class": "LambdaExpression",
@@ -210,7 +213,8 @@
         "name": "expr",
         "type": "ParsedExpression*"
       }
-    ]
+    ],
+    "constructor": []
   },
   {
     "class": "OperatorExpression",
@@ -232,7 +236,8 @@
         "name": "parameter_nr",
         "type": "idx_t"
       }
-    ]
+    ],
+    "constructor": []
   },
   {
     "class": "PositionalReferenceExpression",
@@ -243,7 +248,8 @@
         "name": "index",
         "type": "idx_t"
       }
-    ]
+    ],
+    "constructor": []
   },
   {
     "class": "StarExpression",
@@ -271,7 +277,8 @@
         "optional": true,
         "type": "ParsedExpression*"
       }
-    ]
+    ],
+    "constructor": []
   },
   {
     "class": "SubqueryExpression",
@@ -295,7 +302,8 @@
         "name": "comparison_type",
         "type": "ExpressionType"
       }
-    ]
+    ],
+    "constructor": []
   },
   {
     "class": "WindowExpression",

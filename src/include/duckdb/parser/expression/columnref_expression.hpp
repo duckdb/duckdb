@@ -20,6 +20,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::COLUMN_REF;
 
 public:
+	ColumnRefExpression();
 	//! Specify both the column and table name
 	ColumnRefExpression(string column_name, string table_name);
 	//! Only specify the column name, the table name will be derived later

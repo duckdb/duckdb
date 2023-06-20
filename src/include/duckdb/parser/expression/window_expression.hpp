@@ -34,6 +34,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::WINDOW;
 
 public:
+	explicit WindowExpression(ExpressionType type);
 	WindowExpression(ExpressionType type, string catalog_name, string schema_name, const string &function_name);
 
 	//! Catalog of the aggregate function

@@ -19,6 +19,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::CONSTANT;
 
 public:
+	DUCKDB_API ConstantExpression();
 	DUCKDB_API explicit ConstantExpression(Value val);
 
 	//! The constant value referenced

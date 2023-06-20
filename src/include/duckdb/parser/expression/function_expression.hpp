@@ -19,6 +19,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::FUNCTION;
 
 public:
+	FunctionExpression();
 	DUCKDB_API FunctionExpression(string catalog_name, string schema_name, const string &function_name,
 	                              vector<unique_ptr<ParsedExpression>> children,
 	                              unique_ptr<ParsedExpression> filter = nullptr,

@@ -16,6 +16,7 @@ public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::POSITIONAL_REFERENCE;
 
 public:
+	PositionalReferenceExpression();
 	DUCKDB_API PositionalReferenceExpression(idx_t index);
 
 	idx_t index;
