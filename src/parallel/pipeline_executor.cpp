@@ -17,11 +17,10 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		requires_batch_index = pipeline.sink->RequiresBatchIndex() && pipeline.source->SupportsBatchIndex();
 		if (requires_batch_index) {
 			auto &partition_info = local_sink_state->partition_info;
-			if (!partition_info.batch_index.IsValid()) {
-				// batch index is not set yet - initialize before fetching anything
-				partition_info.batch_index = pipeline.RegisterNewBatchIndex();
-				partition_info.min_batch_index = partition_info.batch_index;
-			}
+			D_ASSERT(!partition_info.batch_index.IsValid());
+			// batch index is not set yet - initialize before fetching anything
+			partition_info.batch_index = pipeline.RegisterNewBatchIndex();
+			partition_info.min_batch_index = partition_info.batch_index;
 		}
 	}
 	local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
@@ -477,7 +476,8 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 		} else {
 			next_batch_index =
 			    pipeline.source->GetBatchIndex(context, result, *pipeline.source_state, *local_source_state);
-			next_batch_index += pipeline.base_batch_index;
+			// we start with the base_batch_index as a valid starting value. Make sure that next batch is called below
+			next_batch_index += pipeline.base_batch_index + 1;
 		}
 		auto &partition_info = local_sink_state->partition_info;
 		if (next_batch_index != partition_info.batch_index.GetIndex()) {

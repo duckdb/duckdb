@@ -517,6 +517,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				}
 			} else if (param == "skip_reload") {
 				skip_reload = true;
+			} else if (param == "noalternativeverify") {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+				return;
+#endif
 			} else {
 				auto result = ExtensionHelper::LoadExtension(*db, param);
 				if (result == ExtensionLoadResult::LOADED_EXTENSION) {

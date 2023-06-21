@@ -124,10 +124,12 @@ struct ParquetWriteGlobalState : public GlobalFunctionData {
 
 struct ParquetWriteLocalState : public LocalFunctionData {
 	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
-	    : buffer(BufferAllocator::Get(context), types) {
+	    : buffer(context, types, ColumnDataAllocatorType::HYBRID) {
+		buffer.InitializeAppend(append_state);
 	}
 
 	ColumnDataCollection buffer;
+	ColumnDataAppendState append_state;
 };
 
 void ParquetOptions::Serialize(FieldWriter &writer) const {
@@ -808,12 +810,12 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 	auto &local_state = lstate.Cast<ParquetWriteLocalState>();
 
 	// append data to the local (buffered) chunk collection
-	local_state.buffer.Append(input);
+	local_state.buffer.Append(local_state.append_state, input);
 	if (local_state.buffer.Count() > bind_data.row_group_size) {
 		// if the chunk collection exceeds a certain size we flush it to the parquet file
+		local_state.append_state.current_chunk_state.handles.clear();
 		global_state.writer->Flush(local_state.buffer);
-		// and reset the buffer
-		local_state.buffer.Reset();
+		local_state.buffer.InitializeAppend(local_state.append_state);
 	}
 }
 

@@ -23,7 +23,7 @@ common/box_renderer.cpp	35
 common/checksum.cpp	2
 common/compressed_file_system.cpp	14
 common/crypto/md5.cpp	2
-common/enum_util.cpp	3512
+common/enum_util.cpp	3526
 common/enums/expression_type.cpp	184
 common/enums/join_type.cpp	3
 common/exception.cpp	95
@@ -206,6 +206,7 @@ execution/operator/scan/physical_positional_scan.cpp	20
 execution/operator/schema/physical_attach.cpp	6
 execution/operator/schema/physical_create_index.cpp	3
 execution/operator/schema/physical_create_type.cpp	2
+execution/operator/set/physical_cte.cpp	1
 execution/partitionable_hashtable.cpp	5
 execution/perfect_aggregate_hashtable.cpp	4
 execution/physical_operator.cpp	2
@@ -222,7 +223,7 @@ execution/physical_plan/plan_show_select.cpp	3
 execution/physical_plan_generator.cpp	6
 execution/radix_partitioned_hashtable.cpp	3
 execution/reservoir_sample.cpp	60
-execution/window_segment_tree.cpp	10
+execution/window_segment_tree.cpp	12
 function/aggregate/sorted_aggregate_function.cpp	85
 function/built_in_functions.cpp	6
 function/cast/bit_cast.cpp	2
@@ -553,6 +554,7 @@ parser/parsed_expression.cpp	15
 parser/parsed_expression_iterator.cpp	3
 parser/parser.cpp	5
 parser/query_node.cpp	8
+parser/query_node/cte_node.cpp	4
 parser/query_node/recursive_cte_node.cpp	6
 parser/query_node/select_node.cpp	18
 parser/query_node/set_operation_node.cpp	6
@@ -580,6 +582,7 @@ parser/transform/expression/transform_expression.cpp	4
 parser/transform/expression/transform_function.cpp	21
 parser/transform/expression/transform_interval.cpp	4
 parser/transform/expression/transform_param_ref.cpp	2
+parser/transform/helpers/transform_cte.cpp	1
 parser/transform/helpers/transform_sample.cpp	5
 parser/transform/helpers/transform_typename.cpp	14
 parser/transform/statement/transform_alter_sequence.cpp	2
@@ -613,6 +616,7 @@ planner/binder/expression/bind_between_expression.cpp	2
 planner/binder/expression/bind_collate_expression.cpp	2
 planner/binder/expression/bind_columnref_expression.cpp	5
 planner/binder/expression/bind_comparison_expression.cpp	2
+planner/binder/query_node/bind_cte_node.cpp	1
 planner/binder/expression/bind_function_expression.cpp	5
 planner/binder/expression/bind_operator_expression.cpp	3
 planner/binder/expression/bind_star_expression.cpp	3
