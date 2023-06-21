@@ -255,7 +255,7 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 #if STANDARD_VECTOR_SIZE >= 128
 	if (!state.initialized) {
 		state.initialized = true;
-		state.can_cache_chunk = PhysicalOperator::OperatorCachingAllowed(context);
+		state.can_cache_chunk = caching_supported && PhysicalOperator::OperatorCachingAllowed(context);
 	}
 	if (!state.can_cache_chunk) {
 		return child_result;
