@@ -406,6 +406,50 @@ bool Node::Merge(ART &art, Node &other) {
 	return ResolvePrefixes(art, other);
 }
 
+bool MergePrefixContainsOtherPrefix(ART &art, reference<Node> &l_node, reference<Node> &r_node,
+                                    idx_t &mismatch_position) {
+
+	// r_node's prefix contains l_node's prefix
+	// l_node cannot be a leaf, otherwise the key represented by l_node would be a subset of another key
+	// which is not possible by our construction
+	D_ASSERT(l_node.get().DecodeARTNodeType() != NType::LEAF);
+
+	// test if the next byte (mismatch_position) in r_node (prefix) exists in l_node
+	auto mismatch_byte = Prefix::GetByte(art, r_node, mismatch_position);
+	auto child_node = l_node.get().GetChild(art, mismatch_byte);
+
+	// update the prefix of r_node to only consist of the bytes after mismatch_position
+	Prefix::Reduce(art, r_node, mismatch_position);
+
+	if (!child_node) {
+		// insert r_node as a child of l_node at the empty position
+		Node::InsertChild(art, l_node, mismatch_byte, r_node);
+		r_node.get().Reset();
+		return true;
+	}
+
+	// recurse
+	return child_node->ResolvePrefixes(art, r_node);
+}
+
+void MergePrefixesDiffer(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &mismatch_position) {
+
+	// create a new node and insert both nodes as children
+
+	Node l_child;
+	auto l_byte = Prefix::GetByte(art, l_node, mismatch_position);
+	Prefix::Split(art, l_node, l_child, mismatch_position);
+	Node4::New(art, l_node);
+
+	// insert children
+	Node4::InsertChild(art, l_node, l_byte, l_child);
+	auto r_byte = Prefix::GetByte(art, r_node, mismatch_position);
+	Prefix::Reduce(art, r_node, mismatch_position);
+	Node4::InsertChild(art, l_node, r_byte, r_node);
+
+	r_node.get().Reset();
+}
+
 bool Node::ResolvePrefixes(ART &art, Node &other) {
 
 	// NOTE: we always merge into the left ART
@@ -426,37 +470,14 @@ bool Node::ResolvePrefixes(ART &art, Node &other) {
 	// traverse prefixes
 	if (l_node.get().DecodeARTNodeType() == NType::PREFIX && r_node.get().DecodeARTNodeType() == NType::PREFIX) {
 
-		auto &l_prefix = Prefix::Get(art, l_node.get());
-		auto &r_prefix = Prefix::Get(art, r_node.get());
-
-		// compare prefix bytes
-		idx_t max_count = MinValue(l_prefix.data[Node::PREFIX_SIZE], r_prefix.data[Node::PREFIX_SIZE]);
-		for (idx_t i = 0; i < max_count; i++) {
-			if (l_prefix.data[i] != r_prefix.data[i]) {
-				mismatch_position = i;
-				break;
-			}
+		if (!Prefix::Traverse(art, l_node, r_node, mismatch_position)) {
+			return false;
 		}
-
+		// we already recurse because the prefixes matched (so far)
 		if (mismatch_position == DConstants::INVALID_INDEX) {
-
-			// prefixes match (so far)
-			if (l_prefix.data[Node::PREFIX_SIZE] == r_prefix.data[Node::PREFIX_SIZE]) {
-				return l_prefix.ptr.ResolvePrefixes(art, r_prefix.ptr);
-			}
-
-			mismatch_position = max_count;
-
-			// l_prefix contains r_prefix
-			if (r_prefix.ptr.DecodeARTNodeType() != NType::PREFIX && r_prefix.data[Node::PREFIX_SIZE] == max_count) {
-				swap(*this, other);
-				l_node = r_prefix.ptr;
-
-			} else {
-				// r_prefix contains l_prefix
-				l_node = l_prefix.ptr;
-			}
+			return true;
 		}
+
 	} else {
 
 		// l_prefix contains r_prefix
@@ -469,44 +490,11 @@ bool Node::ResolvePrefixes(ART &art, Node &other) {
 
 	// case 2: one prefix contains the other prefix
 	if (l_node.get().DecodeARTNodeType() != NType::PREFIX && r_node.get().DecodeARTNodeType() == NType::PREFIX) {
-		// r_node's prefix contains l_node's prefix
-		// l_node cannot be a leaf, otherwise the key represented by l_node would be a subset of another key
-		// which is not possible by our construction
-		D_ASSERT(l_node.get().DecodeARTNodeType() != NType::LEAF);
-
-		// test if the next byte (mismatch_position) in r_node (prefix) exists in l_node
-		auto mismatch_byte = Prefix::GetByte(art, r_node, mismatch_position);
-		auto child_node = l_node.get().GetChild(art, mismatch_byte);
-
-		// update the prefix of r_node to only consist of the bytes after mismatch_position
-		Prefix::Reduce(art, r_node, mismatch_position);
-
-		if (!child_node) {
-			// insert r_node as a child of l_node at the empty position
-			Node::InsertChild(art, l_node, mismatch_byte, r_node);
-			r_node.get().Reset();
-			return true;
-		}
-
-		// recurse
-		return child_node->ResolvePrefixes(art, r_node);
+		return MergePrefixContainsOtherPrefix(art, l_node, r_node, mismatch_position);
 	}
 
 	// case 3: prefixes differ at a specific byte
-	// create a new node and insert both nodes as children
-
-	Node l_child;
-	auto l_byte = Prefix::GetByte(art, l_node, mismatch_position);
-	Prefix::Split(art, l_node, l_child, mismatch_position);
-	Node4::New(art, l_node);
-
-	// insert children
-	Node4::InsertChild(art, l_node, l_byte, l_child);
-	auto r_byte = Prefix::GetByte(art, r_node, mismatch_position);
-	Prefix::Reduce(art, r_node, mismatch_position);
-	Node4::InsertChild(art, l_node, r_byte, r_node);
-
-	r_node.get().Reset();
+	MergePrefixesDiffer(art, l_node, r_node, mismatch_position);
 	return true;
 }
 

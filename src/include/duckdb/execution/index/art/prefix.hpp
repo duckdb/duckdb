@@ -52,6 +52,9 @@ public:
 	//! Traverse a prefix and a key until (1) encountering a non-prefix node, or (2) encountering
 	//! a mismatching byte, in which case depth indexes the mismatching byte in the key
 	static idx_t Traverse(ART &art, reference<Node> &prefix_node, const ARTKey &key, idx_t &depth);
+	//! Traverse two prefixes to find (1) that they match (so far), or (2) that they have a mismatching position,
+	//! or (3) that one prefix contains the other prefix
+	static bool Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &mismatch_position);
 	//! Returns the byte at position
 	static inline uint8_t GetByte(const ART &art, const Node &prefix_node, const idx_t position) {
 		auto prefix = Prefix::Get(art, prefix_node);

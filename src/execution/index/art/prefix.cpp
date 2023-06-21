@@ -138,6 +138,43 @@ idx_t Prefix::Traverse(ART &art, reference<Node> &prefix_node, const ARTKey &key
 	return DConstants::INVALID_INDEX;
 }
 
+bool Prefix::Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &mismatch_position) {
+
+	auto &l_prefix = Prefix::Get(art, l_node.get());
+	auto &r_prefix = Prefix::Get(art, r_node.get());
+
+	// compare prefix bytes
+	idx_t max_count = MinValue(l_prefix.data[Node::PREFIX_SIZE], r_prefix.data[Node::PREFIX_SIZE]);
+	for (idx_t i = 0; i < max_count; i++) {
+		if (l_prefix.data[i] != r_prefix.data[i]) {
+			mismatch_position = i;
+			break;
+		}
+	}
+
+	if (mismatch_position == DConstants::INVALID_INDEX) {
+
+		// prefixes match (so far)
+		if (l_prefix.data[Node::PREFIX_SIZE] == r_prefix.data[Node::PREFIX_SIZE]) {
+			return l_prefix.ptr.ResolvePrefixes(art, r_prefix.ptr);
+		}
+
+		mismatch_position = max_count;
+
+		// l_prefix contains r_prefix
+		if (r_prefix.ptr.DecodeARTNodeType() != NType::PREFIX && r_prefix.data[Node::PREFIX_SIZE] == max_count) {
+			swap(l_node.get(), r_node.get());
+			l_node = r_prefix.ptr;
+
+		} else {
+			// r_prefix contains l_prefix
+			l_node = l_prefix.ptr;
+		}
+	}
+
+	return true;
+}
+
 void Prefix::Reduce(ART &art, Node &prefix_node, const idx_t n) {
 
 	D_ASSERT(prefix_node.IsSet() && !prefix_node.IsSwizzled());

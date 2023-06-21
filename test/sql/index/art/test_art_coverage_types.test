@@ -45,7 +45,7 @@ statement ok
 CREATE TABLE uint64_first (id UINT64, id2 UINT32, id3 UINT64, id4 FLOAT);
 
 statement ok
-INSERt iNTO uint64_first SELECT range, range, range, 0.456 + range FROM range(5000);
+INSERT INTO uint64_first SELECT range, range, range, 0.456 + range FROM range(5000);
 
 statement ok
 CREATE INDEX idx_3 ON uint64_first(id, id2, id3, id4);
