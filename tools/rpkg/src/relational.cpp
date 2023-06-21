@@ -309,8 +309,6 @@ bool constant_expression_is_not_null(duckdb::expr_extptr_t expr) {
 
 	if (join_ref_type == "regular") {
 		ref_type = JoinRefType::REGULAR;
-	} else if (join_ref_type == "natural") {
-		ref_type = JoinRefType::NATURAL;
 	} else if (join_ref_type == "cross") {
 		ref_type = JoinRefType::CROSS;
 	} else if (join_ref_type == "positional") {
