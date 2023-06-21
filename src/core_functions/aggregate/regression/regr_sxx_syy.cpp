@@ -1,6 +1,6 @@
-// regr_sxx
+// REGR_SXX(y, x)
 // Returns REGR_COUNT(y, x) * VAR_POP(x) for non-null pairs.
-// regrsyy
+// REGR_SYY(y, x)
 // Returns REGR_COUNT(y, x) * VAR_POP(y) for non-null pairs.
 
 #include "duckdb/core_functions/aggregate/regression/regr_count.hpp"
@@ -48,17 +48,17 @@ struct RegrBaseOperation {
 
 struct RegrSXXOperation : RegrBaseOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
-		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(state.count, x, y, idata);
-		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop, y);
+	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
+		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(state.count, y, x, idata);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop, x);
 	}
 };
 
 struct RegrSYYOperation : RegrBaseOperation {
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
-		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(state.count, x, y, idata);
-		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop, x);
+	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
+		RegrCountFunction::Operation<A_TYPE, B_TYPE, size_t, OP>(state.count, y, x, idata);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop, y);
 	}
 };
 

@@ -8,8 +8,7 @@
 %type <node> opt_collate_clause
 
 %type <node> indirection_expr
-
-
+%type <node> struct_expr
 
 
 %type <lockwaitpolicy>	opt_nowait_or_skip
@@ -115,6 +114,7 @@
 %type <node>	common_table_expr
 %type <with>	with_clause
 %type <list>	cte_list
+%type <ctematerialize>	opt_materialized
 
 %type <list>	within_group_clause
 %type <node>	filter_clause

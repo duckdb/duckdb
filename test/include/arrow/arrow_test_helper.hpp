@@ -25,15 +25,14 @@
 namespace duckdb {
 class ArrowTestFactory {
 public:
-	ArrowTestFactory(vector<LogicalType> types_p, vector<string> names_p, string tz_p,
-	                 duckdb::unique_ptr<QueryResult> result_p, bool big_result, ArrowOptions options)
-	    : types(std::move(types_p)), names(std::move(names_p)), tz(std::move(tz_p)), result(std::move(result_p)),
-	      big_result(big_result), options(options) {
+	ArrowTestFactory(vector<LogicalType> types_p, vector<string> names_p, duckdb::unique_ptr<QueryResult> result_p,
+	                 bool big_result, ArrowOptions options)
+	    : types(std::move(types_p)), names(std::move(names_p)), result(std::move(result_p)), big_result(big_result),
+	      options(options) {
 	}
 
 	vector<LogicalType> types;
 	vector<string> names;
-	string tz;
 	duckdb::unique_ptr<QueryResult> result;
 	bool big_result;
 	ArrowOptions options;
@@ -74,8 +73,7 @@ public:
 class ArrowTestHelper {
 public:
 	//! Used in the Arrow Roundtrip Tests
-	static bool RunArrowComparison(Connection &con, const string &query, bool big_result = false,
-	                               ArrowOptions options = ArrowOptions());
+	static bool RunArrowComparison(Connection &con, const string &query, bool big_result = false);
 	//! Used in the ADBC Testing
 	static bool RunArrowComparison(Connection &con, const string &query, ArrowArrayStream &arrow_stream);
 
