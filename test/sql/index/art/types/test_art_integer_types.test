@@ -1,0 +1,109 @@
+# name: test/sql/index/art/types/test_art_integer_types.test
+# description: Test different integer types for ART keys
+# group: [types]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i TINYINT, j SMALLINT, k INTEGER, l BIGINT)
+
+statement ok
+CREATE INDEX i_index1 ON integers(i)
+
+statement ok
+CREATE INDEX i_index2 ON integers(j)
+
+statement ok
+CREATE INDEX i_index3 ON integers(k)
+
+statement ok
+CREATE INDEX i_index4 ON integers(l)
+
+# query the empty indices first
+query I
+SELECT i FROM integers WHERE i > 0
+----
+
+query I
+SELECT j FROM integers WHERE j < 0
+----
+
+query I
+SELECT k FROM integers WHERE k >= 0
+----
+
+query I
+SELECT l FROM integers WHERE l <= 0
+----
+
+# now insert the values [1..5] in all columns
+statement ok
+INSERT INTO integers VALUES (1,1,1,1)
+
+statement ok
+INSERT INTO integers VALUES (2,2,2,2)
+
+statement ok
+INSERT INTO integers VALUES (3,3,3,3)
+
+statement ok
+INSERT INTO integers VALUES (4,4,4,4)
+
+statement ok
+INSERT INTO integers VALUES (5,5,5,5)
+
+query IIII
+SELECT * FROM integers ORDER BY i
+----
+1	1	1	1
+2	2	2	2
+3	3	3	3
+4	4	4	4
+5	5	5	5
+
+query I
+SELECT i FROM integers WHERE i > 0::TINYINT ORDER BY i
+----
+1
+2
+3
+4
+5
+
+query I
+SELECT j FROM integers WHERE j <= 2::SMALLINT ORDER BY j
+----
+1
+2
+
+query I
+SELECT k FROM integers WHERE k >= -100000::INTEGER ORDER BY k
+----
+1
+2
+3
+4
+5
+
+query I
+SELECT k FROM integers WHERE k >= 100000::INTEGER ORDER BY k
+----
+
+query I
+SELECT k FROM integers WHERE k >= 100000::INTEGER AND k <= 100001::INTEGER ORDER BY k
+----
+
+query I
+SELECT l FROM integers WHERE l <= 1000000000::BIGINT ORDER BY i
+----
+1
+2
+3
+4
+5
+
+query I
+SELECT l FROM integers WHERE l <= -1000000000::BIGINT ORDER BY i
+----
+
