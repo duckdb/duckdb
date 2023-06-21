@@ -58,10 +58,12 @@ public:
 		D_ASSERT((reinterpret_cast<uint64_t>(pointer) & SALT_MASK) == 0);
 		// Value should have all 1's in the pointer area
 		D_ASSERT((value & POINTER_MASK) == POINTER_MASK);
+		// Set upper bits to 1 in pointer so the salt stays intact
 		value &= reinterpret_cast<uint64_t>(pointer) | SALT_MASK;
 	}
 
 	static inline hash_t ExtractSalt(hash_t hash) {
+		// Leaves upper bits intact, sets lower bits to all 1's
 		return hash | POINTER_MASK;
 	}
 	inline hash_t GetSalt() const {
@@ -72,12 +74,16 @@ public:
 		D_ASSERT(!IsOccupied());
 		// Salt should have all 1's in the pointer field
 		D_ASSERT((salt & POINTER_MASK) == POINTER_MASK);
+		// No need to mask, just put the whole thing there
 		value = salt;
 	}
 
 private:
+	//! Upper 16 bits are salt
 	static constexpr const hash_t SALT_MASK = 0xFFFF000000000000;
+	//! Lower 48 bits are the pointer
 	static constexpr const hash_t POINTER_MASK = 0x0000FFFFFFFFFFFF;
+
 	hash_t value;
 };
 
