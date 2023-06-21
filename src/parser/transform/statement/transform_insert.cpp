@@ -24,8 +24,13 @@ unique_ptr<TableRef> Transformer::TransformValuesList(duckdb_libpgquery::PGList 
 
 unique_ptr<InsertStatement> Transformer::TransformInsert(duckdb_libpgquery::PGInsertStmt &stmt) {
 	auto result = make_uniq<InsertStatement>();
+	vector<unique_ptr<CTENode>> materialized_ctes;
 	if (stmt.withClause) {
-		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), result->cte_map);
+		TransformCTE(*PGPointerCast<duckdb_libpgquery::PGWithClause>(stmt.withClause), result->cte_map,
+		             materialized_ctes);
+		if (!materialized_ctes.empty()) {
+			throw NotImplementedException("Materialized CTEs are not implemented for insert.");
+		}
 	}
 
 	// first check if there are any columns specified

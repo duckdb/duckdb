@@ -1,0 +1,26 @@
+# name: test/sql/cte/materialized/dml_materialized_cte.test
+# description: Test DML statements with materialized Common Table Expressions (CTE)
+# group: [materialized]
+
+statement ok
+PRAGMA enable_verification
+
+require noalternativeverify
+
+statement ok
+create table a(i integer);
+
+statement ok
+insert into a values (42);
+
+statement error
+WITH t(x) AS MATERIALIZED (VALUES (42))
+INSERT INTO a (SELECT * FROM t);
+
+statement error
+WITH t(x) AS MATERIALIZED (VALUES (42))
+DELETE FROM a WHERE a.i IN (SELECT * FROM t);
+
+statement error
+WITH t(x) AS MATERIALIZED (VALUES (42))
+UPDATE a SET i = 0 WHERE a.i IN (SELECT * FROM t);
