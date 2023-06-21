@@ -1,3 +1,4 @@
+// REGR_R2(y, x)
 // Returns the coefficient of determination for non-null pairs in a group.
 // It is computed for non-null pairs using the following formula:
 // null                 if var_pop(x) = 0, else
@@ -24,10 +25,10 @@ struct RegrR2Operation {
 	}
 
 	template <class A_TYPE, class B_TYPE, class STATE, class OP>
-	static void Operation(STATE &state, const A_TYPE &x, const B_TYPE &y, AggregateBinaryInput &idata) {
-		CorrOperation::Operation<A_TYPE, B_TYPE, CorrState, OP>(state.corr, x, y, idata);
-		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop_x, y);
-		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop_y, x);
+	static void Operation(STATE &state, const A_TYPE &y, const B_TYPE &x, AggregateBinaryInput &idata) {
+		CorrOperation::Operation<A_TYPE, B_TYPE, CorrState, OP>(state.corr, y, x, idata);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop_x, x);
+		STDDevBaseOperation::Execute<A_TYPE, StddevState>(state.var_pop_y, y);
 	}
 
 	template <class STATE, class OP>

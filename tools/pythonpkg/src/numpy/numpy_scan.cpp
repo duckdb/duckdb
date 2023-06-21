@@ -173,14 +173,21 @@ void VerifyTypeConstraints(Vector &vec, idx_t count) {
 	}
 }
 
-void NumpyScan::ScanObjectColumn(PyObject **col, idx_t count, idx_t offset, Vector &out) {
+void NumpyScan::ScanObjectColumn(PyObject **col, idx_t stride, idx_t count, idx_t offset, Vector &out) {
 	// numpy_col is a sequential list of objects, that make up one "column" (Vector)
 	out.SetVectorType(VectorType::FLAT_VECTOR);
-	{
-		PythonGILWrapper gil; // We're creating python objects here, so we need the GIL
+	auto &mask = FlatVector::Validity(out);
+	PythonGILWrapper gil; // We're creating python objects here, so we need the GIL
+
+	if (stride == sizeof(PyObject *)) {
+		auto src_ptr = col + offset;
 		for (idx_t i = 0; i < count; i++) {
-			idx_t source_idx = offset + i;
-			ScanNumpyObject(col[source_idx], i, out);
+			ScanNumpyObject(src_ptr[i], i, out);
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			auto src_ptr = col[stride / sizeof(PyObject *) * (i + offset)];
+			ScanNumpyObject(src_ptr, i, out);
 		}
 	}
 	VerifyTypeConstraints(out, count);
@@ -274,7 +281,7 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		// Get the source pointer of the numpy array
 		auto src_ptr = (PyObject **)array.data(); // NOLINT
 		if (out.GetType().id() != LogicalTypeId::VARCHAR) {
-			return NumpyScan::ScanObjectColumn(src_ptr, count, offset, out);
+			return NumpyScan::ScanObjectColumn(src_ptr, numpy_col.stride, count, offset, out);
 		}
 
 		// Get the data pointer and the validity mask of the result vector

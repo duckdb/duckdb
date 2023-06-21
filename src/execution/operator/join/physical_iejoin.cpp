@@ -1016,19 +1016,16 @@ void PhysicalIEJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeli
 
 	// Create one child meta pipeline that will hold the LHS and RHS pipelines
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-	auto lhs_pipeline = child_meta_pipeline.GetBasePipeline();
-	auto rhs_pipeline = child_meta_pipeline.CreatePipeline();
 
 	// Build out LHS
+	auto lhs_pipeline = child_meta_pipeline.GetBasePipeline();
 	children[0]->BuildPipelines(*lhs_pipeline, child_meta_pipeline);
 
-	// RHS depends on everything in LHS
-	child_meta_pipeline.AddDependenciesFrom(rhs_pipeline, lhs_pipeline.get(), true);
-
 	// Build out RHS
+	auto rhs_pipeline = child_meta_pipeline.CreatePipeline();
 	children[1]->BuildPipelines(*rhs_pipeline, child_meta_pipeline);
 
-	// Despite having the same sink, RHS needs its own PipelineFinishEvent
+	// Despite having the same sink, RHS and everything created after it need their own (same) PipelineFinishEvent
 	child_meta_pipeline.AddFinishEvent(rhs_pipeline);
 }
 
