@@ -631,3 +631,10 @@ test_that("rel_to_sql works for row_number", {
     sub_str_sql <- substr(sql, 0, 44)
     expect_equal(sub_str_sql, "SELECT row_number() OVER () AS ___row_number")
 })
+
+
+test_that("rel_from_table_function works", {
+    rel <- duckdb:::rel_from_table_function(duckdb:::default_connection(), 'generate_series', list(1L, 10L, 2L))
+    df <- as.data.frame(rel)
+    expect_equal(df$generate_series, c(1,3,5,7,9))
+})

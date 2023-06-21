@@ -12,6 +12,7 @@ import org.duckdb.JsonNode;
 
 import javax.sql.rowset.CachedRowSet;
 import javax.sql.rowset.RowSetProvider;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -60,6 +61,10 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.TimeZone;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.logging.Logger;
 
@@ -115,12 +120,12 @@ public class TestDuckDBJDBC {
 	private static <T extends Throwable> String assertThrows(Thrower thrower, Class<T> exception) throws Exception {
 		try {
 			thrower.run();
-			fail("Expected to throw " + exception.getName());
-			return null;
 		} catch (Throwable e) {
 			assertEquals(e.getClass(), exception);
 			return e.getMessage();
 		}
+		fail("Expected to throw " + exception.getName());
+		return null;
 	}
 
 	static {
@@ -2783,7 +2788,19 @@ public class TestDuckDBJDBC {
 				SQLException.class
 		);
 
-		assertTrue(message.contains("unrecognized configuration parameter \"invalid config name\""));
+		assertTrue(message.contains("Unrecognized configuration property \"invalid config name\""));
+	}
+
+	public static void test_valid_but_local_config_throws_exception() throws Exception {
+		Properties info = new Properties();
+		info.put("ordered_aggregate_threshold", "123");
+
+		String message = assertThrows(
+				() -> DriverManager.getConnection("jdbc:duckdb:", info),
+				SQLException.class
+		);
+
+		assertTrue(message.contains("Failed to set configuration option \"ordered_aggregate_threshold\""));
 	}
 
 	private static String getSetting(Connection conn, String settingName) throws Exception {
@@ -3557,6 +3574,19 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	public static void test_cancel() throws Exception {
+		ExecutorService service = Executors.newFixedThreadPool(1);
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:"); Statement stmt = conn.createStatement()) {
+			Future<String> thread = service.submit(() -> assertThrows(() ->
+				stmt.execute("select count(*) from range(10000000) t1, range(1000000) t2;"), SQLException.class)
+			);
+			Thread.sleep(500); // wait for query to start running
+			stmt.cancel();
+			String message = thread.get(1, TimeUnit.SECONDS);
+			assertEquals(message, "INTERRUPT Error: Interrupted!");
+		}
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
@@ -3587,6 +3617,9 @@ public class TestDuckDBJDBC {
 					m.invoke(null);
 					System.out.println("success in " + Duration.between(start, LocalDateTime.now()).getSeconds() + " seconds");
 				} catch (Throwable t) {
+					if (t instanceof InvocationTargetException) {
+						t = t.getCause();
+					}
 					System.out.println("failed with " + t);
 					t.printStackTrace(System.out);
 					anyFailed = true;
@@ -3598,7 +3631,7 @@ public class TestDuckDBJDBC {
 			System.out.println("No tests found that match " + specific_test);
 			System.exit(1);
 		}
-		System.out.println("OK");
+		System.out.println(anyFailed ? "FAILED" : "OK");
 
 		System.exit(anyFailed ? 1 : 0);
 	}

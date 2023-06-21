@@ -8,37 +8,33 @@
 
 namespace duckdb {
 
-unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgquery::PGNode *node) {
-	D_ASSERT(node);
-	D_ASSERT(node->type == duckdb_libpgquery::T_PGCreateFunctionStmt);
-
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateFunctionStmt *>(node);
-	D_ASSERT(stmt);
-	D_ASSERT(stmt->function || stmt->query);
+unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgquery::PGCreateFunctionStmt &stmt) {
+	D_ASSERT(stmt.type == duckdb_libpgquery::T_PGCreateFunctionStmt);
+	D_ASSERT(stmt.function || stmt.query);
 
 	auto result = make_uniq<CreateStatement>();
-	auto qname = TransformQualifiedName(stmt->name);
+	auto qname = TransformQualifiedName(*stmt.name);
 
 	unique_ptr<MacroFunction> macro_func;
 
 	// function can be null here
-	if (stmt->function) {
-		auto expression = TransformExpression(stmt->function);
+	if (stmt.function) {
+		auto expression = TransformExpression(stmt.function);
 		macro_func = make_uniq<ScalarMacroFunction>(std::move(expression));
-	} else if (stmt->query) {
-		auto query_node = TransformSelect(stmt->query, true)->node->Copy();
+	} else if (stmt.query) {
+		auto query_node =
+		    TransformSelect(*PGPointerCast<duckdb_libpgquery::PGSelectStmt>(stmt.query), true)->node->Copy();
 		macro_func = make_uniq<TableMacroFunction>(std::move(query_node));
 	}
 	PivotEntryCheck("macro");
 
-	auto info =
-	    make_uniq<CreateMacroInfo>((stmt->function ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY));
+	auto info = make_uniq<CreateMacroInfo>(stmt.function ? CatalogType::MACRO_ENTRY : CatalogType::TABLE_MACRO_ENTRY);
 	info->catalog = qname.catalog;
 	info->schema = qname.schema;
 	info->name = qname.name;
 
 	// temporary macro
-	switch (stmt->name->relpersistence) {
+	switch (stmt.name->relpersistence) {
 	case duckdb_libpgquery::PG_RELPERSISTENCE_TEMP:
 		info->temporary = true;
 		break;
@@ -51,11 +47,11 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 	}
 
 	// what to do on conflict
-	info->on_conflict = TransformOnConflict(stmt->onconflict);
+	info->on_conflict = TransformOnConflict(stmt.onconflict);
 
-	if (stmt->params) {
+	if (stmt.params) {
 		vector<unique_ptr<ParsedExpression>> parameters;
-		TransformExpressionList(*stmt->params, parameters);
+		TransformExpressionList(*stmt.params, parameters);
 		for (auto &param : parameters) {
 			if (param->type == ExpressionType::VALUE_CONSTANT) {
 				// parameters with default value (must have an alias)

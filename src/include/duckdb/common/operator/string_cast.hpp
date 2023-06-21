@@ -20,7 +20,7 @@ class Vector;
 
 struct StringCast {
 	template <class SRC>
-	DUCKDB_API static inline string_t Operation(SRC input, Vector &result) {
+	static inline string_t Operation(SRC input, Vector &result) {
 		throw NotImplementedException("Unimplemented type for string cast!");
 	}
 };

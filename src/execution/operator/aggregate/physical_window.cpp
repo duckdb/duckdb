@@ -1,7 +1,9 @@
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
@@ -224,12 +226,14 @@ struct WindowInputColumn {
 	}
 
 	void Append(DataChunk &input_chunk) {
-		if (input_expr.expr && (!input_expr.scalar || !count)) {
-			input_expr.Execute(input_chunk);
-			auto &source = input_expr.chunk.data[0];
-			const auto source_count = input_expr.chunk.size();
+		if (input_expr.expr) {
+			const auto source_count = input_chunk.size();
 			D_ASSERT(count + source_count <= capacity);
-			VectorOperations::Copy(source, *target, source_count, 0, count);
+			if (!input_expr.scalar || !count) {
+				input_expr.Execute(input_chunk);
+				auto &source = input_expr.chunk.data[0];
+				VectorOperations::Copy(source, *target, source_count, 0, count);
+			}
 			count += source_count;
 		}
 	}
@@ -527,11 +531,17 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 		bounds.window_start = bounds.peer_start;
 		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS: {
-		bounds.window_start = (int64_t)row_idx - boundary_start.GetCell<int64_t>(expr_idx);
+		if (!TrySubtractOperator::Operation(int64_t(row_idx), boundary_start.GetCell<int64_t>(expr_idx),
+		                                    bounds.window_start)) {
+			throw OutOfRangeException("Overflow computing ROWS PRECEDING start");
+		}
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_ROWS: {
-		bounds.window_start = row_idx + boundary_start.GetCell<int64_t>(expr_idx);
+		if (!TryAddOperator::Operation(int64_t(row_idx), boundary_start.GetCell<int64_t>(expr_idx),
+		                               bounds.window_start)) {
+			throw OutOfRangeException("Overflow computing ROWS FOLLOWING start");
+		}
 		break;
 	}
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {
@@ -567,10 +577,16 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 		bounds.window_end = bounds.partition_end;
 		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS:
-		bounds.window_end = (int64_t)row_idx - boundary_end.GetCell<int64_t>(expr_idx) + 1;
+		if (!TrySubtractOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(expr_idx),
+		                                    bounds.window_end)) {
+			throw OutOfRangeException("Overflow computing ROWS PRECEDING end");
+		}
 		break;
 	case WindowBoundary::EXPR_FOLLOWING_ROWS:
-		bounds.window_end = row_idx + boundary_end.GetCell<int64_t>(expr_idx) + 1;
+		if (!TryAddOperator::Operation(int64_t(row_idx + 1), boundary_end.GetCell<int64_t>(expr_idx),
+		                               bounds.window_end)) {
+			throw OutOfRangeException("Overflow computing ROWS FOLLOWING end");
+		}
 		break;
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {
 		if (boundary_end.CellIsNull(expr_idx)) {
@@ -1254,6 +1270,7 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 		// Overwrite the collections with the sorted data
 		hash_group = std::move(gsink.hash_groups[hash_bin]);
 		hash_group->ComputeMasks(partition_mask, order_mask);
+		external = hash_group->global_sort->external;
 		MaterializeSortedData();
 	} else {
 		return;

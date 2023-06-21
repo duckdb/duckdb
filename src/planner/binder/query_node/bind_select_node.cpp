@@ -113,7 +113,7 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 		unique_ptr<BoundResultModifier> bound_modifier;
 		switch (mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
-			auto &distinct = (DistinctModifier &)*mod;
+			auto &distinct = mod->Cast<DistinctModifier>();
 			auto bound_distinct = make_uniq<BoundDistinctModifier>();
 			bound_distinct->distinct_type =
 			    distinct.distinct_on_targets.empty() ? DistinctType::DISTINCT : DistinctType::DISTINCT_ON;
@@ -133,7 +133,7 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
-			auto &order = (OrderModifier &)*mod;
+			auto &order = mod->Cast<OrderModifier>();
 			auto bound_order = make_uniq<BoundOrderModifier>();
 			auto &config = DBConfig::GetConfig(context);
 			D_ASSERT(!order.orders.empty());
@@ -174,10 +174,10 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 			break;
 		}
 		case ResultModifierType::LIMIT_MODIFIER:
-			bound_modifier = BindLimit(order_binder, (LimitModifier &)*mod);
+			bound_modifier = BindLimit(order_binder, mod->Cast<LimitModifier>());
 			break;
 		case ResultModifierType::LIMIT_PERCENT_MODIFIER:
-			bound_modifier = BindLimitPercent(order_binder, (LimitPercentModifier &)*mod);
+			bound_modifier = BindLimitPercent(order_binder, mod->Cast<LimitPercentModifier>());
 			break;
 		default:
 			throw Exception("Unsupported result modifier");
@@ -203,7 +203,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 	for (auto &bound_mod : result.modifiers) {
 		switch (bound_mod->type) {
 		case ResultModifierType::DISTINCT_MODIFIER: {
-			auto &distinct = (BoundDistinctModifier &)*bound_mod;
+			auto &distinct = bound_mod->Cast<BoundDistinctModifier>();
 			D_ASSERT(!distinct.target_distincts.empty());
 			// set types of distinct targets
 			for (auto &expr : distinct.target_distincts) {
@@ -226,19 +226,19 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 			break;
 		}
 		case ResultModifierType::LIMIT_MODIFIER: {
-			auto &limit = (BoundLimitModifier &)*bound_mod;
+			auto &limit = bound_mod->Cast<BoundLimitModifier>();
 			AssignReturnType(limit.limit, sql_types);
 			AssignReturnType(limit.offset, sql_types);
 			break;
 		}
 		case ResultModifierType::LIMIT_PERCENT_MODIFIER: {
-			auto &limit = (BoundLimitPercentModifier &)*bound_mod;
+			auto &limit = bound_mod->Cast<BoundLimitPercentModifier>();
 			AssignReturnType(limit.limit, sql_types);
 			AssignReturnType(limit.offset, sql_types);
 			break;
 		}
 		case ResultModifierType::ORDER_MODIFIER: {
-			auto &order = (BoundOrderModifier &)*bound_mod;
+			auto &order = bound_mod->Cast<BoundOrderModifier>();
 			for (auto &order_node : order.orders) {
 				auto &expr = order_node.expression;
 				D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
@@ -288,6 +288,9 @@ void Binder::BindWhereStarExpression(unique_ptr<ParsedExpression> &expr) {
 	// expand the stars for this expression
 	vector<unique_ptr<ParsedExpression>> new_conditions;
 	ExpandStarExpression(std::move(expr), new_conditions);
+	if (new_conditions.empty()) {
+		throw ParserException("COLUMNS expansion resulted in empty set of columns");
+	}
 
 	// set up an AND conjunction between the expanded conditions
 	expr = std::move(new_conditions[0]);
@@ -401,14 +404,15 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	}
 
 	// bind the QUALIFY clause, if any
+	unique_ptr<QualifyBinder> qualify_binder;
 	if (statement.qualify) {
 		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
 			throw BinderException("Combining QUALIFY with GROUP BY ALL is not supported yet");
 		}
-		QualifyBinder qualify_binder(*this, context, *result, info, alias_map);
+		qualify_binder = make_uniq<QualifyBinder>(*this, context, *result, info, alias_map);
 		ExpressionBinder::QualifyColumnNames(*this, statement.qualify);
-		result->qualify = qualify_binder.Bind(statement.qualify);
-		if (qualify_binder.HasBoundColumns() && qualify_binder.BoundAggregates()) {
+		result->qualify = qualify_binder->Bind(statement.qualify);
+		if (qualify_binder->HasBoundColumns() && qualify_binder->BoundAggregates()) {
 			throw BinderException("Cannot mix aggregates with non-aggregated columns!");
 		}
 	}
@@ -487,19 +491,31 @@ unique_ptr<BoundQueryNode> Binder::BindSelectNode(SelectNode &statement, unique_
 	    !result->groups.grouping_sets.empty()) {
 		if (statement.aggregate_handling == AggregateHandling::NO_AGGREGATES_ALLOWED) {
 			throw BinderException("Aggregates cannot be present in a Project relation!");
-		} else if (select_binder.HasBoundColumns()) {
-			auto &bound_columns = select_binder.GetBoundColumns();
-			string error;
-			error = "column \"%s\" must appear in the GROUP BY clause or must be part of an aggregate function.";
-			if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
-				error += "\nGROUP BY ALL will only group entries in the SELECT list. Add it to the SELECT list or "
-				         "GROUP BY this entry explicitly.";
-			} else {
-				error += "\nEither add it to the GROUP BY list, or use \"ANY_VALUE(%s)\" if the exact value of \"%s\" "
-				         "is not important.";
+		} else {
+			vector<reference<BaseSelectBinder>> to_check_binders;
+			to_check_binders.push_back(select_binder);
+			if (qualify_binder) {
+				to_check_binders.push_back(*qualify_binder);
 			}
-			throw BinderException(FormatError(bound_columns[0].query_location, error, bound_columns[0].name,
-			                                  bound_columns[0].name, bound_columns[0].name));
+			for (auto &binder : to_check_binders) {
+				auto &sel_binder = binder.get();
+				if (!sel_binder.HasBoundColumns()) {
+					continue;
+				}
+				auto &bound_columns = sel_binder.GetBoundColumns();
+				string error;
+				error = "column \"%s\" must appear in the GROUP BY clause or must be part of an aggregate function.";
+				if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES) {
+					error += "\nGROUP BY ALL will only group entries in the SELECT list. Add it to the SELECT list or "
+					         "GROUP BY this entry explicitly.";
+				} else {
+					error +=
+					    "\nEither add it to the GROUP BY list, or use \"ANY_VALUE(%s)\" if the exact value of \"%s\" "
+					    "is not important.";
+				}
+				throw BinderException(FormatError(bound_columns[0].query_location, error, bound_columns[0].name,
+				                                  bound_columns[0].name, bound_columns[0].name));
+			}
 		}
 	}
 

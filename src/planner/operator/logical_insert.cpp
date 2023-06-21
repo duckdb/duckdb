@@ -25,6 +25,16 @@ void LogicalInsert::Serialize(FieldWriter &writer) const {
 	writer.WriteField(return_chunk);
 	writer.WriteSerializableList(bound_defaults);
 	writer.WriteField(action_type);
+	writer.WriteRegularSerializableList(expected_set_types);
+	writer.WriteList<column_t>(on_conflict_filter);
+	writer.WriteOptional(on_conflict_condition);
+	writer.WriteOptional(do_update_condition);
+	writer.WriteIndexList(set_columns);
+	writer.WriteRegularSerializableList(set_types);
+	writer.WriteField(excluded_table_index);
+	writer.WriteList<column_t>(columns_to_fetch);
+	writer.WriteList<column_t>(source_columns);
+	writer.WriteSerializableList<Expression>(expressions);
 }
 
 unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
@@ -42,6 +52,16 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	auto return_chunk = reader.ReadRequired<bool>();
 	auto bound_defaults = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 	auto action_type = reader.ReadRequired<OnConflictAction>();
+	auto expected_set_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	auto on_conflict_filter = reader.ReadRequiredSet<column_t, unordered_set<column_t>>();
+	auto on_conflict_condition = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	auto do_update_condition = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	auto set_columns = reader.ReadRequiredIndexList<PhysicalIndex>();
+	auto set_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
+	auto excluded_table_index = reader.ReadRequired<idx_t>();
+	auto columns_to_fetch = reader.ReadRequiredList<column_t>();
+	auto source_columns = reader.ReadRequiredList<column_t>();
+	auto expressions = reader.ReadRequiredSerializableList<Expression>(state.gstate);
 
 	auto &catalog = Catalog::GetCatalog(context, info->catalog);
 
@@ -54,6 +74,16 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 	result->expected_types = expected_types;
 	result->bound_defaults = std::move(bound_defaults);
 	result->action_type = action_type;
+	result->expected_set_types = std::move(expected_set_types);
+	result->on_conflict_filter = std::move(on_conflict_filter);
+	result->on_conflict_condition = std::move(on_conflict_condition);
+	result->do_update_condition = std::move(do_update_condition);
+	result->set_columns = std::move(set_columns);
+	result->set_types = std::move(set_types);
+	result->excluded_table_index = excluded_table_index;
+	result->columns_to_fetch = std::move(columns_to_fetch);
+	result->source_columns = std::move(source_columns);
+	result->expressions = std::move(expressions);
 	return std::move(result);
 }
 

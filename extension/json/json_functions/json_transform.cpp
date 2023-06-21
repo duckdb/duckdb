@@ -20,7 +20,7 @@ JSONTransformOptions::JSONTransformOptions(bool strict_cast_p, bool error_duplic
       error_unknown_key(error_unkown_key_p) {
 }
 
-void JSONTransformOptions::Serialize(FieldWriter &writer) {
+void JSONTransformOptions::Serialize(FieldWriter &writer) const {
 	writer.WriteField(strict_cast);
 	writer.WriteField(error_duplicate_key);
 	writer.WriteField(error_missing_key);
@@ -98,8 +98,8 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
 		JSONAllocator json_allocator(Allocator::DefaultAllocator());
 		yyjson_read_err err;
-		auto doc = JSONCommon::ReadDocumentUnsafe(structure_string, JSONCommon::READ_FLAG,
-		                                          json_allocator.GetYYJSONAllocator(), &err);
+		auto doc =
+		    JSONCommon::ReadDocumentUnsafe(structure_string, JSONCommon::READ_FLAG, json_allocator.GetYYAlc(), &err);
 		if (err.code != YYJSON_READ_SUCCESS) {
 			JSONCommon::ThrowParseError(structure_string.GetData(), structure_string.GetSize(), err);
 		}
@@ -216,7 +216,7 @@ static inline bool GetValueString(yyjson_val *val, yyjson_alc *alc, string_t &re
 
 template <class T>
 static bool TransformNumerical(yyjson_val *vals[], Vector &result, const idx_t count, JSONTransformOptions &options) {
-	auto data = (T *)FlatVector::GetData(result);
+	auto data = FlatVector::GetData<T>(result);
 	auto &validity = FlatVector::Validity(result);
 
 	bool success = true;
@@ -238,7 +238,7 @@ static bool TransformNumerical(yyjson_val *vals[], Vector &result, const idx_t c
 template <class T>
 static bool TransformDecimal(yyjson_val *vals[], Vector &result, const idx_t count, uint8_t width, uint8_t scale,
                              JSONTransformOptions &options) {
-	auto data = (T *)FlatVector::GetData(result);
+	auto data = FlatVector::GetData<T>(result);
 	auto &validity = FlatVector::Validity(result);
 
 	bool success = true;
@@ -373,7 +373,7 @@ static bool TransformFromStringWithFormat(yyjson_val *vals[], Vector &result, co
 }
 
 static bool TransformToString(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count) {
-	auto data = (string_t *)FlatVector::GetData(result);
+	auto data = FlatVector::GetData<string_t>(result);
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
@@ -400,11 +400,11 @@ bool JSONTransform::TransformObject(yyjson_val *objects[], yyjson_alc *alc, cons
 	nested_vals.reserve(column_count);
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 		key_map.insert({{names[col_idx].c_str(), names[col_idx].length()}, col_idx});
-		nested_vals.push_back((yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * count));
+		nested_vals.push_back(JSONCommon::AllocateArray<yyjson_val *>(alc, count));
 	}
 
 	idx_t found_key_count;
-	auto found_keys = (bool *)alc->malloc(alc->ctx, sizeof(bool) * column_count);
+	auto found_keys = JSONCommon::AllocateArray<bool>(alc, column_count);
 
 	bool success = true;
 
@@ -558,7 +558,7 @@ static bool TransformArray(yyjson_val *arrays[], yyjson_alc *alc, Vector &result
 	ListVector::Reserve(result, offset);
 
 	// Initialize array for the nested values
-	auto nested_vals = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * offset);
+	auto nested_vals = JSONCommon::AllocateArray<yyjson_val *>(alc, offset);
 
 	// Get array values
 	size_t idx, max;
@@ -615,10 +615,10 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 	ListVector::SetListSize(result, list_size);
 
 	auto list_entries = FlatVector::GetData<list_entry_t>(result);
-	auto list_validity = FlatVector::Validity(result);
+	auto &list_validity = FlatVector::Validity(result);
 
-	auto keys = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * list_size);
-	auto vals = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * list_size);
+	auto keys = JSONCommon::AllocateArray<yyjson_val *>(alc, list_size);
+	auto vals = JSONCommon::AllocateArray<yyjson_val *>(alc, list_size);
 
 	bool success = true;
 	idx_t list_offset = 0;
@@ -654,11 +654,12 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 			list_offset++;
 		}
 	}
+	D_ASSERT(list_offset == list_size);
 
 	// Transform keys
 	if (!JSONTransform::Transform(keys, alc, MapVector::GetKeys(result), list_size, options)) {
 		throw ConversionException(
-		    StringUtil::Format(options.error_message, ". Cannot default to NULL, because map keys cannot be NULL"));
+		    StringUtil::Format(options.error_message + ". Cannot default to NULL, because map keys cannot be NULL"));
 	}
 
 	// Transform values
@@ -674,11 +675,11 @@ static bool TransformObjectToMap(yyjson_val *objects[], yyjson_alc *alc, Vector 
 }
 
 bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count) {
-	auto data = (string_t *)FlatVector::GetData(result);
+	auto data = FlatVector::GetData<string_t>(result);
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &val = vals[i];
-		if (!val) {
+		if (!val || unsafe_yyjson_is_null(val)) {
 			validity.SetInvalid(i);
 		} else {
 			data[i] = JSONCommon::WriteVal(val, alc);
@@ -691,7 +692,8 @@ bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const 
 bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
                               JSONTransformOptions &options) {
 	auto result_type = result.GetType();
-	if ((result_type == LogicalTypeId::TIMESTAMP || result_type == LogicalTypeId::DATE) && options.date_format_map) {
+	if ((result_type == LogicalTypeId::TIMESTAMP || result_type == LogicalTypeId::DATE) && options.date_format_map &&
+	    options.date_format_map->HasFormats(result_type.id())) {
 		// Auto-detected date/timestamp format during sampling
 		return TransformFromStringWithFormat(vals, result, count, options);
 	}
@@ -774,11 +776,11 @@ static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &
                                       JSONTransformOptions &options) {
 	UnifiedVectorFormat input_data;
 	input.ToUnifiedFormat(count, input_data);
-	auto inputs = (string_t *)input_data.data;
+	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	// Read documents
-	auto docs = (yyjson_doc **)alc->malloc(alc->ctx, sizeof(yyjson_doc *) * count);
-	auto vals = (yyjson_val **)alc->malloc(alc->ctx, sizeof(yyjson_val *) * count);
+	auto docs = JSONCommon::AllocateArray<yyjson_doc *>(alc, count);
+	auto vals = JSONCommon::AllocateArray<yyjson_val *>(alc, count);
 	auto &result_validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = input_data.sel->get_index(i);
@@ -803,7 +805,7 @@ static bool TransformFunctionInternal(Vector &input, const idx_t count, Vector &
 template <bool strict>
 static void TransformFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+	auto alc = lstate.json_allocator.GetYYAlc();
 
 	JSONTransformOptions options(strict, strict, strict, false);
 	if (!TransformFunctionInternal(args.data[0], args.size(), result, alc, options)) {
@@ -838,7 +840,7 @@ ScalarFunctionSet JSONFunctions::GetTransformStrictFunction() {
 static bool JSONToAnyCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &lstate = parameters.local_state->Cast<JSONFunctionLocalState>();
 	lstate.json_allocator.Reset();
-	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+	auto alc = lstate.json_allocator.GetYYAlc();
 
 	JSONTransformOptions options(true, true, true, true);
 	options.delay_error = true;

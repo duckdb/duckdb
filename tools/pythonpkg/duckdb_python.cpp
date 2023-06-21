@@ -76,7 +76,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	      "Create a DuckDB function out of the passing in python function so it can be used in queries",
 	      py::arg("name"), py::arg("function"), py::arg("return_type") = py::none(), py::arg("parameters") = py::none(),
 	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0,
-	      py::arg("exception_handling") = 0, py::arg("connection") = py::none());
+	      py::arg("exception_handling") = 0, py::arg("side_effects") = false, py::arg("connection") = py::none());
 
 	m.def("remove_function", &PyConnectionWrapper::UnregisterUDF, "Remove a previously created function",
 	      py::arg("name"), py::arg("connection") = py::none());
@@ -144,7 +144,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("connection") = py::none())
 	    .def("read_json", &PyConnectionWrapper::ReadJSON, "Create a relation object from the JSON file in 'name'",
 	         py::arg("name"), py::arg("connection") = py::none(), py::arg("columns") = py::none(),
-	         py::arg("sample_size") = py::none(), py::arg("maximum_depth") = py::none());
+	         py::arg("sample_size") = py::none(), py::arg("maximum_depth") = py::none(),
+	         py::arg("records") = py::none(), py::arg("format") = py::none());
 
 	m.def("values", &PyConnectionWrapper::Values, "Create a relation object from the passed values", py::arg("values"),
 	      py::arg("connection") = py::none());
@@ -268,8 +269,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("connection") = py::none());
 }
 
-PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
-
+PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	py::enum_<duckdb::ExplainType>(m, "ExplainType")
 	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)
 	    .value("ANALYZE", duckdb::ExplainType::EXPLAIN_ANALYZE)

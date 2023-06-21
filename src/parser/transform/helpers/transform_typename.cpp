@@ -7,13 +7,13 @@
 
 namespace duckdb {
 
-LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_name) {
-	if (!type_name || type_name->type != duckdb_libpgquery::T_PGTypeName) {
+LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_name) {
+	if (type_name.type != duckdb_libpgquery::T_PGTypeName) {
 		throw ParserException("Expected a type");
 	}
 	auto stack_checker = StackCheck();
 
-	auto name = (reinterpret_cast<duckdb_libpgquery::PGValue *>(type_name->names->tail->data.ptr_value)->val.str);
+	auto name = PGPointerCast<duckdb_libpgquery::PGValue>(type_name.names->tail->data.ptr_value)->val.str;
 	// transform it to the SQL type
 	LogicalTypeId base_type = TransformStringToLogicalTypeId(name);
 
@@ -23,21 +23,21 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 	} else if (base_type == LogicalTypeId::ENUM) {
 		throw ParserException("ENUM is not valid as a stand-alone type");
 	} else if (base_type == LogicalTypeId::STRUCT) {
-		if (!type_name->typmods || type_name->typmods->length == 0) {
+		if (!type_name.typmods || type_name.typmods->length == 0) {
 			throw ParserException("Struct needs a name and entries");
 		}
 		child_list_t<LogicalType> children;
 		case_insensitive_set_t name_collision_set;
 
-		for (auto node = type_name->typmods->head; node; node = node->next) {
-			auto &type_val = *((duckdb_libpgquery::PGList *)node->data.ptr_value);
+		for (auto node = type_name.typmods->head; node; node = node->next) {
+			auto &type_val = *PGPointerCast<duckdb_libpgquery::PGList>(node->data.ptr_value);
 			if (type_val.length != 2) {
 				throw ParserException("Struct entry needs an entry name and a type name");
 			}
 
-			auto entry_name_node = (duckdb_libpgquery::PGValue *)(type_val.head->data.ptr_value);
+			auto entry_name_node = PGPointerCast<duckdb_libpgquery::PGValue>(type_val.head->data.ptr_value);
 			D_ASSERT(entry_name_node->type == duckdb_libpgquery::T_PGString);
-			auto entry_type_node = (duckdb_libpgquery::PGValue *)(type_val.tail->data.ptr_value);
+			auto entry_type_node = PGPointerCast<duckdb_libpgquery::PGTypeName>(type_val.tail->data.ptr_value);
 			D_ASSERT(entry_type_node->type == duckdb_libpgquery::T_PGTypeName);
 
 			auto entry_name = string(entry_name_node->val.str);
@@ -47,42 +47,43 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 				throw ParserException("Duplicate struct entry name \"%s\"", entry_name);
 			}
 			name_collision_set.insert(entry_name);
+			auto entry_type = TransformTypeName(*entry_type_node);
 
-			auto entry_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)entry_type_node);
 			children.push_back(make_pair(entry_name, entry_type));
 		}
 		D_ASSERT(!children.empty());
 		result_type = LogicalType::STRUCT(children);
 
 	} else if (base_type == LogicalTypeId::MAP) {
-
-		if (!type_name->typmods || type_name->typmods->length != 2) {
+		if (!type_name.typmods || type_name.typmods->length != 2) {
 			throw ParserException("Map type needs exactly two entries, key and value type");
 		}
-		auto key_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->head->data.ptr_value);
-		auto value_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)type_name->typmods->tail->data.ptr_value);
+		auto key_type =
+		    TransformTypeName(*PGPointerCast<duckdb_libpgquery::PGTypeName>(type_name.typmods->head->data.ptr_value));
+		auto value_type =
+		    TransformTypeName(*PGPointerCast<duckdb_libpgquery::PGTypeName>(type_name.typmods->tail->data.ptr_value));
 
 		result_type = LogicalType::MAP(std::move(key_type), std::move(value_type));
 	} else if (base_type == LogicalTypeId::UNION) {
-		if (!type_name->typmods || type_name->typmods->length == 0) {
+		if (!type_name.typmods || type_name.typmods->length == 0) {
 			throw ParserException("Union type needs at least one member");
 		}
-		if (type_name->typmods->length > (int)UnionType::MAX_UNION_MEMBERS) {
+		if (type_name.typmods->length > (int)UnionType::MAX_UNION_MEMBERS) {
 			throw ParserException("Union types can have at most %d members", UnionType::MAX_UNION_MEMBERS);
 		}
 
 		child_list_t<LogicalType> children;
 		case_insensitive_set_t name_collision_set;
 
-		for (auto node = type_name->typmods->head; node; node = node->next) {
-			auto &type_val = *((duckdb_libpgquery::PGList *)node->data.ptr_value);
+		for (auto node = type_name.typmods->head; node; node = node->next) {
+			auto &type_val = *PGPointerCast<duckdb_libpgquery::PGList>(node->data.ptr_value);
 			if (type_val.length != 2) {
 				throw ParserException("Union type member needs a tag name and a type name");
 			}
 
-			auto entry_name_node = (duckdb_libpgquery::PGValue *)(type_val.head->data.ptr_value);
+			auto entry_name_node = PGPointerCast<duckdb_libpgquery::PGValue>(type_val.head->data.ptr_value);
 			D_ASSERT(entry_name_node->type == duckdb_libpgquery::T_PGString);
-			auto entry_type_node = (duckdb_libpgquery::PGValue *)(type_val.tail->data.ptr_value);
+			auto entry_type_node = PGPointerCast<duckdb_libpgquery::PGTypeName>(type_val.tail->data.ptr_value);
 			D_ASSERT(entry_type_node->type == duckdb_libpgquery::T_PGTypeName);
 
 			auto entry_name = string(entry_name_node->val.str);
@@ -94,7 +95,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 
 			name_collision_set.insert(entry_name);
 
-			auto entry_type = TransformTypeName((duckdb_libpgquery::PGTypeName *)entry_type_node);
+			auto entry_type = TransformTypeName(*entry_type_node);
 			children.push_back(make_pair(entry_name, entry_type));
 		}
 		D_ASSERT(!children.empty());
@@ -111,9 +112,9 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 		}
 		// check any modifiers
 		int modifier_idx = 0;
-		if (type_name->typmods) {
-			for (auto node = type_name->typmods->head; node; node = node->next) {
-				auto &const_val = *((duckdb_libpgquery::PGAConst *)node->data.ptr_value);
+		if (type_name.typmods) {
+			for (auto node = type_name.typmods->head; node; node = node->next) {
+				auto &const_val = *PGPointerCast<duckdb_libpgquery::PGAConst>(node->data.ptr_value);
 				if (const_val.type != duckdb_libpgquery::T_PGAConst ||
 				    const_val.val.type != duckdb_libpgquery::T_PGInteger) {
 					throw ParserException("Expected an integer constant as type modifier");
@@ -169,7 +170,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			break;
 		}
 		case LogicalTypeId::BIT: {
-			if (!width && type_name->typmods) {
+			if (!width && type_name.typmods) {
 				throw ParserException("Type %s does not support any modifiers!", LogicalType(base_type).ToString());
 			}
 			result_type = LogicalType(base_type);
@@ -204,10 +205,10 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			break;
 		}
 	}
-	if (type_name->arrayBounds) {
+	if (type_name.arrayBounds) {
 		// array bounds: turn the type into a list
 		idx_t extra_stack = 0;
-		for (auto cell = type_name->arrayBounds->head; cell != nullptr; cell = cell->next) {
+		for (auto cell = type_name.arrayBounds->head; cell != nullptr; cell = cell->next) {
 			result_type = LogicalType::LIST(result_type);
 			StackCheck(extra_stack++);
 		}

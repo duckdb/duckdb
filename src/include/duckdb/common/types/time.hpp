@@ -42,6 +42,8 @@ public:
 	DUCKDB_API static dtime_t FromTimeMs(int64_t time_ms);
 	DUCKDB_API static dtime_t FromTimeNs(int64_t time_ns);
 
+	DUCKDB_API static bool IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds);
+
 private:
 	static bool TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict);
 };

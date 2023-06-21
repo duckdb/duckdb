@@ -1,0 +1,16 @@
+# Marks all changed PR as draft
+name: Draft on Synchronize
+on:
+  pull_request:
+    types: [ synchronize ]
+
+jobs:
+  mark-as-draft:
+    name: Mark as draft
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark as draft
+        uses: voiceflow/draft-pr@latest
+        with:
+          token: ${{ secrets.GH_TOKEN }}

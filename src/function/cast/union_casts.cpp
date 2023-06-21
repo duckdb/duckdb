@@ -293,7 +293,7 @@ static bool UnionToUnionCast(Vector &source, Vector &result, idx_t count, CastPa
 			auto source_row_idx = source_tag_format.sel->get_index(row_idx);
 			if (source_tag_format.validity.RowIsValid(source_row_idx)) {
 				// map the tag
-				auto source_tag = ((union_tag_t *)source_tag_format.data)[source_row_idx];
+				auto source_tag = (UnifiedVectorFormat::GetData<union_tag_t>(source_tag_format))[source_row_idx];
 				auto target_tag = cast_data.tag_map[source_tag];
 				FlatVector::GetData<union_tag_t>(result_tag_vector)[row_idx] = target_tag;
 			} else {
@@ -339,7 +339,7 @@ static bool UnionToVarcharCast(Vector &source, Vector &result, idx_t count, Cast
 		auto mapped_idx = member_vdata.sel->get_index(i);
 		auto member_valid = member_vdata.validity.RowIsValid(mapped_idx);
 		if (member_valid) {
-			auto member_str = ((string_t *)member_vdata.data)[mapped_idx];
+			auto member_str = (UnifiedVectorFormat::GetData<string_t>(member_vdata))[mapped_idx];
 			result_data[i] = StringVector::AddString(result, member_str);
 		} else {
 			result_data[i] = StringVector::AddString(result, "NULL");

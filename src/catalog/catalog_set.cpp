@@ -42,7 +42,7 @@ private:
 };
 
 CatalogSet::CatalogSet(Catalog &catalog_p, unique_ptr<DefaultGenerator> defaults)
-    : catalog((DuckCatalog &)catalog_p), defaults(std::move(defaults)) {
+    : catalog(catalog_p.Cast<DuckCatalog>()), defaults(std::move(defaults)) {
 	D_ASSERT(catalog_p.IsDuckCatalog());
 }
 CatalogSet::~CatalogSet() {
@@ -84,7 +84,7 @@ bool CatalogSet::CreateEntry(CatalogTransaction transaction, const string &name,
 			throw InternalException("Attempting to create temporary entry \"%s\" in non-temporary catalog", name);
 		}
 		if (!value->temporary && catalog.IsTemporaryCatalog() && name != DEFAULT_SCHEMA) {
-			throw InternalException("Attempting to create non-temporary entry \"%s\" in temporary catalog", name);
+			throw InvalidInputException("Cannot create non-temporary entry \"%s\" in temporary catalog", name);
 		}
 	}
 	// lock the catalog for writing
@@ -621,7 +621,7 @@ void CatalogSet::Undo(CatalogEntry &entry) {
 		auto &dependency_manager = catalog.GetDependencyManager();
 		dependency_manager.EraseObject(to_be_removed_node);
 	}
-	if (entry.name != to_be_removed_node.name) {
+	if (!StringUtil::CIEquals(entry.name, to_be_removed_node.name)) {
 		// rename: clean up the new name when the rename is rolled back
 		auto removed_entry = mapping.find(to_be_removed_node.name);
 		if (removed_entry->second->child) {

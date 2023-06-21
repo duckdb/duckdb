@@ -27,9 +27,7 @@ Index::Index(AttachedDatabase &db, IndexType type, TableIOManager &table_io_mana
 	}
 
 	// create the column id set
-	for (auto column_id : column_ids) {
-		column_id_set.insert(column_id);
-	}
+	column_id_set.insert(column_ids.begin(), column_ids.end());
 }
 
 void Index::InitializeLock(IndexLock &state) {
@@ -58,6 +56,19 @@ bool Index::MergeIndexes(Index &other_index) {
 		return Cast<ART>().MergeIndexes(state, other_index);
 	default:
 		throw InternalException("Unimplemented index type for merge");
+	}
+}
+
+string Index::VerifyAndToString(const bool only_verify) {
+
+	IndexLock state;
+	InitializeLock(state);
+
+	switch (this->type) {
+	case IndexType::ART:
+		return Cast<ART>().VerifyAndToString(state, only_verify);
+	default:
+		throw InternalException("Unimplemented index type for VerifyAndToString");
 	}
 }
 

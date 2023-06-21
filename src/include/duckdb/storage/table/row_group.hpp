@@ -31,7 +31,7 @@ class RowGroupCollection;
 class RowGroupWriter;
 class UpdateSegment;
 class TableStatistics;
-class TableStorageInfo;
+struct ColumnSegmentInfo;
 class Vector;
 struct ColumnCheckpointState;
 struct RowGroupPointer;
@@ -141,7 +141,7 @@ public:
 	void MergeIntoStatistics(idx_t column_idx, BaseStatistics &other);
 	unique_ptr<BaseStatistics> GetStatistics(idx_t column_idx);
 
-	void GetStorageInfo(idx_t row_group_index, TableStorageInfo &result);
+	void GetColumnSegmentInfo(idx_t row_group_index, vector<ColumnSegmentInfo> &result);
 
 	void Verify();
 
@@ -149,7 +149,7 @@ public:
 
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
-	ColumnData &GetColumn(idx_t c);
+	ColumnData &GetColumn(storage_t c);
 	idx_t GetColumnCount() const;
 	vector<shared_ptr<ColumnData>> &GetColumns();
 

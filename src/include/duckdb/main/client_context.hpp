@@ -86,7 +86,7 @@ public:
 	TransactionContext transaction;
 
 public:
-	DUCKDB_API MetaTransaction &ActiveTransaction() {
+	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
 	}
 
@@ -276,7 +276,7 @@ private:
 
 class ClientContextWrapper {
 public:
-	DUCKDB_API explicit ClientContextWrapper(const shared_ptr<ClientContext> &context)
+	explicit ClientContextWrapper(const shared_ptr<ClientContext> &context)
 	    : client_context(context) {
 
 	      };

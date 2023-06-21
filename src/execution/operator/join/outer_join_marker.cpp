@@ -10,7 +10,7 @@ void OuterJoinMarker::Initialize(idx_t count_p) {
 		return;
 	}
 	this->count = count_p;
-	found_match = unique_ptr<bool[]>(new bool[count]);
+	found_match = make_unsafe_uniq_array<bool>(count);
 	Reset();
 }
 
@@ -63,7 +63,7 @@ void OuterJoinMarker::ConstructLeftJoinResult(DataChunk &left, DataChunk &result
 }
 
 idx_t OuterJoinMarker::MaxThreads() const {
-	return count / (STANDARD_VECTOR_SIZE * 10);
+	return count / (STANDARD_VECTOR_SIZE * 10ULL);
 }
 
 void OuterJoinMarker::InitializeScan(ColumnDataCollection &data, OuterJoinGlobalScanState &gstate) {
