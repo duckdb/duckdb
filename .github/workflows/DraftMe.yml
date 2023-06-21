@@ -5,7 +5,7 @@ on:
     types: [ synchronize ]
 
 env:
-  TOKEN: ${{ secrets.GH_TOKEN }}
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
   mark-as-draft:
@@ -16,7 +16,7 @@ jobs:
       - name: Mark as draft
         shell: bash
         run: |
-          echo ${{ env.TOKEN }} | gh auth login --with-token
+          gh auth login
           gh api graphql -F id=${{ github.event.pull_request.node_id }} -f query='
             mutation($id: ID!) {
               convertPullRequestToDraft(input: { pullRequestId: $id }) {
