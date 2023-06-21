@@ -1079,7 +1079,10 @@ JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1stream
 		return (jlong)&wrapper->stream;
 	} catch (const exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
+		return 0;
 	}
+	//	Unreachable
+	return 0;
 }
 
 class JavaArrowTabularStreamFactory {
