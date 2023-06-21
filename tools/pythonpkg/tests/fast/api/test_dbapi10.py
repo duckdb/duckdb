@@ -31,6 +31,8 @@ class TestCursorDescription(object):
     def test_rowcount(self, duckdb_cursor):
         ex = duckdb_cursor.execute
         assert ex('select 1').rowcount == -1  # not materialized
+        ex.fetchall()
+        assert ex.rowcount == 1
 
         assert ex('create table test (id int)').rowcount == -1  # does not update or return rows
 
