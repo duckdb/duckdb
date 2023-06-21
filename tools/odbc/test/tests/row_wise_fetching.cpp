@@ -23,6 +23,9 @@ static void TestMicrosoftExample(HSTMT &hstmt) {
 	rows_fetched = 0;
 	if (order_info_size == rows_fetched) {
 		row_array_status[rows_fetched] = 0;
+		if (row_array_status[0] == SQL_PARAM_SUCCESS) {
+			return;
+		}
 	}
 }
 
