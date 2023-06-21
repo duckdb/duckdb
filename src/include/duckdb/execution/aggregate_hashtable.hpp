@@ -122,7 +122,7 @@ public:
 	static idx_t InitialCapacity();
 	//! Max capacity while sinking data into the HT
 	static idx_t SinkCapacity();
-	//! Currenty capacity of the HT
+	//! Current capacity of the HT
 	idx_t Capacity() const;
 
 	//! The size (in bytes) of the data collection
