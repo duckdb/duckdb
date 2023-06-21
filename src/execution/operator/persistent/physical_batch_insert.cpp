@@ -327,10 +327,11 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 		// no collection yet: create a new one
 		lstate.CreateNewCollection(table, insert_types);
 		lstate.writer = &table.GetStorage().CreateOptimisticWriter(context.client);
-	} else if (lstate.current_index != batch_index) {
+	}
+
+	if (lstate.current_index != batch_index) {
 		throw InternalException("Current batch differs from batch - but NextBatch was not called!?");
 	}
-	lstate.current_index = batch_index;
 
 	table.GetStorage().VerifyAppendConstraints(table, context.client, lstate.insert_chunk);
 

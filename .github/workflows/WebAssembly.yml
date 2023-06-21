@@ -19,6 +19,7 @@ on:
       - '!.github/workflows/WebAssembly.yml'
       - '.github/config/uncovered_files.csv'
   pull_request:
+    types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
       - 'script/**'
@@ -35,7 +36,7 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  DUCKDB_WASM_VERSION: 2564ea4
+  DUCKDB_WASM_VERSION: 7bf2a73
 
 jobs:
  linux-wasm-experimental:
@@ -54,6 +55,7 @@ jobs:
         git clone --recurse-submodules https://github.com/duckdb/duckdb-wasm
         cd duckdb-wasm
         git checkout ${{ env.DUCKDB_WASM_VERSION }}
+        shopt -s nullglob
         for filename in ../.github/patches/duckdb-wasm/*.patch; do
           git apply $filename
         done

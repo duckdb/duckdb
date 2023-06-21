@@ -17,6 +17,7 @@ runs:
         yum install -y git
         yum install -y curl-devel expat-devel gettext-devel zlib-devel perl-ExtUtils-MakeMaker ninja-build
         yum install -y unixODBC-devel
+        yum install -y java-11-openjdk-devel maven
 
     - name: Install AWS CLI
       shell: bash

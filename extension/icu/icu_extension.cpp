@@ -65,17 +65,15 @@ struct IcuBindData : public FunctionData {
 
 static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, duckdb::unique_ptr<char[]> &buffer,
                              int32_t &buffer_size) {
-	int32_t string_size =
-	    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize())),
-	                        (uint8_t *)buffer.get(), buffer_size);
+	icu::UnicodeString unicode_string =
+	    icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize()));
+	int32_t string_size = collator.getSortKey(unicode_string, (uint8_t *)buffer.get(), buffer_size);
 	if (string_size > buffer_size) {
 		// have to resize the buffer
 		buffer_size = string_size;
 		buffer = duckdb::unique_ptr<char[]>(new char[buffer_size]);
 
-		string_size =
-		    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetData(), input.GetSize())),
-		                        (uint8_t *)buffer.get(), buffer_size);
+		string_size = collator.getSortKey(unicode_string, (uint8_t *)buffer.get(), buffer_size);
 	}
 	return string_size;
 }
