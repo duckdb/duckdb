@@ -147,7 +147,7 @@ ArenaChunk *ArenaAllocator::GetTail() {
 	return tail;
 }
 
-bool ArenaAllocator::IsEmpty() {
+bool ArenaAllocator::IsEmpty() const {
 	return head == nullptr;
 }
 
