@@ -240,7 +240,7 @@ clreldebug:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
-merged_vcpkg:
+merged_vcpkg_manifest:
 	mkdir -p ./build/vcpkg_merged_manifest && \
 	cd build/vcpkg_merged_manifest && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${CMAKE_VARS} -DMERGE_EXTENSION_VCPKG_MANIFESTS=TRUE -DVCPKG_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
