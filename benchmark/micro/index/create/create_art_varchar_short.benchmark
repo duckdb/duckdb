@@ -11,7 +11,7 @@ CREATE TEMPORARY TABLE strings_temp AS
            ((i * 547892347987) % 1000)::VARCHAR AS s2,
             ((i * 847892347987) % 100)::VARCHAR AS s3,
         FROM range(1000000) tbl(i);
-CREATE TABLE art AS SELECT s3 || 'a' || s2 || 'b' || s3 || 'c' AS id FROM strings_temp;
+CREATE TABLE art AS SELECT s1 || 'a' || s2 || 'b' || s3 || 'c' AS id FROM strings_temp;
 
 run
 CREATE INDEX idx ON art USING ART(id);

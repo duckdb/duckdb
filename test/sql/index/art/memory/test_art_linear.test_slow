@@ -1,6 +1,8 @@
-# name: test/sql/index/art/memory/test_art_memory_usage.test_slow
+# name: test/sql/index/art/memory/test_art_linear.test_slow
 # description: Test the memory usage of the ART for linear integer insertions
 # group: [memory]
+
+# FIXME: once we inline leaves, these numbers should all go down
 
 statement ok
 PRAGMA enable_verification
