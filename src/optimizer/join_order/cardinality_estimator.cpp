@@ -8,6 +8,8 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
+#include "iostream"
+
 #include <cmath>
 
 namespace duckdb {
@@ -432,11 +434,13 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 			}
 		}
 
+		bool have_stats = false;
 		if (catalog_table && actual_binding != relation_column_to_original_column.end()) {
 			// Get HLL stats here
-			auto base_stats = catalog_table->GetStatistics(context, actual_binding->second.column_index);
-			if (base_stats) {
-				distinct_count = base_stats->GetDistinctCount();
+			auto stats = get->function.statistics(context, get->bind_data.get(), actual_binding->second.column_index);
+			if (stats) {
+				distinct_count = stats->GetDistinctCount();
+				have_stats = true;
 			}
 
 			// HLL has estimation error, distinct_count can't be greater than cardinality of the table before filters
@@ -452,7 +456,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 			if (i_set.count(key) != 1) {
 				continue;
 			}
-			if (catalog_table) {
+			if (have_stats) {
 				if (relation_to_tdom.tdom_hll < distinct_count) {
 					relation_to_tdom.tdom_hll = distinct_count;
 					relation_to_tdom.has_tdom_hll = true;
