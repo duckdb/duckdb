@@ -1,6 +1,6 @@
 catalog/catalog.cpp	15
 catalog/catalog_entry.cpp	3
-catalog/catalog_entry/duck_schema_entry.cpp	3
+catalog/catalog_entry/duck_schema_entry.cpp	4
 catalog/catalog_entry/duck_table_entry.cpp	7
 catalog/catalog_entry/index_catalog_entry.cpp	2
 catalog/catalog_entry/scalar_function_catalog_entry.cpp	3
@@ -211,9 +211,11 @@ execution/perfect_aggregate_hashtable.cpp	4
 execution/physical_operator.cpp	2
 execution/physical_plan/plan_aggregate.cpp	2
 execution/physical_plan/plan_asof_join.cpp	37
+execution/physical_plan/plan_column_data_get.cpp	1
 execution/physical_plan/plan_comparison_join.cpp	14
 execution/physical_plan/plan_explain.cpp	5
 execution/physical_plan/plan_export.cpp	2
+execution/physical_plan/plan_expression_get.cpp	1
 execution/physical_plan/plan_positional_join.cpp	2
 execution/physical_plan/plan_recursive_cte.cpp	2
 execution/physical_plan/plan_sample.cpp	2
@@ -222,7 +224,7 @@ execution/physical_plan/plan_show_select.cpp	3
 execution/physical_plan_generator.cpp	6
 execution/radix_partitioned_hashtable.cpp	3
 execution/reservoir_sample.cpp	60
-execution/window_segment_tree.cpp	10
+execution/window_segment_tree.cpp	12
 function/aggregate/sorted_aggregate_function.cpp	85
 function/built_in_functions.cpp	6
 function/cast/bit_cast.cpp	2
@@ -310,7 +312,7 @@ extension/parquet/include/row_number_column_reader.hpp	10
 extension/parquet/include/templated_column_reader.hpp	5
 extension/parquet/include/thrift_tools.hpp	27
 extension/parquet/include/zstd_file_system.hpp	3
-extension/parquet/parquet_extension.cpp	30
+extension/parquet/parquet_extension.cpp	31
 extension/parquet/parquet_metadata.cpp	29
 extension/parquet/parquet_reader.cpp	113
 extension/parquet/parquet_statistics.cpp	12
@@ -321,6 +323,7 @@ include/duckdb/catalog/catalog.hpp	3
 include/duckdb/catalog/catalog_entry/table_catalog_entry.hpp	3
 include/duckdb/catalog/catalog_set.hpp	2
 include/duckdb/catalog/mapping_value.hpp	2
+include/duckdb/common/allocator.hpp	2
 include/duckdb/common/bit_utils.hpp	3
 include/duckdb/common/bitpacking.hpp	11
 include/duckdb/common/dl.hpp	3
@@ -377,11 +380,13 @@ include/duckdb/execution/operator/join/physical_piecewise_merge_join.hpp	3
 include/duckdb/execution/operator/join/physical_range_join.hpp	2
 include/duckdb/execution/operator/persistent/buffered_csv_reader.hpp	2
 include/duckdb/execution/operator/persistent/parallel_csv_reader.hpp	3
+include/duckdb/function/aggregate_function.hpp	2
 include/duckdb/function/function_serialization.hpp	2
 include/duckdb/function/function_set.hpp	3
 include/duckdb/function/scalar/list/contains_or_position.hpp	16
 include/duckdb/function/table_function.hpp	6
 include/duckdb/function/udf_function.hpp	108
+include/duckdb/main/appender.hpp	4
 include/duckdb/main/capi/cast/from_decimal.hpp	2
 include/duckdb/main/capi/cast/to_decimal.hpp	38
 include/duckdb/main/client_context.hpp	2

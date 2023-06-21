@@ -565,6 +565,7 @@ function(add_extension_definitions)
   foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
     if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
+      add_definitions(-DDUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LINKED=1)
       if (DEFINED DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_INCLUDE_PATH)
         include_directories("${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_INCLUDE_PATH}")
       else()
@@ -855,12 +856,6 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
   # Skip explicitly disabled extensions
   if (NOT ${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_BUILD} OR ${MERGE_EXTENSION_VCPKG_MANIFESTS})
     continue()
-  endif()
-
-  if (DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK)
-    add_definitions(-DDUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LINKED=true)
-  else()
-    add_definitions(-DDUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LINKED=false)
   endif()
 
   # Warning for trying to load vcpkg extensions without having VCPKG_BUILD SET
