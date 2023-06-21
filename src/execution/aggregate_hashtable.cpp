@@ -85,6 +85,10 @@ void GroupedAggregateHashTable::Destroy() {
 	data_collection->Reset();
 }
 
+TupleDataCollection &GroupedAggregateHashTable::GetDataCollection() {
+	return *data_collection;
+}
+
 idx_t GroupedAggregateHashTable::Count() const {
 	return data_collection->Count();
 }

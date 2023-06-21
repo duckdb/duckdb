@@ -116,6 +116,8 @@ public:
 	~GroupedAggregateHashTable() override;
 
 public:
+	//! Get the data collection of this HT
+	TupleDataCollection &GetDataCollection();
 	//! Number of groups in the HT
 	idx_t Count() const;
 	//! Initial capacity of the HT
