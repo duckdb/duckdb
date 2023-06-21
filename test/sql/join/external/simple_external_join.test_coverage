@@ -1,4 +1,4 @@
-# name: test/sql/join/external/simple_external_join.test_slow
+# name: test/sql/join/external/simple_external_join.test_coverage
 # description: Test simple external join
 # group: [external]
 
@@ -13,10 +13,10 @@ create table t2 (j varchar)
 # Create tables with large string values so that strings aren't inlined
 # The tables have some overlapping values to keep the join result small
 statement ok
-insert into t1 select concat(range::VARCHAR, repeat('0', 50)) i from range(100000) order by random()
+insert into t1 select concat(range::VARCHAR, repeat('0', 50)) i from range(100000)
 
 statement ok
-insert into t2 select concat(range::VARCHAR, repeat('0', 50)) j from range(90000, 500000) order by random()
+insert into t2 select concat(range::VARCHAR, repeat('0', 50)) j from range(90000, 500000)
 
 # we want tight memory settings for the external joins
 statement ok
