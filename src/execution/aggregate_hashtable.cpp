@@ -105,10 +105,6 @@ idx_t GroupedAggregateHashTable::ResizeThreshold() const {
 	return capacity / LOAD_FACTOR;
 }
 
-TupleDataCollection &GroupedAggregateHashTable::GetDataCollection() {
-	return *data_collection;
-}
-
 idx_t GroupedAggregateHashTable::DataSize() const {
 	return data_collection->SizeInBytes();
 }
@@ -495,7 +491,7 @@ void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
 }
 
 void GroupedAggregateHashTable::Append(GroupedAggregateHashTable &other) {
-	data_collection->Combine(other.GetDataCollection());
+	data_collection->Combine(*other.data_collection);
 
 	// Inherit ownership to all stored aggregate allocators
 	stored_allocators.emplace_back(other.aggregate_allocator);

@@ -119,8 +119,6 @@ public:
 	//! Currenty capacity of the HT
 	idx_t Capacity() const;
 
-	//! Get the data collection of the HT
-	TupleDataCollection &GetDataCollection();
 	//! The size (in bytes) of the data collection
 	idx_t DataSize() const;
 	//! The size (in bytes) of the first part of the HT
