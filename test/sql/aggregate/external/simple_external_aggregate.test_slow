@@ -7,26 +7,29 @@ load __TEST_DIR__/simple_external_aggregate.db
 statement ok
 create table t1 (i varchar)
 
-# should be around 65mb
+# should be around 150mb
 statement ok
-insert into t1 select concat(range::VARCHAR, repeat('0', 50)) i from range(1000000) order by random()
+insert into t1 select concat(range::VARCHAR, repeat('0', 50)) i from range(2000000) order by random()
 
 statement ok
 pragma threads=4
 
 statement ok
-pragma memory_limit='40mb'
+pragma memory_limit='50mb'
 
 query I
 select count(*) from (select distinct i from t1)
 ----
-1000000
+2000000
 
-# add some strings that are longer than Storage::BLOCK_SIZE (another 30MB, for a total of ~95MB)
+# add some strings that are longer than Storage::BLOCK_SIZE (another ~30MB, for a total of ~180MB)
 statement ok
 insert into t1 select concat(range::VARCHAR, repeat('0', 300000)) i from range(100)
 
+statement ok
+pragma memory_limit='85mb'
+
 query I
 select count(*) from (select distinct i from t1)
 ----
-1000100
+2000100
