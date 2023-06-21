@@ -1,5 +1,6 @@
 import os
 import json
+import re
 
 source_base = os.path.sep.join('src/include/duckdb/storage/serialization'.split('/'))
 target_base = os.path.sep.join('src/storage/serialization'.split('/'))
@@ -14,6 +15,15 @@ for fname in os.listdir(source_base):
             'target': os.path.join(target_base, 'serialize_' + fname.replace('.json', '.cpp'))
         }
     )
+
+def is_container(type):
+    return '<' in type
+
+def is_pointer(type):
+    return '*' in type
+
+def replace_pointer(type):
+    return re.sub('([a-zA-Z0-9]+)[*]', 'unique_ptr<\\1>', type)
 
 for entry in file_list:
     source_path = entry['source']
@@ -94,7 +104,7 @@ ${CASE_STATEMENTS}\tdefault:
     deserialize_element_class_base = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<unique_ptr<${BASE_PROPERTY}>>("${PROPERTY_KEY}");\n\tresult->${PROPERTY_NAME} = unique_ptr_cast<${BASE_PROPERTY}, ${DERIVED_PROPERTY}>(std::move(${PROPERTY_NAME}));\n'
 
     move_list = [
-        'string', 'ParsedExpression*'
+        'string', 'ParsedExpression*', 'CommonTableExpressionMap'
     ]
 
     with open(target_path, 'w+') as f:
@@ -108,10 +118,13 @@ ${CASE_STATEMENTS}\tdefault:
         enum_type = ''
         for entry in serialize_data[base_class]:
             property_name = entry['property'] if 'property' in entry else entry['name']
+            type_name = entry['type']
+            if is_pointer(type_name):
+                type_name = replace_pointer(type_name)
             if property_name == base_class_data[base_class_name]['__enum_value']:
                 enum_type = entry['type']
             base_class_serialize += serialize_element.replace('${PROPERTY_NAME}', property_name).replace('${PROPERTY_KEY}', entry['name'])
-            base_class_deserialize += deserialize_element.replace('${PROPERTY_NAME}', property_name).replace('${PROPERTY_TYPE}', entry['type']).replace('${PROPERTY_KEY}', entry['name'])
+            base_class_deserialize += deserialize_element.replace('${PROPERTY_NAME}', property_name).replace('${PROPERTY_TYPE}', type_name).replace('${PROPERTY_KEY}', entry['name'])
         expressions = [x for x in base_class_data[base_class_name].items() if x[0] != '__enum_value']
         expressions = sorted(expressions, key=lambda x: x[0])
 
@@ -131,14 +144,14 @@ ${CASE_STATEMENTS}\tdefault:
                 entry_property = entry['property']
             skip = False
             for check_entry in [entry_name, entry_property]:
-                if check_entry in extra_parameter:
+                if check_entry in extra_parameters:
                     skip = True
                 if check_entry == base_class_data[base_class_name]['__enum_value']:
                     skip = True
             if skip:
                 continue
             move = False
-            if entry['type'] in move_list:
+            if entry['type'] in move_list or is_container(entry['type']):
                 move = True
             assign_entries.append([entry_property, move])
 
