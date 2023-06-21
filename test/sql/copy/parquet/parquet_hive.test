@@ -165,6 +165,7 @@ order by id
 3	value3	c	2014-01-01
 4	value4	d	2015-01-01
 
+
 # check cases where there are file filters AND table filters
 statement ok
 Create table t1 (a int, b int, c int);
@@ -179,8 +180,17 @@ endloop
 statement ok
 COPY (SELECT * FROM t1) TO '__TEST_DIR__/hive_filters' (FORMAT PARQUET, PARTITION_BY c);
 
-# There should be Table Filters (id < 50
+statement ok
+COPY (SELECT * FROM t1) TO '__TEST_DIR__/hive_filters_2' (FORMAT PARQUET, PARTITION_BY (c, b));
+
+# There should be Table Filters (id < 50) and regular filters
 query II
 EXPLAIN select a from parquet_scan('__TEST_DIR__/hive_filters/*/*.parquet', HIVE_PARTITIONING=1) where c=500 and a < 4;
 ----
 physical_plan	<REGEX>:.*PARQUET_SCAN.*Filters:.*a<4 AND a IS NOT.*NULL.*File Filters: \(CAST\(c AS.*INTEGER\) = 500\).*
+
+# unsatisfiable file filters also show up
+query II
+EXPLAIN select a from parquet_scan('__TEST_DIR__/hive_filters_2/*/*/*.parquet', HIVE_PARTITIONING=1) where c > 500 and c < 500;
+----
+physical_plan	<REGEX>:.*PARQUET_SCAN.*File Filters:.*\(CAST\(c AS.*INTEGER\).*BETWEEN 500.*

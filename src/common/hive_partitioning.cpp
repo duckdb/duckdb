@@ -114,7 +114,16 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 			ConvertKnownColRefToConstants(filter_copy, known_values, table_index);
 			// Evaluate the filter, if it can be evaluated here, we can not prune this filter
 			Value result_value;
+			if (combiner.AddFilter(std::move(filter_copy)) == FilterResult::UNSATISFIABLE) {
+				should_prune_file = true;
+				if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
+					get.file_filters.push_back(filter->Copy());
+					filters_applied_to_files.insert(j);
+				};
+				continue;
+			}
 
+			filter_copy = filter->Copy();
 			if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() ||
 			    !ExpressionExecutor::TryEvaluateScalar(context, *filter_copy, result_value)) {
 				// can not be evaluated only with the filename/hive columns added, we can not prune this filter
@@ -131,15 +140,14 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 					filters_applied_to_files.insert(j);
 				}
 			}
-
 			// Use filter combiner to determine that this filter makes
-			if (!should_prune_file && combiner.AddFilter(std::move(filter_copy)) == FilterResult::UNSATISFIABLE) {
-				should_prune_file = true;
-				if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
-					get.file_filters.push_back(filter->Copy());
-					filters_applied_to_files.insert(j);
-				}
-			}
+//			if (!should_prune_file && combiner.AddFilter(std::move(filter_copy)) == FilterResult::UNSATISFIABLE) {
+//				should_prune_file = true;
+//				if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
+//					get.file_filters.push_back(filter->Copy());
+//					filters_applied_to_files.insert(j);
+//				}
+//			}
 		}
 
 		if (!should_prune_file) {
