@@ -911,7 +911,7 @@ bool JoinHashTable::RequiresPartitioning(ClientConfig &config, vector<unique_ptr
 			auto new_estimated_size = double(partition_size) / partition_multiplier;
 			auto new_estimated_ht_size = new_estimated_size + PointerTableSize(new_estimated_count);
 
-			if (new_estimated_ht_size <= double(max_ht_size) / 4) {
+			if (config.force_external || new_estimated_ht_size <= double(max_ht_size) / 4) {
 				// Aim for an estimated partition size of max_ht_size / 4
 				break;
 			}
