@@ -567,3 +567,162 @@ TEST_CASE("Test ADBC Transaction Errors", "[adbc]") {
 
 	REQUIRE(SUCCESS(AdbcConnectionRollback(&adbc_connection, &adbc_error)));
 }
+
+TEST_CASE("Test ADBC ConnectionGetTableSchema", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	duckdb_adbc::AdbcDatabase adbc_database;
+	duckdb_adbc::AdbcConnection adbc_connection;
+
+	duckdb_adbc::AdbcError adbc_error;
+	duckdb_adbc::InitiliazeADBCError(&adbc_error);
+
+	ArrowSchema arrow_schema;
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	// Test successful schema return
+	REQUIRE(SUCCESS(
+	    AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "main", "duckdb_indexes", &arrow_schema, &adbc_error)));
+	REQUIRE(arrow_schema.n_children == 12);
+	arrow_schema.release(&arrow_schema);
+
+	// Test Catalog Name (Not accepted)
+	REQUIRE(!SUCCESS(
+	    AdbcConnectionGetTableSchema(&adbc_connection, "bla", "main", "duckdb_indexes", &arrow_schema, &adbc_error)));
+	REQUIRE(std::strcmp(adbc_error.message,
+	                    "Catalog Name is not used in DuckDB. It must be set to nullptr or an empty string") == 0);
+	adbc_error.release(&adbc_error);
+
+	// Test null schema name
+	REQUIRE(!SUCCESS(AdbcConnectionGetTableSchema(&adbc_connection, nullptr, nullptr, "duckdb_indexes", &arrow_schema,
+	                                              &adbc_error)));
+	REQUIRE(std::strcmp(adbc_error.message, "AdbcConnectionGetTableSchema: must provide db_schema") == 0);
+	adbc_error.release(&adbc_error);
+
+	// Empty schema should be fine
+	REQUIRE(SUCCESS(
+	    AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "", "duckdb_indexes", &arrow_schema, &adbc_error)));
+	REQUIRE(arrow_schema.n_children == 12);
+	arrow_schema.release(&arrow_schema);
+
+	// Test null and empty table name
+	REQUIRE(!SUCCESS(AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "", nullptr, &arrow_schema, &adbc_error)));
+	REQUIRE(std::strcmp(adbc_error.message, "AdbcConnectionGetTableSchema: must provide table_name") == 0);
+	adbc_error.release(&adbc_error);
+
+	REQUIRE(!SUCCESS(AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "", "", &arrow_schema, &adbc_error)));
+	REQUIRE(std::strcmp(adbc_error.message, "AdbcConnectionGetTableSchema: must provide table_name") == 0);
+	adbc_error.release(&adbc_error);
+
+	// Test invalid schema
+
+	REQUIRE(!SUCCESS(
+	    AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "b", "duckdb_indexes", &arrow_schema, &adbc_error)));
+	REQUIRE(std::strcmp(adbc_error.message, "Catalog Error: Table with name duckdb_indexes does not exist!\nDid you "
+	                                        "mean \"main.duckdb_indexes\"?\nLINE 1: SELECT * FROM b.duckdb_indexes "
+	                                        "LIMIT 0;\n                      ^\nunable to initialize statement") == 0);
+	adbc_error.release(&adbc_error);
+
+	// Test invalid table
+	REQUIRE(!SUCCESS(
+	    AdbcConnectionGetTableSchema(&adbc_connection, nullptr, "", "duckdb_indexeeees", &arrow_schema, &adbc_error)));
+	REQUIRE(
+	    std::strcmp(
+	        adbc_error.message,
+	        "Catalog Error: Table with name duckdb_indexeeees does not exist!\nDid you mean \"duckdb_indexes\"?\nLINE "
+	        "1: SELECT * FROM duckdb_indexeeees LIMIT 0;\n                      ^\nunable to initialize statement") ==
+	    0);
+	adbc_error.release(&adbc_error);
+}
+
+TEST_CASE("Test ADBC Substrait", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	duckdb_adbc::AdbcDatabase adbc_database;
+	duckdb_adbc::AdbcConnection adbc_connection;
+
+	duckdb_adbc::AdbcError adbc_error;
+	duckdb_adbc::AdbcStatement adbc_statement;
+	duckdb_adbc::InitiliazeADBCError(&adbc_error);
+
+	ArrowArrayStream arrow_stream;
+	ArrowArray arrow_array;
+
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	auto conn = (duckdb::Connection *)adbc_connection.private_data;
+	if (!conn->context->db->ExtensionIsLoaded("substrait")) {
+		// We need substrait to run this test
+		return;
+	}
+	// Insert Data
+	ADBCTestDatabase db;
+	auto &input_data = db.Query("SELECT 'Push Ups' as exercise, 3 as difficulty_level;");
+	string table_name = "crossfit";
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+
+	REQUIRE(SUCCESS(duckdb_adbc::StatementSetOption(&adbc_statement, ADBC_INGEST_OPTION_TARGET_TABLE,
+	                                                table_name.c_str(), &adbc_error)));
+
+	REQUIRE(SUCCESS(duckdb_adbc::StatementBindStream(&adbc_statement, &input_data, &adbc_error)));
+
+	REQUIRE(SUCCESS(duckdb_adbc::StatementExecuteQuery(&adbc_statement, nullptr, nullptr, &adbc_error)));
+
+	// SELECT COUNT(*) FROM CROSSFIT
+	auto str_plan =
+	    "\\x12\\x09\\x1A\\x07\\x10\\x01\\x1A\\x03lte\\x12\\x11\\x1A\\x0F\\x10\\x02\\x1A\\x0Bis_not_"
+	    "null\\x12\\x09\\x1A\\x07\\x10\\x03\\x1A\\x03and\\x12\\x0B\\x1A\\x09\\x10\\x04\\x1A\\x05count\\x1A\\xC7\\x01\\x"
+	    "12\\xC4\\x01\\x0A\\xB7\\x01:\\xB4\\x01\\x12\\xA7\\x01\\x22\\xA4\\x01\\x12\\x93\\x01\\x0A\\x90\\x01\\x12."
+	    "\\x0A\\x08exercise\\x0A\\x0Fdificulty_level\\x12\\x11\\x0A\\x07\\xB2\\x01\\x04\\x08\\x0D\\x18\\x01\\x0A\\x04*"
+	    "\\x02\\x10\\x01\\x18\\x02\\x1AJ\\x1AH\\x08\\x03\\x1A\\x04\\x0A\\x02\\x10\\x01\\x22\\x22\\x1A "
+	    "\\x1A\\x1E\\x08\\x01\\x1A\\x04*"
+	    "\\x02\\x10\\x01\\x22\\x0C\\x1A\\x0A\\x12\\x08\\x0A\\x04\\x12\\x02\\x08\\x01\\x22\\x00\\x22\\x06\\x1A\\x04\\x0A"
+	    "\\x02(\\x05\\x22\\x1A\\x1A\\x18\\x1A\\x16\\x08\\x02\\x1A\\x04*"
+	    "\\x02\\x10\\x01\\x22\\x0C\\x1A\\x0A\\x12\\x08\\x0A\\x04\\x12\\x02\\x08\\x01\\x22\\x00\\x22\\x06\\x0A\\x02\\x0A"
+	    "\\x00\\x10\\x01:\\x0A\\x0A\\x08crossfit\\x1A\\x00\\x22\\x0A\\x0A\\x08\\x08\\x04*\\x04:"
+	    "\\x02\\x10\\x01\\x1A\\x08\\x12\\x06\\x0A\\x02\\x12\\x00\\x22\\x00\\x12\\x08exercise2\\x0A\\x10\\x18*"
+	    "\\x06DuckDB";
+	auto plan = (uint8_t *)str_plan;
+	size_t length = strlen(str_plan);
+	REQUIRE(SUCCESS(AdbcStatementNew(&adbc_connection, &adbc_statement, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcStatementSetSubstraitPlan(&adbc_statement, plan, length, &adbc_error)));
+	int64_t rows_affected;
+	REQUIRE(SUCCESS(AdbcStatementExecuteQuery(&adbc_statement, &arrow_stream, &rows_affected, &adbc_error)));
+	arrow_stream.get_next(&arrow_stream, &arrow_array);
+	REQUIRE(((int64_t *)arrow_array.children[0]->buffers[1])[0] == 1);
+	arrow_array.release(&arrow_array);
+	arrow_stream.release(&arrow_stream);
+
+	// Try some errors
+	REQUIRE(!SUCCESS(AdbcStatementSetSubstraitPlan(&adbc_statement, nullptr, length, &adbc_error)));
+	REQUIRE(std::strcmp(adbc_error.message, "Substrait Plan is not set") == 0);
+	adbc_error.release(&adbc_error);
+
+	REQUIRE(!SUCCESS(AdbcStatementSetSubstraitPlan(&adbc_statement, plan, 0, &adbc_error)));
+	REQUIRE(std::strcmp(adbc_error.message, "Can't execute plan with size = 0") == 0);
+	adbc_error.release(&adbc_error);
+
+	// Broken Plan
+	REQUIRE(!SUCCESS(AdbcStatementSetSubstraitPlan(&adbc_statement, plan, 5, &adbc_error)));
+	REQUIRE(std::strcmp(adbc_error.message, "Conversion Error: Invalid hex escape code encountered in string -> blob "
+	                                        "conversion: unterminated escape code at end of blob") == 0);
+	adbc_error.release(&adbc_error);
+}
