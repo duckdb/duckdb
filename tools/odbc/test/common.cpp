@@ -6,7 +6,7 @@ namespace odbc_test {
 void ODBC_CHECK(SQLRETURN ret, std::string msg) {
 	switch (ret) {
 	case SQL_SUCCESS:
-		REQUIRE(TRUE);
+		REQUIRE(1);
 		return;
 	case SQL_SUCCESS_WITH_INFO:
 		fprintf(stderr, "%s: Success with info\n", msg.c_str());
