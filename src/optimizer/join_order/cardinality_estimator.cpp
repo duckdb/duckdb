@@ -8,8 +8,6 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
-#include "iostream"
-
 #include <cmath>
 
 namespace duckdb {
