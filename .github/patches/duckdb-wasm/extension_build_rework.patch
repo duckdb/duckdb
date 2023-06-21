@@ -1,9 +1,9 @@
 diff --git a/lib/cmake/duckdb.cmake b/lib/cmake/duckdb.cmake
-index 086a0a9c..cfc2f300 100644
+index cb0e60d6..d7a4851d 100644
 --- a/lib/cmake/duckdb.cmake
 +++ b/lib/cmake/duckdb.cmake
 @@ -15,6 +15,10 @@ endif()
- set(DUCKDB_CXX_FLAGS "${DUCKDB_CXX_FLAGS} -Wno-unqualified-std-cast-call")
+ set(DUCKDB_CXX_FLAGS "${DUCKDB_CXX_FLAGS} -Wno-unqualified-std-cast-call -DDUCKDB_DEBUG_NO_SAFETY")
  message("DUCKDB_CXX_FLAGS=${DUCKDB_CXX_FLAGS}")
  
 +set(DUCKDB_EXTENSIONS "fts;excel;json")
