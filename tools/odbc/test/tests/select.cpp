@@ -5,7 +5,6 @@
 using namespace odbc_test;
 
 TEST_CASE("Test Select Statement", "[odbc]") {
-	SQLRETURN ret;
 	SQLHANDLE env;
 	SQLHANDLE dbc;
 

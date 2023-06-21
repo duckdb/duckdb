@@ -113,7 +113,6 @@ static void TestSQLTables(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_ma
 static void TestSQLTablesLong(HSTMT &hstmt) {
 	// FIXME: this test is broken
 	return;
-	SQLRETURN ret;
 
 	EXECUTE_AND_CHECK("SQLTables", SQLTables, hstmt, ConvertToSQLCHAR(""), SQL_NTS, ConvertToSQLCHAR("main"), SQL_NTS,
 	                  ConvertToSQLCHAR("test_table_%"), SQL_NTS,
@@ -197,7 +196,7 @@ TEST_CASE("Test Catalog Functions (SQLGetTypeInfo, SQLTables, SQLColumns, SQLGet
 
 	// Check for SQLTables
 	TestSQLTables(hstmt, types_map);
-	//	TestSQLTablesLong(hstmt);
+	TestSQLTablesLong(hstmt);
 
 	// Check for SQLColumns
 	TestSQLColumns(hstmt, types_map);

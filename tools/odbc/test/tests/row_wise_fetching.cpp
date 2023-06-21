@@ -20,6 +20,10 @@ static void TestMicrosoftExample(HSTMT &hstmt) {
 	SQLULEN order_info_size = sizeof(order_info);
 	EXECUTE_AND_CHECK("SQLSetStmtAttr", SQLSetStmtAttr, hstmt, SQL_ATTR_ROW_ARRAY_SIZE,
 	                  reinterpret_cast<SQLPOINTER>(ROW_ARRAY_SIZE), 0);
+	rows_fetched = 0;
+	if (order_info_size == rows_fetched) {
+		row_array_status[rows_fetched] = 0;
+	}
 }
 
 TEST_CASE("row_wise_fetching", "[odbc]") {
@@ -34,6 +38,8 @@ TEST_CASE("row_wise_fetching", "[odbc]") {
 	CONNECT_TO_DATABASE(env, dbc);
 
 	EXECUTE_AND_CHECK("SQLAllocHandle (HSTMT)", SQLAllocHandle, SQL_HANDLE_STMT, dbc, &hstmt);
+
+	TestMicrosoftExample(hstmt);
 
 	// Free the statement handle
 	EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
