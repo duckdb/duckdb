@@ -111,7 +111,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::EmptyResult(const std::shared_ptr
 	for (auto &type : types) {
 		dummy_values.emplace_back(type);
 	}
-	vector<vector<Value>> single_row(1, std::move(dummy_values));
+	vector<vector<Value>> single_row(1, dummy_values);
 	auto values_relation =
 	    make_uniq<DuckDBPyRelation>(make_shared<ValueRelation>(context, single_row, std::move(names)));
 	// Add a filter on an impossible condition
