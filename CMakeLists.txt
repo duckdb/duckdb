@@ -692,7 +692,7 @@ function(build_loadable_extension NAME PARAMETERS)
 endfunction()
 
 # Internal extension register function
-function(register_extension NAME DONT_LINK DONT_BUILD PATH INCLUDE_PATH)
+function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH)
   string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
   string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
 
@@ -705,6 +705,12 @@ function(register_extension NAME DONT_LINK DONT_BUILD PATH INCLUDE_PATH)
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD FALSE PARENT_SCOPE)
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK FALSE PARENT_SCOPE)
     return()
+  endif()
+
+  if ("${LOAD_TESTS}")
+    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LOAD_TESTS TRUE PARENT_SCOPE)
+  else()
+    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LOAD_TESTS FALSE PARENT_SCOPE)
   endif()
 
   if (NOT ${DONT_LINK} AND NOT DISABLE_BUILTIN_EXTENSIONS)
@@ -725,7 +731,7 @@ function(register_extension NAME DONT_LINK DONT_BUILD PATH INCLUDE_PATH)
 endfunction()
 
 # Downloads the external extension repo at the specified commit and calls register_extension
-macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD PATH INCLUDE_PATH)
+macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH)
   include(FetchContent)
   FETCHCONTENT_DECLARE(
           ${NAME}_extension_fc
@@ -737,15 +743,15 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD PATH INCL
   FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
 
   if ("${INCLUDE_PATH}" STREQUAL "")
-    register_extension(${NAME} ${DONT_LINK} ${DONT_BUILD} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} "${${NAME}_extension_fc_SOURCE_DIR}/src/include")
+    register_extension(${NAME} ${DONT_LINK} ${DONT_BUILD} ${LOAD_TESTS} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} "${${NAME}_extension_fc_SOURCE_DIR}/src/include")
   else()
-    register_extension(${NAME} ${DONT_LINK} ${DONT_BUILD} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} "${${NAME}_extension_fc_SOURCE_DIR}/${INCLUDE_PATH}")
+    register_extension(${NAME} ${DONT_LINK} ${DONT_BUILD} ${LOAD_TESTS} ${${NAME}_extension_fc_SOURCE_DIR}/${PATH} "${${NAME}_extension_fc_SOURCE_DIR}/${INCLUDE_PATH}")
   endif()
 endmacro()
 
 function(duckdb_extension_load NAME)
   # Parameter parsing
-  set(options DONT_LINK DONT_BUILD)
+  set(options DONT_LINK DONT_BUILD LINK_TESTS)
   set(oneValueArgs SOURCE_DIR INCLUDE_DIR GIT_URL GIT_TAG)
   cmake_parse_arguments(duckdb_extension_load "${options}" "${oneValueArgs}" "" ${ARGN})
 
@@ -765,7 +771,7 @@ function(duckdb_extension_load NAME)
     if (NOT "${duckdb_extension_load_GIT_COMMIT}" STREQUAL "")
       error("Git URL specified but no valid git commit was found for ${NAME} extension")
     endif()
-    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}")
+    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}")
   elseif (NOT "${duckdb_extension_load_SOURCE_DIR}" STREQUAL "")
     # Local extension, custom path
     message(STATUS "Building extension '${NAME}' from '${duckdb_extension_load_SOURCE_DIR}'")
@@ -777,21 +783,22 @@ function(duckdb_extension_load NAME)
       set(INCLUDE_PATH_DEFAULT ${duckdb_extension_load_INCLUDE_DIR})
     endif()
 
-    register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_SOURCE_DIR}" "${INCLUDE_PATH_DEFAULT}")
+    register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${INCLUDE_PATH_DEFAULT}")
   elseif(EXISTS ${CMAKE_SOURCE_DIR}/extension_external/${NAME})
     # Local extension, default path
     message(STATUS "Building extension '${NAME}' from '${CMAKE_SOURCE_DIR}/extension_external'")
-    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}"  "${CMAKE_SOURCE_DIR}/extension_external/${NAME}" "${CMAKE_SOURCE_DIR}/extension_external/${NAME}/src/include")
+    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}"  "${CMAKE_SOURCE_DIR}/extension_external/${NAME}" "${CMAKE_SOURCE_DIR}/extension_external/${NAME}/src/include")
   else()
     # Local extension, default path
     message(STATUS "Building extension '${NAME}' from '${CMAKE_SOURCE_DIR}/extensions'")
-    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}"  "${CMAKE_SOURCE_DIR}/extension/${NAME}" "${CMAKE_SOURCE_DIR}/extension/${NAME}/include")
+    register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${CMAKE_SOURCE_DIR}/extension/${NAME}" "${CMAKE_SOURCE_DIR}/extension/${NAME}/include")
   endif()
 
   # Propagate variables set by register_extension
   set(DUCKDB_EXTENSION_NAMES ${DUCKDB_EXTENSION_NAMES} PARENT_SCOPE)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD} PARENT_SCOPE)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK} PARENT_SCOPE)
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LOAD_TESTS ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LOAD_TESTS} PARENT_SCOPE)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_PATH} PARENT_SCOPE)
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_INCLUDE_PATH} PARENT_SCOPE)
 endfunction()

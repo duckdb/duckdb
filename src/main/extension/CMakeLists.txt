@@ -50,6 +50,19 @@ if(NOT ${EXT_LOADER_NAME_LIST} STREQUAL "")
   string(SUBSTRING ${EXT_LOADER_NAME_LIST} 1 -1 EXT_NAME_VECTOR_INITIALIZER)
 endif()
 
+# Load test paths for extensions whose SQLLogicTests need to be registered
+set(EXT_TEST_PATH_LIST "")
+foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+  string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+  if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_LOAD_TESTS})
+    set(EXT_TEST_PATH_LIST "${EXT_TEST_PATH_LIST},\"${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH}test/sql\"")
+  endif()
+endforeach()
+
+if(NOT ${EXT_TEST_PATH_LIST} STREQUAL "")
+  string(SUBSTRING ${EXT_TEST_PATH_LIST} 1 -1 EXT_TEST_PATH_INITIALIZER)
+endif()
+
 configure_file(generated_extension_loader.hpp.in
                "${PROJECT_BINARY_DIR}/include/generated_extension_loader.hpp")
 

@@ -11,6 +11,10 @@
 #include <string>
 #include <vector>
 
+#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
+#include "generated_extension_loader.hpp"
+#endif
+
 using namespace duckdb;
 using namespace std;
 
@@ -178,5 +182,16 @@ void RegisterSqllogictests() {
 			REGISTER_TEST_CASE(testRunner<false>, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
 		}
 	});
+
+#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
+	for (auto extension_test_path: EXTENSION_TEST_PATHS) {
+		listFiles(*fs, extension_test_path, [&](const string &path) {
+			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
+				// parse the name / group from the test
+				REGISTER_TEST_CASE(testRunner<false>, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
+			}
+		});
+	}
+#endif
 }
 } // namespace duckdb

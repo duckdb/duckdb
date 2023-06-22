@@ -3,6 +3,10 @@ include_directories(../third_party/tpce-tool/include)
 include_directories(../third_party/sqlite/include)
 include_directories(include)
 
+# Allows loading tests from registered extensions
+include_directories("${PROJECT_BINARY_DIR}/include/")
+add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
+
 add_subdirectory(api)
 add_subdirectory(appender)
 add_subdirectory(arrow)
