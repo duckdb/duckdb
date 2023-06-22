@@ -422,41 +422,6 @@ jobs:
       shell: bash
       run: make sqlite
 
- expanded:
-    name: Expanded
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      TREAT_WARNINGS_AS_ERRORS: 1
-      DISABLE_UNITY: 1
-      DISABLE_PARQUET: 1
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: ./.github/actions/swap_space
-
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: make debug
-
-
-
  odbc:
     name: ODBC
     runs-on: ubuntu-22.04
