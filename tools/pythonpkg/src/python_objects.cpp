@@ -277,7 +277,7 @@ void PythonObject::Initialize() {
 	PyDateTime_IMPORT; // Python datetime initialize #2
 }
 
-py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
+py::object PythonObject::FromValue(const Value &val, const LogicalType &type, const string &timezone_config) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	if (val.IsNull()) {
 		return py::none();
@@ -338,7 +338,13 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 		Timestamp::Convert(timestamp, date, time);
 		Date::Convert(date, year, month, day);
 		Time::Convert(time, hour, min, sec, micros);
-		return py::cast<py::object>(PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros));
+		auto py_timestamp = py::cast<py::object>(PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros));
+		if (type.id() == LogicalTypeId::TIMESTAMP_TZ){
+			// We have to add the timezone info
+			auto tz_info  = import_cache.pytz().timezone()(timezone_config);
+			return tz_info.attr("localize")(py_timestamp);
+		}
+		return py_timestamp;
 	}
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ: {
@@ -362,7 +368,7 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 
 		py::list list;
 		for (auto &list_elem : list_values) {
-			list.append(FromValue(list_elem, ListType::GetChildType(type)));
+			list.append(FromValue(list_elem, ListType::GetChildType(type),timezone_config));
 		}
 		return std::move(list);
 	}
@@ -376,8 +382,8 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 		py::list values;
 		for (auto &list_elem : list_values) {
 			auto &struct_children = StructValue::GetChildren(list_elem);
-			keys.append(PythonObject::FromValue(struct_children[0], key_type));
-			values.append(PythonObject::FromValue(struct_children[1], val_type));
+			keys.append(PythonObject::FromValue(struct_children[0], key_type,timezone_config));
+			values.append(PythonObject::FromValue(struct_children[1], val_type,timezone_config));
 		}
 		py::dict py_struct;
 		py_struct["key"] = std::move(keys);
@@ -393,7 +399,7 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 			auto &child_entry = child_types[i];
 			auto &child_name = child_entry.first;
 			auto &child_type = child_entry.second;
-			py_struct[child_name.c_str()] = FromValue(struct_values[i], child_type);
+			py_struct[child_name.c_str()] = FromValue(struct_values[i], child_type,timezone_config);
 		}
 		return std::move(py_struct);
 	}

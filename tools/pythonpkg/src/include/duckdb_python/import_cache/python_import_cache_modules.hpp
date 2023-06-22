@@ -6,4 +6,5 @@
 #include "duckdb_python/import_cache/modules/numpy_module.hpp"
 #include "duckdb_python/import_cache/modules/pandas_module.hpp"
 #include "duckdb_python/import_cache/modules/polars_module.hpp"
+#include "duckdb_python/import_cache/modules/pytz_module.hpp"
 #include "duckdb_python/import_cache/modules/uuid_module.hpp"

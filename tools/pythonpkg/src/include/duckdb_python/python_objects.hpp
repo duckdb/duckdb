@@ -172,7 +172,7 @@ public:
 
 struct PythonObject {
 	static void Initialize();
-	static py::object FromValue(const Value &value, const LogicalType &id);
+	static py::object FromValue(const Value &value, const LogicalType &id, const string &timezone_config);
 };
 
 } // namespace duckdb

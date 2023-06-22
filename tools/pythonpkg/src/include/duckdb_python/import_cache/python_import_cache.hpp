@@ -40,6 +40,9 @@ public:
 	DecimalCacheItem &decimal() {
 		return LazyLoadModule(decimal_module);
 	}
+	PyTzCacheItem &pytz() {
+		return LazyLoadModule(pytz_module);
+	}
 	UUIDCacheItem &uuid() {
 		return LazyLoadModule(uuid_module);
 	}
@@ -63,6 +66,7 @@ private:
 	NumpyCacheItem numpy_module;
 	DatetimeCacheItem datetime_module;
 	DecimalCacheItem decimal_module;
+	PyTzCacheItem pytz_module;
 	UUIDCacheItem uuid_module;
 	PandasCacheItem pandas_module;
 	PolarsCacheItem polars_module;

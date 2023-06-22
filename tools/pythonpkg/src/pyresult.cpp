@@ -65,7 +65,7 @@ py::object DuckDBPyResult::Fetchone() {
 			continue;
 		}
 		auto val = current_chunk->data[col_idx].GetValue(chunk_offset);
-		res[col_idx] = PythonObject::FromValue(val, result->types[col_idx]);
+		res[col_idx] = PythonObject::FromValue(val, result->types[col_idx],timezone_config);
 	}
 	chunk_offset++;
 	return std::move(res);
