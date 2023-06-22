@@ -426,8 +426,9 @@ void WindowSegmentTree::Evaluate(const idx_t *begins, const idx_t *ends, Vector 
 	const auto cant_combine = (!aggr.function.combine || !UseCombineAPI());
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 
-	//	Second pass: aggregate the segment tree nodes
+	//	First pass: aggregate the segment tree nodes
 	//	Share adjacent identical states
+	//  We do this first because we want to share only tree aggregations
 	idx_t prev_begin = 1;
 	idx_t prev_end = 0;
 	auto ldata = FlatVector::GetData<data_ptr_t>(statel);
@@ -438,7 +439,8 @@ void WindowSegmentTree::Evaluate(const idx_t *begins, const idx_t *ends, Vector 
 		aggr.function.initialize(state_ptr);
 
 		if (cant_combine) {
-			break;
+			// Make sure we initialise all states
+			continue;
 		}
 
 		auto begin = begins[rid];
@@ -493,7 +495,7 @@ void WindowSegmentTree::Evaluate(const idx_t *begins, const idx_t *ends, Vector 
 	}
 	FlushStates(true);
 
-	//	First pass: aggregate the ragged leaves
+	//	Seggond pass: aggregate the ragged leaves
 	//	(or everything if we can't combine)
 	for (idx_t rid = 0; rid < count; ++rid) {
 		auto state_ptr = fdata[rid];
