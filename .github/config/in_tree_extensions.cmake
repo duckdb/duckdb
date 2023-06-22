@@ -2,7 +2,7 @@
 # This is the DuckDB in-tree extension config as it will run on the CI
 #
 # to build duckdb with this configuration run:
-#   EXTENSION_CONFIGS=.github/config/extension_config.cmake make
+#   EXTENSION_CONFIGS=.github/config/in_tree_extensions.cmake make
 #
 
 duckdb_extension_load(excel DONT_LINK)
