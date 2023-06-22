@@ -163,9 +163,7 @@ static void ExecuteConstantSlice(Vector &result, Vector &v, Vector &b, Vector &e
 	auto sel_length = 0;
 	if (s && svalid && vvalid && bvalid && evalid && step != 1 && end - begin > 0) {
 		sel_length = CalculateSliceLength(begin, end, step, svalid);
-		if (sel_length > 0) {
-			sel.Initialize(sel_length);
-		}
+		sel.Initialize(sel_length);
 	}
 
 	// Try to slice
