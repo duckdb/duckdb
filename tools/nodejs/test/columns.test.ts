@@ -8,7 +8,7 @@ describe('Column Types', function() {
     it('should prepare a statement and return the columns and their types', function(done) {
       // we dont include the large_enum and small_enum since they are huge and test the same code path as the small_enum
 	  // union is not covered (yet)
-      var stmt = db.prepare("SELECT * EXCLUDE(medium_enum, large_enum, union) FROM test_all_types()", function(err: null | Error) {
+      var stmt = db.prepare("SELECT * EXCLUDE(medium_enum, large_enum) FROM test_all_types()", function(err: null | Error) {
           if (err) throw err;
 
           let cols = stmt.columns();
