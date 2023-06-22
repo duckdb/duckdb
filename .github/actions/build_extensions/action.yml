@@ -70,9 +70,11 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Setup vcpkg (it does not install any package yet)
+    - name: Setup vcpkg
       if: ${{ inputs.build_vcpkg_extensions }}
       uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgGitCommitId: f6a5d4e8eb7476b8d7fc12a56dff300c1c986131
 
     - name: Configure combined vcpkg build for extensions that require vcpkg
       if: ${{ inputs.build_vcpkg_extensions }}
