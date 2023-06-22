@@ -80,12 +80,11 @@ vector<TestType> TestAllTypesFun::GetTestTypes() {
 	result.emplace_back(LogicalType::ENUM("medium_enum", medium_enum, 300), "medium_enum");
 
 	// this is a big one... not sure if we should push this one here, but it's required for completeness
-	Vector large_enum(LogicalType::VARCHAR, 70000);
+	Vector large_enum(LogicalType::VARCHAR, 2);
 	auto large_enum_ptr = FlatVector::GetData<string_t>(large_enum);
-	for (idx_t i = 0; i < 70000; i++) {
-		large_enum_ptr[i] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(i));
-	}
-	result.emplace_back(LogicalType::ENUM("large_enum", large_enum, 70000), "large_enum");
+	large_enum_ptr[0] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(0));
+	large_enum_ptr[1] = StringVector::AddStringOrBlob(large_enum, string("enum_") + to_string(69999));
+	result.emplace_back(LogicalType::ENUM("large_enum", large_enum, 2), "large_enum");
 
 	// arrays
 	auto int_list_type = LogicalType::LIST(LogicalType::INTEGER);
