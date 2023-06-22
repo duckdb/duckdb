@@ -114,17 +114,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 			ConvertKnownColRefToConstants(filter_copy, known_values, table_index);
 			// Evaluate the filter, if it can be evaluated here, we can not prune this filter
 			Value result_value;
-			auto ret = combiner.AddFilter(std::move(filter_copy));
-			if (ret == FilterResult::UNSATISFIABLE) {
-				should_prune_file = true;
-				if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
-					get.file_filters.push_back(filter->Copy());
-					filters_applied_to_files.insert(j);
-				};
-				continue;
-			}
 
-			filter_copy = filter->Copy();
 			if (!filter_copy->IsScalar() || !filter_copy->IsFoldable() ||
 			    !ExpressionExecutor::TryEvaluateScalar(context, *filter_copy, result_value)) {
 				// can not be evaluated only with the filename/hive columns added, we can not prune this filter
