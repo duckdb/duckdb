@@ -275,6 +275,7 @@ jobs:
 
      - uses: ./.github/actions/build_extensions
        with:
+         build_vcpkg_extensions: 1
          deploy_as: windows_amd64
          post_install: choco uninstall openssl -y --force
          treat_warn_as_error: 0

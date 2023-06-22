@@ -48,6 +48,9 @@ inputs:
   build_out_of_tree_extensions:
     description: 'Build out-of-tree extensions'
     default: 1
+  build_vcpkg_extensions:
+    description: 'Build extensions that require vcpkg for dependency management'
+    default: 1  
   python_name:
     description: 'Python binary name because wtf Python'
     default: 'python3'
@@ -67,6 +70,18 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Setup vcpkg (it does not install any package yet)
+      if: ${{ inputs.build_vcpkg_extensions }}
+      uses: lukka/run-vcpkg@v11
+
+    - name: Configure combined vcpkg build for extensions that require vcpkg
+      if: ${{ inputs.build_vcpkg_extensions }}
+      shell: bash
+      run: |
+        echo "VCPKG_TOOLCHAIN_PATH=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
+        make merged_vcpkg_manifest
+        echo "USE_MERGED_VCPKG_MANIFEST=1" >> $GITHUB_ENV 
+
     - name: Build
       shell: bash
       env:
@@ -90,6 +105,7 @@ runs:
         export EXTENSION_CONFIGS=""
         export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_in_tree_extensions == 1 && '.github/config/in_tree_extensions.cmake' || ''}}"
         export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_out_of_tree_extensions == 1 && '.github/config/out_of_tree_extensions.cmake' || '' }}"
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_vcpkg_extensions == 1 && '.github/config/vcpkg_out_of_tree_extensions.cmake' || '' }}"
         echo "EXTENSION_CONFIGS"
         make
 
@@ -126,6 +142,8 @@ runs:
           fi
         fi
 
+    # Note: the extension-upload-test script will currently not run the out-of-tree extensions tests.
+    #       it will however confirm that the out-of-tree extensions can actually be loaded.
     - name: Test loadable extensions
       if: ${{ inputs.run_tests == 1 }}
       shell: bash

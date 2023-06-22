@@ -197,6 +197,7 @@ jobs:
   
     - uses: ./.github/actions/build_extensions
       with:
+        build_vcpkg_extensions: 1
         post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64
         s3_id: ${{ secrets.S3_ID }}
