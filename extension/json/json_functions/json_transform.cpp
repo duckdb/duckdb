@@ -41,7 +41,7 @@ static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context
 
 static LogicalType StructureStringToTypeArray(yyjson_val *arr, ClientContext &context) {
 	if (yyjson_arr_size(arr) != 1) {
-		throw InvalidInputException("Too many values in array of JSON structure");
+		throw BinderException("Too many values in array of JSON structure");
 	}
 	return LogicalType::LIST(StructureStringToType(yyjson_arr_get_first(arr), context));
 }
@@ -62,7 +62,7 @@ static LogicalType StructureToTypeObject(yyjson_val *obj, ClientContext &context
 	}
 	D_ASSERT(yyjson_obj_size(obj) == names.size());
 	if (child_types.empty()) {
-		throw InvalidInputException("Empty object in JSON structure");
+		throw BinderException("Empty object in JSON structure");
 	}
 	return LogicalType::STRUCT(child_types);
 }
@@ -76,7 +76,7 @@ static LogicalType StructureStringToType(yyjson_val *val, ClientContext &context
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 		return TransformStringToLogicalType(unsafe_yyjson_get_str(val), context);
 	default:
-		throw InvalidInputException("invalid JSON structure");
+		throw BinderException("invalid JSON structure");
 	}
 }
 
@@ -89,20 +89,15 @@ static unique_ptr<FunctionData> JSONTransformBind(ClientContext &context, Scalar
 	if (arguments[1]->return_type == LogicalTypeId::SQLNULL) {
 		bound_function.return_type = LogicalTypeId::SQLNULL;
 	} else if (!arguments[1]->IsFoldable()) {
-		throw InvalidInputException("JSON structure must be a constant!");
+		throw BinderException("JSON structure must be a constant!");
 	} else {
 		auto structure_val = ExpressionExecutor::EvaluateScalar(context, *arguments[1]);
 		if (!structure_val.DefaultTryCastAs(JSONCommon::JSONType())) {
-			throw InvalidInputException("Cannot cast JSON structure to string");
+			throw BinderException("Cannot cast JSON structure to string");
 		}
 		auto structure_string = structure_val.GetValueUnsafe<string_t>();
 		JSONAllocator json_allocator(Allocator::DefaultAllocator());
-		yyjson_read_err err;
-		auto doc =
-		    JSONCommon::ReadDocumentUnsafe(structure_string, JSONCommon::READ_FLAG, json_allocator.GetYYAlc(), &err);
-		if (err.code != YYJSON_READ_SUCCESS) {
-			JSONCommon::ThrowParseError(structure_string.GetData(), structure_string.GetSize(), err);
-		}
+		auto doc = JSONCommon::ReadDocument(structure_string, JSONCommon::READ_FLAG, json_allocator.GetYYAlc());
 		bound_function.return_type = StructureStringToType(doc->root, context);
 	}
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
@@ -114,10 +109,9 @@ static inline string_t GetString(yyjson_val *val) {
 
 template <class T, class OP = TryCast>
 static inline bool GetValueNumerical(yyjson_val *val, T &result, JSONTransformOptions &options) {
+	D_ASSERT(unsafe_yyjson_get_tag(val) != (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE));
 	bool success;
 	switch (unsafe_yyjson_get_tag(val)) {
-	case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
-		return false;
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 		success = OP::template Operation<string_t, T>(GetString(val), result, options.strict_cast);
 		break;
@@ -150,10 +144,9 @@ static inline bool GetValueNumerical(yyjson_val *val, T &result, JSONTransformOp
 
 template <class T, class OP = TryCastToDecimal>
 static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_t s, JSONTransformOptions &options) {
+	D_ASSERT(unsafe_yyjson_get_tag(val) != (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE));
 	bool success;
 	switch (unsafe_yyjson_get_tag(val)) {
-	case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
-		return false;
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 		success = OP::template Operation<string_t, T>(GetString(val), result, &options.error_message, w, s);
 		break;
@@ -186,9 +179,8 @@ static inline bool GetValueDecimal(yyjson_val *val, T &result, uint8_t w, uint8_
 }
 
 static inline bool GetValueString(yyjson_val *val, yyjson_alc *alc, string_t &result, Vector &vector) {
+	D_ASSERT(unsafe_yyjson_get_tag(val) != (YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE));
 	switch (unsafe_yyjson_get_tag(val)) {
-	case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
-		return true;
 	case YYJSON_TYPE_STR | YYJSON_SUBTYPE_NONE:
 		result = string_t(unsafe_yyjson_get_str(val), unsafe_yyjson_get_len(val));
 		return true;
@@ -318,26 +310,14 @@ static bool TransformStringWithFormat(Vector &string_vector, StrpTimeFormat &for
 	auto &target_validity = FlatVector::Validity(result);
 
 	bool success = true;
-	if (source_validity.AllValid()) {
-		for (idx_t i = 0; i < count; i++) {
-			if (!OP::template Operation<T>(format, source_strings[i], target_vals[i], options.error_message)) {
-				target_validity.SetInvalid(i);
-				if (success && options.strict_cast) {
-					options.object_index = i;
-					success = false;
-				}
-			}
-		}
-	} else {
-		for (idx_t i = 0; i < count; i++) {
-			if (!source_validity.RowIsValid(i)) {
-				target_validity.SetInvalid(i);
-			} else if (!OP::template Operation<T>(format, source_strings[i], target_vals[i], options.error_message)) {
-				target_validity.SetInvalid(i);
-				if (success && options.strict_cast) {
-					options.object_index = i;
-					success = false;
-				}
+	for (idx_t i = 0; i < count; i++) {
+		if (!source_validity.RowIsValid(i)) {
+			target_validity.SetInvalid(i);
+		} else if (!OP::template Operation<T>(format, source_strings[i], target_vals[i], options.error_message)) {
+			target_validity.SetInvalid(i);
+			if (success && options.strict_cast) {
+				options.object_index = i;
+				success = false;
 			}
 		}
 	}
