@@ -37,7 +37,7 @@ static bool endsWith(const string &mainStr, const string &toMatch) {
 	        mainStr.compare(mainStr.size() - toMatch.size(), toMatch.size(), toMatch) == 0);
 }
 
-template <bool VERIFICATION>
+template <bool VERIFICATION, bool AUTO_SWITCH_TEST_DIR=false>
 static void testRunner() {
 	// this is an ugly hack that uses the test case name to pass the script file
 	// name if someone has a better idea...
@@ -53,7 +53,29 @@ static void testRunner() {
 	SQLLogicTestRunner runner(std::move(initial_dbpath));
 	runner.output_sql = Catch::getCurrentContext().getConfig()->outputSQL();
 	runner.enable_verification = VERIFICATION;
+
+	string prev_directory;
+
+	// We assume the test working dir for extensions to be one dir above the test/sql, this is of course mega hacky
+	// and will fail in various situations.
+	if (AUTO_SWITCH_TEST_DIR) {
+		prev_directory = TestGetCurrentDirectory();
+
+		std::size_t found = name.find("test/sql");
+		if (found == std::string::npos) {
+			throw Exception("Failed to auto detect working dir for test '" + name + "' because a non-standard path was used!");
+		}
+		auto test_working_dir = name.substr(0,found);
+
+		// Parse the test dir automatically
+		TestChangeDirectory(test_working_dir);
+	}
+
 	runner.ExecuteFile(name);
+
+	if (AUTO_SWITCH_TEST_DIR) {
+		TestChangeDirectory(prev_directory);
+	}
 }
 
 static string ParseGroupFromPath(string file) {
@@ -187,8 +209,8 @@ void RegisterSqllogictests() {
 	for (auto extension_test_path: EXTENSION_TEST_PATHS) {
 		listFiles(*fs, extension_test_path, [&](const string &path) {
 			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
-				// parse the name / group from the test
-				REGISTER_TEST_CASE(testRunner<false>, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
+				auto fun = testRunner<false, true>;
+				REGISTER_TEST_CASE(fun, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
 			}
 		});
 	}
