@@ -571,7 +571,7 @@ jobs:
   threadsan:
     name: Thread Sanitizer
     runs-on: ubuntu-20.04
-    needs: linux-debug
+    needs: linux-memory-leaks
     env:
       CC: gcc-10
       CXX: g++-10
@@ -618,7 +618,7 @@ jobs:
   vector-sizes:
     name: Vector Sizes
     runs-on: ubuntu-20.04
-    needs: linux-release-64
+    needs: linux-memory-leaks
     env:
       CC: gcc-10
       CXX: g++-10
