@@ -16,15 +16,6 @@ PartitionedTupleData::PartitionedTupleData(const PartitionedTupleData &other)
     : type(other.type), buffer_manager(other.buffer_manager), layout(other.layout.Copy()) {
 }
 
-unique_ptr<PartitionedTupleData> PartitionedTupleData::CreateShared() {
-	switch (type) {
-	case PartitionedTupleDataType::RADIX:
-		return make_uniq<RadixPartitionedTupleData>(Cast<RadixPartitionedTupleData>());
-	default:
-		throw NotImplementedException("CreateShared for this type of PartitionedTupleData");
-	}
-}
-
 PartitionedTupleData::~PartitionedTupleData() {
 }
 

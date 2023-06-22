@@ -197,7 +197,7 @@ execution/operator/persistent/physical_batch_copy_to_file.cpp	7
 execution/operator/persistent/physical_batch_insert.cpp	43
 execution/operator/persistent/physical_copy_to_file.cpp	2
 execution/operator/persistent/physical_export.cpp	2
-execution/operator/persistent/physical_fixed_batch_copy.cpp	5
+execution/operator/persistent/physical_fixed_batch_copy.cpp	6
 execution/operator/persistent/physical_insert.cpp	5
 execution/operator/projection/physical_projection.cpp	16
 execution/operator/projection/physical_tableinout_function.cpp	8
