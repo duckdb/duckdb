@@ -35,7 +35,7 @@ static bool endsWith(const string &mainStr, const string &toMatch) {
 	        mainStr.compare(mainStr.size() - toMatch.size(), toMatch.size(), toMatch) == 0);
 }
 
-template <bool VERIFICATION, bool AUTO_SWITCH_TEST_DIR=false>
+template <bool VERIFICATION, bool AUTO_SWITCH_TEST_DIR = false>
 static void testRunner() {
 	// this is an ugly hack that uses the test case name to pass the script file
 	// name if someone has a better idea...
@@ -61,9 +61,10 @@ static void testRunner() {
 
 		std::size_t found = name.find("test/sql");
 		if (found == std::string::npos) {
-			throw Exception("Failed to auto detect working dir for test '" + name + "' because a non-standard path was used!");
+			throw Exception("Failed to auto detect working dir for test '" + name +
+			                "' because a non-standard path was used!");
 		}
-		auto test_working_dir = name.substr(0,found);
+		auto test_working_dir = name.substr(0, found);
 
 		// Parse the test dir automatically
 		TestChangeDirectory(test_working_dir);
@@ -204,7 +205,7 @@ void RegisterSqllogictests() {
 	});
 
 #if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
-	for (auto extension_test_path: EXTENSION_TEST_PATHS) {
+	for (auto extension_test_path : EXTENSION_TEST_PATHS) {
 		listFiles(*fs, extension_test_path, [&](const string &path) {
 			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
 				auto fun = testRunner<false, true>;
