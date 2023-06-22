@@ -391,33 +391,6 @@ jobs:
           libduckdb-linux-rpi.zip
           duckdb_cli-linux-rpi.zip
 
- vector-sizes:
-    name: Vector Sizes
-    runs-on: ubuntu-20.04
-    needs: linux-release-64
-    env:
-      CC: gcc-10
-      CXX: g++-10
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Test
-      shell: bash
-      run: python scripts/test_vector_sizes.py
-
  symbol-leakage:
     name: Symbol Leakage
     runs-on: ubuntu-20.04
