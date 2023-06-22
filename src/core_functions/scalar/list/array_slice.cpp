@@ -9,9 +9,6 @@
 namespace duckdb {
 
 static int CalculateSliceLength(int64_t &begin, int64_t &end, int64_t step, bool svalid) {
-	if (end < begin) {
-		return 0;
-	}
 	if (step < 0) {
 		step *= -1;
 	}
@@ -86,11 +83,6 @@ INPUT_TYPE SliceValue(Vector &result, INPUT_TYPE input, INDEX_TYPE begin, INDEX_
 
 template <>
 list_entry_t SliceValue(Vector &result, list_entry_t input, int64_t begin, int64_t end) {
-	if (end < begin) {
-		input.length = 0;
-		input.offset = 0;
-		return input;
-	}
 	input.offset += begin;
 	input.length = end - begin;
 	return input;
@@ -114,10 +106,6 @@ list_entry_t SliceValueWithSteps(Vector &result, SelectionVector &sel, list_entr
 	if (end - begin == 0) {
 		input.length = 0;
 		input.offset = sel_idx;
-		return input;
-	} else if (end < begin) {
-		input.length = 0;
-		input.offset = 0;
 		return input;
 	}
 	input.length = CalculateSliceLength(begin, end, step, true);
@@ -177,8 +165,6 @@ static void ExecuteConstantSlice(Vector &result, Vector &v, Vector &b, Vector &e
 		sel_length = CalculateSliceLength(begin, end, step, svalid);
 		if (sel_length > 0) {
 			sel.Initialize(sel_length);
-		} else {
-			s = nullptr;
 		}
 	}
 
