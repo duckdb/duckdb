@@ -1,0 +1,58 @@
+# name: test/sql/cte/materialized/test_cte_in_cte_materialized.test
+# description: Test Nested Common Table Expressions (CTE)
+# group: [materialized]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table a(i integer);
+
+statement ok
+insert into a values (42);
+
+query I
+with cte1 as MATERIALIZED (Select i as j from a) select * from cte1;
+----
+42
+
+query I
+with cte1 as MATERIALIZED (with b as MATERIALIZED (Select i as j from a) Select j from b) select x from cte1 t1(x);
+----
+42
+
+query I
+with cte1(xxx) as MATERIALIZED (with ncte(yyy) as MATERIALIZED (Select i as j from a) Select yyy from ncte) select xxx from cte1;
+----
+42
+
+query II
+with cte1 as MATERIALIZED (with b as MATERIALIZED (Select i as j from a) select j from b), cte2 as MATERIALIZED (with c as MATERIALIZED (select ref.j+1 as k from cte1 as ref) select k from c) select * from cte1 , cte2;
+----
+42	43
+
+# duplicate CTE alias
+statement error
+with cte1 as MATERIALIZED (select 42), cte1 as MATERIALIZED (select 42) select * FROM cte1;
+
+# refer to CTE in subquery tableref
+query I
+with cte1 as MATERIALIZED (Select i as j from a) select * from (with cte2 as MATERIALIZED (select max(j) as j from cte1) select * from cte2) f
+----
+42
+
+# refer to CTE in subquery expression
+query I
+with cte1 as MATERIALIZED (Select i as j from a) select * from cte1 where j = (with cte2 as MATERIALIZED (select max(j) as j from cte1) select j from cte2);
+----
+42
+
+require noalternativeverify
+
+# refer to same-named CTE in a subquery expression
+statement error
+with cte as MATERIALIZED (Select i as j from a) select * from cte where j = (with cte as MATERIALIZED (select max(j) as j from cte) select j from cte);
+
+# self-refer to non-existent cte
+statement error
+with cte as MATERIALIZED (select * from cte) select * from cte

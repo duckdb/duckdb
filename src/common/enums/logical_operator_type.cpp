@@ -88,6 +88,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "VACUUM";
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 		return "REC_CTE";
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE:
+		return "CTE";
 	case LogicalOperatorType::LOGICAL_CTE_REF:
 		return "CTE_SCAN";
 	case LogicalOperatorType::LOGICAL_SHOW:
