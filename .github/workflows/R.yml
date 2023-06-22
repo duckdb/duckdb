@@ -40,38 +40,9 @@ env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 jobs:
-
-  r-test-extension:
-    name: Extension for R test
-    runs-on: ubuntu-latest
-    container: ubuntu:16.04
-
-    steps:
-    - uses: actions/checkout@v3
-    - uses: ./.github/actions/ubuntu_16_setup
-      with:
-        openssl: 1
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - uses: ./.github/actions/build_extensions
-      with:
-        run_tests: 0
-
-    - uses: actions/upload-artifact@v3
-      with:
-        name: r-test-extensions
-        path: |
-          build/release/extension/*/*.duckdb_extension
-
   rstats-linux:
     name: R Package Linux
     runs-on: ubuntu-20.04
-    needs: r-test-extension
     env:
       LIBARROW_BINARY: 'false'
       ARROW_USER_SIMD_LEVEL: 'AVX2'
@@ -106,18 +77,13 @@ jobs:
         ./configure
         R CMD build .
 
-    - uses: actions/download-artifact@v3
-      with:
-        name: r-test-extensions
-        path: /tmp/duckdb_extensions
-
     - name: Tests
       shell: bash
       run: |
         ls /tmp/duckdb_extensions
         cd tools/rpkg
         R CMD INSTALL -d duckdb_*.tar.gz
-        (cd tests && DUCKDB_R_TEST_EXTENSION_REQUIRED=1 R -f testthat.R)
+        (cd tests && R -f testthat.R)
 
     - name: R CMD check
       shell: bash
