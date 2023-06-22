@@ -93,6 +93,12 @@ runs:
         echo "EXTENSION_CONFIGS"
         make
 
+    - name: Test statically linked extensions
+      if: ${{ inputs.run_tests == 1 }}
+      shell: bash
+      run: |
+        python3 scripts/run_tests_one_by_one.py build/release/test/unittest
+
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
       shell: bash
@@ -120,7 +126,7 @@ runs:
           fi
         fi
 
-    - name: Test
+    - name: Test loadable extensions
       if: ${{ inputs.run_tests == 1 }}
       shell: bash
       env:
