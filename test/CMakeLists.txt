@@ -4,7 +4,7 @@ include_directories(../third_party/sqlite/include)
 include_directories(include)
 
 # Allows loading tests from registered extensions
-include_directories("${PROJECT_BINARY_DIR}/include/")
+include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
 add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
 
 add_subdirectory(api)

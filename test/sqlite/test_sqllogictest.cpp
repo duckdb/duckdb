@@ -11,9 +11,7 @@
 #include <string>
 #include <vector>
 
-#if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
-#include "generated_extension_loader.hpp"
-#endif
+#include "duckdb/main/extension/generated_extension_loader.hpp"
 
 using namespace duckdb;
 using namespace std;

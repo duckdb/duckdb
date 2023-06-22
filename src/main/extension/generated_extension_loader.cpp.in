@@ -1,5 +1,4 @@
-#pragma once
-#include "generated_extension_headers.hpp"
+#include "duckdb/main/extension/generated_extension_loader.hpp"
 
 namespace duckdb{
 

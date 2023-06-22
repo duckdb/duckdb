@@ -20,7 +20,6 @@
 */extension/visualizer/*
 */extension/json/yyjson/*
 main/extension_helper.cpp
-generated_extension_loader.hpp
 */adbc/*
 common/enum_util.cpp
 common/enums/expression_type.cpp

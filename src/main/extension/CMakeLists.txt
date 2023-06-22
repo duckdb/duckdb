@@ -6,14 +6,14 @@ include_directories(../../../third_party/httplib/)
 
 # generated_extension_headers.hpp
 configure_file(generated_extension_headers.hpp.in
-               "${PROJECT_BINARY_DIR}/include/generated_extension_headers.hpp")
+               "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp")
 if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
   foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
     if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
       set(DUCKDB_EXTENSION_HEADER "${EXT_NAME}_extension.hpp")
       file(APPEND
-           "${PROJECT_BINARY_DIR}/include/generated_extension_headers.hpp"
+           "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp"
            "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
     endif()
   endforeach()
@@ -63,18 +63,18 @@ if(NOT ${EXT_TEST_PATH_LIST} STREQUAL "")
   string(SUBSTRING ${EXT_TEST_PATH_LIST} 1 -1 EXT_TEST_PATH_INITIALIZER)
 endif()
 
-configure_file(generated_extension_loader.hpp.in
-               "${PROJECT_BINARY_DIR}/include/generated_extension_loader.hpp")
-
+set(GENERATED_CPP_FILE ${PROJECT_BINARY_DIR}/codegen/src/generated_extension_loader.cpp)
+configure_file(generated_extension_loader.cpp.in "${GENERATED_CPP_FILE}")
 add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
 
 # include generated includes
-include_directories("${PROJECT_BINARY_DIR}/include/")
+include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
 
 if(${EXIT_TIME_DESTRUCTORS_WARNING})
   set(CMAKE_CXX_FLAGS_DEBUG
       "${CMAKE_CXX_FLAGS_DEBUG} -Wno-exit-time-destructors")
 endif()
+
 add_library_unity(
   duckdb_main_extension
   OBJECT
@@ -83,8 +83,15 @@ add_library_unity(
   extension_install.cpp
   extension_load.cpp
   extension_util.cpp)
+
+add_library(
+        duckdb_generated_extension_loader
+        OBJECT
+        ${GENERATED_CPP_FILE}
+)
+
 set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_extension>
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_extension> $<TARGET_OBJECTS:duckdb_generated_extension_loader>
     PARENT_SCOPE)
 
 add_extension_definitions(duckdb_main_extension)
