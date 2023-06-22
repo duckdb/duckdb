@@ -35,23 +35,6 @@ EXPLAIN SELECT * FROM test WHERE b=(SELECT MIN(b) FROM test AS a WHERE a.id=test
 ----
 logical_opt	<!REGEX>:.*DELIM_JOIN.*
 
-# FTS
-require fts
-
-statement ok
-CREATE TABLE documents(id VARCHAR, body VARCHAR)
-
-statement ok
-INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('doc2', ' BÁRKING+BÁRKING+BÁRKING+BÁRKING'), ('doc3', ' MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING+999')
-
-statement ok
-PRAGMA create_fts_index('documents', 'id', 'body', overwrite=1)
-
-query II
-EXPLAIN SELECT score, id, body FROM (SELECT *, fts_main_documents.match_bm25(id, 'quacked barked') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
-----
-logical_opt	<!REGEX>:.*DELIM_JOIN.*
-
 # TPC-H
 require tpch
 
@@ -229,5 +212,24 @@ GROUP BY
     cntrycode
 ORDER BY
     cntrycode
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# FTS
+require fts
+
+require noalternativeverify
+
+statement ok
+CREATE TABLE documents(id VARCHAR, body VARCHAR)
+
+statement ok
+INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('doc2', ' BÁRKING+BÁRKING+BÁRKING+BÁRKING'), ('doc3', ' MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING+999')
+
+statement ok
+PRAGMA create_fts_index('documents', 'id', 'body', overwrite=1)
+
+query II
+EXPLAIN SELECT score, id, body FROM (SELECT *, fts_main_documents.match_bm25(id, 'quacked barked') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
 ----
 logical_opt	<!REGEX>:.*DELIM_JOIN.*
