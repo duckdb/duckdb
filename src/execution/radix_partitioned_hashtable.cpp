@@ -84,6 +84,29 @@ public:
 		}
 	}
 
+	void AddToFinal(GroupedAggregateHashTable &intermediate_ht,
+	                optional_ptr<vector<UncombinedAggregateData>> uncombined_data = nullptr) {
+		unique_ptr<PartitionedTupleData> partitioned_data;
+		shared_ptr<ArenaAllocator> aggregate_allocator;
+		intermediate_ht.GetDataOwnership(partitioned_data, aggregate_allocator);
+		{
+			lock_guard<mutex> guard(lock);
+			for (auto &partition : partitioned_data->GetPartitions()) {
+				final_data_collection->Combine(*partition);
+			}
+			final_allocators.emplace_back(std::move(aggregate_allocator));
+			if (!uncombined_data) {
+				return;
+			}
+			for (auto &ucb : *uncombined_data) {
+				D_ASSERT(!ucb.allocators.empty());
+				for (auto &allocator : ucb.allocators) {
+					final_allocators.emplace_back(std::move(allocator));
+				}
+			}
+		}
+	}
+
 	//! The HT object
 	const RadixPartitionedHashTable &ht;
 
@@ -176,7 +199,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 
 	if (lstate.ht->Count() + STANDARD_VECTOR_SIZE > GroupedAggregateHashTable::SinkCapacity()) {
 		CombineInternal(context, input.global_state, input.local_state);
-		// TODO: "refresh" local HT by resetting first part and creating a new allocator
+		lstate.ht->ClearFirstPart();
 	}
 }
 
@@ -200,10 +223,19 @@ void RadixPartitionedHashTable::CombineInternal(ExecutionContext &context, Globa
 		return;
 	}
 
-	for (idx_t partition_idx = 0; partition_idx < gstate.sink_partitions.size(); partition_idx++) {
-		auto &partition = *gstate.sink_partitions[partition_idx];
-		lock_guard<mutex> guard(partition.lock);
-		// TODO get TDC and allocator, add to partition
+	// Get data from the HT
+	unique_ptr<PartitionedTupleData> partitioned_data;
+	shared_ptr<ArenaAllocator> allocator;
+	lstate.ht->GetDataOwnership(partitioned_data, allocator);
+
+	auto &partitions = partitioned_data->GetPartitions();
+	D_ASSERT(partitions.size() == gstate.sink_partitions.size());
+	for (idx_t partition_idx = 0; partition_idx < partitions.size(); partition_idx++) {
+		auto &partition = partitions[partition_idx];
+		auto &sink_partition = *gstate.sink_partitions[partition_idx];
+		lock_guard<mutex> guard(sink_partition.lock);
+		sink_partition.uncombined_data.emplace_back(std::move(partition));
+		sink_partition.uncombined_data.back().allocators.emplace_back(std::move(allocator));
 	}
 }
 
@@ -213,7 +245,7 @@ bool RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 	// Special case if we have non-combinable aggregates, for which we've already created a global shared HT
 	if (ForceSingleHT(gstate)) {
 		D_ASSERT(gstate.sink_partitions.size() == 1);
-		// TODO: move data to final TDC
+		gstate.AddToFinal(*gstate.sink_partitions[0]->ht);
 		return false; // No tasks needed
 	}
 
@@ -260,7 +292,8 @@ public:
 		ht.Combine(data_collection);
 		ht.Finalize();
 
-		// TODO: move data from finalize_partition to final_data_collection
+		gstate.AddToFinal(ht, &uncombined_data);
+		uncombined_data.clear();
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
@@ -424,6 +457,7 @@ void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_p
 }
 
 bool RadixPartitionedHashTable::ForceSingleHT(GlobalSinkState &state) {
+	return false;
 	// TODO
 	//	auto &gstate = state.Cast<RadixHTGlobalState>();
 	//	return gstate.partition_info->n_partitions < 2;

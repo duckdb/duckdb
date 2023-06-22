@@ -41,18 +41,36 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
                                                      idx_t initial_capacity)
     : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)), capacity(0),
       aggregate_allocator(make_shared<ArenaAllocator>(allocator)), is_finalized(false) {
+
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
 	layout.Initialize(std::move(group_types_p), std::move(aggregate_objects_p));
-
-	// HT layout TODO don't hardcode 4
 	hash_offset = layout.GetOffsets()[layout.ColumnCount() - 1];
-	partitioned_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, 4, layout.ColumnCount() - 1);
-	partitioned_data->InitializeAppendState(state.append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 
+	// Partitioned data and first part
+	InitializePartitionedData();
 	Resize(initial_capacity);
 
+	// Predicates
 	predicates.resize(layout.ColumnCount() - 1, ExpressionType::COMPARE_EQUAL);
+}
+
+void GroupedAggregateHashTable::InitializePartitionedData() {
+	// TODO don't hardcode 4
+	D_ASSERT(!partitioned_data);
+	partitioned_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, 4, layout.ColumnCount() - 1);
+	partitioned_data->InitializeAppendState(state.append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+}
+
+void GroupedAggregateHashTable::GetDataOwnership(unique_ptr<PartitionedTupleData> &partitioned_data_p,
+                                                 shared_ptr<ArenaAllocator> &aggregate_allocator_p) {
+	partitioned_data->FlushAppendState(state.append_state);
+	partitioned_data_p = std::move(partitioned_data);
+	InitializePartitionedData();
+	D_ASSERT(Count() == 0);
+
+	aggregate_allocator_p = std::move(aggregate_allocator);
+	aggregate_allocator = make_shared<ArenaAllocator>(allocator);
 }
 
 GroupedAggregateHashTable::~GroupedAggregateHashTable() {
@@ -137,6 +155,10 @@ void GroupedAggregateHashTable::Verify() {
 	D_ASSERT(count == Count());
 }
 
+void GroupedAggregateHashTable::ClearFirstPart() {
+	std::fill_n(entries, capacity, aggr_ht_entry_t(0));
+}
+
 void GroupedAggregateHashTable::Resize(idx_t size) {
 	D_ASSERT(!is_finalized);
 	D_ASSERT(size >= STANDARD_VECTOR_SIZE);
@@ -148,7 +170,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	capacity = size;
 	hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(aggr_ht_entry_t));
 	entries = reinterpret_cast<aggr_ht_entry_t *>(hash_map.get());
-	std::fill_n(entries, capacity, aggr_ht_entry_t(0));
+	ClearFirstPart();
 	bitmask = capacity - 1;
 
 	if (Count() != 0) {
