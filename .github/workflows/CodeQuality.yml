@@ -33,7 +33,7 @@ env:
 jobs:
   format-check:
     name: Format Check
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     env:
       CC: gcc-10
@@ -59,7 +59,7 @@ jobs:
 
   tidy-check:
     name: Tidy Check
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     needs: format-check
 
     env:
@@ -96,7 +96,7 @@ jobs:
 
   codecov:
     name: Code Coverage
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     needs: format-check
     strategy:
       fail-fast: false
