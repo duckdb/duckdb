@@ -87,10 +87,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAsOfJoin &
 	asof_upper.comparison = ExpressionType::COMPARE_LESSTHAN;
 	op.conditions.emplace_back(std::move(asof_upper));
 
-	auto iejoin = make_uniq<PhysicalIEJoin>(op, std::move(left), std::move(window), std::move(op.conditions),
-	                                        op.join_type, lhs_cardinality);
-
-	return iejoin;
+	return make_uniq<PhysicalIEJoin>(op, std::move(left), std::move(window), std::move(op.conditions), op.join_type,
+	                                 lhs_cardinality);
 }
 
 } // namespace duckdb
