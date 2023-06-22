@@ -15,7 +15,7 @@ SHA512Context::~SHA512Context() {
 }
 
 void SHA512Context::Add(string_t str) {
-	mbedtls_sha512_update(&sha_context, (const unsigned char *)str.GetData(), str.GetSize());
+	mbedtls_sha512_update(&sha_context, reinterpret_cast<const unsigned char *>(str.GetData()), str.GetSize());
 }
 
 void SHA512Context::Finish(char *out) {
