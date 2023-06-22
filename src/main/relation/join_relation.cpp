@@ -7,6 +7,8 @@
 
 namespace duckdb {
 
+// tested in substrait extension
+// LCOV_EXCL_START
 JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p,
                            unique_ptr<ParsedExpression> condition_p, JoinType type)
     : Relation(left_p->context, RelationType::JOIN_RELATION), left(std::move(left_p)), right(std::move(right_p)),
@@ -16,6 +18,7 @@ JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> rig
 	}
 	context.GetContext()->TryBindRelation(*this, this->columns);
 }
+// LCOV_EXCL_STOP
 
 JoinRelation::JoinRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p,
                            unique_ptr<ParsedExpression> condition_p, JoinType type, JoinRefType join_ref_type)
