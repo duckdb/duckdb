@@ -162,6 +162,7 @@ public:
 
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
+	void Combine(TupleDataCollection &other_data);
 
 	//! Appends the data in the other HT to this one
 	void Append(GroupedAggregateHashTable &other);

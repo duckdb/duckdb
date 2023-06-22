@@ -473,17 +473,25 @@ struct FlushMoveState {
 };
 
 void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
+	Combine(*other.data_collection);
+	stored_allocators.emplace_back(other.aggregate_allocator);
+	for (const auto &stored_allocator : other.stored_allocators) {
+		stored_allocators.emplace_back(stored_allocator);
+	}
+}
+
+void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data) {
 	D_ASSERT(!is_finalized);
 
-	D_ASSERT(other.layout.GetAggrWidth() == layout.GetAggrWidth());
-	D_ASSERT(other.layout.GetDataWidth() == layout.GetDataWidth());
-	D_ASSERT(other.layout.GetRowWidth() == layout.GetRowWidth());
+	D_ASSERT(other_data.GetLayout().GetAggrWidth() == layout.GetAggrWidth());
+	D_ASSERT(other_data.GetLayout().GetDataWidth() == layout.GetDataWidth());
+	D_ASSERT(other_data.GetLayout().GetRowWidth() == layout.GetRowWidth());
 
-	if (other.Count() == 0) {
+	if (other_data.Count() == 0) {
 		return;
 	}
 
-	FlushMoveState state(*other.data_collection);
+	FlushMoveState state(other_data);
 	RowOperationsState row_state(*aggregate_allocator);
 	while (state.Scan()) {
 		FindOrCreateGroups(state.append_state, state.groups, state.hashes, state.group_addresses, state.new_groups_sel);
