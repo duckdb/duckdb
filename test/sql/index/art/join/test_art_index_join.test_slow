@@ -64,7 +64,7 @@ statement ok
 CREATE INDEX w_index ON words using art(word);
 
 statement ok
-COPY words FROM 'benchmark/micro/index/indexjoin.csv.gz' (DELIMITER ',' , AUTO_DETECT FALSE)
+COPY words FROM 'data/csv/index_join.csv.gz' (DELIMITER ',' , AUTO_DETECT FALSE)
 
 query II
 SELECT w2.doc as doc2, COUNT(*) AS c FROM words AS w1 JOIN words AS w2 ON (w1.word=w2.word) GROUP BY doc2 ORDER BY c DESC LIMIT 10
