@@ -470,51 +470,6 @@ jobs:
         CC: gcc-4.8
         CXX: g++-4.8
 
- release-assert:
-    name: Release Assertions
-    runs-on: ubuntu-20.04
-    needs: linux-release-64
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      BUILD_ICU: 1
-      BUILD_INET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_EXCEL: 1
-      BUILD_VISUALIZER: 1
-      BUILD_JSON: 1
-      BUILD_JEMALLOC: 1
-      DISABLE_SANITIZER: 1
-      CRASH_ON_ASSERT: 1
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: make relassert
-
-    - name: Test
-      shell: bash
-      run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"
-
-
  vector-sizes:
     name: Vector Sizes
     runs-on: ubuntu-20.04
