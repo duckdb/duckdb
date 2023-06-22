@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
@@ -99,8 +99,6 @@ public:
 	~GroupedAggregateHashTable() override;
 
 public:
-	//! Get the data collection of this HT
-	TupleDataCollection &GetDataCollection();
 	//! Number of groups in the HT
 	idx_t Count() const;
 	//! Initial capacity of the HT
@@ -123,11 +121,6 @@ public:
 	idx_t AddChunk(DataChunk &groups, DataChunk &payload, const unsafe_vector<idx_t> &filter);
 	idx_t AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload, const unsafe_vector<idx_t> &filter);
 	idx_t AddChunk(DataChunk &groups, DataChunk &payload, AggregateType filter);
-
-	//! Scan the HT starting from the scan_position until the result and group
-	//! chunks are filled. scan_position will be updated by this function.
-	//! Returns the amount of elements found.
-	idx_t Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate, DataChunk &result);
 
 	//! Fetch the aggregates for specific groups from the HT and place them in the result
 	void FetchAggregates(DataChunk &groups, DataChunk &result);
@@ -157,6 +150,8 @@ private:
 	struct AggregateHTAppendState {
 		AggregateHTAppendState();
 
+		PartitionedTupleDataAppendState append_state;
+
 		Vector ht_offsets;
 		Vector hash_salts;
 		SelectionVector group_compare_vector;
@@ -166,15 +161,10 @@ private:
 		Vector addresses;
 		unsafe_unique_array<UnifiedVectorFormat> group_data;
 		DataChunk group_chunk;
-
-		TupleDataChunkState chunk_state;
-		bool chunk_state_initialized;
 	} state;
 
 	//! The data of the HT
-	unique_ptr<TupleDataCollection> data_collection;
-	//! Block pin state of the HT (for appending data)
-	TupleDataPinState td_pin_state;
+	unique_ptr<PartitionedTupleData> partitioned_data;
 	//! Predicates for matching groups (always ExpressionType::COMPARE_EQUAL)
 	vector<ExpressionType> predicates;
 

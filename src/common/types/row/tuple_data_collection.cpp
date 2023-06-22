@@ -67,17 +67,6 @@ idx_t TupleDataCollection::SizeInBytes() const {
 	return total_size;
 }
 
-void TupleDataCollection::GetBlockPointers(vector<data_ptr_t> &block_pointers) const {
-	D_ASSERT(segments.size() == 1);
-	const auto &segment = segments[0];
-	const auto block_count = segment.allocator->RowBlockCount();
-	D_ASSERT(segment.pinned_row_handles.size() == block_count);
-	block_pointers.resize(block_count);
-	for (idx_t block_idx = 0; block_idx < block_count; block_idx++) {
-		block_pointers[block_idx] = segment.pinned_row_handles[block_idx].Ptr();
-	}
-}
-
 void TupleDataCollection::Unpin() {
 	for (auto &segment : segments) {
 		segment.Unpin();

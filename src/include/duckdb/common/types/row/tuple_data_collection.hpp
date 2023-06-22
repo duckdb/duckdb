@@ -63,8 +63,6 @@ public:
 	idx_t ChunkCount() const;
 	//! The size (in bytes) of the blocks held by this tuple data collection
 	idx_t SizeInBytes() const;
-	//! Get pointers to the pinned blocks
-	void GetBlockPointers(vector<data_ptr_t> &block_pointers) const;
 	//! Unpins all held pins
 	void Unpin();
 

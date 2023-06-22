@@ -57,7 +57,14 @@ public:
 	void InitializeAppendState(PartitionedTupleDataAppendState &state,
 	                           TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE) const;
 	//! Appends a DataChunk to this PartitionedTupleData
-	void Append(PartitionedTupleDataAppendState &state, DataChunk &input);
+	void Append(PartitionedTupleDataAppendState &state, DataChunk &input,
+	            const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
+	            const idx_t append_count = DConstants::INVALID_INDEX);
+	//! Appends a DataChunk to this PartitionedTupleData
+	//! - ToUnifiedFormat has already been called
+	void AppendUnified(PartitionedTupleDataAppendState &state, DataChunk &input,
+	                   const SelectionVector &append_sel = *FlatVector::IncrementalSelectionVector(),
+	                   const idx_t append_count = DConstants::INVALID_INDEX);
 	//! Appends rows to this PartitionedTupleData
 	void Append(PartitionedTupleDataAppendState &state, TupleDataChunkState &input, idx_t count);
 	//! Flushes any remaining data in the append state into this PartitionedTupleData
@@ -69,6 +76,8 @@ public:
 	               TupleDataPinProperties properties = TupleDataPinProperties::UNPIN_AFTER_DONE);
 	//! Repartition this PartitionedTupleData into the new PartitionedTupleData
 	void Repartition(PartitionedTupleData &new_partitioned_data);
+	//! Unpins the data
+	void Unpin();
 	//! Get the partitions in this PartitionedTupleData
 	vector<unique_ptr<TupleDataCollection>> &GetPartitions();
 	//! Get the count of this PartitionedTupleData
@@ -118,7 +127,8 @@ protected:
 	void CreateAllocator();
 	//! Builds a selection vector in the Append state for the partitions
 	//! - returns true if everything belongs to the same partition - stores partition index in single_partition_idx
-	void BuildPartitionSel(PartitionedTupleDataAppendState &state, idx_t count);
+	void BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
+	                       const idx_t append_count);
 	//! Builds out the buffer space in the partitions
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	//! Create a collection for a specific a partition
