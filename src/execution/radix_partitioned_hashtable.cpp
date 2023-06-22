@@ -119,8 +119,6 @@ public:
 
 	//! Chunk with group columns
 	DataChunk group_chunk;
-	//! Append state
-	AggregateHTAppendState append_state;
 	//! The aggregate HT
 	unique_ptr<GroupedAggregateHashTable> ht;
 };
@@ -166,7 +164,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 			single_partition.ht = make_uniq<GroupedAggregateHashTable>(
 			    context.client, BufferAllocator::Get(context.client), group_types, op.payload_types, op.bindings);
 		}
-		single_partition.ht->AddChunk(lstate.append_state, group_chunk, payload_input, filter);
+		single_partition.ht->AddChunk(group_chunk, payload_input, filter);
 		return;
 	}
 
@@ -174,7 +172,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 		lstate.ht = make_uniq<GroupedAggregateHashTable>(context.client, BufferAllocator::Get(context.client),
 		                                                 group_types, op.payload_types, op.bindings);
 	}
-	lstate.ht->AddChunk(lstate.append_state, group_chunk, payload_input, filter);
+	lstate.ht->AddChunk(group_chunk, payload_input, filter);
 
 	if (lstate.ht->Count() + STANDARD_VECTOR_SIZE > GroupedAggregateHashTable::SinkCapacity()) {
 		CombineInternal(context, input.global_state, input.local_state);

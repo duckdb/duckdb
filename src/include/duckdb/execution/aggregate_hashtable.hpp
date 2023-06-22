@@ -87,23 +87,6 @@ private:
 	hash_t value;
 };
 
-struct AggregateHTAppendState {
-	AggregateHTAppendState();
-
-	Vector ht_offsets;
-	Vector hash_salts;
-	SelectionVector group_compare_vector;
-	SelectionVector no_match_vector;
-	SelectionVector empty_vector;
-	SelectionVector new_groups;
-	Vector addresses;
-	unsafe_unique_array<UnifiedVectorFormat> group_data;
-	DataChunk group_chunk;
-
-	TupleDataChunkState chunk_state;
-	bool chunk_state_initialized;
-};
-
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
@@ -137,11 +120,9 @@ public:
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
-	idx_t AddChunk(AggregateHTAppendState &state, DataChunk &groups, DataChunk &payload,
-	               const unsafe_vector<idx_t> &filter);
-	idx_t AddChunk(AggregateHTAppendState &state, DataChunk &groups, Vector &group_hashes, DataChunk &payload,
-	               const unsafe_vector<idx_t> &filter);
-	idx_t AddChunk(AggregateHTAppendState &state, DataChunk &groups, DataChunk &payload, AggregateType filter);
+	idx_t AddChunk(DataChunk &groups, DataChunk &payload, const unsafe_vector<idx_t> &filter);
+	idx_t AddChunk(DataChunk &groups, Vector &group_hashes, DataChunk &payload, const unsafe_vector<idx_t> &filter);
+	idx_t AddChunk(DataChunk &groups, DataChunk &payload, AggregateType filter);
 
 	//! Scan the HT starting from the scan_position until the result and group
 	//! chunks are filled. scan_position will be updated by this function.
@@ -154,21 +135,14 @@ public:
 	//! Finds or creates groups in the hashtable using the specified group keys. The addresses vector will be filled
 	//! with pointers to the groups in the hash table, and the new_groups selection vector will point to the newly
 	//! created groups. The return value is the amount of newly created groups.
-	idx_t FindOrCreateGroups(AggregateHTAppendState &state, DataChunk &groups, Vector &group_hashes,
-	                         Vector &addresses_out, SelectionVector &new_groups_out);
-	idx_t FindOrCreateGroups(AggregateHTAppendState &state, DataChunk &groups, Vector &addresses_out,
+	idx_t FindOrCreateGroups(DataChunk &groups, Vector &group_hashes, Vector &addresses_out,
 	                         SelectionVector &new_groups_out);
-	void FindOrCreateGroups(AggregateHTAppendState &state, DataChunk &groups, Vector &addresses_out);
+	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out);
+	void FindOrCreateGroups(DataChunk &groups, Vector &addresses_out);
 
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
 	void Combine(TupleDataCollection &other_data);
-
-	//! Appends the data in the other HT to this one
-	void Append(GroupedAggregateHashTable &other);
-
-	//! Radix partition the HT into multiple HTs
-	void Partition(vector<GroupedAggregateHashTable *> &partition_hts, idx_t radix_bits, bool sink_done);
 
 	//! Unpin the first part and data blocks
 	void Finalize();
@@ -178,6 +152,24 @@ private:
 	constexpr static float LOAD_FACTOR = 1.5;
 	//! The size of the first part of the HT, should fit in L2 cache
 	constexpr static idx_t FIRST_PART_SINK_SIZE = 1048576;
+
+	//! Append state
+	struct AggregateHTAppendState {
+		AggregateHTAppendState();
+
+		Vector ht_offsets;
+		Vector hash_salts;
+		SelectionVector group_compare_vector;
+		SelectionVector no_match_vector;
+		SelectionVector empty_vector;
+		SelectionVector new_groups;
+		Vector addresses;
+		unsafe_unique_array<UnifiedVectorFormat> group_data;
+		DataChunk group_chunk;
+
+		TupleDataChunkState chunk_state;
+		bool chunk_state_initialized;
+	} state;
 
 	//! The data of the HT
 	unique_ptr<TupleDataCollection> data_collection;
