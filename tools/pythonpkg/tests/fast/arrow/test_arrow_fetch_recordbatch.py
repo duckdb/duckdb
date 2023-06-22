@@ -252,9 +252,7 @@ class TestArrowFetchRecordBatch(object):
         conn = duckdb.connect()
 
         conn.execute("""
-            create or replace table tbl as
-                select struct_of_arrays
-                from test_all_types(), range(1000000)
+            create or replace table tbl as select * from (select {'a': [5,4,3,2,1]}), range(10000000)
         """)
 
         query = "SELECT * FROM tbl"
