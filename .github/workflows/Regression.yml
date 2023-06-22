@@ -13,14 +13,17 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/pythonpkg/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Regression.yml'
       - '.github/config/uncovered_files.csv'
   pull_request:
+    types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
       - 'tools/**'
       - '!tools/pythonpkg/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Regression.yml'
       - '.github/config/uncovered_files.csv'
@@ -69,7 +72,7 @@ jobs:
       shell: bash
       run: |
         make
-        git clone https://github.com/duckdb/duckdb.git --depth=1
+        git clone --branch ${GITHUB_BASE_REF:-master} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb
         make
         cd ..
@@ -224,7 +227,7 @@ jobs:
       shell: bash
       run: |
         make
-        git clone https://github.com/duckdb/duckdb.git --depth=1
+        git clone --branch ${GITHUB_BASE_REF:-master} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb
         make
         cd ..
@@ -233,6 +236,44 @@ jobs:
       shell: bash
       run: |
         python scripts/regression_test_storage_size.py --old=duckdb/build/release/duckdb --new=build/release/duckdb
+
+    - name: Test for incompatibility
+      shell: bash
+      run: |
+        if (cmp test/sql/storage_version/storage_version.db duckdb/test/sql/storage_version/storage_version.db); then
+          echo "storage_changed=false" >> $GITHUB_ENV
+        else
+          echo "storage_changed=true" >> $GITHUB_ENV
+        fi
+
+    - name: Regression Compatibility Test (testing bidirectional compatibility)
+      shell: bash
+      if: env.storage_changed == 'false'
+      run: |
+        # Regenerate test/sql/storage_version.db with newer version -> read with older version
+        python3 scripts/generate_storage_version.py
+        ./duckdb/build/release/duckdb test/sql/storage_version/storage_version.db
+        # Regenerate test/sql/storage_version.db with older version -> read with newer version (already performed as part of test.slow)
+        cd duckdb
+        python3 ../scripts/generate_storage_version.py
+        ../build/release/duckdb duckdb/test/sql/storage_version/storage_version.db
+        cd ..
+
+    - name: Regression Compatibility Test (testing storage version has been bumped)
+      shell: bash
+      if: env.storage_changed == 'true'
+      run: |
+        python3 scripts/generate_storage_version.py
+        cd duckdb
+        python3 scripts/generate_storage_version.py
+        cd ..
+        if (cmp -i 8 -n 12 test/sql/storage_version.db duckdb/test/sql/storage_version.db); then
+           echo "Expected storage format to be bumped, but this is not the case"
+           echo "This might fail spuriously if changes to content of test database / generation script happened"
+           exit 1
+        else
+           echo "Storage bump detected, all good!"
+        fi
 
  regression-test-python:
   name: Regression Test (Python Client)
@@ -285,7 +326,7 @@ jobs:
     - name: Build Current
       shell: bash
       run: |
-        git clone https://github.com/duckdb/duckdb.git --depth=1
+        git clone --branch ${GITHUB_BASE_REF:-master} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb/tools/pythonpkg
         python setup.py install --user
         cd ../../..
@@ -334,7 +375,7 @@ jobs:
       shell: bash
       run: |
         make
-        git clone https://github.com/duckdb/duckdb.git --depth=1
+        git clone --branch ${GITHUB_BASE_REF:-master} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb
         make
         cd ..

@@ -1,0 +1,14 @@
+# name: test/sql/sample/large_reservoir_sample.test_slow
+# description: Test reservoir sample crash on large data sets
+# group: [sample]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+create table integers as from range(1000000);
+
+query I
+select count(*) from integers USING SAMPLE 99.0% (Reservoir);
+----
+990000

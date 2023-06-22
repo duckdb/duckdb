@@ -274,7 +274,7 @@ static void ExportStateAggregateSerialize(FieldWriter &writer, const FunctionDat
                                           const AggregateFunction &function) {
 	throw NotImplementedException("FIXME: export state serialize");
 }
-static unique_ptr<FunctionData> ExportStateAggregateDeserialize(ClientContext &context, FieldReader &reader,
+static unique_ptr<FunctionData> ExportStateAggregateDeserialize(PlanDeserializationState &state, FieldReader &reader,
                                                                 AggregateFunction &bound_function) {
 	throw NotImplementedException("FIXME: export state deserialize");
 }
@@ -283,7 +283,7 @@ static void ExportStateScalarSerialize(FieldWriter &writer, const FunctionData *
                                        const ScalarFunction &function) {
 	throw NotImplementedException("FIXME: export state serialize");
 }
-static unique_ptr<FunctionData> ExportStateScalarDeserialize(ClientContext &context, FieldReader &reader,
+static unique_ptr<FunctionData> ExportStateScalarDeserialize(PlanDeserializationState &state, FieldReader &reader,
                                                              ScalarFunction &bound_function) {
 	throw NotImplementedException("FIXME: export state deserialize");
 }

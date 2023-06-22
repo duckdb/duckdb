@@ -19,7 +19,8 @@
 */extension/tpch/*
 */extension/visualizer/*
 */extension/json/yyjson/*
-src/main/extension_helper.cpp
+main/extension_helper.cpp
 *extension_oote*
 */adbc/*
-src/common/enum_util.cpp
+common/enum_util.cpp
+common/enums/expression_type.cpp

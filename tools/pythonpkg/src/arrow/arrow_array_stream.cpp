@@ -18,7 +18,7 @@ void TransformDuckToArrowChunk(ArrowSchema &arrow_schema, ArrowArray &data, py::
 	py::gil_assert();
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 	auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
-	batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
+	batches.append(batch_import_func(reinterpret_cast<uint64_t>(&data), reinterpret_cast<uint64_t>(&arrow_schema)));
 }
 
 void VerifyArrowDatasetLoaded() {
@@ -75,7 +75,7 @@ py::object PythonTableArrowArrayStreamFactory::ProduceScanner(py::object &arrow_
 unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_ptr,
                                                                                 ArrowStreamParameters &parameters) {
 	py::gil_scoped_acquire acquire;
-	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
+	auto factory = static_cast<PythonTableArrowArrayStreamFactory *>(reinterpret_cast<void *>(factory_ptr));
 	D_ASSERT(factory->arrow_object);
 	py::handle arrow_obj_handle(factory->arrow_object);
 	auto arrow_object_type = GetArrowType(arrow_obj_handle);
@@ -115,20 +115,20 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	auto record_batches = scanner.attr("to_reader")();
 	auto res = make_uniq<ArrowArrayStreamWrapper>();
 	auto export_to_c = record_batches.attr("_export_to_c");
-	export_to_c((uint64_t)&res->arrow_array_stream);
+	export_to_c(reinterpret_cast<uint64_t>(&res->arrow_array_stream));
 	return res;
 }
 
 void PythonTableArrowArrayStreamFactory::GetSchema(uintptr_t factory_ptr, ArrowSchemaWrapper &schema) {
 	py::gil_scoped_acquire acquire;
-	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
+	auto factory = static_cast<PythonTableArrowArrayStreamFactory *>(reinterpret_cast<void *>(factory_ptr));
 	D_ASSERT(factory->arrow_object);
 	auto table_class = py::module::import("pyarrow").attr("Table");
 	py::handle arrow_obj_handle(factory->arrow_object);
 	if (py::isinstance(arrow_obj_handle, table_class)) {
 		auto obj_schema = arrow_obj_handle.attr("schema");
 		auto export_to_c = obj_schema.attr("_export_to_c");
-		export_to_c((uint64_t)&schema);
+		export_to_c(reinterpret_cast<uint64_t>(&schema));
 		return;
 	}
 
@@ -139,11 +139,11 @@ void PythonTableArrowArrayStreamFactory::GetSchema(uintptr_t factory_ptr, ArrowS
 	if (py::isinstance(arrow_obj_handle, scanner_class)) {
 		auto obj_schema = arrow_obj_handle.attr("projected_schema");
 		auto export_to_c = obj_schema.attr("_export_to_c");
-		export_to_c((uint64_t)&schema);
+		export_to_c(reinterpret_cast<uint64_t>(&schema));
 	} else {
 		auto obj_schema = arrow_obj_handle.attr("schema");
 		auto export_to_c = obj_schema.attr("_export_to_c");
-		export_to_c((uint64_t)&schema);
+		export_to_c(reinterpret_cast<uint64_t>(&schema));
 	}
 }
 
@@ -237,10 +237,10 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 	py::object field = py::module_::import("pyarrow.dataset").attr("field");
 	switch (filter->filter_type) {
 	case TableFilterType::CONSTANT_COMPARISON: {
-		auto constant_filter = (ConstantFilter *)filter;
+		auto &constant_filter = filter->Cast<ConstantFilter>();
 		auto constant_field = field(column_name);
-		auto constant_value = GetScalar(constant_filter->constant, timezone_config);
-		switch (constant_filter->comparison_type) {
+		auto constant_value = GetScalar(constant_filter.constant, timezone_config);
+		switch (constant_filter.comparison_type) {
 		case ExpressionType::COMPARE_EQUAL: {
 			return constant_field.attr("__eq__")(constant_value);
 		}
@@ -272,12 +272,12 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 	//! We do not pushdown or conjuctions yet
 	case TableFilterType::CONJUNCTION_OR: {
 		idx_t i = 0;
-		auto or_filter = (ConjunctionOrFilter *)filter;
+		auto &or_filter = filter->Cast<ConjunctionOrFilter>();
 		//! Get first non null filter type
-		auto child_filter = or_filter->child_filters[i++].get();
+		auto child_filter = or_filter.child_filters[i++].get();
 		py::object expression = TransformFilterRecursive(child_filter, column_name, timezone_config);
-		while (i < or_filter->child_filters.size()) {
-			child_filter = or_filter->child_filters[i++].get();
+		while (i < or_filter.child_filters.size()) {
+			child_filter = or_filter.child_filters[i++].get();
 			py::object child_expression = TransformFilterRecursive(child_filter, column_name, timezone_config);
 			expression = expression.attr("__or__")(child_expression);
 		}
@@ -285,11 +285,11 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 	}
 	case TableFilterType::CONJUNCTION_AND: {
 		idx_t i = 0;
-		auto and_filter = (ConjunctionAndFilter *)filter;
-		auto child_filter = and_filter->child_filters[i++].get();
+		auto &and_filter = filter->Cast<ConjunctionAndFilter>();
+		auto child_filter = and_filter.child_filters[i++].get();
 		py::object expression = TransformFilterRecursive(child_filter, column_name, timezone_config);
-		while (i < and_filter->child_filters.size()) {
-			child_filter = and_filter->child_filters[i++].get();
+		while (i < and_filter.child_filters.size()) {
+			child_filter = and_filter.child_filters[i++].get();
 			py::object child_expression = TransformFilterRecursive(child_filter, column_name, timezone_config);
 			expression = expression.attr("__and__")(child_expression);
 		}

@@ -9,12 +9,12 @@
 #pragma once
 
 #include "duckdb/common/enums/operator_result_type.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
-#include "duckdb/common/optional_ptr.hpp"
 
 #include <functional>
 
@@ -204,7 +204,7 @@ typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
 
 typedef void (*table_function_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
                                            const TableFunction &function);
-typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(ClientContext &context, FieldReader &reader,
+typedef unique_ptr<FunctionData> (*table_function_deserialize_t)(PlanDeserializationState &context, FieldReader &reader,
                                                                  TableFunction &function);
 
 class TableFunction : public SimpleNamedParameterFunction {
@@ -265,6 +265,7 @@ public:
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;
+	bool verify_serialization = true;
 
 	//! Whether or not the table function supports projection pushdown. If not supported a projection will be added
 	//! that filters out unused columns.

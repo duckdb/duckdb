@@ -76,7 +76,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	      "Create a DuckDB function out of the passing in python function so it can be used in queries",
 	      py::arg("name"), py::arg("function"), py::arg("return_type") = py::none(), py::arg("parameters") = py::none(),
 	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0,
-	      py::arg("exception_handling") = 0, py::arg("connection") = py::none());
+	      py::arg("exception_handling") = 0, py::arg("side_effects") = false, py::arg("connection") = py::none());
 
 	m.def("remove_function", &PyConnectionWrapper::UnregisterUDF, "Remove a previously created function",
 	      py::arg("name"), py::arg("connection") = py::none());
