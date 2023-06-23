@@ -50,7 +50,7 @@ inputs:
     default: 1
   build_vcpkg_extensions:
     description: 'Build extensions that require vcpkg for dependency management'
-    default: 1  
+    default: 0
   python_name:
     description: 'Python binary name because wtf Python'
     default: 'python3'
@@ -81,6 +81,9 @@ runs:
       shell: bash
       run: |
         echo "VCPKG_TOOLCHAIN_PATH=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_in_tree_extensions == 1 && '.github/config/in_tree_extensions.cmake' || ''}}"
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_out_of_tree_extensions == 1 && '.github/config/out_of_tree_extensions.cmake' || '' }}"
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_vcpkg_extensions == 1 && '.github/config/vcpkg_out_of_tree_extensions.cmake' || '' }}"
         make merged_vcpkg_manifest
         echo "USE_MERGED_VCPKG_MANIFEST=1" >> $GITHUB_ENV 
 

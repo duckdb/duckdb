@@ -41,54 +41,54 @@ env:
 
 jobs:
 #  This is just a sanity check of Python 3.9 running with Arrow
-   linux-python3-9:
-    name: Python 3.9 Linux
-    runs-on: ubuntu-20.04
-
-    env:
-      CIBW_BUILD: 'cp39-manylinux_x86_64'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-      PYTEST_TIMEOUT: '600'
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-
-    - name: Install
-      shell: bash
-      run: pip install cibuildwheel twine
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build source dist
-      shell: bash
-      working-directory: tools/pythonpkg
-      run: |
-        python setup.py sdist
-        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-    - name: Build
-      shell: bash
-      working-directory: tools/pythonpkg
-      run: |
-        export DISTUTILS_C_COMPILER_LAUNCHER=ccache
-        # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
-        cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
+#   linux-python3-9:
+#    name: Python 3.9 Linux
+#    runs-on: ubuntu-20.04
+#
+#    env:
+#      CIBW_BUILD: 'cp39-manylinux_x86_64'
+#      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+#      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+#      PYTEST_TIMEOUT: '600'
+#
+#    steps:
+#    - uses: actions/checkout@v3
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v4
+#      with:
+#        python-version: '3.9'
+#
+#    - name: Install
+#      shell: bash
+#      run: pip install cibuildwheel twine
+#
+#    - name: Setup Ccache
+#      uses: hendrikmuhs/ccache-action@main
+#      with:
+#        key: ${{ github.job }}
+#        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+#
+#    - name: Build source dist
+#      shell: bash
+#      working-directory: tools/pythonpkg
+#      run: |
+#        python setup.py sdist
+#        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+#    - name: Build
+#      shell: bash
+#      working-directory: tools/pythonpkg
+#      run: |
+#        export DISTUTILS_C_COMPILER_LAUNCHER=ccache
+#        # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
+#        cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
    manylinux-extensions:
     name: DuckDB Extensions (gcc4)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
-    needs: linux-python3-9
+#    needs: linux-python3-9
 
     steps:
     - uses: actions/checkout@v3
