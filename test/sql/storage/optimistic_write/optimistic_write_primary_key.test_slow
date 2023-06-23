@@ -1,4 +1,4 @@
-# name: test/sql/storage/optimistic_write/optimistic_write_primary_key.test
+# name: test/sql/storage/optimistic_write/optimistic_write_primary_key.test_slow
 # description: Test optimistic writes and primary key
 # group: [optimistic_write]
 
