@@ -14,6 +14,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
+#include <_types/_uint64_t.h>
 
 namespace duckdb {
 
@@ -82,6 +83,12 @@ public:
 	template <class T>
 	inline static bitpacking_width_t MinimumBitWidth(T value) {
 		return FindMinimumBitWidth<T, BYTE_ALIGNED>(value, value);
+	}
+
+	// Overload specifically for the usage of size_t in the fsst library
+	template <>
+	bitpacking_width_t MinimumBitWidth<size_t>(size_t value) {
+		return MinimumBitWidth<uint64_t>(uint64_t(value));
 	}
 
 	// Calculates the minimum required number of bits per value that can store all values
@@ -200,16 +207,21 @@ private:
 	static void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
 	                        bool skip_sign_extension = false) {
 		if (std::is_same<T, uint8_t>::value || std::is_same<T, int8_t>::value) {
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint8_t *>(src), reinterpret_cast<uint8_t *>(dst), (uint32_t)width);
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint8_t *>(src), reinterpret_cast<uint8_t *>(dst),
+			                               (uint32_t)width);
 		} else if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint16_t *>(src), reinterpret_cast<uint16_t *>(dst), (uint32_t)width);
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint16_t *>(src), reinterpret_cast<uint16_t *>(dst),
+			                               (uint32_t)width);
 		} else if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint32_t *>(dst), (uint32_t)width);
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint32_t *>(dst),
+			                               (uint32_t)width);
 		} else if (std::is_same<T, uint64_t>::value || std::is_same<T, int64_t>::value) {
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst), (uint32_t)width);
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst),
+			                               (uint32_t)width);
 		} else if (std::is_same<T, hugeint_t>::value) {
 
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst), (uint32_t)width);
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst),
+			                               (uint32_t)width);
 			// throw NotImplementedException("Not implemented (yet)");
 
 		} else {

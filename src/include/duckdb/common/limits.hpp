@@ -170,23 +170,6 @@ struct NumericLimits<uint64_t> {
 };
 
 template <>
-struct NumericLimits<unsigned long> {
-	static constexpr unsigned long Minimum() {
-		return std::numeric_limits<unsigned long>::lowest();
-	}
-	static constexpr unsigned long Maximum() {
-		return std::numeric_limits<unsigned long>::max();
-	}
-	static bool IsSigned() {
-		return false;
-	}
-	static idx_t Digits() {
-		return sizeof(unsigned long) == sizeof(uint64_t) ? NumericLimits<uint64_t>::Digits()
-		                                                 : NumericLimits<uint32_t>::Digits();
-	}
-};
-
-template <>
 struct NumericLimits<float> {
 	static constexpr float Minimum() {
 		return std::numeric_limits<float>::lowest();
