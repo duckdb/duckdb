@@ -26,6 +26,7 @@ struct TableAppendState;
 class DuckTransaction;
 class BoundConstraint;
 class RowGroupSegmentTree;
+struct ColumnSegmentInfo;
 
 class RowGroupCollection {
 public:
@@ -88,7 +89,7 @@ public:
 	void CommitDropColumn(idx_t index);
 	void CommitDropTable();
 
-	void GetStorageInfo(TableStorageInfo &result);
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo();
 	const vector<LogicalType> &GetTypes() const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
