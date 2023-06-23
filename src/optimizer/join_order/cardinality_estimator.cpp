@@ -12,12 +12,6 @@
 
 namespace duckdb {
 
-static optional_ptr<TableCatalogEntry> GetCatalogTableEntry(LogicalOperator &op) {
-	D_ASSERT(op.type == LogicalOperatorType::LOGICAL_GET);
-	auto &get = op.Cast<LogicalGet>();
-	return get.GetTable();
-}
-
 // The filter was made on top of a logical sample or other projection,
 // but no specific columns are referenced. See issue 4978 number 4.
 bool CardinalityEstimator::EmptyFilter(FilterInfo &filter_info) {
@@ -405,7 +399,6 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 	optional_ptr<TableCatalogEntry> catalog_table;
 
 	optional_ptr<LogicalGet> get;
-	bool get_updated = true;
 	for (auto &column : relation_attributes[relation_id].columns) {
 		//! for every column used in a filter in the relation, get the distinct count via HLL, or assume it to be
 		//! the cardinality
