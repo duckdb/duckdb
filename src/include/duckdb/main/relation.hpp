@@ -99,7 +99,7 @@ public:
 
 	// CROSS PRODUCT operation
 	DUCKDB_API shared_ptr<Relation> CrossProduct(const shared_ptr<Relation> &other,
-	                                             JoinRefType join_ref_type = JoinRefType::REGULAR);
+	                                             JoinRefType join_ref_type = JoinRefType::CROSS);
 
 	// SET operations
 	DUCKDB_API shared_ptr<Relation> Union(const shared_ptr<Relation> &other);
