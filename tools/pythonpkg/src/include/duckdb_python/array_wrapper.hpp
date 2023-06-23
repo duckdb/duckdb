@@ -27,11 +27,12 @@ public:
 	void Append(idx_t current_offset, Vector &input, idx_t count);
 };
 struct ArrayWrapper {
-	explicit ArrayWrapper(const LogicalType &type);
+	explicit ArrayWrapper(const LogicalType &type, const string &timezone_config);
 
 	unique_ptr<RawArrayWrapper> data;
 	unique_ptr<RawArrayWrapper> mask;
 	bool requires_mask;
+	const string timezone_config;
 
 public:
 	void Initialize(idx_t capacity);
@@ -42,7 +43,7 @@ public:
 
 class NumpyResultConversion {
 public:
-	NumpyResultConversion(vector<LogicalType> &types, idx_t initial_capacity);
+	NumpyResultConversion(vector<LogicalType> &types, idx_t initial_capacity, const string &timezone_config);
 
 	void Append(DataChunk &chunk);
 

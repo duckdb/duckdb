@@ -42,6 +42,7 @@ unique_ptr<DataChunk> DuckDBPyResult::FetchNextRaw(QueryResult &result) {
 }
 
 py::object DuckDBPyResult::Fetchone() {
+	timezone_config = QueryResult::GetConfigTimezone(*result);
 	{
 		py::gil_scoped_release release;
 		if (!result) {
@@ -65,7 +66,7 @@ py::object DuckDBPyResult::Fetchone() {
 			continue;
 		}
 		auto val = current_chunk->data[col_idx].GetValue(chunk_offset);
-		res[col_idx] = PythonObject::FromValue(val, result->types[col_idx],timezone_config);
+		res[col_idx] = PythonObject::FromValue(val, result->types[col_idx], timezone_config);
 	}
 	chunk_offset++;
 	return std::move(res);
@@ -144,7 +145,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 		initial_capacity = materialized.RowCount();
 	}
 
-	NumpyResultConversion conversion(result->types, initial_capacity);
+	NumpyResultConversion conversion(result->types, initial_capacity, timezone_config);
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		auto &materialized = (MaterializedQueryResult &)*result;
 		for (auto &chunk : materialized.Collection().Chunks()) {

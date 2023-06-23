@@ -1147,7 +1147,10 @@ ParserOptions ClientContext::GetParserOptions() const {
 
 ClientProperties ClientContext::GetClientProperties() const {
 	ClientProperties properties;
-	properties.timezone = ClientConfig::GetConfig(*this).ExtractTimezone();
+	Value result;
+	db->TryGetCurrentSetting("timezone",result);
+
+	properties.timezone = result.GetValue<string>();
 	return properties;
 }
 

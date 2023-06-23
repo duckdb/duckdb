@@ -247,19 +247,19 @@ struct UUIDConvert {
 };
 
 struct ListConvert {
-	static py::list ConvertValue(Vector &input, idx_t chunk_offset) {
+	static py::list ConvertValue(Vector &input, idx_t chunk_offset, const string &timezone_config) {
 		auto val = input.GetValue(chunk_offset);
 		auto &list_children = ListValue::GetChildren(val);
 		py::list list;
 		for (auto &list_elem : list_children) {
-			list.append(PythonObject::FromValue(list_elem, ListType::GetChildType(input.GetType())));
+			list.append(PythonObject::FromValue(list_elem, ListType::GetChildType(input.GetType()), timezone_config));
 		}
 		return list;
 	}
 };
 
 struct StructConvert {
-	static py::dict ConvertValue(Vector &input, idx_t chunk_offset) {
+	static py::dict ConvertValue(Vector &input, idx_t chunk_offset, const string &timezone_config) {
 		py::dict py_struct;
 		auto val = input.GetValue(chunk_offset);
 		auto &child_types = StructType::GetChildTypes(input.GetType());
@@ -269,14 +269,14 @@ struct StructConvert {
 			auto &child_entry = child_types[i];
 			auto &child_name = child_entry.first;
 			auto &child_type = child_entry.second;
-			py_struct[child_name.c_str()] = PythonObject::FromValue(struct_children[i], child_type);
+			py_struct[child_name.c_str()] = PythonObject::FromValue(struct_children[i], child_type, timezone_config);
 		}
 		return py_struct;
 	}
 };
 
 struct MapConvert {
-	static py::dict ConvertValue(Vector &input, idx_t chunk_offset) {
+	static py::dict ConvertValue(Vector &input, idx_t chunk_offset, const string &timezone_config) {
 		auto val = input.GetValue(chunk_offset);
 		auto &list_children = ListValue::GetChildren(val);
 
@@ -287,8 +287,8 @@ struct MapConvert {
 		py::list values;
 		for (auto &list_elem : list_children) {
 			auto &struct_children = StructValue::GetChildren(list_elem);
-			keys.append(PythonObject::FromValue(struct_children[0], key_type));
-			values.append(PythonObject::FromValue(struct_children[1], val_type));
+			keys.append(PythonObject::FromValue(struct_children[0], key_type, timezone_config));
+			values.append(PythonObject::FromValue(struct_children[1], val_type, timezone_config));
 		}
 
 		py::dict py_struct;
@@ -378,7 +378,7 @@ static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t tar
 
 template <class NUMPY_T, class CONVERT>
 static bool ConvertNested(idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &input,
-                          UnifiedVectorFormat &idata, idx_t count) {
+                          UnifiedVectorFormat &idata, idx_t count, const string &timezone_config) {
 	auto out_ptr = (NUMPY_T *)target_data;
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
@@ -387,7 +387,7 @@ static bool ConvertNested(idx_t target_offset, data_ptr_t target_data, bool *tar
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
 				target_mask[offset] = true;
 			} else {
-				out_ptr[offset] = CONVERT::ConvertValue(input, i);
+				out_ptr[offset] = CONVERT::ConvertValue(input, i, timezone_config);
 				target_mask[offset] = false;
 			}
 		}
@@ -395,7 +395,7 @@ static bool ConvertNested(idx_t target_offset, data_ptr_t target_data, bool *tar
 	} else {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t offset = target_offset + i;
-			out_ptr[offset] = CONVERT::ConvertValue(input, i);
+			out_ptr[offset] = CONVERT::ConvertValue(input, i, timezone_config);
 			target_mask[offset] = false;
 		}
 		return false;
@@ -620,7 +620,8 @@ void RawArrayWrapper::Resize(idx_t new_capacity) {
 	data = (data_ptr_t)array.mutable_data();
 }
 
-ArrayWrapper::ArrayWrapper(const LogicalType &type) : requires_mask(false) {
+ArrayWrapper::ArrayWrapper(const LogicalType &type, const string &timezone_config_p)
+    : requires_mask(false), timezone_config(timezone_config_p) {
 	data = make_unique<RawArrayWrapper>(type);
 	mask = make_unique<RawArrayWrapper>(LogicalType::BOOLEAN);
 }
@@ -743,15 +744,15 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		break;
 	case LogicalTypeId::LIST:
 		may_have_null = ConvertNested<py::list, duckdb_py_convert::ListConvert>(current_offset, dataptr, maskptr, input,
-		                                                                        idata, count);
+		                                                                        idata, count, timezone_config);
 		break;
 	case LogicalTypeId::MAP:
 		may_have_null = ConvertNested<py::dict, duckdb_py_convert::MapConvert>(current_offset, dataptr, maskptr, input,
-		                                                                       idata, count);
+		                                                                       idata, count, timezone_config);
 		break;
 	case LogicalTypeId::STRUCT:
 		may_have_null = ConvertNested<py::dict, duckdb_py_convert::StructConvert>(current_offset, dataptr, maskptr,
-		                                                                          input, idata, count);
+		                                                                          input, idata, count, timezone_config);
 		break;
 	case LogicalTypeId::UUID:
 		may_have_null = ConvertColumn<hugeint_t, PyObject *, duckdb_py_convert::UUIDConvert>(current_offset, dataptr,
@@ -784,11 +785,12 @@ py::object ArrayWrapper::ToArray(idx_t count) const {
 	return masked_array;
 }
 
-NumpyResultConversion::NumpyResultConversion(vector<LogicalType> &types, idx_t initial_capacity)
+NumpyResultConversion::NumpyResultConversion(vector<LogicalType> &types, idx_t initial_capacity,
+                                             const string &timezone_config)
     : count(0), capacity(0) {
 	owned_data.reserve(types.size());
 	for (auto &type : types) {
-		owned_data.emplace_back(type);
+		owned_data.emplace_back(type, timezone_config);
 	}
 	Resize(initial_capacity);
 }

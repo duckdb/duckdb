@@ -53,7 +53,7 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, Ta
 	data.in_names = input.input_table_names;
 	data.in_types = input.input_table_types;
 
-	NumpyResultConversion conversion(data.in_types, 0);
+	NumpyResultConversion conversion(data.in_types, 0, context.config.ExtractTimezone());
 	auto df = FunctionCall(conversion, data.in_names, data.function);
 	vector<PandasColumnBindData> pandas_bind_data; // unused
 	VectorConversion::BindPandas(DBConfig::GetConfig(context), df, pandas_bind_data, return_types, names);
@@ -78,7 +78,7 @@ OperatorResultType MapFunction::MapFunctionExec(ExecutionContext &context, Table
 	auto &data = (MapFunctionData &)*data_p.bind_data;
 
 	D_ASSERT(input.GetTypes() == data.in_types);
-	NumpyResultConversion conversion(data.in_types, input.size());
+	NumpyResultConversion conversion(data.in_types, input.size(), context.client.config.ExtractTimezone());
 	conversion.Append(input);
 
 	auto df = FunctionCall(conversion, data.in_names, data.function);

@@ -15,21 +15,21 @@
 using namespace duckdb;
 
 struct ArrowRoundtripFactory {
-	ArrowRoundtripFactory(vector<LogicalType> types_p, vector<string> names_p, string tz_p,
+	ArrowRoundtripFactory(vector<LogicalType> types_p, vector<string> names_p, ClientProperties client_properties_p,
 	                      unique_ptr<QueryResult> result_p, bool big_result)
-	    : types(std::move(types_p)), names(std::move(names_p)), tz(std::move(tz_p)), result(std::move(result_p)),
+	    : types(std::move(types_p)), names(std::move(names_p)), client_properties(std::move(client_properties_p)), result(std::move(result_p)),
 	      big_result(big_result) {
 	}
 
 	vector<LogicalType> types;
 	vector<string> names;
-	string tz;
+	ClientProperties client_properties;
 	unique_ptr<QueryResult> result;
 	bool big_result;
 
 public:
 	struct ArrowArrayStreamData {
-		ArrowArrayStreamData(ArrowRoundtripFactory &factory) : factory(factory) {
+		explicit ArrowArrayStreamData(ArrowRoundtripFactory &factory) : factory(factory) {
 		}
 
 		ArrowRoundtripFactory &factory;
@@ -125,10 +125,10 @@ void RunArrowComparison(Connection &con, const string &query, bool big_result = 
 		FAIL();
 	}
 	// create the roundtrip factory
-	auto tz = ClientConfig::GetConfig(*con.context).ExtractTimezone();
+	auto client_properties = con.context->GetClientProperties();
 	auto types = initial_result->types;
 	auto names = initial_result->names;
-	ArrowRoundtripFactory factory(std::move(types), std::move(names), tz, std::move(initial_result), big_result);
+	ArrowRoundtripFactory factory(std::move(types), std::move(names), client_properties, std::move(initial_result), big_result);
 
 	// construct the arrow scan
 	vector<Value> params;
