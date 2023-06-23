@@ -7,15 +7,16 @@ CREATE or replace TABLE big_table AS
     SELECT
     (i % 500)::int16 AS "Pid",
     (i % 5000)::int16 AS "Planid",
-    uuid()::VARCHAR AS "Claimid",
+    left(uuid()::VARCHAR, 10) AS "Claimid",
     FROM range(1e8::int) tbl(i);
 
-# This query will take ~25GB of memory
+# This query will take ~12GB of memory
 statement ok
-PRAGMA memory_limit='10GB'
+PRAGMA memory_limit='5GB'
 
+# Reduce the thread count to compensate for 1024 partitions.
 statement ok
-PRAGMA temp_directory='__TEST_DIR__'
+PRAGMA threads=4
 
 query II
 WITH new_table as (SELECT
