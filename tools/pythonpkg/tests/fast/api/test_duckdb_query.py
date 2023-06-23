@@ -32,6 +32,12 @@ class TestDuckDBQuery(object):
         ''').fetchall()
         assert res == [(1,), (23,), (3,), (5,), (1,), (23,), (3,), (5,)]
 
+    def test_duckdb_query_empty_result(self):
+        con = duckdb.connect()
+        # show tables on empty connection does not produce any tuples
+        res = con.query('show tables').fetchall()
+        assert res == []
+
     def test_duckdb_from_query(self, duckdb_cursor):
         # duckdb.from_query cannot be used to run arbitrary queries
         with pytest.raises(duckdb.ParserException, match='duckdb.from_query cannot be used to run arbitrary SQL queries'):

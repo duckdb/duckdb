@@ -71,6 +71,11 @@ jobs:
           - ubuntu-latest
         arch:
           - x64
+        isRelease:
+          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
+        exclude:
+          - isRelease: false
+            version: '1.6'
     steps:
       - uses: actions/checkout@v3
         with:
