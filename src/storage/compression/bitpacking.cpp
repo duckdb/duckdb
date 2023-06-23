@@ -11,6 +11,7 @@
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/common/numeric_utils.hpp"
 
 #include <functional>
 
@@ -77,11 +78,11 @@ struct EmptyBitpackingWriter {
 	template <class T>
 	static void WriteConstant(T constant, idx_t count, void *data_ptr, bool all_invalid) {
 	}
-	template <class T, class T_S = typename std::make_signed<T>::type>
+	template <class T, class T_S = typename make_signed<T>::type>
 	static void WriteConstantDelta(T_S constant, T frame_of_reference, idx_t count, T *values, bool *validity,
 	                               void *data_ptr) {
 	}
-	template <class T, class T_S = typename std::make_signed<T>::type>
+	template <class T, class T_S = typename make_signed<T>::type>
 	static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference,
 	                          T_S delta_offset, T *original_values, idx_t count, void *data_ptr) {
 	}
@@ -91,7 +92,7 @@ struct EmptyBitpackingWriter {
 	}
 };
 
-template <class T, class T_U = typename std::make_unsigned<T>::type, class T_S = typename std::make_signed<T>::type>
+template <class T, class T_U = typename make_unsigned<T>::type, class T_S = typename make_signed<T>::type>
 struct BitpackingState {
 public:
 	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr) {
@@ -211,7 +212,7 @@ public:
 
 	template <class T_INNER>
 	void SubtractFrameOfReference(T_INNER *buffer, T_INNER frame_of_reference) {
-		static_assert(std::is_integral<T_INNER>::value, "Integral type required.");
+		static_assert(is_integral<T_INNER>::value, "Integral type required.");
 		for (idx_t i = 0; i < compression_buffer_idx; i++) {
 			buffer[i] -= uint64_t(frame_of_reference);
 		}
@@ -234,7 +235,7 @@ public:
 
 		if (can_do_delta) {
 			if (maximum_delta == minimum_delta && mode != BitpackingMode::FOR && mode != BitpackingMode::DELTA_FOR) {
-				idx_t frame_of_reference = compression_buffer[0];
+				idx_t frame_of_reference = (idx_t)compression_buffer[0];
 				OP::WriteConstantDelta((T_S)maximum_delta, (T)frame_of_reference, compression_buffer_idx,
 				                       (T *)compression_buffer, (bool *)compression_buffer_validity, data_ptr);
 				total_size += sizeof(T) + sizeof(T) + sizeof(bitpacking_metadata_encoded_t);
@@ -347,7 +348,7 @@ idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-template <class T, bool WRITE_STATISTICS, class T_S = typename std::make_signed<T>::type>
+template <class T, bool WRITE_STATISTICS, class T_S = typename make_signed<T>::type>
 struct BitpackingCompressState : public CompressionState {
 public:
 	explicit BitpackingCompressState(ColumnDataCheckpointer &checkpointer)
@@ -588,7 +589,7 @@ static T DeltaDecode(T *data, T previous_value, const size_t size) {
 	return data[size - 1];
 }
 
-template <class T, class T_S = typename std::make_signed<T>::type>
+template <class T, class T_S = typename make_signed<T>::type>
 struct BitpackingScanState : public SegmentScanState {
 public:
 	explicit BitpackingScanState(ColumnSegment &segment) : current_segment(segment) {
@@ -658,7 +659,7 @@ public:
 			break;
 		case BitpackingMode::FOR:
 		case BitpackingMode::DELTA_FOR:
-			current_width = (bitpacking_width_t) * (T *)(current_group_ptr);
+			current_width = (bitpacking_width_t)(*(T *)(current_group_ptr));
 			current_group_ptr += MaxValue(sizeof(T), sizeof(bitpacking_width_t));
 			break;
 		case BitpackingMode::CONSTANT:
@@ -734,7 +735,7 @@ unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-template <class T, class T_S = typename std::make_signed<T>::type>
+template <class T, class T_S = typename make_signed<T>::type>
 void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                            idx_t result_offset) {
 	auto &scan_state = (BitpackingScanState<T> &)*state.scan_state;
@@ -852,6 +853,7 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	}
 
 	if (scan_state.current_group.mode == BitpackingMode::CONSTANT_DELTA) {
+		// FIXME: is it being verified that this will never overflow?
 		*current_result_ptr =
 		    ((scan_state.current_group_offset) * scan_state.current_constant) + scan_state.current_frame_of_reference;
 		return;
@@ -907,10 +909,9 @@ CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 		return GetBitpackingFunction<uint32_t>(type);
 	case PhysicalType::UINT64:
 		return GetBitpackingFunction<uint64_t>(type);
+	case PhysicalType::INT128:
+		return GetBitpackingFunction<hugeint_t>(type);
 
-	// case PhysicalType::INT128:
-	// 	return GetBitpackingFunction<int64_t>(type);
-	
 	case PhysicalType::LIST:
 		return GetBitpackingFunction<uint64_t, false>(type);
 	default:
@@ -930,8 +931,7 @@ bool BitpackingFun::TypeIsSupported(PhysicalType type) {
 	case PhysicalType::UINT32:
 	case PhysicalType::UINT64:
 	case PhysicalType::LIST:
-
-	// case PhysicalType::INT128:
+	case PhysicalType::INT128:
 
 		return true;
 	default:

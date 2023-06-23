@@ -3,6 +3,7 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/string.hpp"
 #include <stdint.h>
+#include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
 
@@ -58,6 +59,15 @@ public:
 	DUCKDB_API hugeint_t &operator&=(const hugeint_t &rhs);
 	DUCKDB_API hugeint_t &operator|=(const hugeint_t &rhs);
 	DUCKDB_API hugeint_t &operator^=(const hugeint_t &rhs);
+
+	DUCKDB_API explicit operator uint64_t() const;
+	DUCKDB_API explicit operator uint8_t() const;
+	DUCKDB_API explicit operator bool() const;
+
+	// misc operators
+	DUCKDB_API bool operator!() const;
 };
+
+hugeint_t operator*(idx_t lhs, hugeint_t rhs);
 
 } // namespace duckdb

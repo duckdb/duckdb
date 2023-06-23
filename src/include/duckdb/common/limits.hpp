@@ -181,7 +181,8 @@ struct NumericLimits<unsigned long> {
 		return false;
 	}
 	static idx_t Digits() {
-		return sizeof(unsigned long) == sizeof(uint64_t) ? NumericLimits<uint64_t>::Digits() : NumericLimits<uint32_t>::Digits();
+		return sizeof(unsigned long) == sizeof(uint64_t) ? NumericLimits<uint64_t>::Digits()
+		                                                 : NumericLimits<uint32_t>::Digits();
 	}
 };
 

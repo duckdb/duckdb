@@ -763,8 +763,28 @@ hugeint_t &hugeint_t::operator^=(const hugeint_t &rhs) {
 	return *this;
 }
 
+bool hugeint_t::operator!() const {
+	return *this == 0;
+}
+
+hugeint_t::operator bool() const {
+	return *this != 0;
+}
+
+hugeint_t::operator uint64_t() const {
+	throw NotImplementedException("Not implemented");
+}
+
+hugeint_t::operator uint8_t() const {
+	throw NotImplementedException("Not implemented");
+}
+
 string hugeint_t::ToString() const {
 	return Hugeint::ToString(*this);
+}
+
+hugeint_t operator*(idx_t lhs, hugeint_t rhs) {
+	throw NotImplementedException("Not implemented");
 }
 
 } // namespace duckdb
