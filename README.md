@@ -6,6 +6,8 @@
 
 
 
+
+
 <p align="center">
   <a href="https://github.com/duckdb/duckdb/actions">
     <img src="https://github.com/duckdb/duckdb/actions/workflows/Main.yml/badge.svg?branch=master" alt="Github Actions Badge">
