@@ -9,7 +9,7 @@ namespace duckdb {
 
 Node16 &Node16::New(ART &art, Node &node) {
 
-	node.SetPtr(Node::GetAllocator(art, NType::NODE_16).New());
+	node = Node::GetAllocator(art, NType::NODE_16).New();
 	node.type = (uint8_t)NType::NODE_16;
 	auto &n16 = Node16::Get(art, node);
 
@@ -221,7 +221,7 @@ void Node16::Deserialize(MetaBlockReader &reader) {
 void Node16::Vacuum(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < count; i++) {
-		Node::Vacuum(art, children[i], flags);
+		children[i].Vacuum(art, flags);
 	}
 }
 

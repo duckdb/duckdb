@@ -21,64 +21,64 @@ class MetaBlockReader;
 // structs
 struct BlockPointer;
 
+//! The LEAF is a special node type that contains a count, up to LEAF_SIZE row IDs,
+//! and a Node pointer. If this pointer is set, then it must point to another LEAF,
+//! creating a chain of leaf nodes storing row IDs.
+//! This class also covers the case of LEAF_INLINED, in which case we store the
+//! row ID directly in the node pointer.
 class Leaf {
 public:
-	//! Number of row IDs
-	uint32_t count;
-	union {
-		//! The pointer to the head of the list of leaf segments
-		Node ptr;
-		//! Inlined row ID
-		row_t inlined;
-	} row_ids;
+	//! The number of row IDs in this leaf
+	uint8_t count;
+	//! Up to LEAF_SIZE row IDs
+	row_t row_ids[Node::LEAF_SIZE];
+	//! A pointer to the next LEAF node
+	Node ptr;
 
 public:
-	//! Get a new leaf node, might cause a new buffer allocation, and initializes a leaf holding one row ID
-	static Leaf &New(ART &art, Node &node, const row_t row_id);
-	//! Get a new leaf node, might cause a new buffer allocation, and initializes a leaf holding n_row_ids row IDs
-	static Leaf &New(ART &art, Node &node, const row_t *row_ids, const idx_t count);
-	//! Free the leaf
+	//! Inline a row ID into a node pointer
+	static void New(Node &node, const row_t row_id);
+	//! Get a new chain of leaf nodes, might cause new buffer allocations,
+	//! with the node parameter holding the tail of the chain
+	static void New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t count);
+	//! Free the leaf (chain)
 	static void Free(ART &art, Node &node);
 	//! Get a reference to the leaf
 	static inline Leaf &Get(const ART &art, const Node ptr) {
 		return *Node::GetAllocator(art, NType::LEAF).Get<Leaf>(ptr);
 	}
 
-	//! Initializes a merge by incrementing the buffer IDs of the leaf segments
-	void InitializeMerge(const ART &art, const idx_t buffer_count);
-	//! Merge leaves
-	void Merge(ART &art, Node &other);
+	//! Initializes a merge by incrementing the buffer IDs of the leaf
+	static void InitializeMerge(ART &art, Node &node, const ARTFlags &flags);
+	//! Merge leaves and free all copied leaf nodes
+	static void Merge(ART &art, Node &l_node, Node &r_node);
 
 	//! Insert a row ID into a leaf
-	void Insert(ART &art, const row_t row_id);
+	static void Insert(ART &art, Node &node, const row_t row_id);
 	//! Remove a row ID from a leaf
-	void Remove(ART &art, const row_t row_id);
+	static void Remove(ART &art, reference<Node> &node, const row_t row_id);
 
-	//! Returns whether this leaf is inlined
-	inline bool IsInlined() const {
-		return count <= 1;
-	}
 	//! Get the row ID at the position
-	row_t GetRowId(const ART &art, const idx_t position) const;
-	//! Returns the position of a row ID, and an invalid index, if the leaf does not contain the row ID,
-	//! and sets the ptr to point to the segment containing the row ID
-	uint32_t FindRowId(const ART &art, Node &ptr, const row_t row_id) const;
+	static row_t GetRowId(ART &art, Node &node, const idx_t position);
 
-	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
-	string VerifyAndToString(const ART &art, const bool only_verify) const;
+	//! Returns the string representation of the leaf, or only traverses and verifies the leaf
+	static string VerifyAndToString(ART &art, Node &node, const bool only_verify);
 
-	//! Serialize this leaf
-	BlockPointer Serialize(const ART &art, MetaBlockWriter &writer) const;
-	//! Deserialize this leaf
-	void Deserialize(ART &art, MetaBlockReader &reader);
+	//! Serialize the leaf
+	static BlockPointer Serialize(const ART &art, Node &node, MetaBlockWriter &writer);
+	//! Deserialize the leaf
+	static void Deserialize(ART &art, Node &node, MetaBlockReader &reader);
 
-	//! Vacuum the leaf segments of a leaf, if not inlined
-	void Vacuum(ART &art);
+	//! Vacuum the leaf
+	inline void Vacuum(ART &art, const ARTFlags &flags) {
+		ptr.Vacuum(art, flags);
+	}
 
 private:
-	//! Moves the inlined row ID onto a leaf segment, does not change the size
-	//! so this will be a (temporarily) invalid leaf
-	void MoveInlinedToSegment(ART &art);
+	//! Moves the inlined row ID onto a leaf
+	static void MoveInlinedToLeaf(ART &art, Node &node);
+	//! Appends the row ID to this leaf, or creates a subsequent leaf, if this node is full
+	Leaf &Append(ART &art, const row_t row_id);
 };
 
 } // namespace duckdb

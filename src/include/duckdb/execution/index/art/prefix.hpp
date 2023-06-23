@@ -80,7 +80,7 @@ public:
 
 	//! Vacuum the child of the node
 	inline void Vacuum(ART &art, const ARTFlags &flags) {
-		Node::Vacuum(art, ptr, flags);
+		ptr.Vacuum(art, flags);
 	}
 
 private:

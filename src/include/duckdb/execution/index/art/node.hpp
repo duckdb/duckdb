@@ -1,30 +1,27 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/index/art/art_node.hpp
+// duckdb/execution/index/art/node.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/execution/index/art/fixed_size_allocator.hpp"
-#include "duckdb/execution/index/art/swizzleable_pointer.hpp"
-
 namespace duckdb {
 
 // classes
 enum class NType : uint8_t {
 	PREFIX = 1,
-	LEAF_SEGMENT = 2,
+	LEAF_INLINED = 2,
 	LEAF = 3,
 	NODE_4 = 4,
 	NODE_16 = 5,
 	NODE_48 = 6,
-	NODE_256 = 7
+	NODE_256 = 7,
 };
+class FixedSizeAllocator;
 class ART;
-class Node;
 class Prefix;
 class MetaBlockReader;
 class MetaBlockWriter;
@@ -32,11 +29,17 @@ class MetaBlockWriter;
 // structs
 struct BlockPointer;
 struct ARTFlags;
+struct BufferPointer {
+	//! The offset in a buffer
+	uint32_t offset : 24;
+	//! The buffer ID
+	uint32_t buffer_id : 32;
+};
 
-//! The ARTNode is the swizzleable pointer class of the ART index.
-//! If the ARTNode pointer is not swizzled, then the leftmost byte identifies the NType.
-//! The remaining bytes are the position in the respective ART buffer.
-class Node : public SwizzleablePointer {
+//! The Node is the pointer class of the ART index.
+//! If the swizzle flag is set, then the pointer points to a storage address (and has no type),
+//! otherwise the pointer has a type and stores other information (e.g., a buffer location or a row ID).
+class Node {
 public:
 	//! Node thresholds
 	static constexpr uint8_t NODE_48_SHRINK_THRESHOLD = 12;
@@ -48,39 +51,63 @@ public:
 	static constexpr uint16_t NODE_256_CAPACITY = 256;
 	//! Other constants
 	static constexpr uint8_t EMPTY_MARKER = 48;
-	static constexpr uint32_t LEAF_SEGMENT_SIZE = 8;
+	static constexpr uint8_t LEAF_SIZE = 4;
 	static constexpr uint8_t PREFIX_SIZE = 15;
+	static constexpr row_t ROW_ID_LIMIT = 36028797018963967;
 
 public:
-	//! Constructs an empty ARTNode
-	Node();
-	//! Constructs a swizzled pointer from a block ID and an offset
+	//! Constructs an empty Node
+	Node() : swizzle_flag(0), type(0) {};
+	//! Constructs a swizzled Node from a block ID and an offset
 	explicit Node(MetaBlockReader &reader);
-	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
-	static void New(ART &art, Node &node, const NType type);
-	//! Free the node (and its subtree)
-	static void Free(ART &art, Node &node);
+	//! Constructs a non-swizzled Node from a buffer ID and an offset
+	Node(uint32_t offset, uint32_t buffer_id) : swizzle_flag(0), type(0) {
+		data.node_ptr.buffer_id = buffer_id;
+		data.node_ptr.offset = offset;
+	};
 
+	//! The swizzle flag, set if swizzled, not set otherwise
+	uint8_t swizzle_flag : 1;
+	//! The node type
+	uint8_t type : 7;
+	//! Depending on the type, this is either a BufferPointer or an inlined row ID
+	union {
+		BufferPointer node_ptr;
+		uint64_t row_id : 56;
+	} data;
+
+public:
+	//! Comparison operator
 	inline bool operator==(const Node &node) const {
-		return swizzle_flag == node.swizzle_flag && type == node.type && offset == node.offset &&
-		       buffer_id == node.buffer_id;
+		return swizzle_flag == node.swizzle_flag && type == node.type &&
+		       data.node_ptr.offset == node.data.node_ptr.offset &&
+		       data.node_ptr.buffer_id == node.data.node_ptr.buffer_id;
 	}
-
-	//! Retrieve the node type from the leftmost byte
-	inline NType DecodeARTNodeType() const {
+	//! Returns the swizzle flag
+	inline bool IsSwizzled() const {
+		return swizzle_flag;
+	}
+	//! Returns true, if neither the swizzle flag nor the info is set, and false otherwise
+	inline bool IsSet() const {
+		return swizzle_flag || type;
+	}
+	//! Reset the Node pointer
+	inline void Reset() {
+		swizzle_flag = 0;
+		type = 0;
+	}
+	//! Retrieve the node type from the pointer info
+	inline NType DecodeNodeType() const {
 		D_ASSERT(!IsSwizzled());
 		D_ASSERT(type >= (uint8_t)NType::PREFIX);
 		D_ASSERT(type <= (uint8_t)NType::NODE_256);
 		return NType(type);
 	}
 
-	//! Set the pointer
-	inline void SetPtr(const SwizzleablePointer ptr) {
-		swizzle_flag = ptr.swizzle_flag;
-		type = ptr.type;
-		offset = ptr.offset;
-		buffer_id = ptr.buffer_id;
-	}
+	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
+	static void New(ART &art, Node &node, const NType type);
+	//! Free the node (and its subtree)
+	static void Free(ART &art, Node &node);
 
 	//! Replace the child node at the respective byte
 	void ReplaceChild(const ART &art, const uint8_t byte, const Node child);
@@ -118,7 +145,7 @@ public:
 	bool MergeInternal(ART &art, Node &other);
 
 	//! Vacuum all nodes that exceed their respective vacuum thresholds
-	static void Vacuum(ART &art, Node &node, const ARTFlags &flags);
+	void Vacuum(ART &art, const ARTFlags &flags);
 };
 
 } // namespace duckdb

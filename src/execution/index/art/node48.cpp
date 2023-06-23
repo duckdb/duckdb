@@ -9,7 +9,7 @@ namespace duckdb {
 
 Node48 &Node48::New(ART &art, Node &node) {
 
-	node.SetPtr(Node::GetAllocator(art, NType::NODE_48).New());
+	node = Node::GetAllocator(art, NType::NODE_48).New();
 	node.type = (uint8_t)NType::NODE_48;
 	auto &n48 = Node48::Get(art, node);
 
@@ -214,7 +214,7 @@ void Node48::Vacuum(ART &art, const ARTFlags &flags) {
 
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		if (child_index[i] != Node::EMPTY_MARKER) {
-			Node::Vacuum(art, children[child_index[i]], flags);
+			children[child_index[i]].Vacuum(art, flags);
 		}
 	}
 }

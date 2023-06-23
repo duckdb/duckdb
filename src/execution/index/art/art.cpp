@@ -54,8 +54,8 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	// set the root node of the tree
 	tree = make_uniq<Node>();
 	if (block_id != DConstants::INVALID_INDEX) {
-		tree->buffer_id = block_id;
-		tree->offset = block_offset;
+		tree->data.node_ptr.buffer_id = block_id;
+		tree->data.node_ptr.offset = block_offset;
 		tree->Deserialize(*this);
 	}
 	serialized_data_pointer = BlockPointer(block_id, block_offset);
@@ -498,7 +498,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 		return true;
 	}
 
-	auto node_type = node.DecodeARTNodeType();
+	auto node_type = node.DecodeNodeType();
 
 	// insert the row ID into this leaf
 	if (node_type == NType::LEAF) {
@@ -534,7 +534,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 	auto mismatch_position = Prefix::Traverse(*this, next_node, key, depth);
 
 	// prefix matches key
-	if (next_node.get().DecodeARTNodeType() != NType::PREFIX) {
+	if (next_node.get().DecodeNodeType() != NType::PREFIX) {
 		return Insert(next_node, key, depth, row_id);
 	}
 
@@ -622,15 +622,15 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 
 	// handle prefix
 	reference<Node> next_node(node);
-	if (next_node.get().DecodeARTNodeType() == NType::PREFIX) {
+	if (next_node.get().DecodeNodeType() == NType::PREFIX) {
 		Prefix::Traverse(*this, next_node, key, depth);
-		if (next_node.get().DecodeARTNodeType() == NType::PREFIX) {
+		if (next_node.get().DecodeNodeType() == NType::PREFIX) {
 			return;
 		}
 	}
 
 	// delete a row ID from a leaf (root is leaf with possible prefix nodes)
-	if (next_node.get().DecodeARTNodeType() == NType::LEAF) {
+	if (next_node.get().DecodeNodeType() == NType::LEAF) {
 		auto &leaf = Leaf::Get(*this, next_node.get());
 		leaf.Remove(*this, row_id);
 
@@ -648,14 +648,14 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 
 		auto temp_depth = depth + 1;
 		reference<Node> child_node(*child);
-		if (child_node.get().DecodeARTNodeType() == NType::PREFIX) {
+		if (child_node.get().DecodeNodeType() == NType::PREFIX) {
 			Prefix::Traverse(*this, child_node, key, temp_depth);
-			if (child_node.get().DecodeARTNodeType() == NType::PREFIX) {
+			if (child_node.get().DecodeNodeType() == NType::PREFIX) {
 				return;
 			}
 		}
 
-		if (child_node.get().DecodeARTNodeType() == NType::LEAF) {
+		if (child_node.get().DecodeNodeType() == NType::LEAF) {
 			// leaf found, remove entry
 			auto &leaf = Leaf::Get(*this, child_node.get());
 			leaf.Remove(*this, row_id);
@@ -752,14 +752,14 @@ Node ART::Lookup(Node node, const ARTKey &key, idx_t depth) {
 
 		// traverse prefix, if exists
 		reference<Node> next_node(node);
-		if (next_node.get().DecodeARTNodeType() == NType::PREFIX) {
+		if (next_node.get().DecodeNodeType() == NType::PREFIX) {
 			Prefix::Traverse(*this, next_node, key, depth);
-			if (next_node.get().DecodeARTNodeType() == NType::PREFIX) {
+			if (next_node.get().DecodeNodeType() == NType::PREFIX) {
 				return Node();
 			}
 		}
 
-		if (next_node.get().DecodeARTNodeType() == NType::LEAF) {
+		if (next_node.get().DecodeNodeType() == NType::LEAF) {
 			return next_node.get();
 		}
 
