@@ -155,7 +155,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 3, {27, 8, 20}));
 
 	// asof join
-	REQUIRE_NOTHROW(v1 = con.Values({{1, 10}, {6, 5}, {8, 4}, {10, 23}, {12, 12}, {15,14}}, {"id", "j"}, "v1"));
+	REQUIRE_NOTHROW(v1 = con.Values({{1, 10}, {6, 5}, {8, 4}, {10, 23}, {12, 12}, {15, 14}}, {"id", "j"}, "v1"));
 	REQUIRE_NOTHROW(v2 = con.Values({{4, 27}, {8, 8}, {14, 20}}, {"id", "k"}, "v2"));
 	REQUIRE_NOTHROW(result = v1->Join(v2, "v1.id>=v2.id", JoinType::INNER, JoinRefType::ASOF)->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {6, 8, 10, 12, 15}));
@@ -378,20 +378,20 @@ TEST_CASE("Test crossproduct relation", "[relation_api]") {
 
 	// run cross product
 	vcross = v1->CrossProduct(v2);
-//	REQUIRE_NOTHROW(result = vcross->Order("v1.i")->Execute());
-//	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 2, 2, 2, 3, 3, 3}));
-//	REQUIRE(CHECK_COLUMN(result, 1, {10, 10, 10, 5, 5, 5, 4, 4, 4}));
-//	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3, 1, 2, 3, 1, 2, 3}));
-//	REQUIRE(CHECK_COLUMN(result, 3, {10, 5, 4, 10, 5, 4, 10, 5, 4}));
+	REQUIRE_NOTHROW(result = vcross->Order("v1.i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 1, 1, 2, 2, 2, 3, 3, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 10, 10, 5, 5, 5, 4, 4, 4}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3, 1, 2, 3, 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 3, {10, 5, 4, 10, 5, 4, 10, 5, 4}));
 
 	// run a positional cross product
-//	auto join_ref_type = JoinRefType::POSITIONAL;
-//	vcross = v1->CrossProduct(v2, join_ref_type);
-//	REQUIRE_NOTHROW(result = vcross->Order("v1.i")->Execute());
-//	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
-//	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
-//	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3}));
-//	REQUIRE(CHECK_COLUMN(result, 3, {10, 5, 4}));
+	auto join_ref_type = JoinRefType::POSITIONAL;
+	vcross = v1->CrossProduct(v2, join_ref_type);
+	REQUIRE_NOTHROW(result = vcross->Order("v1.i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
+	REQUIRE(CHECK_COLUMN(result, 2, {1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 3, {10, 5, 4}));
 }
 
 TEST_CASE("Test view creation of relations", "[relation_api]") {

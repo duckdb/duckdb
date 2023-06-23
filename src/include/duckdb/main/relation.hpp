@@ -98,7 +98,8 @@ public:
 	                                     JoinType type = JoinType::INNER, JoinRefType ref_type = JoinRefType::REGULAR);
 
 	// CROSS PRODUCT operation
-	DUCKDB_API shared_ptr<Relation> CrossProduct(const shared_ptr<Relation> &other, JoinRefType ref_type = JoinRefType::REGULAR);
+	DUCKDB_API shared_ptr<Relation> CrossProduct(const shared_ptr<Relation> &other,
+	                                             JoinRefType join_ref_type = JoinRefType::REGULAR);
 
 	// SET operations
 	DUCKDB_API shared_ptr<Relation> Union(const shared_ptr<Relation> &other);

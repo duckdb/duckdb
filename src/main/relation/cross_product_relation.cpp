@@ -6,7 +6,6 @@
 
 namespace duckdb {
 
-
 CrossProductRelation::CrossProductRelation(shared_ptr<Relation> left_p, shared_ptr<Relation> right_p,
                                            JoinRefType ref_type)
     : Relation(left_p->context, RelationType::CROSS_PRODUCT_RELATION), left(std::move(left_p)),
