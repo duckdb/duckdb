@@ -1,15 +1,9 @@
-<<<<<<<< HEAD:test/sql/index/art/insert_update_delete/test_art_update_scans.test_coverage
-# name: test/sql/index/art/insert_update_delete/test_art_update_scans.test_coverage
+# name: test/sql/index/art/insert_update_delete/test_art_update_scans.test_slow
 # description: Test mixing updates, insertions, deletions and big scans
 # group: [insert_update_delete]
 
 statement ok
 PRAGMA enable_verification
-========
-# name: test/sql/index/art/test_art_big_update.test_slow
-# description: Test updates resulting from big index scans
-# group: [art]
->>>>>>>> feature:test/sql/index/art/test_art_big_update.test_slow
 
 statement ok
 BEGIN TRANSACTION
