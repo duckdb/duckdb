@@ -211,7 +211,7 @@ private:
 
 			duckdb_fastpforlib::fastunpack((const uint32_t *)src, (uint64_t *)dst, (uint32_t)width);
 			// throw NotImplementedException("Not implemented (yet)");
-		
+
 		} else {
 			throw InternalException("Unsupported type found in bitpacking.");
 		}
@@ -245,10 +245,8 @@ private:
 		} else if (std::is_same<T, hugeint_t>::value) {
 
 			duckdb_fastpforlib::fastpack((const uint64_t *)values, (uint32_t *)dst, (uint32_t)width);
-		//	throw NotImplementedException("Not implemented (yet)");
-		
-		
-		
+			//	throw NotImplementedException("Not implemented (yet)");
+
 		} else {
 			throw InternalException("Unsupported type found in bitpacking.");
 		}
