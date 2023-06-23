@@ -211,6 +211,7 @@ jobs:
 
  force-blocking-sink-source:
     name: Forcing async Sinks/Sources
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:
@@ -254,6 +255,7 @@ jobs:
 
  storage-initialization:
     name: Storage Initialization Verification
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
     needs: linux-debug
     runs-on: ubuntu-20.04
     env:
@@ -393,6 +395,7 @@ jobs:
 
  sqllogic:
     name: Sqllogic tests
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
     runs-on: ubuntu-20.04
     needs: linux-debug
     env:

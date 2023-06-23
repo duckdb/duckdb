@@ -76,6 +76,9 @@ jobs:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
           - isRelease: false
+            node: 10
+            target_arch: x64
+          - isRelease: false
             node: 12
             target_arch: x64
           - isRelease: false
@@ -96,6 +99,9 @@ jobs:
           - isRelease: false
             node: 19
             target_arch: x64
+          - isRelease: false
+            node: 10
+            target_arch: arm64
           - isRelease: false
             node: 12
             target_arch: arm64
@@ -180,6 +186,8 @@ jobs:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
           - isRelease: false
+            node: 10
+          - isRelease: false
             node: 12
           - isRelease: false
             node: 14
@@ -254,6 +262,8 @@ jobs:
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
+          - isRelease: false
+            node: 10
           - isRelease: false
             node: 12
           - isRelease: false
