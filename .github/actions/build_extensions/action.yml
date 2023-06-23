@@ -74,7 +74,7 @@ runs:
       if: ${{ inputs.build_vcpkg_extensions }}
       uses: lukka/run-vcpkg@v11
       with:
-        vcpkgGitCommitId: f6a5d4e8eb7476b8d7fc12a56dff300c1c986131
+        vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
 
     - name: Configure combined vcpkg build for extensions that require vcpkg
       if: ${{ inputs.build_vcpkg_extensions }}
