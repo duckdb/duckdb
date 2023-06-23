@@ -15,6 +15,7 @@
 
 namespace duckdb {
 
+// random comment
 BaseAppender::BaseAppender(Allocator &allocator, AppenderType type_p)
     : allocator(allocator), column(0), appender_type(type_p) {
 }
