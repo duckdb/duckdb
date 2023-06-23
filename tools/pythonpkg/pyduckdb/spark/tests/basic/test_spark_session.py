@@ -1,19 +1,15 @@
 import pytest
-import pyduckdb.spark as pyspark
 from pyduckdb.spark.sql import SparkSession
-
-@pytest.fixture(scope='session', autouse=True)
-def basic_session():
-	return SparkSession.builder.master(':memory:').appName('pyspark').getOrCreate()
 
 class TestSparkSession(object):
 	def test_spark_session(self):
-		spark = SparkSession.builder.master("local[1]") \
+		session = SparkSession.builder.master("local[1]") \
 							.appName('SparkByExamples.com') \
 							.getOrCreate()
-	def test_new_session(self, basic_session: SparkSession):
-		spark = basic_session.newSession()
-		print(spark)
+
+	def test_new_session(self, spark: SparkSession):
+		session = spark.newSession()
+		print(session)
 
 	@pytest.mark.skip(reason='not tested yet')
 	def test_retrieve_same_session(self):
