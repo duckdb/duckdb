@@ -411,6 +411,7 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 		//! the cardinality
 		ColumnBinding key = ColumnBinding(relation_id, column);
 		auto actual_binding = relation_column_to_original_column.find(key);
+		bool have_stats = false;
 		// each relation has columns that are either projected or used as filters
 		// In order to get column statistics we need to make sure the actual binding still
 		// refers to the same base table relation, as non-reorderable joins may involve 2+
@@ -419,21 +420,12 @@ void CardinalityEstimator::UpdateTotalDomains(JoinNode &node, LogicalOperator &o
 		if (actual_binding != relation_column_to_original_column.end() &&
 		    (!get || get->table_index != actual_binding->second.table_index)) {
 			get = GetLogicalGet(op, actual_binding->second.table_index);
-			get_updated = true;
 		} else {
-			get_updated = false;
+			get = nullptr;
+			have_stats = false;
 		}
 
-		if (get_updated) {
-			if (get) {
-				catalog_table = GetCatalogTableEntry(*get);
-			} else {
-				catalog_table = nullptr;
-			}
-		}
-
-		bool have_stats = false;
-		if (catalog_table && actual_binding != relation_column_to_original_column.end()) {
+		if (get && get->function.statistics && actual_binding != relation_column_to_original_column.end()) {
 			// Get HLL stats here
 			auto stats = get->function.statistics(context, get->bind_data.get(), actual_binding->second.column_index);
 			if (stats) {
