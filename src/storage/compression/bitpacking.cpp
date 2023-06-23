@@ -172,7 +172,7 @@ public:
 		// Note: since we dont allow any values over NumericLimits<T_S>::Maximum(), all subtractions for unsigned types
 		// are guaranteed not to overflow
 		bool can_do_all = true;
-		if (std::is_signed<T>()) {
+		if (NumericLimits<T>::IsSigned()) {
 			T_S bogus;
 			can_do_all = TrySubtractOperator::Operation((T_S)(minimum), (T_S)(maximum), bogus) &&
 			             TrySubtractOperator::Operation((T_S)(maximum), (T_S)(minimum), bogus);
@@ -907,6 +907,10 @@ CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 		return GetBitpackingFunction<uint32_t>(type);
 	case PhysicalType::UINT64:
 		return GetBitpackingFunction<uint64_t>(type);
+
+	// case PhysicalType::INT128:
+	// 	return GetBitpackingFunction<int64_t>(type);
+	
 	case PhysicalType::LIST:
 		return GetBitpackingFunction<uint64_t, false>(type);
 	default:
@@ -926,6 +930,9 @@ bool BitpackingFun::TypeIsSupported(PhysicalType type) {
 	case PhysicalType::UINT32:
 	case PhysicalType::UINT64:
 	case PhysicalType::LIST:
+
+	// case PhysicalType::INT128:
+
 		return true;
 	default:
 		return false;

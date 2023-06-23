@@ -122,7 +122,7 @@ private:
 				max_value = values[i];
 			}
 
-			if (std::is_signed<T>::value) {
+			if (NumericLimits<T>::IsSigned()) {
 				if (values[i] < min_value) {
 					min_value = values[i];
 				}
@@ -137,7 +137,7 @@ private:
 		bitpacking_width_t bitwidth;
 		T value;
 
-		if (std::is_signed<T>::value) {
+		if (NumericLimits<T>::IsSigned()) {
 			if (min_value == NumericLimits<T>::Minimum()) {
 				// handle special case of the minimal value, as it cannot be negated like all other values.
 				return sizeof(T) * 8;
@@ -152,7 +152,7 @@ private:
 			return 0;
 		}
 
-		if (std::is_signed<T>::value) {
+		if (NumericLimits<T>::IsSigned()) {
 			bitwidth = 1;
 		} else {
 			bitwidth = 0;
@@ -168,7 +168,7 @@ private:
 		// Assert results are correct
 #ifdef DEBUG
 		if (bitwidth < sizeof(T) * 8 && bitwidth != 0) {
-			if (std::is_signed<T>::value) {
+			if (NumericLimits<T>::IsSigned()) {
 				D_ASSERT((int64_t)max_value <= (int64_t)(1L << (bitwidth - 1)) - 1);
 				D_ASSERT((int64_t)min_value >= (int64_t)(-1 * ((1L << (bitwidth - 1)) - 1) - 1));
 			} else {
