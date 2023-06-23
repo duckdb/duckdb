@@ -1155,14 +1155,19 @@ ParserOptions ClientContext::GetParserOptions() const {
 }
 
 ClientProperties ClientContext::GetClientProperties() const {
-//		ClientProperties properties;
-//	Value result;
-//	db->TryGetCurrentSetting("timezone",result);
-//
-//	properties.timezone = result.GetValue<string>();
-//	return properties;
-	auto client_context = ClientConfig::GetConfig(*this);
-	return {client_context.ExtractTimezone(), db->config.options.arrow_offset_size};
+	string timezone = "UTC";
+	Value result;
+	auto found = db->TryGetCurrentSetting("timezone", result);
+	if (!found) {
+		// Check for default
+		auto default_value = db->config.extension_parameters.find("timezone");
+		if (default_value != db->config.extension_parameters.end()) {
+			timezone = default_value->second.default_value.GetValue<string>();
+		}
+	} else {
+		timezone = result.GetValue<string>();
+	}
+	return {timezone, db->config.options.arrow_offset_size};
 }
 
 bool ClientContext::ExecutionIsFinished() {

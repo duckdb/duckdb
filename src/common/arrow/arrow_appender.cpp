@@ -16,7 +16,7 @@ typedef void (*append_vector_t)(ArrowAppendData &append_data, Vector &input, idx
 typedef void (*finalize_t)(ArrowAppendData &append_data, const LogicalType &type, ArrowArray *result);
 
 struct ArrowAppendData {
-	explicit ArrowAppendData(ArrowOptions &options_p) : options(options_p) {
+	explicit ArrowAppendData(ClientProperties &options_p) : options(options_p) {
 	}
 	// the buffers of the arrow vector
 	ArrowBuffer validity;
@@ -39,16 +39,17 @@ struct ArrowAppendData {
 	duckdb::array<const void *, 3> buffers = {{nullptr, nullptr, nullptr}};
 	vector<ArrowArray *> child_pointers;
 
-	ArrowOptions options;
+	ClientProperties options;
 };
 
 //===--------------------------------------------------------------------===//
 // ArrowAppender
 //===--------------------------------------------------------------------===//
-static unique_ptr<ArrowAppendData> InitializeArrowChild(const LogicalType &type, idx_t capacity, ArrowOptions &options);
+static unique_ptr<ArrowAppendData> InitializeArrowChild(const LogicalType &type, idx_t capacity,
+                                                        ClientProperties &options);
 static ArrowArray *FinalizeArrowChild(const LogicalType &type, ArrowAppendData &append_data);
 
-ArrowAppender::ArrowAppender(vector<LogicalType> types_p, idx_t initial_capacity, ArrowOptions options)
+ArrowAppender::ArrowAppender(vector<LogicalType> types_p, idx_t initial_capacity, ClientProperties options)
     : types(std::move(types_p)) {
 	for (auto &type : types) {
 		auto entry = InitializeArrowChild(type, initial_capacity, options);
@@ -352,7 +353,7 @@ struct ArrowVarcharData {
 		auto last_offset = offset_data[append_data.row_count];
 		idx_t max_offset = append_data.row_count + to - from;
 		if (max_offset > NumericLimits<uint32_t>::Maximum() &&
-		    append_data.options.offset_size == ArrowOffsetSize::REGULAR) {
+		    append_data.options.arrow_offset_size == ArrowOffsetSize::REGULAR) {
 			throw InvalidInputException("Arrow Appender: The maximum total string size for regular string buffers is "
 			                            "%u but the offset of %lu exceeds this.",
 			                            NumericLimits<uint32_t>::Maximum(), max_offset);
@@ -690,14 +691,14 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
-		if (append_data.options.offset_size == ArrowOffsetSize::LARGE) {
+		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			InitializeFunctionPointers<ArrowVarcharData<string_t>>(append_data);
 		} else {
 			InitializeFunctionPointers<ArrowVarcharData<string_t, ArrowVarcharConverter, uint32_t>>(append_data);
 		}
 		break;
 	case LogicalTypeId::UUID:
-		if (append_data.options.offset_size == ArrowOffsetSize::LARGE) {
+		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			InitializeFunctionPointers<ArrowVarcharData<hugeint_t, ArrowUUIDConverter>>(append_data);
 		} else {
 			InitializeFunctionPointers<ArrowVarcharData<hugeint_t, ArrowUUIDConverter, uint32_t>>(append_data);
@@ -735,7 +736,7 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	}
 }
 
-unique_ptr<ArrowAppendData> InitializeArrowChild(const LogicalType &type, idx_t capacity, ArrowOptions &options) {
+unique_ptr<ArrowAppendData> InitializeArrowChild(const LogicalType &type, idx_t capacity, ClientProperties &options) {
 	auto result = make_uniq<ArrowAppendData>(options);
 	InitializeFunctionPointers(*result, type);
 

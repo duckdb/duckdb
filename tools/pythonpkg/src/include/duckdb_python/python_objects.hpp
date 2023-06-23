@@ -8,6 +8,7 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
+#include "duckdb/main/client_properties.hpp"
 
 #include "datetime.h" //from python
 
@@ -195,7 +196,7 @@ public:
 
 struct PythonObject {
 	static void Initialize();
-	static py::object FromValue(const Value &value, const LogicalType &id, const string &timezone_config);
+	static py::object FromValue(const Value &value, const LogicalType &id, const ClientProperties &client_properties);
 };
 
 template <class T>

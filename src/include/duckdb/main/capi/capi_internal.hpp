@@ -13,7 +13,6 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/appender.hpp"
-#include "duckdb/common/arrow/arrow_options.hpp"
 
 #include <cstring>
 #include <cassert>
@@ -48,7 +47,7 @@ struct PendingStatementWrapper {
 struct ArrowResultWrapper {
 	unique_ptr<MaterializedQueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
-	ArrowOptions options;
+	ClientProperties options;
 };
 
 struct AppenderWrapper {

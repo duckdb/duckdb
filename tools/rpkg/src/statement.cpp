@@ -273,7 +273,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 	if (count == 0) {
 		return false;
 	}
-	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, QueryResult::GetArrowOptions(*result));
+	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, result->client_properties);
 	batches_list.PrepAppend();
 	batches_list.Append(cpp11::safe[Rf_eval](batch_import_from_c, arrow_namespace));
 	return true;
@@ -303,7 +303,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 	}
 
 	SET_LENGTH(batches_list.the_list, batches_list.size);
-	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, QueryResult::GetArrowOptions(*result));
+	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, result->client_properties);
 	cpp11::sexp schema_arrow_obj(cpp11::safe[Rf_eval](schema_import_from_c, arrow_namespace));
 
 	// create arrow::Table

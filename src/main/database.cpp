@@ -397,7 +397,6 @@ bool DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &resul
 	return true;
 }
 
-
 ValidChecker &DatabaseInstance::GetValidChecker() {
 	return db_validity;
 }
