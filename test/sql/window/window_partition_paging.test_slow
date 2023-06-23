@@ -3,6 +3,12 @@
 # group: [window]
 
 statement ok
+PRAGMA temp_directory='__TEST_DIR__/window_paging'
+
+statement ok
+PRAGMA debug_force_external=True
+
+statement ok
 CREATE or replace TABLE big_table AS
     SELECT
     (i % 500)::int16 AS "Pid",
@@ -10,13 +16,9 @@ CREATE or replace TABLE big_table AS
     left(uuid()::VARCHAR, 10) AS "Claimid",
     FROM range(1e8::int) tbl(i);
 
-# This query will take ~12GB of memory
+# This query would take ~12GB of memory
 statement ok
-PRAGMA memory_limit='5GB'
-
-# Reduce the thread count to compensate for 1024 partitions.
-statement ok
-PRAGMA threads=4
+PRAGMA memory_limit='4GB'
 
 query II
 WITH new_table as (SELECT

@@ -87,12 +87,17 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
                                                    const vector<unique_ptr<BaseStatistics>> &partition_stats,
                                                    idx_t estimated_cardinality)
     : context(context), buffer_manager(BufferManager::GetBufferManager(context)), allocator(Allocator::Get(context)),
-      fixed_bits(0), payload_types(payload_types), memory_per_thread(0), count(0) {
+      fixed_bits(0), payload_types(payload_types), memory_per_thread(0), max_bits(1), count(0) {
 
 	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
 
 	memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
 	external = ClientConfig::GetConfig(context).force_external;
+
+	const auto thread_pages = PreviousPowerOfTwo(memory_per_thread / (4 * idx_t(Storage::BLOCK_ALLOC_SIZE)));
+	while (max_bits < 10 && (thread_pages >> max_bits) > 1) {
+		++max_bits;
+	}
 
 	if (!orders.empty()) {
 		auto types = payload_types;
@@ -122,7 +127,7 @@ void PartitionGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
 	const idx_t partition_size = STANDARD_ROW_GROUPS_SIZE;
 	const auto bits = grouping_data ? grouping_data->GetRadixBits() : 0;
 	auto new_bits = bits ? bits : 4;
-	while (new_bits < 10 && (cardinality / RadixPartitioning::NumberOfPartitions(new_bits)) > partition_size) {
+	while (new_bits < max_bits && (cardinality / RadixPartitioning::NumberOfPartitions(new_bits)) > partition_size) {
 		++new_bits;
 	}
 
