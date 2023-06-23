@@ -6,6 +6,9 @@ class SparkSession:
 		self.name = "session"
 		self._master = 'master'
 
+	def newSession(self) -> "SparkSession":
+		return SparkSession()
+
 	class Builder:
 		def __init__(self):
 			self.name = "builder"
