@@ -16,8 +16,6 @@ namespace duckdb {
 class JoinRelation : public Relation {
 public:
 	DUCKDB_API JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> right,
-	                        unique_ptr<ParsedExpression> condition, JoinType type);
-	DUCKDB_API JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> right,
 	                        unique_ptr<ParsedExpression> condition, JoinType type, JoinRefType join_ref_type);
 	DUCKDB_API JoinRelation(shared_ptr<Relation> left, shared_ptr<Relation> right, vector<string> using_columns,
 	                        JoinType type, JoinRefType join_ref_type);

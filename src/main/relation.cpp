@@ -140,7 +140,8 @@ shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const str
 }
 
 shared_ptr<Relation> Relation::CrossProduct(const shared_ptr<Relation> &other, JoinRefType ref_type) {
-	return make_shared<CrossProductRelation>(shared_from_this(), other, ref_type);
+	auto shared_from_this_res = shared_from_this();
+	return make_shared<CrossProductRelation>(shared_from_this_res, other, ref_type);
 }
 
 shared_ptr<Relation> Relation::Union(const shared_ptr<Relation> &other) {
