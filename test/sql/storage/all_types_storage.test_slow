@@ -1,0 +1,23 @@
+# name: test/sql/storage/all_types_storage.test_slow
+# description: Test all types function
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/all_types_storage.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE all_types AS SELECT * FROM test_all_types();
+
+query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII nosort r1
+SELECT * FROM test_all_types();
+
+query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII nosort r1
+SELECT * FROM all_types;
+
+restart
+
+query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII nosort r1
+SELECT * FROM all_types;

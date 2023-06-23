@@ -1,0 +1,78 @@
+# name: test/sql/join/inner/test_join_types.test_slow
+# description: Test joins with different types
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+pragma verify_external
+
+# numeric types
+
+foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+begin transaction
+
+statement ok
+create table a as select i::${type} AS i from range(1, 101, 1) t1(i)
+
+# range joins
+query IR
+select count(*), sum(i) from a, (SELECT 100::${type} AS j) b where i < j
+----
+99	4950.000000
+
+query I
+select count(*) from a, (SELECT 100::${type} AS j) b where i <= j
+----
+100
+
+query I
+select count(*) from a, (SELECT 1::${type} AS j) b where i > j
+----
+99
+
+query I
+select count(*) from a, (SELECT 1::${type} AS j) b where i >= j
+----
+100
+
+# inequality join
+query I
+select count(*) from a, (SELECT 1::${type} AS j) b where i <> j
+----
+99
+
+query I
+select count(*) from a, (SELECT 1::${type} AS j) b where i <> j AND i=j
+----
+0
+
+# equality join
+query I
+select count(*) from a, (SELECT 1::${type} AS j) b where i = j
+----
+1
+
+# no results on one side
+query I
+select count(*) from a, (SELECT 1::${type} AS j) b where i > j AND i>120
+----
+0
+
+query I
+select count(*) from a, (SELECT 1::${type} AS j) b where i <> j AND i>120
+----
+0
+
+query I
+select count(*) from a, (SELECT 1::${type} AS j) b where i = j AND i>120
+----
+0
+
+statement ok
+rollback
+
+endloop
