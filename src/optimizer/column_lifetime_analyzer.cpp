@@ -1,7 +1,5 @@
 #include "duckdb/optimizer/column_lifetime_optimizer.hpp"
-
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_delim_join.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
@@ -20,6 +18,7 @@ void ColumnLifetimeAnalyzer::ExtractUnusedColumnBindings(vector<ColumnBinding> b
 void ColumnLifetimeAnalyzer::GenerateProjectionMap(vector<ColumnBinding> bindings,
                                                    column_binding_set_t &unused_bindings,
                                                    vector<idx_t> &projection_map) {
+	projection_map.clear();
 	if (unused_bindings.empty()) {
 		return;
 	}

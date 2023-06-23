@@ -1,6 +1,6 @@
 catalog/catalog.cpp	15
 catalog/catalog_entry.cpp	3
-catalog/catalog_entry/duck_schema_entry.cpp	3
+catalog/catalog_entry/duck_schema_entry.cpp	4
 catalog/catalog_entry/duck_table_entry.cpp	7
 catalog/catalog_entry/index_catalog_entry.cpp	2
 catalog/catalog_entry/scalar_function_catalog_entry.cpp	3
@@ -197,7 +197,7 @@ execution/operator/persistent/physical_batch_copy_to_file.cpp	7
 execution/operator/persistent/physical_batch_insert.cpp	43
 execution/operator/persistent/physical_copy_to_file.cpp	2
 execution/operator/persistent/physical_export.cpp	2
-execution/operator/persistent/physical_fixed_batch_copy.cpp	6
+execution/operator/persistent/physical_fixed_batch_copy.cpp	7
 execution/operator/persistent/physical_insert.cpp	5
 execution/operator/projection/physical_projection.cpp	16
 execution/operator/projection/physical_tableinout_function.cpp	8
@@ -212,11 +212,13 @@ execution/perfect_aggregate_hashtable.cpp	4
 execution/physical_operator.cpp	2
 execution/physical_plan/plan_aggregate.cpp	2
 execution/physical_plan/plan_asof_join.cpp	37
+execution/physical_plan/plan_column_data_get.cpp	1
 execution/physical_plan/plan_comparison_join.cpp	14
 execution/physical_plan/plan_explain.cpp	5
 execution/physical_plan/plan_export.cpp	2
+execution/physical_plan/plan_expression_get.cpp	1
 execution/physical_plan/plan_positional_join.cpp	2
-execution/physical_plan/plan_recursive_cte.cpp	2
+execution/physical_plan/plan_recursive_cte.cpp	3
 execution/physical_plan/plan_sample.cpp	2
 execution/physical_plan/plan_set_operation.cpp	2
 execution/physical_plan/plan_show_select.cpp	3
@@ -264,7 +266,7 @@ function/table/copy_csv.cpp	16
 function/table/pragma_detailed_profiling_output.cpp	86
 function/table/pragma_last_profiling_output.cpp	51
 function/table/range.cpp	5
-function/table/read_csv.cpp	51
+function/table/read_csv.cpp	52
 function/table/system/duckdb_constraints.cpp	3
 function/table/system/duckdb_dependencies.cpp	4
 function/table/system/duckdb_extensions.cpp	20
@@ -322,6 +324,7 @@ include/duckdb/catalog/catalog.hpp	3
 include/duckdb/catalog/catalog_entry/table_catalog_entry.hpp	3
 include/duckdb/catalog/catalog_set.hpp	2
 include/duckdb/catalog/mapping_value.hpp	2
+include/duckdb/common/allocator.hpp	2
 include/duckdb/common/bit_utils.hpp	3
 include/duckdb/common/bitpacking.hpp	11
 include/duckdb/common/dl.hpp	3
@@ -378,11 +381,13 @@ include/duckdb/execution/operator/join/physical_piecewise_merge_join.hpp	3
 include/duckdb/execution/operator/join/physical_range_join.hpp	2
 include/duckdb/execution/operator/persistent/buffered_csv_reader.hpp	2
 include/duckdb/execution/operator/persistent/parallel_csv_reader.hpp	3
+include/duckdb/function/aggregate_function.hpp	2
 include/duckdb/function/function_serialization.hpp	2
 include/duckdb/function/function_set.hpp	3
 include/duckdb/function/scalar/list/contains_or_position.hpp	16
 include/duckdb/function/table_function.hpp	6
 include/duckdb/function/udf_function.hpp	108
+include/duckdb/main/appender.hpp	4
 include/duckdb/main/capi/cast/from_decimal.hpp	2
 include/duckdb/main/capi/cast/to_decimal.hpp	38
 include/duckdb/main/client_context.hpp	2
