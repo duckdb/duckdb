@@ -325,6 +325,10 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
+	if (std::is_same<T, hugeint_t>::value) {
+		// TODO: only analyze if  can fit in int64
+	}
+
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
@@ -397,7 +401,6 @@ public:
 
 			UpdateStats(state, count);
 		}
-
 		static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference,
 		                          T_S delta_offset, T *original_values, idx_t count, void *data_ptr) {
 			auto state = (BitpackingCompressState<T, WRITE_STATISTICS> *)data_ptr;

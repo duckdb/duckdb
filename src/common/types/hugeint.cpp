@@ -1,11 +1,14 @@
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
+#include <_types/_uint64_t.h>
+#include <_types/_uint8_t.h>
 #include <cmath>
 #include <limits>
 
@@ -772,11 +775,19 @@ hugeint_t::operator bool() const {
 }
 
 hugeint_t::operator uint64_t() const {
-	throw NotImplementedException("Not implemented");
+	uint64_t result;
+	if (!Hugeint::TryCast(*this, result)) {
+		throw InternalException("unable to cast hugeint_t to uint64_t");
+	}
+	return result;
 }
 
 hugeint_t::operator uint8_t() const {
-	throw NotImplementedException("Not implemented");
+	uint8_t result;
+	if (!Hugeint::TryCast(*this, result)) {
+		throw InternalException("unable to cast hugeint_t to uint8_t");
+	}
+	return result;
 }
 
 string hugeint_t::ToString() const {
@@ -784,7 +795,7 @@ string hugeint_t::ToString() const {
 }
 
 hugeint_t operator*(idx_t lhs, hugeint_t rhs) {
-	throw NotImplementedException("Not implemented");
+	return (hugeint_t(lhs) * rhs);
 }
 
 } // namespace duckdb
