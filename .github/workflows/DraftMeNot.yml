@@ -1,0 +1,20 @@
+# Marks all changed PR as draft
+name: Placeholder to avoid cancel already running DraftMe jobs
+on:
+  pull_request:
+    types: [ ready_for_review ]
+
+concurrency:
+  group: shouldturntodraft-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  mark-as-draft:
+    name: Placeholder
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print PR number
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.node_id }}
+        run: |
+          echo $PR_NUMBER

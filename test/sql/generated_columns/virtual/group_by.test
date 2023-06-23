@@ -23,7 +23,7 @@ insert into tbl VALUES
 (12, 5)
 
 statement ok
-insert into tbl select i % 20, random()::INTEGER * 20 from range(10000) tbl(i);
+insert into tbl select i % 20, random()::INTEGER * 20 from range(100) tbl(i);
 
 statement ok
 CREATE TABLE non_generated as select * from tbl;

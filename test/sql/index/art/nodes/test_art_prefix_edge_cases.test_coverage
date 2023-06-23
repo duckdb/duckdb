@@ -1,6 +1,12 @@
+<<<<<<<< HEAD:test/sql/index/art/nodes/test_art_prefix_edge_cases.test_coverage
 # name: test/sql/index/art/nodes/test_art_prefix_edge_cases.test_coverage
 # description: Test ART prefix edge cases
 # group: [nodes]
+========
+# name: test/sql/index/art/test_art_index_prefix.test_slow
+# description: Test ART index with prefixes
+# group: [art]
+>>>>>>>> feature:test/sql/index/art/test_art_index_prefix.test_slow
 
 statement ok
 PRAGMA enable_verification

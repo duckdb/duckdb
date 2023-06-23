@@ -1,6 +1,12 @@
+<<<<<<<< HEAD:test/sql/index/art/nodes/test_art_leaf_with_duplicates.test_coverage
 # name: test/sql/index/art/nodes/test_art_leaf_with_duplicates.test_coverage
 # description: Test ART leaf containing duplicates
 # group: [nodes]
+========
+# name: test/sql/index/art/test_art_node_leaf_with_duplicates.test_slow
+# description: ART Node Leaf with removing duplicated keys
+# group: [art]
+>>>>>>>> feature:test/sql/index/art/test_art_node_leaf_with_duplicates.test_slow
 
 statement ok
 PRAGMA enable_verification
