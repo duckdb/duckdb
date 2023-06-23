@@ -20,3 +20,9 @@ class TestDataFrame(object):
 		#|Spark|35000|
 		#|  PHP|21000|
 		#+-----+-----+
+
+	def test_writing_to_table(self, spark):
+		# Create Hive table & query it.
+		spark.table("sample_table").write.saveAsTable("sample_hive_table")
+		df3 = spark.sql("SELECT _1,_2 FROM sample_hive_table")
+		df3.show()

@@ -15,6 +15,15 @@ class SparkSession:
 	def createDataFrame(self, tuples: List[Tuple[Any, ...]]) -> DataFrame:
 		return DataFrame()
 
+	def table(self, table_name: str) -> DataFrame:
+		return DataFrame()
+
+	def sql(self, query: str) -> DataFrame:
+		"""
+			TODO: this needs to query DuckDB
+		"""
+		return DataFrame()
+
 	@property
 	def conf(self) -> RuntimeConfig:
 		return RuntimeConfig()
