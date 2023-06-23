@@ -21,3 +21,20 @@ class TestSparkSession(object):
 		spark2 = SparkSession.builder.getOrCreate()
 		# Same connection should be returned
 		assert spark == spark2
+
+	def test_config(self):
+		# Usage of config()
+		spark = SparkSession.builder \
+			.master("local[1]") \
+			.appName("SparkByExamples.com") \
+			.config("spark.some.config.option", "config-value") \
+			.getOrCreate()
+
+	def test_hive_support(self):
+		# Enabling Hive to use in Spark
+		spark = SparkSession.builder \
+			.master("local[1]") \
+			.appName("SparkByExamples.com") \
+			.config("spark.sql.warehouse.dir", "<path>/spark-warehouse") \
+			.enableHiveSupport() \
+			.getOrCreate()
