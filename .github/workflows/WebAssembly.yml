@@ -48,6 +48,8 @@ jobs:
         fetch-depth: 0
 
     - uses: mymindstorm/setup-emsdk@v12
+      with:
+        version: 3.1.41
 
     - name: Setup
       shell: bash
@@ -66,12 +68,27 @@ jobs:
         key: ${{ github.job }}
         save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
-    - name: Build WebAssembly
+    - name: Print version
+      shell: bash
+      run: |
+        emcc --version
+
+    - name: Build WebAssembly MVP
       shell: bash
       run: |
         cd duckdb-wasm
         bash scripts/wasm_build_lib.sh relsize mvp $(pwd)/..
+
+    - name: Build WebAssembly EH
+      shell: bash
+      run: |
+        cd duckdb-wasm
         bash scripts/wasm_build_lib.sh relsize eh $(pwd)/..
+
+    - name: Build WebAssembly COI
+      shell: bash
+      run: |
+        cd duckdb-wasm
         bash scripts/wasm_build_lib.sh relsize coi $(pwd)/..
 
     - name: Package
