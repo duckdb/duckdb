@@ -3,6 +3,7 @@ from typing import Optional, List, Tuple, Any
 
 from pyduckdb.spark.sql.dataframe import DataFrame
 from pyduckdb.spark.sql.conf import RuntimeConfig
+from pyduckdb.spark.sql.catalog import Catalog
 
 class SparkSession:
 	def __init__(self):
@@ -23,6 +24,10 @@ class SparkSession:
 			TODO: this needs to query DuckDB
 		"""
 		return DataFrame()
+
+	@property
+	def catalog(self) -> Catalog:
+		return Catalog()
 
 	@property
 	def conf(self) -> RuntimeConfig:

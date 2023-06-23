@@ -1,11 +1,13 @@
-from pyduckdb.spark.sql.session import SparkSession
-from pyduckdb.spark.sql.readwriter import DataFrameWriter
-from pyduckdb.spark.sql.dataframe import DataFrame
-from pyduckdb.spark.sql.conf import RuntimeConfig
+from .session import SparkSession
+from .readwriter import DataFrameWriter
+from .dataframe import DataFrame
+from .conf import RuntimeConfig
+from .catalog import Catalog
 
 __all__ = [
 	"SparkSession",
 	"DataFrame",
 	"RuntimeConfig",
-	"DataFrameWriter"
+	"DataFrameWriter",
+	"Catalog"
 ]

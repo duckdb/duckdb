@@ -1,5 +1,4 @@
-from pyduckdb.spark.sql import SparkSession
-from pyduckdb.spark.sql import DataFrame
+from .sql import SparkSession, DataFrame
 
 __all__ = [
 	"SparkSession",
