@@ -2,6 +2,7 @@ from typing_extensions import Self
 from typing import Optional, List, Tuple, Any
 
 from pyduckdb.spark.sql.dataframe import DataFrame
+from pyduckdb.spark.sql.conf import RuntimeConfig
 
 class SparkSession:
 	def __init__(self):
@@ -13,6 +14,10 @@ class SparkSession:
 
 	def createDataFrame(self, tuples: List[Tuple[Any, ...]]) -> DataFrame:
 		return DataFrame()
+
+	@property
+	def conf(self) -> RuntimeConfig:
+		return RuntimeConfig()
 
 	class Builder:
 		def __init__(self):
