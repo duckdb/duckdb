@@ -415,7 +415,7 @@ private extension TypeConversionTests {
     cast: (Column<Void>) -> Column<T>
   ) throws {
     let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT \(testColumnName) FROM test_all_types();")
+    let result = try connection.query("SELECT \(testColumnName) FROM test_all_types(large_enum=true);")
     let column = cast(result[0])
     for (index, item) in expected.enumerated() {
       XCTAssertEqual(column[DBInt(index)], item)
