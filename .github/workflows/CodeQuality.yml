@@ -132,6 +132,7 @@ jobs:
         shell: bash
         run: |
           build/coverage/test/unittest
+          build/coverage/test/unittest "[coverage]"
           build/coverage/test/unittest "[intraquery]"
           build/coverage/test/unittest "[interquery]"
           build/coverage/test/unittest "[detailed_profiler]"
