@@ -1,0 +1,60 @@
+# name: test/sql/storage/compression/constant/constant_columns_types.test_slow
+# description: Test storage of constant columns with various types
+# group: [constant]
+
+# load the DB from disk
+load __TEST_DIR__/constant_columns_types.db
+
+foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+CREATE TABLE a AS SELECT 1::${type} i FROM range(1000000)
+
+query IIIII
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM a
+----
+1	1	1	1000000	1000000
+
+query IIIII
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM a WHERE i=1
+----
+1	1	1	1000000	1000000
+
+statement ok
+DROP TABLE a
+
+endloop
+
+# interval
+statement ok
+CREATE TABLE a AS SELECT interval 1 year i FROM range(1000000)
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a
+----
+1 year	1 year	1000000	1000000
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a WHERE i=interval 1 year
+----
+1 year	1 year	1000000	1000000
+
+statement ok
+DROP TABLE a
+
+# bool
+statement ok
+CREATE TABLE a AS SELECT false i FROM range(1000000)
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a
+----
+false	false	1000000	1000000
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a WHERE not i
+----
+false	false	1000000	1000000
+
+statement ok
+DROP TABLE a

@@ -1,0 +1,48 @@
+# name: test/sql/storage/compression/dictionary/dictionary_compression_ratio.test_slow
+# description: Assert dictionary compression ratio is within reasonable margins
+# group: [dictionary]
+
+# load the DB from disk
+load __TEST_DIR__/test_dictionary.db
+
+# First test: detailed compression ratio
+statement ok
+PRAGMA force_compression='dictionary'
+
+# Assuming 10 chars at 1 byte, with a 4byte offset and a 2byte length per string uncompressed:
+# Ratio absolute max at 3 bits per value (ignoring dict size) = (16/(3/8)) = 42.6666666667
+statement ok
+CREATE TABLE test_dictionary AS SELECT concat('BEEPBOOP-', (i%3)::VARCHAR) AS i FROM range(0, 1250000) tbl(i);
+
+statement ok
+checkpoint
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+statement ok
+CREATE TABLE test_uncompressed AS SELECT concat('BEEPBOOP-', (i%3)::VARCHAR) AS i FROM range(0, 1250000) tbl(i);
+
+statement ok
+checkpoint
+
+
+#mode output_result
+
+statement ok
+select (uncompressed::FLOAT / dictionary::FLOAT) as compression_ratio  FROM (
+    select
+        (select count(distinct block_id) from pragma_storage_info('test_dictionary') where segment_type in('VARCHAR')) as dictionary,
+        (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type in('VARCHAR')) as uncompressed
+)
+
+# This query keeps a pretty wide margin in compression ratio un purpose to account for possible changes that
+# influence compression ratio.
+query II
+select (uncompressed::FLOAT / dictionary::FLOAT) > 35, (uncompressed::FLOAT / dictionary::FLOAT) < 43  FROM (
+    select
+        (select count(distinct block_id) from pragma_storage_info('test_dictionary') where segment_type in('VARCHAR')) as dictionary,
+        (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type in('VARCHAR')) as uncompressed
+)
+----
+True	True
