@@ -28,7 +28,7 @@ unique_ptr<QueryNode> QueryNode::FormatDeserialize(FormatDeserializer &deseriali
 		result = SetOperationNode::FormatDeserialize(deserializer);
 		break;
 	default:
-		throw SerializationException("Unsupported type for deserialization!");
+		throw SerializationException("Unsupported type for deserialization of QueryNode!");
 	}
 	result->modifiers = std::move(modifiers);
 	result->cte_map = std::move(cte_map);

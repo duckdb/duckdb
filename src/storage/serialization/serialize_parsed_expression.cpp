@@ -70,7 +70,7 @@ unique_ptr<ParsedExpression> ParsedExpression::FormatDeserialize(FormatDeseriali
 		result = WindowExpression::FormatDeserialize(type, deserializer);
 		break;
 	default:
-		throw SerializationException("Unsupported type for deserialization!");
+		throw SerializationException("Unsupported type for deserialization of ParsedExpression!");
 	}
 	result->alias = std::move(alias);
 	return result;

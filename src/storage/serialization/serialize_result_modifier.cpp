@@ -27,7 +27,7 @@ unique_ptr<ResultModifier> ResultModifier::FormatDeserialize(FormatDeserializer 
 		result = OrderModifier::FormatDeserialize(deserializer);
 		break;
 	default:
-		throw SerializationException("Unsupported type for deserialization!");
+		throw SerializationException("Unsupported type for deserialization of ResultModifier!");
 	}
 	return result;
 }
