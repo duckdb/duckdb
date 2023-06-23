@@ -62,8 +62,8 @@ idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 	}
 #ifdef DEBUG
 	for (auto entry : info.map) {
-		D_ASSERT(!entry.first.get().Equals(&expr));
-		D_ASSERT(!expr.Equals(&entry.first.get()));
+		D_ASSERT(!entry.first.get().Equals(expr));
+		D_ASSERT(!expr.Equals(entry.first.get()));
 	}
 #endif
 	return DConstants::INVALID_INDEX;

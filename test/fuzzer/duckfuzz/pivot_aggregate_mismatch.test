@@ -1,0 +1,9 @@
+# name: test/fuzzer/duckfuzz/pivot_aggregate_mismatch.test
+# description: Pivot with non-aggregate function
+# group: [duckfuzz]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+FROM (VALUES (42)) t(i) PIVOT (current_date() FOR (i) IN (41))

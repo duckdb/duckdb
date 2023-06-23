@@ -182,6 +182,24 @@ class TestScalarUDF(object):
         res = con.sql('select return_pd_nan()').fetchall()
         assert res[0][0] == None
 
+    def test_side_effects(self):
+        def count() -> int:
+            old = count.counter;
+            count.counter += 1
+            return old
+        count.counter = 0
+
+        con = duckdb.connect()
+        con.create_function('my_counter', count, side_effects=False)
+        res = con.sql('select my_counter() from range(10)').fetchall()
+        assert res == [(0,), (0,), (0,), (0,), (0,), (0,), (0,), (0,), (0,), (0,)]
+
+        count.counter = 0
+        con.remove_function('my_counter')
+        con.create_function('my_counter', count, side_effects=True)
+        res = con.sql('select my_counter() from range(10)').fetchall()
+        assert res == [(0,), (1,), (2,), (3,), (4,), (5,), (6,), (7,), (8,), (9,)]
+
     @pytest.mark.parametrize('udf_type', [
         'arrow',
         'native'

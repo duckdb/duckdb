@@ -509,6 +509,29 @@ public class TestDuckDBJDBC {
 		stmt.close();
 		conn.close();
 	}
+	
+	public static void test_timestamptz_as_long() throws Exception {
+		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs;
+
+		stmt.execute("SET CALENDAR='gregorian'");
+		stmt.execute("SET TIMEZONE='America/Los_Angeles'");
+		stmt.execute("CREATE TABLE t (id INT, t1 TIMESTAMPTZ)");
+		stmt.execute("INSERT INTO t (id, t1) VALUES (1, '2022-01-01T12:11:10Z')");
+		stmt.execute("INSERT INTO t (id, t1) VALUES (2, '2022-01-01T12:11:11Z')");
+
+		rs = stmt.executeQuery("SELECT * FROM t ORDER BY id");
+		rs.next();
+		assertEquals(rs.getLong(2), 1641039070000000L);
+		rs.next();
+		assertEquals(rs.getLong(2), 1641039071000000L);
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
 
     public static void test_consecutive_timestamps() throws Exception {
     	long expected = 986860800000L;
@@ -535,7 +558,7 @@ public class TestDuckDBJDBC {
 		rs.next();
 
 		try {
-			rs.getTimestamp(2);
+			rs.getShort(2);
 			fail();
 		} catch (IllegalArgumentException e) {
 		}
@@ -2788,7 +2811,19 @@ public class TestDuckDBJDBC {
 				SQLException.class
 		);
 
-		assertTrue(message.contains("unrecognized configuration parameter \"invalid config name\""));
+		assertTrue(message.contains("Unrecognized configuration property \"invalid config name\""));
+	}
+
+	public static void test_valid_but_local_config_throws_exception() throws Exception {
+		Properties info = new Properties();
+		info.put("ordered_aggregate_threshold", "123");
+
+		String message = assertThrows(
+				() -> DriverManager.getConnection("jdbc:duckdb:", info),
+				SQLException.class
+		);
+
+		assertTrue(message.contains("Failed to set configuration option \"ordered_aggregate_threshold\""));
 	}
 
 	private static String getSetting(Connection conn, String settingName) throws Exception {
@@ -3619,7 +3654,7 @@ public class TestDuckDBJDBC {
 			System.out.println("No tests found that match " + specific_test);
 			System.exit(1);
 		}
-		System.out.println("OK");
+		System.out.println(anyFailed ? "FAILED" : "OK");
 
 		System.exit(anyFailed ? 1 : 0);
 	}

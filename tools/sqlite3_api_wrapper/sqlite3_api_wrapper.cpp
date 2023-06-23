@@ -15,6 +15,9 @@
 #include "duckdb/main/error_manager.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#ifdef SHELL_INLINE_AUTOCOMPLETE
+#include "autocomplete_extension.hpp"
+#endif
 
 #include <ctype.h>
 #include <stdio.h>
@@ -113,6 +116,9 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		    "extensions are disabled by configuration.\nStart the shell with the -unsigned parameter to allow this "
 		    "(e.g. duckdb -unsigned).");
 		pDb->db = make_uniq<DuckDB>(filename, &config);
+#ifdef SHELL_INLINE_AUTOCOMPLETE
+		pDb->db->LoadExtension<AutocompleteExtension>();
+#endif
 		pDb->con = make_uniq<Connection>(*pDb->db);
 	} catch (const Exception &ex) {
 		if (pDb) {
@@ -688,7 +694,7 @@ int sqlite3_bind_blob(sqlite3_stmt *stmt, int idx, const void *val, int length, 
 	if (length < 0) {
 		blob = Value::BLOB(string((const char *)val));
 	} else {
-		blob = Value::BLOB((const_data_ptr_t)val, length);
+		blob = Value::BLOB(const_data_ptr_cast(val), length);
 	}
 	if (free_func && ((ptrdiff_t)free_func) != -1) {
 		free_func((void *)val);
@@ -1521,7 +1527,7 @@ SQLITE_API void sqlite3_result_blob64(sqlite3_context *context, const void *blob
 	}
 	context->result.type = SQLiteTypeValue::BLOB;
 	context->result.str = string((char *)blob, n_bytes);
-	if (xDel) {
+	if (xDel && xDel != SQLITE_TRANSIENT) {
 		xDel((void *)blob);
 	}
 }

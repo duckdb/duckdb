@@ -32,7 +32,7 @@ public:
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const RangeFunctionBindData &)other_p;
+		auto &other = other_p.Cast<RangeFunctionBindData>();
 		if (with_timestamps != other.with_timestamps) {
 			return false;
 		}

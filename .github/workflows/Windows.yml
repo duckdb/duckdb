@@ -13,15 +13,20 @@ on:
       - '**.md'
       - 'tools/**'
       - '!tools/odbc/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
+      - '.github/config/uncovered_files.csv'
   pull_request:
+    types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
       - 'tools/**'
       - '!tools/odbc/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
+      - '.github/config/uncovered_files.csv'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -93,7 +98,7 @@ jobs:
 
  win-release-32:
     name: Windows (32 Bit)
-    runs-on: windows-latest
+    runs-on: windows-2019
     needs: win-release-64
 
     steps:

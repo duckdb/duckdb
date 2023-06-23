@@ -402,6 +402,35 @@ class TestResolveObjectColumns(object):
         assert isinstance(converted_col['0'].dtype, double_dtype.__class__) == True
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_numpy_object_with_stride(self, pandas):
+        con = duckdb.connect()
+        df = pandas.DataFrame(columns=["idx", "evens", "zeros"])
+
+        df["idx"] = list(range(10))
+        for col in df.columns[1:]:
+            df[col].values[:] = 0
+
+        counter = 0
+        for i in range(10):
+            df.loc[df["idx"] == i, "evens"] += counter
+            counter += 2
+
+        res = con.sql("select * from df").fetchall()
+        assert res == [
+            (0, 0, 0),
+            (1, 2, 0),
+            (2, 4, 0),
+            (3, 6, 0),
+            (4, 8, 0),
+            (5, 10, 0),
+            (6, 12, 0),
+            (7, 14, 0),
+            (8, 16, 0),
+            (9, 18, 0)
+        ]
+
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_numpy_stringliterals(self, pandas):
         con = duckdb.connect()
         df = pandas.DataFrame({"x": list(map(np.str_, range(3)))})
@@ -554,6 +583,84 @@ class TestResolveObjectColumns(object):
         res = duckdb.query_df(x, "x", "select * from x").df()
         assert(res['nested'].dtype == np.dtype('object'))
 
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_struct_deeply_nested_in_struct(self, pandas):
+        x = pandas.DataFrame([
+            {
+                # STRUCT(b STRUCT(x VARCHAR, y VARCHAR))
+                'a': {
+                    'b': {
+                        'x': 'A', 
+                        'y': 'B'
+                    }
+                }
+            },
+            {
+                # STRUCT(b STRUCT(x VARCHAR))
+                'a': {
+                    'b': {
+                        'x': 'A'
+                    }
+                }
+            }
+        ])
+        # The dataframe has incompatible struct schemas in the nested child
+        # This gets upgraded to STRUCT(b MAP(VARCHAR, VARCHAR))
+        con = duckdb.connect()
+        res = con.sql("select * from x").fetchall()
+        assert res == [
+            (
+                {
+                    'b': {
+                        'key': ['x', 'y'],
+                        'value': ['A', 'B']
+                    }
+                },
+            ),
+            (
+                {
+                    'b': {
+                        'key': ['x'],
+                        'value': ['A']
+                    }
+                },
+            )
+        ]
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_struct_deeply_nested_in_list(self, pandas):
+        x = pandas.DataFrame({'a': [
+            [
+                # STRUCT(x VARCHAR, y VARCHAR)[]
+                {
+                    'x': 'A', 
+                    'y': 'B'
+                },
+                # STRUCT(x VARCHAR)[]
+                {
+                    'x': 'A'
+                }
+            ]
+        ]})
+        # The dataframe has incompatible struct schemas in the nested child
+        # This gets upgraded to STRUCT(b MAP(VARCHAR, VARCHAR))
+        con = duckdb.connect()
+        res = con.sql("select * from x").fetchall()
+        assert res == [
+            (
+                [
+                    {
+                        'key': ['x', 'y'],
+                        'value': ['A', 'B']
+                    },
+                    {
+                        'key': ['x'],
+                        'value': ['A']
+                    }
+                ],
+            )
+        ]
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_analyze_sample_too_small(self, pandas):

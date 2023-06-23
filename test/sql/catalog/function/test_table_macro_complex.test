@@ -33,6 +33,11 @@ select * from dates_between('2021-01-01', '2021-02-04');
 2021-01-01 00:00:00
 2021-02-01 00:00:00
 
+
+# alternative verify turns this CTE into a materialized CTE,
+# which then does not terminate anymore.
+require noalternativeverify
+
 statement ok
 CREATE MACRO fibonacci(n0, n1, nlimit, noffset) AS TABLE
 WITH RECURSIVE fib AS (

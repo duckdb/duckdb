@@ -12,11 +12,10 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/OSX.yml'
-  pull_request:
-    branches-ignore:
-      - '**'
+      - '.github/config/uncovered_files.csv'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}

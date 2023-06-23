@@ -35,7 +35,7 @@ public:
 	                  const shared_ptr<DuckDBPyType> &return_type = nullptr, PythonUDFType type = PythonUDFType::NATIVE,
 	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	                  PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR,
-	                  shared_ptr<DuckDBPyConnection> conn = nullptr);
+	                  bool side_effects = false, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static shared_ptr<DuckDBPyConnection> UnregisterUDF(const string &name,
 	                                                    shared_ptr<DuckDBPyConnection> conn = nullptr);
@@ -113,6 +113,8 @@ public:
 
 	static void Close(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
+	static void Interrupt(shared_ptr<DuckDBPyConnection> conn = nullptr);
+
 	static shared_ptr<DuckDBPyConnection> Cursor(shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static Optional<py::list> GetDescription(shared_ptr<DuckDBPyConnection> conn = nullptr);
@@ -122,9 +124,11 @@ public:
 	static py::list FetchMany(idx_t size, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 	static unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, shared_ptr<DuckDBPyConnection> conn = nullptr,
-	                                             const py::object &columns = py::none(),
-	                                             const py::object &sample_size = py::none(),
-	                                             const py::object &maximum_depth = py::none());
+	                                             const Optional<py::object> &columns = py::none(),
+	                                             const Optional<py::object> &sample_size = py::none(),
+	                                             const Optional<py::object> &maximum_depth = py::none(),
+	                                             const Optional<py::str> &records = py::none(),
+	                                             const Optional<py::str> &format = py::none());
 	static unique_ptr<DuckDBPyRelation>
 	ReadCSV(const py::object &name, shared_ptr<DuckDBPyConnection> conn, const py::object &header = py::none(),
 	        const py::object &compression = py::none(), const py::object &sep = py::none(),

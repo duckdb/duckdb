@@ -6,6 +6,7 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/common/chrono.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -66,6 +67,21 @@ void VersionNode::SetStart(idx_t start) {
 	}
 }
 
+idx_t VersionNode::GetCommittedDeletedCount(idx_t count) {
+	idx_t deleted_count = 0;
+	for (idx_t r = 0, i = 0; r < count; r += STANDARD_VECTOR_SIZE, i++) {
+		if (!info[i]) {
+			continue;
+		}
+		idx_t max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - r);
+		if (max_count == 0) {
+			break;
+		}
+		deleted_count += info[i]->GetCommittedDeletedCount(max_count);
+	}
+	return deleted_count;
+}
+
 RowGroup::~RowGroup() {
 }
 
@@ -81,7 +97,7 @@ idx_t RowGroup::GetColumnCount() const {
 	return columns.size();
 }
 
-ColumnData &RowGroup::GetColumn(idx_t c) {
+ColumnData &RowGroup::GetColumn(storage_t c) {
 	D_ASSERT(c < columns.size());
 	if (!is_loaded) {
 		// not being lazy loaded
@@ -109,10 +125,6 @@ ColumnData &RowGroup::GetColumn(idx_t c) {
 	    ColumnData::Deserialize(GetBlockManager(), GetTableInfo(), c, start, column_data_reader, types[c], nullptr);
 	is_loaded[c] = true;
 	return *columns[c];
-}
-
-DatabaseInstance &RowGroup::GetDatabase() {
-	return GetCollection().GetDatabase();
 }
 
 BlockManager &RowGroup::GetBlockManager() {
@@ -179,7 +191,7 @@ bool RowGroup::InitializeScanWithOffset(CollectionScanState &state, idx_t vector
 	    this->start > state.max_row ? 0 : MinValue<idx_t>(this->count, state.max_row - this->start);
 	D_ASSERT(state.column_scans);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		auto column = column_ids[i];
+		const auto &column = column_ids[i];
 		if (column != COLUMN_IDENTIFIER_ROW_ID) {
 			auto &column_data = GetColumn(column);
 			column_data.InitializeScanWithOffset(state.column_scans[i], start + vector_offset * STANDARD_VECTOR_SIZE);
@@ -269,7 +281,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(RowGroupCollection &new_collection, con
 }
 
 unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, ColumnDefinition &new_column,
-                                         ExpressionExecutor &executor, Expression *default_value, Vector &result) {
+                                         ExpressionExecutor &executor, Expression &default_value, Vector &result) {
 	Verify();
 
 	// construct a new column data for the new column
@@ -284,10 +296,8 @@ unique_ptr<RowGroup> RowGroup::AddColumn(RowGroupCollection &new_collection, Col
 		added_column->InitializeAppend(state);
 		for (idx_t i = 0; i < rows_to_write; i += STANDARD_VECTOR_SIZE) {
 			idx_t rows_in_this_vector = MinValue<idx_t>(rows_to_write - i, STANDARD_VECTOR_SIZE);
-			if (default_value) {
-				dummy_chunk.SetCardinality(rows_in_this_vector);
-				executor.ExecuteExpression(dummy_chunk, result);
-			}
+			dummy_chunk.SetCardinality(rows_in_this_vector);
+			executor.ExecuteExpression(dummy_chunk, result);
 			added_column->Append(state, result, rows_in_this_vector);
 		}
 	}
@@ -334,9 +344,9 @@ void RowGroup::CommitDropColumn(idx_t column_idx) {
 
 void RowGroup::NextVector(CollectionScanState &state) {
 	state.vector_index++;
-	auto &column_ids = state.GetColumnIds();
+	const auto &column_ids = state.GetColumnIds();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		auto column = column_ids[i];
+		const auto &column = column_ids[i];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			continue;
 		}
@@ -345,11 +355,11 @@ void RowGroup::NextVector(CollectionScanState &state) {
 	}
 }
 
-bool RowGroup::CheckZonemap(TableFilterSet &filters, const vector<column_t> &column_ids) {
+bool RowGroup::CheckZonemap(TableFilterSet &filters, const vector<storage_t> &column_ids) {
 	for (auto &entry : filters.filters) {
 		auto column_index = entry.first;
 		auto &filter = entry.second;
-		auto base_column_index = column_ids[column_index];
+		const auto &base_column_index = column_ids[column_index];
 		if (!GetColumn(base_column_index).CheckZonemap(*filter)) {
 			return false;
 		}
@@ -366,7 +376,7 @@ bool RowGroup::CheckZonemapSegments(CollectionScanState &state) {
 	for (auto &entry : filters->filters) {
 		D_ASSERT(entry.first < column_ids.size());
 		auto column_idx = entry.first;
-		auto base_column_idx = column_ids[column_idx];
+		const auto &base_column_idx = column_ids[column_idx];
 		bool read_segment = GetColumn(base_column_idx).CheckZonemap(state.column_scans[column_idx], *entry.second);
 		if (!read_segment) {
 			idx_t target_row =
@@ -398,7 +408,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 	const bool ALLOW_UPDATES = TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES &&
 	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
 	auto table_filters = state.GetFilters();
-	auto &column_ids = state.GetColumnIds();
+	const auto &column_ids = state.GetColumnIds();
 	auto adaptive_filter = state.GetAdaptiveFilter();
 	while (true) {
 		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row_group_row) {
@@ -436,7 +446,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		if (count == max_count && !table_filters) {
 			// scan all vectors completely: full scan without deletions or table filters
 			for (idx_t i = 0; i < column_ids.size(); i++) {
-				auto column = column_ids[i];
+				const auto &column = column_ids[i];
 				if (column == COLUMN_IDENTIFIER_ROW_ID) {
 					// scan row id
 					D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
@@ -502,7 +512,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					if (column == COLUMN_IDENTIFIER_ROW_ID) {
 						D_ASSERT(result.data[i].GetType().InternalType() == PhysicalType::INT64);
 						result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
-						auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
+						auto result_data = FlatVector::GetData<int64_t>(result.data[i]);
 						for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
 							result_data[sel_idx] = this->start + current_row + sel.get_index(sel_idx);
 						}
@@ -650,7 +660,7 @@ void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t count) {
 			} else {
 				D_ASSERT(version_info->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
 				// use existing vector
-				info = (ChunkVectorInfo *)version_info->info[vector_idx].get();
+				info = &version_info->info[vector_idx]->Cast<ChunkVectorInfo>();
 			}
 			info->Append(start, end, transaction.transaction_id);
 		}
@@ -795,6 +805,13 @@ RowGroupWriteData RowGroup::WriteToDisk(PartialBlockManager &manager,
 	return result;
 }
 
+bool RowGroup::AllDeleted() {
+	if (!version_info) {
+		return false;
+	}
+	return version_info->GetCommittedDeletedCount(count) == count;
+}
+
 RowGroupPointer RowGroup::Checkpoint(RowGroupWriter &writer, TableStatistics &global_stats) {
 	RowGroupPointer row_group_pointer;
 
@@ -912,12 +929,12 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &main_source, const vector<Lo
 }
 
 //===--------------------------------------------------------------------===//
-// GetStorageInfo
+// GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
-void RowGroup::GetStorageInfo(idx_t row_group_index, TableStorageInfo &result) {
+void RowGroup::GetColumnSegmentInfo(idx_t row_group_index, vector<ColumnSegmentInfo> &result) {
 	for (idx_t col_idx = 0; col_idx < GetColumnCount(); col_idx++) {
 		auto &col_data = GetColumn(col_idx);
-		col_data.GetStorageInfo(row_group_index, {col_idx}, result);
+		col_data.GetColumnSegmentInfo(row_group_index, {col_idx}, result);
 	}
 }
 
@@ -985,7 +1002,7 @@ void VersionDeleteState::Delete(row_t row_id) {
 			info.version_info->info[vector_idx] =
 			    make_uniq<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE);
 		} else if (info.version_info->info[vector_idx]->type == ChunkInfoType::CONSTANT_INFO) {
-			auto &constant = (ChunkConstantInfo &)*info.version_info->info[vector_idx];
+			auto &constant = info.version_info->info[vector_idx]->Cast<ChunkConstantInfo>();
 			// info exists but it's a constant info: convert to a vector info
 			auto new_info = make_uniq<ChunkVectorInfo>(info.start + vector_idx * STANDARD_VECTOR_SIZE);
 			new_info->insert_id = constant.insert_id.load();
@@ -995,7 +1012,7 @@ void VersionDeleteState::Delete(row_t row_id) {
 			info.version_info->info[vector_idx] = std::move(new_info);
 		}
 		D_ASSERT(info.version_info->info[vector_idx]->type == ChunkInfoType::VECTOR_INFO);
-		current_info = (ChunkVectorInfo *)info.version_info->info[vector_idx].get();
+		current_info = &info.version_info->info[vector_idx]->Cast<ChunkVectorInfo>();
 		current_chunk = vector_idx;
 		chunk_row = vector_idx * STANDARD_VECTOR_SIZE;
 	}

@@ -52,7 +52,7 @@ public:
 
 class NumpyResultConversion {
 public:
-	NumpyResultConversion(vector<LogicalType> &types, idx_t initial_capacity);
+	NumpyResultConversion(const vector<LogicalType> &types, idx_t initial_capacity);
 
 	void Append(DataChunk &chunk);
 

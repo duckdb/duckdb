@@ -40,6 +40,9 @@ SELECT plus42(42)
 ----
 84
 
+# temporary solution until decorrelation of materialized CTEs is implemented
+require noalternativeverify
+
 query T
 SELECT plus42(a) FROM integers
 ----
