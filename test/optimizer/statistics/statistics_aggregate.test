@@ -3,6 +3,9 @@
 # group: [statistics]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 CREATE TABLE integers AS SELECT * FROM (VALUES (1), (2), (3)) tbl(i);
 
 statement ok

@@ -41,10 +41,12 @@ public:
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
 
 	static void InstallExtension(ClientContext &context, const string &extension, bool force_install);
+	static void InstallExtension(DBConfig &config, FileSystem &fs, const string &extension, bool force_install);
 	static void LoadExternalExtension(ClientContext &context, const string &extension);
-	static void LoadExternalExtension(DatabaseInstance &db, FileOpener *opener, const string &extension);
+	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension);
 
 	static string ExtensionDirectory(ClientContext &context);
+	static string ExtensionDirectory(DBConfig &config, FileSystem &fs);
 
 	static idx_t DefaultExtensionCount();
 	static DefaultExtension GetDefaultExtension(idx_t index);
@@ -54,17 +56,23 @@ public:
 
 	static const vector<string> GetPublicKeys();
 
-	static void StorageInit(string &extension, DBConfig &config);
-
 	// Returns extension name, or empty string if not a replacement open path
 	static string ExtractExtensionPrefixFromPath(const string &path);
 
 	//! Apply any known extension aliases
 	static string ApplyExtensionAlias(string extension_name);
 
+	static string GetExtensionName(const string &extension);
+	static bool IsFullPath(const string &extension);
+
 private:
+	static void InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
+	                                     const string &local_path, const string &extension, bool force_install);
 	static const vector<string> PathComponents();
-	static ExtensionInitResult InitialLoad(DBConfig &context, FileOpener *opener, const string &extension);
+	static bool AllowAutoInstall(const string &extension);
+	static ExtensionInitResult InitialLoad(DBConfig &config, FileSystem &fs, const string &extension);
+	static bool TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension, ExtensionInitResult &result,
+	                           string &error);
 	//! For tagged releases we use the tag, else we use the git commit hash
 	static const string GetVersionDirectoryName();
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'

@@ -1,6 +1,8 @@
 #include "duckdb/main/connection.hpp"
 
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection_manager.hpp"
@@ -14,8 +16,6 @@
 #include "duckdb/main/relation/view_relation.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
-#include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
 
@@ -130,7 +130,7 @@ unique_ptr<PreparedStatement> Connection::Prepare(unique_ptr<SQLStatement> state
 unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, vector<Value> &values) {
 	auto statement = Prepare(query);
 	if (statement->HasError()) {
-		return make_unique<MaterializedQueryResult>(statement->error);
+		return make_uniq<MaterializedQueryResult>(statement->error);
 	}
 	return statement->Execute(values, false);
 }

@@ -3,36 +3,47 @@
 #include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/common/preserved_error.hpp"
 
-using duckdb::make_unique;
+using duckdb::make_uniq;
 using duckdb::PendingExecutionResult;
 using duckdb::PendingQueryResult;
 using duckdb::PendingStatementWrapper;
 using duckdb::PreparedStatementWrapper;
 
-duckdb_state duckdb_pending_prepared(duckdb_prepared_statement prepared_statement, duckdb_pending_result *out_result) {
+duckdb_state duckdb_pending_prepared_internal(duckdb_prepared_statement prepared_statement,
+                                              duckdb_pending_result *out_result, bool allow_streaming) {
 	if (!prepared_statement || !out_result) {
 		return DuckDBError;
 	}
-	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(prepared_statement);
 	auto result = new PendingStatementWrapper();
+	result->allow_streaming = allow_streaming;
 	try {
-		result->statement = wrapper->statement->PendingQuery(wrapper->values, false);
+		result->statement = wrapper->statement->PendingQuery(wrapper->values, allow_streaming);
 	} catch (const duckdb::Exception &ex) {
-		result->statement = make_unique<PendingQueryResult>(duckdb::PreservedError(ex));
+		result->statement = make_uniq<PendingQueryResult>(duckdb::PreservedError(ex));
 	} catch (std::exception &ex) {
-		result->statement = make_unique<PendingQueryResult>(duckdb::PreservedError(ex));
+		result->statement = make_uniq<PendingQueryResult>(duckdb::PreservedError(ex));
 	}
 	duckdb_state return_value = !result->statement->HasError() ? DuckDBSuccess : DuckDBError;
-	*out_result = (duckdb_pending_result)result;
+	*out_result = reinterpret_cast<duckdb_pending_result>(result);
 
 	return return_value;
+}
+
+duckdb_state duckdb_pending_prepared(duckdb_prepared_statement prepared_statement, duckdb_pending_result *out_result) {
+	return duckdb_pending_prepared_internal(prepared_statement, out_result, false);
+}
+
+duckdb_state duckdb_pending_prepared_streaming(duckdb_prepared_statement prepared_statement,
+                                               duckdb_pending_result *out_result) {
+	return duckdb_pending_prepared_internal(prepared_statement, out_result, true);
 }
 
 void duckdb_destroy_pending(duckdb_pending_result *pending_result) {
 	if (!pending_result || !*pending_result) {
 		return;
 	}
-	auto wrapper = (PendingStatementWrapper *)*pending_result;
+	auto wrapper = reinterpret_cast<PendingStatementWrapper *>(*pending_result);
 	if (wrapper->statement) {
 		wrapper->statement->Close();
 	}
@@ -44,7 +55,7 @@ const char *duckdb_pending_error(duckdb_pending_result pending_result) {
 	if (!pending_result) {
 		return nullptr;
 	}
-	auto wrapper = (PendingStatementWrapper *)pending_result;
+	auto wrapper = reinterpret_cast<PendingStatementWrapper *>(pending_result);
 	if (!wrapper->statement) {
 		return nullptr;
 	}
@@ -55,7 +66,7 @@ duckdb_pending_state duckdb_pending_execute_task(duckdb_pending_result pending_r
 	if (!pending_result) {
 		return DUCKDB_PENDING_ERROR;
 	}
-	auto wrapper = (PendingStatementWrapper *)pending_result;
+	auto wrapper = reinterpret_cast<PendingStatementWrapper *>(pending_result);
 	if (!wrapper->statement) {
 		return DUCKDB_PENDING_ERROR;
 	}
@@ -86,11 +97,13 @@ duckdb_state duckdb_execute_pending(duckdb_pending_result pending_result, duckdb
 	if (!pending_result || !out_result) {
 		return DuckDBError;
 	}
-	auto wrapper = (PendingStatementWrapper *)pending_result;
+	auto wrapper = reinterpret_cast<PendingStatementWrapper *>(pending_result);
 	if (!wrapper->statement) {
 		return DuckDBError;
 	}
-	auto result = wrapper->statement->Execute();
+
+	duckdb::unique_ptr<duckdb::QueryResult> result;
+	result = wrapper->statement->Execute();
 	wrapper->statement.reset();
 	return duckdb_translate_result(std::move(result), out_result);
 }

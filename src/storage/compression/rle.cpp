@@ -1,11 +1,12 @@
 #include "duckdb/function/compression/compression.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
+
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
 #include <functional>
 
 namespace duckdb {
@@ -39,7 +40,7 @@ public:
 	}
 
 	template <class OP = EmptyRLEWriter>
-	void Update(T *data, ValidityMask &validity, idx_t idx) {
+	void Update(const T *data, ValidityMask &validity, idx_t idx) {
 		if (validity.RowIsValid(idx)) {
 			if (all_null) {
 				// no value seen yet
@@ -88,16 +89,16 @@ struct RLEAnalyzeState : public AnalyzeState {
 
 template <class T>
 unique_ptr<AnalyzeState> RLEInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<RLEAnalyzeState<T>>();
+	return make_uniq<RLEAnalyzeState<T>>();
 }
 
 template <class T>
 bool RLEAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
-	auto &rle_state = (RLEAnalyzeState<T> &)state;
+	auto &rle_state = state.template Cast<RLEAnalyzeState<T>>();
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
-	auto data = (T *)vdata.data;
+	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		rle_state.state.Update(data, vdata.validity, idx);
@@ -107,7 +108,7 @@ bool RLEAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 
 template <class T>
 idx_t RLEFinalAnalyze(AnalyzeState &state) {
-	auto &rle_state = (RLEAnalyzeState<T> &)state;
+	auto &rle_state = state.template Cast<RLEAnalyzeState<T>>();
 	return (sizeof(rle_count_t) + sizeof(T)) * rle_state.state.seen_count;
 }
 
@@ -118,12 +119,12 @@ struct RLEConstants {
 	static constexpr const idx_t RLE_HEADER_SIZE = sizeof(uint64_t);
 };
 
-template <class T>
+template <class T, bool WRITE_STATISTICS>
 struct RLECompressState : public CompressionState {
 	struct RLEWriter {
 		template <class VALUE_TYPE>
 		static void Operation(VALUE_TYPE value, rle_count_t count, void *dataptr, bool is_null) {
-			auto state = (RLECompressState<T> *)dataptr;
+			auto state = reinterpret_cast<RLECompressState<T, WRITE_STATISTICS> *>(dataptr);
 			state->WriteValue(value, count, is_null);
 		}
 	};
@@ -135,11 +136,9 @@ struct RLECompressState : public CompressionState {
 		return max_vector_count * STANDARD_VECTOR_SIZE;
 	}
 
-	explicit RLECompressState(ColumnDataCheckpointer &checkpointer_p) : checkpointer(checkpointer_p) {
-		auto &db = checkpointer.GetDatabase();
-		auto &type = checkpointer.GetType();
-		auto &config = DBConfig::GetConfig(db);
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_RLE, type.InternalType());
+	explicit RLECompressState(ColumnDataCheckpointer &checkpointer_p)
+	    : checkpointer(checkpointer_p),
+	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_RLE)) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 
 		state.dataptr = (void *)this;
@@ -157,10 +156,10 @@ struct RLECompressState : public CompressionState {
 	}
 
 	void Append(UnifiedVectorFormat &vdata, idx_t count) {
-		auto data = (T *)vdata.data;
+		auto data = UnifiedVectorFormat::GetData<T>(vdata);
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
-			state.template Update<RLECompressState<T>::RLEWriter>(data, vdata.validity, idx);
+			state.template Update<RLECompressState<T, WRITE_STATISTICS>::RLEWriter>(data, vdata.validity, idx);
 		}
 	}
 
@@ -174,8 +173,8 @@ struct RLECompressState : public CompressionState {
 		entry_count++;
 
 		// update meta data
-		if (!is_null) {
-			NumericStatistics::Update<T>(current_segment->stats, value);
+		if (WRITE_STATISTICS && !is_null) {
+			NumericStats::Update<T>(current_segment->stats.statistics, value);
 		}
 		current_segment->count += count;
 
@@ -206,14 +205,14 @@ struct RLECompressState : public CompressionState {
 	}
 
 	void Finalize() {
-		state.template Flush<RLECompressState<T>::RLEWriter>();
+		state.template Flush<RLECompressState<T, WRITE_STATISTICS>::RLEWriter>();
 
 		FlushSegment();
 		current_segment.reset();
 	}
 
 	ColumnDataCheckpointer &checkpointer;
-	CompressionFunction *function;
+	CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
 
@@ -222,23 +221,23 @@ struct RLECompressState : public CompressionState {
 	idx_t max_rle_count;
 };
 
-template <class T>
+template <class T, bool WRITE_STATISTICS>
 unique_ptr<CompressionState> RLEInitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
-	return make_unique<RLECompressState<T>>(checkpointer);
+	return make_uniq<RLECompressState<T, WRITE_STATISTICS>>(checkpointer);
 }
 
-template <class T>
+template <class T, bool WRITE_STATISTICS>
 void RLECompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = (RLECompressState<T> &)state_p;
+	auto &state = (RLECompressState<T, WRITE_STATISTICS> &)state_p;
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
 
 	state.Append(vdata, count);
 }
 
-template <class T>
+template <class T, bool WRITE_STATISTICS>
 void RLEFinalizeCompress(CompressionState &state_p) {
-	auto &state = (RLECompressState<T> &)state_p;
+	auto &state = (RLECompressState<T, WRITE_STATISTICS> &)state_p;
 	state.Finalize();
 }
 
@@ -281,7 +280,7 @@ struct RLEScanState : public SegmentScanState {
 
 template <class T>
 unique_ptr<SegmentScanState> RLEInitScan(ColumnSegment &segment) {
-	auto result = make_unique<RLEScanState<T>>(segment);
+	auto result = make_uniq<RLEScanState<T>>(segment);
 	return std::move(result);
 }
 
@@ -290,14 +289,14 @@ unique_ptr<SegmentScanState> RLEInitScan(ColumnSegment &segment) {
 //===--------------------------------------------------------------------===//
 template <class T>
 void RLESkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
-	auto &scan_state = (RLEScanState<T> &)*state.scan_state;
+	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 	scan_state.Skip(segment, skip_count);
 }
 
 template <class T>
 void RLEScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                     idx_t result_offset) {
-	auto &scan_state = (RLEScanState<T> &)*state.scan_state;
+	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto data_pointer = (T *)(data + RLEConstants::RLE_HEADER_SIZE);
@@ -341,10 +340,11 @@ void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, 
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
-template <class T>
+template <class T, bool WRITE_STATISTICS = true>
 CompressionFunction GetRLEFunction(PhysicalType data_type) {
 	return CompressionFunction(CompressionType::COMPRESSION_RLE, data_type, RLEInitAnalyze<T>, RLEAnalyze<T>,
-	                           RLEFinalAnalyze<T>, RLEInitCompression<T>, RLECompress<T>, RLEFinalizeCompress<T>,
+	                           RLEFinalAnalyze<T>, RLEInitCompression<T, WRITE_STATISTICS>,
+	                           RLECompress<T, WRITE_STATISTICS>, RLEFinalizeCompress<T, WRITE_STATISTICS>,
 	                           RLEInitScan<T>, RLEScan<T>, RLEScanPartial<T>, RLEFetchRow<T>, RLESkip<T>);
 }
 
@@ -373,6 +373,8 @@ CompressionFunction RLEFun::GetFunction(PhysicalType type) {
 		return GetRLEFunction<float>(type);
 	case PhysicalType::DOUBLE:
 		return GetRLEFunction<double>(type);
+	case PhysicalType::LIST:
+		return GetRLEFunction<uint64_t, false>(type);
 	default:
 		throw InternalException("Unsupported type for RLE");
 	}
@@ -392,6 +394,7 @@ bool RLEFun::TypeIsSupported(PhysicalType type) {
 	case PhysicalType::UINT64:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
+	case PhysicalType::LIST:
 		return true;
 	default:
 		return false;

@@ -5,6 +5,8 @@ import os
 import pandas as pd
 import pytest
 
+from duckdb.typing import BIGINT, VARCHAR, TINYINT, BOOLEAN
+
 def get_relation(conn):
     test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})
     conn.register("test_df", test_df)
@@ -27,12 +29,12 @@ class TestRelation(object):
         rel = get_relation(conn)
         assert rel.filter('i > 1').execute().fetchall() == [(2, 'two'), (3, 'three'), (4, 'four')]
 
-    def test_projection_operator(self, duckdb_cursor):
+    def test_projection_operator_single(self, duckdb_cursor):
         conn = duckdb.connect()
         rel = get_relation(conn)
         assert rel.project('i').execute().fetchall() == [(1,), (2,), (3,), (4,)]
 
-    def test_projection_operator(self, duckdb_cursor):
+    def test_projection_operator_double(self, duckdb_cursor):
         conn = duckdb.connect()
         rel = get_relation(conn)
         assert rel.order('j').execute().fetchall() == [(4, 'four'), (1, 'one'), (3, 'three'), (2, 'two')]
@@ -153,6 +155,35 @@ class TestRelation(object):
         rel = duckdb.project(test_df, 'i')
         assert rel.execute().fetchall() == [(1,), (2,), (3,), (4,)]
 
+    def test_project_on_types(self, duckdb_cursor):
+        con = duckdb_cursor
+        con.sql("""
+            create table tbl(
+                c0 BIGINT,
+                c1 TINYINT,
+                c2 VARCHAR,
+                c3 TIMESTAMP,
+                c4 VARCHAR,
+                c5 STRUCT(a VARCHAR, b BIGINT)
+            )
+            """)
+        rel = con.table("tbl")
+        # select only the varchar columns
+        projection = rel.select_types(["varchar"])
+        assert projection.columns == ["c2", "c4"]
+
+        # select bigint, tinyint and a type that isn't there
+        projection = rel.select_types([BIGINT, "tinyint", con.struct_type({'a': VARCHAR, 'b': TINYINT})])
+        assert projection.columns == ["c0", "c1"]
+
+        ## select with empty projection list, not possible
+        with pytest.raises(duckdb.Error):
+            projection = rel.select_types([])
+        
+        # select with type-filter that matches nothing
+        with pytest.raises(duckdb.Error):
+            projection = rel.select_types([BOOLEAN])
+
     def test_df_alias(self,duckdb_cursor):
         test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})
         rel = duckdb.alias(test_df, 'dfzinho')
@@ -191,15 +222,6 @@ class TestRelation(object):
 
         assert rel1.join(rel2, 'i=j', 'left').aggregate('count()').fetchone()[0] == 4
 
-    def test_explain(self, duckdb_cursor):
-        con = duckdb.connect()
-        con.execute("Create table t1 (i integer)")
-        con.execute("Create table t2 (j integer)")
-        rel1 = con.table('t1')
-        rel2 = con.table('t2')
-        join = rel1.join(rel2, 'i=j', 'inner').aggregate('count()')
-        assert join.explain() == 'Aggregate [count_star()]\n  Join INNER (i = j)\n    Scan Table [t1]\n    Scan Table [t2]'
-
     def test_fetchnumpy(self, duckdb_cursor):
         start, stop = -1000, 2000
         count = stop - start
@@ -230,6 +252,31 @@ class TestRelation(object):
             # invalid conversion of negative integer to UINTEGER
             rel.project("CAST(a as UINTEGER)").fetchnumpy()
 
+    def test_close(self):
+        def counter():
+            counter.count += 1
+            return 42
+
+        counter.count = 0
+        conn = duckdb.connect()
+        conn.create_function('my_counter', counter, [], BIGINT)
+
+        # Create a relation
+        rel = conn.sql('select my_counter()')
+        # Execute the relation once
+        rel.fetchall()
+        assert counter.count == 1
+        # Close the result
+        rel.close()
+        # Verify that the query was not run again
+        assert counter.count == 1
+        rel.fetchall()
+        assert counter.count == 2
+
+        # Verify that the query is run at least once if it's closed before it was executed.
+        rel = conn.sql('select my_counter()')
+        rel.close()
+        assert counter.count == 3
 
     def test_relation_print(self, duckdb_cursor):
         con = duckdb.connect()

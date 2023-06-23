@@ -1,18 +1,27 @@
 name: LinuxRelease
 on:
+  workflow_dispatch:
+  repository_dispatch:
   push:
+    branches:
+      - '**'
+      - '!master'
+      - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
+      - 'tools/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/LinuxRelease.yml'
+      - '.github/config/uncovered_files.csv'
   pull_request:
     paths-ignore:
       - '**.md'
-      - 'tools/jdbc/**'
-      - 'tools/nodejs/**'
-      - 'tools/juliapkg/**'
-      - 'tools/pythonpkg/**'
-      - 'tools/rpkg/**'
+      - 'tools/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
+      - '.github/config/uncovered_files.csv'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -37,6 +46,8 @@ jobs:
       BUILD_EXCEL: 1
       BUILD_ODBC: 1
       BUILD_JEMALLOC: 1
+      DEBUG_STACKTRACE: 1
+      BUILD_AUTOCOMPLETE: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
       STATIC_LIBCPP: 1
@@ -84,7 +95,7 @@ jobs:
         zip -j duckdb_odbc-linux-amd64.zip build/release/tools/odbc/libduckdb_odbc.so tools/odbc/linux_setup/unixodbc_setup.sh
         python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_odbc-linux-amd64.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-binaries-linux
         path: |
@@ -130,7 +141,7 @@ jobs:
        shell: bash
        run: |
          apt-get update -y -qq
-         apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu 
+         apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 
      - name: Install unixODBC
        shell: bash
@@ -154,7 +165,7 @@ jobs:
          zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
          python3.7 scripts/asset-upload-gha.py libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip duckdb_odbc-linux-aarch64.zip
 
-     - uses: actions/upload-artifact@v2
+     - uses: actions/upload-artifact@v3
        with:
          name: duckdb-binaries-linux-aarch64
          path: |
@@ -176,6 +187,11 @@ jobs:
       with:
         openssl: 1
 
+    - name: Configure OpenSSL path
+      shell: bash
+      run: |
+        echo "OPENSSL_ROOT_DIR=/usr/local/ssl" >> $GITHUB_ENV
+  
     - uses: ./.github/actions/build_extensions
       with:
         post_install: rm build/release/src/libduckdb*
@@ -184,7 +200,7 @@ jobs:
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: linux-extensions-64
         path: |
@@ -223,7 +239,7 @@ jobs:
           aarch64_cross_compile: 1
           run_tests: 0 # Cannot run tests here due to cross-compiling
 
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: linux-extensions-64-aarch64
           path: |
@@ -244,7 +260,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.9'
 
@@ -263,7 +279,7 @@ jobs:
       run: |
         mkdir -p build/release
         cd build/release
-        cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release ../.. 
+        cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release ../..
         cmake --build . --config Release
 
     - uses: actions/download-artifact@v3
@@ -312,7 +328,7 @@ jobs:
         zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         python3.7 scripts/asset-upload-gha.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-binaries-linux-32bit
         path: |
@@ -328,7 +344,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -362,7 +378,7 @@ jobs:
         zip -j libduckdb-linux-rpi.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-linux-rpi.zip duckdb_cli-linux-rpi.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-binaries-rpi
         path: |
@@ -372,7 +388,7 @@ jobs:
 
  linux-clang:
     name: Clang 14
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     needs: linux-release-64
 
     env:
@@ -395,7 +411,7 @@ jobs:
         version: "14.0"
         directory: '/home/runner/work/llvm'
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -415,25 +431,24 @@ jobs:
 
  old-gcc:
     name: GCC 4.8
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
+    container: ubuntu:16.04
     needs: linux-release-64
-
-    env:
-      CC: gcc-4.8
-      CXX: g++-4.8
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: ./.github/actions/ubuntu_16_setup
+
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq g++-4.8 binutils
+      run: apt-get update -y -qq && apt-get install -y -qq g++-4.8 binutils
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -444,10 +459,17 @@ jobs:
     - name: Build
       shell: bash
       run: make release
+      env:
+        CC: gcc-4.8
+        CXX: g++-4.8
+
 
     - name: Test
       shell: bash
       run: make allunit
+      env:
+        CC: gcc-4.8
+        CXX: g++-4.8
 
  release-assert:
     name: Release Assertions
@@ -507,7 +529,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -521,53 +543,6 @@ jobs:
       shell: bash
       run: python scripts/test_vector_sizes.py
 
- linux-wasm-release:
-    name: WebAssembly Release
-    runs-on: ubuntu-20.04
-    needs: linux-release-64
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Build Amalgamation
-      shell: bash
-      run: python scripts/amalgamation.py
-
-    - name: Setup
-      shell: bash
-      run: ./scripts/wasm_configure.sh
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build Library Module
-      shell: bash
-      run: ./scripts/wasm_build_lib.sh Release
-
-    - name: Build Test Module
-      shell: bash
-      run: ./scripts/wasm_build_test.sh Release
-
-    - name: Test WASM Module
-      shell: bash
-      run: node ./test/wasm/hello_wasm_test.js
-
-    - name: Package
-      shell: bash
-      run: |
-        zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
-        python scripts/asset-upload-gha.py duckdb-wasm32-nothreads.zip
-
-    - uses: actions/upload-artifact@v2
-      with:
-        name: duckdb-wasm32-nothreads
-        path: |
-          duckdb-wasm32-nothreads.zip
-
  symbol-leakage:
     name: Symbol Leakage
     runs-on: ubuntu-20.04
@@ -578,7 +553,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -608,7 +583,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -640,6 +615,8 @@ jobs:
       BUILD_HTTPFS: 1
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
+      BUILD_PARQUET: 1
+      BUILD_JSON: 1
       S3_TEST_SERVER_AVAILABLE: 1
       AWS_DEFAULT_REGION: eu-west-1
       AWS_ACCESS_KEY_ID: minio_duckdb_user
@@ -654,7 +631,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -676,7 +653,8 @@ jobs:
       shell: bash
       run: |
         sudo ./scripts/install_s3_test_server.sh
-        ./scripts/run_s3_test_server.sh
+        ./scripts/generate_presigned_url.sh
+        source ./scripts/run_s3_test_server.sh
         sleep 60
 
     - name: Test
@@ -698,7 +676,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 

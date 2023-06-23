@@ -27,10 +27,12 @@ bool TestMemoryLeaks() {
 } // namespace duckdb
 
 int main(int argc, char *argv[]) {
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
+	bool delete_test_path = true;
 
 	int new_argc = 0;
-	auto new_argv = unique_ptr<char *[]>(new char *[argc]);
+	auto new_argv = duckdb::unique_ptr<char *[]>(new char *[argc]);
 	for (int i = 0; i < argc; i++) {
 		if (string(argv[i]) == "--force-storage") {
 			test_force_storage = true;
@@ -41,6 +43,21 @@ int main(int argc, char *argv[]) {
 			test_memory_leaks = true;
 		} else if (string(argv[i]) == "--test-dir") {
 			test_directory = string(argv[++i]);
+		} else if (string(argv[i]) == "--test-temp-dir") {
+			auto test_dir = string(argv[++i]);
+			if (fs->DirectoryExists(test_dir)) {
+				fprintf(stderr, "--test-temp-dir cannot point to a directory that already exists (%s)\n",
+				        test_dir.c_str());
+				return 1;
+			}
+			SetTestDirectory(test_dir);
+			delete_test_path = false;
+		} else if (string(argv[i]) == "--zero-initialize") {
+			SetDebugInitialize(0);
+		} else if (string(argv[i]) == "--one-initialize") {
+			SetDebugInitialize(0xFF);
+		} else if (string(argv[i]) == "--single-threaded") {
+			SetSingleThreaded();
 		} else {
 			new_argv[new_argc] = argv[i];
 			new_argc++;
@@ -55,7 +72,7 @@ int main(int argc, char *argv[]) {
 		// create the empty testing directory
 		TestCreateDirectory(dir);
 	} catch (std::exception &ex) {
-		fprintf(stderr, "Failed to create testing directory \"%s\": %s", dir.c_str(), ex.what());
+		fprintf(stderr, "Failed to create testing directory \"%s\": %s\n", dir.c_str(), ex.what());
 		return 1;
 	}
 
@@ -63,7 +80,9 @@ int main(int argc, char *argv[]) {
 
 	int result = Catch::Session().run(new_argc, new_argv.get());
 
-	TestDeleteDirectory(dir);
+	if (delete_test_path) {
+		TestDeleteDirectory(dir);
+	}
 
 	return result;
 }

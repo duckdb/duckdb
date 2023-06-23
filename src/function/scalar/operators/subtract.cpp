@@ -15,18 +15,12 @@ namespace duckdb {
 template <>
 float SubtractOperator::Operation(float left, float right) {
 	auto result = left - right;
-	if (!Value::FloatIsFinite(result)) {
-		throw OutOfRangeException("Overflow in subtraction of float!");
-	}
 	return result;
 }
 
 template <>
 double SubtractOperator::Operation(double left, double right) {
 	auto result = left - right;
-	if (!Value::DoubleIsFinite(result)) {
-		throw OutOfRangeException("Overflow in subtraction of double!");
-	}
 	return result;
 }
 

@@ -36,7 +36,7 @@ static inline void ReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_va
 	UnifiedVectorFormat input_data;
 	auto &input_vector = input;
 	input_vector.ToUnifiedFormat(count, input_data);
-	auto inputs = (string_t *)input_data.data;
+	auto inputs = UnifiedVectorFormat::GetData<string_t>(input_data);
 
 	// Read the documents
 	for (idx_t i = 0; i < count; i++) {
@@ -53,17 +53,17 @@ static inline void ReadObjects(yyjson_mut_doc *doc, Vector &input, yyjson_mut_va
 //! Follows MySQL behaviour
 static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &lstate = JSONFunctionLocalState::ResetAndGet(state);
-	auto alc = lstate.json_allocator.GetYYJSONAllocator();
+	auto alc = lstate.json_allocator.GetYYAlc();
 
-	auto doc = JSONCommon::CreateDocument(lstate.json_allocator.GetYYJSONAllocator());
+	auto doc = JSONCommon::CreateDocument(lstate.json_allocator.GetYYAlc());
 	const auto count = args.size();
 
 	// Read the first json arg
-	yyjson_mut_val *origs[STANDARD_VECTOR_SIZE];
+	auto origs = JSONCommon::AllocateArray<yyjson_mut_val *>(alc, count);
 	ReadObjects(doc, args.data[0], origs, count);
 
 	// Read the next json args one by one and merge them into the first json arg
-	yyjson_mut_val *patches[STANDARD_VECTOR_SIZE];
+	auto patches = JSONCommon::AllocateArray<yyjson_mut_val *>(alc, count);
 	for (idx_t arg_idx = 1; arg_idx < args.data.size(); arg_idx++) {
 		ReadObjects(doc, args.data[arg_idx], patches, count);
 		for (idx_t i = 0; i < count; i++) {
@@ -96,13 +96,13 @@ static void MergePatchFunction(DataChunk &args, ExpressionState &state, Vector &
 	}
 }
 
-CreateScalarFunctionInfo JSONFunctions::GetMergePatchFunction() {
+ScalarFunctionSet JSONFunctions::GetMergePatchFunction() {
 	ScalarFunction fun("json_merge_patch", {}, JSONCommon::JSONType(), MergePatchFunction, JSONMergePatchBind, nullptr,
 	                   nullptr, JSONFunctionLocalState::Init);
 	fun.varargs = LogicalType::ANY;
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 
-	return CreateScalarFunctionInfo(fun);
+	return ScalarFunctionSet(fun);
 }
 
 } // namespace duckdb

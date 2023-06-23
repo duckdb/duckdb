@@ -4,8 +4,8 @@ using duckdb::OdbcHandleDesc;
 using duckdb::RowDescriptor;
 
 RowDescriptor::RowDescriptor(OdbcHandleStmt *stmt_ptr) : stmt(stmt_ptr) {
-	ard = make_unique<OdbcHandleDesc>(stmt->dbc);
-	ird = make_unique<OdbcHandleDesc>(stmt->dbc);
+	ard = make_uniq<OdbcHandleDesc>(stmt->dbc);
+	ird = make_uniq<OdbcHandleDesc>(stmt->dbc);
 
 	cur_ard = ard.get();
 }

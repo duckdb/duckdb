@@ -3,13 +3,13 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformGroupingFunction(duckdb_libpgquery::PGGroupingFunc *n) {
-	auto op = make_unique<OperatorExpression>(ExpressionType::GROUPING_FUNCTION);
-	for (auto node = n->args->head; node; node = node->next) {
-		auto n = (duckdb_libpgquery::PGNode *)node->data.ptr_value;
+unique_ptr<ParsedExpression> Transformer::TransformGroupingFunction(duckdb_libpgquery::PGGroupingFunc &grouping) {
+	auto op = make_uniq<OperatorExpression>(ExpressionType::GROUPING_FUNCTION);
+	for (auto node = grouping.args->head; node; node = node->next) {
+		auto n = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
 		op->children.push_back(TransformExpression(n));
 	}
-	op->query_location = n->location;
+	op->query_location = grouping.location;
 	return std::move(op);
 }
 

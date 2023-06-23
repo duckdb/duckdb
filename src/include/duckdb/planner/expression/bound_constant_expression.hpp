@@ -15,6 +15,9 @@ namespace duckdb {
 
 class BoundConstantExpression : public Expression {
 public:
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_CONSTANT;
+
+public:
 	explicit BoundConstantExpression(Value value);
 
 	Value value;
@@ -22,7 +25,7 @@ public:
 public:
 	string ToString() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	bool Equals(const BaseExpression &other) const override;
 	hash_t Hash() const override;
 
 	unique_ptr<Expression> Copy() override;

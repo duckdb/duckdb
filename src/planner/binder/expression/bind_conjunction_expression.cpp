@@ -17,11 +17,10 @@ BindResult ExpressionBinder::BindExpression(ConjunctionExpression &expr, idx_t d
 	// the children have been successfully resolved
 	// cast the input types to boolean (if necessary)
 	// and construct the bound conjunction expression
-	auto result = make_unique<BoundConjunctionExpression>(expr.type);
+	auto result = make_uniq<BoundConjunctionExpression>(expr.type);
 	for (auto &child_expr : expr.children) {
-		auto &child = (BoundExpression &)*child_expr;
-		result->children.push_back(
-		    BoundCastExpression::AddCastToType(context, std::move(child.expr), LogicalType::BOOLEAN));
+		auto &child = BoundExpression::GetExpression(*child_expr);
+		result->children.push_back(BoundCastExpression::AddCastToType(context, std::move(child), LogicalType::BOOLEAN));
 	}
 	// now create the bound conjunction expression
 	return BindResult(std::move(result));

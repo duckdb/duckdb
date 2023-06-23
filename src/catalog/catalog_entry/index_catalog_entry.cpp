@@ -4,25 +4,26 @@
 
 namespace duckdb {
 
-IndexCatalogEntry::IndexCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateIndexInfo *info)
-    : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info->index_name), index(nullptr), sql(info->sql) {
-	this->temporary = info->temporary;
+IndexCatalogEntry::IndexCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateIndexInfo &info)
+    : StandardEntry(CatalogType::INDEX_ENTRY, schema, catalog, info.index_name), index(nullptr), sql(info.sql) {
+	this->temporary = info.temporary;
 }
 
-string IndexCatalogEntry::ToSQL() {
+string IndexCatalogEntry::ToSQL() const {
 	if (sql.empty()) {
 		return sql;
 	}
 	if (sql[sql.size() - 1] != ';') {
-		sql += ";";
+		return sql + ";";
 	}
 	return sql;
 }
 
-void IndexCatalogEntry::Serialize(duckdb::MetaBlockWriter &serializer) {
-	// Here we serialize the index metadata in the following order:
-	// schema name, table name, index name, sql, index type, index constraint type, expression list.
-	// column_ids, unbound_expression
+void IndexCatalogEntry::Serialize(Serializer &serializer) const {
+	// here we serialize the index metadata in the following order:
+	// schema name, table name, index name, sql, index type, index constraint type, expression list, parsed expressions,
+	// column IDs
+
 	FieldWriter writer(serializer);
 	writer.WriteString(GetSchemaName());
 	writer.WriteString(GetTableName());
@@ -37,16 +38,16 @@ void IndexCatalogEntry::Serialize(duckdb::MetaBlockWriter &serializer) {
 }
 
 unique_ptr<CreateIndexInfo> IndexCatalogEntry::Deserialize(Deserializer &source, ClientContext &context) {
-	// Here we deserialize the index metadata in the following order:
-	// root block, root offset, schema name, table name, index name, sql, index type, index constraint type, expression
-	// list.
+	// here we deserialize the index metadata in the following order:
+	// schema name, table schema name, table name, index name, sql, index type, index constraint type, expression list,
+	// parsed expression list, column IDs
 
-	auto create_index_info = make_unique<CreateIndexInfo>();
+	auto create_index_info = make_uniq<CreateIndexInfo>();
 
 	FieldReader reader(source);
 
 	create_index_info->schema = reader.ReadRequired<string>();
-	create_index_info->table = make_unique<BaseTableRef>();
+	create_index_info->table = make_uniq<BaseTableRef>();
 	create_index_info->table->schema_name = create_index_info->schema;
 	create_index_info->table->table_name = reader.ReadRequired<string>();
 	create_index_info->index_name = reader.ReadRequired<string>();

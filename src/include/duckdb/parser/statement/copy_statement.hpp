@@ -16,6 +16,9 @@ namespace duckdb {
 
 class CopyStatement : public SQLStatement {
 public:
+	static constexpr const StatementType TYPE = StatementType::COPY_STATEMENT;
+
+public:
 	CopyStatement();
 
 	unique_ptr<CopyInfo> info;
@@ -28,7 +31,7 @@ protected:
 	CopyStatement(const CopyStatement &other);
 
 public:
-	unique_ptr<SQLStatement> Copy() const override;
+	DUCKDB_API unique_ptr<SQLStatement> Copy() const override;
 
 private:
 };

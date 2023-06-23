@@ -1,0 +1,15 @@
+# name: benchmark/micro/aggregate/bitwise_aggregate.benchmark
+# description: BIT_AND over a bunch of bitstrings
+# group: [aggregate]
+
+name Bit string Bitwise AND (Ungrouped)
+group aggregate
+
+load
+CREATE TABLE bits AS SELECT printf('%032b', 1000 + (i % 5))::BIT col FROM range(0, 1000000) tbl(i);
+
+run
+SELECT BIT_AND(col) FROM bits
+
+result I
+00000000000000000000001111101000

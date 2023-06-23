@@ -44,6 +44,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 	private boolean returnsChangedRows = false;
 	private boolean returnsNothing = false;
 	private boolean returnsResultSet = false;
+	boolean closeOnCompletion = false;
 	private Object[] params = new Object[0];
 	private DuckDBResultSetMetaData meta = null;
 
@@ -74,9 +75,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		this.conn.transactionRunning = true;
 
 		// Start transaction via Statement
-		Statement s = conn.createStatement();
-		s.execute("BEGIN TRANSACTION;");
-		s.close();
+		try (Statement s = conn.createStatement()) {
+			s.execute("BEGIN TRANSACTION;");
+		}
 	}
 
 	private void prepare(String sql) throws SQLException {
@@ -135,7 +136,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		try {
 			startTransaction();
 			result_ref = DuckDBNative.duckdb_jdbc_execute(stmt_ref, params);
-			select_result = new DuckDBResultSet(this, meta, result_ref);
+			select_result = new DuckDBResultSet(this, meta, result_ref, conn.conn_ref);
 		}
 		catch (SQLException e) {
 			// Delete stmt_ref as it cannot be used anymore and 
@@ -150,6 +151,14 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 			close();
 			throw e;
 		}
+
+		if (returnsChangedRows) {
+			if (select_result.next()) {
+				update_result = select_result.getInt(1);
+			}
+			select_result.close();
+		}
+
 		return returnsResultSet;
 	}
 
@@ -168,13 +177,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 			throw new SQLException("executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows");
 		}
 		execute();
-		update_result = 0;
-		if (select_result.next()) {
-			update_result = select_result.getInt(1);
-		}
-		select_result.close();
-
-		return update_result;
+		return getUpdateCount();
 	}
 
 	@Override
@@ -231,7 +234,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		} else if (x instanceof LocalDateTime) {
 			x = new DuckDBTimestamp((LocalDateTime) x);
 		} else if (x instanceof OffsetDateTime) {
-			x = new DuckDBTimestamp((OffsetDateTime) x);
+			x = new DuckDBTimestampTZ((OffsetDateTime) x);
 		}
 		params[parameterIndex - 1] = x;
 	}
@@ -335,9 +338,15 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		logger.log(Level.FINE, "setQueryTimeout not supported");
 	}
 
+	/**
+	 * This function calls the underlying C++ interrupt function which aborts the query running on that connection.
+	 * It is not safe to call this function when the connection is already closed.
+	 */
 	@Override
-	public void cancel() throws SQLException {
-		throw new SQLFeatureNotSupportedException("cancel");
+	public synchronized void cancel() throws SQLException {
+		if (conn.conn_ref != null) {
+			DuckDBNative.duckdb_jdbc_interrupt(conn.conn_ref);
+		}
 	}
 
 	@Override
@@ -378,7 +387,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 			throw new SQLException("Prepare something first");
 		}
 
-		if (!returnsChangedRows || update_result == 0) {
+		if (returnsResultSet || select_result.isFinished()) {
 			return -1;
 		}
 		return update_result;
@@ -506,22 +515,24 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	@Override
 	public void closeOnCompletion() throws SQLException {
-		throw new SQLFeatureNotSupportedException("closeOnCompletion");
+		if (isClosed()) throw new SQLException("Statement is closed");
+		closeOnCompletion = true;
 	}
 
 	@Override
 	public boolean isCloseOnCompletion() throws SQLException {
-		return false;
+		if (isClosed()) throw new SQLException("Statement is closed");
+		return closeOnCompletion;
 	}
 
 	@Override
 	public <T> T unwrap(Class<T> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException("unwrap");
+		return JdbcUtils.unwrap(this, iface);
 	}
 
 	@Override
-	public boolean isWrapperFor(Class<?> iface) throws SQLException {
-		throw new SQLFeatureNotSupportedException("isWrapperFor");
+	public boolean isWrapperFor(Class<?> iface) {
+		return iface.isInstance(this);
 	}
 
 	@Override

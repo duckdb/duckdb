@@ -5,6 +5,7 @@ add_library_unity(
   bind_emptytableref.cpp
   bind_expressionlistref.cpp
   bind_joinref.cpp
+  bind_pivot.cpp
   bind_subqueryref.cpp
   bind_table_function.cpp
   bind_named_parameters.cpp
@@ -14,7 +15,8 @@ add_library_unity(
   plan_joinref.cpp
   plan_subqueryref.cpp
   plan_table_function.cpp
-  plan_cteref.cpp)
+  plan_cteref.cpp
+  plan_pivotref.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_bind_tableref>
     PARENT_SCOPE)

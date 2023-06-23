@@ -4,7 +4,7 @@
 namespace duckdb {
 class DbpDecoder {
 public:
-	DbpDecoder(const uint8_t *buffer, uint32_t buffer_len) : buffer_((char *)buffer, buffer_len) {
+	DbpDecoder(data_ptr_t buffer, uint32_t buffer_len) : buffer_(buffer, buffer_len) {
 		//<block size in values> <number of miniblocks in a block> <total value count> <first value>
 		// overall header
 		block_value_count = ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_);
@@ -15,7 +15,7 @@ public:
 		// some derivatives
 		D_ASSERT(miniblocks_per_block > 0);
 		values_per_miniblock = block_value_count / miniblocks_per_block;
-		miniblock_bit_widths = std::unique_ptr<uint8_t[]>(new data_t[miniblocks_per_block]);
+		miniblock_bit_widths = unique_ptr<uint8_t[]>(new data_t[miniblocks_per_block]);
 
 		// init state to something sane
 		values_left_in_block = 0;
@@ -35,8 +35,8 @@ public:
 	}
 
 	template <typename T>
-	void GetBatch(char *values_target_ptr, uint32_t batch_size) {
-		auto values = (T *)values_target_ptr;
+	void GetBatch(data_ptr_t values_target_ptr, uint32_t batch_size) {
+		auto values = reinterpret_cast<T *>(values_target_ptr);
 
 		if (batch_size == 0) {
 			return;
@@ -97,7 +97,7 @@ public:
 			return;
 		}
 		auto data = unique_ptr<uint32_t[]>(new uint32_t[values_left_in_miniblock]);
-		GetBatch<uint32_t>((char *)data.get(), values_left_in_miniblock);
+		GetBatch<uint32_t>(data_ptr_cast(data.get()), values_left_in_miniblock);
 	}
 
 	uint64_t TotalValues() {
@@ -112,7 +112,7 @@ private:
 	int64_t start_value;
 	idx_t values_per_miniblock;
 
-	std::unique_ptr<uint8_t[]> miniblock_bit_widths;
+	unique_ptr<uint8_t[]> miniblock_bit_widths;
 	idx_t values_left_in_block;
 	idx_t values_left_in_miniblock;
 	idx_t miniblock_offset;

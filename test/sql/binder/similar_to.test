@@ -1,0 +1,32 @@
+# name: test/sql/binder/similar_to.test
+# description: Test table alias with single quotes
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE depdelay_minutes(depdelay_minutes INTEGER);
+
+statement error
+SELECT * FROM depdelay
+----
+depdelay_minutes
+
+statement error
+SELECT depdelay FROM depdelay_minutes
+----
+depdelay_minutes
+
+statement ok
+CREATE TABLE lineitem(i INTEGER);
+
+statement error
+SELECT * FROM li
+----
+lineitem
+
+statement error
+SELECT * FROM lineitem_long
+----
+lineitem

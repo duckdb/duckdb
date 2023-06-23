@@ -15,34 +15,18 @@ AttachStmt:
 		;
 
 DetachStmt:
-				DETACH DATABASE any_name_list
+				DETACH opt_database IDENT
 				{
-					PGDropStmt *n = makeNode(PGDropStmt);
-					n->removeType = PG_OBJECT_DATABASE;
+					PGDetachStmt *n = makeNode(PGDetachStmt);
 					n->missing_ok = false;
-					n->objects = $3;
-					n->behavior = PG_DROP_RESTRICT;
-					n->concurrent = false;
+					n->db_name = $3;
 					$$ = (PGNode *)n;
 				}
-			|	DETACH ident_list
+			|	DETACH DATABASE IF_P EXISTS IDENT
 				{
-					PGDropStmt *n = makeNode(PGDropStmt);
-					n->removeType = PG_OBJECT_DATABASE;
-					n->missing_ok = false;
-					n->objects = $2;
-					n->behavior = PG_DROP_RESTRICT;
-					n->concurrent = false;
-					$$ = (PGNode *)n;
-				}
-			|	DETACH DATABASE IF_P EXISTS any_name_list
-				{
-					PGDropStmt *n = makeNode(PGDropStmt);
-					n->removeType = PG_OBJECT_DATABASE;
+					PGDetachStmt *n = makeNode(PGDetachStmt);
 					n->missing_ok = true;
-					n->objects = $5;
-					n->behavior = PG_DROP_RESTRICT;
-					n->concurrent = false;
+					n->db_name = $5;
 					$$ = (PGNode *)n;
 				}
 		;

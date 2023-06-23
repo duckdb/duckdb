@@ -890,11 +890,64 @@ outstr = open(outfile,'rb').read().decode('utf8')
 if '99' not in outstr:
      raise Exception('.output test failed')
 
+# columnar mode
+test('''
+.col
+select * from range(4);
+''', out='Row 1')
+
+columns = ','.join(["'MyValue" + str(x) + "'" for x in range(100)])
+test(f'''
+.col
+select {columns};
+''', out='MyValue50')
+
+test(f'''
+.col
+select {columns}
+from range(1000)
+''', out='100 columns')
+
 # test null-byte rendering
 test('select varchar from test_all_types();', out='goo\\0se')
 
 # null byte in error message
 test('select chr(0)::int', err='INT32')
+
+# test temp directory behavior (issue #5878)
+# use an existing temp directory
+temp_dir = tf()
+temp_file = os.path.join(temp_dir, 'myfile')
+os.mkdir(temp_dir)
+with open(temp_file, 'w+') as f:
+     f.write('hello world')
+
+test(f'''
+SET temp_directory='{temp_dir}';
+PRAGMA memory_limit='2MB';
+CREATE TABLE t1 AS SELECT * FROM range(1000000);
+''')
+
+# make sure the temp directory or existing files are not deleted
+assert os.path.isdir(temp_dir)
+with open(temp_file, 'r') as f:
+     assert f.read() == "hello world"
+
+# all other files are gone
+assert os.listdir(temp_dir) == ['myfile']
+
+os.remove(temp_file)
+os.rmdir(temp_dir)
+
+# now use a new temp directory
+test(f'''
+SET temp_directory='{temp_dir}';
+PRAGMA memory_limit='2MB';
+CREATE TABLE t1 AS SELECT * FROM range(1000000);
+''')
+
+# make sure the temp directory is deleted
+assert not os.path.isdir(temp_dir)
 
 if os.name != 'nt':
      shell_test_dir = 'shell_test_dir'
@@ -940,6 +993,13 @@ test('.open test/storage/bc/db_04.db', err='v0.4.0')
 test('.open test/storage/bc/db_051.db', err='v0.5.1')
 test('.open test/storage/bc/db_060.db', err='v0.6.0')
 
+# sqlite udfs
+test('select decimal_mul(NULL, NULL);', out='NULL')
+test('select decimal_mul(NULL, i) FROM range(3) t(i);', out='NULL')
+test('select sha3(NULL);', out='NULL')
+test('select sha3(256);', out='A7')
+test("select sha3('hello world this is a long string');", out='D4')
+
 if os.name != 'nt':
      test('''
 create table mytable as select * from
@@ -972,7 +1032,7 @@ select channel,i_brand_id,sum_sales,number_sales from mytable;
           out='''web,8006004,844.21,21''')
 
      test('''create table mytable as select * from
-read_json_objects('/dev/stdin');
+read_ndjson_objects('/dev/stdin');
 select * from mytable;
           ''',
           extra_commands=['-list', ':memory:'],

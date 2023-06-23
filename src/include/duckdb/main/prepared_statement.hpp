@@ -48,6 +48,8 @@ public:
 public:
 	//! Returns the stored error message
 	DUCKDB_API const string &GetError();
+	//! Returns the stored error object
+	DUCKDB_API PreservedError &GetErrorObject();
 	//! Returns whether or not an error occurred
 	DUCKDB_API bool HasError() const;
 	//! Returns the number of columns in the result

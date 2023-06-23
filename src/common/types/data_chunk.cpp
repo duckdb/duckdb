@@ -62,7 +62,7 @@ void DataChunk::InitializeEmpty(vector<LogicalType>::const_iterator begin, vecto
 	D_ASSERT(data.empty());                   // can only be initialized once
 	D_ASSERT(std::distance(begin, end) != 0); // empty chunk not allowed
 	for (; begin != end; begin++) {
-		data.emplace_back(Vector(*begin, nullptr));
+		data.emplace_back(*begin, nullptr);
 	}
 }
 
@@ -291,8 +291,8 @@ void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count_
 	}
 }
 
-unique_ptr<UnifiedVectorFormat[]> DataChunk::ToUnifiedFormat() {
-	auto orrified_data = unique_ptr<UnifiedVectorFormat[]>(new UnifiedVectorFormat[ColumnCount()]);
+unsafe_unique_array<UnifiedVectorFormat> DataChunk::ToUnifiedFormat() {
+	auto orrified_data = make_unsafe_uniq_array<UnifiedVectorFormat>(ColumnCount());
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
 		data[col_idx].ToUnifiedFormat(size(), orrified_data[col_idx]);
 	}

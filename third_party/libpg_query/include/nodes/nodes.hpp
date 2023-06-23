@@ -194,6 +194,9 @@ typedef enum PGNodeTag {
 	T_PGOnConflictExpr,
 	T_PGIntoClause,
 	T_PGLambdaFunction,
+	T_PGPivotExpr,
+	T_PGPivot,
+	T_PGPivotStmt,
 
 	/*
 	 * TAGS FOR EXPRESSION STATE NODES (execnodes.h)
@@ -422,7 +425,7 @@ typedef enum PGNodeTag {
 	T_PGExportStmt,
 	T_PGImportStmt,
 	T_PGAttachStmt,
-	T_PGCreateDatabaseStmt,
+	T_PGDetachStmt,
 	T_PGUseStmt,
 
 	/*
@@ -678,6 +681,38 @@ typedef enum PGJoinType {
 } PGJoinType;
 
 /*
+ * PGJoinRefType -
+ *    enums for the types of implied conditions
+ *
+ * PGJoinRefType specifies the semantics of interpreting the join conditions.
+ * These can be explicit (e.g., REGULAR) implied (e.g., NATURAL)
+ * or interpreted in a particular manner (e.g., ASOF)
+ *
+ * This is a generalisation of the old Postgres isNatural flag.
+ */
+typedef enum PGJoinRefType {
+	PG_JOIN_REGULAR, /* Join conditions are interpreted as is */
+	PG_JOIN_NATURAL, /* Join conditions are inferred from the column names */
+
+	/*
+	 * ASOF joins are joins with a single inequality predicate
+	 * and optional equality predicates.
+	 * The semantics are equivalent to the following window join:
+	 * 		times t
+	 * 	<jointype> JOIN (
+     *		SELECT *,
+     *			LEAD(begin, 1, 'infinity') OVER ([PARTITION BY key] ORDER BY begin) AS end)
+	 * 		FROM events) e
+	 *	ON t.ts >= e.begin AND t.ts < e.end [AND t.key = e.key]
+	 */
+	PG_JOIN_ASOF
+
+	/*
+	 * Positional join is a candidate to move here
+	 */
+} PGJoinRefType;
+
+/*
  * OUTER joins are those for which pushed-down quals must behave differently
  * from the join's own quals.  This is in fact everything except INNER and
  * SEMI joins.  However, this macro must also exclude the JOIN_UNIQUE symbols
@@ -777,5 +812,14 @@ typedef enum PGOnConflictActionAlias {
 	PG_ONCONFLICT_ALIAS_REPLACE, /* INSERT OR REPLACE */
 	PG_ONCONFLICT_ALIAS_IGNORE   /* INSERT OR IGNORE */
 } PGOnConflictActionAlias;
+
+/*
+ * PGInsertByNameOrPosition
+ *    "INSERT BY [POSITION|NAME]
+ */
+typedef enum PGInsertColumnOrder {
+	PG_INSERT_BY_POSITION,    /* INSERT BY POSITION (default behavior) */
+	PG_INSERT_BY_NAME,        /* INSERT BY NAME */
+} PGInsertColumnOrder;
 
 }

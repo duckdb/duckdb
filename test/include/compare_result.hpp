@@ -1,3 +1,12 @@
+//===----------------------------------------------------------------------===//
+//
+//                         DuckDB
+//
+// compare_result.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/string_util.hpp"
@@ -6,8 +15,8 @@
 namespace duckdb {
 
 bool CHECK_COLUMN(QueryResult &result, size_t column_number, vector<duckdb::Value> values);
-bool CHECK_COLUMN(unique_ptr<duckdb::QueryResult> &result, size_t column_number, vector<duckdb::Value> values);
-bool CHECK_COLUMN(unique_ptr<duckdb::MaterializedQueryResult> &result, size_t column_number,
+bool CHECK_COLUMN(duckdb::unique_ptr<duckdb::QueryResult> &result, size_t column_number, vector<duckdb::Value> values);
+bool CHECK_COLUMN(duckdb::unique_ptr<duckdb::MaterializedQueryResult> &result, size_t column_number,
                   vector<duckdb::Value> values);
 
 string compare_csv(duckdb::QueryResult &result, string csv, bool header = false);

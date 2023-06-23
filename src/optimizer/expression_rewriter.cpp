@@ -9,14 +9,14 @@
 
 namespace duckdb {
 
-unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<Rule *> &rules,
+unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const vector<reference<Rule>> &rules,
                                                       unique_ptr<Expression> expr, bool &changes_made, bool is_root) {
 	for (auto &rule : rules) {
-		vector<Expression *> bindings;
-		if (rule->root->Match(expr.get(), bindings)) {
+		vector<reference<Expression>> bindings;
+		if (rule.get().root->Match(*expr, bindings)) {
 			// the rule matches! try to apply it
 			bool rule_made_change = false;
-			auto result = rule->Apply(op, bindings, rule_made_change, is_root);
+			auto result = rule.get().Apply(op, bindings, rule_made_change, is_root);
 			if (result) {
 				changes_made = true;
 				// the base node changed: the rule applied changes
@@ -41,16 +41,16 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(unique_ptr<Expression> child, Value value) {
 	vector<unique_ptr<Expression>> children;
-	children.push_back(make_unique<BoundConstantExpression>(value));
+	children.push_back(make_uniq<BoundConstantExpression>(value));
 	children.push_back(std::move(child));
 	return ConstantOrNull(std::move(children), std::move(value));
 }
 
 unique_ptr<Expression> ExpressionRewriter::ConstantOrNull(vector<unique_ptr<Expression>> children, Value value) {
 	auto type = value.type();
-	children.insert(children.begin(), make_unique<BoundConstantExpression>(value));
-	return make_unique<BoundFunctionExpression>(type, ConstantOrNull::GetFunction(type), std::move(children),
-	                                            ConstantOrNull::Bind(std::move(value)));
+	children.insert(children.begin(), make_uniq<BoundConstantExpression>(value));
+	return make_uniq<BoundFunctionExpression>(type, ConstantOrNull::GetFunction(type), std::move(children),
+	                                          ConstantOrNull::Bind(std::move(value)));
 }
 
 void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
@@ -63,7 +63,7 @@ void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
 			// this rule does not apply to this type of LogicalOperator
 			continue;
 		}
-		to_apply_rules.push_back(rule.get());
+		to_apply_rules.push_back(*rule);
 	}
 	if (to_apply_rules.empty()) {
 		// no rules to apply on this node
@@ -74,7 +74,7 @@ void ExpressionRewriter::VisitOperator(LogicalOperator &op) {
 
 	// if it is a LogicalFilter, we split up filter conjunctions again
 	if (op.type == LogicalOperatorType::LOGICAL_FILTER) {
-		auto &filter = (LogicalFilter &)op;
+		auto &filter = op.Cast<LogicalFilter>();
 		filter.SplitPredicates();
 	}
 }

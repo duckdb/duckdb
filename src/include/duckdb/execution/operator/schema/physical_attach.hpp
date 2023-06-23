@@ -16,6 +16,9 @@ namespace duckdb {
 //! PhysicalLoad represents an extension LOAD operation
 class PhysicalAttach : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::ATTACH;
+
+public:
 	explicit PhysicalAttach(unique_ptr<AttachInfo> info, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::ATTACH, {LogicalType::BOOLEAN}, estimated_cardinality),
 	      info(std::move(info)) {
@@ -25,9 +28,11 @@ public:
 
 public:
 	// Source interface
-	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
-	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	             LocalSourceState &lstate) const override;
+	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+
+	bool IsSource() const override {
+		return true;
+	}
 };
 
 } // namespace duckdb

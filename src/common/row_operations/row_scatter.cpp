@@ -8,8 +8,8 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/types/row_data_collection.hpp"
-#include "duckdb/common/types/row_layout.hpp"
+#include "duckdb/common/types/row/row_data_collection.hpp"
+#include "duckdb/common/types/row/row_layout.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/vector.hpp"
 
@@ -20,7 +20,7 @@ using ValidityBytes = RowLayout::ValidityBytes;
 template <class T>
 static void TemplatedScatter(UnifiedVectorFormat &col, Vector &rows, const SelectionVector &sel, const idx_t count,
                              const idx_t col_offset, const idx_t col_no) {
-	auto data = (T *)col.data;
+	auto data = UnifiedVectorFormat::GetData<T>(col);
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
 	if (!col.validity.AllValid()) {
@@ -50,7 +50,7 @@ static void TemplatedScatter(UnifiedVectorFormat &col, Vector &rows, const Selec
 
 static void ComputeStringEntrySizes(const UnifiedVectorFormat &col, idx_t entry_sizes[], const SelectionVector &sel,
                                     const idx_t count, const idx_t offset = 0) {
-	auto data = (const string_t *)col.data;
+	auto data = UnifiedVectorFormat::GetData<string_t>(col);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto col_idx = col.sel->get_index(idx) + offset;
@@ -64,9 +64,11 @@ static void ComputeStringEntrySizes(const UnifiedVectorFormat &col, idx_t entry_
 static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr_t str_locations[],
                                 const SelectionVector &sel, const idx_t count, const idx_t col_offset,
                                 const idx_t col_no) {
-	auto string_data = (string_t *)col.data;
+	auto string_data = UnifiedVectorFormat::GetData<string_t>(col);
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
+	// Write out zero length to avoid swizzling problems.
+	const string_t null(nullptr, 0);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto col_idx = col.sel->get_index(idx);
@@ -74,13 +76,13 @@ static void ScatterStringVector(UnifiedVectorFormat &col, Vector &rows, data_ptr
 		if (!col.validity.RowIsValid(col_idx)) {
 			ValidityBytes col_mask(row);
 			col_mask.SetInvalidUnsafe(col_no);
-			Store<string_t>(NullValue<string_t>(), row + col_offset);
+			Store<string_t>(null, row + col_offset);
 		} else if (string_data[col_idx].IsInlined()) {
 			Store<string_t>(string_data[col_idx], row + col_offset);
 		} else {
 			const auto &str = string_data[col_idx];
-			string_t inserted((const char *)str_locations[i], str.GetSize());
-			memcpy(inserted.GetDataWriteable(), str.GetDataUnsafe(), str.GetSize());
+			string_t inserted(const_char_ptr_cast(str_locations[i]), str.GetSize());
+			memcpy(inserted.GetDataWriteable(), str.GetData(), str.GetSize());
 			str_locations[i] += str.GetSize();
 			inserted.Finalize();
 			Store<string_t>(inserted, row + col_offset);
@@ -152,7 +154,7 @@ void RowOperations::Scatter(DataChunk &columns, UnifiedVectorFormat col_data[], 
 		}
 
 		// Build out the buffer space
-		string_heap.Build(count, data_locations, entry_sizes);
+		handles = string_heap.Build(count, data_locations, entry_sizes);
 
 		// Serialize information that is needed for swizzling if the computation goes out-of-core
 		const idx_t heap_pointer_offset = layout.GetHeapOffset();

@@ -10,13 +10,15 @@ add_subdirectory(third_party)
 
 set(ICU_EXTENSION_FILES
     ${ICU_LIBRARY_FILES}
-    icu-extension.cpp
+    icu_extension.cpp
     icu-dateadd.cpp
     icu-datefunc.cpp
     icu-datepart.cpp
     icu-datesub.cpp
     icu-datetrunc.cpp
     icu-makedate.cpp
+    icu-list-range.cpp
+    icu-table-range.cpp
     icu-strptime.cpp
     icu-timebucket.cpp
     icu-timezone.cpp)

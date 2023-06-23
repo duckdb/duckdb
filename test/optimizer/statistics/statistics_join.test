@@ -67,12 +67,6 @@ EXPLAIN SELECT i1.i FROM integers i1 LEFT JOIN integers2 i2 ON i1.i=i2.i ORDER B
 ----
 logical_opt	<REGEX>:.*EMPTY_RESULT.*
 
-# left join with guaranteed match: same as inner join
-query II
-EXPLAIN SELECT i1.i FROM integers i1 LEFT JOIN integers2 i2 ON i1.i<i2.i ORDER BY 1;
-----
-logical_opt	<REGEX>:.*CROSS_PRODUCT.*
-
 # semi join
 # join cannot match: replaced with empty result
 query II

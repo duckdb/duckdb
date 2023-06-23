@@ -38,7 +38,7 @@ SET s3_url_style='${urlstyle}'
 
 # simple globbing
 query I
-SELECT * FROM read_csv('s3://test-bucket/read_csv_glob_s3/glob/a?/*.csv', auto_detect=1) ORDER BY 1
+SELECT * FROM read_csv('s3://test-bucket/read_csv_glob_s3/glob/a[123]/*.csv', auto_detect=1) ORDER BY 1
 ----
 2019-06-05
 2019-06-15
@@ -51,7 +51,7 @@ SELECT * FROM read_csv('s3://test-bucket/read_csv_glob_s3/glob/a?/*.csv', auto_d
 2019-08-25
 
 query I
-SELECT * FROM read_csv('s3://test-bucket/read_csv_glob_s3/*/a?/a*.csv', auto_detect=1) ORDER BY 1
+SELECT * FROM read_csv('s3://test-bucket/read_csv_glob_s3/*/a[123]/a*.csv', auto_detect=1) ORDER BY 1
 ----
 2019-06-05
 2019-06-15
@@ -61,7 +61,7 @@ SELECT * FROM read_csv('s3://test-bucket/read_csv_glob_s3/*/a?/a*.csv', auto_det
 2019-07-25
 
 query II
-SELECT a, b LIKE '%a1.csv%' FROM read_csv('s3://test-bucket/read_csv_glob_s3/gl*/a?/a*.csv', auto_detect=1, filename=1) t1(a,b) ORDER BY 1
+SELECT a, b LIKE '%a1.csv%' FROM read_csv('s3://test-bucket/read_csv_glob_s3/gl*/a[123]/a*.csv', auto_detect=1, filename=1) t1(a,b) ORDER BY 1
 ----
 2019-06-05	1
 2019-06-15	1

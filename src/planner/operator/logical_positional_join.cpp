@@ -14,7 +14,7 @@ unique_ptr<LogicalOperator> LogicalPositionalJoin::Create(unique_ptr<LogicalOper
 	if (right->type == LogicalOperatorType::LOGICAL_DUMMY_SCAN) {
 		return left;
 	}
-	return make_unique<LogicalPositionalJoin>(std::move(left), std::move(right));
+	return make_uniq<LogicalPositionalJoin>(std::move(left), std::move(right));
 }
 
 void LogicalPositionalJoin::Serialize(FieldWriter &writer) const {

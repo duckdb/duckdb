@@ -7,24 +7,22 @@
 
 namespace duckdb {
 
-unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery::PGNode *node) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGAlterSeqStmt *>(node);
-	D_ASSERT(stmt);
-	auto result = make_unique<AlterStatement>();
+unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery::PGAlterSeqStmt &stmt) {
+	auto result = make_uniq<AlterStatement>();
 
-	auto qname = TransformQualifiedName(stmt->sequence);
+	auto qname = TransformQualifiedName(*stmt.sequence);
 	auto sequence_catalog = qname.catalog;
 	auto sequence_schema = qname.schema;
 	auto sequence_name = qname.name;
 
-	if (!stmt->options) {
+	if (!stmt.options) {
 		throw InternalException("Expected an argument for ALTER SEQUENCE.");
 	}
 
 	unordered_set<SequenceInfo, EnumClassHash> used;
-	duckdb_libpgquery::PGListCell *cell = nullptr;
-	for_each_cell(cell, stmt->options->head) {
-		auto *def_elem = reinterpret_cast<duckdb_libpgquery::PGDefElem *>(cell->data.ptr_value);
+	duckdb_libpgquery::PGListCell *cell;
+	for_each_cell(cell, stmt.options->head) {
+		auto def_elem = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
 		string opt_name = string(def_elem->defname);
 
 		if (opt_name == "owned_by") {
@@ -33,7 +31,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 			}
 			used.insert(SequenceInfo::SEQ_OWN);
 
-			auto val = (duckdb_libpgquery::PGValue *)def_elem->arg;
+			auto val = PGPointerCast<duckdb_libpgquery::PGList>(def_elem->arg);
 			if (!val) {
 				throw InternalException("Expected an argument for option %s", opt_name);
 			}
@@ -43,9 +41,8 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 			}
 			auto opt_values = vector<string>();
 
-			auto opt_value_list = (duckdb_libpgquery::PGList *)(val);
-			for (auto c = opt_value_list->head; c != nullptr; c = lnext(c)) {
-				auto target = (duckdb_libpgquery::PGResTarget *)(c->data.ptr_value);
+			for (auto c = val->head; c != nullptr; c = lnext(c)) {
+				auto target = PGPointerCast<duckdb_libpgquery::PGResTarget>(c->data.ptr_value);
 				opt_values.emplace_back(target->name);
 			}
 			D_ASSERT(!opt_values.empty());
@@ -60,14 +57,15 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 			} else {
 				throw InternalException("Wrong argument for %s. Expected either <schema>.<name> or <name>", opt_name);
 			}
-			auto info = make_unique<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, sequence_catalog, sequence_schema,
-			                                             sequence_name, owner_schema, owner_name, stmt->missing_ok);
+			auto info = make_uniq<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, sequence_catalog, sequence_schema,
+			                                           sequence_name, owner_schema, owner_name,
+			                                           TransformOnEntryNotFound(stmt.missing_ok));
 			result->info = std::move(info);
 		} else {
 			throw NotImplementedException("ALTER SEQUENCE option not supported yet!");
 		}
 	}
-	result->info->if_exists = stmt->missing_ok;
+	result->info->if_not_found = TransformOnEntryNotFound(stmt.missing_ok);
 	return result;
 }
 } // namespace duckdb

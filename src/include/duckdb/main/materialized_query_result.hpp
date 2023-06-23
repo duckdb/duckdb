@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/query_result.hpp"
 
@@ -17,6 +17,9 @@ namespace duckdb {
 class ClientContext;
 
 class MaterializedQueryResult : public QueryResult {
+public:
+	static constexpr const QueryResultType TYPE = QueryResultType::MATERIALIZED_RESULT;
+
 public:
 	friend class ClientContext;
 	//! Creates a successful query result with the specified names and types

@@ -12,6 +12,10 @@ using FixedPointDecimals
 
 export DBInterface, DuckDBException
 
+abstract type ResultType end
+struct MaterializedResult <: ResultType end
+struct StreamResult <: ResultType end
+
 include("helper.jl")
 include("exceptions.jl")
 include("ctypes.jl")

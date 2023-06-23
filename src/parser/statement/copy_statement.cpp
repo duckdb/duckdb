@@ -2,22 +2,12 @@
 
 namespace duckdb {
 
-CopyStatement::CopyStatement() : SQLStatement(StatementType::COPY_STATEMENT), info(make_unique<CopyInfo>()) {
+CopyStatement::CopyStatement() : SQLStatement(StatementType::COPY_STATEMENT), info(make_uniq<CopyInfo>()) {
 }
 
 CopyStatement::CopyStatement(const CopyStatement &other) : SQLStatement(other), info(other.info->Copy()) {
 	if (other.select_statement) {
 		select_statement = other.select_statement->Copy();
-	}
-}
-
-string ConvertOptionValueToString(const Value &val) {
-	auto type = val.type().id();
-	switch (type) {
-	case LogicalTypeId::VARCHAR:
-		return KeywordHelper::WriteOptionallyQuoted(val.ToString());
-	default:
-		return val.ToString();
 	}
 }
 
@@ -45,15 +35,14 @@ string CopyStatement::CopyOptionsToString(const string &format,
 			// Options like HEADER don't need an explicit value
 			// just providing the name already sets it to true
 		} else if (values.size() == 1) {
-			result += ConvertOptionValueToString(values[0]);
+			result += values[0].ToSQLString();
 		} else {
 			result += "( ";
 			for (idx_t i = 0; i < values.size(); i++) {
-				auto &value = values[i];
 				if (i) {
 					result += ", ";
 				}
-				result += KeywordHelper::WriteOptionallyQuoted(value.ToString());
+				result += values[i].ToSQLString();
 			}
 			result += " )";
 		}
@@ -97,7 +86,7 @@ string CopyStatement::ToString() const {
 		D_ASSERT(!select_statement);
 		result += TablePart(*info);
 		result += " FROM";
-		result += StringUtil::Format(" '%s'", info->file_path);
+		result += StringUtil::Format(" %s", SQLString(info->file_path));
 		result += CopyOptionsToString(info->format, info->options);
 	} else {
 		if (select_statement) {
@@ -107,7 +96,7 @@ string CopyStatement::ToString() const {
 			result += TablePart(*info);
 		}
 		result += " TO ";
-		result += StringUtil::Format("'%s'", info->file_path);
+		result += StringUtil::Format("%s", SQLString(info->file_path));
 		result += CopyOptionsToString(info->format, info->options);
 	}
 	return result;

@@ -4,7 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/vector_operations/ternary_executor.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
+
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "utf8proc.hpp"
 #include "duckdb/common/types/blob.hpp"
@@ -82,7 +82,7 @@ bool SubstringStartEnd(int64_t input_size, int64_t offset, int64_t length, int64
 }
 
 string_t SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t length) {
-	auto input_data = input.GetDataUnsafe();
+	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 
 	AssertInSupportedRange(input_size, offset, length);
@@ -95,7 +95,7 @@ string_t SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t 
 }
 
 string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t offset, int64_t length) {
-	auto input_data = input.GetDataUnsafe();
+	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 
 	AssertInSupportedRange(input_size, offset, length);
@@ -190,7 +190,7 @@ string_t SubstringFun::SubstringUnicode(Vector &result, string_t input, int64_t 
 }
 
 string_t SubstringFun::SubstringGrapheme(Vector &result, string_t input, int64_t offset, int64_t length) {
-	auto input_data = input.GetDataUnsafe();
+	auto input_data = input.GetData();
 	auto input_size = input.GetSize();
 
 	AssertInSupportedRange(input_size, offset, length);
@@ -307,12 +307,8 @@ static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context
 	auto &child_stats = input.child_stats;
 	auto &expr = input.expr;
 	// can only propagate stats if the children have stats
-	if (!child_stats[0]) {
-		return nullptr;
-	}
 	// we only care about the stats of the first child (i.e. the string)
-	auto &sstats = (StringStatistics &)*child_stats[0];
-	if (!sstats.has_unicode) {
+	if (!StringStats::CanContainUnicode(child_stats[0])) {
 		expr.function.function = SubstringFunctionASCII;
 	}
 	return nullptr;

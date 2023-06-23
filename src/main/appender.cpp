@@ -3,15 +3,15 @@
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/main/connection.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
+#include "duckdb/common/operator/string_cast.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
-#include "duckdb/common/operator/string_cast.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
-#include "duckdb/common/operator/decimal_cast_operators.hpp"
 
 namespace duckdb {
 
@@ -20,8 +20,8 @@ BaseAppender::BaseAppender(Allocator &allocator, AppenderType type_p)
 }
 
 BaseAppender::BaseAppender(Allocator &allocator_p, vector<LogicalType> types_p, AppenderType type_p)
-    : allocator(allocator_p), types(std::move(types_p)),
-      collection(make_unique<ColumnDataCollection>(allocator, types)), column(0), appender_type(type_p) {
+    : allocator(allocator_p), types(std::move(types_p)), collection(make_uniq<ColumnDataCollection>(allocator, types)),
+      column(0), appender_type(type_p) {
 	InitializeChunk();
 }
 
@@ -60,7 +60,7 @@ Appender::Appender(Connection &con, const string &schema_name, const string &tab
 		types.push_back(column.Type());
 	}
 	InitializeChunk();
-	collection = make_unique<ColumnDataCollection>(allocator, types);
+	collection = make_uniq<ColumnDataCollection>(allocator, types);
 }
 
 Appender::Appender(Connection &con, const string &table_name) : Appender(con, DEFAULT_SCHEMA, table_name) {

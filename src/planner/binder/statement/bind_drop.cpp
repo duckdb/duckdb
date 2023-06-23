@@ -1,9 +1,13 @@
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/standard_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
 
@@ -30,27 +34,23 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::TYPE_ENTRY: {
 		BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
-		auto entry = (StandardEntry *)Catalog::GetEntry(context, stmt.info->type, stmt.info->catalog, stmt.info->schema,
-		                                                stmt.info->name, true);
+		auto entry = Catalog::GetEntry(context, stmt.info->type, stmt.info->catalog, stmt.info->schema, stmt.info->name,
+		                               OnEntryNotFound::RETURN_NULL);
 		if (!entry) {
 			break;
 		}
-		stmt.info->catalog = entry->catalog->GetName();
+		stmt.info->catalog = entry->ParentCatalog().GetName();
 		if (!entry->temporary) {
 			// we can only drop temporary tables in read-only mode
 			properties.modified_databases.insert(stmt.info->catalog);
 		}
-		stmt.info->schema = entry->schema->name;
+		stmt.info->schema = entry->ParentSchema().name;
 		break;
 	}
-	case CatalogType::DATABASE_ENTRY:
-		// attaching and detaching is read-only
-		stmt.info->catalog = SYSTEM_CATALOG;
-		break;
 	default:
 		throw BinderException("Unknown catalog type for drop statement!");
 	}
-	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_DROP, std::move(stmt.info));
+	result.plan = make_uniq<LogicalSimple>(LogicalOperatorType::LOGICAL_DROP, std::move(stmt.info));
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
 	properties.allow_stream_result = false;

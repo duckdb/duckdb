@@ -13,18 +13,18 @@ struct ConstantOrNullBindData : public FunctionData {
 
 public:
 	unique_ptr<FunctionData> Copy() const override {
-		return make_unique<ConstantOrNullBindData>(value);
+		return make_uniq<ConstantOrNullBindData>(value);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
-		auto &other = (const ConstantOrNullBindData &)other_p;
+		auto &other = other_p.Cast<ConstantOrNullBindData>();
 		return value == other.value;
 	}
 };
 
 static void ConstantOrNullFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (ConstantOrNullBindData &)*func_expr.bind_info;
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<ConstantOrNullBindData>();
 	result.Reference(info.value);
 	for (idx_t idx = 1; idx < args.ColumnCount(); idx++) {
 		switch (args.data[idx].GetVectorType()) {
@@ -70,7 +70,7 @@ ScalarFunction ConstantOrNull::GetFunction(const LogicalType &return_type) {
 }
 
 unique_ptr<FunctionData> ConstantOrNull::Bind(Value value) {
-	return make_unique<ConstantOrNullBindData>(std::move(value));
+	return make_uniq<ConstantOrNullBindData>(std::move(value));
 }
 
 bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value &val) {
@@ -78,7 +78,7 @@ bool ConstantOrNull::IsConstantOrNull(BoundFunctionExpression &expr, const Value
 		return false;
 	}
 	D_ASSERT(expr.bind_info);
-	auto &bind_data = (ConstantOrNullBindData &)*expr.bind_info;
+	auto &bind_data = expr.bind_info->Cast<ConstantOrNullBindData>();
 	D_ASSERT(bind_data.value.type() == val.type());
 	return bind_data.value == val;
 }
@@ -94,7 +94,7 @@ unique_ptr<FunctionData> ConstantOrNullBind(ClientContext &context, ScalarFuncti
 	D_ASSERT(arguments.size() >= 2);
 	auto value = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
 	bound_function.return_type = arguments[0]->return_type;
-	return make_unique<ConstantOrNullBindData>(std::move(value));
+	return make_uniq<ConstantOrNullBindData>(std::move(value));
 }
 
 void ConstantOrNull::RegisterFunction(BuiltinFunctions &set) {

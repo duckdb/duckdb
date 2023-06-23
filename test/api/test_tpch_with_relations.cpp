@@ -1,6 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
-#include "tpch-extension.hpp"
+#include "tpch_extension.hpp"
 
 #include <chrono>
 #include <iostream>
@@ -10,7 +10,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test TPC-H SF0.01 with relations", "[tpch][.]") {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
 	double sf = 0.01;
@@ -38,7 +38,7 @@ TEST_CASE("Test TPC-H SF0.01 with relations", "[tpch][.]") {
 	             "avg(l_extendedprice) AS avg_price", "avg(l_discount) AS avg_disc", "count(*) AS count_order"})
 	        ->Order("l_returnflag, l_linestatus")
 	        ->Execute();
-	COMPARE_CSV(result, TPCHExtension::GetAnswer(sf, 1), true);
+	COMPARE_CSV(result, TpchExtension::GetAnswer(sf, 1), true);
 
 	// Q02
 	auto partsupp_region = partsupp->Join(supplier, "s_suppkey=ps_suppkey")
@@ -55,7 +55,7 @@ TEST_CASE("Test TPC-H SF0.01 with relations", "[tpch][.]") {
 	        ->Order({"s_acctbal DESC", "n_name", "s_name", "p_partkey"})
 	        ->Limit(100)
 	        ->Execute();
-	COMPARE_CSV(result, TPCHExtension::GetAnswer(sf, 2), true);
+	COMPARE_CSV(result, TpchExtension::GetAnswer(sf, 2), true);
 
 	// Q03
 	auto cust_join = customer->Join(orders, "c_custkey=o_custkey")->Join(lineitem, "l_orderkey=o_orderkey");
@@ -67,7 +67,7 @@ TEST_CASE("Test TPC-H SF0.01 with relations", "[tpch][.]") {
 	        ->Order("revenue DESC, o_orderdate")
 	        ->Limit(10)
 	        ->Execute();
-	COMPARE_CSV(result, TPCHExtension::GetAnswer(sf, 3), true);
+	COMPARE_CSV(result, TpchExtension::GetAnswer(sf, 3), true);
 
 	// Q06
 	result = lineitem
@@ -75,7 +75,7 @@ TEST_CASE("Test TPC-H SF0.01 with relations", "[tpch][.]") {
 	                       "l_discount BETWEEN 0.05 AND 0.07", "l_quantity < 24;"})
 	             ->Aggregate("sum(l_extendedprice * l_discount) AS revenue")
 	             ->Execute();
-	COMPARE_CSV(result, TPCHExtension::GetAnswer(sf, 6), true);
+	COMPARE_CSV(result, TpchExtension::GetAnswer(sf, 6), true);
 
 	// Q12
 	result =
@@ -89,5 +89,5 @@ TEST_CASE("Test TPC-H SF0.01 with relations", "[tpch][.]") {
 	                     "END) AS low_line_count"})
 	        ->Order("l_shipmode")
 	        ->Execute();
-	COMPARE_CSV(result, TPCHExtension::GetAnswer(sf, 12), true);
+	COMPARE_CSV(result, TpchExtension::GetAnswer(sf, 12), true);
 }

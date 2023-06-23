@@ -98,12 +98,21 @@ statement ok
 CREATE TABLE nums AS SELECT range % 8 i, range j FROM range(16)
 
 statement ok
-CREATE TABLE lists AS SELECT i % 4 i, list(j) j FROM nums GROUP BY i
+CREATE TABLE lists AS SELECT i % 4 i, list(j ORDER BY rowid) j FROM nums GROUP BY i
 
 statement ok
-CREATE TABLE nested_lists AS SELECT i, list(j) j FROM lists GROUP BY i
+CREATE TABLE nested_lists AS SELECT i, list_sort(list(j ORDER BY rowid)) j FROM lists GROUP BY i ORDER BY i
 
 query II
+FROM nested_lists
+----
+0	[[0, 8], [4, 12]]
+1	[[1, 9], [5, 13]]
+2	[[2, 10], [6, 14]]
+3	[[3, 11], [7, 15]]
+
+
+query II rowsort
 SELECT i, flatten(j) FROM nested_lists
 ----
 0	[0, 8, 4, 12]
@@ -124,3 +133,19 @@ SELECT i, flatten([[1, 2], [3, 4]]) FROM nested_lists
 1	[1, 2, 3, 4]
 2	[1, 2, 3, 4]
 3	[1, 2, 3, 4]
+
+# Issue #6856 - flatten() segfaults when called on bad input
+statement error
+select flatten(42);
+----
+No function matches the given name and argument types
+
+statement error
+select flatten([1, 2]);
+----
+No function matches the given name and argument types
+
+query I
+select flatten(NULL);
+----
+NULL

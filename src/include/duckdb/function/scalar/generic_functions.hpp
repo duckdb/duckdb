@@ -15,42 +15,10 @@
 namespace duckdb {
 class BoundFunctionExpression;
 
-struct AliasFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct HashFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct LeastFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct GreatestFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct StatsFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct TypeOfFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct ConstantOrNull {
 	static ScalarFunction GetFunction(const LogicalType &return_type);
 	static unique_ptr<FunctionData> Bind(Value value);
 	static bool IsConstantOrNull(BoundFunctionExpression &expr, const Value &val);
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct CurrentSettingFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct SystemFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -65,6 +33,7 @@ struct ExportAggregateFunction {
 	static unique_ptr<BoundAggregateExpression> Bind(unique_ptr<BoundAggregateExpression> child_aggregate);
 	static ScalarFunction GetCombine();
 	static ScalarFunction GetFinalize();
+	static void RegisterFunction(BuiltinFunctions &set);
 };
 
 } // namespace duckdb

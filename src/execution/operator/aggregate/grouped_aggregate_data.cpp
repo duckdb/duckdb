@@ -12,7 +12,7 @@ const vector<vector<idx_t>> &GroupedAggregateData::GetGroupingFunctions() const 
 
 void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> groups,
                                              vector<unique_ptr<Expression>> expressions,
-                                             vector<vector<idx_t>> grouping_functions) {
+                                             vector<unsafe_vector<idx_t>> grouping_functions) {
 	InitializeGroupbyGroups(std::move(groups));
 	vector<LogicalType> payload_types_filters;
 
@@ -22,7 +22,7 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 	for (auto &expr : expressions) {
 		D_ASSERT(expr->expression_class == ExpressionClass::BOUND_AGGREGATE);
 		D_ASSERT(expr->IsAggregate());
-		auto &aggr = (BoundAggregateExpression &)*expr;
+		auto &aggr = expr->Cast<BoundAggregateExpression>();
 		bindings.push_back(&aggr);
 
 		aggregate_return_types.push_back(aggr.return_type);
@@ -45,7 +45,7 @@ void GroupedAggregateData::InitializeGroupby(vector<unique_ptr<Expression>> grou
 
 void GroupedAggregateData::InitializeDistinct(const unique_ptr<Expression> &aggregate,
                                               const vector<unique_ptr<Expression>> *groups_p) {
-	auto &aggr = (BoundAggregateExpression &)*aggregate;
+	auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 	D_ASSERT(aggr.IsDistinct());
 
 	// Add the (empty in ungrouped case) groups of the aggregates
@@ -86,7 +86,7 @@ void GroupedAggregateData::InitializeGroupbyGroups(vector<unique_ptr<Expression>
 	this->groups = std::move(groups);
 }
 
-void GroupedAggregateData::SetGroupingFunctions(vector<vector<idx_t>> &functions) {
+void GroupedAggregateData::SetGroupingFunctions(vector<unsafe_vector<idx_t>> &functions) {
 	grouping_functions.reserve(functions.size());
 	for (idx_t i = 0; i < functions.size(); i++) {
 		grouping_functions.push_back(std::move(functions[i]));

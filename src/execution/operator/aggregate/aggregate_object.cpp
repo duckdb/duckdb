@@ -1,19 +1,29 @@
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
+
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
 
 AggregateObject::AggregateObject(AggregateFunction function, FunctionData *bind_data, idx_t child_count,
                                  idx_t payload_size, AggregateType aggr_type, PhysicalType return_type,
                                  Expression *filter)
-    : function(std::move(function)), bind_data(bind_data), child_count(child_count), payload_size(payload_size),
-      aggr_type(aggr_type), return_type(return_type), filter(filter) {
+    : function(std::move(function)),
+      bind_data_wrapper(bind_data ? make_shared<FunctionDataWrapper>(bind_data->Copy()) : nullptr),
+      child_count(child_count), payload_size(payload_size), aggr_type(aggr_type), return_type(return_type),
+      filter(filter) {
 }
 
 AggregateObject::AggregateObject(BoundAggregateExpression *aggr)
     : AggregateObject(aggr->function, aggr->bind_info.get(), aggr->children.size(),
                       AlignValue(aggr->function.state_size()), aggr->aggr_type, aggr->return_type.InternalType(),
                       aggr->filter.get()) {
+}
+
+AggregateObject::AggregateObject(BoundWindowExpression &window)
+    : AggregateObject(*window.aggregate, window.bind_info.get(), window.children.size(),
+                      AlignValue(window.aggregate->state_size()), AggregateType::NON_DISTINCT,
+                      window.return_type.InternalType(), window.filter_expr.get()) {
 }
 
 vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<BoundAggregateExpression *> &bindings) {
@@ -62,7 +72,7 @@ void AggregateFilterDataSet::Initialize(ClientContext &context, const vector<Agg
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggr = aggregates[aggr_idx];
 		if (aggr.filter) {
-			filter_data[aggr_idx] = make_unique<AggregateFilterData>(context, *aggr.filter, payload_types);
+			filter_data[aggr_idx] = make_uniq<AggregateFilterData>(context, *aggr.filter, payload_types);
 		}
 	}
 }

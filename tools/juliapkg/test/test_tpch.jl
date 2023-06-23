@@ -7,7 +7,12 @@
 
     # load TPC-H into DuckDB
     native_con = DBInterface.connect(DuckDB.DB)
-    DBInterface.execute(native_con, "CALL dbgen(sf=$sf)")
+    try
+        DBInterface.execute(native_con, "CALL dbgen(sf=$sf)")
+    catch
+        @info "TPC-H extension not available; skipping"
+        return
+    end
 
     # convert all tables to Julia DataFrames
     customer = DataFrame(DBInterface.execute(native_con, "SELECT * FROM customer"))

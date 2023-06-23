@@ -1,0 +1,111 @@
+# name: test/sql/parser/function_chaining.test
+# description: Test function chaining
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE varchars(v VARCHAR);
+
+statement ok
+INSERT INTO varchars VALUES ('Hello'), ('World')
+
+statement error
+SELECT x.lower() FROM varchars
+----
+Function with name lower does not exist
+
+# conflict
+statement error
+SELECT main.lower() FROM varchars AS t(main)
+----
+No function matches the given name and argument types
+
+query I
+SELECT v.lower() FROM varchars
+----
+hello
+world
+
+query I
+SELECT (v).lower() FROM varchars
+----
+hello
+world
+
+statement error
+SELECT v.lowe() FROM varchars
+----
+Function with name lowe does not exist
+
+query I
+SELECT varchars.v.lower() FROM varchars
+----
+hello
+world
+
+query I
+SELECT v.lower().upper() FROM varchars
+----
+HELLO
+WORLD
+
+query I
+SELECT v.lower()[:3] FROM varchars
+----
+hel
+wor
+
+query I
+SELECT v.lower()[:3] FROM varchars
+----
+hel
+wor
+
+statement ok
+DELETE FROM varchars
+
+statement ok
+INSERT INTO varchars VALUES ('Hello World');
+
+# list functions
+query I
+SELECT v.split(' ') FROM varchars
+----
+[Hello, World]
+
+query I
+SELECT v.split(' ').apply(x -> x.lower()) FROM varchars
+----
+[hello, world]
+
+query I
+SELECT v.split(' ').apply(x -> x.lower()).filter(x -> x[1] == 'h') FROM varchars
+----
+[hello]
+
+query I
+SELECT v.split(' ').length() FROM varchars
+----
+2
+
+# list aggr
+query I
+SELECT v.split(' ').aggregate('count') FROM varchars
+----
+2
+
+query I
+SELECT v.split(' ').aggregate('min') FROM varchars
+----
+Hello
+
+# prepared statements
+statement ok
+PREPARE v1 AS SELECT ?.split(' ').lower()
+
+query I
+EXECUTE v1('Hello World')
+----
+[hello, world]

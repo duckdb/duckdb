@@ -21,18 +21,18 @@ CreateViewRelation::CreateViewRelation(shared_ptr<Relation> child_p, string sche
 }
 
 BoundStatement CreateViewRelation::Bind(Binder &binder) {
-	auto select = make_unique<SelectStatement>();
+	auto select = make_uniq<SelectStatement>();
 	select->node = child->GetQueryNode();
 
 	CreateStatement stmt;
-	auto info = make_unique<CreateViewInfo>();
+	auto info = make_uniq<CreateViewInfo>();
 	info->query = std::move(select);
 	info->view_name = view_name;
 	info->temporary = temporary;
 	info->schema = schema_name;
 	info->on_conflict = replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
 	stmt.info = std::move(info);
-	return binder.Bind((SQLStatement &)stmt);
+	return binder.Bind(stmt.Cast<SQLStatement>());
 }
 
 const vector<ColumnDefinition> &CreateViewRelation::Columns() {

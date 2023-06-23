@@ -7,6 +7,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -34,10 +35,10 @@ static string ParseGroupFromPath(string file) {
 }
 
 struct InterpretedBenchmarkState : public BenchmarkState {
-	unique_ptr<DBConfig> benchmark_config;
+	duckdb::unique_ptr<DBConfig> benchmark_config;
 	DuckDB db;
 	Connection con;
-	unique_ptr<MaterializedQueryResult> result;
+	duckdb::unique_ptr<MaterializedQueryResult> result;
 
 	explicit InterpretedBenchmarkState(string path)
 	    : benchmark_config(GetBenchmarkConfig()), db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()),
@@ -47,8 +48,8 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 		D_ASSERT(!res->HasError());
 	}
 
-	unique_ptr<DBConfig> GetBenchmarkConfig() {
-		auto result = make_unique<DBConfig>();
+	duckdb::unique_ptr<DBConfig> GetBenchmarkConfig() {
+		auto result = make_uniq<DBConfig>();
 		result->options.load_extensions = false;
 		return result;
 	}
@@ -160,7 +161,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 					throw std::runtime_error("Failed to read " + splits[0] + " from file " + splits[1]);
 				}
 
-				auto buffer = unique_ptr<char[]>(new char[size]);
+				auto buffer = make_unsafe_uniq_array<char>(size);
 				if (!file.read(buffer.get(), size)) {
 					throw std::runtime_error("Failed to read " + splits[0] + " from file " + splits[1]);
 				}
@@ -308,17 +309,17 @@ void InterpretedBenchmark::LoadBenchmark() {
 }
 
 unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfiguration &config) {
-	unique_ptr<QueryResult> result;
+	duckdb::unique_ptr<QueryResult> result;
 	LoadBenchmark();
-	unique_ptr<InterpretedBenchmarkState> state;
+	duckdb::unique_ptr<InterpretedBenchmarkState> state;
 	auto full_db_path = GetDatabasePath();
 	try {
-		state = make_unique<InterpretedBenchmarkState>(full_db_path);
-	} catch (Exception(e)) {
+		state = make_uniq<InterpretedBenchmarkState>(full_db_path);
+	} catch (Exception &e) {
 		// if the connection throws an error, chances are it's a storage format error.
 		// In this case delete the file and connect again.
 		DeleteDatabase(full_db_path);
-		state = make_unique<InterpretedBenchmarkState>(full_db_path);
+		state = make_uniq<InterpretedBenchmarkState>(full_db_path);
 	}
 	extensions.insert("parquet");
 	for (auto &extension : extensions) {
@@ -382,7 +383,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		state->con.Query("PRAGMA enable_profiling");
 		state->con.Query("PRAGMA profiling_mode='detailed'");
 	}
-	return state;
+	return std::move(state);
 }
 
 string InterpretedBenchmark::GetQuery() {
@@ -398,7 +399,7 @@ void InterpretedBenchmark::Run(BenchmarkState *state_p) {
 void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 	auto &state = (InterpretedBenchmarkState &)*state_p;
 	if (queries.find("cleanup") != queries.end()) {
-		unique_ptr<QueryResult> result;
+		duckdb::unique_ptr<QueryResult> result;
 		string cleanup_query = queries["cleanup"];
 		result = state.con.Query(cleanup_query);
 		while (result) {

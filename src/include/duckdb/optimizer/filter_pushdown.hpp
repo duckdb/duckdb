@@ -19,8 +19,11 @@ class Optimizer;
 class FilterPushdown {
 public:
 	explicit FilterPushdown(Optimizer &optimizer);
+
 	//! Perform filter pushdown
 	unique_ptr<LogicalOperator> Rewrite(unique_ptr<LogicalOperator> op);
+	//! Return a reference to the client context (from the optimizer)
+	ClientContext &GetContext();
 
 	struct Filter {
 		unordered_set<idx_t> bindings;
@@ -67,6 +70,8 @@ private:
 	unique_ptr<LogicalOperator> PushdownSingleJoin(unique_ptr<LogicalOperator> op, unordered_set<idx_t> &left_bindings,
 	                                               unordered_set<idx_t> &right_bindings);
 
+	//! Push any remaining filters into a LogicalFilter at this level
+	unique_ptr<LogicalOperator> PushFinalFilters(unique_ptr<LogicalOperator> op);
 	// Finish pushing down at this operator, creating a LogicalFilter to store any of the stored filters and recursively
 	// pushing down into its children (if any)
 	unique_ptr<LogicalOperator> FinishPushdown(unique_ptr<LogicalOperator> op);

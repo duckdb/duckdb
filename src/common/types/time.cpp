@@ -6,6 +6,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 
 #include <cctype>
 #include <cstring>
@@ -115,7 +116,7 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 		if (!strict) {
 			// last chance, check if we can parse as timestamp
 			timestamp_t timestamp;
-			if (Timestamp::TryConvertTimestamp(buf, len, timestamp)) {
+			if (Timestamp::TryConvertTimestamp(buf, len, timestamp) == TimestampCastResult::SUCCESS) {
 				if (!Timestamp::IsFinite(timestamp)) {
 					return false;
 				}
@@ -157,7 +158,7 @@ string Time::ToString(dtime_t time) {
 
 	char micro_buffer[6];
 	auto length = TimeToStringCast::Length(time_units, micro_buffer);
-	auto buffer = unique_ptr<char[]>(new char[length]);
+	auto buffer = make_unsafe_uniq_array<char>(length);
 	TimeToStringCast::Format(buffer.get(), length, time_units, micro_buffer);
 	return string(buffer.get(), length);
 }
@@ -193,9 +194,7 @@ dtime_t Time::FromTime(int32_t hour, int32_t minute, int32_t second, int32_t mic
 	return dtime_t(result);
 }
 
-// LCOV_EXCL_START
-#ifdef DEBUG
-static bool AssertValidTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds) {
+bool Time::IsValidTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds) {
 	if (hour < 0 || hour >= 24) {
 		return false;
 	}
@@ -210,8 +209,6 @@ static bool AssertValidTime(int32_t hour, int32_t minute, int32_t second, int32_
 	}
 	return true;
 }
-#endif
-// LCOV_EXCL_STOP
 
 void Time::Convert(dtime_t dtime, int32_t &hour, int32_t &min, int32_t &sec, int32_t &micros) {
 	int64_t time = dtime.micros;
@@ -222,9 +219,19 @@ void Time::Convert(dtime_t dtime, int32_t &hour, int32_t &min, int32_t &sec, int
 	sec = int32_t(time / Interval::MICROS_PER_SEC);
 	time -= int64_t(sec) * Interval::MICROS_PER_SEC;
 	micros = int32_t(time);
-#ifdef DEBUG
-	D_ASSERT(AssertValidTime(hour, min, sec, micros));
-#endif
+	D_ASSERT(Time::IsValidTime(hour, min, sec, micros));
+}
+
+dtime_t Time::FromTimeMs(int64_t time_ms) {
+	int64_t result;
+	if (!TryMultiplyOperator::Operation(time_ms, Interval::MICROS_PER_MSEC, result)) {
+		throw ConversionException("Could not convert Time(MS) to Time(US)");
+	}
+	return dtime_t(result);
+}
+
+dtime_t Time::FromTimeNs(int64_t time_ns) {
+	return dtime_t(time_ns / Interval::NANOS_PER_MICRO);
 }
 
 } // namespace duckdb

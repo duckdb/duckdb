@@ -1,0 +1,112 @@
+# name: test/sql/types/map/map_const_and_col_combination.test
+# description: Test creating map when one list is const and the other list columnar data
+# group: [map]
+
+statement ok
+create table ints (i INT);
+
+statement ok
+INSERT INTO ints VALUES (1),(2),(3);
+
+query I
+select map(['name'], [i] ) FROM ints;
+----
+{name=1}
+{name=2}
+{name=3}
+
+statement error
+select map(['x', 'y'], [i] ) FROM ints;
+----
+Error in MAP creation: key list and value list do not align. i.e. different size or incompatible structure
+
+query I
+select map([i], ['name'] ) FROM ints;
+----
+{1=name}
+{2=name}
+{3=name}
+
+query I
+select map([i, i+1], ['x', 'y']) FROM ints;
+----
+{1=x, 2=y}
+{2=x, 3=y}
+{3=x, 4=y}
+
+
+query I
+select map([i, i+1], ['x', 'y']) FROM ints WHERE i > 1;
+----
+{2=x, 3=y}
+{3=x, 4=y}
+
+query I
+select map(['x'], [m]) FROM (SELECT map([i], ['y']) m FROM ints WHERE i <> 1);
+----
+{x={2=y}}
+{x={3=y}}
+
+query I
+select map(['key'], [range]) from range(5) WHERE range > 2;
+----
+{key=3}
+{key=4}
+
+query I
+select map(['🦆', '🦤', '🐓'], [i, i+1, i+2] ) FROM ints;
+----
+{🦆=1, 🦤=2, 🐓=3}
+{🦆=2, 🦤=3, 🐓=4}
+{🦆=3, 🦤=4, 🐓=5}
+
+query I
+SELECT map([10, i, i+1, 9], [i, 3.14, 0.12, 8.0]) FROM ints;
+----
+{10=1.00, 1=3.14, 2=0.12, 9=8.00}
+{10=2.00, 2=3.14, 3=0.12, 9=8.00}
+{10=3.00, 3=3.14, 4=0.12, 9=8.00}
+
+statement ok
+CREATE TABLE tbl (v VARCHAR[]);
+
+statement ok
+INSERT INTO tbl VALUES (ARRAY['test','string']), (ARRAY['foo','bar'])
+
+query I
+select map(['x', 'y'], v ) FROM tbl;
+----
+{x=test, y=string}
+{x=foo, y=bar}
+
+# test mismatched lists of same total length
+statement ok
+CREATE TABLE map_input (keys INT[], values INT[])
+
+statement ok
+INSERT INTO map_input VALUES ([1,0],[2]), ([3],[4, 9])
+
+statement error
+SELECT map(keys, values) FROM map_input;
+----
+Error in MAP creation: key list and value list do not align. i.e. different size or incompatible structure
+
+
+statement ok
+CREATE TABLE groups (category INT, score INT);
+
+statement ok
+INSERT INTO groups VALUES (1,2), (1,8), (1,3), (2,3), (2,4), (2,5), (3,6), (3,1), (3,9)
+
+query I
+select map(['category', 'min', 'max'], [category, MIN(score), MAX(score)]) FROM groups GROUP BY category;
+----
+{category=1, min=2, max=8}
+{category=2, min=3, max=5}
+{category=3, min=1, max=9}
+
+#Map with larger-than-vector-size cardinalities
+query I
+select MAP([range], ['a']) FROM range(10000) WHERE range = 9999;
+----
+{9999=a}

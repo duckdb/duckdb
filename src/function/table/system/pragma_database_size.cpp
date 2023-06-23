@@ -15,7 +15,7 @@ struct PragmaDatabaseSizeData : public GlobalTableFunctionState {
 	}
 
 	idx_t index;
-	vector<AttachedDatabase *> databases;
+	vector<reference<AttachedDatabase>> databases;
 	Value memory_usage;
 	Value memory_limit;
 };
@@ -53,7 +53,7 @@ static unique_ptr<FunctionData> PragmaDatabaseSizeBind(ClientContext &context, T
 }
 
 unique_ptr<GlobalTableFunctionState> PragmaDatabaseSizeInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<PragmaDatabaseSizeData>();
+	auto result = make_uniq<PragmaDatabaseSizeData>();
 	result->databases = DatabaseManager::Get(context).GetDatabases(context);
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	result->memory_usage = Value(StringUtil::BytesToHumanReadableString(buffer_manager.GetUsedMemory()));
@@ -65,16 +65,16 @@ unique_ptr<GlobalTableFunctionState> PragmaDatabaseSizeInit(ClientContext &conte
 }
 
 void PragmaDatabaseSizeFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (PragmaDatabaseSizeData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<PragmaDatabaseSizeData>();
 	idx_t row = 0;
 	for (; data.index < data.databases.size() && row < STANDARD_VECTOR_SIZE; data.index++) {
-		auto db = data.databases[data.index];
-		if (db->IsSystem() || db->IsTemporary()) {
+		auto &db = data.databases[data.index].get();
+		if (db.IsSystem() || db.IsTemporary()) {
 			continue;
 		}
-		auto ds = db->GetCatalog().GetDatabaseSize(context);
+		auto ds = db.GetCatalog().GetDatabaseSize(context);
 		idx_t col = 0;
-		output.data[col++].SetValue(row, Value(db->GetName()));
+		output.data[col++].SetValue(row, Value(db.GetName()));
 		output.data[col++].SetValue(row, Value(StringUtil::BytesToHumanReadableString(ds.bytes)));
 		output.data[col++].SetValue(row, Value::BIGINT(ds.block_size));
 		output.data[col++].SetValue(row, Value::BIGINT(ds.total_blocks));

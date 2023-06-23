@@ -15,7 +15,7 @@ struct DuckDBIndexesData : public GlobalTableFunctionState {
 	DuckDBIndexesData() : offset(0) {
 	}
 
-	vector<CatalogEntry *> entries;
+	vector<reference<CatalogEntry>> entries;
 	idx_t offset;
 };
 
@@ -61,18 +61,19 @@ static unique_ptr<FunctionData> DuckDBIndexesBind(ClientContext &context, TableF
 }
 
 unique_ptr<GlobalTableFunctionState> DuckDBIndexesInit(ClientContext &context, TableFunctionInitInput &input) {
-	auto result = make_unique<DuckDBIndexesData>();
+	auto result = make_uniq<DuckDBIndexesData>();
 
 	// scan all the schemas for tables and collect them and collect them
 	auto schemas = Catalog::GetAllSchemas(context);
 	for (auto &schema : schemas) {
-		schema->Scan(context, CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) { result->entries.push_back(entry); });
+		schema.get().Scan(context, CatalogType::INDEX_ENTRY,
+		                  [&](CatalogEntry &entry) { result->entries.push_back(entry); });
 	};
 	return std::move(result);
 }
 
 void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (DuckDBIndexesData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<DuckDBIndexesData>();
 	if (data.offset >= data.entries.size()) {
 		// finished returning values
 		return;
@@ -81,31 +82,31 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 	// either fill up the chunk or return all the remaining columns
 	idx_t count = 0;
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
-		auto &entry = data.entries[data.offset++];
+		auto &entry = data.entries[data.offset++].get();
 
-		auto &index = (IndexCatalogEntry &)*entry;
+		auto &index = entry.Cast<IndexCatalogEntry>();
 		// return values:
 
 		idx_t col = 0;
 		// database_name, VARCHAR
-		output.SetValue(col++, count, index.catalog->GetName());
+		output.SetValue(col++, count, index.catalog.GetName());
 		// database_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(index.catalog->GetOid()));
+		output.SetValue(col++, count, Value::BIGINT(index.catalog.GetOid()));
 		// schema_name, VARCHAR
-		output.SetValue(col++, count, Value(index.schema->name));
+		output.SetValue(col++, count, Value(index.schema.name));
 		// schema_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(index.schema->oid));
+		output.SetValue(col++, count, Value::BIGINT(index.schema.oid));
 		// index_name, VARCHAR
 		output.SetValue(col++, count, Value(index.name));
 		// index_oid, BIGINT
 		output.SetValue(col++, count, Value::BIGINT(index.oid));
 		// find the table in the catalog
-		auto table_entry =
-		    index.schema->catalog->GetEntry<TableCatalogEntry>(context, index.GetSchemaName(), index.GetTableName());
+		auto &table_entry =
+		    index.schema.catalog.GetEntry<TableCatalogEntry>(context, index.GetSchemaName(), index.GetTableName());
 		// table_name, VARCHAR
-		output.SetValue(col++, count, Value(table_entry->name));
+		output.SetValue(col++, count, Value(table_entry.name));
 		// table_oid, BIGINT
-		output.SetValue(col++, count, Value::BIGINT(table_entry->oid));
+		output.SetValue(col++, count, Value::BIGINT(table_entry.oid));
 		if (index.index) {
 			// is_unique, BOOLEAN
 			output.SetValue(col++, count, Value::BOOLEAN(index.index->IsUnique()));

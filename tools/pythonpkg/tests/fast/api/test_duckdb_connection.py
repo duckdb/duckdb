@@ -1,7 +1,6 @@
 import duckdb
-from pandas import DataFrame
-import pandas as pd
 import pytest
+from conftest import NumpyPandas, ArrowPandas
 
 def is_dunder_method(method_name: str) -> bool:
     if (len(method_name) < 4):
@@ -11,13 +10,26 @@ def is_dunder_method(method_name: str) -> bool:
 # This file contains tests for DuckDBPyConnection methods,
 # wrapped by the 'duckdb' module, to execute with the 'default_connection'
 class TestDuckDBConnection(object):
-    def test_append(self):
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_append(self, pandas):
         duckdb.execute("Create table integers (i integer)")
-        df_in = pd.DataFrame({'numbers': [1,2,3,4,5],})
+        df_in = pandas.DataFrame({'numbers': [1,2,3,4,5],})
         duckdb.append('integers',df_in)
         assert duckdb.execute('select count(*) from integers').fetchone()[0] == 5
         # cleanup
         duckdb.execute("drop table integers")
+
+    def test_default_connection_from_connect(self):
+        duckdb.sql('create or replace table connect_default_connect (i integer)')
+        con = duckdb.connect(':default:')
+        con.sql('select i from connect_default_connect')
+        duckdb.sql('drop table connect_default_connect')
+        with pytest.raises(duckdb.Error):
+            con.sql('select i from connect_default_connect')
+
+        # not allowed with additional options
+        with pytest.raises(duckdb.InvalidInputException, match='Default connection fetching is only allowed without additional options'):
+            con = duckdb.connect(':default:', read_only=True)
 
     def test_arrow(self):
         pyarrow = pytest.importorskip("pyarrow")
@@ -167,9 +179,6 @@ class TestDuckDBConnection(object):
     def test_from_parquet(self):
         assert None != duckdb.from_parquet
 
-    def test_from_parquet(self):
-        assert None != duckdb.from_parquet
-
     def test_from_query(self):
         assert None != duckdb.from_query
 
@@ -197,6 +206,32 @@ class TestDuckDBConnection(object):
     def test_register(self):
         assert None != duckdb.register
 
+    def test_register_relation(self):
+        rel = duckdb.sql('select [5,4,3]')
+        duckdb.register("relation", rel)
+
+        duckdb.sql("create table tbl as select * from relation")
+        assert duckdb.table('tbl').fetchall() == [([5, 4, 3],)]
+        duckdb.execute('drop table tbl')
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_relation_out_of_scope(self, pandas):
+        def temporary_scope():
+            # Create a connection, we will return this
+            con = duckdb.connect()
+            # Create a dataframe
+            df = pandas.DataFrame({'a': [1,2,3]})
+            # The dataframe has to be registered as well
+            # making sure it does not go out of scope
+            con.register("df", df)
+            rel = con.sql('select * from df')
+            con.register("relation", rel)
+            return con
+        
+        con = temporary_scope()
+        res = con.sql('select * from relation').fetchall()
+        print(res)
+
     def test_table(self):
         duckdb.execute("create table tbl as select 1")
         assert [(1,)] == duckdb.table("tbl").fetchall()
@@ -221,6 +256,9 @@ class TestDuckDBConnection(object):
 
     def test_close(self):
         assert None != duckdb.close
+
+    def test_interrupt(self):
+        assert None != duckdb.interrupt
 
     def test_wrap_coverage(self):
         con = duckdb.default_connection

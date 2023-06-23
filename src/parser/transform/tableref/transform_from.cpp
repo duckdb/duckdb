@@ -4,26 +4,26 @@
 
 namespace duckdb {
 
-unique_ptr<TableRef> Transformer::TransformFrom(duckdb_libpgquery::PGList *root) {
+unique_ptr<TableRef> Transformer::TransformFrom(optional_ptr<duckdb_libpgquery::PGList> root) {
 	if (!root) {
-		return make_unique<EmptyTableRef>();
+		return make_uniq<EmptyTableRef>();
 	}
 
 	if (root->length > 1) {
 		// Cross Product
-		auto result = make_unique<JoinRef>(JoinRefType::CROSS);
+		auto result = make_uniq<JoinRef>(JoinRefType::CROSS);
 		JoinRef *cur_root = result.get();
 		idx_t list_size = 0;
 		for (auto node = root->head; node != nullptr; node = node->next) {
-			auto n = reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value);
-			unique_ptr<TableRef> next = TransformTableRefNode(n);
+			auto n = PGPointerCast<duckdb_libpgquery::PGNode>(node->data.ptr_value);
+			unique_ptr<TableRef> next = TransformTableRefNode(*n);
 			if (!cur_root->left) {
 				cur_root->left = std::move(next);
 			} else if (!cur_root->right) {
 				cur_root->right = std::move(next);
 			} else {
 				auto old_res = std::move(result);
-				result = make_unique<JoinRef>(JoinRefType::CROSS);
+				result = make_uniq<JoinRef>(JoinRefType::CROSS);
 				result->left = std::move(old_res);
 				result->right = std::move(next);
 				cur_root = result.get();
@@ -34,8 +34,8 @@ unique_ptr<TableRef> Transformer::TransformFrom(duckdb_libpgquery::PGList *root)
 		return std::move(result);
 	}
 
-	auto n = reinterpret_cast<duckdb_libpgquery::PGNode *>(root->head->data.ptr_value);
-	return TransformTableRefNode(n);
+	auto n = PGPointerCast<duckdb_libpgquery::PGNode>(root->head->data.ptr_value);
+	return TransformTableRefNode(*n);
 }
 
 } // namespace duckdb

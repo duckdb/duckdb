@@ -67,9 +67,9 @@ insert into integers(i,j)
 	select
 		CASE WHEN i % 2 = 0
 			THEN
-				4999 - (i/2)
+				4999 - (i//2)
 			ELSE
-				i - ((i/2)+1)
+				i - ((i//2)+1)
 		END,
 		i
 	from range(5000) tbl(i)
@@ -105,9 +105,9 @@ insert into integers(i,j)
 	select
 		CASE WHEN i % 2 = 0
 			THEN
-				4999 - (i/2)
+				4999 - (i//2)
 			ELSE
-				i - ((i/2)+1)
+				i - ((i//2)+1)
 		END,
 		i
 	from range(5000) tbl(i)

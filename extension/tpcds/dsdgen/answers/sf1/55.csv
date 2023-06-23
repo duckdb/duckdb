@@ -1,101 +1,101 @@
 brand_id|brand|ext_price
-5003001|exportischolar #1|139054.42
-2001001|amalgimporto #1|138964.41
-1001001|amalgamalg #1|129550.45
-3003001|exportiexporti #1|109562.50
-5001001|amalgscholar #1|107025.43
-1002001|importoamalg #1|104580.18
-4001001|amalgedu pack #1|97605.28
-5004001|edu packscholar #1|93727.41
-4003001|exportiedu pack #1|90621.02
-1004001|edu packamalg #1|83298.87
+2001001|amalgimporto #1|136546.11
+5003001|exportischolar #1|130337.22
+1001001|amalgamalg #1|121787.35
+3003001|exportiexporti #1|108905.90
+5001001|amalgscholar #1|96384.34
+1002001|importoamalg #1|91968.87
+4001001|amalgedu pack #1|89341.68
+5004001|edu packscholar #1|88611.11
+4003001|exportiedu pack #1|87590.78
 1001002|amalgamalg #2|76971.15
-5002001|importoscholar #1|68611.98
-5003002|exportischolar #2|66305.55
-1004002|edu packamalg #2|64973.23
-4001002|amalgedu pack #2|64364.41
-3004001|edu packexporti #1|59119.67
-5001002|amalgscholar #2|58311.85
-10014016|edu packamalgamalg #16|55259.03
-2002001|importoimporto #1|53765.45
-4004002|edu packedu pack #2|52300.57
-2004001|edu packimporto #1|52249.77
-4002001|importoedu pack #1|52137.36
-5002002|importoscholar #2|50168.30
-3001001|amalgexporti #1|49617.98
+1004001|edu packamalg #1|67158.65
+5002001|importoscholar #1|66586.85
+1004002|edu packamalg #2|57196.57
+10014016|edu packamalgamalg #16|54291.45
+4001002|amalgedu pack #2|52242.22
+3004001|edu packexporti #1|51761.61
+2002001|importoimporto #1|51710.10
+3001001|amalgexporti #1|48775.60
 6002001|importocorp #1|47965.18
-3002001|importoexporti #1|41338.39
-9013009|exportiunivamalg #9|40516.63
-2004002|edu packimporto #2|39006.70
-10015011|scholaramalgamalg #11|35873.52
-8002010|importonameless #10|35695.89
+5002002|importoscholar #2|46147.99
+2004001|edu packimporto #1|45744.20
+5003002|exportischolar #2|44134.44
+4002001|importoedu pack #1|44127.01
+4004002|edu packedu pack #2|40336.72
+5001002|amalgscholar #2|39009.61
+9013009|exportiunivamalg #9|38638.22
+3002001|importoexporti #1|38010.67
+10015011|scholaramalgamalg #11|35735.73
 8009007|maxinameless #7|35558.17
-1003001|exportiamalg #1|35222.37
-6006002|corpcorp #2|35051.00
 8005010|scholarnameless #10|34958.35
+8002010|importonameless #10|34863.91
 8006008|corpnameless #8|34508.49
-8006005|corpnameless #5|32963.49
-10015001|scholaramalgamalg #1|31903.37
-9011008|amalgunivamalg #8|31678.63
+2004002|edu packimporto #2|33680.36
+6006002|corpcorp #2|33319.52
+8006005|corpnameless #5|32550.43
+9011008|amalgunivamalg #8|31619.54
 6011006|amalgbrand #6|30658.57
-8010006|univmaxi #6|27889.15
+1003001|exportiamalg #1|29367.62
 9004008|edu packmaxi #8|27814.23
-3003002|exportiexporti #2|26541.63
-10005001|scholarunivamalg #1|25543.47
-8012005|importomaxi #5|24816.16
-9011009|amalgunivamalg #9|24757.48
+8010006|univmaxi #6|27319.13
+10015001|scholaramalgamalg #1|26405.70
+10005001|scholarunivamalg #1|25209.85
 6014007|edu packbrand #7|24463.93
-10006001|corpunivamalg #1|23997.09
-9005002|scholarmaxi #2|23713.96
-3002002|importoexporti #2|23625.94
 6005001|scholarcorp #1|23597.72
-6008008|namelesscorp #8|23436.77
+3003002|exportiexporti #2|23229.16
 6003006|exporticorp #6|23038.76
-1003002|exportiamalg #2|23003.11
-6015001|scholarbrand #1|22597.19
+6008008|namelesscorp #8|22662.62
 8004009|edu packnameless #9|22193.00
-3001002|amalgexporti #2|21048.97
-6013007|exportibrand #7|20825.81
+3002002|importoexporti #2|22054.26
+9011009|amalgunivamalg #9|21769.42
 10016003|corpamalgamalg #3|20729.52
 9008008|namelessmaxi #8|20511.39
-9009002|maximaxi #2|20165.98
-7009005|maxibrand #5|19540.97
+3001002|amalgexporti #2|20341.27
+8012005|importomaxi #5|20070.25
+1003002|exportiamalg #2|19267.21
+9009002|maximaxi #2|19039.66
 10012012|importoamalgamalg #12|18818.97
 4002002|importoedu pack #2|18452.59
-7003005|exportibrand #5|17418.38
+7009005|maxibrand #5|17765.35
 7002004|importobrand #4|16839.76
 10003013|exportiunivamalg #13|16766.09
 6002002|importocorp #2|16414.81
 9016003|corpunivamalg #3|16080.75
 9003003|exportimaxi #3|15850.72
-6009008|maxicorp #8|15531.71
+6009008|maxicorp #8|15410.45
+6015001|scholarbrand #1|15094.88
 9005011|scholarmaxi #11|15019.81
+6013007|exportibrand #7|15007.25
 7015007|scholarnameless #7|14829.67
-6015005|scholarbrand #5|14801.97
 6015003|scholarbrand #3|14617.11
-10009006|maxiunivamalg #6|14580.47
 6008001|namelesscorp #1|14578.58
 8013007|exportimaxi #7|14430.24
 10006017|corpunivamalg #17|13984.69
+9005002|scholarmaxi #2|13469.00
 8001003|amalgnameless #3|13317.08
 6013005|exportibrand #5|12943.96
-9016009|corpunivamalg #9|12720.09
-6011001|amalgbrand #1|12378.50
+9016009|corpunivamalg #9|12704.27
 6009003|maxicorp #3|12374.65
-10004001|edu packunivamalg #1|12275.89
-8011009|amalgmaxi #9|12151.45
-9011003|amalgunivamalg #3|12108.06
 6006006|corpcorp #6|11892.62
-8009003|maxinameless #3|11756.04
 7006010|corpbrand #10|11703.76
-6014001|edu packbrand #1|11371.75
+8011009|amalgmaxi #9|11660.19
+10004001|edu packunivamalg #1|11660.17
+8009003|maxinameless #3|11401.98
+6014001|edu packbrand #1|10609.45
+10006001|corpunivamalg #1|10351.36
 2003001|exportiimporto #1|9525.85
 8004003|edu packnameless #3|9462.49
+6011001|amalgbrand #1|9212.00
 6016005|corpbrand #5|9147.85
-2001002|amalgimporto #2|9021.33
 7011009|amalgnameless #9|8890.84
+2001002|amalgimporto #2|8877.48
 6001005|amalgcorp #5|8403.40
-7015003|scholarnameless #3|8362.58
+7003005|exportibrand #5|8312.44
+6015005|scholarbrand #5|8245.08
+9011003|amalgunivamalg #3|8087.04
 6005003|scholarcorp #3|7247.50
-10011013|amalgamalgamalg #13|6612.31
-10013009|exportiamalgamalg #9|6391.83
+10009006|maxiunivamalg #6|6870.74
+10013009|exportiamalgamalg #9|6085.68
+7015003|scholarnameless #3|5594.53
+6014008|edu packbrand #8|5358.05

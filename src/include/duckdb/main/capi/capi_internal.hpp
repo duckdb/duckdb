@@ -13,6 +13,8 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/common/arrow/arrow_options.hpp"
+
 #include <cstring>
 #include <cassert>
 
@@ -40,12 +42,13 @@ struct ExtractStatementsWrapper {
 
 struct PendingStatementWrapper {
 	unique_ptr<PendingQueryResult> statement;
+	bool allow_streaming;
 };
 
 struct ArrowResultWrapper {
 	unique_ptr<MaterializedQueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
-	string timezone_config;
+	ArrowOptions options;
 };
 
 struct AppenderWrapper {
@@ -56,6 +59,7 @@ struct AppenderWrapper {
 enum class CAPIResultSetType : uint8_t {
 	CAPI_RESULT_TYPE_NONE = 0,
 	CAPI_RESULT_TYPE_MATERIALIZED,
+	CAPI_RESULT_TYPE_STREAMING,
 	CAPI_RESULT_TYPE_DEPRECATED
 };
 

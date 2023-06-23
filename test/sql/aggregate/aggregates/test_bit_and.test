@@ -56,3 +56,24 @@ SELECT BIT_AND(1, 2, 3)
 statement error
 SELECT BIT_AND(BIT_AND(1))
 
+#test on bit types
+statement ok
+CREATE TABLE bits(b BIT);
+
+statement ok
+INSERT INTO bits VALUES ('1110101011'), ('0111010101'), ('0101011101'), ('1111111111'), ('0100010011'), ('1100110011')
+
+query I
+SELECT BIT_AND(b) FROM bits
+----
+0100000001
+
+query I
+SELECT BIT_AND(b) FROM bits WHERE get_bit(b, 2) = 1;
+----
+0110000001
+
+query I
+SELECT BIT_AND('010110'::BIT)
+----
+010110

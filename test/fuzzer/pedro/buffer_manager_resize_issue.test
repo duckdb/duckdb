@@ -1,0 +1,35 @@
+# name: test/fuzzer/pedro/buffer_manager_resize_issue.test
+# description: Issue #5984, number 49
+# group: [pedro]
+
+statement ok
+CREATE TABLE t1 (c1 INT, c0 INT);
+
+statement ok
+CREATE TABLE t2 (c1 INT, c0 INT);
+
+statement ok
+START TRANSACTION;
+
+statement ok
+CREATE INDEX i1 ON t2 (c1);
+
+statement error
+CREATE INDEX i1 ON t1 (c0);
+----
+Catalog Error: Index with name "i1" already exists!
+
+# actually a ROLLBACK, because we threw an exception in the transaction
+statement ok
+COMMIT;
+
+statement ok
+CREATE UNIQUE INDEX i1 ON t2 (c1);
+
+statement ok
+INSERT INTO t2(c1,c0) VALUES (235,36),(43,81),(246,187),(28,149),(206,20),(135,11),(170,205),(202,63),(69,78),(160,50),(6,34),(207,28);
+
+statement error
+INSERT INTO t2(c1,c0) VALUES (86,98),(96,107),(237,190),(253,242),(229,9),(6,147);
+----
+Constraint Error: Duplicate key "c1: 6" violates unique constraint

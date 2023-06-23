@@ -1,0 +1,76 @@
+# name: test/sql/subquery/scalar/correlated_pivot.test
+# description: Test using PIVOT in correlated subqueries
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Product(DaysToManufacture int, StandardCost int);
+
+statement ok
+INSERT INTO Product VALUES (0, 5.0885), (1, 223.88), (2, 359.1082), (4, 949.4105);
+
+statement ok
+SET pivot_filter_threshold=0
+
+# pivot
+statement error
+SELECT DaysToManufacture, StandardCost, (SELECT ["0", "1", "2", "3", "4"] FROM
+	(SELECT DaysToManufacture, StandardCost) AS SourceTable
+	PIVOT
+	(
+	  AVG(StandardCost)
+	  FOR DaysToManufacture IN (0, 1, 2, 3, 4)
+	) AS PivotTable
+)
+FROM Product
+----
+PIVOT is not supported in correlated subqueries yet
+
+# unpivot with exclude nulls (default)
+statement error
+SELECT DaysToManufacture, StandardCost, (SELECT cost FROM
+	(SELECT DaysToManufacture, StandardCost) AS SourceTable
+	PIVOT
+	(
+	  AVG(StandardCost)
+	  FOR DaysToManufacture IN (0, 1, 2, 3, 4)
+	) AS PivotTable
+	UNPIVOT
+	(
+		cost FOR days IN (0, 1, 2, 3, 4)
+	)
+)
+FROM Product
+----
+PIVOT is not supported in correlated subqueries yet
+
+# unpivot with include nulls
+statement error
+SELECT DaysToManufacture, StandardCost, (SELECT LIST(cost) FROM
+	(SELECT DaysToManufacture, StandardCost) AS SourceTable
+	PIVOT
+	(
+	  AVG(StandardCost)
+	  FOR DaysToManufacture IN (0, 1, 2, 3, 4)
+	) AS PivotTable
+	UNPIVOT INCLUDE NULLS
+	(
+		cost FOR days IN (0, 1, 2, 3, 4)
+	)
+)
+FROM Product
+----
+PIVOT is not supported in correlated subqueries yet
+
+statement ok
+RESET pivot_filter_threshold
+
+statement ok
+RESET SESSION pivot_filter_threshold
+
+statement error
+RESET GLOBAL pivot_filter_threshold
+----
+cannot be reset globally

@@ -127,3 +127,89 @@ query II
 EXPLAIN select * from (select [42, 43, 44]) t(a), (select unnest(t.a)) t2(b) where b=43;
 ----
 logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# test issue #7444
+
+statement ok
+CREATE TABLE with_array(foo INT, arr DOUBLE[]);
+
+statement ok
+INSERT INTO with_array VALUES(1, [1,2,3]), (2, [4,5,6]);
+
+query IIII
+SELECT foo, arr, u1, u2 FROM with_array,
+(SELECT UNNEST(with_array.arr) AS u1,
+UNNEST(generate_series(1, len(with_array.arr), 1)) AS u2)
+ORDER BY foo, u2;
+----
+1	[1.0, 2.0, 3.0]	1.0	1
+1	[1.0, 2.0, 3.0]	2.0	2
+1	[1.0, 2.0, 3.0]	3.0	3
+2	[4.0, 5.0, 6.0]	4.0	1
+2	[4.0, 5.0, 6.0]	5.0	2
+2	[4.0, 5.0, 6.0]	6.0	3
+
+# test issue 7733
+
+statement ok
+CREATE TABLE tbl_ints AS SELECT ARRAY[1, 2, 3] AS col_a, ARRAY[6] AS col_b;
+
+statement ok
+INSERT INTO tbl_ints VALUES (ARRAY[4, 5], ARRAY[7, 8]);
+
+query II
+SELECT new_a, new_b
+FROM tbl_ints, LATERAL (SELECT UNNEST(col_a) new_a, UNNEST(col_b) new_b FROM tbl_ints) g
+ORDER BY 1, 2
+----
+1	6
+1	6
+2	NULL
+2	NULL
+3	NULL
+3	NULL
+4	7
+4	7
+5	8
+5	8
+
+query II
+SELECT new_a, new_b
+FROM tbl_ints, LATERAL (SELECT UNNEST(col_a) new_a, UNNEST(col_b) new_b) g
+ORDER BY 1
+----
+1	6
+2	NULL
+3	NULL
+4	7
+5	8
+
+statement ok
+CREATE TABLE tbl_mix AS SELECT ARRAY[1, 2, 3] AS col_a, ARRAY['a'] AS col_b;
+
+statement ok
+INSERT INTO tbl_mix VALUES (ARRAY[4, 5], ARRAY['b', 'c']);
+
+query IIII
+SELECT * FROM tbl_mix, LATERAL (SELECT UNNEST(tbl_mix.col_a) new_a, UNNEST(tbl_mix.col_b) new_b) g
+ORDER BY new_a;
+----
+[1, 2, 3]	[a]	1	a
+[1, 2, 3]	[a]	2	NULL
+[1, 2, 3]	[a]	3	NULL
+[4, 5]	[b, c]	4	b
+[4, 5]	[b, c]	5	c
+
+# test issue 7792
+
+query III
+WITH tbl AS (SELECT [{'a': 1, 'b': 'oh no!'}] AS c)
+SELECT a, b, c FROM tbl, (SELECT UNNEST(c, recursive := TRUE));
+----
+1	oh no!	[{'a': 1, 'b': oh no!}]
+
+query III
+WITH tbl AS (SELECT [{'a': 1, 'b': 2}] as c)
+SELECT a, b, c FROM tbl, (SELECT UNNEST(c, recursive := TRUE));
+----
+1	2	[{'a': 1, 'b': 2}]

@@ -1,8 +1,8 @@
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
 #include "duckdb/execution/operator/scan/physical_expression_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_expression_get.hpp"
-#include "duckdb/execution/operator/scan/physical_column_data_scan.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
 
 namespace duckdb {
 
@@ -10,7 +10,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExpression
 	D_ASSERT(op.children.size() == 1);
 	auto plan = CreatePlan(*op.children[0]);
 
-	auto expr_scan = make_unique<PhysicalExpressionScan>(op.types, std::move(op.expressions), op.estimated_cardinality);
+	auto expr_scan = make_uniq<PhysicalExpressionScan>(op.types, std::move(op.expressions), op.estimated_cardinality);
 	expr_scan->children.push_back(std::move(plan));
 	if (!expr_scan->IsFoldable()) {
 		return std::move(expr_scan);
@@ -18,9 +18,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExpression
 	auto &allocator = Allocator::Get(context);
 	// simple expression scan (i.e. no subqueries to evaluate and no prepared statement parameters)
 	// we can evaluate all the expressions right now and turn this into a chunk collection scan
-	auto chunk_scan = make_unique<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN,
-	                                                      expr_scan->expressions.size());
-	chunk_scan->owned_collection = make_unique<ColumnDataCollection>(context, op.types);
+	auto chunk_scan = make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN,
+	                                                    expr_scan->expressions.size());
+	chunk_scan->owned_collection = make_uniq<ColumnDataCollection>(context, op.types);
 	chunk_scan->collection = chunk_scan->owned_collection.get();
 
 	DataChunk chunk;

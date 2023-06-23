@@ -14,6 +14,13 @@ namespace duckdb {
 
 class PhysicalRecursiveCTE;
 
+struct PipelineFinishGroup {
+	explicit PipelineFinishGroup(Pipeline *group_base_p) : group_base(group_base_p) {
+	}
+	Pipeline *group_base;
+	unordered_set<Pipeline *> group_members;
+};
+
 //! MetaPipeline represents a set of pipelines that all have the same sink
 class MetaPipeline : public std::enable_shared_from_this<MetaPipeline> {
 	//! We follow these rules when building:
@@ -35,7 +42,7 @@ public:
 	//! Get the PipelineBuildState for this MetaPipeline
 	PipelineBuildState &GetState() const;
 	//! Get the sink operator for this MetaPipeline
-	PhysicalOperator *GetSink() const;
+	optional_ptr<PhysicalOperator> GetSink() const;
 
 	//! Get the initial pipeline of this MetaPipeline
 	shared_ptr<Pipeline> &GetBasePipeline();
@@ -57,11 +64,13 @@ public:
 	//! Make sure that the given pipeline has its own PipelineFinishEvent (e.g., for IEJoin - double Finalize)
 	void AddFinishEvent(Pipeline *pipeline);
 	//! Whether the pipeline needs its own PipelineFinishEvent
-	bool HasFinishEvent(Pipeline *pipeline);
+	bool HasFinishEvent(Pipeline *pipeline) const;
+	//! Whether this pipeline is part of a PipelineFinishEvent
+	optional_ptr<Pipeline> GetFinishGroup(Pipeline *pipeline) const;
 
 public:
 	//! Build the MetaPipeline with 'op' as the first operator (excl. the shared sink)
-	void Build(PhysicalOperator *op);
+	void Build(PhysicalOperator &op);
 	//! Ready all the pipelines (recursively)
 	void Ready();
 
@@ -71,9 +80,9 @@ public:
 	Pipeline *CreateUnionPipeline(Pipeline &current, bool order_matters);
 	//! Create a child pipeline op 'current' starting at 'op',
 	//! where 'last_pipeline' is the last pipeline added before building out 'current'
-	void CreateChildPipeline(Pipeline &current, PhysicalOperator *op, Pipeline *last_pipeline);
+	void CreateChildPipeline(Pipeline &current, PhysicalOperator &op, Pipeline *last_pipeline);
 	//! Create a MetaPipeline child that 'current' depends on
-	MetaPipeline *CreateChildMetaPipeline(Pipeline &current, PhysicalOperator *op);
+	MetaPipeline &CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op);
 
 private:
 	//! The executor for all MetaPipelines in the query plan
@@ -81,13 +90,11 @@ private:
 	//! The PipelineBuildState for all MetaPipelines in the query plan
 	PipelineBuildState &state;
 	//! The sink of all pipelines within this MetaPipeline
-	PhysicalOperator *sink;
+	optional_ptr<PhysicalOperator> sink;
 	//! Whether this MetaPipeline is a the recursive pipeline of a recursive CTE
 	bool recursive_cte;
 	//! All pipelines with a different source, but the same sink
 	vector<shared_ptr<Pipeline>> pipelines;
-	//! The pipelines that must finish before the MetaPipeline is finished
-	vector<Pipeline *> final_pipelines;
 	//! Dependencies within this MetaPipeline
 	unordered_map<Pipeline *, vector<Pipeline *>> dependencies;
 	//! Other MetaPipelines that this MetaPipeline depends on
@@ -96,6 +103,8 @@ private:
 	idx_t next_batch_index;
 	//! Pipelines (other than the base pipeline) that need their own PipelineFinishEvent (e.g., for IEJoin)
 	unordered_set<Pipeline *> finish_pipelines;
+	//! Mapping from pipeline (e.g., child or union) to finish pipeline
+	unordered_map<Pipeline *, Pipeline *> finish_map;
 };
 
 } // namespace duckdb

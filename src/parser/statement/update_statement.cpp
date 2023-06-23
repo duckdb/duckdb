@@ -27,6 +27,9 @@ UpdateStatement::UpdateStatement(const UpdateStatement &other)
 	if (other.from_table) {
 		from_table = other.from_table->Copy();
 	}
+	for (auto &expr : other.returning_list) {
+		returning_list.emplace_back(expr->Copy());
+	}
 	cte_map = other.cte_map.Copy();
 }
 

@@ -15,9 +15,12 @@ class TableCatalogEntry;
 
 class LogicalDelete : public LogicalOperator {
 public:
-	explicit LogicalDelete(TableCatalogEntry *table, idx_t table_index);
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_DELETE;
 
-	TableCatalogEntry *table;
+public:
+	explicit LogicalDelete(TableCatalogEntry &table, idx_t table_index);
+
+	TableCatalogEntry &table;
 	idx_t table_index;
 	bool return_chunk;
 
@@ -26,6 +29,7 @@ public:
 	static unique_ptr<LogicalOperator> Deserialize(LogicalDeserializationState &state, FieldReader &reader);
 	idx_t EstimateCardinality(ClientContext &context) override;
 	vector<idx_t> GetTableIndex() const override;
+	string GetName() const override;
 
 protected:
 	vector<ColumnBinding> GetColumnBindings() override;

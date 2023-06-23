@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/map.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
 class BufferManager;
@@ -24,7 +24,7 @@ struct BatchedChunkScanState {
 //! Scans over a BatchedDataCollection are ordered by batch index
 class BatchedDataCollection {
 public:
-	DUCKDB_API BatchedDataCollection(vector<LogicalType> types);
+	DUCKDB_API BatchedDataCollection(ClientContext &context, vector<LogicalType> types, bool buffer_managed = false);
 
 	//! Appends a datachunk with the given batch index to the batched collection
 	DUCKDB_API void Append(DataChunk &input, idx_t batch_index);
@@ -51,7 +51,9 @@ private:
 		ColumnDataAppendState append_state;
 	};
 
+	ClientContext &context;
 	vector<LogicalType> types;
+	bool buffer_managed;
 	//! The data of the batched chunk collection - a set of batch_index -> ColumnDataCollection pointers
 	map<idx_t, unique_ptr<ColumnDataCollection>> data;
 	//! The last batch collection that was inserted into

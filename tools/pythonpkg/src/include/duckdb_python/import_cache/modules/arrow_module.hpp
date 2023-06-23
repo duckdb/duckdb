@@ -14,9 +14,10 @@ namespace duckdb {
 
 struct ArrowLibCacheItem : public PythonImportCacheItem {
 public:
+	static constexpr const char *Name = "pyarrow";
 	~ArrowLibCacheItem() override {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
+	void LoadSubtypes(PythonImportCache &cache) override {
 		Table.LoadAttribute("Table", cache, *this);
 		RecordBatchReader.LoadAttribute("RecordBatchReader", cache, *this);
 	}
@@ -28,9 +29,10 @@ public:
 
 struct ArrowDatasetCacheItem : public PythonImportCacheItem {
 public:
+	static constexpr const char *Name = "pyarrow.dataset";
 	~ArrowDatasetCacheItem() override {
 	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
+	void LoadSubtypes(PythonImportCache &cache) override {
 		Dataset.LoadAttribute("Dataset", cache, *this);
 		Scanner.LoadAttribute("Scanner", cache, *this);
 	}
@@ -40,29 +42,7 @@ public:
 	PythonImportCacheItem Scanner;
 
 protected:
-	bool IsRequired() const override final {
-		return false;
-	}
-};
-
-struct ArrowCacheItem : public PythonImportCacheItem {
-public:
-	static constexpr const char *Name = "pyarrow";
-
-public:
-	~ArrowCacheItem() override {
-	}
-	virtual void LoadSubtypes(PythonImportCache &cache) override {
-		lib.LoadAttribute("lib", cache, *this);
-		dataset.LoadModule("pyarrow.dataset", cache);
-	}
-
-public:
-	ArrowLibCacheItem lib;
-	ArrowDatasetCacheItem dataset;
-
-protected:
-	bool IsRequired() const override final {
+	bool IsRequired() const final {
 		return false;
 	}
 };

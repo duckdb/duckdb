@@ -37,8 +37,7 @@ public:
 		 * @param throwIfNotFound fail if a stream is required and not found
 		 * @return the new stream
 		 */
-		virtual std::unique_ptr<SeekableInputStream> getStream(const StreamIdentifier &si, bool throwIfNotFound)
-		    const = 0;
+		virtual unique_ptr<SeekableInputStream> getStream(const StreamIdentifier &si, bool throwIfNotFound) const = 0;
 
 		/**
 		 * visit all streams of given node and execute visitor logic
@@ -63,7 +62,7 @@ public:
 		 * Get the RowGroupIndex.
 		 * @return a vector of RowIndex belonging to the stripe
 		 */
-		virtual std::unique_ptr<proto::RowIndex> getRowGroupIndex(const StreamIdentifier &si) const = 0;
+		virtual unique_ptr<proto::RowIndex> getRowGroupIndex(const StreamIdentifier &si) const = 0;
 
 		/**
 		 * Get stride index provider which is used by string dictionary reader to
@@ -84,7 +83,7 @@ public:
 	 * @param throwIfNotFound fail if a stream is required and not found
 	 * @return the new stream
 	 */
-	virtual std::unique_ptr<SeekableInputStream> getStream(const StreamIdentifier &si, bool throwIfNotFound) const = 0;
+	virtual unique_ptr<SeekableInputStream> getStream(const StreamIdentifier &si, bool throwIfNotFound) const = 0;
 
 	/**
 	 * visit all streams of given node and execute visitor logic
@@ -109,7 +108,7 @@ public:
 	 * Get the RowGroupIndex.
 	 * @return a vector of RowIndex belonging to the stripe
 	 */
-	virtual std::unique_ptr<proto::RowIndex> getRowGroupIndex(const StreamIdentifier &si) const = 0;
+	virtual unique_ptr<proto::RowIndex> getRowGroupIndex(const StreamIdentifier &si) const = 0;
 
 	/**
 	 * Get stride index provider which is used by string dictionary reader to
@@ -156,10 +155,10 @@ public:
 	}
 
 	// Creates a reader for the given stripe.
-	static std::unique_ptr<SelectiveColumnReader>
-	build(const std::shared_ptr<const dwio::common::TypeWithId> &requestedType,
-	      const std::shared_ptr<const dwio::common::TypeWithId> &dataType, StripeStreams &stripe,
-	      common::ScanSpec *scanSpec, uint32_t sequence = 0);
+	static unique_ptr<SelectiveColumnReader> build(const std::shared_ptr<const dwio::common::TypeWithId> &requestedType,
+	                                               const std::shared_ptr<const dwio::common::TypeWithId> &dataType,
+	                                               StripeStreams &stripe, common::ScanSpec *scanSpec,
+	                                               uint32_t sequence = 0);
 
 	// Seeks to offset and reads the rows in 'rows' and applies
 	// filters and value processing as given by 'scanSpec supplied at
@@ -269,9 +268,9 @@ protected:
 	RowSet inputRows_;
 	// Rows passing the filter in readWithVisitor. Must stay
 	// constant between consecutive calls to read().
-	std::vector<vector_size_t> outputRows_;
+	vector<vector_size_t> outputRows_;
 	// The row number corresponding to each element in 'values_'
-	std::vector<vector_size_t> valueRows_;
+	vector<vector_size_t> valueRows_;
 	// The set of all nulls in the range of read(). Created when first
 	// needed and then reused. Not returned to callers.
 	BufferPtr nullsInReadRange_;
@@ -289,7 +288,7 @@ protected:
 	// different width.
 	int8_t valueSize_ = kNoValueSize;
 	// Buffers backing the StringViews in 'values' when reading strings.
-	std::vector<BufferPtr> stringBuffers_;
+	vector<BufferPtr> stringBuffers_;
 	// Writable contents of 'stringBuffers_.back()'.
 	char *rawStringBuffer_ = nullptr;
 	// Total writable bytes in 'rawStringBuffer_'.
@@ -335,7 +334,7 @@ public:
 		return kind_;
 	}
 
-	virtual std::unique_ptr<Filter> clone() const = 0;
+	virtual unique_ptr<Filter> clone() const = 0;
 
 	/**
 	 * A filter becomes non-deterministic when applies to nested column,

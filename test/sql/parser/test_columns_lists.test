@@ -1,0 +1,141 @@
+# name: test/sql/parser/test_columns_lists.test
+# description: Test the columns expression with list comprehension
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers AS SELECT 42 i, 84 j UNION ALL SELECT 13, 14
+
+query II
+SELECT COLUMNS([x for x in *]) FROM integers
+----
+42	84
+13	14
+
+query I
+SELECT COLUMNS([x for x in (*) if x <> 'i']) FROM integers
+----
+84
+14
+
+# short-hand, allow directly specifying the lambda
+query I
+SELECT COLUMNS(x -> x <> 'i') FROM integers
+----
+84
+14
+
+query I
+SELECT COLUMNS([x for x in (*) if x SIMILAR TO 'i']) FROM integers
+----
+42
+13
+
+query I
+SELECT COLUMNS(['i', 'i']) FROM integers
+----
+42
+13
+
+query I
+SELECT COLUMNS(list_concat(['i'], ['i'])) FROM integers
+----
+42
+13
+
+# star with exclude
+query I
+SELECT COLUMNS([x for x in (* EXCLUDE (i))]) FROM integers
+----
+84
+14
+
+# multiple columns that are the same works
+query I
+SELECT COLUMNS(['i']) + COLUMNS(['i']) FROM integers
+----
+84
+26
+
+# columns are turned into strings
+query II
+SELECT COLUMNS([i, j]) FROM integers
+----
+42	84
+13	14
+
+# nested columns
+statement error
+SELECT COLUMNS([x for x in COLUMNS(*)]) FROM integers
+----
+COLUMNS expression is not allowed inside another COLUMNS expression
+
+statement error
+SELECT * + 42 FROM integers
+----
+STAR expression is only allowed as the root element of an expression
+
+# empty lambda
+statement error
+SELECT COLUMNS([x for x in (*) if x = 'k']) FROM integers
+----
+resulted in an empty set of columns
+
+# columns that are not found
+statement error
+SELECT COLUMNS(['k']) FROM integers
+----
+not found in the FROM clause
+
+# COLUMNS and joins
+query I
+SELECT COLUMNS([x for x in (*) if x LIKE 'i']) FROM integers i1 JOIN integers i2 USING (i)
+----
+42
+13
+
+query II
+SELECT COLUMNS([x for x in (*) if x LIKE 'i']) FROM integers i1 JOIN integers i2 ON (i1.i=i2.i)
+----
+42	42
+13	13
+
+# wrong parameter type
+statement error
+SELECT COLUMNS([43]) FROM integers
+----
+VARCHAR argument
+
+statement error
+SELECT COLUMNS([NULL]) FROM integers
+----
+VARCHAR argument
+
+statement error
+SELECT COLUMNS([]::VARCHAR[]) FROM integers
+----
+empty set of columns
+
+statement error
+SELECT COLUMNS(NULL::VARCHAR[]) FROM integers
+----
+empty set of columns
+
+statement error
+SELECT COLUMNS(NULL::VARCHAR) FROM integers
+----
+does not support NULL
+
+# different columns
+statement error
+SELECT COLUMNS(['i']) + COLUMNS(['j']) FROM integers
+----
+Multiple different STAR/COLUMNS in the same expression are not supported
+
+# star with replace
+statement error
+SELECT COLUMNS([x for x in (* REPLACE (i AS i))]) FROM integers
+----
+only allowed as the root element

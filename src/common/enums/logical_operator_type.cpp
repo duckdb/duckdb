@@ -20,6 +20,10 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "EXPRESSION_GET";
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 		return "ANY_JOIN";
+	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
+		return "ASOF_JOIN";
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN:
+		return "DEPENDENT_JOIN";
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
 		return "COMPARISON_JOIN";
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
@@ -100,6 +104,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "CREATE_SCHEMA";
 	case LogicalOperatorType::LOGICAL_ATTACH:
 		return "ATTACH";
+	case LogicalOperatorType::LOGICAL_DETACH:
+		return "ATTACH";
 	case LogicalOperatorType::LOGICAL_DROP:
 		return "DROP";
 	case LogicalOperatorType::LOGICAL_PRAGMA:
@@ -118,6 +124,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		break;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		return "CUSTOM_OP";
+	case LogicalOperatorType::LOGICAL_PIVOT:
+		return "PIVOT";
 	}
 	return "INVALID";
 }

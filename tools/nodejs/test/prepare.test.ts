@@ -66,7 +66,6 @@ describe('prepare', function() {
             }
         });
 
-
         it('should prepare a statement and return values again', function(done) {
             var stmt = db.prepare("SELECT txt, num, flt, blb FROM foo ORDER BY num", function(err: null | Error) {
                 if (err) throw err;
@@ -338,6 +337,45 @@ describe('prepare', function() {
 
         it('should have retrieved all rows', function() {
             assert.equal(count, retrieved, "Didn't retrieve all rows");
+        });
+
+        after(function(done) { db.close(done); });
+    });
+
+    describe('prepare multiple statements', function() {
+        var db: sqlite3.Database;
+        before(function(done) { db = new sqlite3.Database(':memory:',
+            function(err) {
+                db.run("CREATE TABLE foo (a integer)", done)
+            }
+            ); });
+
+        it('should directly execute first statements', function(done) {
+            db.prepare("insert into foo values (3); insert into foo values (4); select * from foo")
+                .all(function(err: null | Error, rows: TableData) {
+                    if (err) throw err;
+                    assert.equal(rows[0].a, 3);
+                    assert.equal(rows[1].a, 4);
+                })
+                .finalize(done);
+        });
+
+        it('should fail in prepare, when executing the first statement', function(done) {
+            let prepared = db.prepare("SELECT * FROM non_existent_table; SELECT 42", function(err: null | Error) {
+				if (err) {
+					done();
+					return;
+				}
+			});
+        });
+
+        it('should fail in prepare, when preparing the first statement', function(done) {
+            let prepared = db.prepare("SELCET * FROM foo; SELECT 42", function(err: null | Error) {
+				if (err) {
+					done();
+					return;
+				}
+			});
         });
 
         after(function(done) { db.close(done); });

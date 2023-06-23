@@ -6,9 +6,6 @@ import platform
 
 extensions = ['parquet']
 
-if platform.system() == 'Linux' and platform.architecture()[0] == '64bit':
-    extensions.append('jemalloc')
-
 # check if there are any additional extensions being requested
 if 'DUCKDB_R_EXTENSIONS' in os.environ:
     extensions = extensions + os.environ['DUCKDB_R_EXTENSIONS'].split(",")
@@ -126,6 +123,7 @@ with open_utf8(os.path.join('src', 'Makevars'), 'w+') as f:
 with open_utf8(os.path.join('src', 'Makevars.in'), 'r') as f:
     text = f.read()
 
+include_list += " -DDUCKDB_PLATFORM_RTOOLS=1"
 text = text.replace('{{ SOURCES }}', object_list)
 text = text.replace('{{ INCLUDES }}', include_list)
 text = text.replace('{{ LINK_FLAGS }}', "-lws2_32")

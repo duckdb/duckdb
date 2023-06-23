@@ -41,8 +41,8 @@ void TableFunctionRelation::InitializeColumns() {
 }
 
 unique_ptr<QueryNode> TableFunctionRelation::GetQueryNode() {
-	auto result = make_unique<SelectNode>();
-	result->select_list.push_back(make_unique<StarExpression>());
+	auto result = make_uniq<SelectNode>();
+	result->select_list.push_back(make_uniq<StarExpression>());
 	result->from_table = GetTableRef();
 	return std::move(result);
 }
@@ -50,29 +50,29 @@ unique_ptr<QueryNode> TableFunctionRelation::GetQueryNode() {
 unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 	vector<unique_ptr<ParsedExpression>> children;
 	if (input_relation) { // input relation becomes first parameter if present, always
-		auto subquery = make_unique<SubqueryExpression>();
-		subquery->subquery = make_unique<SelectStatement>();
+		auto subquery = make_uniq<SubqueryExpression>();
+		subquery->subquery = make_uniq<SelectStatement>();
 		subquery->subquery->node = input_relation->GetQueryNode();
 		subquery->subquery_type = SubqueryType::SCALAR;
 		children.push_back(std::move(subquery));
 	}
 	for (auto &parameter : parameters) {
-		children.push_back(make_unique<ConstantExpression>(parameter));
+		children.push_back(make_uniq<ConstantExpression>(parameter));
 	}
 
 	for (auto &parameter : named_parameters) {
 		// Hackity-hack some comparisons with column refs
 		// This is all but pretty, basically the named parameter is the column, the table is empty because that's what
 		// the function binder likes
-		auto column_ref = make_unique<ColumnRefExpression>(parameter.first);
-		auto constant_value = make_unique<ConstantExpression>(parameter.second);
-		auto comparison = make_unique<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(column_ref),
-		                                                    std::move(constant_value));
+		auto column_ref = make_uniq<ColumnRefExpression>(parameter.first);
+		auto constant_value = make_uniq<ConstantExpression>(parameter.second);
+		auto comparison = make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, std::move(column_ref),
+		                                                  std::move(constant_value));
 		children.push_back(std::move(comparison));
 	}
 
-	auto table_function = make_unique<TableFunctionRef>();
-	auto function = make_unique<FunctionExpression>(name, std::move(children));
+	auto table_function = make_uniq<TableFunctionRef>();
+	auto function = make_uniq<FunctionExpression>(name, std::move(children));
 	table_function->function = std::move(function);
 	return std::move(table_function);
 }

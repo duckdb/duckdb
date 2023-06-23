@@ -4,19 +4,19 @@ on:
     inputs:
       extension_name:
         description: 'Extension name (e.g. postgres_scanner)'
-        required: true 
+        required: true
         type: string
       extension_repo:
         description: 'Extension git repo (e.g. https://github.com/duckdblabs/postgres_scanner)'
-        required: true 
+        required: true
         type: string
       extension_ref:
         description: 'Extension version (commit hash)'
-        required: true 
+        required: true
         type: string
       duckdb_ref:
         description: 'DuckDB version (short commit hash or vX.Y.Z tag)'
-        required: true 
+        required: true
         type: string
 
 jobs:
@@ -86,7 +86,7 @@ jobs:
         run: |
           echo -e 'name,url,commit,options\n${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > duckdb-old/.github/config/extensions.csv
 
-      - uses: actions/setup-python@v2
+      - uses: actions/setup-python@v4
         with:
           python-version: '3.7'
 
@@ -138,7 +138,7 @@ jobs:
        run: |
          echo -e 'name,url,commit,options\n${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > duckdb-old/.github/config/extensions.csv
 
-     - uses: actions/setup-python@v2
+     - uses: actions/setup-python@v4
        with:
          python-version: '3.7'
 

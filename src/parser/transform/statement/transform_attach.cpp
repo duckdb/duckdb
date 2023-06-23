@@ -5,20 +5,19 @@
 
 namespace duckdb {
 
-unique_ptr<AttachStatement> Transformer::TransformAttach(duckdb_libpgquery::PGNode *node) {
-	auto stmt = reinterpret_cast<duckdb_libpgquery::PGAttachStmt *>(node);
-	auto result = make_unique<AttachStatement>();
-	auto info = make_unique<AttachInfo>();
-	info->name = stmt->name ? stmt->name : string();
-	info->path = stmt->path;
+unique_ptr<AttachStatement> Transformer::TransformAttach(duckdb_libpgquery::PGAttachStmt &stmt) {
+	auto result = make_uniq<AttachStatement>();
+	auto info = make_uniq<AttachInfo>();
+	info->name = stmt.name ? stmt.name : string();
+	info->path = stmt.path;
 
-	if (stmt->options) {
-		duckdb_libpgquery::PGListCell *cell = nullptr;
-		for_each_cell(cell, stmt->options->head) {
-			auto *def_elem = reinterpret_cast<duckdb_libpgquery::PGDefElem *>(cell->data.ptr_value);
+	if (stmt.options) {
+		duckdb_libpgquery::PGListCell *cell;
+		for_each_cell(cell, stmt.options->head) {
+			auto def_elem = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
 			Value val;
 			if (def_elem->arg) {
-				val = TransformValue(*((duckdb_libpgquery::PGValue *)def_elem->arg))->value;
+				val = TransformValue(*PGPointerCast<duckdb_libpgquery::PGValue>(def_elem->arg))->value;
 			} else {
 				val = Value::BOOLEAN(true);
 			}

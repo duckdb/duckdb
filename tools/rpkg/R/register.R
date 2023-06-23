@@ -40,7 +40,6 @@ encode_values <- function(value) {
 #' dbReadTable(con, "data")
 #'
 #' duckdb_unregister(con, "data")
-#' try(dbReadTable(con, "data"))
 #'
 #' dbDisconnect(con)
 duckdb_register <- function(conn, name, df, overwrite = FALSE, experimental = FALSE) {

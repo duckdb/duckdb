@@ -113,7 +113,6 @@ But we still have CMakeLists in the pythonpkg, for tidy-check and intellisense p
 For this reason it might not be instantly apparent that the CMakeLists are incorrectly set up, and will only result in a very confusing CI failure of TidyCheck.
 
 To prevent this, or to help you when you encounter said CI failure, here are a couple of things to note about the CMakeLists in here.
-When running clang-tidy, cmake is called with `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`, this will cause cmake to output a `compile_commands.json` file containing all the commands for every file it registered.
 
 The pythonpkg depends on `PythonLibs`, and `pybind11`, for some reason `PythonLibs` can not be found by clang-tidy when generating the `compile_commands.json` file
 So the reason for clang-tidy failing is likely that there is no entry for a file in the `compile_commands.json`, check the CMakeLists to see why cmake did not register it.

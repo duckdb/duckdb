@@ -27,7 +27,7 @@ struct PragmaInfo : public ParseInfo {
 
 public:
 	unique_ptr<PragmaInfo> Copy() const {
-		auto result = make_unique<PragmaInfo>();
+		auto result = make_uniq<PragmaInfo>();
 		result->name = name;
 		result->parameters = parameters;
 		result->named_parameters = named_parameters;

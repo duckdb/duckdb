@@ -21,12 +21,15 @@ using namespace cpp11::literals;
 	}
 }
 
-[[cpp11::register]] SEXP rapi_get_substrait(duckdb::conn_eptr_t conn, std::string query) {
+[[cpp11::register]] SEXP rapi_get_substrait(duckdb::conn_eptr_t conn, std::string query, bool enable_optimizer = true) {
 	if (!conn || !conn.get() || !conn->conn) {
 		cpp11::stop("rapi_get_substrait: Invalid connection");
 	}
 
-	auto rel = conn->conn->TableFunction("get_substrait", {Value(query)});
+	named_parameter_map_t parameter_map;
+	parameter_map["enable_optimizer"] = Value::BOOLEAN(enable_optimizer);
+
+	auto rel = conn->conn->TableFunction("get_substrait", {Value(query)}, parameter_map);
 	auto res = rel->Execute();
 	auto chunk = res->Fetch();
 	auto blob_string = StringValue::Get(chunk->GetValue(0, 0));
@@ -40,12 +43,16 @@ using namespace cpp11::literals;
 	return rawval;
 }
 
-[[cpp11::register]] SEXP rapi_get_substrait_json(duckdb::conn_eptr_t conn, std::string query) {
+[[cpp11::register]] SEXP rapi_get_substrait_json(duckdb::conn_eptr_t conn, std::string query,
+                                                 bool enable_optimizer = true) {
 	if (!conn || !conn.get() || !conn->conn) {
 		cpp11::stop("rapi_get_substrait_json: Invalid connection");
 	}
 
-	auto rel = conn->conn->TableFunction("get_substrait_json", {Value(query)});
+	named_parameter_map_t parameter_map;
+	parameter_map["enable_optimizer"] = Value::BOOLEAN(enable_optimizer);
+
+	auto rel = conn->conn->TableFunction("get_substrait_json", {Value(query)}, parameter_map);
 	auto res = rel->Execute();
 	auto chunk = res->Fetch();
 	auto json = StringValue::Get(chunk->GetValue(0, 0));
@@ -53,7 +60,7 @@ using namespace cpp11::literals;
 	return StringsToSexp({json});
 }
 
-static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const string &query, idx_t n_param) {
+static cpp11::list construct_retlist(duckdb::unique_ptr<PreparedStatement> stmt, const string &query, idx_t n_param) {
 	cpp11::writable::list retlist;
 	retlist.reserve(6);
 	retlist.push_back({"str"_nm = query});
@@ -91,7 +98,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 	}
 
 	auto rel = conn->conn->TableFunction("from_substrait", {Value::BLOB(RAW_POINTER(query), LENGTH(query))});
-	auto relation_stmt = make_unique<RelationStatement>(rel);
+	auto relation_stmt = make_uniq<RelationStatement>(rel);
 	relation_stmt->n_param = 0;
 	relation_stmt->query = "";
 	auto stmt = conn->conn->Prepare(std::move(relation_stmt));
@@ -108,7 +115,7 @@ static cpp11::list construct_retlist(unique_ptr<PreparedStatement> stmt, const s
 	}
 
 	auto rel = conn->conn->TableFunction("from_substrait_json", {Value(json)});
-	auto relation_stmt = make_unique<RelationStatement>(rel);
+	auto relation_stmt = make_uniq<RelationStatement>(rel);
 	relation_stmt->n_param = 0;
 	relation_stmt->query = "";
 	auto stmt = conn->conn->Prepare(std::move(relation_stmt));
@@ -211,8 +218,7 @@ SEXP duckdb::duckdb_execute_R_impl(MaterializedQueryResult *result, bool integer
 	SET_NAMES(data_frame, StringsToSexp(result->names));
 
 	for (size_t col_idx = 0; col_idx < ncols; col_idx++) {
-		RProtector r_varvalue;
-		auto varvalue = r_varvalue.Protect(duckdb_r_allocate(result->types[col_idx], r_varvalue, nrows));
+		cpp11::sexp varvalue = duckdb_r_allocate(result->types[col_idx], nrows);
 		duckdb_r_decorate(result->types[col_idx], varvalue, integer64);
 		SET_VECTOR_ELT(data_frame, col_idx, varvalue);
 	}
@@ -237,12 +243,12 @@ SEXP duckdb::duckdb_execute_R_impl(MaterializedQueryResult *result, bool integer
 
 struct AppendableRList {
 	AppendableRList() {
-		the_list = r.Protect(NEW_LIST(capacity));
+		the_list = NEW_LIST(capacity);
 	}
 	void PrepAppend() {
 		if (size >= capacity) {
 			capacity = capacity * 2;
-			SEXP new_list = r.Protect(NEW_LIST(capacity));
+			cpp11::sexp new_list = NEW_LIST(capacity);
 			D_ASSERT(new_list);
 			for (idx_t i = 0; i < size; i++) {
 				SET_VECTOR_ELT(new_list, i, VECTOR_ELT(the_list, i));
@@ -256,10 +262,9 @@ struct AppendableRList {
 		D_ASSERT(the_list != R_NilValue);
 		SET_VECTOR_ELT(the_list, size++, val);
 	}
-	SEXP the_list;
+	cpp11::sexp the_list;
 	idx_t capacity = 1000;
 	idx_t size = 0;
-	RProtector r;
 };
 
 bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowArray &arrow_data,
@@ -268,8 +273,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 	if (count == 0) {
 		return false;
 	}
-	auto timezone_config = QueryResult::GetConfigTimezone(*result);
-	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
+	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, QueryResult::GetArrowOptions(*result));
 	batches_list.PrepAppend();
 	batches_list.Append(cpp11::safe[Rf_eval](batch_import_from_c, arrow_namespace));
 	return true;
@@ -299,8 +303,7 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 	}
 
 	SET_LENGTH(batches_list.the_list, batches_list.size);
-	auto timezone_config = QueryResult::GetConfigTimezone(*result);
-	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, timezone_config);
+	ArrowConverter::ToArrowSchema(&arrow_schema, result->types, result->names, QueryResult::GetArrowOptions(*result));
 	cpp11::sexp schema_arrow_obj(cpp11::safe[Rf_eval](schema_import_from_c, arrow_namespace));
 
 	// create arrow::Table

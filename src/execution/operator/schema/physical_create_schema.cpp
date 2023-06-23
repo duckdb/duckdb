@@ -6,30 +6,15 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class CreateSchemaSourceState : public GlobalSourceState {
-public:
-	CreateSchemaSourceState() : finished(false) {
-	}
-
-	bool finished;
-};
-
-unique_ptr<GlobalSourceState> PhysicalCreateSchema::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<CreateSchemaSourceState>();
-}
-
-void PhysicalCreateSchema::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                   LocalSourceState &lstate) const {
-	auto &state = (CreateSchemaSourceState &)gstate;
-	if (state.finished) {
-		return;
-	}
+SourceResultType PhysicalCreateSchema::GetData(ExecutionContext &context, DataChunk &chunk,
+                                               OperatorSourceInput &input) const {
 	auto &catalog = Catalog::GetCatalog(context.client, info->catalog);
 	if (catalog.IsSystemCatalog()) {
 		throw BinderException("Cannot create schema in system catalog");
 	}
-	catalog.CreateSchema(context.client, info.get());
-	state.finished = true;
+	catalog.CreateSchema(context.client, *info);
+
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

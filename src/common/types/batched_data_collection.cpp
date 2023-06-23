@@ -1,15 +1,19 @@
 #include "duckdb/common/types/batched_data_collection.hpp"
+
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
-BatchedDataCollection::BatchedDataCollection(vector<LogicalType> types_p) : types(std::move(types_p)) {
+BatchedDataCollection::BatchedDataCollection(ClientContext &context_p, vector<LogicalType> types_p,
+                                             bool buffer_managed_p)
+    : context(context_p), types(std::move(types_p)), buffer_managed(buffer_managed_p) {
 }
 
 void BatchedDataCollection::Append(DataChunk &input, idx_t batch_index) {
 	D_ASSERT(batch_index != DConstants::INVALID_INDEX);
-	ColumnDataCollection *collection;
+	optional_ptr<ColumnDataCollection> collection;
 	if (last_collection.collection && last_collection.batch_index == batch_index) {
 		// we are inserting into the same collection as before: use it directly
 		collection = last_collection.collection;
@@ -18,9 +22,11 @@ void BatchedDataCollection::Append(DataChunk &input, idx_t batch_index) {
 		D_ASSERT(data.find(batch_index) == data.end());
 		unique_ptr<ColumnDataCollection> new_collection;
 		if (last_collection.collection) {
-			new_collection = make_unique<ColumnDataCollection>(*last_collection.collection);
+			new_collection = make_uniq<ColumnDataCollection>(*last_collection.collection);
+		} else if (buffer_managed) {
+			new_collection = make_uniq<ColumnDataCollection>(BufferManager::GetBufferManager(context), types);
 		} else {
-			new_collection = make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+			new_collection = make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 		}
 		last_collection.collection = new_collection.get();
 		last_collection.batch_index = batch_index;
@@ -81,7 +87,7 @@ unique_ptr<ColumnDataCollection> BatchedDataCollection::FetchCollection() {
 	data.clear();
 	if (!result) {
 		// empty result
-		return make_unique<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
+		return make_uniq<ColumnDataCollection>(Allocator::DefaultAllocator(), types);
 	}
 	return result;
 }

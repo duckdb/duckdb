@@ -14,6 +14,9 @@ namespace duckdb {
 
 class NotNullConstraint : public Constraint {
 public:
+	static constexpr const ConstraintType TYPE = ConstraintType::NOT_NULL;
+
+public:
 	DUCKDB_API explicit NotNullConstraint(LogicalIndex index);
 	DUCKDB_API ~NotNullConstraint() override;
 

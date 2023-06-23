@@ -3,9 +3,6 @@
 # group: [pedro]
 
 statement ok
-pragma enable_verification
-
-statement ok
 create table test as select range i from range(10000)
 
 foreach type FLOAT DOUBLE REAL

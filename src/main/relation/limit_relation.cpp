@@ -14,12 +14,12 @@ LimitRelation::LimitRelation(shared_ptr<Relation> child_p, int64_t limit, int64_
 
 unique_ptr<QueryNode> LimitRelation::GetQueryNode() {
 	auto child_node = child->GetQueryNode();
-	auto limit_node = make_unique<LimitModifier>();
+	auto limit_node = make_uniq<LimitModifier>();
 	if (limit >= 0) {
-		limit_node->limit = make_unique<ConstantExpression>(Value::BIGINT(limit));
+		limit_node->limit = make_uniq<ConstantExpression>(Value::BIGINT(limit));
 	}
 	if (offset > 0) {
-		limit_node->offset = make_unique<ConstantExpression>(Value::BIGINT(offset));
+		limit_node->offset = make_uniq<ConstantExpression>(Value::BIGINT(offset));
 	}
 
 	child_node->modifiers.push_back(std::move(limit_node));

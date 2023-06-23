@@ -15,13 +15,13 @@ InsertRelation::InsertRelation(shared_ptr<Relation> child_p, string schema_name,
 
 BoundStatement InsertRelation::Bind(Binder &binder) {
 	InsertStatement stmt;
-	auto select = make_unique<SelectStatement>();
+	auto select = make_uniq<SelectStatement>();
 	select->node = child->GetQueryNode();
 
 	stmt.schema = schema_name;
 	stmt.table = table_name;
 	stmt.select_statement = std::move(select);
-	return binder.Bind((SQLStatement &)stmt);
+	return binder.Bind(stmt.Cast<SQLStatement>());
 }
 
 const vector<ColumnDefinition> &InsertRelation::Columns() {

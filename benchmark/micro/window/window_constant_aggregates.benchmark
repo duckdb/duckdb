@@ -1,0 +1,34 @@
+# name: benchmark/micro/window/window_constant_aggregates.benchmark
+# description: Moving COUNT(*) performance, fixed 100 element window
+# group: [window]
+
+load
+SELECT SETSEED(0.8675309);
+CREATE TABLE dates AS
+	SELECT ts::DATE AS date, random() AS v1, random() AS v2, random() AS v3
+	FROM range('2017-01-01'::TIMESTAMP, '2020-12-31'::TIMESTAMP, INTERVAL 1 DAY) r(ts);
+CREATE TABLE issue6728 AS
+	SELECT d.* FROM (
+		SELECT 
+			rowid AS id, 
+			date,
+			v1 * (SELECT COUNT(*) FROM dates) AS v1, 
+			v2 * (SELECT COUNT(*) FROM dates) AS v2,
+			v3 * (SELECT COUNT(*) FROM dates) AS v3,
+		FROM dates
+		) d
+	CROSS JOIN 
+	range(3000)
+;
+
+run
+SELECT sum(sum_v1)
+FROM (
+	SELECT date, id, v1, v2, v3, quantile(v1, 0.7) OVER (partition by id) AS sum_v1 
+	FROM issue6728 
+	ORDER BY id, date
+) df
+;
+
+result I
+3219979503.458688

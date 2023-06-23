@@ -1,0 +1,92 @@
+# name: test/sql/binder/test_function_chainging_alias.test
+# description: referencing an alias or a function chaining alias that exists earlier on
+# group: [binder]
+
+#              in the SELECT clause (Issue #7190)
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT 'test' || ' more testing' as added,
+        added.substr(5) as my_substr
+----
+test more testing	 more testing
+
+statement ok
+CREATE TABLE varchars(v VARCHAR);
+
+statement ok
+INSERT INTO varchars VALUES ('>>%Test<<'), ('%FUNCTION%'), ('Chaining')
+
+query I
+SELECT v.lower() FROM varchars
+----
+>>%test<<
+%function%
+chaining
+
+# only_alphabet is used before defined
+statement error
+SELECT  v.trim('><') as trim_inequality,
+        only_alphabet.lower() as lower
+        trim_inequality.replace('%', '') as only_alphabet,
+FROM varchars
+
+
+query III
+SELECT  v.trim('><') as trim_inequality,
+        trim_inequality.replace('%', '') as only_alphabet,
+        only_alphabet.lower() as lower
+FROM varchars
+----
+%Test	Test	test
+%FUNCTION%	FUNCTION	function
+Chaining	Chaining	chaining
+
+# Test col with table name 
+query III
+SELECT  varchars.v.trim('><') as trim_inequality,
+        trim_inequality.replace('%', '') as only_alphabet,
+        only_alphabet.lower() as lower
+FROM varchars
+----
+%Test	Test	test
+%FUNCTION%	FUNCTION	function
+Chaining	Chaining	chaining
+
+statement ok
+DELETE FROM varchars
+
+statement ok
+INSERT INTO varchars VALUES ('Test Function Chainging Alias');
+
+# list
+query III
+SELECT  v.split(' ') strings,
+        strings.lower() lower,
+        lower.upper() upper
+FROM varchars
+----
+[Test, Function, Chainging, Alias]	[test, function, chainging, alias]	[TEST, FUNCTION, CHAINGING, ALIAS]
+
+query IIII
+SELECT  v.split(' ') strings,
+        strings.apply(x -> x.lower()).filter(x -> x[1] == 't') lower,
+        strings.apply(x -> x.upper()).filter(x -> x[1] == 'T') upper,
+        lower + upper  as mix_case_srings
+FROM varchars
+----
+[Test, Function, Chainging, Alias]	[test]	[TEST]	[test, TEST]
+
+# prepared statements
+statement ok
+PREPARE v1 AS 
+SELECT ?.split(' ').lower() lstrings,
+       ?.split(' ').upper() ustrings,
+       list_concat(lstrings::VARCHAR[], ustrings::VARCHAR[]) as mix_case_srings
+
+query III
+EXECUTE v1('Hello World', 'test function chainging')
+----
+[hello, world]	[TEST, FUNCTION, CHAINGING]	[hello, world, TEST, FUNCTION, CHAINGING]

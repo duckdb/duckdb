@@ -5,7 +5,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 
 namespace duckdb {
@@ -44,14 +43,14 @@ bool GetCastType(hugeint_t range, LogicalType &cast_type) {
 }
 
 template <class T>
-unique_ptr<Expression> TemplatedCastToSmallestType(unique_ptr<Expression> expr, NumericStatistics &num_stats) {
+unique_ptr<Expression> TemplatedCastToSmallestType(unique_ptr<Expression> expr, BaseStatistics &stats) {
 	// Compute range
-	if (num_stats.min.IsNull() || num_stats.max.IsNull()) {
+	if (!NumericStats::HasMinMax(stats)) {
 		return expr;
 	}
 
-	auto signed_min_val = num_stats.min.GetValue<T>();
-	auto signed_max_val = num_stats.max.GetValue<T>();
+	auto signed_min_val = NumericStats::Min(stats).GetValue<T>();
+	auto signed_max_val = NumericStats::Max(stats).GetValue<T>();
 	if (signed_max_val < signed_min_val) {
 		return expr;
 	}
@@ -71,18 +70,18 @@ unique_ptr<Expression> TemplatedCastToSmallestType(unique_ptr<Expression> expr, 
 
 	// Create expression to map to a smaller range
 	auto input_type = expr->return_type;
-	auto minimum_expr = make_unique<BoundConstantExpression>(Value::CreateValue(signed_min_val));
+	auto minimum_expr = make_uniq<BoundConstantExpression>(Value::CreateValue(signed_min_val));
 	vector<unique_ptr<Expression>> arguments;
 	arguments.push_back(std::move(expr));
 	arguments.push_back(std::move(minimum_expr));
-	auto minus_expr = make_unique<BoundFunctionExpression>(input_type, SubtractFun::GetFunction(input_type, input_type),
-	                                                       std::move(arguments), nullptr, true);
+	auto minus_expr = make_uniq<BoundFunctionExpression>(input_type, SubtractFun::GetFunction(input_type, input_type),
+	                                                     std::move(arguments), nullptr, true);
 
 	// Cast to smaller type
 	return BoundCastExpression::AddDefaultCastToType(std::move(minus_expr), cast_type);
 }
 
-unique_ptr<Expression> CastToSmallestType(unique_ptr<Expression> expr, NumericStatistics &num_stats) {
+unique_ptr<Expression> CastToSmallestType(unique_ptr<Expression> expr, BaseStatistics &num_stats) {
 	auto physical_type = expr->return_type.InternalType();
 	switch (physical_type) {
 	case PhysicalType::UINT8:
@@ -111,7 +110,7 @@ void StatisticsPropagator::PropagateAndCompress(unique_ptr<Expression> &expr, un
 	stats = PropagateExpression(expr);
 	if (stats) {
 		if (expr->return_type.IsIntegral()) {
-			expr = CastToSmallestType(std::move(expr), (NumericStatistics &)*stats);
+			expr = CastToSmallestType(std::move(expr), *stats);
 		}
 	}
 }

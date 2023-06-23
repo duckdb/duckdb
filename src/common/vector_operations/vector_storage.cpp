@@ -6,7 +6,7 @@ namespace duckdb {
 
 template <class T>
 static void CopyToStorageLoop(UnifiedVectorFormat &vdata, idx_t count, data_ptr_t target) {
-	auto ldata = (T *)vdata.data;
+	auto ldata = UnifiedVectorFormat::GetData<T>(vdata);
 	auto result_data = (T *)target;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);

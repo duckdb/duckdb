@@ -89,10 +89,8 @@ Reiwa	2022-01-01 09:00:00+09	{'era': 236, 'year': 4, 'month': 1, 'day': 1}
 statement ok
 SET CALENDAR='islamic-umalqura';
 
-query I
+statement ok
 SELECT strftime(TIMESTAMPTZ '-260722-3-4 0:3:52',TIMESTAMP '-285441-5-3 8:3:4');
-----
-285442-05-03 (BC) 08:03:04
 
 # Issue #5235
 statement ok

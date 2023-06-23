@@ -4,7 +4,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
-
+#include "duckdb/parser/statement/multi_statement.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
 #include "duckdb/function/function.hpp"
 
@@ -22,11 +22,19 @@ PragmaHandler::PragmaHandler(ClientContext &context) : context(context) {
 void PragmaHandler::HandlePragmaStatementsInternal(vector<unique_ptr<SQLStatement>> &statements) {
 	vector<unique_ptr<SQLStatement>> new_statements;
 	for (idx_t i = 0; i < statements.size(); i++) {
+		if (statements[i]->type == StatementType::MULTI_STATEMENT) {
+			auto &multi_statement = statements[i]->Cast<MultiStatement>();
+			for (auto &stmt : multi_statement.statements) {
+				statements.push_back(std::move(stmt));
+			}
+			continue;
+		}
 		if (statements[i]->type == StatementType::PRAGMA_STATEMENT) {
 			// PRAGMA statement: check if we need to replace it by a new set of statements
 			PragmaHandler handler(context);
-			auto new_query = handler.HandlePragma(statements[i].get());
-			if (!new_query.empty()) {
+			string new_query;
+			bool expanded = handler.HandlePragma(statements[i].get(), new_query);
+			if (expanded) {
 				// this PRAGMA statement gets replaced by a new query string
 				// push the new query string through the parser again and add it to the transformer
 				Parser parser(context.GetParserOptions());
@@ -47,7 +55,8 @@ void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<uniqu
 	// first check if there are any pragma statements
 	bool found_pragma = false;
 	for (idx_t i = 0; i < statements.size(); i++) {
-		if (statements[i]->type == StatementType::PRAGMA_STATEMENT) {
+		if (statements[i]->type == StatementType::PRAGMA_STATEMENT ||
+		    statements[i]->type == StatementType::MULTI_STATEMENT) {
 			found_pragma = true;
 			break;
 		}
@@ -59,26 +68,26 @@ void PragmaHandler::HandlePragmaStatements(ClientContextLock &lock, vector<uniqu
 	context.RunFunctionInTransactionInternal(lock, [&]() { HandlePragmaStatementsInternal(statements); });
 }
 
-string PragmaHandler::HandlePragma(SQLStatement *statement) { // PragmaInfo &info
-	auto info = *((PragmaStatement &)*statement).info;
-	auto entry =
-	    Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, info.name, false);
+bool PragmaHandler::HandlePragma(SQLStatement *statement, string &resulting_query) { // PragmaInfo &info
+	auto info = *(statement->Cast<PragmaStatement>()).info;
+	auto &entry = Catalog::GetEntry<PragmaFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, info.name);
 	string error;
 
 	FunctionBinder function_binder(context);
-	idx_t bound_idx = function_binder.BindFunction(entry->name, entry->functions, info, error);
+	idx_t bound_idx = function_binder.BindFunction(entry.name, entry.functions, info, error);
 	if (bound_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(error);
 	}
-	auto bound_function = entry->functions.GetFunctionByOffset(bound_idx);
+	auto bound_function = entry.functions.GetFunctionByOffset(bound_idx);
 	if (bound_function.query) {
 		QueryErrorContext error_context(statement, statement->stmt_location);
 		Binder::BindNamedParameters(bound_function.named_parameters, info.named_parameters, error_context,
 		                            bound_function.name);
 		FunctionParameters parameters {info.parameters, info.named_parameters};
-		return bound_function.query(context, parameters);
+		resulting_query = bound_function.query(context, parameters);
+		return true;
 	}
-	return string();
+	return false;
 }
 
 } // namespace duckdb

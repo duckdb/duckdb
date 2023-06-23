@@ -13,17 +13,19 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/enum_util.hpp"
 
 #include <algorithm>
 #include <codecvt>
 #include <locale>
 
-using std::string;
-
 using duckdb::date_t;
 using duckdb::Decimal;
 using duckdb::DecimalType;
 using duckdb::dtime_t;
+using duckdb::EnumUtil;
 using duckdb::hugeint_t;
 using duckdb::interval_t;
 using duckdb::LogicalType;
@@ -33,8 +35,10 @@ using duckdb::OdbcInterval;
 using duckdb::OdbcUtils;
 using duckdb::SQLStateType;
 using duckdb::Store;
+using duckdb::string;
 using duckdb::string_t;
 using duckdb::timestamp_t;
+using duckdb::vector;
 
 SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length) {
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
@@ -99,7 +103,7 @@ SQLRETURN duckdb::SingleExecuteStmt(duckdb::OdbcHandleStmt *stmt) {
 		*stmt->rows_fetched_ptr = 0;
 	}
 
-	std::vector<Value> values;
+	duckdb::vector<Value> values;
 	SQLRETURN ret = stmt->param_desc->GetParamValues(values);
 	if (ret == SQL_NEED_DATA || ret == SQL_ERROR) {
 		return ret;
@@ -138,8 +142,8 @@ SQLRETURN duckdb::FetchStmtResult(SQLHSTMT statement_handle, SQLSMALLINT fetch_o
 
 static void ValidateType(LogicalTypeId input, LogicalTypeId expected, duckdb::OdbcHandleStmt *stmt) {
 	if (input != expected) {
-		string msg = "Type mismatch error: received " + LogicalTypeIdToString(input) + ", but expected " +
-		             LogicalTypeIdToString(expected);
+		string msg = "Type mismatch error: received " + EnumUtil::ToString(input) + ", but expected " +
+		             EnumUtil::ToString(expected);
 		duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE, stmt->dbc->GetDataSourceName());
 		throw duckdb::OdbcException("ValidateType", SQL_ERROR, diag_rec);
 	}
@@ -242,7 +246,11 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		}
 
 		Value val;
-		stmt->odbc_fetcher->GetValue(col_or_param_num - 1, val);
+		if (col_or_param_num > 0) {
+			// Prevent underflow
+			col_or_param_num--;
+		}
+		stmt->odbc_fetcher->GetValue(col_or_param_num, val);
 		if (val.IsNull()) {
 			if (!str_len_or_ind_ptr) {
 				return SQL_ERROR;

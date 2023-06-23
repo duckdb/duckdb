@@ -40,6 +40,11 @@ duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE, bigint = "numeric", 
     stop(paste("Unsupported bigint configuration", bigint))
   )
 
+  # R packages are not allowed to write extensions into home directory, so use R_user_dir instead
+  if (!("extension_directory" %in% names(config))) {
+    config["extension_directory"] <- tools::R_user_dir("duckdb", "data")
+  }
+
   new(
     "duckdb_driver",
     database_ref = rapi_startup(dbdir, read_only, config),

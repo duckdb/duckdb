@@ -4,10 +4,11 @@
 
 #include <sql.h>
 #include <regex>
+#include "duckdb/common/vector.hpp"
 
 using duckdb::OdbcUtils;
+using duckdb::vector;
 using std::string;
-using std::vector;
 
 string OdbcUtils::ReadString(const SQLPOINTER ptr, const SQLSMALLINT len) {
 	return len == SQL_NTS ? string((const char *)ptr) : string((const char *)ptr, (size_t)len);

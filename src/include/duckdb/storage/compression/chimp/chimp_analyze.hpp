@@ -103,7 +103,7 @@ public:
 
 template <class T>
 unique_ptr<AnalyzeState> ChimpInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<ChimpAnalyzeState<T>>();
+	return make_uniq<ChimpAnalyzeState<T>>();
 }
 
 template <class T>
@@ -113,7 +113,7 @@ bool ChimpAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
-	auto data = (CHIMP_TYPE *)vdata.data;
+	auto data = UnifiedVectorFormat::GetData<CHIMP_TYPE>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		analyze_state.WriteValue(data[idx], vdata.validity.RowIsValid(idx));

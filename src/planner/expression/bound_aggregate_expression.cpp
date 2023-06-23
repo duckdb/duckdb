@@ -19,8 +19,8 @@ BoundAggregateExpression::BoundAggregateExpression(AggregateFunction function, v
 }
 
 string BoundAggregateExpression::ToString() const {
-	return FunctionExpression::ToString<BoundAggregateExpression, Expression>(*this, string(), function.name, false,
-	                                                                          IsDistinct(), filter.get());
+	return FunctionExpression::ToString<BoundAggregateExpression, Expression, BoundOrderModifier>(
+	    *this, string(), function.name, false, IsDistinct(), filter.get(), order_bys.get());
 }
 
 hash_t BoundAggregateExpression::Hash() const {
@@ -30,29 +30,32 @@ hash_t BoundAggregateExpression::Hash() const {
 	return result;
 }
 
-bool BoundAggregateExpression::Equals(const BaseExpression *other_p) const {
+bool BoundAggregateExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto other = (BoundAggregateExpression *)other_p;
-	if (other->aggr_type != aggr_type) {
+	auto &other = other_p.Cast<BoundAggregateExpression>();
+	if (other.aggr_type != aggr_type) {
 		return false;
 	}
-	if (other->function != function) {
+	if (other.function != function) {
 		return false;
 	}
-	if (children.size() != other->children.size()) {
+	if (children.size() != other.children.size()) {
 		return false;
 	}
-	if (!Expression::Equals(other->filter.get(), filter.get())) {
+	if (!Expression::Equals(other.filter, filter)) {
 		return false;
 	}
 	for (idx_t i = 0; i < children.size(); i++) {
-		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
+		if (!Expression::Equals(*children[i], *other.children[i])) {
 			return false;
 		}
 	}
-	if (!FunctionData::Equals(bind_info.get(), other->bind_info.get())) {
+	if (!FunctionData::Equals(bind_info.get(), other.bind_info.get())) {
+		return false;
+	}
+	if (!BoundOrderModifier::Equals(order_bys, other.order_bys)) {
 		return false;
 	}
 	return true;
@@ -71,15 +74,17 @@ unique_ptr<Expression> BoundAggregateExpression::Copy() {
 	}
 	auto new_bind_info = bind_info ? bind_info->Copy() : nullptr;
 	auto new_filter = filter ? filter->Copy() : nullptr;
-	auto copy = make_unique<BoundAggregateExpression>(function, std::move(new_children), std::move(new_filter),
-	                                                  std::move(new_bind_info), aggr_type);
+	auto copy = make_uniq<BoundAggregateExpression>(function, std::move(new_children), std::move(new_filter),
+	                                                std::move(new_bind_info), aggr_type);
 	copy->CopyProperties(*this);
+	copy->order_bys = order_bys ? order_bys->Copy() : nullptr;
 	return std::move(copy);
 }
 
 void BoundAggregateExpression::Serialize(FieldWriter &writer) const {
 	writer.WriteField(IsDistinct());
 	writer.WriteOptional(filter);
+	writer.WriteOptional(order_bys);
 	FunctionSerializer::Serialize<AggregateFunction>(writer, function, return_type, children, bind_info.get());
 }
 
@@ -87,13 +92,16 @@ unique_ptr<Expression> BoundAggregateExpression::Deserialize(ExpressionDeseriali
                                                              FieldReader &reader) {
 	auto distinct = reader.ReadRequired<bool>();
 	auto filter = reader.ReadOptional<Expression>(nullptr, state.gstate);
+	auto order_bys = reader.ReadOptional<BoundOrderModifier>(nullptr, state.gstate);
 	vector<unique_ptr<Expression>> children;
 	unique_ptr<FunctionData> bind_info;
 	auto function = FunctionSerializer::Deserialize<AggregateFunction, AggregateFunctionCatalogEntry>(
 	    reader, state, CatalogType::AGGREGATE_FUNCTION_ENTRY, children, bind_info);
 
-	return make_unique<BoundAggregateExpression>(function, std::move(children), std::move(filter), std::move(bind_info),
+	auto x = make_uniq<BoundAggregateExpression>(function, std::move(children), std::move(filter), std::move(bind_info),
 	                                             distinct ? AggregateType::DISTINCT : AggregateType::NON_DISTINCT);
+	x->order_bys = std::move(order_bys);
+	return std::move(x);
 }
 
 } // namespace duckdb

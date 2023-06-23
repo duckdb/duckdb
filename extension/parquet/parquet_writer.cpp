@@ -29,6 +29,30 @@ using duckdb_parquet::format::PageType;
 using ParquetRowGroup = duckdb_parquet::format::RowGroup;
 using duckdb_parquet::format::Type;
 
+ChildFieldIDs::ChildFieldIDs() {
+	ids = make_uniq<case_insensitive_map_t<FieldID>>();
+}
+
+ChildFieldIDs ChildFieldIDs::Copy() const {
+	ChildFieldIDs result;
+	for (const auto &id : *ids) {
+		result.ids->emplace(id.first, id.second.Copy());
+	}
+	return result;
+}
+
+FieldID::FieldID() : set(false) {
+}
+
+FieldID::FieldID(int32_t field_id_p) : set(true), field_id(field_id_p) {
+}
+
+FieldID FieldID::Copy() const {
+	auto result = set ? FieldID(field_id) : FieldID();
+	result.child_field_ids = child_field_ids.Copy();
+	return result;
+}
+
 class MyTransport : public TTransport {
 public:
 	explicit MyTransport(Serializer &serializer) : serializer(serializer) {
@@ -45,7 +69,7 @@ public:
 	}
 
 	void write_virt(const uint8_t *buf, uint32_t len) override {
-		serializer.WriteData((const_data_ptr_t)buf, len);
+		serializer.WriteData(const_data_ptr_cast(buf), len);
 	}
 
 private:
@@ -225,14 +249,15 @@ void VerifyUniqueNames(const vector<string> &names) {
 #endif
 }
 
-ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *file_opener_p, vector<LogicalType> types_p,
-                             vector<string> names_p, CompressionCodec::type codec)
-    : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec) {
+ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalType> types_p, vector<string> names_p,
+                             CompressionCodec::type codec, ChildFieldIDs field_ids_p)
+    : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec),
+      field_ids(std::move(field_ids_p)) {
 	// initialize the file writer
-	writer = make_unique<BufferedFileWriter>(
-	    fs, file_name.c_str(), FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW, file_opener_p);
+	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
+	                                       FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
 	// parquet files start with the string "PAR1"
-	writer->WriteData((const_data_ptr_t) "PAR1", 4);
+	writer->WriteData(const_data_ptr_cast("PAR1"), 4);
 	TCompactProtocolFactoryT<MyTransport> tproto_factory;
 	protocol = tproto_factory.getProtocol(make_shared<MyTransport>(*writer));
 
@@ -257,26 +282,25 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, FileOpener *fil
 	vector<string> schema_path;
 	for (idx_t i = 0; i < sql_types.size(); i++) {
 		column_writers.push_back(ColumnWriter::CreateWriterRecursive(file_meta_data.schema, *this, sql_types[i],
-		                                                             unique_names[i], schema_path));
+		                                                             unique_names[i], schema_path, &field_ids));
 	}
 }
 
-void ParquetWriter::Flush(ColumnDataCollection &buffer) {
-	if (buffer.Count() == 0) {
-		return;
-	}
+void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result) {
+	// We want these to be in-memory so we don't have to copy over strings to the dictionary
+	D_ASSERT(buffer.GetAllocatorType() == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR);
 
 	// set up a new row group for this chunk collection
-	ParquetRowGroup row_group;
+	auto &row_group = result.row_group;
 	row_group.num_rows = buffer.Count();
 	row_group.__isset.file_offset = true;
 
-	vector<unique_ptr<ColumnWriterState>> states;
+	auto &states = result.states;
 	// iterate over each of the columns of the chunk collection and write them
 	D_ASSERT(buffer.ColumnCount() == column_writers.size());
 	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
 		const auto &col_writer = column_writers[col_idx];
-		auto write_state = col_writer->InitializeWriteState(row_group, buffer.GetAllocator());
+		auto write_state = col_writer->InitializeWriteState(row_group);
 		if (col_writer->HasAnalyze()) {
 			for (auto &chunk : buffer.Chunks()) {
 				col_writer->Analyze(*write_state, nullptr, chunk.data[col_idx], chunk.size());
@@ -292,10 +316,18 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 		}
 		states.push_back(std::move(write_state));
 	}
+	result.heaps = buffer.GetHeapReferences();
+}
 
+void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	lock_guard<mutex> glock(lock);
+	auto &row_group = prepared.row_group;
+	auto &states = prepared.states;
+	if (states.empty()) {
+		throw InternalException("Attempting to flush a row group with no rows");
+	}
 	row_group.file_offset = writer->GetTotalWritten();
-	for (idx_t col_idx = 0; col_idx < buffer.ColumnCount(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < states.size(); col_idx++) {
 		const auto &col_writer = column_writers[col_idx];
 		auto write_state = std::move(states[col_idx]);
 		col_writer->FinalizeWrite(*write_state);
@@ -303,7 +335,18 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 
 	// append the row group to the file meta data
 	file_meta_data.row_groups.push_back(row_group);
-	file_meta_data.num_rows += buffer.Count();
+	file_meta_data.num_rows += row_group.num_rows;
+}
+
+void ParquetWriter::Flush(ColumnDataCollection &buffer) {
+	if (buffer.Count() == 0) {
+		return;
+	}
+
+	PreparedRowGroup prepared_row_group;
+	PrepareRowGroup(buffer, prepared_row_group);
+
+	FlushRowGroup(prepared_row_group);
 }
 
 void ParquetWriter::Finalize() {
@@ -313,7 +356,7 @@ void ParquetWriter::Finalize() {
 	writer->Write<uint32_t>(writer->GetTotalWritten() - start_offset);
 
 	// parquet files also end with the string "PAR1"
-	writer->WriteData((const_data_ptr_t) "PAR1", 4);
+	writer->WriteData(const_data_ptr_cast("PAR1"), 4);
 
 	// flush to disk
 	writer->Sync();

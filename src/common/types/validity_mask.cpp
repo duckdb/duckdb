@@ -68,24 +68,74 @@ void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
 	}
 }
 
-void ValidityMask::Slice(const ValidityMask &other, idx_t offset, idx_t end) {
+void ValidityMask::Slice(const ValidityMask &other, idx_t source_offset, idx_t count) {
 	if (other.AllValid()) {
 		validity_mask = nullptr;
 		validity_data.reset();
 		return;
 	}
-	if (offset == 0) {
+	if (source_offset == 0) {
 		Initialize(other);
 		return;
 	}
-	ValidityMask new_mask(end - offset);
-
-// FIXME THIS NEEDS FIXING!
-#if 1
-	for (idx_t i = offset; i < end; i++) {
-		new_mask.Set(i - offset, other.RowIsValid(i));
-	}
+	ValidityMask new_mask(count);
+	new_mask.SliceInPlace(other, 0, source_offset, count);
 	Initialize(new_mask);
+}
+
+bool ValidityMask::IsAligned(idx_t count) {
+	return count % BITS_PER_VALUE == 0;
+}
+
+void ValidityMask::SliceInPlace(const ValidityMask &other, idx_t target_offset, idx_t source_offset, idx_t count) {
+	if (IsAligned(source_offset) && IsAligned(target_offset)) {
+		auto target_validity = GetData();
+		auto source_validity = other.GetData();
+		auto source_offset_entries = EntryCount(source_offset);
+		auto target_offset_entries = EntryCount(target_offset);
+		memcpy(target_validity + target_offset_entries, source_validity + source_offset_entries,
+		       sizeof(validity_t) * EntryCount(count));
+		return;
+	} else if (IsAligned(target_offset)) {
+		//	Simple common case where we are shifting into an aligned mask (e.g., 0 in Slice above)
+		const idx_t entire_units = count / BITS_PER_VALUE;
+		const idx_t ragged = count % BITS_PER_VALUE;
+		const idx_t tail = source_offset % BITS_PER_VALUE;
+		const idx_t head = BITS_PER_VALUE - tail;
+		auto source_validity = other.GetData() + (source_offset / BITS_PER_VALUE);
+		auto target_validity = this->GetData() + (target_offset / BITS_PER_VALUE);
+		auto src_entry = *source_validity++;
+		for (idx_t i = 0; i < entire_units; ++i) {
+			//	Start with head of previous src
+			validity_t tgt_entry = src_entry >> tail;
+			src_entry = *source_validity++;
+			// 	Add in tail of current src
+			tgt_entry |= (src_entry << head);
+			*target_validity++ = tgt_entry;
+		}
+		//	Finish last ragged entry
+		if (ragged) {
+			//	Start with head of previous src
+			validity_t tgt_entry = (src_entry >> tail);
+			//  Add in the tail of the next src, if head was too small
+			if (head < ragged) {
+				src_entry = *source_validity++;
+				tgt_entry |= (src_entry << head);
+			}
+			//  Mask off the bits that go past the ragged end
+			tgt_entry &= (ValidityBuffer::MAX_ENTRY >> (BITS_PER_VALUE - ragged));
+			//	Restore the ragged end of the target
+			tgt_entry |= *target_validity & (ValidityBuffer::MAX_ENTRY << ragged);
+			*target_validity++ = tgt_entry;
+		}
+		return;
+	}
+
+	// FIXME: use bitwise operations here
+#if 1
+	for (idx_t i = 0; i < count; i++) {
+		Set(target_offset + i, other.RowIsValid(source_offset + i));
+	}
 #else
 	// first shift the "whole" units
 	idx_t entire_units = offset / BITS_PER_VALUE;

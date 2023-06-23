@@ -1,18 +1,27 @@
 name: Main
 on:
+  workflow_dispatch:
+  repository_dispatch:
   push:
+    branches:
+      - '**'
+      - '!master'
+      - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
+      - 'tools/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Main.yml'
+      - '.github/config/uncovered_files.csv'
   pull_request:
     paths-ignore:
       - '**.md'
-      - 'tools/jdbc/**'
-      - 'tools/nodejs/**'
-      - 'tools/juliapkg/**'
-      - 'tools/pythonpkg/**'
-      - 'tools/rpkg/**'
+      - 'tools/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
+      - '.github/config/uncovered_files.csv'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -64,7 +73,9 @@ jobs:
 
     - name: Test
       shell: bash
-      run: make unittestci
+      run: |
+          echo "DUCKDB_INSTALL_LIB=$(find `pwd` -name "libduck*.so" | head -n 1)" >> $GITHUB_ENV
+          make unittestci
 
 
  force-storage:
@@ -170,6 +181,7 @@ jobs:
       BUILD_EXCEL: 1
       DISABLE_STRING_INLINE: 1
       DESTROY_UNPINNED_BLOCKS: 1
+      ALTERNATIVE_VERIFY: 1
 
     steps:
     - uses: actions/checkout@v3
@@ -193,6 +205,81 @@ jobs:
     - name: Test
       shell: bash
       run: build/debug/test/unittest
+
+ force-blocking-sink-source:
+    name: Forcing async Sinks/Sources
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_INET: 1
+      BUILD_PARQUET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+      BUILD_JSON: 1
+      BUILD_EXCEL: 1
+      FORCE_ASYNC_SINK_SOURCE: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build
+      shell: bash
+      run: make relassert
+
+    - name: Test
+      shell: bash
+      run: build/relassert/test/unittest
+
+
+ storage-initialization:
+    name: Storage Initialization Verification
+    needs: linux-debug
+    runs-on: ubuntu-20.04
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build
+      shell: bash
+      run: make debug
+
+    - name: Test
+      shell: bash
+      run: python3 scripts/test_zero_initialize.py
 
  threadsan:
     name: Thread Sanitizer
@@ -290,7 +377,7 @@ jobs:
       run: git clone https://github.com/duckdb/duckdb-web
 
     - name: Set up Python 3.9
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: '3.9'
 
@@ -338,6 +425,7 @@ jobs:
       CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       DISABLE_UNITY: 1
+      DISABLE_PARQUET: 1
       GEN: ninja
 
     steps:
@@ -376,7 +464,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 

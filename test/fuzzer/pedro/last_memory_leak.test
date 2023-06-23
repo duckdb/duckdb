@@ -1,0 +1,17 @@
+# name: test/fuzzer/pedro/last_memory_leak.test
+# description: Memory leak on "last" aggregate
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0 (c1 VARCHAR);
+
+statement ok
+INSERT INTO t0(c1) VALUES (NULL), ('a'),('-801673450963');
+
+query I
+SELECT "last"(c1) FROM t0;
+----
+-801673450963

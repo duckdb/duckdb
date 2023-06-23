@@ -9,3 +9,4 @@
 #pragma once
 
 #include <algorithm>
+#include <cmath>

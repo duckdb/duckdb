@@ -1,8 +1,10 @@
+from multiprocessing.sharedctypes import Value
 import numpy
 import datetime
 import pandas
 import pytest
 import duckdb
+from io import StringIO, BytesIO
 
 def TestFile(name):
 	import os
@@ -144,7 +146,10 @@ class TestReadCSV(object):
 		rel = duckdb_cursor.read_csv(TestFile('problematic.csv'), header=True, sample_size=1)
 		with pytest.raises(duckdb.InvalidInputException):
 			# The sniffer couldn't detect that this column contains non-integer values
-			res = rel.fetchone()
+			while True:
+				res = rel.fetchone()
+				if res is None:
+					break
 
 	def test_sample_size_correct(self, duckdb_cursor):
 		rel = duckdb_cursor.read_csv(TestFile('problematic.csv'), header=True, sample_size=-1)
@@ -157,6 +162,40 @@ class TestReadCSV(object):
 		res = rel.fetchone()
 		print(res)
 		assert res == ('1', 'Action', '2006-02-15 04:46:27')
+
+	def test_null_padding(self, duckdb_cursor):
+	
+		rel = duckdb_cursor.read_csv(TestFile('nullpadding.csv'), null_padding=False)
+		res = rel.fetchall()
+		assert res == [('# this file has a bunch of gunk at the top',), ('one,two,three,four',), ('1,a,alice',), ('2,b,bob',)]
+		
+		rel = duckdb_cursor.read_csv(TestFile('nullpadding.csv'), null_padding=True)
+		res = rel.fetchall()
+		assert res == [(1, 'a', 'alice', None), (2, 'b', 'bob', None)]
+
+		rel = duckdb.read_csv(TestFile('nullpadding.csv'), null_padding=False)
+		res = rel.fetchall()
+		assert res == [('# this file has a bunch of gunk at the top',), ('one,two,three,four',), ('1,a,alice',), ('2,b,bob',)]
+		
+		rel = duckdb.read_csv(TestFile('nullpadding.csv'), null_padding=True)
+		res = rel.fetchall()
+		assert res == [(1, 'a', 'alice', None), (2, 'b', 'bob', None)]
+
+		rel = duckdb_cursor.from_csv_auto(TestFile('nullpadding.csv'), null_padding=False)
+		res = rel.fetchall()
+		assert res == [('# this file has a bunch of gunk at the top',), ('one,two,three,four',), ('1,a,alice',), ('2,b,bob',)]
+		
+		rel = duckdb_cursor.from_csv_auto(TestFile('nullpadding.csv'), null_padding=True)
+		res = rel.fetchall()
+		assert res == [(1, 'a', 'alice', None), (2, 'b', 'bob', None)]
+
+		rel = duckdb.from_csv_auto(TestFile('nullpadding.csv'), null_padding=False)
+		res = rel.fetchall()
+		assert res == [('# this file has a bunch of gunk at the top',), ('one,two,three,four',), ('1,a,alice',), ('2,b,bob',)]
+		
+		rel = duckdb.from_csv_auto(TestFile('nullpadding.csv'), null_padding=True)
+		res = rel.fetchall()
+		assert res == [(1, 'a', 'alice', None), (2, 'b', 'bob', None)]
 
 	def test_normalize_names(self, duckdb_cursor):
 		rel = duckdb_cursor.read_csv(TestFile('category.csv'), normalize_names=False)
@@ -183,3 +222,132 @@ class TestReadCSV(object):
 		column_names = list(df.columns.values)
 		# The filename is included in the returned columns
 		assert 'filename' in column_names
+
+	def test_read_pathlib_path(self, duckdb_cursor):
+		pathlib = pytest.importorskip("pathlib")
+		path = pathlib.Path(TestFile('category.csv'))
+		rel = duckdb_cursor.read_csv(path)
+		res = rel.fetchone()
+		print(res)
+		assert res == (1, 'Action', datetime.datetime(2006, 2, 15, 4, 46, 27))
+
+	def test_read_filelike(self, duckdb_cursor):
+		_ = pytest.importorskip("fsspec")
+		string = StringIO("c1,c2,c3\na,b,c")
+		res = duckdb_cursor.read_csv(string, header=True).fetchall()
+		assert res == [('a', 'b', 'c')]
+
+	def test_read_filelike_rel_out_of_scope(self, duckdb_cursor):
+		_ = pytest.importorskip("fsspec")
+		def keep_in_scope():
+			string = StringIO("c1,c2,c3\na,b,c")
+			# Create a ReadCSVRelation on a file-like object
+			# this will add the object to our internal object filesystem
+			rel = duckdb_cursor.read_csv(string, header=True)
+			# The file-like object will still exist, so we can execute this later
+			return rel
+		
+		def close_scope():
+			string = StringIO("c1,c2,c3\na,b,c")
+			# Create a ReadCSVRelation on a file-like object
+			# this will add the object to our internal object filesystem
+			res = duckdb_cursor.read_csv(string, header=True).fetchall()
+			# When the relation goes out of scope - we delete the file-like object from our filesystem
+			return res
+
+		relation = keep_in_scope()
+		res = relation.fetchall()
+
+		res2 = close_scope()
+		assert res == res2
+
+	def test_filelike_bytesio(self, duckdb_cursor):
+		_ = pytest.importorskip("fsspec")
+		string = BytesIO(b"c1,c2,c3\na,b,c")
+		res = duckdb_cursor.read_csv(string, header=True).fetchall()
+		assert res == [('a', 'b', 'c')]
+	
+	def test_filelike_exception(self, duckdb_cursor):
+		_ = pytest.importorskip("fsspec")
+		class ReadError:
+			def __init__(self):
+				pass
+			def read(self, amount):
+				raise ValueError(amount)
+			def seek(self, loc):
+				return 0
+
+		class SeekError:
+			def __init__(self):
+				pass
+			def read(self, amount):
+				return b'test'
+			def seek(self, loc):
+				raise ValueError(loc)
+
+		obj = ReadError()
+		with pytest.raises(ValueError):
+			res = duckdb_cursor.read_csv(obj, header=True).fetchall()
+
+		obj = SeekError()
+		with pytest.raises(ValueError):
+			res = duckdb_cursor.read_csv(obj, header=True).fetchall()
+	
+	def test_filelike_custom(self, duckdb_cursor):
+		_ = pytest.importorskip("fsspec")
+		class CustomIO:
+			def __init__(self):
+				self.loc = 0
+				pass
+			def seek(self, loc):
+				self.loc = loc
+				return loc
+			def read(self, amount):
+				out = b"c1,c2,c3\na,b,c"[self.loc : self.loc + amount : 1]
+				self.loc += amount
+				return out
+
+		obj = CustomIO()
+		res = duckdb_cursor.read_csv(obj, header=True).fetchall()
+		assert res == [('a', 'b', 'c')]
+
+	def test_filelike_non_readable(self, duckdb_cursor):
+		_ = pytest.importorskip("fsspec")
+		obj = 5;
+		with pytest.raises(ValueError, match="Can not read from a non file-like object"):
+			res = duckdb_cursor.read_csv(obj, header=True).fetchall()
+	
+	def test_filelike_none(self, duckdb_cursor):
+		_ = pytest.importorskip("fsspec")
+		obj = None;
+		with pytest.raises(ValueError, match="Can not read from a non file-like object"):
+			res = duckdb_cursor.read_csv(obj, header=True).fetchall()
+
+	def test_internal_object_filesystem_cleanup(self, duckdb_cursor):
+		_ = pytest.importorskip("fsspec")
+		class CountedObject(StringIO):
+			instance_count = 0
+			def __init__(self, str):
+				CountedObject.instance_count += 1
+				super().__init__(str)
+			def __del__(self):
+				CountedObject.instance_count -= 1
+
+		def scoped_objects(duckdb_cursor):
+			obj = CountedObject("a,b,c")
+			rel1 = duckdb_cursor.read_csv(obj)
+			assert rel1.fetchall() == [('a','b','c',)]
+			assert CountedObject.instance_count == 1
+
+			obj = CountedObject("a,b,c")
+			rel2 = duckdb_cursor.read_csv(obj)
+			assert rel2.fetchall() == [('a','b','c',)]
+			assert CountedObject.instance_count == 2
+
+			obj = CountedObject("a,b,c")
+			rel3 = duckdb_cursor.read_csv(obj)
+			assert rel3.fetchall() == [('a','b','c',)]
+			assert CountedObject.instance_count == 3
+		assert CountedObject.instance_count == 0
+		scoped_objects(duckdb_cursor)
+		assert CountedObject.instance_count == 0

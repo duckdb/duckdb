@@ -15,13 +15,18 @@
 
 namespace duckdb {
 struct ParallelTableScanState;
-
+struct ParallelCollectionScanState;
+class CreateIndexScanState;
+class CollectionScanState;
 class PersistentTableData;
 class TableDataWriter;
 class TableIndexList;
 class TableStatistics;
-
+struct TableAppendState;
+class DuckTransaction;
 class BoundConstraint;
+class RowGroupSegmentTree;
+struct ColumnSegmentInfo;
 
 class RowGroupCollection {
 public:
@@ -46,8 +51,8 @@ public:
 	void InitializeCreateIndexScan(CreateIndexScanState &state);
 	void InitializeScanWithOffset(CollectionScanState &state, const vector<column_t> &column_ids, idx_t start_row,
 	                              idx_t end_row);
-	static bool InitializeScanInRowGroup(CollectionScanState &state, RowGroup *row_group, idx_t vector_index,
-	                                     idx_t max_row);
+	static bool InitializeScanInRowGroup(CollectionScanState &state, RowGroupCollection &collection,
+	                                     RowGroup &row_group, idx_t vector_index, idx_t max_row);
 	void InitializeParallelScan(ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
@@ -73,28 +78,37 @@ public:
 
 	void RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count);
 
-	idx_t Delete(TransactionData transaction, DataTable *table, row_t *ids, idx_t count);
+	idx_t Delete(TransactionData transaction, DataTable &table, row_t *ids, idx_t count);
 	void Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids, DataChunk &updates);
 	void UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
 	                  DataChunk &updates);
 
-	void Checkpoint(TableDataWriter &writer, vector<unique_ptr<BaseStatistics>> &global_stats);
+	void Checkpoint(TableDataWriter &writer, TableStatistics &global_stats);
 
 	void CommitDropColumn(idx_t index);
 	void CommitDropTable();
 
-	void GetStorageInfo(TableStorageInfo &result);
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo();
 	const vector<LogicalType> &GetTypes() const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
-	                                         Expression *default_value);
+	                                         Expression &default_value);
 	shared_ptr<RowGroupCollection> RemoveColumn(idx_t col_idx);
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
 	                                         vector<column_t> bound_columns, Expression &cast_expr);
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 
+	void CopyStats(TableStatistics &stats);
 	unique_ptr<BaseStatistics> CopyStats(column_t column_id);
-	void SetStatistics(column_t column_id, const std::function<void(BaseStatistics &)> &set_fun);
+	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
+
+	AttachedDatabase &GetAttached();
+	BlockManager &GetBlockManager() {
+		return block_manager;
+	}
+	DataTableInfo &GetTableInfo() {
+		return *info;
+	}
 
 private:
 	bool IsEmpty(SegmentLock &) const;
@@ -104,11 +118,13 @@ private:
 	BlockManager &block_manager;
 	//! The number of rows in the table
 	atomic<idx_t> total_rows;
+	//! The data table info
 	shared_ptr<DataTableInfo> info;
+	//! The column types of the row group collection
 	vector<LogicalType> types;
 	idx_t row_start;
 	//! The segment trees holding the various row_groups of the table
-	shared_ptr<SegmentTree> row_groups;
+	shared_ptr<RowGroupSegmentTree> row_groups;
 	//! Table statistics
 	TableStatistics stats;
 };

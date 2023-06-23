@@ -362,7 +362,7 @@ string Date::ToString(date_t date) {
 	Date::Convert(date, date_units[0], date_units[1], date_units[2]);
 
 	auto length = DateToStringCast::Length(date_units, year_length, add_bc);
-	auto buffer = unique_ptr<char[]>(new char[length]);
+	auto buffer = make_unsafe_uniq_array<char>(length);
 	DateToStringCast::Format(buffer.get(), date_units, year_length, add_bc);
 	return string(buffer.get(), length);
 }
@@ -437,6 +437,15 @@ int64_t Date::EpochMicroseconds(date_t date) {
 	int64_t result;
 	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(date.days, Interval::MICROS_PER_DAY, result)) {
 		throw ConversionException("Could not convert DATE (%s) to microseconds", Date::ToString(date));
+	}
+	return result;
+}
+
+int64_t Date::EpochMilliseconds(date_t date) {
+	int64_t result;
+	const auto MILLIS_PER_DAY = Interval::MICROS_PER_DAY / Interval::MICROS_PER_MSEC;
+	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(date.days, MILLIS_PER_DAY, result)) {
+		throw ConversionException("Could not convert DATE (%s) to milliseconds", Date::ToString(date));
 	}
 	return result;
 }

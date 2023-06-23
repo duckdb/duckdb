@@ -1,18 +1,29 @@
 name: Windows
 on:
+  workflow_dispatch:
+  repository_dispatch:
   push:
+    branches:
+      - '**'
+      - '!master'
+      - '!feature'
+    tags:
+      - '**'
     paths-ignore:
       - '**.md'
+      - 'tools/**'
+      - '!tools/odbc/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Windows.yml'
+      - '.github/config/uncovered_files.csv'
   pull_request:
     paths-ignore:
       - '**.md'
-      - 'tools/jdbc/**'
-      - 'tools/juliapkg/**'
-      - 'tools/nodejs/**'
-      - 'tools/pythonpkg/**'
-      - 'tools/rpkg/**'
+      - 'tools/**'
+      - '!tools/odbc/**'
       - '.github/workflows/**'
       - '!.github/workflows/Windows.yml'
+      - '.github/config/uncovered_files.csv'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -30,7 +41,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -44,17 +55,20 @@ jobs:
       shell: bash
       run: |
         python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1 -DBUILD_AUTOCOMPLETE_EXTENSION=1
         cmake --build . --config Release
 
     - name: Test
       shell: bash
-      run: test/Release/unittest.exe
+      run: |
+        echo "DUCKDB_INSTALL_LIB=D:\a\duckdb\duckdb\src\Release\duckdb.dll" >> $env:GITHUB_ENV
+        test/Release/unittest.exe
 
     - name: Tools Test
       shell: bash
       run: |
         python tools/shell/shell-test.py Release/duckdb.exe
+        tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
     - name: Deploy
       shell: bash
@@ -66,7 +80,7 @@ jobs:
         zip -j duckdb_odbc-windows-amd64.zip tools/odbc/bin/Release/*
         python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_odbc-windows-amd64.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-binaries-windows
         path: |
@@ -81,7 +95,7 @@ jobs:
 
  win-release-32:
     name: Windows (32 Bit)
-    runs-on: windows-latest
+    runs-on: windows-2019
     needs: win-release-64
 
     steps:
@@ -89,7 +103,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -102,7 +116,7 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_AUTOCOMPLETE_EXTENSION=1
         cmake --build . --config Release
 
     - name: Test
@@ -113,6 +127,7 @@ jobs:
       shell: bash
       run: |
         python tools/shell/shell-test.py Release/duckdb.exe
+        tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
 
     - name: Deploy
       shell: bash
@@ -123,7 +138,7 @@ jobs:
         zip -j libduckdb-windows-i386.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-windows-i386.zip duckdb_cli-windows-i386.zip
 
-    - uses: actions/upload-artifact@v2
+    - uses: actions/upload-artifact@v3
       with:
         name: duckdb-binaries-windows-32bit
         path: |
@@ -164,6 +179,11 @@ jobs:
          run: |
            cp src/libduckdb.dll .
            test/unittest.exe
+           
+       - name: Tools Test
+         shell: msys2 {0}
+         run: |
+           tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper.exe
 
  odbc-win-64:
     name: ODBC Windows
@@ -174,7 +194,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
+    - uses: actions/setup-python@v4
       with:
         python-version: '3.7'
 
@@ -235,7 +255,7 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: actions/setup-python@v2
+     - uses: actions/setup-python@v4
        with:
          python-version: '3.7'
 

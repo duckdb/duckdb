@@ -35,7 +35,10 @@
 #endif
 #endif
 
-// duplicate of duckdb/common/constants.hpp
+// API versions
+// if no explicit API version is defined, the latest API version is used
+// Note that using older API versions (i.e. not using DUCKDB_API_LATEST) is deprecated.
+// These will not be supported long-term, and will be removed in future versions.
 #ifndef DUCKDB_API_0_3_1
 #define DUCKDB_API_0_3_1 1
 #endif
@@ -187,6 +190,23 @@ typedef struct {
 	idx_t size;
 } duckdb_string;
 
+/*
+    The internal data representation of a VARCHAR/BLOB column
+*/
+typedef struct {
+	union {
+		struct {
+			uint32_t length;
+			char prefix[4];
+			char *ptr;
+		} pointer;
+		struct {
+			uint32_t length;
+			char inlined[12];
+		} inlined;
+	} value;
+} duckdb_string_t;
+
 typedef struct {
 	void *data;
 	idx_t size;
@@ -259,6 +279,9 @@ typedef struct _duckdb_appender {
 typedef struct _duckdb_arrow {
 	void *__arrw;
 } * duckdb_arrow;
+typedef struct _duckdb_arrow_stream {
+	void *__arrwstr;
+} * duckdb_arrow_stream;
 typedef struct _duckdb_config {
 	void *__cnfg;
 } * duckdb_config;
@@ -295,6 +318,7 @@ typedef enum {
 /*!
 Creates a new database or opens an existing database file stored at the the given path.
 If no path is given a new in-memory database is created instead.
+The instantiated database should be closed with 'duckdb_close'
 
 * path: Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.
 * out_database: The result database object.
@@ -328,6 +352,7 @@ DUCKDB_API void duckdb_close(duckdb_database *database);
 /*!
 Opens a connection to a database. Connections are required to query the database, and store transactional state
 associated with the connection.
+The instantiated connection should be closed using 'duckdb_disconnect'
 
 * database: The database file to connect to.
 * out_connection: The result connection object.
@@ -571,10 +596,18 @@ Use `duckdb_result_chunk_count` to figure out how many chunks there are in the r
 DUCKDB_API duckdb_data_chunk duckdb_result_get_chunk(duckdb_result result, idx_t chunk_index);
 
 /*!
+Checks if the type of the internal result is StreamQueryResult.
+
+* result: The result object to check.
+* returns: Whether or not the result object is of the type StreamQueryResult
+*/
+DUCKDB_API bool duckdb_result_is_streaming(duckdb_result result);
+
+/*!
 Returns the number of data chunks present in the result.
 
 * result: The result object
-* returns: The resulting data chunk. Returns `NULL` if the chunk index is out of bounds.
+* returns: Number of data chunks present in the result.
 */
 DUCKDB_API idx_t duckdb_result_chunk_count(duckdb_result result);
 
@@ -739,6 +772,13 @@ This is the amount of tuples that will fit into a data chunk created by `duckdb_
 * returns: The vector size.
 */
 DUCKDB_API idx_t duckdb_vector_size();
+
+/*!
+Whether or not the duckdb_string_t value is inlined.
+This means that the data of the string does not have a separate allocation.
+
+*/
+DUCKDB_API bool duckdb_string_is_inlined(duckdb_string_t string);
 
 //===--------------------------------------------------------------------===//
 // Date/Time/Timestamp Helpers
@@ -1041,6 +1081,31 @@ Executes the prepared statement with the given bound parameters, and returns an 
 DUCKDB_API duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_statement,
                                                       duckdb_arrow *out_result);
 
+/*!
+Scans the Arrow stream and creates a view with the given name.
+
+* connection: The connection on which to execute the scan.
+* table_name: Name of the temporary view to create.
+* arrow: Arrow stream wrapper.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_arrow_scan(duckdb_connection connection, const char *table_name,
+                                          duckdb_arrow_stream arrow);
+
+/*!
+Scans the Arrow array and creates a view with the given name.
+
+* connection: The connection on which to execute the scan.
+* table_name: Name of the temporary view to create.
+* arrow_schema: Arrow schema wrapper.
+* arrow_array: Arrow array wrapper.
+* out_stream: Output array stream that wraps around the passed schema, for releasing/deleting once done.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_arrow_array_scan(duckdb_connection connection, const char *table_name,
+                                                duckdb_arrow_schema arrow_schema, duckdb_arrow_array arrow_array,
+                                                duckdb_arrow_stream *out_stream);
+
 //===--------------------------------------------------------------------===//
 // Extract Statements
 //===--------------------------------------------------------------------===//
@@ -1105,6 +1170,21 @@ Note that after calling `duckdb_pending_prepared`, the pending result should alw
 */
 DUCKDB_API duckdb_state duckdb_pending_prepared(duckdb_prepared_statement prepared_statement,
                                                 duckdb_pending_result *out_result);
+
+/*!
+Executes the prepared statement with the given bound parameters, and returns a pending result.
+This pending result will create a streaming duckdb_result when executed.
+The pending result represents an intermediate structure for a query that is not yet fully executed.
+
+Note that after calling `duckdb_pending_prepared_streaming`, the pending result should always be destroyed using
+`duckdb_destroy_pending`, even if this function returns DuckDBError.
+
+* prepared_statement: The prepared statement to execute.
+* out_result: The pending query result.
+* returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
+*/
+DUCKDB_API duckdb_state duckdb_pending_prepared_streaming(duckdb_prepared_statement prepared_statement,
+                                                          duckdb_pending_result *out_result);
 
 /*!
 Closes the pending result and de-allocates all memory allocated for the result.
@@ -1685,6 +1765,16 @@ Adds a parameter to the table function.
 DUCKDB_API void duckdb_table_function_add_parameter(duckdb_table_function table_function, duckdb_logical_type type);
 
 /*!
+Adds a named parameter to the table function.
+
+* table_function: The table function
+* name: The name of the parameter
+* type: The type of the parameter to add.
+*/
+DUCKDB_API void duckdb_table_function_add_named_parameter(duckdb_table_function table_function, const char *name,
+                                                          duckdb_logical_type type);
+
+/*!
 Assigns extra information to the table function that can be fetched during binding, etc.
 
 * table_function: The table function
@@ -1791,6 +1881,17 @@ The result must be destroyed with `duckdb_destroy_value`.
 * returns: The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
 */
 DUCKDB_API duckdb_value duckdb_bind_get_parameter(duckdb_bind_info info, idx_t index);
+
+/*!
+Retrieves a named parameter with the given name.
+
+The result must be destroyed with `duckdb_destroy_value`.
+
+* info: The info object
+* name: The name of the parameter
+* returns: The value of the parameter. Must be destroyed with `duckdb_destroy_value`.
+*/
+DUCKDB_API duckdb_value duckdb_bind_get_named_parameter(duckdb_bind_info info, const char *name);
 
 /*!
 Sets the user-provided bind data in the bind object. This object can be retrieved again during execution.
@@ -2318,6 +2419,28 @@ Returns true if execution of the current query is finished.
 * con: The connection on which to check
 */
 DUCKDB_API bool duckdb_execution_is_finished(duckdb_connection con);
+
+//===--------------------------------------------------------------------===//
+// Streaming Result Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Fetches a data chunk from the (streaming) duckdb_result. This function should be called repeatedly until the result is
+exhausted.
+
+The result must be destroyed with `duckdb_destroy_data_chunk`.
+
+This function can only be used on duckdb_results created with 'duckdb_pending_prepared_streaming'
+
+If this function is used, none of the other result functions can be used and vice versa (i.e. this function cannot be
+mixed with the legacy result functions or the materialized result functions).
+
+It is not known beforehand how many chunks will be returned by this result.
+
+* result: The result object to fetch the data chunk from.
+* returns: The resulting data chunk. Returns `NULL` if the result has an error.
+*/
+DUCKDB_API duckdb_data_chunk duckdb_stream_fetch_chunk(duckdb_result result);
 
 #ifdef __cplusplus
 }

@@ -52,14 +52,14 @@ public:
 	// &pushed_filters);
 
 private:
-	FilterResult AddFilter(Expression *expr);
-	FilterResult AddBoundComparisonFilter(Expression *expr);
+	FilterResult AddFilter(Expression &expr);
+	FilterResult AddBoundComparisonFilter(Expression &expr);
 	FilterResult AddTransitiveFilters(BoundComparisonExpression &comparison);
-	unique_ptr<Expression> FindTransitiveFilter(Expression *expr);
+	unique_ptr<Expression> FindTransitiveFilter(Expression &expr);
 	// unordered_map<idx_t, std::pair<Value *, Value *>>
 	// FindZonemapChecks(vector<idx_t> &column_ids, unordered_set<idx_t> &not_constants, Expression *filter);
-	Expression *GetNode(Expression *expr);
-	idx_t GetEquivalenceSet(Expression *expr);
+	Expression &GetNode(Expression &expr);
+	idx_t GetEquivalenceSet(Expression &expr);
 	FilterResult AddConstantComparison(vector<ExpressionValueInformation> &info_list, ExpressionValueInformation info);
 	//
 	//	//! Functions used to push and generate OR Filters
@@ -81,13 +81,13 @@ private:
 	//
 	//	template <typename CONJUNCTION_TYPE>
 	//	unique_ptr<TableFilter> NextConjunctionFilter(BoundConjunctionExpression *conjunction) {
-	//		unique_ptr<ConjunctionFilter> conj_filter = make_unique<CONJUNCTION_TYPE>();
+	//		unique_ptr<ConjunctionFilter> conj_filter = make_uniq<CONJUNCTION_TYPE>();
 	//		for (auto &expr : conjunction->children) {
 	//			auto comp_expr = (BoundComparisonExpression *)expr.get();
 	//			auto &const_expr =
 	//			    (comp_expr->left->type == ExpressionType::VALUE_CONSTANT) ? *comp_expr->left : *comp_expr->right;
 	//			auto const_value = ExpressionExecutor::EvaluateScalar(const_expr);
-	//			auto const_filter = make_unique<ConstantFilter>(comp_expr->type, const_value);
+	//			auto const_filter = make_uniq<ConstantFilter>(comp_expr->type, const_value);
 	//			conj_filter->child_filters.push_back(std::move(const_filter));
 	//		}
 	//		return std::move(conj_filter);
@@ -97,9 +97,9 @@ private:
 	vector<unique_ptr<Expression>> remaining_filters;
 
 	expression_map_t<unique_ptr<Expression>> stored_expressions;
-	unordered_map<Expression *, idx_t> equivalence_set_map;
+	expression_map_t<idx_t> equivalence_set_map;
 	unordered_map<idx_t, vector<ExpressionValueInformation>> constant_values;
-	unordered_map<idx_t, vector<Expression *>> equivalence_map;
+	unordered_map<idx_t, vector<reference<Expression>>> equivalence_map;
 	idx_t set_index = 0;
 	//
 	//	//! Structures used for OR Filters

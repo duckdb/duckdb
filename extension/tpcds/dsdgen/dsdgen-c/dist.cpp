@@ -42,10 +42,11 @@
 #include <fcntl.h>
 #include <stdio.h>
 
-#ifdef WIN32
+#ifdef _WIN32
 #include <io.h>
 #include <search.h>
 #include <stdlib.h>
+#include <winsock.h>
 #else
 #include <netinet/in.h>
 #include <sys/stat.h>

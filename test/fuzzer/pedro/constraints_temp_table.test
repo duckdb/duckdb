@@ -1,0 +1,21 @@
+# name: test/fuzzer/pedro/constraints_temp_table.test
+# description: Reference issue in duckdb_constraints with temporary tables
+# group: [pedro]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0 (c1 INT, c0 INT CONSTRAINT k1 REFERENCES t0(c0) UNIQUE);
+
+statement ok
+CREATE TABLE t1 AS (SELECT 1);
+
+statement ok
+CREATE TEMP TABLE t0 AS (SELECT 1);
+
+statement ok
+SELECT * FROM duckdb_constraints()
+
+statement ok
+SHOW

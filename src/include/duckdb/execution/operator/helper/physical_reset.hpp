@@ -20,6 +20,9 @@ struct ExtensionOption;
 //! PhysicalReset represents a RESET operation (e.g. RESET a = 42)
 class PhysicalReset : public PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RESET;
+
+public:
 	PhysicalReset(const std::string &name_p, SetScope scope_p, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::RESET, {LogicalType::BOOLEAN}, estimated_cardinality), name(name_p),
 	      scope(scope_p) {
@@ -27,8 +30,11 @@ public:
 
 public:
 	// Source interface
-	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	             LocalSourceState &lstate) const override;
+	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
+
+	bool IsSource() const override {
+		return true;
+	}
 
 public:
 	const std::string name;

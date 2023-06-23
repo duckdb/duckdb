@@ -17,6 +17,9 @@ namespace duckdb {
 
 class LogicalReset : public LogicalOperator {
 public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_RESET;
+
+public:
 	LogicalReset(std::string name_p, SetScope scope_p)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_RESET), name(name_p), scope(scope_p) {
 	}

@@ -15,7 +15,7 @@ CreatePragmaFunctionInfo::CreatePragmaFunctionInfo(string name, PragmaFunctionSe
 }
 
 unique_ptr<CreateInfo> CreatePragmaFunctionInfo::Copy() const {
-	auto result = make_unique<CreatePragmaFunctionInfo>(functions.name, functions);
+	auto result = make_uniq<CreatePragmaFunctionInfo>(functions.name, functions);
 	CopyProperties(*result);
 	return std::move(result);
 }

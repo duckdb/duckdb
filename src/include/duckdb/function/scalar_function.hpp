@@ -14,12 +14,25 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/function.hpp"
+#include "duckdb/planner/plan_serialization.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
 
 struct FunctionLocalState {
 	DUCKDB_API virtual ~FunctionLocalState();
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 class Binder;
@@ -28,14 +41,14 @@ class DependencyList;
 class ScalarFunctionCatalogEntry;
 
 struct FunctionStatisticsInput {
-	FunctionStatisticsInput(BoundFunctionExpression &expr_p, FunctionData *bind_data_p,
-	                        vector<unique_ptr<BaseStatistics>> &child_stats_p, unique_ptr<Expression> *expr_ptr_p)
+	FunctionStatisticsInput(BoundFunctionExpression &expr_p, optional_ptr<FunctionData> bind_data_p,
+	                        vector<BaseStatistics> &child_stats_p, unique_ptr<Expression> *expr_ptr_p)
 	    : expr(expr_p), bind_data(bind_data_p), child_stats(child_stats_p), expr_ptr(expr_ptr_p) {
 	}
 
 	BoundFunctionExpression &expr;
-	FunctionData *bind_data;
-	vector<unique_ptr<BaseStatistics>> &child_stats;
+	optional_ptr<FunctionData> bind_data;
+	vector<BaseStatistics> &child_stats;
 	unique_ptr<Expression> *expr_ptr;
 };
 
@@ -53,7 +66,7 @@ typedef void (*dependency_function_t)(BoundFunctionExpression &expr, DependencyL
 
 typedef void (*function_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
                                      const ScalarFunction &function);
-typedef unique_ptr<FunctionData> (*function_deserialize_t)(ClientContext &context, FieldReader &reader,
+typedef unique_ptr<FunctionData> (*function_deserialize_t)(PlanDeserializationState &state, FieldReader &reader,
                                                            ScalarFunction &function);
 
 class ScalarFunction : public BaseScalarFunction {

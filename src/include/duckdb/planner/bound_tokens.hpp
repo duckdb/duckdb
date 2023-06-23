@@ -52,5 +52,6 @@ class BoundTableFunction;
 class BoundEmptyTableRef;
 class BoundExpressionListRef;
 class BoundCTERef;
+class BoundPivotRef;
 
 } // namespace duckdb

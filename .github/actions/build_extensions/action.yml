@@ -69,6 +69,12 @@ inputs:
   sqlsmith:
     description: 'Build SQLsmith'
     default: 1
+  inet:
+    description: 'Build INET'
+    default: 1
+  autocomplete:
+    description: 'Build SQL autocomplete extension'
+    default: 1
   out_of_tree_ext:
     description: 'Build Out-Of-Tree Extensions'
     default: 1
@@ -81,6 +87,12 @@ inputs:
   aarch64_cross_compile:
     description: 'Enable Linux aarch64 cross-compiling'
     default: 0
+  override_cc:
+    description: 'Override C Compiler'
+    default: ''
+  override_cxx:
+    description: 'Override CXX Compiler'
+    default: ''
 
 runs:
   using: "composite"
@@ -93,10 +105,12 @@ runs:
         BUILD_TPCH: ${{ inputs.tpch }}
         BUILD_TPCDS: ${{ inputs.tpcds }}
         BUILD_FTS: ${{ inputs.fts }}
+        BUILD_INET: ${{ inputs.inet }}
         BUILD_HTTPFS: ${{ inputs.httpfs }}
         BUILD_JSON: ${{ inputs.json }}
         BUILD_EXCEL: ${{ inputs.excel }}
         BUILD_SQLSMITH: ${{ inputs.sqlsmith }}
+        BUILD_AUTOCOMPLETE: ${{ inputs.autocomplete }}
         FORCE_32_BIT: ${{ inputs.force_32_bit }}
         TREAT_WARNINGS_AS_ERRORS: ${{ inputs.treat_warn_as_error}}
         FORCE_WARN_UNUSED: 1
@@ -105,8 +119,8 @@ runs:
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
-        CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || '' }}
-        CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || '' }}
+        CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
+        CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
 
       run: |
         cd  ${{ inputs.build_dir}}

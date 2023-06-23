@@ -18,7 +18,7 @@ PipelineBuildState &MetaPipeline::GetState() const {
 	return state;
 }
 
-PhysicalOperator *MetaPipeline::GetSink() const {
+optional_ptr<PhysicalOperator> MetaPipeline::GetSink() const {
 	return sink;
 }
 
@@ -67,11 +67,10 @@ void MetaPipeline::AssignNextBatchIndex(Pipeline *pipeline) {
 	pipeline->base_batch_index = next_batch_index++ * PipelineBuildState::BATCH_INCREMENT;
 }
 
-void MetaPipeline::Build(PhysicalOperator *op) {
+void MetaPipeline::Build(PhysicalOperator &op) {
 	D_ASSERT(pipelines.size() == 1);
 	D_ASSERT(children.empty());
-	D_ASSERT(final_pipelines.empty());
-	op->BuildPipelines(*pipelines.back(), *this);
+	op.BuildPipelines(*pipelines.back(), *this);
 }
 
 void MetaPipeline::Ready() {
@@ -83,18 +82,18 @@ void MetaPipeline::Ready() {
 	}
 }
 
-MetaPipeline *MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator *op) {
-	children.push_back(make_unique<MetaPipeline>(executor, state, op));
+MetaPipeline &MetaPipeline::CreateChildMetaPipeline(Pipeline &current, PhysicalOperator &op) {
+	children.push_back(make_shared<MetaPipeline>(executor, state, &op));
 	auto child_meta_pipeline = children.back().get();
 	// child MetaPipeline must finish completely before this MetaPipeline can start
 	current.AddDependency(child_meta_pipeline->GetBasePipeline());
 	// child meta pipeline is part of the recursive CTE too
 	child_meta_pipeline->recursive_cte = recursive_cte;
-	return child_meta_pipeline;
+	return *child_meta_pipeline;
 }
 
 Pipeline *MetaPipeline::CreatePipeline() {
-	pipelines.emplace_back(make_unique<Pipeline>(executor));
+	pipelines.emplace_back(make_shared<Pipeline>(executor));
 	state.SetPipelineSink(*pipelines.back(), sink, next_batch_index++);
 	return pipelines.back().get();
 }
@@ -125,18 +124,29 @@ void MetaPipeline::AddDependenciesFrom(Pipeline *dependant, Pipeline *start, boo
 }
 
 void MetaPipeline::AddFinishEvent(Pipeline *pipeline) {
+	D_ASSERT(finish_pipelines.find(pipeline) == finish_pipelines.end());
 	finish_pipelines.insert(pipeline);
+
+	// add all pipelines that were added since 'pipeline' was added (including 'pipeline') to the finish group
+	auto it = pipelines.begin();
+	for (; it->get() != pipeline; it++) {
+	}
+	it++;
+	for (; it != pipelines.end(); it++) {
+		finish_map.emplace(it->get(), pipeline);
+	}
 }
 
-bool MetaPipeline::HasFinishEvent(Pipeline *pipeline) {
+bool MetaPipeline::HasFinishEvent(Pipeline *pipeline) const {
 	return finish_pipelines.find(pipeline) != finish_pipelines.end();
 }
 
-Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matters) {
-	if (HasRecursiveCTE()) {
-		throw NotImplementedException("UNIONS are not supported in recursive CTEs yet");
-	}
+optional_ptr<Pipeline> MetaPipeline::GetFinishGroup(Pipeline *pipeline) const {
+	auto it = finish_map.find(pipeline);
+	return it == finish_map.end() ? nullptr : it->second;
+}
 
+Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matters) {
 	// create the union pipeline (batch index 0, should be set correctly afterwards)
 	auto union_pipeline = CreatePipeline();
 	state.SetPipelineOperators(*union_pipeline, state.GetPipelineOperators(current));
@@ -157,19 +167,16 @@ Pipeline *MetaPipeline::CreateUnionPipeline(Pipeline &current, bool order_matter
 	return union_pipeline;
 }
 
-void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator *op, Pipeline *last_pipeline) {
+void MetaPipeline::CreateChildPipeline(Pipeline &current, PhysicalOperator &op, Pipeline *last_pipeline) {
 	// rule 2: 'current' must be fully built (down to the source) before creating the child pipeline
 	D_ASSERT(current.source);
-	if (HasRecursiveCTE()) {
-		throw NotImplementedException("Child pipelines are not supported in recursive CTEs yet");
-	}
 
 	// create the child pipeline (same batch index)
 	pipelines.emplace_back(state.CreateChildPipeline(executor, current, op));
 	auto child_pipeline = pipelines.back().get();
 	child_pipeline->base_batch_index = current.base_batch_index;
 
-	// child pipeline has a depency (within this MetaPipeline on all pipelines that were scheduled
+	// child pipeline has a dependency (within this MetaPipeline on all pipelines that were scheduled
 	// between 'current' and now (including 'current') - set them up
 	dependencies[child_pipeline].push_back(&current);
 	AddDependenciesFrom(child_pipeline, last_pipeline, false);

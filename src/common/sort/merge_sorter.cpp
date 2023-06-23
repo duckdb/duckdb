@@ -83,7 +83,7 @@ void MergeSorter::MergePartition() {
 
 void MergeSorter::GetNextPartition() {
 	// Create result block
-	state.sorted_blocks_temp[state.pair_idx].push_back(make_unique<SortedBlock>(buffer_manager, state));
+	state.sorted_blocks_temp[state.pair_idx].push_back(make_uniq<SortedBlock>(buffer_manager, state));
 	result = state.sorted_blocks_temp[state.pair_idx].back().get();
 	// Determine which blocks must be merged
 	auto &left_block = *state.sorted_blocks[state.pair_idx * 2];
@@ -91,8 +91,8 @@ void MergeSorter::GetNextPartition() {
 	const idx_t l_count = left_block.Count();
 	const idx_t r_count = right_block.Count();
 	// Initialize left and right reader
-	left = make_unique<SBScanState>(buffer_manager, state);
-	right = make_unique<SBScanState>(buffer_manager, state);
+	left = make_uniq<SBScanState>(buffer_manager, state);
+	right = make_uniq<SBScanState>(buffer_manager, state);
 	// Compute the work that this thread must do using Merge Path
 	idx_t l_end;
 	idx_t r_end;
@@ -273,16 +273,13 @@ void MergeSorter::ComputeMerge(const idx_t &count, bool left_smaller[]) {
 			break;
 		}
 		// Pin the radix sorting data
-		if (!l_done) {
-			left->PinRadix(l.block_idx);
-			l_radix_ptr = left->RadixPtr();
-		}
-		if (!r_done) {
-			right->PinRadix(r.block_idx);
-			r_radix_ptr = right->RadixPtr();
-		}
-		const idx_t &l_count = !l_done ? l_sorted_block.radix_sorting_data[l.block_idx]->count : 0;
-		const idx_t &r_count = !r_done ? r_sorted_block.radix_sorting_data[r.block_idx]->count : 0;
+		left->PinRadix(l.block_idx);
+		l_radix_ptr = left->RadixPtr();
+		right->PinRadix(r.block_idx);
+		r_radix_ptr = right->RadixPtr();
+
+		const idx_t l_count = l_sorted_block.radix_sorting_data[l.block_idx]->count;
+		const idx_t r_count = r_sorted_block.radix_sorting_data[r.block_idx]->count;
 		// Compute the merge
 		if (sort_layout.all_constant) {
 			// All sorting columns are constant size
@@ -298,12 +295,8 @@ void MergeSorter::ComputeMerge(const idx_t &count, bool left_smaller[]) {
 			}
 		} else {
 			// Pin the blob data
-			if (!l_done) {
-				left->PinData(*l_sorted_block.blob_sorting_data);
-			}
-			if (!r_done) {
-				right->PinData(*r_sorted_block.blob_sorting_data);
-			}
+			left->PinData(*l_sorted_block.blob_sorting_data);
+			right->PinData(*r_sorted_block.blob_sorting_data);
 			// Merge with variable size sorting columns
 			for (; compared < count && l.entry_idx < l_count && r.entry_idx < r_count; compared++) {
 				left_smaller[compared] =
@@ -544,7 +537,9 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 					const bool &l_smaller = left_smaller[copied + i];
 					const bool r_smaller = !l_smaller;
 					const auto &entry_size = next_entry_sizes[copied + i];
-					memcpy(result_heap_ptr, (data_ptr_t)(l_smaller * (idx_t)l_heap_ptr + r_smaller * (idx_t)r_heap_ptr),
+					memcpy(result_heap_ptr,
+					       reinterpret_cast<data_ptr_t>(l_smaller * CastPointerToValue(l_heap_ptr) +
+					                                    r_smaller * CastPointerToValue(r_heap_ptr)),
 					       entry_size);
 					D_ASSERT(Load<uint32_t>(result_heap_ptr) == entry_size);
 					result_heap_ptr += entry_size;
@@ -585,7 +580,10 @@ void MergeSorter::MergeRows(data_ptr_t &l_ptr, idx_t &l_entry_idx, const idx_t &
 		const bool &l_smaller = left_smaller[copied + i];
 		const bool r_smaller = !l_smaller;
 		// Use comparison bool (0 or 1) to copy an entry from either side
-		FastMemcpy(target_ptr, (data_ptr_t)(l_smaller * (idx_t)l_ptr + r_smaller * (idx_t)r_ptr), entry_size);
+		FastMemcpy(
+		    target_ptr,
+		    reinterpret_cast<data_ptr_t>(l_smaller * CastPointerToValue(l_ptr) + r_smaller * CastPointerToValue(r_ptr)),
+		    entry_size);
 		target_ptr += entry_size;
 		// Use the comparison bool to increment entries and pointers
 		l_entry_idx += l_smaller;
