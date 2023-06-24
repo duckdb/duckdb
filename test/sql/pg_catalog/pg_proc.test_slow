@@ -1,4 +1,4 @@
-# name: test/sql/pg_catalog/pg_proc.test
+# name: test/sql/pg_catalog/pg_proc.test_slow
 # description: Test pg_proc function
 # group: [pg_catalog]
 

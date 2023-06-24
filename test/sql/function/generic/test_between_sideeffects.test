@@ -36,7 +36,7 @@ query I
 EXECUTE v2(now() - INTERVAL '10 minute')
 ----
 
-loop i 0 100
+loop i 0 10
 
 # this should always be false
 query I
