@@ -1,11 +1,11 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "duckdb.hpp"
-#include "duckdb/optimizer/optimizer_extension.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 
 using namespace duckdb;
 
@@ -111,7 +111,7 @@ public:
 			auto buffer = malloc(chunk_len);
 			D_ASSERT(buffer);
 			ReadChecked(sockfd, buffer, chunk_len);
-			BufferedDeserializer deserializer((data_ptr_t)buffer, chunk_len);
+			BufferedDeserializer deserializer(data_ptr_cast(buffer), chunk_len);
 			DataChunk chunk;
 
 			chunk.Deserialize(deserializer);

@@ -2,6 +2,9 @@
 # description: Test mode function
 # group: [aggregates]
 
+statement ok
+SET default_null_order='nulls_first';
+
 #Corner cases
 statement error
 select mode()
@@ -278,3 +281,20 @@ select k, v, mode(v) over (partition by k)
 2	2	2
 2	5	2
 3	1	1
+
+# MODE is order-sensitive, so this should bind and return the larger value
+query I
+SELECT MODE(order_occurrences ORDER BY order_occurrences DESC) FROM (
+VALUES
+	(500, 1),
+	(1000, 2),
+	(800, 3),
+	(1000, 4),
+	(500, 5),
+	(550, 6),
+	(400, 7),
+	(200, 8),
+	(10, 9)
+)items_per_order(order_occurrences, item_count);
+----
+1000

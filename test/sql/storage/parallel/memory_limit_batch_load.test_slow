@@ -1,0 +1,63 @@
+# name: test/sql/storage/parallel/memory_limit_batch_load.test_slow
+# description: Test batch streaming to disk with different row group sizes
+# group: [parallel]
+
+require parquet
+
+load __TEST_DIR__/memory_limit_batch_load.db
+
+# in this test we load data of around 100M rows - uncompressed this will be 1.4GB~2GB (without/with NULLs)
+# we do these operations with a low memory limit to verify the data is streamed to and from disk correctly
+statement ok
+SET memory_limit='300MB'
+
+foreach row_group_size 5000 150000 1000000
+
+statement ok
+COPY (FROM range(100000000) tbl(i)) TO '__TEST_DIR__/giant_row_groups.parquet' (ROW_GROUP_SIZE ${row_group_size})
+
+statement ok
+CREATE TABLE integers AS FROM '__TEST_DIR__/giant_row_groups.parquet'
+
+query IIIII
+SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM integers
+----
+4999999950000000	0	99999999	100000000	100000000
+
+query I
+SELECT * FROM integers LIMIT 5 OFFSET 99998
+----
+99998
+99999
+100000
+100001
+100002
+
+statement ok
+DROP TABLE integers
+
+# now with NULL values
+statement ok
+COPY (SELECT CASE WHEN i%2=0 THEN NULL ELSE i END AS i FROM range(100000000) tbl(i)) TO '__TEST_DIR__/giant_row_groups_nulls.parquet' (ROW_GROUP_SIZE ${row_group_size})
+
+statement ok
+CREATE TABLE integers AS FROM '__TEST_DIR__/giant_row_groups_nulls.parquet'
+
+query IIIII
+SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM integers
+----
+2500000000000000	1	99999999	50000000	100000000
+
+query I
+SELECT * FROM integers LIMIT 5 OFFSET 99998
+----
+NULL
+99999
+NULL
+100001
+NULL
+
+statement ok
+DROP TABLE integers
+
+endloop

@@ -14,8 +14,8 @@ public:
 	ExpressionExecutor executor;
 
 public:
-	void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
-		context.thread.profiler.Flush(op, &executor, "projection", 0);
+	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
+		context.thread.profiler.Flush(op, executor, "projection", 0);
 	}
 };
 
@@ -27,7 +27,7 @@ PhysicalProjection::PhysicalProjection(vector<LogicalType> types, vector<unique_
 
 OperatorResultType PhysicalProjection::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                GlobalOperatorState &gstate, OperatorState &state_p) const {
-	auto &state = (ProjectionState &)state_p;
+	auto &state = state_p.Cast<ProjectionState>();
 	state.executor.Execute(input, chunk);
 	return OperatorResultType::NEED_MORE_INPUT;
 }

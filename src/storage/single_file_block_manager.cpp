@@ -19,7 +19,7 @@ namespace duckdb {
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
 
 void MainHeader::Serialize(Serializer &ser) {
-	ser.WriteData((data_ptr_t)MAGIC_BYTES, MAGIC_BYTE_SIZE);
+	ser.WriteData(const_data_ptr_cast(MAGIC_BYTES), MAGIC_BYTE_SIZE);
 	ser.Write<uint64_t>(version_number);
 	FieldWriter writer(ser);
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
@@ -107,15 +107,15 @@ T DeserializeHeaderStructure(data_ptr_t ptr) {
 	return T::Deserialize(source);
 }
 
-SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path_p, bool read_only, bool use_direct_io)
+SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, string path_p, StorageManagerOptions options)
     : BlockManager(BufferManager::GetBufferManager(db)), db(db), path(std::move(path_p)),
       header_buffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER,
                     Storage::FILE_HEADER_SIZE - Storage::BLOCK_HEADER_SIZE),
-      iteration_count(0), read_only(read_only), use_direct_io(use_direct_io) {
+      iteration_count(0), options(options) {
 }
 
 void SingleFileBlockManager::GetFileFlags(uint8_t &flags, FileLockType &lock, bool create_new) {
-	if (read_only) {
+	if (options.read_only) {
 		D_ASSERT(!create_new);
 		flags = FileFlags::FILE_FLAGS_READ;
 		lock = FileLockType::READ_LOCK;
@@ -126,7 +126,7 @@ void SingleFileBlockManager::GetFileFlags(uint8_t &flags, FileLockType &lock, bo
 			flags |= FileFlags::FILE_FLAGS_FILE_CREATE;
 		}
 	}
-	if (use_direct_io) {
+	if (options.use_direct_io) {
 		flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 	}
 }
@@ -170,7 +170,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	h2.free_list = INVALID_BLOCK;
 	h2.block_count = 0;
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
-	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE * 2);
+	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 	// ensure that writing to disk is completed before returning
 	handle->Sync();
 	// we start with h2 as active_header, this way our initial write will be in h1
@@ -197,7 +197,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	DatabaseHeader h1, h2;
 	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE);
 	h1 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
-	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2);
+	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 	h2 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
 	// check the header with the highest iteration count
 	if (h1.iteration > h2.iteration) {
@@ -241,10 +241,6 @@ void SingleFileBlockManager::Initialize(DatabaseHeader &header) {
 }
 
 void SingleFileBlockManager::LoadFreeList() {
-	if (read_only) {
-		// no need to load free list for read only db
-		return;
-	}
 	if (free_list_id == INVALID_BLOCK) {
 		// no free list
 		return;
@@ -287,7 +283,9 @@ void SingleFileBlockManager::MarkBlockAsFree(block_id_t block_id) {
 	lock_guard<mutex> lock(block_lock);
 	D_ASSERT(block_id >= 0);
 	D_ASSERT(block_id < max_block);
-	D_ASSERT(free_list.find(block_id) == free_list.end());
+	if (free_list.find(block_id) != free_list.end()) {
+		throw InternalException("MarkBlockAsFree called but block %llu was already freed!", block_id);
+	}
 	multi_use_blocks.erase(block_id);
 	free_list.insert(block_id);
 }
@@ -343,13 +341,20 @@ idx_t SingleFileBlockManager::FreeBlocks() {
 	return free_list.size();
 }
 
+unique_ptr<Block> SingleFileBlockManager::ConvertBlock(block_id_t block_id, FileBuffer &source_buffer) {
+	D_ASSERT(source_buffer.AllocSize() == Storage::BLOCK_ALLOC_SIZE);
+	return make_uniq<Block>(source_buffer, block_id);
+}
+
 unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id, FileBuffer *source_buffer) {
+	unique_ptr<Block> result;
 	if (source_buffer) {
-		D_ASSERT(source_buffer->AllocSize() == Storage::BLOCK_ALLOC_SIZE);
-		return make_uniq<Block>(*source_buffer, block_id);
+		result = ConvertBlock(block_id, *source_buffer);
 	} else {
-		return make_uniq<Block>(Allocator::Get(db), block_id);
+		result = make_uniq<Block>(Allocator::Get(db), block_id);
 	}
+	result->Initialize(options.debug_initialize);
+	return result;
 }
 
 void SingleFileBlockManager::Read(Block &block) {
@@ -459,7 +464,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		throw FatalException("Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag");
 	}
 
-	if (!use_direct_io) {
+	if (!options.use_direct_io) {
 		// if we are not using Direct IO we need to fsync BEFORE we write the header to ensure that all the previous
 		// blocks are written as well
 		handle->Sync();

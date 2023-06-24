@@ -24,10 +24,17 @@ private:
 	// Either adds a value to the current object with the current tag, or appends it to the current array
 	void PushValue(yyjson_mut_val *val);
 
-public:
 	explicit JsonSerializer(yyjson_mut_doc *doc, bool skip_if_null, bool skip_if_empty)
 	    : doc(doc), stack({yyjson_mut_obj(doc)}), skip_if_null(skip_if_null), skip_if_empty(skip_if_empty) {
 		serialize_enum_as_string = true;
+	}
+
+public:
+	template <class T>
+	static yyjson_mut_val *Serialize(T &value, yyjson_mut_doc *doc, bool skip_if_null, bool skip_if_empty) {
+		JsonSerializer serializer(doc, skip_if_null, skip_if_empty);
+		value.FormatSerialize(serializer);
+		return serializer.GetRootObject();
 	}
 
 	yyjson_mut_val *GetRootObject() {
@@ -51,6 +58,10 @@ public:
 	void OnMapEnd(idx_t count) final;
 	void OnObjectBegin() final;
 	void OnObjectEnd() final;
+	void OnPairBegin() final;
+	void OnPairKeyBegin() final;
+	void OnPairValueBegin() final;
+	void OnPairEnd() final;
 
 	//===--------------------------------------------------------------------===//
 	// Primitive Types
@@ -68,10 +79,11 @@ public:
 	void WriteValue(float value) final;
 	void WriteValue(double value) final;
 	void WriteValue(interval_t value) final;
-	void WriteValue(const string &value) final;
 	void WriteValue(const string_t value) final;
+	void WriteValue(const string &value) final;
 	void WriteValue(const char *value) final;
 	void WriteValue(bool value) final;
+	void WriteDataPtr(const_data_ptr_t ptr, idx_t count) final;
 };
 
 } // namespace duckdb

@@ -133,7 +133,7 @@ static void parallel_query(Connection *conn, bool *correct, size_t threadnr) {
 	correct[threadnr] = true;
 	for (size_t i = 0; i < 100; i++) {
 		auto result = conn->Query("SELECT * FROM integers ORDER BY i");
-		if (!CHECK_COLUMN(result, 0, {Value(), 1, 2, 3})) {
+		if (!CHECK_COLUMN(result, 0, {1, 2, 3, Value()})) {
 			correct[threadnr] = false;
 		}
 	}
@@ -162,7 +162,7 @@ static void parallel_query_with_new_connection(DuckDB *db, bool *correct, size_t
 	for (size_t i = 0; i < 100; i++) {
 		auto conn = make_uniq<Connection>(*db);
 		auto result = conn->Query("SELECT * FROM integers ORDER BY i");
-		if (!CHECK_COLUMN(result, 0, {Value(), 1, 2, 3})) {
+		if (!CHECK_COLUMN(result, 0, {1, 2, 3, Value()})) {
 			correct[threadnr] = false;
 		}
 	}
@@ -182,14 +182,14 @@ TEST_CASE("Test making and dropping connections in parallel to a single database
 	}
 	for (size_t i = 0; i < 100; i++) {
 		auto result = conn->Query("SELECT * FROM integers ORDER BY i");
-		REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+		REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, Value()}));
 	}
 	for (size_t i = 0; i < 20; i++) {
 		threads[i].join();
 		REQUIRE(correct[i]);
 	}
 	auto result = conn->Query("SELECT * FROM integers ORDER BY i");
-	REQUIRE(CHECK_COLUMN(result, 0, {Value(), 1, 2, 3}));
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3, Value()}));
 }
 
 TEST_CASE("Test multiple result sets", "[api]") {
@@ -517,7 +517,7 @@ TEST_CASE("Test large number of connections to a single database", "[api]") {
 	auto context = make_uniq<ClientContext>((*db).instance);
 	auto &connection_manager = ConnectionManager::Get(*context);
 
-	vector<duckdb::unique_ptr<Connection>> connections;
+	duckdb::vector<duckdb::unique_ptr<Connection>> connections;
 	size_t createdConnections = 5000;
 	size_t remainingConnections = 500;
 	size_t toRemove = createdConnections - remainingConnections;
@@ -593,7 +593,7 @@ TEST_CASE("Issue #6284: CachingPhysicalOperator in pull causes issues", "[api][.
 		count += chunk->size();
 	}
 
-	REQUIRE(951446 - count == 0);
+	REQUIRE(951468 - count == 0);
 }
 
 TEST_CASE("Fuzzer 50 - Alter table heap-use-after-free", "[api]") {
@@ -604,4 +604,14 @@ TEST_CASE("Fuzzer 50 - Alter table heap-use-after-free", "[api]") {
 
 	con.SendQuery("CREATE TABLE t0(c0 INT);");
 	con.SendQuery("ALTER TABLE t0 ADD c1 TIMESTAMP_SEC;");
+}
+
+TEST_CASE("Test loading database with enable_external_access set to false", "[api]") {
+	DBConfig config;
+	config.options.enable_external_access = false;
+	auto path = TestCreatePath("external_access_test");
+	DuckDB db(path, &config);
+	Connection con(db);
+
+	REQUIRE_FAIL(con.Query("ATTACH 'mydb.db' AS external_access_test"));
 }

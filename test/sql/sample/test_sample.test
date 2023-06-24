@@ -57,24 +57,6 @@ SELECT * FROM test USING SAMPLE 10 ORDER BY a, b
 12	21
 13	22
 
-# sample on a larger data set
-query I
-SELECT COUNT(*) FROM range(10000) USING SAMPLE 5
-----
-5
-
-# test sample with multiple columns
-# we insert the same data in the entire column
-statement ok
-CREATE TABLE test2 AS SELECT i a, i::VARCHAR b, CONCAT(i, ' - ', i) c FROM repeat(1, 1000) tbl(i)
-
-query III
-SELECT a, b, c FROM test2 USING SAMPLE 3;
-----
-1	1	1 - 1
-1	1	1 - 1
-1	1	1 - 1
-
 # sample in scalar subqueries
 query I
 SELECT (SELECT COUNT(*) FROM test USING SAMPLE 1);
@@ -98,43 +80,6 @@ SELECT COUNT(*) FROM test USING SAMPLE 'hello'
 
 statement error
 SELECT COUNT(*) FROM test USING SAMPLE DATE '1992-01-01'
-
-# verify that it is a sample without replacement (i.e. the same row will never occur more than once in the result)
-loop i 0 10
-
-query I
-select count(distinct i) from range(10) tbl(i) using sample 5;
-----
-5
-
-endloop
-
-# specifying a seed leads to repeatable behavior
-loop i 0 10
-
-query I nosort reservoirseed
-select * from range(100) using sample 10 (reservoir, 250)
-----
-
-query I nosort bernoulliseed
-select * from range(100) using sample 10% (bernoulli, 250)
-----
-
-query I nosort systemseed
-select * from range(100) using sample 10% (system, 250)
-----
-
-endloop
-
-# specify as sample_size, with reservoir sampling this should give us an exact count (i.e. always 10)
-loop i 0 10
-
-query I
-select count(*) from range(100) using sample 10% (reservoir)
-----
-10
-
-endloop
 
 # we can also use postgres/sqlserver-style tablesample syntax
 statement ok
@@ -221,12 +166,6 @@ query I
 select count(*) from range(1000) using sample reservoir(0.1%);
 ----
 1
-
-# reservoir sample from a larger dataset
-query I
-select count(*) from range(200000) tablesample reservoir(90%);
-----
-180000
 
 # cannot use bernoulli or system sampling with X number of rows
 statement error

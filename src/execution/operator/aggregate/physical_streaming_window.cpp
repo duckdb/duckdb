@@ -26,15 +26,16 @@ class StreamingWindowState : public OperatorState {
 public:
 	using StateBuffer = vector<data_t>;
 
-	StreamingWindowState() : initialized(false), statev(LogicalType::POINTER, (data_ptr_t)&state_ptr) {
+	StreamingWindowState() : initialized(false), statev(LogicalType::POINTER, data_ptr_cast(&state_ptr)) {
 	}
 
 	~StreamingWindowState() override {
 		for (size_t i = 0; i < aggregate_dtors.size(); ++i) {
 			auto dtor = aggregate_dtors[i];
 			if (dtor) {
+				AggregateInputData aggr_input_data(aggregate_bind_data[i], Allocator::DefaultAllocator());
 				state_ptr = aggregate_states[i].data();
-				dtor(statev, 1);
+				dtor(statev, aggr_input_data, 1);
 			}
 		}
 	}
@@ -42,6 +43,7 @@ public:
 	void Initialize(ClientContext &context, DataChunk &input, const vector<unique_ptr<Expression>> &expressions) {
 		const_vectors.resize(expressions.size());
 		aggregate_states.resize(expressions.size());
+		aggregate_bind_data.resize(expressions.size(), nullptr);
 		aggregate_dtors.resize(expressions.size(), nullptr);
 
 		for (idx_t expr_idx = 0; expr_idx < expressions.size(); expr_idx++) {
@@ -51,6 +53,7 @@ public:
 			case ExpressionType::WINDOW_AGGREGATE: {
 				auto &aggregate = *wexpr.aggregate;
 				auto &state = aggregate_states[expr_idx];
+				aggregate_bind_data[expr_idx] = wexpr.bind_info.get();
 				aggregate_dtors[expr_idx] = aggregate.destructor;
 				state.resize(aggregate.state_size());
 				aggregate.initialize(state.data());
@@ -89,6 +92,7 @@ public:
 
 	// Aggregation
 	vector<StateBuffer> aggregate_states;
+	vector<FunctionData *> aggregate_bind_data;
 	vector<aggregate_destructor_t> aggregate_dtors;
 	data_ptr_t state_ptr;
 	Vector statev;
@@ -105,7 +109,7 @@ unique_ptr<OperatorState> PhysicalStreamingWindow::GetOperatorState(ExecutionCon
 OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                     GlobalOperatorState &gstate_p, OperatorState &state_p) const {
 	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
-	auto &state = (StreamingWindowState &)state_p;
+	auto &state = state_p.Cast<StreamingWindowState>();
 	if (!state.initialized) {
 		state.Initialize(context.client, input, select_list);
 	}

@@ -26,7 +26,7 @@ public:
 
 public:
 	//! Create a real TableCatalogEntry and initialize storage for it
-	ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateViewInfo *info);
+	ViewCatalogEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateViewInfo &info);
 
 	//! The query of the view
 	unique_ptr<SelectStatement> query;
@@ -38,7 +38,7 @@ public:
 	vector<LogicalType> types;
 
 public:
-	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
+	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo &info) override;
 
 	//! Serialize the meta information of the ViewCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer) const;
@@ -50,6 +50,6 @@ public:
 	string ToSQL() const override;
 
 private:
-	void Initialize(CreateViewInfo *info);
+	void Initialize(CreateViewInfo &info);
 };
 } // namespace duckdb

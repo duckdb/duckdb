@@ -17,7 +17,7 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 		return;
 	}
 	// Fill pointer array for sorting
-	auto ptr_block = unique_ptr<data_ptr_t[]>(new data_ptr_t[end - start]);
+	auto ptr_block = make_unsafe_uniq_array<data_ptr_t>(end - start);
 	auto entry_ptrs = (data_ptr_t *)ptr_block.get();
 	for (idx_t i = start; i < end; i++) {
 		entry_ptrs[i - start] = row_ptr;
@@ -158,7 +158,7 @@ inline void InsertionSort(const data_ptr_t orig_ptr, const data_ptr_t temp_ptr, 
 	const data_ptr_t target_ptr = swap ? orig_ptr : temp_ptr;
 	if (count > 1) {
 		const idx_t total_offset = col_offset + offset;
-		auto temp_val = unique_ptr<data_t[]>(new data_t[row_width]);
+		auto temp_val = make_unsafe_uniq_array<data_t>(row_width);
 		const data_ptr_t val = temp_val.get();
 		const auto comp_width = total_comp_width - offset;
 		for (idx_t i = 1; i < count; i++) {
@@ -249,7 +249,7 @@ void RadixSort(BufferManager &buffer_manager, const data_ptr_t &dataptr, const i
 		RadixSortLSD(buffer_manager, dataptr, count, col_offset, sort_layout.entry_size, sorting_size);
 	} else {
 		auto temp_block = buffer_manager.Allocate(MaxValue(count * sort_layout.entry_size, (idx_t)Storage::BLOCK_SIZE));
-		auto preallocated_array = unique_ptr<idx_t[]>(new idx_t[sorting_size * SortConstants::MSD_RADIX_LOCATIONS]);
+		auto preallocated_array = make_unsafe_uniq_array<idx_t>(sorting_size * SortConstants::MSD_RADIX_LOCATIONS);
 		RadixSortMSD(dataptr, temp_block.Ptr(), count, col_offset, sort_layout.entry_size, sorting_size, 0,
 		             preallocated_array.get(), false);
 	}
@@ -291,7 +291,7 @@ void LocalSortState::SortInMemory() {
 	// Radix sort and break ties until no more ties, or until all columns are sorted
 	idx_t sorting_size = 0;
 	idx_t col_offset = 0;
-	unique_ptr<bool[]> ties_ptr;
+	unsafe_unique_array<bool> ties_ptr;
 	bool *ties = nullptr;
 	bool contains_string = false;
 	for (idx_t i = 0; i < sort_layout->column_count; i++) {
@@ -305,7 +305,7 @@ void LocalSortState::SortInMemory() {
 		if (!ties) {
 			// This is the first sort
 			RadixSort(*buffer_manager, dataptr, count, col_offset, sorting_size, *sort_layout, contains_string);
-			ties_ptr = unique_ptr<bool[]>(new bool[count]);
+			ties_ptr = make_unsafe_uniq_array<bool>(count);
 			ties = ties_ptr.get();
 			std::fill_n(ties, count - 1, true);
 			ties[count - 1] = false;

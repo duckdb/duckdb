@@ -22,20 +22,20 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 		break;
 	}
 	case UndoFlags::INSERT_TUPLE: {
-		auto info = (AppendInfo *)data;
+		auto info = reinterpret_cast<AppendInfo *>(data);
 		// revert the append in the base table
 		info->table->RevertAppend(info->start_row, info->count);
 		break;
 	}
 	case UndoFlags::DELETE_TUPLE: {
-		auto info = (DeleteInfo *)data;
+		auto info = reinterpret_cast<DeleteInfo *>(data);
 		// reset the deleted flag on rollback
 		info->vinfo->CommitDelete(NOT_DELETED_ID, info->rows, info->count);
 		break;
 	}
 	case UndoFlags::UPDATE_TUPLE: {
-		auto info = (UpdateInfo *)data;
-		info->segment->RollbackUpdate(info);
+		auto info = reinterpret_cast<UpdateInfo *>(data);
+		info->segment->RollbackUpdate(*info);
 		break;
 	}
 	default: // LCOV_EXCL_START

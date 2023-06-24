@@ -269,12 +269,11 @@ void RestartCommand::ExecuteInternal(ExecuteContext &context) const {
 	runner.con->context->config = client_config;
 
 	runner.con->BeginTransaction();
-	runner.con->context->client_data->catalog_search_path->Set(catalog_search_paths);
+	runner.con->context->client_data->catalog_search_path->Set(catalog_search_paths, CatalogSetPathType::SET_SCHEMAS);
 	runner.con->Commit();
 	if (!low_query_writer_path.empty()) {
-		runner.con->context->client_data->log_query_writer =
-		    make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path,
-		                                  1 << 1 | 1 << 5, runner.con->context->client_data->file_opener.get());
+		runner.con->context->client_data->log_query_writer = make_uniq<BufferedFileWriter>(
+		    FileSystem::GetFileSystem(*runner.con->context), low_query_writer_path, 1 << 1 | 1 << 5);
 	}
 }
 

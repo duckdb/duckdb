@@ -28,9 +28,11 @@ public:
 	unique_ptr<Expression> expr;
 
 public:
+	static unique_ptr<Expression> &GetExpression(ParsedExpression &expr);
+
 	string ToString() const override;
 
-	bool Equals(const BaseExpression *other) const override;
+	bool Equals(const BaseExpression &other) const override;
 	hash_t Hash() const override;
 
 	unique_ptr<ParsedExpression> Copy() const override;

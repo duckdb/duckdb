@@ -1,9 +1,12 @@
-#include "duckdb_python/pandas_scan.hpp"
-#include "duckdb_python/array_wrapper.hpp"
+#include "duckdb_python/pandas/pandas_scan.hpp"
+#include "duckdb_python/pandas/pandas_bind.hpp"
+#include "duckdb_python/numpy/array_wrapper.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb_python/vector_conversion.hpp"
+#include "duckdb_python/numpy/numpy_scan.hpp"
+#include "duckdb_python/numpy/numpy_bind.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
 
 #include "duckdb/common/atomic.hpp"
 
@@ -57,6 +60,7 @@ PandasScanFunction::PandasScanFunction()
 	get_batch_index = PandasScanGetBatchIndex;
 	cardinality = PandasScanCardinality;
 	table_scan_progress = PandasProgress;
+	serialize = PandasSerialize;
 	projection_pushdown = true;
 }
 
@@ -70,14 +74,19 @@ idx_t PandasScanFunction::PandasScanGetBatchIndex(ClientContext &context, const 
 unique_ptr<FunctionData> PandasScanFunction::PandasScanBind(ClientContext &context, TableFunctionBindInput &input,
                                                             vector<LogicalType> &return_types, vector<string> &names) {
 	py::gil_scoped_acquire acquire;
-	py::handle df((PyObject *)(input.inputs[0].GetPointer()));
+	py::handle df(reinterpret_cast<PyObject *>(input.inputs[0].GetPointer()));
 
 	vector<PandasColumnBindData> pandas_bind_data;
-	VectorConversion::BindPandas(DBConfig::GetConfig(context), df, pandas_bind_data, return_types, names);
 
-	auto df_columns = py::list(df.attr("columns"));
+	auto is_py_dict = py::isinstance<py::dict>(df);
+	if (is_py_dict) {
+		NumpyBind::Bind(context, df, pandas_bind_data, return_types, names);
+	} else {
+		Pandas::Bind(context, df, pandas_bind_data, return_types, names);
+	}
+	auto df_columns = py::list(df.attr("keys")());
+
 	auto get_fun = df.attr("__getitem__");
-
 	idx_t row_count = py::len(get_fun(df_columns[0]));
 	return make_uniq<PandasScanFunctionData>(df, row_count, std::move(pandas_bind_data), return_types);
 }
@@ -87,7 +96,7 @@ unique_ptr<GlobalTableFunctionState> PandasScanFunction::PandasScanInitGlobal(Cl
 	if (PyGILState_Check()) {
 		throw InvalidInputException("PandasScan called but GIL was already held!");
 	}
-	return make_uniq<PandasScanGlobalState>(PandasScanMaxThreads(context, input.bind_data));
+	return make_uniq<PandasScanGlobalState>(PandasScanMaxThreads(context, input.bind_data.get()));
 }
 
 unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(ExecutionContext &context,
@@ -95,7 +104,7 @@ unique_ptr<LocalTableFunctionState> PandasScanFunction::PandasScanInitLocal(Exec
                                                                             GlobalTableFunctionState *gstate) {
 	auto result = make_uniq<PandasScanLocalState>(0, 0);
 	result->column_ids = input.column_ids;
-	PandasScanParallelStateNext(context.client, input.bind_data, result.get(), gstate);
+	PandasScanParallelStateNext(context.client, input.bind_data.get(), result.get(), gstate);
 	return std::move(result);
 }
 
@@ -103,14 +112,14 @@ idx_t PandasScanFunction::PandasScanMaxThreads(ClientContext &context, const Fun
 	if (ClientConfig::GetConfig(context).verify_parallelism) {
 		return context.db->NumberOfThreads();
 	}
-	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<PandasScanFunctionData>();
 	return bind_data.row_count / PANDAS_PARTITION_COUNT + 1;
 }
 
 bool PandasScanFunction::PandasScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
                                                      LocalTableFunctionState *lstate,
                                                      GlobalTableFunctionState *gstate) {
-	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<PandasScanFunctionData>();
 	auto &parallel_state = gstate->Cast<PandasScanGlobalState>();
 	auto &state = lstate->Cast<PandasScanLocalState>();
 
@@ -130,7 +139,7 @@ bool PandasScanFunction::PandasScanParallelStateNext(ClientContext &context, con
 
 double PandasScanFunction::PandasProgress(ClientContext &context, const FunctionData *bind_data_p,
                                           const GlobalTableFunctionState *gstate) {
-	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
+	auto &bind_data = bind_data_p->Cast<PandasScanFunctionData>();
 	if (bind_data.row_count == 0) {
 		return 100;
 	}
@@ -138,14 +147,29 @@ double PandasScanFunction::PandasProgress(ClientContext &context, const Function
 	return percentage;
 }
 
+void PandasScanFunction::PandasBackendScanSwitch(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
+                                                 Vector &out) {
+	auto backend = bind_data.pandas_col->Backend();
+	switch (backend) {
+	case PandasColumnBackend::NUMPY: {
+		NumpyScan::Scan(bind_data, count, offset, out);
+		break;
+	}
+	default: {
+		throw NotImplementedException("Type not implemented for PandasColumnBackend");
+	}
+	}
+}
+
 //! The main pandas scan function: note that this can be called in parallel without the GIL
 //! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
 void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (PandasScanFunctionData &)*data_p.bind_data;
+	auto &data = data_p.bind_data->CastNoConst<PandasScanFunctionData>();
 	auto &state = data_p.local_state->Cast<PandasScanLocalState>();
 
 	if (state.start >= state.end) {
-		if (!PandasScanParallelStateNext(context, data_p.bind_data, data_p.local_state, data_p.global_state)) {
+		if (!PandasScanParallelStateNext(context, data_p.bind_data.get(), data_p.local_state.get(),
+		                                 data_p.global_state.get())) {
 			return;
 		}
 	}
@@ -156,8 +180,7 @@ void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInp
 		if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
 			output.data[idx].Sequence(state.start, 1, this_count);
 		} else {
-			VectorConversion::NumpyToDuckDB(data.pandas_bind_data[col_idx], data.pandas_bind_data[col_idx].numpy_col,
-			                                this_count, state.start, output.data[idx]);
+			PandasBackendScanSwitch(data.pandas_bind_data[col_idx], this_count, state.start, output.data[idx]);
 		}
 	}
 	state.start += this_count;
@@ -166,7 +189,7 @@ void PandasScanFunction::PandasScanFunc(ClientContext &context, TableFunctionInp
 
 unique_ptr<NodeStatistics> PandasScanFunction::PandasScanCardinality(ClientContext &context,
                                                                      const FunctionData *bind_data) {
-	auto &data = (PandasScanFunctionData &)*bind_data;
+	auto &data = bind_data->Cast<PandasScanFunctionData>();
 	return make_uniq<NodeStatistics>(data.row_count, data.row_count);
 }
 
@@ -209,6 +232,11 @@ py::object PandasScanFunction::PandasReplaceCopiedNames(const py::object &origin
 
 	copy_df.attr("columns") = column_name_list;
 	return copy_df;
+}
+
+void PandasScanFunction::PandasSerialize(FieldWriter &writer, const FunctionData *bind_data,
+                                         const TableFunction &function) {
+	throw NotImplementedException("PandasScan function cannot be serialized");
 }
 
 } // namespace duckdb

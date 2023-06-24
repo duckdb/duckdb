@@ -1,3 +1,7 @@
+if(NOT CLANG_TIDY)
+  add_subdirectory(adbc)
+endif()
+
 add_subdirectory(arrow)
 add_subdirectory(crypto)
 add_subdirectory(enums)
@@ -31,6 +35,7 @@ add_library_unity(
   field_writer.cpp
   file_buffer.cpp
   file_system.cpp
+  filename_pattern.cpp
   fsst.cpp
   gzip_file_system.cpp
   hive_partitioning.cpp
@@ -44,6 +49,7 @@ add_library_unity(
   random_engine.cpp
   serializer.cpp
   string_util.cpp
+  enum_util.cpp
   symbols.cpp
   tree_renderer.cpp
   types.cpp

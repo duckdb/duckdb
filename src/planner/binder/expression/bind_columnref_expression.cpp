@@ -17,6 +17,44 @@
 
 namespace duckdb {
 
+string GetSQLValueFunctionName(const string &column_name) {
+	auto lcase = StringUtil::Lower(column_name);
+	if (lcase == "current_catalog") {
+		return "current_catalog";
+	} else if (lcase == "current_date") {
+		return "current_date";
+	} else if (lcase == "current_schema") {
+		return "current_schema";
+	} else if (lcase == "current_role") {
+		return "current_role";
+	} else if (lcase == "current_time") {
+		return "get_current_time";
+	} else if (lcase == "current_timestamp") {
+		return "get_current_timestamp";
+	} else if (lcase == "current_user") {
+		return "current_user";
+	} else if (lcase == "localtime") {
+		return "current_localtime";
+	} else if (lcase == "localtimestamp") {
+		return "current_localtimestamp";
+	} else if (lcase == "session_user") {
+		return "session_user";
+	} else if (lcase == "user") {
+		return "user";
+	}
+	return string();
+}
+
+unique_ptr<ParsedExpression> ExpressionBinder::GetSQLValueFunction(const string &column_name) {
+	auto value_function = GetSQLValueFunctionName(column_name);
+	if (value_function.empty()) {
+		return nullptr;
+	}
+
+	vector<unique_ptr<ParsedExpression>> children;
+	return make_uniq<FunctionExpression>(value_function, std::move(children));
+}
+
 unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &column_name, string &error_message) {
 	auto using_binding = binder.bind_context.GetUsingBinding(column_name);
 	if (using_binding) {
@@ -70,6 +108,11 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 	}
 	// see if it's a column
 	if (table_name.empty()) {
+		// column was not found - check if it is a SQL value function
+		auto value_function = GetSQLValueFunction(column_name);
+		if (value_function) {
+			return value_function;
+		}
 		// it's not, find candidates and error
 		auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
 		string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
@@ -161,13 +204,13 @@ unique_ptr<ParsedExpression> ExpressionBinder::CreateStructPack(ColumnRefExpress
 		}
 		if (colref.column_names.size() == 2) {
 			auto &qualifier = colref.column_names[0];
-			if (catalog_entry->catalog->GetName() != qualifier && catalog_entry->schema->name != qualifier) {
+			if (catalog_entry->catalog.GetName() != qualifier && catalog_entry->schema.name != qualifier) {
 				return nullptr;
 			}
 		} else if (colref.column_names.size() == 3) {
 			auto &catalog_name = colref.column_names[0];
 			auto &schema_name = colref.column_names[1];
-			if (catalog_entry->catalog->GetName() != catalog_name || catalog_entry->schema->name != schema_name) {
+			if (catalog_entry->catalog.GetName() != catalog_name || catalog_entry->schema.name != schema_name) {
 				return nullptr;
 			}
 		} else {
@@ -297,7 +340,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 	// a generated column returns a generated expression, a struct on a column returns a struct extract
 	if (expr->type != ExpressionType::COLUMN_REF) {
 		auto alias = expr->alias;
-		auto result = BindExpression(&expr, depth);
+		auto result = BindExpression(expr, depth);
 		if (result.expression) {
 			result.expression->alias = std::move(alias);
 		}
@@ -343,6 +386,12 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref_p, idx_t
 		result.error = binder.FormatError(colref_p, result.error);
 	}
 	return result;
+}
+
+bool ExpressionBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
+	// Only BaseSelectBinder will have a valid col alias map,
+	// otherwise just return false
+	return false;
 }
 
 } // namespace duckdb

@@ -16,11 +16,13 @@ args = parser.parse_args()
 
 stored_functions = {
     'substrait': ["from_substrait", "get_substrait", "get_substrait_json", "from_substrait_json"],
-    'arrow': ["scan_arrow_ipc", "to_arrow_ipc"]
+    'arrow': ["scan_arrow_ipc", "to_arrow_ipc"],
+    'spatial': []
 }
 stored_settings = {
     'substrait': [],
-    'arrow': []
+    'arrow': [],
+    'spatial': []
 }
 
 functions = {}
@@ -86,7 +88,7 @@ for extension in reader:
 
 if args.validate:
     file = open(ext_hpp,'r')
-    pattern = re.compile("{\"(.*?)\", \"(.*?)\"},")
+    pattern = re.compile("{\"(.*?)\", \"(.*?)\"}[,}\n]")
     cur_function_map = dict(pattern.findall(file.read()))
     function_map.update(settings_map)
     print("Cur Function + Settings Map: ")

@@ -12,8 +12,8 @@ public:
 	string analyzed_plan;
 };
 
-SinkResultType PhysicalExplainAnalyze::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                            DataChunk &input) const {
+SinkResultType PhysicalExplainAnalyze::Sink(ExecutionContext &context, DataChunk &chunk,
+                                            OperatorSinkInput &input) const {
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -32,30 +32,15 @@ unique_ptr<GlobalSinkState> PhysicalExplainAnalyze::GetGlobalSinkState(ClientCon
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class ExplainAnalyzeState : public GlobalSourceState {
-public:
-	ExplainAnalyzeState() : finished(false) {
-	}
-
-	bool finished;
-};
-
-unique_ptr<GlobalSourceState> PhysicalExplainAnalyze::GetGlobalSourceState(ClientContext &context) const {
-	return make_uniq<ExplainAnalyzeState>();
-}
-
-void PhysicalExplainAnalyze::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &source_state,
-                                     LocalSourceState &lstate) const {
-	auto &state = (ExplainAnalyzeState &)source_state;
+SourceResultType PhysicalExplainAnalyze::GetData(ExecutionContext &context, DataChunk &chunk,
+                                                 OperatorSourceInput &input) const {
 	auto &gstate = sink_state->Cast<ExplainAnalyzeStateGlobalState>();
-	if (state.finished) {
-		return;
-	}
+
 	chunk.SetValue(0, 0, Value("analyzed_plan"));
 	chunk.SetValue(1, 0, Value(gstate.analyzed_plan));
 	chunk.SetCardinality(1);
 
-	state.finished = true;
+	return SourceResultType::FINISHED;
 }
 
 } // namespace duckdb

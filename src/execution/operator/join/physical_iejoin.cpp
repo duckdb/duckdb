@@ -134,12 +134,11 @@ unique_ptr<LocalSinkState> PhysicalIEJoin::GetLocalSinkState(ExecutionContext &c
 	return make_uniq<IEJoinLocalState>(context.client, *this, sink_child);
 }
 
-SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                                    DataChunk &input) const {
-	auto &gstate = gstate_p.Cast<IEJoinGlobalState>();
-	auto &lstate = lstate_p.Cast<IEJoinLocalState>();
+SinkResultType PhysicalIEJoin::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<IEJoinGlobalState>();
+	auto &lstate = input.local_state.Cast<IEJoinLocalState>();
 
-	gstate.Sink(input, lstate);
+	gstate.Sink(chunk, lstate);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -150,7 +149,7 @@ void PhysicalIEJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 	gstate.tables[gstate.child]->Combine(lstate.table);
 	auto &client_profiler = QueryProfiler::Get(context.client);
 
-	context.thread.profiler.Flush(this, &lstate.table.executor, gstate.child ? "rhs_executor" : "lhs_executor", 1);
+	context.thread.profiler.Flush(*this, lstate.table.executor, gstate.child ? "rhs_executor" : "lhs_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
 }
 
@@ -401,6 +400,10 @@ IEJoinUnion::IEJoinUnion(ClientContext &context, const PhysicalIEJoin &op, Sorte
 	r_executor.AddExpression(*op.rhs_orders[0][0].expression);
 	r_executor.AddExpression(*op.rhs_orders[1][0].expression);
 	AppendKey(t2, r_executor, *l1, -1, -1, b2);
+
+	if (l1->global_sort_state.sorted_blocks.empty()) {
+		return;
+	}
 
 	Sort(*l1);
 
@@ -927,11 +930,11 @@ unique_ptr<LocalSourceState> PhysicalIEJoin::GetLocalSourceState(ExecutionContex
 	return make_uniq<IEJoinLocalSourceState>(context.client, *this);
 }
 
-void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, GlobalSourceState &gstate,
-                             LocalSourceState &lstate) const {
+SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result,
+                                         OperatorSourceInput &input) const {
 	auto &ie_sink = sink_state->Cast<IEJoinGlobalState>();
-	auto &ie_gstate = gstate.Cast<IEJoinGlobalSourceState>();
-	auto &ie_lstate = lstate.Cast<IEJoinLocalSourceState>();
+	auto &ie_gstate = input.global_state.Cast<IEJoinGlobalSourceState>();
+	auto &ie_lstate = input.local_state.Cast<IEJoinLocalSourceState>();
 
 	ie_gstate.Initialize(ie_sink);
 
@@ -944,7 +947,7 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 		ResolveComplexJoin(context, result, ie_lstate);
 
 		if (result.size()) {
-			return;
+			return SourceResultType::HAVE_MORE_OUTPUT;
 		}
 
 		ie_gstate.PairCompleted(context.client, ie_sink, ie_lstate);
@@ -970,7 +973,7 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 		result.SetCardinality(count);
 		result.Verify();
 
-		return;
+		return result.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
 	// Process RIGHT OUTER results
@@ -993,8 +996,10 @@ void PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &result, Globa
 		result.SetCardinality(count);
 		result.Verify();
 
-		return;
+		break;
 	}
+
+	return result.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 //===--------------------------------------------------------------------===//
@@ -1007,24 +1012,21 @@ void PhysicalIEJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeli
 	}
 
 	// becomes a source after both children fully sink their data
-	meta_pipeline.GetState().SetPipelineSource(current, this);
+	meta_pipeline.GetState().SetPipelineSource(current, *this);
 
 	// Create one child meta pipeline that will hold the LHS and RHS pipelines
-	auto child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, this);
-	auto lhs_pipeline = child_meta_pipeline->GetBasePipeline();
-	auto rhs_pipeline = child_meta_pipeline->CreatePipeline();
+	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
 
 	// Build out LHS
-	children[0]->BuildPipelines(*lhs_pipeline, *child_meta_pipeline);
-
-	// RHS depends on everything in LHS
-	child_meta_pipeline->AddDependenciesFrom(rhs_pipeline, lhs_pipeline.get(), true);
+	auto lhs_pipeline = child_meta_pipeline.GetBasePipeline();
+	children[0]->BuildPipelines(*lhs_pipeline, child_meta_pipeline);
 
 	// Build out RHS
-	children[1]->BuildPipelines(*rhs_pipeline, *child_meta_pipeline);
+	auto rhs_pipeline = child_meta_pipeline.CreatePipeline();
+	children[1]->BuildPipelines(*rhs_pipeline, child_meta_pipeline);
 
-	// Despite having the same sink, RHS needs its own PipelineFinishEvent
-	child_meta_pipeline->AddFinishEvent(rhs_pipeline);
+	// Despite having the same sink, RHS and everything created after it need their own (same) PipelineFinishEvent
+	child_meta_pipeline.AddFinishEvent(rhs_pipeline);
 }
 
 } // namespace duckdb

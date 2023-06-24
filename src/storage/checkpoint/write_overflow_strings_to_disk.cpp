@@ -32,9 +32,9 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 	MiniZStream s;
 	size_t compressed_size = 0;
 	compressed_size = s.MaxCompressedLength(uncompressed_size);
-	auto compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
-	s.Compress((const char *)string.GetDataUnsafe(), uncompressed_size, (char *)compressed_buf.get(), &compressed_size);
-	string_t compressed_string((const char *)compressed_buf.get(), compressed_size);
+	auto compressed_buf = make_unsafe_uniq_array<data_t>(compressed_size);
+	s.Compress(string.GetData(), uncompressed_size, char_ptr_cast(compressed_buf.get()), &compressed_size);
+	string_t compressed_string(const_char_ptr_cast(compressed_buf.get()), compressed_size);
 
 	// store sizes
 	auto data_ptr = handle.Ptr();
@@ -43,7 +43,7 @@ void WriteOverflowStringsToDisk::WriteString(string_t string, block_id_t &result
 
 	// now write the remainder of the string
 	offset += 2 * sizeof(uint32_t);
-	auto strptr = compressed_string.GetDataUnsafe();
+	auto strptr = compressed_string.GetData();
 	uint32_t remaining = compressed_size;
 	while (remaining > 0) {
 		uint32_t to_write = MinValue<uint32_t>(remaining, STRING_SPACE - offset);

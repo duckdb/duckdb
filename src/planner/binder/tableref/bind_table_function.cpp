@@ -19,6 +19,7 @@
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/function/table/read_csv.hpp"
 
 namespace duckdb {
 
@@ -77,6 +78,15 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			}
 		}
 		if (child->type == ExpressionType::SUBQUERY) {
+			auto fun = table_function.functions.GetFunctionByOffset(0);
+			if (table_function.functions.Size() != 1 || fun.arguments.empty() ||
+			    fun.arguments[0].id() != LogicalTypeId::TABLE) {
+				throw BinderException(
+				    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
+				    fun.name);
+			}
+			// this separate subquery binding path is only used by python_map
+			// FIXME: this should be unified with `BindTableInTableOutFunction` above
 			if (seen_subquery) {
 				error = "Table function can have at most one subquery parameter ";
 				return false;
@@ -87,6 +97,8 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			subquery = make_uniq<BoundSubqueryRef>(std::move(binder), std::move(node));
 			seen_subquery = true;
 			arguments.emplace_back(LogicalTypeId::TABLE);
+			parameters.emplace_back(
+			    Value(LogicalType::INVALID)); // this is a dummy value so the lengths of arguments and parameter match
 			continue;
 		}
 
@@ -97,8 +109,8 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 			throw ParameterNotResolvedException();
 		}
 		if (!expr->IsScalar()) {
-			error = "Table function requires a constant parameter";
-			return false;
+			// should have been eliminated before
+			throw InternalException("Table function requires a constant parameter");
 		}
 		auto constant = ExpressionExecutor::EvaluateScalar(context, *expr, true);
 		if (parameter_name.empty()) {
@@ -140,14 +152,23 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
 		if (table_function.name == "pandas_scan" || table_function.name == "arrow_scan") {
-			auto arrow_bind = (PyTableFunctionData *)bind_data.get();
-			arrow_bind->external_dependency = std::move(external_dependency);
+			auto &arrow_bind = bind_data->Cast<PyTableFunctionData>();
+			arrow_bind.external_dependency = std::move(external_dependency);
 		}
+		if (table_function.name == "read_csv" || table_function.name == "read_csv_auto") {
+			auto &csv_bind = bind_data->Cast<ReadCSVData>();
+			if (csv_bind.single_threaded) {
+				table_function.extra_info = "(Single-Threaded)";
+			} else {
+				table_function.extra_info = "(Multi-Threaded)";
+			}
+		}
+	} else {
+		throw InvalidInputException("Cannot call function \"%s\" directly - it has no bind function",
+		                            table_function.name);
 	}
 	if (return_types.size() != return_names.size()) {
-		throw InternalException(
-		    "Failed to bind \"%s\": Table function return_types and return_names must be of the same size",
-		    table_function.name);
+		throw InternalException("Failed to bind \"%s\": return_types/names must have same size", table_function.name);
 	}
 	if (return_types.empty()) {
 		throw InternalException("Failed to bind \"%s\": Table function must return at least one column",
@@ -176,7 +197,7 @@ Binder::BindTableFunctionInternal(TableFunction &table_function, const string &f
 	}
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->column_ids,
-	                              get->GetTable());
+	                              get->GetTable().get());
 	return std::move(get);
 }
 
@@ -196,16 +217,12 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
-	TableFunctionCatalogEntry *function = nullptr;
-
 	// fetch the function from the catalog
-	auto func_catalog = Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, fexpr.catalog, fexpr.schema,
-	                                      fexpr.function_name, false, error_context);
+	auto &func_catalog = Catalog::GetEntry(context, CatalogType::TABLE_FUNCTION_ENTRY, fexpr.catalog, fexpr.schema,
+	                                       fexpr.function_name, error_context);
 
-	if (func_catalog->type == CatalogType::TABLE_FUNCTION_ENTRY) {
-		function = (TableFunctionCatalogEntry *)func_catalog;
-	} else if (func_catalog->type == CatalogType::TABLE_MACRO_ENTRY) {
-		auto macro_func = (TableMacroCatalogEntry *)func_catalog;
+	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
+		auto &macro_func = func_catalog.Cast<TableMacroCatalogEntry>();
 		auto query_node = BindTableMacro(fexpr, macro_func, 0);
 		D_ASSERT(query_node);
 
@@ -225,6 +242,8 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		MoveCorrelatedExpressions(*result->binder);
 		return std::move(result);
 	}
+	D_ASSERT(func_catalog.type == CatalogType::TABLE_FUNCTION_ENTRY);
+	auto &function = func_catalog.Cast<TableFunctionCatalogEntry>();
 
 	// evaluate the input parameters to the function
 	vector<LogicalType> arguments;
@@ -232,28 +251,29 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	named_parameter_map_t named_parameters;
 	unique_ptr<BoundSubqueryRef> subquery;
 	string error;
-	if (!BindTableFunctionParameters(*function, fexpr.children, arguments, parameters, named_parameters, subquery,
+	if (!BindTableFunctionParameters(function, fexpr.children, arguments, parameters, named_parameters, subquery,
 	                                 error)) {
 		throw BinderException(FormatError(ref, error));
 	}
 
 	// select the function based on the input parameters
 	FunctionBinder function_binder(context);
-	idx_t best_function_idx = function_binder.BindFunction(function->name, function->functions, arguments, error);
+	idx_t best_function_idx = function_binder.BindFunction(function.name, function.functions, arguments, error);
 	if (best_function_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(FormatError(ref, error));
 	}
-	auto table_function = function->functions.GetFunctionByOffset(best_function_idx);
+	auto table_function = function.functions.GetFunctionByOffset(best_function_idx);
 
 	// now check the named parameters
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);
 
 	// cast the parameters to the type of the function
 	for (idx_t i = 0; i < arguments.size(); i++) {
-		if (table_function.arguments[i] != LogicalType::ANY && table_function.arguments[i] != LogicalType::TABLE &&
-		    table_function.arguments[i] != LogicalType::POINTER &&
-		    table_function.arguments[i].id() != LogicalTypeId::LIST) {
-			parameters[i] = parameters[i].CastAs(context, table_function.arguments[i]);
+		auto target_type = i < table_function.arguments.size() ? table_function.arguments[i] : table_function.varargs;
+
+		if (target_type != LogicalType::ANY && target_type != LogicalType::TABLE &&
+		    target_type != LogicalType::POINTER && target_type.id() != LogicalTypeId::LIST) {
+			parameters[i] = parameters[i].CastAs(context, target_type);
 		}
 	}
 

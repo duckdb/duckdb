@@ -84,7 +84,7 @@ static unique_ptr<SelectNode> PivotInitialAggregate(PivotBindState &bind_state, 
 			if (entry->type != ExpressionType::COLUMN_REF) {
 				throw InternalException("Unexpected child of pivot source - not a ColumnRef");
 			}
-			auto &columnref = (ColumnRefExpression &)*entry;
+			auto &columnref = entry->Cast<ColumnRefExpression>();
 			if (handled_columns.find(columnref.GetColumnName()) == handled_columns.end()) {
 				// not handled - add to grouping set
 				subquery_stage1->groups.group_expressions.push_back(
@@ -250,7 +250,9 @@ unique_ptr<BoundTableRef> Binder::BindBoundPivot(PivotRef &ref) {
 	auto &aggregates = result->bound_pivot.aggregates;
 	ExtractPivotAggregates(*result->child, aggregates);
 	if (aggregates.size() != ref.bound_aggregate_names.size()) {
-		throw InternalException("Pivot - aggregate count mismatch");
+		throw BinderException("Pivot aggregate count mismatch. Expected %llu aggregates but found %llu. Are all pivot "
+		                      "expressions aggregate functions?",
+		                      ref.bound_aggregate_names.size(), aggregates.size());
 	}
 
 	vector<string> child_names;
@@ -313,7 +315,6 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 		}
 		ExtractPivotExpressions(*aggr, handled_columns);
 	}
-	value_set_t pivots;
 
 	// first add all pivots to the set of handled columns, and check for duplicates
 	idx_t total_pivots = 1;
@@ -544,6 +545,9 @@ unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
 
 	// bind the source of the pivot
 	// we need to do this to be able to expand star expressions
+	if (ref.source->type == TableReferenceType::SUBQUERY && ref.source->alias.empty()) {
+		ref.source->alias = "__internal_pivot_alias_" + to_string(GenerateTableIndex());
+	}
 	auto copied_source = ref.source->Copy();
 	auto star_binder = Binder::CreateBinder(context, this);
 	star_binder->Bind(*copied_source);

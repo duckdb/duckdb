@@ -18,7 +18,8 @@
 namespace duckdb {
 
 struct AWSEnvironmentCredentialsProvider {
-	static constexpr const char *REGION_ENV_VAR = "AWS_DEFAULT_REGION";
+	static constexpr const char *REGION_ENV_VAR = "AWS_REGION";
+	static constexpr const char *DEFAULT_REGION_ENV_VAR = "AWS_DEFAULT_REGION";
 	static constexpr const char *ACCESS_KEY_ENV_VAR = "AWS_ACCESS_KEY_ID";
 	static constexpr const char *SECRET_KEY_ENV_VAR = "AWS_SECRET_ACCESS_KEY";
 	static constexpr const char *SESSION_TOKEN_ENV_VAR = "AWS_SESSION_TOKEN";
@@ -232,7 +233,7 @@ protected:
 // Helper class to do s3 ListObjectV2 api call https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html
 struct AWSListObjectV2 {
 	static string Request(string &path, HTTPParams &http_params, S3AuthParams &s3_auth_params,
-	                      string &continuation_token, HTTPState *state, bool use_delimiter = false);
+	                      string &continuation_token, optional_ptr<HTTPState> state, bool use_delimiter = false);
 	static void ParseKey(string &aws_response, vector<string> &result);
 	static vector<string> ParseCommonPrefix(string &aws_response);
 	static string ParseContinuationToken(string &aws_response);

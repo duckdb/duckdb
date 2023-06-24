@@ -21,12 +21,16 @@ ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpc
                  'helper.hpp', 'single_thread_ptr.hpp', 'types.hpp', 'default_views.cpp', 'default_functions.cpp',
                  'release.h', 'genrand.cpp', 'address.cpp', 'visualizer_constants.hpp', 'icu-collate.cpp', 'icu-collate.hpp',
                  'yyjson.cpp', 'yyjson.hpp', 'duckdb_pdqsort.hpp', 'stubdata.cpp',
-                 'nf_calendar.cpp', 'nf_calendar.h', 'nf_localedata.cpp', 'nf_localedata.h', 'nf_zformat.cpp', 'nf_zformat.h', 'expr.cc']
+                 'nf_calendar.cpp', 'nf_calendar.h', 'nf_localedata.cpp', 'nf_localedata.h', 'nf_zformat.cpp',
+                 'nf_zformat.h', 'expr.cc', 'function_list.cpp']
 ignored_directories = ['.eggs', '__pycache__', 'dbgen', os.path.join('tools', 'pythonpkg', 'duckdb'),
                        os.path.join('tools', 'pythonpkg', 'build'), os.path.join('tools', 'rpkg', 'src', 'duckdb'),
                        os.path.join('tools', 'rpkg', 'inst', 'include', 'cpp11'),
                        os.path.join('extension', 'tpcds', 'dsdgen'), os.path.join('extension', 'jemalloc', 'jemalloc'),
-                       os.path.join('extension', 'json', 'yyjson'), os.path.join('extension', 'icu', 'third_party')]
+                       os.path.join('extension', 'json', 'yyjson'), os.path.join('extension', 'icu', 'third_party'),
+                       os.path.join('src', 'include', 'duckdb', 'core_functions', 'aggregate'),
+                       os.path.join('src', 'include', 'duckdb', 'core_functions', 'scalar'),
+                       os.path.join('tools', 'nodejs', 'src', 'duckdb')]
 format_all = False
 check_only = True
 confirm = True
@@ -66,19 +70,25 @@ if len(sys.argv) > 2:
 if revision == '--all':
     format_all = True
 
+def file_is_ignored(full_path):
+    if os.path.basename(full_path) in ignored_files:
+        return True
+    dirnames = os.path.sep.join(full_path.split(os.path.sep)[:-1])
+    for ignored_directory in ignored_directories:
+        if ignored_directory in dirnames:
+            return True
+    return False
+
+
+
 def can_format_file(full_path):
     global extensions, formatted_directories, ignored_files
     if not os.path.isfile(full_path):
         return False
     fname = full_path.split(os.path.sep)[-1]
     # check ignored files
-    if fname in ignored_files:
+    if file_is_ignored(full_path):
         return False
-    # check ignored directories
-    dirnames = full_path.split(os.path.sep)[:-1]
-    for i in range(1, len(dirnames)):
-        if os.path.join(*dirnames[:i]) in ignored_directories:
-            return False
     found = False
     # check file extension
     for ext in extensions:
@@ -106,9 +116,7 @@ def get_changed_files(revision):
     for f in files:
         if not can_format_file(f):
             continue
-        if os.path.basename(f) in ignored_files:
-            continue
-        if f.split(os.sep)[0] in ignored_directories:
+        if file_is_ignored(f):
             continue
         changed_files.append(f)
     return changed_files

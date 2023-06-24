@@ -28,12 +28,12 @@ MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewrit
 	root = std::move(op);
 }
 
-unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expression *> &bindings, bool &changes_made,
-                                                bool is_root) {
-	auto &comparison = bindings[0]->Cast<BoundComparisonExpression>();
-	auto &outer_constant = bindings[1]->Cast<BoundConstantExpression>();
-	auto &arithmetic = bindings[2]->Cast<BoundFunctionExpression>();
-	auto &inner_constant = bindings[3]->Cast<BoundConstantExpression>();
+unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<reference<Expression>> &bindings,
+                                                bool &changes_made, bool is_root) {
+	auto &comparison = bindings[0].get().Cast<BoundComparisonExpression>();
+	auto &outer_constant = bindings[1].get().Cast<BoundConstantExpression>();
+	auto &arithmetic = bindings[2].get().Cast<BoundFunctionExpression>();
+	auto &inner_constant = bindings[3].get().Cast<BoundConstantExpression>();
 	if (!TypeIsIntegral(arithmetic.return_type.InternalType())) {
 		return nullptr;
 	}
@@ -55,6 +55,9 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 		}
 		auto result_value = Value::HUGEINT(outer_value);
 		if (!result_value.DefaultTryCastAs(constant_type)) {
+			if (comparison.type != ExpressionType::COMPARE_EQUAL) {
+				return nullptr;
+			}
 			// if the cast is not possible then the comparison is not possible
 			// for example, if we have x + 5 = 3, where x is an unsigned number, we will get x = -2
 			// since this is not possible we can remove the entire branch here

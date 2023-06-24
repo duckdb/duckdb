@@ -36,7 +36,7 @@
 #include <sys/types.h>
 #include <string>
 #include <map>
-#include <vector>
+#include "duckdb/common/vector.hpp"
 #include <climits>
 
 // Use this to get around strict aliasing rules.

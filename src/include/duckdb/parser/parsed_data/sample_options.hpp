@@ -17,6 +17,7 @@ namespace duckdb {
 
 enum class SampleMethod : uint8_t { SYSTEM_SAMPLE = 0, BERNOULLI_SAMPLE = 1, RESERVOIR_SAMPLE = 2 };
 
+// **DEPRECATED**: Use EnumUtil directly instead.
 string SampleMethodToString(SampleMethod method);
 
 struct SampleOptions {

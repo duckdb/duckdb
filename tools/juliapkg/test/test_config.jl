@@ -8,14 +8,13 @@
     df = DataFrame(results)
     @test names(df) == ["a"]
     @test size(df, 1) == 2
-    @test isequal(df.a, [missing, 42])
+    @test isequal(df.a, [42, missing])
 
     DBInterface.close!(con)
 
     # if we add this configuration flag, nulls should come last
     config = DuckDB.Config()
-    DuckDB.set_config(config, "default_null_order", "nulls_last")
-    @test_throws DuckDB.QueryException DuckDB.set_config(config, "unrecognized option", "aaa")
+    DuckDB.set_config(config, "default_null_order", "nulls_first")
 
     con = DBInterface.connect(DuckDB.DB, ":memory:", config)
 
@@ -24,11 +23,15 @@
     df = DataFrame(results)
     @test names(df) == ["a"]
     @test size(df, 1) == 2
-    @test isequal(df.a, [42, missing])
+    @test isequal(df.a, [missing, 42])
+
+    DBInterface.close!(con)
+
+    DuckDB.set_config(config, "unrecognized option", "aaa")
+    @test_throws DuckDB.ConnectionException con = DBInterface.connect(DuckDB.DB, ":memory:", config)
 
     DBInterface.close!(config)
     DBInterface.close!(config)
-    DBInterface.close!(con)
 end
 
 @testset "Test Set TimeZone" begin

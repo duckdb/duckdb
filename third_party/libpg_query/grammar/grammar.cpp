@@ -554,18 +554,6 @@ makeNotExpr(PGNode *expr, int location)
 	return (PGNode *) makeBoolExpr(PG_NOT_EXPR, list_make1(expr), location);
 }
 
-static PGNode *
-makeSQLValueFunction(PGSQLValueFunctionOp op, int32_t typmod, int location)
-{
-	PGSQLValueFunction *svf = makeNode(PGSQLValueFunction);
-
-	svf->op = op;
-	/* svf->type will be filled during parse analysis */
-	svf->typmod = typmod;
-	svf->location = location;
-	return (PGNode *) svf;
-}
-
 /* Separate PGConstraint nodes from COLLATE clauses in a */
 static void
 SplitColQualList(PGList *qualList,

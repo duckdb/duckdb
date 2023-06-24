@@ -8,7 +8,7 @@ namespace duckdb {
 TableFunctionBinder::TableFunctionBinder(Binder &binder, ClientContext &context) : ExpressionBinder(binder, context) {
 }
 
-BindResult TableFunctionBinder::BindColumnReference(ColumnRefExpression &expr, idx_t depth) {
+BindResult TableFunctionBinder::BindColumnReference(ColumnRefExpression &expr, idx_t depth, bool root_expression) {
 
 	// if this is a lambda parameters, then we temporarily add a BoundLambdaRef,
 	// which we capture and remove later
@@ -20,17 +20,21 @@ BindResult TableFunctionBinder::BindColumnReference(ColumnRefExpression &expr, i
 			}
 		}
 	}
+	auto value_function = ExpressionBinder::GetSQLValueFunction(expr.GetColumnName());
+	if (value_function) {
+		return BindExpression(value_function, depth, root_expression);
+	}
 
 	auto result_name = StringUtil::Join(expr.column_names, ".");
 	return BindResult(make_uniq<BoundConstantExpression>(Value(result_name)));
 }
 
-BindResult TableFunctionBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
+BindResult TableFunctionBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth,
                                                bool root_expression) {
-	auto &expr = **expr_ptr;
+	auto &expr = *expr_ptr;
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
-		return BindColumnReference(expr.Cast<ColumnRefExpression>(), depth);
+		return BindColumnReference(expr.Cast<ColumnRefExpression>(), depth, root_expression);
 	case ExpressionClass::SUBQUERY:
 		throw BinderException("Table function cannot contain subqueries");
 	case ExpressionClass::DEFAULT:

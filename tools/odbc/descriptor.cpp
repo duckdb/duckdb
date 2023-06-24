@@ -4,12 +4,14 @@
 #include "odbc_utils.hpp"
 #include "parameter_descriptor.hpp"
 #include "row_descriptor.hpp"
+#include "duckdb/common/vector.hpp"
 
 using duckdb::ApiInfo;
 using duckdb::DescHeader;
 using duckdb::DescRecord;
 using duckdb::OdbcHandleDesc;
 using duckdb::OdbcInterval;
+using duckdb::vector;
 
 //! ODBC Descriptor functions ********************************
 
@@ -852,7 +854,7 @@ SQLRETURN DescRecord::SetSqlDataType(SQLSMALLINT type) {
 }
 
 SQLRETURN DescRecord::SetSqlDescType(SQLSMALLINT type) {
-	std::vector<duckdb::TypeInfo> vec_typeinfo;
+	vector<duckdb::TypeInfo> vec_typeinfo;
 	ApiInfo::FindDataType(type, vec_typeinfo);
 	if (vec_typeinfo.empty()) {
 		return SQL_ERROR;

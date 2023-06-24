@@ -22,7 +22,7 @@ public:
 	    : arena_allocator(allocator), yyjson_allocator({Allocate, Reallocate, Free, &arena_allocator}) {
 	}
 
-	inline yyjson_alc *GetYYJSONAllocator() {
+	inline yyjson_alc *GetYYAlc() {
 		return &yyjson_allocator;
 	}
 
@@ -38,7 +38,7 @@ private:
 
 	static inline void *Reallocate(void *ctx, void *ptr, size_t old_size, size_t size) {
 		auto alloc = (ArenaAllocator *)ctx;
-		return alloc->ReallocateAligned((data_ptr_t)ptr, old_size, size);
+		return alloc->ReallocateAligned(data_ptr_cast(ptr), old_size, size);
 	}
 
 	static inline void Free(void *ctx, void *ptr) {
@@ -62,7 +62,7 @@ struct JSONKeyHash {
 			memcpy(&result, k.ptr + k.len - sizeof(size_t), sizeof(size_t));
 		} else {
 			result = 0;
-			duckdb::FastMemcpy(&result, k.ptr, k.len);
+			FastMemcpy(&result, k.ptr, k.len);
 		}
 		return result;
 	}
@@ -73,7 +73,7 @@ struct JSONKeyEquality {
 		if (a.len != b.len) {
 			return false;
 		}
-		return duckdb::FastMemcmp(a.ptr, b.ptr, a.len) == 0;
+		return FastMemcmp(a.ptr, b.ptr, a.len) == 0;
 	}
 };
 
@@ -98,7 +98,8 @@ public:
 public:
 	//! Read/Write flags
 	static constexpr auto READ_FLAG = YYJSON_READ_ALLOW_INF_AND_NAN | YYJSON_READ_ALLOW_TRAILING_COMMAS;
-	static constexpr auto STOP_READ_FLAG = READ_FLAG | YYJSON_READ_STOP_WHEN_DONE | YYJSON_READ_INSITU;
+	static constexpr auto READ_STOP_FLAG = READ_FLAG | YYJSON_READ_STOP_WHEN_DONE;
+	static constexpr auto READ_INSITU_FLAG = READ_STOP_FLAG | YYJSON_READ_INSITU;
 	static constexpr auto WRITE_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN;
 	static constexpr auto WRITE_PRETTY_FLAG = YYJSON_WRITE_ALLOW_INF_AND_NAN | YYJSON_WRITE_PRETTY;
 
@@ -169,6 +170,16 @@ public:
 	}
 
 public:
+	template <class T>
+	static T *AllocateArray(yyjson_alc *alc, idx_t count) {
+		return reinterpret_cast<T *>(alc->malloc(alc->ctx, sizeof(T) * count));
+	}
+
+	template <class T>
+	static T *AllocateArray(yyjson_mut_doc *doc, idx_t count) {
+		return AllocateArray<T>(&doc->alc, count);
+	}
+
 	static inline yyjson_mut_doc *CreateDocument(yyjson_alc *alc) {
 		D_ASSERT(alc);
 		return yyjson_mut_doc_new(alc);
@@ -228,7 +239,7 @@ public:
 	//! Get JSON value using JSON path query (safe, checks the path query)
 	template <class YYJSON_VAL_T>
 	static inline YYJSON_VAL_T *GetPointer(YYJSON_VAL_T *root, const string_t &path_str) {
-		auto ptr = path_str.GetDataUnsafe();
+		auto ptr = path_str.GetData();
 		auto len = path_str.GetSize();
 		if (len == 0) {
 			return GetPointerUnsafe<YYJSON_VAL_T>(root, ptr, len);
@@ -418,11 +429,11 @@ private:
 
 template <>
 inline char *JSONCommon::WriteVal(yyjson_val *val, yyjson_alc *alc, idx_t &len) {
-	return yyjson_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, (size_t *)&len, nullptr);
+	return yyjson_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, reinterpret_cast<size_t *>(&len), nullptr);
 }
 template <>
 inline char *JSONCommon::WriteVal(yyjson_mut_val *val, yyjson_alc *alc, idx_t &len) {
-	return yyjson_mut_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, (size_t *)&len, nullptr);
+	return yyjson_mut_val_write_opts(val, JSONCommon::WRITE_FLAG, alc, reinterpret_cast<size_t *>(&len), nullptr);
 }
 
 template <>

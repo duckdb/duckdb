@@ -21,6 +21,7 @@ struct tpcds_table_def {
 	const char *name;
 	int fl_small;
 	int fl_child;
+	int first_column;
 };
 
 #define CALL_CENTER   0
@@ -35,6 +36,8 @@ struct tpcds_append_information {
 	duckdb::InternalAppender appender;
 
 	tpcds_table_def table_def;
+
+	bool IsNull();
 };
 
 } // namespace tpcds

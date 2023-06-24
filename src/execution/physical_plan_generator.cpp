@@ -1,7 +1,7 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
@@ -207,10 +207,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		plan = CreatePlan(op.Cast<LogicalReset>());
 		break;
 	case LogicalOperatorType::LOGICAL_PIVOT:
-		plan = CreatePlan((LogicalPivot &)op);
+		plan = CreatePlan(op.Cast<LogicalPivot>());
 		break;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
-		plan = ((LogicalExtensionOperator &)op).CreatePlan(context, *this);
+		plan = op.Cast<LogicalExtensionOperator>().CreatePlan(context, *this);
 
 		if (!plan) {
 			throw InternalException("Missing PhysicalOperator for Extension Operator");

@@ -113,7 +113,7 @@ DistinctAggregateData::DistinctAggregateData(const DistinctAggregateCollectionIn
 	}
 }
 
-using aggr_ref_t = std::reference_wrapper<BoundAggregateExpression>;
+using aggr_ref_t = reference<BoundAggregateExpression>;
 
 struct FindMatchingAggregate {
 	explicit FindMatchingAggregate(const aggr_ref_t &aggr) : aggr_r(aggr) {
@@ -124,7 +124,7 @@ struct FindMatchingAggregate {
 		if (other.children.size() != aggr.children.size()) {
 			return false;
 		}
-		if (!Expression::Equals(aggr.filter.get(), other.filter.get())) {
+		if (!Expression::Equals(aggr.filter, other.filter)) {
 			return false;
 		}
 		for (idx_t i = 0; i < aggr.children.size(); i++) {
@@ -171,7 +171,7 @@ bool DistinctAggregateCollectionInfo::AnyDistinct() const {
 	return !indices.empty();
 }
 
-const vector<idx_t> &DistinctAggregateCollectionInfo::Indices() const {
+const unsafe_vector<idx_t> &DistinctAggregateCollectionInfo::Indices() const {
 	return this->indices;
 }
 

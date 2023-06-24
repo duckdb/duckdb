@@ -68,7 +68,23 @@ def benchmark_queries(benchmark_name, con, queries):
         t = 0.0
         for i, q in enumerate(queries):
             start = time.time()
-            df_result = con.execute(q).fetchall()
+            rel = con.sql(q)
+            if rel:
+                if benchmark_name.startswith('pandas'):
+                    if verbose:
+                        print(f"Fetching '{q}' as a DataFrame")
+                    df_result = rel.df()
+                elif benchmark_name.startswith('arrow'):
+                    if verbose:
+                        print(f"Fetching '{q}' as an Arrow table")
+                    df_result = rel.arrow()
+                else:
+                    if verbose:
+                        print(f"Fetching '{q}' as native Python lists/tuples")
+                    df_result = rel.fetchall()
+            else:
+                if verbose:
+                    print(f"Query '{q}' did not produce output")
             end = time.time()
             query_time = float(end - start)
             if verbose:
@@ -88,10 +104,11 @@ def run_dataload(con, type):
     for nrun in range(nruns):
         t = 0.0
         start = time.time()
+        rel = con.sql(q)
         if type == 'pandas':
-            res = con.execute(q).df()
+            res = rel.df()
         elif type == 'arrow':
-            res = con.execute(q).arrow()
+            res = rel.arrow()
         end = time.time()
         t = float(end - start)
         del res

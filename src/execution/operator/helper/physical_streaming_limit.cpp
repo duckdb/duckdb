@@ -60,8 +60,8 @@ OperatorResultType PhysicalStreamingLimit::Execute(ExecutionContext &context, Da
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 
-bool PhysicalStreamingLimit::IsOrderDependent() const {
-	return !parallel;
+OrderPreservationType PhysicalStreamingLimit::OperatorOrder() const {
+	return OrderPreservationType::FIXED_ORDER;
 }
 
 bool PhysicalStreamingLimit::ParallelOperator() const {

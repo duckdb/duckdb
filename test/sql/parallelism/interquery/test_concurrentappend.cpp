@@ -15,7 +15,7 @@ TEST_CASE("Sequential append", "[interquery][.]") {
 	duckdb::unique_ptr<MaterializedQueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	vector<duckdb::unique_ptr<Connection>> connections;
+	duckdb::vector<duckdb::unique_ptr<Connection>> connections;
 
 	// enable detailed profiling
 	con.Query("PRAGMA enable_profiling");

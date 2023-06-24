@@ -142,6 +142,26 @@ Value DebugForceNoCrossProduct::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Ordered Aggregate Threshold
+//===--------------------------------------------------------------------===//
+
+void OrderedAggregateThreshold::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).ordered_aggregate_threshold = ClientConfig().ordered_aggregate_threshold;
+}
+
+void OrderedAggregateThreshold::SetLocal(ClientContext &context, const Value &input) {
+	const auto param = input.GetValue<uint64_t>();
+	if (param <= 0) {
+		throw ParserException("Invalid option for PRAGMA ordered_aggregate_threshold, value must be positive");
+	}
+	ClientConfig::GetConfig(context).ordered_aggregate_threshold = param;
+}
+
+Value OrderedAggregateThreshold::GetSetting(ClientContext &context) {
+	return Value::UBIGINT(ClientConfig::GetConfig(context).ordered_aggregate_threshold);
+}
+
+//===--------------------------------------------------------------------===//
 // Debug Window Mode
 //===--------------------------------------------------------------------===//
 void DebugWindowMode::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -163,6 +183,21 @@ void DebugWindowMode::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
 
 Value DebugWindowMode::GetSetting(ClientContext &context) {
 	return Value();
+}
+
+//===--------------------------------------------------------------------===//
+// Debug AsOf Join
+//===--------------------------------------------------------------------===//
+void DebugAsOfIEJoin::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).force_asof_iejoin = ClientConfig().force_asof_iejoin;
+}
+
+void DebugAsOfIEJoin::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).force_asof_iejoin = input.GetValue<bool>();
+}
+
+Value DebugAsOfIEJoin::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).force_asof_iejoin);
 }
 
 //===--------------------------------------------------------------------===//
@@ -233,14 +268,18 @@ void DefaultNullOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 	auto parameter = StringUtil::Lower(input.ToString());
 
 	if (parameter == "nulls_first" || parameter == "nulls first" || parameter == "null first" || parameter == "first") {
-		config.options.default_null_order = OrderByNullType::NULLS_FIRST;
+		config.options.default_null_order = DefaultOrderByNullType::NULLS_FIRST;
 	} else if (parameter == "nulls_last" || parameter == "nulls last" || parameter == "null last" ||
 	           parameter == "last") {
-		config.options.default_null_order = OrderByNullType::NULLS_LAST;
+		config.options.default_null_order = DefaultOrderByNullType::NULLS_LAST;
+	} else if (parameter == "nulls_first_on_asc_last_on_desc" || parameter == "sqlite" || parameter == "mysql") {
+		config.options.default_null_order = DefaultOrderByNullType::NULLS_FIRST_ON_ASC_LAST_ON_DESC;
+	} else if (parameter == "nulls_last_on_asc_first_on_desc" || parameter == "postgres") {
+		config.options.default_null_order = DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC;
 	} else {
-		throw ParserException(
-		    "Unrecognized parameter for option NULL_ORDER \"%s\", expected either NULLS FIRST or NULLS LAST",
-		    parameter);
+		throw ParserException("Unrecognized parameter for option NULL_ORDER \"%s\", expected either NULLS FIRST, NULLS "
+		                      "LAST, SQLite, MySQL or Postgres",
+		                      parameter);
 	}
 }
 
@@ -251,10 +290,14 @@ void DefaultNullOrderSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config
 Value DefaultNullOrderSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	switch (config.options.default_null_order) {
-	case OrderByNullType::NULLS_FIRST:
+	case DefaultOrderByNullType::NULLS_FIRST:
 		return "nulls_first";
-	case OrderByNullType::NULLS_LAST:
+	case DefaultOrderByNullType::NULLS_LAST:
 		return "nulls_last";
+	case DefaultOrderByNullType::NULLS_FIRST_ON_ASC_LAST_ON_DESC:
+		return "nulls_first_on_asc_last_on_desc";
+	case DefaultOrderByNullType::NULLS_LAST_ON_ASC_FIRST_ON_DESC:
+		return "nulls_last_on_asc_first_on_desc";
 	default:
 		throw InternalException("Unknown null order setting");
 	}
@@ -390,7 +433,6 @@ Value EnableHTTPMetadataCacheSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 // Enable Profiling
 //===--------------------------------------------------------------------===//
-
 void EnableProfilingSetting::ResetLocal(ClientContext &context) {
 	auto &config = ClientConfig::GetConfig(context);
 	config.profiler_print_format = ClientConfig().profiler_print_format;
@@ -492,16 +534,15 @@ Value EnableProgressBarPrintSetting::GetSetting(ClientContext &context) {
 // Experimental Parallel CSV
 //===--------------------------------------------------------------------===//
 void ExperimentalParallelCSVSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	config.options.experimental_parallel_csv_reader = input.GetValue<bool>();
+	Printer::Print("experimental_parallel_csv is deprecated and will be removed with the next release - the parallel "
+	               "CSV reader is now standard and does not need to be manually enabled anymore 1");
 }
 
 void ExperimentalParallelCSVSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
-	config.options.experimental_parallel_csv_reader = DBConfig().options.experimental_parallel_csv_reader;
 }
 
 Value ExperimentalParallelCSVSetting::GetSetting(ClientContext &context) {
-	auto &config = DBConfig::GetConfig(context);
-	return Value::BIGINT(config.options.experimental_parallel_csv_reader);
+	return Value();
 }
 
 //===--------------------------------------------------------------------===//
@@ -661,9 +702,25 @@ Value HomeDirectorySetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Integer Division
+//===--------------------------------------------------------------------===//
+void IntegerDivisionSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).integer_division = ClientConfig().integer_division;
+}
+
+void IntegerDivisionSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.integer_division = input.GetValue<bool>();
+}
+
+Value IntegerDivisionSetting::GetSetting(ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value(config.integer_division);
+}
+
+//===--------------------------------------------------------------------===//
 // Log Query Path
 //===--------------------------------------------------------------------===//
-
 void LogQueryPathSetting::ResetLocal(ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
 	// TODO: verify that this does the right thing
@@ -677,15 +734,31 @@ void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
 		// empty path: clean up query writer
 		client_data.log_query_writer = nullptr;
 	} else {
-		client_data.log_query_writer =
-		    make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(context), path,
-		                                  BufferedFileWriter::DEFAULT_OPEN_FLAGS, client_data.file_opener.get());
+		client_data.log_query_writer = make_uniq<BufferedFileWriter>(FileSystem::GetFileSystem(context), path,
+		                                                             BufferedFileWriter::DEFAULT_OPEN_FLAGS);
 	}
 }
 
 Value LogQueryPathSetting::GetSetting(ClientContext &context) {
 	auto &client_data = ClientData::Get(context);
 	return client_data.log_query_writer ? Value(client_data.log_query_writer->path) : Value();
+}
+
+//===--------------------------------------------------------------------===//
+// Lock Configuration
+//===--------------------------------------------------------------------===//
+void LockConfigurationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto new_value = input.GetValue<bool>();
+	config.options.lock_configuration = new_value;
+}
+
+void LockConfigurationSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.lock_configuration = DBConfig().options.lock_configuration;
+}
+
+Value LockConfigurationSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.options.lock_configuration);
 }
 
 //===--------------------------------------------------------------------===//
@@ -823,6 +896,25 @@ Value PreserveInsertionOrder::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// ExportLargeBufferArrow
+//===--------------------------------------------------------------------===//
+void ExportLargeBufferArrow::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto export_large_buffers_arrow = input.GetValue<bool>();
+
+	config.options.arrow_offset_size = export_large_buffers_arrow ? ArrowOffsetSize::LARGE : ArrowOffsetSize::REGULAR;
+}
+
+void ExportLargeBufferArrow::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.arrow_offset_size = DBConfig().options.arrow_offset_size;
+}
+
+Value ExportLargeBufferArrow::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	bool export_large_buffers_arrow = config.options.arrow_offset_size == ArrowOffsetSize::LARGE;
+	return Value::BOOLEAN(export_large_buffers_arrow);
+}
+
+//===--------------------------------------------------------------------===//
 // Profiler History Size
 //===--------------------------------------------------------------------===//
 
@@ -931,7 +1023,7 @@ void SchemaSetting::ResetLocal(ClientContext &context) {
 void SchemaSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = input.ToString();
 	auto &client_data = ClientData::Get(context);
-	client_data.catalog_search_path->Set(CatalogSearchEntry::Parse(parameter), true);
+	client_data.catalog_search_path->Set(CatalogSearchEntry::Parse(parameter), CatalogSetPathType::SET_SCHEMA);
 }
 
 Value SchemaSetting::GetSetting(ClientContext &context) {
@@ -951,7 +1043,7 @@ void SearchPathSetting::ResetLocal(ClientContext &context) {
 void SearchPathSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = input.ToString();
 	auto &client_data = ClientData::Get(context);
-	client_data.catalog_search_path->Set(CatalogSearchEntry::ParseList(parameter), false);
+	client_data.catalog_search_path->Set(CatalogSearchEntry::ParseList(parameter), CatalogSetPathType::SET_SCHEMAS);
 }
 
 Value SearchPathSetting::GetSetting(ClientContext &context) {

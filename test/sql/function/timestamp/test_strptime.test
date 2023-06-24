@@ -260,6 +260,20 @@ SELECT strptime('Mon Oct 17 2022 22:00:00 GMT+0000 (GMT', '%a %b %d %Y %X GMT%z 
 ----
 2022-10-17 22:00:00+00
 
+#
+# Multiple patterns
+#
+query I
+SELECT strptime('10/28/1910', ['%d-%m-%Y', '%m-%d-%Y', '%d/%m/%Y', '%m/%d/%Y'])
+----
+1910-10-28 00:00:00
+
+# Report mismatch for first pattern
+statement error
+SELECT strptime('10.28.1910', ['%d-%m-%Y', '%m-%d-%Y', '%d/%m/%Y', '%m/%d/%Y'])
+----
+Error: Literal does not match, expected /
+
 statement error
 SELECT strptime('Mon Oct 17 2022 22:00:00 GMT+0000 (GMT)', '%a %b %d %Y %X GMT%z (%Z') as broken;
 

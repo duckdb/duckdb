@@ -51,12 +51,10 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 	auto &append_vector = ListVector::GetEntry(result);
 
 	CastParameters child_parameters(parameters, cast_data.child_cast_info.cast_data, parameters.local_state);
-	if (!cast_data.child_cast_info.function(source_cc, append_vector, source_size, child_parameters)) {
-		return false;
-	}
+	bool all_succeeded = cast_data.child_cast_info.function(source_cc, append_vector, source_size, child_parameters);
 	ListVector::SetListSize(result, source_size);
 	D_ASSERT(ListVector::GetListSize(result) == source_size);
-	return true;
+	return all_succeeded;
 }
 
 static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
@@ -106,7 +104,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 			}
 			if (child_validity.RowIsValid(idx)) {
 				auto len = child_data[idx].GetSize();
-				memcpy(dataptr + offset, child_data[idx].GetDataUnsafe(), len);
+				memcpy(dataptr + offset, child_data[idx].GetData(), len);
 				offset += len;
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);

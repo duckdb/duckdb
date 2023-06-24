@@ -21,6 +21,8 @@ include_dir = os.path.join('src', 'include')
 main_header_files = [os.path.join(include_dir, 'duckdb.hpp'),
     os.path.join(include_dir, 'duckdb.h'),
     os.path.join(include_dir, 'duckdb', 'common', 'types', 'date.hpp'),
+    os.path.join(include_dir, 'duckdb', 'common', 'adbc', 'adbc.h'),
+    os.path.join(include_dir, 'duckdb', 'common', 'adbc', 'adbc.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'arrow', 'arrow.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'arrow', 'arrow_converter.hpp'),
     os.path.join(include_dir, 'duckdb', 'common', 'arrow', 'arrow_wrapper.hpp'),
@@ -101,9 +103,9 @@ def get_includes(fpath, text):
         included_file = x[1]
         if skip_duckdb_includes and 'duckdb' in included_file:
             continue
-        if 'extension_helper.cpp' in fpath and (included_file.endswith('-extension.hpp') or included_file == 'extension_oote_loader.hpp'):
+        if 'extension_helper.cpp' in fpath and (included_file.endswith('_extension.hpp') or included_file == 'extension_oote_loader.hpp'):
             continue
-        if 'allocator.cpp' in fpath and included_file.endswith('jemalloc-extension.hpp'):
+        if 'allocator.cpp' in fpath and included_file.endswith('jemalloc_extension.hpp'):
             continue
         if x[0] in include_statements:
             raise Exception(f"duplicate include {x[0]} in file {fpath}")

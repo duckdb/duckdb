@@ -303,7 +303,8 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 		ordered_data_ptr += row_width;
 		sorting_ptr += sorting_entry_size;
 	}
-	ordered_data_block->block->SetSwizzling(sd.swizzled ? "LocalSortState::ReOrder.ordered_data" : nullptr);
+	ordered_data_block->block->SetSwizzling(
+	    sd.layout.AllConstant() || !sd.swizzled ? nullptr : "LocalSortState::ReOrder.ordered_data");
 	// Replace the unordered data block with the re-ordered data block
 	sd.data_blocks.clear();
 	sd.data_blocks.push_back(std::move(ordered_data_block));

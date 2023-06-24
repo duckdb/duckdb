@@ -11,5 +11,11 @@ public class DuckDBColumnTypeMetaData {
 		this.width = width;
 		this.scale = scale;
 	}
+
+	public static DuckDBColumnTypeMetaData parseColumnTypeMetadata(String columnTypeDetail) {
+		String[] split_details = columnTypeDetail.split(";");
+		return new DuckDBColumnTypeMetaData(Short.parseShort(split_details[0].replace("DECIMAL", ""))
+				, Short.parseShort(split_details[1]), Short.parseShort(split_details[2]));
+	}
 }
 	

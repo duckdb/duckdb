@@ -14,9 +14,9 @@ struct FirstState {
 
 struct FirstFunctionBase {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->is_set = false;
-		state->is_null = false;
+	static void Initialize(STATE &state) {
+		state.is_set = false;
+		state.is_null = false;
 	}
 
 	static bool IgnoreNull() {
@@ -27,40 +27,40 @@ struct FirstFunctionBase {
 template <bool LAST, bool SKIP_NULLS>
 struct FirstFunction : public FirstFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
-		if (LAST || !state->is_set) {
-			if (!mask.RowIsValid(idx)) {
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		if (LAST || !state.is_set) {
+			if (!unary_input.RowIsValid()) {
 				if (!SKIP_NULLS) {
-					state->is_set = true;
+					state.is_set = true;
 				}
-				state->is_null = true;
+				state.is_null = true;
 			} else {
-				state->is_set = true;
-				state->is_null = false;
-				state->value = input[idx];
+				state.is_set = true;
+				state.is_null = false;
+				state.value = input;
 			}
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
-		Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
+		Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
-		if (!target->is_set) {
-			*target = source;
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		if (!target.is_set) {
+			target = source;
 		}
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->is_set || state->is_null) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.is_set || state.is_null) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = state->value;
+			target = state.value;
 		}
 	}
 };
@@ -68,64 +68,64 @@ struct FirstFunction : public FirstFunctionBase {
 template <bool LAST, bool SKIP_NULLS>
 struct FirstFunctionString : public FirstFunctionBase {
 	template <class STATE>
-	static void SetValue(STATE *state, string_t value, bool is_null) {
-		if (LAST && state->is_set) {
-			Destroy(state);
+	static void SetValue(STATE &state, AggregateInputData &input_data, string_t value, bool is_null) {
+		if (LAST && state.is_set) {
+			Destroy(state, input_data);
 		}
 		if (is_null) {
 			if (!SKIP_NULLS) {
-				state->is_set = true;
-				state->is_null = true;
+				state.is_set = true;
+				state.is_null = true;
 			}
 		} else {
-			state->is_set = true;
-			state->is_null = false;
+			state.is_set = true;
+			state.is_null = false;
 			if (value.IsInlined()) {
-				state->value = value;
+				state.value = value;
 			} else {
 				// non-inlined string, need to allocate space for it
 				auto len = value.GetSize();
 				auto ptr = new char[len];
-				memcpy(ptr, value.GetDataUnsafe(), len);
+				memcpy(ptr, value.GetData(), len);
 
-				state->value = string_t(ptr, len);
+				state.value = string_t(ptr, len);
 			}
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void Operation(STATE *state, AggregateInputData &, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
-		if (LAST || !state->is_set) {
-			SetValue(state, input[idx], !mask.RowIsValid(idx));
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		if (LAST || !state.is_set) {
+			SetValue(state, unary_input.input, input, !unary_input.RowIsValid());
 		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
-	static void ConstantOperation(STATE *state, AggregateInputData &aggr_input_data, INPUT_TYPE *input,
-	                              ValidityMask &mask, idx_t count) {
-		Operation<INPUT_TYPE, STATE, OP>(state, aggr_input_data, input, mask, 0);
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
+		Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
-		if (source.is_set && (LAST || !target->is_set)) {
-			SetValue(target, source.value, source.is_null);
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &input_data) {
+		if (source.is_set && (LAST || !target.is_set)) {
+			SetValue(target, input_data, source.value, source.is_null);
 		}
 	}
 
 	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->is_set || state->is_null) {
-			mask.SetInvalid(idx);
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (!state.is_set || state.is_null) {
+			finalize_data.ReturnNull();
 		} else {
-			target[idx] = StringVector::AddStringOrBlob(result, state->value);
+			target = StringVector::AddStringOrBlob(finalize_data.result, state.value);
 		}
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
-		if (state->is_set && !state->is_null && !state->value.IsInlined()) {
-			delete[] state->value.GetDataUnsafe();
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		if (state.is_set && !state.is_null && !state.value.IsInlined()) {
+			delete[] state.value.GetData();
 		}
 	}
 };
@@ -137,14 +137,14 @@ struct FirstStateVector {
 template <bool LAST, bool SKIP_NULLS>
 struct FirstVectorFunction {
 	template <class STATE>
-	static void Initialize(STATE *state) {
-		state->value = nullptr;
+	static void Initialize(STATE &state) {
+		state.value = nullptr;
 	}
 
 	template <class STATE>
-	static void Destroy(STATE *state) {
-		if (state->value) {
-			delete state->value;
+	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+		if (state.value) {
+			delete state.value;
 		}
 	}
 	static bool IgnoreNull() {
@@ -152,14 +152,14 @@ struct FirstVectorFunction {
 	}
 
 	template <class STATE>
-	static void SetValue(STATE *state, Vector &input, const idx_t idx) {
-		if (!state->value) {
-			state->value = new Vector(input.GetType());
-			state->value->SetVectorType(VectorType::CONSTANT_VECTOR);
+	static void SetValue(STATE &state, Vector &input, const idx_t idx) {
+		if (!state.value) {
+			state.value = new Vector(input.GetType());
+			state.value->SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 		sel_t selv = idx;
 		SelectionVector sel(&selv);
-		VectorOperations::Copy(input, *state->value, sel, 1, 0, 0);
+		VectorOperations::Copy(input, *state.value, sel, 1, 0, 0);
 	}
 
 	static void Update(Vector inputs[], AggregateInputData &, idx_t input_count, Vector &state_vector, idx_t count) {
@@ -170,39 +170,32 @@ struct FirstVectorFunction {
 		UnifiedVectorFormat sdata;
 		state_vector.ToUnifiedFormat(count, sdata);
 
-		auto states = (FirstStateVector **)sdata.data;
+		auto states = UnifiedVectorFormat::GetData<FirstStateVector *>(sdata);
 		for (idx_t i = 0; i < count; i++) {
 			const auto idx = idata.sel->get_index(i);
 			if (SKIP_NULLS && !idata.validity.RowIsValid(idx)) {
 				continue;
 			}
-			auto state = states[sdata.sel->get_index(i)];
-			if (LAST || !state->value) {
+			auto &state = *states[sdata.sel->get_index(i)];
+			if (LAST || !state.value) {
 				SetValue(state, input, i);
 			}
 		}
 	}
 
 	template <class STATE, class OP>
-	static void Combine(const STATE &source, STATE *target, AggregateInputData &) {
-		if (source.value && (LAST || !target->value)) {
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		if (source.value && (LAST || !target.value)) {
 			SetValue(target, *source.value, 0);
 		}
 	}
 
-	template <class T, class STATE>
-	static void Finalize(Vector &result, AggregateInputData &, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (!state->value) {
-			// we need to use FlatVector::SetNull here
-			// since for STRUCT columns only setting the validity mask of the struct is incorrect
-			// as for a struct column, we need to also set ALL child columns to NULL
-			if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-				ConstantVector::SetNull(result, true);
-			} else {
-				FlatVector::SetNull(result, idx, true);
-			}
+	template <class STATE>
+	static void Finalize(STATE &state, AggregateFinalizeData &finalize_data) {
+		if (!state.value) {
+			finalize_data.ReturnNull();
 		} else {
-			VectorOperations::Copy(*state->value, result, 1, 0, idx);
+			VectorOperations::Copy(*state.value, finalize_data.result, 1, 0, finalize_data.result_idx);
 		}
 	}
 
@@ -288,7 +281,7 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 		return AggregateFunction({type}, type, AggregateFunction::StateSize<FirstStateVector>,
 		                         AggregateFunction::StateInitialize<FirstStateVector, OP>, OP::Update,
 		                         AggregateFunction::StateCombine<FirstStateVector, OP>,
-		                         AggregateFunction::StateFinalize<FirstStateVector, void, OP>, nullptr, OP::Bind,
+		                         AggregateFunction::StateVoidFinalize<FirstStateVector, OP>, nullptr, OP::Bind,
 		                         AggregateFunction::StateDestroy<FirstStateVector, OP>, nullptr, nullptr);
 	}
 	}
@@ -304,8 +297,9 @@ template <bool LAST, bool SKIP_NULLS>
 unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunction &function,
                                           vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
+	auto name = std::move(function.name);
 	function = GetFirstFunction<LAST, SKIP_NULLS>(decimal_type);
-	function.name = "first";
+	function.name = std::move(name);
 	function.return_type = decimal_type;
 	return nullptr;
 }

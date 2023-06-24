@@ -118,7 +118,7 @@ static void parallel_pending_query(Connection *conn, bool *correct, size_t threa
 		try {
 			// this will randomly throw an exception if another thread calls pending query first
 			auto result = executor->Execute();
-			if (!CHECK_COLUMN(result, 0, {Value(), 1, 2, 3})) {
+			if (!CHECK_COLUMN(result, 0, {1, 2, 3, Value()})) {
 				correct[threadnr] = false;
 			}
 		} catch (...) {
@@ -181,7 +181,7 @@ TEST_CASE("Test Pending Query Prepared Statements API", "[api][.]") {
 		REQUIRE_THROWS(prepare->PendingQuery(0));
 	}
 	SECTION("Error during execution") {
-		vector<Value> parameters;
+		duckdb::vector<Value> parameters;
 		auto prepared = con.Prepare("SELECT concat(SUM(i)::varchar, CASE WHEN SUM(i) IS NULL THEN 0 ELSE 'hello' "
 		                            "END)::INT FROM range(1000000) tbl(i) WHERE i>$1");
 		// this succeeds initially

@@ -12,6 +12,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/preserved_error.hpp"
+#include "duckdb/common/arrow/arrow_options.hpp"
 
 namespace duckdb {
 struct BoxRendererConfig;
@@ -20,7 +21,11 @@ enum class QueryResultType : uint8_t { MATERIALIZED_RESULT, STREAM_RESULT, PENDI
 
 //! A set of properties from the client context that can be used to interpret the query result
 struct ClientProperties {
-	string timezone;
+	ClientProperties(string time_zone_p, ArrowOffsetSize arrow_offset_size_p)
+	    : time_zone(std::move(time_zone_p)), arrow_offset_size(arrow_offset_size_p) {
+	}
+	string time_zone;
+	ArrowOffsetSize arrow_offset_size;
 };
 
 class BaseQueryResult {
@@ -58,7 +63,16 @@ protected:
 	//! The error (in case execution was not successful)
 	PreservedError error;
 };
-
+struct CurrentChunk {
+	//! The current data chunk
+	unique_ptr<DataChunk> data_chunk;
+	//! The current position in the data chunk
+	idx_t position;
+	//! If we have a current chunk we must scan for result production
+	bool Valid();
+	//! The remaining size of the current chunk
+	idx_t RemainingSize();
+};
 //! The QueryResult object holds the result of a query. It can either be a MaterializedQueryResult, in which case the
 //! result contains the entire result set, or a StreamQueryResult in which case the Fetch method can be called to
 //! incrementally fetch data from the database.
@@ -75,6 +89,27 @@ public:
 	ClientProperties client_properties;
 	//! The next result (if any)
 	unique_ptr<QueryResult> next;
+	//! In case we are converting the result from Native DuckDB to a different library (e.g., Arrow, Polars)
+	//! We might be producing chunks of a pre-determined size.
+	//! To comply, we use the following variable to store the current chunk, and it's position.
+	CurrentChunk current_chunk;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast query result to type - query result type mismatch");
+		}
+		return reinterpret_cast<TARGET &>(*this);
+	}
+
+	template <class TARGET>
+	const TARGET &Cast() const {
+		if (type != TARGET::TYPE) {
+			throw InternalException("Failed to cast query result to type - query result type mismatch");
+		}
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 
 public:
 	//! Returns the name of the column for the given index
@@ -95,7 +130,7 @@ public:
 	//! Fetch() until both results are exhausted. The data in the results will be lost.
 	DUCKDB_API bool Equals(QueryResult &other);
 
-	DUCKDB_API bool TryFetch(unique_ptr<DataChunk> &result, PreservedError &error) {
+	bool TryFetch(unique_ptr<DataChunk> &result, PreservedError &error) {
 		try {
 			result = Fetch();
 			return success;
@@ -111,6 +146,7 @@ public:
 		}
 	}
 
+	static ArrowOptions GetArrowOptions(QueryResult &query_result);
 	static string GetConfigTimezone(QueryResult &query_result);
 
 private:
@@ -131,7 +167,8 @@ private:
 	//! The row-based query result iterator. Invoking the
 	class QueryResultIterator {
 	public:
-		explicit QueryResultIterator(QueryResult *result_p) : current_row(*this, 0), result(result_p), base_row(0) {
+		explicit QueryResultIterator(optional_ptr<QueryResult> result_p)
+		    : current_row(*this, 0), result(result_p), base_row(0) {
 			if (result) {
 				chunk = shared_ptr<DataChunk>(result->Fetch().release());
 				if (!chunk) {
@@ -142,7 +179,7 @@ private:
 
 		QueryResultRow current_row;
 		shared_ptr<DataChunk> chunk;
-		QueryResult *result;
+		optional_ptr<QueryResult> result;
 		idx_t base_row;
 
 	public:
@@ -177,10 +214,10 @@ private:
 	};
 
 public:
-	DUCKDB_API QueryResultIterator begin() {
+	QueryResultIterator begin() {
 		return QueryResultIterator(this);
 	}
-	DUCKDB_API QueryResultIterator end() {
+	QueryResultIterator end() {
 		return QueryResultIterator(nullptr);
 	}
 

@@ -7,6 +7,27 @@ require json
 statement ok
 pragma enable_verification
 
+# should go to our NULL
+query T
+select json_extract('{"foo": null}', '$.foo')
+----
+NULL
+
+query T
+select json_extract('{"foo": null}', '$.foo.bar')
+----
+NULL
+
+query T
+select json_extract('null', '$')
+----
+NULL
+
+query T
+select json_extract('[null]', '$[0]')
+----
+NULL
+
 query T
 select json_extract('{"my_field": {"my_nested_field": ["goose", "duck"]}}', '/my_field/my_nested_field/1')
 ----
@@ -251,10 +272,6 @@ query T
 SELECT x::JSON->'$.settings.layer2."tris.legomenon"."summary.report"' FROM t12;
 ----
 false
-
-
-# can't deal with force reload / force storage (#5132)
-require skip_reload
 
 # test issue #5063
 statement ok

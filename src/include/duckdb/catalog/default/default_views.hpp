@@ -16,9 +16,9 @@ class SchemaCatalogEntry;
 
 class DefaultViewGenerator : public DefaultGenerator {
 public:
-	DefaultViewGenerator(Catalog &catalog, SchemaCatalogEntry *schema);
+	DefaultViewGenerator(Catalog &catalog, SchemaCatalogEntry &schema);
 
-	SchemaCatalogEntry *schema;
+	SchemaCatalogEntry &schema;
 
 public:
 	unique_ptr<CatalogEntry> CreateDefaultEntry(ClientContext &context, const string &entry_name) override;

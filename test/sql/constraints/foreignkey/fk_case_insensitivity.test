@@ -1,0 +1,29 @@
+# name: test/sql/constraints/foreignkey/fk_case_insensitivity.test
+# description: Issue #7119/#7120: foreign key case insensitivity
+# group: [foreignkey]
+
+statement ok
+PRAGMA enable_verification
+
+# issue 7119
+statement ok
+create table a (a int not null, constraint pk_a primary key (A));
+
+statement ok
+create table b (a int references a (a));
+
+statement ok
+drop table b;
+
+statement ok
+drop table a;
+
+# issue 7120
+statement ok
+create table a (i int primary key);
+
+statement ok
+create table b (i int references A (i));
+
+statement ok
+create table c (i int primary key, j int references C (i));

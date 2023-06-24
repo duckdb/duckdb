@@ -47,6 +47,10 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "PROJECTION";
 	case PhysicalOperatorType::COPY_TO_FILE:
 		return "COPY_TO_FILE";
+	case PhysicalOperatorType::BATCH_COPY_TO_FILE:
+		return "BATCH_COPY_TO_FILE";
+	case PhysicalOperatorType::FIXED_BATCH_COPY_TO_FILE:
+		return "FIXED_BATCH_COPY_TO_FILE";
 	case PhysicalOperatorType::DELIM_JOIN:
 		return "DELIM_JOIN";
 	case PhysicalOperatorType::BLOCKWISE_NL_JOIN:
@@ -61,6 +65,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "PIECEWISE_MERGE_JOIN";
 	case PhysicalOperatorType::IE_JOIN:
 		return "IE_JOIN";
+	case PhysicalOperatorType::ASOF_JOIN:
+		return "ASOF_JOIN";
 	case PhysicalOperatorType::CROSS_PRODUCT:
 		return "CROSS_PRODUCT";
 	case PhysicalOperatorType::POSITIONAL_JOIN:

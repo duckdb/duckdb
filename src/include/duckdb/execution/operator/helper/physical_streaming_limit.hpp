@@ -35,7 +35,7 @@ public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
-	bool IsOrderDependent() const override;
+	OrderPreservationType OperatorOrder() const override;
 	bool ParallelOperator() const override;
 };
 

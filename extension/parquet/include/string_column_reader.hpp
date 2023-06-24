@@ -22,6 +22,9 @@ struct StringParquetValueConversion {
 
 class StringColumnReader : public TemplatedColumnReader<string_t, StringParquetValueConversion> {
 public:
+	static constexpr const PhysicalType TYPE = PhysicalType::VARCHAR;
+
+public:
 	StringColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
 	                   idx_t max_define_p, idx_t max_repeat_p);
 
@@ -36,6 +39,7 @@ public:
 	void PrepareDeltaByteArray(ResizeableBuffer &buffer) override;
 	void DeltaByteArray(uint8_t *defines, idx_t num_values, parquet_filter_t &filter, idx_t result_offset,
 	                    Vector &result) override;
+	static uint32_t VerifyString(const char *str_data, uint32_t str_len, const bool isVarchar);
 	uint32_t VerifyString(const char *str_data, uint32_t str_len);
 
 protected:

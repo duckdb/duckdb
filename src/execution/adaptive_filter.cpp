@@ -1,13 +1,13 @@
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include <vector>
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
 AdaptiveFilter::AdaptiveFilter(const Expression &expr)
     : iteration_count(0), observe_interval(10), execute_interval(20), warmup(true) {
-	auto &conj_expr = (const BoundConjunctionExpression &)expr;
+	auto &conj_expr = expr.Cast<BoundConjunctionExpression>();
 	D_ASSERT(conj_expr.children.size() > 1);
 	for (idx_t idx = 0; idx < conj_expr.children.size(); idx++) {
 		permutation.push_back(idx);

@@ -14,7 +14,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
-#include "duckdb/common/types/column_data_collection.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #endif
 
 #include "parquet_types.h"
@@ -25,12 +25,19 @@ namespace duckdb {
 class FileSystem;
 class FileOpener;
 
+struct PreparedRowGroup {
+	duckdb_parquet::format::RowGroup row_group;
+	vector<duckdb::unique_ptr<ColumnWriterState>> states;
+};
+
 class ParquetWriter {
 public:
-	ParquetWriter(FileSystem &fs, string file_name, FileOpener *file_opener, vector<LogicalType> types,
-	              vector<string> names, duckdb_parquet::format::CompressionCodec::type codec);
+	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names,
+	              duckdb_parquet::format::CompressionCodec::type codec);
 
 public:
+	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
+	void FlushRowGroup(PreparedRowGroup &row_group);
 	void Flush(ColumnDataCollection &buffer);
 	void Finalize();
 

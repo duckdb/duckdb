@@ -3,6 +3,9 @@
 # group: [operator]
 
 statement ok
+SET default_null_order='nulls_first';
+
+statement ok
 PRAGMA enable_verification
 
 statement ok
@@ -119,7 +122,7 @@ NULL	NULL
 # division is ordered
 # i/2=1 => i>=2 or i<=3
 query TT
-SELECT i/2=1, 1=i/2 FROM integers ORDER BY i
+SELECT i//2=1, 1=i//2 FROM integers ORDER BY i
 ----
 NULL	NULL
 0	0

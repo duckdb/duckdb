@@ -15,16 +15,13 @@
 #include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
+class Serializer;
+class Deserializer;
 
 //! inline std directives that we use frequently
 #ifndef DUCKDB_DEBUG_MOVE
 using std::move;
 #endif
-
-// template <class _Tp, class _Dp = std::default_delete<_Tp>>
-// class unique_ptr;
-
-// using data_ptr = unique_ptr<char[]>;
 
 // NOTE: there is a copy of this in the Postgres' parser grammar (gram.y)
 #define DEFAULT_SCHEMA  "main"
@@ -110,6 +107,8 @@ struct PhysicalIndex {
 	}
 };
 
+DUCKDB_API bool IsPowerOfTwo(uint64_t v);
 DUCKDB_API uint64_t NextPowerOfTwo(uint64_t v);
+DUCKDB_API uint64_t PreviousPowerOfTwo(uint64_t v);
 
 } // namespace duckdb

@@ -26,7 +26,7 @@ static unique_ptr<GlobalTableFunctionState> PragmaVersionInit(ClientContext &con
 }
 
 static void PragmaVersionFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &data = (PragmaVersionData &)*data_p.global_state;
+	auto &data = data_p.global_state->Cast<PragmaVersionData>();
 	if (data.finished) {
 		// finished returning values
 		return;
@@ -81,7 +81,13 @@ string DuckDB::Platform() {
 		postfix = "_gcc4";
 	}
 #endif
-
+#ifdef __MINGW32__
+	postfix = "_mingw";
+#endif
+// this is used for the windows R builds which use a separate build environment
+#ifdef DUCKDB_PLATFORM_RTOOLS
+	postfix = "_rtools";
+#endif
 	return os + "_" + arch + postfix;
 }
 

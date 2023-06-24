@@ -1,6 +1,8 @@
 #include "duckdb/planner/operator/logical_aggregate.hpp"
-#include "duckdb/common/string_util.hpp"
+
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -87,7 +89,7 @@ unique_ptr<LogicalOperator> LogicalAggregate::Deserialize(LogicalDeserialization
 	for (idx_t i = 0; i < grouping_sets_size; i++) {
 		grouping_sets.push_back(reader.ReadRequiredSet<idx_t>());
 	}
-	vector<vector<idx_t>> grouping_functions;
+	vector<unsafe_vector<idx_t>> grouping_functions;
 	auto grouping_functions_size = reader.ReadRequired<idx_t>();
 	for (idx_t i = 0; i < grouping_functions_size; i++) {
 		grouping_functions.push_back(reader.ReadRequiredList<idx_t>());
@@ -115,6 +117,16 @@ vector<idx_t> LogicalAggregate::GetTableIndex() const {
 		result.push_back(groupings_index);
 	}
 	return result;
+}
+
+string LogicalAggregate::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return LogicalOperator::GetName() +
+		       StringUtil::Format(" #%llu, #%llu, #%llu", group_index, aggregate_index, groupings_index);
+	}
+#endif
+	return LogicalOperator::GetName();
 }
 
 } // namespace duckdb

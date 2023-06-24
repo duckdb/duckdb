@@ -24,10 +24,10 @@ SELECT COUNT(*) FROM PARQUET_SCAN('__TEST_DIR__/per_thread_output/*.parquet')
 query I
 SELECT STR_SPLIT(REPLACE(file, '\','/'), '/')[-1]  f FROM GLOB('__TEST_DIR__/per_thread_output/*.parquet') ORDER BY f
 ----
-out_0.parquet
-out_1.parquet
-out_2.parquet
-out_3.parquet
+data_0.parquet
+data_1.parquet
+data_2.parquet
+data_3.parquet
 
 # CSV also works
 statement ok
@@ -41,10 +41,10 @@ SELECT COUNT(*) FROM read_csv('__TEST_DIR__/per_thread_output_csv/*.csv', column
 query I
 SELECT STR_SPLIT(REPLACE(file, '\','/'), '/')[-1]  f FROM GLOB('__TEST_DIR__/per_thread_output_csv/*.csv') ORDER BY f
 ----
-out_0.csv
-out_1.csv
-out_2.csv
-out_3.csv
+data_0.csv
+data_1.csv
+data_2.csv
+data_3.csv
 
 # with a trailing slash
 statement ok

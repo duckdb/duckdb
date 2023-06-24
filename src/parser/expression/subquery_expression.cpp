@@ -28,15 +28,15 @@ string SubqueryExpression::ToString() const {
 	}
 }
 
-bool SubqueryExpression::Equal(const SubqueryExpression *a, const SubqueryExpression *b) {
-	if (!a->subquery || !b->subquery) {
+bool SubqueryExpression::Equal(const SubqueryExpression &a, const SubqueryExpression &b) {
+	if (!a.subquery || !b.subquery) {
 		return false;
 	}
-	if (!BaseExpression::Equals(a->child.get(), b->child.get())) {
+	if (!ParsedExpression::Equals(a.child, b.child)) {
 		return false;
 	}
-	return a->comparison_type == b->comparison_type && a->subquery_type == b->subquery_type &&
-	       a->subquery->Equals(b->subquery.get());
+	return a.comparison_type == b.comparison_type && a.subquery_type == b.subquery_type &&
+	       a.subquery->Equals(*b.subquery);
 }
 
 unique_ptr<ParsedExpression> SubqueryExpression::Copy() const {
@@ -77,7 +77,7 @@ unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type
 void SubqueryExpression::FormatSerialize(FormatSerializer &serializer) const {
 	ParsedExpression::FormatSerialize(serializer);
 	serializer.WriteProperty("subquery_type", subquery_type);
-	serializer.WriteProperty("subquery", *subquery.get());
+	serializer.WriteProperty("subquery", *subquery);
 	serializer.WriteOptionalProperty("child", child);
 	serializer.WriteProperty("comparison_type", comparison_type);
 }

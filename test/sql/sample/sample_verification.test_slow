@@ -1,0 +1,43 @@
+# name: test/sql/sample/sample_verification.test_slow
+# description: Test SAMPLE keyword
+# group: [sample]
+
+statement ok
+PRAGMA enable_verification;
+
+# verify that it is a sample without replacement (i.e. the same row will never occur more than once in the result)
+loop i 0 10
+
+query I
+select count(distinct i) from range(10) tbl(i) using sample 5;
+----
+5
+
+endloop
+
+# specifying a seed leads to repeatable behavior
+loop i 0 10
+
+query I nosort reservoirseed
+select * from range(100) using sample 10 (reservoir, 250)
+----
+
+query I nosort bernoulliseed
+select * from range(100) using sample 10% (bernoulli, 250)
+----
+
+query I nosort systemseed
+select * from range(100) using sample 10% (system, 250)
+----
+
+endloop
+
+# specify as sample_size, with reservoir sampling this should give us an exact count (i.e. always 10)
+loop i 0 10
+
+query I
+select count(*) from range(100) using sample 10% (reservoir)
+----
+10
+
+endloop

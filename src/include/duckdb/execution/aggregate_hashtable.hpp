@@ -8,13 +8,14 @@
 
 #pragma once
 
+#include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
+#include "duckdb/storage/arena_allocator.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 
 namespace duckdb {
 class BlockHandle;
 class BufferHandle;
-class RowDataCollection;
 
 struct FlushMoveState;
 
@@ -59,7 +60,7 @@ enum HtEntryType { HT_WIDTH_32, HT_WIDTH_64 };
 
 struct AggregateHTScanState {
 	mutex lock;
-	idx_t scan_position = 0;
+	TupleDataScanState scan_state;
 };
 
 struct AggregateHTAppendState {
@@ -72,8 +73,11 @@ struct AggregateHTAppendState {
 	SelectionVector empty_vector;
 	SelectionVector new_groups;
 	Vector addresses;
-	unique_ptr<UnifiedVectorFormat[]> group_data;
+	unsafe_unique_array<UnifiedVectorFormat> group_data;
 	DataChunk group_chunk;
+
+	TupleDataChunkState chunk_state;
+	bool chunk_state_initialized;
 };
 
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
@@ -94,22 +98,20 @@ public:
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types);
 	~GroupedAggregateHashTable() override;
 
-	//! The stringheap of the AggregateHashTable
-	unique_ptr<RowDataCollection> string_heap;
-
 public:
 	//! Add the given data to the HT, computing the aggregates grouped by the
 	//! data in the group chunk. When resize = true, aggregates will not be
 	//! computed but instead just assigned.
-	idx_t AddChunk(AggregateHTAppendState &state, DataChunk &groups, DataChunk &payload, const vector<idx_t> &filter);
+	idx_t AddChunk(AggregateHTAppendState &state, DataChunk &groups, DataChunk &payload,
+	               const unsafe_vector<idx_t> &filter);
 	idx_t AddChunk(AggregateHTAppendState &state, DataChunk &groups, Vector &group_hashes, DataChunk &payload,
-	               const vector<idx_t> &filter);
+	               const unsafe_vector<idx_t> &filter);
 	idx_t AddChunk(AggregateHTAppendState &state, DataChunk &groups, DataChunk &payload, AggregateType filter);
 
 	//! Scan the HT starting from the scan_position until the result and group
 	//! chunks are filled. scan_position will be updated by this function.
 	//! Returns the amount of elements found.
-	idx_t Scan(AggregateHTScanState &scan_state, DataChunk &result);
+	idx_t Scan(TupleDataParallelScanState &gstate, TupleDataLocalScanState &lstate, DataChunk &result);
 
 	//! Fetch the aggregates for specific groups from the HT and place them in the result
 	void FetchAggregates(DataChunk &groups, DataChunk &result);
@@ -126,10 +128,15 @@ public:
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
 
-	static idx_t InitialCapacity();
-	idx_t Size() {
-		return entries;
+	TupleDataCollection &GetDataCollection() {
+		return *data_collection;
 	}
+
+	idx_t Count() const {
+		return data_collection->Count();
+	}
+
+	static idx_t InitialCapacity();
 	idx_t Capacity() {
 		return capacity;
 	}
@@ -138,24 +145,23 @@ public:
 	idx_t MaxCapacity();
 	static idx_t GetMaxCapacity(HtEntryType entry_type, idx_t tuple_size);
 
-	void Partition(vector<GroupedAggregateHashTable *> &partition_hts, hash_t mask, idx_t shift);
+	void Partition(vector<GroupedAggregateHashTable *> &partition_hts, idx_t radix_bits);
+	void InitializeFirstPart();
 
 	void Finalize();
 
 private:
 	HtEntryType entry_type;
 
-	//! The total tuple size
-	idx_t tuple_size;
-	//! The amount of tuples that fit in a single block
-	idx_t tuples_per_block;
-	//! The capacity of the HT. This can be increased using
-	//! GroupedAggregateHashTable::Resize
+	//! The capacity of the HT. This can be increased using GroupedAggregateHashTable::Resize
 	idx_t capacity;
-	//! The amount of entries stored in the HT currently
-	idx_t entries;
+	//! Tuple width
+	idx_t tuple_size;
+	//! Tuples per block
+	idx_t tuples_per_block;
 	//! The data of the HT
-	vector<BufferHandle> payload_hds;
+	unique_ptr<TupleDataCollection> data_collection;
+	TupleDataPinState td_pin_state;
 	vector<data_ptr_t> payload_hds_ptrs;
 
 	//! The hashes of the HT
@@ -164,7 +170,6 @@ private:
 	idx_t hash_offset; // Offset into the layout of the hash column
 
 	hash_t hash_prefix_shift;
-	idx_t payload_page_offset;
 
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	hash_t bitmask;
@@ -173,28 +178,31 @@ private:
 
 	vector<ExpressionType> predicates;
 
+	//! The arena allocator used by the aggregates for their internal state
+	shared_ptr<ArenaAllocator> aggregate_allocator;
+
 private:
 	GroupedAggregateHashTable(const GroupedAggregateHashTable &) = delete;
 
-	//! Resize the HT to the specified size. Must be larger than the current
-	//! size.
 	void Destroy();
-
 	void Verify();
-
-	void FlushMove(FlushMoveState &state, Vector &source_addresses, Vector &source_hashes, idx_t count);
-	void NewBlock();
-
 	template <class ENTRY>
 	void VerifyInternal();
+	//! Resize the HT to the specified size. Must be larger than the current size.
 	template <class ENTRY>
 	void Resize(idx_t size);
+	//! Initializes the first part of the HT
+	template <class ENTRY>
+	void InitializeHashes();
+	//! Does the actual group matching / creation
+	template <class ENTRY>
+	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v, Vector &addresses_v,
+	                                 SelectionVector &new_groups);
+	//! Updates payload_hds_ptrs with the new pointers (after appending to data_collection)
+	void UpdateBlockPointers();
 	template <class ENTRY>
 	idx_t FindOrCreateGroupsInternal(AggregateHTAppendState &state, DataChunk &groups, Vector &group_hashes,
 	                                 Vector &addresses, SelectionVector &new_groups);
-
-	template <class FUNC = std::function<void(idx_t, idx_t, data_ptr_t)>>
-	void PayloadApply(FUNC fun);
 };
 
 } // namespace duckdb

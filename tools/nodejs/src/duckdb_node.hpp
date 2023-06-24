@@ -6,6 +6,10 @@
 #include <queue>
 #include <unordered_map>
 
+#include "duckdb/common/vector.hpp"
+
+using duckdb::vector;
+
 namespace node_duckdb {
 
 struct Task {
@@ -161,6 +165,7 @@ public:
 	Napi::Value Run(const Napi::CallbackInfo &info);
 	Napi::Value Finish(const Napi::CallbackInfo &info);
 	Napi::Value Stream(const Napi::CallbackInfo &info);
+	Napi::Value Columns(const Napi::CallbackInfo &info);
 
 public:
 	static Napi::FunctionReference constructor;
@@ -203,7 +208,7 @@ public:
 	static bool OtherIsInt(Napi::Number source);
 
 	template <class T>
-	static T *NewUnwrap(std::vector<napi_value> args) {
+	static T *NewUnwrap(vector<napi_value> args) {
 		auto obj = T::constructor.New(args);
 		return Napi::ObjectWrap<T>::Unwrap(obj);
 	}
