@@ -1,4 +1,4 @@
-# name: test/sql/storage/optimistic_write/optimistic_write_index.test
+# name: test/sql/storage/optimistic_write/optimistic_write_index.test_slow
 # description: Test optimistic writes and index creation
 # group: [optimistic_write]
 
