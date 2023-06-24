@@ -34,3 +34,37 @@ class TestSparkSession(object):
 			.config("spark.sql.warehouse.dir", "<path>/spark-warehouse") \
 			.enableHiveSupport() \
 			.getOrCreate()
+
+	def test_version(self, spark):
+		version = spark.version
+		assert version == '1.0.0'
+	
+	def test_get_active_session(self, spark):
+		active_session = spark.getActiveSession()
+	
+	def test_read(self, spark):
+		reader = spark.read
+	
+	def test_write(self, spark):
+		df = spark.sql('select 42')
+		writer = df.write
+	
+	def test_read_stream(self, spark):
+		reader = spark.readStream
+	
+	def test_spark_context(self, spark):
+		context = spark.sparkContext
+	
+	def test_sql(self, spark):
+		df = spark.sql('select 42')
+	
+	def test_stop_context(self, spark):
+		context = spark.sparkContext
+		spark.stop()
+	
+	def test_table(self, spark):
+		spark.sql('create table tbl(a varchar(10))')
+		df = spark.table('tbl')
+	
+	def test_udf(self, spark):
+		udf_registration = spark.udf

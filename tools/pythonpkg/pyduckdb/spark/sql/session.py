@@ -4,14 +4,19 @@ from typing import Optional, List, Tuple, Any
 from pyduckdb.spark.sql.dataframe import DataFrame
 from pyduckdb.spark.sql.conf import RuntimeConfig
 from pyduckdb.spark.sql.catalog import Catalog
+from pyduckdb.spark.sql.readwriter import DataFrameReader
+from pyduckdb.spark.context import SparkContext
+from pyduckdb.spark.sql.udf import UDFRegistration
+from pyduckdb.spark.sql.streaming import DataStreamReader
 
 class SparkSession:
-	def __init__(self):
-		self.name = "session"
-		self._master = 'master'
+	def __init__(self, master: str, appName: str):
+		self.context = SparkContext(master, appName)
+		self._master = master
+		self._appName = appName
 
 	def newSession(self) -> "SparkSession":
-		return SparkSession()
+		return SparkSession(self._master, self._appName)
 
 	def createDataFrame(self, tuples: List[Tuple[Any, ...]]) -> DataFrame:
 		return DataFrame()
@@ -24,6 +29,32 @@ class SparkSession:
 			TODO: this needs to query DuckDB
 		"""
 		return DataFrame()
+
+	def getActiveSession(self) -> Self:
+		return self
+
+	@property
+	def udf(self) -> UDFRegistration:
+		return UDFRegistration()
+
+	@property
+	def sparkContext(self) -> SparkContext:
+		return self.context
+
+	def stop(self) -> None:
+		self.context.stop()
+
+	@property
+	def read(self) -> DataFrameReader:
+		return DataFrameReader(self)
+
+	@property
+	def readStream(self) -> DataStreamReader:
+		return DataStreamReader(self)
+
+	@property
+	def version(self) -> str:
+		return '1.0.0'
 
 	@property
 	def catalog(self) -> Catalog:
@@ -47,7 +78,7 @@ class SparkSession:
 			return self
 
 		def getOrCreate(self) -> "SparkSession":
-			return SparkSession()
+			return SparkSession(self._master, self._appName)
 		
 		def config(self, key: Optional[str] = None, value: Optional[str] = None) -> Self:
 			if (key and value):
