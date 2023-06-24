@@ -8,9 +8,11 @@ from pyduckdb.spark.sql.readwriter import DataFrameReader
 from pyduckdb.spark.context import SparkContext
 from pyduckdb.spark.sql.udf import UDFRegistration
 from pyduckdb.spark.sql.streaming import DataStreamReader
+import duckdb
 
 class SparkSession:
-	def __init__(self, master: str, appName: str):
+	def __init__(self, master: str = '', appName: str = ''):
+		self.conn = duckdb.connect(master)
 		self.context = SparkContext(master, appName)
 		self._master = master
 		self._appName = appName
@@ -19,16 +21,23 @@ class SparkSession:
 		return SparkSession(self._master, self._appName)
 
 	def createDataFrame(self, tuples: List[Tuple[Any, ...]]) -> DataFrame:
-		return DataFrame()
+		parameter_count = len(tuples)
+		parameters = [f'${x+1}' for x in range(parameter_count)]
+		parameters = ', '.join(parameters)
+		query = f"""
+			select {parameters}
+		"""
+		# FIXME: we can't add prepared parameters to a relation
+		# or extract the relation from a connection after 'execute'
+		raise NotImplementedError()
 
 	def table(self, table_name: str) -> DataFrame:
-		return DataFrame()
+		relation = self.conn.table(table_name)
+		return DataFrame(relation, self)
 
 	def sql(self, query: str) -> DataFrame:
-		"""
-			TODO: this needs to query DuckDB
-		"""
-		return DataFrame()
+		relation = self.conn.sql(query)
+		return DataFrame(relation, self)
 
 	def getActiveSession(self) -> Self:
 		return self

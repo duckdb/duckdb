@@ -11,7 +11,8 @@ class DataFrameWriter:
 
 	def saveAsTable(self, table_name: str) -> None:
 		# register the dataframe or create a table from the contents?
-		pass
+		relation = self.dataframe.relation
+		relation.create(table_name)
 
 class DataFrameReader:
 	def __init__(self, session: "SparkSession"):
@@ -22,6 +23,7 @@ class DataFrameReader:
 	# https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.load.html#pyspark.sql.DataFrameReader.load
 	def load(self, path: str, format: str) -> "DataFrame":
 		from pyduckdb.spark.sql.dataframe import DataFrame
+		raise NotImplementedError
 		return DataFrame()
 
 __all__ = [
