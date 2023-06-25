@@ -6,6 +6,7 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer.hpp"

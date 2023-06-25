@@ -10,7 +10,6 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 
@@ -27,6 +26,7 @@ class TypeCatalogEntry;
 class Vector;
 class ClientContext;
 class FieldWriter;
+class FieldReader;
 
 //! Extra Type Info Type
 enum class ExtraTypeInfoType : uint8_t {
