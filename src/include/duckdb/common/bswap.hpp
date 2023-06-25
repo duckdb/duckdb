@@ -39,9 +39,4 @@ static inline T BSwap(const T &x) {
 	}
 }
 
-template <>
-inline hugeint_t BSwap(const hugeint_t &x) {
-	return hugeint_t(BSWAP64(x.lower), BSWAP64(x.upper));
-}
-
 } // namespace duckdb
