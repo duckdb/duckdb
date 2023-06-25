@@ -10,6 +10,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/field_writer.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 
@@ -68,7 +69,7 @@ struct list_entry_t {
 	uint64_t length;
 };
 
-using union_tag_t = uint8_t; 
+using union_tag_t = uint8_t;
 
 //===--------------------------------------------------------------------===//
 // Internal Types
@@ -486,6 +487,75 @@ struct aggregate_state_t {
 	string function_name;
 	LogicalType return_type;
 	vector<LogicalType> bound_argument_types;
+};
+
+//===--------------------------------------------------------------------===//
+// Extra Type Info
+//===--------------------------------------------------------------------===//
+
+struct ExtraTypeInfo {
+	explicit ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
+	}
+	explicit ExtraTypeInfo(ExtraTypeInfoType type, string alias) : type(type), alias(std::move(alias)) {
+	}
+	virtual ~ExtraTypeInfo() {
+	}
+
+	ExtraTypeInfoType type;
+	string alias;
+	optional_ptr<TypeCatalogEntry> catalog_entry;
+
+public:
+	bool Equals(ExtraTypeInfo *other_p) const {
+		if (type == ExtraTypeInfoType::INVALID_TYPE_INFO || type == ExtraTypeInfoType::STRING_TYPE_INFO ||
+		    type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
+			if (!other_p) {
+				if (!alias.empty()) {
+					return false;
+				}
+				//! We only need to compare aliases when both types have them in this case
+				return true;
+			}
+			if (alias != other_p->alias) {
+				return false;
+			}
+			return true;
+		}
+		if (!other_p) {
+			return false;
+		}
+		if (type != other_p->type) {
+			return false;
+		}
+		return alias == other_p->alias && EqualsInternal(other_p);
+	}
+	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
+	virtual void Serialize(FieldWriter &writer) const {
+	}
+	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
+	static void Serialize(ExtraTypeInfo *info, FieldWriter &writer);
+	//! Deserializes a blob back into an ExtraTypeInfo
+	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
+
+	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
+protected:
+	virtual bool EqualsInternal(ExtraTypeInfo *other_p) const {
+		// Do nothing
+		return true;
+	}
 };
 
 } // namespace duckdb
