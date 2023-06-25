@@ -4,10 +4,11 @@
 
 # Can't do reload tests with temp tables
 require skip_reload
+
 require json
 
 statement ok
-CREATE TEMPORARY TABLE j1(x json);
+CREATE TEMP TABLE j1(x json);
 
 statement ok
 INSERT INTO j1(x) VALUES ('[1, 2, 3]');
