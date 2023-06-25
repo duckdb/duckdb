@@ -2,10 +2,12 @@
 # description: Test JSON fields in temporary tables for issue 8062
 # group: [json]
 
+# Can't do reload tests with temp tables
+require skip_reload
 require json
 
 statement ok
-CREATE TEMP TABLE j1(x json);
+CREATE TEMPORARY TABLE j1(x json);
 
 statement ok
 INSERT INTO j1(x) VALUES ('[1, 2, 3]');
