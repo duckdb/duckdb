@@ -43,7 +43,7 @@ EDGE TABLES (
     studyAt SOURCE KEY ( personId ) REFERENCES Student ( id )
             DESTINATION KEY ( SchoolId ) REFERENCES School ( id )
             LABEL StudyAt
-    )
+    );
 
 query II
 -SELECT study.name, study.school

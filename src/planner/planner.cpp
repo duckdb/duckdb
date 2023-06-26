@@ -71,7 +71,23 @@ void Planner::CreatePlan(SQLStatement &statement) {
 			throw;
 		}
 	} catch (std::exception &ex) {
-		throw;
+        auto &config = DBConfig::GetConfig(context);
+
+        this->plan = nullptr;
+        for (auto &extension_op : config.operator_extensions) {
+            auto bound_statement =
+                    extension_op->Bind(context, *this->binder, extension_op->operator_info.get(), statement);
+            if (bound_statement.plan != nullptr) {
+                this->names = bound_statement.names;
+                this->types = bound_statement.types;
+                this->plan = std::move(bound_statement.plan);
+                break;
+            }
+        }
+
+        if (!this->plan) {
+            throw;
+        }
 	}
 	this->properties = binder->properties;
 	this->properties.parameter_count = parameter_count;
