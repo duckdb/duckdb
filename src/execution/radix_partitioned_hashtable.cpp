@@ -280,7 +280,7 @@ public:
 		auto &finalize_partition = gstate.finalize_partitions[partition_idx];
 		D_ASSERT(finalize_partition);
 
-		if (!finalize_partition->ht) {
+		{
 			lock_guard<mutex> guard(finalize_partition->lock);
 			if (finalize_partition->ht) {
 				return; // Another thread has started finalizing this
@@ -298,11 +298,12 @@ public:
 
 		if (uncombined_data.size() == 1) {
 			auto &ucb = uncombined_data[0];
-			D_ASSERT(ucb.allocators.size() == 1);
 			D_ASSERT(ucb.data_collection->Count() != 0);
 			lock_guard<mutex> guard(gstate.lock);
 			gstate.AddToFinal(std::move(ucb.data_collection));
-			gstate.final_allocators.emplace_back(ucb.allocators[0]);
+			for (auto &allocator : ucb.allocators) {
+				gstate.final_allocators.emplace_back(allocator);
+			}
 			uncombined_data.clear();
 			return;
 		}
@@ -366,7 +367,7 @@ public:
 
 				// Acquire data
 				vector<UncombinedAggregateData> uncombined_data;
-				if (!sink_partition.uncombined_data.empty()) {
+				{
 					lock_guard<mutex> guard(sink_partition.lock);
 					while (!sink_partition.uncombined_data.empty() &&
 					       uncombined_data.size() < sink_partition.data_per_repartition_task.GetIndex()) {
