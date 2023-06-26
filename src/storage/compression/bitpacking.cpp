@@ -78,11 +78,11 @@ struct EmptyBitpackingWriter {
 	template <class T>
 	static void WriteConstant(T constant, idx_t count, void *data_ptr, bool all_invalid) {
 	}
-	template <class T, class T_S = typename make_signed<T>::type>
+	template <class T, class T_S = typename MakeSigned<T>::type>
 	static void WriteConstantDelta(T_S constant, T frame_of_reference, idx_t count, T *values, bool *validity,
 	                               void *data_ptr) {
 	}
-	template <class T, class T_S = typename make_signed<T>::type>
+	template <class T, class T_S = typename MakeSigned<T>::type>
 	static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference,
 	                          T_S delta_offset, T *original_values, idx_t count, void *data_ptr) {
 	}
@@ -92,7 +92,7 @@ struct EmptyBitpackingWriter {
 	}
 };
 
-template <class T, class T_U = typename make_unsigned<T>::type, class T_S = typename make_signed<T>::type>
+template <class T, class T_U = typename MakeUnsigned<T>::type, class T_S = typename MakeSigned<T>::type>
 struct BitpackingState {
 public:
 	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr) {
@@ -212,7 +212,7 @@ public:
 
 	template <class T_INNER>
 	void SubtractFrameOfReference(T_INNER *buffer, T_INNER frame_of_reference) {
-		static_assert(is_integral<T_INNER>::value, "Integral type required.");
+		static_assert(IsIntegral<T_INNER>::value, "Integral type required.");
 		for (idx_t i = 0; i < compression_buffer_idx; i++) {
 			buffer[i] -= uint64_t(frame_of_reference);
 		}
@@ -352,7 +352,7 @@ idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-template <class T, bool WRITE_STATISTICS, class T_S = typename make_signed<T>::type>
+template <class T, bool WRITE_STATISTICS, class T_S = typename MakeSigned<T>::type>
 struct BitpackingCompressState : public CompressionState {
 public:
 	explicit BitpackingCompressState(ColumnDataCheckpointer &checkpointer)
@@ -592,7 +592,7 @@ static T DeltaDecode(T *data, T previous_value, const size_t size) {
 	return data[size - 1];
 }
 
-template <class T, class T_S = typename make_signed<T>::type>
+template <class T, class T_S = typename MakeSigned<T>::type>
 struct BitpackingScanState : public SegmentScanState {
 public:
 	explicit BitpackingScanState(ColumnSegment &segment) : current_segment(segment) {
@@ -738,7 +738,7 @@ unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-template <class T, class T_S = typename make_signed<T>::type>
+template <class T, class T_S = typename MakeSigned<T>::type>
 void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                            idx_t result_offset) {
 	auto &scan_state = (BitpackingScanState<T> &)*state.scan_state;

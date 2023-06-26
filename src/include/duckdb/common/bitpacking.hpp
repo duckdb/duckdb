@@ -14,7 +14,6 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/numeric_utils.hpp"
-#include <_types/_uint64_t.h>
 
 namespace duckdb {
 
@@ -192,7 +191,7 @@ private:
 	}
 
 	// Sign bit extension
-	template <class T, class T_U = typename make_unsigned<T>::type>
+	template <class T, class T_U = typename MakeUnsigned<T>::type>
 	static void SignExtend(data_ptr_t dst, bitpacking_width_t width) {
 		T const mask = ((T_U)1) << (width - 1);
 		for (idx_t i = 0; i < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
@@ -257,7 +256,6 @@ private:
 		} else if (std::is_same<T, hugeint_t>::value) {
 
 			duckdb_fastpforlib::fastpack((const uint64_t *)values, (uint32_t *)dst, (uint32_t)width);
-			//	throw NotImplementedException("Not implemented (yet)");
 
 		} else {
 			throw InternalException("Unsupported type found in bitpacking.");
