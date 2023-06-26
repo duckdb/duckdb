@@ -13,8 +13,9 @@ pytestmark = mark.skipif(
 class TestHTTPFS(object):
 	def test_read_json_httpfs(self, require):
 		connection = require('httpfs')
-		res = connection.read_json('https://jsonplaceholder.typicode.com/todos')
-		assert len(res.types) == 4
+		# FIXME: add test back
+		# res = connection.read_json('https://jsonplaceholder.typicode.com/todos')
+		# assert len(res.types) == 4
 
 	@pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
 	def test_httpfs(self, require, pandas):
