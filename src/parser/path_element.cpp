@@ -1,4 +1,5 @@
 #include "duckdb/parser/path_element.hpp"
+#include "duckdb/parser/path_reference.hpp"
 
 namespace duckdb {
 

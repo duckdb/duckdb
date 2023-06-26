@@ -1,4 +1,3 @@
-
 #pragma once
 #include "duckdb/parser/path_reference.hpp"
 
