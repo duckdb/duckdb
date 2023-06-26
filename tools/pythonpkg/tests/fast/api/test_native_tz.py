@@ -1,23 +1,80 @@
 import duckdb
 import datetime
 import pytz
-
-# def test_native_tz():
 import os
+import pandas as pd
+import pytest
+
 filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'..','data','tz.parquet')
-con = duckdb.connect('')
-res = con.execute("SET timezone='America/Denver';").fetchall()
-print(res)
-res = con.execute(f"select TimeRecStart as tz  from '{filename}'").fetchone()
-res = con.execute(f"select TimeRecStart as tz  from '{filename}'").fetchone()
-# assert res[0].tzinfo is not None
-# assert res[1].tzinfo is None
-# utc = pytz.timezone('UTC')
-# dt_utc = res[0].astimezone(utc)
-# no_tz = dt_utc.replace(tzinfo=None)
-print (res[0])
-# print(dt_utc)
-# print (no_tz)
+
+def test_native_python_timestamp_timezone():
+	con = duckdb.connect('')
+	con.execute("SET timezone='America/Los_Angeles';")
+	res = con.execute(f"select TimeRecStart as tz  from '{filename}'").fetchone()
+	assert res[0].hour == 14 and res[0].minute == 52
+	assert res[0].tzinfo.zone == 'America/Los_Angeles'
+
+	res = con.execute(f"select TimeRecStart as tz  from '{filename}'").fetchall()[0]
+	assert res[0].hour == 14 and res[0].minute == 52
+	assert res[0].tzinfo.zone == 'America/Los_Angeles'
+
+	res = con.execute(f"select TimeRecStart as tz  from '{filename}'").fetchmany(1)[0]
+	assert res[0].hour == 14 and res[0].minute == 52
+	assert res[0].tzinfo.zone == 'America/Los_Angeles'
+
+	con.execute("SET timezone='UTC';")
+	res = con.execute(f"select TimeRecStart as tz  from '{filename}'").fetchone()
+	assert res[0].hour == 21 and res[0].minute == 52
+	assert res[0].tzinfo.zone == 'UTC'
+
+def test_native_python_time_timezone():
+	con = duckdb.connect('')
+	con.execute("SET timezone='America/Los_Angeles';")
+	res = con.execute(f"select TimeRecStart::TIMETZ as tz  from '{filename}'").fetchone()
+	assert res[0].hour == 14 and res[0].minute == 52
+
+	res = con.execute(f"select TimeRecStart::TIMETZ as tz  from '{filename}'").fetchall()[0]
+	assert res[0].hour == 14 and res[0].minute == 52
+
+	res = con.execute(f"select TimeRecStart::TIMETZ as tz  from '{filename}'").fetchmany(1)[0]
+	assert res[0].hour == 14 and res[0].minute == 52
+
+	con.execute("SET timezone='UTC';")
+	res = con.execute(f"select TimeRecStart::TIMETZ as tz  from '{filename}'").fetchone()
+	assert res[0].hour == 21 and res[0].minute == 52
+
+def test_pandas_timestamp_timezone():
+	con = duckdb.connect('')
+	res = con.execute("SET timezone='America/Los_Angeles';")
+	res = con.execute(f"select TimeRecStart as tz  from '{filename}'").df()
+	assert res.dtypes["tz"].tz.zone == 'America/Los_Angeles'
+	assert res['tz'][0].hour == 14 and res['tz'][0].minute == 52
+
+	con.execute("SET timezone='UTC';")
+	res = con.execute(f"select TimeRecStart as tz  from '{filename}'").df()
+	assert res.dtypes["tz"].tz.zone == 'UTC'
+	assert res['tz'][0].hour == 21 and res['tz'][0].minute == 52
+
+def test_pandas_timestamp_time():
+	con = duckdb.connect('')
+	with pytest.raises(duckdb.NotImplementedException, match="Not implemented Error: Unsupported type"):
+		con.execute(f"select TimeRecStart::TIMETZ  as tz  from '{filename}'").df()
 
 
-assert 0 == res[1]
+def test_arrow_timestamp_timezone():
+	pa = pytest.importorskip('pyarrow')
+	con = duckdb.connect('')
+	res = con.execute("SET timezone='America/Los_Angeles';")
+	res = con.execute(f"select TimeRecStart as tz  from '{filename}'").arrow().to_pandas()
+	assert res.dtypes["tz"].tz.zone == 'America/Los_Angeles'
+	assert res['tz'][0].hour == 14 and res['tz'][0].minute == 52
+
+	con.execute("SET timezone='UTC';")
+	res = con.execute(f"select TimeRecStart as tz  from '{filename}'").arrow().to_pandas()
+	assert res.dtypes["tz"].tz.zone == 'UTC'
+	assert res['tz'][0].hour == 21 and res['tz'][0].minute == 52
+
+def test_arrow_timestamp_time():
+	con = duckdb.connect('')
+	with pytest.raises(duckdb.NotImplementedException, match="Unsupported Arrow type"):
+		con.execute(f"select TimeRecStart::TIMETZ  as tz  from '{filename}'").arrow()

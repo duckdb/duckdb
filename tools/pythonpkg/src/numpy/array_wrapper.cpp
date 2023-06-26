@@ -712,7 +712,6 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		                                                                               idata, count);
 		break;
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		may_have_null = ConvertColumn<dtime_t, PyObject *, duckdb_py_convert::TimeConvert>(current_offset, dataptr,
 		                                                                                   maskptr, idata, count);
 		break;

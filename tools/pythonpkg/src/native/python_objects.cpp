@@ -407,11 +407,13 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		Time::Convert(time, hour, min, sec, micros);
 		auto py_timestamp =
 		    py::reinterpret_steal<py::object>(PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros));
-				if (type.id() == LogicalTypeId::TIMESTAMP_TZ) {
-					// We have to add the timezone info
-					auto tz_info = import_cache.pytz().timezone()(client_properties.time_zone);
-					return tz_info.attr("localize")(py_timestamp);
-				}
+		if (type.id() == LogicalTypeId::TIMESTAMP_TZ) {
+			// We have to add the timezone info
+			auto tz_utc = import_cache.pytz().timezone()("UTC");
+			auto timestamp_utc = tz_utc.attr("localize")(py_timestamp);
+			auto tz_info = import_cache.pytz().timezone()(client_properties.time_zone);
+			return timestamp_utc.attr("astimezone")(tz_info);
+		}
 		return py_timestamp;
 	}
 	case LogicalTypeId::TIME:
@@ -421,6 +423,17 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		int32_t hour, min, sec, microsec;
 		auto time = val.GetValueUnsafe<dtime_t>();
 		duckdb::Time::Convert(time, hour, min, sec, microsec);
+		auto py_time = py::reinterpret_steal<py::object>(PyTime_FromTime(hour, min, sec, microsec));
+		if (type.id() == LogicalTypeId::TIME_TZ) {
+			// Time in Python is not really timezone aware, so we have to transform it to a datetime, apply the timezone
+			// and get the time
+			auto tz_utc = import_cache.pytz().timezone()("UTC");
+			auto py_timestamp = import_cache.datetime().datetime().attr("combine")(
+			    import_cache.datetime().datetime().attr("today")(), py_time);
+			auto timestamp_utc = tz_utc.attr("localize")(py_timestamp);
+			auto tz_info = import_cache.pytz().timezone()(client_properties.time_zone);
+			return timestamp_utc.attr("astimezone")(tz_info).attr("time")();
+		}
 		return py::reinterpret_steal<py::object>(PyTime_FromTime(hour, min, sec, microsec));
 	}
 	case LogicalTypeId::DATE: {

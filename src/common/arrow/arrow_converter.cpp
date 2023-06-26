@@ -127,7 +127,6 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "tdD";
 		break;
 	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ:
 		child.format = "ttu";
 		break;
 	case LogicalTypeId::TIMESTAMP:
@@ -253,7 +252,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	default:
-		throw InternalException("Unsupported Arrow type " + type.ToString());
+		throw NotImplementedException("Unsupported Arrow type " + type.ToString());
 	}
 }
 

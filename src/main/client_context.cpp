@@ -1160,7 +1160,7 @@ ClientProperties ClientContext::GetClientProperties() const {
 	// 1) Check Set Variable
 	auto &client_config = ClientConfig::GetConfig(*this);
 	auto tz_config = client_config.set_variables.find("timezone");
-	if (tz_config == client_config.set_variables.end()){
+	if (tz_config == client_config.set_variables.end()) {
 		// 2) Check for Default Value
 		auto default_value = db->config.extension_parameters.find("timezone");
 		if (default_value != db->config.extension_parameters.end()) {
