@@ -18,7 +18,7 @@ public:
     vector<int64_t> edge_ids;
 
     vector<int64_t> w;
-    vector<double_t> w_double;
+    vector<double> w_double;
 
     bool initialized_v = false;
     bool initialized_e = false;
