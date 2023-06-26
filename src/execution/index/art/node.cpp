@@ -22,7 +22,7 @@ namespace duckdb {
 Node::Node(MetaBlockReader &reader) {
 
 	idx_t block_id = reader.Read<block_id_t>();
-	data.node_ptr.offset = reader.Read<uint32_t>();
+	auto offset = reader.Read<uint32_t>();
 	type = 0;
 
 	if (block_id == DConstants::INVALID_INDEX) {
@@ -30,8 +30,8 @@ Node::Node(MetaBlockReader &reader) {
 		return;
 	}
 
-	data.node_ptr.buffer_id = (uint32_t)block_id;
 	swizzle_flag = 1;
+	SetPtr(block_id, offset);
 }
 
 //===--------------------------------------------------------------------===//
@@ -256,14 +256,16 @@ BlockPointer Node::Serialize(ART &art, MetaBlockWriter &writer) {
 
 void Node::Deserialize(ART &art) {
 
-	MetaBlockReader reader(art.table_io_manager.GetIndexBlockManager(), data.node_ptr.buffer_id);
-	reader.offset = data.node_ptr.offset;
+	D_ASSERT(IsSet() && IsSwizzled());
+
+	MetaBlockReader reader(art.table_io_manager.GetIndexBlockManager(), GetBufferId());
+	reader.offset = GetOffset();
 	type = reader.Read<uint8_t>();
 	swizzle_flag = 0;
 
 	auto decoded_type = DecodeNodeType();
 	if (decoded_type == NType::LEAF_INLINED) {
-		data.row_id = reader.Read<row_t>();
+		data = reader.Read<row_t>();
 		return;
 	}
 
@@ -397,7 +399,8 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 		return;
 	}
 
-	data.node_ptr.buffer_id += flags.merge_buffer_counts[type - 1];
+	// NOTE: this works because the rightmost 32 bits contain the buffer ID
+	data += flags.merge_buffer_counts[type - 1];
 }
 
 bool Node::Merge(ART &art, Node &other) {
@@ -574,7 +577,9 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 		return;
 	}
 	if (node_type == NType::LEAF) {
-		Leaf::Vacuum(art, *this);
+		if (flags.vacuum_flags[type - 1]) {
+			Leaf::Vacuum(art, *this);
+		}
 		return;
 	}
 

@@ -29,12 +29,6 @@ class MetaBlockWriter;
 // structs
 struct BlockPointer;
 struct ARTFlags;
-struct BufferPointer {
-	//! The offset in a buffer
-	uint32_t offset : 24;
-	//! The buffer ID
-	uint32_t buffer_id : 32;
-};
 
 //! The Node is the pointer class of the ART index.
 //! If the swizzle flag is set, then the pointer points to a storage address (and has no type),
@@ -53,6 +47,8 @@ public:
 	static constexpr uint8_t EMPTY_MARKER = 48;
 	static constexpr uint8_t LEAF_SIZE = 4;
 	static constexpr uint8_t PREFIX_SIZE = 15;
+	static constexpr uint8_t BUFFER_ID_SIZE = 32;
+	static constexpr uint64_t OFFSET_TO_ZERO = 0x00000000FFFFFFFF;
 
 public:
 	//! Constructs an empty Node
@@ -60,27 +56,35 @@ public:
 	//! Constructs a swizzled Node from a block ID and an offset
 	explicit Node(MetaBlockReader &reader);
 	//! Constructs a non-swizzled Node from a buffer ID and an offset
-	Node(uint32_t offset, uint32_t buffer_id) : swizzle_flag(0), type(0) {
-		data.node_ptr.buffer_id = buffer_id;
-		data.node_ptr.offset = offset;
+	Node(uint32_t buffer_id, uint32_t offset) : swizzle_flag(0), type(0) {
+		SetPtr(buffer_id, offset);
 	};
 
 	//! The swizzle flag, set if swizzled, not set otherwise
 	uint8_t swizzle_flag : 1;
 	//! The node type
 	uint8_t type : 7;
-	//! Depending on the type, this is either a BufferPointer or an inlined row ID
-	union {
-		BufferPointer node_ptr;
-		uint64_t row_id : 56;
-	} data;
+	//! Depending on the type, this is either a buffer/block pointer or an inlined row ID
+	uint64_t data : 56;
 
 public:
+	//! Get the block/buffer ID
+	inline idx_t GetBufferId() const {
+		return data & Node::OFFSET_TO_ZERO;
+	}
+	//! Get the offset
+	inline idx_t GetOffset() const {
+		return (data >> Node::BUFFER_ID_SIZE);
+	}
+	//! Set the block/buffer ID and offset
+	inline void SetPtr(uint32_t buffer_id, uint32_t offset) {
+		data = offset;
+		data <<= Node::BUFFER_ID_SIZE;
+		data += buffer_id;
+	}
 	//! Comparison operator
 	inline bool operator==(const Node &node) const {
-		return swizzle_flag == node.swizzle_flag && type == node.type &&
-		       data.node_ptr.offset == node.data.node_ptr.offset &&
-		       data.node_ptr.buffer_id == node.data.node_ptr.buffer_id;
+		return swizzle_flag == node.swizzle_flag && type == node.type && data == node.data;
 	}
 	//! Returns the swizzle flag
 	inline bool IsSwizzled() const {
@@ -146,5 +150,7 @@ public:
 	//! Vacuum all nodes that exceed their respective vacuum thresholds
 	void Vacuum(ART &art, const ARTFlags &flags);
 };
+
+static_assert(sizeof(Node) == sizeof(uint64_t), "Invalid size for Node type.");
 
 } // namespace duckdb

@@ -73,19 +73,19 @@ Node FixedSizeAllocator::New() {
 		buffers_with_free_space.erase(buffer_id);
 	}
 
-	return Node(offset, buffer_id);
+	return Node(buffer_id, offset);
 }
 
 void FixedSizeAllocator::Free(const Node ptr) {
-	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffers[ptr.data.node_ptr.buffer_id].ptr);
+	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffers[ptr.GetBufferId()].ptr);
 	ValidityMask mask(bitmask_ptr);
-	D_ASSERT(!mask.RowIsValid(ptr.data.node_ptr.offset));
-	mask.SetValid(ptr.data.node_ptr.offset);
-	buffers_with_free_space.insert(ptr.data.node_ptr.buffer_id);
+	D_ASSERT(!mask.RowIsValid(ptr.GetOffset()));
+	mask.SetValid(ptr.GetOffset());
+	buffers_with_free_space.insert(ptr.GetBufferId());
 
 	D_ASSERT(total_allocations > 0);
-	D_ASSERT(buffers[ptr.data.node_ptr.buffer_id].allocation_count > 0);
-	buffers[ptr.data.node_ptr.buffer_id].allocation_count--;
+	D_ASSERT(buffers[ptr.GetBufferId()].allocation_count > 0);
+	buffers[ptr.GetBufferId()].allocation_count--;
 	total_allocations--;
 }
 

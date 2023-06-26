@@ -52,8 +52,8 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	// set the root node of the tree
 	tree = make_uniq<Node>();
 	if (block_id != DConstants::INVALID_INDEX) {
-		tree->data.node_ptr.buffer_id = block_id;
-		tree->data.node_ptr.offset = block_offset;
+		tree->swizzle_flag = 1;
+		tree->SetPtr(block_id, block_offset);
 		tree->Deserialize(*this);
 	}
 	serialized_data_pointer = BlockPointer(block_id, block_offset);
@@ -953,7 +953,7 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 		// when we find a node, we need to update the 'matches' and 'row_ids'
 		// NOTE: leaves can have more than one row_id, but for UNIQUE/PRIMARY KEY they will only have one
 		D_ASSERT(leaf.DecodeNodeType() == NType::LEAF_INLINED);
-		if (conflict_manager.AddHit(i, leaf.data.row_id)) {
+		if (conflict_manager.AddHit(i, leaf.data)) {
 			found_conflict = i;
 		}
 	}

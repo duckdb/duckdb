@@ -90,7 +90,7 @@ public:
 	void FinalizeVacuum();
 	//! Returns true, if a Node pointer qualifies for a vacuum operation, and false otherwise
 	inline bool NeedsVacuum(const Node ptr) const {
-		if (ptr.data.node_ptr.buffer_id >= min_vacuum_buffer_id) {
+		if (ptr.GetBufferId() >= min_vacuum_buffer_id) {
 			return true;
 		}
 		return false;
@@ -104,10 +104,9 @@ public:
 private:
 	//! Returns the data_ptr_t of a Node pointer
 	inline data_ptr_t Get(const Node ptr) const {
-		D_ASSERT(ptr.data.node_ptr.buffer_id < buffers.size());
-		D_ASSERT(ptr.data.node_ptr.offset < allocations_per_buffer);
-		return buffers[ptr.data.node_ptr.buffer_id].ptr + ptr.data.node_ptr.offset * allocation_size +
-		       allocation_offset;
+		D_ASSERT(ptr.GetBufferId() < buffers.size());
+		D_ASSERT(ptr.GetOffset() < allocations_per_buffer);
+		return buffers[ptr.GetBufferId()].ptr + ptr.GetOffset() * allocation_size + allocation_offset;
 	}
 	//! Returns the first free offset in a bitmask
 	uint32_t GetOffset(ValidityMask &mask, const idx_t allocation_count);
