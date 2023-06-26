@@ -97,7 +97,7 @@ jobs:
 
     - uses: ./.github/actions/centos_7_setup
       with:
-        openssl: 1
+        openssl: 0
 
     - name: Version Check
       shell: bash

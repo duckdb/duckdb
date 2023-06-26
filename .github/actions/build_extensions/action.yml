@@ -93,9 +93,9 @@ runs:
         FORCE_32_BIT: ${{ inputs.force_32_bit }}
         TREAT_WARNINGS_AS_ERRORS: ${{ inputs.treat_warn_as_error}}
         FORCE_WARN_UNUSED: 1
-        STATIC_OPENSSL: 1
+#        STATIC_OPENSSL: 1
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
-        OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
+#        OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
