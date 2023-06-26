@@ -1,57 +1,88 @@
 name: "Setup CentOS7"
 description: "Setup the CentOS7 container from manylinux"
 inputs:
-  openssl:
-    description: 'OpenSSL'
+  aws-cli:
+    description: 'Install aws-cli'
     default: 0
+  ninja-build:
+    description: 'Install ninja-build'
+    default: 0
+  vcpkg:
+    description: 'Install vcpkg'
+    default: 0
+  openssl:
+    description: 'Install OpenSSL (requires vcpkg)'
+    default: 0
+  ccache:
+    description: 'Setup Ccache'
+    default: 0
+  jdk:
+    description: 'Setup JDK'
+    default: 0
+
 runs:
   using: "composite"
   steps:
-    - name: Install dependencies
-      shell: bash
-      run: |
-        yum install -y gcc gcc-c++ cmake make
-        yum install -y epel-release
-        yum install -y make gcc perl-core pcre-devel wget zlib-devel python3
-        yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
-        yum install -y git
-        yum install -y curl-devel expat-devel gettext-devel zlib-devel perl-ExtUtils-MakeMaker ninja-build
-        yum install -y unixODBC-devel
-        yum install -y java-11-openjdk-devel maven
-
-    - name: Install AWS CLI
-      shell: bash
-      run: |
-        python3 -m pip install awscli
-        aws --version
-
-      # the weird openssl findreplace fix with version numbers is from: https://github.com/h2o/h2o/issues/213
-    - name: Download OpenSSL 1.1.1s
-      shell: bash
-      if: ${{ inputs.openssl == 1 }}
-      run: |
-        wget https://github.com/openssl/openssl/archive/refs/tags/OpenSSL_1_1_1s.tar.gz
-        tar -xzvf OpenSSL_1_1_1s.tar.gz
-        mv openssl-OpenSSL_1_1_1s openssl-1.1.1s
-        cd openssl-1.1.1s
-        find ./ -type f -exec sed -i -e 's/\#\ define\ OPENSSL\_VERSION\_NUMBER/\#define\ OPENSSL\_VERSION\_NUMBER/g' {} \;
-
-    - name: Configure OpenSSL
-      if: ${{ inputs.openssl == 1 }}
-      shell: bash
-      run: |
-        cd openssl-1.1.1s
-        ./config --prefix=/usr --openssldir=/etc/ssl --libdir=lib no-shared zlib-dynamic
-
-    - name: Build OpenSSL
-      if: ${{ inputs.openssl == 1 }}
-      shell: bash
-      run: |
-        cd openssl-1.1.1s
-        make
-        make install
+#    - name: Install dependencies
+#      shell: bash
+#      run: |
+#        yum install -y gcc gcc-c++ cmake make
+#        yum install -y epel-release
+#        yum install -y make gcc perl-core pcre-devel wget zlib-devel python3
+#        yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+#        yum install -y git
+#        yum install -y curl-devel expat-devel gettext-devel zlib-devel perl-ExtUtils-MakeMaker ninja-build
+#        yum install -y unixODBC-devel
+#        yum install -y java-11-openjdk-devel maven
 
     - name: Do the git permissions thing
       shell: bash
       run: |
         git config --global --add safe.directory '*'
+
+    - name: Install AWS CLI
+      if: ${{ inputs.aws-cli == 1 }}
+      shell: bash
+      run: |
+        python3 -m pip install awscli
+        aws --version
+
+    - name: Setup dependencies for building DuckDB
+      if: ${{ inputs.ninja-build == 1 }}
+      shell: bash
+      run: yum install -y ninja-build
+
+    - name: Setup dependencies for vcpkg
+      if: ${{ inputs.vcpkg == 1 }}
+      shell: bash
+      run: yum install -y curl zip unzip tar
+
+    - name: Setup dependencies for installing OpenSSL through vcpkg
+      if: ${{ inputs.openssl == 1 }}
+      shell: bash
+      run: yum install -y perl-IPC-Cmd
+
+    - name: Setup vcpkg
+      if: ${{ inputs.vcpkg == 1 }}
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
+
+    - name: Install OpenSSL
+      if: ${{ inputs.openssl == 1 }}
+      shell: bash
+      run: |
+        cd ${{ github.workspace }}/vcpkg
+        ./vcpkg install openssl
+
+    - name: Setup Ccache
+      if: ${{ inputs.ccache == 1 }}
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Setup JDK
+      if: ${{ inputs.jdk == 1 }}
+      shell: bash
+      run: yum install -y java-11-openjdk-devel maven
