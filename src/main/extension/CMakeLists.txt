@@ -19,6 +19,8 @@ if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
   endforeach()
 endif()
 
+
+
 # generated_extension_loader.hpp
 set(EXT_LOADER_NAME_LIST "")
 set(EXT_LOADER_BODY "")
@@ -53,6 +55,9 @@ endif()
 configure_file(generated_extension_loader.hpp.in
                "${PROJECT_BINARY_DIR}/include/generated_extension_loader.hpp")
 
+if(${DISABLE_EXTENSION_LOAD})
+  add_definitions(-DDUCKDB_DISABLE_EXTENSION_LOAD)
+endif()
 add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
 
 # include generated includes
