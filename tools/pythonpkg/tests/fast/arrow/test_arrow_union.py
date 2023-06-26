@@ -3,7 +3,7 @@ from pytest import importorskip
 importorskip('pyarrow')
 
 import duckdb
-from pyarrow import scalar, large_string, list_, int32, types
+from pyarrow import scalar, string, large_string, list_, int32, types
 
 
 def test_nested():
@@ -15,14 +15,14 @@ def test_nested():
 def test_union_contains_nested_data():
     res = run("select ['hello']::UNION(first_name VARCHAR, middle_names VARCHAR[]) as res")
     assert types.is_union(res.type)
-    assert res.value == scalar(['hello'], type=list_(large_string()))
+    assert res.value == scalar(['hello'], type=list_(string()))
 
 
 def test_unions_inside_lists_structs_maps():
     res = run("select [union_value(name := 'Frank')] as res")
     assert types.is_list(res.type)
     assert types.is_union(res.type.value_type)
-    assert res[0].value == scalar('Frank', type=large_string())
+    assert res[0].value == scalar('Frank', type=string())
 
 
 def run(query):
