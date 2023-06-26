@@ -24,7 +24,6 @@
 #include "duckdb/parser/subpath_element.hpp"
 
 
-#include "pg_definitions.hpp"
 #include "nodes/parsenodes.hpp"
 #include "nodes/primnodes.hpp"
 
