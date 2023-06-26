@@ -855,11 +855,11 @@ protected:
 	void EvaluateInternal(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) override;
 };
 
-class WindowCumeDistExecutor : public WindowPeerExecutor {
+class WindowCumeDistExecutor : public WindowExecutor {
 public:
 	WindowCumeDistExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
 	                       const idx_t count)
-	    : WindowPeerExecutor(wexpr, context, partition_mask, count) {
+	    : WindowExecutor(wexpr, context, partition_mask, count) {
 	}
 
 protected:
@@ -1251,11 +1251,9 @@ void WindowPercentRankExecutor::EvaluateInternal(DataChunk &bounds, Vector &resu
 void WindowCumeDistExecutor::EvaluateInternal(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) {
 	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto partition_end = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
-	auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
 	auto peer_end = FlatVector::GetData<const idx_t>(bounds.data[PEER_END]);
 	auto rdata = FlatVector::GetData<double>(result);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
-		NextRank(partition_begin[i], peer_begin[i], row_idx);
 		int64_t denom = partition_end[i] - partition_begin[i];
 		double cume_dist = denom > 0 ? ((double)(peer_end[i] - partition_begin[i])) / denom : 0;
 		rdata[i] = cume_dist;
