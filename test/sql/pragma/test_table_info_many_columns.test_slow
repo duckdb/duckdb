@@ -1,4 +1,4 @@
-# name: test/sql/pragma/test_table_info_many_columns.test
+# name: test/sql/pragma/test_table_info_many_columns.test_slow
 # description: Test table_info pragma with many names
 # group: [pragma]
 
