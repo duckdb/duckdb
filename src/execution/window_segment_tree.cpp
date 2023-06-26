@@ -495,7 +495,7 @@ void WindowSegmentTree::Evaluate(const idx_t *begins, const idx_t *ends, Vector 
 	}
 	FlushStates(true);
 
-	//	Seggond pass: aggregate the ragged leaves
+	//	Second pass: aggregate the ragged leaves
 	//	(or everything if we can't combine)
 	for (idx_t rid = 0; rid < count; ++rid) {
 		auto state_ptr = fdata[rid];
