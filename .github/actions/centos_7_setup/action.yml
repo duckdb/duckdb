@@ -40,22 +40,24 @@ runs:
       run: |
         git config --global --add safe.directory '*'
 
+    - name: Setup dependencies for vcpkg or aws-cli
+      if: ${{ inputs.vcpkg == 1 || inputs.aws-cli == 1}}
+      shell: bash
+      run: yum install -y curl zip unzip tar
+
     - name: Install AWS CLI
       if: ${{ inputs.aws-cli == 1 }}
       shell: bash
       run: |
-        python3.7 -m pip install awscli
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        unzip awscliv2.zip
+        sudo ./aws/install
         aws --version
 
     - name: Setup dependencies for building DuckDB
       if: ${{ inputs.ninja-build == 1 }}
       shell: bash
       run: yum install -y ninja-build
-
-    - name: Setup dependencies for vcpkg
-      if: ${{ inputs.vcpkg == 1 }}
-      shell: bash
-      run: yum install -y curl zip unzip tar
 
     - name: Setup dependencies for installing OpenSSL through vcpkg
       if: ${{ inputs.openssl == 1 }}
