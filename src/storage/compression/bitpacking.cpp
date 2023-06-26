@@ -325,9 +325,9 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
-	if (std::is_same<T, hugeint_t>::value) {
-		// TODO: only analyze if  can fit in int64
-	}
+	// if (std::is_same<T, hugeint_t>::value) {
+	// 	// TODO: only analyze if  can fit in int64
+	// }
 
 	auto data = UnifiedVectorFormat::GetData<T>(vdata);
 	for (idx_t i = 0; i < count; i++) {
@@ -914,7 +914,6 @@ CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 		return GetBitpackingFunction<uint64_t>(type);
 	case PhysicalType::INT128:
 		return GetBitpackingFunction<hugeint_t>(type);
-
 	case PhysicalType::LIST:
 		return GetBitpackingFunction<uint64_t, false>(type);
 	default:
@@ -935,7 +934,6 @@ bool BitpackingFun::TypeIsSupported(PhysicalType type) {
 	case PhysicalType::UINT64:
 	case PhysicalType::LIST:
 	case PhysicalType::INT128:
-
 		return true;
 	default:
 		return false;

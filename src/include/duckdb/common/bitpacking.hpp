@@ -207,21 +207,20 @@ private:
 	                        bool skip_sign_extension = false) {
 		if (std::is_same<T, uint8_t>::value || std::is_same<T, int8_t>::value) {
 			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint8_t *>(src), reinterpret_cast<uint8_t *>(dst),
-			                               (uint32_t)width);
+			                               static_cast<uint32_t>(width));
 		} else if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
 			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint16_t *>(src), reinterpret_cast<uint16_t *>(dst),
-			                               (uint32_t)width);
+			                               static_cast<uint32_t>(width));
 		} else if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
 			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint32_t *>(dst),
-			                               (uint32_t)width);
+			                               static_cast<uint32_t>(width));
 		} else if (std::is_same<T, uint64_t>::value || std::is_same<T, int64_t>::value) {
 			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst),
-			                               (uint32_t)width);
+			                               static_cast<uint32_t>(width));
 		} else if (std::is_same<T, hugeint_t>::value) {
 
 			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst),
-			                               (uint32_t)width);
-			// throw NotImplementedException("Not implemented (yet)");
+			                               static_cast<uint32_t>(width));
 
 		} else {
 			throw InternalException("Unsupported type found in bitpacking.");
@@ -246,16 +245,21 @@ private:
 	template <class T>
 	static void PackGroup(data_ptr_t dst, T *values, bitpacking_width_t width) {
 		if (std::is_same<T, uint8_t>::value || std::is_same<T, int8_t>::value) {
-			duckdb_fastpforlib::fastpack((const uint8_t *)values, (uint8_t *)dst, (uint32_t)width);
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint8_t *>(values), reinterpret_cast<uint8_t *>(dst),
+			                             static_cast<uint32_t>(width));
 		} else if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
-			duckdb_fastpforlib::fastpack((const uint16_t *)values, (uint16_t *)dst, (uint32_t)width);
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint16_t *>(values), reinterpret_cast<uint16_t *>(dst),
+			                             static_cast<uint32_t>(width));
 		} else if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
-			duckdb_fastpforlib::fastpack((const uint32_t *)values, (uint32_t *)dst, (uint32_t)width);
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint32_t *>(values), reinterpret_cast<uint32_t *>(dst),
+			                             static_cast<uint32_t>(width));
 		} else if (std::is_same<T, uint64_t>::value || std::is_same<T, int64_t>::value) {
-			duckdb_fastpforlib::fastpack((const uint64_t *)values, (uint32_t *)dst, (uint32_t)width);
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint64_t *>(values), reinterpret_cast<uint32_t *>(dst),
+			                             static_cast<uint32_t>(width));
 		} else if (std::is_same<T, hugeint_t>::value) {
 
-			duckdb_fastpforlib::fastpack((const uint64_t *)values, (uint32_t *)dst, (uint32_t)width);
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint64_t *>(values), reinterpret_cast<uint32_t *>(dst),
+			                             static_cast<uint32_t>(width));
 
 		} else {
 			throw InternalException("Unsupported type found in bitpacking.");
