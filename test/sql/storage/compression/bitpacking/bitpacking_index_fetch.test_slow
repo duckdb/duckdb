@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/bitpacking/bitpacking_index_fetch.test
+# name: test/sql/storage/compression/bitpacking/bitpacking_index_fetch.test_slow
 # description: Fetch from Bitpacking column with index
 # group: [bitpacking]
 
