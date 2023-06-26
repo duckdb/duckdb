@@ -4,6 +4,9 @@ from typing import Optional, List, Tuple, Any, TYPE_CHECKING
 if TYPE_CHECKING:
 	from pyduckdb.spark.sql.catalog import Catalog
 
+from pyduckdb.spark.exception import ContributionsAcceptedError
+
+from pyduckdb.spark.conf import SparkConf
 from pyduckdb.spark.sql.dataframe import DataFrame
 from pyduckdb.spark.sql.conf import RuntimeConfig
 from pyduckdb.spark.sql.readwriter import DataFrameReader
@@ -26,9 +29,6 @@ class SparkSession:
 		self._context = context
 		self._conf = RuntimeConfig(self.conn)
 
-	def newSession(self) -> "SparkSession":
-		return SparkSession(self._context)
-
 	def createDataFrame(self, tuples: List[Tuple[Any, ...]]) -> DataFrame:
 		parameter_count = len(tuples)
 		parameters = [f'${x+1}' for x in range(parameter_count)]
@@ -40,39 +40,27 @@ class SparkSession:
 		# or extract the relation from a connection after 'execute'
 		raise NotImplementedError()
 
-	def table(self, table_name: str) -> DataFrame:
-		relation = self.conn.table(table_name)
+	def newSession(self) -> "SparkSession":
+		return SparkSession(self._context)
+
+	def range(self, start: int, end: Optional[int] = None, step: int = 1, numPartitions: Optional[int] = None) -> "DataFrame":
+		raise ContributionsAcceptedError
+
+	def sql(self, sqlQuery: str, **kwargs: Any) -> DataFrame:
+		if kwargs:
+			raise NotImplementedError
+		relation = self.conn.sql(sqlQuery)
 		return DataFrame(relation, self)
-
-	def sql(self, query: str) -> DataFrame:
-		relation = self.conn.sql(query)
-		return DataFrame(relation, self)
-
-	def getActiveSession(self) -> Self:
-		return self
-
-	@property
-	def udf(self) -> UDFRegistration:
-		return UDFRegistration()
-
-	@property
-	def sparkContext(self) -> SparkContext:
-		return self._context
 
 	def stop(self) -> None:
 		self._context.stop()
 
-	@property
-	def read(self) -> DataFrameReader:
-		return DataFrameReader(self)
+	def table(self, tableName: str) -> DataFrame:
+		relation = self.conn.table(tableName)
+		return DataFrame(relation, self)
 
-	@property
-	def readStream(self) -> DataStreamReader:
-		return DataStreamReader(self)
-
-	@property
-	def version(self) -> str:
-		return '1.0.0'
+	def getActiveSession(self) -> Self:
+		return self
 
 	@property
 	def catalog(self) -> "Catalog":
@@ -85,6 +73,30 @@ class SparkSession:
 	def conf(self) -> RuntimeConfig:
 		return self._conf
 
+	@property
+	def read(self) -> DataFrameReader:
+		return DataFrameReader(self)
+
+	@property
+	def readStream(self) -> DataStreamReader:
+		return DataStreamReader(self)
+
+	@property
+	def sparkContext(self) -> SparkContext:
+		return self._context
+
+	@property
+	def streams(self) -> Any:
+		raise ContributionsAcceptedError
+
+	@property
+	def udf(self) -> UDFRegistration:
+		return UDFRegistration()
+
+	@property
+	def version(self) -> str:
+		return '1.0.0'
+
 	class Builder:
 		def __init__(self):
 			self.name = "builder"
@@ -95,20 +107,28 @@ class SparkSession:
 			return self
 
 		def appName(self, name: str) -> Self:
-			self._appName = name
+			# no-op
+			return self
+
+		def remote(self, url: str) -> Self:
+			# no-op
 			return self
 
 		def getOrCreate(self) -> "SparkSession":
-			context = SparkContext(self._master, self._appName)
+			# TODO: use the config to pass in methods to 'connect'
+			context = SparkContext(self._master)
 			return SparkSession(context)
 
-		def config(self, key: Optional[str] = None, value: Optional[str] = None) -> Self:
+		def config(self, key: Optional[str] = None, value: Optional[Any] = None, conf: Optional[SparkConf] = None) -> Self:
+			if conf:
+				raise NotImplementedError
 			if (key and value):
 				self._config[key] = value
 			return self
 
 		def enableHiveSupport(self) -> Self:
-			raise NotImplementedError
+			# no-op
+			return self
 
 	builder = Builder()
 
