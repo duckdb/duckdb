@@ -28,7 +28,7 @@ SELECT COUNT(DISTINCT n) FROM test_vector_types(NULL::VARCHAR, all_flat=${flatte
 ----
 
 query I nosort count_int_grouped
-SELECT n, COUNT(n) FROM test_vector_types(NULL::INT, all_flat=${flatten}) t(n) GROUP BY n;
+SELECT n, COUNT(n) FROM test_vector_types(NULL::INT, all_flat=${flatten}) t(n) GROUP BY n ORDER BY ALL;
 ----
 
 endloop

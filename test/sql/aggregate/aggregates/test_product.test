@@ -42,7 +42,7 @@ SELECT PRODUCT(2) FROM range(100) tbl(i) WHERE i % 2 != 0;
 
 # Grouped Aggregation
 query I
-select product(i) from integers group by i%2
+select product(i) from integers group by i%2 order by all
 ----
 1.000000
 8.000000
