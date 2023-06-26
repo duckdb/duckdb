@@ -397,20 +397,17 @@ bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLoca
 	lstate.pin_state.properties = gstate.scan_state.pin_state.properties;
 
 	const auto segment_index_before = lstate.segment_index;
-	idx_t segment_index;
-	idx_t chunk_index;
 	{
 		lock_guard<mutex> guard(gstate.lock);
-		if (!NextScanIndex(gstate.scan_state, segment_index, chunk_index)) {
+		if (!NextScanIndex(gstate.scan_state, lstate.segment_index, lstate.chunk_index)) {
 			return false;
 		}
 	}
-	if (segment_index_before != DConstants::INVALID_INDEX && segment_index_before != segment_index) {
+	if (segment_index_before != DConstants::INVALID_INDEX && segment_index_before != lstate.segment_index) {
 		FinalizePinState(lstate.pin_state, segments[lstate.segment_index]);
-		lstate.segment_index = segment_index;
 	}
-	ScanAtIndex(lstate.pin_state, lstate.chunk_state, gstate.scan_state.chunk_state.column_ids, segment_index,
-	            chunk_index, result);
+	ScanAtIndex(lstate.pin_state, lstate.chunk_state, gstate.scan_state.chunk_state.column_ids, lstate.segment_index,
+	            lstate.chunk_index, result);
 	return true;
 }
 

@@ -23,6 +23,7 @@ public:
 public:
 	Vector partition_indices;
 	SelectionVector partition_sel;
+	SelectionVector reverse_partition_sel;
 
 	static constexpr idx_t MAP_THRESHOLD = 32;
 	perfect_map_t<list_entry_t> partition_entries;
@@ -84,6 +85,10 @@ public:
 	idx_t Count() const;
 	//! Get the size (in bytes) of this PartitionedTupleData
 	idx_t SizeInBytes() const;
+	//! Converts this PartitionedTupleData to a string representation
+	string ToString();
+	//! Prints the string representation of this PartitionedTupleData
+	void Print();
 
 protected:
 	//===--------------------------------------------------------------------===//

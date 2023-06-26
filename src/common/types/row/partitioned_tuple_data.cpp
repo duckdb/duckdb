@@ -26,6 +26,7 @@ PartitionedTupleDataType PartitionedTupleData::GetType() const {
 void PartitionedTupleData::InitializeAppendState(PartitionedTupleDataAppendState &state,
                                                  TupleDataPinProperties properties) const {
 	state.partition_sel.Initialize();
+	state.reverse_partition_sel.Initialize();
 
 	vector<column_t> column_ids;
 	column_ids.reserve(layout.ColumnCount());
@@ -58,7 +59,7 @@ void PartitionedTupleData::AppendUnified(PartitionedTupleDataAppendState &state,
 		const auto &partition_index = partition_entries.begin()->first;
 		auto &partition = *partitions[partition_index];
 		auto &partition_pin_state = *state.partition_pin_states[partition_index];
-		partition.AppendUnified(partition_pin_state, state.chunk_state, input);
+		partition.AppendUnified(partition_pin_state, state.chunk_state, input, append_sel, actual_append_count);
 		return;
 	}
 
@@ -164,13 +165,15 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 	}
 
 	// Now initialize a single selection vector that acts as a selection vector for every partition
-	auto &all_partitions_sel = state.partition_sel;
+	auto &partition_sel = state.partition_sel;
+	auto &reverse_partition_sel = state.reverse_partition_sel;
 	if (use_arr) {
 		for (idx_t i = 0; i < append_count; i++) {
 			const auto index = append_sel.get_index(i);
 			const auto &partition_index = partition_indices[index];
 			auto &partition_offset = partition_entries_arr[partition_index].offset;
-			all_partitions_sel[partition_offset++] = index;
+			reverse_partition_sel[index] = partition_offset;
+			partition_sel[partition_offset++] = index;
 		}
 		// Now just add it to the map anyway so the rest of the functionality is shared
 		for (idx_t partition_index = 0; partition_index <= max_partition_index; partition_index++) {
@@ -184,7 +187,8 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 			const auto index = append_sel.get_index(i);
 			const auto &partition_index = partition_indices[index];
 			auto &partition_offset = partition_entries[partition_index].offset;
-			all_partitions_sel[partition_offset++] = index;
+			reverse_partition_sel[index] = partition_offset;
+			partition_sel[partition_offset++] = index;
 		}
 	}
 }
@@ -320,6 +324,20 @@ idx_t PartitionedTupleData::SizeInBytes() const {
 	}
 	return total_size;
 }
+
+// LCOV_EXCL_START
+string PartitionedTupleData::ToString() {
+	string result = StringUtil::Format("PartitionedTupleData - [%llu Partitions]\n", partitions.size());
+	for (idx_t partition_idx = 0; partition_idx < partitions.size(); partition_idx++) {
+		result += StringUtil::Format("Partition %llu: ", partition_idx) + partitions[partition_idx]->ToString();
+	}
+	return result;
+}
+
+void PartitionedTupleData::Print() {
+	Printer::Print(ToString());
+}
+// LCOV_EXCL_STOP
 
 void PartitionedTupleData::CreateAllocator() {
 	allocators->allocators.emplace_back(make_shared<TupleDataAllocator>(buffer_manager, layout));

@@ -56,6 +56,7 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 struct UncombinedAggregateData {
 	explicit UncombinedAggregateData(unique_ptr<TupleDataCollection> data_collection_p)
 	    : data_collection(std::move(data_collection_p)) {
+		D_ASSERT(data_collection);
 	}
 	unique_ptr<TupleDataCollection> data_collection;
 	vector<shared_ptr<ArenaAllocator>> allocators;
@@ -84,6 +85,17 @@ public:
 		}
 	}
 
+	void AddToFinal(unique_ptr<TupleDataCollection> data_collection) {
+		if (data_collection->Count() == 0) {
+			return;
+		}
+		if (final_data_collection) {
+			final_data_collection->Combine(*data_collection);
+		} else {
+			final_data_collection = std::move(data_collection);
+		}
+	}
+
 	void AddToFinal(GroupedAggregateHashTable &intermediate_ht,
 	                optional_ptr<vector<UncombinedAggregateData>> uncombined_data = nullptr) {
 		unique_ptr<PartitionedTupleData> partitioned_data;
@@ -92,16 +104,16 @@ public:
 		{
 			lock_guard<mutex> guard(lock);
 			for (auto &partition : partitioned_data->GetPartitions()) {
-				final_data_collection->Combine(*partition);
+				AddToFinal(std::move(partition));
 			}
-			final_allocators.emplace_back(std::move(aggregate_allocator));
+			final_allocators.emplace_back(aggregate_allocator);
 			if (!uncombined_data) {
 				return;
 			}
 			for (auto &ucb : *uncombined_data) {
 				D_ASSERT(!ucb.allocators.empty());
 				for (auto &allocator : ucb.allocators) {
-					final_allocators.emplace_back(std::move(allocator));
+					final_allocators.emplace_back(allocator);
 				}
 			}
 		}
@@ -232,10 +244,13 @@ void RadixPartitionedHashTable::CombineInternal(ExecutionContext &context, Globa
 	D_ASSERT(partitions.size() == gstate.sink_partitions.size());
 	for (idx_t partition_idx = 0; partition_idx < partitions.size(); partition_idx++) {
 		auto &partition = partitions[partition_idx];
+		if (partition->Count() == 0) {
+			continue;
+		}
 		auto &sink_partition = *gstate.sink_partitions[partition_idx];
 		lock_guard<mutex> guard(sink_partition.lock);
 		sink_partition.uncombined_data.emplace_back(std::move(partition));
-		sink_partition.uncombined_data.back().allocators.emplace_back(std::move(allocator));
+		sink_partition.uncombined_data.back().allocators.emplace_back(allocator);
 	}
 }
 
@@ -274,14 +289,25 @@ public:
 			    make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), gstate.ht.group_types,
 			                                         gstate.ht.op.payload_types, gstate.ht.op.bindings);
 		}
-		D_ASSERT(!finalize_partition->ht);
+		D_ASSERT(finalize_partition->ht);
 
-		if (finalize_partition->uncombined_data.empty()) {
+		auto &uncombined_data = finalize_partition->uncombined_data;
+		if (uncombined_data.empty()) {
+			return;
+		}
+
+		if (uncombined_data.size() == 1) {
+			auto &ucb = uncombined_data[0];
+			D_ASSERT(ucb.allocators.size() == 1);
+			D_ASSERT(ucb.data_collection->Count() != 0);
+			lock_guard<mutex> guard(finalize_partition->lock);
+			gstate.AddToFinal(std::move(ucb.data_collection));
+			gstate.final_allocators.emplace_back(ucb.allocators[0]);
+			uncombined_data.clear();
 			return;
 		}
 
 		// Create one TupleDataCollection from all uncombined data in this partition
-		auto &uncombined_data = finalize_partition->uncombined_data;
 		auto &data_collection = *uncombined_data[0].data_collection;
 		for (idx_t i = 1; i < uncombined_data.size(); i++) {
 			data_collection.Combine(*uncombined_data[1].data_collection);
@@ -345,7 +371,7 @@ public:
 					while (!sink_partition.uncombined_data.empty() &&
 					       uncombined_data.size() < sink_partition.data_per_repartition_task.GetIndex()) {
 						uncombined_data.push_back(std::move(sink_partition.uncombined_data.back()));
-						uncombined_data.pop_back();
+						sink_partition.uncombined_data.pop_back();
 					}
 				}
 
@@ -359,7 +385,7 @@ public:
 					auto repartitioned_data = make_uniq<RadixPartitionedTupleData>(
 					    BufferManager::GetBufferManager(executor.context), layout,
 					    gstate.finalize_radix_bits.GetIndex(), layout.ColumnCount() - 1);
-					repartitioned_data->Partition(sink_data_collection, TupleDataPinProperties::DESTROY_AFTER_DONE);
+					repartitioned_data->Partition(sink_data_collection);
 
 					// Add it to the finalize partitions
 					auto &repartitioned_data_collections = repartitioned_data->GetPartitions();
@@ -367,6 +393,9 @@ public:
 						const auto partition_idx = sink_partition_idx * multiplier + i;
 						auto &finalize_partition = *gstate.finalize_partitions[partition_idx];
 						auto &finalize_data_collection = repartitioned_data_collections[partition_idx];
+						if (finalize_data_collection->Count() == 0) {
+							continue;
+						}
 
 						lock_guard<mutex> guard(finalize_partition.lock);
 						finalize_partition.uncombined_data.emplace_back(std::move(finalize_data_collection));
@@ -498,7 +527,7 @@ bool RadixPartitionedHashTable::RequiresRepartitioning(ClientContext &context, G
 	const auto max_ht_size = double(0.6) * BufferManager::GetBufferManager(context).GetMaxMemory();
 	const idx_t n_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	// Desired number of tasks is at least 2x the number of threads
-	const auto desired_tasks = NextPowerOfTwo(2 * n_threads);
+	const auto desired_tasks = MaxValue<idx_t>(NextPowerOfTwo(2 * n_threads), num_partitions);
 	if (!context.config.force_external && total_size < max_ht_size) {
 		// In-memory finalize
 		if (num_partitions >= desired_tasks) { // Can already keep all threads busy
@@ -538,7 +567,7 @@ bool RadixPartitionedHashTable::RequiresRepartitioning(ClientContext &context, G
 		gstate.tasks_per_partition = desired_tasks;
 	} else {
 		// Multiple partitions fit in memory, threads work on multiple at a time
-		const auto partitions_in_memory = max_ht_size / partition_size;
+		const auto partitions_in_memory = MinValue<idx_t>(max_ht_size / partition_size, num_partitions);
 		gstate.tasks_per_partition = desired_tasks / partitions_in_memory;
 	}
 
@@ -558,17 +587,19 @@ public:
 		if (initialized) {
 			return;
 		}
-		auto &layout = data_collection.GetLayout();
+		layout = data_collection.GetLayout().Copy();
 		vector<column_t> column_ids;
 		column_ids.reserve(layout.ColumnCount() - 1);
 		for (idx_t col_idx = 0; col_idx < layout.ColumnCount() - 1; col_idx++) {
 			column_ids.emplace_back(col_idx);
 		}
 		data_collection.InitializeScan(global_scan_state, column_ids);
+		initialized = true;
 	}
 
 	//! All data and scan state
 	TupleDataParallelScanState global_scan_state;
+	TupleDataLayout layout;
 	atomic<bool> initialized;
 	atomic<bool> finished;
 };
@@ -609,6 +640,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 	auto &sink = sink_p.Cast<RadixHTGlobalState>();
 	auto &gstate = input.global_state.Cast<RadixHTGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<RadixHTLocalSourceState>();
+
 	if (gstate.finished) {
 		return SourceResultType::FINISHED;
 	}
@@ -643,15 +675,14 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 			chunk.data[null_groups.size() + op.aggregates.size() + i].Reference(grouping_values[i]);
 		}
 		gstate.finished = true;
-		return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
 	if (count == 0) {
 		gstate.finished = true;
-		return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+		return SourceResultType::FINISHED;
 	}
 
-	lstate.scan_chunk.Reset();
 	if (!gstate.initialized) {
 		gstate.Initialize(*sink.final_data_collection);
 	}
@@ -661,6 +692,12 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 		gstate.finished = true;
 		return SourceResultType::FINISHED;
 	}
+
+	// TODO check if final allocator is thread-safe here
+	RowOperationsState row_state(*sink.final_allocators.back());
+	const auto group_cols = gstate.layout.ColumnCount() - 1;
+	RowOperations::FinalizeStates(row_state, gstate.layout, local_scan_state.chunk_state.row_locations,
+	                              lstate.scan_chunk, group_cols);
 
 	idx_t chunk_index = 0;
 	for (auto &entry : grouping_set) {
@@ -678,6 +715,8 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 	for (idx_t i = 0; i < op.grouping_functions.size(); i++) {
 		chunk.data[op.GroupCount() + op.aggregates.size() + i].Reference(grouping_values[i]);
 	}
+	chunk.SetCardinality(lstate.scan_chunk);
+
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 

@@ -149,7 +149,7 @@ void GroupedAggregateHashTable::Verify() {
 			continue;
 		}
 		auto hash = Load<hash_t>(entry.GetPointer() + hash_offset);
-		D_ASSERT((entry.GetSalt()) == aggr_ht_entry_t::ExtractSalt(hash));
+		D_ASSERT(entry.GetSalt() == aggr_ht_entry_t::ExtractSalt(hash));
 		count++;
 	}
 	D_ASSERT(count == Count());
@@ -389,10 +389,14 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 
 			// Set the entry pointers in the 1st part of the HT now that the data has been appended
 			const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
+			const auto &row_sel = state.append_state.reverse_partition_sel;
 			for (idx_t new_entry_idx = 0; new_entry_idx < new_entry_count; new_entry_idx++) {
-				const auto &row_location = row_locations[new_entry_idx];
 				const auto index = state.empty_vector.get_index(new_entry_idx);
+				const auto row_idx = row_sel.get_index(index);
+				const auto &row_location = row_locations[row_idx];
+
 				auto &entry = entries[ht_offsets[index]];
+
 				entry.SetPointer(row_location);
 				addresses[index] = row_location;
 			}
