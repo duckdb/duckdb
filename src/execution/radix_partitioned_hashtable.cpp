@@ -189,20 +189,6 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 	DataChunk &group_chunk = lstate.group_chunk;
 	PopulateGroupChunk(group_chunk, chunk);
 
-	// if we have non-combinable aggregates (e.g. string_agg) we cannot keep parallel hash tables
-	if (ForceSingleHT(input.global_state)) {
-		D_ASSERT(gstate.sink_partitions.size() == 1);
-		auto &single_partition = *gstate.sink_partitions[0];
-		lock_guard<mutex> glock(single_partition.lock);
-		if (!single_partition.ht) {
-			// Create a finalized ht in the global state, that we can populate
-			single_partition.ht = make_uniq<GroupedAggregateHashTable>(
-			    context.client, BufferAllocator::Get(context.client), group_types, op.payload_types, op.bindings);
-		}
-		single_partition.ht->AddChunk(group_chunk, payload_input, filter);
-		return;
-	}
-
 	if (!lstate.ht) {
 		lstate.ht = make_uniq<GroupedAggregateHashTable>(context.client, BufferAllocator::Get(context.client),
 		                                                 group_types, op.payload_types, op.bindings);
@@ -230,10 +216,6 @@ void RadixPartitionedHashTable::CombineInternal(ExecutionContext &context, Globa
                                                 LocalSinkState &lstate_p) const {
 	auto &gstate = gstate_p.Cast<RadixHTGlobalState>();
 	auto &lstate = lstate_p.Cast<RadixHTLocalState>();
-	if (ForceSingleHT(gstate)) {
-		D_ASSERT(gstate.sink_partitions.size() == 1);
-		return;
-	}
 
 	// Get data from the HT
 	unique_ptr<PartitionedTupleData> partitioned_data;
@@ -254,17 +236,8 @@ void RadixPartitionedHashTable::CombineInternal(ExecutionContext &context, Globa
 	}
 }
 
-bool RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState &gstate_p) const {
-	auto &gstate = gstate_p.Cast<RadixHTGlobalState>();
-
-	// Special case if we have non-combinable aggregates, for which we've already created a global shared HT
-	if (ForceSingleHT(gstate)) {
-		D_ASSERT(gstate.sink_partitions.size() == 1);
-		gstate.AddToFinal(*gstate.sink_partitions[0]->ht);
-		return false; // No tasks needed
-	}
-
-	return true; // Tasks needed
+bool RadixPartitionedHashTable::Finalize(ClientContext &, GlobalSinkState &) const {
+	return true; // Always needs tasks
 }
 
 // this task is run in multiple threads and combines the radix-partitioned hash tables into a single one and then
@@ -444,7 +417,6 @@ private:
 void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_ptr<Event> &event,
                                               GlobalSinkState &gstate_p, vector<shared_ptr<Task>> &tasks) const {
 	auto &gstate = gstate_p.Cast<RadixHTGlobalState>();
-	D_ASSERT(!ForceSingleHT(gstate_p));
 
 	// Check if we want to repartition
 	auto requires_repartitioning = RequiresRepartitioning(executor.context, gstate_p);
@@ -484,13 +456,6 @@ void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_p
 		}
 		gstate.sink_partitions.clear();
 	}
-}
-
-bool RadixPartitionedHashTable::ForceSingleHT(GlobalSinkState &state) {
-	return false;
-	// TODO
-	//	auto &gstate = state.Cast<RadixHTGlobalState>();
-	//	return gstate.partition_info->n_partitions < 2;
 }
 
 bool RadixPartitionedHashTable::RequiresRepartitioning(ClientContext &context, GlobalSinkState &gstate_p) {

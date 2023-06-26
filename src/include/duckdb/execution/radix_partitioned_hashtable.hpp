@@ -53,8 +53,6 @@ public:
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink,
 	                         OperatorSourceInput &input) const;
 
-	static bool ForceSingleHT(GlobalSinkState &gstate);
-
 private:
 	idx_t CountInternal(GlobalSinkState &sink) const;
 	void SetGroupingValues();
