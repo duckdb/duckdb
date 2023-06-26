@@ -6,7 +6,6 @@
 #include "jemalloc/internal/mutex.h"
 #include "jemalloc/internal/rtree.h"
 
-
 namespace duckdb_jemalloc {
 
 /******************************************************************************/
