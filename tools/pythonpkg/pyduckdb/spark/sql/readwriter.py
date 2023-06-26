@@ -20,8 +20,6 @@ class DataFrameReader:
 	def __init__(self, session: "SparkSession"):
 		self.session = session
 
-	# TODO: Expand the parameters for this:
-	# https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.load.html#pyspark.sql.DataFrameReader.load
 	def load(self, path: Union[str, List[str], None] = None, format: Optional[str] = None, schema: Union[StructType, str, None] = None, **options: OptionalPrimitiveType) -> "DataFrame":
 		from pyduckdb.spark.sql.dataframe import DataFrame
 		raise NotImplementedError
