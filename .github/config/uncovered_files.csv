@@ -89,7 +89,7 @@ common/types/string_heap.cpp	11
 common/types/time.cpp	21
 common/types/timestamp.cpp	19
 common/types/uuid.cpp	3
-common/types/validity_mask.cpp	6
+common/types/validity_mask.cpp	10
 common/types/value.cpp	180
 common/types/vector.cpp	132
 common/value_operations/comparison_operations.cpp	32
