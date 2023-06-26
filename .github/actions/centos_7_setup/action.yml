@@ -44,7 +44,7 @@ runs:
       if: ${{ inputs.aws-cli == 1 }}
       shell: bash
       run: |
-        python3 -m pip install awscli
+        python3.7 -m pip install awscli
         aws --version
 
     - name: Setup dependencies for building DuckDB

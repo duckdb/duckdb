@@ -202,6 +202,7 @@ jobs:
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         treat_warn_as_error: 0
         toolchain_path: ${{ github.workspace }}/vcpkg/scripts/buildsystem/vcpkg.cmake
+        python_name: python3.7
 
     - uses: actions/upload-artifact@v3
       with:
