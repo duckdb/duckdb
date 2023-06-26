@@ -87,7 +87,7 @@ public:
 	// Overload specifically for the usage of size_t in the fsst library
 	template <>
 	bitpacking_width_t MinimumBitWidth<size_t>(size_t value) {
-		return MinimumBitWidth<uint64_t>(uint64_t(value));
+		return FindMinimumBitWidth<uint64_t, BYTE_ALIGNED>(uint64_t(value), uint64_t(value));
 	}
 
 	// Calculates the minimum required number of bits per value that can store all values
@@ -221,7 +221,6 @@ private:
 			// currently for compatibility with the fastpforlib the hugeints are treated as two 64 bit integers
 			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst),
 			                               static_cast<uint32_t>(width));
-
 		} else {
 			throw InternalException("Unsupported type found in bitpacking.");
 		}
@@ -234,8 +233,8 @@ private:
 	// Prevent compression at widths that are ineffective
 	template <class T>
 	static bitpacking_width_t GetEffectiveWidth(bitpacking_width_t width) {
-		auto bits_of_type = sizeof(T) * 8;
-		auto type_size = sizeof(T);
+		bitpacking_width_t bits_of_type = sizeof(T) * 8;
+		bitpacking_width_t type_size = sizeof(T);
 		if (width + type_size > bits_of_type) {
 			return bits_of_type;
 		}
