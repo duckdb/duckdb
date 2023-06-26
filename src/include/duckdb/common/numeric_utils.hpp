@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/bit_utils.hpp
+// duckdb/common/numeric_utils.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,7 +9,6 @@
 #pragma once
 
 #include <type_traits>
-#include <typeinfo>
 #include "duckdb/common/hugeint.hpp"
 
 namespace duckdb {
@@ -29,6 +28,7 @@ struct MakeUnsigned {
 	using type = typename std::make_unsigned<T>::type;
 };
 
+// hugeint_t does not actually have an unsigned variant (yet), but this is required to make compression work
 template <>
 struct MakeUnsigned<hugeint_t> {
 	using type = hugeint_t;
