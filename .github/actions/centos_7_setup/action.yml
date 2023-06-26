@@ -50,3 +50,8 @@ runs:
         cd openssl-1.1.1s
         make
         make install
+
+    - name: Do the git permissions thing
+      shell: bash
+      run: |
+        git config --global --add safe.directory '*'
