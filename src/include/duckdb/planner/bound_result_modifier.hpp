@@ -95,6 +95,9 @@ public:
 	unique_ptr<BoundOrderModifier> Copy() const;
 	static bool Equals(const BoundOrderModifier &left, const BoundOrderModifier &right);
 	static bool Equals(const unique_ptr<BoundOrderModifier> &left, const unique_ptr<BoundOrderModifier> &right);
+
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<BoundOrderModifier> Deserialize(Deserializer &source, PlanDeserializationState &state);
 };
 
 enum class DistinctType : uint8_t { DISTINCT = 0, DISTINCT_ON = 1 };

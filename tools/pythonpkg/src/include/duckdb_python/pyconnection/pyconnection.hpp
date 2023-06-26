@@ -100,7 +100,8 @@ public:
 	RegisterScalarUDF(const string &name, const py::function &udf, const py::object &arguments = py::none(),
 	                  const shared_ptr<DuckDBPyType> &return_type = nullptr, PythonUDFType type = PythonUDFType::NATIVE,
 	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	                  PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR);
+	                  PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR,
+	                  bool side_effects = false);
 
 	shared_ptr<DuckDBPyConnection> UnregisterUDF(const string &name);
 
@@ -161,6 +162,8 @@ public:
 
 	void Close();
 
+	void Interrupt();
+
 	ModifiedMemoryFileSystem &GetObjectFileSystem();
 
 	// cursor() is stupid
@@ -214,7 +217,8 @@ private:
 	unique_lock<std::mutex> AcquireConnectionLock();
 	ScalarFunction CreateScalarUDF(const string &name, const py::function &udf, const py::object &parameters,
 	                               const shared_ptr<DuckDBPyType> &return_type, bool vectorized,
-	                               FunctionNullHandling null_handling, PythonExceptionHandling exception_handling);
+	                               FunctionNullHandling null_handling, PythonExceptionHandling exception_handling,
+	                               bool side_effects);
 	void RegisterArrowObject(const py::object &arrow_object, const string &name);
 
 	static PythonEnvironmentType environment;

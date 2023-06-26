@@ -122,7 +122,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      "Create a DuckDB function out of the passing in python function so it can be used in queries",
 	      py::arg("name"), py::arg("function"), py::arg("return_type") = py::none(), py::arg("parameters") = py::none(),
 	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0,
-	      py::arg("exception_handling") = 0);
+	      py::arg("exception_handling") = 0, py::arg("side_effects") = false);
 
 	m.def("remove_function", &DuckDBPyConnection::UnregisterUDF, "Remove a previously created function",
 	      py::arg("name"));
@@ -152,6 +152,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
 	         py::arg("query"), py::arg("parameters") = py::none())
 	    .def("close", &DuckDBPyConnection::Close, "Close the connection")
+	    .def("interrupt", &DuckDBPyConnection::Interrupt, "Interrupt pending operations")
 	    .def("fetchone", &DuckDBPyConnection::FetchOne, "Fetch a single row from a result following execute")
 	    .def("fetchmany", &DuckDBPyConnection::FetchMany, "Fetch the next set of rows from a result following execute",
 	         py::arg("size") = 1)
@@ -327,7 +328,8 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterUDF(const string &n
 shared_ptr<DuckDBPyConnection>
 DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &udf, const py::object &parameters_p,
                                       const shared_ptr<DuckDBPyType> &return_type_p, PythonUDFType type,
-                                      FunctionNullHandling null_handling, PythonExceptionHandling exception_handling) {
+                                      FunctionNullHandling null_handling, PythonExceptionHandling exception_handling,
+                                      bool side_effects) {
 	if (!connection) {
 		throw ConnectionException("Connection already closed!");
 	}
@@ -339,7 +341,7 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &ud
 		                              name);
 	}
 	auto scalar_function = CreateScalarUDF(name, udf, parameters_p, return_type_p, type == PythonUDFType::ARROW,
-	                                       null_handling, exception_handling);
+	                                       null_handling, exception_handling, side_effects);
 	CreateScalarFunctionInfo info(scalar_function);
 
 	context.RegisterFunction(info);
@@ -952,7 +954,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, c
 			}
 		}
 		if (values.empty()) {
-			return nullptr;
+			return DuckDBPyRelation::EmptyResult(connection->context, res->types, res->names);
 		}
 	}
 	return make_uniq<DuckDBPyRelation>(make_uniq<ValueRelation>(connection->context, values, names));
@@ -1199,6 +1201,13 @@ void DuckDBPyConnection::Close() {
 		cur->Close();
 	}
 	cursors.clear();
+}
+
+void DuckDBPyConnection::Interrupt() {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
+	connection->Interrupt();
 }
 
 void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install) {

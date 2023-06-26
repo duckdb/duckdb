@@ -3,6 +3,7 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
+#include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -95,26 +96,50 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 
 		// create events/stack for this pipeline
 		auto pipeline_event = make_shared<PipelineEvent>(pipeline);
-		optional_ptr<Event> pipeline_finish_event_ptr;
-		if (meta_pipeline->HasFinishEvent(pipeline.get())) {
+
+		auto finish_group = meta_pipeline->GetFinishGroup(pipeline.get());
+		if (finish_group) {
+			// this pipeline is part of a finish group
+			const auto group_entry = event_map.find(*finish_group.get());
+			D_ASSERT(group_entry != event_map.end());
+			auto &group_stack = group_entry->second;
+			PipelineEventStack pipeline_stack(base_stack.pipeline_initialize_event, *pipeline_event,
+			                                  group_stack.pipeline_finish_event, base_stack.pipeline_complete_event);
+
+			// dependencies: base_finish -> pipeline_event -> group_finish
+			pipeline_stack.pipeline_event.AddDependency(base_stack.pipeline_event);
+			group_stack.pipeline_finish_event.AddDependency(pipeline_stack.pipeline_event);
+
+			// add pipeline stack to event map
+			event_map.insert(make_pair(reference<Pipeline>(*pipeline), pipeline_stack));
+		} else if (meta_pipeline->HasFinishEvent(pipeline.get())) {
 			// this pipeline has its own finish event (despite going into the same sink - Finalize twice!)
 			auto pipeline_finish_event = make_shared<PipelineFinishEvent>(pipeline);
-			pipeline_finish_event_ptr = pipeline_finish_event.get();
+			PipelineEventStack pipeline_stack(base_stack.pipeline_initialize_event, *pipeline_event,
+			                                  *pipeline_finish_event, base_stack.pipeline_complete_event);
 			events.push_back(std::move(pipeline_finish_event));
-			base_stack.pipeline_complete_event.AddDependency(*pipeline_finish_event_ptr);
+
+			// dependencies: base_finish -> pipeline_event -> pipeline_finish -> base_complete
+			pipeline_stack.pipeline_event.AddDependency(base_stack.pipeline_finish_event);
+			pipeline_stack.pipeline_finish_event.AddDependency(pipeline_stack.pipeline_event);
+			base_stack.pipeline_complete_event.AddDependency(pipeline_stack.pipeline_finish_event);
+
+			// add pipeline stack to event map
+			event_map.insert(make_pair(reference<Pipeline>(*pipeline), pipeline_stack));
+
 		} else {
-			pipeline_finish_event_ptr = &base_stack.pipeline_finish_event;
+			// no additional finish event
+			PipelineEventStack pipeline_stack(base_stack.pipeline_initialize_event, *pipeline_event,
+			                                  base_stack.pipeline_finish_event, base_stack.pipeline_complete_event);
+
+			// dependencies: base_initialize -> pipeline_event -> base_finish
+			pipeline_stack.pipeline_event.AddDependency(base_stack.pipeline_initialize_event);
+			base_stack.pipeline_finish_event.AddDependency(pipeline_stack.pipeline_event);
+
+			// add pipeline stack to event map
+			event_map.insert(make_pair(reference<Pipeline>(*pipeline), pipeline_stack));
 		}
-		PipelineEventStack pipeline_stack(base_stack.pipeline_initialize_event, *pipeline_event,
-		                                  *pipeline_finish_event_ptr, base_stack.pipeline_complete_event);
 		events.push_back(std::move(pipeline_event));
-
-		// dependencies: base_initialize -> pipeline_event -> base_finish
-		pipeline_stack.pipeline_event.AddDependency(base_stack.pipeline_initialize_event);
-		pipeline_stack.pipeline_finish_event.AddDependency(pipeline_stack.pipeline_event);
-
-		// add pipeline stack to event map
-		event_map.insert(make_pair(reference<Pipeline>(*pipeline), pipeline_stack));
 	}
 
 	// add base stack to the event data too
@@ -243,6 +268,10 @@ void Executor::AddRecursiveCTE(PhysicalOperator &rec_cte) {
 	recursive_ctes.push_back(rec_cte);
 }
 
+void Executor::AddMaterializedCTE(PhysicalOperator &mat_cte) {
+	materialized_ctes.push_back(mat_cte);
+}
+
 void Executor::ReschedulePipelines(const vector<shared_ptr<MetaPipeline>> &pipelines_p,
                                    vector<shared_ptr<Event>> &events_p) {
 	ScheduleEventData event_data(pipelines_p, events_p, false);
@@ -320,6 +349,12 @@ void Executor::InitializeInternal(PhysicalOperator &plan) {
 			rec_cte.recursive_meta_pipeline->Ready();
 		}
 
+		// ready materialized cte pipelines too
+		for (auto &mat_cte_ref : materialized_ctes) {
+			auto &mat_cte = mat_cte_ref.get().Cast<PhysicalCTE>();
+			mat_cte.recursive_meta_pipeline->Ready();
+		}
+
 		// set root pipelines, i.e., all pipelines that end in the final sink
 		root_pipeline->GetPipelines(root_pipelines, false);
 		root_pipeline_idx = 0;
@@ -356,6 +391,10 @@ void Executor::CancelTasks() {
 		for (auto &rec_cte_ref : recursive_ctes) {
 			auto &rec_cte = rec_cte_ref.get().Cast<PhysicalRecursiveCTE>();
 			rec_cte.recursive_meta_pipeline.reset();
+		}
+		for (auto &mat_cte_ref : materialized_ctes) {
+			auto &mat_cte = mat_cte_ref.get().Cast<PhysicalCTE>();
+			mat_cte.recursive_meta_pipeline.reset();
 		}
 		pipelines.clear();
 		root_pipelines.clear();
