@@ -2,7 +2,7 @@
 
 class UDFRegistration:
 	def __init__(self):
-		pass
+		raise NotImplementedError
 
 __all__ = [
 	"UDFRegistration"

@@ -1,6 +1,6 @@
 class SparkConf:
 	def __init__(self):
-		pass
+		raise NotImplementedError
 
 __all__ = [
 	"SparkConf"

@@ -18,6 +18,7 @@ class DataFrameWriter:
 
 class DataFrameReader:
 	def __init__(self, session: "SparkSession"):
+		raise NotImplementedError
 		self.session = session
 
 	def load(self, path: Union[str, List[str], None] = None, format: Optional[str] = None, schema: Union[StructType, str, None] = None, **options: OptionalPrimitiveType) -> "DataFrame":

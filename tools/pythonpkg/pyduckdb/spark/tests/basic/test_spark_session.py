@@ -44,7 +44,8 @@ class TestSparkSession(object):
 		active_session = spark.getActiveSession()
 	
 	def test_read(self, spark):
-		reader = spark.read
+		with pytest.raises(NotImplementedError):
+			reader = spark.read
 	
 	def test_write(self, spark):
 		df = spark.sql('select 42')
@@ -68,4 +69,5 @@ class TestSparkSession(object):
 		df = spark.table('tbl')
 	
 	def test_udf(self, spark):
-		udf_registration = spark.udf
+		with pytest.raises(NotImplementedError):
+			udf_registration = spark.udf
