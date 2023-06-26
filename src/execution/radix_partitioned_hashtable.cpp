@@ -209,7 +209,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 	}
 	lstate.ht->AddChunk(group_chunk, payload_input, filter);
 
-	if (lstate.ht->Count() + STANDARD_VECTOR_SIZE > GroupedAggregateHashTable::SinkCapacity()) {
+	if (lstate.ht->Count() + group_chunk.size() > GroupedAggregateHashTable::SinkCapacity()) {
 		CombineInternal(context, input.global_state, input.local_state);
 		lstate.ht->ClearFirstPart();
 	}
@@ -311,7 +311,7 @@ public:
 		// Create one TupleDataCollection from all uncombined data in this partition
 		auto &data_collection = *uncombined_data[0].data_collection;
 		for (idx_t i = 1; i < uncombined_data.size(); i++) {
-			data_collection.Combine(*uncombined_data[1].data_collection);
+			data_collection.Combine(*uncombined_data[i].data_collection);
 		}
 
 		// Now combine / finalize

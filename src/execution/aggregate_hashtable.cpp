@@ -175,6 +175,9 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 
 	if (Count() != 0) {
 		for (auto &data_collection : partitioned_data->GetPartitions()) {
+			if (data_collection->Count() == 0) {
+				continue;
+			}
 			TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::ALREADY_PINNED, false);
 			const auto row_locations = iterator.GetRowLocations();
 			do {
