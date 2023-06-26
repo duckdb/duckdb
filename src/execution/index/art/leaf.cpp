@@ -139,7 +139,7 @@ void Leaf::Insert(ART &art, Node &node, const row_t row_id) {
 	leaf.get().Append(art, row_id);
 }
 
-void Leaf::Remove(ART &art, reference<Node> &node, const row_t row_id) {
+bool Leaf::Remove(ART &art, reference<Node> &node, const row_t row_id) {
 
 	D_ASSERT(node.get().IsSet());
 	if (node.get().IsSwizzled()) {
@@ -148,8 +148,7 @@ void Leaf::Remove(ART &art, reference<Node> &node, const row_t row_id) {
 
 	if (node.get().DecodeNodeType() == NType::LEAF_INLINED) {
 		D_ASSERT(node.get().data.row_id == row_id);
-		node.get().Reset();
-		return;
+		return true;
 	}
 
 	reference<Leaf> leaf = Leaf::Get(art, node);
@@ -160,7 +159,7 @@ void Leaf::Remove(ART &art, reference<Node> &node, const row_t row_id) {
 		auto remaining_row_id = leaf.get().row_ids[0] == row_id ? leaf.get().row_ids[1] : leaf.get().row_ids[0];
 		Node::Free(art, node);
 		Leaf::New(node, remaining_row_id);
-		return;
+		return false;
 	}
 
 	// get the last row ID (the order within a leaf does not matter)
@@ -183,7 +182,7 @@ void Leaf::Remove(ART &art, reference<Node> &node, const row_t row_id) {
 	if (leaf.get().count == 1) {
 		Node::Free(art, prev_leaf.get().ptr);
 		if (last_row_id == row_id) {
-			return;
+			return false;
 		}
 	} else {
 		leaf.get().count--;
@@ -196,7 +195,7 @@ void Leaf::Remove(ART &art, reference<Node> &node, const row_t row_id) {
 		for (idx_t i = 0; i < leaf.get().count; i++) {
 			if (leaf.get().row_ids[i] == row_id) {
 				leaf.get().row_ids[i] = last_row_id;
-				return;
+				return false;
 			}
 		}
 		node = leaf.get().ptr;
@@ -205,7 +204,7 @@ void Leaf::Remove(ART &art, reference<Node> &node, const row_t row_id) {
 	                        "exist in that leaf");
 }
 
-row_t Leaf::GetRowId(ART &art, Node &node, const idx_t position) {
+idx_t Leaf::TotalCount(ART &art, Node &node) {
 
 	D_ASSERT(node.IsSet());
 	if (node.IsSwizzled()) {
@@ -213,13 +212,85 @@ row_t Leaf::GetRowId(ART &art, Node &node, const idx_t position) {
 	}
 
 	if (node.DecodeNodeType() == NType::LEAF_INLINED) {
-		D_ASSERT(position == 0);
-		return node.data.row_id;
+		return 1;
 	}
 
-	auto &leaf = Leaf::Get(art, node);
-	D_ASSERT(position < leaf.count);
-	return leaf.row_ids[position];
+	idx_t count = 0;
+	reference<Node> node_ref(node);
+	while (node_ref.get().IsSet()) {
+		auto &leaf = Leaf::Get(art, node);
+		count += leaf.count;
+
+		if (leaf.ptr.IsSwizzled()) {
+			leaf.ptr.Deserialize(art);
+		}
+		node_ref = leaf.ptr;
+	}
+	return count;
+}
+
+bool Leaf::GetRowIds(ART &art, Node &node, vector<row_t> &result_ids, idx_t max_count) {
+
+	// adding more elements would exceed the maximum count
+	D_ASSERT(node.IsSet());
+	if (result_ids.size() + Leaf::TotalCount(art, node) > max_count) {
+		return false;
+	}
+
+	if (node.IsSwizzled()) {
+		node.Deserialize(art);
+	}
+
+	if (node.DecodeNodeType() == NType::LEAF_INLINED) {
+		// push back the inlined row ID of this leaf
+		result_ids.push_back(node.data.row_id);
+
+	} else {
+		// push back all the row IDs of this leaf
+		reference<Node> last_leaf_ref(node);
+		while (last_leaf_ref.get().IsSet()) {
+			auto &leaf = Leaf::Get(art, last_leaf_ref);
+			for (idx_t i = 0; i < leaf.count; i++) {
+				result_ids.push_back(leaf.row_ids[i]);
+			}
+
+			if (leaf.ptr.IsSwizzled()) {
+				leaf.ptr.Deserialize(art);
+			}
+			last_leaf_ref = leaf.ptr;
+		}
+	}
+
+	return true;
+}
+
+bool Leaf::ContainsRowId(ART &art, Node &node, const row_t row_id) {
+
+	D_ASSERT(node.IsSet());
+	if (node.IsSwizzled()) {
+		node.Deserialize(art);
+	}
+
+	if (node.DecodeNodeType() == NType::LEAF_INLINED) {
+		return node.data.row_id == row_id;
+	}
+
+	reference<Node> ref_node(node);
+	while (ref_node.get().IsSet()) {
+		auto &leaf = Leaf::Get(art, ref_node);
+		for (idx_t i = 0; i < leaf.count; i++) {
+			if (leaf.row_ids[i] == row_id) {
+				return true;
+			}
+		}
+
+		if (leaf.ptr.IsSwizzled()) {
+			leaf.ptr.Deserialize(art);
+		}
+		ref_node = leaf.ptr;
+	}
+
+	return false;
 }
 
 string Leaf::VerifyAndToString(ART &art, Node &node, const bool only_verify) {
@@ -274,10 +345,7 @@ BlockPointer Leaf::Serialize(const ART &art, Node &node, MetaBlockWriter &writer
 
 void Leaf::Deserialize(ART &art, Node &node, MetaBlockReader &reader) {
 
-	if (node.DecodeNodeType() == NType::LEAF_INLINED) {
-		node.data.row_id = reader.Read<row_t>();
-		return;
-	}
+	D_ASSERT(node.DecodeNodeType() == NType::LEAF);
 
 	auto &leaf = Leaf::Get(art, node);
 	leaf.count = reader.Read<uint8_t>();

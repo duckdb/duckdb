@@ -8,7 +8,6 @@
 #include "duckdb/execution/index/art/node16.hpp"
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
-#include "duckdb/execution/index/art/leaf_segment.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
@@ -76,9 +75,6 @@ void Node::Free(ART &art, Node &node) {
 		case NType::PREFIX:
 			Prefix::Free(art, node);
 			break;
-		case NType::LEAF_INLINED:
-			node.Reset();
-			return;
 		case NType::LEAF:
 			Leaf::Free(art, node);
 			break;
@@ -94,6 +90,9 @@ void Node::Free(ART &art, Node &node) {
 		case NType::NODE_256:
 			Node256::Free(art, node);
 			break;
+		case NType::LEAF_INLINED:
+			node.Reset();
+			return;
 		}
 
 		Node::GetAllocator(art, type).Free(node);
@@ -239,8 +238,6 @@ BlockPointer Node::Serialize(ART &art, MetaBlockWriter &writer) {
 	switch (DecodeNodeType()) {
 	case NType::PREFIX:
 		return Prefix::Get(art, *this).Serialize(art, writer);
-	case NType::LEAF_INLINED:
-		return Leaf::Serialize(art, *this, writer);
 	case NType::LEAF:
 		return Leaf::Serialize(art, *this, writer);
 	case NType::NODE_4:
@@ -251,6 +248,8 @@ BlockPointer Node::Serialize(ART &art, MetaBlockWriter &writer) {
 		return Node48::Get(art, *this).Serialize(art, writer);
 	case NType::NODE_256:
 		return Node256::Get(art, *this).Serialize(art, writer);
+	case NType::LEAF_INLINED:
+		return Leaf::Serialize(art, *this, writer);
 	}
 }
 
@@ -262,14 +261,17 @@ void Node::Deserialize(ART &art) {
 	swizzle_flag = 0;
 
 	auto decoded_type = DecodeNodeType();
+	if (decoded_type == NType::LEAF_INLINED) {
+		data.row_id = reader.Read<row_t>();
+		return;
+	}
+
 	*this = Node::GetAllocator(art, decoded_type).New();
 	type = (uint8_t)decoded_type;
 
 	switch (decoded_type) {
 	case NType::PREFIX:
 		return Prefix::Get(art, *this).Deserialize(reader);
-	case NType::LEAF_INLINED:
-		return Leaf::Deserialize(art, *this, reader);
 	case NType::LEAF:
 		return Leaf::Deserialize(art, *this, reader);
 	case NType::NODE_4:
@@ -280,6 +282,8 @@ void Node::Deserialize(ART &art) {
 		return Node48::Get(art, *this).Deserialize(reader);
 	case NType::NODE_256:
 		return Node256::Get(art, *this).Deserialize(reader);
+	default:
+		throw InternalException("Invalid node type for Deserialize.");
 	}
 }
 
@@ -294,7 +298,7 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) {
 		return only_verify ? "" : "swizzled";
 	}
 
-	if (DecodeNodeType() == NType::LEAF) {
+	if (DecodeNodeType() == NType::LEAF || DecodeNodeType() == NType::LEAF_INLINED) {
 		auto str = Leaf::VerifyAndToString(art, *this, only_verify);
 		return only_verify ? "" : "\n" + str;
 	}
@@ -373,9 +377,6 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 	case NType::PREFIX:
 		Prefix::Get(art, *this).InitializeMerge(art, flags);
 		break;
-	case NType::LEAF_INLINED:
-		Leaf::InitializeMerge(art, *this, flags);
-		break;
 	case NType::LEAF:
 		Leaf::InitializeMerge(art, *this, flags);
 		break;
@@ -390,6 +391,9 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 		break;
 	case NType::NODE_256:
 		Node256::Get(art, *this).InitializeMerge(art, flags);
+		break;
+	case NType::LEAF_INLINED:
+		Leaf::InitializeMerge(art, *this, flags);
 		break;
 	}
 
@@ -575,8 +579,6 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 	switch (node_type) {
 	case NType::PREFIX:
 		return Prefix::Get(art, *this).Vacuum(art, flags);
-	case NType::LEAF_INLINED:
-		return;
 	case NType::LEAF:
 		return Leaf::Get(art, *this).Vacuum(art, flags);
 	case NType::NODE_4:
@@ -587,6 +589,8 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 		return Node48::Get(art, *this).Vacuum(art, flags);
 	case NType::NODE_256:
 		return Node256::Get(art, *this).Vacuum(art, flags);
+	case NType::LEAF_INLINED:
+		return;
 	}
 }
 

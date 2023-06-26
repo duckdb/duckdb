@@ -58,15 +58,9 @@ bool Iterator::Scan(const ARTKey &upper_bound, const idx_t max_count, vector<row
 			}
 		}
 
-		// adding more elements would exceed the maximum count
-		if (result_ids.size() + last_leaf->count > max_count) {
+		// copy all row IDs of this leaf into the result IDs (if they don't exceed max_count)
+		if (!Leaf::GetRowIds(*art, last_leaf, result_ids, max_count)) {
 			return false;
-		}
-
-		// FIXME: copy all at once to improve performance
-		for (idx_t i = 0; i < last_leaf->count; i++) {
-			row_t row_id = last_leaf->GetRowId(*art, i);
-			result_ids.push_back(row_id);
 		}
 
 		// get the next leaf
@@ -85,8 +79,8 @@ void Iterator::FindMinimum(Node &node) {
 	}
 
 	// found the minimum
-	if (node.DecodeNodeType() == NType::LEAF) {
-		last_leaf = Node::GetAllocator(*art, NType::LEAF).Get<Leaf>(node);
+	if (node.DecodeNodeType() == NType::LEAF || node.DecodeNodeType() == NType::LEAF_INLINED) {
+		last_leaf = node;
 		return;
 	}
 
@@ -120,11 +114,11 @@ bool Iterator::LowerBound(Node &node, const ARTKey &key, const bool equal, idx_t
 	}
 
 	// we found the lower bound
-	if (node.DecodeNodeType() == NType::LEAF) {
+	if (node.DecodeNodeType() == NType::LEAF || node.DecodeNodeType() == NType::LEAF_INLINED) {
 		if (!equal && current_key == key) {
 			return Next();
 		}
-		last_leaf = Node::GetAllocator(*art, NType::LEAF).Get<Leaf>(node);
+		last_leaf = node;
 		return true;
 	}
 
@@ -181,7 +175,7 @@ bool Iterator::Next() {
 	while (!nodes.empty()) {
 
 		auto &top = nodes.top();
-		D_ASSERT(top.node.DecodeNodeType() != NType::LEAF);
+		D_ASSERT(top.node.DecodeNodeType() != NType::LEAF && top.node.DecodeNodeType() != NType::LEAF_INLINED);
 
 		if (top.node.DecodeNodeType() == NType::PREFIX) {
 			PopNode();

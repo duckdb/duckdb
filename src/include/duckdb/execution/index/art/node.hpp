@@ -13,12 +13,12 @@ namespace duckdb {
 // classes
 enum class NType : uint8_t {
 	PREFIX = 1,
-	LEAF_INLINED = 2,
-	LEAF = 3,
-	NODE_4 = 4,
-	NODE_16 = 5,
-	NODE_48 = 6,
-	NODE_256 = 7,
+	LEAF = 2,
+	NODE_4 = 3,
+	NODE_16 = 4,
+	NODE_48 = 5,
+	NODE_256 = 6,
+	LEAF_INLINED = 7,
 };
 class FixedSizeAllocator;
 class ART;
@@ -100,7 +100,7 @@ public:
 	inline NType DecodeNodeType() const {
 		D_ASSERT(!IsSwizzled());
 		D_ASSERT(type >= (uint8_t)NType::PREFIX);
-		D_ASSERT(type <= (uint8_t)NType::NODE_256);
+		D_ASSERT(type <= (uint8_t)NType::LEAF_INLINED);
 		return NType(type);
 	}
 

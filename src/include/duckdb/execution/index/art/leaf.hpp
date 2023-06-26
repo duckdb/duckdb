@@ -55,11 +55,15 @@ public:
 
 	//! Insert a row ID into a leaf
 	static void Insert(ART &art, Node &node, const row_t row_id);
-	//! Remove a row ID from a leaf
-	static void Remove(ART &art, reference<Node> &node, const row_t row_id);
+	//! Remove a row ID from a leaf. Returns true, if the leaf is empty after the removal
+	static bool Remove(ART &art, reference<Node> &node, const row_t row_id);
 
-	//! Get the row ID at the position
-	static row_t GetRowId(ART &art, Node &node, const idx_t position);
+	//! Get the total count of row IDs in the chain of leaves
+	static idx_t TotalCount(ART &art, Node &node);
+	//! Fill the result_ids vector with the row IDs of this leaf chain, if the total count does not exceed max_count
+	static bool GetRowIds(ART &art, Node &node, vector<row_t> &result_ids, idx_t max_count);
+	//! Returns whether the leaf contains the row ID
+	static bool ContainsRowId(ART &art, Node &node, const row_t row_id);
 
 	//! Returns the string representation of the leaf, or only traverses and verifies the leaf
 	static string VerifyAndToString(ART &art, Node &node, const bool only_verify);
