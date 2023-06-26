@@ -18,3 +18,6 @@ echo $S3_SMALL_PARQUET_PRESIGNED_URL
 
 export S3_LARGE_PARQUET_PRESIGNED_URL=$(docker logs $container_name | grep -m 1 'Share:.*lineitem_large\.parquet' | grep -o 'http[s]\?://[^ ]\+')
 echo $S3_LARGE_PARQUET_PRESIGNED_URL
+
+export S3_ATTACH_DB=$(docker logs $container_name | grep -m 1 'Share:.*attach\.db' | grep -o 'http[s]\?://[^ ]\+')
+echo $S3_ATTACH_DB

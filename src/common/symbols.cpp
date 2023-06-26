@@ -6,6 +6,8 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/list.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/types/column/column_data_allocator.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
@@ -18,8 +20,8 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/rule.hpp"
-#include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/parser/expression/list.hpp"
@@ -35,11 +37,9 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/query_node/bound_set_operation_node.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/transaction.hpp"
-#include "duckdb/common/types/column/column_data_collection.hpp"
-#include "duckdb/common/types/column/column_data_allocator.hpp"
-#include "duckdb/common/vector.hpp"
 
 using namespace duckdb;
 
@@ -145,6 +145,7 @@ template class unique_ptr<SingleJoinRelation>;
 template class unique_ptr<CatalogSet>;
 template class unique_ptr<Binder>;
 template class unique_ptr<PrivateAllocatorData>;
+template class unique_ptr<BaseStatistics>;
 
 } // namespace duckdb
 
