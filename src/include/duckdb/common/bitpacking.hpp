@@ -176,10 +176,10 @@ private:
 #ifdef DEBUG
 		if (bitwidth < sizeof(T) * 8 && bitwidth != 0) {
 			if (NumericLimits<T>::IsSigned()) {
-				D_ASSERT((int64_t)max_value <= (int64_t)(1L << (bitwidth - 1)) - 1);
-				D_ASSERT((int64_t)min_value >= (int64_t)(-1 * ((1L << (bitwidth - 1)) - 1) - 1));
+				D_ASSERT(max_value <= (T(1) << (bitwidth - 1)) - 1);
+				D_ASSERT(min_value >= (-1 * ((T(1) << (bitwidth - 1)) - 1) - 1));
 			} else {
-				D_ASSERT((uint64_t)max_value <= (uint64_t)(1L << (bitwidth)) - 1);
+				D_ASSERT(max_value <= (T(1) << (bitwidth)) - 1);
 			}
 		}
 #endif
@@ -218,7 +218,7 @@ private:
 			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst),
 			                               static_cast<uint32_t>(width));
 		} else if (std::is_same<T, hugeint_t>::value) {
-
+			// currently for compatibility with the fastpforlib the hugeints are treated as two 64 bit integers
 			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst),
 			                               static_cast<uint32_t>(width));
 
@@ -257,7 +257,7 @@ private:
 			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint64_t *>(values), reinterpret_cast<uint32_t *>(dst),
 			                             static_cast<uint32_t>(width));
 		} else if (std::is_same<T, hugeint_t>::value) {
-
+			// currently for compatibility with the fastpforlib the hugeints are treated as two 64 bit integers
 			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint64_t *>(values), reinterpret_cast<uint32_t *>(dst),
 			                             static_cast<uint32_t>(width));
 
