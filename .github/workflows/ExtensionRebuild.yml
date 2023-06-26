@@ -18,6 +18,10 @@ on:
         description: 'DuckDB version (short commit hash or vX.Y.Z tag)'
         required: true
         type: string
+      use_old_extension_config:
+        description: 'Use the old csv-based configuration for building extensions'
+        required: true
+        type: bool
 
 jobs:
   linux-extensions-64-rebuild:
@@ -38,22 +42,21 @@ jobs:
         git clone https://github.com/duckdb/duckdb.git duckdb-old
         git -C duckdb-old checkout ${{ inputs.duckdb_ref }}
 
-    - name: Override extensions.csv
+    - name: Override config (CMake)
+      if: !use_old_extension_config
+      shell: bash
+      run: |
+        echo -e 'duckdb_extension_load( ${{ inputs.extension_name }} GIT_URL ${{ inputs.extension_repo }} GIT_TAG ${{ inputs.extension_ref }} DONT_LINK)' > duckdb-old/.github/config/out_of_tree_extensions.cmake
+
+    - name: Override config (CSV)
+      if: use_old_extension_config
       shell: bash
       run: |
         echo -e 'name,url,commit,options\n${{ inputs.extension_name }},${{ inputs.extension_repo }},${{ inputs.extension_ref }},true' > duckdb-old/.github/config/extensions.csv
 
     - uses: ./.github/actions/build_extensions
       with:
-        visualizer: 0
-        icu: 0
-        tpch: 0
-        tpcds: 0
-        httpfs: 0
-        fts: 0
-        json: 0
-        excel: 0
-        sqlsmith: 0
+        build_in_tree_extensions: 0
         build_dir: duckdb-old
         deploy_as: linux_amd64
         deploy_version: ${{ inputs.duckdb_ref }}
@@ -92,15 +95,7 @@ jobs:
 
       - uses: ./.github/actions/build_extensions
         with:
-          visualizer: 0
-          icu: 0
-          tpch: 0
-          tpcds: 0
-          httpfs: 0
-          fts: 0
-          json: 0
-          excel: 0
-          sqlsmith: 0
+          build_in_tree_extensions: 0
           treat_warn_as_error: 0
           build_dir: duckdb-old
           post_install: rm build/release/src/libduckdb*
@@ -144,15 +139,7 @@ jobs:
 
      - uses: ./.github/actions/build_extensions
        with:
-         visualizer: 0
-         icu: 0
-         tpch: 0
-         tpcds: 0
-         httpfs: 0
-         fts: 0
-         json: 0
-         excel: 0
-         sqlsmith: 0
+         build_in_tree_extensions: 0
          deploy_as: windows_amd64
          deploy_version: ${{ inputs.duckdb_ref }}
          run_tests: 0
@@ -202,15 +189,7 @@ jobs:
 
     - uses: ./.github/actions/build_extensions
       with:
-        visualizer: 0
-        icu: 0
-        tpch: 0
-        tpcds: 0
-        httpfs: 0
-        fts: 0
-        json: 0
-        excel: 0
-        sqlsmith: 0
+        build_in_tree_extensions: 0
         run_tests: 0
         build_dir: duckdb-old
         deploy_as: linux_amd64_gcc4

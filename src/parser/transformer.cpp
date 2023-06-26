@@ -221,7 +221,7 @@ unique_ptr<QueryNode> Transformer::TransformMaterializedCTE(unique_ptr<QueryNode
 		materialized_ctes.pop_back();
 	}
 
-	return std::move(root);
+	return root;
 }
 
 } // namespace duckdb
