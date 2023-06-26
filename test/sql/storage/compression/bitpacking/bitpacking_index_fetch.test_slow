@@ -1,0 +1,59 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_index_fetch.test_slow
+# description: Fetch from Bitpacking column with index
+# group: [bitpacking]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+foreach bitpacking_mode delta_for for constant_delta constant
+
+statement ok
+PRAGMA force_bitpacking_mode='${bitpacking_mode}'
+
+foreach type INTEGER UINT16
+
+statement ok
+CREATE TABLE test(id INTEGER PRIMARY KEY, col ${type})
+
+statement ok
+INSERT INTO test SELECT i::VARCHAR id, i b FROM range(10000) tbl(i)
+
+statement ok
+INSERT INTO test SELECT i::VARCHAR id, 1337 FROM range(10000, 20000) tbl(i)
+
+statement ok
+INSERT INTO test SELECT i::VARCHAR id, i b FROM range(20000, 30000) tbl(i)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'INTEGER' and compression != 'BitPacking'
+----
+
+query IIIIII
+SELECT MIN(id), MAX(id), SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='5000'
+----
+5000	5000	5000	5000	5000	1
+
+query IIIIII
+SELECT MIN(id), MAX(id), SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='12000'
+----
+12000	12000	1337	1337	1337	1
+
+query IIIIII
+SELECT MIN(id), MAX(id), SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='22000'
+----
+22000	22000	22000	22000	22000	1
+
+statement ok
+DROP TABLE test;
+
+endloop
+
+endloop
+
+

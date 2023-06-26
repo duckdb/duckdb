@@ -4,6 +4,8 @@
 
 require json
 
+require notwindows
+
 statement ok
 PRAGMA enable_verification
 
