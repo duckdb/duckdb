@@ -257,21 +257,30 @@ void Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx
 	return;
 }
 
-string Prefix::VerifyAndToString(ART &art, const bool only_verify) {
+string Prefix::VerifyAndToString(ART &art, Node &node) {
 
-	D_ASSERT(data[Node::PREFIX_SIZE] != 0);
-	D_ASSERT(data[Node::PREFIX_SIZE] <= Node::PREFIX_SIZE);
+	// NOTE: we could do this recursively, but the function-call overhead can become kinda crazy
+	string str = "";
 
-	string str = " prefix_bytes:[";
-	for (idx_t i = 0; i < data[Node::PREFIX_SIZE]; i++) {
-		str += to_string(data[i]) + "-";
+	reference<Node> node_ref(node);
+	while (node_ref.get().DecodeNodeType() == NType::PREFIX) {
+
+		auto &prefix = Prefix::Get(art, node_ref);
+		D_ASSERT(prefix.data[Node::PREFIX_SIZE] != 0);
+		D_ASSERT(prefix.data[Node::PREFIX_SIZE] <= Node::PREFIX_SIZE);
+
+		str += " prefix_bytes:[";
+		for (idx_t i = 0; i < prefix.data[Node::PREFIX_SIZE]; i++) {
+			str += to_string(prefix.data[i]) + "-";
+		}
+		str += "] ";
+
+		if (prefix.ptr.IsSwizzled()) {
+			return str + " swizzled";
+		}
+		node_ref = prefix.ptr;
 	}
-	str += "] ";
-
-	if (only_verify) {
-		return ptr.VerifyAndToString(art, only_verify);
-	}
-	return str + ptr.VerifyAndToString(art, only_verify);
+	return str;
 }
 
 BlockPointer Prefix::Serialize(ART &art, MetaBlockWriter &writer) {

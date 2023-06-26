@@ -66,17 +66,15 @@ public:
 	static bool ContainsRowId(ART &art, Node &node, const row_t row_id);
 
 	//! Returns the string representation of the leaf, or only traverses and verifies the leaf
-	static string VerifyAndToString(ART &art, Node &node, const bool only_verify);
+	static string VerifyAndToString(ART &art, Node &node);
 
 	//! Serialize the leaf
-	static BlockPointer Serialize(const ART &art, Node &node, MetaBlockWriter &writer);
+	static BlockPointer Serialize(ART &art, Node &node, MetaBlockWriter &writer);
 	//! Deserialize the leaf
 	static void Deserialize(ART &art, Node &node, MetaBlockReader &reader);
 
 	//! Vacuum the leaf
-	inline void Vacuum(ART &art, const ARTFlags &flags) {
-		ptr.Vacuum(art, flags);
-	}
+	static void Vacuum(ART &art, Node &node);
 
 private:
 	//! Moves the inlined row ID onto a leaf

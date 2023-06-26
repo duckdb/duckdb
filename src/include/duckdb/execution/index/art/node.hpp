@@ -53,7 +53,6 @@ public:
 	static constexpr uint8_t EMPTY_MARKER = 48;
 	static constexpr uint8_t LEAF_SIZE = 4;
 	static constexpr uint8_t PREFIX_SIZE = 15;
-	static constexpr row_t ROW_ID_LIMIT = 36028797018963967;
 
 public:
 	//! Constructs an empty Node

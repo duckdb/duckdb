@@ -525,7 +525,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 	if (depth + 1 < key.len) {
 		Prefix::New(*this, ref_node, key, depth + 1, key.len - depth - 1);
 	}
-	Leaf::New(leaf_node, row_id);
+	Leaf::New(ref_node, row_id);
 	Node4::InsertChild(*this, next_node, key[depth], leaf_node);
 	return true;
 }
@@ -678,6 +678,10 @@ void ART::SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size) {
 	auto leaf_node = Lookup(*tree, key, 0);
 	if (!leaf_node.IsSet()) {
 		result_size = 0;
+		return;
+	}
+	if (leaf_node.DecodeNodeType() == NType::LEAF_INLINED) {
+		result_size = 1;
 		return;
 	}
 

@@ -71,7 +71,7 @@ public:
 	static void Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx_t position);
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
-	string VerifyAndToString(ART &art, const bool only_verify);
+	static string VerifyAndToString(ART &art, Node &node);
 
 	//! Serialize this node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);

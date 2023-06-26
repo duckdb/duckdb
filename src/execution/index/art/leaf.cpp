@@ -10,7 +10,7 @@ namespace duckdb {
 void Leaf::New(Node &node, const row_t row_id) {
 
 	// we directly inline this row ID into the node pointer
-	D_ASSERT(row_id < Node::ROW_ID_LIMIT);
+	D_ASSERT(row_id < MAX_ROW_ID_LOCAL);
 	node.swizzle_flag = 0;
 	node.type = (uint8_t)NType::LEAF_INLINED;
 	node.data.row_id = row_id;
@@ -28,7 +28,9 @@ void Leaf::New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t coun
 		auto &leaf = Leaf::Get(art, node);
 
 		leaf.count = MinValue((idx_t)Node::LEAF_SIZE, count);
-		memcpy(leaf.row_ids, row_ids + copy_count, leaf.count);
+		for (idx_t i = 0; i < leaf.count; i++) {
+			leaf.row_ids[i] = row_ids[copy_count + i];
+		}
 
 		copy_count += leaf.count;
 		count -= leaf.count;
@@ -48,12 +50,12 @@ void Leaf::Free(ART &art, Node &node) {
 void Leaf::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
 
 	D_ASSERT(node.IsSet() && !node.IsSwizzled());
-	if (node.DecodeNodeType() == NType::LEAF_INLINED) {
-		return;
-	}
+	D_ASSERT(node.DecodeNodeType() == NType::LEAF);
 
 	auto &leaf = Leaf::Get(art, node);
-	leaf.ptr.InitializeMerge(art, flags);
+	if (leaf.ptr.IsSet()) {
+		leaf.ptr.InitializeMerge(art, flags);
+	}
 }
 
 void Leaf::Merge(ART &art, Node &l_node, Node &r_node) {
@@ -147,18 +149,21 @@ bool Leaf::Remove(ART &art, reference<Node> &node, const row_t row_id) {
 	}
 
 	if (node.get().DecodeNodeType() == NType::LEAF_INLINED) {
-		D_ASSERT(node.get().data.row_id == row_id);
-		return true;
+		if (node.get().data.row_id == row_id) {
+			return true;
+		}
+		return false;
 	}
 
 	reference<Leaf> leaf = Leaf::Get(art, node);
 
 	// inline the remaining row ID
 	if (leaf.get().count == 2) {
-		D_ASSERT(leaf.get().row_ids[0] == row_id || leaf.get().row_ids[1] == row_id);
-		auto remaining_row_id = leaf.get().row_ids[0] == row_id ? leaf.get().row_ids[1] : leaf.get().row_ids[0];
-		Node::Free(art, node);
-		Leaf::New(node, remaining_row_id);
+		if (leaf.get().row_ids[0] == row_id || leaf.get().row_ids[1] == row_id) {
+			auto remaining_row_id = leaf.get().row_ids[0] == row_id ? leaf.get().row_ids[1] : leaf.get().row_ids[0];
+			Node::Free(art, node);
+			Leaf::New(node, remaining_row_id);
+		}
 		return false;
 	}
 
@@ -200,8 +205,7 @@ bool Leaf::Remove(ART &art, reference<Node> &node, const row_t row_id) {
 		}
 		node = leaf.get().ptr;
 	}
-	throw InternalException("Tried to remove a row ID from a leaf that does not"
-	                        "exist in that leaf");
+	return false;
 }
 
 idx_t Leaf::TotalCount(ART &art, Node &node) {
@@ -218,7 +222,7 @@ idx_t Leaf::TotalCount(ART &art, Node &node) {
 	idx_t count = 0;
 	reference<Node> node_ref(node);
 	while (node_ref.get().IsSet()) {
-		auto &leaf = Leaf::Get(art, node);
+		auto &leaf = Leaf::Get(art, node_ref);
 		count += leaf.count;
 
 		if (leaf.ptr.IsSwizzled()) {
@@ -293,27 +297,36 @@ bool Leaf::ContainsRowId(ART &art, Node &node, const row_t row_id) {
 	return false;
 }
 
-string Leaf::VerifyAndToString(ART &art, Node &node, const bool only_verify) {
+string Leaf::VerifyAndToString(ART &art, Node &node) {
 
 	if (node.DecodeNodeType() == NType::LEAF_INLINED) {
-		return only_verify ? "" : "Leaf [count: 1, row ID: " + to_string(node.data.row_id) + "]";
+		return "Leaf [count: 1, row ID: " + to_string(node.data.row_id) + "]";
 	}
 
-	auto &leaf = Leaf::Get(art, node);
-	D_ASSERT(leaf.count > 1 && leaf.count <= Node::LEAF_SIZE);
+	// NOTE: we could do this recursively, but the function-call overhead can become kinda crazy
 	string str = "";
-	for (idx_t i = 0; i < leaf.count; i++) {
-		str += ", " + to_string(leaf.row_ids[i]);
-	}
-	str = "Leaf [count: " + to_string(leaf.count) + ", row IDs: " + str + "] \n";
 
-	if (only_verify) {
-		return leaf.ptr.VerifyAndToString(art, only_verify);
+	reference<Node> node_ref(node);
+	while (node_ref.get().IsSet()) {
+
+		auto &leaf = Leaf::Get(art, node_ref);
+		D_ASSERT(leaf.count > 1 && leaf.count <= Node::LEAF_SIZE);
+
+		str += "Leaf [count: " + to_string(leaf.count) + ", row IDs: ";
+		for (idx_t i = 0; i < leaf.count; i++) {
+			str += to_string(leaf.row_ids[i]) + "-";
+		}
+		str += "] ";
+
+		if (leaf.ptr.IsSwizzled()) {
+			return str + " swizzled";
+		}
+		node_ref = leaf.ptr;
 	}
-	return str + leaf.ptr.VerifyAndToString(art, only_verify);
+	return str;
 }
 
-BlockPointer Leaf::Serialize(const ART &art, Node &node, MetaBlockWriter &writer) {
+BlockPointer Leaf::Serialize(ART &art, Node &node, MetaBlockWriter &writer) {
 
 	if (node.DecodeNodeType() == NType::LEAF_INLINED) {
 		auto block_pointer = writer.GetBlockPointer();
@@ -324,7 +337,7 @@ BlockPointer Leaf::Serialize(const ART &art, Node &node, MetaBlockWriter &writer
 
 	// recurse into the child and retrieve its block pointer
 	auto &leaf = Leaf::Get(art, node);
-	auto child_block_pointer = Leaf::Serialize(art, leaf.ptr, writer);
+	auto child_block_pointer = leaf.ptr.Serialize(art, writer);
 
 	// get pointer and write fields
 	auto block_pointer = writer.GetBlockPointer();
@@ -359,6 +372,23 @@ void Leaf::Deserialize(ART &art, Node &node, MetaBlockReader &reader) {
 	leaf.ptr = Node(reader);
 }
 
+void Leaf::Vacuum(ART &art, Node &node) {
+
+	// NOTE: we could do this recursively, but the function-call overhead can become kinda crazy
+	auto &allocator = Node::GetAllocator(art, NType::LEAF);
+
+	reference<Node> node_ref(node);
+	while (node_ref.get().IsSet() && !node_ref.get().IsSwizzled()) {
+		if (allocator.NeedsVacuum(node_ref)) {
+			node_ref.get() = allocator.VacuumPointer(node_ref);
+			node_ref.get().type = (uint8_t)NType::LEAF;
+		}
+		auto &leaf = Leaf::Get(art, node_ref);
+		node_ref = leaf.ptr;
+	}
+	return;
+}
+
 void Leaf::MoveInlinedToLeaf(ART &art, Node &node) {
 
 	D_ASSERT(node.DecodeNodeType() == NType::LEAF_INLINED);
@@ -369,6 +399,7 @@ void Leaf::MoveInlinedToLeaf(ART &art, Node &node) {
 	auto &leaf = Leaf::Get(art, node);
 	leaf.count = 1;
 	leaf.row_ids[0] = row_id;
+	leaf.ptr.Reset();
 }
 
 Leaf &Leaf::Append(ART &art, const row_t row_id) {

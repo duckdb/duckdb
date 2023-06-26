@@ -299,11 +299,11 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) {
 	}
 
 	if (DecodeNodeType() == NType::LEAF || DecodeNodeType() == NType::LEAF_INLINED) {
-		auto str = Leaf::VerifyAndToString(art, *this, only_verify);
+		auto str = Leaf::VerifyAndToString(art, *this);
 		return only_verify ? "" : "\n" + str;
 	}
 	if (DecodeNodeType() == NType::PREFIX) {
-		auto str = Prefix::Get(art, *this).VerifyAndToString(art, only_verify);
+		auto str = Prefix::Get(art, *this).VerifyAndToString(art, *this);
 		return only_verify ? "" : "\n" + str;
 	}
 
@@ -393,8 +393,7 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 		Node256::Get(art, *this).InitializeMerge(art, flags);
 		break;
 	case NType::LEAF_INLINED:
-		Leaf::InitializeMerge(art, *this, flags);
-		break;
+		return;
 	}
 
 	data.node_ptr.buffer_id += flags.merge_buffer_counts[type - 1];
@@ -564,11 +563,20 @@ bool Node::MergeInternal(ART &art, Node &other) {
 
 void Node::Vacuum(ART &art, const ARTFlags &flags) {
 
+	D_ASSERT(IsSet());
 	if (IsSwizzled()) {
 		return;
 	}
 
 	auto node_type = DecodeNodeType();
+	if (node_type == NType::LEAF_INLINED) {
+		return;
+	}
+	if (node_type == NType::LEAF) {
+		Leaf::Vacuum(art, *this);
+		return;
+	}
+
 	auto &allocator = Node::GetAllocator(art, node_type);
 	auto needs_vacuum = flags.vacuum_flags[type - 1] && allocator.NeedsVacuum(*this);
 	if (needs_vacuum) {
@@ -579,8 +587,6 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 	switch (node_type) {
 	case NType::PREFIX:
 		return Prefix::Get(art, *this).Vacuum(art, flags);
-	case NType::LEAF:
-		return Leaf::Get(art, *this).Vacuum(art, flags);
 	case NType::NODE_4:
 		return Node4::Get(art, *this).Vacuum(art, flags);
 	case NType::NODE_16:
@@ -589,8 +595,8 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 		return Node48::Get(art, *this).Vacuum(art, flags);
 	case NType::NODE_256:
 		return Node256::Get(art, *this).Vacuum(art, flags);
-	case NType::LEAF_INLINED:
-		return;
+	default:
+		throw InternalException("Invalid node type for Vacuum.");
 	}
 }
 
