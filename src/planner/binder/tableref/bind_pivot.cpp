@@ -369,7 +369,6 @@ unique_ptr<SelectNode> Binder::BindPivot(PivotRef &ref, vector<unique_ptr<Parsed
 		                                                       aggr_function.function_name);
 		ExtractPivotExpressions(*aggr, handled_columns);
 	}
-	value_set_t pivots;
 
 	// first add all pivots to the set of handled columns, and check for duplicates
 	idx_t total_pivots = 1;

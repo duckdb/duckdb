@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/auto/test_auto_voter.test
+# name: test/sql/copy/csv/auto/test_auto_voter.test_slow
 # description: Test read_csv_auto from voter tsv
 # group: [auto]
 
