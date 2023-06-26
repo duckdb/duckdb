@@ -26,7 +26,6 @@
 #include "jemalloc/internal/thread_event.h"
 #include "jemalloc/internal/util.h"
 
-
 #include "duckdb/common/string_util.hpp"
 
 namespace duckdb_jemalloc {

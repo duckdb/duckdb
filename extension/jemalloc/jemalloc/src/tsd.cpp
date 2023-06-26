@@ -6,10 +6,6 @@
 #include "jemalloc/internal/mutex.h"
 #include "jemalloc/internal/rtree.h"
 
-#ifdef __MVS__
-#define _OPEN_THREADS
-#include <pthread.h>
-#endif
 
 namespace duckdb_jemalloc {
 
@@ -515,11 +511,7 @@ tsd_init_check_recursion(tsd_init_head_t *head, tsd_init_block_t *block) {
 	/* Check whether this thread has already inserted into the list. */
 	malloc_mutex_lock(TSDN_NULL, &head->lock);
 	ql_foreach(iter, &head->blocks, link) {
-#if !defined(__MVS__)
 		if (iter->thread == self) {
-#else
-		if (pthread_equal(iter->thread, self)) {
-#endif
 			malloc_mutex_unlock(TSDN_NULL, &head->lock);
 			return iter->data;
 		}

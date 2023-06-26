@@ -7,7 +7,6 @@
 #include "jemalloc/internal/prof_data.h"
 #include "jemalloc/internal/prof_sys.h"
 
-
 namespace duckdb_jemalloc {
 
 #ifdef JEMALLOC_PROF_LIBUNWIND
