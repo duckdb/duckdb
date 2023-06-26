@@ -11,16 +11,15 @@ class DataFrame:
 	def __init__(self, relation: duckdb.DuckDBPyRelation, session: "SparkSession"):
 		self.relation = relation
 		self.session = session
-		pass
 
 	def show(self) -> None:
 		self.relation.show()
 
 	def createOrReplaceTempView(self, name: str) -> None:
-		pass
+		raise NotImplementedError
 
 	def createGlobalTempView(self, name: str) -> None:
-		pass
+		raise NotImplementedError
 
 	@property
 	def write(self) -> DataFrameWriter:

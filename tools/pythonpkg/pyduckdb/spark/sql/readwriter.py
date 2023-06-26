@@ -1,4 +1,8 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Union, List, Optional
+from pyduckdb.spark.sql.types import StructType
+
+PrimitiveType = Union[bool, float, int, str]
+OptionalPrimitiveType = Optional[PrimitiveType]
 
 if TYPE_CHECKING:
 	from pyduckdb.spark.sql.dataframe import DataFrame
@@ -7,24 +11,20 @@ if TYPE_CHECKING:
 class DataFrameWriter:
 	def __init__(self, dataframe: "DataFrame"):
 		self.dataframe = dataframe
-		pass
 
 	def saveAsTable(self, table_name: str) -> None:
-		# register the dataframe or create a table from the contents?
 		relation = self.dataframe.relation
 		relation.create(table_name)
 
 class DataFrameReader:
 	def __init__(self, session: "SparkSession"):
 		self.session = session
-		pass
 
 	# TODO: Expand the parameters for this:
 	# https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrameReader.load.html#pyspark.sql.DataFrameReader.load
-	def load(self, path: str, format: str) -> "DataFrame":
+	def load(self, path: Union[str, List[str], None] = None, format: Optional[str] = None, schema: Union[StructType, str, None] = None, **options: OptionalPrimitiveType) -> "DataFrame":
 		from pyduckdb.spark.sql.dataframe import DataFrame
 		raise NotImplementedError
-		return DataFrame()
 
 __all__ = [
 	"DataFrameWriter",

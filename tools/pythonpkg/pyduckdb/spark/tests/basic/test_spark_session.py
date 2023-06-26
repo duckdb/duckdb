@@ -26,6 +26,7 @@ class TestSparkSession(object):
 			.config("spark.some.config.option", "config-value") \
 			.getOrCreate()
 
+	@pytest.mark.skip(reason="enableHiveSupport is not implemented yet")
 	def test_hive_support(self):
 		# Enabling Hive to use in Spark
 		spark = SparkSession.builder \

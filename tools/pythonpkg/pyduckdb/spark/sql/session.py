@@ -12,16 +12,22 @@ from pyduckdb.spark.sql.udf import UDFRegistration
 from pyduckdb.spark.sql.streaming import DataStreamReader
 import duckdb
 
+# In spark:
+# SparkSession holds a SparkContext
+# SparkContext gets created from SparkConf
+# At this level the check is made to determine whether the instance already exists and just needs to be retrieved or it needs to be created
+
+# For us this is done inside of `duckdb.connect`, based on the passed in path + configuration
+# SparkContext can be compared to our Connection class, and SparkConf to our ClientContext class
+
 class SparkSession:
-	def __init__(self, master: str = '', appName: str = ''):
-		self.conn = duckdb.connect(master)
-		self.context = SparkContext(master, appName)
-		self._master = master
-		self._conf = RuntimeConfig()
-		self._appName = appName
+	def __init__(self, context : SparkContext):
+		self.conn = context.connection
+		self._context = context
+		self._conf = RuntimeConfig(self.conn)
 
 	def newSession(self) -> "SparkSession":
-		return SparkSession(self._master, self._appName)
+		return SparkSession(self._context)
 
 	def createDataFrame(self, tuples: List[Tuple[Any, ...]]) -> DataFrame:
 		parameter_count = len(tuples)
@@ -51,10 +57,10 @@ class SparkSession:
 
 	@property
 	def sparkContext(self) -> SparkContext:
-		return self.context
+		return self._context
 
 	def stop(self) -> None:
-		self.context.stop()
+		self._context.stop()
 
 	@property
 	def read(self) -> DataFrameReader:
@@ -77,7 +83,7 @@ class SparkSession:
 
 	@property
 	def conf(self) -> RuntimeConfig:
-		return RuntimeConfig()
+		return self._conf
 
 	class Builder:
 		def __init__(self):
@@ -93,15 +99,16 @@ class SparkSession:
 			return self
 
 		def getOrCreate(self) -> "SparkSession":
-			return SparkSession(self._master, self._appName)
-		
+			context = SparkContext(self._master, self._appName)
+			return SparkSession(context)
+
 		def config(self, key: Optional[str] = None, value: Optional[str] = None) -> Self:
 			if (key and value):
 				self._config[key] = value
 			return self
-		
+
 		def enableHiveSupport(self) -> Self:
-			return self
+			raise NotImplementedError
 
 	builder = Builder()
 

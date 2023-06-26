@@ -1,7 +1,7 @@
 
 
 import pytest
-from pyduckdb.spark.sql.catalog import Table, Database
+from pyduckdb.spark.sql.catalog import Table, Database, Column
 
 class TestSparkCatalog(object):
 	def test_list_databases(self, spark):
@@ -17,4 +17,12 @@ class TestSparkCatalog(object):
 		tbls = spark.catalog.listTables()
 		assert tbls == [
 			Table(name='tbl', database='memory', description='CREATE TABLE tbl(a VARCHAR);', tableType='', isTemporary=False)
+		]
+
+	def test_list_columns(self, spark):
+		spark.sql('create table tbl(a varchar, b bool)')
+		columns = spark.catalog.listColumns('tbl')
+		assert columns == [
+			Column(name='a', description=None, dataType='VARCHAR', nullable=False, isPartition=False, isBucket=False),
+			Column(name='b', description=None, dataType='BOOLEAN', nullable=False, isPartition=False, isBucket=False)
 		]

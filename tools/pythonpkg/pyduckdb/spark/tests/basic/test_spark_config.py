@@ -8,5 +8,5 @@ class TestSparkConfig(object):
 		spark.conf.set("spark.executor.memory", "5g")
 
 		# Get a Spark Config
-		partitions = spark.conf.get("spark.sql.shuffle.partitions")
-		print(partitions)
+		with pytest.raises(KeyError):
+			partitions = spark.conf.get("spark.sql.shuffle.partitions")
