@@ -127,7 +127,7 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 				should_prune_file = true;
 				// convert the filter to a table filter.
 				if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
-					get.file_filters.push_back(filter->Copy());
+					get.extra_info.file_filters += filter->ToString();
 					filters_applied_to_files.insert(j);
 				}
 			}

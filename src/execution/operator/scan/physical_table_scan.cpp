@@ -16,18 +16,18 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), column_ids(std::move(column_ids_p)),
       names(std::move(names_p)), table_filters(std::move(table_filters_p)) {
+	extra_info.file_filters = "";
 }
 
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_p,
                                      unique_ptr<FunctionData> bind_data_p, vector<LogicalType> returned_types_p,
                                      vector<column_t> column_ids_p, vector<idx_t> projection_ids_p,
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
-                                     idx_t estimated_cardinality,
-                                     vector<unique_ptr<Expression>> table_filters_applied_via_files)
+                                     idx_t estimated_cardinality, ExtraOperatorInfo extra_info)
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), returned_types(std::move(returned_types_p)),
       column_ids(std::move(column_ids_p)), projection_ids(std::move(projection_ids_p)), names(std::move(names_p)),
-      table_filters(std::move(table_filters_p)), file_filters(std::move(table_filters_applied_via_files)) {
+      table_filters(std::move(table_filters_p)), extra_info(extra_info) {
 }
 
 class TableScanGlobalSourceState : public GlobalSourceState {
@@ -150,13 +150,9 @@ string PhysicalTableScan::ParamsToString() const {
 			}
 		}
 	}
-	if (!file_filters.empty()) {
+	if (!extra_info.file_filters.empty()) {
 		result += "\n[INFOSEPARATOR]\n";
-		result += "File Filters: ";
-		for (auto &filter : file_filters) {
-			result += filter->ToString();
-			result += "\n";
-		}
+		result += "File Filters: " + extra_info.file_filters;
 	}
 	result += "\n[INFOSEPARATOR]\n";
 	result += StringUtil::Format("EC: %llu", estimated_props->GetCardinality<idx_t>());

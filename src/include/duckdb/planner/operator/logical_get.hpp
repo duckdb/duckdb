@@ -11,6 +11,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/table_filter.hpp"
+#include "duckdb/common/operator/extra_operator_info.hpp"
 
 namespace duckdb {
 
@@ -39,10 +40,6 @@ public:
 	vector<idx_t> projection_ids;
 	//! Filters pushed down for table scan
 	TableFilterSet table_filters;
-	//! File Filters applied by hive partitioning/complex filter pushdown
-	//! Separate from table_filters since they can more complex (eg. year extraction)
-	//! and are not applied during execution
-	vector<unique_ptr<Expression>> file_filters;
 	//! The set of input parameters for the table function
 	vector<Value> parameters;
 	//! The set of named input parameters for the table function
@@ -53,6 +50,9 @@ public:
 	vector<string> input_table_names;
 	//! For a table-in-out function, the set of projected input columns
 	vector<column_t> projected_input;
+	//! Currently stores File Filters (as strings) applied by hive partitioning/complex filter pushdown
+	//! Stored so the can be included in explain output
+	ExtraOperatorInfo extra_info;
 
 	string GetName() const override;
 	string ParamsToString() const override;
