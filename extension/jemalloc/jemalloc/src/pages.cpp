@@ -781,7 +781,7 @@ pages_boot(void) {
 	}
 #endif
 
-#if !defined(_WIN32) && !defined(__MVS__)
+#ifndef _WIN32
 	mmap_flags = MAP_PRIVATE | MAP_ANON;
 #endif
 

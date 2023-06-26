@@ -21,7 +21,7 @@
 #else
 #  include <sys/param.h>
 #  include <sys/mman.h>
-#  if !defined(__pnacl__) && !defined(__native_client__) && !defined(__MVS__)
+#  if !defined(__pnacl__) && !defined(__native_client__)
 #    include <sys/syscall.h>
 #    if !defined(SYS_write) && defined(__NR_write)
 #      define SYS_write __NR_write

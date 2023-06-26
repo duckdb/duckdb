@@ -7,10 +7,6 @@
 #include "jemalloc/internal/prof_data.h"
 #include "jemalloc/internal/prof_sys.h"
 
-#ifdef __MVS__
-#define PATH_MAX _XOPEN_PATH_MAX
-#include <zos-sys-info.h>
-#endif
 
 namespace duckdb_jemalloc {
 

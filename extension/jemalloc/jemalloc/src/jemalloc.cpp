@@ -26,10 +26,6 @@
 #include "jemalloc/internal/thread_event.h"
 #include "jemalloc/internal/util.h"
 
-#ifdef __MVS__
-#define PATH_MAX _XOPEN_PATH_MAX
-#include <zos-sys-info.h>
-#endif
 
 #include "duckdb/common/string_util.hpp"
 
@@ -730,8 +726,6 @@ malloc_ncpus(void) {
 	SYSTEM_INFO si;
 	GetSystemInfo(&si);
 	result = si.dwNumberOfProcessors;
-#elif defined(__MVS__)
-	result = __get_num_online_cpus();
 #elif defined(CPU_COUNT)
 	/*
 	 * glibc >= 2.6 has the CPU_COUNT macro.
@@ -772,7 +766,7 @@ malloc_ncpus(void) {
 static bool
 malloc_cpu_count_is_deterministic()
 {
-#if defined(_WIN32) || defined(__MVS__)
+#ifdef _WIN32
 	return true;
 #else
 	long cpu_onln = sysconf(_SC_NPROCESSORS_ONLN);
