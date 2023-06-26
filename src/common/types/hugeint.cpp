@@ -7,8 +7,6 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 
-#include <_types/_uint64_t.h>
-#include <_types/_uint8_t.h>
 #include <cmath>
 #include <limits>
 
