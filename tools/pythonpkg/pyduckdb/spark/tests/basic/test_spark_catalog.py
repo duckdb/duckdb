@@ -1,21 +1,20 @@
 
 
 import pytest
+from pyduckdb.spark.sql.catalog import Table, Database
 
 class TestSparkCatalog(object):
-	def test_spark_catalog(self, spark):
-		# Get metadata from the Catalog
-		# List databases
+	def test_list_databases(self, spark):
 		dbs = spark.catalog.listDatabases()
-		print(dbs)
+		assert dbs == [
+			Database(name='memory', description=None, locationUri=''),
+			Database(name='system', description=None, locationUri=''),
+			Database(name='temp', description=None, locationUri='')
+		]
 
-		# Output
-		#[Database(name='default', description='default database', 
-		#locationUri='file:/Users/admin/.spyder-py3/spark-warehouse')]
-
-		# List Tables
+	def test_list_tables(self, spark):
+		spark.sql('create table tbl(a varchar)')
 		tbls = spark.catalog.listTables()
-		print(tbls)
-
-		#Output
-		#[Table(name='sample_hive_table', database='default', description=None, tableType='MANAGED', #isTemporary=False), Table(name='sample_hive_table1', database='default', description=None, #tableType='MANAGED', isTemporary=False), Table(name='sample_hive_table121', database='default', #description=None, tableType='MANAGED', isTemporary=False), Table(name='sample_table', database=None, #description=None, tableType='TEMPORARY', isTemporary=True)]
+		assert tbls == [
+			Table(name='tbl', database='memory', description='CREATE TABLE tbl(a VARCHAR);', tableType='', isTemporary=False)
+		]

@@ -1,9 +1,11 @@
 from typing_extensions import Self
-from typing import Optional, List, Tuple, Any
+from typing import Optional, List, Tuple, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+	from pyduckdb.spark.sql.catalog import Catalog
 
 from pyduckdb.spark.sql.dataframe import DataFrame
 from pyduckdb.spark.sql.conf import RuntimeConfig
-from pyduckdb.spark.sql.catalog import Catalog
 from pyduckdb.spark.sql.readwriter import DataFrameReader
 from pyduckdb.spark.context import SparkContext
 from pyduckdb.spark.sql.udf import UDFRegistration
@@ -15,6 +17,7 @@ class SparkSession:
 		self.conn = duckdb.connect(master)
 		self.context = SparkContext(master, appName)
 		self._master = master
+		self._conf = RuntimeConfig()
 		self._appName = appName
 
 	def newSession(self) -> "SparkSession":
@@ -66,8 +69,11 @@ class SparkSession:
 		return '1.0.0'
 
 	@property
-	def catalog(self) -> Catalog:
-		return Catalog()
+	def catalog(self) -> "Catalog":
+		if not hasattr(self, "_catalog"):
+			from pyduckdb.spark.sql.catalog import Catalog
+			self._catalog = Catalog(self)
+		return self._catalog
 
 	@property
 	def conf(self) -> RuntimeConfig:
