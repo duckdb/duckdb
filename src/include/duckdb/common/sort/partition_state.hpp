@@ -88,6 +88,7 @@ public:
 
 	// Threading
 	idx_t memory_per_thread;
+	idx_t max_bits;
 	atomic<idx_t> count;
 
 private:
