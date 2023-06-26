@@ -329,14 +329,16 @@ bool constant_expression_is_not_null(duckdb::expr_extptr_t expr) {
 		join_type = JoinType::ANTI;
 	} else if (join == "cross" || ref_type == JoinRefType::POSITIONAL) {
 		if (ref_type != JoinRefType::POSITIONAL) {
+			warning("turning " + ref_type + " join to a cross join");
 			ref_type = JoinRefType::CROSS;
 		}
 		auto res = std::make_shared<CrossProductRelation>(left->rel, right->rel, ref_type);
-		auto rel = make_external<RelationWrapper>("duckdb_relation", res);
+		auto rel = make_external_prot<RelationWrapper>("duckdb_relation", res);
 		// if the user described filters, apply them on top of the cross product relation
 		if (conds.size() > 0) {
 			return rapi_rel_filter(rel, conds);
 		}
+		return rel;
 	}
 
 	if (conds.size() == 1) {
