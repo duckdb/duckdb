@@ -56,6 +56,7 @@ public:
 	static bool ForceSingleHT(GlobalSinkState &gstate);
 
 private:
+	idx_t CountInternal(GlobalSinkState &sink) const;
 	void SetGroupingValues();
 	void PopulateGroupChunk(DataChunk &group_chunk, DataChunk &input_chunk) const;
 

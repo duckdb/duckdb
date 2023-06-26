@@ -416,8 +416,8 @@ void TupleDataCollection::FinalizePinState(TupleDataPinState &pin_state, TupleDa
 }
 
 void TupleDataCollection::FinalizePinState(TupleDataPinState &pin_state) {
-	D_ASSERT(segments.size() == 1);
-	allocator->ReleaseOrStoreHandles(pin_state, segments.back());
+	D_ASSERT(!segments.empty());
+	FinalizePinState(pin_state, segments.back());
 }
 
 bool TupleDataCollection::NextScanIndex(TupleDataScanState &state, idx_t &segment_index, idx_t &chunk_index) {

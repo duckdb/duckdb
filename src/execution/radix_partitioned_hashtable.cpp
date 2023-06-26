@@ -300,7 +300,7 @@ public:
 			auto &ucb = uncombined_data[0];
 			D_ASSERT(ucb.allocators.size() == 1);
 			D_ASSERT(ucb.data_collection->Count() != 0);
-			lock_guard<mutex> guard(finalize_partition->lock);
+			lock_guard<mutex> guard(gstate.lock);
 			gstate.AddToFinal(std::move(ucb.data_collection));
 			gstate.final_allocators.emplace_back(ucb.allocators[0]);
 			uncombined_data.clear();
@@ -622,9 +622,13 @@ public:
 };
 
 idx_t RadixPartitionedHashTable::Count(duckdb::GlobalSinkState &sink_p) const {
-	auto &sink = sink_p.Cast<RadixHTGlobalState>();
-	const auto count = sink.final_data_collection->Count();
+	const auto count = CountInternal(sink_p);
 	return count == 0 && grouping_set.empty() ? 1 : count;
+}
+
+idx_t RadixPartitionedHashTable::CountInternal(GlobalSinkState &sink_p) const {
+	auto &sink = sink_p.Cast<RadixHTGlobalState>();
+	return sink.final_data_collection ? sink.final_data_collection->Count() : 0;
 }
 
 unique_ptr<GlobalSourceState> RadixPartitionedHashTable::GetGlobalSourceState(ClientContext &context) const {
@@ -646,7 +650,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 	}
 
 	// special case hack to sort out aggregating from empty intermediates for aggregations without groups
-	const auto count = sink.final_data_collection->Count();
+	const auto count = CountInternal(sink_p);
 	if (count == 0 && grouping_set.empty()) {
 		D_ASSERT(chunk.ColumnCount() == null_groups.size() + op.aggregates.size() + op.grouping_functions.size());
 		// for each column in the aggregates, set to initial state
