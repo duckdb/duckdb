@@ -64,6 +64,11 @@ runs:
       shell: bash
       run: yum install -y perl-IPC-Cmd
 
+    - name: Setup dependencies for ccache
+      if: ${{ inputs.ccache == 1 }}
+      shell: bash
+      run: yum -y install ccache
+
     - name: Setup vcpkg
       if: ${{ inputs.vcpkg == 1 }}
       uses: lukka/run-vcpkg@v11
