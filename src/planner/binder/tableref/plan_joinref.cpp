@@ -294,7 +294,6 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundJoinRef &ref) {
 	default:
 		break;
 	}
-	// TODO: check the combination of joinref and join type are valid.
 	if (ref.type == JoinType::INNER && (ref.condition->HasSubquery() || HasCorrelatedColumns(*ref.condition)) &&
 	    ref.ref_type == JoinRefType::REGULAR) {
 		// inner join, generate a cross product + filter
