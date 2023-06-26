@@ -327,7 +327,8 @@ idx_t PartitionedTupleData::SizeInBytes() const {
 
 // LCOV_EXCL_START
 string PartitionedTupleData::ToString() {
-	string result = StringUtil::Format("PartitionedTupleData - [%llu Partitions]\n", partitions.size());
+	string result =
+	    StringUtil::Format("PartitionedTupleData - [%llu Partitions, %llu Rows]\n", partitions.size(), Count());
 	for (idx_t partition_idx = 0; partition_idx < partitions.size(); partition_idx++) {
 		result += StringUtil::Format("Partition %llu: ", partition_idx) + partitions[partition_idx]->ToString();
 	}
