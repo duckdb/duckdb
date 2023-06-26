@@ -68,6 +68,7 @@ runs:
       if: ${{ inputs.vcpkg == 1 }}
       uses: lukka/run-vcpkg@v11
       with:
+        vcpkgDirectory: ${{ github.workspace }}/vcpkg
         vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
 
     - name: Install OpenSSL
