@@ -4,13 +4,23 @@ on:
   pull_request:
     types: [ synchronize ]
 
+concurrency:
+  group: shouldturntodraft-${{ github.event.number }}
+  cancel-in-progress: true
+
 jobs:
   mark-as-draft:
     name: Mark as draft
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
-      - name: Mark as draft
-        uses: voiceflow/draft-pr@latest
+      - name: Save PR number
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.node_id }}
+        run: |
+          mkdir -p ./pr
+          echo $PR_NUMBER > ./pr/pr_number
+      - uses: actions/upload-artifact@v3
         with:
-          token: ${{ secrets.GH_TOKEN }}
+          name: pr_number
+          path: pr/

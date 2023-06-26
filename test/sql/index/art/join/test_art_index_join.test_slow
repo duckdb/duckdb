@@ -32,6 +32,10 @@ INSERT INTO t2 SELECT i+1 FROM range(50,100) tbl(i);
 statement ok
 INSERT INTO t3 SELECT i+1 FROM range(0,100) tbl(i);
 
+# have do disable this otherwise we get a perfect hash join
+statement ok
+set disabled_optimizers to 'statistics_propagation'
+
 # standalone limit
 query II
 EXPLAIN select count(t1.i) from t1 inner join t2 on (t1.i = t2.i)
@@ -64,7 +68,7 @@ statement ok
 CREATE INDEX w_index ON words using art(word);
 
 statement ok
-COPY words FROM 'benchmark/micro/index/indexjoin.csv.gz' (DELIMITER ',' , AUTO_DETECT FALSE)
+COPY words FROM 'data/csv/index_join.csv.gz' (DELIMITER ',' , AUTO_DETECT FALSE)
 
 query II
 SELECT w2.doc as doc2, COUNT(*) AS c FROM words AS w1 JOIN words AS w2 ON (w1.word=w2.word) GROUP BY doc2 ORDER BY c DESC LIMIT 10
