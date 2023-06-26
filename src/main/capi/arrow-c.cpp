@@ -189,6 +189,7 @@ void Release(struct ArrowArrayStream *stream) {
 	}
 
 	stream->private_data = nullptr;
+	stream->release = nullptr;
 }
 
 duckdb_state Ingest(duckdb_connection connection, const char *table_name, struct ArrowArrayStream *input) {
