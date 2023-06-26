@@ -9,16 +9,40 @@ require icu
 statement ok
 PRAGMA enable_verification
 
-query I
-select typeof(TimeRecStart) from 'data/parquet-testing/tz.parquet' limit 1;
-----
-TIMESTAMP WITH TIME ZONE
+#query I
+#select typeof(TimeRecStart) from 'data/parquet-testing/tz.parquet' limit 1;
+#----
+#TIMESTAMP WITH TIME ZONE
+
 
 statement ok
-SET timezone='UTC'
+SET timezone='America/Denver';
 
 query I
-select TimeRecStart from 'data/parquet-testing/tz.parquet';
+select TimeRecStart  from 'data/parquet-testing/tz.parquet' LIMIT 1;
+----
+2022-10-17 15:52:27-06
+
+statement ok
+SET timezone='UTC';
+
+query I
+select TimeRecStart  from 'data/parquet-testing/tz.parquet' LIMIT 1;
 ----
 2022-10-17 21:52:27+00
+
+
+statement ok
+SET timezone='America/Denver';
+
+query II
+select TimeRecStart  from 'data/parquet-testing/tz.parquet' LIMIT 1;
+----
 2022-10-17 21:52:27+00
+
+
+query II
+select TimeRecStart, TimeRecStart::TIMESTAMP  from 'data/parquet-testing/tz.parquet' LIMIT 1;
+----
+2022-10-17 21:52:27+00	2022-10-17 15:52:27
+

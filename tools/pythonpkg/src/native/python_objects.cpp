@@ -407,11 +407,11 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		Time::Convert(time, hour, min, sec, micros);
 		auto py_timestamp =
 		    py::reinterpret_steal<py::object>(PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros));
-		//		if (type.id() == LogicalTypeId::TIMESTAMP_TZ) {
-		//			// We have to add the timezone info
-		//			auto tz_info = import_cache.pytz().timezone()(client_properties.time_zone);
-		//			return tz_info.attr("localize")(py_timestamp);
-		//		}
+				if (type.id() == LogicalTypeId::TIMESTAMP_TZ) {
+					// We have to add the timezone info
+					auto tz_info = import_cache.pytz().timezone()(client_properties.time_zone);
+					return tz_info.attr("localize")(py_timestamp);
+				}
 		return py_timestamp;
 	}
 	case LogicalTypeId::TIME:
