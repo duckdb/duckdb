@@ -278,7 +278,8 @@ def setup_data_files(data_files):
 data_files = setup_data_files(extra_files + header_files)
 
 packages = [
-	'duckdb-stubs'
+	'duckdb-stubs',
+	'pyduckdb'
 ]
 
 spark_packages = [
