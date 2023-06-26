@@ -4,7 +4,9 @@
 #include "duckdb/common/string_util.hpp"
 
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
+#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 #include "httplib.hpp"
+#endif
 #endif
 #include "duckdb/common/windows_undefs.hpp"
 
