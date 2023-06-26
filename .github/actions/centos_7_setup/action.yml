@@ -75,7 +75,7 @@ runs:
       if: ${{ inputs.openssl == 1 }}
       shell: bash
       run: |
-        cd ${{ github.workspace }}/vcpkg
+        cd $GITHUB_WORKSPACE/vcpkg
         ./vcpkg install openssl
 
     - name: Setup Ccache
