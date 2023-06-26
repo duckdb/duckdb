@@ -149,7 +149,7 @@ bool Leaf::Remove(ART &art, reference<Node> &node, const row_t row_id) {
 	}
 
 	if (node.get().DecodeNodeType() == NType::LEAF_INLINED) {
-		if (node.get().data.row_id == row_id) {
+		if ((row_t)node.get().data.row_id == row_id) {
 			return true;
 		}
 		return false;
@@ -276,7 +276,7 @@ bool Leaf::ContainsRowId(ART &art, Node &node, const row_t row_id) {
 	}
 
 	if (node.DecodeNodeType() == NType::LEAF_INLINED) {
-		return node.data.row_id == row_id;
+		return (row_t)node.data.row_id == row_id;
 	}
 
 	reference<Node> ref_node(node);
