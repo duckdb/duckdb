@@ -194,7 +194,6 @@ jobs:
         ccache: 1
 
     - uses: ./.github/actions/build_extensions
-      env:
       with:
         post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64
