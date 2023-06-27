@@ -202,7 +202,7 @@ jobs:
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         treat_warn_as_error: 0
-#        toolchain_path: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+        toolchain_path: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
         python_name: python3.7
         # Hacky way to pass openssl from vcpkg to spatial extension build: spatial should probably move to vcpkg instead
         openssl_path: ${{ env.VCPKG_ROOT }}/installed/x64-linux

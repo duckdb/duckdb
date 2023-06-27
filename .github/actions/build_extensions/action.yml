@@ -137,6 +137,8 @@ runs:
     - name: Build External Extensions
       if: ${{ inputs.out_of_tree_ext != 0 }}
       shell: bash
+      env:
+        OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
       run: |
         mkdir -p ~/.ssh
         ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
