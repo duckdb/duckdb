@@ -943,29 +943,6 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 	return ADBC_STATUS_INVALID_ARGUMENT;
 }
 
-AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
-                             struct AdbcError *error) {
-	AdbcStatement statement;
-
-	auto status = StatementNew(connection, &statement, error);
-	if (status != ADBC_STATUS_OK) {
-		SetError(error, "unable to initialize statement");
-		return status;
-	}
-	status = StatementSetSqlQuery(&statement, query, error);
-	if (status != ADBC_STATUS_OK) {
-		SetError(error, "unable to initialize statement");
-		return status;
-	}
-	status = StatementExecuteQuery(&statement, out, nullptr, error);
-	if (status != ADBC_STATUS_OK) {
-		SetError(error, "unable to initialize statement");
-		return status;
-	}
-
-	return ADBC_STATUS_OK;
-}
-
 AdbcStatusCode ConnectionGetObjects(struct AdbcConnection *connection, int depth, const char *catalog,
                                     const char *db_schema, const char *table_name, const char **table_type,
                                     const char *column_name, struct ArrowArrayStream *out, struct AdbcError *error) {
