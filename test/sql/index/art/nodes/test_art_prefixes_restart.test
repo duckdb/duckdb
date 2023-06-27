@@ -49,7 +49,7 @@ DELETE FROM tbl_varchar;
 statement ok
 INSERT INTO tbl_varchar VALUES ('012345678901234'), ('012345678901235');
 
-# now with swizzled prefixes
+# now with serialized prefixes
 
 statement ok
 DELETE FROM tbl_varchar;

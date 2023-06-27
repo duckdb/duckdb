@@ -10,6 +10,7 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
@@ -35,7 +36,7 @@ struct BlockPointer;
 struct ARTFlags;
 
 //! The Node is the pointer class of the ART index.
-//! If the swizzle flag is set, then the pointer points to a storage address (and has no type),
+//! If the node is serialized, then the pointer points to a storage address (and has no type),
 //! otherwise the pointer has a type and stores other information (e.g., a buffer location or a row ID).
 class Node {
 public:
@@ -47,27 +48,32 @@ public:
 	static constexpr uint8_t NODE_16_CAPACITY = 16;
 	static constexpr uint8_t NODE_48_CAPACITY = 48;
 	static constexpr uint16_t NODE_256_CAPACITY = 256;
+	//! Bit-shifting
+	static constexpr uint8_t TYPE_SIZE = 7;
+	static constexpr uint8_t RESET_SERIALIZED_FLAG = 127;
+	static constexpr uint8_t SET_SERIALIZED_FLAG = 128;
+	static constexpr uint8_t BUFFER_ID_SIZE = 32;
+	static constexpr uint64_t OFFSET_TO_ZERO = 0x00000000FFFFFFFF;
 	//! Other constants
 	static constexpr uint8_t EMPTY_MARKER = 48;
 	static constexpr uint8_t LEAF_SIZE = 4;
 	static constexpr uint8_t PREFIX_SIZE = 15;
-	static constexpr uint8_t BUFFER_ID_SIZE = 32;
-	static constexpr uint64_t OFFSET_TO_ZERO = 0x00000000FFFFFFFF;
 
 public:
 	//! Constructs an empty Node
-	Node() : swizzle_flag(0), type(0) {};
-	//! Constructs a swizzled Node from a block ID and an offset
+	Node() : info(0) {};
+	//! Constructs a serialized Node pointer from a block ID and an offset
 	explicit Node(MetaBlockReader &reader);
-	//! Constructs a non-swizzled Node from a buffer ID and an offset
-	Node(uint32_t buffer_id, uint32_t offset) : swizzle_flag(0), type(0) {
+	//! Constructs an in-memory Node from a buffer ID and an offset
+	Node(uint32_t buffer_id, uint32_t offset) : info(0) {
 		SetPtr(buffer_id, offset);
 	};
 
-	//! The swizzle flag, set if swizzled, not set otherwise
-	uint8_t swizzle_flag : 1;
-	//! The node type
-	uint8_t type : 7;
+	//! The serialized flag (first bit) and the node type
+	//! NOTE: We combine this into one uint8_t because Windows will otherwise allocate
+	//! 2 * sizeof(uint64_t) for a Node instead of sizeof(uint64_t) bytes
+	//! https://learn.microsoft.com/en-us/cpp/cpp/cpp-bit-fields?view=msvc-170
+	uint8_t info : 8;
 	//! Depending on the type, this is either a buffer/block pointer or an inlined row ID
 	uint64_t data : 56;
 
@@ -81,34 +87,44 @@ public:
 		return (data >> Node::BUFFER_ID_SIZE);
 	}
 	//! Set the block/buffer ID and offset
-	inline void SetPtr(uint32_t buffer_id, uint32_t offset) {
+	inline void SetPtr(const uint32_t buffer_id, const uint32_t offset) {
 		data = offset;
 		data <<= Node::BUFFER_ID_SIZE;
 		data += buffer_id;
 	}
-	//! Comparison operator
-	inline bool operator==(const Node &node) const {
-		return swizzle_flag == node.swizzle_flag && type == node.type && data == node.data;
-	}
-	//! Returns the swizzle flag
-	inline bool IsSwizzled() const {
-		return swizzle_flag;
-	}
-	//! Returns true, if neither the swizzle flag nor the info is set, and false otherwise
-	inline bool IsSet() const {
-		return swizzle_flag || type;
-	}
-	//! Reset the Node pointer
-	inline void Reset() {
-		swizzle_flag = 0;
-		type = 0;
-	}
-	//! Retrieve the node type from the pointer info
-	inline NType DecodeNodeType() const {
-		D_ASSERT(!IsSwizzled());
+
+	//! Get the type
+	inline NType GetType() const {
+		D_ASSERT(!IsSerialized());
+		auto type = info & Node::RESET_SERIALIZED_FLAG;
 		D_ASSERT(type >= (uint8_t)NType::PREFIX);
 		D_ASSERT(type <= (uint8_t)NType::LEAF_INLINED);
 		return NType(type);
+	}
+	//! Set the type
+	inline void SetType(const uint8_t type) {
+		info += type;
+	}
+	//! Returns whether the node is serialized or not
+	inline bool IsSerialized() const {
+		return info >> Node::TYPE_SIZE;
+	}
+	//! Set the serialized flag
+	inline void SetSerialized() {
+		info |= Node::SET_SERIALIZED_FLAG;
+	}
+	//! Returns true, if the node is not zero
+	inline bool IsSet() const {
+		return info;
+	}
+	//! Reset the Node pointer by setting the node info to zero
+	inline void Reset() {
+		info = 0;
+	}
+
+	//! Comparison operator
+	inline bool operator==(const Node &node) const {
+		return info == node.info && data == node.data;
 	}
 
 	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it

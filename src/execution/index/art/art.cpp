@@ -52,7 +52,7 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	// set the root node of the tree
 	tree = make_uniq<Node>();
 	if (block_id != DConstants::INVALID_INDEX) {
-		tree->swizzle_flag = 1;
+		tree->SetSerialized();
 		tree->SetPtr(block_id, block_offset);
 		tree->Deserialize(*this);
 	}
@@ -471,7 +471,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 		return true;
 	}
 
-	auto node_type = node.DecodeNodeType();
+	auto node_type = node.GetType();
 
 	// insert the row ID into this leaf
 	if (node_type == NType::LEAF || node_type == NType::LEAF_INLINED) {
@@ -505,7 +505,7 @@ bool ART::Insert(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id
 	auto mismatch_position = Prefix::Traverse(*this, next_node, key, depth);
 
 	// prefix matches key
-	if (next_node.get().DecodeNodeType() != NType::PREFIX) {
+	if (next_node.get().GetType() != NType::PREFIX) {
 		return Insert(next_node, key, depth, row_id);
 	}
 
@@ -581,15 +581,15 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 
 	// handle prefix
 	reference<Node> next_node(node);
-	if (next_node.get().DecodeNodeType() == NType::PREFIX) {
+	if (next_node.get().GetType() == NType::PREFIX) {
 		Prefix::Traverse(*this, next_node, key, depth);
-		if (next_node.get().DecodeNodeType() == NType::PREFIX) {
+		if (next_node.get().GetType() == NType::PREFIX) {
 			return;
 		}
 	}
 
 	// delete a row ID from a leaf (root is leaf with possible prefix nodes)
-	if (next_node.get().DecodeNodeType() == NType::LEAF || next_node.get().DecodeNodeType() == NType::LEAF_INLINED) {
+	if (next_node.get().GetType() == NType::LEAF || next_node.get().GetType() == NType::LEAF_INLINED) {
 		if (Leaf::Remove(*this, next_node, row_id)) {
 			Node::Free(*this, node);
 		}
@@ -603,15 +603,14 @@ void ART::Erase(Node &node, const ARTKey &key, idx_t depth, const row_t &row_id)
 
 		auto temp_depth = depth + 1;
 		reference<Node> child_node(*child);
-		if (child_node.get().DecodeNodeType() == NType::PREFIX) {
+		if (child_node.get().GetType() == NType::PREFIX) {
 			Prefix::Traverse(*this, child_node, key, temp_depth);
-			if (child_node.get().DecodeNodeType() == NType::PREFIX) {
+			if (child_node.get().GetType() == NType::PREFIX) {
 				return;
 			}
 		}
 
-		if (child_node.get().DecodeNodeType() == NType::LEAF ||
-		    child_node.get().DecodeNodeType() == NType::LEAF_INLINED) {
+		if (child_node.get().GetType() == NType::LEAF || child_node.get().GetType() == NType::LEAF_INLINED) {
 			// leaf found, remove entry
 			if (Leaf::Remove(*this, child_node, row_id)) {
 				Node::DeleteChild(*this, next_node, node, key[depth]);
@@ -680,7 +679,7 @@ void ART::SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size) {
 		result_size = 0;
 		return;
 	}
-	if (leaf_node.DecodeNodeType() == NType::LEAF_INLINED) {
+	if (leaf_node.GetType() == NType::LEAF_INLINED) {
 		result_size = 1;
 		return;
 	}
@@ -699,15 +698,14 @@ Node ART::Lookup(Node node, const ARTKey &key, idx_t depth) {
 
 		// traverse prefix, if exists
 		reference<Node> next_node(node);
-		if (next_node.get().DecodeNodeType() == NType::PREFIX) {
+		if (next_node.get().GetType() == NType::PREFIX) {
 			Prefix::Traverse(*this, next_node, key, depth);
-			if (next_node.get().DecodeNodeType() == NType::PREFIX) {
+			if (next_node.get().GetType() == NType::PREFIX) {
 				return Node();
 			}
 		}
 
-		if (next_node.get().DecodeNodeType() == NType::LEAF ||
-		    next_node.get().DecodeNodeType() == NType::LEAF_INLINED) {
+		if (next_node.get().GetType() == NType::LEAF || next_node.get().GetType() == NType::LEAF_INLINED) {
 			return next_node.get();
 		}
 
@@ -952,7 +950,7 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 
 		// when we find a node, we need to update the 'matches' and 'row_ids'
 		// NOTE: leaves can have more than one row_id, but for UNIQUE/PRIMARY KEY they will only have one
-		D_ASSERT(leaf.DecodeNodeType() == NType::LEAF_INLINED);
+		D_ASSERT(leaf.GetType() == NType::LEAF_INLINED);
 		if (conflict_manager.AddHit(i, leaf.data)) {
 			found_conflict = i;
 		}
