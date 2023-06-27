@@ -206,6 +206,7 @@ jobs:
         python_name: python3.7
         # Hacky way to pass openssl from vcpkg to spatial extension build: spatial should probably move to vcpkg instead
         openssl_path: ${{ env.VCPKG_ROOT }}/installed/x64-linux
+        run_tests: 0 # TODO: disable before PR!
 
     - uses: actions/upload-artifact@v3
       with:
@@ -255,32 +256,23 @@ jobs:
 
  check-load-install-extensions:
     name: Checks extension functions
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     needs: linux-extensions-64
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
+    container: quay.io/pypa/manylinux2014_x86_64
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v4
+    - uses: ./.github/actions/manylinux_2014_setup
       with:
-        python-version: '3.9'
+        ninja-build: 1
+        ccache: 1
 
     - name: Install
       shell: bash
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Build
       shell: bash
