@@ -15,6 +15,8 @@
 #include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
+#include "duckdb/main/relation/value_relation.hpp"
+#include "duckdb/main/relation/filter_relation.hpp"
 
 namespace duckdb {
 
@@ -98,6 +100,22 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromTypes(const py::object
 		throw InvalidInputException("None of the columns matched the provided type filter!");
 	}
 	return ProjectFromExpression(projection);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::EmptyResult(const std::shared_ptr<ClientContext> &context,
+                                                           const vector<LogicalType> &types, vector<string> names) {
+	vector<Value> dummy_values;
+	D_ASSERT(types.size() == names.size());
+	dummy_values.reserve(types.size());
+	D_ASSERT(!types.empty());
+	for (auto &type : types) {
+		dummy_values.emplace_back(type);
+	}
+	vector<vector<Value>> single_row(1, dummy_values);
+	auto values_relation =
+	    make_uniq<DuckDBPyRelation>(make_shared<ValueRelation>(context, single_row, std::move(names)));
+	// Add a filter on an impossible condition
+	return values_relation->Filter("true = false");
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::SetAlias(const string &expr) {

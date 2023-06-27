@@ -118,7 +118,7 @@ struct TestType {
 
 struct TestAllTypesFun {
 	static void RegisterFunction(BuiltinFunctions &set);
-	static vector<TestType> GetTestTypes();
+	static vector<TestType> GetTestTypes(bool large_enum = false);
 };
 
 struct TestVectorTypesFun {

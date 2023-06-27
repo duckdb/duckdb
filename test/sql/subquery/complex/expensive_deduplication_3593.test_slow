@@ -1,0 +1,75 @@
+# name: test/sql/subquery/complex/expensive_deduplication_3593.test_slow
+# description: Issue #3593: Macros causes crash: memory consumption or recursion or something
+# group: [complex]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT
+(
+  select count(*) as value
+  FROM (
+    SELECT UNNEST(array_agg(distinct id))
+  ) a
+)
+  as total_seats
+FROM (
+SELECT gen_random_uuid() id, 1 as val FROM generate_series(0, 160)
+) as m;
+----
+161
+
+query II
+SELECT
+z%2 AS k,
+(
+  select count(*) as value
+  FROM (
+    SELECT UNNEST(array_agg(distinct id))
+  ) a
+)
+  as total_seats
+FROM (
+SELECT row_number() over () AS z, gen_random_uuid() id, 1 as val FROM generate_series(0, 160)
+) as m
+GROUP BY k
+ORDER BY k;
+----
+0	80
+1	81
+
+# disable verification for these queries, they are too slow to run without the deduplication
+statement ok
+PRAGMA disable_verification
+
+query I
+SELECT
+(
+  select count(*) as value
+  FROM (
+    SELECT UNNEST(array_agg(distinct id))
+  ) a
+)
+  as total_seats
+FROM (
+SELECT gen_random_uuid() id, 1 as val FROM generate_series(0, 100000)
+) as m;
+----
+100001
+
+query I
+SELECT
+(
+  select sum(a.val) as value
+  FROM (
+    SELECT UNNEST(list(distinct {key:m.id, val: m.val})) a
+  ) x
+)
+  as total_seats
+FROM (
+SELECT gen_random_uuid() id, 1 as val FROM range(0, 100000)
+) as m
+cross join (select * FROM range(0,3)) as r
+----
+100000
