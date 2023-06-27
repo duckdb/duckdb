@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
