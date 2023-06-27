@@ -55,7 +55,8 @@ TEST_CASE("Test enum types C API", "[capi]") {
 	}
 
 	REQUIRE(tester.OpenDatabase(nullptr));
-	result = tester.Query("select small_enum, medium_enum, large_enum, int from test_all_types();");
+	result =
+	    tester.Query("select small_enum, medium_enum, large_enum, int from test_all_types(use_large_enum = true);");
 	REQUIRE(NO_FAIL(*result));
 	REQUIRE(result->ColumnCount() == 4);
 	REQUIRE(result->ErrorMessage() == nullptr);

@@ -15,10 +15,8 @@
 #endif
 
 #ifndef USE_JEMALLOC
-#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(WIN32)
+#if defined(DUCKDB_EXTENSION_JEMALLOC_LINKED) && DUCKDB_EXTENSION_JEMALLOC_LINKED && !defined(WIN32)
 #define USE_JEMALLOC
-#else
-#define USE JEMALLOC 0
 #endif
 #endif
 

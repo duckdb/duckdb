@@ -109,8 +109,9 @@ struct ManagerDriverState {
 static AdbcStatusCode ReleaseDriver(struct AdbcDriver *driver, struct AdbcError *error) {
 	AdbcStatusCode status = ADBC_STATUS_OK;
 
-	if (!driver->private_manager)
+	if (!driver->private_manager) {
 		return status;
+	}
 	ManagerDriverState *state = reinterpret_cast<ManagerDriverState *>(driver->private_manager);
 
 	if (state->driver_release) {
@@ -138,11 +139,6 @@ AdbcStatusCode ConnectionGetInfo(struct AdbcConnection *connection, uint32_t *in
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 
-AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *, const char *, const char *, const char *,
-                                        struct ArrowSchema *, struct AdbcError *error) {
-	return ADBC_STATUS_NOT_IMPLEMENTED;
-}
-
 AdbcStatusCode StatementBind(struct AdbcStatement *, struct ArrowArray *, struct ArrowSchema *,
                              struct AdbcError *error) {
 	return ADBC_STATUS_NOT_IMPLEMENTED;
@@ -150,9 +146,6 @@ AdbcStatusCode StatementBind(struct AdbcStatement *, struct ArrowArray *, struct
 
 AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, struct ArrowSchema *schema,
                                            struct AdbcError *error) {
-	return ADBC_STATUS_NOT_IMPLEMENTED;
-}
-AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement *, const uint8_t *, size_t, struct AdbcError *error) {
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 
@@ -351,15 +344,17 @@ AdbcStatusCode AdbcConnectionInit(struct AdbcConnection *connection, struct Adbc
 	delete args;
 
 	auto status = database->private_driver->ConnectionNew(connection, error);
-	if (status != ADBC_STATUS_OK)
+	if (status != ADBC_STATUS_OK) {
 		return status;
+	}
 	connection->private_driver = database->private_driver;
 
 	for (const auto &option : options) {
 		status = database->private_driver->ConnectionSetOption(connection, option.first.c_str(), option.second.c_str(),
 		                                                       error);
-		if (status != ADBC_STATUS_OK)
+		if (status != ADBC_STATUS_OK) {
 			return status;
+		}
 	}
 	return connection->private_driver->ConnectionInit(connection, database, error);
 }
