@@ -41,7 +41,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/arrow/nanoarrow/nanoarrow.h"
 
 /// \defgroup Arrow C Data Interface
 /// Definitions for the C Data Interface/C Stream Interface.
