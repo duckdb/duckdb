@@ -32,7 +32,7 @@ class TestADBCConnectionGetInfo(object):
             "ADBC DuckDB Driver",
             "(unknown)",
             "(unknown)"
-        ], type=pa.large_string())
+        ], type=pa.string())
 
         assert values.num_chunks == 1
         chunk = values.chunk(0)
@@ -66,7 +66,7 @@ class TestADBCConnectionGetInfo(object):
         expected_result = pa.array([
             "duckdb",
             "(unknown)"
-        ], type=pa.large_string())
+        ], type=pa.string())
 
         assert values.num_chunks == 1
         chunk = values.chunk(0)

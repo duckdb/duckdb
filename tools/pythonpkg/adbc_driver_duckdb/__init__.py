@@ -23,10 +23,7 @@ import typing
 
 import adbc_driver_manager
 
-from ._version import __version__  # noqa:F401
-
 __all__ = ["StatementOptions", "connect"]
-
 
 class StatementOptions(enum.Enum):
     """Statement options specific to the DuckDB driver."""
@@ -34,13 +31,11 @@ class StatementOptions(enum.Enum):
     #: The number of rows per batch. Defaults to 1024.
     BATCH_ROWS = "adbc.duckdb.query.batch_rows"
 
-
 def connect(uri: typing.Optional[str] = None) -> adbc_driver_manager.AdbcDatabase:
     """Create a low level ADBC connection to DuckDB."""
     if uri is None:
         return adbc_driver_manager.AdbcDatabase(driver=_driver_path(), entrypoint="duckdb_adbc_init")
     return adbc_driver_manager.AdbcDatabase(driver=_driver_path(), entrypoint="duckdb_adbc_init", uri=uri)
-
 
 @functools.cache
 def _driver_path() -> str:
