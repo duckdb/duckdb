@@ -5,6 +5,7 @@
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/common/swap.hpp"
 
 namespace duckdb {
 
