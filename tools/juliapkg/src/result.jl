@@ -579,7 +579,7 @@ function Tables.columns(q::QueryResult)
             return convert_column(column_data)
         end)
     end
-    return q.tbl
+    return Tables.CopiedColumns(q.tbl)
 end
 
 mutable struct PendingQueryResult
