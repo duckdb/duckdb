@@ -71,8 +71,8 @@ struct AggregatePartition {
 	unique_ptr<GroupedAggregateHashTable> ht;
 
 	optional_idx data_per_repartition_task;
-	atomic<idx_t> repartition_tasks_assigned {0};
-	atomic<idx_t> repartition_tasks_done {0};
+	atomic<idx_t> repartition_tasks_assigned;
+	atomic<idx_t> repartition_tasks_done;
 };
 
 class RadixHTGlobalState : public GlobalSinkState {
@@ -207,8 +207,9 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 		return;
 	}
 
-	CombineInternal(context, gstate_p, lstate_p);
 	lstate.ht->Finalize();
+	CombineInternal(context, gstate_p, lstate_p);
+	lstate.ht.reset();
 }
 
 void RadixPartitionedHashTable::CombineInternal(ExecutionContext &context, GlobalSinkState &gstate_p,
@@ -277,9 +278,11 @@ public:
 		// Now combine / finalize
 		auto &ht = *finalize_partition->ht;
 		ht.Combine(data_collection);
-		ht.Finalize();
 
+		ht.Finalize();
 		gstate.AddToFinal(ht, &uncombined_data);
+		finalize_partition->ht.reset();
+
 		uncombined_data.clear();
 	}
 
@@ -497,7 +500,7 @@ bool RadixPartitionedHashTable::RequiresRepartitioning(ClientContext &context, G
 
 	// Out-of-core finalize
 	const auto partition_count = partition_counts[max_partition_idx];
-	const auto partition_size = partition_sizes[max_partition_idx];
+	const auto partition_size = MaxValue<idx_t>(partition_sizes[max_partition_idx], 1);
 
 	const auto max_added_bits = RadixPartitioning::MAX_RADIX_BITS - RadixHTGlobalState::SINK_RADIX_BITS;
 	idx_t added_bits = context.config.force_external ? 2 : 1;
@@ -647,10 +650,10 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 	auto &local_scan_state = lstate.scan_state;
 	if (!sink.final_data_collection->Scan(gstate.global_scan_state, local_scan_state, lstate.scan_chunk)) {
 		gstate.finished = true;
+		// TODO: we need to destroy the aggregate states here otherwise we get a leak!
 		return SourceResultType::FINISHED;
 	}
 
-	// TODO check if final allocator is thread-safe here
 	RowOperationsState row_state(*sink.final_allocators.back());
 	const auto group_cols = gstate.layout.ColumnCount() - 1;
 	RowOperations::FinalizeStates(row_state, gstate.layout, local_scan_state.chunk_state.row_locations,
