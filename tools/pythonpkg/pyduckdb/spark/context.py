@@ -1,4 +1,5 @@
-from typing import Optional, Self
+from typing_extensions import Self
+from typing import Optional
 import duckdb
 from duckdb import DuckDBPyConnection
 

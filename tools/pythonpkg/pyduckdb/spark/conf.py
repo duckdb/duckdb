@@ -1,4 +1,5 @@
-from typing import TYPE_CHECKING, Optional, List, Tuple, Self
+from typing_extensions import Self
+from typing import TYPE_CHECKING, Optional, List, Tuple
 from pyduckdb.spark.exception import ContributionsAcceptedError
 
 class SparkConf:
