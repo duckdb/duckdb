@@ -730,8 +730,7 @@ void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, WindowInput
 
 class WindowExecutor {
 public:
-	WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
-	               const idx_t count);
+	WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count);
 	virtual ~WindowExecutor() {
 	}
 
@@ -797,9 +796,8 @@ protected:
 
 class WindowRowNumberExecutor : public WindowExecutor {
 public:
-	WindowRowNumberExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
-	                        const idx_t count)
-	    : WindowExecutor(wexpr, context, partition_mask, count) {
+	WindowRowNumberExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
+	    : WindowExecutor(wexpr, context, count) {
 	}
 
 protected:
@@ -809,9 +807,8 @@ protected:
 //	Base class for non-aggregate functions that use peer boundaries
 class WindowPeerExecutor : public WindowExecutor {
 public:
-	WindowPeerExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
-	                   const idx_t count)
-	    : WindowExecutor(wexpr, context, partition_mask, count) {
+	WindowPeerExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
+	    : WindowExecutor(wexpr, context, count) {
 	}
 
 protected:
@@ -824,9 +821,8 @@ protected:
 
 class WindowRankExecutor : public WindowPeerExecutor {
 public:
-	WindowRankExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
-	                   const idx_t count)
-	    : WindowPeerExecutor(wexpr, context, partition_mask, count) {
+	WindowRankExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
+	    : WindowPeerExecutor(wexpr, context, count) {
 	}
 
 protected:
@@ -835,20 +831,20 @@ protected:
 
 class WindowDenseRankExecutor : public WindowPeerExecutor {
 public:
-	WindowDenseRankExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
+	WindowDenseRankExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &order_mask_p,
 	                        const idx_t count)
-	    : WindowPeerExecutor(wexpr, context, partition_mask, count) {
+	    : WindowPeerExecutor(wexpr, context, count), order_mask(order_mask_p) {
 	}
 
 protected:
+	const ValidityMask &order_mask;
 	void EvaluateInternal(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) override;
 };
 
 class WindowPercentRankExecutor : public WindowPeerExecutor {
 public:
-	WindowPercentRankExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
-	                          const idx_t count)
-	    : WindowPeerExecutor(wexpr, context, partition_mask, count) {
+	WindowPercentRankExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
+	    : WindowPeerExecutor(wexpr, context, count) {
 	}
 
 protected:
@@ -857,9 +853,8 @@ protected:
 
 class WindowCumeDistExecutor : public WindowExecutor {
 public:
-	WindowCumeDistExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
-	                       const idx_t count)
-	    : WindowExecutor(wexpr, context, partition_mask, count) {
+	WindowCumeDistExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
+	    : WindowExecutor(wexpr, context, count) {
 	}
 
 protected:
@@ -869,9 +864,8 @@ protected:
 // Base class for non-aggregate functions that have a payload
 class WindowValueExecutor : public WindowExecutor {
 public:
-	WindowValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
-	                    const idx_t count)
-	    : WindowExecutor(wexpr, context, partition_mask, count) {
+	WindowValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
+	    : WindowExecutor(wexpr, context, count) {
 	}
 
 	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count) override;
@@ -884,9 +878,8 @@ protected:
 //
 class WindowNtileExecutor : public WindowValueExecutor {
 public:
-	WindowNtileExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
-	                    const idx_t count)
-	    : WindowValueExecutor(wexpr, context, partition_mask, count) {
+	WindowNtileExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
+	    : WindowValueExecutor(wexpr, context, count) {
 	}
 
 protected:
@@ -894,9 +887,8 @@ protected:
 };
 class WindowLeadLagExecutor : public WindowValueExecutor {
 public:
-	WindowLeadLagExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
-	                      const idx_t count)
-	    : WindowValueExecutor(wexpr, context, partition_mask, count) {
+	WindowLeadLagExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
+	    : WindowValueExecutor(wexpr, context, count) {
 	}
 
 protected:
@@ -905,9 +897,8 @@ protected:
 
 class WindowFirstValueExecutor : public WindowValueExecutor {
 public:
-	WindowFirstValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
-	                         const idx_t count)
-	    : WindowValueExecutor(wexpr, context, partition_mask, count) {
+	WindowFirstValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
+	    : WindowValueExecutor(wexpr, context, count) {
 	}
 
 protected:
@@ -916,9 +907,8 @@ protected:
 
 class WindowLastValueExecutor : public WindowValueExecutor {
 public:
-	WindowLastValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
-	                        const idx_t count)
-	    : WindowValueExecutor(wexpr, context, partition_mask, count) {
+	WindowLastValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
+	    : WindowValueExecutor(wexpr, context, count) {
 	}
 
 protected:
@@ -927,9 +917,8 @@ protected:
 
 class WindowNthValueExecutor : public WindowValueExecutor {
 public:
-	WindowNthValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
-	                       const idx_t count)
-	    : WindowValueExecutor(wexpr, context, partition_mask, count) {
+	WindowNthValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
+	    : WindowValueExecutor(wexpr, context, count) {
 	}
 
 protected:
@@ -1002,8 +991,7 @@ bool WindowAggregateExecutor::IsCustomAggregate() {
 	return (mode < WindowAggregationMode::COMBINE);
 }
 
-WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
-                               const idx_t count)
+WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
     : wexpr(wexpr), state(wexpr, count), payload_collection(), payload_executor(context),
       leadlag_offset(wexpr.offset_expr.get(), context), leadlag_default(wexpr.default_expr.get(), context),
       boundary_start(wexpr.start_expr.get(), context), boundary_end(wexpr.end_expr.get(), context),
@@ -1130,32 +1118,33 @@ void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &res
 }
 
 static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &wexpr, ClientContext &context,
-                                                        const ValidityMask &partition_mask, const idx_t count,
+                                                        const ValidityMask &partition_mask,
+                                                        const ValidityMask &order_mask, const idx_t count,
                                                         WindowAggregationMode mode) {
 	switch (wexpr.type) {
 	case ExpressionType::WINDOW_AGGREGATE:
 		return make_uniq<WindowAggregateExecutor>(wexpr, context, partition_mask, count, mode);
 	case ExpressionType::WINDOW_ROW_NUMBER:
-		return make_uniq<WindowRowNumberExecutor>(wexpr, context, partition_mask, count);
+		return make_uniq<WindowRowNumberExecutor>(wexpr, context, count);
 	case ExpressionType::WINDOW_RANK_DENSE:
-		return make_uniq<WindowDenseRankExecutor>(wexpr, context, partition_mask, count);
+		return make_uniq<WindowDenseRankExecutor>(wexpr, context, order_mask, count);
 	case ExpressionType::WINDOW_RANK:
-		return make_uniq<WindowRankExecutor>(wexpr, context, partition_mask, count);
+		return make_uniq<WindowRankExecutor>(wexpr, context, count);
 	case ExpressionType::WINDOW_PERCENT_RANK:
-		return make_uniq<WindowPercentRankExecutor>(wexpr, context, partition_mask, count);
+		return make_uniq<WindowPercentRankExecutor>(wexpr, context, count);
 	case ExpressionType::WINDOW_CUME_DIST:
-		return make_uniq<WindowCumeDistExecutor>(wexpr, context, partition_mask, count);
+		return make_uniq<WindowCumeDistExecutor>(wexpr, context, count);
 	case ExpressionType::WINDOW_NTILE:
-		return make_uniq<WindowNtileExecutor>(wexpr, context, partition_mask, count);
+		return make_uniq<WindowNtileExecutor>(wexpr, context, count);
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
-		return make_uniq<WindowLeadLagExecutor>(wexpr, context, partition_mask, count);
+		return make_uniq<WindowLeadLagExecutor>(wexpr, context, count);
 	case ExpressionType::WINDOW_FIRST_VALUE:
-		return make_uniq<WindowFirstValueExecutor>(wexpr, context, partition_mask, count);
+		return make_uniq<WindowFirstValueExecutor>(wexpr, context, count);
 	case ExpressionType::WINDOW_LAST_VALUE:
-		return make_uniq<WindowLastValueExecutor>(wexpr, context, partition_mask, count);
+		return make_uniq<WindowLastValueExecutor>(wexpr, context, count);
 	case ExpressionType::WINDOW_NTH_VALUE:
-		return make_uniq<WindowNthValueExecutor>(wexpr, context, partition_mask, count);
+		return make_uniq<WindowNthValueExecutor>(wexpr, context, count);
 		break;
 	default:
 		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.type));
@@ -1178,7 +1167,7 @@ void WindowPeerExecutor::NextRank(idx_t partition_begin, idx_t peer_begin, idx_t
 WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context,
                                                  const ValidityMask &partition_mask, const idx_t count,
                                                  WindowAggregationMode mode)
-    : WindowExecutor(wexpr, context, partition_mask, count), mode(mode), filter_executor(context) {
+    : WindowExecutor(wexpr, context, count), mode(mode), filter_executor(context) {
 	// TODO we could evaluate those expressions in parallel
 
 	//	Check for constant aggregate
@@ -1219,6 +1208,11 @@ void WindowRankExecutor::EvaluateInternal(DataChunk &bounds, Vector &result, idx
 	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
 	auto rdata = FlatVector::GetData<int64_t>(result);
+
+	//	Reset to "previous" row
+	rank = (peer_begin[0] - partition_begin[0]) + 1;
+	rank_equal = (row_idx - peer_begin[0]);
+
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		NextRank(partition_begin[i], peer_begin[i], row_idx);
 		rdata[i] = rank;
@@ -1229,6 +1223,46 @@ void WindowDenseRankExecutor::EvaluateInternal(DataChunk &bounds, Vector &result
 	auto partition_begin = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto peer_begin = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
 	auto rdata = FlatVector::GetData<int64_t>(result);
+
+	//	Reset to "previous" row
+	rank = (peer_begin[0] - partition_begin[0]) + 1;
+	rank_equal = (row_idx - peer_begin[0]);
+
+	//	The dense rank is the number of order mask bits between partition_begin and peer_begin
+	dense_rank = 1;
+
+	auto order_begin = partition_begin[0];
+	idx_t begin_idx;
+	idx_t begin_offset;
+	order_mask.GetEntryIndex(order_begin, begin_idx, begin_offset);
+
+	auto order_end = peer_begin[0];
+	idx_t end_idx;
+	idx_t end_offset;
+	order_mask.GetEntryIndex(order_end, end_idx, end_offset);
+
+	//	If they are in the same entry, just loop
+	if (begin_idx == end_idx) {
+		const auto entry = order_mask.GetValidityEntry(begin_idx);
+		for (; begin_offset < end_offset; ++begin_offset) {
+			dense_rank += order_mask.RowIsValid(entry, begin_offset);
+		}
+	} else {
+		// Count the ragged bits at the start of the partition
+		if (begin_offset) {
+			const auto entry = order_mask.GetValidityEntry(begin_idx);
+			for (; begin_offset < order_mask.BITS_PER_VALUE; ++begin_offset) {
+				dense_rank += order_mask.RowIsValid(entry, begin_offset);
+				++order_begin;
+			}
+			++begin_idx;
+		}
+
+		//	Count the the aligned bits.
+		ValidityMask tail_mask(order_mask.GetData() + begin_idx);
+		dense_rank += tail_mask.CountValid(order_end - order_begin);
+	}
+
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		NextRank(partition_begin[i], peer_begin[i], row_idx);
 		rdata[i] = dense_rank;
@@ -1642,7 +1676,7 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
-		auto wexec = WindowExecutorFactory(wexpr, context, partition_mask, count, gstate.mode);
+		auto wexec = WindowExecutorFactory(wexpr, context, partition_mask, order_mask, count, gstate.mode);
 		window_execs.emplace_back(std::move(wexec));
 	}
 
