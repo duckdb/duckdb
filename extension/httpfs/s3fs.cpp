@@ -102,7 +102,7 @@ string S3FileSystem::UrlDecode(string input) {
 	replace(input.begin(), input.end(), '+', ' ');
 	for (idx_t i = 0; i < input.length(); i++) {
 		if (int(input[i]) == 37) {
-			int ii;
+			unsigned int ii;
 			sscanf(input.substr(i + 1, 2).c_str(), "%x", &ii);
 			ch = static_cast<char>(ii);
 			result += ch;
