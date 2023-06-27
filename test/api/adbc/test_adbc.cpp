@@ -480,7 +480,7 @@ TEST_CASE("Test ADBC Statement Bind", "[adbc]") {
 	expected_schema.release = nullptr;
 	REQUIRE(SUCCESS(AdbcStatementGetParameterSchema(&adbc_statement, &expected_schema, &adbc_error)));
 	REQUIRE(expected_schema.n_children == 3);
-	for (idx_t i = 0; i < expected_schema.n_children; i++) {
+	for (int64_t i = 0; i < expected_schema.n_children; i++) {
 		auto child = expected_schema.children[i];
 		std::string child_name = child->name;
 		std::string expected_name = StringUtil::Format("%d", i);
