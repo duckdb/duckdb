@@ -141,7 +141,7 @@ private:
 	ArenaAllocator allocator;
 
 	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
-	static constexpr idx_t TREE_FANOUT = 64;
+	static constexpr idx_t TREE_FANOUT = 16;
 };
 
 } // namespace duckdb
