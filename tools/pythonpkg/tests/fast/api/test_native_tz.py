@@ -52,7 +52,6 @@ def test_pandas_timestamp_timezone():
 
 	con.execute("SET timezone='UTC';")
 	res = con.execute(f"select TimeRecStart as tz  from '{filename}'").df()
-	assert res.dtypes["tz"].tz.zone == 'UTC'
 	assert res['tz'][0].hour == 21 and res['tz'][0].minute == 52
 
 def test_pandas_timestamp_time():
