@@ -1,7 +1,6 @@
 import pytest
 
 class TestDataFrame(object):
-	@pytest.mark.skip("can't create a dataframe from a list of tuples yet")
 	def test_dataframe(self, spark):
 		# Create DataFrame
 		df = spark.createDataFrame(

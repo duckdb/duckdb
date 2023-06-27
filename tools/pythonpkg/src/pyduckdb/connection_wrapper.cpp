@@ -312,11 +312,6 @@ unique_ptr<DuckDBPyRelation> PyConnectionWrapper::Values(py::object values, shar
 	return conn->Values(std::move(values));
 }
 
-unique_ptr<DuckDBPyRelation> PyConnectionWrapper::FromQuery(const string &query, const string &alias,
-                                                            shared_ptr<DuckDBPyConnection> conn) {
-	return conn->FromQuery(query, alias);
-}
-
 unique_ptr<DuckDBPyRelation> PyConnectionWrapper::RunQuery(const string &query, const string &alias,
                                                            shared_ptr<DuckDBPyConnection> conn) {
 	return conn->RunQuery(query, alias);

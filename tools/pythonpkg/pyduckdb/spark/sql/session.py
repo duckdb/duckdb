@@ -30,15 +30,41 @@ class SparkSession:
 		self._conf = RuntimeConfig(self.conn)
 
 	def createDataFrame(self, tuples: List[Tuple[Any, ...]]) -> DataFrame:
-		parameter_count = len(tuples)
-		parameters = [f'${x+1}' for x in range(parameter_count)]
-		parameters = ', '.join(parameters)
-		query = f"""
-			select {parameters}
-		"""
-		# FIXME: we can't add prepared parameters to a relation
-		# or extract the relation from a connection after 'execute'
-		raise NotImplementedError()
+		def verify_tuple_integrity(tuples):
+			if len(tuples) <= 1:
+				return
+			assert all([len(x) == len(tuples[0]) for x in tuples[1:]])
+
+		if not tuples:
+			rel = self.conn.sql('select 42 where 1=0')
+			return DataFrame(rel, self)
+		verify_tuple_integrity(tuples)
+
+		def construct_query(tuples) -> str:
+			def construct_values_list(row, start_param_idx):
+				parameter_count = len(row)
+				parameters = [f'${x+start_param_idx}' for x in range(parameter_count)]
+				parameters = '(' + ', '.join(parameters) + ')'
+				return parameters
+			row_size = len(tuples[0])
+			values_list = [construct_values_list(x, 1 + (i * row_size)) for i, x in enumerate(tuples)]
+			values_list = ', '.join(values_list)
+
+			query = f"""
+				select * from (values {values_list})
+			"""
+			return query
+		query = construct_query(tuples)
+
+		def construct_parameters(tuples):
+			parameters = []
+			for row in tuples:
+				parameters.extend(list(row))
+			return parameters
+		parameters = construct_parameters(tuples)
+
+		rel = self.conn.sql(query, params=parameters)
+		return DataFrame(rel, self)
 
 	def newSession(self) -> "SparkSession":
 		return SparkSession(self._context)
