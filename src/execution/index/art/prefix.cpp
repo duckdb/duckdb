@@ -76,16 +76,11 @@ void Prefix::Concatenate(ART &art, Node &prefix_node, const uint8_t byte, Node &
 
 		// get the tail
 		reference<Prefix> prefix = Prefix::Get(art, prefix_node);
-		D_ASSERT(prefix.get().ptr.IsSet());
-		if (prefix.get().ptr.IsSwizzled()) {
-			prefix.get().ptr.Deserialize(art);
-		}
+		D_ASSERT(prefix.get().ptr.IsSet() && !prefix.get().ptr.IsSwizzled());
+
 		while (prefix.get().ptr.DecodeARTNodeType() == NType::PREFIX) {
 			prefix = Prefix::Get(art, prefix.get().ptr);
-			D_ASSERT(prefix.get().ptr.IsSet());
-			if (prefix.get().ptr.IsSwizzled()) {
-				prefix.get().ptr.Deserialize(art);
-			}
+			D_ASSERT(prefix.get().ptr.IsSet() && !prefix.get().ptr.IsSwizzled());
 		}
 
 		// append the byte
@@ -271,10 +266,8 @@ string Prefix::VerifyAndToString(ART &art, const bool only_verify) {
 	}
 	str += "] ";
 
-	if (only_verify) {
-		return ptr.VerifyAndToString(art, only_verify);
-	}
-	return str + ptr.VerifyAndToString(art, only_verify);
+	str = only_verify ? ptr.VerifyAndToString(art, only_verify) : str + ptr.VerifyAndToString(art, only_verify);
+	return str;
 }
 
 BlockPointer Prefix::Serialize(ART &art, MetaBlockWriter &writer) {
@@ -328,10 +321,8 @@ Prefix &Prefix::Append(ART &art, const uint8_t byte) {
 
 void Prefix::Append(ART &art, Node other_prefix) {
 
-	D_ASSERT(other_prefix.IsSet());
-	if (other_prefix.IsSwizzled()) {
-		other_prefix.Deserialize(art);
-	}
+	// NOTE: all usages of this function already deserialize the other prefix
+	D_ASSERT(other_prefix.IsSet() && !other_prefix.IsSwizzled());
 
 	reference<Prefix> prefix(*this);
 	while (other_prefix.DecodeARTNodeType() == NType::PREFIX) {
