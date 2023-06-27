@@ -206,19 +206,15 @@ idx_t ColumnDataCollectionSegment::ReadVector(ChunkManagementState &state, Vecto
 	} else if (internal_type == PhysicalType::VARCHAR) {
 		if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
 			auto next_index = vector_index;
-			idx_t v_offset = 0;
+			idx_t offset = 0;
 			while (next_index.IsValid()) {
 				auto &current_vdata = GetVectorData(next_index);
 				for (auto &swizzle_segment : current_vdata.swizzle_data) {
 					auto &string_heap_segment = GetVectorData(swizzle_segment.child_index);
-					allocator->UnswizzlePointers(state, result, v_offset + swizzle_segment.offset,
-					                             swizzle_segment.count, string_heap_segment.block_id,
-					                             string_heap_segment.offset);
+					allocator->UnswizzlePointers(state, result, offset + swizzle_segment.offset, swizzle_segment.count,
+					                             string_heap_segment.block_id, string_heap_segment.offset);
 				}
-				if (!current_vdata.swizzle_data.empty()) {
-					auto &last_swizzle_data = current_vdata.swizzle_data.back();
-					v_offset += last_swizzle_data.offset + last_swizzle_data.count;
-				}
+				offset += current_vdata.count;
 				next_index = current_vdata.next_data;
 			}
 		}
