@@ -95,7 +95,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: ./.github/actions/centos_7_setup
+    - uses: ./.github/actions/manylinux_2014_setup
       with:
         openssl: 1
 

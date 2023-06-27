@@ -58,7 +58,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: ./.github/actions/centos_7_setup
+    - uses: ./.github/actions/manylinux_2014_setup
       with:
         ninja-build: 1
         ccache: 1
@@ -185,7 +185,7 @@ jobs:
       with:
         fetch-depth: 0
 
-    - uses: ./.github/actions/centos_7_setup
+    - uses: ./.github/actions/manylinux_2014_setup
       with:
         aws-cli: 1
         ninja-build: 1
