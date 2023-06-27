@@ -88,7 +88,7 @@ jobs:
     name: DuckDB Extensions (gcc4)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
-    needs: linux-python3-9
+#    needs: linux-python3-9
 
     steps:
     - uses: actions/checkout@v3
@@ -97,16 +97,12 @@ jobs:
 
     - uses: ./.github/actions/manylinux_2014_setup
       with:
-        openssl: 1
-
-    - name: Version Check
-      shell: bash
-      run: |
-        cmake --version
-        ldd --version ldd
-        ls -al
-        pwd
-        echo "$USER"
+         aws-cli: 1
+         ninja-build: 1
+         vcpkg: 1
+         openssl: 1
+         ccache: 1
+         ssh: 1
 
     - uses: ./.github/actions/build_extensions
       with:
@@ -115,6 +111,10 @@ jobs:
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         treat_warn_as_error: 0
+        toolchain_path: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+        python_name: python3.7
+        # Hacky way to pass openssl from vcpkg to spatial extension build: spatial should probably move to vcpkg instead
+        openssl_path: ${{ env.VCPKG_ROOT }}/installed/x64-linux
 
     - uses: actions/upload-artifact@v3
       with:
