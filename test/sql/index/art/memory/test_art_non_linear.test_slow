@@ -20,8 +20,6 @@ CREATE FUNCTION mem_to_bytes(x) AS CASE
     WHEN x = '0 bytes' THEN 0
     ELSE x::INT END;
 
-mode skip
-
 # test 100K short strings
 
 statement ok
@@ -100,8 +98,6 @@ true
 
 statement ok
 DROP TABLE art;
-
-mode unskip
 
 # test 100K mostly duplicate INTEGER keys
 
