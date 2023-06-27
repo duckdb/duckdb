@@ -68,7 +68,7 @@ class TestADBCStatementBind(object):
         # Create the schema
         schema = pa.schema([
             ('a', pa.int64()),
-            ('b', pa.large_string()),
+            ('b', pa.string()),
             ('c', pa.bool_())
         ])
 
@@ -104,7 +104,7 @@ class TestADBCStatementBind(object):
         data_dict = {
             'field1': pa.array([10], type=pa.int64()),
             'field2': pa.array([3.14], type=pa.float64()),
-            'field3': pa.array(['example with long string'], type=pa.large_string())
+            'field3': pa.array(['example with long string'], type=pa.string())
         }
         # Create the StructArray
         struct_array = pa.StructArray.from_arrays(arrays=data_dict.values(), names=data_dict.keys())
