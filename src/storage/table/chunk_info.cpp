@@ -89,6 +89,10 @@ void ChunkConstantInfo::Serialize(Serializer &serializer) {
 	serializer.Write<idx_t>(start);
 }
 
+idx_t ChunkConstantInfo::GetCommittedDeletedCount(idx_t max_count) {
+	return delete_id < TRANSACTION_ID_START ? max_count : 0;
+}
+
 unique_ptr<ChunkInfo> ChunkConstantInfo::Deserialize(Deserializer &source) {
 	auto start = source.Read<idx_t>();
 
@@ -241,7 +245,20 @@ void ChunkVectorInfo::Serialize(Serializer &serializer) {
 	for (idx_t i = 0; i < count; i++) {
 		deleted_tuples[sel.get_index(i)] = false;
 	}
-	serializer.WriteData((data_ptr_t)deleted_tuples, sizeof(bool) * STANDARD_VECTOR_SIZE);
+	serializer.WriteData(data_ptr_cast(deleted_tuples), sizeof(bool) * STANDARD_VECTOR_SIZE);
+}
+
+idx_t ChunkVectorInfo::GetCommittedDeletedCount(idx_t max_count) {
+	if (!any_deleted) {
+		return 0;
+	}
+	idx_t delete_count = 0;
+	for (idx_t i = 0; i < max_count; i++) {
+		if (deleted[i] < TRANSACTION_ID_START) {
+			delete_count++;
+		}
+	}
+	return delete_count;
 }
 
 unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(Deserializer &source) {
@@ -250,7 +267,7 @@ unique_ptr<ChunkInfo> ChunkVectorInfo::Deserialize(Deserializer &source) {
 	auto result = make_uniq<ChunkVectorInfo>(start);
 	result->any_deleted = true;
 	bool deleted_tuples[STANDARD_VECTOR_SIZE];
-	source.ReadData((data_ptr_t)deleted_tuples, sizeof(bool) * STANDARD_VECTOR_SIZE);
+	source.ReadData(data_ptr_cast(deleted_tuples), sizeof(bool) * STANDARD_VECTOR_SIZE);
 	for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		if (deleted_tuples[i]) {
 			result->deleted[i] = 0;

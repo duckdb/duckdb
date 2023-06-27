@@ -17,12 +17,12 @@ SubqueryRef::SubqueryRef(unique_ptr<SelectStatement> subquery_p, string alias_p)
 	this->alias = std::move(alias_p);
 }
 
-bool SubqueryRef::Equals(const TableRef *other_p) const {
+bool SubqueryRef::Equals(const TableRef &other_p) const {
 	if (!TableRef::Equals(other_p)) {
 		return false;
 	}
-	auto other = (SubqueryRef *)other_p;
-	return subquery->Equals(other->subquery.get());
+	auto &other = other_p.Cast<SubqueryRef>();
+	return subquery->Equals(*other.subquery);
 }
 
 unique_ptr<TableRef> SubqueryRef::Copy() {

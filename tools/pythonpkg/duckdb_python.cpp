@@ -10,9 +10,13 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/pybind11/exceptions.hpp"
 #include "duckdb_python/typing.hpp"
+#include "duckdb_python/functional.hpp"
 #include "duckdb_python/connection_wrapper.hpp"
 #include "duckdb_python/pybind11/conversions/pyconnection_default.hpp"
 #include "duckdb/common/box_renderer.hpp"
+#include "duckdb/function/function.hpp"
+#include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
+#include "duckdb_python/pybind11/conversions/python_udf_type_enum.hpp"
 
 #include "duckdb.hpp"
 
@@ -69,6 +73,15 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	      py::arg("connection") = py::none())
 	    .def("duplicate", &PyConnectionWrapper::Cursor, "Create a duplicate of the current connection",
 	         py::arg("connection") = py::none());
+	m.def("create_function", &PyConnectionWrapper::RegisterScalarUDF,
+	      "Create a DuckDB function out of the passing in python function so it can be used in queries",
+	      py::arg("name"), py::arg("function"), py::arg("return_type") = py::none(), py::arg("parameters") = py::none(),
+	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0,
+	      py::arg("exception_handling") = 0, py::arg("side_effects") = false, py::arg("connection") = py::none());
+
+	m.def("remove_function", &PyConnectionWrapper::UnregisterUDF, "Remove a previously created function",
+	      py::arg("name"), py::arg("connection") = py::none());
+
 	DefineMethod({"sqltype", "dtype", "type"}, m, &PyConnectionWrapper::Type, "Create a type object from 'type_str'",
 	             py::arg("type_str"), py::arg("connection") = py::none());
 	DefineMethod({"struct_type", "row_type"}, m, &PyConnectionWrapper::StructType,
@@ -95,6 +108,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
 	         py::arg("query"), py::arg("parameters") = py::none(), py::arg("connection") = py::none())
 	    .def("close", &PyConnectionWrapper::Close, "Close the connection", py::arg("connection") = py::none())
+	    .def("interrupt", &PyConnectionWrapper::Interrupt, "Interrupt pending operations",
+	         py::arg("connection") = py::none())
 	    .def("fetchone", &PyConnectionWrapper::FetchOne, "Fetch a single row from a result following execute",
 	         py::arg("connection") = py::none())
 	    .def("fetchmany", &PyConnectionWrapper::FetchMany, "Fetch the next set of rows from a result following execute",
@@ -132,7 +147,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("connection") = py::none())
 	    .def("read_json", &PyConnectionWrapper::ReadJSON, "Create a relation object from the JSON file in 'name'",
 	         py::arg("name"), py::arg("connection") = py::none(), py::arg("columns") = py::none(),
-	         py::arg("sample_size") = py::none(), py::arg("maximum_depth") = py::none());
+	         py::arg("sample_size") = py::none(), py::arg("maximum_depth") = py::none(),
+	         py::arg("records") = py::none(), py::arg("format") = py::none());
 
 	m.def("values", &PyConnectionWrapper::Values, "Create a relation object from the passed values", py::arg("values"),
 	      py::arg("connection") = py::none());
@@ -190,7 +206,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    py::arg("skiprows") = py::none(), py::arg("quotechar") = py::none(), py::arg("escapechar") = py::none(),
 	    py::arg("encoding") = py::none(), py::arg("parallel") = py::none(), py::arg("date_format") = py::none(),
 	    py::arg("timestamp_format") = py::none(), py::arg("sample_size") = py::none(),
-	    py::arg("all_varchar") = py::none(), py::arg("normalize_names") = py::none(), py::arg("filename") = py::none());
+	    py::arg("all_varchar") = py::none(), py::arg("normalize_names") = py::none(), py::arg("filename") = py::none(),
+	    py::arg("null_padding") = py::none());
 
 	m.def("append", &PyConnectionWrapper::Append, "Append the passed DataFrame to the named table",
 	      py::arg("table_name"), py::arg("df"), py::kw_only(), py::arg("by_name") = false,
@@ -255,13 +272,22 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	         py::arg("connection") = py::none());
 }
 
-PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
+PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
+	py::enum_<duckdb::ExplainType>(m, "ExplainType")
+	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)
+	    .value("ANALYZE", duckdb::ExplainType::EXPLAIN_ANALYZE)
+	    .export_values();
+
+	py::enum_<duckdb::PythonExceptionHandling>(m, "PythonExceptionHandling")
+	    .value("DEFAULT", duckdb::PythonExceptionHandling::FORWARD_ERROR)
+	    .value("RETURN_NULL", duckdb::PythonExceptionHandling::RETURN_NULL)
+	    .export_values();
+
+	DuckDBPyTyping::Initialize(m);
+	DuckDBPyFunctional::Initialize(m);
 	DuckDBPyRelation::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
-	DuckDBPyTyping::Initialize(m);
 	PythonObject::Initialize();
-
-	InitializeConnectionMethods(m);
 
 	py::options pybind_opts;
 
@@ -277,10 +303,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.attr("threadsafety") = 1;
 	m.attr("paramstyle") = "qmark";
 
-	py::enum_<duckdb::ExplainType>(m, "ExplainType")
-	    .value("STANDARD", duckdb::ExplainType::EXPLAIN_STANDARD)
-	    .value("ANALYZE", duckdb::ExplainType::EXPLAIN_ANALYZE)
-	    .export_values();
+	InitializeConnectionMethods(m);
 
 	RegisterExceptions(m);
 

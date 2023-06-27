@@ -110,7 +110,7 @@ void ExpressionBinder::TransformCapturedLambdaColumn(unique_ptr<Expression> &ori
 	if (original->expression_class == ExpressionClass::BOUND_LAMBDA_REF) {
 
 		// determine if this is the lambda parameter
-		auto &bound_lambda_ref = (BoundLambdaRefExpression &)*original;
+		auto &bound_lambda_ref = original->Cast<BoundLambdaRefExpression>();
 		auto alias = bound_lambda_ref.alias;
 
 		if (lambda_bindings && bound_lambda_ref.lambda_index != lambda_bindings->size()) {

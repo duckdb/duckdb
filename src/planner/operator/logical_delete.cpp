@@ -1,6 +1,7 @@
 #include "duckdb/planner/operator/logical_delete.hpp"
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/main/config.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 
 namespace duckdb {
@@ -14,6 +15,7 @@ void LogicalDelete::Serialize(FieldWriter &writer) const {
 	table.Serialize(writer.GetSerializer());
 	writer.WriteField(table_index);
 	writer.WriteField(return_chunk);
+	writer.WriteSerializableList(this->expressions);
 }
 
 unique_ptr<LogicalOperator> LogicalDelete::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
@@ -25,6 +27,7 @@ unique_ptr<LogicalOperator> LogicalDelete::Deserialize(LogicalDeserializationSta
 	auto table_index = reader.ReadRequired<idx_t>();
 	auto result = make_uniq<LogicalDelete>(table_catalog_entry, table_index);
 	result->return_chunk = reader.ReadRequired<bool>();
+	result->expressions = reader.ReadRequiredSerializableList<duckdb::Expression>(state.gstate);
 	return std::move(result);
 }
 
@@ -49,6 +52,15 @@ void LogicalDelete::ResolveTypes() {
 	} else {
 		types.emplace_back(LogicalType::BIGINT);
 	}
+}
+
+string LogicalDelete::GetName() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return LogicalOperator::GetName() + StringUtil::Format(" #%llu", table_index);
+	}
+#endif
+	return LogicalOperator::GetName();
 }
 
 } // namespace duckdb

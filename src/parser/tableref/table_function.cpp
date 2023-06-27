@@ -13,12 +13,12 @@ string TableFunctionRef::ToString() const {
 	return BaseToString(function->ToString(), column_name_alias);
 }
 
-bool TableFunctionRef::Equals(const TableRef *other_p) const {
+bool TableFunctionRef::Equals(const TableRef &other_p) const {
 	if (!TableRef::Equals(other_p)) {
 		return false;
 	}
-	auto other = (TableFunctionRef *)other_p;
-	return function->Equals(other->function.get());
+	auto &other = other_p.Cast<TableFunctionRef>();
+	return function->Equals(*other.function);
 }
 
 void TableFunctionRef::Serialize(FieldWriter &writer) const {

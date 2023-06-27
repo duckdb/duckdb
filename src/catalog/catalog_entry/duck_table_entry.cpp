@@ -16,6 +16,9 @@
 #include "duckdb/parser/constraints/list.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include "duckdb/planner/operator/logical_update.hpp"
 
 namespace duckdb {
 
@@ -295,7 +298,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	auto binder = Binder::CreateBinder(context);
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info));
 	auto new_storage =
-	    make_shared<DataTable>(context, *storage, info.new_column, bound_create_info->bound_defaults.back().get());
+	    make_shared<DataTable>(context, *storage, info.new_column, *bound_create_info->bound_defaults.back());
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
 
@@ -714,16 +717,19 @@ TableFunction DuckTableEntry::GetScanFunction(ClientContext &context, unique_ptr
 	return TableScanFunction::GetFunction();
 }
 
+vector<ColumnSegmentInfo> DuckTableEntry::GetColumnSegmentInfo() {
+	return storage->GetColumnSegmentInfo();
+}
+
 TableStorageInfo DuckTableEntry::GetStorageInfo(ClientContext &context) {
 	TableStorageInfo result;
 	result.cardinality = storage->info->cardinality.load();
-	storage->GetStorageInfo(result);
 	storage->info->indexes.Scan([&](Index &index) {
 		IndexInfo info;
 		info.is_primary = index.IsPrimary();
-		info.is_unique = index.IsUnique();
+		info.is_unique = index.IsUnique() || info.is_primary;
 		info.is_foreign = index.IsForeign();
-		index.column_id_set = index.column_id_set;
+		info.column_set = index.column_id_set;
 		result.index_info.push_back(std::move(info));
 		return false;
 	});

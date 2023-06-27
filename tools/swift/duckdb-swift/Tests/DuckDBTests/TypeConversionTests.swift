@@ -270,6 +270,11 @@ final class TypeConversionTests: XCTestCase {
     try extractTest(testColumnName: "int_array", expected: expected) { $0.cast(to: [Int32?].self) }
   }
   
+  func test_extract_from_int_array_casting_to_swift_int() throws {
+    let expected = [[], [Int(42), 999, nil, nil, -42], nil]
+    try extractTest(testColumnName: "int_array", expected: expected) { $0.cast(to: [Int?].self) }
+  }
+  
   func test_extract_from_double_array() throws {
     // We need this contraption to work around .nan != .nan
     enum DoubleBox: Equatable {
@@ -287,7 +292,7 @@ final class TypeConversionTests: XCTestCase {
     let source = [[], [Double(42), .nan, .infinity, -.infinity, nil, -42], nil]
     let expected = source.map { $0?.map(DoubleBox.init(_:)) }
     let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT double_array FROM test_all_types();")
+    let result = try connection.query("SELECT double_array FROM test_all_types(use_large_enum=true);")
     let column = result[0].cast(to: [Double?].self)
     for (index, item) in expected.enumerated() {
       XCTAssertEqual(column[DBInt(index)]?.map(DoubleBox.init(_:)), item)
@@ -410,7 +415,7 @@ private extension TypeConversionTests {
     cast: (Column<Void>) -> Column<T>
   ) throws {
     let connection = try Database(store: .inMemory).connect()
-    let result = try connection.query("SELECT \(testColumnName) FROM test_all_types();")
+    let result = try connection.query("SELECT \(testColumnName) FROM test_all_types(use_large_enum=true);")
     let column = cast(result[0])
     for (index, item) in expected.enumerated() {
       XCTAssertEqual(column[DBInt(index)], item)

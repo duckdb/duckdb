@@ -5,12 +5,16 @@
 name Write Lineitem Parquet (Non-Order Preserving)
 group parquet
 
+cache tpch_sf1.duckdb
+
 require parquet
 
 require tpch
 
 load
 CALL dbgen(sf=1);
+
+init
 SET preserve_insertion_order=false;
 
 run

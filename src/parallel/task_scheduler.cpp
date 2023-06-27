@@ -1,13 +1,14 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "concurrentqueue.h"
-#include "lightweightsemaphore.h"
 #include "duckdb/common/thread.hpp"
+#include "lightweightsemaphore.h"
 #else
 #include <queue>
 #endif
@@ -24,15 +25,15 @@ struct SchedulerThread {
 };
 
 #ifndef DUCKDB_NO_THREADS
-typedef duckdb_moodycamel::ConcurrentQueue<unique_ptr<Task>> concurrent_queue_t;
+typedef duckdb_moodycamel::ConcurrentQueue<shared_ptr<Task>> concurrent_queue_t;
 typedef duckdb_moodycamel::LightweightSemaphore lightweight_semaphore_t;
 
 struct ConcurrentQueue {
 	concurrent_queue_t q;
 	lightweight_semaphore_t semaphore;
 
-	void Enqueue(ProducerToken &token, unique_ptr<Task> task);
-	bool DequeueFromProducer(ProducerToken &token, unique_ptr<Task> &task);
+	void Enqueue(ProducerToken &token, shared_ptr<Task> task);
+	bool DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task);
 };
 
 struct QueueProducerToken {
@@ -42,7 +43,7 @@ struct QueueProducerToken {
 	duckdb_moodycamel::ProducerToken queue_token;
 };
 
-void ConcurrentQueue::Enqueue(ProducerToken &token, unique_ptr<Task> task) {
+void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 	lock_guard<mutex> producer_lock(token.producer_lock);
 	if (q.enqueue(token.token->queue_token, std::move(task))) {
 		semaphore.signal();
@@ -51,26 +52,26 @@ void ConcurrentQueue::Enqueue(ProducerToken &token, unique_ptr<Task> task) {
 	}
 }
 
-bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, unique_ptr<Task> &task) {
+bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
 	lock_guard<mutex> producer_lock(token.producer_lock);
 	return q.try_dequeue_from_producer(token.token->queue_token, task);
 }
 
 #else
 struct ConcurrentQueue {
-	std::queue<unique_ptr<Task>> q;
+	std::queue<shared_ptr<Task>> q;
 	mutex qlock;
 
-	void Enqueue(ProducerToken &token, unique_ptr<Task> task);
-	bool DequeueFromProducer(ProducerToken &token, unique_ptr<Task> &task);
+	void Enqueue(ProducerToken &token, shared_ptr<Task> task);
+	bool DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task);
 };
 
-void ConcurrentQueue::Enqueue(ProducerToken &token, unique_ptr<Task> task) {
+void ConcurrentQueue::Enqueue(ProducerToken &token, shared_ptr<Task> task) {
 	lock_guard<mutex> lock(qlock);
 	q.push(std::move(task));
 }
 
-bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, unique_ptr<Task> &task) {
+bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
 	lock_guard<mutex> lock(qlock);
 	if (q.empty()) {
 		return false;
@@ -93,7 +94,9 @@ ProducerToken::ProducerToken(TaskScheduler &scheduler, unique_ptr<QueueProducerT
 ProducerToken::~ProducerToken() {
 }
 
-TaskScheduler::TaskScheduler(DatabaseInstance &db) : db(db), queue(make_uniq<ConcurrentQueue>()) {
+TaskScheduler::TaskScheduler(DatabaseInstance &db)
+    : db(db), queue(make_uniq<ConcurrentQueue>()),
+      allocator_flush_threshold(db.config.options.allocator_flush_threshold) {
 }
 
 TaskScheduler::~TaskScheduler() {
@@ -115,25 +118,40 @@ unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {
 	return make_uniq<ProducerToken>(*this, std::move(token));
 }
 
-void TaskScheduler::ScheduleTask(ProducerToken &token, unique_ptr<Task> task) {
+void TaskScheduler::ScheduleTask(ProducerToken &token, shared_ptr<Task> task) {
 	// Enqueue a task for the given producer token and signal any sleeping threads
 	queue->Enqueue(token, std::move(task));
 }
 
-bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, unique_ptr<Task> &task) {
+bool TaskScheduler::GetTaskFromProducer(ProducerToken &token, shared_ptr<Task> &task) {
 	return queue->DequeueFromProducer(token, task);
 }
 
 void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 #ifndef DUCKDB_NO_THREADS
-	unique_ptr<Task> task;
+	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
 		// wait for a signal with a timeout
 		queue->semaphore.wait();
 		if (queue->q.try_dequeue(task)) {
-			task->Execute(TaskExecutionMode::PROCESS_ALL);
-			task.reset();
+			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
+
+			switch (execute_result) {
+			case TaskExecutionResult::TASK_FINISHED:
+			case TaskExecutionResult::TASK_ERROR:
+				task.reset();
+				break;
+			case TaskExecutionResult::TASK_NOT_FINISHED:
+				throw InternalException("Task should not return TASK_NOT_FINISHED in PROCESS_ALL mode");
+			case TaskExecutionResult::TASK_BLOCKED:
+				task->Deschedule();
+				task.reset();
+				break;
+			}
+
+			// Flushes the outstanding allocator's outstanding allocations
+			Allocator::ThreadFlush(allocator_flush_threshold);
 		}
 	}
 #else
@@ -146,13 +164,25 @@ idx_t TaskScheduler::ExecuteTasks(atomic<bool> *marker, idx_t max_tasks) {
 	idx_t completed_tasks = 0;
 	// loop until the marker is set to false
 	while (*marker && completed_tasks < max_tasks) {
-		unique_ptr<Task> task;
+		shared_ptr<Task> task;
 		if (!queue->q.try_dequeue(task)) {
 			return completed_tasks;
 		}
-		task->Execute(TaskExecutionMode::PROCESS_ALL);
-		task.reset();
-		completed_tasks++;
+		auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
+
+		switch (execute_result) {
+		case TaskExecutionResult::TASK_FINISHED:
+		case TaskExecutionResult::TASK_ERROR:
+			task.reset();
+			completed_tasks++;
+			break;
+		case TaskExecutionResult::TASK_NOT_FINISHED:
+			throw InternalException("Task should not return TASK_NOT_FINISHED in PROCESS_ALL mode");
+		case TaskExecutionResult::TASK_BLOCKED:
+			task->Deschedule();
+			task.reset();
+			break;
+		}
 	}
 	return completed_tasks;
 #else
@@ -162,15 +192,26 @@ idx_t TaskScheduler::ExecuteTasks(atomic<bool> *marker, idx_t max_tasks) {
 
 void TaskScheduler::ExecuteTasks(idx_t max_tasks) {
 #ifndef DUCKDB_NO_THREADS
-	unique_ptr<Task> task;
+	shared_ptr<Task> task;
 	for (idx_t i = 0; i < max_tasks; i++) {
 		queue->semaphore.wait(TASK_TIMEOUT_USECS);
 		if (!queue->q.try_dequeue(task)) {
 			return;
 		}
 		try {
-			task->Execute(TaskExecutionMode::PROCESS_ALL);
-			task.reset();
+			auto execute_result = task->Execute(TaskExecutionMode::PROCESS_ALL);
+			switch (execute_result) {
+			case TaskExecutionResult::TASK_FINISHED:
+			case TaskExecutionResult::TASK_ERROR:
+				task.reset();
+				break;
+			case TaskExecutionResult::TASK_NOT_FINISHED:
+				throw InternalException("Task should not return TASK_NOT_FINISHED in PROCESS_ALL mode");
+			case TaskExecutionResult::TASK_BLOCKED:
+				task->Deschedule();
+				task.reset();
+				break;
+			}
 		} catch (...) {
 			return;
 		}
@@ -204,6 +245,9 @@ void TaskScheduler::SetThreads(int32_t n) {
 		throw NotImplementedException("DuckDB was compiled without threads! Setting threads > 1 is not allowed.");
 	}
 #endif
+}
+
+void TaskScheduler::SetAllocatorFlushTreshold(idx_t threshold) {
 }
 
 void TaskScheduler::Signal(idx_t n) {

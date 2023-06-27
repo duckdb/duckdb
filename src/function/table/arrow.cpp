@@ -193,8 +193,8 @@ void ArrowTableFunction::RenameArrowColumns(vector<string> &names) {
 unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &context, TableFunctionBindInput &input,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
 	auto stream_factory_ptr = input.inputs[0].GetPointer();
-	auto stream_factory_produce = (stream_factory_produce_t)input.inputs[1].GetPointer();
-	auto stream_factory_get_schema = (stream_factory_get_schema_t)input.inputs[2].GetPointer();
+	auto stream_factory_produce = (stream_factory_produce_t)input.inputs[1].GetPointer();       // NOLINT
+	auto stream_factory_get_schema = (stream_factory_get_schema_t)input.inputs[2].GetPointer(); // NOLINT
 
 	auto res = make_uniq<ArrowScanFunctionData>(stream_factory_produce, stream_factory_ptr);
 
@@ -206,8 +206,8 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 			throw InvalidInputException("arrow_scan: released schema passed");
 		}
 		if (schema.dictionary) {
-			res->arrow_convert_data[col_idx] =
-			    make_uniq<ArrowConvertData>(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
+			auto logical_type = GetArrowLogicalType(schema, res->arrow_convert_data, col_idx);
+			res->arrow_convert_data[col_idx] = make_uniq<ArrowConvertData>(std::move(logical_type));
 			return_types.emplace_back(GetArrowLogicalType(*schema.dictionary, res->arrow_convert_data, col_idx));
 		} else {
 			return_types.emplace_back(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
@@ -269,7 +269,7 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
 
 unique_ptr<GlobalTableFunctionState> ArrowTableFunction::ArrowScanInitGlobal(ClientContext &context,
                                                                              TableFunctionInitInput &input) {
-	auto &bind_data = (const ArrowScanFunctionData &)*input.bind_data;
+	auto &bind_data = input.bind_data->Cast<ArrowScanFunctionData>();
 	auto result = make_uniq<ArrowScanGlobalState>();
 	result->stream = ProduceArrowScan(bind_data, input.column_ids, input.filters.get());
 	result->max_threads = ArrowScanMaxThreads(context, input.bind_data.get());
@@ -286,9 +286,9 @@ unique_ptr<GlobalTableFunctionState> ArrowTableFunction::ArrowScanInitGlobal(Cli
 	return std::move(result);
 }
 
-unique_ptr<LocalTableFunctionState> ArrowTableFunction::ArrowScanInitLocal(ExecutionContext &context,
-                                                                           TableFunctionInitInput &input,
-                                                                           GlobalTableFunctionState *global_state_p) {
+unique_ptr<LocalTableFunctionState>
+ArrowTableFunction::ArrowScanInitLocalInternal(ClientContext &context, TableFunctionInitInput &input,
+                                               GlobalTableFunctionState *global_state_p) {
 	auto &global_state = global_state_p->Cast<ArrowScanGlobalState>();
 	auto current_chunk = make_uniq<ArrowArrayWrapper>();
 	auto result = make_uniq<ArrowScanLocalState>(std::move(current_chunk));
@@ -296,19 +296,25 @@ unique_ptr<LocalTableFunctionState> ArrowTableFunction::ArrowScanInitLocal(Execu
 	result->filters = input.filters.get();
 	if (input.CanRemoveFilterColumns()) {
 		auto &asgs = global_state_p->Cast<ArrowScanGlobalState>();
-		result->all_columns.Initialize(context.client, asgs.scanned_types);
+		result->all_columns.Initialize(context, asgs.scanned_types);
 	}
-	if (!ArrowScanParallelStateNext(context.client, input.bind_data.get(), *result, global_state)) {
+	if (!ArrowScanParallelStateNext(context, input.bind_data.get(), *result, global_state)) {
 		return nullptr;
 	}
 	return std::move(result);
+}
+
+unique_ptr<LocalTableFunctionState> ArrowTableFunction::ArrowScanInitLocal(ExecutionContext &context,
+                                                                           TableFunctionInitInput &input,
+                                                                           GlobalTableFunctionState *global_state_p) {
+	return ArrowScanInitLocalInternal(context.client, input, global_state_p);
 }
 
 void ArrowTableFunction::ArrowScanFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	if (!data_p.local_state) {
 		return;
 	}
-	auto &data = (ArrowScanFunctionData &)*data_p.bind_data;
+	auto &data = data_p.bind_data->CastNoConst<ArrowScanFunctionData>(); // FIXME
 	auto &state = data_p.local_state->Cast<ArrowScanLocalState>();
 	auto &global_state = data_p.global_state->Cast<ArrowScanGlobalState>();
 

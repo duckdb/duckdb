@@ -1,5 +1,4 @@
 #include "duckdb/execution/operator/persistent/base_csv_reader.hpp"
-
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -10,6 +9,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/main/appender.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -17,7 +17,9 @@
 #include "utf8proc.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/main/error_manager.hpp"
-
+#include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
+#include "duckdb/main/client_data.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -25,27 +27,23 @@
 
 namespace duckdb {
 
-string BaseCSVReader::GetLineNumberStr(idx_t linenr, bool linenr_estimated) {
-	string estimated = (linenr_estimated ? string(" (estimated)") : string(""));
-	return to_string(linenr + 1) + estimated;
+string BaseCSVReader::GetLineNumberStr(idx_t line_error, bool is_line_estimated, idx_t buffer_idx) {
+	// If an error happens during auto-detect it is an estimated line
+	string estimated = (is_line_estimated ? string(" (estimated)") : string(""));
+	return to_string(GetLineError(line_error, buffer_idx)) + estimated;
 }
 
 BaseCSVReader::BaseCSVReader(ClientContext &context_p, BufferedCSVReaderOptions options_p,
                              const vector<LogicalType> &requested_types)
-    : context(context_p), fs(FileSystem::GetFileSystem(context)), allocator(Allocator::Get(context)),
-      opener(FileSystem::GetFileOpener(context)), options(std::move(options_p)) {
+    : context(context_p), fs(FileSystem::GetFileSystem(context)), allocator(BufferAllocator::Get(context)),
+      options(std::move(options_p)) {
 }
 
 BaseCSVReader::~BaseCSVReader() {
 }
 
 unique_ptr<CSVFileHandle> BaseCSVReader::OpenCSV(const BufferedCSVReaderOptions &options_p) {
-	auto file_handle = fs.OpenFile(options_p.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
-	                               options_p.compression, this->opener);
-	if (file_handle->CanSeek()) {
-		file_handle->Reset();
-	}
-	return make_uniq<CSVFileHandle>(std::move(file_handle));
+	return CSVFileHandle::OpenFile(fs, allocator, options_p.file_path, options_p.compression, true);
 }
 
 void BaseCSVReader::InitParseChunk(idx_t num_cols) {
@@ -165,40 +163,48 @@ struct TryCastTimestampOperator {
 
 template <class OP, class T>
 static bool TemplatedTryCastDateVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
-                                       idx_t count, string &error_message) {
+                                       idx_t count, string &error_message, idx_t &line_error) {
 	D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 	bool all_converted = true;
+	idx_t cur_line = 0;
 	UnaryExecutor::Execute<string_t, T>(input_vector, result_vector, count, [&](string_t input) {
 		T result;
 		if (!OP::Operation(options, input, result, error_message)) {
+			line_error = cur_line;
 			all_converted = false;
 		}
+		cur_line++;
 		return result;
 	});
 	return all_converted;
 }
 
 bool TryCastDateVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
-                       string &error_message) {
+                       string &error_message, idx_t &line_error) {
 	return TemplatedTryCastDateVector<TryCastDateOperator, date_t>(options, input_vector, result_vector, count,
-	                                                               error_message);
+	                                                               error_message, line_error);
 }
 
 bool TryCastTimestampVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
                             string &error_message) {
+	idx_t line_error;
 	return TemplatedTryCastDateVector<TryCastTimestampOperator, timestamp_t>(options, input_vector, result_vector,
-	                                                                         count, error_message);
+	                                                                         count, error_message, line_error);
 }
 
 template <class OP, class T>
 bool TemplatedTryCastFloatingVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
-                                    idx_t count, string &error_message) {
+                                    idx_t count, string &error_message, idx_t &line_error) {
 	D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 	bool all_converted = true;
+	idx_t row = 0;
 	UnaryExecutor::Execute<string_t, T>(input_vector, result_vector, count, [&](string_t input) {
 		T result;
 		if (!OP::Operation(input, result, &error_message)) {
+			line_error = row;
 			all_converted = false;
+		} else {
+			row++;
 		}
 		return result;
 	});
@@ -226,7 +232,8 @@ bool BaseCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const Log
 	if (options.has_format[LogicalTypeId::DATE] && sql_type == LogicalTypeId::DATE) {
 		// use the date format to cast the chunk
 		string error_message;
-		return TryCastDateVector(options, parse_chunk_col, dummy_result, size, error_message);
+		idx_t line_error;
+		return TryCastDateVector(options, parse_chunk_col, dummy_result, size, error_message, line_error);
 	} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
 		// use the timestamp format to cast the chunk
 		string error_message;
@@ -238,7 +245,8 @@ bool BaseCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const Log
 	}
 }
 
-void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes) {
+void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes,
+                             idx_t buffer_idx) {
 	auto length = str_val.GetSize();
 	if (length == 0 && column == 0) {
 		row_empty = true;
@@ -260,7 +268,8 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 		} else {
 			throw InvalidInputException(
 			    "Error in file \"%s\", on line %s: expected %lld values per row, but got more. (%s)", options.file_path,
-			    GetLineNumberStr(linenr, linenr_estimated).c_str(), return_types.size(), options.ToString());
+			    GetLineNumberStr(linenr, linenr_estimated, buffer_idx).c_str(), return_types.size(),
+			    options.ToString());
 		}
 	}
 
@@ -301,7 +310,7 @@ void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &esc
 	column++;
 }
 
-bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error_message) {
+bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error_message, idx_t buffer_idx) {
 	linenr++;
 
 	if (row_empty) {
@@ -338,8 +347,8 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 			} else {
 				throw InvalidInputException(
 				    "Error in file \"%s\" on line %s: expected %lld values per row, but got %d.\nParser options:\n%s",
-				    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), return_types.size(), column,
-				    options.ToString());
+				    options.file_path, GetLineNumberStr(linenr, linenr_estimated, buffer_idx).c_str(),
+				    return_types.size(), column, options.ToString());
 			}
 		}
 	}
@@ -363,7 +372,7 @@ bool BaseCSVReader::AddRow(DataChunk &insert_chunk, idx_t &column, string &error
 	}
 
 	if (mode == ParserMode::PARSING && parse_chunk.size() == STANDARD_VECTOR_SIZE) {
-		Flush(insert_chunk);
+		Flush(insert_chunk, buffer_idx);
 		return true;
 	}
 
@@ -426,20 +435,32 @@ bool TryCastDecimalVectorCommaSeparated(BufferedCSVReaderOptions &options, Vecto
 }
 
 bool TryCastFloatingVectorCommaSeparated(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
-                                         idx_t count, string &error_message, const LogicalType &result_type) {
+                                         idx_t count, string &error_message, const LogicalType &result_type,
+                                         idx_t &line_error) {
 	switch (result_type.InternalType()) {
 	case PhysicalType::DOUBLE:
 		return TemplatedTryCastFloatingVector<TryCastErrorMessageCommaSeparated, double>(
-		    options, input_vector, result_vector, count, error_message);
+		    options, input_vector, result_vector, count, error_message, line_error);
 	case PhysicalType::FLOAT:
 		return TemplatedTryCastFloatingVector<TryCastErrorMessageCommaSeparated, float>(
-		    options, input_vector, result_vector, count, error_message);
+		    options, input_vector, result_vector, count, error_message, line_error);
 	default:
 		throw InternalException("Unimplemented physical type for floating");
 	}
 }
 
-bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
+// Location of erroneous value in the current parse chunk
+struct ErrorLocation {
+	idx_t row_idx;
+	idx_t col_idx;
+	idx_t row_line;
+
+	ErrorLocation(idx_t row_idx, idx_t col_idx, idx_t row_line)
+	    : row_idx(row_idx), col_idx(col_idx), row_line(row_line) {
+	}
+};
+
+bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_add_line) {
 	if (parse_chunk.size() == 0) {
 		return true;
 	}
@@ -468,9 +489,12 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 		} else {
 			string error_message;
 			bool success;
+			idx_t line_error = 0;
+			bool target_type_not_varchar = false;
 			if (options.has_format[LogicalTypeId::DATE] && type.id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
-				success = TryCastDateVector(options, parse_vector, result_vector, parse_chunk.size(), error_message);
+				success = TryCastDateVector(options, parse_vector, result_vector, parse_chunk.size(), error_message,
+				                            line_error);
 			} else if (options.has_format[LogicalTypeId::TIMESTAMP] && type.id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
 				success =
@@ -478,12 +502,13 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 			} else if (options.decimal_separator != "." &&
 			           (type.id() == LogicalTypeId::FLOAT || type.id() == LogicalTypeId::DOUBLE)) {
 				success = TryCastFloatingVectorCommaSeparated(options, parse_vector, result_vector, parse_chunk.size(),
-				                                              error_message, type);
+				                                              error_message, type, line_error);
 			} else if (options.decimal_separator != "." && type.id() == LogicalTypeId::DECIMAL) {
 				success = TryCastDecimalVectorCommaSeparated(options, parse_vector, result_vector, parse_chunk.size(),
 				                                             error_message, type);
 			} else {
 				// target type is not varchar: perform a cast
+				target_type_not_varchar = true;
 				success =
 				    VectorOperations::TryCast(context, parse_vector, result_vector, parse_chunk.size(), &error_message);
 			}
@@ -493,27 +518,36 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 			if (try_add_line) {
 				return false;
 			}
-			if (options.ignore_errors) {
-				conversion_error_ignored = true;
-				continue;
-			}
+
 			string col_name = to_string(col_idx);
 			if (col_idx < names.size()) {
 				col_name = "\"" + names[col_idx] + "\"";
 			}
 
 			// figure out the exact line number
-			UnifiedVectorFormat inserted_column_data;
-			result_vector.ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
-			idx_t row_idx;
-			for (row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
-				if (!inserted_column_data.validity.RowIsValid(row_idx) && !FlatVector::IsNull(parse_vector, row_idx)) {
-					break;
+			if (target_type_not_varchar) {
+				UnifiedVectorFormat inserted_column_data;
+				result_vector.ToUnifiedFormat(parse_chunk.size(), inserted_column_data);
+				for (; line_error < parse_chunk.size(); line_error++) {
+					if (!inserted_column_data.validity.RowIsValid(line_error) &&
+					    !FlatVector::IsNull(parse_vector, line_error)) {
+						break;
+					}
 				}
 			}
-			auto error_line = linenr - (parse_chunk.size() - row_idx) + 1;
 
-			if (options.auto_detect) {
+			// The line_error must be summed with linenr (All lines emmited from this batch)
+			// But subtracted from the parse_chunk
+			D_ASSERT(line_error + linenr >= parse_chunk.size());
+			line_error += linenr;
+			line_error -= parse_chunk.size();
+
+			auto error_line = GetLineError(line_error, buffer_idx);
+
+			if (options.ignore_errors) {
+				conversion_error_ignored = true;
+
+			} else if (options.auto_detect) {
 				throw InvalidInputException("%s in column %s, at line %llu.\n\nParser "
 				                            "options:\n%s.\n\nConsider either increasing the sample size "
 				                            "(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
@@ -527,11 +561,19 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 	}
 	if (conversion_error_ignored) {
 		D_ASSERT(options.ignore_errors);
+
 		SelectionVector succesful_rows(parse_chunk.size());
 		idx_t sel_size = 0;
 
+		// Keep track of failed cells
+		vector<ErrorLocation> failed_cells;
+
 		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
-			bool failed = false;
+
+			auto global_row_idx = row_idx + linenr - parse_chunk.size();
+			auto row_line = GetLineError(global_row_idx, buffer_idx, false);
+
+			bool row_failed = false;
 			for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
 				auto col_idx = reader_data.column_ids[c];
 				auto result_idx = reader_data.column_mapping[c];
@@ -541,14 +583,82 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, bool try_add_line) {
 
 				bool was_already_null = FlatVector::IsNull(parse_vector, row_idx);
 				if (!was_already_null && FlatVector::IsNull(result_vector, row_idx)) {
-					failed = true;
-					break;
+					row_failed = true;
+					failed_cells.emplace_back(row_idx, col_idx, row_line);
 				}
 			}
-			if (!failed) {
+			if (!row_failed) {
 				succesful_rows.set_index(sel_size++, row_idx);
 			}
 		}
+
+		// Now do a second pass to produce the reject table entries
+		if (!failed_cells.empty() && !options.rejects_table_name.empty()) {
+			auto limit = options.rejects_limit;
+
+			auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_table_name);
+			lock_guard<mutex> lock(rejects->write_lock);
+
+			// short circuit if we already have too many rejects
+			if (limit == 0 || rejects->count < limit) {
+				auto &table = rejects->GetTable(context);
+				InternalAppender appender(context, table);
+				auto file_name = GetFileName();
+
+				for (auto &cell : failed_cells) {
+					if (limit != 0 && rejects->count >= limit) {
+						break;
+					}
+					rejects->count++;
+
+					auto row_idx = cell.row_idx;
+					auto col_idx = cell.col_idx;
+					auto row_line = cell.row_line;
+
+					auto col_name = to_string(col_idx);
+					if (col_idx < names.size()) {
+						col_name = "\"" + names[col_idx] + "\"";
+					}
+
+					auto &parse_vector = parse_chunk.data[col_idx];
+					auto parsed_str = FlatVector::GetData<string_t>(parse_vector)[row_idx];
+					auto &type = insert_chunk.data[col_idx].GetType();
+					auto row_error_msg = StringUtil::Format("Could not convert string '%s' to '%s'",
+					                                        parsed_str.GetString(), type.ToString());
+
+					// Add the row to the rejects table
+					appender.BeginRow();
+					appender.Append(string_t(file_name));
+					appender.Append(row_line);
+					appender.Append(col_idx);
+					appender.Append(string_t(col_name));
+					appender.Append(parsed_str);
+
+					if (!options.rejects_recovery_columns.empty()) {
+						child_list_t<Value> recovery_key;
+						for (auto &key_idx : options.rejects_recovery_column_ids) {
+							// Figure out if the recovery key is valid.
+							// If not, error out for real.
+							auto &component_vector = parse_chunk.data[key_idx];
+							if (FlatVector::IsNull(component_vector, row_idx)) {
+								throw InvalidInputException("%s at line %llu in column %s. Parser options:\n%s ",
+								                            "Could not parse recovery column", row_line, col_name,
+								                            options.ToString());
+							}
+							auto component = Value(FlatVector::GetData<string_t>(component_vector)[row_idx]);
+							recovery_key.emplace_back(names[key_idx], component);
+						}
+						appender.Append(Value::STRUCT(recovery_key));
+					}
+
+					appender.Append(string_t(row_error_msg));
+					appender.EndRow();
+				}
+				appender.Close();
+			}
+		}
+
+		// Now slice the insert chunk to only include the succesful rows
 		insert_chunk.Slice(succesful_rows, sel_size);
 	}
 	parse_chunk.Reset();

@@ -33,11 +33,11 @@ unique_ptr<SelectStatement> SelectStatement::FormatDeserialize(FormatDeserialize
 	return result;
 }
 
-bool SelectStatement::Equals(const SQLStatement *other_p) const {
-	if (type != other_p->type) {
+bool SelectStatement::Equals(const SQLStatement &other_p) const {
+	if (type != other_p.type) {
 		return false;
 	}
-	auto &other = other_p->Cast<SelectStatement>();
+	auto &other = other_p.Cast<SelectStatement>();
 	return node->Equals(other.node.get());
 }
 
@@ -46,47 +46,3 @@ string SelectStatement::ToString() const {
 }
 
 } // namespace duckdb
-
-/*
- json_serialize_sql('SELECT BLOB ''\x01\x10'';', format := CAST('t' AS BOOLEAN)){
-"error": false,
-"statements": [
-    {
-        "node": {
-            "type": "SELECT_NODE",
-            "modifiers": [],
-            "cte_map": {
-                "map": []
-            },
-            "select_list": [
-                {
-                    "class": "CONSTANT",
-                    "type": "CONSTANT",
-                    "alias": "",
-                    "value": {
-                        "type": {
-                            "id": "BLOB",
-                            "type_info": null
-                        },
-                        "is_null": false,
-                        "value": "\u0001\u0010"
-                    }
-                }
-            ],
-            "from_table": {
-                "type": "EMPTY",
-                "alias": "",
-                "sample": null
-            },
-            "where_clause": null,
-            "group_expressions": [],
-            "group_sets": [],
-            "aggregate_handling": "STANDARD_HANDLING",
-            "having": null,
-            "sample": null,
-            "qualify": null
-        }
-    }
-]
-}
- */

@@ -14,12 +14,6 @@ namespace duckdb {
 
 ArrowSchemaWrapper::~ArrowSchemaWrapper() {
 	if (arrow_schema.release) {
-		for (int64_t child_idx = 0; child_idx < arrow_schema.n_children; child_idx++) {
-			auto &child = *arrow_schema.children[child_idx];
-			if (child.release) {
-				child.release(&child);
-			}
-		}
 		arrow_schema.release(&arrow_schema);
 		arrow_schema.release = nullptr;
 	}
@@ -27,12 +21,6 @@ ArrowSchemaWrapper::~ArrowSchemaWrapper() {
 
 ArrowArrayWrapper::~ArrowArrayWrapper() {
 	if (arrow_array.release) {
-		for (int64_t child_idx = 0; child_idx < arrow_array.n_children; child_idx++) {
-			auto &child = *arrow_array.children[child_idx];
-			if (child.release) {
-				child.release(&child);
-			}
-		}
 		arrow_array.release(&arrow_array);
 		arrow_array.release = nullptr;
 	}
@@ -77,10 +65,10 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 	if (!stream->release) {
 		return -1;
 	}
-	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
+	auto my_stream = reinterpret_cast<ResultArrowArrayStreamWrapper *>(stream->private_data);
 	if (!my_stream->column_types.empty()) {
 		ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
-		                              my_stream->timezone_config);
+		                              QueryResult::GetArrowOptions(*my_stream->result));
 		return 0;
 	}
 
@@ -90,7 +78,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 		return -1;
 	}
 	if (result.type == QueryResultType::STREAM_RESULT) {
-		auto &stream_result = (StreamQueryResult &)result;
+		auto &stream_result = result.Cast<StreamQueryResult>();
 		if (!stream_result.IsOpen()) {
 			my_stream->last_error = PreservedError("Query Stream is closed");
 			return -1;
@@ -100,7 +88,8 @@ int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *st
 		my_stream->column_types = result.types;
 		my_stream->column_names = result.names;
 	}
-	ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names, my_stream->timezone_config);
+	ArrowConverter::ToArrowSchema(out, my_stream->column_types, my_stream->column_names,
+	                              QueryResult::GetArrowOptions(*my_stream->result));
 	return 0;
 }
 
@@ -108,14 +97,14 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 	if (!stream->release) {
 		return -1;
 	}
-	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
+	auto my_stream = reinterpret_cast<ResultArrowArrayStreamWrapper *>(stream->private_data);
 	auto &result = *my_stream->result;
 	if (result.HasError()) {
 		my_stream->last_error = result.GetErrorObject();
 		return -1;
 	}
 	if (result.type == QueryResultType::STREAM_RESULT) {
-		auto &stream_result = (StreamQueryResult &)result;
+		auto &stream_result = result.Cast<StreamQueryResult>();
 		if (!stream_result.IsOpen()) {
 			// Nothing to output
 			out->release = nullptr;
@@ -145,7 +134,7 @@ void ResultArrowArrayStreamWrapper::MyStreamRelease(struct ArrowArrayStream *str
 		return;
 	}
 	stream->release = nullptr;
-	delete (ResultArrowArrayStreamWrapper *)stream->private_data;
+	delete reinterpret_cast<ResultArrowArrayStreamWrapper *>(stream->private_data);
 }
 
 const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArrayStream *stream) {
@@ -153,7 +142,7 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 		return "stream was released";
 	}
 	D_ASSERT(stream->private_data);
-	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
+	auto my_stream = reinterpret_cast<ResultArrowArrayStreamWrapper *>(stream->private_data);
 	return my_stream->last_error.Message().c_str();
 }
 
@@ -175,7 +164,7 @@ ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryRes
 
 bool ArrowUtil::TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &chunk, PreservedError &error) {
 	if (result.type == QueryResultType::STREAM_RESULT) {
-		auto &stream_result = (StreamQueryResult &)result;
+		auto &stream_result = result.Cast<StreamQueryResult>();
 		if (!stream_result.IsOpen()) {
 			return true;
 		}
@@ -186,7 +175,7 @@ bool ArrowUtil::TryFetchNext(QueryResult &result, unique_ptr<DataChunk> &chunk, 
 bool ArrowUtil::TryFetchChunk(QueryResult *result, idx_t chunk_size, ArrowArray *out, idx_t &count,
                               PreservedError &error) {
 	count = 0;
-	ArrowAppender appender(result->types, chunk_size);
+	ArrowAppender appender(result->types, chunk_size, QueryResult::GetArrowOptions(*result));
 	auto &current_chunk = result->current_chunk;
 	if (current_chunk.Valid()) {
 		// We start by scanning the non-finished current chunk

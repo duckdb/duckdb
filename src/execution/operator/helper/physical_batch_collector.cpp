@@ -1,7 +1,8 @@
 #include "duckdb/execution/operator/helper/physical_batch_collector.hpp"
+
 #include "duckdb/common/types/batched_data_collection.hpp"
-#include "duckdb/main/materialized_query_result.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/materialized_query_result.hpp"
 
 namespace duckdb {
 
@@ -13,7 +14,7 @@ PhysicalBatchCollector::PhysicalBatchCollector(PreparedStatementData &data) : Ph
 //===--------------------------------------------------------------------===//
 class BatchCollectorGlobalState : public GlobalSinkState {
 public:
-	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op) : data(op.types) {
+	BatchCollectorGlobalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
 	}
 
 	mutex glock;
@@ -23,16 +24,16 @@ public:
 
 class BatchCollectorLocalState : public LocalSinkState {
 public:
-	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op) : data(op.types) {
+	BatchCollectorLocalState(ClientContext &context, const PhysicalBatchCollector &op) : data(context, op.types) {
 	}
 
 	BatchedDataCollection data;
 };
 
-SinkResultType PhysicalBatchCollector::Sink(ExecutionContext &context, GlobalSinkState &gstate,
-                                            LocalSinkState &lstate_p, DataChunk &input) const {
-	auto &state = lstate_p.Cast<BatchCollectorLocalState>();
-	state.data.Append(input, state.batch_index);
+SinkResultType PhysicalBatchCollector::Sink(ExecutionContext &context, DataChunk &chunk,
+                                            OperatorSinkInput &input) const {
+	auto &state = input.local_state.Cast<BatchCollectorLocalState>();
+	state.data.Append(chunk, state.partition_info.batch_index.GetIndex());
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

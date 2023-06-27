@@ -34,6 +34,9 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 			if (val.IsNull()) {
 				throw ParserException("%s reader cannot take NULL input as parameter", name);
 			}
+			if (val.type().id() != LogicalTypeId::VARCHAR) {
+				throw ParserException("%s reader can only take a list of strings as a parameter", name);
+			}
 			auto glob_files = fs.GlobFiles(StringValue::Get(val), context, options);
 			files.insert(files.end(), glob_files.begin(), glob_files.end());
 		}
@@ -52,6 +55,7 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 		options.filename = BooleanValue::Get(val);
 	} else if (loption == "hive_partitioning") {
 		options.hive_partitioning = BooleanValue::Get(val);
+		options.auto_detect_hive_partitioning = false;
 	} else if (loption == "union_by_name") {
 		options.union_by_name = BooleanValue::Get(val);
 	} else {
@@ -107,12 +111,25 @@ MultiFileReaderBindData MultiFileReader::BindOptions(MultiFileReaderOptions &opt
 			auto file_partitions = HivePartitioning::Parse(f);
 			for (auto &part_info : partitions) {
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
+					if (options.auto_detect_hive_partitioning == true) {
+						throw BinderException(
+						    "Hive partitioning was enabled automatically, but an error was encountered: Hive partition "
+						    "mismatch between file \"%s\" and \"%s\": key \"%s\" not found\n\nTo switch off hive "
+						    "partition, set: HIVE_PARTITIONING=0",
+						    files[0], f, part_info.first);
+					}
 					throw BinderException(
 					    "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found", files[0], f,
 					    part_info.first);
 				}
 			}
 			if (partitions.size() != file_partitions.size()) {
+				if (options.auto_detect_hive_partitioning == true) {
+					throw BinderException("Hive partitioning was enabled automatically, but an error was encountered: "
+					                      "Hive partition mismatch between file \"%s\" and \"%s\"\n\nTo switch off "
+					                      "hive partition, set: HIVE_PARTITIONING=0",
+					                      files[0], f);
+				}
 				throw BinderException("Hive partition mismatch between file \"%s\" and \"%s\"", files[0], f);
 			}
 		}
@@ -192,7 +209,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 void MultiFileReader::CreateNameMapping(const string &file_name, const vector<LogicalType> &local_types,
                                         const vector<string> &local_names, const vector<LogicalType> &global_types,
                                         const vector<string> &global_names, const vector<column_t> &global_column_ids,
-                                        MultiFileReaderData &reader_data) {
+                                        MultiFileReaderData &reader_data, const string &initial_file) {
 	D_ASSERT(global_types.size() == global_names.size());
 	D_ASSERT(local_types.size() == local_names.size());
 	// we have expected types: create a map of name -> column index
@@ -229,11 +246,12 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 				}
 				candidate_names += local_name;
 			}
-			throw IOException(StringUtil::Format(
-			    "Failed to read file \"%s\": schema mismatch in glob: column \"%s\" was read from "
-			    "the original file, but could not be found in file \"%s\".\nCandidate names: %s\nIf you are trying to "
-			    "read files with different schemas, try setting union_by_name=True",
-			    file_name, global_name, file_name, candidate_names));
+			throw IOException(
+			    StringUtil::Format("Failed to read file \"%s\": schema mismatch in glob: column \"%s\" was read from "
+			                       "the original file \"%s\", but could not be found in file \"%s\".\nCandidate names: "
+			                       "%s\nIf you are trying to "
+			                       "read files with different schemas, try setting union_by_name=True",
+			                       file_name, global_name, initial_file, file_name, candidate_names));
 		}
 		// we found the column in the local file - check if the types are the same
 		auto local_id = entry->second;
@@ -254,8 +272,10 @@ void MultiFileReader::CreateNameMapping(const string &file_name, const vector<Lo
 void MultiFileReader::CreateMapping(const string &file_name, const vector<LogicalType> &local_types,
                                     const vector<string> &local_names, const vector<LogicalType> &global_types,
                                     const vector<string> &global_names, const vector<column_t> &global_column_ids,
-                                    optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data) {
-	CreateNameMapping(file_name, local_types, local_names, global_types, global_names, global_column_ids, reader_data);
+                                    optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
+                                    const string &initial_file) {
+	CreateNameMapping(file_name, local_types, local_names, global_types, global_names, global_column_ids, reader_data,
+	                  initial_file);
 	if (filters) {
 		reader_data.filter_map.resize(global_types.size());
 		for (idx_t c = 0; c < reader_data.column_mapping.size(); c++) {

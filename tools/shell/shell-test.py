@@ -993,6 +993,13 @@ test('.open test/storage/bc/db_04.db', err='v0.4.0')
 test('.open test/storage/bc/db_051.db', err='v0.5.1')
 test('.open test/storage/bc/db_060.db', err='v0.6.0')
 
+# sqlite udfs
+test('select decimal_mul(NULL, NULL);', out='NULL')
+test('select decimal_mul(NULL, i) FROM range(3) t(i);', out='NULL')
+test('select sha3(NULL);', out='NULL')
+test('select sha3(256);', out='A7')
+test("select sha3('hello world this is a long string');", out='D4')
+
 if os.name != 'nt':
      test('''
 create table mytable as select * from
@@ -1025,7 +1032,7 @@ select channel,i_brand_id,sum_sales,number_sales from mytable;
           out='''web,8006004,844.21,21''')
 
      test('''create table mytable as select * from
-read_json_objects('/dev/stdin');
+read_ndjson_objects('/dev/stdin');
 select * from mytable;
           ''',
           extra_commands=['-list', ':memory:'],

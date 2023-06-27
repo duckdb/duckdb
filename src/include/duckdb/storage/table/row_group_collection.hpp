@@ -26,6 +26,7 @@ struct TableAppendState;
 class DuckTransaction;
 class BoundConstraint;
 class RowGroupSegmentTree;
+struct ColumnSegmentInfo;
 
 class RowGroupCollection {
 public:
@@ -87,11 +88,11 @@ public:
 	void CommitDropColumn(idx_t index);
 	void CommitDropTable();
 
-	void GetStorageInfo(TableStorageInfo &result);
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo();
 	const vector<LogicalType> &GetTypes() const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ClientContext &context, ColumnDefinition &new_column,
-	                                         Expression *default_value);
+	                                         Expression &default_value);
 	shared_ptr<RowGroupCollection> RemoveColumn(idx_t col_idx);
 	shared_ptr<RowGroupCollection> AlterType(ClientContext &context, idx_t changed_idx, const LogicalType &target_type,
 	                                         vector<column_t> bound_columns, Expression &cast_expr);
@@ -102,7 +103,6 @@ public:
 	void SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats);
 
 	AttachedDatabase &GetAttached();
-	DatabaseInstance &GetDatabase();
 	BlockManager &GetBlockManager() {
 		return block_manager;
 	}

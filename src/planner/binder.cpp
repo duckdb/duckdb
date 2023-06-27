@@ -117,6 +117,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 		result = BindNode(node.Cast<RecursiveCTENode>());
 		break;
+	case QueryNodeType::CTE_NODE:
+		result = BindNode(node.Cast<CTENode>());
+		break;
 	default:
 		D_ASSERT(node.type == QueryNodeType::SET_OPERATION_NODE);
 		result = BindNode(node.Cast<SetOperationNode>());
@@ -145,6 +148,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundQueryNode &node) {
 		return CreatePlan(node.Cast<BoundSetOperationNode>());
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 		return CreatePlan(node.Cast<BoundRecursiveCTENode>());
+	case QueryNodeType::CTE_NODE:
+		return CreatePlan(node.Cast<BoundCTENode>());
 	default:
 		throw InternalException("Unsupported bound query node type");
 	}
@@ -208,7 +213,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 		root = CreatePlan(ref.Cast<BoundCTERef>());
 		break;
 	case TableReferenceType::PIVOT:
-		root = CreatePlan((BoundPivotRef &)ref);
+		root = CreatePlan(ref.Cast<BoundPivotRef>());
 		break;
 	case TableReferenceType::INVALID:
 	default:

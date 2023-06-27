@@ -8,9 +8,9 @@
 namespace duckdb {
 
 StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                   idx_t start_row, LogicalType type_p, ColumnData *parent)
+                                   idx_t start_row, LogicalType type_p, optional_ptr<ColumnData> parent)
     : ColumnData(block_manager, info, column_index, start_row, std::move(type_p), parent),
-      validity(block_manager, info, 0, start_row, this) {
+      validity(block_manager, info, 0, start_row, *this) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
 	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(child_types.size() > 0);
@@ -23,12 +23,12 @@ StructColumnData::StructColumnData(BlockManager &block_manager, DataTableInfo &i
 	}
 }
 
-StructColumnData::StructColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
-    : ColumnData(original, start_row, parent), validity(((StructColumnData &)original).validity, start_row, this) {
-	auto &struct_data = (StructColumnData &)original;
-	for (auto &child_col : struct_data.sub_columns) {
-		sub_columns.push_back(ColumnData::CreateColumnUnique(*child_col, start_row, this));
+void StructColumnData::SetStart(idx_t new_start) {
+	this->start = new_start;
+	for (auto &sub_column : sub_columns) {
+		sub_column->SetStart(new_start);
 	}
+	validity.SetStart(new_start);
 }
 
 bool StructColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -246,12 +246,6 @@ public:
 			state->WriteDataPointers(writer);
 		}
 	}
-	void GetBlockIds(unordered_set<block_id_t> &result) override {
-		validity_state->GetBlockIds(result);
-		for (auto &state : child_states) {
-			state->GetBlockIds(result);
-		}
-	}
 };
 
 unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(RowGroup &row_group,
@@ -279,12 +273,13 @@ void StructColumnData::DeserializeColumn(Deserializer &source) {
 	this->count = validity.count;
 }
 
-void StructColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) {
+void StructColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
+                                            vector<duckdb::ColumnSegmentInfo> &result) {
 	col_path.push_back(0);
-	validity.GetStorageInfo(row_group_index, col_path, result);
+	validity.GetColumnSegmentInfo(row_group_index, col_path, result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		col_path.back() = i + 1;
-		sub_columns[i]->GetStorageInfo(row_group_index, col_path, result);
+		sub_columns[i]->GetColumnSegmentInfo(row_group_index, col_path, result);
 	}
 }
 

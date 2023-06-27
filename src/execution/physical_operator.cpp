@@ -72,8 +72,8 @@ unique_ptr<GlobalSourceState> PhysicalOperator::GetGlobalSourceState(ClientConte
 }
 
 // LCOV_EXCL_START
-void PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                               LocalSourceState &lstate) const {
+SourceResultType PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk,
+                                           OperatorSourceInput &input) const {
 	throw InternalException("Calling GetData on a node that is not a source!");
 }
 
@@ -91,10 +91,10 @@ double PhysicalOperator::GetProgress(ClientContext &context, GlobalSourceState &
 // Sink
 //===--------------------------------------------------------------------===//
 // LCOV_EXCL_START
-SinkResultType PhysicalOperator::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                                      DataChunk &input) const {
+SinkResultType PhysicalOperator::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	throw InternalException("Calling Sink on a node that is not a sink!");
 }
+
 // LCOV_EXCL_STOP
 
 void PhysicalOperator::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
@@ -103,6 +103,9 @@ void PhysicalOperator::Combine(ExecutionContext &context, GlobalSinkState &gstat
 SinkFinalizeType PhysicalOperator::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                             GlobalSinkState &gstate) const {
 	return SinkFinalizeType::READY;
+}
+
+void PhysicalOperator::NextBatch(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const {
 }
 
 unique_ptr<LocalSinkState> PhysicalOperator::GetLocalSinkState(ExecutionContext &context) const {
@@ -119,6 +122,22 @@ idx_t PhysicalOperator::GetMaxThreadMemory(ClientContext &context) {
 	idx_t max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
 	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	return (max_memory / num_threads) / 4;
+}
+
+bool PhysicalOperator::OperatorCachingAllowed(ExecutionContext &context) {
+	if (!context.client.config.enable_caching_operators) {
+		return false;
+	} else if (!context.pipeline) {
+		return false;
+	} else if (!context.pipeline->GetSink()) {
+		return false;
+	} else if (context.pipeline->GetSink()->RequiresBatchIndex()) {
+		return false;
+	} else if (context.pipeline->IsOrderDependent()) {
+		return false;
+	}
+
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -236,22 +255,12 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 #if STANDARD_VECTOR_SIZE >= 128
 	if (!state.initialized) {
 		state.initialized = true;
-		state.can_cache_chunk = true;
-
-		if (!context.pipeline || !caching_supported) {
-			state.can_cache_chunk = false;
-		} else if (!context.pipeline->GetSink()) {
-			// Disabling for pipelines without Sink, i.e. when pulling
-			state.can_cache_chunk = false;
-		} else if (context.pipeline->GetSink()->RequiresBatchIndex()) {
-			state.can_cache_chunk = false;
-		} else if (context.pipeline->IsOrderDependent()) {
-			state.can_cache_chunk = false;
-		}
+		state.can_cache_chunk = caching_supported && PhysicalOperator::OperatorCachingAllowed(context);
 	}
 	if (!state.can_cache_chunk) {
 		return child_result;
 	}
+	// TODO chunk size of 0 should not result in a cache being created!
 	if (chunk.size() < CACHE_THRESHOLD) {
 		// we have filtered out a significant amount of tuples
 		// add this chunk to the cache and continue

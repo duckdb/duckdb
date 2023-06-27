@@ -8,10 +8,11 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
-#include "duckdb/parser/parsed_data/create_database_info.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/statement/create_statement.hpp"
@@ -24,6 +25,7 @@
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_distinct.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
@@ -240,18 +242,26 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, optional
 		type = LogicalType::UNION(member_types);
 		type.SetAlias(alias);
 	} else if (type.id() == LogicalTypeId::USER) {
-		auto &user_type_name = UserType::GetTypeName(type);
+		auto user_type_name = UserType::GetTypeName(type);
 		if (catalog) {
+			// The search order is:
+			// 1) In the same schema as the table
+			// 2) In the same catalog
+			// 3) System catalog
 			type = catalog->GetType(context, schema, user_type_name, OnEntryNotFound::RETURN_NULL);
+
 			if (type.id() == LogicalTypeId::INVALID) {
-				// look in the system catalog if the type was not found
-				type = Catalog::GetType(context, SYSTEM_CATALOG, schema, user_type_name);
+				type = catalog->GetType(context, INVALID_SCHEMA, user_type_name, OnEntryNotFound::RETURN_NULL);
+			}
+
+			if (type.id() == LogicalTypeId::INVALID) {
+				type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
 			}
 		} else {
 			type = Catalog::GetType(context, INVALID_CATALOG, schema, user_type_name);
 		}
 	} else if (type.id() == LogicalTypeId::ENUM) {
-		auto &enum_type_name = EnumType::GetTypeName(type);
+		auto enum_type_name = EnumType::GetTypeName(type);
 		optional_ptr<TypeCatalogEntry> enum_type_catalog;
 		if (catalog) {
 			enum_type_catalog =
@@ -452,7 +462,7 @@ static bool AnyConstraintReferencesGeneratedColumn(CreateTableInfo &table_info) 
 unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
                                                          TableCatalogEntry &table, unique_ptr<LogicalOperator> plan) {
 	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
-	auto &base = (CreateIndexInfo &)*stmt.info;
+	auto &base = stmt.info->Cast<CreateIndexInfo>();
 
 	auto &get = plan->Cast<LogicalGet>();
 	// bind the index expressions
@@ -490,7 +500,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_SCHEMA, std::move(stmt.info));
 		break;
 	case CatalogType::VIEW_ENTRY: {
-		auto &base = (CreateViewInfo &)*stmt.info;
+		auto &base = stmt.info->Cast<CreateViewInfo>();
 		// bind the schema
 		auto &schema = BindCreateSchema(*stmt.info);
 		BindCreateViewInfo(base);
@@ -605,41 +615,28 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::TYPE_ENTRY: {
 		auto &schema = BindCreateSchema(*stmt.info);
-		auto &create_type_info = (CreateTypeInfo &)(*stmt.info);
+		auto &create_type_info = stmt.info->Cast<CreateTypeInfo>();
 		result.plan = make_uniq<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, std::move(stmt.info), &schema);
 		if (create_type_info.query) {
 			// CREATE TYPE mood AS ENUM (SELECT 'happy')
-			auto &select_stmt = create_type_info.query->Cast<SelectStatement>();
-			auto &query_node = *select_stmt.node;
-
-			// We always add distinct modifier implicitly
-			bool need_to_add = true;
-			if (!query_node.modifiers.empty()) {
-				if (query_node.modifiers[0]->type == ResultModifierType::DISTINCT_MODIFIER) {
-					// There are cases where the same column is grouped repeatedly
-					// CREATE TYPE mood AS ENUM (SELECT DISTINCT ON(x) x FROM test);
-					// When we push into a constant expression
-					// => CREATE TYPE mood AS ENUM (SELECT DISTINCT ON(x, x) x FROM test);
-					auto &distinct_modifier = (DistinctModifier &)*query_node.modifiers[0];
-					if (distinct_modifier.distinct_on_targets.empty()) {
-						need_to_add = false;
-					}
-				}
-			}
-
-			// Add distinct modifier
-			if (need_to_add) {
-				auto distinct_modifier = make_uniq<DistinctModifier>();
-				query_node.modifiers.emplace(query_node.modifiers.begin(), std::move(distinct_modifier));
-			}
-
 			auto query_obj = Bind(*create_type_info.query);
 			auto query = std::move(query_obj.plan);
+			create_type_info.query.reset();
 
 			auto &sql_types = query_obj.types;
-			if (sql_types.size() != 1 || sql_types[0].id() != LogicalType::VARCHAR) {
+			if (sql_types.size() != 1) {
 				// add cast expression?
-				throw BinderException("The query must return one varchar column");
+				throw BinderException("The query must return a single column");
+			}
+			if (sql_types[0].id() != LogicalType::VARCHAR) {
+				// push a projection casting to varchar
+				vector<unique_ptr<Expression>> select_list;
+				auto ref = make_uniq<BoundColumnRefExpression>(sql_types[0], query->GetColumnBindings()[0]);
+				auto cast_expr = BoundCastExpression::AddCastToType(context, std::move(ref), LogicalType::VARCHAR);
+				select_list.push_back(std::move(cast_expr));
+				auto proj = make_uniq<LogicalProjection>(GenerateTableIndex(), std::move(select_list));
+				proj->AddChild(std::move(query));
+				query = std::move(proj);
 			}
 
 			result.plan->AddChild(std::move(query));
@@ -655,32 +652,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			EnumType::SetCatalog(inner_type, nullptr);
 			inner_type.SetAlias(create_type_info.name);
 			create_type_info.type = inner_type;
-		}
-		break;
-	}
-	case CatalogType::DATABASE_ENTRY: {
-		// not supported in DuckDB yet but allow extensions to intercept and implement this functionality
-		auto &base = (CreateDatabaseInfo &)*stmt.info;
-		string database_name = base.name;
-		string source_path = base.path;
-
-		auto &config = DBConfig::GetConfig(context);
-
-		if (config.storage_extensions.empty()) {
-			throw NotImplementedException("CREATE DATABASE not supported in DuckDB yet");
-		}
-		// for now assume only one storage extension provides the custom create_database impl
-		for (auto &extension_entry : config.storage_extensions) {
-			if (extension_entry.second->create_database != nullptr) {
-				auto &storage_extension = extension_entry.second;
-				auto create_database_function_ref = storage_extension->create_database(
-				    storage_extension->storage_info.get(), context, database_name, source_path);
-				if (create_database_function_ref) {
-					auto bound_create_database_func = Bind(*create_database_function_ref);
-					result.plan = CreatePlan(*bound_create_database_func);
-					break;
-				}
-			}
 		}
 		break;
 	}

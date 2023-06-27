@@ -20,7 +20,7 @@ scripts_dir = 'scripts'
 sys.path.append(scripts_dir)
 import package_build
 
-defines = ['BUILD_{}_EXTENSION'.format(ext.upper()) for ext in extensions]
+defines = ['DUCKDB_EXTENSION_{}_LINKED'.format(ext.upper()) for ext in extensions]
 
 if os.environ.get('DUCKDB_NODE_BUILD_CACHE') == '1' and os.path.isfile(cache_file):
     with open(cache_file, 'rb') as f:
@@ -63,6 +63,8 @@ elif 'DUCKDB_NODE_BINDIR' in os.environ:
             cflags += ['-g']
         if '-O0' in os.environ['DUCKDB_NODE_CFLAGS']:
             cflags += ['-O0']
+        if '-DNDEBUG' in os.environ['DUCKDB_NODE_CFLAGS']:
+            defines += ['NDEBUG']
 
     if 'DUCKDB_NODE_BUILD_CACHE' in os.environ:
         cache = {

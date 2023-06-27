@@ -1,0 +1,135 @@
+# name: test/sql/function/list/list_intersect.test
+# description: Test list_intersect
+# group: [list]
+
+foreach f list_intersect array_intersect
+
+query I
+select ${f}([1,2,3], [2,3,4]);
+----
+[2, 3]
+
+statement ok
+CREATE TABLE list_data(l1 int[], l2 int[]);
+
+statement ok
+INSERT INTO list_data VALUES (NULL, NULL);
+
+statement ok
+INSERT INTO list_data VALUES (NULL, [1,2,3]);
+
+statement ok
+INSERT INTO list_data VALUES ([1,2,3], NULL);
+
+statement ok
+INSERT INTO list_data VALUES ([1,2,3], [2,3,NULL]);
+
+statement ok
+INSERT INTO list_data VALUES ([1,2,NULL], [2,3,NULL]);
+
+query I
+select ${f}(l1, l2) from list_data;
+----
+NULL
+NULL
+[]
+[2, 3]
+[2]
+
+statement ok
+DROP TABLE list_data;
+
+statement ok
+create table list_of_list(l1 int[][], l2 int[][]);
+
+statement ok
+insert into list_of_list values (NULL, NULL);
+
+statement ok
+insert into list_of_list values ([[1 , 2, 3], NULL, [3, 2, 1]], [[ 2, 3, 4], NULL, [1, 2, 3]]);
+
+query I
+select ${f}(l1, l2) from list_of_list;
+----
+NULL
+[[1, 2, 3]]
+
+statement ok
+drop table list_of_list;
+
+statement ok
+create table list_of_strings(l1 string[], l2 string[]);
+
+statement ok
+insert into list_of_strings values (NULL, NULL);
+
+statement ok
+insert into list_of_strings values ([NULL, 'a', 'b', 'c'], [NULL, 'b', 'c', 'd']);
+
+statement ok
+insert into list_of_strings values (['here is a very long long string that is def more than 12 bytes', 'and a shorty'], ['here is a very long long string that is def more than 12 bytes', 'here is a very long long string that is def more than 12 bytes', 'c', 'd']);
+
+query I
+select ${f}(l1, l2) from list_of_strings;
+----
+NULL
+[b, c]
+[here is a very long long string that is def more than 12 bytes]
+
+statement ok
+drop table list_of_strings;
+
+endloop
+
+# test error cases
+
+statement error
+select list_intersect(l1) from list_of_strings;
+
+statement error
+select list_intersect(l1, l2, l1) from list_of_strings;
+
+statement error
+select list_intersect([[1,2], [2,4]], ['abc', 'def']);
+
+# Test Large Lists
+
+statement ok
+create table large_lists(l1 int[], l2 int[]);
+
+statement ok
+insert into large_lists values (range(1, 3000), range(2000, 3000));
+
+statement ok
+insert into large_lists values (range(3000), range(3000));
+
+statement ok
+select list_intersect(l1, l2) from large_lists;
+
+query I
+select list_intersect(list_intersect([1,2,3,4], [4,5,6,7]), list_intersect([4,5,6,7],[1,2,3,4]));
+----
+[4]
+
+query I
+select list_intersect(list_filter([1,2,3,4], x -> x > 2), list_filter([4,5,6,7], x -> x > 2));
+----
+[4]
+
+statement ok
+prepare q1 as select list_intersect(?, ?);
+
+query I
+execute q1(['abc', 'def'], ['def', 'ghi']);
+----
+[def]
+
+statement ok
+CREATE TABLE all_types AS SELECT * FROM test_all_types();
+
+foreach colname bool tinyint smallint int bigint hugeint utinyint usmallint uint ubigint date time timestamp timestamp_s timestamp_ms timestamp_ns time_tz timestamp_tz float double dec_4_1 dec_9_4 dec_18_6 dec38_10 uuid interval varchar blob small_enum medium_enum large_enum int_array double_array date_array timestamp_array timestamptz_array varchar_array nested_int_array struct struct_of_arrays array_of_structs map
+
+statement ok
+select list_intersect(["${colname}"], ["${colname}"]) FROM all_types;
+
+endloop

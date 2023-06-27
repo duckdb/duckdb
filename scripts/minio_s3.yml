@@ -14,6 +14,8 @@ services:
       - MINIO_ROOT_PASSWORD=duckdb_minio_admin_password
       - MINIO_REGION_NAME=eu-west-1
       - MINIO_DOMAIN=duckdb-minio.com
+      - MINIO_ACCESS_KEY=duckdb_minio_admin
+      - MINIO_SECRET_KEY=duckdb_minio_admin_password
     command: server /data --console-address ":9001"
 
   minio_setup:
@@ -24,16 +26,15 @@ services:
       - minio
     volumes:
       - ${PWD}/data:/duckdb/data
+
     entrypoint: >
       /bin/sh -c "
-        while true; do
+        until (
           /usr/bin/mc config host add myminio http://duckdb-minio.com:9000 duckdb_minio_admin duckdb_minio_admin_password
-          if [ $$? -eq 0 ]; then
-            break
-          fi
-          echo 'Failed to add host alias, trying again in a second'
-          sleep 1
-        done
+        ) do
+          echo '...waiting...' && sleep 1;
+        done;
+
         /usr/bin/mc admin user add myminio minio_duckdb_user minio_duckdb_user_password
         /usr/bin/mc admin user list myminio
         /usr/bin/mc admin user info myminio minio_duckdb_user
@@ -48,9 +49,9 @@ services:
         /usr/bin/mc mb myminio/test-bucket
         /usr/bin/mc policy get myminio/test-bucket
 
-        /usr/bin/mc rb --force myminio/test-bucket_2
-        /usr/bin/mc mb myminio/test-bucket_2
-        /usr/bin/mc policy get myminio/test-bucket_2
+        /usr/bin/mc rb --force myminio/test-bucket-2
+        /usr/bin/mc mb myminio/test-bucket-2
+        /usr/bin/mc policy get myminio/test-bucket-2
 
         /usr/bin/mc rb --force myminio/test-bucket-public
         /usr/bin/mc mb myminio/test-bucket-public
@@ -58,6 +59,8 @@ services:
         /usr/bin/mc policy get myminio/test-bucket-public
 
         # This is for the test of presigned URLs
+        # !!! When missing, be sure that you have ran 'scripts/generate_presigned_url.sh' !!!
+
         # small file upload
         /usr/bin/mc cp /duckdb/data/csv/phonenumbers.csv myminio/test-bucket/presigned/phonenumbers.csv
         /usr/bin/mc cp /duckdb/data/parquet-testing/glob/t1.parquet myminio/test-bucket/presigned/t1.parquet
@@ -65,9 +68,13 @@ services:
         # large file upload
         /usr/bin/mc cp /duckdb/data/parquet-testing/presigned/presigned-url-lineitem.parquet myminio/test-bucket/presigned/lineitem_large.parquet
 
+        # Upload the db for the attach 
+        /usr/bin/mc cp /duckdb/data/attach_test/attach.db myminio/test-bucket/presigned/attach.db
+    
         /usr/bin/mc share download myminio/test-bucket/presigned/phonenumbers.csv
         /usr/bin/mc share download myminio/test-bucket/presigned/t1.parquet
         /usr/bin/mc share download myminio/test-bucket/presigned/lineitem_large.parquet
+        /usr/bin/mc share download myminio/test-bucket/presigned/attach.db
 
         exit 0;
       "

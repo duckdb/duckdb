@@ -66,6 +66,9 @@ public:
 		return std::find(specifiers.begin(), specifiers.end(), s) != specifiers.end();
 	}
 
+	//! The full format specifier, for error messages
+	string format_specifier;
+
 protected:
 	//! The format specifiers
 	vector<StrTimeSpecifier> specifiers;
@@ -133,10 +136,6 @@ public:
 
 		DUCKDB_API string FormatError(string_t input, const string &format_specifier);
 	};
-
-public:
-	//! The full format specifier, for error messages
-	string format_specifier;
 
 public:
 	DUCKDB_API static ParseResult Parse(const string &format, const string &text);

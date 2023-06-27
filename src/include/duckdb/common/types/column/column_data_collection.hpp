@@ -44,20 +44,20 @@ public:
 
 public:
 	//! The types of columns in the ColumnDataCollection
-	DUCKDB_API vector<LogicalType> &Types() {
+	vector<LogicalType> &Types() {
 		return types;
 	}
-	DUCKDB_API const vector<LogicalType> &Types() const {
+	const vector<LogicalType> &Types() const {
 		return types;
 	}
 
 	//! The amount of rows in the ColumnDataCollection
-	DUCKDB_API const idx_t &Count() const {
+	const idx_t &Count() const {
 		return count;
 	}
 
 	//! The amount of columns in the ColumnDataCollection
-	DUCKDB_API idx_t ColumnCount() const {
+	idx_t ColumnCount() const {
 		return types.size();
 	}
 
@@ -143,7 +143,12 @@ public:
 	//! Initialize the column data collection
 	void Initialize(vector<LogicalType> types);
 
-	//! Get a vector of references to every chunk (segment, index in segment), and optionally sort by block id
+	//! Get references to the string heaps in this ColumnDataCollection
+	vector<shared_ptr<StringHeap>> GetHeapReferences();
+	//! Get the allocator type of this ColumnDataCollection
+	ColumnDataAllocatorType GetAllocatorType() const;
+
+	//! Get a vector of the segments in this ColumnDataCollection
 	const vector<unique_ptr<ColumnDataCollectionSegment>> &GetSegments() const;
 
 private:
@@ -177,32 +182,32 @@ public:
 
 public:
 	// container API
-	DUCKDB_API bool empty() const {
+	bool empty() const {
 		return rows.empty();
 	}
-	DUCKDB_API idx_t size() const {
+	idx_t size() const {
 		return rows.size();
 	}
 
 	DUCKDB_API ColumnDataRow &operator[](idx_t i);
 	DUCKDB_API const ColumnDataRow &operator[](idx_t i) const;
 
-	DUCKDB_API vector<ColumnDataRow>::iterator begin() {
+	vector<ColumnDataRow>::iterator begin() {
 		return rows.begin();
 	}
-	DUCKDB_API vector<ColumnDataRow>::iterator end() {
+	vector<ColumnDataRow>::iterator end() {
 		return rows.end();
 	}
-	DUCKDB_API vector<ColumnDataRow>::const_iterator cbegin() const {
+	vector<ColumnDataRow>::const_iterator cbegin() const {
 		return rows.cbegin();
 	}
-	DUCKDB_API vector<ColumnDataRow>::const_iterator cend() const {
+	vector<ColumnDataRow>::const_iterator cend() const {
 		return rows.cend();
 	}
-	DUCKDB_API vector<ColumnDataRow>::const_iterator begin() const {
+	vector<ColumnDataRow>::const_iterator begin() const {
 		return rows.begin();
 	}
-	DUCKDB_API vector<ColumnDataRow>::const_iterator end() const {
+	vector<ColumnDataRow>::const_iterator end() const {
 		return rows.end();
 	}
 

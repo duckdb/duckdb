@@ -14,6 +14,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/function/function.hpp"
+#include "duckdb/planner/plan_serialization.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 
@@ -25,12 +26,12 @@ struct FunctionLocalState {
 	template <class TARGET>
 	TARGET &Cast() {
 		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 	template <class TARGET>
 	const TARGET &Cast() const {
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 
@@ -65,7 +66,7 @@ typedef void (*dependency_function_t)(BoundFunctionExpression &expr, DependencyL
 
 typedef void (*function_serialize_t)(FieldWriter &writer, const FunctionData *bind_data,
                                      const ScalarFunction &function);
-typedef unique_ptr<FunctionData> (*function_deserialize_t)(ClientContext &context, FieldReader &reader,
+typedef unique_ptr<FunctionData> (*function_deserialize_t)(PlanDeserializationState &state, FieldReader &reader,
                                                            ScalarFunction &function);
 
 class ScalarFunction : public BaseScalarFunction {

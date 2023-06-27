@@ -3,6 +3,7 @@
 #include <string>
 #include <cassert>
 #include <cstring>
+#include <cstdint>
 
 namespace duckdb {
 

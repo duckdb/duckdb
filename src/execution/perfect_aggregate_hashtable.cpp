@@ -1,6 +1,7 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
-#include "duckdb/execution/expression_executor.hpp"
+
 #include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -23,11 +24,11 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(ClientContext &context, All
 	tuple_size = layout.GetRowWidth();
 
 	// allocate and null initialize the data
-	owned_data = unique_ptr<data_t[]>(new data_t[tuple_size * total_groups]);
+	owned_data = make_unsafe_uniq_array<data_t>(tuple_size * total_groups);
 	data = owned_data.get();
 
 	// set up the empty payloads for every tuple, and initialize the "occupied" flag to false
-	group_is_set = unique_ptr<bool[]>(new bool[total_groups]);
+	group_is_set = make_unsafe_uniq_array<bool>(total_groups);
 	memset(group_is_set.get(), 0, total_groups * sizeof(bool));
 
 	// initialize the hash table for each entry
@@ -51,7 +52,7 @@ PerfectAggregateHashTable::~PerfectAggregateHashTable() {
 template <class T>
 static void ComputeGroupLocationTemplated(UnifiedVectorFormat &group_data, Value &min, uintptr_t *address_data,
                                           idx_t current_shift, idx_t count) {
-	auto data = (T *)group_data.data;
+	auto data = UnifiedVectorFormat::GetData<T>(group_data);
 	auto min_val = min.GetValueUnsafe<T>();
 	if (!group_data.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
@@ -92,6 +93,18 @@ static void ComputeGroupLocation(Vector &group, Value &min, uintptr_t *address_d
 		break;
 	case PhysicalType::INT64:
 		ComputeGroupLocationTemplated<int64_t>(vdata, min, address_data, current_shift, count);
+		break;
+	case PhysicalType::UINT8:
+		ComputeGroupLocationTemplated<uint8_t>(vdata, min, address_data, current_shift, count);
+		break;
+	case PhysicalType::UINT16:
+		ComputeGroupLocationTemplated<uint16_t>(vdata, min, address_data, current_shift, count);
+		break;
+	case PhysicalType::UINT32:
+		ComputeGroupLocationTemplated<uint32_t>(vdata, min, address_data, current_shift, count);
+		break;
+	case PhysicalType::UINT64:
+		ComputeGroupLocationTemplated<uint64_t>(vdata, min, address_data, current_shift, count);
 		break;
 	default:
 		throw InternalException("Unsupported group type for perfect aggregate hash table");
@@ -207,6 +220,18 @@ static void ReconstructGroupVector(uint32_t group_values[], Value &min, idx_t re
 		break;
 	case PhysicalType::INT64:
 		ReconstructGroupVectorTemplated<int64_t>(group_values, min, mask, shift, entry_count, result);
+		break;
+	case PhysicalType::UINT8:
+		ReconstructGroupVectorTemplated<uint8_t>(group_values, min, mask, shift, entry_count, result);
+		break;
+	case PhysicalType::UINT16:
+		ReconstructGroupVectorTemplated<uint16_t>(group_values, min, mask, shift, entry_count, result);
+		break;
+	case PhysicalType::UINT32:
+		ReconstructGroupVectorTemplated<uint32_t>(group_values, min, mask, shift, entry_count, result);
+		break;
+	case PhysicalType::UINT64:
+		ReconstructGroupVectorTemplated<uint64_t>(group_values, min, mask, shift, entry_count, result);
 		break;
 	default:
 		throw InternalException("Invalid type for perfect aggregate HT group");

@@ -45,7 +45,10 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 				colref = make_uniq<ColumnRefExpression>(function.schema, function.catalog);
 			}
 			auto new_colref = QualifyColumnName(*colref, error);
-			if (error.empty()) {
+			bool is_col = error.empty() ? true : false;
+			bool is_col_alias = QualifyColumnAlias(*colref);
+
+			if (is_col || is_col_alias) {
 				// we can! transform this into a function call on the column
 				// i.e. "x.lower()" becomes "lower(x)"
 				function.children.insert(function.children.begin(), std::move(colref));
@@ -186,7 +189,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// capture the (lambda) columns
-	auto &bound_lambda_expr = (BoundLambdaExpression &)*children.back();
+	auto &bound_lambda_expr = children.back()->Cast<BoundLambdaExpression>();
 	CaptureLambdaColumns(bound_lambda_expr.captures, list_child_type, bound_lambda_expr.lambda_expr);
 
 	FunctionBinder function_binder(context);
@@ -215,7 +218,6 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 			D_ASSERT(binding.names.size() == 1);
 			D_ASSERT(binding.types.size() == 1);
 
-			bound_function_expr.function.arguments.push_back(binding.types[0]);
 			auto bound_lambda_param =
 			    make_uniq<BoundReferenceExpression>(binding.names[0], binding.types[0], lambda_index);
 			bound_function_expr.children.push_back(std::move(bound_lambda_param));
@@ -224,7 +226,6 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 	// push back the captures into the children vector and the correct return types into the bound_function arguments
 	for (auto &capture : bound_lambda.captures) {
-		bound_function_expr.function.arguments.push_back(capture->return_type);
 		bound_function_expr.children.push_back(std::move(capture));
 	}
 

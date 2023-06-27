@@ -62,8 +62,8 @@ idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 	}
 #ifdef DEBUG
 	for (auto entry : info.map) {
-		D_ASSERT(!entry.first.get().Equals(&expr));
-		D_ASSERT(!expr.Equals(&entry.first.get()));
+		D_ASSERT(!entry.first.get().Equals(expr));
+		D_ASSERT(!expr.Equals(entry.first.get()));
 	}
 #endif
 	return DConstants::INVALID_INDEX;
@@ -141,6 +141,13 @@ BindResult BaseSelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_
 	auto &group = node.groups.group_expressions[group_index];
 	return BindResult(make_uniq<BoundColumnRefExpression>(expr.GetName(), group->return_type,
 	                                                      ColumnBinding(node.group_index, group_index), depth));
+}
+
+bool BaseSelectBinder::QualifyColumnAlias(const ColumnRefExpression &colref) {
+	if (!colref.IsQualified()) {
+		return alias_map.find(colref.column_names[0]) != alias_map.end() ? true : false;
+	}
+	return false;
 }
 
 } // namespace duckdb

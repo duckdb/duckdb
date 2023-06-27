@@ -70,6 +70,12 @@ public:
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);
 
+	//! Reschedules a task that was blocked
+	void RescheduleTask(shared_ptr<Task> &task);
+
+	//! Add the task to be rescheduled
+	void AddToBeRescheduled(shared_ptr<Task> &task);
+
 	//! Returns the progress of the pipelines
 	bool GetPipelinesProgress(double &current_progress);
 
@@ -82,6 +88,7 @@ public:
 	void AddEvent(shared_ptr<Event> event);
 
 	void AddRecursiveCTE(PhysicalOperator &rec_cte);
+	void AddMaterializedCTE(PhysicalOperator &mat_cte);
 	void ReschedulePipelines(const vector<shared_ptr<MetaPipeline>> &pipelines, vector<shared_ptr<Event>> &events);
 
 	//! Whether or not the root of the pipeline is a result collector object
@@ -123,6 +130,8 @@ private:
 	vector<shared_ptr<Pipeline>> root_pipelines;
 	//! The recursive CTE's in this query plan
 	vector<reference<PhysicalOperator>> recursive_ctes;
+	//! The materialized CTE's in this query plan
+	vector<reference<PhysicalOperator>> materialized_ctes;
 	//! The pipeline executor for the root pipeline
 	unique_ptr<PipelineExecutor> root_executor;
 	//! The current root pipeline index
@@ -146,6 +155,9 @@ private:
 	//! The last pending execution result (if any)
 	PendingExecutionResult execution_result;
 	//! The current task in process (if any)
-	unique_ptr<Task> task;
+	shared_ptr<Task> task;
+
+	//! Task that have been descheduled
+	unordered_map<Task *, shared_ptr<Task>> to_be_rescheduled_tasks;
 };
 } // namespace duckdb

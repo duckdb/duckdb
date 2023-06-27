@@ -1,11 +1,10 @@
 #include "duckdb/core_functions/scalar/list_functions.hpp"
-#include "duckdb/common/serializer/enum_serializer.hpp"
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/config.hpp"
-
 #include "duckdb/common/sort/sort.hpp"
 
 namespace duckdb {
@@ -133,7 +132,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 	// get the lists data
 	UnifiedVectorFormat lists_data;
 	result.ToUnifiedFormat(count, lists_data);
-	auto list_entries = (list_entry_t *)lists_data.data;
+	auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(lists_data);
 
 	// create the lists_indices vector, this contains an element for each list's entry,
 	// the element corresponds to the list's index, e.g. for [1, 2, 4], [5, 4]
@@ -251,7 +250,7 @@ static T GetOrder(ClientContext &context, Expression &expr) {
 	}
 	Value order_value = ExpressionExecutor::EvaluateScalar(context, expr);
 	auto order_name = StringUtil::Upper(order_value.ToString());
-	return EnumSerializer::StringToEnum<T>(order_name.c_str());
+	return EnumUtil::FromString<T>(order_name.c_str());
 }
 
 static unique_ptr<FunctionData> ListNormalSortBind(ClientContext &context, ScalarFunction &bound_function,

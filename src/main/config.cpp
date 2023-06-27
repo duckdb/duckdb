@@ -14,6 +14,10 @@
 
 namespace duckdb {
 
+#ifdef DEBUG
+bool DBConfigOptions::debug_print_bindings = false;
+#endif
+
 #define DUCKDB_GLOBAL(_PARAM)                                                                                          \
 	{                                                                                                                  \
 		_PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::ResetGlobal,         \
@@ -78,6 +82,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(ForceBitpackingModeSetting),
                                                  DUCKDB_LOCAL(HomeDirectorySetting),
                                                  DUCKDB_LOCAL(LogQueryPathSetting),
+                                                 DUCKDB_GLOBAL(LockConfigurationSetting),
                                                  DUCKDB_GLOBAL(ImmediateTransactionModeSetting),
                                                  DUCKDB_LOCAL(IntegerDivisionSetting),
                                                  DUCKDB_LOCAL(MaximumExpressionDepthSetting),
@@ -87,6 +92,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_LOCAL(OrderedAggregateThreshold),
                                                  DUCKDB_GLOBAL(PasswordSetting),
                                                  DUCKDB_LOCAL(PerfectHashThresholdSetting),
+                                                 DUCKDB_LOCAL(PivotFilterThreshold),
                                                  DUCKDB_LOCAL(PivotLimitSetting),
                                                  DUCKDB_LOCAL(PreserveIdentifierCase),
                                                  DUCKDB_GLOBAL(PreserveInsertionOrder),
@@ -100,9 +106,11 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL(TempDirectorySetting),
                                                  DUCKDB_GLOBAL(ThreadsSetting),
                                                  DUCKDB_GLOBAL(UsernameSetting),
+                                                 DUCKDB_GLOBAL(ExportLargeBufferArrow),
                                                  DUCKDB_GLOBAL_ALIAS("user", UsernameSetting),
                                                  DUCKDB_GLOBAL_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
                                                  DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
+                                                 DUCKDB_GLOBAL(FlushAllocatorSetting),
                                                  FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {

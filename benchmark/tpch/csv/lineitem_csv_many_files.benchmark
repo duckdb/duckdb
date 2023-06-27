@@ -1,0 +1,49 @@
+# name: benchmark/tpch/csv/lineitem_csv_many_files.benchmark
+# description: Read the lineitem CSV with many files
+# group: [csv]
+
+name Read Lineitem CSV Many Files
+group csv
+
+require tpch
+
+# create the CSV file
+load
+call dbgen(sf=1);
+COPY (FROM lineitem LIMIT 200000 OFFSET 0)       TO '${BENCHMARK_DIR}/lineitem-split-0.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 200000)  TO '${BENCHMARK_DIR}/lineitem-split-1.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 400000)  TO '${BENCHMARK_DIR}/lineitem-split-2.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 600000)  TO '${BENCHMARK_DIR}/lineitem-split-3.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 800000)  TO '${BENCHMARK_DIR}/lineitem-split-4.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 1000000) TO '${BENCHMARK_DIR}/lineitem-split-5.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 1200000) TO '${BENCHMARK_DIR}/lineitem-split-6.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 1400000) TO '${BENCHMARK_DIR}/lineitem-split-7.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 1600000) TO '${BENCHMARK_DIR}/lineitem-split-8.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 1800000) TO '${BENCHMARK_DIR}/lineitem-split-9.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 2000000) TO '${BENCHMARK_DIR}/lineitem-split-10.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 2200000) TO '${BENCHMARK_DIR}/lineitem-split-11.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 2400000) TO '${BENCHMARK_DIR}/lineitem-split-12.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 2600000) TO '${BENCHMARK_DIR}/lineitem-split-13.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 2800000) TO '${BENCHMARK_DIR}/lineitem-split-14.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 3000000) TO '${BENCHMARK_DIR}/lineitem-split-15.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 3200000) TO '${BENCHMARK_DIR}/lineitem-split-16.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 3400000) TO '${BENCHMARK_DIR}/lineitem-split-17.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 3600000) TO '${BENCHMARK_DIR}/lineitem-split-18.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 3800000) TO '${BENCHMARK_DIR}/lineitem-split-19.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 4000000) TO '${BENCHMARK_DIR}/lineitem-split-20.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 4200000) TO '${BENCHMARK_DIR}/lineitem-split-21.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 4400000) TO '${BENCHMARK_DIR}/lineitem-split-22.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 4600000) TO '${BENCHMARK_DIR}/lineitem-split-23.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 4800000) TO '${BENCHMARK_DIR}/lineitem-split-24.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 5000000) TO '${BENCHMARK_DIR}/lineitem-split-25.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 5200000) TO '${BENCHMARK_DIR}/lineitem-split-26.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 5400000) TO '${BENCHMARK_DIR}/lineitem-split-27.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 5600000) TO '${BENCHMARK_DIR}/lineitem-split-28.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 5800000) TO '${BENCHMARK_DIR}/lineitem-split-29.csv' (HEADER, DELIMITER '|');
+COPY (FROM lineitem LIMIT 200000 OFFSET 6000000) TO '${BENCHMARK_DIR}/lineitem-split-30.csv' (HEADER, DELIMITER '|');
+
+run
+SELECT COUNT(*) FROM read_csv_auto('${BENCHMARK_DIR}/lineitem-split-*.csv');
+
+result I
+6001215

@@ -29,6 +29,10 @@ INSERT INTO t2 SELECT i+1 FROM range(50,100) tbl(i);
 statement ok
 INSERT INTO t3 SELECT i+1 FROM range(0,100) tbl(i);
 
+# have do disable this otherwise we get a perfect hash join
+statement ok
+set disabled_optimizers to 'statistics_propagation'
+
 # standalone limit
 query II
 EXPLAIN select count(t1.i) from t1 inner join t2 on (t1.i = t2.i)

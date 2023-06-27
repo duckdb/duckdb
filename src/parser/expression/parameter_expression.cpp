@@ -25,8 +25,8 @@ unique_ptr<ParsedExpression> ParameterExpression::Copy() const {
 	return std::move(copy);
 }
 
-bool ParameterExpression::Equal(const ParameterExpression *a, const ParameterExpression *b) {
-	return a->parameter_nr == b->parameter_nr;
+bool ParameterExpression::Equal(const ParameterExpression &a, const ParameterExpression &b) {
+	return a.parameter_nr == b.parameter_nr;
 }
 
 hash_t ParameterExpression::Hash() const {

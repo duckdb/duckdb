@@ -11,10 +11,16 @@
 */examples/*
 */third_party/*
 */test/*
+*/extension/autocomplete/*
 */extension/fts/*
 */extension/icu/*
+*/extension/jemalloc/*
 */extension/tpcds/*
 */extension/tpch/*
 */extension/visualizer/*
 */extension/json/yyjson/*
-src/main/extension_helper.cpp
+main/extension_helper.cpp
+generated_extension_loader.hpp
+*/adbc/*
+common/enum_util.cpp
+common/enums/expression_type.cpp

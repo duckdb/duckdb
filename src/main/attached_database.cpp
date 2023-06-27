@@ -1,9 +1,11 @@
 #include "duckdb/main/attached_database.hpp"
+
+#include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/parser/parsed_data/attach_info.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/duck_transaction_manager.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/catalog/duck_catalog.hpp"
-#include "duckdb/storage/storage_extension.hpp"
 
 namespace duckdb {
 
@@ -120,6 +122,14 @@ TransactionManager &AttachedDatabase::GetTransactionManager() {
 
 Catalog &AttachedDatabase::ParentCatalog() {
 	return *parent_catalog;
+}
+
+bool AttachedDatabase::IsInitialDatabase() const {
+	return is_initial_database;
+}
+
+void AttachedDatabase::SetInitialDatabase() {
+	is_initial_database = true;
 }
 
 } // namespace duckdb

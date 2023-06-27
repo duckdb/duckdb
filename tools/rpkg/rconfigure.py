@@ -32,8 +32,9 @@ def open_utf8(fpath, flags):
         return open(fpath, flags, encoding="utf8")
 
 extension_list = ""
+
 for ext in extensions:
-    extension_list += ' -DBUILD_{}_EXTENSION'.format(ext.upper())
+    extension_list += ' -DDUCKDB_EXTENSION_{}_LINKED'.format(ext.upper())
     extension_list += " -DDUCKDB_BUILD_LIBRARY"
 
 libraries = []
@@ -123,6 +124,7 @@ with open_utf8(os.path.join('src', 'Makevars'), 'w+') as f:
 with open_utf8(os.path.join('src', 'Makevars.in'), 'r') as f:
     text = f.read()
 
+include_list += " -DDUCKDB_PLATFORM_RTOOLS=1"
 text = text.replace('{{ SOURCES }}', object_list)
 text = text.replace('{{ INCLUDES }}', include_list)
 text = text.replace('{{ LINK_FLAGS }}', "-lws2_32")

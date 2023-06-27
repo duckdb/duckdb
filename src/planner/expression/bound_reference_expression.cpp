@@ -1,9 +1,10 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 
-#include "duckdb/common/serializer.hpp"
-#include "duckdb/common/types/hash.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/common/field_writer.hpp"
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/hash.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -16,17 +17,22 @@ BoundReferenceExpression::BoundReferenceExpression(LogicalType type, idx_t index
 }
 
 string BoundReferenceExpression::ToString() const {
+#ifdef DEBUG
+	if (DBConfigOptions::debug_print_bindings) {
+		return "#" + to_string(index);
+	}
+#endif
 	if (!alias.empty()) {
 		return alias;
 	}
 	return "#" + to_string(index);
 }
 
-bool BoundReferenceExpression::Equals(const BaseExpression *other_p) const {
+bool BoundReferenceExpression::Equals(const BaseExpression &other_p) const {
 	if (!Expression::Equals(other_p)) {
 		return false;
 	}
-	auto &other = other_p->Cast<BoundReferenceExpression>();
+	auto &other = other_p.Cast<BoundReferenceExpression>();
 	return other.index == index;
 }
 

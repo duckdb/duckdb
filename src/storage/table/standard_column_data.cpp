@@ -10,13 +10,14 @@
 namespace duckdb {
 
 StandardColumnData::StandardColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index,
-                                       idx_t start_row, LogicalType type, ColumnData *parent)
+                                       idx_t start_row, LogicalType type, optional_ptr<ColumnData> parent)
     : ColumnData(block_manager, info, column_index, start_row, std::move(type), parent),
-      validity(block_manager, info, 0, start_row, this) {
+      validity(block_manager, info, 0, start_row, *this) {
 }
 
-StandardColumnData::StandardColumnData(ColumnData &original, idx_t start_row, ColumnData *parent)
-    : ColumnData(original, start_row, parent), validity(((StandardColumnData &)original).validity, start_row, this) {
+void StandardColumnData::SetStart(idx_t new_start) {
+	ColumnData::SetStart(new_start);
+	validity.SetStart(new_start);
 }
 
 bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
@@ -176,11 +177,6 @@ public:
 		ColumnCheckpointState::WriteDataPointers(writer);
 		validity_state->WriteDataPointers(writer);
 	}
-
-	void GetBlockIds(unordered_set<block_id_t> &result) override {
-		ColumnCheckpointState::GetBlockIds(result);
-		validity_state->GetBlockIds(result);
-	}
 };
 
 unique_ptr<ColumnCheckpointState>
@@ -193,12 +189,12 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
                                                                  ColumnCheckpointInfo &checkpoint_info) {
 	auto validity_state = validity.Checkpoint(row_group, partial_block_manager, checkpoint_info);
 	auto base_state = ColumnData::Checkpoint(row_group, partial_block_manager, checkpoint_info);
-	auto &checkpoint_state = (StandardColumnCheckpointState &)*base_state;
+	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
 	checkpoint_state.validity_state = std::move(validity_state);
 	return base_state;
 }
 
-void StandardColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start,
+void StandardColumnData::CheckpointScan(ColumnSegment &segment, ColumnScanState &state, idx_t row_group_start,
                                         idx_t count, Vector &scan_vector) {
 	ColumnData::CheckpointScan(segment, state, row_group_start, count, scan_vector);
 
@@ -211,10 +207,11 @@ void StandardColumnData::DeserializeColumn(Deserializer &source) {
 	validity.DeserializeColumn(source);
 }
 
-void StandardColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) {
-	ColumnData::GetStorageInfo(row_group_index, col_path, result);
+void StandardColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
+                                              vector<duckdb::ColumnSegmentInfo> &result) {
+	ColumnData::GetColumnSegmentInfo(row_group_index, col_path, result);
 	col_path.push_back(0);
-	validity.GetStorageInfo(row_group_index, std::move(col_path), result);
+	validity.GetColumnSegmentInfo(row_group_index, std::move(col_path), result);
 }
 
 void StandardColumnData::Verify(RowGroup &parent) {

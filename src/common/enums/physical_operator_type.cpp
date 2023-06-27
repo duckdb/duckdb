@@ -47,6 +47,10 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "PROJECTION";
 	case PhysicalOperatorType::COPY_TO_FILE:
 		return "COPY_TO_FILE";
+	case PhysicalOperatorType::BATCH_COPY_TO_FILE:
+		return "BATCH_COPY_TO_FILE";
+	case PhysicalOperatorType::FIXED_BATCH_COPY_TO_FILE:
+		return "FIXED_BATCH_COPY_TO_FILE";
 	case PhysicalOperatorType::DELIM_JOIN:
 		return "DELIM_JOIN";
 	case PhysicalOperatorType::BLOCKWISE_NL_JOIN:
@@ -99,8 +103,12 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "VACUUM";
 	case PhysicalOperatorType::RECURSIVE_CTE:
 		return "REC_CTE";
+	case PhysicalOperatorType::CTE:
+		return "CTE";
 	case PhysicalOperatorType::RECURSIVE_CTE_SCAN:
 		return "REC_CTE_SCAN";
+	case PhysicalOperatorType::CTE_SCAN:
+		return "CTE_SCAN";
 	case PhysicalOperatorType::EXPRESSION_SCAN:
 		return "EXPRESSION_SCAN";
 	case PhysicalOperatorType::ALTER:

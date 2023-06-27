@@ -108,12 +108,12 @@ unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(Executi
 	return make_uniq<MergeJoinLocalState>(context.client, *this, 1);
 }
 
-SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                                LocalSinkState &lstate_p, DataChunk &input) const {
-	auto &gstate = gstate_p.Cast<MergeJoinGlobalState>();
-	auto &lstate = lstate_p.Cast<MergeJoinLocalState>();
+SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, DataChunk &chunk,
+                                                OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<MergeJoinGlobalState>();
+	auto &lstate = input.local_state.Cast<MergeJoinLocalState>();
 
-	gstate.Sink(input, lstate);
+	gstate.Sink(chunk, lstate);
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -208,6 +208,7 @@ public:
 	idx_t right_position;
 	idx_t right_chunk_index;
 	idx_t right_base;
+	idx_t prev_left_index;
 
 	// Secondary predicate shared data
 	SelectionVector sel;
@@ -385,7 +386,7 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 
 void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    OperatorState &state_p) const {
-	auto &state = (PiecewiseMergeJoinState &)state_p;
+	auto &state = state_p.Cast<PiecewiseMergeJoinState>();
 	auto &gstate = sink_state->Cast<MergeJoinGlobalState>();
 
 	state.ResolveJoinKeys(input);
@@ -431,7 +432,8 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 	}
 }
 
-static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const ExpressionType comparison) {
+static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const ExpressionType comparison,
+                                    idx_t &prev_left_index) {
 	const auto cmp = MergeJoinComparisonValue(comparison);
 
 	// The sort parameters should all be the same
@@ -465,6 +467,20 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 
 	idx_t result_count = 0;
 	while (true) {
+		if (l.entry_idx < prev_left_index) {
+			// left side smaller: found match
+			l.result.set_index(result_count, sel_t(l.entry_idx));
+			r.result.set_index(result_count, sel_t(r.entry_idx));
+			result_count++;
+			// move left side forward
+			l.entry_idx++;
+			l_ptr += entry_size;
+			if (result_count == STANDARD_VECTOR_SIZE) {
+				// out of space!
+				break;
+			}
+			continue;
+		}
 		if (l.entry_idx < l.not_null) {
 			int comp_res;
 			if (all_constant) {
@@ -474,7 +490,6 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 				rread.entry_idx = r.entry_idx;
 				comp_res = Comparators::CompareTuple(lread, rread, l_ptr, r_ptr, l.state.sort_layout, external);
 			}
-
 			if (comp_res <= cmp) {
 				// left side smaller: found match
 				l.result.set_index(result_count, sel_t(l.entry_idx));
@@ -490,6 +505,8 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 				continue;
 			}
 		}
+
+		prev_left_index = l.entry_idx;
 		// right side smaller or equal, or left side exhausted: move
 		// right pointer forward reset left side to start
 		r.entry_idx++;
@@ -507,7 +524,7 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 
 OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &input,
                                                                   DataChunk &chunk, OperatorState &state_p) const {
-	auto &state = (PiecewiseMergeJoinState &)state_p;
+	auto &state = state_p.Cast<PiecewiseMergeJoinState>();
 	auto &gstate = sink_state->Cast<MergeJoinGlobalState>();
 	auto &rsorted = *gstate.table->global_sort_state.sorted_blocks[0];
 	const auto left_cols = input.ColumnCount();
@@ -521,6 +538,7 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 			state.right_chunk_index = 0;
 			state.right_base = 0;
 			state.left_position = 0;
+			state.prev_left_index = 0;
 			state.right_position = 0;
 			state.first_fetch = false;
 			state.finished = false;
@@ -547,7 +565,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		BlockMergeInfo right_info(gstate.table->global_sort_state, state.right_chunk_index, state.right_position,
 		                          rhs_not_null);
 
-		idx_t result_count = MergeJoinComplexBlocks(left_info, right_info, conditions[0].comparison);
+		idx_t result_count =
+		    MergeJoinComplexBlocks(left_info, right_info, conditions[0].comparison, state.prev_left_index);
 		if (result_count == 0) {
 			// exhausted this chunk on the right side
 			// move to the next right chunk
@@ -677,19 +696,19 @@ unique_ptr<GlobalSourceState> PhysicalPiecewiseMergeJoin::GetGlobalSourceState(C
 	return make_uniq<PiecewiseJoinScanState>(*this);
 }
 
-void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &result, GlobalSourceState &gstate,
-                                         LocalSourceState &lstate) const {
+SourceResultType PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &result,
+                                                     OperatorSourceInput &input) const {
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = sink_state->Cast<MergeJoinGlobalState>();
-	auto &state = (PiecewiseJoinScanState &)gstate;
+	auto &state = input.global_state.Cast<PiecewiseJoinScanState>();
 
 	lock_guard<mutex> l(state.lock);
 	if (!state.scanner) {
 		// Initialize scanner (if not yet initialized)
 		auto &sort_state = sink.table->global_sort_state;
 		if (sort_state.sorted_blocks.empty()) {
-			return;
+			return SourceResultType::FINISHED;
 		}
 		state.scanner = make_uniq<PayloadScanner>(*sort_state.sorted_blocks[0]->payload_data, sort_state);
 	}
@@ -707,7 +726,7 @@ void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &r
 
 		const auto count = rhs_chunk.size();
 		if (count == 0) {
-			return;
+			return result.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 		}
 
 		idx_t result_count = 0;
@@ -732,9 +751,11 @@ void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &r
 				result.data[left_column_count + col_idx].Slice(rhs_chunk.data[col_idx], rsel, result_count);
 			}
 			result.SetCardinality(result_count);
-			return;
+			break;
 		}
 	}
+
+	return result.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

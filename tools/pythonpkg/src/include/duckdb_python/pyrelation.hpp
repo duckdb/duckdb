@@ -17,6 +17,7 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
 #include "duckdb_python/pybind11/conversions/explain_enum.hpp"
+#include "duckdb_python/pybind11/conversions/null_handling_enum.hpp"
 #include "duckdb_python/pybind11/dataframe.hpp"
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb/common/box_renderer.hpp"
@@ -60,6 +61,9 @@ public:
 	unique_ptr<DuckDBPyRelation> GetAttribute(const string &name);
 
 	py::str GetAlias();
+
+	static unique_ptr<DuckDBPyRelation> EmptyResult(const std::shared_ptr<ClientContext> &context,
+	                                                const vector<LogicalType> &types, vector<string> names);
 
 	unique_ptr<DuckDBPyRelation> SetAlias(const string &expr);
 
@@ -216,6 +220,8 @@ private:
 	unique_ptr<QueryResult> ExecuteInternal(bool stream_result = false);
 
 private:
+	//! Whether the relation has been executed at least once
+	bool executed;
 	shared_ptr<Relation> rel;
 	vector<LogicalType> types;
 	vector<string> names;

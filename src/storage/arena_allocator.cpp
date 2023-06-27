@@ -31,7 +31,7 @@ struct ArenaAllocatorData : public PrivateAllocatorData {
 };
 
 static data_ptr_t ArenaAllocatorAllocate(PrivateAllocatorData *private_data, idx_t size) {
-	auto &allocator_data = (ArenaAllocatorData &)*private_data;
+	auto &allocator_data = private_data->Cast<ArenaAllocatorData>();
 	return allocator_data.allocator.Allocate(size);
 }
 
@@ -41,7 +41,7 @@ static void ArenaAllocatorFree(PrivateAllocatorData *, data_ptr_t, idx_t) {
 
 static data_ptr_t ArenaAllocateReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t old_size,
                                           idx_t size) {
-	auto &allocator_data = (ArenaAllocatorData &)*private_data;
+	auto &allocator_data = private_data->Cast<ArenaAllocatorData>();
 	return allocator_data.allocator.Reallocate(pointer, old_size, size);
 }
 //===--------------------------------------------------------------------===//
@@ -64,7 +64,7 @@ data_ptr_t ArenaAllocator::Allocate(idx_t len) {
 		do {
 			current_capacity *= 2;
 		} while (current_capacity < len);
-		auto new_chunk = make_uniq<ArenaChunk>(allocator, current_capacity);
+		auto new_chunk = make_unsafe_uniq<ArenaChunk>(allocator, current_capacity);
 		if (head) {
 			head->prev = new_chunk.get();
 			new_chunk->next = std::move(head);
@@ -109,7 +109,6 @@ data_ptr_t ArenaAllocator::ReallocateAligned(data_ptr_t pointer, idx_t old_size,
 }
 
 void ArenaAllocator::Reset() {
-
 	if (head) {
 		// destroy all chunks except the current one
 		if (head->next) {
@@ -148,7 +147,7 @@ ArenaChunk *ArenaAllocator::GetTail() {
 	return tail;
 }
 
-bool ArenaAllocator::IsEmpty() {
+bool ArenaAllocator::IsEmpty() const {
 	return head == nullptr;
 }
 

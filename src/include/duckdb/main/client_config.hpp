@@ -63,6 +63,8 @@ struct ClientConfig {
 	bool verify_serializer = false;
 	//! Enable the running of optimizers
 	bool enable_optimizer = true;
+	//! Enable caching operators
+	bool enable_caching_operators = true;
 	//! Force parallelism of small tables, used for testing
 	bool verify_parallelism = false;
 	//! Force index join independent of table cardinality, used for testing
@@ -93,6 +95,9 @@ struct ClientConfig {
 
 	//! The maximum amount of pivot columns
 	idx_t pivot_limit = 100000;
+
+	//! The threshold at which we switch from using filtered aggregates to LIST with a dedicated pivot operator
+	idx_t pivot_filter_threshold = 10;
 
 	//! Whether or not the "/" division operator defaults to integer division or floating point division
 	bool integer_division = false;

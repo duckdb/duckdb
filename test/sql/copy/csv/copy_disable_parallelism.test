@@ -1,0 +1,16 @@
+# name: test/sql/copy/csv/copy_disable_parallelism.test
+# description: Test copy statement
+# group: [csv]
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER, c VARCHAR(10));
+
+query I
+COPY test FROM 'test/sql/copy/csv/data/test/test.csv' (PARALLEL);
+----
+5000
+
+query I
+COPY test FROM 'test/sql/copy/csv/data/test/test.csv' (PARALLEL FALSE);
+----
+5000

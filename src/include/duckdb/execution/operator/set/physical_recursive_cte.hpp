@@ -20,9 +20,13 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::RECURSIVE_CTE;
 
 public:
-	PhysicalRecursiveCTE(vector<LogicalType> types, bool union_all, unique_ptr<PhysicalOperator> top,
-	                     unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality);
+	PhysicalRecursiveCTE(string ctename, idx_t table_index, vector<LogicalType> types, bool union_all,
+	                     unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom,
+	                     idx_t estimated_cardinality);
 	~PhysicalRecursiveCTE() override;
+
+	string ctename;
+	idx_t table_index;
 
 	bool union_all;
 	std::shared_ptr<ColumnDataCollection> working_table;
@@ -30,8 +34,7 @@ public:
 
 public:
 	// Source interface
-	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	             LocalSourceState &lstate) const override;
+	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
 		return true;
@@ -39,14 +42,15 @@ public:
 
 public:
 	// Sink interface
-	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-	                    DataChunk &input) const override;
+	SinkResultType Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const override;
 
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
 	bool IsSink() const override {
 		return true;
 	}
+
+	string ParamsToString() const override;
 
 public:
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
