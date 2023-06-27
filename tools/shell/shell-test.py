@@ -309,9 +309,37 @@ CREATE INDEX a_idx ON a(i);
 test('.sha3sum')
 
 test('''
+.mode json
+SELECT *
+FROM (
+    VALUES
+    ('Jan', 'Apr'),
+    ('Feb', 'May'),
+    ('Mar', 'Jun')
+);
+''', out='[{"col0":"Jan","col1":"Apr"},\n{"col0":"Feb","col1":"May"},\n{"col0":"Mar","col1":"Jun"}]\n')
+
+test('''
 .mode jsonlines
-SELECT 42,43;
-''', out='{"42":42,"43":43}')
+SELECT *
+FROM (
+    VALUES
+    ('Jan', 'Apr'),
+    ('Feb', 'May'),
+    ('Mar', 'Jun')
+);
+''', out='{"col0":"Jan","col1":"Apr"}\n{"col0":"Feb","col1":"May"}\n{"col0":"Mar","col1":"Jun"}\n')
+
+test('''
+.mode jsonsequence
+SELECT *
+FROM (
+    VALUES
+    ('Jan', 'Apr'),
+    ('Feb', 'May'),
+    ('Mar', 'Jun')
+);
+''', out='\x1E{"col0":"Jan","col1":"Apr"}\n\x1E{"col0":"Feb","col1":"May"}\n\x1E{"col0":"Mar","col1":"Jun"}\n')
 
 test('''
 .mode csv

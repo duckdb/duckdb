@@ -10795,27 +10795,28 @@ struct ShellState {
 /*
 ** These are the allowed modes.
 */
-#define MODE_Line     0    /* One column per line.  Blank line between records */
-#define MODE_Column   1    /* One record per line in neat columns */
-#define MODE_List     2    /* One record per line with a separator */
-#define MODE_Semi     3    /* Same as MODE_List but append ";" to each line */
-#define MODE_Html     4    /* Generate an XHTML table */
-#define MODE_Insert   5    /* Generate SQL "insert" statements */
-#define MODE_Quote    6    /* Quote values as for SQL */
-#define MODE_Tcl      7    /* Generate ANSI-C or TCL quoted elements */
-#define MODE_Csv      8    /* Quote strings, numbers are plain */
-#define MODE_Explain  9    /* Like MODE_Column, but do not truncate data */
-#define MODE_Ascii   10    /* Use ASCII unit and record separators (0x1F/0x1E) */
-#define MODE_Pretty  11    /* Pretty-print schemas */
-#define MODE_EQP     12    /* Converts EXPLAIN QUERY PLAN output into a graph */
-#define MODE_Json    13    /* Output JSON */
-#define MODE_Markdown 14   /* Markdown formatting */
-#define MODE_Table   15    /* MySQL-style table formatting */
-#define MODE_Box     16    /* Unicode box-drawing characters */
-#define MODE_Latex   17    /* Latex tabular formatting */
-#define MODE_Trash   18    /* Discard output */
-#define MODE_Jsonlines 19  /* Output JSON Lines */
-#define MODE_DuckBox 20    /* Unicode box drawing - using DuckDB's own renderer */
+#define MODE_Line          0  /* One column per line.  Blank line between records */
+#define MODE_Column        1  /* One record per line in neat columns */
+#define MODE_List          2  /* One record per line with a separator */
+#define MODE_Semi          3  /* Same as MODE_List but append ";" to each line */
+#define MODE_Html          4  /* Generate an XHTML table */
+#define MODE_Insert        5  /* Generate SQL "insert" statements */
+#define MODE_Quote         6  /* Quote values as for SQL */
+#define MODE_Tcl           7  /* Generate ANSI-C or TCL quoted elements */
+#define MODE_Csv           8  /* Quote strings, numbers are plain */
+#define MODE_Explain       9  /* Like MODE_Column, but do not truncate data */
+#define MODE_Ascii        10  /* Use ASCII unit and record separators (0x1F/0x1E) */
+#define MODE_Pretty       11  /* Pretty-print schemas */
+#define MODE_EQP          12  /* Converts EXPLAIN QUERY PLAN output into a graph */
+#define MODE_Json         13  /* Output JSON */
+#define MODE_Markdown     14  /* Markdown formatting */
+#define MODE_Table        15  /* MySQL-style table formatting */
+#define MODE_Box          16  /* Unicode box-drawing characters */
+#define MODE_Latex        17  /* Latex tabular formatting */
+#define MODE_Trash        18  /* Discard output */
+#define MODE_Jsonlines    19  /* Output JSON Lines */
+#define MODE_DuckBox      20  /* Unicode box drawing - using DuckDB's own renderer */
+#define MODE_Jsonsequence 21  /* Output JSON Text Sequence (RFC 7464) */
 
 static const char *modeDescr[] = {
   "line",
@@ -10838,7 +10839,8 @@ static const char *modeDescr[] = {
   "latex",
   "trash",
   "jsonlines",
-  "duckbox"
+  "duckbox",
+  "jsonsequence"
 };
 
 /*
@@ -11833,19 +11835,23 @@ static int shell_callback(
       break;
     }
     case MODE_Json:
-	case MODE_Jsonlines: {
+    case MODE_Jsonlines:
+    case MODE_Jsonsequence: {
       if( azArg==0 ) break;
-      if( p->cnt==0 ){
-        if (p->cMode == MODE_Json) {
+      if( p->cnt==0 ) {
+        if ( p->cMode == MODE_Json ) {
           fputc('[', p->out);
         }
-        fputc('{', p->out);
-      }else{
-        if (p->cMode == MODE_Json) {
+      } else {
+        if ( p->cMode == MODE_Json ) {
           fputc(',', p->out);
         }
-        fputs("\n{", p->out);
+        fputc('\n', p->out);
       }
+      if ( p->cMode == MODE_Jsonsequence ) {
+        fputc(0x1E, p->out);
+      }
+      fputc('{', p->out);
       p->cnt++;
       for(i=0; i<nArg; i++){
         output_json_string(p->out, azCol[i], -1);
@@ -12968,7 +12974,7 @@ static void exec_prepared_stmt(
       if( pArg->cMode==MODE_Json ){
         fputs("]\n", pArg->out);
       }
-      if( pArg->cMode==MODE_Jsonlines ){
+      if( pArg->cMode==MODE_Jsonlines || pArg->cMode==MODE_Jsonsequence ) {
         fputs("\n", pArg->out);
       }
     }
@@ -13651,24 +13657,25 @@ static const char *(azHelp[]) = {
   ".maxwidth COUNT          Sets the maximum width in characters. 0 defaults to terminal width. Only for duckbox mode.",
   ".mode MODE ?TABLE?       Set output mode",
   "   MODE is one of:",
-  "     ascii     Columns/rows delimited by 0x1F and 0x1E",
-  "     box       Tables using unicode box-drawing characters",
-  "     csv       Comma-separated values",
-  "     column    Output in columns.  (See .width)",
-  "     duckbox   Tables with extensive features",
-  "     html      HTML <table> code",
-  "     insert    SQL insert statements for TABLE",
-  "     json      Results in a JSON array",
-  "     jsonlines Results in a NDJSON",
-  "     latex     LaTeX tabular environment code",
-  "     line      One value per line",
-  "     list      Values delimited by \"|\"",
-  "     markdown  Markdown table format",
-  "     quote     Escape answers as for SQL",
-  "     table     ASCII-art table",
-  "     tabs      Tab-separated values",
-  "     tcl       TCL list elements",
-  "     trash     No output",
+  "     ascii        Columns/rows delimited by 0x1F and 0x1E",
+  "     box          Tables using unicode box-drawing characters",
+  "     csv          Comma-separated values",
+  "     column       Output in columns.  (See .width)",
+  "     duckbox      Tables with extensive features",
+  "     html         HTML <table> code",
+  "     insert       SQL insert statements for TABLE",
+  "     json         Results in a JSON array",
+  "     jsonlines    Results in a NDJSON",
+  "     jsonsequence Results in a JSON Text Sequence (RFC 7464)",
+  "     latex        LaTeX tabular environment code",
+  "     line         One value per line",
+  "     list         Values delimited by \"|\"",
+  "     markdown     Markdown table format",
+  "     quote        Escape answers as for SQL",
+  "     table        ASCII-art table",
+  "     tabs         Tab-separated values",
+  "     tcl          TCL list elements",
+  "     trash        No output",
   ".nullvalue STRING        Use STRING in place of NULL values",
   ".once ?OPTIONS? ?FILE?   Output for the next SQL command only to FILE",
   "     If FILE begins with '|' then open as a pipe",
@@ -18160,13 +18167,15 @@ static int do_meta_command(char *zLine, ShellState *p){
       p->mode = MODE_Latex;
     }else if( c2=='t' && strncmp(azArg[1],"trash",n2)==0 ){
       p->mode = MODE_Trash;
-	}else if( c2=='j' && strncmp(azArg[1],"jsonlines",n2)==0 ){
-		p->mode = MODE_Jsonlines;
+    }else if( c2=='j' && strncmp(azArg[1],"jsonlines",n2)==0 ){
+      p->mode = MODE_Jsonlines;
+    }else if( c2=='j' && strncmp(azArg[1],"jsonsequence",n2)==0 ){
+      p->mode = MODE_Jsonsequence;
     }else if( nArg==1 ){
       raw_printf(p->out, "current output mode: %s\n", modeDescr[p->mode]);
     }else{
       raw_printf(stderr, "Error: mode should be one of: "
-         "ascii box column csv duckbox html insert json jsonlines latex line "
+         "ascii box column csv duckbox html insert json jsonlines jsonsequence latex line "
          "list markdown quote table tabs tcl trash \n");
       rc = 1;
     }
@@ -20172,6 +20181,8 @@ static const char zOptions[] =
   "   -html                set output mode to HTML\n"
   "   -interactive         force interactive I/O\n"
   "   -json                set output mode to 'json'\n"
+  "   -jsonlines           set output mode to 'jsonlines'\n"
+  "   -jsonsequence        set output mode to 'jsonsequence'\n"
   "   -line                set output mode to 'line'\n"
   "   -list                set output mode to 'list'\n"
   "   -markdown            set output mode to 'markdown'\n"
@@ -20599,8 +20610,10 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
       data.mode = MODE_Column;
     }else if( strcmp(z,"-json")==0 ){
       data.mode = MODE_Json;
-	}else if( strcmp(z,"-jsonlines")==0 ){
-		data.mode = MODE_Jsonlines;
+    }else if( strcmp(z,"-jsonlines")==0 ){
+      data.mode = MODE_Jsonlines;
+    }else if( strcmp(z,"-jsonsequence")==0 ){
+      data.mode = MODE_Jsonsequence;
     }else if( strcmp(z,"-markdown")==0 ){
       data.mode = MODE_Markdown;
     }else if( strcmp(z,"-table")==0 ){
