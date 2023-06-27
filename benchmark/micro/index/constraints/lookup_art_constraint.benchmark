@@ -1,0 +1,13 @@
+# name: benchmark/micro/index/constraints/lookup_art_constraint.benchmark
+# description: Attempt to insert 10M integers into a PK column and fail on the last entry, benchmarks lookup performance
+# group: [constraints]
+
+name Lookup ART Constraint
+group index
+
+load
+CREATE TABLE temp AS (SELECT range AS id, (random() * 1000000)::INT AS rank FROM range(9999999) ORDER BY rank);
+CREATE TABLE art (id INTEGER PRIMARY KEY);
+
+run
+INSERT INTO art (SELECT id FROM temp UNION ALL SELECT 9999998);
