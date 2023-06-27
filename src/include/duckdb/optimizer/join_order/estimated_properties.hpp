@@ -27,7 +27,10 @@ public:
 	T GetCardinality() const {
 		throw NotImplementedException("Unsupported type for GetCardinality");
 	}
-	double GetCost() const;
+	template <class T>
+	T GetCost() const {
+		throw NotImplementedException("Unsupported type for GetCost");
+	}
 	void SetCost(double new_cost);
 	void SetCardinality(double cardinality);
 
@@ -44,5 +47,11 @@ double EstimatedProperties::GetCardinality() const;
 
 template <>
 idx_t EstimatedProperties::GetCardinality() const;
+
+template <>
+double EstimatedProperties::GetCost() const;
+
+template <>
+idx_t EstimatedProperties::GetCost() const;
 
 } // namespace duckdb

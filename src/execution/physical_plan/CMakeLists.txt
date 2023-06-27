@@ -42,7 +42,8 @@ add_library_unity(
   plan_window.cpp
   plan_unnest.cpp
   plan_expression_get.cpp
-  plan_recursive_cte.cpp)
+  plan_recursive_cte.cpp
+  plan_cte.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_physical_plan>
     PARENT_SCOPE)

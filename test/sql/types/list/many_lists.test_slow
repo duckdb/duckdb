@@ -1,0 +1,59 @@
+# name: test/sql/types/list/many_lists.test_slow
+# description: Test many lists
+# group: [list]
+
+# integers
+statement ok
+CREATE TABLE t1 AS SELECT i % 5000 g, LIST(i) l FROM RANGE(20000) tbl(i) GROUP BY g
+
+query I
+SELECT COUNT(*) FROM t1
+----
+5000
+
+query III
+SELECT COUNT(k), MIN(k), MAX(k) FROM (SELECT UNNEST(l) FROM t1) tbl(k)
+----
+20000	0	19999
+
+# varchar
+statement ok
+CREATE TABLE t2 AS SELECT i % 5000 g, LIST('thisisalongprefix'||i::VARCHAR) l FROM RANGE(20000) tbl(i) GROUP BY g
+
+query I
+SELECT COUNT(*) FROM t2
+----
+5000
+
+query III
+SELECT COUNT(k), MIN(k), MAX(k) FROM (SELECT UNNEST(l) FROM t2) tbl(k)
+----
+20000	thisisalongprefix0	thisisalongprefix9999
+
+# list of structs
+statement ok
+CREATE TABLE t3 AS SELECT i % 5000 g, LIST({'a': i, 'b': i + 2}) l FROM RANGE(20000) tbl(i) GROUP BY g
+
+query I
+SELECT COUNT(*) FROM t3
+----
+5000
+
+query IIIII
+SELECT COUNT(k), MIN(k['a']), MAX(k['a']), MIN(k['b']), MAX(k['b']) FROM (SELECT UNNEST(l) FROM t3) tbl(k)
+----
+20000	0	19999	2	20001
+
+# list of lists
+statement ok
+CREATE TABLE t4 AS SELECT i % 5000 g, LIST([i, i + 2]) l FROM RANGE(20000) tbl(i) GROUP BY g
+
+query I
+SELECT COUNT(*) FROM t4
+----
+5000
+
+query IIIII
+SELECT COUNT(k), MIN(k[1]), MAX(k[1]), MIN(k[2]), MAX(k[2]) FROM (SELECT UNNEST(l) FROM t4) tbl(k)
+----
+20000	0	19999	2	20001
