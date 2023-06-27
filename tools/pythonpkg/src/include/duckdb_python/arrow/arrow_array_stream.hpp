@@ -70,7 +70,7 @@ public:
 	//! Arrow Object (i.e., Scanner, Record Batch Reader, Table, Dataset)
 	PyObject *arrow_object;
 
-	const ClientProperties &client_properties;
+	const ClientProperties client_properties;
 
 private:
 	//! We transform a TableFilterSet to an Arrow Expression Object
