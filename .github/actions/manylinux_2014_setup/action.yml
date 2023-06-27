@@ -106,7 +106,7 @@ runs:
     - name: Setup 32bit compiler
       if: ${{ inputs.glibc32 == 1 }}
       shell: bash
-      run: yum install -y glibc-devel.i686 glibc-devel libstdc++-devel.i686
+      run: yum install -y libgcc*i686 libstdc++*i686 glibc*i686 libgfortran*i686
 
     - name: Setup old (GCC 4.8) compiler
       if: ${{ inputs.gcc_4_8 == 1 }}
