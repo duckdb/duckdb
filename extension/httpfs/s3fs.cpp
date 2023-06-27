@@ -474,7 +474,7 @@ BufferHandle S3FileSystem::Allocate(idx_t part_size, uint16_t max_threads) {
 			auto currently_in_use = buffers_in_use;
 			if (currently_in_use == 0) {
 				// There exist no upload write buffers that can release more memory. We really ran out of memory here.
-				throw e;
+				throw;
 			} else {
 				// Wait for more buffers to become available before trying again
 				buffers_available_cv.wait(lck, [&] { return buffers_in_use < currently_in_use; });
