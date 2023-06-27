@@ -2,7 +2,9 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
