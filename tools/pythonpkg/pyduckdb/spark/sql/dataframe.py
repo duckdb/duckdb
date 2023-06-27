@@ -1,6 +1,5 @@
 from typing import TYPE_CHECKING
 
-from typing_extensions import Self
 from pyduckdb.spark.sql.readwriter import DataFrameWriter
 import duckdb
 

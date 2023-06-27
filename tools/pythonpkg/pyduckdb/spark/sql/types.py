@@ -1,4 +1,3 @@
-from typing_extensions import Self
 from typing import Optional, List, Tuple, Any, TYPE_CHECKING
 
 class StructType:

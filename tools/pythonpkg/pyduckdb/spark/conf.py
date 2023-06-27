@@ -1,4 +1,3 @@
-from typing_extensions import Self
 from typing import TYPE_CHECKING, Optional, List, Tuple
 from pyduckdb.spark.exception import ContributionsAcceptedError
 
@@ -15,25 +14,25 @@ class SparkConf:
 	def getAll(self) -> List[Tuple[str, str]]:
 		raise ContributionsAcceptedError
 
-	def set(self, key: str, value: str) -> Self:
+	def set(self, key: str, value: str) -> "SparkConf":
 		raise ContributionsAcceptedError
 
-	def setAll(self, pairs: List[Tuple[str, str]]) -> Self:
+	def setAll(self, pairs: List[Tuple[str, str]]) -> "SparkConf":
 		raise ContributionsAcceptedError
 	
-	def setAppName(self, value: str) -> Self:
+	def setAppName(self, value: str) -> "SparkConf":
 		raise ContributionsAcceptedError
 	
-	def setExecutorEnv(self, key: Optional[str] = None, value: Optional[str] = None, pairs: Optional[List[Tuple[str, str]]] = None) -> Self:
+	def setExecutorEnv(self, key: Optional[str] = None, value: Optional[str] = None, pairs: Optional[List[Tuple[str, str]]] = None) -> "SparkConf":
 		raise ContributionsAcceptedError
 
-	def setIfMissing(self, key: str, value: str) -> Self:
+	def setIfMissing(self, key: str, value: str) -> "SparkConf":
 		raise ContributionsAcceptedError
 
-	def setMaster(self, value: str) -> Self:
+	def setMaster(self, value: str) -> "SparkConf":
 		raise ContributionsAcceptedError
 
-	def setSparkHome(self, value: str) -> Self:
+	def setSparkHome(self, value: str) -> "SparkConf":
 		raise ContributionsAcceptedError
 
 	def toDebugString(self) -> str:

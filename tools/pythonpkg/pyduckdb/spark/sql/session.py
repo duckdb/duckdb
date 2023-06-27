@@ -1,4 +1,3 @@
-from typing_extensions import Self
 from typing import Optional, List, Tuple, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -59,7 +58,7 @@ class SparkSession:
 		relation = self.conn.table(tableName)
 		return DataFrame(relation, self)
 
-	def getActiveSession(self) -> Self:
+	def getActiveSession(self) -> "SparkSession":
 		return self
 
 	@property
@@ -102,15 +101,15 @@ class SparkSession:
 			self.name = "builder"
 			self._config = {}
 
-		def master(self, name: str) -> Self:
+		def master(self, name: str) -> "SparkSession.Builder":
 			self._master = name
 			return self
 
-		def appName(self, name: str) -> Self:
+		def appName(self, name: str) -> "SparkSession.Builder":
 			# no-op
 			return self
 
-		def remote(self, url: str) -> Self:
+		def remote(self, url: str) -> "SparkSession.Builder":
 			# no-op
 			return self
 
@@ -119,14 +118,14 @@ class SparkSession:
 			context = SparkContext(self._master)
 			return SparkSession(context)
 
-		def config(self, key: Optional[str] = None, value: Optional[Any] = None, conf: Optional[SparkConf] = None) -> Self:
+		def config(self, key: Optional[str] = None, value: Optional[Any] = None, conf: Optional[SparkConf] = None) -> "SparkSession.Builder":
 			if conf:
 				raise NotImplementedError
 			if (key and value):
 				self._config[key] = value
 			return self
 
-		def enableHiveSupport(self) -> Self:
+		def enableHiveSupport(self) -> "SparkSession.Builder":
 			# no-op
 			return self
 

@@ -1,4 +1,3 @@
-from typing_extensions import Self
 from typing import Optional
 import duckdb
 from duckdb import DuckDBPyConnection
@@ -18,7 +17,7 @@ class SparkContext:
 		self._connection.close()
 
 	@classmethod
-	def getOrCreate(cls, conf: Optional[SparkConf] = None) -> Self:
+	def getOrCreate(cls, conf: Optional[SparkConf] = None) -> "SparkContext":
 		raise ContributionsAcceptedError
 
 	@classmethod
