@@ -189,6 +189,7 @@ jobs:
           ninja-build: 1
           ccache: 1
           glibc32: 1
+          gcc_4_8: 1 # Note: we run this job on the older gcc 4.8 toolchain
 
       - name: Build
         shell: bash
