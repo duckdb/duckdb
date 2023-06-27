@@ -124,7 +124,7 @@ runs:
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
-        EXTRA_CMAKE_VARIABLES: ${{ inputs.toolchain_path != '' && '-DCMAKE_TOOLCHAIN_FILE=${{ inputs.toolchain_path }}' || ''}}
+        EXTRA_CMAKE_VARIABLES: -DCMAKE_TOOLCHAIN_FILE=${{ inputs.toolchain_path }}
 
       run: |
         cd  ${{ inputs.build_dir}}

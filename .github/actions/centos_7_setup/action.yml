@@ -2,16 +2,16 @@ name: "Setup CentOS7"
 description: "Setup the CentOS7 container from manylinux"
 inputs:
   aws-cli:
-    description: 'Install aws-cli'
+    description: 'Setup aws-cli'
     default: 0
   ninja-build:
-    description: 'Install ninja-build'
+    description: 'Setup ninja-build'
     default: 0
   vcpkg:
-    description: 'Install vcpkg'
+    description: 'Setup vcpkg (installs to $GITHUB_WORKSPACE/vcpkg)'
     default: 0
   openssl:
-    description: 'Install OpenSSL (requires vcpkg)'
+    description: 'Setup OpenSSL (requires vcpkg to also be installed)'
     default: 0
   ccache:
     description: 'Setup Ccache'

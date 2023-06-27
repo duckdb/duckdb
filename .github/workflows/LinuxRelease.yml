@@ -60,10 +60,7 @@ jobs:
 
     - uses: ./.github/actions/centos_7_setup
       with:
-        aws-cli: 1
         ninja-build: 1
-        vcpkg: 1
-        openssl: 1
         ccache: 1
         odbc: 1
 
@@ -180,6 +177,8 @@ jobs:
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
 #   needs: linux-release-64
+    env:
+      GEN: ninja
 
     steps:
     - uses: actions/checkout@v3
@@ -202,7 +201,7 @@ jobs:
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         treat_warn_as_error: 0
-        toolchain_path: $GITHUB_WORKSPACE/vcpkg/scripts/buildsystem/vcpkg.cmake
+        toolchain_path: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
         python_name: python3.7
 
     - uses: actions/upload-artifact@v3
