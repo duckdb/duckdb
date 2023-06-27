@@ -295,7 +295,7 @@ ArrowErrorCode ArrowSchemaInitDateTime(struct ArrowSchema *schema, enum ArrowTyp
 		return EINVAL;
 	}
 
-	if (n_chars >= sizeof(buffer)) {
+	if (static_cast<size_t>(n_chars) >= sizeof(buffer)) {
 		schema->release(schema);
 		return ERANGE;
 	}

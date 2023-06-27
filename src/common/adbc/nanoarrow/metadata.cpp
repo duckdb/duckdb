@@ -99,7 +99,6 @@ ArrowErrorCode ArrowMetadataGetValue(const char *metadata, const char *key, cons
 	struct ArrowStringView value;
 	ArrowMetadataReaderInit(&reader, metadata);
 
-	int64_t size = sizeof(int32_t);
 	while (ArrowMetadataReaderRead(&reader, &key_view, &value) == NANOARROW_OK) {
 		int key_equal = target_key_view.n_bytes == key_view.n_bytes &&
 		                strncmp(target_key_view.data, key_view.data, key_view.n_bytes) == 0;
