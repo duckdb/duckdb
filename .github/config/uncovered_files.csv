@@ -333,6 +333,7 @@ include/duckdb/common/hive_partitioning.hpp	3
 include/duckdb/common/local_file_system.hpp	5
 include/duckdb/common/multi_file_reader_options.hpp	3
 include/duckdb/common/opener_file_system.hpp	21
+include/duckdb/common/operator/abs.hpp	1
 include/duckdb/common/operator/add.hpp	2
 include/duckdb/common/operator/decimal_cast_operators.hpp	3
 include/duckdb/common/operator/multiply.hpp	2
@@ -346,6 +347,7 @@ include/duckdb/common/serializer.hpp	4
 include/duckdb/common/serializer/format_deserializer.hpp	37
 include/duckdb/common/serializer/format_serializer.hpp	34
 include/duckdb/common/sort/duckdb_pdqsort.hpp	3
+include/duckdb/common/sort/sorted_block.hpp	1
 include/duckdb/common/string_util.hpp	9
 include/duckdb/common/type_util.hpp	2
 include/duckdb/common/types.hpp	5
@@ -616,7 +618,7 @@ planner/binder.cpp	7
 planner/binder/expression/bind_aggregate_expression.cpp	15
 planner/binder/expression/bind_between_expression.cpp	2
 planner/binder/expression/bind_collate_expression.cpp	2
-planner/binder/expression/bind_columnref_expression.cpp	5
+planner/binder/expression/bind_columnref_expression.cpp	6
 planner/binder/expression/bind_comparison_expression.cpp	2
 planner/binder/query_node/bind_cte_node.cpp	1
 planner/binder/expression/bind_function_expression.cpp	5
@@ -754,7 +756,7 @@ storage/table/chunk_info.cpp	16
 storage/table/column_checkpoint_state.cpp	20
 storage/table/column_data.cpp	16
 storage/table/column_data_checkpointer.cpp	4
-storage/table/column_segment.cpp	61
+storage/table/column_segment.cpp	62
 storage/table/list_column_data.cpp	28
 storage/table/row_group.cpp	13
 storage/table/row_group_collection.cpp	7
