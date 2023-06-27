@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/arrow/nanoarrow/nanoarrow.h"
 #include "duckdb/common/arrow/arrow_options.hpp"
 
 struct ArrowSchema;

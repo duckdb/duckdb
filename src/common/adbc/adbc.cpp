@@ -6,7 +6,7 @@
 
 #include "duckdb.h"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
-#include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/arrow/nanoarrow/nanoarrow.h"
 
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/main/connection.hpp"

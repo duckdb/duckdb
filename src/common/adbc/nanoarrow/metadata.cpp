@@ -19,9 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "duckdb/common/adbc/nanoarrow/nanoarrow.h"
-
-namespace duckdb_adbc {
+#include "duckdb/common/arrow/nanoarrow/nanoarrow.h"
 
 ArrowErrorCode ArrowMetadataReaderInit(struct ArrowMetadataReader *reader, const char *metadata) {
 	reader->metadata = metadata;
@@ -117,5 +115,3 @@ char ArrowMetadataHasKey(const char *metadata, const char *key) {
 	ArrowMetadataGetValue(metadata, key, NULL, &value);
 	return value.data != NULL;
 }
-
-} // namespace duckdb_adbc
