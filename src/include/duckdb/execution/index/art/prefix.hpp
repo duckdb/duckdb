@@ -8,6 +8,7 @@
 #pragma once
 
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/fixed_size_allocator.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 
 namespace duckdb {
