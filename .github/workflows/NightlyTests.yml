@@ -175,6 +175,9 @@ jobs:
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
 #    needs: linux-memory-leaks
+    env:
+      CC: /usr/bin/gcc
+      CXX: /usr/bin/g++
 
     steps:
       - uses: actions/checkout@v3

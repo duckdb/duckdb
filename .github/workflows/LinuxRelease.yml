@@ -176,7 +176,7 @@ jobs:
     name: Linux Extensions (64 Bit)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
-#   needs: linux-release-64
+    needs: linux-release-64
     env:
       GEN: ninja
 
@@ -206,7 +206,6 @@ jobs:
         python_name: python3.7
         # Hacky way to pass openssl from vcpkg to spatial extension build: spatial should probably move to vcpkg instead
         openssl_path: ${{ env.VCPKG_ROOT }}/installed/x64-linux
-        run_tests: 0 # TODO: disable before PR!
 
     - uses: actions/upload-artifact@v3
       with:

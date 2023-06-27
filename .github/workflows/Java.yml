@@ -283,7 +283,7 @@ jobs:
   jdbc-compliance:
     name: JDBC Compliance
     runs-on: ubuntu-20.04
-#    needs: java-linux-amd64
+    needs: java-linux-amd64
     container: quay.io/pypa/manylinux2014_x86_64
     env:
       BUILD_JDBC: 1
