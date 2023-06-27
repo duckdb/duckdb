@@ -21,8 +21,6 @@
 
 namespace duckdb_adbc {
 
-static size_t kErrorBufferSize = 256;
-
 struct SingleBatchArrayStream {
 	struct ArrowSchema schema;
 	struct ArrowArray batch;
