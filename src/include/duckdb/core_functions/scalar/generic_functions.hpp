@@ -43,7 +43,8 @@ struct ErrorFun {
 struct HashFun {
 	static constexpr const char *Name = "hash";
 	static constexpr const char *Parameters = "param";
-	static constexpr const char *Description = "Returns an integer with the hash of the value. Note that this is not a cryptographic hash.";
+	static constexpr const char *Description =
+	    "Returns an integer with the hash of the value. Note that this is not a cryptographic hash.";
 	static constexpr const char *Example = "hash('🦆')";
 
 	static ScalarFunction GetFunction();
@@ -70,7 +71,8 @@ struct GreatestFun {
 struct StatsFun {
 	static constexpr const char *Name = "stats";
 	static constexpr const char *Parameters = "expression";
-	static constexpr const char *Description = "Returns a string with statistics about the expression. Expression can be a column, constant, or SQL expression.";
+	static constexpr const char *Description = "Returns a string with statistics about the expression. Expression can "
+	                                           "be a column, constant, or SQL expression.";
 	static constexpr const char *Example = "stats(5)";
 
 	static ScalarFunction GetFunction();
@@ -106,7 +108,8 @@ struct CurrentSchemaFun {
 struct CurrentSchemasFun {
 	static constexpr const char *Name = "current_schemas";
 	static constexpr const char *Parameters = "include_implicit";
-	static constexpr const char *Description = "Return list of schemas. Pass a parameter of True to include implicit schemas.";
+	static constexpr const char *Description =
+	    "Return list of schemas. Pass a parameter of True to include implicit schemas.";
 	static constexpr const char *Example = "current_schemas(true)";
 
 	static ScalarFunction GetFunction();
@@ -124,7 +127,8 @@ struct CurrentDatabaseFun {
 struct CurrentTransactionIdFun {
 	static constexpr const char *Name = "txid_current";
 	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "Returns the current transaction’s ID (a BIGINT). It will assign a new one if the current transaction does not have one already.";
+	static constexpr const char *Description = "Returns the current transaction’s ID (a BIGINT). It will assign a new "
+	                                           "one if the current transaction does not have one already.";
 	static constexpr const char *Example = "txid_current()";
 
 	static ScalarFunction GetFunction();
@@ -133,7 +137,8 @@ struct CurrentTransactionIdFun {
 struct VersionFun {
 	static constexpr const char *Name = "version";
 	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "Return the currently active version of DuckDB in this format: v0.3.2	";
+	static constexpr const char *Description =
+	    "Return the currently active version of DuckDB in this format: v0.3.2	";
 	static constexpr const char *Example = "version()";
 
 	static ScalarFunction GetFunction();

@@ -31,7 +31,8 @@ struct StartsWithFun {
 struct ASCIIFun {
 	static constexpr const char *Name = "ascii";
 	static constexpr const char *Parameters = "string";
-	static constexpr const char *Description = "Returns an integer that represents the Unicode code point of the first character of the string.";
+	static constexpr const char *Description =
+	    "Returns an integer that represents the Unicode code point of the first character of the string.";
 	static constexpr const char *Example = "ascii('Ω')";
 
 	static ScalarFunction GetFunction();
@@ -40,7 +41,8 @@ struct ASCIIFun {
 struct BarFun {
 	static constexpr const char *Name = "bar";
 	static constexpr const char *Parameters = "x,min,max,width";
-	static constexpr const char *Description = "Draw a band whose width is proportional to (x - min) and equal to width characters when x = max. width defaults to 80.";
+	static constexpr const char *Description = "Draw a band whose width is proportional to (x - min) and equal to "
+	                                           "width characters when x = max. width defaults to 80.";
 	static constexpr const char *Example = "bar(5, 0, 20, 10)";
 
 	static ScalarFunctionSet GetFunctions();
@@ -64,7 +66,8 @@ struct ToBinaryFun {
 struct ChrFun {
 	static constexpr const char *Name = "chr";
 	static constexpr const char *Parameters = "code_point";
-	static constexpr const char *Description = "returns a character which is corresponding the ASCII code value or Unicode code point";
+	static constexpr const char *Description =
+	    "returns a character which is corresponding the ASCII code value or Unicode code point";
 	static constexpr const char *Example = "chr(65)";
 
 	static ScalarFunction GetFunction();
@@ -73,7 +76,10 @@ struct ChrFun {
 struct DamerauLevenshteinFun {
 	static constexpr const char *Name = "damerau_levenshtein";
 	static constexpr const char *Parameters = "str1,str2";
-	static constexpr const char *Description = "Extension of Levenshtein distance to also include transposition of adjacent characters as an allowed edit operation. In other words, the minimum number of edit operations (insertions, deletions, substitutions or transpositions) required to change one string to another. Different case is considered different.";
+	static constexpr const char *Description =
+	    "Extension of Levenshtein distance to also include transposition of adjacent characters as an allowed edit "
+	    "operation. In other words, the minimum number of edit operations (insertions, deletions, substitutions or "
+	    "transpositions) required to change one string to another. Different case is considered different.";
 	static constexpr const char *Example = "damerau_levenshtein('hello', 'world')";
 
 	static ScalarFunction GetFunction();
@@ -91,7 +97,8 @@ struct FormatFun {
 struct HammingFun {
 	static constexpr const char *Name = "hamming";
 	static constexpr const char *Parameters = "str1,str2";
-	static constexpr const char *Description = "The number of positions with different characters for 2 strings of equal length. Different case is considered different.";
+	static constexpr const char *Description = "The number of positions with different characters for 2 strings of "
+	                                           "equal length. Different case is considered different.";
 	static constexpr const char *Example = "hamming('duck','luck')";
 
 	static ScalarFunction GetFunction();
@@ -121,7 +128,8 @@ struct ToHexFun {
 struct InstrFun {
 	static constexpr const char *Name = "instr";
 	static constexpr const char *Parameters = "haystack,needle";
-	static constexpr const char *Description = "Return location of first occurrence of needle in haystack, counting from 1. Returns 0 if no match found.";
+	static constexpr const char *Description =
+	    "Return location of first occurrence of needle in haystack, counting from 1. Returns 0 if no match found.";
 	static constexpr const char *Example = "instr('test test','es')";
 
 	static ScalarFunction GetFunction();
@@ -142,7 +150,8 @@ struct PositionFun {
 struct JaccardFun {
 	static constexpr const char *Name = "jaccard";
 	static constexpr const char *Parameters = "str1,str2";
-	static constexpr const char *Description = "The Jaccard similarity between two strings. Different case is considered different. Returns a number between 0 and 1.";
+	static constexpr const char *Description = "The Jaccard similarity between two strings. Different case is "
+	                                           "considered different. Returns a number between 0 and 1.";
 	static constexpr const char *Example = "jaccard('duck','luck')";
 
 	static ScalarFunction GetFunction();
@@ -151,7 +160,8 @@ struct JaccardFun {
 struct JaroSimilarityFun {
 	static constexpr const char *Name = "jaro_similarity";
 	static constexpr const char *Parameters = "str1,str2";
-	static constexpr const char *Description = "The Jaro similarity between two strings. Different case is considered different. Returns a number between 0 and 1.";
+	static constexpr const char *Description = "The Jaro similarity between two strings. Different case is considered "
+	                                           "different. Returns a number between 0 and 1.";
 	static constexpr const char *Example = "jaro_similarity('duck','duckdb')";
 
 	static ScalarFunction GetFunction();
@@ -160,7 +170,8 @@ struct JaroSimilarityFun {
 struct JaroWinklerSimilarityFun {
 	static constexpr const char *Name = "jaro_winkler_similarity";
 	static constexpr const char *Parameters = "str1,str2";
-	static constexpr const char *Description = "The Jaro-Winkler similarity between two strings. Different case is considered different. Returns a number between 0 and 1.";
+	static constexpr const char *Description = "The Jaro-Winkler similarity between two strings. Different case is "
+	                                           "considered different. Returns a number between 0 and 1.";
 	static constexpr const char *Example = "jaro_winkler_similarity('duck','duckdb')";
 
 	static ScalarFunction GetFunction();
@@ -187,7 +198,9 @@ struct LeftGraphemeFun {
 struct LevenshteinFun {
 	static constexpr const char *Name = "levenshtein";
 	static constexpr const char *Parameters = "str1,str2";
-	static constexpr const char *Description = "The minimum number of single-character edits (insertions, deletions or substitutions) required to change one string to the other. Different case is considered different.";
+	static constexpr const char *Description =
+	    "The minimum number of single-character edits (insertions, deletions or substitutions) required to change one "
+	    "string to the other. Different case is considered different.";
 	static constexpr const char *Example = "levenshtein('duck','db')";
 
 	static ScalarFunction GetFunction();
@@ -202,7 +215,8 @@ struct Editdist3Fun {
 struct LpadFun {
 	static constexpr const char *Name = "lpad";
 	static constexpr const char *Parameters = "string,count,character";
-	static constexpr const char *Description = "Pads the string with the character from the left until it has count characters";
+	static constexpr const char *Description =
+	    "Pads the string with the character from the left until it has count characters";
 	static constexpr const char *Example = "lpad('hello', 10, '>')";
 
 	static ScalarFunction GetFunction();
@@ -211,7 +225,8 @@ struct LpadFun {
 struct LtrimFun {
 	static constexpr const char *Name = "ltrim";
 	static constexpr const char *Parameters = "string,characters";
-	static constexpr const char *Description = "Removes any occurrences of any of the characters from the left side of the string";
+	static constexpr const char *Description =
+	    "Removes any occurrences of any of the characters from the left side of the string";
 	static constexpr const char *Example = "ltrim('>>>>test<<', '><')";
 
 	static ScalarFunctionSet GetFunctions();
@@ -310,7 +325,8 @@ struct RightGraphemeFun {
 struct RpadFun {
 	static constexpr const char *Name = "rpad";
 	static constexpr const char *Parameters = "string,count,character";
-	static constexpr const char *Description = "Pads the string with the character from the right until it has count characters";
+	static constexpr const char *Description =
+	    "Pads the string with the character from the right until it has count characters";
 	static constexpr const char *Example = "rpad('hello', 10, '<')";
 
 	static ScalarFunction GetFunction();
@@ -319,7 +335,8 @@ struct RpadFun {
 struct RtrimFun {
 	static constexpr const char *Name = "rtrim";
 	static constexpr const char *Parameters = "string,characters";
-	static constexpr const char *Description = "Removes any occurrences of any of the characters from the right side of the string";
+	static constexpr const char *Description =
+	    "Removes any occurrences of any of the characters from the right side of the string";
 	static constexpr const char *Example = "rtrim('>>>>test<<', '><')";
 
 	static ScalarFunctionSet GetFunctions();
@@ -376,7 +393,9 @@ struct RegexpSplitToArrayFun {
 struct TranslateFun {
 	static constexpr const char *Name = "translate";
 	static constexpr const char *Parameters = "string,from,to";
-	static constexpr const char *Description = "Replaces each character in string that matches a character in the from set with the corresponding character in the to set. If from is longer than to, occurrences of the extra characters in from are deleted.";
+	static constexpr const char *Description =
+	    "Replaces each character in string that matches a character in the from set with the corresponding character "
+	    "in the to set. If from is longer than to, occurrences of the extra characters in from are deleted.";
 	static constexpr const char *Example = "translate('12345', '143', 'ax')";
 
 	static ScalarFunction GetFunction();
@@ -385,7 +404,8 @@ struct TranslateFun {
 struct TrimFun {
 	static constexpr const char *Name = "trim";
 	static constexpr const char *Parameters = "string,characters";
-	static constexpr const char *Description = "Removes any occurrences of any of the characters from either side of the string";
+	static constexpr const char *Description =
+	    "Removes any occurrences of any of the characters from either side of the string";
 	static constexpr const char *Example = "trim('>>>>test<<', '><')";
 
 	static ScalarFunctionSet GetFunctions();
