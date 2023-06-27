@@ -354,6 +354,49 @@ struct DatePart {
 		}
 	};
 
+	struct EpochNanosecondsOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			return input.micros * Interval::NANOS_PER_MICRO;
+		}
+
+		template <class T>
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateDatePartStatistics<T, EpochNanosecondsOperator>(input.child_stats);
+		}
+	};
+
+	struct EpochMicrosecondsOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			return input.micros;
+		}
+
+		template <class T>
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateDatePartStatistics<T, EpochMicrosecondsOperator>(input.child_stats);
+		}
+	};
+
+	struct EpochMillisOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
+			return input.micros / Interval::MICROS_PER_MSEC;
+		}
+
+		template <class T>
+		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, FunctionStatisticsInput &input) {
+			return PropagateDatePartStatistics<T, EpochMillisOperator>(input.child_stats);
+		}
+
+		static void Inverse(DataChunk &input, ExpressionState &state, Vector &result) {
+			D_ASSERT(input.ColumnCount() == 1);
+
+			UnaryExecutor::Execute<int64_t, timestamp_t>(input.data[0], result, input.size(),
+			                                             [&](int64_t input) { return Timestamp::FromEpochMs(input); });
+		}
+	};
+
 	struct MicrosecondsOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
@@ -521,9 +564,8 @@ struct DatePart {
 		}
 
 		template <typename P>
-		static inline bool HasPartValue(P *part_values, DatePartSpecifier part, P &value) {
-			value = part_values[int(part)];
-			return value;
+		static inline P HasPartValue(P *part_values, DatePartSpecifier part) {
+			return part_values[int(part)];
 		}
 
 		template <class TA, class TR>
@@ -535,28 +577,36 @@ struct DatePart {
 			int32_t dd = 1;
 			if (mask & YMD) {
 				Date::Convert(input, yyyy, mm, dd);
-				if (HasPartValue(part_values, DatePartSpecifier::YEAR, part_data)) {
+				part_data = HasPartValue(part_values, DatePartSpecifier::YEAR);
+				if (part_data) {
 					part_data[idx] = yyyy;
 				}
-				if (HasPartValue(part_values, DatePartSpecifier::MONTH, part_data)) {
+				part_data = HasPartValue(part_values, DatePartSpecifier::MONTH);
+				if (part_data) {
 					part_data[idx] = mm;
 				}
-				if (HasPartValue(part_values, DatePartSpecifier::DAY, part_data)) {
+				part_data = HasPartValue(part_values, DatePartSpecifier::DAY);
+				if (part_data) {
 					part_data[idx] = dd;
 				}
-				if (HasPartValue(part_values, DatePartSpecifier::DECADE, part_data)) {
+				part_data = HasPartValue(part_values, DatePartSpecifier::DECADE);
+				if (part_data) {
 					part_data[idx] = DecadeOperator::DecadeFromYear(yyyy);
 				}
-				if (HasPartValue(part_values, DatePartSpecifier::CENTURY, part_data)) {
+				part_data = HasPartValue(part_values, DatePartSpecifier::CENTURY);
+				if (part_data) {
 					part_data[idx] = CenturyOperator::CenturyFromYear(yyyy);
 				}
-				if (HasPartValue(part_values, DatePartSpecifier::MILLENNIUM, part_data)) {
+				part_data = HasPartValue(part_values, DatePartSpecifier::MILLENNIUM);
+				if (part_data) {
 					part_data[idx] = MillenniumOperator::MillenniumFromYear(yyyy);
 				}
-				if (HasPartValue(part_values, DatePartSpecifier::QUARTER, part_data)) {
+				part_data = HasPartValue(part_values, DatePartSpecifier::QUARTER);
+				if (part_data) {
 					part_data[idx] = QuarterOperator::QuarterFromMonth(mm);
 				}
-				if (HasPartValue(part_values, DatePartSpecifier::ERA, part_data)) {
+				part_data = HasPartValue(part_values, DatePartSpecifier::ERA);
+				if (part_data) {
 					part_data[idx] = EraOperator::EraFromYear(yyyy);
 				}
 			}
@@ -564,10 +614,12 @@ struct DatePart {
 			// Week calculations
 			if (mask & DOW) {
 				auto isodow = Date::ExtractISODayOfTheWeek(input);
-				if (HasPartValue(part_values, DatePartSpecifier::DOW, part_data)) {
+				part_data = HasPartValue(part_values, DatePartSpecifier::DOW);
+				if (part_data) {
 					part_data[idx] = DayOfWeekOperator::DayOfWeekFromISO(isodow);
 				}
-				if (HasPartValue(part_values, DatePartSpecifier::ISODOW, part_data)) {
+				part_data = HasPartValue(part_values, DatePartSpecifier::ISODOW);
+				if (part_data) {
 					part_data[idx] = isodow;
 				}
 			}
@@ -577,24 +629,29 @@ struct DatePart {
 				int32_t ww = 0;
 				int32_t iyyy = 0;
 				Date::ExtractISOYearWeek(input, iyyy, ww);
-				if (HasPartValue(part_values, DatePartSpecifier::WEEK, part_data)) {
+				part_data = HasPartValue(part_values, DatePartSpecifier::WEEK);
+				if (part_data) {
 					part_data[idx] = ww;
 				}
-				if (HasPartValue(part_values, DatePartSpecifier::ISOYEAR, part_data)) {
+				part_data = HasPartValue(part_values, DatePartSpecifier::ISOYEAR);
+				if (part_data) {
 					part_data[idx] = iyyy;
 				}
-				if (HasPartValue(part_values, DatePartSpecifier::YEARWEEK, part_data)) {
+				part_data = HasPartValue(part_values, DatePartSpecifier::YEARWEEK);
+				if (part_data) {
 					part_data[idx] = YearWeekOperator::YearWeekFromParts(iyyy, ww);
 				}
 			}
 
 			if (mask & EPOCH) {
-				if (HasPartValue(part_values, DatePartSpecifier::EPOCH, part_data)) {
+				part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH);
+				if (part_data) {
 					part_data[idx] = Date::Epoch(input);
 				}
 			}
 			if (mask & DOY) {
-				if (HasPartValue(part_values, DatePartSpecifier::DOY, part_data)) {
+				part_data = HasPartValue(part_values, DatePartSpecifier::DOY);
+				if (part_data) {
 					part_data[idx] = Date::ExtractDayOfTheYear(input);
 				}
 			}
@@ -799,6 +856,51 @@ int64_t DatePart::YearWeekOperator::Operation(dtime_t input) {
 }
 
 template <>
+int64_t DatePart::EpochNanosecondsOperator::Operation(timestamp_t input) {
+	return Timestamp::GetEpochNanoSeconds(input);
+}
+
+template <>
+int64_t DatePart::EpochNanosecondsOperator::Operation(date_t input) {
+	return Date::EpochNanoseconds(input);
+}
+
+template <>
+int64_t DatePart::EpochNanosecondsOperator::Operation(interval_t input) {
+	return Interval::GetNanoseconds(input);
+}
+
+template <>
+int64_t DatePart::EpochMicrosecondsOperator::Operation(timestamp_t input) {
+	return Timestamp::GetEpochMicroSeconds(input);
+}
+
+template <>
+int64_t DatePart::EpochMicrosecondsOperator::Operation(date_t input) {
+	return Date::EpochMicroseconds(input);
+}
+
+template <>
+int64_t DatePart::EpochMicrosecondsOperator::Operation(interval_t input) {
+	return Interval::GetMicro(input);
+}
+
+template <>
+int64_t DatePart::EpochMillisOperator::Operation(timestamp_t input) {
+	return Timestamp::GetEpochMs(input);
+}
+
+template <>
+int64_t DatePart::EpochMillisOperator::Operation(date_t input) {
+	return Date::EpochMilliseconds(input);
+}
+
+template <>
+int64_t DatePart::EpochMillisOperator::Operation(interval_t input) {
+	return Interval::GetMilli(input);
+}
+
+template <>
 int64_t DatePart::MicrosecondsOperator::Operation(timestamp_t input) {
 	auto time = Timestamp::GetTime(input);
 	// remove everything but the second & microsecond part
@@ -949,37 +1051,47 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const dtime_t &i
 	int64_t *part_data;
 	if (mask & TIME) {
 		const auto micros = MicrosecondsOperator::Operation<dtime_t, int64_t>(input);
-		if (HasPartValue(part_values, DatePartSpecifier::MICROSECONDS, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::MICROSECONDS);
+		if (part_data) {
 			part_data[idx] = micros;
 		}
-		if (HasPartValue(part_values, DatePartSpecifier::MILLISECONDS, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::MILLISECONDS);
+		if (part_data) {
 			part_data[idx] = micros / Interval::MICROS_PER_MSEC;
 		}
-		if (HasPartValue(part_values, DatePartSpecifier::SECOND, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::SECOND);
+		if (part_data) {
 			part_data[idx] = micros / Interval::MICROS_PER_SEC;
 		}
-		if (HasPartValue(part_values, DatePartSpecifier::MINUTE, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::MINUTE);
+		if (part_data) {
 			part_data[idx] = MinutesOperator::Operation<dtime_t, int64_t>(input);
 		}
-		if (HasPartValue(part_values, DatePartSpecifier::HOUR, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::HOUR);
+		if (part_data) {
 			part_data[idx] = HoursOperator::Operation<dtime_t, int64_t>(input);
 		}
 	}
 
 	if (mask & EPOCH) {
-		if (HasPartValue(part_values, DatePartSpecifier::EPOCH, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH);
+		if (part_data) {
 			part_data[idx] = EpochOperator::Operation<dtime_t, int64_t>(input);
+			;
 		}
 	}
 
 	if (mask & ZONE) {
-		if (HasPartValue(part_values, DatePartSpecifier::TIMEZONE, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::TIMEZONE);
+		if (part_data) {
 			part_data[idx] = 0;
 		}
-		if (HasPartValue(part_values, DatePartSpecifier::TIMEZONE_HOUR, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::TIMEZONE_HOUR);
+		if (part_data) {
 			part_data[idx] = 0;
 		}
-		if (HasPartValue(part_values, DatePartSpecifier::TIMEZONE_MINUTE, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::TIMEZONE_MINUTE);
+		if (part_data) {
 			part_data[idx] = 0;
 		}
 	}
@@ -998,8 +1110,8 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const timestamp_
 	Operation(part_values, t, idx, mask & ~EPOCH);
 
 	if (mask & EPOCH) {
-		int64_t *part_data;
-		if (HasPartValue(part_values, DatePartSpecifier::EPOCH, part_data)) {
+		auto part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH);
+		if (part_data) {
 			part_data[idx] = EpochOperator::Operation<timestamp_t, int64_t>(input);
 		}
 	}
@@ -1011,50 +1123,63 @@ void DatePart::StructOperator::Operation(int64_t **part_values, const interval_t
 	int64_t *part_data;
 	if (mask & YMD) {
 		const auto mm = input.months % Interval::MONTHS_PER_YEAR;
-		if (HasPartValue(part_values, DatePartSpecifier::YEAR, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::YEAR);
+		if (part_data) {
 			part_data[idx] = input.months / Interval::MONTHS_PER_YEAR;
 		}
-		if (HasPartValue(part_values, DatePartSpecifier::MONTH, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::MONTH);
+		if (part_data) {
 			part_data[idx] = mm;
 		}
-		if (HasPartValue(part_values, DatePartSpecifier::DAY, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::DAY);
+		if (part_data) {
 			part_data[idx] = input.days;
 		}
-		if (HasPartValue(part_values, DatePartSpecifier::DECADE, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::DECADE);
+		if (part_data) {
 			part_data[idx] = input.months / Interval::MONTHS_PER_DECADE;
 		}
-		if (HasPartValue(part_values, DatePartSpecifier::CENTURY, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::CENTURY);
+		if (part_data) {
 			part_data[idx] = input.months / Interval::MONTHS_PER_CENTURY;
 		}
-		if (HasPartValue(part_values, DatePartSpecifier::MILLENNIUM, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::MILLENNIUM);
+		if (part_data) {
 			part_data[idx] = input.months / Interval::MONTHS_PER_MILLENIUM;
 		}
-		if (HasPartValue(part_values, DatePartSpecifier::QUARTER, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::QUARTER);
+		if (part_data) {
 			part_data[idx] = mm / Interval::MONTHS_PER_QUARTER + 1;
 		}
 	}
 
 	if (mask & TIME) {
 		const auto micros = MicrosecondsOperator::Operation<interval_t, int64_t>(input);
-		if (HasPartValue(part_values, DatePartSpecifier::MICROSECONDS, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::MICROSECONDS);
+		if (part_data) {
 			part_data[idx] = micros;
 		}
-		if (HasPartValue(part_values, DatePartSpecifier::MILLISECONDS, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::MILLISECONDS);
+		if (part_data) {
 			part_data[idx] = micros / Interval::MICROS_PER_MSEC;
 		}
-		if (HasPartValue(part_values, DatePartSpecifier::SECOND, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::SECOND);
+		if (part_data) {
 			part_data[idx] = micros / Interval::MICROS_PER_SEC;
 		}
-		if (HasPartValue(part_values, DatePartSpecifier::MINUTE, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::MINUTE);
+		if (part_data) {
 			part_data[idx] = MinutesOperator::Operation<interval_t, int64_t>(input);
 		}
-		if (HasPartValue(part_values, DatePartSpecifier::HOUR, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::HOUR);
+		if (part_data) {
 			part_data[idx] = HoursOperator::Operation<interval_t, int64_t>(input);
 		}
 	}
 
 	if (mask & EPOCH) {
-		if (HasPartValue(part_values, DatePartSpecifier::EPOCH, part_data)) {
+		part_data = HasPartValue(part_values, DatePartSpecifier::EPOCH);
+		if (part_data) {
 			part_data[idx] = EpochOperator::Operation<interval_t, int64_t>(input);
 		}
 	}
@@ -1464,6 +1589,47 @@ ScalarFunctionSet TimezoneMinuteFun::GetFunctions() {
 
 ScalarFunctionSet EpochFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::EpochOperator>();
+}
+
+ScalarFunctionSet EpochNanosecondsFun::GetFunctions() {
+	using OP = DatePart::EpochNanosecondsOperator;
+	auto operator_set = GetTimePartFunction<OP>();
+
+	//	TIMESTAMP WITH TIME ZONE has the same representation as TIMESTAMP so no need to defer to ICU
+	auto tstz_func = DatePart::UnaryFunction<timestamp_t, int64_t, OP>;
+	auto tstz_stats = OP::template PropagateStatistics<timestamp_t>;
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, tstz_func, nullptr, nullptr, tstz_stats));
+	return operator_set;
+}
+
+ScalarFunctionSet EpochMicrosecondsFun::GetFunctions() {
+	using OP = DatePart::EpochMicrosecondsOperator;
+	auto operator_set = GetTimePartFunction<OP>();
+
+	//	TIMESTAMP WITH TIME ZONE has the same representation as TIMESTAMP so no need to defer to ICU
+	auto tstz_func = DatePart::UnaryFunction<timestamp_t, int64_t, OP>;
+	auto tstz_stats = OP::template PropagateStatistics<timestamp_t>;
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, tstz_func, nullptr, nullptr, tstz_stats));
+	return operator_set;
+}
+
+ScalarFunctionSet EpochMsFun::GetFunctions() {
+	using OP = DatePart::EpochMillisOperator;
+	auto operator_set = GetTimePartFunction<OP>();
+
+	//	TIMESTAMP WITH TIME ZONE has the same representation as TIMESTAMP so no need to defer to ICU
+	auto tstz_func = DatePart::UnaryFunction<timestamp_t, int64_t, OP>;
+	auto tstz_stats = OP::template PropagateStatistics<timestamp_t>;
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, tstz_func, nullptr, nullptr, tstz_stats));
+
+	//	Legacy inverse BIGINT => TIMESTAMP
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, DatePart::EpochMillisOperator::Inverse));
+
+	return operator_set;
 }
 
 ScalarFunctionSet MicrosecondsFun::GetFunctions() {

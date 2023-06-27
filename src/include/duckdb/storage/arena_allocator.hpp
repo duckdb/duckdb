@@ -45,7 +45,7 @@ public:
 	DUCKDB_API ArenaChunk *GetHead();
 	DUCKDB_API ArenaChunk *GetTail();
 
-	DUCKDB_API bool IsEmpty();
+	DUCKDB_API bool IsEmpty() const;
 
 	//! Returns an "Allocator" wrapper for this arena allocator
 	Allocator &GetAllocator() {

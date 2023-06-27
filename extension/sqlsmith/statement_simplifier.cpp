@@ -144,6 +144,7 @@ void StatementSimplifier::Simplify(QueryNode &node) {
 		Simplify(node.Cast<SetOperationNode>());
 		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
+	case QueryNodeType::CTE_NODE:
 	default:
 		break;
 	}

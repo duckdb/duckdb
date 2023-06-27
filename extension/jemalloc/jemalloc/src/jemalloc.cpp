@@ -26,6 +26,8 @@
 #include "jemalloc/internal/thread_event.h"
 #include "jemalloc/internal/util.h"
 
+#include "duckdb/common/string_util.hpp"
+
 namespace duckdb_jemalloc {
 
 /******************************************************************************/
@@ -4306,6 +4308,8 @@ label_done:
 JEMALLOC_ATTR(constructor)
 static void
 jemalloc_constructor(void) {
+	static const std::string CONFIG_STRING = duckdb::StringUtil::Format("narenas:%llu,dirty_decay_ms:1000,muzzy_decay_ms:1000", duckdb::idx_t(malloc_ncpus()));
+	je_malloc_conf = CONFIG_STRING.c_str();
 	malloc_init();
 }
 #endif
@@ -4321,6 +4325,7 @@ _malloc_prefork(void)
 	tsd_t *tsd;
 	unsigned i, j, narenas;
 	arena_t *arena;
+
 
 #ifdef JEMALLOC_MUTEX_INIT_CB
 	if (!malloc_initialized()) {
