@@ -192,6 +192,7 @@ jobs:
         vcpkg: 1
         openssl: 1
         ccache: 1
+        ssh: 1
 
     - uses: ./.github/actions/build_extensions
       with:

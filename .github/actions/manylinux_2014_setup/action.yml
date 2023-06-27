@@ -1,5 +1,5 @@
-name: "Setup CentOS7"
-description: "Setup the CentOS7 container from manylinux"
+name: "Setup manylinux2014 image"
+description: "Installs/configures additional CI dependencies"
 inputs:
   aws-cli:
     description: 'Setup aws-cli'
@@ -22,29 +22,19 @@ inputs:
   odbc:
     description: 'Setup ODBC'
     default: 0
-
+  ssh:
+    description: 'Setup SSH'
+    default: 0
 
 runs:
   using: "composite"
   steps:
-#    - name: Install dependencies
-#      shell: bash
-#      run: |
-#        yum install -y gcc gcc-c++ cmake make
-#        yum install -y epel-release
-#        yum install -y make gcc perl-core pcre-devel wget zlib-devel python3
-#        yum install -y https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
-#        yum install -y git
-#        yum install -y curl-devel expat-devel gettext-devel zlib-devel perl-ExtUtils-MakeMaker ninja-build
-#        yum install -y unixODBC-devel
-#        yum install -y java-11-openjdk-devel maven
-
     - name: Do the git permissions thing
       shell: bash
       run: |
         git config --global --add safe.directory '*'
 
-    - name: Setup dependencies for vcpkg or aws-cli
+    - name: Setup dependencies for vcpkg and/or aws-cli
       if: ${{ inputs.vcpkg == 1 || inputs.aws-cli == 1}}
       shell: bash
       run: yum install -y curl zip unzip tar
@@ -58,7 +48,7 @@ runs:
         ./aws/install
         aws --version
 
-    - name: Setup dependencies for building DuckDB
+    - name: Setup dependencies for building DuckDB quickly
       if: ${{ inputs.ninja-build == 1 }}
       shell: bash
       run: yum install -y ninja-build
@@ -82,7 +72,6 @@ runs:
       if: ${{ inputs.vcpkg == 1 }}
       uses: lukka/run-vcpkg@v11
       with:
-        vcpkgDirectory: ${{ github.workspace }}/vcpkg
         vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
 
     - name: Install OpenSSL
@@ -103,3 +92,8 @@ runs:
       if: ${{ inputs.jdk == 1 }}
       shell: bash
       run: yum install -y java-11-openjdk-devel maven
+
+    - name: Setup SSH
+      if: ${{ inputs.ssh == 1 }}
+      shell: bash
+      run: yum install -y openssh-clients
