@@ -41,6 +41,7 @@ query TT
 select range % 2 g, sum(length(json_keys(j))) c
 from t1
 group by g
+order by all
 ----
 0	5000
 1	10000

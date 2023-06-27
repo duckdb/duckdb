@@ -264,6 +264,7 @@ SELECT
     GROUPING(Product_Category), AVG(SUM(TotalSales)) OVER (ROWS UNBOUNDED PRECEDING)
 FROM tbl_ProductSales
 GROUP BY GROUPING SETS((Product_Category), (Product_Name), (Product_Category, Product_Name), ())
+ORDER BY ALL
 ----
 0
 360.000

@@ -64,6 +64,9 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 
 void GroupedAggregateHashTable::GetDataOwnership(unique_ptr<PartitionedTupleData> &partitioned_data_p,
                                                  shared_ptr<ArenaAllocator> &aggregate_allocator_p) {
+	D_ASSERT(partitioned_data);
+	D_ASSERT(aggregate_allocator);
+
 	partitioned_data->FlushAppendState(state.append_state);
 	partitioned_data_p = std::move(partitioned_data);
 	InitializePartitionedData();

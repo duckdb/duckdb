@@ -183,7 +183,6 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 
 void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
                                      DataChunk &payload_input, const unsafe_vector<idx_t> &filter) const {
-	auto &gstate = input.global_state.Cast<RadixHTGlobalState>();
 	auto &lstate = input.local_state.Cast<RadixHTLocalState>();
 
 	DataChunk &group_chunk = lstate.group_chunk;
@@ -195,7 +194,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 	}
 	lstate.ht->AddChunk(group_chunk, payload_input, filter);
 
-	if (lstate.ht->Count() + group_chunk.size() > GroupedAggregateHashTable::SinkCapacity()) {
+	if (lstate.ht->Count() + STANDARD_VECTOR_SIZE > GroupedAggregateHashTable::SinkCapacity()) {
 		CombineInternal(context, input.global_state, input.local_state);
 		lstate.ht->ClearFirstPart();
 	}
@@ -266,18 +265,6 @@ public:
 
 		auto &uncombined_data = finalize_partition->uncombined_data;
 		if (uncombined_data.empty()) {
-			return;
-		}
-
-		if (uncombined_data.size() == 1) {
-			auto &ucb = uncombined_data[0];
-			D_ASSERT(ucb.data_collection->Count() != 0);
-			lock_guard<mutex> guard(gstate.lock);
-			gstate.AddToFinal(std::move(ucb.data_collection));
-			for (auto &allocator : ucb.allocators) {
-				gstate.final_allocators.emplace_back(allocator);
-			}
-			uncombined_data.clear();
 			return;
 		}
 
@@ -378,7 +365,7 @@ public:
 						// Also give it ownership of the corresponding allocators
 						for (auto &ucb : uncombined_data) {
 							D_ASSERT(ucb.allocators.size() == 1);
-							data.allocators.emplace_back(std::move(ucb.allocators[0]));
+							data.allocators.emplace_back(ucb.allocators[0]);
 						}
 					}
 					uncombined_data.clear();
