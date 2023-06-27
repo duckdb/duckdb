@@ -1,0 +1,98 @@
+# name: test/sql/index/art/issues/test_art_fuzzer.test
+# description: Test different ART fuzzer issues
+# group: [issues]
+
+statement ok
+PRAGMA enable_verification
+
+# issue 5984, number 21
+statement ok
+CREATE TABLE t1 (c1 DECIMAL(4,3));
+
+statement ok
+INSERT INTO t1(c1) VALUES (1),(-0.505);
+
+statement ok
+CREATE INDEX i1 ON t1 (TRY_CAST(c1 AS USMALLINT));
+
+statement ok
+INSERT INTO t1(c1) VALUES (2),(3);
+
+# issue 5984, number 22
+# FIXME: eventually, we might want to rethink the way that we null-terminate keys, see #5865
+
+statement ok
+CREATE TABLE t2 (c1 VARCHAR);
+
+statement ok
+CREATE INDEX i2 ON t2 (c1);
+
+statement error
+INSERT INTO t2 VALUES (decode('g\x00'::BLOB)::VARCHAR),('g');
+----
+Not implemented Error: Indexes cannot contain BLOBs that contain null-terminated bytes.
+
+statement ok
+INSERT INTO t2 VALUES ('\0');
+
+statement ok
+CREATE INDEX i22 ON t2 (c1);
+
+# issue 5984, number 32
+
+statement ok
+CREATE TABLE t3(c1 INT);
+
+statement ok
+INSERT INTO t3 VALUES (0),(85491);
+
+statement ok
+CREATE INDEX i3 ON t3 (c1, (TRY_CAST(c1 AS USMALLINT)));
+
+# issue 5984, number 44
+
+statement ok
+CREATE TABLE t4 (c1 BOOLEAN);
+
+statement ok
+CREATE INDEX i4 ON t4 (c1);
+
+statement ok
+INSERT INTO t4 VALUES (1),(0),(1),(1);
+
+statement ok
+UPDATE t4 SET c1 = NULL;
+
+# issue 5984, number 19
+
+statement ok
+CREATE TABLE t_leak (c1 INT);
+
+statement ok
+INSERT INTO t_leak VALUES (2), (1), (1), (540000);
+
+statement error
+CREATE UNIQUE INDEX i_leak ON t_leak (c1);
+----
+Constraint Error: Data contains duplicates on indexed column(s)
+
+# issue 5984, number 22
+# FIXME: eventually, we might want to rethink the way that we null-terminate keys, see #5865
+# FIXME: this fails only with verification enabled and force reload, we should fix this when we
+# FIXME: address the null-terminated keys
+
+require skip_reload
+
+statement ok
+CREATE TABLE t21 (c1 INT);
+
+statement ok
+CREATE INDEX i21 ON t21 (c1, "decode"('\x00'::BLOB));
+
+statement error
+INSERT INTO t21 VALUES (1);
+----
+Not implemented Error: Indexes cannot contain BLOBs that contain null-terminated bytes.
+
+statement error
+CREATE INDEX i21 ON t21 (c1);
