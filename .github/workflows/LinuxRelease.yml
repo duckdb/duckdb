@@ -298,8 +298,6 @@ jobs:
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
 #    needs: linux-release-64
-    env:
-      GEN: ninja
 
     steps:
      - uses: actions/checkout@v3
@@ -309,12 +307,13 @@ jobs:
          ninja-build: 1
          ccache: 1
          odbc: 1
+         glibc32: 1
 
      - name: Build
        shell: bash
        run: |
          mkdir -p build/release
-         (cd build/release && cmake -DSTATIC_LIBCPP=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+         (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
      - name: Test
        shell: bash

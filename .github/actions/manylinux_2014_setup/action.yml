@@ -25,6 +25,9 @@ inputs:
   ssh:
     description: 'Setup SSH'
     default: 0
+  glibc32:
+    description: 'Setup 32bit glibc'
+    default: 0
 
 runs:
   using: "composite"
@@ -97,3 +100,8 @@ runs:
       if: ${{ inputs.ssh == 1 }}
       shell: bash
       run: yum install -y openssh-clients
+
+    - name: Setup 32bit compiler
+      if: ${{ inputs.glibc32 == 1 }}
+      shell: bash
+      run: yum -y install glibc-devel.i686 glibc-devel
