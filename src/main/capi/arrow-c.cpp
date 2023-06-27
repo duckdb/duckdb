@@ -95,13 +95,7 @@ duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_st
 		return DuckDBError;
 	}
 	auto arrow_wrapper = new ArrowResultWrapper();
-	if (wrapper->statement->context->config.set_variables.find("TimeZone") ==
-	    wrapper->statement->context->config.set_variables.end()) {
-		arrow_wrapper->options.time_zone = "UTC";
-	} else {
-		arrow_wrapper->options.time_zone =
-		    wrapper->statement->context->config.set_variables["TimeZone"].GetValue<std::string>();
-	}
+	arrow_wrapper->options = wrapper->statement->context->GetClientProperties();
 
 	auto result = wrapper->statement->Execute(wrapper->values, false);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
