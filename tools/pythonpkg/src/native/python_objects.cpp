@@ -416,29 +416,16 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type,
 		}
 		return py_timestamp;
 	}
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIME_TZ: {
+	case LogicalTypeId::TIME: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
-
 		int32_t hour, min, sec, microsec;
 		auto time = val.GetValueUnsafe<dtime_t>();
 		duckdb::Time::Convert(time, hour, min, sec, microsec);
 		auto py_time = py::reinterpret_steal<py::object>(PyTime_FromTime(hour, min, sec, microsec));
-		if (type.id() == LogicalTypeId::TIME_TZ) {
-			// Time in Python is not really timezone aware, so we have to transform it to a datetime, apply the timezone
-			// and get the time
-			auto tz_utc = import_cache.pytz().timezone()("UTC");
-			auto py_timestamp = import_cache.datetime().datetime().attr("combine")(
-			    import_cache.datetime().datetime().attr("today")(), py_time);
-			auto timestamp_utc = tz_utc.attr("localize")(py_timestamp);
-			auto tz_info = import_cache.pytz().timezone()(client_properties.time_zone);
-			return timestamp_utc.attr("astimezone")(tz_info).attr("time")();
-		}
 		return py::reinterpret_steal<py::object>(PyTime_FromTime(hour, min, sec, microsec));
 	}
 	case LogicalTypeId::DATE: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT32);
-
 		auto date = val.GetValueUnsafe<date_t>();
 		int32_t year, month, day;
 		duckdb::Date::Convert(date, year, month, day);

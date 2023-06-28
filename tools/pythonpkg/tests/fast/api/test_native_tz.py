@@ -29,19 +29,8 @@ def test_native_python_timestamp_timezone():
 
 def test_native_python_time_timezone():
 	con = duckdb.connect('')
-	con.execute("SET timezone='America/Los_Angeles';")
-	res = con.execute(f"select TimeRecStart::TIMETZ as tz  from '{filename}'").fetchone()
-	assert res[0].hour == 14 and res[0].minute == 52
-
-	res = con.execute(f"select TimeRecStart::TIMETZ as tz  from '{filename}'").fetchall()[0]
-	assert res[0].hour == 14 and res[0].minute == 52
-
-	res = con.execute(f"select TimeRecStart::TIMETZ as tz  from '{filename}'").fetchmany(1)[0]
-	assert res[0].hour == 14 and res[0].minute == 52
-
-	con.execute("SET timezone='UTC';")
-	res = con.execute(f"select TimeRecStart::TIMETZ as tz  from '{filename}'").fetchone()
-	assert res[0].hour == 21 and res[0].minute == 52
+	with pytest.raises(duckdb.NotImplementedException, match="Not implemented Error: Unsupported type"):
+		con.execute(f"select TimeRecStart::TIMETZ  as tz  from '{filename}'").fetchone()
 
 def test_pandas_timestamp_timezone():
 	con = duckdb.connect('')
