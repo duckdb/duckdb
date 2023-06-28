@@ -181,7 +181,7 @@ public:
 
 		// Calculate delta's
 		// compression_buffer pointer points one element ahead of the internal buffer making the use of signed index integer (-1) possible
-		D_ASSERT(compression_buffer_idx <= NumericLimits<int64_t>::maximum() );
+		D_ASSERT(compression_buffer_idx <= NumericLimits<int64_t>::Maximum() );
 		if (can_do_all) {
 			for (int64_t i = 0; i < static_cast<int64_t>(compression_buffer_idx); i++) {
 				delta_buffer[i] = static_cast<T_S>(compression_buffer[i]) - static_cast<T_S>(compression_buffer[i - 1]);
@@ -198,7 +198,7 @@ public:
 
 		can_do_delta = true;
 
-		for (int64_t i = 1; i < static_cast<int64_t>(compression_buffer_idx); i++) {
+		for (idx_t i = 1; i < compression_buffer_idx; i++) {
 			maximum_delta = MaxValue<T_S>(maximum_delta, delta_buffer[i]);
 			minimum_delta = MinValue<T_S>(minimum_delta, delta_buffer[i]);
 		}
