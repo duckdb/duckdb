@@ -1,3 +1,5 @@
+# name: test/sql/sqlpgq/pgq_keywords.test
+# group: [sqlpgq]
 
 statement ok
 pragma enable_verification

@@ -1,4 +1,4 @@
-# name: test/sql/sqlpgq/basic_match.test
+# name: test/sql/sqlpgq/shortest_path.test
 # group: [sqlpgq]
 
 statement ok

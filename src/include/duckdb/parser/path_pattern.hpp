@@ -14,10 +14,10 @@ public:
 	unique_ptr<ParsedExpression> where_clause;
 	vector<unique_ptr<PathReference>> path_elements;
 
-    bool all = false;
-    bool shortest = false;
-    bool group = false;
-    int32_t topk = false;
+	bool all = false;
+	bool shortest = false;
+	bool group = false;
+	int32_t topk = false;
 
 	PathPattern() {
 

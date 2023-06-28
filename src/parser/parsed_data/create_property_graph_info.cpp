@@ -5,17 +5,14 @@
 
 namespace duckdb {
 
-CreatePropertyGraphInfo::CreatePropertyGraphInfo() :
-        CreateInfo(CatalogType::VIEW_ENTRY) {
+CreatePropertyGraphInfo::CreatePropertyGraphInfo() : CreateInfo(CatalogType::VIEW_ENTRY) {
 }
 
-
-CreatePropertyGraphInfo::CreatePropertyGraphInfo(string property_graph_name) :
-        CreateInfo(CatalogType::VIEW_ENTRY),
-        property_graph_name(std::move(property_graph_name)) {
+CreatePropertyGraphInfo::CreatePropertyGraphInfo(string property_graph_name)
+    : CreateInfo(CatalogType::VIEW_ENTRY), property_graph_name(std::move(property_graph_name)) {
 }
 //
-//string CreatePropertyGraphInfo::ToString() const {
+// string CreatePropertyGraphInfo::ToString() const {
 //    string result;
 //    result += "CREATE PROPERTY GRAPH " + property_graph_name + "\n";
 //    result += "VERTEX TABLES (\n";
@@ -40,7 +37,7 @@ CreatePropertyGraphInfo::CreatePropertyGraphInfo(string property_graph_name) :
 //    return result;
 //}
 //
-//bool CreatePropertyGraphInfo::Equals(const BaseExpression *other_p) const {
+// bool CreatePropertyGraphInfo::Equals(const BaseExpression *other_p) const {
 //    auto other = (CreatePropertyGraphInfo *)other_p;
 //    if (property_graph_name != other->property_graph_name) {
 //        return false;
@@ -66,47 +63,46 @@ CreatePropertyGraphInfo::CreatePropertyGraphInfo(string property_graph_name) :
 //    return true;
 //}
 
-
 void CreatePropertyGraphInfo::SerializeInternal(Serializer &serializer) const {
-    FieldWriter writer(serializer);
+	FieldWriter writer(serializer);
 	writer.WriteString(property_graph_name);
-    writer.WriteSerializableList<PropertyGraphTable>(vertex_tables);
-    writer.WriteSerializableList<PropertyGraphTable>(edge_tables);
-//    writer.WriteRegularSerializableMap<PropertyGraphTable*>(label_map);
+	writer.WriteSerializableList<PropertyGraphTable>(vertex_tables);
+	writer.WriteSerializableList<PropertyGraphTable>(edge_tables);
+	//    writer.WriteRegularSerializableMap<PropertyGraphTable*>(label_map);
 
-    writer.Finalize();
+	writer.Finalize();
 }
 
 unique_ptr<CreateInfo> CreatePropertyGraphInfo::Copy() const {
 	auto result = make_uniq<CreatePropertyGraphInfo>(property_graph_name);
 
 	for (auto &vertex_table : vertex_tables) {
-        auto copied_vertex_table = vertex_table->Copy();
-        for (auto &label : copied_vertex_table->sub_labels) {
-            result->label_map[label] = copied_vertex_table.get();
-        }
-        result->label_map[copied_vertex_table->main_label] = copied_vertex_table.get();
+		auto copied_vertex_table = vertex_table->Copy();
+		for (auto &label : copied_vertex_table->sub_labels) {
+			result->label_map[label] = copied_vertex_table.get();
+		}
+		result->label_map[copied_vertex_table->main_label] = copied_vertex_table.get();
 		result->vertex_tables.push_back(std::move(copied_vertex_table));
 	}
 	for (auto &edge_table : edge_tables) {
-        auto copied_edge_table = edge_table->Copy();
-        for (auto &label : copied_edge_table->sub_labels) {
-            result->label_map[label] = copied_edge_table.get();
-        }
-        result->label_map[copied_edge_table->main_label] = copied_edge_table.get();
-        result->edge_tables.push_back(std::move(copied_edge_table));
+		auto copied_edge_table = edge_table->Copy();
+		for (auto &label : copied_edge_table->sub_labels) {
+			result->label_map[label] = copied_edge_table.get();
+		}
+		result->label_map[copied_edge_table->main_label] = copied_edge_table.get();
+		result->edge_tables.push_back(std::move(copied_edge_table));
 	}
 	return std::move(result);
 }
 
-    unique_ptr<CreateInfo> CreatePropertyGraphInfo::Deserialize(FieldReader &reader) {
-        auto result = make_uniq<CreatePropertyGraphInfo>();
-        result->property_graph_name = reader.ReadRequired<string>();
-        result->vertex_tables = reader.ReadRequiredSerializableList<PropertyGraphTable>();
-        result->edge_tables = reader.ReadRequiredSerializableList<PropertyGraphTable>();
-//        result->label_map = reader.ReadRequiredSerializableMap<PropertyGraphTable>();
-        reader.Finalize();
-        return result;
-    }
+unique_ptr<CreateInfo> CreatePropertyGraphInfo::Deserialize(FieldReader &reader) {
+	auto result = make_uniq<CreatePropertyGraphInfo>();
+	result->property_graph_name = reader.ReadRequired<string>();
+	result->vertex_tables = reader.ReadRequiredSerializableList<PropertyGraphTable>();
+	result->edge_tables = reader.ReadRequiredSerializableList<PropertyGraphTable>();
+	//        result->label_map = reader.ReadRequiredSerializableMap<PropertyGraphTable>();
+	reader.Finalize();
+	return result;
+}
 
 } // namespace duckdb
