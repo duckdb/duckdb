@@ -1,0 +1,211 @@
+# name: test/sql/index/art/types/test_art_bigint.test_slow
+# description: Test ART BIGINT key type
+# group: [types]
+
+statement ok
+PRAGMA enable_verification
+
+require skip_reload
+
+statement ok
+PRAGMA force_index_join
+
+# BEGIN TYPE BIGINT
+statement ok
+CREATE TABLE integers(i BIGINT)
+
+statement ok
+CREATE TABLE storage as select i::BIGINT i, random() j from range(1, 1001, 1) tbl(i)
+
+statement ok
+CREATE INDEX i_index ON integers(i)
+
+statement ok
+BEGIN TRANSACTION
+
+# START LOOP 0..1000
+loop i 0 1000
+
+# insert the first entry (randomly ordered)
+statement ok
+INSERT INTO integers VALUES ((select i from storage order by j limit 1));
+
+# verify that it was inserted
+query I
+SELECT COUNT(*) FROM integers WHERE i=(select i from storage order by j limit 1)
+----
+1
+
+# remove it from the storage
+
+statement ok
+DELETE FROM storage WHERE i=(select i from storage order by j limit 1);
+
+endloop
+
+statement ok
+COMMIT
+
+# Checking non-existing values
+query I
+SELECT i FROM integers WHERE i=CAST(-1 AS BIGINT)
+----
+
+query I
+SELECT i FROM integers WHERE i=CAST(1001 AS BIGINT)
+----
+
+# Checking if all elements are there
+loop i 0 1000
+
+query I
+SELECT COUNT(*) FROM integers WHERE i=CAST(${i}+1 AS BIGINT)
+----
+1
+
+endloop
+
+# Checking Multiple Range Queries
+query R
+SELECT sum(i) FROM integers WHERE i >= 99
+----
+495649
+
+query R
+SELECT sum(i) FROM integers WHERE i > 98
+----
+495649
+
+query R
+SELECT sum(i) FROM integers WHERE i > 2 AND i < 5
+----
+7.000000
+
+query R
+SELECT sum(i) FROM integers WHERE i >=2 AND i <5
+----
+9.000000
+
+query R
+SELECT sum(i) FROM integers WHERE i >2 AND i <=5
+----
+12.000000
+
+query R
+SELECT sum(i) FROM integers WHERE i >=2 AND i <=5
+----
+14.000000
+
+query R
+SELECT sum(i) FROM integers WHERE i <=2
+----
+3.000000
+
+query R
+SELECT sum(i) FROM integers WHERE i <0
+----
+NULL
+
+query R
+SELECT sum(i) FROM integers WHERE i >100000000
+----
+NULL
+
+# Checking Duplicates
+statement ok
+INSERT INTO integers VALUES (1)
+
+query R
+SELECT SUM(i) FROM integers WHERE i=1
+----
+2.000000
+
+# Successful update
+statement ok
+UPDATE integers SET i=14 WHERE i=13
+
+query I
+SELECT * FROM integers WHERE i=14
+----
+14
+14
+
+# Testing rollbacks and commits
+# rolled back update
+statement ok
+BEGIN TRANSACTION
+
+# update the value
+statement ok
+UPDATE integers SET i=14 WHERE i=12
+
+# now there are three values with 14
+query I
+SELECT * FROM integers WHERE i=14
+----
+14
+14
+14
+
+# rollback the value
+statement ok
+ROLLBACK
+
+# after the rollback
+query I
+SELECT * FROM integers WHERE i=14
+----
+14
+14
+
+# roll back insert
+statement ok
+BEGIN TRANSACTION
+
+# update the value
+statement ok
+INSERT INTO integers VALUES (14)
+
+# now there are three values with 14
+query I
+SELECT * FROM integers WHERE i=14
+----
+14
+14
+14
+
+# rollback the value
+statement ok
+ROLLBACK
+
+# after the rol
+query I
+SELECT * FROM integers WHERE i=14
+----
+14
+14
+
+# Testing deletes
+# Delete non-existing element
+statement ok
+DELETE FROM integers WHERE i=0
+
+# Now delete all elements
+loop i 0 1000
+
+statement ok
+CREATE TEMPORARY TABLE temp_table AS SELECT i FROM integers ORDER BY RANDOM() LIMIT 1;
+
+statement ok
+DELETE FROM integers WHERE i=(SELECT * FROM temp_table);
+
+# verify the entry is gone
+query I
+SELECT COUNT(*) FROM integers WHERE i=CAST((SELECT * FROM temp_table) AS BIGINT)
+----
+0
+
+statement ok
+DROP TABLE temp_table
+
+endloop
