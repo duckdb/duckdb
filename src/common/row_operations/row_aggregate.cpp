@@ -73,34 +73,43 @@ void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &la
 		return;
 	}
 
+	Vector sources_copy(LogicalType::POINTER);
+	Vector targets_copy(LogicalType::POINTER);
+	VectorOperations::Copy(sources, sources_copy, count, 0, 0);
+	VectorOperations::Copy(targets, targets_copy, count, 0, 0);
+
 	//	Move to the first aggregate states
-	VectorOperations::AddInPlace(sources, layout.GetAggrOffset(), count);
-	VectorOperations::AddInPlace(targets, layout.GetAggrOffset(), count);
+	VectorOperations::AddInPlace(sources_copy, layout.GetAggrOffset(), count);
+	VectorOperations::AddInPlace(targets_copy, layout.GetAggrOffset(), count);
 	for (auto &aggr : layout.GetAggregates()) {
 		D_ASSERT(aggr.function.combine);
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
-		aggr.function.combine(sources, targets, aggr_input_data, count);
+		aggr.function.combine(sources_copy, targets_copy, aggr_input_data, count);
 
 		// Move to the next aggregate states
-		VectorOperations::AddInPlace(sources, aggr.payload_size, count);
-		VectorOperations::AddInPlace(targets, aggr.payload_size, count);
+		VectorOperations::AddInPlace(sources_copy, aggr.payload_size, count);
+		VectorOperations::AddInPlace(targets_copy, aggr.payload_size, count);
 	}
 }
 
 void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses,
                                    DataChunk &result, idx_t aggr_idx) {
+	// Copy the addresses
+	Vector addresses_copy(LogicalType::POINTER);
+	VectorOperations::Copy(addresses, addresses_copy, result.size(), 0, 0);
+
 	//	Move to the first aggregate state
-	VectorOperations::AddInPlace(addresses, layout.GetAggrOffset(), result.size());
+	VectorOperations::AddInPlace(addresses_copy, layout.GetAggrOffset(), result.size());
 
 	auto &aggregates = layout.GetAggregates();
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[aggr_idx + i];
 		auto &aggr = aggregates[i];
 		AggregateInputData aggr_input_data(aggr.GetFunctionData(), state.allocator);
-		aggr.function.finalize(addresses, aggr_input_data, target, result.size(), 0);
+		aggr.function.finalize(addresses_copy, aggr_input_data, target, result.size(), 0);
 
 		// Move to the next aggregate state
-		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());
+		VectorOperations::AddInPlace(addresses_copy, aggr.payload_size, result.size());
 	}
 }
 

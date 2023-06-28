@@ -234,15 +234,13 @@ public:
 };
 
 void PhysicalHashAggregate::SetMultiScan(GlobalSinkState &state) {
-	// TODO
-//	auto &gstate = state.Cast<HashAggregateGlobalState>();
-//	for (auto &grouping_state : gstate.grouping_states) {
-//		auto &radix_state = grouping_state.table_state;
-//		RadixPartitionedHashTable::SetMultiScan(*radix_state);
-//		if (!grouping_state.distinct_state) {
-//			continue;
-//		}
-//	}
+	auto &gstate = state.Cast<HashAggregateGlobalState>();
+	for (auto &grouping_state : gstate.grouping_states) {
+		RadixPartitionedHashTable::SetMultiScan(*grouping_state.table_state);
+		if (!grouping_state.distinct_state) {
+			continue;
+		}
+	}
 }
 
 unique_ptr<GlobalSinkState> PhysicalHashAggregate::GetGlobalSinkState(ClientContext &context) const {

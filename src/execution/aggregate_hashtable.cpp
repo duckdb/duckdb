@@ -521,6 +521,8 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data) {
 		FindOrCreateGroups(fm_state.groups, fm_state.hashes, fm_state.group_addresses, fm_state.new_groups_sel);
 		RowOperations::CombineStates(row_state, layout, fm_state.scan_state.chunk_state.row_locations,
 		                             fm_state.group_addresses, fm_state.groups.size());
+		RowOperations::DestroyStates(row_state, layout, fm_state.scan_state.chunk_state.row_locations,
+		                             fm_state.groups.size());
 	}
 
 	Verify();

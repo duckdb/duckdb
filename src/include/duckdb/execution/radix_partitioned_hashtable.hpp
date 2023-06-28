@@ -9,13 +9,10 @@
 #pragma once
 
 #include "duckdb/execution/operator/aggregate/grouped_aggregate_data.hpp"
-#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/group_by_node.hpp"
 
 namespace duckdb {
-class BufferManager;
 class Executor;
-class PhysicalHashAggregate;
 class Pipeline;
 class Task;
 
@@ -52,6 +49,8 @@ public:
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context) const;
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink,
 	                         OperatorSourceInput &input) const;
+
+	static void SetMultiScan(GlobalSinkState &sink);
 
 private:
 	idx_t CountInternal(GlobalSinkState &sink) const;
