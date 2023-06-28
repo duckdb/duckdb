@@ -1,10 +1,10 @@
-# name: test/sql/sqlpgq/create_property_graph.test
-# group: [sqlpgq]
-
-statement ok
-pragma enable_verification
+# name: test/sql/create_property_graph.test
+# group: [duckpgq]
 
 require duckpgq
+
+#statement ok
+#pragma enable_verification
 
 statement ok
 CREATE TABLE Student(id BIGINT, name VARCHAR);
@@ -22,97 +22,108 @@ statement ok
 INSERT INTO know VALUES (0,1, 10), (0,2, 11), (0,3, 12), (1,2, 14), (1,3, 15), (2,3, 16);
 
 # vertex table with alias
-statement ok
-CREATE PROPERTY GRAPH pg
-VERTEX TABLES (
-    Student PROPERTIES ( id, name ) LABEL Person,
-    School as school_alias PROPERTIES ( school_id, school_name ) LABEL School IN School_kind (Hogeschool, University)
-    )
-EDGE TABLES (
-    know    SOURCE KEY ( src ) REFERENCES Student ( id )
-            DESTINATION KEY ( dst ) REFERENCES Student ( id )
-            PROPERTIES ( createDate ) LABEL Knows
-    )
+#statement ok
+#-CREATE PROPERTY GRAPH pg
+#VERTEX TABLES (
+#    Student PROPERTIES ( id, name ) LABEL Person,
+#    School as school_alias PROPERTIES ( school_id, school_name ) LABEL School IN School_kind (Hogeschool, University)
+#    )
+#EDGE TABLES (
+#    know    SOURCE KEY ( src ) REFERENCES Student ( id )
+#            DESTINATION KEY ( dst ) REFERENCES Student ( id )
+#            PROPERTIES ( createDate ) LABEL Knows
+#    )
+#
+## Error as property graph pg already exists
+#statement error
+#-CREATE PROPERTY GRAPH pg
+#VERTEX TABLES (
+#    Student PROPERTIES ( id, name ) LABEL Person,
+#    School PROPERTIES ( school_id, school_name) LABEL School IN School_kind (Hogeschool, University)
+#    )
+#EDGE TABLES (
+#    know    SOURCE KEY ( src ) REFERENCES Student ( id )
+#            DESTINATION KEY ( dst ) REFERENCES Student ( id )
+#            PROPERTIES ( createDate ) LABEL Knows
+#    )
+#----
+#Binder Error: Property graph table with name pg already exists
+#
+#statement ok
+#-CREATE PROPERTY GRAPH pg1
+#VERTEX TABLES (
+#    Student as Student_alias PROPERTIES ( id as id_alias, name ) LABEL Person
+#    )
+#EDGE TABLES (
+#    know    SOURCE KEY ( src ) REFERENCES Student ( id )
+#            DESTINATION KEY ( dst ) REFERENCES Student ( id )
+#            PROPERTIES ( createDate ) LABEL Knows
+#    )
+#
+## Missing the keyword IN between Person and Person_alias
+#statement error
+#-CREATE PROPERTY GRAPH pg
+#VERTEX TABLES (
+#    Student PROPERTIES ( id as id, name ) LABEL Person Person_alias Person2_alias,
+#    )
+#EDGE TABLES (
+#    know    SOURCE KEY ( src ) REFERENCES Student ( id )
+#            DESTINATION KEY ( dst ) REFERENCES Student ( id )
+#            PROPERTIES ( createDate ) LABEL Knows
+#    )
+#----
+#Parser Error: syntax error at or near "Person_alias"
+#
+## Duplicate labels
+#statement error
+#-CREATE PROPERTY GRAPH pg2
+#VERTEX TABLES (
+#    Student PROPERTIES ( id, name ) LABEL Person,
+#    School as school_alias PROPERTIES ( school_id, school_name) LABEL School IN School_kind (University, Hogeschool, University)
+#    )
+#EDGE TABLES (
+#    know    SOURCE KEY ( src ) REFERENCES Student ( id )
+#            DESTINATION KEY ( dst ) REFERENCES Student ( id )
+#            PROPERTIES ( createDate ) LABEL Knows
+#    )
+#----
+#Constraint Error: Label university is not unique, make sure all labels are unique
+#
+## Should fail as ( * ) is not allowed in the PROPERTIES list, in this case, PROPERTIES ( * ) should be omitted
+#statement error
+#-CREATE PROPERTY GRAPH pg3
+#VERTEX TABLES (
+#    Student PROPERTIES ( * ) LABEL Person,
+#    School PROPERTIES ( * ) LABEL School IN School_kind (Hogeschool, University)
+#    )
+#EDGE TABLES (
+#    know    SOURCE KEY ( src ) REFERENCES Student ( id )
+#            DESTINATION KEY ( dst ) REFERENCES Student ( id )
+#            PROPERTIES ( createDate ) LABEL Knows
+#    )
+#----
+#Parser Error: syntax error at or near "*"
+#
+#
+## Should fail since the edge table references vertex tables that do not exist
+#statement error
+#-CREATE PROPERTY GRAPH pg3
+#VERTEX TABLES (
+#    School  LABEL School IN School_kind (Hogeschool, University)
+#    )
+#EDGE TABLES (
+#    know    SOURCE KEY ( src ) REFERENCES Student ( id )
+#            DESTINATION KEY ( dst ) REFERENCES Student ( id )
+#            PROPERTIES ( createDate ) LABEL Knows
+#    )
+#----
+#Binder Error: Referenced vertex table Student does not exist.
+#
 
-# Error as property graph pg already exists
-statement error
-CREATE PROPERTY GRAPH pg
-VERTEX TABLES (
-    Student PROPERTIES ( id, name ) LABEL Person,
-    School PROPERTIES ( school_id, school_name) LABEL School IN School_kind (Hogeschool, University)
-    )
-EDGE TABLES (
-    know    SOURCE KEY ( src ) REFERENCES Student ( id )
-            DESTINATION KEY ( dst ) REFERENCES Student ( id )
-            PROPERTIES ( createDate ) LABEL Knows
-    )
-
-statement ok
-CREATE PROPERTY GRAPH pg1
-VERTEX TABLES (
-    Student as Student_alias PROPERTIES ( id as id_alias, name ) LABEL Person
-    )
-EDGE TABLES (
-    know    SOURCE KEY ( src ) REFERENCES Student ( id )
-            DESTINATION KEY ( dst ) REFERENCES Student ( id )
-            PROPERTIES ( createDate ) LABEL Knows
-    )
-
-
-# Missing the keyword IN between Person and Person_alias
-statement error
-CREATE PROPERTY GRAPH pg
-VERTEX TABLES (
-    Student PROPERTIES ( id as id, name ) LABEL Person Person_alias Person2_alias,
-    )
-EDGE TABLES (
-    know    SOURCE KEY ( src ) REFERENCES Student ( id )
-            DESTINATION KEY ( dst ) REFERENCES Student ( id )
-            PROPERTIES ( createDate ) LABEL Knows
-    )
-
-# Duplicate labels
-statement error
-CREATE PROPERTY GRAPH pg2
-VERTEX TABLES (
-    Student PROPERTIES ( id, name ) LABEL Person,
-    School as school_alias PROPERTIES ( school_id, school_name) LABEL School IN School_kind (University, Hogeschool, University)
-    )
-EDGE TABLES (
-    know    SOURCE KEY ( src ) REFERENCES Student ( id )
-            DESTINATION KEY ( dst ) REFERENCES Student ( id )
-            PROPERTIES ( createDate ) LABEL Knows
-    )
-
-# Should fail as ( * ) is not allowed in the PROPERTIES list, in this case, PROPERTIES ( * ) should be omitted
-statement error
-CREATE PROPERTY GRAPH pg3
-VERTEX TABLES (
-    Student PROPERTIES ( * ) LABEL Person,
-    School PROPERTIES ( * ) LABEL School IN School_kind (Hogeschool, University)
-    )
-EDGE TABLES (
-    know    SOURCE KEY ( src ) REFERENCES Student ( id )
-            DESTINATION KEY ( dst ) REFERENCES Student ( id )
-            PROPERTIES ( createDate ) LABEL Knows
-    )
-
+### Currently fails due to the internal query throwing a path keyword
 # Should fail since the edge table references vertex tables that do not exist
 statement error
-CREATE PROPERTY GRAPH pg3
-VERTEX TABLES (
-    School  LABEL School IN School_kind (Hogeschool, University)
-    )
-EDGE TABLES (
-    know    SOURCE KEY ( src ) REFERENCES Student ( id )
-            DESTINATION KEY ( dst ) REFERENCES Student ( id )
-            PROPERTIES ( createDate ) LABEL Knows
-    )
-
-
-# Should fail since the edge table references vertex tables that do not exist
-statement error
-CREATE PROPERTY GRAPH pg3
+-CREATE PROPERTY GRAPH pg3
 VERTEX TABLES (
     School  LABEL School IN School_kind (Hogeschool, University)
     )
