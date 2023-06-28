@@ -35,44 +35,47 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Do the git permissions thing
-      shell: bash
-      run: |
-        git config --global --add safe.directory '*'
-
     - name: Setup general dependencies
       shell: bash
-      run: yum install -y curl zip unzip tar
+      run: scripts/setup_manylinux2014.sh general
 
     - name: Install AWS CLI
       if: ${{ inputs.aws-cli == 1 }}
       shell: bash
-      run: |
-        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-        unzip awscliv2.zip
-        ./aws/install
-        aws --version
-
-    - name: Setup dependencies for building DuckDB quickly
-      if: ${{ inputs.ninja-build == 1 }}
-      shell: bash
-      run: yum install -y ninja-build
+      run: scripts/setup_manylinux2014.sh aws-cli
 
     - name: Setup dependencies for ODBC
       if: ${{ inputs.odbc == 1 }}
       shell: bash
-      run: yum install -y unixODBC-devel
-
-    - name: Setup dependencies for installing OpenSSL through vcpkg
-      if: ${{ inputs.openssl == 1 }}
-      shell: bash
-      run: yum install -y perl-IPC-Cmd
+      run: scripts/setup_manylinux2014.sh odbc
 
     - name: Setup dependencies for ccache
       if: ${{ inputs.ccache == 1 }}
       shell: bash
-      run: yum -y install ccache
+      run: scripts/setup_manylinux2014.sh ccache
 
+    - name: Setup JDK
+      if: ${{ inputs.jdk == 1 }}
+      shell: bash
+      run: scripts/setup_manylinux2014.sh jdk
+
+    - name: Setup SSH
+      if: ${{ inputs.ssh == 1 }}
+      shell: bash
+      run: scripts/setup_manylinux2014.sh ssh
+
+    - name: Setup 32bit compiler
+      if: ${{ inputs.glibc32 == 1 }}
+      shell: bash
+      run: scripts/setup_manylinux2014.sh glibc32
+
+    - name: Setup old (GCC 4.8) compiler
+      if: ${{ inputs.gcc_4_8 == 1 }}
+      shell: bash
+      run: scripts/setup_manylinux2014.sh gcc_4_8
+
+    # Note instead of using scripts/setup_manylinux2014.sh vcpkg, we prefer to use
+    # lukka/run-vcpkg@v11 here as it configures vcpkg to cache to GH actions.
     - name: Setup vcpkg
       if: ${{ inputs.vcpkg == 1 }}
       uses: lukka/run-vcpkg@v11
@@ -82,9 +85,7 @@ runs:
     - name: Install OpenSSL
       if: ${{ inputs.openssl == 1 }}
       shell: bash
-      run: |
-        cd $GITHUB_WORKSPACE/vcpkg
-        ./vcpkg install openssl
+      run: scripts/setup_manylinux2014.sh openssl
 
     - name: Setup Ccache
       if: ${{ inputs.ccache == 1 }}
@@ -92,23 +93,3 @@ runs:
       with:
         key: ${{ github.job }}
         save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Setup JDK
-      if: ${{ inputs.jdk == 1 }}
-      shell: bash
-      run: yum install -y java-11-openjdk-devel maven
-
-    - name: Setup SSH
-      if: ${{ inputs.ssh == 1 }}
-      shell: bash
-      run: yum install -y openssh-clients
-
-    - name: Setup 32bit compiler
-      if: ${{ inputs.glibc32 == 1 }}
-      shell: bash
-      run: yum install -y libgcc*i686 libstdc++*i686 glibc*i686 libgfortran*i686
-
-    - name: Setup old (GCC 4.8) compiler
-      if: ${{ inputs.gcc_4_8 == 1 }}
-      shell: bash
-      run: yum install -y gcc-c++

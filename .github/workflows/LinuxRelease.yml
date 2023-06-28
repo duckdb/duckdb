@@ -285,7 +285,7 @@ jobs:
     - name: Check if extension_functions.hpp is up to date
       shell: bash
       run: |
-        python3.7 scripts/generate_extensions_function.py --validate
+        python3.9 scripts/generate_extensions_function.py --validate
 
  symbol-leakage:
     name: Symbol Leakage
