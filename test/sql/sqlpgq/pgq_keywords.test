@@ -1,10 +1,19 @@
-# name: test/sql/sqlpgq/shortest_path.test
+# name: test/sql/sqlpgq/pgq_keywords.test
 # group: [sqlpgq]
 
 statement ok
 pragma enable_verification
 
 require duckpgq
+
+statement ok
+select 1 as path;
+
+statement ok
+select 1 as group;
+
+statement ok
+SELECT database_oid AS seq, database_name AS name, path AS file FROM duckdb_databases() WHERE NOT internal ORDER BY 1
 
 statement ok
 CREATE TABLE Student(id BIGINT, name VARCHAR);
@@ -31,7 +40,7 @@ statement ok
 INSERT INTO StudyAt VALUES (0, 0), (1, 0), (2, 1), (3, 1), (4, 1);
 
 statement ok
-CREATE PROPERTY GRAPH pg
+-CREATE PROPERTY GRAPH pg
 VERTEX TABLES (
     Student PROPERTIES ( id, name ) LABEL Person,
     School LABEL SCHOOL
@@ -46,20 +55,12 @@ EDGE TABLES (
     );
 
 query II
+-SELECT study.name, study.school
 FROM GRAPH_TABLE (pg
     MATCH
-    ANY SHORTEST (a:Person)-[s:StudyAt]->(b:School)
+    (a:Person)-[s:StudyAt]->(b:School)
     WHERE a.name = 'Daniel'
     COLUMNS (a.name as name, b.name as school)
     ) study;
 ----
 Daniel	VU
-
-query II
-FROM GRAPH_TABLE (pg
-    MATCH
-    ANY SHORTEST (a:Person)-[k:knows]->{0,0}(b:Person)
-    WHERE a.name = 'Daniel'
-    COLUMNS (a.name as name, b.name as school)
-    ) study;
-----

@@ -134,9 +134,6 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	base.types = query_node.types;
 }
 
-
-
-
 static void QualifyFunctionNames(ClientContext &context, unique_ptr<ParsedExpression> &expr) {
 	switch (expr->GetExpressionClass()) {
 	case ExpressionClass::FUNCTION: {

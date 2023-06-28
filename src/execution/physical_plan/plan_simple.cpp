@@ -43,8 +43,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSimple &op
 	case LogicalOperatorType::LOGICAL_DETACH:
 		return make_uniq<PhysicalDetach>(unique_ptr_cast<ParseInfo, DetachInfo>(std::move(op.info)),
 		                                 op.estimated_cardinality);
-    default:
-        throw NotImplementedException("Unimplemented type for logical simple operator");
+	default:
+		throw NotImplementedException("Unimplemented type for logical simple operator");
 	}
 }
 

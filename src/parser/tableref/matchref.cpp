@@ -3,7 +3,6 @@
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/common/field_writer.hpp"
 
-
 namespace duckdb {
 
 string MatchExpression::ToString() const {
@@ -82,15 +81,15 @@ bool MatchExpression::Equals(const BaseExpression &other_p) const {
 
 	// columns
 	for (idx_t i = 0; i < column_list.size(); i++) {
-        if (!ParsedExpression::Equals(column_list[i], other.column_list[i])) {
+		if (!ParsedExpression::Equals(column_list[i], other.column_list[i])) {
 			return false;
 		}
 	}
 
 	// where clause
 	if (where_clause && other.where_clause.get()) {
-        if (!ParsedExpression::Equals(where_clause, other.where_clause)) {
-            return false;
+		if (!ParsedExpression::Equals(where_clause, other.where_clause)) {
+			return false;
 		}
 	}
 	if ((where_clause && !other.where_clause.get()) || (!where_clause && other.where_clause.get())) {
@@ -133,7 +132,7 @@ unique_ptr<ParsedExpression> MatchExpression::Deserialize(FieldReader &reader) {
 	result->path_list = reader.ReadRequiredSerializableList<PathPattern>();
 	result->column_list = reader.ReadRequiredSerializableList<ParsedExpression>();
 	result->where_clause = reader.ReadOptional<ParsedExpression>(nullptr);
-    reader.Finalize();
+	reader.Finalize();
 	return result;
 }
 

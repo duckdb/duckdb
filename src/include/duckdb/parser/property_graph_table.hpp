@@ -57,12 +57,12 @@ public:
 	string destination_reference;
 
 public:
-    string ToString() const;
-    bool Equals(const PropertyGraphTable *other_p) const;
+	string ToString() const;
+	bool Equals(const PropertyGraphTable *other_p) const;
 
-    unique_ptr<PropertyGraphTable> Copy() const;
+	unique_ptr<PropertyGraphTable> Copy() const;
 
-    void Serialize(Serializer &serializer) const;
+	void Serialize(Serializer &serializer) const;
 
 	static unique_ptr<PropertyGraphTable> Deserialize(Deserializer &deserializer);
 };

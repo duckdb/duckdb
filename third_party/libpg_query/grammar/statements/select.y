@@ -3973,16 +3973,22 @@ Iconst:		ICONST									{ $$ = $1; };
 type_function_name:	IDENT							{ $$ = $1; }
 			| unreserved_keyword					{ $$ = pstrdup($1); }
 			| type_func_name_keyword				{ $$ = pstrdup($1); }
+            | pgq_unreserved_keyword                { $$ = pstrdup($1); }
+
 		;
 
 function_name_token:	IDENT						{ $$ = $1; }
 			| unreserved_keyword					{ $$ = pstrdup($1); }
 			| func_name_keyword						{ $$ = pstrdup($1); }
+            | pgq_unreserved_keyword                { $$ = pstrdup($1); }
+
 		;
 
 type_name_token:	IDENT						{ $$ = $1; }
 			| unreserved_keyword					{ $$ = pstrdup($1); }
 			| type_name_keyword						{ $$ = pstrdup($1); }
+            | pgq_unreserved_keyword                { $$ = pstrdup($1); }
+
 		;
 
 any_name:	ColId						{ $$ = list_make1(makeString($1)); }

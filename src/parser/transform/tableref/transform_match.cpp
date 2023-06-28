@@ -2,7 +2,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
-
 namespace duckdb {
 
 unique_ptr<PathElement> Transformer::TransformPathElement(duckdb_libpgquery::PGPathElement *element) {
@@ -110,35 +109,35 @@ unique_ptr<PathPattern> Transformer::TransformPath(duckdb_libpgquery::PGPathPatt
 }
 
 unique_ptr<TableRef> Transformer::TransformMatch(duckdb_libpgquery::PGMatchClause &root) {
-    auto match_info = make_uniq<MatchExpression>();
-    match_info->pg_name = root.pg_name; // Name of the property graph to bind to
+	auto match_info = make_uniq<MatchExpression>();
+	match_info->pg_name = root.pg_name; // Name of the property graph to bind to
 
-    auto alias = TransformQualifiedName(*root.graph_table);
-    match_info->alias = alias.name;
+	auto alias = TransformQualifiedName(*root.graph_table);
+	match_info->alias = alias.name;
 
-    if (root.where_clause) {
-        match_info->where_clause = TransformExpression(root.where_clause);
-    }
+	if (root.where_clause) {
+		match_info->where_clause = TransformExpression(root.where_clause);
+	}
 
-    for (auto node = root.paths->head; node != nullptr; node = lnext(node)) {
-        auto path = reinterpret_cast<duckdb_libpgquery::PGPathPattern *>(node->data.ptr_value);
-        auto transformed_path = TransformPath(path);
-        match_info->path_list.push_back(std::move(transformed_path));
-    }
+	for (auto node = root.paths->head; node != nullptr; node = lnext(node)) {
+		auto path = reinterpret_cast<duckdb_libpgquery::PGPathPattern *>(node->data.ptr_value);
+		auto transformed_path = TransformPath(path);
+		match_info->path_list.push_back(std::move(transformed_path));
+	}
 
-    for (auto node = root.columns->head; node != nullptr; node = lnext(node)) {
-        auto column = reinterpret_cast<duckdb_libpgquery::PGList *>(node->data.ptr_value);
-        auto target = reinterpret_cast<duckdb_libpgquery::PGResTarget *>(column->head->next->data.ptr_value);
-        auto res_target = TransformResTarget(*target);
-        match_info->column_list.push_back(std::move(res_target));
-    }
+	for (auto node = root.columns->head; node != nullptr; node = lnext(node)) {
+		auto column = reinterpret_cast<duckdb_libpgquery::PGList *>(node->data.ptr_value);
+		auto target = reinterpret_cast<duckdb_libpgquery::PGResTarget *>(column->head->next->data.ptr_value);
+		auto res_target = TransformResTarget(*target);
+		match_info->column_list.push_back(std::move(res_target));
+	}
 
-    auto children = vector<unique_ptr<ParsedExpression>>();
-    children.push_back(std::move(match_info));
-    auto result = make_uniq<TableFunctionRef>();
-    result->function = make_uniq<FunctionExpression>("duckpgq_match", std::move(children));
+	auto children = vector<unique_ptr<ParsedExpression>>();
+	children.push_back(std::move(match_info));
+	auto result = make_uniq<TableFunctionRef>();
+	result->function = make_uniq<FunctionExpression>("duckpgq_match", std::move(children));
 
-    return result;
+	return result;
 }
 
 } // namespace duckdb

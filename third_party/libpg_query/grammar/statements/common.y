@@ -44,6 +44,7 @@ qualified_name:
 ColId:		IDENT									{ $$ = $1; }
 			| unreserved_keyword					{ $$ = pstrdup($1); }
 			| col_name_keyword						{ $$ = pstrdup($1); }
+			| pgq_unreserved_keyword                { $$ = pstrdup($1); }
 		;
 
 
@@ -76,5 +77,7 @@ ColLabel:	IDENT									{ $$ = $1; }
 			| other_keyword							{ $$ = pstrdup($1); }
 			| unreserved_keyword					{ $$ = pstrdup($1); }
 			| reserved_keyword						{ $$ = pstrdup($1); }
+            | pgq_unreserved_keyword                { $$ = pstrdup($1); }
+
 		;
 

@@ -9,7 +9,7 @@ namespace duckdb {
 
 class MatchExpression : public ParsedExpression {
 public:
-    static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_EXPRESSION;
+	static constexpr const ExpressionClass TYPE = ExpressionClass::BOUND_EXPRESSION;
 
 public:
 	MatchExpression() : ParsedExpression(ExpressionType::FUNCTION_REF, ExpressionClass::BOUND_EXPRESSION) {

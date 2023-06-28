@@ -193,20 +193,26 @@ void Parser::ParseQuery(const string &query) {
 			auto query_statements = SplitQueryStringIntoStatements(query);
 			for (auto const &query_statement : query_statements) {
 				bool parse_success = false;
-                {
-                    PostgresParser another_parser;
-                    another_parser.Parse(query_statement);
-                    // LCOV_EXCL_START
-                    // first see if DuckDB can parse this individual query statement
-                    if (another_parser.success) {
-                        parse_success = true;
-                        if (!another_parser.parse_tree) {
-                            // empty statement
-                            continue;
-                        }
-                        transformer.TransformParseTree(another_parser.parse_tree, statements);
+                string another_parser_error;
+                int another_parser_error_location;
+				{
+					PostgresParser another_parser;
+					another_parser.Parse(query_statement);
+					// LCOV_EXCL_START
+					// first see if DuckDB can parse this individual query statement
+					if (another_parser.success) {
+						parse_success = true;
+						if (!another_parser.parse_tree) {
+							// empty statement
+							continue;
+						}
+						transformer.TransformParseTree(another_parser.parse_tree, statements);
+					} else {
+                        another_parser_error = another_parser.error_message;
+                        another_parser_error_location = another_parser.error_location;
                     }
-				} if (!parse_success) {
+				}
+				if (!parse_success) {
 					// let extensions parse the statement which DuckDB failed to parse
 					bool parsed_single_statement = false;
 					for (auto &ext : *options.extensions) {
@@ -227,8 +233,8 @@ void Parser::ParseQuery(const string &query) {
 						}
 					}
 					if (!parsed_single_statement) {
-//						parser_error = QueryErrorContext::Format(query, another_parser.error_message,
-//						                                         another_parser.error_location - 1);
+                        parser_error = QueryErrorContext::Format(query,
+						another_parser_error,another_parser_error_location - 1);
 						throw ParserException(parser_error);
 					}
 				}
