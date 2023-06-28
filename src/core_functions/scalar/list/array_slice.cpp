@@ -140,108 +140,110 @@ static void CheckBeginAndEnd(INDEX_TYPE &begin, INDEX_TYPE &end, INDEX_TYPE step
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
-static void ExecuteConstantSlice(Vector &result, Vector &v, Vector &b, Vector &e, const idx_t count,
-                                 optional_ptr<Vector> s, SelectionVector &sel, idx_t &sel_idx,
-                                 optional_ptr<Vector> result_child_vector) {
-	auto rdata = ConstantVector::GetData<INPUT_TYPE>(result);
-	auto vdata = ConstantVector::GetData<INPUT_TYPE>(v);
-	auto bdata = ConstantVector::GetData<INDEX_TYPE>(b);
-	auto edata = ConstantVector::GetData<INDEX_TYPE>(e);
-	auto sdata = s ? ConstantVector::GetData<INDEX_TYPE>(*s) : nullptr;
+static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &begin_vector, Vector &end_vector,
+                                 optional_ptr<Vector> step_vector, const idx_t count, SelectionVector &sel,
+                                 idx_t &sel_idx, optional_ptr<Vector> result_child_vector) {
+	auto result_data = ConstantVector::GetData<INPUT_TYPE>(result);
+	auto str_data = ConstantVector::GetData<INPUT_TYPE>(str_vector);
+	auto begin_data = ConstantVector::GetData<INDEX_TYPE>(begin_vector);
+	auto end_data = ConstantVector::GetData<INDEX_TYPE>(end_vector);
+	auto step_data = step_vector ? ConstantVector::GetData<INDEX_TYPE>(*step_vector) : nullptr;
 
-	auto sliced = vdata[0];
-	auto begin = bdata[0];
-	auto end = edata[0];
-	auto step = sdata ? sdata[0] : 1;
+	auto str = str_data[0];
+	auto begin = begin_data[0];
+	auto end = end_data[0];
+	auto step = step_data ? step_data[0] : 1;
 
-	CheckBeginAndEnd(begin, end, step, sliced);
+	CheckBeginAndEnd(begin, end, step, str);
 
-	auto vvalid = !ConstantVector::IsNull(v);
-	auto bvalid = !ConstantVector::IsNull(b);
-	auto evalid = !ConstantVector::IsNull(e);
-	auto svalid = s && !ConstantVector::IsNull(*s);
+	auto str_valid = !ConstantVector::IsNull(str_vector);
+	auto begin_valid = !ConstantVector::IsNull(begin_vector);
+	auto end_valid = !ConstantVector::IsNull(end_vector);
+	auto step_valid = step_vector && !ConstantVector::IsNull(*step_vector);
 
 	// Clamp offsets
 	bool clamp_result = false;
-	if (vvalid && bvalid && evalid && (svalid || step == 1)) {
-		clamp_result = ClampSlice(sliced, begin, end);
+	if (str_valid && begin_valid && end_valid && (step_valid || step == 1)) {
+		clamp_result = ClampSlice(str, begin, end);
 	}
 
 	auto sel_length = 0;
-	if (s && svalid && vvalid && bvalid && evalid && step != 1 && end - begin > 0) {
-		sel_length = CalculateSliceLength(begin, end, step, svalid);
+	if (step_vector && step_valid && str_valid && begin_valid && end_valid && step != 1 && end - begin > 0) {
+		sel_length = CalculateSliceLength(begin, end, step, step_valid);
 		sel.Initialize(sel_length);
 	}
 
 	// Try to slice
-	if (!vvalid || !bvalid || !evalid || (s && !svalid) || !clamp_result) {
+	if (!str_valid || !begin_valid || !end_valid || (step_vector && !step_valid) || !clamp_result) {
 		ConstantVector::SetNull(result, true);
 	} else if (step == 1) {
-		rdata[0] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
+		result_data[0] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, str, begin, end);
 	} else {
-		rdata[0] = SliceValueWithSteps<INPUT_TYPE, INDEX_TYPE>(result, sel, sliced, begin, end, step, sel_idx);
+		result_data[0] = SliceValueWithSteps<INPUT_TYPE, INDEX_TYPE>(result, sel, str, begin, end, step, sel_idx);
 	}
 
-	if (s && step != 0 && end - begin > 0) {
+	if (step_vector && step != 0 && end - begin > 0) {
 		result_child_vector->Slice(sel, sel_length);
 	}
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
-static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, const idx_t count, optional_ptr<Vector> s,
-                             SelectionVector &sel, idx_t &sel_idx, optional_ptr<Vector> result_child_vector) {
-	UnifiedVectorFormat vdata, bdata, edata, sdata;
+static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector, Vector &end_vector,
+                             optional_ptr<Vector> step_vector, const idx_t count, SelectionVector &sel, idx_t &sel_idx,
+                             optional_ptr<Vector> result_child_vector) {
+	UnifiedVectorFormat list_data, begin_data, end_data, step_data;
 	idx_t sel_length = 0;
 
-	v.ToUnifiedFormat(count, vdata);
-	b.ToUnifiedFormat(count, bdata);
-	e.ToUnifiedFormat(count, edata);
-	if (s) {
-		s->ToUnifiedFormat(count, sdata);
-		sel.Initialize(ListVector::GetListSize(v));
+	list_vector.ToUnifiedFormat(count, list_data);
+	begin_vector.ToUnifiedFormat(count, begin_data);
+	end_vector.ToUnifiedFormat(count, end_data);
+	if (step_vector) {
+		step_vector->ToUnifiedFormat(count, step_data);
+		sel.Initialize(ListVector::GetListSize(list_vector));
 	}
 
-	auto rdata = FlatVector::GetData<INPUT_TYPE>(result);
-	auto &rmask = FlatVector::Validity(result);
+	auto result_data = FlatVector::GetData<INPUT_TYPE>(result);
+	auto &result_mask = FlatVector::Validity(result);
 
 	for (idx_t i = 0; i < count; ++i) {
-		auto vidx = vdata.sel->get_index(i);
-		auto bidx = bdata.sel->get_index(i);
-		auto eidx = edata.sel->get_index(i);
-		auto sidx = s ? sdata.sel->get_index(i) : 0;
+		auto list_idx = list_data.sel->get_index(i);
+		auto begin_idx = begin_data.sel->get_index(i);
+		auto end_idx = end_data.sel->get_index(i);
+		auto step_idx = step_vector ? step_data.sel->get_index(i) : 0;
 
-		auto sliced = ((INPUT_TYPE *)vdata.data)[vidx];
-		auto begin = ((INDEX_TYPE *)bdata.data)[bidx];
-		auto end = ((INDEX_TYPE *)edata.data)[eidx];
-		auto step = s ? ((INDEX_TYPE *)sdata.data)[sidx] : 1;
+		auto sliced = ((INPUT_TYPE *)list_data.data)[list_idx];
+		auto begin = ((INDEX_TYPE *)begin_data.data)[begin_idx];
+		auto end = ((INDEX_TYPE *)end_data.data)[end_idx];
+		auto step = step_vector ? ((INDEX_TYPE *)step_data.data)[step_idx] : 1;
 
 		CheckBeginAndEnd(begin, end, step, sliced);
 
-		auto vvalid = vdata.validity.RowIsValid(vidx);
-		auto bvalid = bdata.validity.RowIsValid(bidx);
-		auto evalid = edata.validity.RowIsValid(eidx);
-		auto svalid = s && sdata.validity.RowIsValid(sidx);
+		auto list_valid = list_data.validity.RowIsValid(list_idx);
+		auto begin_valid = begin_data.validity.RowIsValid(begin_idx);
+		auto end_valid = end_data.validity.RowIsValid(end_idx);
+		auto step_valid = step_vector && step_data.validity.RowIsValid(step_idx);
 
 		bool clamp_result = false;
-		if (vvalid && bvalid && evalid && (svalid || step == 1)) {
+		if (list_valid && begin_valid && end_valid && (step_valid || step == 1)) {
 			clamp_result = ClampSlice(sliced, begin, end);
 		}
 
 		auto length = 0;
-		if (s && svalid && vvalid && bvalid && evalid && end - begin > 0) {
-			length = CalculateSliceLength(begin, end, step, svalid);
+		if (step_vector && step_valid && list_valid && begin_valid && end_valid && end - begin > 0) {
+			length = CalculateSliceLength(begin, end, step, step_valid);
 		}
 		sel_length += length;
 
-		if (!vvalid || !bvalid || !evalid || (s && !svalid) || !clamp_result) {
-			rmask.SetInvalid(i);
-		} else if (!s) {
-			rdata[i] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
+		if (!list_valid || !begin_valid || !end_valid || (step_vector && !step_valid) || !clamp_result) {
+			result_mask.SetInvalid(i);
+		} else if (!step_vector) {
+			result_data[i] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
 		} else {
-			rdata[i] = SliceValueWithSteps<INPUT_TYPE, INDEX_TYPE>(result, sel, sliced, begin, end, step, sel_idx);
+			result_data[i] =
+			    SliceValueWithSteps<INPUT_TYPE, INDEX_TYPE>(result, sel, sliced, begin, end, step, sel_idx);
 		}
 	}
-	if (s) {
+	if (step_vector) {
 		SelectionVector new_sel(sel_length);
 		for (idx_t i = 0; i < sel_length; ++i) {
 			new_sel.set_index(i, sel.get_index(i));
@@ -251,9 +253,10 @@ static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, co
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
-static void ExecuteSlice(Vector &result, Vector &v, Vector &b, Vector &e, const idx_t count, optional_ptr<Vector> s) {
+static void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &begin_vector, Vector &end_vector,
+                         optional_ptr<Vector> step_vector, const idx_t count) {
 	optional_ptr<Vector> result_child_vector;
-	if (s) {
+	if (step_vector) {
 		result_child_vector = &ListVector::GetEntry(result);
 	}
 
@@ -261,9 +264,11 @@ static void ExecuteSlice(Vector &result, Vector &v, Vector &b, Vector &e, const 
 	idx_t sel_idx = 0;
 
 	if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		ExecuteConstantSlice<INPUT_TYPE, INDEX_TYPE>(result, v, b, e, count, s, sel, sel_idx, result_child_vector);
+		ExecuteConstantSlice<INPUT_TYPE, INDEX_TYPE>(result, list_or_str_vector, begin_vector, end_vector, step_vector,
+		                                             count, sel, sel_idx, result_child_vector);
 	} else {
-		ExecuteFlatSlice<INPUT_TYPE, INDEX_TYPE>(result, v, b, e, count, s, sel, sel_idx, result_child_vector);
+		ExecuteFlatSlice<INPUT_TYPE, INDEX_TYPE>(result, list_or_str_vector, begin_vector, end_vector, step_vector,
+		                                         count, sel, sel_idx, result_child_vector);
 	}
 	result.Verify(count);
 }
@@ -273,28 +278,29 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 	D_ASSERT(args.data.size() == 3 || args.data.size() == 4);
 	auto count = args.size();
 
-	Vector &v = args.data[0];
-	Vector &b = args.data[1];
-	Vector &e = args.data[2];
+	Vector &list_or_str_vector = args.data[0];
+	Vector &begin_vector = args.data[1];
+	Vector &end_vector = args.data[2];
 
-	optional_ptr<Vector> s;
+	optional_ptr<Vector> step_vector;
 	if (args.ColumnCount() == 4) {
-		s = &args.data[3];
+		step_vector = &args.data[3];
 	}
 
 	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	switch (result.GetType().id()) {
 	case LogicalTypeId::LIST: {
 		// Share the value dictionary as we are just going to slice it
-		if (v.GetVectorType() != VectorType::FLAT_VECTOR && v.GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			v.Flatten(count);
+		if (list_or_str_vector.GetVectorType() != VectorType::FLAT_VECTOR &&
+		    list_or_str_vector.GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			list_or_str_vector.Flatten(count);
 		}
-		ListVector::ReferenceEntry(result, v);
-		ExecuteSlice<list_entry_t, int64_t>(result, v, b, e, count, s);
+		ListVector::ReferenceEntry(result, list_or_str_vector);
+		ExecuteSlice<list_entry_t, int64_t>(result, list_or_str_vector, begin_vector, end_vector, step_vector, count);
 		break;
 	}
 	case LogicalTypeId::VARCHAR: {
-		ExecuteSlice<string_t, int64_t>(result, v, b, e, count, s);
+		ExecuteSlice<string_t, int64_t>(result, list_or_str_vector, begin_vector, end_vector, step_vector, count);
 		break;
 	}
 	default:

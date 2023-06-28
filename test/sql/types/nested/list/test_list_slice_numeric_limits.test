@@ -1,4 +1,4 @@
-# name: test/sql/types/nested/list/test_list_slicing_numeric_limits.test
+# name: test/sql/types/nested/list/test_list_slice_numeric_limits.test
 # description: List slicing tests for numeric limits
 # group: [list]
 
