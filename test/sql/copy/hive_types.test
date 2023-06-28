@@ -1,5 +1,5 @@
 # name: test/sql/copy/hive_types.test
-# description: basic tests hive_types flag
+# description: basic tests hive_types flag + hive_types_autocast flag
 # group: [copy]
 
 # dir: data/csv/hive-partitioning/hive_types/
