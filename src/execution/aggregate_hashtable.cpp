@@ -67,7 +67,7 @@ void GroupedAggregateHashTable::GetDataOwnership(unique_ptr<PartitionedTupleData
 	D_ASSERT(partitioned_data);
 	D_ASSERT(aggregate_allocator);
 
-	partitioned_data->FlushAppendState(state.append_state);
+	UnpinData();
 	partitioned_data_p = std::move(partitioned_data);
 	InitializePartitionedData();
 	D_ASSERT(Count() == 0);
@@ -81,18 +81,7 @@ GroupedAggregateHashTable::~GroupedAggregateHashTable() {
 }
 
 void GroupedAggregateHashTable::Destroy() {
-	if (partitioned_data->Count() == 0) {
-		return;
-	}
-
-	// Check if there is an aggregate with a destructor
-	bool has_destructor = false;
-	for (auto &aggr : layout.GetAggregates()) {
-		if (aggr.function.destructor) {
-			has_destructor = true;
-		}
-	}
-	if (!has_destructor) {
+	if (partitioned_data->Count() == 0 || !layout.HasDestructor()) {
 		return;
 	}
 
@@ -521,8 +510,10 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data) {
 		FindOrCreateGroups(fm_state.groups, fm_state.hashes, fm_state.group_addresses, fm_state.new_groups_sel);
 		RowOperations::CombineStates(row_state, layout, fm_state.scan_state.chunk_state.row_locations,
 		                             fm_state.group_addresses, fm_state.groups.size());
-		RowOperations::DestroyStates(row_state, layout, fm_state.scan_state.chunk_state.row_locations,
-		                             fm_state.groups.size());
+		if (layout.HasDestructor()) {
+			RowOperations::DestroyStates(row_state, layout, fm_state.scan_state.chunk_state.row_locations,
+			                             fm_state.groups.size());
+		}
 	}
 
 	Verify();
@@ -535,10 +526,14 @@ void GroupedAggregateHashTable::Finalize() {
 
 	// Early release hashes (not needed for partition/scan) and data collection (will be pinned again when scanning)
 	hash_map.Reset();
-	partitioned_data->FlushAppendState(state.append_state);
-	partitioned_data->Unpin();
+	UnpinData();
 
 	is_finalized = true;
+}
+
+void GroupedAggregateHashTable::UnpinData() {
+	partitioned_data->FlushAppendState(state.append_state);
+	partitioned_data->Unpin();
 }
 
 } // namespace duckdb

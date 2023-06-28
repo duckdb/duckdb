@@ -25,6 +25,7 @@ TupleDataLayout TupleDataLayout::Copy() const {
 	result.offsets = this->offsets;
 	result.all_constant = this->all_constant;
 	result.heap_size_offset = this->heap_size_offset;
+	result.has_destructor = this->has_destructor;
 	return result;
 }
 
@@ -106,6 +107,14 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 		row_width = AlignValue(row_width);
 	}
 #endif
+
+	has_destructor = false;
+	for (auto &aggr : GetAggregates()) {
+		if (aggr.function.destructor) {
+			has_destructor = true;
+			break;
+		}
+	}
 }
 
 void TupleDataLayout::Initialize(vector<LogicalType> types_p, bool align, bool heap_offset_p) {

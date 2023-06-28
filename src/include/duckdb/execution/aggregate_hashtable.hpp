@@ -200,6 +200,8 @@ private:
 
 	//! Initializes the PartitionedTupleData
 	void InitializePartitionedData();
+	//! Unpins the data blocks
+	void UnpinData();
 
 	//! Apply bitmask to get the entry in the HT
 	inline idx_t ApplyBitMask(hash_t hash) const;
@@ -207,8 +209,6 @@ private:
 	idx_t ResizeThreshold() const;
 	//! Resize the HT to the specified size. Must be larger than the current size.
 	void Resize(idx_t size);
-	//! Initializes the hashes of the HT
-	void InitializeFirstPart();
 
 	//! Does the actual group matching / creation
 	idx_t FindOrCreateGroupsInternal(AggregateHTAppendState &state, DataChunk &groups, Vector &group_hashes,
