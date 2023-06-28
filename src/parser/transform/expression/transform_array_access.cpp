@@ -30,7 +30,7 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 				// if either the lower or upper bound is not specified, we use the maximum value so that we can handle
 				// it in the execution
 				children.push_back(!index->lidx
-				                       ? make_uniq<ConstantExpression>(Value::BIGINT(NumericLimits<int64_t>::Maximum()))
+				                       ? make_uniq<ConstantExpression>(Value::BIGINT(NumericLimits<int64_t>::Minimum()))
 				                       : TransformExpression(index->lidx));
 				children.push_back(!index->uidx
 				                       ? make_uniq<ConstantExpression>(Value::BIGINT(NumericLimits<int64_t>::Maximum()))

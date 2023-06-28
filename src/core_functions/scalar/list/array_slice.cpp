@@ -130,7 +130,7 @@ static void CheckBeginAndEnd(INDEX_TYPE &begin, INDEX_TYPE &end, INDEX_TYPE step
 		swap(begin, end);
 	}
 
-	if (begin == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
+	if (begin == (INDEX_TYPE)NumericLimits<int64_t>::Minimum()) {
 		begin = 0;
 	}
 

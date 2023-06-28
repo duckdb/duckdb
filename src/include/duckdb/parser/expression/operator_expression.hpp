@@ -92,7 +92,7 @@ public:
 			if (entry.children[1]->type == ExpressionType::VALUE_CONSTANT) {
 				auto &const_expr_begin = entry.children[1]->template Cast<ConstantExpression>();
 				if (const_expr_begin.value.type() == LogicalType::BIGINT &&
-				    const_expr_begin.value.template GetValue<int64_t>() == NumericLimits<int64_t>::Maximum()) {
+				    const_expr_begin.value.template GetValue<int64_t>() == NumericLimits<int64_t>::Minimum()) {
 					begin = "";
 				}
 			}
