@@ -183,9 +183,8 @@ private:
 #endif
 		if (round_to_next_byte) {
 			return (bitwidth / 8 + (bitwidth % 8 != 0)) * 8;
-		} else {
-			return bitwidth;
 		}
+		return bitwidth;
 	}
 
 	// Sign bit extension
