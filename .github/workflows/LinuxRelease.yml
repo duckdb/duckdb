@@ -176,7 +176,7 @@ jobs:
     name: Linux Extensions (64 Bit)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
-    needs: linux-release-64
+#    needs: linux-release-64
     env:
       GEN: ninja
 
@@ -269,10 +269,6 @@ jobs:
         ninja-build: 1
         ccache: 1
 
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
     - name: Build
       shell: bash
       run: |
@@ -289,7 +285,7 @@ jobs:
     - name: Check if extension_functions.hpp is up to date
       shell: bash
       run: |
-        python scripts/generate_extensions_function.py --validate
+        python3.7 scripts/generate_extensions_function.py --validate
 
  symbol-leakage:
     name: Symbol Leakage

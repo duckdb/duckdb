@@ -148,7 +148,7 @@ jobs:
 
   old-gcc:
     name: GCC 4.8
-#    needs: linux-memory-leaks
+    needs: linux-memory-leaks
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
     steps:
@@ -174,7 +174,7 @@ jobs:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
-#    needs: linux-memory-leaks
+    needs: linux-memory-leaks
     env:
       CC: /usr/bin/gcc
       CXX: /usr/bin/g++
