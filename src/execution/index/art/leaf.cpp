@@ -119,10 +119,7 @@ void Leaf::Merge(ART &art, Node &l_node, Node &r_node) {
 
 void Leaf::Insert(ART &art, Node &node, const row_t row_id) {
 
-	D_ASSERT(node.IsSet());
-	if (node.IsSerialized()) {
-		node.Deserialize(art);
-	}
+	D_ASSERT(node.IsSet() && !node.IsSerialized());
 
 	if (node.GetType() == NType::LEAF_INLINED) {
 		Leaf::MoveInlinedToLeaf(art, node);
@@ -143,10 +140,7 @@ void Leaf::Insert(ART &art, Node &node, const row_t row_id) {
 
 bool Leaf::Remove(ART &art, reference<Node> &node, const row_t row_id) {
 
-	D_ASSERT(node.get().IsSet());
-	if (node.get().IsSerialized()) {
-		node.get().Deserialize(art);
-	}
+	D_ASSERT(node.get().IsSet() && !node.get().IsSerialized());
 
 	if (node.get().GetType() == NType::LEAF_INLINED) {
 		if (node.get().GetRowId() == row_id) {
@@ -210,10 +204,8 @@ bool Leaf::Remove(ART &art, reference<Node> &node, const row_t row_id) {
 
 idx_t Leaf::TotalCount(ART &art, Node &node) {
 
-	D_ASSERT(node.IsSet());
-	if (node.IsSerialized()) {
-		node.Deserialize(art);
-	}
+	// NOTE: first leaf in the leaf chain is already deserialized
+	D_ASSERT(node.IsSet() && !node.IsSerialized());
 
 	if (node.GetType() == NType::LEAF_INLINED) {
 		return 1;
@@ -241,9 +233,8 @@ bool Leaf::GetRowIds(ART &art, Node &node, vector<row_t> &result_ids, idx_t max_
 		return false;
 	}
 
-	if (node.IsSerialized()) {
-		node.Deserialize(art);
-	}
+	// NOTE: Leaf::TotalCount fully deserializes the leaf
+	D_ASSERT(!node.IsSerialized());
 
 	if (node.GetType() == NType::LEAF_INLINED) {
 		// push back the inlined row ID of this leaf
@@ -258,9 +249,7 @@ bool Leaf::GetRowIds(ART &art, Node &node, vector<row_t> &result_ids, idx_t max_
 				result_ids.push_back(leaf.row_ids[i]);
 			}
 
-			if (leaf.ptr.IsSerialized()) {
-				leaf.ptr.Deserialize(art);
-			}
+			D_ASSERT(!leaf.ptr.IsSerialized());
 			last_leaf_ref = leaf.ptr;
 		}
 	}
@@ -270,10 +259,10 @@ bool Leaf::GetRowIds(ART &art, Node &node, vector<row_t> &result_ids, idx_t max_
 
 bool Leaf::ContainsRowId(ART &art, Node &node, const row_t row_id) {
 
-	D_ASSERT(node.IsSet());
-	if (node.IsSerialized()) {
-		node.Deserialize(art);
-	}
+	// NOTE: we either just removed a row ID from this leaf (by copying the
+	// last row ID at a different position) or inserted a row ID into this leaf
+	// (at the end), so the whole leaf is deserialized
+	D_ASSERT(node.IsSet() && !node.IsSerialized());
 
 	if (node.GetType() == NType::LEAF_INLINED) {
 		return node.GetRowId() == row_id;
@@ -288,9 +277,7 @@ bool Leaf::ContainsRowId(ART &art, Node &node, const row_t row_id) {
 			}
 		}
 
-		if (leaf.ptr.IsSerialized()) {
-			leaf.ptr.Deserialize(art);
-		}
+		D_ASSERT(!leaf.ptr.IsSerialized());
 		ref_node = leaf.ptr;
 	}
 
@@ -310,7 +297,7 @@ string Leaf::VerifyAndToString(ART &art, Node &node) {
 	while (node_ref.get().IsSet()) {
 
 		auto &leaf = Leaf::Get(art, node_ref);
-		D_ASSERT(leaf.count > 1 && leaf.count <= Node::LEAF_SIZE);
+		D_ASSERT(leaf.count <= Node::LEAF_SIZE);
 
 		str += "Leaf [count: " + to_string(leaf.count) + ", row IDs: ";
 		for (idx_t i = 0; i < leaf.count; i++) {
@@ -318,9 +305,9 @@ string Leaf::VerifyAndToString(ART &art, Node &node) {
 		}
 		str += "] ";
 
-		if (leaf.ptr.IsSerialized()) {
-			return str + " serialized";
-		}
+		// NOTE: we are currently only calling this function during CREATE INDEX
+		// statements (and debugging), so the index is never serialized
+		D_ASSERT(!leaf.ptr.IsSerialized());
 		node_ref = leaf.ptr;
 	}
 	return str;

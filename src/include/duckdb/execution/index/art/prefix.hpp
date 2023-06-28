@@ -38,6 +38,7 @@ public:
 	static void Free(ART &art, Node &node);
 	//! Get a reference to the prefix
 	static inline Prefix &Get(const ART &art, const Node ptr) {
+		D_ASSERT(!ptr.IsSerialized());
 		return *Node::GetAllocator(art, NType::PREFIX).Get<Prefix>(ptr);
 	}
 
@@ -72,7 +73,7 @@ public:
 	static void Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx_t position);
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
-	static string VerifyAndToString(ART &art, Node &node);
+	static string VerifyAndToString(ART &art, Node &node, const bool only_verify);
 
 	//! Serialize this node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);

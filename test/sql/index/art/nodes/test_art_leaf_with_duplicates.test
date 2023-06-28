@@ -99,3 +99,14 @@ DROP INDEX b_index
 
 statement ok
 DROP TABLE integers
+
+# test insertion after matching prefixes
+
+statement ok
+CREATE TABLE tbl_leaf_cov (id INTEGER);
+
+statement ok
+CREATE INDEX idx_leaf_cov ON tbl_leaf_cov(id);
+
+statement ok
+INSERT INTO tbl_leaf_cov VALUES (1), (1);

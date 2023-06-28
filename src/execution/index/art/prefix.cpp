@@ -253,7 +253,7 @@ void Prefix::Split(ART &art, reference<Node> &prefix_node, Node &child_node, idx
 	return;
 }
 
-string Prefix::VerifyAndToString(ART &art, Node &node) {
+string Prefix::VerifyAndToString(ART &art, Node &node, const bool only_verify) {
 
 	// NOTE: we could do this recursively, but the function-call overhead can become kinda crazy
 	string str = "";
@@ -276,7 +276,8 @@ string Prefix::VerifyAndToString(ART &art, Node &node) {
 		}
 		node_ref = prefix.ptr;
 	}
-	return str;
+
+	return str + node_ref.get().VerifyAndToString(art, only_verify);
 }
 
 BlockPointer Prefix::Serialize(ART &art, MetaBlockWriter &writer) {

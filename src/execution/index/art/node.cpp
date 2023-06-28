@@ -305,7 +305,7 @@ string Node::VerifyAndToString(ART &art, const bool only_verify) {
 		return only_verify ? "" : "\n" + str;
 	}
 	if (GetType() == NType::PREFIX) {
-		auto str = Prefix::Get(art, *this).VerifyAndToString(art, *this);
+		auto str = Prefix::Get(art, *this).VerifyAndToString(art, *this, only_verify);
 		return only_verify ? "" : "\n" + str;
 	}
 

@@ -455,7 +455,6 @@ bool ART::InsertToLeaf(Node &leaf, const row_t &row_id) {
 		return false;
 	}
 
-	D_ASSERT(!Leaf::ContainsRowId(*this, leaf, row_id));
 	Leaf::Insert(*this, leaf, row_id);
 	return true;
 }
@@ -679,13 +678,11 @@ void ART::SearchEqualJoinNoFetch(ARTKey &key, idx_t &result_size) {
 		result_size = 0;
 		return;
 	}
-	if (leaf_node.GetType() == NType::LEAF_INLINED) {
-		result_size = 1;
-		return;
-	}
 
-	auto &leaf = Leaf::Get(*this, leaf_node);
-	result_size = leaf.count;
+	// we only perform index joins on PK/FK columns
+	D_ASSERT(leaf_node.GetType() == NType::LEAF_INLINED);
+	result_size = 1;
+	return;
 }
 
 //===--------------------------------------------------------------------===//

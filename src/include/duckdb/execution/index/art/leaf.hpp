@@ -45,6 +45,7 @@ public:
 	static void Free(ART &art, Node &node);
 	//! Get a reference to the leaf
 	static inline Leaf &Get(const ART &art, const Node ptr) {
+		D_ASSERT(!ptr.IsSerialized());
 		return *Node::GetAllocator(art, NType::LEAF).Get<Leaf>(ptr);
 	}
 

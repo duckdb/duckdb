@@ -31,6 +31,7 @@ public:
 	static void Free(ART &art, Node &node);
 	//! Get a reference to the node
 	static inline Node4 &Get(const ART &art, const Node ptr) {
+		D_ASSERT(!ptr.IsSerialized());
 		return *Node::GetAllocator(art, NType::NODE_4).Get<Node4>(ptr);
 	}
 	//! Initializes all fields of the node while shrinking a Node16 to a Node4
