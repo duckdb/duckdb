@@ -38,9 +38,7 @@ public:
 			idx_t misaligned_count = count % BITPACKING_ALGORITHM_GROUP_SIZE;
 			T tmp_buffer[BITPACKING_ALGORITHM_GROUP_SIZE]; // TODO maybe faster on the heap?
 
-			if (misaligned_count) {
-				count -= misaligned_count;
-			}
+			count -= misaligned_count;
 
 			for (idx_t i = 0; i < count; i += BITPACKING_ALGORITHM_GROUP_SIZE) {
 				PackGroup<T>(dst + (i * width) / 8, src + i, width);
