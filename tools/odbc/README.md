@@ -5,9 +5,7 @@
 
 *There will be links throughout this README to the official [Microsoft ODBC documentation](https://learn.microsoft.com/en-us/sql/odbc/reference/odbc-programmer-s-reference?view=sql-server-ver16), which is a great resource for learning more about ODBC.*
 
-## Important Concepts
-
-### Handle
+## Handles
 A [handle](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/handles?view=sql-server-ver16) is a pointer to a specific ODBC object which is used to interact with the database.  There are several different types of handles, each with a different purpose, these are the environment handle, the connection handle, the statement handle, and the descriptor handle. Handles are allocated using the [`SQLAllocHandle`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlallochandle-function?view=sql-server-ver16) which takes as input the type of handle to allocate, and a pointer to the handle, the driver then creates a new handle of the specified type which it returns to the application.
 
 #### Handle Types
@@ -19,21 +17,32 @@ A [handle](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/hand
 | [Statement](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/statement-handles?view=sql-server-ver16)     | `SQL_HANDLE_STMT` | 	Handles the execution of SQL statements, as well as the returned result sets.                                                                                         | Executing SQL queries, fetching result sets, managing statement options          | To facilitate the execution of concurrent queries, multiple handles can be [allocated](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/allocating-a-statement-handle-odbc?view=sql-server-ver16) per connection.                                                                                                                                                                                                                  |
 | [Descriptor](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/descriptor-handles?view=sql-server-ver16)   | `SQL_HANDLE_DESC` | 	Describes the attributes of a data structure or parameter, and allows the application to specify the structure of data to be bound/retrieved.                         | Describing table structures, result sets, binding columns to application buffers | Used in situations where data structures need to be explicitly defined, for example during parameter binding or result set fetching.  They are automatically allocated when a statement is allocated, but can also be allocated explicitly.                                                                                                                                                                                                        |
 
-### Connecting
-The first step in using ODBC is to connect to the database.  This is done by allocating a [connection handle](#handle-types) using the [`SQLAllocHandle`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlallochandle-function?view=sql-server-ver16) function, and then using the [`SQLDriverConnect`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqldriverconnect-function?view=sql-server-ver16) or the [`SQLConnect`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlconnect-function?view=sql-server-ver16) function to connect to the database. 
+## ODBC  Lifecycle
+### 1. Connecting
+The first step is to connect to the data source so that the application can perform database operations.  First the application must allocate an environment handle, and then a connection handle.  The connection handle is then used to connect to the data source.  There are two functions which can be used to connect to a data source, [`SQLDriverConnect`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqldriverconnect-function?view=sql-server-ver16) and [`SQLConnect`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlconnect-function?view=sql-server-ver16).  The former is used to connect to a data source using a connection string, while the latter is used to connect to a data source using a DSN. 
+
+#### Connection String
+A [connection string](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/connection-strings?view=sql-server-ver16) is a string which contains the information needed to connect to a data source.  It is formatted as a semicolon separated list of key-value pairs.  The following table lists the keys which can be used in a connection string, and their corresponding values, however currently DuckDB only utilizes the DSN and ignores the rest of the parameters.
+
+| Key        | Value                                                                                                                    |
+|------------|--------------------------------------------------------------------------------------------------------------------------|
+| `DSN`      | The name of the data source to connect to. See more [below](#data-source-name-dsn).                                      |                                                     
+| `FILEDSN`  | The path to a file containing a DSN.                                                                                     |
+| `DRIVER`   | The name of the ODBC driver to use.  This is the name of the driver as it appears in the ODBC Data Source Administrator. |
+| `UID`      | The username to use when connecting to the database.                                                                     |
+| `PWD`      | The password to use when connecting to the database.                                                                     |
+| `SAVEFILE` | The path to a file to which the connection string should be saved.                                                       |
 
 
 #### Data Source Name (DSN)
-A DSN is a string that identifies a database.  It is used to connect to the database.  It can be a file path, a URL, or a database name.  For example, the following are all valid DSNs:
+A DSN is a string that identifies a database. It can be a file path, a URL, or a database name.  For example, the following are all valid DSNs:
 
 [//]: # (TODO: change to example relevent to duckdb)
-- `C:\Users\me\mydatabase.db`
-- `https://mydatabase.com`
-- `mydatabase`
+- `C:\Users\me\duckdb.db`
+- `DuckDB`
 
 
-
-### Error Handling
+## Error Handling
 All functions in ODBC return a code which represents the success or failure of the function.  This allows for easy error handling, as the application can simply check the return code of each function call to determine if it was successful.  If the function was unsuccessful, the application can then use the [`SQLGetDiagRec`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetdiagrec-function?view=sql-server-ver16) function to retrieve the error information. The following table defines the [return codes](https://learn.microsoft.com/en-us/sql/odbc/reference/develop-app/return-codes-odbc?view=sql-server-ver16):
 
 | Return Code             | Description                                                                                                                                  |
@@ -46,7 +55,7 @@ All functions in ODBC return a code which represents the success or failure of t
 | `SQL_NEED_DATA`         | More data is needed, such as when a parameter data is sent at execution time, or additional connection information is required.              |
 | `SQL_STILL_EXECUTING`   | A function that was asynchronously executed is still executing.                                                                              |
 
-### Buffers and Binding
+## Buffers and Binding
 A buffer is a block of memory used to store data.  Buffers are used to store data retrieved from the database, or to send data to the database.  Buffers are allocated by the application, and then bound to a column in a result set, or a parameter in a query, using the [`SQLBindCol`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlbindcol-function?view=sql-server-ver16) and [`SQLBindParameter`](https://learn.microsoft.com/en-us/sql/odbc/reference/syntax/sqlbindparameter-function?view=sql-server-ver16) functions.  When the application fetches a row from the result set, or executes a query, the data is stored in the buffer.  When the application sends a query to the database, the data in the buffer is sent to the database.
 
 [//]: # (<details>)
