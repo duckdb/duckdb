@@ -193,6 +193,7 @@ void Parser::ParseQuery(const string &query) {
 			auto query_statements = SplitQueryStringIntoStatements(query);
 			for (auto const &query_statement : query_statements) {
 				bool parse_success = false;
+                string another_parser_error;
 				{
 					PostgresParser another_parser;
 					another_parser.Parse(query_statement);
@@ -205,7 +206,9 @@ void Parser::ParseQuery(const string &query) {
 							continue;
 						}
 						transformer.TransformParseTree(another_parser.parse_tree, statements);
-					}
+					} else {
+                        another_parser_error = another_parser.error_message;
+                    }
 				}
 				if (!parse_success) {
 					// let extensions parse the statement which DuckDB failed to parse
@@ -228,8 +231,8 @@ void Parser::ParseQuery(const string &query) {
 						}
 					}
 					if (!parsed_single_statement) {
-						//						parser_error = QueryErrorContext::Format(query,
-						//another_parser.error_message, 						                                         another_parser.error_location - 1);
+                        parser_error = QueryErrorContext::Format(query,
+						another_parser_error, 						                                         another_parser.error_location - 1);
 						throw ParserException(parser_error);
 					}
 				}
