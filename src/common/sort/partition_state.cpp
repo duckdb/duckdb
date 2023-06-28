@@ -147,24 +147,8 @@ void PartitionGlobalSinkState::SyncLocalPartition(GroupingPartition &local_parti
 
 	// If the local partition is now too small, flush it and reallocate
 	auto new_partition = grouping_data->CreateShared();
-	auto new_append = make_uniq<PartitionedTupleDataAppendState>();
-	new_partition->InitializeAppendState(*new_append);
-
 	local_partition->FlushAppendState(*local_append);
-	auto &local_groups = local_partition->GetPartitions();
-	for (auto &local_group : local_groups) {
-		TupleDataScanState scanner;
-		local_group->InitializeScan(scanner);
-
-		DataChunk scan_chunk;
-		local_group->InitializeScanChunk(scanner, scan_chunk);
-		for (scan_chunk.Reset(); local_group->Scan(scanner, scan_chunk); scan_chunk.Reset()) {
-			new_partition->Append(*new_append, scan_chunk);
-		}
-	}
-
-	// The append state has stale pointers to the old local partition, so nuke it from orbit.
-	new_partition->FlushAppendState(*new_append);
+	local_partition->Repartition(*new_partition);
 
 	local_partition = std::move(new_partition);
 	local_append = make_uniq<PartitionedTupleDataAppendState>();
