@@ -147,7 +147,6 @@ unique_ptr<CreateStatement> Transformer::TransformCreatePropertyGraph(duckdb_lib
 				info->label_map[label] = pg_table.get();
 			}
 			info->label_map[pg_table->main_label] = pg_table.get();
-            //! TODO Check if moving the pointer doesn't break the label_map pointers
 			info->edge_tables.push_back(std::move(pg_table));
 		}
 	}
