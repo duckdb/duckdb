@@ -1,5 +1,6 @@
 #include "duckdb/core_functions/scalar/list_functions.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/swap.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
@@ -8,16 +9,17 @@
 
 namespace duckdb {
 
-static int CalculateSliceLength(int64_t &begin, int64_t &end, int64_t step, bool svalid) {
+template <typename INDEX_TYPE>
+static int CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool svalid) {
 	if (step < 0) {
-		step *= -1;
+		step = abs(step);
 	}
 	if (step == 0 && svalid) {
-		throw Exception("Slice step cannot be zero");
+		throw InvalidInputException("Slice step cannot be zero");
 	}
 	if (step == 1) {
 		return end - begin;
-	} else if (step >= (end - begin)) {
+	} else if (static_cast<idx_t>(step) >= (end - begin)) {
 		return 1;
 	}
 	if ((end - begin) % step != 0) {
@@ -123,6 +125,21 @@ list_entry_t SliceValueWithSteps(Vector &result, SelectionVector &sel, list_entr
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
+static void CheckBeginAndEnd(INDEX_TYPE &begin, INDEX_TYPE &end, INDEX_TYPE step, INPUT_TYPE &sliced) {
+	if (step < 0) {
+		swap(begin, end);
+	}
+
+	if (begin == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
+		begin = 0;
+	}
+
+	if (end == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
+		end = ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced);
+	}
+}
+
+template <typename INPUT_TYPE, typename INDEX_TYPE>
 static void ExecuteConstantSlice(Vector &result, Vector &v, Vector &b, Vector &e, const idx_t count,
                                  optional_ptr<Vector> s, SelectionVector &sel, idx_t &sel_idx,
                                  optional_ptr<Vector> result_child_vector) {
@@ -137,17 +154,7 @@ static void ExecuteConstantSlice(Vector &result, Vector &v, Vector &b, Vector &e
 	auto end = edata[0];
 	auto step = sdata ? sdata[0] : 1;
 
-	if (step < 0) {
-		std::swap(begin, end);
-	}
-
-	if (begin == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
-		begin = 0;
-	}
-
-	if (end == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
-		end = ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced);
-	}
+	CheckBeginAndEnd(begin, end, step, sliced);
 
 	auto vvalid = !ConstantVector::IsNull(v);
 	auto bvalid = !ConstantVector::IsNull(b);
@@ -181,42 +188,6 @@ static void ExecuteConstantSlice(Vector &result, Vector &v, Vector &b, Vector &e
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
-static void FindSelLength(UnifiedVectorFormat &vdata, UnifiedVectorFormat &bdata, UnifiedVectorFormat &edata,
-                          UnifiedVectorFormat &sdata, const idx_t count, idx_t &sel_length) {
-	for (idx_t i = 0; i < count; ++i) {
-		auto vidx = vdata.sel->get_index(i);
-		auto bidx = bdata.sel->get_index(i);
-		auto eidx = edata.sel->get_index(i);
-		auto sidx = sdata.sel->get_index(i);
-
-		auto sliced = ((INPUT_TYPE *)vdata.data)[vidx];
-		auto begin = ((INDEX_TYPE *)bdata.data)[bidx];
-		auto end = ((INDEX_TYPE *)edata.data)[eidx];
-		auto step = ((INDEX_TYPE *)sdata.data)[sidx];
-
-		if (step < 0) {
-			std::swap(begin, end);
-		}
-
-		if (begin == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
-			begin = 0;
-		}
-
-		if (end == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
-			end = ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced);
-		}
-
-		auto step_valid = sdata.validity.RowIsValid(sidx);
-
-		auto length = 0;
-		if (step_valid && ClampSlice(sliced, begin, end)) {
-			length = CalculateSliceLength(begin, end, step, step_valid);
-		}
-		sel_length += length;
-	}
-}
-
-template <typename INPUT_TYPE, typename INDEX_TYPE>
 static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, const idx_t count, optional_ptr<Vector> s,
                              SelectionVector &sel, idx_t &sel_idx, optional_ptr<Vector> result_child_vector) {
 	UnifiedVectorFormat vdata, bdata, edata, sdata;
@@ -227,8 +198,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, co
 	e.ToUnifiedFormat(count, edata);
 	if (s) {
 		s->ToUnifiedFormat(count, sdata);
-		FindSelLength<INPUT_TYPE, INDEX_TYPE>(vdata, bdata, edata, sdata, count, sel_length);
-		sel.Initialize(sel_length);
+		sel.Initialize(ListVector::GetListSize(v));
 	}
 
 	auto rdata = FlatVector::GetData<INPUT_TYPE>(result);
@@ -245,24 +215,25 @@ static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, co
 		auto end = ((INDEX_TYPE *)edata.data)[eidx];
 		auto step = s ? ((INDEX_TYPE *)sdata.data)[sidx] : 1;
 
-		if (step < 0) {
-			std::swap(begin, end);
-		}
-
-		if (begin == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
-			begin = 0;
-		}
-
-		if (end == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
-			end = ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced);
-		}
+		CheckBeginAndEnd(begin, end, step, sliced);
 
 		auto vvalid = vdata.validity.RowIsValid(vidx);
 		auto bvalid = bdata.validity.RowIsValid(bidx);
 		auto evalid = edata.validity.RowIsValid(eidx);
 		auto svalid = s && sdata.validity.RowIsValid(sidx);
 
-		if (!vvalid || !bvalid || !evalid || (s && !svalid) || !ClampSlice(sliced, begin, end)) {
+		bool clamp_result = false;
+		if (vvalid && bvalid && evalid && (svalid || step == 1)) {
+			clamp_result = ClampSlice(sliced, begin, end);
+		}
+
+		auto length = 0;
+		if (s && svalid && vvalid && bvalid && evalid && end - begin > 0) {
+			length = CalculateSliceLength(begin, end, step, svalid);
+		}
+		sel_length += length;
+
+		if (!vvalid || !bvalid || !evalid || (s && !svalid) || !clamp_result) {
 			rmask.SetInvalid(i);
 		} else if (!s) {
 			rdata[i] = SliceValue<INPUT_TYPE, INDEX_TYPE>(result, sliced, begin, end);
@@ -271,7 +242,11 @@ static void ExecuteFlatSlice(Vector &result, Vector &v, Vector &b, Vector &e, co
 		}
 	}
 	if (s) {
-		result_child_vector->Slice(sel, sel_length);
+		SelectionVector new_sel(sel_length);
+		for (idx_t i = 0; i < sel_length; ++i) {
+			new_sel.set_index(i, sel.get_index(i));
+		}
+		result_child_vector->Slice(new_sel, sel_length);
 	}
 }
 
@@ -309,7 +284,7 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	switch (result.GetType().id()) {
-	case duckdb::LogicalTypeId::LIST: {
+	case LogicalTypeId::LIST: {
 		// Share the value dictionary as we are just going to slice it
 		if (v.GetVectorType() != VectorType::FLAT_VECTOR && v.GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			v.Flatten(count);
@@ -365,7 +340,6 @@ ScalarFunctionSet ListSliceFun::GetFunctions() {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction fun({LogicalType::ANY, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::ANY,
 	                   ArraySliceFunction, ArraySliceBind);
-	//		fun.varargs = LogicalType::ANY; // Do we need this?
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 
 	ScalarFunctionSet set;
