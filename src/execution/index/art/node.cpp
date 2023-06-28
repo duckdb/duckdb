@@ -23,7 +23,7 @@ Node::Node(MetaBlockReader &reader) {
 
 	idx_t block_id = reader.Read<block_id_t>();
 	auto offset = reader.Read<uint32_t>();
-	info = 0;
+	Reset();
 
 	if (block_id == DConstants::INVALID_INDEX) {
 		return;
@@ -259,11 +259,12 @@ void Node::Deserialize(ART &art) {
 
 	MetaBlockReader reader(art.table_io_manager.GetIndexBlockManager(), GetBufferId());
 	reader.offset = GetOffset();
-	info = reader.Read<uint8_t>();
+	Reset();
+	SetType(reader.Read<uint8_t>());
 
 	auto decoded_type = GetType();
 	if (decoded_type == NType::LEAF_INLINED) {
-		data = reader.Read<row_t>();
+		SetRowId(reader.Read<row_t>());
 		return;
 	}
 

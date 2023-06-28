@@ -49,84 +49,34 @@ public:
 	static constexpr uint8_t NODE_48_CAPACITY = 48;
 	static constexpr uint16_t NODE_256_CAPACITY = 256;
 	//! Bit-shifting
-	static constexpr uint8_t TYPE_SIZE = 7;
-	static constexpr uint8_t RESET_SERIALIZED_FLAG = 127;
-	static constexpr uint8_t SET_SERIALIZED_FLAG = 128;
-	static constexpr uint8_t BUFFER_ID_SIZE = 32;
-	static constexpr uint64_t OFFSET_TO_ZERO = 0x00000000FFFFFFFF;
+	static constexpr uint64_t SHIFT_OFFSET = 32;
+	static constexpr uint64_t SHIFT_TYPE = 56;
+	static constexpr uint64_t SHIFT_SERIALIZED_FLAG = 63;
+	//! AND operations
+	static constexpr uint64_t AND_OFFSET = 0x0000000000FFFFFF;
+	static constexpr uint64_t AND_BUFFER_ID = 0x00000000FFFFFFFF;
+	static constexpr uint64_t AND_IS_SET = 0xFF00000000000000;
+	static constexpr uint64_t AND_RESET = 0x00FFFFFFFFFFFFFF;
+	//! OR operations
+	static constexpr uint64_t SET_SERIALIZED_FLAG = 0x8000000000000000;
 	//! Other constants
 	static constexpr uint8_t EMPTY_MARKER = 48;
 	static constexpr uint8_t LEAF_SIZE = 4;
 	static constexpr uint8_t PREFIX_SIZE = 15;
 
 public:
+	//! Constructors
+
 	//! Constructs an empty Node
-	Node() : info(0) {};
+	Node() : data(0) {};
 	//! Constructs a serialized Node pointer from a block ID and an offset
 	explicit Node(MetaBlockReader &reader);
 	//! Constructs an in-memory Node from a buffer ID and an offset
-	Node(uint32_t buffer_id, uint32_t offset) : info(0) {
+	Node(const uint32_t buffer_id, const uint32_t offset) : data(0) {
 		SetPtr(buffer_id, offset);
 	};
 
-	//! The serialized flag (first bit) and the node type
-	//! NOTE: We combine this into one uint8_t because Windows will otherwise allocate
-	//! 2 * sizeof(uint64_t) for a Node instead of sizeof(uint64_t) bytes
-	//! https://learn.microsoft.com/en-us/cpp/cpp/cpp-bit-fields?view=msvc-170
-	uint8_t info : 8;
-	//! Depending on the type, this is either a buffer/block pointer or an inlined row ID
-	uint64_t data : 56;
-
 public:
-	//! Get the block/buffer ID
-	inline idx_t GetBufferId() const {
-		return data & Node::OFFSET_TO_ZERO;
-	}
-	//! Get the offset
-	inline idx_t GetOffset() const {
-		return (data >> Node::BUFFER_ID_SIZE);
-	}
-	//! Set the block/buffer ID and offset
-	inline void SetPtr(const uint32_t buffer_id, const uint32_t offset) {
-		data = offset;
-		data <<= Node::BUFFER_ID_SIZE;
-		data += buffer_id;
-	}
-
-	//! Get the type
-	inline NType GetType() const {
-		D_ASSERT(!IsSerialized());
-		auto type = info & Node::RESET_SERIALIZED_FLAG;
-		D_ASSERT(type >= (uint8_t)NType::PREFIX);
-		D_ASSERT(type <= (uint8_t)NType::LEAF_INLINED);
-		return NType(type);
-	}
-	//! Set the type
-	inline void SetType(const uint8_t type) {
-		info += type;
-	}
-	//! Returns whether the node is serialized or not
-	inline bool IsSerialized() const {
-		return info >> Node::TYPE_SIZE;
-	}
-	//! Set the serialized flag
-	inline void SetSerialized() {
-		info |= Node::SET_SERIALIZED_FLAG;
-	}
-	//! Returns true, if the node is not zero
-	inline bool IsSet() const {
-		return info;
-	}
-	//! Reset the Node pointer by setting the node info to zero
-	inline void Reset() {
-		info = 0;
-	}
-
-	//! Comparison operator
-	inline bool operator==(const Node &node) const {
-		return info == node.info && data == node.data;
-	}
-
 	//! Get a new pointer to a node, might cause a new buffer allocation, and initialize it
 	static void New(ART &art, Node &node, const NType type);
 	//! Free the node (and its subtree)
@@ -169,6 +119,83 @@ public:
 
 	//! Vacuum all nodes that exceed their respective vacuum thresholds
 	void Vacuum(ART &art, const ARTFlags &flags);
+
+	// Getters and Setters
+
+	//! Returns whether the node is serialized or not (zero bit)
+	inline bool IsSerialized() const {
+		return data >> Node::SHIFT_SERIALIZED_FLAG;
+	}
+	//! Get the type (1st to 7th bit)
+	inline NType GetType() const {
+		D_ASSERT(!IsSerialized());
+		auto type = data >> Node::SHIFT_TYPE;
+		D_ASSERT(type >= (uint8_t)NType::PREFIX);
+		D_ASSERT(type <= (uint8_t)NType::LEAF_INLINED);
+		return NType(type);
+	}
+	//! Get the offset (8th to 23rd bit)
+	inline idx_t GetOffset() const {
+		auto offset = data >> Node::SHIFT_OFFSET;
+		return offset & Node::AND_OFFSET;
+	}
+	//! Get the block/buffer ID (24th to 63rd bit)
+	inline idx_t GetBufferId() const {
+		return data & Node::AND_BUFFER_ID;
+	}
+	//! Get the row ID (8th to 63rd bit)
+	inline row_t GetRowId() const {
+		return data & Node::AND_RESET;
+	}
+
+	//! Set the serialized flag (zero bit)
+	inline void SetSerialized() {
+		data &= Node::AND_RESET;
+		data |= Node::SET_SERIALIZED_FLAG;
+	}
+	//! Set the type (1st to 7th bit)
+	inline void SetType(const uint8_t type) {
+		D_ASSERT(!IsSerialized());
+		data += (uint64_t)type << Node::SHIFT_TYPE;
+	}
+	//! Set the block/buffer ID (24th to 63rd bit) and offset (8th to 23rd bit)
+	inline void SetPtr(const uint32_t buffer_id, const uint32_t offset) {
+		D_ASSERT(!(data & Node::AND_RESET));
+		auto shifted_offset = ((uint64_t)offset) << Node::SHIFT_OFFSET;
+		data += shifted_offset;
+		data += buffer_id;
+	}
+	//! Set the row ID (8th to 63rd bit)
+	inline void SetRowId(const row_t row_id) {
+		D_ASSERT(!(data & Node::AND_RESET));
+		data += row_id;
+	}
+
+	//! Returns true, if neither the serialized flag is set nor the type
+	inline bool IsSet() const {
+		return data & Node::AND_IS_SET;
+	}
+	//! Reset the Node pointer by setting the node info to zero
+	inline void Reset() {
+		data = 0;
+	}
+
+	//! Comparison operator
+	inline bool operator==(const Node &node) const {
+		return data == node.data;
+	}
+
+private:
+	//! Data holds all the information contained in a Node pointer
+	//! [0: serialized flag, 1 - 7: type,
+	//! 8 - 23: offset, 24 - 63: buffer/block ID OR
+	//! 8 - 63: row ID]
+	//! NOTE: a Node pointer can be either serialized OR have a type
+	//! NOTE: we do not use bit fields because when using bit fields Windows compiles
+	//! the Node class into 16 bytes instead of the intended 8 bytes, doubling the
+	//! space requirements
+	//! https://learn.microsoft.com/en-us/cpp/cpp/cpp-bit-fields?view=msvc-170
+	uint64_t data;
 };
 
 static_assert(sizeof(Node) == sizeof(uint64_t), "Invalid size for Node type.");

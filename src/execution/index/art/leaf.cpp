@@ -11,8 +11,9 @@ void Leaf::New(Node &node, const row_t row_id) {
 
 	// we directly inline this row ID into the node pointer
 	D_ASSERT(row_id < MAX_ROW_ID_LOCAL);
-	node.info = (uint8_t)NType::LEAF_INLINED;
-	node.data = row_id;
+	node.Reset();
+	node.SetType((uint8_t)NType::LEAF_INLINED);
+	node.SetRowId(row_id);
 }
 
 void Leaf::New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t count) {
@@ -22,7 +23,7 @@ void Leaf::New(ART &art, reference<Node> &node, const row_t *row_ids, idx_t coun
 	idx_t copy_count = 0;
 	while (count) {
 		node.get() = Node::GetAllocator(art, NType::LEAF).New();
-		node.get().info = (uint8_t)NType::LEAF;
+		node.get().SetType((uint8_t)NType::LEAF);
 
 		auto &leaf = Leaf::Get(art, node);
 
@@ -64,14 +65,14 @@ void Leaf::Merge(ART &art, Node &l_node, Node &r_node) {
 
 	// copy inlined row ID of r_node
 	if (r_node.GetType() == NType::LEAF_INLINED) {
-		Leaf::Insert(art, l_node, r_node.data);
+		Leaf::Insert(art, l_node, r_node.GetRowId());
 		r_node.Reset();
 		return;
 	}
 
 	// l_node has an inlined row ID, swap and insert
 	if (l_node.GetType() == NType::LEAF_INLINED) {
-		auto row_id = l_node.data;
+		auto row_id = l_node.GetRowId();
 		l_node = r_node;
 		Leaf::Insert(art, l_node, row_id);
 		r_node.Reset();
@@ -148,7 +149,7 @@ bool Leaf::Remove(ART &art, reference<Node> &node, const row_t row_id) {
 	}
 
 	if (node.get().GetType() == NType::LEAF_INLINED) {
-		if ((row_t)node.get().data == row_id) {
+		if (node.get().GetRowId() == row_id) {
 			return true;
 		}
 		return false;
@@ -246,7 +247,7 @@ bool Leaf::GetRowIds(ART &art, Node &node, vector<row_t> &result_ids, idx_t max_
 
 	if (node.GetType() == NType::LEAF_INLINED) {
 		// push back the inlined row ID of this leaf
-		result_ids.push_back(node.data);
+		result_ids.push_back(node.GetRowId());
 
 	} else {
 		// push back all the row IDs of this leaf
@@ -275,7 +276,7 @@ bool Leaf::ContainsRowId(ART &art, Node &node, const row_t row_id) {
 	}
 
 	if (node.GetType() == NType::LEAF_INLINED) {
-		return (row_t)node.data == row_id;
+		return node.GetRowId() == row_id;
 	}
 
 	reference<Node> ref_node(node);
@@ -299,7 +300,7 @@ bool Leaf::ContainsRowId(ART &art, Node &node, const row_t row_id) {
 string Leaf::VerifyAndToString(ART &art, Node &node) {
 
 	if (node.GetType() == NType::LEAF_INLINED) {
-		return "Leaf [count: 1, row ID: " + to_string(node.data) + "]";
+		return "Leaf [count: 1, row ID: " + to_string(node.GetRowId()) + "]";
 	}
 
 	// NOTE: we could do this recursively, but the function-call overhead can become kinda crazy
@@ -330,7 +331,7 @@ BlockPointer Leaf::Serialize(ART &art, Node &node, MetaBlockWriter &writer) {
 	if (node.GetType() == NType::LEAF_INLINED) {
 		auto block_pointer = writer.GetBlockPointer();
 		writer.Write(NType::LEAF_INLINED);
-		writer.Write(node.data);
+		writer.Write(node.GetRowId());
 		return block_pointer;
 	}
 
@@ -380,7 +381,7 @@ void Leaf::Vacuum(ART &art, Node &node) {
 	while (node_ref.get().IsSet() && !node_ref.get().IsSerialized()) {
 		if (allocator.NeedsVacuum(node_ref)) {
 			node_ref.get() = allocator.VacuumPointer(node_ref);
-			node_ref.get().info = (uint8_t)NType::LEAF;
+			node_ref.get().SetType((uint8_t)NType::LEAF);
 		}
 		auto &leaf = Leaf::Get(art, node_ref);
 		node_ref = leaf.ptr;
@@ -391,9 +392,9 @@ void Leaf::Vacuum(ART &art, Node &node) {
 void Leaf::MoveInlinedToLeaf(ART &art, Node &node) {
 
 	D_ASSERT(node.GetType() == NType::LEAF_INLINED);
-	auto row_id = node.data;
+	auto row_id = node.GetRowId();
 	node = Node::GetAllocator(art, NType::LEAF).New();
-	node.info = (uint8_t)NType::LEAF;
+	node.SetType((uint8_t)NType::LEAF);
 
 	auto &leaf = Leaf::Get(art, node);
 	leaf.count = 1;
@@ -408,7 +409,7 @@ Leaf &Leaf::Append(ART &art, const row_t row_id) {
 	// we need a new leaf node
 	if (leaf.get().count == Node::LEAF_SIZE) {
 		leaf.get().ptr = Node::GetAllocator(art, NType::LEAF).New();
-		leaf.get().ptr.info = (uint8_t)NType::LEAF;
+		leaf.get().ptr.SetType((uint8_t)NType::LEAF);
 
 		leaf = Leaf::Get(art, leaf.get().ptr);
 		leaf.get().count = 0;

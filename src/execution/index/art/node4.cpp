@@ -10,7 +10,7 @@ namespace duckdb {
 Node4 &Node4::New(ART &art, Node &node) {
 
 	node = Node::GetAllocator(art, NType::NODE_4).New();
-	node.info = (uint8_t)NType::NODE_4;
+	node.SetType((uint8_t)NType::NODE_4);
 	auto &n4 = Node4::Get(art, node);
 
 	n4.count = 0;

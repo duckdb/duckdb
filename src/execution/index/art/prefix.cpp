@@ -12,7 +12,7 @@ namespace duckdb {
 Prefix &Prefix::New(ART &art, Node &node) {
 
 	node = Node::GetAllocator(art, NType::PREFIX).New();
-	node.info = (uint8_t)NType::PREFIX;
+	node.SetType((uint8_t)NType::PREFIX);
 
 	auto &prefix = Prefix::Get(art, node);
 	prefix.data[Node::PREFIX_SIZE] = 0;
@@ -22,7 +22,7 @@ Prefix &Prefix::New(ART &art, Node &node) {
 Prefix &Prefix::New(ART &art, Node &node, uint8_t byte, Node next) {
 
 	node = Node::GetAllocator(art, NType::PREFIX).New();
-	node.info = (uint8_t)NType::PREFIX;
+	node.SetType((uint8_t)NType::PREFIX);
 
 	auto &prefix = Prefix::Get(art, node);
 	prefix.data[Node::PREFIX_SIZE] = 1;
@@ -40,7 +40,7 @@ void Prefix::New(ART &art, reference<Node> &node, const ARTKey &key, const uint3
 
 	while (count) {
 		node.get() = Node::GetAllocator(art, NType::PREFIX).New();
-		node.get().info = (uint8_t)NType::PREFIX;
+		node.get().SetType((uint8_t)NType::PREFIX);
 		auto &prefix = Prefix::Get(art, node);
 
 		auto this_count = MinValue((uint32_t)Node::PREFIX_SIZE, count);

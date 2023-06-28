@@ -10,7 +10,7 @@ namespace duckdb {
 Node48 &Node48::New(ART &art, Node &node) {
 
 	node = Node::GetAllocator(art, NType::NODE_48).New();
-	node.info = (uint8_t)NType::NODE_48;
+	node.SetType((uint8_t)NType::NODE_48);
 	auto &n48 = Node48::Get(art, node);
 
 	n48.count = 0;

@@ -951,7 +951,7 @@ void ART::CheckConstraintsForChunk(DataChunk &input, ConflictManager &conflict_m
 		// when we find a node, we need to update the 'matches' and 'row_ids'
 		// NOTE: leaves can have more than one row_id, but for UNIQUE/PRIMARY KEY they will only have one
 		D_ASSERT(leaf.GetType() == NType::LEAF_INLINED);
-		if (conflict_manager.AddHit(i, leaf.data)) {
+		if (conflict_manager.AddHit(i, leaf.GetRowId())) {
 			found_conflict = i;
 		}
 	}

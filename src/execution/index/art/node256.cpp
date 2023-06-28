@@ -9,7 +9,7 @@ namespace duckdb {
 Node256 &Node256::New(ART &art, Node &node) {
 
 	node = Node::GetAllocator(art, NType::NODE_256).New();
-	node.info = (uint8_t)NType::NODE_256;
+	node.SetType((uint8_t)NType::NODE_256);
 	auto &n256 = Node256::Get(art, node);
 
 	n256.count = 0;
