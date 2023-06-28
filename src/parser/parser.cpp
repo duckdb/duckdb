@@ -194,6 +194,7 @@ void Parser::ParseQuery(const string &query) {
 			for (auto const &query_statement : query_statements) {
 				bool parse_success = false;
                 string another_parser_error;
+                int another_parser_error_location;
 				{
 					PostgresParser another_parser;
 					another_parser.Parse(query_statement);
@@ -208,6 +209,7 @@ void Parser::ParseQuery(const string &query) {
 						transformer.TransformParseTree(another_parser.parse_tree, statements);
 					} else {
                         another_parser_error = another_parser.error_message;
+                        another_parser_error_location = another_parser.error_location;
                     }
 				}
 				if (!parse_success) {
@@ -232,7 +234,7 @@ void Parser::ParseQuery(const string &query) {
 					}
 					if (!parsed_single_statement) {
                         parser_error = QueryErrorContext::Format(query,
-						another_parser_error, 						                                         another_parser.error_location - 1);
+						another_parser_error,another_parser_error_location - 1);
 						throw ParserException(parser_error);
 					}
 				}
