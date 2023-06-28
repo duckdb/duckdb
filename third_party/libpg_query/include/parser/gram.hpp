@@ -1049,6 +1049,7 @@ typedef union YYSTYPE
 	PGAlias				*alias;
 	PGRangeVar			*range;
 	PGIntoClause			*into;
+	PGCTEMaterialize			ctematerialize;
 	PGWithClause			*with;
 	PGInferClause			*infer;
 	PGOnConflictClause	*onconflict;
@@ -1068,7 +1069,7 @@ typedef union YYSTYPE
 	PGInsertColumnOrder bynameorposition;
 }
 /* Line 1529 of yacc.c.  */
-#line 1072 "third_party/libpg_query/grammar/grammar_out.hpp"
+#line 1073 "third_party/libpg_query/grammar/grammar_out.hpp"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1

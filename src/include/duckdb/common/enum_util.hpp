@@ -133,6 +133,8 @@ enum class PhysicalType : uint8_t;
 
 enum class LogicalTypeId : uint8_t;
 
+enum class CTEMaterialize : uint8_t;
+
 enum class OutputStream : uint8_t;
 
 enum class TimestampCastResult : uint8_t;
@@ -411,6 +413,9 @@ const char *EnumUtil::ToChars<PhysicalType>(PhysicalType value);
 
 template <>
 const char *EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value);
+
+template <>
+const char *EnumUtil::ToChars<CTEMaterialize>(CTEMaterialize value);
 
 template <>
 const char *EnumUtil::ToChars<OutputStream>(OutputStream value);
@@ -756,6 +761,9 @@ PhysicalType EnumUtil::FromString<PhysicalType>(const char *value);
 
 template <>
 LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value);
+
+template <>
+CTEMaterialize EnumUtil::FromString<CTEMaterialize>(const char *value);
 
 template <>
 OutputStream EnumUtil::FromString<OutputStream>(const char *value);

@@ -6,7 +6,8 @@ namespace duckdb {
 
 ColumnDataCollectionSegment::ColumnDataCollectionSegment(shared_ptr<ColumnDataAllocator> allocator_p,
                                                          vector<LogicalType> types_p)
-    : allocator(std::move(allocator_p)), types(std::move(types_p)), count(0), heap(allocator->GetAllocator()) {
+    : allocator(std::move(allocator_p)), types(std::move(types_p)), count(0),
+      heap(make_shared<StringHeap>(allocator->GetAllocator())) {
 }
 
 idx_t ColumnDataCollectionSegment::GetDataSize(idx_t type_size) {
@@ -26,7 +27,8 @@ VectorDataIndex ColumnDataCollectionSegment::AllocateVectorInternal(const Logica
 	auto type_size = internal_type == PhysicalType::STRUCT ? 0 : GetTypeIdSize(internal_type);
 	allocator->AllocateData(GetDataSize(type_size) + ValidityMask::STANDARD_MASK_SIZE, meta_data.block_id,
 	                        meta_data.offset, chunk_state);
-	if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR) {
+	if (allocator->GetType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR ||
+	    allocator->GetType() == ColumnDataAllocatorType::HYBRID) {
 		chunk_meta.block_ids.insert(meta_data.block_id);
 	}
 

@@ -37,7 +37,7 @@ ICUDateFunc::BindData::BindData(ClientContext &context) {
 }
 
 bool ICUDateFunc::BindData::Equals(const FunctionData &other_p) const {
-	auto &other = (const ICUDateFunc::BindData &)other_p;
+	auto &other = other_p.Cast<const BindData>();
 	return *calendar == *other.calendar;
 }
 
