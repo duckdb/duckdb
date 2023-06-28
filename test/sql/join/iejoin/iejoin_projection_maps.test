@@ -1,0 +1,44 @@
+# name: test/sql/join/iejoin/iejoin_projection_maps.test
+# description: Test IEJoin projection mapping
+# group: [iejoin]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SELECT SETSEED(0.8675309);
+
+statement ok
+CREATE TABLE df AS
+    SELECT 
+        (random() * 100)::INTEGER + 1 as id,
+        (random() * 10)::INTEGER + 1 as id2,
+        (random() * 5)::INTEGER + 1 as id3,
+        random() as value,
+    FROM range(5000);
+
+# Test right_projection_map
+foreach prefer False True
+
+statement ok
+PRAGMA prefer_range_joins=${prefer};
+
+query I
+SELECT id2, id3, id3_right, corr(value, value_right) as value
+FROM (
+	SELECT df.*, df2.id3 as id3_right, df2.value as value_right
+	FROM df JOIN df as df2
+		ON (df.id = df2.id
+		AND df.id2 = df2.id2
+		AND df.id3 > df2.id3
+		AND df.id3 < df2.id3 + 30)
+	) tbl
+GROUP BY ALL
+ORDER BY ALL
+----
+660 values hashing to d817ad02dd4d1d3a3fba438d5d299381
+
+endloop
+
+# Test left_projection_map
+# (Once it can acutally happen...)
