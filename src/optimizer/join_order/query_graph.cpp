@@ -76,22 +76,30 @@ void QueryGraph::CreateEdge(JoinRelationSet &left, JoinRelationSet &right, optio
 	info.neighbors.push_back(std::move(n));
 }
 
+void QueryGraph::EnumerateNeighborsDFS(JoinRelationSet &node, reference<QueryEdge> info, idx_t index,
+                                       const std::function<bool(NeighborInfo &)> &callback) {
+
+	for (auto &neighbor : info.get().neighbors) {
+		if (callback(*neighbor)) {
+			return;
+		}
+	}
+
+	for (idx_t node_index = index; node_index < node.count; ++node_index) {
+		auto iter = info.get().children.find(node.relations[node_index]);
+		if (iter != info.get().children.end()) {
+			reference<QueryEdge> new_info = *iter->second;
+			EnumerateNeighborsDFS(node, new_info, node_index + 1, callback);
+		}
+	}
+}
+
 void QueryGraph::EnumerateNeighbors(JoinRelationSet &node, const std::function<bool(NeighborInfo &)> &callback) {
 	for (idx_t j = 0; j < node.count; j++) {
-		reference<QueryEdge> info = root;
-		for (idx_t i = j; i < node.count; i++) {
-			auto entry = info.get().children.find(node.relations[i]);
-			if (entry == info.get().children.end()) {
-				// node not found
-				break;
-			}
-			// check if any subset of the other set is in this sets neighbors
-			info = *entry->second;
-			for (auto &neighbor : info.get().neighbors) {
-				if (callback(*neighbor)) {
-					return;
-				}
-			}
+		auto iter = root.children.find(node.relations[j]);
+		if (iter != root.children.end()) {
+			reference<QueryEdge> new_info = *iter->second;
+			EnumerateNeighborsDFS(node, new_info, j + 1, callback);
 		}
 	}
 }

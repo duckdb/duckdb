@@ -1,6 +1,8 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/core_functions/scalar/struct_functions.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/statement/copy_statement.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/transformer.hpp"
@@ -47,6 +49,17 @@ void Transformer::TransformCopyOptions(CopyInfo &info, optional_ptr<duckdb_libpg
 		case duckdb_libpgquery::T_PGAStar:
 			info.options[def_elem->defname].push_back(Value("*"));
 			break;
+		case duckdb_libpgquery::T_PGFuncCall: {
+			auto func_call = PGPointerCast<duckdb_libpgquery::PGFuncCall>(def_elem->arg);
+			auto func_expr = TransformFuncCall(*func_call);
+
+			Value value;
+			if (!Transformer::ConstructConstantFromExpression(*func_expr, value)) {
+				throw ParserException("Unsupported expression in COPY options: %s", func_expr->ToString());
+			}
+			info.options[def_elem->defname].push_back(std::move(value));
+			break;
+		}
 		default: {
 			auto val = PGPointerCast<duckdb_libpgquery::PGValue>(def_elem->arg);
 			info.options[def_elem->defname].push_back(TransformValue(*val)->value);

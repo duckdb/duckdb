@@ -44,10 +44,23 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 	driver->ConnectionRollback = duckdb_adbc::ConnectionRollback;
 	driver->ConnectionReadPartition = duckdb_adbc::ConnectionReadPartition;
 	driver->StatementExecutePartitions = duckdb_adbc::StatementExecutePartitions;
+	driver->ConnectionGetTableSchema = duckdb_adbc::ConnectionGetTableSchema;
+	driver->StatementSetSubstraitPlan = duckdb_adbc::StatementSetSubstraitPlan;
+
 	return ADBC_STATUS_OK;
 }
 
 namespace duckdb_adbc {
+
+struct DuckDBAdbcStatementWrapper {
+	::duckdb_connection connection;
+	::duckdb_arrow result;
+	::duckdb_prepared_statement statement;
+	char *ingestion_table_name;
+	ArrowArrayStream *ingestion_stream;
+};
+static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
+                                    struct AdbcError *error);
 AdbcStatusCode SetErrorMaybe(const void *result, AdbcError *error, const std::string &error_message) {
 	if (!error) {
 		return ADBC_STATUS_INVALID_ARGUMENT;
@@ -109,6 +122,28 @@ AdbcStatusCode DatabaseNew(struct AdbcDatabase *database, struct AdbcError *erro
 	return CheckResult(res, error, "Failed to allocate");
 }
 
+AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement *statement, const uint8_t *plan, size_t length,
+                                         struct AdbcError *error) {
+	if (!statement) {
+		SetError(error, "Statement is not set");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (!plan) {
+		SetError(error, "Substrait Plan is not set");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (length == 0) {
+		SetError(error, "Can't execute plan with size = 0");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	auto wrapper = reinterpret_cast<DuckDBAdbcStatementWrapper *>(statement->private_data);
+	auto plan_str = std::string(reinterpret_cast<const char *>(plan), length);
+	auto query = "CALL from_substrait('" + plan_str + "'::BLOB)";
+	auto res = duckdb_prepare(wrapper->connection, query.c_str(), &wrapper->statement);
+	auto error_msg = duckdb_prepare_error(wrapper->statement);
+	return CheckResult(res, error, error_msg);
+}
+
 AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key, const char *value,
                                  struct AdbcError *error) {
 	auto status = SetErrorMaybe(database, error, "Missing database object");
@@ -156,6 +191,44 @@ AdbcStatusCode DatabaseRelease(struct AdbcDatabase *database, struct AdbcError *
 		delete wrapper;
 		database->private_data = nullptr;
 	}
+	return ADBC_STATUS_OK;
+}
+
+AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *connection, const char *catalog, const char *db_schema,
+                                        const char *table_name, struct ArrowSchema *schema, struct AdbcError *error) {
+	if (!connection) {
+		SetError(error, "Connection is not set");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	if (catalog != nullptr && strlen(catalog) > 0) {
+		// In DuckDB this is the name of the database, not sure what's the expected functionality here, so for now,
+		// scream.
+		SetError(error, "Catalog Name is not used in DuckDB. It must be set to nullptr or an empty string");
+		return ADBC_STATUS_NOT_IMPLEMENTED;
+	} else if (db_schema == nullptr) {
+		SetError(error, "AdbcConnectionGetTableSchema: must provide db_schema");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	} else if (table_name == nullptr) {
+		SetError(error, "AdbcConnectionGetTableSchema: must provide table_name");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	} else if (strlen(table_name) == 0) {
+		SetError(error, "AdbcConnectionGetTableSchema: must provide table_name");
+		return ADBC_STATUS_INVALID_ARGUMENT;
+	}
+	ArrowArrayStream arrow_stream;
+
+	std::string query = "SELECT * FROM ";
+	if (strlen(db_schema) > 0) {
+		query += std::string(db_schema) + ".";
+	}
+	query += std::string(table_name) + " LIMIT 0;";
+
+	auto success = QueryInternal(connection, &arrow_stream, query.c_str(), error);
+	if (success != ADBC_STATUS_OK) {
+		return success;
+	}
+	arrow_stream.get_schema(&arrow_stream, schema);
+	arrow_stream.release(&arrow_stream);
 	return ADBC_STATUS_OK;
 }
 
@@ -400,14 +473,6 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, stru
 	return ADBC_STATUS_OK;
 }
 
-struct DuckDBAdbcStatementWrapper {
-	::duckdb_connection connection;
-	::duckdb_arrow result;
-	::duckdb_prepared_statement statement;
-	char *ingestion_table_name;
-	ArrowArrayStream *ingestion_stream;
-};
-
 AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatement *statement,
                             struct AdbcError *error) {
 
@@ -581,8 +646,8 @@ AdbcStatusCode StatementSetOption(struct AdbcStatement *statement, const char *k
 	return ADBC_STATUS_INVALID_ARGUMENT;
 }
 
-static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
-                                    struct AdbcError *error) {
+AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
+                             struct AdbcError *error) {
 	AdbcStatement statement;
 
 	auto status = StatementNew(connection, &statement, error);

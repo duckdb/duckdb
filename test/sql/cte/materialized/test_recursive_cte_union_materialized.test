@@ -1,0 +1,136 @@
+# name: test/sql/cte/materialized/test_recursive_cte_union_materialized.test
+# description: Test Recursive Common Table Expressions UNION (CTE)
+# group: [materialized]
+
+statement ok
+PRAGMA enable_verification
+
+# simple recursive CTE
+query I
+with recursive t as MATERIALIZED (select 1 as x union select x+1 from t where x < 3) select * from t order by x
+----
+1
+2
+3
+
+query I
+with recursive t(x) as MATERIALIZED (select 1 union select x+1 from t where x < 3) select * from t order by x
+----
+1
+2
+3
+
+# test some aliases
+query I
+with recursive t(x) as MATERIALIZED (select 1 union select x+1 from t where x < 3) select zz from t t1(zz) order by zz
+----
+1
+2
+3
+
+query I
+with recursive t(x) as MATERIALIZED (select 1 union select zzz+1 from t t1(zzz) where zzz < 3) select zz from t t1(zz) order by zz
+----
+1
+2
+3
+
+# UNION semantics prevents infinite loop here
+query I
+with recursive t as MATERIALIZED (select 1 as x union select x from t) select * from t
+----
+1
+
+# simple recursive CTE with an alias
+query I
+with recursive t as MATERIALIZED (select 1 as x union select x+1 from t as m where m.x < 3) select * from t order by x
+----
+1
+2
+3
+
+# recursive CTE with multiple references and aliases
+query I
+with recursive t as MATERIALIZED (select 1 as x union select m.x+f.x from t as m, t as f where m.x < 3) select * from t order by x
+----
+1
+2
+4
+
+# strings and multiple columns
+query IT
+with recursive t as MATERIALIZED (select 1 as x, 'hello' as y union select x+1, y || '-' || 'hello' from t where x < 3) select * from t order by x;
+----
+1	hello
+2	hello-hello
+3	hello-hello-hello
+
+# referencing same CTE multiple times
+query I
+with recursive t as MATERIALIZED (select 1 as x union select x+1 from t where x < 3) select min(a1.x) from t a1, t a2;
+----
+1
+
+# nested uncorrelated subquery
+query I
+with recursive t as MATERIALIZED (select 1 as x union select x+(SELECT 1) from t where x < 3) select * from t order by x;
+----
+1
+2
+3
+
+# correlated subquery
+query I
+with recursive t as MATERIALIZED (select 1 as x union select x+(SELECT 1+t.x) from t where x < 5) select * from t order by x;
+----
+1
+3
+7
+
+# use with recursive in table creation
+statement ok
+create table integers as with recursive t as MATERIALIZED (select 1 as x union select x+1 from t where x < 3) select * from t;
+
+# more complex uncorrelated subquery
+query I
+with recursive t as MATERIALIZED (select (select min(x) from integers) as x union select x+1 from t where x < 3) select * from t order by x;
+----
+1
+2
+3
+
+# aggregate functions
+query I
+with recursive t as MATERIALIZED (select 1 as x union select sum(x+1) from t where x < 3) select * from t order by 1 nulls last
+----
+1
+2
+3
+NULL
+
+# order by is not allowed in the recursive term of ctes
+statement error
+with recursive t as MATERIALIZED (select 1 as x union select sum(x+1) from t where x < 3 order by x) select * from t
+
+# limit is not allowed in the recursive term of ctes
+statement error
+with recursive t as MATERIALIZED (select 1 as x union select sum(x+1) from t where x < 3 LIMIT 1) select * from t
+
+# offset is not allowed in the recursive term of ctes
+statement error
+with recursive t as MATERIALIZED (select 1 as x union select sum(x+1) from t where x < 3 OFFSET 1) select * from t
+
+# offset is not allowed in the recursive term of ctes
+statement error
+with recursive t as MATERIALIZED (select 1 as x union select sum(x+1) from t where x < 3 LIMIT 1 OFFSET 1) select * from t
+
+# create a view from a recursive cte
+statement ok
+create view vr as (with recursive t(x) as MATERIALIZED (select 1 union select x+1 from t where x < 3) select * from t order by x)
+
+query I
+select * from vr
+----
+1
+2
+3

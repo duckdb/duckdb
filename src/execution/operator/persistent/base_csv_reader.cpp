@@ -1,5 +1,4 @@
 #include "duckdb/execution/operator/persistent/base_csv_reader.hpp"
-
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
@@ -10,6 +9,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/main/appender.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/data_table.hpp"
@@ -18,7 +18,8 @@
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/main/error_manager.hpp"
 #include "duckdb/execution/operator/persistent/parallel_csv_reader.hpp"
-
+#include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
+#include "duckdb/main/client_data.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -448,6 +449,17 @@ bool TryCastFloatingVectorCommaSeparated(BufferedCSVReaderOptions &options, Vect
 	}
 }
 
+// Location of erroneous value in the current parse chunk
+struct ErrorLocation {
+	idx_t row_idx;
+	idx_t col_idx;
+	idx_t row_line;
+
+	ErrorLocation(idx_t row_idx, idx_t col_idx, idx_t row_line)
+	    : row_idx(row_idx), col_idx(col_idx), row_line(row_line) {
+	}
+};
+
 bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_add_line) {
 	if (parse_chunk.size() == 0) {
 		return true;
@@ -506,10 +518,7 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 			if (try_add_line) {
 				return false;
 			}
-			if (options.ignore_errors) {
-				conversion_error_ignored = true;
-				continue;
-			}
+
 			string col_name = to_string(col_idx);
 			if (col_idx < names.size()) {
 				col_name = "\"" + names[col_idx] + "\"";
@@ -527,16 +536,18 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 				}
 			}
 
-			idx_t error_line;
 			// The line_error must be summed with linenr (All lines emmited from this batch)
 			// But subtracted from the parse_chunk
 			D_ASSERT(line_error + linenr >= parse_chunk.size());
 			line_error += linenr;
 			line_error -= parse_chunk.size();
 
-			error_line = GetLineError(line_error, buffer_idx);
+			auto error_line = GetLineError(line_error, buffer_idx);
 
-			if (options.auto_detect) {
+			if (options.ignore_errors) {
+				conversion_error_ignored = true;
+
+			} else if (options.auto_detect) {
 				throw InvalidInputException("%s in column %s, at line %llu.\n\nParser "
 				                            "options:\n%s.\n\nConsider either increasing the sample size "
 				                            "(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
@@ -550,11 +561,19 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 	}
 	if (conversion_error_ignored) {
 		D_ASSERT(options.ignore_errors);
+
 		SelectionVector succesful_rows(parse_chunk.size());
 		idx_t sel_size = 0;
 
+		// Keep track of failed cells
+		vector<ErrorLocation> failed_cells;
+
 		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
-			bool failed = false;
+
+			auto global_row_idx = row_idx + linenr - parse_chunk.size();
+			auto row_line = GetLineError(global_row_idx, buffer_idx, false);
+
+			bool row_failed = false;
 			for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
 				auto col_idx = reader_data.column_ids[c];
 				auto result_idx = reader_data.column_mapping[c];
@@ -564,14 +583,82 @@ bool BaseCSVReader::Flush(DataChunk &insert_chunk, idx_t buffer_idx, bool try_ad
 
 				bool was_already_null = FlatVector::IsNull(parse_vector, row_idx);
 				if (!was_already_null && FlatVector::IsNull(result_vector, row_idx)) {
-					failed = true;
-					break;
+					row_failed = true;
+					failed_cells.emplace_back(row_idx, col_idx, row_line);
 				}
 			}
-			if (!failed) {
+			if (!row_failed) {
 				succesful_rows.set_index(sel_size++, row_idx);
 			}
 		}
+
+		// Now do a second pass to produce the reject table entries
+		if (!failed_cells.empty() && !options.rejects_table_name.empty()) {
+			auto limit = options.rejects_limit;
+
+			auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_table_name);
+			lock_guard<mutex> lock(rejects->write_lock);
+
+			// short circuit if we already have too many rejects
+			if (limit == 0 || rejects->count < limit) {
+				auto &table = rejects->GetTable(context);
+				InternalAppender appender(context, table);
+				auto file_name = GetFileName();
+
+				for (auto &cell : failed_cells) {
+					if (limit != 0 && rejects->count >= limit) {
+						break;
+					}
+					rejects->count++;
+
+					auto row_idx = cell.row_idx;
+					auto col_idx = cell.col_idx;
+					auto row_line = cell.row_line;
+
+					auto col_name = to_string(col_idx);
+					if (col_idx < names.size()) {
+						col_name = "\"" + names[col_idx] + "\"";
+					}
+
+					auto &parse_vector = parse_chunk.data[col_idx];
+					auto parsed_str = FlatVector::GetData<string_t>(parse_vector)[row_idx];
+					auto &type = insert_chunk.data[col_idx].GetType();
+					auto row_error_msg = StringUtil::Format("Could not convert string '%s' to '%s'",
+					                                        parsed_str.GetString(), type.ToString());
+
+					// Add the row to the rejects table
+					appender.BeginRow();
+					appender.Append(string_t(file_name));
+					appender.Append(row_line);
+					appender.Append(col_idx);
+					appender.Append(string_t(col_name));
+					appender.Append(parsed_str);
+
+					if (!options.rejects_recovery_columns.empty()) {
+						child_list_t<Value> recovery_key;
+						for (auto &key_idx : options.rejects_recovery_column_ids) {
+							// Figure out if the recovery key is valid.
+							// If not, error out for real.
+							auto &component_vector = parse_chunk.data[key_idx];
+							if (FlatVector::IsNull(component_vector, row_idx)) {
+								throw InvalidInputException("%s at line %llu in column %s. Parser options:\n%s ",
+								                            "Could not parse recovery column", row_line, col_name,
+								                            options.ToString());
+							}
+							auto component = Value(FlatVector::GetData<string_t>(component_vector)[row_idx]);
+							recovery_key.emplace_back(names[key_idx], component);
+						}
+						appender.Append(Value::STRUCT(recovery_key));
+					}
+
+					appender.Append(string_t(row_error_msg));
+					appender.EndRow();
+				}
+				appender.Close();
+			}
+		}
+
+		// Now slice the insert chunk to only include the succesful rows
 		insert_chunk.Slice(succesful_rows, sel_size);
 	}
 	parse_chunk.Reset();

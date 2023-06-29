@@ -183,7 +183,16 @@ using socket_t = SOCKET;
 
 #include <arpa/inet.h>
 #include <cstring>
+#ifndef __MVS__
 #include <ifaddrs.h>
+#endif
+#ifdef __MVS__
+#include <net/if.h>
+#include <strings.h>
+#ifndef NI_MAXHOST
+#define NI_MAXHOST 1025
+#endif
+#endif
 #include <netdb.h>
 #include <netinet/in.h>
 #ifdef __linux__
@@ -2668,7 +2677,7 @@ inline bool bind_ip_address(socket_t sock, const char *host) {
 	return ret;
 }
 
-#if !defined _WIN32 && !defined ANDROID
+#if !defined _WIN32 && !defined ANDROID && !defined __MVS__
 #define USE_IF2IP
 #endif
 
