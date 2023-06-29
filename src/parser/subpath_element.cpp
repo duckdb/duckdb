@@ -76,7 +76,7 @@ unique_ptr<PathReference> SubPath::Deserialize(FieldReader &reader) {
 	result->lower = reader.ReadRequired<int32_t>();
 	result->upper = reader.ReadRequired<int32_t>();
 	result->where_clause = reader.ReadOptional<ParsedExpression>(nullptr);
-	return result;
+	return std::move(result);
 }
 string SubPath::ToString() const {
 	string result = "";
