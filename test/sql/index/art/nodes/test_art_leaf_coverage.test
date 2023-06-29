@@ -1,4 +1,4 @@
-# name: test/sql/index/art/nodes/test_art_coverage_leaf.test
+# name: test/sql/index/art/nodes/test_art_leaf_coverage.test
 # description: ART coverage tests for leaf code coverage
 # group: [nodes]
 

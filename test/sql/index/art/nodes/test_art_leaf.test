@@ -1,4 +1,4 @@
-# name: test/sql/index/art/nodes/test_art_leaf_with_duplicates.test
+# name: test/sql/index/art/nodes/test_art_leaf.test
 # description: Test ART leaf containing duplicates on multi column table
 # group: [nodes]
 

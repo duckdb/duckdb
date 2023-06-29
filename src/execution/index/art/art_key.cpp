@@ -72,17 +72,6 @@ bool ARTKey::operator>(const ARTKey &k) const {
 	return len > k.len;
 }
 
-bool ARTKey::operator<(const ARTKey &k) const {
-	for (uint32_t i = 0; i < MinValue<uint32_t>(len, k.len); i++) {
-		if (data[i] < k.data[i]) {
-			return true;
-		} else if (data[i] > k.data[i]) {
-			return false;
-		}
-	}
-	return len < k.len;
-}
-
 bool ARTKey::operator>=(const ARTKey &k) const {
 	for (uint32_t i = 0; i < MinValue<uint32_t>(len, k.len); i++) {
 		if (data[i] > k.data[i]) {
