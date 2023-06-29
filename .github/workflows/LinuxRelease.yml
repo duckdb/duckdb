@@ -176,7 +176,7 @@ jobs:
     name: Linux Extensions (64 Bit)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
-#    needs: linux-release-64
+    needs: linux-release-64
     env:
       GEN: ninja
 
