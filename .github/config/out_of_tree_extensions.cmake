@@ -15,6 +15,7 @@ duckdb_extension_load(postgres_scanner
     GIT_URL https://github.com/duckdblabs/postgres_scanner
     GIT_TAG cd043b49cdc9e0d3752535b8333c9433e1007a48
 )
+# TODO: re-enable?
 #duckdb_extension_load(spatial
 #    LOAD_TESTS
 #    GIT_URL https://github.com/duckdblabs/duckdb_spatial.git

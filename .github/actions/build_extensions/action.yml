@@ -24,9 +24,6 @@ inputs:
     default: ''
 
   # Build config
-  force_32_bit:
-    description: 'Force the 32 bit build'
-    default: 0
   static_link_build:
     description: 'Links duckdb statically to the built extensions'
     default: 1
@@ -73,37 +70,45 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Setup DuckDB extension build config
+      shell: bash
+      run: |
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_in_tree_extensions == 1 && '.github/config/in_tree_extensions.cmake' || ''}}"
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_out_of_tree_extensions == 1 && '.github/config/out_of_tree_extensions.cmake' || '' }}"
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_vcpkg_extensions == 1 && '.github/config/vcpkg_out_of_tree_extensions.cmake' || '' }}"
+        echo "EXTENSION_CONFIGS=$EXTENSION_CONFIGS" >> $GITHUB_ENV
+
+    # Install vcpkg if not already installed
     - name: Setup vcpkg
-      if: ${{ inputs.build_vcpkg_extensions }}
+      if: ${{ inputs.build_vcpkg_extensions && inputs.toolchain_path == '' }}
       uses: lukka/run-vcpkg@v11
       with:
         vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
 
-    - name: Configure combined vcpkg build for extensions that require vcpkg
+    - name: Set vcpkg path
+      if: ${{ inputs.build_vcpkg_extensions || inputs.toolchain_path != '' }}
+      shell: bash
+      run: |
+        echo "VCPKG_TOOLCHAIN_PATH=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
+
+    - name: Create combined vcpkg manifest
       if: ${{ inputs.build_vcpkg_extensions }}
       shell: bash
       run: |
-        echo "VCPKG_TOOLCHAIN_PATH=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
-        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_in_tree_extensions == 1 && '.github/config/in_tree_extensions.cmake' || ''}}"
-        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_out_of_tree_extensions == 1 && '.github/config/out_of_tree_extensions.cmake' || '' }}"
-        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_vcpkg_extensions == 1 && '.github/config/vcpkg_out_of_tree_extensions.cmake' || '' }}"
         make merged_vcpkg_manifest
         echo "USE_MERGED_VCPKG_MANIFEST=1" >> $GITHUB_ENV 
 
     - name: Build
       shell: bash
       env:
-        FORCE_32_BIT: ${{ inputs.force_32_bit }}
         TREAT_WARNINGS_AS_ERRORS: ${{ inputs.treat_warn_as_error}}
         FORCE_WARN_UNUSED: 1
-#        STATIC_OPENSSL: 1
+        STATIC_OPENSSL: 1
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
-#        OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
+        OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }} # Necessary for spatial extension build: it doesn't detect the vcpkg install automatically
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
-        EXTRA_CMAKE_VARIABLES: -DCMAKE_TOOLCHAIN_FILE=${{ inputs.toolchain_path }}
-
       run: |
         mkdir -p ~/.ssh
         ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
@@ -112,11 +117,6 @@ runs:
         pwd
         echo "$USER"
         git config --global --add safe.directory '*'
-        export EXTENSION_CONFIGS=""
-        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_in_tree_extensions == 1 && '.github/config/in_tree_extensions.cmake' || ''}}"
-        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_out_of_tree_extensions == 1 && '.github/config/out_of_tree_extensions.cmake' || '' }}"
-        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_vcpkg_extensions == 1 && '.github/config/vcpkg_out_of_tree_extensions.cmake' || '' }}"
-        echo "EXTENSION_CONFIGS"
         make
 
     - name: Test statically linked extensions
