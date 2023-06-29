@@ -76,6 +76,12 @@ class DataType:
     def simpleString(self) -> str:
         return self.typeName()
 
+    def jsonValue(self) -> Union[str, Dict[str, Any]]:
+        raise ContributionsAcceptedError
+
+    def json(self) -> str:
+        raise ContributionsAcceptedError
+
     def needConversion(self) -> bool:
         """
         Does this type needs conversion between Python object and internal SQL object.
@@ -439,7 +445,7 @@ class MapType(DataType):
     ...        == MapType(StringType(), FloatType()))
     False
     """
-	
+    
     def __init__(self, keyType: DataType, valueType: DataType, valueContainsNull: bool = True):
         super().__init__(duckdb.map_type(keyType.duckdb_type, valueType.duckdb_type))
         assert isinstance(keyType, DataType), "keyType %s should be an instance of %s" % (
@@ -500,7 +506,7 @@ class StructField(DataType):
     ...      == StructField("f2", StringType(), True))
     False
     """
-	
+    
     def __init__(
         self,
         name: str,
@@ -565,6 +571,8 @@ class StructType(DataType):
     >>> struct1 == struct2
     False
     """
+    def _update_internal_duckdb_type(self):
+        self.duckdb_type = duckdb.struct_type(dict(zip(self.names, [x.duckdb_type for x in self.fields])))
 
     def __init__(self, fields: Optional[List[StructField]] = None):
         if not fields:
@@ -655,6 +663,7 @@ class StructType(DataType):
         # Precalculated list of fields that need conversion with fromInternal/toInternal functions
         self._needConversion = [f.needConversion() for f in self]
         self._needSerializeAnyField = any(self._needConversion)
+        self._update_internal_duckdb_type()
         return self
 
     def __iter__(self) -> Iterator[StructField]:

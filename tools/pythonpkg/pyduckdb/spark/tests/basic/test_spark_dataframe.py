@@ -62,3 +62,31 @@ class TestDataFrame(object):
 		df = spark.createDataFrame([(42,True), (21,False)], ['a', 'b'])
 		res = df.collect()
 		assert res == [Row(a=42, b=True), Row(a=21, b=False)]
+
+	def test_df_creation_coverage(self, spark):
+		from pyduckdb.spark.sql.types import StructType,StructField, StringType, IntegerType
+		data2 = [("James","","Smith","36636","M",3000),
+			("Michael","Rose","","40288","M",4000),
+			("Robert","","Williams","42114","M",4000),
+			("Maria","Anne","Jones","39192","F",4000),
+			("Jen","Mary","Brown","","F",-1)
+		]
+
+		schema = StructType([ \
+			StructField("firstname",StringType(),True), \
+			StructField("middlename",StringType(),True), \
+			StructField("lastname",StringType(),True), \
+			StructField("id", StringType(), True), \
+			StructField("gender", StringType(), True), \
+			StructField("salary", IntegerType(), True) \
+		])
+
+		df = spark.createDataFrame(data=data2,schema=schema)
+		res = df.collect()
+		assert res == [
+			Row(firstname='James', middlename='', lastname='Smith', id='36636', gender='M', salary=3000),
+			Row(firstname='Michael', middlename='Rose', lastname='', id='40288', gender='M', salary=4000),
+			Row(firstname='Robert', middlename='', lastname='Williams', id='42114', gender='M', salary=4000),
+			Row(firstname='Maria', middlename='Anne', lastname='Jones', id='39192', gender='F', salary=4000),
+			Row(firstname='Jen', middlename='Mary', lastname='Brown', id='', gender='F', salary=-1)
+		]
