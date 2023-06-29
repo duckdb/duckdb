@@ -1,10 +1,26 @@
-from typing import Optional, List, Tuple, Any, TYPE_CHECKING
+from typing import (
+	Optional,
+	List,
+	Tuple,
+	Any,
+	Union,
+	Iterable,
+	ForwardRef,
+	TYPE_CHECKING
+)
+import uuid
 
 if TYPE_CHECKING:
 	from pyduckdb.spark.sql.catalog import Catalog
+	from pandas.core.frame import DataFrame as PandasDataFrame
 
 from pyduckdb.spark.exception import ContributionsAcceptedError
 
+from pyduckdb.spark.sql.types import (
+	StructType,
+	AtomicType,
+	DataType
+)
 from pyduckdb.spark.conf import SparkConf
 from pyduckdb.spark.sql.dataframe import DataFrame
 from pyduckdb.spark.sql.conf import RuntimeConfig
@@ -28,16 +44,28 @@ class SparkSession:
 		self._context = context
 		self._conf = RuntimeConfig(self.conn)
 
-	def createDataFrame(self, tuples: List[Tuple[Any, ...]]) -> DataFrame:
+	def _create_dataframe(self, data: Union[Iterable[Any], "PandasDataFrame"]) -> DataFrame:
+		try:
+			import pandas
+			has_pandas = True
+		except:
+			has_pandas = False
+		if has_pandas and isinstance(data, pandas.DataFrame):
+			unique_name = f'pyspark_pandas_df_{uuid.uuid1()}'
+			self.conn.register(unique_name, data)
+			return DataFrame(self.conn.sql(f'select * from "{unique_name}"'), self)
+
 		def verify_tuple_integrity(tuples):
 			if len(tuples) <= 1:
 				return
 			assert all([len(x) == len(tuples[0]) for x in tuples[1:]])
 
-		if not tuples:
+		if not data:
 			rel = self.conn.sql('select 42 where 1=0')
 			return DataFrame(rel, self)
-		verify_tuple_integrity(tuples)
+		if not isinstance(data, list):
+			data = list(data)
+		verify_tuple_integrity(data)
 
 		def construct_query(tuples) -> str:
 			def construct_values_list(row, start_param_idx):
@@ -53,17 +81,39 @@ class SparkSession:
 				select * from (values {values_list})
 			"""
 			return query
-		query = construct_query(tuples)
+		query = construct_query(data)
 
 		def construct_parameters(tuples):
 			parameters = []
 			for row in tuples:
 				parameters.extend(list(row))
 			return parameters
-		parameters = construct_parameters(tuples)
+		parameters = construct_parameters(data)
 
 		rel = self.conn.sql(query, params=parameters)
 		return DataFrame(rel, self)
+
+
+	def createDataFrame(self, data: Union["PandasDataFrame", Iterable[Any]], schema: Optional[Union[StructType, List[str]]] = None, samplingRatio: Optional[float] = None, verifySchema: bool = True) -> DataFrame:
+		if samplingRatio:
+			raise NotImplementedError
+		if not verifySchema:
+			raise NotImplementedError
+		df = self._create_dataframe(data)
+		if schema:
+			def extract_names_and_types(schema: StructType) -> Tuple[List[str], List[str]]:
+				names = []
+				types = []
+				for f in schema:
+					types.append(str(f.dataType.duckdb_type))
+					names.append(f.name)
+				return (types, names)
+			if isinstance(schema, StructType):
+				types, names = extract_names_and_types(schema)
+				df = df._cast_types(*types)
+				schema = names
+			df = df.toDF(*schema)
+		return df
 
 	def newSession(self) -> "SparkSession":
 		return SparkSession(self._context)
@@ -125,6 +175,7 @@ class SparkSession:
 	class Builder:
 		def __init__(self):
 			self.name = "builder"
+			self._master = ":memory:"
 			self._config = {}
 
 		def master(self, name: str) -> "SparkSession.Builder":
