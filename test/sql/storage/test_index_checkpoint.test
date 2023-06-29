@@ -2,7 +2,7 @@
 # description: Verify that database footprint remains within expected bounds when writing index data.
 # group: [storage]
 
-# FIXME: once we inline leaves and refactor the (de)serialization, these numbers should all go down
+# FIXME: once we refactor the (de)serialization, these numbers should go down
 
 require skip_reload
 
