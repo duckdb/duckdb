@@ -220,7 +220,7 @@ if (OSX_BUILD_UNIVERSAL)
 endif()
 
 if (OSX_BUILD_ARCH)
-  message(STATUS building for architecture: ${OSX_BUILD_ARCH})
+  message(STATUS "building for OSX architecture: ${OSX_BUILD_ARCH}")
   if (NOT APPLE)
     error("This only makes sense on OSX")
   endif()

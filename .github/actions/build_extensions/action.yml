@@ -54,6 +54,9 @@ inputs:
   osx_universal:
     description: 'Build Universal Binary for OSX'
     default: 0
+  osx_arch:
+    description: 'Build specific architecture for OSX'
+    default: 0
   aarch64_cross_compile:
     description: 'Enable Linux aarch64 cross-compiling'
     default: 0
@@ -107,6 +110,7 @@ runs:
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }} # Necessary for spatial extension build: it doesn't detect the vcpkg install automatically
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
+        OSX_BUILD_ARCH: ${{ inputs.osx_arch }}
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
       run: |
