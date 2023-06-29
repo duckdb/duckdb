@@ -716,13 +716,17 @@ function(register_extension NAME DONT_LINK DONT_BUILD PATH INCLUDE_PATH)
 endfunction()
 
 # Downloads the external extension repo at the specified commit and calls register_extension
-macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD PATH INCLUDE_PATH)
+macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD PATH INCLUDE_PATH APPLY_PATCHES)
   include(FetchContent)
+  if (${APPLY_PATCHES})
+    set (PATCH_COMMAND "${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.sh ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}")
+  endif()
   FETCHCONTENT_DECLARE(
           ${NAME}_extension_fc
           GIT_REPOSITORY ${URL}
           GIT_TAG ${COMMIT}
           GIT_SUBMODULES ""
+          PATCH_COMMAND ${PATCH_COMMAND}
   )
   message(STATUS "Building extension '${NAME}' from ${URL} @ ${COMMIT}")
   FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
@@ -736,7 +740,7 @@ endmacro()
 
 function(duckdb_extension_load NAME)
   # Parameter parsing
-  set(options DONT_LINK DONT_BUILD)
+  set(options DONT_LINK DONT_BUILD APPLY_PATCHES)
   set(oneValueArgs SOURCE_DIR INCLUDE_DIR GIT_URL GIT_TAG)
   cmake_parse_arguments(duckdb_extension_load "${options}" "${oneValueArgs}" "" ${ARGN})
 
@@ -756,7 +760,7 @@ function(duckdb_extension_load NAME)
     if (NOT "${duckdb_extension_load_GIT_COMMIT}" STREQUAL "")
       error("Git URL specified but no valid git commit was found for ${NAME} extension")
     endif()
-    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}")
+    register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}" "${duckdb_extension_load_APPLY_PATCHES}")
   elseif (NOT "${duckdb_extension_load_SOURCE_DIR}" STREQUAL "")
     # Local extension, custom path
     message(STATUS "Building extension '${NAME}' from '${duckdb_extension_load_SOURCE_DIR}'")
