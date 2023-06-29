@@ -113,7 +113,7 @@ private:
 	bool all_constant;
 	//! Offset to the heap size of every row
 	idx_t heap_size_offset;
-	//! Whether any of the aggregate have a destructor
+	//! Whether any of the aggregates have a destructor
 	bool has_destructor;
 };
 

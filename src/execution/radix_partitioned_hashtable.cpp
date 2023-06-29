@@ -125,7 +125,7 @@ public:
 
 	//! Lock for final stuff
 	mutex lock;
-	//! Pin properties when scanning
+	//! Pin properties when scanning TODO clean up agg states if not DESTROY_AFTER_DONE
 	TupleDataPinProperties scan_pin_properties;
 	//! The final data that has to be scanned
 	vector<MaterializedAggregateData> final_data;
@@ -413,8 +413,9 @@ void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_p
 		D_ASSERT(gstate.sink_partitions.size() == num_sink_partitions);
 		for (idx_t partition_idx = 0; partition_idx < num_sink_partitions; partition_idx++) {
 			auto &sink_partition = gstate.sink_partitions[partition_idx];
-			sink_partition->data_per_repartition_task =
-			    MaxValue<idx_t>(sink_partition->uncombined_data.size() / gstate.tasks_per_partition.GetIndex(), 1);
+			const auto num_data = sink_partition->uncombined_data.size();
+			const auto tasks_per_partition = gstate.tasks_per_partition.GetIndex();
+			sink_partition->data_per_repartition_task = (num_data + tasks_per_partition - 1) / tasks_per_partition;
 			D_ASSERT(sink_partition->data_per_repartition_task.GetIndex() * gstate.tasks_per_partition.GetIndex() >=
 			         sink_partition->uncombined_data.size());
 		}
@@ -530,7 +531,7 @@ bool RadixPartitionedHashTable::RequiresRepartitioning(ClientContext &context, G
 class RadixHTGlobalSourceState : public GlobalSourceState {
 public:
 	explicit RadixHTGlobalSourceState(const RadixPartitionedHashTable &ht)
-	    : initialized(false), final_data_idx(0), finished(false) {
+	    : initialized(false), final_data_idx(0), final_data_done(0), finished(false) {
 		for (column_t column_id = 0; column_id < ht.group_types.size(); column_id++) {
 			column_ids.push_back(column_id);
 		}
@@ -563,6 +564,7 @@ public:
 
 	//! Scan progress
 	atomic<idx_t> final_data_idx;
+	atomic<idx_t> final_data_done;
 	atomic<bool> finished;
 };
 
@@ -578,12 +580,29 @@ public:
 		scan_chunk.Initialize(allocator, scan_chunk_types);
 	}
 
-	bool Scan(RadixHTGlobalSourceState &gstate, RadixHTGlobalSinkState &sink, DataChunk &result) {
+	bool Scan(RadixHTGlobalSinkState &sink) {
 		D_ASSERT(final_data_idx.IsValid());
 		D_ASSERT(final_data_idx.GetIndex() < sink.final_data.size());
 		auto &data_collection = *sink.final_data[final_data_idx.GetIndex()].data_collection;
 		D_ASSERT(data_collection.Count() != 0);
-		return data_collection.Scan(scan_state, result);
+		return data_collection.Scan(scan_state, scan_chunk);
+	}
+
+	void NextDataCollection(RadixHTGlobalSinkState &sink, RadixHTGlobalSourceState &gstate) {
+		// Try to assign next data collection
+		if (gstate.final_data_idx >= sink.final_data.size()) {
+			return;
+		}
+		final_data_idx = gstate.final_data_idx++;
+		if (final_data_idx.GetIndex() >= sink.final_data.size()) {
+			final_data_idx.Invalidate();
+			return; // Everything has been assigned
+		}
+
+		// Initialize scan on the next data collection
+		auto &data_collection = *sink.final_data[final_data_idx.GetIndex()].data_collection;
+		D_ASSERT(data_collection.Count() != 0);
+		data_collection.InitializeScan(scan_state, gstate.column_ids, sink.scan_pin_properties);
 	}
 
 	//! Allocator for finalizing state
@@ -607,6 +626,7 @@ idx_t RadixPartitionedHashTable::CountInternal(GlobalSinkState &sink_p) const {
 		for (auto &data : sink.final_data) {
 			total_count += data.data_collection->Count();
 		}
+		lock_guard<mutex> guard(sink.lock);
 		sink.final_count = total_count;
 	}
 	return sink.final_count.GetIndex();
@@ -634,6 +654,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 	         sink.scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE);
 
 	if (gstate.finished) {
+		D_ASSERT(!lstate.final_data_idx.IsValid());
 		return SourceResultType::FINISHED;
 	}
 
@@ -670,21 +691,30 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 		return SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
-	if (!lstate.final_data_idx.IsValid() || !lstate.Scan(gstate, sink, lstate.scan_chunk)) {
-		if (lstate.final_data_idx.IsValid() && sink.scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE) {
-			// Destroy aggregate allocators when moving to the next data collection
-			sink.final_data[lstate.final_data_idx.GetIndex()].allocators.clear();
-		}
-		lstate.final_data_idx = gstate.final_data_idx++;
-		if (lstate.final_data_idx.GetIndex() >= sink.final_data.size()) {
-			gstate.finished = true;
+	while (true) {
+		if (gstate.finished) {
 			return SourceResultType::FINISHED;
-		}
-		auto &data_collection = *sink.final_data[lstate.final_data_idx.GetIndex()].data_collection;
-		D_ASSERT(data_collection.Count() != 0);
-		data_collection.InitializeScan(lstate.scan_state, gstate.column_ids, sink.scan_pin_properties);
-		if (!lstate.Scan(gstate, sink, lstate.scan_chunk)) {
-			throw InternalException("Unable to scan chunk in RadixPartitionedHashTable::GetData");
+		} else if (lstate.final_data_idx.IsValid()) {
+			// We have a data collection
+			if (lstate.Scan(sink)) {
+				break; // We scanned something
+			}
+
+			// Destroy data collection and allocators
+			if (sink.scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE) {
+				auto &data = sink.final_data[lstate.final_data_idx.GetIndex()];
+				data.data_collection->Reset();
+				data.allocators.clear();
+			}
+			lstate.final_data_idx.Invalidate();
+
+			// Mark the collection as done
+			auto done = ++gstate.final_data_done;
+			if (done == sink.final_data.size()) {
+				gstate.finished = true;
+			}
+		} else {
+			lstate.NextDataCollection(sink, gstate);
 		}
 	}
 
@@ -719,6 +749,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 		chunk.data[op.GroupCount() + op.aggregates.size() + i].Reference(grouping_values[i]);
 	}
 	chunk.SetCardinality(lstate.scan_chunk);
+	D_ASSERT(chunk.size() != 0);
 
 	return SourceResultType::HAVE_MORE_OUTPUT;
 }

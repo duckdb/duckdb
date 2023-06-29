@@ -385,6 +385,7 @@ bool TupleDataCollection::Scan(TupleDataScanState &state, DataChunk &result) {
 	idx_t chunk_index;
 	if (!NextScanIndex(state, segment_index, chunk_index)) {
 		FinalizePinState(state.pin_state, segments[segment_index_before]);
+		result.SetCardinality(0);
 		return false;
 	}
 	if (segment_index_before != DConstants::INVALID_INDEX && segment_index != segment_index_before) {
@@ -402,6 +403,7 @@ bool TupleDataCollection::Scan(TupleDataParallelScanState &gstate, TupleDataLoca
 		lock_guard<mutex> guard(gstate.lock);
 		if (!NextScanIndex(gstate.scan_state, lstate.segment_index, lstate.chunk_index)) {
 			FinalizePinState(lstate.pin_state, segments[segment_index_before]);
+			result.SetCardinality(0);
 			return false;
 		}
 	}
