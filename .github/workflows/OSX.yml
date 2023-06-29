@@ -206,7 +206,7 @@ jobs:
       - name: Install OpenSSL
         shell: bash
         run: |
-          cd $VCPKG_ROOT && ./vcpkg install openssl
+          cd $VCPKG_ROOT && ./vcpkg install openssl --triplet=${{ matrix.vcpkg_triplet }}
 
       - uses: ./.github/actions/build_extensions
         with:
@@ -226,7 +226,6 @@ jobs:
         run: |
           if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           . scripts/osx_import_codesign_certificate.sh
-
           codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/extension/*/*.duckdb_extension
           fi
 

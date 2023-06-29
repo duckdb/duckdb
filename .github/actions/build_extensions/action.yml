@@ -47,7 +47,7 @@ inputs:
     default: 1
   build_vcpkg_extensions:
     description: 'Build extensions that require vcpkg for dependency management'
-    default: 0
+    default: 1
   python_name:
     description: 'Python binary name because wtf Python'
     default: 'python3'
