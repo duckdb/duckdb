@@ -102,7 +102,7 @@ unique_ptr<CreateInfo> CreatePropertyGraphInfo::Deserialize(FieldReader &reader)
 	result->edge_tables = reader.ReadRequiredSerializableList<PropertyGraphTable>();
 	//        result->label_map = reader.ReadRequiredSerializableMap<PropertyGraphTable>();
 	reader.Finalize();
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb
