@@ -308,3 +308,6 @@ query II
 1	Tavneet
 2	Gabor
 4	David
+
+statement ok
+-DROP PROPERTY GRAPH pg;
