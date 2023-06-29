@@ -2,6 +2,9 @@ import pytest
 from pyduckdb.spark.sql import SparkSession
 
 class TestSparkSession(object):
+	def test_spark_session_default(self):
+		session = SparkSession.builder.getOrCreate()
+
 	def test_spark_session(self):
 		session = SparkSession.builder.master("local[1]") \
 							.appName('SparkByExamples.com') \
