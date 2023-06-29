@@ -108,6 +108,24 @@ public:
 		}
 	}
 
+	~RadixHTGlobalSinkState() {
+		if (scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE) {
+			return;
+		}
+
+		for (auto &data : final_data) {
+			// There are aggregates with destructors: Call the destructor for each of the aggregates
+			RowOperationsState row_state(*data.allocators.back());
+			auto layout = data.data_collection->GetLayout().Copy();
+			TupleDataChunkIterator iterator(*data.data_collection, TupleDataPinProperties::DESTROY_AFTER_DONE, false);
+			auto &row_locations = iterator.GetChunkState().row_locations;
+			do {
+				RowOperations::DestroyStates(row_state, layout, row_locations, iterator.GetCurrentChunkCount());
+			} while (iterator.Next());
+			data.data_collection->Reset();
+		}
+	}
+
 	//! The HT object
 	const RadixPartitionedHashTable &ht;
 
