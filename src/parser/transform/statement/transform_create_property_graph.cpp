@@ -32,8 +32,8 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 				all_columns = true;
 				continue;
 			}
-			auto column_alias __attribute__((unused)) =
-			    reinterpret_cast<duckdb_libpgquery::PGColumnDef *>(column_optional_as->head->next->data.ptr_value);
+//			auto column_alias __attribute__((unused)) =
+//			    reinterpret_cast<duckdb_libpgquery::PGColumnDef *>(column_optional_as->head->next->data.ptr_value);
 			// TODO
 			//  	- 	Change this to support the optional as
 			// 		  	Looking at the next element of column_optional_as, which is a linked list
