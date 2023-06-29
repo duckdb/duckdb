@@ -105,7 +105,10 @@ void Iterator::FindMinimum(Node &node) {
 
 bool Iterator::LowerBound(Node &node, const ARTKey &key, const bool equal, idx_t depth) {
 
-	D_ASSERT(node.IsSet());
+	if (!node.IsSet()) {
+		return false;
+	}
+
 	if (node.IsSerialized()) {
 		node.Deserialize(*art);
 	}

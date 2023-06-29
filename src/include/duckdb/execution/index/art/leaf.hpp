@@ -24,7 +24,7 @@ struct BlockPointer;
 //! The LEAF is a special node type that contains a count, up to LEAF_SIZE row IDs,
 //! and a Node pointer. If this pointer is set, then it must point to another LEAF,
 //! creating a chain of leaf nodes storing row IDs.
-//! This class also covers the case of LEAF_INLINED, in which case we store the
+//! This class also contains functionality for nodes of type LEAF_INLINED, in which case we store the
 //! row ID directly in the node pointer.
 class Leaf {
 public:

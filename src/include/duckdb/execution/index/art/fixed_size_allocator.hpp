@@ -24,7 +24,7 @@ struct BufferEntry {
 };
 
 //! The FixedSizeAllocator provides pointers to fixed-size sections of pre-allocated memory buffers.
-//! The pointers are Node pointers, and the leftmost byte (info) must always be zero.
+//! The pointers are Node pointers, and the leftmost byte (serialize flag and type) must always be zero.
 class FixedSizeAllocator {
 public:
 	//! Fixed size of the buffers
