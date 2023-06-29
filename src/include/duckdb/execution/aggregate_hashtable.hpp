@@ -27,19 +27,6 @@ struct FlushMoveState;
    stores them in the HT. It uses linear probing for collision resolution.
 */
 
-// two part hash table
-// hashes and payload
-// hashes layout:
-// [48 BIT POINTER][16 BIT SALT]
-//
-// payload layout
-// [VALIDITY][GROUPS][HASH][PADDING][PAYLOAD]
-// [VALIDITY] is the validity bits of the data columns (including the HASH)
-// [GROUPS] is the group data, could be multiple values, fixed size, strings are elsewhere
-// [HASH] is the hash data of the groups
-// [PADDING] is gunk data to align payload properly
-// [PAYLOAD] is the payload (i.e. the aggregate states)
-
 struct aggr_ht_entry_t {
 public:
 	explicit aggr_ht_entry_t(hash_t value_p) : value(value_p) {
@@ -91,28 +78,33 @@ class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, const vector<BoundAggregateExpression *> &aggregates,
-	                          idx_t initial_capacity = InitialCapacity());
+	                          idx_t initial_capacity = InitialCapacity(), idx_t radix_bits = 0);
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
 	                          vector<LogicalType> payload_types, vector<AggregateObject> aggregates,
-	                          idx_t initial_capacity = InitialCapacity());
+	                          idx_t initial_capacity = InitialCapacity(), idx_t radix_bits = 0);
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types);
 	~GroupedAggregateHashTable() override;
 
 public:
+	//! The hash table load factor, when a resize is triggered
+	constexpr static float LOAD_FACTOR = 1.5;
+
 	//! Number of groups in the HT
 	idx_t Count() const;
+	//! Returns the number of tuples sunk into the HT
+	idx_t SinkCount() const;
 	//! Initial capacity of the HT
 	static idx_t InitialCapacity();
-	//! Max capacity while sinking data into the HT
-	static idx_t SinkCapacity();
 	//! Current capacity of the HT
 	idx_t Capacity() const;
+	//! Threshold at which to resize the HT
+	idx_t ResizeThreshold() const;
 
 	//! The size (in bytes) of the data collection
 	idx_t DataSize() const;
-	//! The size (in bytes) of the first part of the HT
-	static idx_t FirstPartSize(idx_t count);
-	//! The total size (first part and data) of the HT
+	//! The size (in bytes) of the pointer table of the HT
+	static idx_t PointerTableSize(idx_t count);
+	//! The total size (pointer table and data) of the HT
 	idx_t TotalSize() const;
 
 	//! Add the given data to the HT, computing the aggregates grouped by the
@@ -136,22 +128,17 @@ public:
 	//! Gets the partitioned data and aggregate allocator of the HT (transfers ownership)
 	void GetDataOwnership(unique_ptr<PartitionedTupleData> &partitioned_data,
 	                      shared_ptr<ArenaAllocator> &aggregate_allocator);
-	//! Resets the first part of the HT to all 0's
-	void ClearFirstPart();
+	//! Resets the pointer table of the HT to all 0's
+	void ClearPointerTable();
 
 	//! Executes the filter(if any) and update the aggregates
 	void Combine(GroupedAggregateHashTable &other);
 	void Combine(TupleDataCollection &other_data);
 
-	//! Unpin the first part and data blocks
+	//! Unpin the pointer table and data blocks
 	void Finalize();
 
 private:
-	//! The hash table load factor, when a resize is triggered
-	constexpr static float LOAD_FACTOR = 1.5;
-	//! The size of the first part of the HT, should fit in L2 cache
-	constexpr static idx_t FIRST_PART_SINK_SIZE = 1048576;
-
 	//! Append state
 	struct AggregateHTAppendState {
 		AggregateHTAppendState();
@@ -169,14 +156,19 @@ private:
 		DataChunk group_chunk;
 	} state;
 
+	//! The number of radix bits to partition by
+	idx_t radix_bits;
 	//! The data of the HT
 	unique_ptr<PartitionedTupleData> partitioned_data;
+	//! How much data was sunk into the HT
+	idx_t sink_count;
+
 	//! Predicates for matching groups (always ExpressionType::COMPARE_EQUAL)
 	vector<ExpressionType> predicates;
 
 	//! The capacity of the HT. This can be increased using GroupedAggregateHashTable::Resize
 	idx_t capacity;
-	//! The hash map (first part) of the HT: allocated data and pointer into it
+	//! The hash map (pointer table) of the HT: allocated data and pointer into it
 	AllocatedData hash_map;
 	aggr_ht_entry_t *entries;
 	//! Offset of the hash column in the rows
@@ -189,7 +181,7 @@ private:
 	//! Owning arena allocators that this HT has data from
 	vector<shared_ptr<ArenaAllocator>> stored_allocators;
 
-	//! Whether this HT has been finalized (first part and data blocks have been unpinned)
+	//! Whether this HT has been finalized (pointer table and data blocks have been unpinned)
 	bool is_finalized;
 
 private:
@@ -205,16 +197,14 @@ private:
 
 	//! Apply bitmask to get the entry in the HT
 	inline idx_t ApplyBitMask(hash_t hash) const;
-	//! Threshold at which to resize the HT
-	idx_t ResizeThreshold() const;
 	//! Resize the HT to the specified size. Must be larger than the current size.
 	void Resize(idx_t size);
 
 	//! Does the actual group matching / creation
-	idx_t FindOrCreateGroupsInternal(AggregateHTAppendState &state, DataChunk &groups, Vector &group_hashes,
-	                                 Vector &addresses, SelectionVector &new_groups);
+	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
+	                                 SelectionVector &new_groups);
 
-	//! Verify the first part of the HT
+	//! Verify the pointer table of the HT
 	void Verify();
 };
 

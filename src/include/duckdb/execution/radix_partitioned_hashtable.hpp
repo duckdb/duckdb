@@ -12,6 +12,7 @@
 #include "duckdb/parser/group_by_node.hpp"
 
 namespace duckdb {
+
 class Executor;
 class Pipeline;
 class Task;

@@ -18,9 +18,9 @@ using ValidityBytes = TupleDataLayout::ValidityBytes;
 GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, Allocator &allocator,
                                                      vector<LogicalType> group_types, vector<LogicalType> payload_types,
                                                      const vector<BoundAggregateExpression *> &bindings,
-                                                     idx_t initial_capacity)
+                                                     idx_t initial_capacity, idx_t radix_bits)
     : GroupedAggregateHashTable(context, allocator, std::move(group_types), std::move(payload_types),
-                                AggregateObject::CreateAggregateObjects(bindings), initial_capacity) {
+                                AggregateObject::CreateAggregateObjects(bindings), initial_capacity, radix_bits) {
 }
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, Allocator &allocator,
@@ -38,16 +38,17 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
                                                      vector<LogicalType> group_types_p,
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
-                                                     idx_t initial_capacity)
-    : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)), capacity(0),
-      aggregate_allocator(make_shared<ArenaAllocator>(allocator)), is_finalized(false) {
+                                                     idx_t initial_capacity, idx_t radix_bits)
+    : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)),
+      radix_bits(radix_bits), sink_count(0), capacity(0), aggregate_allocator(make_shared<ArenaAllocator>(allocator)),
+      is_finalized(false) {
 
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
 	layout.Initialize(std::move(group_types_p), std::move(aggregate_objects_p));
 	hash_offset = layout.GetOffsets()[layout.ColumnCount() - 1];
 
-	// Partitioned data and first part
+	// Partitioned data and pointer table
 	InitializePartitionedData();
 	Resize(initial_capacity);
 
@@ -56,9 +57,9 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 }
 
 void GroupedAggregateHashTable::InitializePartitionedData() {
-	// TODO don't hardcode 4
 	D_ASSERT(!partitioned_data);
-	partitioned_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, 4, layout.ColumnCount() - 1);
+	partitioned_data =
+	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
 	partitioned_data->InitializeAppendState(state.append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 }
 
@@ -70,6 +71,7 @@ void GroupedAggregateHashTable::GetDataOwnership(unique_ptr<PartitionedTupleData
 	UnpinData();
 	partitioned_data_p = std::move(partitioned_data);
 	InitializePartitionedData();
+	sink_count = 0;
 	D_ASSERT(Count() == 0);
 
 	aggregate_allocator_p = std::move(aggregate_allocator);
@@ -101,12 +103,12 @@ idx_t GroupedAggregateHashTable::Count() const {
 	return partitioned_data->Count();
 }
 
-idx_t GroupedAggregateHashTable::InitialCapacity() {
-	return STANDARD_VECTOR_SIZE * 2ULL;
+idx_t GroupedAggregateHashTable::SinkCount() const {
+	return sink_count;
 }
 
-idx_t GroupedAggregateHashTable::SinkCapacity() {
-	return FIRST_PART_SINK_SIZE / sizeof(aggr_ht_entry_t);
+idx_t GroupedAggregateHashTable::InitialCapacity() {
+	return STANDARD_VECTOR_SIZE * 2ULL;
 }
 
 idx_t GroupedAggregateHashTable::Capacity() const {
@@ -121,12 +123,12 @@ idx_t GroupedAggregateHashTable::DataSize() const {
 	return partitioned_data->SizeInBytes();
 }
 
-idx_t GroupedAggregateHashTable::FirstPartSize(idx_t count) {
+idx_t GroupedAggregateHashTable::PointerTableSize(idx_t count) {
 	return NextPowerOfTwo(count * 2L) * sizeof(aggr_ht_entry_t);
 }
 
 idx_t GroupedAggregateHashTable::TotalSize() const {
-	return DataSize() + FirstPartSize(Count());
+	return DataSize() + PointerTableSize(Count());
 }
 
 idx_t GroupedAggregateHashTable::ApplyBitMask(hash_t hash) const {
@@ -147,7 +149,7 @@ void GroupedAggregateHashTable::Verify() {
 	D_ASSERT(count == Count());
 }
 
-void GroupedAggregateHashTable::ClearFirstPart() {
+void GroupedAggregateHashTable::ClearPointerTable() {
 	std::fill_n(entries, capacity, aggr_ht_entry_t(0));
 }
 
@@ -162,7 +164,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	capacity = size;
 	hash_map = buffer_manager.GetBufferAllocator().Allocate(capacity * sizeof(aggr_ht_entry_t));
 	entries = reinterpret_cast<aggr_ht_entry_t *>(hash_map.get());
-	ClearFirstPart();
+	ClearPointerTable();
 	bitmask = capacity - 1;
 
 	if (Count() != 0) {
@@ -291,9 +293,8 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	RowOperations::FinalizeStates(row_state, layout, addresses, result, 0);
 }
 
-idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendState &state, DataChunk &groups,
-                                                            Vector &group_hashes_v, Vector &addresses_v,
-                                                            SelectionVector &new_groups_out) {
+idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v,
+                                                            Vector &addresses_v, SelectionVector &new_groups_out) {
 	D_ASSERT(!is_finalized);
 	D_ASSERT(groups.ColumnCount() + 1 == layout.ColumnCount());
 	D_ASSERT(group_hashes_v.GetType() == LogicalType::HASH);
@@ -302,8 +303,11 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 	D_ASSERT(addresses_v.GetType() == LogicalType::POINTER);
 	D_ASSERT(state.hash_salts.GetType() == LogicalType::HASH);
 
-	// Resize at 50% capacity, also need to fit the entire vector
-	if (capacity - Count() <= groups.size() || Count() > ResizeThreshold()) {
+	// Update sink count
+	sink_count += groups.size();
+
+	// Need to fit the entire vector, and resize at threshold
+	if (Count() + groups.size() > capacity || Count() + groups.size() > ResizeThreshold()) {
 		Verify();
 		Resize(capacity * 2);
 	}
@@ -430,7 +434,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(AggregateHTAppendSta
 // have already seen a value for a group
 idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &group_hashes, Vector &addresses_out,
                                                     SelectionVector &new_groups_out) {
-	return FindOrCreateGroupsInternal(state, groups, group_hashes, addresses_out, new_groups_out);
+	return FindOrCreateGroupsInternal(groups, group_hashes, addresses_out, new_groups_out);
 }
 
 void GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses) {
@@ -455,8 +459,7 @@ struct FlushMoveState {
 		for (idx_t col_idx = 0; col_idx < layout.ColumnCount() - 1; col_idx++) {
 			column_ids.emplace_back(col_idx);
 		}
-		// FIXME DESTROY_AFTER_DONE if we make it possible to pass a selection vector to RowOperations::DestroyStates?
-		collection.InitializeScan(scan_state, column_ids, TupleDataPinProperties::UNPIN_AFTER_DONE);
+		collection.InitializeScan(scan_state, column_ids, TupleDataPinProperties::DESTROY_AFTER_DONE);
 		collection.InitializeScanChunk(scan_state, groups);
 		hash_col_idx = layout.ColumnCount() - 1;
 	}
