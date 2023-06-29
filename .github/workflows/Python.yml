@@ -103,6 +103,7 @@ jobs:
          openssl: 1
          ccache: 1
          ssh: 1
+         python_alias: 1
 
     - uses: ./.github/actions/build_extensions
       with:
@@ -113,7 +114,6 @@ jobs:
         out_of_tree_ext: 0
         run_tests: 0
         toolchain_path: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
-        python_name: python3.7
 
     - uses: actions/upload-artifact@v3
       with:

@@ -53,6 +53,9 @@ install_deps() {
   elif [ "$1" = "ccache" ]; then
     yum -y install ccache
 
+  elif [ "$1" = "python_alias" ]; then
+    ln -fs /usr/local/bin/python3.9 /usr/local/bin/python3
+
   elif [ "$1" = "jdk" ]; then
     yum install -y java-11-openjdk-devel maven
 

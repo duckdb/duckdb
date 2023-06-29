@@ -123,7 +123,7 @@ runs:
       if: ${{ inputs.run_tests == 1 }}
       shell: bash
       run: |
-        python3 scripts/run_tests_one_by_one.py build/release/test/unittest
+        ${{ inputs.python_name }} scripts/run_tests_one_by_one.py build/release/test/unittest
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
