@@ -12,12 +12,12 @@ duckdb_extension_load(spatial
     APPLY_PATCHES
 )
 ```
-upon downloading the spatial extension, all patches in the `.github/patches/extensions/spatial/*.patch`
+In this example, upon downloading the spatial extension, all patches in the `.github/patches/extensions/spatial/*.patch`
 will be automatically applied.
 
 Note that the reason for having the APPLY_PATCHES flag explicitly enabled is to make it easier for developers reading
-the extension config to detect a patch is present. Therefore this flag should also be removed after applying all
-the patches.
+the extension config to detect a patch is present. For this reason, the patching mechanism will actually fail if `APPLY_PATCHES`
+is set with no patches in `.github/patches/extensions/<ext>/*.patch`.
 
 # Workflow
 Imagine a change to DuckDB is introduced that breaks compatibility with extension X. The
