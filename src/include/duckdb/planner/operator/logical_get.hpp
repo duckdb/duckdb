@@ -11,7 +11,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/common/operator/extra_operator_info.hpp"
+#include "duckdb/common/extra_operator_info.hpp"
 
 namespace duckdb {
 
