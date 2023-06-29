@@ -1,0 +1,139 @@
+# name: test/sql/copy/csv/parallel/csv_parallel_new_line.test_slow
+# description: Test parallel read CSV function with different settings of new lines
+# group: [parallel]
+
+require vector_size 512
+
+# force parallelism of the queries
+statement ok
+PRAGMA verify_parallelism
+
+loop thr 1 8
+
+loop i 25 100
+
+statement ok
+pragma threads=${thr}
+
+# Test read_csv auto with \n
+query IIII
+select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv', buffer_size=${i}, parallel=True)
+----
+1	6370	371	p1
+10	214	465	p2
+100	2403	160	p3
+1000	1564	67	p4
+10000	10617	138	p5
+100000	430	181	p6
+1000000	1904	658	p7
+10000000	12845	370	p8
+100000000	15519	785	p9
+
+# Test read_csv auto with \r
+query IIII
+select * from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_r.csv', buffer_size=${i}, parallel=True)
+----
+1	6370	371	p1
+10	214	465	p2
+100	2403	160	p3
+1000	1564	67	p4
+10000	10617	138	p5
+100000	430	181	p6
+1000000	1904	658	p7
+10000000	12845	370	p8
+100000000	15519	785	p9
+
+# Test read_csv auto with mix \r and \n
+query IIII
+select * from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_mix_r_n.csv', buffer_size=${i}, parallel=True)
+----
+1	6370	371	p1
+10	214	465	p2
+100	2403	160	p3
+1000	1564	67	p4
+10000	10617	138	p5
+100000	430	181	p6
+1000000	1904	658	p7
+10000000	12845	370	p8
+100000000	15519	785	p9
+
+
+# Test read_csv auto with \r\n
+query IIII
+select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string_rn.csv', buffer_size=${i}, header=False, parallel=True)
+----
+1	6370	371	p1
+10	214	465	p2
+100	2403	160	p3
+1000	1564	67	p4
+10000	10617	138	p5
+100000	430	181	p6
+1000000	1904	658	p7
+10000000	12845	370	p8
+100000000	15519	785	p9
+
+endloop
+
+endloop
+
+# Test read_csv auto with mix \r, \n and \r\n (This must always run single threaded)
+query IIII
+select * from read_csv_auto('test/sql/copy/csv/data/auto/multi_column_string_mix.csv', parallel=True)
+----
+1	6370	371	p1
+10	214	465	p2
+100	2403	160	p3
+1000	1564	67	p4
+10000	10617	138	p5
+100000	430	181	p6
+1000000	1904	658	p7
+10000000	12845	370	p8
+100000000	15519	785	p9
+
+# These are basically checkers that assume our files have the set newlines, some robot is rewriting my newlines to
+# \r\n on windows, hence some of these pass when they should fail on windows.
+require notwindows
+
+loop thr 2 8
+
+statement ok
+pragma threads=${thr}
+
+statement error
+select * from read_csv('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='false', delim = '|', new_line = '\r\n', parallel=True)
+
+
+# Test read_csv with user defined variable
+query IIII
+select * from read_csv('test/sql/copy/csv/data/test/multi_column_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='false', delim = '|', new_line = '\n', parallel=True)
+----
+1	6370	371	p1
+10	214	465	p2
+100	2403	160	p3
+1000	1564	67	p4
+10000	10617	138	p5
+100000	430	181	p6
+1000000	1904	658	p7
+10000000	12845	370	p8
+100000000	15519	785	p9
+
+statement error
+select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  new_line = '\r\n', parallel=True)
+
+query IIII
+select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',   new_line = '\n', parallel=True)
+----
+1	6370	371	p1
+10	214	465	p2
+100	2403	160	p3
+1000	1564	67	p4
+10000	10617	138	p5
+100000	430	181	p6
+1000000	1904	658	p7
+10000000	12845	370	p8
+100000000	15519	785	p9
+
+statement error
+select * from read_csv_auto('test/sql/copy/csv/data/test/multi_column_string.csv',  new_line = 'not_valid', parallel=True)
+
+endloop

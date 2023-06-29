@@ -351,3 +351,6 @@ bloaty: reldebug bloaty/bloaty
 
 clangd:
 	cmake -DCMAKE_BUILD_TYPE=Debug ${CMAKE_VARS} -B build/clangd .
+
+coverage-check:
+	./scripts/coverage_check.sh

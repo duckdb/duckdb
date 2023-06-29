@@ -4,8 +4,9 @@ on:
   pull_request:
     types: [ synchronize ]
 
-env:
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+concurrency:
+  group: shouldturntodraft-${{ github.event.number }}
+  cancel-in-progress: true
 
 jobs:
   mark-as-draft:
@@ -13,18 +14,13 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
-      - name: Mark as draft
-        shell: bash
+      - name: Save PR number
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.node_id }}
         run: |
-          gh auth login
-          gh api graphql -F id=${{ github.event.pull_request.node_id }} -f query='
-            mutation($id: ID!) {
-              convertPullRequestToDraft(input: { pullRequestId: $id }) {
-                pullRequest {
-                  id
-                  number
-                  isDraft
-                }
-              }
-            }
-          '
+          mkdir -p ./pr
+          echo $PR_NUMBER > ./pr/pr_number
+      - uses: actions/upload-artifact@v3
+        with:
+          name: pr_number
+          path: pr/
