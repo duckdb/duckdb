@@ -181,6 +181,7 @@ jobs:
       DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
       AWS_DEFAULT_REGION: us-east-1
       OSX_BUILD_UNIVERSAL: 1
+      VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
 
     steps:
       - uses: actions/checkout@v3
