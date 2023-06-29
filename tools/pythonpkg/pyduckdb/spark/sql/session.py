@@ -101,15 +101,8 @@ class SparkSession:
 			raise NotImplementedError
 		df = self._create_dataframe(data)
 		if schema:
-			def extract_names_and_types(schema: StructType) -> Tuple[List[str], List[str]]:
-				names = []
-				types = []
-				for f in schema:
-					types.append(str(f.dataType.duckdb_type))
-					names.append(f.name)
-				return (types, names)
 			if isinstance(schema, StructType):
-				types, names = extract_names_and_types(schema)
+				types, names = schema.extract_types_and_names()
 				df = df._cast_types(*types)
 				schema = names
 			df = df.toDF(*schema)

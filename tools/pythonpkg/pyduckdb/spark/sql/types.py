@@ -697,6 +697,14 @@ class StructType(DataType):
     def __repr__(self) -> str:
         return "StructType([%s])" % ", ".join(str(field) for field in self)
 
+    def extract_types_and_names(self) -> Tuple[List[str], List[str]]:
+        names = []
+        types = []
+        for f in self.fields:
+            types.append(str(f.dataType.duckdb_type))
+            names.append(f.name)
+        return (types, names)
+
     def fieldNames(self) -> List[str]:
         """
         Returns all field names in a list.
