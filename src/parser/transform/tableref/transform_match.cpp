@@ -137,7 +137,7 @@ unique_ptr<TableRef> Transformer::TransformMatch(duckdb_libpgquery::PGMatchClaus
 	auto result = make_uniq<TableFunctionRef>();
 	result->function = make_uniq<FunctionExpression>("duckpgq_match", std::move(children));
 
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb
