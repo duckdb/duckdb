@@ -47,6 +47,7 @@
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
+#include "duckdb/optimizer/cascade/Cascade.h"
 
 namespace duckdb {
 
@@ -341,23 +342,35 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 #ifdef DEBUG
 	plan->Verify(*this);
 #endif
-	if (config.enable_optimizer && plan->RequireOptimizer()) {
+	unique_ptr<PhysicalOperator> physical_plan;
+	if (config.enable_optimizer && plan->RequireOptimizer())
+	{
 		profiler.StartPhase("optimizer");
-		Optimizer optimizer(*planner.binder, *this);
-		plan = optimizer.Optimize(std::move(plan));
-		D_ASSERT(plan);
-		profiler.EndPhase();
-
+		if(statement_type == StatementType::SELECT_STATEMENT)
+		{
+			Cascade cascade = Cascade(*this);
+			physical_plan = cascade.Optimize(std::move(plan));
+		}
+		else
+		{
+			Optimizer optimizer(*planner.binder, *this);
+			plan = optimizer.Optimize(std::move(plan));
+			D_ASSERT(plan);
 #ifdef DEBUG
-		plan->Verify(*this);
+			plan->Verify(*this);
 #endif
+			// now convert logical query plan into a physical query plan
+			PhysicalPlanGenerator physical_planner(*this);
+			physical_plan = physical_planner.CreatePlan(std::move(plan));
+		}
+		profiler.EndPhase();
 	}
 
-	profiler.StartPhase("physical_planner");
+	//profiler.StartPhase("physical_planner");
 	// now convert logical query plan into a physical query plan
-	PhysicalPlanGenerator physical_planner(*this);
-	auto physical_plan = physical_planner.CreatePlan(std::move(plan));
-	profiler.EndPhase();
+	//PhysicalPlanGenerator physical_planner(*this);
+	//physical_plan = physical_planner.CreatePlan(std::move(plan));
+	//profiler.EndPhase();
 
 #ifdef DEBUG
 	D_ASSERT(!physical_plan->ToString().empty());
