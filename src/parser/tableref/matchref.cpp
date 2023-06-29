@@ -133,7 +133,7 @@ unique_ptr<ParsedExpression> MatchExpression::Deserialize(FieldReader &reader) {
 	result->column_list = reader.ReadRequiredSerializableList<ParsedExpression>();
 	result->where_clause = reader.ReadOptional<ParsedExpression>(nullptr);
 	reader.Finalize();
-	return result;
+	return std::move(result);
 }
 
 } // namespace duckdb
