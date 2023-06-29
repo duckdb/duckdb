@@ -60,9 +60,6 @@ class SparkSession:
 				return
 			assert all([len(x) == len(tuples[0]) for x in tuples[1:]])
 
-		if not data:
-			rel = self.conn.sql('select 42 where 1=0')
-			return DataFrame(rel, self)
 		if not isinstance(data, list):
 			data = list(data)
 		verify_tuple_integrity(data)
@@ -99,13 +96,41 @@ class SparkSession:
 			raise NotImplementedError
 		if not verifySchema:
 			raise NotImplementedError
-		df = self._create_dataframe(data)
+		types = None
+		names = None
 		if schema:
 			if isinstance(schema, StructType):
 				types, names = schema.extract_types_and_names()
-				df = df._cast_types(*types)
-				schema = names
-			df = df.toDF(*schema)
+			else:
+				names = schema
+
+		try:
+			import pandas
+			has_pandas = True
+		except:
+			has_pandas = False
+		# Falsey check on pandas dataframe is not defined, so first check if it's not a pandas dataframe
+		# Then check if 'data' is None or []
+		# Finally check if a schema was provided
+		is_empty = False
+		if (not has_pandas or (has_pandas and not isinstance(data, pandas.DataFrame))) and not data and names:
+			# Create NULLs for every type in our the dataframe
+			is_empty = True
+			data = [tuple(None for _ in names)]
+
+		df = self._create_dataframe(data)
+		if is_empty:
+			rel = df.relation
+			# Add impossible where clause
+			rel = rel.filter('1=0')
+			df = DataFrame(rel, self)
+
+		# Cast to types
+		if types:
+			df = df._cast_types(*types)
+		# Alias to names
+		if names:
+			df = df.toDF(*names)
 		return df
 
 	def newSession(self) -> "SparkSession":

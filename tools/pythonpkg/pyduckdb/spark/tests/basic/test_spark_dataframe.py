@@ -1,6 +1,6 @@
 import pytest
 from pyduckdb.spark.sql.types import Row
-from pyduckdb.spark.sql.types import LongType, StructType, BooleanType, StructField
+from pyduckdb.spark.sql.types import LongType, StructType, BooleanType, StructField, StringType
 
 class TestDataFrame(object):
 	def test_dataframe(self, spark):
@@ -42,6 +42,17 @@ class TestDataFrame(object):
 			Row(language='Python', users_count='100000'),
 			Row(language='Scala', users_count='3000')
 		]
+
+	def test_empty_df(self, spark):
+		schema = StructType([
+			StructField('firstname', StringType(), True),
+			StructField('middlename', StringType(), True),
+			StructField('lastname', StringType(), True)
+		])
+		df = spark.createDataFrame([], schema=schema)
+		res = df.collect()
+		# TODO: assert that the types and column names are correct
+		assert res == []
 
 	def test_df_from_pandas(self, spark):
 		import pandas as pd
