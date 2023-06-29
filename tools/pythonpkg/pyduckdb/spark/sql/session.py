@@ -193,7 +193,7 @@ class SparkSession:
 	class Builder:
 		def __init__(self):
 			self.name = "builder"
-			self._master = ":memory:"
+			self._master = ':memory:'
 			self._config = {}
 
 		def master(self, name: str) -> "SparkSession.Builder":
