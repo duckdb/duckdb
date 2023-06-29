@@ -1,7 +1,8 @@
 #define DUCKDB_EXTENSION_MAIN
 
-#include "duckdb.hpp"
 #include "parquet_extension.hpp"
+
+#include "duckdb.hpp"
 #include "parquet_metadata.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
@@ -712,12 +713,10 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 
 		FieldID field_id;
 		if (field_id_value) {
-			if (field_id_value->type().id() != LogicalTypeId::INTEGER) {
-				throw BinderException("Expected an INTEGER in FIELD_IDS specification for column \"%s\"", col_name);
-			}
-			const uint32_t field_id_int = IntegerValue::Get(*field_id_value);
+			Value field_id_integer_value = field_id_value->DefaultCastAs(LogicalType::INTEGER);
+			const uint32_t field_id_int = IntegerValue::Get(field_id_integer_value);
 			if (!unique_field_ids.insert(field_id_int).second) {
-				throw BinderException("Duplicate field_id %s found in FIELD_IDS", field_id_value->ToString());
+				throw BinderException("Duplicate field_id %s found in FIELD_IDS", field_id_integer_value.ToString());
 			}
 			field_id = FieldID(field_id_int);
 		}
