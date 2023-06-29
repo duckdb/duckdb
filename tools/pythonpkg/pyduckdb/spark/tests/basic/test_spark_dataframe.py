@@ -1,6 +1,13 @@
 import pytest
 from pyduckdb.spark.sql.types import Row
-from pyduckdb.spark.sql.types import LongType, StructType, BooleanType, StructField, StringType
+from pyduckdb.spark.sql.types import (
+	LongType,
+	StructType,
+	BooleanType,
+	StructField,
+	StringType,
+	IntegerType
+)
 
 class TestDataFrame(object):
 	def test_dataframe(self, spark):
@@ -24,6 +31,11 @@ class TestDataFrame(object):
 		df3 = spark.sql("SELECT _1,_2 FROM sample_hive_table")
 		res = df3.collect()
 		assert res == [Row(_1=True, _2=42)]
+		schema = df3.schema
+		assert schema == StructType([
+			StructField('_1', BooleanType(), True),
+			StructField('_2', IntegerType(), True)
+		])
 
 	def test_dataframe_collect(self, spark):
 		df = spark.createDataFrame([(42,), (21,)]).toDF('a')

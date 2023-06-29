@@ -34,18 +34,31 @@ __all__ = [
     "NullType",
     "StringType",
     "BinaryType",
+    "UUIDType",
+    "BitstringType",
     "BooleanType",
     "DateType",
     "TimestampType",
+    "TimestampNTZType",
+    "TimestampNanosecondNTZType",
+    "TimestampMilisecondNTZType",
+    "TimestampSecondNTZType",
+    "TimeType",
+    "TimeNTZType",
     "DecimalType",
     "DoubleType",
     "FloatType",
     "ByteType",
+    "UnsignedByteType",
+    "ShortType",
+    "UnsignedShortType",
     "IntegerType",
+    "UnsignedIntegerType",
     "LongType",
+    "UnsignedLongType",
+    "HugeIntegerType",
     "DayTimeIntervalType",
     "Row",
-    "ShortType",
     "ArrayType",
     "MapType",
     "StructField",
@@ -150,6 +163,16 @@ class StringType(AtomicType, metaclass=DataTypeSingleton):
     def __init__(self):
         super().__init__(DuckDBPyType('VARCHAR'))
 
+class BitstringType(AtomicType, metaclass=DataTypeSingleton):
+    """Bitstring data type."""
+    def __init__(self):
+        super().__init__(DuckDBPyType('BIT'))
+
+class UUIDType(AtomicType, metaclass=DataTypeSingleton):
+    """UUID data type."""
+    def __init__(self):
+        super().__init__(DuckDBPyType('UUID'))
+
 class BinaryType(AtomicType, metaclass=DataTypeSingleton):
     """Binary (byte array) data type."""
     def __init__(self):
@@ -186,6 +209,10 @@ class TimestampType(AtomicType, metaclass=DataTypeSingleton):
     def __init__(self):
         super().__init__(DuckDBPyType('TIMESTAMPTZ'))
 
+    @classmethod
+    def typeName(cls) -> str:
+        return "timestamptz"
+
     def needConversion(self) -> bool:
         return True
 
@@ -203,7 +230,7 @@ class TimestampType(AtomicType, metaclass=DataTypeSingleton):
 
 
 class TimestampNTZType(AtomicType, metaclass=DataTypeSingleton):
-    """Timestamp (datetime.datetime) data type without timezone information."""
+    """Timestamp (datetime.datetime) data type without timezone information with microsecond precision."""
 
     def __init__(self):
         super().__init__(DuckDBPyType('TIMESTAMP'))
@@ -213,7 +240,7 @@ class TimestampNTZType(AtomicType, metaclass=DataTypeSingleton):
 
     @classmethod
     def typeName(cls) -> str:
-        return "timestamp_ntz"
+        return "timestamp"
 
     def toInternal(self, dt: datetime.datetime) -> int:
         if dt is not None:
@@ -227,6 +254,62 @@ class TimestampNTZType(AtomicType, metaclass=DataTypeSingleton):
                 microsecond=ts % 1000000
             )
 
+class TimestampSecondNTZType(AtomicType, metaclass=DataTypeSingleton):
+    """Timestamp (datetime.datetime) data type without timezone information with second precision."""
+
+    def __init__(self):
+        super().__init__(DuckDBPyType('TIMESTAMP_S'))
+
+    def needConversion(self) -> bool:
+        return True
+
+    @classmethod
+    def typeName(cls) -> str:
+        return "timestamp_s"
+
+    def toInternal(self, dt: datetime.datetime) -> int:
+        raise ContributionsAcceptedError
+
+    def fromInternal(self, ts: int) -> datetime.datetime:
+	    raise ContributionsAcceptedError
+
+class TimestampMilisecondNTZType(AtomicType, metaclass=DataTypeSingleton):
+    """Timestamp (datetime.datetime) data type without timezone information with milisecond precision."""
+
+    def __init__(self):
+        super().__init__(DuckDBPyType('TIMESTAMP_MS'))
+
+    def needConversion(self) -> bool:
+        return True
+
+    @classmethod
+    def typeName(cls) -> str:
+        return "timestamp_ms"
+
+    def toInternal(self, dt: datetime.datetime) -> int:
+        raise ContributionsAcceptedError
+
+    def fromInternal(self, ts: int) -> datetime.datetime:
+	    raise ContributionsAcceptedError
+
+class TimestampNanosecondNTZType(AtomicType, metaclass=DataTypeSingleton):
+    """Timestamp (datetime.datetime) data type without timezone information with nanosecond precision."""
+
+    def __init__(self):
+        super().__init__(DuckDBPyType('TIMESTAMP_NS'))
+
+    def needConversion(self) -> bool:
+        return True
+
+    @classmethod
+    def typeName(cls) -> str:
+        return "timestamp_ns"
+
+    def toInternal(self, dt: datetime.datetime) -> int:
+        raise ContributionsAcceptedError
+
+    def fromInternal(self, ts: int) -> datetime.datetime:
+	    raise ContributionsAcceptedError
 
 class DecimalType(FractionalType):
     """Decimal (decimal.Decimal) data type.
@@ -260,7 +343,6 @@ class DecimalType(FractionalType):
     def __repr__(self) -> str:
         return "DecimalType(%d,%d)" % (self.precision, self.scale)
 
-
 class DoubleType(FractionalType, metaclass=DataTypeSingleton):
     """Double data type, representing double precision floats."""
     def __init__(self):
@@ -280,6 +362,32 @@ class ByteType(IntegralType):
     def simpleString(self) -> str:
         return "tinyint"
 
+class UnsignedByteType(IntegralType):
+    """Unsigned byte data type, i.e. a unsigned integer in a single byte."""
+
+    def __init__(self):
+        super().__init__(DuckDBPyType('UTINYINT'))
+
+    def simpleString(self) -> str:
+        return "utinyint"
+
+class ShortType(IntegralType):
+    """Short data type, i.e. a signed 16-bit integer."""
+
+    def __init__(self):
+        super().__init__(DuckDBPyType('SMALLINT'))
+
+    def simpleString(self) -> str:
+        return "smallint"
+
+class UnsignedShortType(IntegralType):
+    """Unsigned short data type, i.e. a unsigned 16-bit integer."""
+
+    def __init__(self):
+        super().__init__(DuckDBPyType('USMALLINT'))
+
+    def simpleString(self) -> str:
+        return "usmallint"
 
 class IntegerType(IntegralType):
     """Int data type, i.e. a signed 32-bit integer."""
@@ -288,7 +396,16 @@ class IntegerType(IntegralType):
         super().__init__(DuckDBPyType('INTEGER'))
 
     def simpleString(self) -> str:
-        return "int"
+        return "integer"
+
+class UnsignedIntegerType(IntegralType):
+    """Unsigned int data type, i.e. a unsigned 32-bit integer."""
+
+    def __init__(self):
+        super().__init__(DuckDBPyType('UINTEGER'))
+
+    def simpleString(self) -> str:
+        return "uinteger"
 
 
 class LongType(IntegralType):
@@ -304,6 +421,49 @@ class LongType(IntegralType):
     def simpleString(self) -> str:
         return "bigint"
 
+class UnsignedLongType(IntegralType):
+    """Unsigned long data type, i.e. a unsigned 64-bit integer.
+
+    If the values are beyond the range of [0, 18446744073709551615],
+    please use :class:`HugeIntegerType`.
+    """
+
+    def __init__(self):
+        super().__init__(DuckDBPyType('UBIGINT'))
+
+    def simpleString(self) -> str:
+        return "ubigint"
+
+class HugeIntegerType(IntegralType):
+    """Huge integer data type, i.e. a signed 128-bit integer.
+
+    If the values are beyond the range of [-170141183460469231731687303715884105727, 170141183460469231731687303715884105727],
+    please use :class:`DecimalType`.
+    """
+
+    def __init__(self):
+        super().__init__(DuckDBPyType('HUGEINT'))
+
+    def simpleString(self) -> str:
+        return "hugeint"
+
+class TimeType(IntegralType):
+    """Time (datetime.time) data type."""
+
+    def __init__(self):
+        super().__init__(DuckDBPyType('TIMETZ'))
+
+    def simpleString(self) -> str:
+        return "timetz"
+
+class TimeNTZType(IntegralType):
+    """Time (datetime.time) data type without timezone information."""
+
+    def __init__(self):
+        super().__init__(DuckDBPyType('TIME'))
+
+    def simpleString(self) -> str:
+        return "time"
 
 class DayTimeIntervalType(AtomicType):
     """DayTimeIntervalType (datetime.timedelta)."""
@@ -361,17 +521,6 @@ class DayTimeIntervalType(AtomicType):
     def fromInternal(self, micros: int) -> Optional[datetime.timedelta]:
         if micros is not None:
             return datetime.timedelta(microseconds=micros)
-
-
-class ShortType(IntegralType):
-    """Short data type, i.e. a signed 16-bit integer."""
-
-    def __init__(self):
-        super().__init__(DuckDBPyType('SMALLINT'))
-
-    def simpleString(self) -> str:
-        return "smallint"
-
 
 class ArrayType(DataType):
     """Array data type.
