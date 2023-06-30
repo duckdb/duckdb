@@ -250,6 +250,7 @@ BlockPointer Node::Serialize(ART &art, MetaBlockWriter &writer) {
 	case NType::LEAF_INLINED:
 		return Leaf::Serialize(art, *this, writer);
 	}
+	throw InternalException("Invalid node type for Serialize.");
 }
 
 void Node::Deserialize(ART &art) {

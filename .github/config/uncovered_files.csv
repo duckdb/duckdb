@@ -150,10 +150,10 @@ execution/expression_executor/execute_comparison.cpp	5
 execution/expression_executor/execute_conjunction.cpp	3
 execution/expression_executor/execute_operator.cpp	3
 execution/expression_executor_state.cpp	2
-execution/index/art/art.cpp	2
+execution/index/art/art.cpp	3
 execution/index/art/art_key.cpp	6
 execution/index/art/iterator.cpp	2
-execution/index/art/node.cpp	5
+execution/index/art/node.cpp	6
 execution/index/art/node256.cpp	1
 execution/index/art/prefix.cpp	1
 execution/join_hashtable.cpp	23
