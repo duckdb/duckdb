@@ -132,7 +132,6 @@ unique_ptr<ParsedExpression> MatchExpression::Deserialize(FieldReader &reader) {
 	result->path_list = reader.ReadRequiredSerializableList<PathPattern>();
 	result->column_list = reader.ReadRequiredSerializableList<ParsedExpression>();
 	result->where_clause = reader.ReadOptional<ParsedExpression>(nullptr);
-	reader.Finalize();
 	return std::move(result);
 }
 
