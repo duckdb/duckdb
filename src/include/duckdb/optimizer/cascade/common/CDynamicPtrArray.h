@@ -180,7 +180,7 @@ public:
 	}
 
 	// append element to end of array
-	void Append(T *elem)
+	void Append(uniqu_ptr<T> elem)
 	{
 		if (m_size == m_capacity)
 		{
@@ -196,7 +196,7 @@ public:
 
 	// append array -- flatten it
 	void
-	AppendArray(const CDynamicPtrArray<T, CleanupFn> *arr)
+	AppendArray(const CDynamicPtrArray<T, CleanupFn>* arr)
 	{
 		GPOS_ASSERT(NULL != arr);
 		GPOS_ASSERT(this != arr && "Cannot append array to itself");
