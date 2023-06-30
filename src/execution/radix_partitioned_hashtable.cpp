@@ -13,10 +13,10 @@
 namespace duckdb {
 
 //! Config for RadixPartitionedHashTable
-struct RadixPartitionedHTConfig {
+struct RadixHTConfig {
 	//! Radix bits used during the Sink
 	static constexpr const idx_t SINK_RADIX_BITS = 4;
-	//! Check to abandon HT after crossing this threshold
+	//! Check whether to abandon HT after crossing this threshold
 	static constexpr const idx_t SINK_ABANDON_THRESHOLD = 500000;
 	//! If we cross SINK_ABANDON_THRESHOLD, we decide whether to continue with the current HT or abandon it.
 	//! Abandoning is better if the input has virtually no duplicates.
@@ -26,8 +26,13 @@ struct RadixPartitionedHTConfig {
 	//! If our input size is 100.000.000, then we see each tuple 10 times, and abandoning is actually a bad choice.
 	//! All of this is to defend against our greatest enemy, the random uniform distribution with repetition.
 	//! We keep track of the size of the HT, and the number of tuples that went into it.
-	//! If we are on track for 1 billion groups, we can safely abandon the HTs early!
-	static constexpr const idx_t SINK_EXPECTED_GROUP_COUNT_LIMIT = 10000000000;
+	//! If we are on track to see 25x our current unique count, we can safely abandon the HTs early!
+	static constexpr const idx_t SINK_EXPECTED_GROUP_COUNT_FACTOR = 25;
+
+	//! The maximum number of groups per finalize task. We repartition if there could be more
+	static constexpr const idx_t FINALIZE_MAX_GROUP_COUNT = 500000;
+	//! For in-memory finalizes, we repartition using up to 8 radix bits
+	static constexpr const idx_t FINALIZE_MAX_RADIX_BITS = 8;
 };
 
 // compute the GROUPING values
@@ -101,7 +106,7 @@ class RadixHTGlobalSinkState : public GlobalSinkState {
 public:
 	explicit RadixHTGlobalSinkState(const RadixPartitionedHashTable &ht_p)
 	    : ht(ht_p), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE) {
-		const auto num_partitions = RadixPartitioning::NumberOfPartitions(RadixPartitionedHTConfig::SINK_RADIX_BITS);
+		const auto num_partitions = RadixPartitioning::NumberOfPartitions(RadixHTConfig::SINK_RADIX_BITS);
 		sink_partitions.resize(num_partitions);
 		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
 			sink_partitions[partition_idx] = make_uniq<AggregatePartition>();
@@ -219,9 +224,9 @@ static inline bool AbandonHT(ClientContext &context, const GroupedAggregateHashT
 	                         TaskScheduler::GetScheduler(context).NumberOfThreads()) {
 		// Abandon to stay under memory limit
 		return true;
-	} else if (ht.Count() > RadixPartitionedHTConfig::SINK_ABANDON_THRESHOLD) {
+	} else if (ht.Count() > RadixHTConfig::SINK_ABANDON_THRESHOLD) {
 		// Math taken from https://math.stackexchange.com/a/1088094
-		const double k = RadixPartitionedHTConfig::SINK_EXPECTED_GROUP_COUNT_LIMIT;
+		const double k = ht.Count() * RadixHTConfig::SINK_EXPECTED_GROUP_COUNT_FACTOR;
 		const double n = ht.SinkCount();
 
 		// Compute the expected number of groups after seeing 'n' tuples,
@@ -237,12 +242,13 @@ static inline bool AbandonHT(ClientContext &context, const GroupedAggregateHashT
 		// Compute the standard deviation
 		const auto stdev = std::pow(AbsValue(var), 0.5);
 
-		// With 3 standard deviations we're 99.8% sure we're headed towards 'k' groups
-		const auto threshold = ev + 3 * stdev;
+		// With 3 standard deviations we're 99.9% sure we're headed not towards 'k' or more groups
+		const auto threshold = ev - 3 * stdev;
 
 		// Abandon because too many uniques
 		return ht.Count() > threshold;
 	}
+	// Don't abandon
 	return false;
 }
 
@@ -257,7 +263,7 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 	if (!ht) {
 		ht = make_uniq<GroupedAggregateHashTable>(
 		    context.client, BufferAllocator::Get(context.client), group_types, op.payload_types, op.bindings,
-		    GroupedAggregateHashTable::InitialCapacity(), idx_t(RadixPartitionedHTConfig::SINK_RADIX_BITS));
+		    GroupedAggregateHashTable::InitialCapacity(), idx_t(RadixHTConfig::SINK_RADIX_BITS));
 	}
 
 	ht->AddChunk(group_chunk, payload_input, filter);
@@ -375,8 +381,7 @@ public:
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		D_ASSERT(gstate.tasks_per_partition.IsValid());
-		const auto num_sink_partitions =
-		    RadixPartitioning::NumberOfPartitions(RadixPartitionedHTConfig::SINK_RADIX_BITS);
+		const auto num_sink_partitions = RadixPartitioning::NumberOfPartitions(RadixHTConfig::SINK_RADIX_BITS);
 		D_ASSERT(gstate.sink_partitions.size() == num_sink_partitions);
 		const auto num_finalize_partitions =
 		    RadixPartitioning::NumberOfPartitions(gstate.finalize_radix_bits.GetIndex());
@@ -487,11 +492,10 @@ void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_p
 	D_ASSERT(gstate.tasks_per_partition.IsValid());
 
 	if (requires_repartitioning) { // Schedule repartition / finalize tasks
-		D_ASSERT(gstate.finalize_radix_bits.GetIndex() > RadixPartitionedHTConfig::SINK_RADIX_BITS);
+		D_ASSERT(gstate.finalize_radix_bits.GetIndex() > RadixHTConfig::SINK_RADIX_BITS);
 
 		// Initialize global state
-		const auto num_sink_partitions =
-		    RadixPartitioning::NumberOfPartitions(RadixPartitionedHTConfig::SINK_RADIX_BITS);
+		const auto num_sink_partitions = RadixPartitioning::NumberOfPartitions(RadixHTConfig::SINK_RADIX_BITS);
 		D_ASSERT(gstate.sink_partitions.size() == num_sink_partitions);
 		for (idx_t partition_idx = 0; partition_idx < num_sink_partitions; partition_idx++) {
 			auto &sink_partition = gstate.sink_partitions[partition_idx];
@@ -521,7 +525,7 @@ void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_p
 			tasks.emplace_back(make_shared<RadixAggregateRepartitionTask>(executor, event, gstate));
 		}
 	} else { // No repartitioning necessary
-		const auto num_partitions = RadixPartitioning::NumberOfPartitions(RadixPartitionedHTConfig::SINK_RADIX_BITS);
+		const auto num_partitions = RadixPartitioning::NumberOfPartitions(RadixHTConfig::SINK_RADIX_BITS);
 		gstate.finalize_partitions.resize(num_partitions);
 		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
 			gstate.finalize_partitions[partition_idx] = std::move(gstate.sink_partitions[partition_idx]);
@@ -533,7 +537,7 @@ void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_p
 
 bool RadixPartitionedHashTable::RequiresRepartitioning(ClientContext &context, GlobalSinkState &gstate_p) {
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();
-	const auto num_partitions = RadixPartitioning::NumberOfPartitions(RadixPartitionedHTConfig::SINK_RADIX_BITS);
+	const auto num_partitions = RadixPartitioning::NumberOfPartitions(RadixHTConfig::SINK_RADIX_BITS);
 	D_ASSERT(gstate.sink_partitions.size() == num_partitions);
 
 	// Get partition counts and sizes
@@ -548,7 +552,7 @@ bool RadixPartitionedHashTable::RequiresRepartitioning(ClientContext &context, G
 	}
 
 	// Find max partition size and total size
-	idx_t total_size = 0;
+	idx_t total_count = 0;
 	idx_t max_partition_idx = 0;
 	idx_t max_partition_size = 0;
 	for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
@@ -559,36 +563,38 @@ bool RadixPartitionedHashTable::RequiresRepartitioning(ClientContext &context, G
 			max_partition_idx = partition_idx;
 			max_partition_size = partition_ht_size;
 		}
-		total_size += partition_ht_size;
+		total_count += partition_count;
 		// Also set the count in the partition
 		gstate.sink_partitions[partition_idx]->count = partition_count;
 	}
 
 	// Switch to out-of-core finalize at ~60%
-	const auto max_ht_size = double(0.6) * BufferManager::GetBufferManager(context).GetMaxMemory();
 	const idx_t n_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	// Desired number of tasks is at least 2x the number of threads
-	const auto desired_tasks = MaxValue<idx_t>(NextPowerOfTwo(2 * n_threads), num_partitions);
-	if (!context.config.force_external && total_size < max_ht_size) {
-		// In-memory finalize
-		if (num_partitions >= desired_tasks) { // Can already keep all threads busy
-			gstate.finalize_radix_bits = RadixPartitionedHTConfig::SINK_RADIX_BITS;
-			gstate.tasks_per_partition = 1;
-			return false;
-		} else { // LCOV_EXCL_START
-			// Can't have coverage because we always have more partitions than threads on github actions
-			gstate.finalize_radix_bits = RadixPartitioning::RadixBits(desired_tasks);
-			gstate.tasks_per_partition = desired_tasks / n_threads;
-			return true;
-		} // LCOV_EXCL_START
-	}
+	const auto max_ht_size = double(0.6) * BufferManager::GetBufferManager(context).GetMaxMemory();
 
-	// Out-of-core finalize
+	// Possibly repartition based on total count
+	auto finalize_tasks = NextPowerOfTwo(total_count / RadixHTConfig::FINALIZE_MAX_GROUP_COUNT);
+	// Number of partitions has to be equal to or higher than current number of partitions
+	finalize_tasks = MaxValue<idx_t>(finalize_tasks, num_partitions);
+	// But not higher than the set max
+	finalize_tasks =
+	    MinValue<idx_t>(finalize_tasks, RadixPartitioning::NumberOfPartitions(RadixHTConfig::FINALIZE_MAX_RADIX_BITS));
+	// Unless we have more threads than that
+	finalize_tasks = MaxValue<idx_t>(finalize_tasks, NextPowerOfTwo(n_threads));
+
+	// Largest partition count/size
 	const auto partition_count = partition_counts[max_partition_idx];
 	const auto partition_size = MaxValue<idx_t>(partition_sizes[max_partition_idx], 1);
 
-	const auto max_added_bits = RadixPartitioning::MAX_RADIX_BITS - RadixPartitionedHTConfig::SINK_RADIX_BITS;
-	idx_t added_bits = context.config.force_external ? 2 : 1;
+	// Now we check if this number of partitions is already good enough to go out-of-core
+	const auto max_added_bits = RadixPartitioning::MAX_RADIX_BITS - RadixHTConfig::SINK_RADIX_BITS;
+	idx_t added_bits = RadixPartitioning::RadixBits(finalize_tasks) - RadixHTConfig::SINK_RADIX_BITS;
+	if (context.config.force_external) {
+		// Repartition to at least 2 more radix bits when forcing external
+		added_bits = MinValue<idx_t>(added_bits, 2);
+	}
+
+	// Loop until we can surely fit the partitions in memory
 	for (; added_bits < max_added_bits; added_bits++) {
 		double partition_multiplier = RadixPartitioning::NumberOfPartitions(added_bits);
 
@@ -597,23 +603,24 @@ bool RadixPartitionedHashTable::RequiresRepartitioning(ClientContext &context, G
 		auto new_estimated_ht_size =
 		    new_estimated_size + GroupedAggregateHashTable::PointerTableSize(new_estimated_count);
 
-		if (context.config.force_external || new_estimated_ht_size <= max_ht_size / n_threads / 4) {
-			// Aim for an estimated partition size of max_ht_size / 4
+		if (context.config.force_external || new_estimated_ht_size <= max_ht_size / n_threads) {
 			break;
 		}
 	}
 
-	gstate.finalize_radix_bits = RadixPartitionedHTConfig::SINK_RADIX_BITS + added_bits;
+	gstate.finalize_radix_bits = RadixHTConfig::SINK_RADIX_BITS + added_bits;
 	if (partition_size > max_ht_size) {
 		// Single partition is very large, all threads work on same partition
-		gstate.tasks_per_partition = desired_tasks;
+		gstate.tasks_per_partition = finalize_tasks;
 	} else {
-		// Multiple partitions fit in memory, threads work on multiple at a time
+		// Multiple partitions fit in memory, so multiple are repartitioned at the same time
 		const auto partitions_in_memory = MinValue<idx_t>(max_ht_size / partition_size, num_partitions);
-		gstate.tasks_per_partition = desired_tasks / partitions_in_memory;
+		gstate.tasks_per_partition = finalize_tasks / partitions_in_memory;
 	}
 
-	return true;
+	// Return true if we increased the radix bits
+	D_ASSERT(gstate.finalize_radix_bits.GetIndex() > RadixHTConfig::SINK_RADIX_BITS);
+	return gstate.finalize_radix_bits.GetIndex() != RadixHTConfig::SINK_RADIX_BITS;
 }
 
 //===--------------------------------------------------------------------===//
