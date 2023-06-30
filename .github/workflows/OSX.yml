@@ -249,19 +249,6 @@ jobs:
             ./scripts/extension-upload-test.sh local
           fi
 
-      - uses: ./.github/actions/build_extensions
-        if: matrix.universal_build == 1
-        with:
-          treat_warn_as_error: 0
-          post_install: rm build/release/src/libduckdb*
-          osx_universal: 1
-          openssl_path: ${{ env.OPENSSL_ROOT_DIR}}
-          run_tests: 0
-          build_in_tree_extensions: 1
-          build_vcpkg_extensions: 1
-          build_out_of_tree_extensions: 0
-
-
       # TODO: Universal builds below are for compatibility with current out-of-tree extensions, can be removed after
       #       updating them
       - name: Install OpenSSL
@@ -285,6 +272,18 @@ jobs:
         run: |
           export OPENSSL_ROOT_DIR=`pwd`/build/openssl/build
           echo "OPENSSL_ROOT_DIR=$OPENSSL_ROOT_DIR" >> $GITHUB_ENV
+
+      - uses: ./.github/actions/build_extensions
+        if: matrix.universal_build == 1
+        with:
+          treat_warn_as_error: 0
+          post_install: rm build/release/src/libduckdb*
+          osx_universal: 1
+          openssl_path: ${{ env.OPENSSL_ROOT_DIR}}
+          run_tests: 0
+          build_in_tree_extensions: 0
+          build_vcpkg_extensions: 0
+          build_out_of_tree_extensions: 1
 
       - name: Create separate binaries
         if: matrix.universal_build == 1

@@ -106,7 +106,7 @@ runs:
         echo "OPENSSL_ROOT_DIR=$VCPKG_ROOT/installed/`vcpkg list | grep -o 'openssl:[a-z0-9]*-[a-z]*' | grep -o '[a-z0-9]*-[a-z]*' | head -n 1`" >> $GITHUB_ENV
 
     - name: Create combined vcpkg manifest
-      if: ${{ inputs.build_vcpkg_extensions }}
+      if: inputs.build_vcpkg_extensions == 1
       shell: bash
       run: |
         make merged_vcpkg_manifest

@@ -254,4 +254,4 @@ jobs:
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
          python_name: python
-         unittest_path: test/unittest.exe
+         unittest_path: test\unittest.exe
