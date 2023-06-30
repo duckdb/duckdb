@@ -27,7 +27,7 @@ namespace gpopt
 using namespace gpos;
 
 // fwd declarations
-class CExpression;
+
 
 // type definition of plan checker
 typedef BOOL(FnPlanChecker)(CExpression *);
