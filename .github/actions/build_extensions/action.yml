@@ -69,6 +69,9 @@ inputs:
   override_cxx:
     description: 'Override CXX Compiler'
     default: ''
+  unittest_path:
+    description: 'Expected path to the produced unit test executable'
+    default: './build/release/test/unittest'
 
 runs:
   using: "composite"
@@ -135,7 +138,7 @@ runs:
       if: ${{ inputs.run_tests == 1 }}
       shell: bash
       run: |
-        ${{ inputs.python_name }} scripts/run_tests_one_by_one.py build/release/test/unittest
+        ${{ inputs.python_name }} scripts/run_tests_one_by_one.py ${{ input.unittest_path }} 
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
