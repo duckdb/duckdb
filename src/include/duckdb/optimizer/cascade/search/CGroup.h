@@ -36,7 +36,7 @@ class COptimizationContext;
 class CCostContext;
 class CReqdPropPlan;
 class CReqdPropRelational;
-class CExpression;
+
 
 // type definitions
 // array of groups

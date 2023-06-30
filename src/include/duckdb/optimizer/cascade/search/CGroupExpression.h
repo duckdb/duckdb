@@ -12,7 +12,6 @@
 #include "duckdb/optimizer/cascade/common/CDynamicPtrArray.h"
 #include "duckdb/optimizer/cascade/common/CList.h"
 #include "duckdb/optimizer/cascade/common/CRefCount.h"
-
 #include "duckdb/optimizer/cascade/base/CCostContext.h"
 #include "duckdb/optimizer/cascade/engine/CPartialPlan.h"
 #include "duckdb/optimizer/cascade/operators/COperator.h"
@@ -37,22 +36,14 @@ using namespace gpos;
 class CGroupExpression : public CRefCount
 {
 public:
-#ifdef GPOS_DEBUG
-	// debug print; for interactive debugging sessions only
-	void DbgPrintWithProperties();
-#endif	// GPOS_DEBUG
-
 	// states of a group expression
 	enum EState
 	{
 		estUnexplored,	// initial state
-
 		estExploring,  // ongoing exploration
 		estExplored,   // done exploring
-
 		estImplementing,  // ongoing implementation
 		estImplemented,	  // done implementing
-
 		estSentinel
 	};
 
@@ -61,65 +52,52 @@ public:
 	{
 		ecdDefault,				// default state
 		ecdCircularDependency,	// contains circular dependency
-
 		ecdSentinel
 	};
 
 	// type definition of cost context hash table
-	typedef CSyncHashtable<CCostContext,  // entry
-						   OPTCTXT_PTR /* search key */>
-		ShtCC;
+	typedef CSyncHashtable<CCostContext, OPTCTXT_PTR> ShtCC;
 
 private:
 	// memory pool
-	CMemoryPool *m_mp;
+	CMemoryPool* m_mp;
 
 	// definition of context hash table accessor
-	typedef CSyncHashtableAccessByKey<CCostContext,	 // entry
-									  OPTCTXT_PTR>
-		ShtAcc;
+	typedef CSyncHashtableAccessByKey<CCostContext, OPTCTXT_PTR> ShtAcc;
 
 	// definition of context hash table iter
-	typedef CSyncHashtableIter<CCostContext,  // entry
-							   OPTCTXT_PTR>
-		ShtIter;
+	typedef CSyncHashtableIter<CCostContext, OPTCTXT_PTR> ShtIter;
 
 	// definition of context hash table iter accessor
-	typedef CSyncHashtableAccessByIter<CCostContext,  // entry
-									   OPTCTXT_PTR>
-		ShtAccIter;
+	typedef CSyncHashtableAccessByIter<CCostContext, OPTCTXT_PTR> ShtAccIter;
 
 	// map of partial plans to their costs
-	typedef CHashMap<CPartialPlan, CCost, CPartialPlan::HashValue,
-					 CPartialPlan::Equals, CleanupRelease<CPartialPlan>,
-					 CleanupDelete<CCost> >
-		PartialPlanToCostMap;
-
+	typedef CHashMap<CPartialPlan, CCost, CPartialPlan::HashValue, CPartialPlan::Equals, CleanupRelease<CPartialPlan>, CleanupDelete<CCost>> PartialPlanToCostMap;
 
 	// expression id
 	ULONG m_id;
 
 	// duplicate group expression
-	CGroupExpression *m_pgexprDuplicate;
+	CGroupExpression* m_pgexprDuplicate;
 
 	// operator class
-	COperator *m_pop;
+	LogicalOperator* m_pop;
 
 	// array of child groups
-	CGroupArray *m_pdrgpgroup;
+	CGroupArray* m_pdrgpgroup;
 
 	// sorted array of children groups for faster comparison
 	// of order-insensitive operators
-	CGroupArray *m_pdrgpgroupSorted;
+	CGroupArray* m_pdrgpgroupSorted;
 
 	// back pointer to group
-	CGroup *m_pgroup;
+	CGroup* m_pgroup;
 
 	// id of xform that generated group expression
 	CXform::EXformId m_exfidOrigin;
 
 	// group expression that generated current group expression via xform
-	CGroupExpression *m_pgexprOrigin;
+	CGroupExpression* m_pgexprOrigin;
 
 	// flag to indicate if group expression was created as a node at some
 	// intermediate level when origin expression was inserted to memo
@@ -132,7 +110,7 @@ private:
 	EOptimizationLevel m_eol;
 
 	// map of partial plans to their cost lower bound
-	PartialPlanToCostMap *m_ppartialplancostmap;
+	PartialPlanToCostMap* m_ppartialplancostmap;
 
 	// circular dependency state
 	ECircularDependency m_ecirculardependency;
@@ -146,17 +124,11 @@ private:
 	// set group expression id
 	void SetId(ULONG id);
 
-	// print transformation
-	void PrintXform(CMemoryPool *mp, CXform *pxform, CExpression *pexpr,
-					CXformResult *pxfres, ULONG ulNumResults);
-
 	// preprocessing before applying transformation
-	void PreprocessTransform(CMemoryPool *pmpLocal, CMemoryPool *pmpGlobal,
-							 CXform *pxform);
+	void PreprocessTransform(CMemoryPool* pmpLocal, CMemoryPool* pmpGlobal, CXform* pxform);
 
 	// postprocessing after applying transformation
-	void PostprocessTransform(CMemoryPool *pmpLocal, CMemoryPool *pmpGlobal,
-							  CXform *pxform);
+	void PostprocessTransform(CMemoryPool* pmpLocal, CMemoryPool* pmpGlobal, CXform* pxform);
 
 	// costing scheme
 	CCost CostCompute(CMemoryPool *mp, CCostContext *pcc) const;
@@ -242,23 +214,20 @@ public:
 	void Init(CGroup *pgroup, ULONG id);
 
 	// reset group expression
-	void
-	Reset(CGroup *pgroup, ULONG id)
+	void Reset(CGroup *pgroup, ULONG id)
 	{
 		m_pgroup = pgroup;
 		m_id = id;
 	}
 
 	// optimization level accessor
-	EOptimizationLevel
-	Eol() const
+	EOptimizationLevel Eol() const
 	{
 		return m_eol;
 	}
 
 	// shorthand to access children
-	CGroup *
-	operator[](ULONG ulPos) const
+	CGroup* operator[](ULONG ulPos) const
 	{
 		GPOS_ASSERT(NULL != m_pdrgpgroup);
 
@@ -276,15 +245,13 @@ public:
 	};
 
 	// arity function
-	ULONG
-	Arity() const
+	ULONG Arity() const
 	{
 		return m_pdrgpgroup->Size();
 	}
 
 	// accessor for operator
-	COperator *
-	Pop() const
+	LogicalOperator* Pop() const
 	{
 		return m_pop;
 	}
@@ -340,20 +307,19 @@ public:
 	}
 
 	// match group expression against given operator and its children
-	BOOL Matches(const CGroupExpression *) const;
+	BOOL Matches(const CGroupExpression* pgexpr) const;
 
 	// match non-scalar children of group expression against given children of passed expression
-	BOOL FMatchNonScalarChildren(const CGroupExpression *pgexpr) const;
+	BOOL FMatchNonScalarChildren(const CGroupExpression* pgexpr) const;
 
 	// hash function
-	ULONG
-	HashValue() const
+	ULONG HashValue() const
 	{
 		return HashValue(m_pop, m_pdrgpgroup);
 	}
 
 	// static hash function for operator and group references
-	static ULONG HashValue(COperator *pop, CGroupArray *drgpgroup);
+	static ULONG HashValue(LogicalOperator* pop, CGroupArray* drgpgroup);
 
 	// static hash function for group expression
 	static ULONG HashValue(const CGroupExpression &);
