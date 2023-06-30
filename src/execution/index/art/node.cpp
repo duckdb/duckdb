@@ -363,7 +363,7 @@ NType Node::GetARTNodeTypeByCount(const idx_t count) {
 }
 
 FixedSizeAllocator &Node::GetAllocator(const ART &art, NType type) {
-	return *art.allocators[(uint8_t)type - 1];
+	return *art.allocatorss[(uint8_t)type - 1];
 }
 
 //===--------------------------------------------------------------------===//

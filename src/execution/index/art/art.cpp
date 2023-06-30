@@ -33,7 +33,8 @@ struct ARTIndexScanState : public IndexScanState {
 
 ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
          const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
-         AttachedDatabase &db, const idx_t block_id, const idx_t block_offset)
+         AttachedDatabase &db, optional_ptr<vector<shared_ptr<FixedSizeAllocator>>> allocators, const idx_t block_id,
+         const idx_t block_offset)
 
     : Index(db, IndexType::ART, table_io_manager, column_ids, unbound_expressions, constraint_type) {
 
@@ -42,12 +43,20 @@ ART::ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	}
 
 	// initialize all allocators
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Prefix), buffer_manager.GetBufferAllocator()));
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Leaf), buffer_manager.GetBufferAllocator()));
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node4), buffer_manager.GetBufferAllocator()));
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node16), buffer_manager.GetBufferAllocator()));
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node48), buffer_manager.GetBufferAllocator()));
-	allocators.emplace_back(make_uniq<FixedSizeAllocator>(sizeof(Node256), buffer_manager.GetBufferAllocator()));
+	if (allocators) {
+		for (auto &allocator : *allocators) {
+			allocatorss.push_back(allocator);
+		}
+		owns_memory = false;
+	} else {
+		allocatorss.emplace_back(make_shared<FixedSizeAllocator>(sizeof(Prefix), buffer_manager.GetBufferAllocator()));
+		allocatorss.emplace_back(make_shared<FixedSizeAllocator>(sizeof(Leaf), buffer_manager.GetBufferAllocator()));
+		allocatorss.emplace_back(make_shared<FixedSizeAllocator>(sizeof(Node4), buffer_manager.GetBufferAllocator()));
+		allocatorss.emplace_back(make_shared<FixedSizeAllocator>(sizeof(Node16), buffer_manager.GetBufferAllocator()));
+		allocatorss.emplace_back(make_shared<FixedSizeAllocator>(sizeof(Node48), buffer_manager.GetBufferAllocator()));
+		allocatorss.emplace_back(make_shared<FixedSizeAllocator>(sizeof(Node256), buffer_manager.GetBufferAllocator()));
+		owns_memory = true;
+	}
 
 	// set the root node of the tree
 	tree = make_uniq<Node>();
@@ -986,25 +995,27 @@ BlockPointer ART::Serialize(MetaBlockWriter &writer) {
 
 void ART::InitializeVacuum(ARTFlags &flags) {
 
-	flags.vacuum_flags.reserve(allocators.size());
-	for (auto &allocator : allocators) {
+	flags.vacuum_flags.reserve(allocatorss.size());
+	for (auto &allocator : allocatorss) {
 		flags.vacuum_flags.push_back(allocator->InitializeVacuum());
 	}
 }
 
 void ART::FinalizeVacuum(const ARTFlags &flags) {
 
-	for (idx_t i = 0; i < allocators.size(); i++) {
+	for (idx_t i = 0; i < allocatorss.size(); i++) {
 		if (flags.vacuum_flags[i]) {
-			allocators[i]->FinalizeVacuum();
+			allocatorss[i]->FinalizeVacuum();
 		}
 	}
 }
 
 void ART::Vacuum(IndexLock &state) {
 
+	D_ASSERT(owns_memory);
+
 	if (!tree->IsSet()) {
-		for (auto &allocator : allocators) {
+		for (auto &allocator : allocatorss) {
 			allocator->Reset();
 		}
 		return;
@@ -1032,7 +1043,7 @@ void ART::Vacuum(IndexLock &state) {
 	// finalize the vacuum operation
 	FinalizeVacuum(flags);
 
-	for (auto &allocator : allocators) {
+	for (auto &allocator : allocatorss) {
 		allocator->Verify();
 	}
 }
@@ -1043,8 +1054,10 @@ void ART::Vacuum(IndexLock &state) {
 
 void ART::InitializeMerge(ARTFlags &flags) {
 
-	flags.merge_buffer_counts.reserve(allocators.size());
-	for (auto &allocator : allocators) {
+	D_ASSERT(owns_memory);
+
+	flags.merge_buffer_counts.reserve(allocatorss.size());
+	for (auto &allocator : allocatorss) {
 		flags.merge_buffer_counts.emplace_back(allocator->buffers.size());
 	}
 }
@@ -1056,16 +1069,18 @@ bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 		return true;
 	}
 
-	if (tree->IsSet()) {
-		//  fully deserialize other_index, and traverse it to increment its buffer IDs
-		ARTFlags flags;
-		InitializeMerge(flags);
-		other_art.tree->InitializeMerge(other_art, flags);
-	}
+	if (other_art.owns_memory) {
+		if (tree->IsSet()) {
+			//  fully deserialize other_index, and traverse it to increment its buffer IDs
+			ARTFlags flags;
+			InitializeMerge(flags);
+			other_art.tree->InitializeMerge(other_art, flags);
+		}
 
-	// merge the node storage
-	for (idx_t i = 0; i < allocators.size(); i++) {
-		allocators[i]->Merge(*other_art.allocators[i]);
+		// merge the node storage
+		for (idx_t i = 0; i < allocatorss.size(); i++) {
+			allocatorss[i]->Merge(*other_art.allocatorss[i]);
+		}
 	}
 
 	// merge the ARTs
@@ -1073,7 +1088,7 @@ bool ART::MergeIndexes(IndexLock &state, Index &other_index) {
 		return false;
 	}
 
-	for (auto &allocator : allocators) {
+	for (auto &allocator : allocatorss) {
 		allocator->Verify();
 	}
 	return true;
