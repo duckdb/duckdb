@@ -18,7 +18,7 @@ namespace gpopt
 using namespace gpos;
 
 // forward declaration
-class CExpression;
+
 class CExpressionHandle;
 class CColRefSet;
 

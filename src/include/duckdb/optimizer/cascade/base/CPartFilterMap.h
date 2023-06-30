@@ -26,7 +26,7 @@ using gpnaucrates::IStatistics;
 namespace gpopt
 {
 // forward declarations
-class CExpression;
+
 
 //---------------------------------------------------------------------------
 //	@class:

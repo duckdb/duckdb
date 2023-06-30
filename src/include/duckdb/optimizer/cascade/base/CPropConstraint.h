@@ -20,7 +20,7 @@ using namespace gpos;
 
 // forward declaration
 class CConstraint;
-class CExpression;
+
 
 //---------------------------------------------------------------------------
 //	@class:

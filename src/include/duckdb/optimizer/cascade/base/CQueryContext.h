@@ -9,17 +9,16 @@
 #define CQueryContext_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
+#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/optimizer/cascade/base/CReqdPropPlan.h"
 #include "duckdb/optimizer/cascade/base/CReqdPropRelational.h"
 #include "duckdb/optimizer/cascade/operators/CExpressionPreprocessor.h"
 #include "duckdb/optimizer/cascade/search/CGroupExpression.h"
 
-
 namespace gpopt
 {
 using namespace gpos;
-
+using namespace duckdb;
 //---------------------------------------------------------------------------
 //	@class:
 //		CQueryContext
@@ -63,7 +62,7 @@ private:
 	CMDNameArray *m_pdrgpmdname;
 
 	// logical expression tree to be optimized
-	CExpression *m_pexpr;
+	LogicalOperator* m_pexpr;
 
 	// should statistics derivation take place
 	BOOL m_fDeriveStats;
@@ -79,7 +78,7 @@ private:
 
 public:
 	// ctor
-	CQueryContext(CMemoryPool *mp, CExpression *pexpr, CReqdPropPlan *prpp, CColRefArray *colref_array, CMDNameArray *pdrgpmdname, BOOL fDeriveStats);
+	CQueryContext(CMemoryPool *mp, LogicalOperator* pexpr, CReqdPropPlan *prpp, CColRefArray *colref_array, CMDNameArray *pdrgpmdname, BOOL fDeriveStats);
 
 	// dtor
 	virtual ~CQueryContext();
@@ -90,64 +89,57 @@ public:
 	}
 
 	// expression accessor
-	CExpression * Pexpr() const
+	LogicalOperator* Pexpr() const
 	{
 		return m_pexpr;
 	}
 
 	// required plan properties accessor
-	CReqdPropPlan * Prpp() const
+	CReqdPropPlan* Prpp() const
 	{
 		return m_prpp;
 	}
 
 	// return the array of output column references
-	CColRefArray * PdrgPcr() const
+	CColRefArray* PdrgPcr() const
 	{
 		return m_pdrgpcr;
 	}
 
 	// system columns
-	CColRefArray * PdrgpcrSystemCols() const
+	CColRefArray* PdrgpcrSystemCols() const
 	{
 		return m_pdrgpcrSystemCols;
 	}
 
 	// return the array of output column names
-	CMDNameArray * Pdrgpmdname() const
+	CMDNameArray* Pdrgpmdname() const
 	{
 		return m_pdrgpmdname;
 	}
   
-  //---------------------------------------------------------------------------
-  //  @function:
-  //    PqcGenerate
-  //
-  //  @doc:
+	//---------------------------------------------------------------------------
+	//  @function:
+	//    PqcGenerate
+	//
+	//  @doc:
 	//    Generate the query context for the given expression and array of output column ref ids.
-  //  
-  //  @inputs:
-  //    CMemoryPool* mp, memory pool
-  //    CExpression* pexpr, expression representing the query
-  //    ULongPtrArray* pdrgpulQueryOutputColRefId, array of output column reference id
-  //    CMDNameArray* pdrgpmdname, array of output column names
-  //
-  //  @output:
-  //    CQueryContext
-  //
-  //---------------------------------------------------------------------------
-	static CQueryContext* PqcGenerate(CMemoryPool* mp, CExpression* pexpr, ULongPtrArray* pdrgpulQueryOutputColRefId, CMDNameArray *pdrgpmdname, BOOL fDeriveStats);
-
-#ifdef GPOS_DEBUG
-	// debug print
-	virtual IOstream &OsPrint(IOstream &) const;
-
-	void DbgPrint() const;
-#endif	// GPOS_DEBUG
+	//  
+	//  @inputs:
+	//    CMemoryPool* mp, memory pool
+	//    CExpression* pexpr, expression representing the query
+	//    ULongPtrArray* pdrgpulQueryOutputColRefId, array of output column reference id
+	//    CMDNameArray* pdrgpmdname, array of output column names
+	//
+	//  @output:
+	//    CQueryContext
+	//
+	//---------------------------------------------------------------------------
+	static CQueryContext* PqcGenerate(CMemoryPool* mp, LogicalOperator* pexpr, ULongPtrArray* pdrgpulQueryOutputColRefId, CMDNameArray *pdrgpmdname, BOOL fDeriveStats);
 
 	// walk the expression and add the mapping between computed column
 	// and their corresponding used column(s)
-	static void MapComputedToUsedCols(CColumnFactory *col_factory, CExpression *pexpr);
+	static void MapComputedToUsedCols(CColumnFactory *col_factory, LogicalOperator* pexpr);
 
 };	// class CQueryContext
 }  // namespace gpopt

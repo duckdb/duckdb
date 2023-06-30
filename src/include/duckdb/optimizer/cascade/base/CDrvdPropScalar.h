@@ -37,7 +37,7 @@ class CExpressionHandle;
 //---------------------------------------------------------------------------
 class CDrvdPropScalar : public CDrvdProp
 {
-	friend class CExpression;
+	friend 
 	enum EDrvdPropType
 	{
 		EdptPcrsDefined = 0,

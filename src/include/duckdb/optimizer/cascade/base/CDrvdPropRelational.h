@@ -47,7 +47,7 @@ class CPartInfo;
 //---------------------------------------------------------------------------
 class CDrvdPropRelational : public CDrvdProp
 {
-	friend class CExpression;
+	friend 
 
 	// See member variables (below) with the same name for description on what
 	// the property types respresent

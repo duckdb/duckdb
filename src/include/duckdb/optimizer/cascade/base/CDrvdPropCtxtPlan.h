@@ -11,7 +11,6 @@
 #define GPOPT_CDrvdPropCtxtPlan_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/base/CCTEMap.h"
 #include "duckdb/optimizer/cascade/base/CDrvdPropCtxt.h"
 

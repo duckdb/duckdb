@@ -44,47 +44,30 @@ class CReqdPropPlan : public CReqdProp
 {
 private:
 	// required columns
-	CColRefSet *m_pcrs;
+	CColRefSet* m_pcrs;
 
 	// required sort order
-	CEnfdOrder *m_peo;
-
-	// required distribution
-	CEnfdDistribution *m_ped;
-
-	// required rewindability
-	CEnfdRewindability *m_per;
-
-	// required partition propagation
-	CEnfdPartitionPropagation *m_pepp;
+	CEnfdOrder* m_peo;
 
 	// required ctes
-	CCTEReq *m_pcter;
+	CCTEReq* m_pcter;
 
 	// private copy ctor
 	CReqdPropPlan(const CReqdPropPlan &);
 
 	// combine derived part filter map from input requirements and
 	// derived plan properties in the passed context
-	CPartFilterMap *PpfmCombineDerived(CMemoryPool *mp, CExpressionHandle &exprhdl, CReqdPropPlan *prppInput, ULONG child_index, CDrvdPropArray *pdrgpdpCtxt);
+	CPartFilterMap* PpfmCombineDerived(CMemoryPool* mp, CExpressionHandle &exprhdl, CReqdPropPlan* prppInput, ULONG child_index, CDrvdPropArray* pdrgpdpCtxt);
 
 public:
 	// default ctor
 	CReqdPropPlan()
-		: m_pcrs(NULL),
-		  m_peo(NULL),
-		  m_ped(NULL),
-		  m_per(NULL),
-		  m_pepp(NULL),
-		  m_pcter(NULL)
+		: m_pcrs(NULL), m_peo(NULL), m_pcter(NULL)
 	{
 	}
 
 	// ctor
-	CReqdPropPlan(CColRefSet *pcrs, CEnfdOrder *peo, CEnfdDistribution *ped, CEnfdRewindability *per, CCTEReq *pcter);
-
-	// ctor
-	CReqdPropPlan(CColRefSet *pcrs, CEnfdOrder *peo, CEnfdDistribution *ped, CEnfdRewindability *per, CEnfdPartitionPropagation *pepp, CCTEReq *pcter);
+	CReqdPropPlan(CColRefSet* pcrs, CEnfdOrder* peo, CCTEReq* pcter);
 
 	// dtor
 	virtual ~CReqdPropPlan();
@@ -101,7 +84,8 @@ public:
 
 	// required columns computation function
 	void ComputeReqdCols(CMemoryPool *mp, CExpressionHandle &exprhdl, CReqdProp *prpInput, ULONG child_index, CDrvdPropArray *pdrgpdpCtxt);
-
+	void ComputeReqdCols(CMemoryPool* mp, PhysicalOperator* expr, CReqdProp* prpInput, ULONG child_index, CDrvdPropArray* pdrgpdpCtxt);
+	
 	// required ctes computation function
 	void ComputeReqdCTEs(CMemoryPool *mp, CExpressionHandle &exprhdl, CReqdProp *prpInput, ULONG child_index, CDrvdPropArray *pdrgpdpCtxt);
 
@@ -115,24 +99,6 @@ public:
 	CEnfdOrder* Peo() const
 	{
 		return m_peo;
-	}
-
-	// required distribution accessor
-	CEnfdDistribution* Ped() const
-	{
-		return m_ped;
-	}
-
-	// required rewindability accessor
-	CEnfdRewindability* Per() const
-	{
-		return m_per;
-	}
-
-	// required partition propagation accessor
-	CEnfdPartitionPropagation* Pepp() const
-	{
-		return m_pepp;
 	}
 
 	// required cte accessor
@@ -166,8 +132,7 @@ public:
 	static CReqdPropPlan* Prpp(CReqdProp *prp)
 	{
 		GPOS_ASSERT(NULL != prp);
-
-		return dynamic_cast<CReqdPropPlan *>(prp);
+		return dynamic_cast<CReqdPropPlan*>(prp);
 	}
 
 	//generate empty required properties

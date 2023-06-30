@@ -10,7 +10,6 @@
 #define GPOPT_CAutoOptCtxt_H
 
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/base/CColumnFactory.h"
 #include "duckdb/optimizer/cascade/base/COptCtxt.h"
 #include "duckdb/optimizer/cascade/mdcache/CMDAccessor.h"

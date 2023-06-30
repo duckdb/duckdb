@@ -19,7 +19,6 @@ namespace gpopt
 using namespace gpos;
 
 // fwd declaration
-class CExpression;
 class CConstraint;
 class CRange;
 

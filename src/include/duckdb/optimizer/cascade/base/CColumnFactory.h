@@ -11,7 +11,6 @@
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/common/CList.h"
 #include "duckdb/optimizer/cascade/common/CSyncHashtable.h"
-
 #include "duckdb/optimizer/cascade/base/CColRefSet.h"
 #include "duckdb/optimizer/cascade/metadata/CColumnDescriptor.h"
 #include "duckdb/optimizer/cascade/md/IMDId.h"
@@ -19,8 +18,6 @@
 
 namespace gpopt
 {
-class CExpression;
-
 using namespace gpos;
 using namespace gpmd;
 
@@ -57,11 +54,8 @@ private:
 	CColumnFactory(const CColumnFactory &);
 
 	// implementation of factory methods
-	CColRef *PcrCreate(const IMDType *pmdtype, INT type_modifier, ULONG id,
-					   const CName &name);
-	CColRef *PcrCreate(const CColumnDescriptor *pcoldesc, ULONG id,
-					   const CName &name, ULONG ulOpSource,
-					   BOOL mark_as_used = true, IMDId *mdid_table = NULL);
+	CColRef* PcrCreate(const IMDType *pmdtype, INT type_modifier, ULONG id, const CName &name);
+	CColRef* PcrCreate(const CColumnDescriptor *pcoldesc, ULONG id, const CName &name, ULONG ulOpSource, BOOL mark_as_used = true, IMDId *mdid_table = NULL);
 
 public:
 	// ctor
@@ -77,22 +71,16 @@ public:
 	CColRef *PcrCreate(const IMDType *pmdtype, INT type_modifier);
 
 	// create column reference given its type, type modifier, and name
-	CColRef *PcrCreate(const IMDType *pmdtype, INT type_modifier,
-					   const CName &name);
+	CColRef *PcrCreate(const IMDType *pmdtype, INT type_modifier, const CName &name);
 
 	// create a column reference given its descriptor and name
-	CColRef *PcrCreate(const CColumnDescriptor *pcoldescr, const CName &name,
-					   ULONG ulOpSource, BOOL mark_as_used, IMDId *mdid_table);
+	CColRef *PcrCreate(const CColumnDescriptor *pcoldescr, const CName &name, ULONG ulOpSource, BOOL mark_as_used, IMDId *mdid_table);
 
 	// create a column reference given its type, attno, nullability and name
-	CColRef *PcrCreate(const IMDType *pmdtype, INT type_modifier,
-					   IMDId *mdid_table, INT attno, BOOL is_nullable, ULONG id,
-					   const CName &name, ULONG ulOpSource,
-					   ULONG ulWidth = gpos::ulong_max);
+	CColRef *PcrCreate(const IMDType *pmdtype, INT type_modifier, IMDId *mdid_table, INT attno, BOOL is_nullable, ULONG id, const CName &name, ULONG ulOpSource, ULONG ulWidth = gpos::ulong_max);
 
 	// create a column reference with the same type as passed column reference
-	CColRef *
-	PcrCreate(const CColRef *colref)
+	CColRef* PcrCreate(const CColRef *colref)
 	{
 		return PcrCreate(colref->RetrieveType(), colref->TypeModifier());
 	}

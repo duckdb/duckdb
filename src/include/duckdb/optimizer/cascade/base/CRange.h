@@ -29,7 +29,7 @@ using namespace gpmd;
 using namespace gpnaucrates;
 
 //fwd declarations
-class CExpression;
+
 class CRange;
 class IComparator;
 

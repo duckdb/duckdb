@@ -10,12 +10,13 @@
 
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/common/CRefCount.h"
-
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/optimizer/cascade/operators/CExpression.h"
 
 namespace gpopt
 {
 using namespace gpos;
+using namespace duckdb;
 
 // prototypes
 class CReqdPropPlan;
@@ -38,7 +39,6 @@ public:
 		EpstDistribution,
 		EpstRewindability,
 		EpstPartPropagation,
-
 		EpstSentinel
 	};
 
@@ -59,10 +59,7 @@ protected:
 
 public:
 	// append enforcers to dynamic array for the given plan properties
-	virtual void AppendEnforcers(CMemoryPool *mp, CExpressionHandle &exprhdl,
-								 CReqdPropPlan *prpp,
-								 CExpressionArray *pdrgpexpr,
-								 CExpression *pexpr) = 0;
+	virtual void AppendEnforcers(CMemoryPool* mp, CExpressionHandle &exprhdl, CReqdPropPlan* prpp, ExpressionArray* pdrgpexpr, unique_ptr<LogicalOperator> pexpr) = 0;
 
 	// hash function
 	virtual ULONG HashValue() const = 0;
@@ -72,7 +69,6 @@ public:
 
 	// property type
 	virtual EPropSpecType Epst() const = 0;
-
 };	// class CPropSpec
 
 

@@ -11,7 +11,7 @@
 
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/task/CTaskLocalStorageObject.h"
-
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/optimizer/cascade/base/CCTEInfo.h"
 #include "duckdb/optimizer/cascade/base/CColumnFactory.h"
 #include "duckdb/optimizer/cascade/base/IComparator.h"
@@ -21,6 +21,7 @@
 namespace gpopt
 {
 using namespace gpos;
+using namespace duckdb;
 
 // forward declarations
 class CColRefSet;
@@ -97,7 +98,7 @@ private:
 	BOOL m_has_replicated_tables;
 
 	// does this plan have a direct dispatchable filter
-	CExpressionArray *m_direct_dispatchable_filters;
+	ExpressionArray *m_direct_dispatchable_filters;
 
 public:
 	// ctor
@@ -148,17 +149,14 @@ public:
 		m_has_volatile_or_SQL_func = true;
 	}
 
-	void
-	SetHasReplicatedTables()
+	void SetHasReplicatedTables()
 	{
 		m_has_replicated_tables = true;
 	}
 
-	void
-	AddDirectDispatchableFilterCandidate(CExpression *filter_expression)
+	void AddDirectDispatchableFilterCandidate(unique_ptr<Expression> filter_expression)
 	{
-		filter_expression->AddRef();
-		m_direct_dispatchable_filters->Append(filter_expression);
+		m_direct_dispatchable_filters->Append(std::move(filter_expression));
 	}
 
 	BOOL
@@ -179,8 +177,7 @@ public:
 		return m_has_replicated_tables;
 	}
 
-	CExpressionArray *
-	GetDirectDispatchableFilters() const
+	ExpressionArray* GetDirectDispatchableFilters() const
 	{
 		return m_direct_dispatchable_filters;
 	}
