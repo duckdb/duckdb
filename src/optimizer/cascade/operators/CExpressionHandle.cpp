@@ -1082,20 +1082,22 @@ CExpressionHandle::Pstats(ULONG child_index) const
 //		Assumes caller knows what properties to ask for;
 //
 //---------------------------------------------------------------------------
-CDrvdPropPlan *
-CExpressionHandle::Pdpplan(ULONG child_index) const
+CDrvdPropPlan* CExpressionHandle::Pdpplan(ULONG child_index) const
 {
 	if (NULL != m_pexpr)
 	{
-		return CDrvdPropPlan::Pdpplan(
-			(*m_pexpr)[child_index]->Pdp(CDrvdProp::EptPlan));
+		return CDrvdPropPlan::Pdpplan((*m_pexpr)[child_index]->Pdp(CDrvdProp::EptPlan));
 	}
-
 	GPOS_ASSERT(NULL != m_pcc || NULL != m_pgexpr);
-
-	COptimizationContext *pocChild = (*m_pcc->Pdrgpoc())[child_index];
-	CDrvdPropPlan *pdpplan = pocChild->PccBest()->Pdpplan();
-
+	COptimizationContext* pocChild = (*m_pcc->Pdrgpoc())[child_index];
+	CDrvdPropPlan* pdpplan = pocChild->PccBest()->Pdpplan();
+	/* I comment here */
+	// Add detect of NULL
+	if(NULL == pdpplan)
+	{
+		pocChild->PccBest()->DerivePlanProps(m_mp);
+		pdpplan = pocChild->PccBest()->Pdpplan();
+	}
 	return pdpplan;
 }
 
@@ -1955,8 +1957,7 @@ CExpressionHandle::DerivePartitionInfo()
 	return GetRelationalProperties()->GetPartitionInfo();
 }
 
-BOOL
-CExpressionHandle::DeriveHasPartialIndexes(ULONG child_index)
+BOOL CExpressionHandle::DeriveHasPartialIndexes(ULONG child_index)
 {
 	if (NULL != Pexpr())
 	{

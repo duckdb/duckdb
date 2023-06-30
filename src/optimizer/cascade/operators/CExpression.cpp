@@ -343,8 +343,7 @@ CExpression::CopyGroupPropsAndStats(IStatistics *input_stats)
 //		only used internally during property derivation
 //
 //---------------------------------------------------------------------------
-CDrvdProp *
-CExpression::Pdp(const CDrvdProp::EPropType ept) const
+CDrvdProp* CExpression::Pdp(const CDrvdProp::EPropType ept) const
 {
 	switch (ept)
 	{
@@ -357,28 +356,23 @@ CExpression::Pdp(const CDrvdProp::EPropType ept) const
 		default:
 			break;
 	}
-
 	GPOS_ASSERT(!"Invalid property type");
-
 	return NULL;
 }
 
-CDrvdPropRelational *
-CExpression::GetDrvdPropRelational() const
+CDrvdPropRelational* CExpression::GetDrvdPropRelational() const
 {
 	GPOS_RTL_ASSERT(m_pdprel->IsComplete());
 	return m_pdprel;
 }
 
-CDrvdPropPlan *
-CExpression::GetDrvdPropPlan() const
+CDrvdPropPlan* CExpression::GetDrvdPropPlan() const
 {
 	GPOS_RTL_ASSERT(m_pdpplan->IsComplete());
 	return m_pdpplan;
 }
 
-CDrvdPropScalar *
-CExpression::GetDrvdPropScalar() const
+CDrvdPropScalar* CExpression::GetDrvdPropScalar() const
 {
 	GPOS_RTL_ASSERT(m_pdpscalar->IsComplete());
 	return m_pdpscalar;
@@ -423,26 +417,21 @@ CExpression::AssertValidPropDerivation(const CDrvdProp::EPropType ept)
 //		Get the suitable derived property type based on operator
 //
 //---------------------------------------------------------------------------
-CDrvdProp::EPropType
-CExpression::Ept() const
+CDrvdProp::EPropType CExpression::Ept() const
 {
 	if (Pop()->FLogical())
 	{
 		return CDrvdProp::EptRelational;
 	}
-
 	if (Pop()->FPhysical())
 	{
-		GPOS_ASSERT(NULL != m_pdprel &&
-					"Relational properties were not copied from Memo");
+		GPOS_ASSERT(NULL != m_pdprel && "Relational properties were not copied from Memo");
 		return CDrvdProp::EptPlan;
 	}
-
 	if (Pop()->FScalar())
 	{
 		return CDrvdProp::EptScalar;
 	}
-
 	GPOS_ASSERT(!"Unexpected operator type");
 	return CDrvdProp::EptInvalid;
 }
@@ -451,41 +440,31 @@ CExpression::Ept() const
 // Derive all properties immediately. The suitable derived property is
 // determined internally. To derive properties on an on-demand bases, use
 // DeriveXXX() methods.
-CDrvdProp *
-CExpression::PdpDerive(
-	CDrvdPropCtxt *pdpctxt	// derivation context, passed by caller
-)
+CDrvdProp* CExpression::PdpDerive(CDrvdPropCtxt *pdpctxt)
 {
 	GPOS_CHECK_STACK_SIZE;
 	GPOS_CHECK_ABORT;
-
 	const CDrvdProp::EPropType ept = Ept();
 #ifdef GPOS_DEBUG
 	AssertValidPropDerivation(ept);
 #endif	// GPOS_DEBUG
-
 	CExpressionHandle exprhdl(m_mp);
 	exprhdl.Attach(this);
-
 	// see if suitable prop is already cached. This only applies to plan properties.
 	// relational properties are never null and are handled in the next case
 	if (NULL == Pdp(ept))
 	{
 		GPOS_ASSERT(CDrvdProp::EptRelational != ept);
 		GPOS_ASSERT(CDrvdProp::EptScalar != ept);
-
 		const ULONG arity = Arity();
 		for (ULONG ul = 0; ul < arity; ul++)
 		{
-			CExpression *pexprChild = (*m_pdrgpexpr)[ul];
-			CDrvdProp *pdp = pexprChild->PdpDerive(pdpctxt);
-
+			CExpression* pexprChild = (*m_pdrgpexpr)[ul];
+			CDrvdProp* pdp = pexprChild->PdpDerive(pdpctxt);
 			// add child props to derivation context
 			CDrvdPropCtxt::AddDerivedProps(pdp, pdpctxt);
 		}
-
 		exprhdl.CopyStats();
-
 		switch (ept)
 		{
 			case CDrvdProp::EptPlan:
@@ -494,7 +473,6 @@ CExpression::PdpDerive(
 			default:
 				break;
 		}
-
 		Pdp(ept)->Derive(m_mp, exprhdl, pdpctxt);
 	}
 	// If we havn't derived all properties, do that now. If we've derived some
@@ -517,15 +495,12 @@ CExpression::PdpDerive(
 //		Derive statistics
 //
 //---------------------------------------------------------------------------
-IStatistics *
-CExpression::PstatsDerive(CReqdPropRelational *prprel,
-						  IStatisticsArray *stats_ctxt)
+IStatistics* CExpression::PstatsDerive(CReqdPropRelational *prprel, IStatisticsArray *stats_ctxt)
 {
 	GPOS_CHECK_STACK_SIZE;
 	GPOS_ASSERT(NULL != prprel);
 	GPOS_ASSERT(prprel->FRelational());
 	GPOS_CHECK_ABORT;
-
 	if (Pop()->FScalar())
 	{
 		if (NULL == m_pstats)
@@ -533,34 +508,26 @@ CExpression::PstatsDerive(CReqdPropRelational *prprel,
 			// create an empty statistics container
 			m_pstats = CStatistics::MakeEmptyStats(m_mp);
 		}
-
 		return m_pstats;
 	}
-
 	prprel->AddRef();
-	CReqdPropRelational *prprelInput = prprel;
-
+	CReqdPropRelational* prprelInput = prprel;
 	// if expression has derived statistics, check if requirements are covered
 	// by what's already derived
 	if (NULL != m_pstats)
 	{
 		prprelInput->Release();
-		CReqdPropRelational *prprelExisting =
-			m_pstats->GetReqdRelationalProps(m_mp);
+		CReqdPropRelational *prprelExisting = m_pstats->GetReqdRelationalProps(m_mp);
 		prprelInput = prprel->PrprelDifference(m_mp, prprelExisting);
 		prprelExisting->Release();
-
 		if (prprelInput->IsEmpty())
 		{
-			// required statistics columns are already covered by existing statistics
-
 			// clean up
 			prprelInput->Release();
 			return m_pstats;
 		}
 	}
-
-	IStatisticsArray *pdrgpstatCtxtNew = stats_ctxt;
+	IStatisticsArray* pdrgpstatCtxtNew = stats_ctxt;
 	if (NULL == stats_ctxt)
 	{
 		// create an empty context
@@ -570,24 +537,18 @@ CExpression::PstatsDerive(CReqdPropRelational *prprel,
 	{
 		pdrgpstatCtxtNew->AddRef();
 	}
-
 	// trigger recursive property derivation
 	CExpressionHandle exprhdl(m_mp);
 	exprhdl.Attach(this);
-	CDrvdPropCtxtRelational *pdpctxtrel =
-		GPOS_NEW(m_mp) CDrvdPropCtxtRelational(m_mp);
+	CDrvdPropCtxtRelational* pdpctxtrel = GPOS_NEW(m_mp) CDrvdPropCtxtRelational(m_mp);
 	exprhdl.DeriveProps(pdpctxtrel);
-
 	// compute required relational properties of expression's children
-	exprhdl.ComputeReqdProps(prprelInput, 0 /*ulOptReq*/);
-
+	exprhdl.ComputeReqdProps(prprelInput, 0);
 	// trigger recursive statistics derivation
 	exprhdl.DeriveStats(pdrgpstatCtxtNew);
-
 	// cache derived stats on expression
 	IStatistics *stats = exprhdl.Pstats();
 	GPOS_ASSERT(NULL != stats);
-
 	if (NULL == m_pstats)
 	{
 		stats->AddRef();
@@ -597,18 +558,15 @@ CExpression::PstatsDerive(CReqdPropRelational *prprel,
 	{
 		IStatistics *stats_copy = stats->CopyStats(m_mp);
 		stats_copy->AppendStats(m_mp, m_pstats);
-
 		m_pstats->Release();
 		m_pstats = NULL;
 		m_pstats = stats_copy;
 	}
 	GPOS_ASSERT(NULL != m_pstats);
-
 	// clean up
 	prprelInput->Release();
 	pdrgpstatCtxtNew->Release();
 	pdpctxtrel->Release();
-
 	return m_pstats;
 }
 
@@ -727,8 +685,7 @@ CExpression::HasOuterRefs()
 //
 //
 //---------------------------------------------------------------------------
-CReqdPropPlan *
-CExpression::PrppCompute(CMemoryPool *mp, CReqdPropPlan *prppInput)
+CReqdPropPlan* CExpression::PrppCompute(CMemoryPool *mp, CReqdPropPlan *prppInput)
 {
 	// derive plan properties
 	CDrvdPropCtxtPlan *pdpctxtplan = GPOS_NEW(mp) CDrvdPropCtxtPlan(mp);
