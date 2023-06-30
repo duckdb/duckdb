@@ -541,19 +541,15 @@ CCTEInfo::PdrgPexpr(CMemoryPool *mp) const
 //		column and its used columns
 //
 //---------------------------------------------------------------------------
-void
-CCTEInfo::MapComputedToUsedCols(CColumnFactory *col_factory) const
+void CCTEInfo::MapComputedToUsedCols(CColumnFactory *col_factory) const
 {
 	UlongToCTEInfoEntryMapIter hmulei(m_phmulcteinfoentry);
 	while (hmulei.Advance())
 	{
-		CExpression *pexprProducer =
-			const_cast<CExpression *>(hmulei.Value()->Pexpr());
+		CExpression *pexprProducer = const_cast<CExpression *>(hmulei.Value()->Pexpr());
 		GPOS_ASSERT(NULL != pexprProducer);
-		CQueryContext::MapComputedToUsedCols(col_factory, pexprProducer);
 	}
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:

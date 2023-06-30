@@ -131,8 +131,10 @@ CColRefSet::PcrFirst() const
 //
 //---------------------------------------------------------------------------
 void
-CColRefSet::Include(const CColRef *colref)
+CColRefSet::Include(const CColRef* colref)
 {
+	if(colref == NULL)
+		return;
 	CBitSet::ExchangeSet(colref->Id());
 }
 
@@ -165,7 +167,7 @@ CColRefSet::Include(const CColRefArray *colref_array)
 //
 //---------------------------------------------------------------------------
 void
-CColRefSet::Include(const CColRefSet *pcrs)
+CColRefSet::Include(const CColRefSet* pcrs)
 {
 	CColRefSetIter crsi(*pcrs);
 	while (crsi.Advance())

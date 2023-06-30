@@ -153,16 +153,12 @@ void CRewindabilitySpec::AppendEnforcers(CMemoryPool *mp, CExpressionHandle &exp
 	GPOS_ASSERT(NULL != mp);
 	GPOS_ASSERT(NULL != pdrgpexpr);
 	GPOS_ASSERT(NULL != pexpr);
-	GPOS_ASSERT(
-		this == prpp->Per()->PrsRequired() &&
-		"required plan properties don't match enforced rewindability spec");
+	GPOS_ASSERT(this == prpp->Per()->PrsRequired() && "required plan properties don't match enforced rewindability spec");
 
 	CRewindabilitySpec *prs = CDrvdPropPlan::Pdpplan(exprhdl.Pdp())->Prs();
 
 	BOOL eager = false;
-	if (!GPOS_FTRACE(EopttraceMotionHazardHandling) ||
-		(prpp->Per()->PrsRequired()->HasMotionHazard() &&
-		 prs->HasMotionHazard()))
+	if (!GPOS_FTRACE(EopttraceMotionHazardHandling) || prs->HasMotionHazard())
 	{
 		// If motion hazard handling is disabled then we always want a blocking spool.
 		// otherwise, create a blocking spool *only if* the request alerts about motion

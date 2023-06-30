@@ -44,6 +44,9 @@
 #include "duckdb/optimizer/cascade/md/IMDTypeInt8.h"
 #include "duckdb/optimizer/cascade/md/IMDScalarOp.h"
 #include "duckdb/optimizer/cascade/traceflags/traceflags.h"
+#include "duckdb/optimizer/cascade/test/MyTypeBool.h"
+#include "duckdb/optimizer/cascade/test/MyTypeInt4.h"
+#include "duckdb/optimizer/cascade/test/CMDIdTest.h"
 
 using namespace gpopt;
 using namespace gpmd;
@@ -140,15 +143,11 @@ CUtils::PexprScalarIdent(CMemoryPool *mp, const CColRef *colref)
 }
 
 // generate a ScalarProjectElement expression
-CExpression *
-CUtils::PexprScalarProjectElement(CMemoryPool *mp, CColRef *colref,
-								  CExpression *pexpr)
+CExpression* CUtils::PexprScalarProjectElement(CMemoryPool* mp, CColRef* colref, CExpression* pexpr)
 {
 	GPOS_ASSERT(NULL != colref);
 	GPOS_ASSERT(NULL != pexpr);
-
-	return GPOS_NEW(mp)
-		CExpression(mp, GPOS_NEW(mp) CScalarProjectElement(mp, colref), pexpr);
+	return GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CScalarProjectElement(mp, colref), pexpr);
 }
 
 // generate a comparison expression over two columns
@@ -220,17 +219,13 @@ CUtils::PexprScalarCmp(CMemoryPool *mp, const CColRef *pcrLeft,
 }
 
 // Generate a comparison expression between two columns
-CExpression *
-CUtils::PexprScalarCmp(CMemoryPool *mp, const CColRef *pcrLeft,
-					   const CColRef *pcrRight, IMDType::ECmpType cmp_type)
+CExpression* CUtils::PexprScalarCmp(CMemoryPool* mp, const CColRef* pcrLeft, const CColRef* pcrRight, IMDType::ECmpType cmp_type)
 {
 	GPOS_ASSERT(NULL != pcrLeft);
 	GPOS_ASSERT(NULL != pcrRight);
 	GPOS_ASSERT(IMDType::EcmptOther > cmp_type);
-
-	CExpression *pexprLeft = PexprScalarIdent(mp, pcrLeft);
-	CExpression *pexprRight = PexprScalarIdent(mp, pcrRight);
-
+	CExpression* pexprLeft = PexprScalarIdent(mp, pcrLeft);
+	CExpression* pexprRight = PexprScalarIdent(mp, pcrRight);
 	return PexprScalarCmp(mp, pexprLeft, pexprRight, cmp_type);
 }
 
@@ -263,143 +258,94 @@ CUtils::PexprScalarCmp(CMemoryPool *mp, CExpression *pexprLeft,
 }
 
 // Generate a comparison expression over an expression and a column
-CExpression *
-CUtils::PexprScalarCmp(CMemoryPool *mp, CExpression *pexprLeft,
-					   const CColRef *pcrRight, CWStringConst strOp,
-					   IMDId *mdid_op)
+CExpression* CUtils::PexprScalarCmp(CMemoryPool* mp, CExpression* pexprLeft, const CColRef* pcrRight, CWStringConst strOp, IMDId* mdid_op)
 {
 	GPOS_ASSERT(NULL != pexprLeft);
 	GPOS_ASSERT(NULL != pcrRight);
-
 	IMDType::ECmpType cmp_type = ParseCmpType(mdid_op);
 	if (IMDType::EcmptOther != cmp_type)
 	{
 		IMDId *left_mdid = CScalar::PopConvert(pexprLeft->Pop())->MdidType();
 		IMDId *right_mdid = pcrRight->RetrieveType()->MDId();
-
-		if (CMDAccessorUtils::FCmpOrCastedCmpExists(left_mdid, right_mdid,
-													cmp_type))
+		if (CMDAccessorUtils::FCmpOrCastedCmpExists(left_mdid, right_mdid, cmp_type))
 		{
-			CExpression *pexprScCmp =
-				PexprScalarCmp(mp, pexprLeft, pcrRight, cmp_type);
+			CExpression* pexprScCmp = PexprScalarCmp(mp, pexprLeft, pcrRight, cmp_type);
 			mdid_op->Release();
-
 			return pexprScCmp;
 		}
 	}
-
-	return GPOS_NEW(mp) CExpression(
-		mp,
-		GPOS_NEW(mp) CScalarCmp(
-			mp, mdid_op, GPOS_NEW(mp) CWStringConst(mp, strOp.GetBuffer()),
-			cmp_type),
-		pexprLeft, PexprScalarIdent(mp, pcrRight));
+	return GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CScalarCmp(mp, mdid_op, GPOS_NEW(mp) CWStringConst(mp, strOp.GetBuffer()), cmp_type), pexprLeft, PexprScalarIdent(mp, pcrRight));
 }
 
 // Generate a comparison expression over two expressions
-CExpression *
-CUtils::PexprScalarCmp(CMemoryPool *mp, CExpression *pexprLeft,
-					   CExpression *pexprRight, CWStringConst strOp,
-					   IMDId *mdid_op)
+CExpression* CUtils::PexprScalarCmp(CMemoryPool *mp, CExpression *pexprLeft, CExpression *pexprRight, CWStringConst strOp, IMDId *mdid_op)
 {
 	GPOS_ASSERT(NULL != pexprLeft);
 	GPOS_ASSERT(NULL != pexprRight);
-
-	IMDType::ECmpType cmp_type = ParseCmpType(mdid_op);
+	/* I comment here */
+	// IMDType::ECmpType cmp_type = ParseCmpType(mdid_op);
+	IMDType::ECmpType cmp_type = IMDType::EcmptEq;
 	if (IMDType::EcmptOther != cmp_type)
 	{
 		IMDId *left_mdid = CScalar::PopConvert(pexprLeft->Pop())->MdidType();
 		IMDId *right_mdid = CScalar::PopConvert(pexprRight->Pop())->MdidType();
-
-		if (CMDAccessorUtils::FCmpOrCastedCmpExists(left_mdid, right_mdid,
-													cmp_type))
+		if (CMDAccessorUtils::FCmpOrCastedCmpExists(left_mdid, right_mdid, cmp_type))
 		{
-			CExpression *pexprScCmp =
-				PexprScalarCmp(mp, pexprLeft, pexprRight, cmp_type);
+			CExpression *pexprScCmp = PexprScalarCmp(mp, pexprLeft, pexprRight, cmp_type);
 			mdid_op->Release();
-
 			return pexprScCmp;
 		}
 	}
-
-	return GPOS_NEW(mp) CExpression(
-		mp,
-		GPOS_NEW(mp) CScalarCmp(
-			mp, mdid_op, GPOS_NEW(mp) CWStringConst(mp, strOp.GetBuffer()),
-			cmp_type),
-		pexprLeft, pexprRight);
+	return GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CScalarCmp(mp, mdid_op, GPOS_NEW(mp) CWStringConst(mp, strOp.GetBuffer()), cmp_type), pexprLeft, pexprRight);
 }
 
 // Generate a comparison expression over two expressions
-CExpression *
-CUtils::PexprScalarCmp(CMemoryPool *mp, CExpression *pexprLeft,
-					   CExpression *pexprRight, IMDId *mdid_scop)
+CExpression* CUtils::PexprScalarCmp(CMemoryPool *mp, CExpression *pexprLeft, CExpression *pexprRight, IMDId *mdid_scop)
 {
 	GPOS_ASSERT(NULL != pexprLeft);
 	GPOS_ASSERT(NULL != pexprRight);
 	GPOS_ASSERT(NULL != mdid_scop);
-
 	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
-
 	CExpression *pexprNewLeft = pexprLeft;
 	CExpression *pexprNewRight = pexprRight;
-
 	GPOS_ASSERT(pexprNewLeft != NULL);
 	GPOS_ASSERT(pexprNewRight != NULL);
-
-	CMDAccessorUtils::ApplyCastsForScCmp(mp, md_accessor, pexprNewLeft,
-										 pexprNewRight, mdid_scop);
-
+	CMDAccessorUtils::ApplyCastsForScCmp(mp, md_accessor, pexprNewLeft, pexprNewRight, mdid_scop);
 	mdid_scop->AddRef();
-	const IMDScalarOp *op = md_accessor->RetrieveScOp(mdid_scop);
+	const IMDScalarOp* op = md_accessor->RetrieveScOp(mdid_scop);
 	const CMDName mdname = op->Mdname();
 	CWStringConst strCmpOpName(mdname.GetMDName()->GetBuffer());
-
-	CExpression *pexprResult = GPOS_NEW(mp) CExpression(
-		mp,
-		GPOS_NEW(mp)
-			CScalarCmp(mp, mdid_scop,
-					   GPOS_NEW(mp) CWStringConst(mp, strCmpOpName.GetBuffer()),
-					   op->ParseCmpType()),
-		pexprNewLeft, pexprNewRight);
-
+	CExpression *pexprResult = GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CScalarCmp(mp, mdid_scop, GPOS_NEW(mp) CWStringConst(mp, strCmpOpName.GetBuffer()), op->ParseCmpType()), pexprNewLeft, pexprNewRight);
 	return pexprResult;
 }
 
 // Generate a comparison expression over two expressions
-CExpression *
-CUtils::PexprScalarCmp(CMemoryPool *mp, CExpression *pexprLeft,
-					   CExpression *pexprRight, IMDType::ECmpType cmp_type)
+CExpression* CUtils::PexprScalarCmp(CMemoryPool* mp, CExpression* pexprLeft, CExpression* pexprRight, IMDType::ECmpType cmp_type)
 {
 	GPOS_ASSERT(NULL != pexprLeft);
 	GPOS_ASSERT(NULL != pexprRight);
 	GPOS_ASSERT(IMDType::EcmptOther > cmp_type);
-
-	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
-
-	CExpression *pexprNewLeft = pexprLeft;
-	CExpression *pexprNewRight = pexprRight;
-
-	IMDId *op_mdid = CMDAccessorUtils::GetScCmpMdIdConsiderCasts(
-		md_accessor, pexprNewLeft, pexprNewRight, cmp_type);
-	CMDAccessorUtils::ApplyCastsForScCmp(mp, md_accessor, pexprNewLeft,
-										 pexprNewRight, op_mdid);
+	/* I comment here */
+	// CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
+	CExpression* pexprNewLeft = pexprLeft;
+	CExpression* pexprNewRight = pexprRight;
+	/* I comment here */
+	// IMDId *op_mdid = CMDAccessorUtils::GetScCmpMdIdConsiderCasts(md_accessor, pexprNewLeft, pexprNewRight, cmp_type);
+	// CMDAccessorUtils::ApplyCastsForScCmp(mp, md_accessor, pexprNewLeft, pexprNewRight, op_mdid);
+	IMDId* op_mdid = GPOS_NEW(mp) CMDIdTest(200);
 
 	GPOS_ASSERT(pexprNewLeft != NULL);
 	GPOS_ASSERT(pexprNewRight != NULL);
 
 	op_mdid->AddRef();
-	const IMDScalarOp *op = md_accessor->RetrieveScOp(op_mdid);
-	const CMDName mdname = op->Mdname();
+	/* I comment here */
+	// const IMDScalarOp *op = md_accessor->RetrieveScOp(op_mdid);
+	// const CMDName mdname = op->Mdname();
+	WCHAR str[] = L"=";
+	CWStringConst* cwstr = GPOS_NEW(mp) CWStringConst(str);
+	CMDName mdname = CMDName(mp, cwstr);
 	CWStringConst strCmpOpName(mdname.GetMDName()->GetBuffer());
-
-	CExpression *pexprResult = GPOS_NEW(mp) CExpression(
-		mp,
-		GPOS_NEW(mp) CScalarCmp(
-			mp, op_mdid,
-			GPOS_NEW(mp) CWStringConst(mp, strCmpOpName.GetBuffer()), cmp_type),
-		pexprNewLeft, pexprNewRight);
-
+	CExpression *pexprResult = GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CScalarCmp(mp, op_mdid, GPOS_NEW(mp) CWStringConst(mp, strCmpOpName.GetBuffer()), cmp_type), pexprNewLeft, pexprNewRight);
 	return pexprResult;
 }
 
@@ -1465,27 +1411,20 @@ CUtils::PexprScalarBoolOp(CMemoryPool *mp, CScalarBoolOp::EBoolOperator eboolop,
 }
 
 // generate a boolean scalar constant expression
-CExpression *
-CUtils::PexprScalarConstBool(CMemoryPool *mp, BOOL fval, BOOL is_null)
+CExpression* CUtils::PexprScalarConstBool(CMemoryPool *mp, BOOL fval, BOOL is_null)
 {
-	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
-
 	// create a BOOL datum
-	const IMDTypeBool *pmdtypebool = md_accessor->PtMDType<IMDTypeBool>();
+	const IMDTypeBool *pmdtypebool = GPOS_NEW(mp) MyTypeBool(mp);
 	IDatumBool *datum = pmdtypebool->CreateBoolDatum(mp, fval, is_null);
-
-	CExpression *pexpr = GPOS_NEW(mp)
-		CExpression(mp, GPOS_NEW(mp) CScalarConst(mp, (IDatum *) datum));
-
+	CExpression *pexpr = GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CScalarConst(mp, (IDatum *) datum));
 	return pexpr;
 }
 
 // generate an int4 scalar constant expression
 CExpression* CUtils::PexprScalarConstInt4(CMemoryPool *mp, INT val)
 {
-	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
 	// create a int4 datum
-	const IMDTypeInt4 *pmdtypeint4 = md_accessor->PtMDType<IMDTypeInt4>();
+	const IMDTypeInt4 *pmdtypeint4 = GPOS_NEW(mp) MyTypeInt4(mp);
 	IDatumInt4 *datum = pmdtypeint4->CreateInt4Datum(mp, val, false);
 	CExpression *pexpr = GPOS_NEW(mp) CExpression(mp, GPOS_NEW(mp) CScalarConst(mp, (IDatum *) datum));
 	return pexpr;
@@ -2846,15 +2785,13 @@ CUtils::FConstrainableType(IMDId *mdid_type)
 }
 
 // determine whether a type is an integer type
-BOOL
-CUtils::FIntType(IMDId *mdid_type)
+BOOL CUtils::FIntType(IMDId* mdid_type)
 {
-	CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
-	IMDType::ETypeInfo type_info =
-		md_accessor->RetrieveType(mdid_type)->GetDatumType();
-
-	return (IMDType::EtiInt2 == type_info || IMDType::EtiInt4 == type_info ||
-			IMDType::EtiInt8 == type_info);
+	/* I comment here */
+	// CMDAccessor *md_accessor = COptCtxt::PoctxtFromTLS()->Pmda();
+	// IMDType::ETypeInfo type_info = md_accessor->RetrieveType(mdid_type)->GetDatumType();
+	// return (IMDType::EtiInt2 == type_info || IMDType::EtiInt4 == type_info || IMDType::EtiInt8 == type_info);
+	return true;
 }
 
 // check if a binary operator uses only columns produced by its children
@@ -2985,8 +2922,7 @@ CUtils::IsHashable(CColRefArray *colref_array)
 }
 
 // check if given operator is a logical DML operator
-BOOL
-CUtils::FLogicalDML(COperator *pop)
+BOOL CUtils::FLogicalDML(COperator* pop)
 {
 	GPOS_ASSERT(NULL != pop);
 

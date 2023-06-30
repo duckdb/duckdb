@@ -5,15 +5,12 @@
 //	@doc:
 //		Implementation of column reference management
 //---------------------------------------------------------------------------
-
 #include "duckdb/optimizer/cascade/base/CColumnFactory.h"
-
 #include "duckdb/optimizer/cascade/base.h"
 #include "duckdb/optimizer/cascade/common/CAutoP.h"
 #include "duckdb/optimizer/cascade/common/CSyncHashtableAccessByKey.h"
 #include "duckdb/optimizer/cascade/memory/CAutoMemoryPool.h"
 #include "duckdb/optimizer/cascade/string/CWStringDynamic.h"
-
 #include "duckdb/optimizer/cascade/base/CColRefComputed.h"
 #include "duckdb/optimizer/cascade/base/CColRefTable.h"
 #include "duckdb/optimizer/cascade/operators/CExpression.h"
@@ -90,12 +87,10 @@ CColumnFactory::Initialize()
 //		Variant without name for computed columns
 //
 //---------------------------------------------------------------------------
-CColRef *
-CColumnFactory::PcrCreate(const IMDType *pmdtype, INT type_modifier)
+CColRef* CColumnFactory::PcrCreate(const IMDType* pmdtype, INT type_modifier)
 {
 	// increment atomic counter
 	ULONG id = m_aul++;
-
 	WCHAR wszFmt[] = GPOS_WSZ_LIT("ColRef_%04d");
 	CWStringDynamic *pstrTempName = GPOS_NEW(m_mp) CWStringDynamic(m_mp);
 	CAutoP<CWStringDynamic> a_pstrTempName(pstrTempName);
@@ -348,8 +343,7 @@ CColumnFactory::PcrsUsedInComputedCol(const CColRef *colref)
 //		Add the map between computed column and its used columns
 //
 //---------------------------------------------------------------------------
-void
-CColumnFactory::AddComputedToUsedColsMap(CExpression *pexpr)
+void CColumnFactory::AddComputedToUsedColsMap(CExpression* pexpr)
 {
 	GPOS_ASSERT(NULL != pexpr);
 	GPOS_ASSERT(NULL != m_phmcrcrs);

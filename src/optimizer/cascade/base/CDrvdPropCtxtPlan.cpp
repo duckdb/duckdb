@@ -184,32 +184,3 @@ CDrvdPropCtxtPlan::CopyCTEProducerProps(CDrvdPropPlan *pdpplan, ULONG ulCTEId)
 		m_phmulpdpCTEs->Insert(GPOS_NEW(m_mp) ULONG(ulCTEId), pdpplan);
 	GPOS_ASSERT(fInserted);
 }
-
-//---------------------------------------------------------------------------
-//	@function:
-//		CDrvdPropCtxtPlan::SetExpectedPartitionSelectors
-//
-//	@doc:
-//		Set the number of expected partition selectors based on the given
-//		operator and the given cost context
-//
-//---------------------------------------------------------------------------
-void
-CDrvdPropCtxtPlan::SetExpectedPartitionSelectors(COperator *pop, CCostContext *pcc)
-{
-	ULONG scan_id = 0;
-
-    if (COperator::EopPhysicalSerialUnionAll == pop->Eopid() && CPhysicalUnionAll::PopConvert(pop)->IsPartialIndex())
-	{
-		scan_id = CPhysicalUnionAll::PopConvert(pop)->UlScanIdPartialIndex();
-	}
-	else if (COperator::EopPhysicalPartitionSelector == pop->Eopid())
-	{
-		scan_id = CPhysicalPartitionSelector::PopConvert(pop)->ScanId();
-	}
-	else
-	{
-		return;
-	}
-	m_ulExpectedPartitionSelectors = pcc->Poc()->Prpp()->Pepp()->PppsRequired()->Ppim() ->UlExpectedPropagators(scan_id);
-}

@@ -9,10 +9,8 @@
 #include "duckdb/optimizer/cascade/base/CColRefSet.h"
 #include "duckdb/optimizer/cascade/base/COptCtxt.h"
 #include "duckdb/optimizer/cascade/operators/CPhysicalSort.h"
-
-#ifdef GPOS_DEBUG
 #include "duckdb/optimizer/cascade/error/CAutoTrace.h"
-#endif	// GPOS_DEBUG
+#include "duckdb/planner/operator/logical_order.hpp"
 
 using namespace gpopt;
 using namespace gpmd;
@@ -20,7 +18,6 @@ using namespace gpmd;
 // string encoding of null treatment
 const CHAR rgszNullCode[][16] = {"Auto", "NULLsFirst", "NULLsLast"};
 GPOS_CPL_ASSERT(COrderSpec::EntSentinel == GPOS_ARRAY_SIZE(rgszNullCode));
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -84,16 +81,6 @@ IOstream& COrderSpec::COrderExpression::OsPrint(IOstream &os) const
 
 	return os;
 }
-
-#ifdef GPOS_DEBUG
-void
-COrderSpec::COrderExpression::DbgPrint() const
-{
-	CMemoryPool *mp = COptCtxt::PoctxtFromTLS()->Pmp();
-	CAutoTrace at(mp);
-	(void) this->OsPrint(at.Os());
-}
-#endif	// GPOS_DEBUG
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -190,27 +177,17 @@ COrderSpec::FSatisfies(const COrderSpec *pos) const
 //		Add required enforcers enforcers to dynamic array
 //
 //---------------------------------------------------------------------------
-void
-COrderSpec::AppendEnforcers(CMemoryPool *mp,
-							CExpressionHandle &,  // exprhdl
-							CReqdPropPlan *
-#ifdef GPOS_DEBUG
-								prpp
-#endif	// GPOS_DEBUG
-							,
-							CExpressionArray *pdrgpexpr, CExpression *pexpr)
+void COrderSpec::AppendEnforcers(CMemoryPool* mp, CExpressionHandle &exprhdl, CReqdPropPlan* prpp, CExpressionArray* pdrgpexpr, unique_ptr<LogicalOperator> pexpr)
 {
 	GPOS_ASSERT(NULL != prpp);
 	GPOS_ASSERT(NULL != mp);
 	GPOS_ASSERT(NULL != pdrgpexpr);
 	GPOS_ASSERT(NULL != pexpr);
-	GPOS_ASSERT(this == prpp->Peo()->PosRequired() &&
-				"required plan properties don't match enforced order spec");
-
+	GPOS_ASSERT(this == prpp->Peo()->PosRequired() && "required plan properties don't match enforced order spec");
 	AddRef();
-	pexpr->AddRef();
-	CExpression *pexprSort = GPOS_NEW(mp)
-		CExpression(mp, GPOS_NEW(mp) CPhysicalSort(mp, this), pexpr);
+	vector<BoundOrderByNode> order;
+	auto pexprSort = GPOS_NEW(mp) LogicalOrder(order);
+	pexprSort->AddChild(std::move(pexpr));
 	pdrgpexpr->Append(pexprSort);
 }
 
@@ -223,8 +200,7 @@ COrderSpec::AppendEnforcers(CMemoryPool *mp,
 //		Hash of components
 //
 //---------------------------------------------------------------------------
-ULONG
-COrderSpec::HashValue() const
+ULONG COrderSpec::HashValue() const
 {
 	ULONG ulHash = 0;
 	ULONG arity = m_pdrgpoe->Size();
@@ -248,35 +224,26 @@ COrderSpec::HashValue() const
 //		Return a copy of the order spec with remapped columns
 //
 //---------------------------------------------------------------------------
-COrderSpec *
-COrderSpec::PosCopyWithRemappedColumns(CMemoryPool *mp,
-									   UlongToColRefMap *colref_mapping,
-									   BOOL must_exist)
+COrderSpec* COrderSpec::PosCopyWithRemappedColumns(CMemoryPool* mp, UlongToColRefMap* colref_mapping, BOOL must_exist)
 {
-	COrderSpec *pos = GPOS_NEW(mp) COrderSpec(mp);
-
+	COrderSpec* pos = GPOS_NEW(mp) COrderSpec(mp);
 	const ULONG num_cols = m_pdrgpoe->Size();
 	for (ULONG ul = 0; ul < num_cols; ul++)
 	{
 		COrderExpression *poe = (*m_pdrgpoe)[ul];
 		IMDId *mdid = poe->GetMdIdSortOp();
 		mdid->AddRef();
-
-		const CColRef *colref = poe->Pcr();
+		const CColRef* colref = poe->Pcr();
 		ULONG id = colref->Id();
 		CColRef *pcrMapped = colref_mapping->Find(&id);
 		if (NULL == pcrMapped)
 		{
 			if (must_exist)
 			{
-				CColumnFactory *col_factory = COptCtxt::PoctxtFromTLS()->Pcf();
+				CColumnFactory* col_factory = COptCtxt::PoctxtFromTLS()->Pcf();
 				// not found in hashmap, so create a new colref and add to hashmap
 				pcrMapped = col_factory->PcrCopy(colref);
-
-#ifdef GPOS_DEBUG
-				BOOL result =
-#endif	// GPOS_DEBUG
-					colref_mapping->Insert(GPOS_NEW(mp) ULONG(id), pcrMapped);
+				BOOL result = colref_mapping->Insert(GPOS_NEW(mp) ULONG(id), pcrMapped);
 				GPOS_ASSERT(result);
 			}
 			else
@@ -284,11 +251,9 @@ COrderSpec::PosCopyWithRemappedColumns(CMemoryPool *mp,
 				pcrMapped = const_cast<CColRef *>(colref);
 			}
 		}
-
 		COrderSpec::ENullTreatment ent = poe->Ent();
 		pos->Append(mdid, pcrMapped, ent);
 	}
-
 	return pos;
 }
 
@@ -300,29 +265,23 @@ COrderSpec::PosCopyWithRemappedColumns(CMemoryPool *mp,
 //		Return a copy of the order spec after excluding the given columns
 //
 //---------------------------------------------------------------------------
-COrderSpec *
-COrderSpec::PosExcludeColumns(CMemoryPool *mp, CColRefSet *pcrs)
+COrderSpec* COrderSpec::PosExcludeColumns(CMemoryPool *mp, CColRefSet *pcrs)
 {
 	GPOS_ASSERT(NULL != pcrs);
-
 	COrderSpec *pos = GPOS_NEW(mp) COrderSpec(mp);
-
 	const ULONG num_cols = m_pdrgpoe->Size();
 	for (ULONG ul = 0; ul < num_cols; ul++)
 	{
-		COrderExpression *poe = (*m_pdrgpoe)[ul];
-		const CColRef *colref = poe->Pcr();
-
+		COrderExpression* poe = (*m_pdrgpoe)[ul];
+		const CColRef* colref = poe->Pcr();
 		if (pcrs->FMember(colref))
 		{
 			continue;
 		}
-
-		IMDId *mdid = poe->GetMdIdSortOp();
+		IMDId* mdid = poe->GetMdIdSortOp();
 		mdid->AddRef();
 		pos->Append(mdid, colref, poe->Ent());
 	}
-
 	return pos;
 }
 

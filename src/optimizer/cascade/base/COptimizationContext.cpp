@@ -112,9 +112,7 @@ BOOL COptimizationContext::FEqualForStats(const COptimizationContext *pocLeft, c
 {
 	GPOS_ASSERT(NULL != pocLeft);
 	GPOS_ASSERT(NULL != pocRight);
-	return pocLeft->GetReqdRelationalProps()->PcrsStat()->Equals(pocRight->GetReqdRelationalProps()->PcrsStat()) &&
-		   pocLeft->Pdrgpstat()->Equals(pocRight->Pdrgpstat()) &&
-		   pocLeft->Prpp()->Pepp()->PpfmDerived()->Equals(pocRight->Prpp()->Pepp()->PpfmDerived());
+	return pocLeft->GetReqdRelationalProps()->PcrsStat()->Equals(pocRight->GetReqdRelationalProps()->PcrsStat()) && pocLeft->Pdrgpstat()->Equals(pocRight->Pdrgpstat());
 }
 
 //---------------------------------------------------------------------------
@@ -173,23 +171,6 @@ BOOL COptimizationContext::FEqualContextIds(COptimizationContextArray *pdrgpocFs
 		fEqual = (*pdrgpocFst)[ul]->Id() == (*pdrgpocSnd)[ul]->Id();
 	}
 	return fEqual;
-}
-
-//---------------------------------------------------------------------------
-//	@function:
-//		COptimizationContext::FOptimizeMotion
-//
-//	@doc:
-//		Check if a Motion node should be optimized for the given context
-//
-//---------------------------------------------------------------------------
-BOOL COptimizationContext::FOptimizeMotion(CMemoryPool* mp, CGroupExpression* pgexprParent, CGroupExpression *pgexprMotion, COptimizationContext *poc, ULONG	ulSearchStages)
-{
-	GPOS_ASSERT(NULL != pgexprMotion);
-	GPOS_ASSERT(NULL != poc);
-	GPOS_ASSERT(CUtils::FPhysicalMotion(pgexprMotion->Pop()));
-	CPhysicalMotion *pop = CPhysicalMotion::PopConvert(pgexprMotion->Pop());
-	return poc->Prpp()->Ped()->FCompatible(pop->Pds());
 }
 
 //---------------------------------------------------------------------------
