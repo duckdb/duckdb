@@ -1,7 +1,4 @@
 //---------------------------------------------------------------------------
-//	Greenplum Database
-//	Copyright (C) 2009 Greenplum, Inc.
-//
 //	@filename:
 //		CBinding.cpp
 //
@@ -9,9 +6,7 @@
 //		Implementation of Binding structure
 //---------------------------------------------------------------------------
 #include "duckdb/optimizer/cascade/search/CBinding.h"
-
 #include "duckdb/optimizer/cascade/base.h"
-
 #include "duckdb/optimizer/cascade/operators/CPattern.h"
 #include "duckdb/optimizer/cascade/search/CGroupProxy.h"
 #include "duckdb/optimizer/cascade/search/CMemo.h"
@@ -26,11 +21,9 @@ using namespace gpopt;
 //		Move cursor within a group (initialize if NULL)
 //
 //---------------------------------------------------------------------------
-CGroupExpression *
-CBinding::PgexprNext(CGroup *pgroup, CGroupExpression *pgexpr) const
+CGroupExpression* CBinding::PgexprNext(CGroup *pgroup, CGroupExpression *pgexpr) const
 {
 	CGroupProxy gp(pgroup);
-
 	if (pgroup->FScalar())
 	{
 		// initialize
@@ -38,14 +31,11 @@ CBinding::PgexprNext(CGroup *pgroup, CGroupExpression *pgexpr) const
 		{
 			return gp.PgexprFirst();
 		}
-
 		return gp.PgexprNext(pgexpr);
 	}
-
 	// for non-scalar group, we only consider logical expressions in bindings
 	return gp.PgexprNextLogical(pgexpr);
 }
-
 
 //---------------------------------------------------------------------------
 //	@function:
@@ -57,38 +47,24 @@ CBinding::PgexprNext(CGroup *pgroup, CGroupExpression *pgexpr) const
 //		Given the pattern determine if we need to re-use the pattern operators;
 //
 //---------------------------------------------------------------------------
-CExpression *
-CBinding::PexprExpandPattern(CExpression *pexprPattern, ULONG ulPos,
-							 ULONG arity)
+LogicalOperator* CBinding::PexprExpandPattern(LogicalOperator* pexprPattern, ULONG ulPos, ULONG arity)
 {
-	GPOS_ASSERT_IMP(pexprPattern->Pop()->FPattern(),
-					!CPattern::PopConvert(pexprPattern->Pop())->FLeaf());
-
-	// re-use tree pattern
-	if (COperator::EopPatternTree == pexprPattern->Pop()->Eopid() ||
-		COperator::EopPatternMultiTree == pexprPattern->Pop()->Eopid())
-	{
-		return pexprPattern;
-	}
+	GPOS_ASSERT_IMP(pexprPattern->Pop()->FPattern(), !CPattern::PopConvert(pexprPattern->Pop())->FLeaf());
 
 	// re-use first child if it is a multi-leaf/tree
-	if (0 < pexprPattern->Arity() &&
-		CPattern::FMultiNode((*pexprPattern)[0]->Pop()))
+	if (0 < pexprPattern->Arity())
 	{
 		GPOS_ASSERT(pexprPattern->Arity() <= 2);
-
 		if (ulPos == arity - 1)
 		{
 			// special-case last child
-			return (*pexprPattern)[pexprPattern->Arity() - 1];
+			return pexprPattern->children[pexprPattern->Arity() - 1].get();
 		}
-
 		// otherwise re-use multi-leaf/tree child
-		return (*pexprPattern)[0];
+		return pexprPattern->children[0].get();
 	}
 	GPOS_ASSERT(pexprPattern->Arity() > ulPos);
-
-	return (*pexprPattern)[ulPos];
+	return pexprPattern->children[ulPos].get();
 }
 
 
@@ -100,16 +76,10 @@ CBinding::PexprExpandPattern(CExpression *pexprPattern, ULONG ulPos,
 //		Assemble expression; substitute operator with pattern as necessary
 //
 //---------------------------------------------------------------------------
-CExpression *
-CBinding::PexprFinalize(CMemoryPool *mp, CGroupExpression *pgexpr,
-						CExpressionArray *pdrgpexpr)
+unique_ptr<LogicalOperator> CBinding::PexprFinalize(CMemoryPool *mp, CGroupExpression *pgexpr, ExpressionArray *pdrgpexpr)
 {
-	COperator *pop = pgexpr->Pop();
-
-	pop->AddRef();
-	CExpression *pexpr = GPOS_NEW(mp)
-		CExpression(mp, pop, pgexpr, pdrgpexpr, NULL /*input_stats*/);
-
+	LogicalOperator* pop = pgexpr->Pop();
+	auto pexpr = make_uniq_mp<LogicalOperator>(pop, pgexpr, pdrgpexpr, NULL);
 	return pexpr;
 }
 
@@ -123,9 +93,7 @@ CBinding::PexprFinalize(CMemoryPool *mp, CGroupExpression *pgexpr,
 //		Keep root node fixed;
 //
 //---------------------------------------------------------------------------
-CExpression *
-CBinding::PexprExtract(CMemoryPool *mp, CGroupExpression *pgexpr,
-					   CExpression *pexprPattern, CExpression *pexprLast)
+unique_ptr<LogicalOperator> CBinding::PexprExtract(CMemoryPool* mp, CGroupExpression* pgexpr, unique_ptr<LogicalOperator> pexprPattern, unique_ptr<LogicalOperator> pexprLast)
 {
 	GPOS_CHECK_ABORT;
 
