@@ -94,7 +94,7 @@ struct WindowInputColumn {
 		}
 	}
 
-	inline bool CellIsNull(idx_t i) {
+	inline bool CellIsNull(idx_t i) const {
 		D_ASSERT(target);
 		D_ASSERT(i < count);
 		return FlatVector::IsNull(*target, input_expr.scalar ? 0 : i);
@@ -134,22 +134,13 @@ struct WindowBoundariesState {
 		}
 	}
 
-	WindowBoundariesState(BoundWindowExpression &wexpr, const idx_t input_size)
-	    : type(wexpr.type), input_size(input_size), start_boundary(wexpr.start), end_boundary(wexpr.end),
-	      partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
-	      range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
-	      has_preceding_range(wexpr.start == WindowBoundary::EXPR_PRECEDING_RANGE ||
-	                          wexpr.end == WindowBoundary::EXPR_PRECEDING_RANGE),
-	      has_following_range(wexpr.start == WindowBoundary::EXPR_FOLLOWING_RANGE ||
-	                          wexpr.end == WindowBoundary::EXPR_FOLLOWING_RANGE),
-	      needs_peer(BoundaryNeedsPeer(wexpr.end) || wexpr.type == ExpressionType::WINDOW_CUME_DIST) {
-	}
+	WindowBoundariesState(BoundWindowExpression &wexpr, const idx_t input_size);
 
-	void Update(const idx_t row_idx, WindowInputColumn &range_collection, const idx_t chunk_idx,
+	void Update(const idx_t row_idx, const WindowInputColumn &range_collection, const idx_t chunk_idx,
 	            WindowInputExpression &boundary_start, WindowInputExpression &boundary_end,
 	            const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
-	void Bounds(DataChunk &bounds, idx_t row_idx, WindowInputColumn &range, const idx_t count,
+	void Bounds(DataChunk &bounds, idx_t row_idx, const WindowInputColumn &range, const idx_t count,
 	            WindowInputExpression &boundary_start, WindowInputExpression &boundary_end,
 	            const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
@@ -176,10 +167,45 @@ struct WindowBoundariesState {
 	FrameBounds prev;
 };
 
+class WindowExecutorState {
+public:
+	WindowExecutorState(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count,
+	                    const ValidityMask &partition_mask_p, const ValidityMask &order_mask_p);
+	virtual ~WindowExecutorState() {
+	}
+
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
+	void UpdateBounds(idx_t row_idx, DataChunk &input_chunk, const WindowInputColumn &range);
+
+	// Frame management
+	const ValidityMask &partition_mask;
+	const ValidityMask &order_mask;
+	WindowBoundariesState state;
+	DataChunk bounds;
+
+	// LEAD/LAG Evaluation
+	WindowInputExpression leadlag_offset;
+	WindowInputExpression leadlag_default;
+
+	// evaluate boundaries if present. Parser has checked boundary types.
+	WindowInputExpression boundary_start;
+	WindowInputExpression boundary_end;
+};
 
 class WindowExecutor {
 public:
-	WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count);
+	WindowExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
+	               const ValidityMask &partition_mask, const ValidityMask &order_mask);
 	virtual ~WindowExecutor() {
 	}
 
@@ -190,34 +216,27 @@ public:
 	virtual void Finalize() {
 	}
 
-	void Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &result, const ValidityMask &partition_mask,
-	              const ValidityMask &order_mask);
+	virtual unique_ptr<WindowExecutorState> GetExecutorState() const;
+
+	void Evaluate(idx_t row_idx, DataChunk &input_chunk, Vector &result, WindowExecutorState &lstate) const;
 
 protected:
 	// The function
 	BoundWindowExpression &wexpr;
-
-	// Frame management
-	WindowBoundariesState state;
-	DataChunk bounds;
+	ClientContext &context;
+	const idx_t payload_count;
+	const ValidityMask &partition_mask;
+	const ValidityMask &order_mask;
 
 	// Expression collections
 	DataChunk payload_collection;
 	ExpressionExecutor payload_executor;
 	DataChunk payload_chunk;
 
-	// LEAD/LAG Evaluation
-	WindowInputExpression leadlag_offset;
-	WindowInputExpression leadlag_default;
-
-	// evaluate boundaries if present. Parser has checked boundary types.
-	WindowInputExpression boundary_start;
-	WindowInputExpression boundary_end;
-
 	// evaluate RANGE expressions, if needed
 	WindowInputColumn range;
 
-	virtual void EvaluateInternal(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) = 0;
+	virtual void EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count, idx_t row_idx) const = 0;
 };
 
 class WindowAggregateExecutor : public WindowExecutor {
@@ -225,8 +244,9 @@ public:
 	bool IsConstantAggregate();
 	bool IsCustomAggregate();
 
-	WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &partition_mask,
-	                        const idx_t count, WindowAggregationMode mode);
+	WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
+	                        const ValidityMask &partition_mask, const ValidityMask &order_mask,
+	                        WindowAggregationMode mode);
 
 	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count) override;
 	void Finalize() override;
@@ -240,82 +260,66 @@ protected:
 	// aggregate computation algorithm
 	unique_ptr<WindowAggregateState> aggregate_state;
 
-	void EvaluateInternal(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) override;
+	void EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count, idx_t row_idx) const override;
 };
 
 class WindowRowNumberExecutor : public WindowExecutor {
 public:
-	WindowRowNumberExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
-	    : WindowExecutor(wexpr, context, count) {
-	}
+	WindowRowNumberExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
+	                        const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
 protected:
-	void EvaluateInternal(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) override;
+	void EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count, idx_t row_idx) const override;
 };
 
 //	Base class for non-aggregate functions that use peer boundaries
-class WindowPeerExecutor : public WindowExecutor {
+class WindowRankExecutor : public WindowExecutor {
 public:
-	WindowPeerExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
-	    : WindowExecutor(wexpr, context, count) {
-	}
+	WindowRankExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
+	                   const ValidityMask &partition_mask, const ValidityMask &order_mask);
+
+	unique_ptr<WindowExecutorState> GetExecutorState() const override;
 
 protected:
-	uint64_t dense_rank = 1;
-	uint64_t rank_equal = 0;
-	uint64_t rank = 1;
-
-	void NextRank(idx_t partition_begin, idx_t peer_begin, idx_t row_idx);
+	void EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count, idx_t row_idx) const override;
 };
 
-class WindowRankExecutor : public WindowPeerExecutor {
+class WindowDenseRankExecutor : public WindowExecutor {
 public:
-	WindowRankExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
-	    : WindowPeerExecutor(wexpr, context, count) {
-	}
+	WindowDenseRankExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
+	                        const ValidityMask &partition_mask, const ValidityMask &order_mask);
+
+	unique_ptr<WindowExecutorState> GetExecutorState() const override;
 
 protected:
-	void EvaluateInternal(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) override;
+	void EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count, idx_t row_idx) const override;
 };
 
-class WindowDenseRankExecutor : public WindowPeerExecutor {
+class WindowPercentRankExecutor : public WindowExecutor {
 public:
-	WindowDenseRankExecutor(BoundWindowExpression &wexpr, ClientContext &context, const ValidityMask &order_mask_p,
-	                        const idx_t count)
-	    : WindowPeerExecutor(wexpr, context, count), order_mask(order_mask_p) {
-	}
+	WindowPercentRankExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
+	                          const ValidityMask &partition_mask, const ValidityMask &order_mask);
+
+	unique_ptr<WindowExecutorState> GetExecutorState() const override;
 
 protected:
-	const ValidityMask &order_mask;
-	void EvaluateInternal(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) override;
-};
-
-class WindowPercentRankExecutor : public WindowPeerExecutor {
-public:
-	WindowPercentRankExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
-	    : WindowPeerExecutor(wexpr, context, count) {
-	}
-
-protected:
-	void EvaluateInternal(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) override;
+	void EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count, idx_t row_idx) const override;
 };
 
 class WindowCumeDistExecutor : public WindowExecutor {
 public:
-	WindowCumeDistExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
-	    : WindowExecutor(wexpr, context, count) {
-	}
+	WindowCumeDistExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
+	                       const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
 protected:
-	void EvaluateInternal(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) override;
+	void EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count, idx_t row_idx) const override;
 };
 
 // Base class for non-aggregate functions that have a payload
 class WindowValueExecutor : public WindowExecutor {
 public:
-	WindowValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
-	    : WindowExecutor(wexpr, context, count) {
-	}
+	WindowValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
+	                    const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
 	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count) override;
 
@@ -327,51 +331,46 @@ protected:
 //
 class WindowNtileExecutor : public WindowValueExecutor {
 public:
-	WindowNtileExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
-	    : WindowValueExecutor(wexpr, context, count) {
-	}
+	WindowNtileExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
+	                    const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
 protected:
-	void EvaluateInternal(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) override;
+	void EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count, idx_t row_idx) const override;
 };
 class WindowLeadLagExecutor : public WindowValueExecutor {
 public:
-	WindowLeadLagExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
-	    : WindowValueExecutor(wexpr, context, count) {
-	}
+	WindowLeadLagExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
+	                      const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
 protected:
-	void EvaluateInternal(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) override;
+	void EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count, idx_t row_idx) const override;
 };
 
 class WindowFirstValueExecutor : public WindowValueExecutor {
 public:
-	WindowFirstValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
-	    : WindowValueExecutor(wexpr, context, count) {
-	}
+	WindowFirstValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
+	                         const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
 protected:
-	void EvaluateInternal(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) override;
+	void EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count, idx_t row_idx) const override;
 };
 
 class WindowLastValueExecutor : public WindowValueExecutor {
 public:
-	WindowLastValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
-	    : WindowValueExecutor(wexpr, context, count) {
-	}
+	WindowLastValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
+	                        const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
 protected:
-	void EvaluateInternal(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) override;
+	void EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count, idx_t row_idx) const override;
 };
 
 class WindowNthValueExecutor : public WindowValueExecutor {
 public:
-	WindowNthValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count)
-	    : WindowValueExecutor(wexpr, context, count) {
-	}
+	WindowNthValueExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
+	                       const ValidityMask &partition_mask, const ValidityMask &order_mask);
 
 protected:
-	void EvaluateInternal(DataChunk &bounds, Vector &result, idx_t count, idx_t row_idx) override;
+	void EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count, idx_t row_idx) const override;
 };
 
 } // namespace duckdb

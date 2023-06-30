@@ -81,38 +81,37 @@ PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expr
 
 static unique_ptr<WindowExecutor> WindowExecutorFactory(BoundWindowExpression &wexpr, ClientContext &context,
                                                         const ValidityMask &partition_mask,
-                                                        const ValidityMask &order_mask, const idx_t count,
+                                                        const ValidityMask &order_mask, const idx_t payload_count,
                                                         WindowAggregationMode mode) {
 	switch (wexpr.type) {
 	case ExpressionType::WINDOW_AGGREGATE:
-		return make_uniq<WindowAggregateExecutor>(wexpr, context, partition_mask, count, mode);
+		return make_uniq<WindowAggregateExecutor>(wexpr, context, payload_count, partition_mask, order_mask, mode);
 	case ExpressionType::WINDOW_ROW_NUMBER:
-		return make_uniq<WindowRowNumberExecutor>(wexpr, context, count);
+		return make_uniq<WindowRowNumberExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
 	case ExpressionType::WINDOW_RANK_DENSE:
-		return make_uniq<WindowDenseRankExecutor>(wexpr, context, order_mask, count);
+		return make_uniq<WindowDenseRankExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
 	case ExpressionType::WINDOW_RANK:
-		return make_uniq<WindowRankExecutor>(wexpr, context, count);
+		return make_uniq<WindowRankExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
 	case ExpressionType::WINDOW_PERCENT_RANK:
-		return make_uniq<WindowPercentRankExecutor>(wexpr, context, count);
+		return make_uniq<WindowPercentRankExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
 	case ExpressionType::WINDOW_CUME_DIST:
-		return make_uniq<WindowCumeDistExecutor>(wexpr, context, count);
+		return make_uniq<WindowCumeDistExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
 	case ExpressionType::WINDOW_NTILE:
-		return make_uniq<WindowNtileExecutor>(wexpr, context, count);
+		return make_uniq<WindowNtileExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
-		return make_uniq<WindowLeadLagExecutor>(wexpr, context, count);
+		return make_uniq<WindowLeadLagExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
 	case ExpressionType::WINDOW_FIRST_VALUE:
-		return make_uniq<WindowFirstValueExecutor>(wexpr, context, count);
+		return make_uniq<WindowFirstValueExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
 	case ExpressionType::WINDOW_LAST_VALUE:
-		return make_uniq<WindowLastValueExecutor>(wexpr, context, count);
+		return make_uniq<WindowLastValueExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
 	case ExpressionType::WINDOW_NTH_VALUE:
-		return make_uniq<WindowNthValueExecutor>(wexpr, context, count);
+		return make_uniq<WindowNthValueExecutor>(wexpr, context, payload_count, partition_mask, order_mask);
 		break;
 	default:
 		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.type));
 	}
 }
-
 
 //===--------------------------------------------------------------------===//
 // Sink
@@ -200,8 +199,10 @@ public:
 class WindowLocalSourceState : public LocalSourceState {
 public:
 	using HashGroupPtr = unique_ptr<PartitionGlobalHashGroup>;
-	using WindowExecutorPtr = unique_ptr<WindowExecutor>;
-	using WindowExecutors = vector<WindowExecutorPtr>;
+	using ExecutorPtr = unique_ptr<WindowExecutor>;
+	using Executors = vector<ExecutorPtr>;
+	using LocalStatePtr = unique_ptr<WindowExecutorState>;
+	using LocalStates = vector<LocalStatePtr>;
 
 	WindowLocalSourceState(const PhysicalWindow &op_p, ExecutionContext &context, WindowGlobalSourceState &gsource)
 	    : context(context.client), op(op_p), gsink(gsource.gsink) {
@@ -240,7 +241,8 @@ public:
 	vector<validity_t> order_bits;
 	ValidityMask order_mask;
 	//! The current execution functions
-	WindowExecutors window_execs;
+	Executors executors;
+	LocalStates local_states;
 
 	//! The read partition
 	idx_t hash_bin;
@@ -342,12 +344,13 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 	}
 
 	// Create the executors for each function
-	window_execs.clear();
+	local_states.clear();
+	executors.clear();
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
 		D_ASSERT(op.select_list[expr_idx]->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
 		auto &wexpr = op.select_list[expr_idx]->Cast<BoundWindowExpression>();
 		auto wexec = WindowExecutorFactory(wexpr, context, partition_mask, order_mask, count, gstate.mode);
-		window_execs.emplace_back(std::move(wexec));
+		executors.emplace_back(std::move(wexec));
 	}
 
 	//	First pass over the input without flushing
@@ -362,15 +365,16 @@ void WindowLocalSourceState::GeneratePartition(WindowGlobalSinkState &gstate, co
 		}
 
 		//	TODO: Parallelization opportunity
-		for (auto &wexec : window_execs) {
+		for (auto &wexec : executors) {
 			wexec->Sink(input_chunk, input_idx, scanner->Count());
 		}
 		input_idx += input_chunk.size();
 	}
 
 	//	TODO: Parallelization opportunity
-	for (auto &wexec : window_execs) {
+	for (auto &wexec : executors) {
 		wexec->Finalize();
+		local_states.emplace_back(wexec->GetExecutorState());
 	}
 
 	// External scanning assumes all blocks are swizzled.
@@ -391,9 +395,11 @@ void WindowLocalSourceState::Scan(DataChunk &result) {
 	scanner->Scan(input_chunk);
 
 	output_chunk.Reset();
-	for (idx_t expr_idx = 0; expr_idx < window_execs.size(); ++expr_idx) {
-		auto &executor = *window_execs[expr_idx];
-		executor.Evaluate(position, input_chunk, output_chunk.data[expr_idx], partition_mask, order_mask);
+	for (idx_t expr_idx = 0; expr_idx < executors.size(); ++expr_idx) {
+		auto &executor = *executors[expr_idx];
+		auto &lstate = *local_states[expr_idx];
+		auto &result = output_chunk.data[expr_idx];
+		executor.Evaluate(position, input_chunk, result, lstate);
 	}
 	output_chunk.SetCardinality(input_chunk);
 	output_chunk.Verify();
