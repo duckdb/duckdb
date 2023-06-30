@@ -189,40 +189,14 @@ CPartialPlan::CostCompute(CMemoryPool *mp)
 	RaiseExceptionIfStatsNull(stats);
 
 	stats->AddRef();
-	ICostModel::SCostingInfo ci(mp, exprhdl.UlNonScalarChildren(),
-								GPOS_NEW(mp) ICostModel::CCostingStats(stats));
+	ICostModel::SCostingInfo ci(mp, exprhdl.UlNonScalarChildren(), GPOS_NEW(mp) ICostModel::CCostingStats(stats));
 
 	ICostModel *pcm = COptCtxt::PoctxtFromTLS()->GetCostModel();
 	ExtractChildrenCostingInfo(mp, pcm, exprhdl, &ci);
-
-	CDistributionSpec::EDistributionPartitioningType edpt =
-		CDistributionSpec::EdptSentinel;
-	if (NULL != m_prpp->Ped())
-	{
-		edpt = m_prpp->Ped()->PdsRequired()->Edpt();
-	}
-
 	COperator *pop = m_pgexpr->Pop();
-	BOOL fDataPartitioningMotion =
-		CUtils::FPhysicalMotion(pop) &&
-		CDistributionSpec::EdptPartitioned ==
-			CPhysicalMotion::PopConvert(pop)->Pds()->Edpt();
 
 	// extract rows from stats
 	DOUBLE rows = m_pgexpr->Pgroup()->Pstats()->Rows().Get();
-	if (fDataPartitioningMotion ||	// root operator is known to distribute data across segments
-		NULL ==
-			m_prpp
-				->Ped() ||	// required distribution not known yet, we assume data partitioning since we need a lower-bound on number of rows
-		CDistributionSpec::EdptPartitioned ==
-			edpt ||	 // required distribution is known to be partitioned, we assume data partitioning since we need a lower-bound on number of rows
-		CDistributionSpec::EdptUnknown ==
-			edpt  // required distribution is not known to be partitioned (e.g., ANY distribution), we assume data partitioning since we need a lower-bound on number of rows
-	)
-	{
-		// use rows per host as a cardinality lower bound
-		rows = pcm->DRowsPerHost(CDouble(rows)).Get();
-	}
 	ci.SetRows(rows);
 
 	// extract width from stats
