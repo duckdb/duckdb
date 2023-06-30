@@ -138,7 +138,7 @@ runs:
       if: ${{ inputs.run_tests == 1 }}
       shell: bash
       run: |
-        ${{ inputs.python_name }} scripts/run_tests_one_by_one.py ${{ input.unittest_path }} 
+        ${{ inputs.python_name }} scripts/run_tests_one_by_one.py ${{ inputs.unittest_path }} 
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
