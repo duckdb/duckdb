@@ -8,7 +8,7 @@
 duckdb_extension_load(azure
     LOAD_TESTS
     GIT_URL https://github.com/samansmink/azure-extension
-    GIT_TAG d692c1c5f6bb43af34525feff502c60a4413c519
+    GIT_TAG 8441330242fa8b84fbaebbe478c46b46db408bf8
 )
 
 duckdb_extension_load(aws

@@ -30,6 +30,9 @@ inputs:
   build_dir:
     description: 'DuckDB source directory to run the build in'
     default: '.'
+  openssl_path:
+    description: 'Directory of OpenSSL installation'
+    default: ''
   post_install:
     description: 'Post-install scripts to run'
     default: ''
@@ -53,7 +56,7 @@ inputs:
     default: 0
   osx_arch:
     description: 'Build specific architecture for OSX'
-    default: 0
+    default: ''
   aarch64_cross_compile:
     description: 'Enable Linux aarch64 cross-compiling'
     default: 0
@@ -79,11 +82,13 @@ runs:
         echo "EXTENSION_CONFIGS=$EXTENSION_CONFIGS" >> $GITHUB_ENV
 
     - name: Setup vcpkg
+      if: inputs.osx_universal == 0
       uses: lukka/run-vcpkg@v11
       with:
         vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
 
     - name: Set vcpkg env variables
+      if: inputs.osx_universal == 0
       shell: bash
       run: |
         echo "VCPKG_TOOLCHAIN_PATH=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
@@ -91,6 +96,7 @@ runs:
 
     # Todo: remove this after spatial no longer depends on it
     - name: Globally install OpenSSL (Spatial still depends on it to be available)
+      if: inputs.osx_universal == 0
       shell: bash
       run: |
         cd $VCPKG_ROOT && ./vcpkg install openssl ${{ inputs.target_vcpkg_target_triplet && format('--triplet={0}', inputs.target_vcpkg_target_triplet)}}
@@ -114,6 +120,7 @@ runs:
         OSX_BUILD_ARCH: ${{ inputs.osx_arch }}
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
+        OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
       run: |
         mkdir -p ~/.ssh
         ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts

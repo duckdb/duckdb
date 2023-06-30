@@ -244,11 +244,6 @@ jobs:
          key: ${{ github.job }}
          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
-     - name: Install OpenSSL
-       shell: bash
-       run: |
-         choco install openssl -y --force
-
      - uses: ./.github/actions/build_extensions
        with:
          vcpkg_target_triplet: x64-windows
