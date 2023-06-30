@@ -8,7 +8,7 @@ workflow for this is as follows:
 
 ### PR #1: breaking change to DuckDB
 - Commit breaking change to DuckDB
-- Fix breakage in duckdb-wasm, producing a patch with fix
+- Fix breakage in duckdb-wasm, producing a patch with fix (be wary of already existing patches)
 - Commit patch in `.github/patches/duckdb-wasm/*.patch` using a descriptive name
 
 ### PR #2: patch to duckdb-wasm

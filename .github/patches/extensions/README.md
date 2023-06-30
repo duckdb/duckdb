@@ -25,7 +25,7 @@ workflow for this is as follows:
 
 ### PR #1: breaking change to DuckDB
 - Commit breaking change to DuckDB
-- Fix breakage in extension X, producing a patch with fix
+- Fix breakage in extension X, producing a patch with fix (be wary of already existing patches)
 - Commit patch in `.github/patches/extensions/x/*.patch` using a descriptive name
 - enable APPLY_PATCHES for extension X in `.github/config/out_of_tree_extensions.cmake` (if not already enabled)
 
