@@ -180,7 +180,6 @@ jobs:
     env:
       DUCKDB_EXTENSION_SIGNING_PK: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
       AWS_DEFAULT_REGION: us-east-1
-      OSX_BUILD_UNIVERSAL: 1
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
 
     steps:
@@ -198,16 +197,6 @@ jobs:
           key: ${{ github.job }}
           save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
-      - name: Setup vcpkg
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
-
-      - name: Install OpenSSL
-        shell: bash
-        run: |
-          cd $VCPKG_ROOT && ./vcpkg install openssl --triplet=${{ matrix.vcpkg_triplet }}
-
       - uses: ./.github/actions/build_extensions
         with:
           treat_warn_as_error: 0
@@ -217,6 +206,7 @@ jobs:
           osx_arch: ${{ matrix.osx_arch }}
           toolchain_path: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
           openssl_path: ${{ env.VCPKG_ROOT }}/installed/${{ matrix.osx_arch }}
+          vcpkg_target_triplet: ${{ matrix.vcpkg_triplet }}
 
       - name: Sign Extension Binaries
         env:

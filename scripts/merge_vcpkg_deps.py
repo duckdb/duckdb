@@ -9,7 +9,7 @@ import sys
 # we need to pin the openssl version requiring us to also pin the vcpkg version here. When updating the vcpkg git hash
 # we probably want to change it here and in ('.github/actions/build_extensions/action.yml') at the same time
 
-merged_dependencies = ['openssl']
+merged_dependencies = []
 
 for file in sys.argv[1:]:
     f = open(file)

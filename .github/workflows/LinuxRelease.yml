@@ -189,23 +189,19 @@ jobs:
       with:
         aws-cli: 1
         ninja-build: 1
-        vcpkg: 1
-        openssl: 1
         ccache: 1
         ssh: 1
         python_alias: 1
 
     - uses: ./.github/actions/build_extensions
       with:
+        vcpkg_target_triplet: x64-linux
         post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         treat_warn_as_error: 0
-        toolchain_path: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
-        # Hacky way to pass openssl from vcpkg to spatial extension build: spatial should probably move to vcpkg instead
-        openssl_path: ${{ env.VCPKG_ROOT }}/installed/x64-linux
 
     - uses: actions/upload-artifact@v3
       with:
@@ -227,18 +223,11 @@ jobs:
 
       - uses: ./.github/actions/ubuntu_16_setup
         with:
-          openssl: 1
           aarch64_cross_compile: 1
-
-      - name: Configure OpenSSL path
-        shell: bash
-        run: |
-          export OPENSSL_ROOT_DIR=`pwd`/build/openssl/build
-          echo "OPENSSL_ROOT_DIR=$OPENSSL_ROOT_DIR" >> $GITHUB_ENV
 
       - uses: ./.github/actions/build_extensions
         with:
-          openssl_path: ${{ env.OPENSSL_ROOT_DIR }}
+          vcpkg_target_triplet: arm64-linux
           deploy_as: linux_arm64
           treat_warn_as_error: 0
           s3_id: ${{ secrets.S3_ID }}

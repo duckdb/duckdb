@@ -99,8 +99,6 @@ jobs:
       with:
          aws-cli: 1
          ninja-build: 1
-         vcpkg: 1
-         openssl: 1
          ccache: 1
          ssh: 1
          python_alias: 1
@@ -113,7 +111,6 @@ jobs:
         treat_warn_as_error: 0
         out_of_tree_ext: 0
         run_tests: 0
-        toolchain_path: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
 
     - uses: actions/upload-artifact@v3
       with:

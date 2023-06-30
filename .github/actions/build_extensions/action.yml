@@ -30,9 +30,6 @@ inputs:
   build_dir:
     description: 'DuckDB source directory to run the build in'
     default: '.'
-  openssl_path:
-    description: 'Directory of OpenSSL installation'
-    default: '/usr/local/ssl'
   post_install:
     description: 'Post-install scripts to run'
     default: ''
@@ -60,14 +57,14 @@ inputs:
   aarch64_cross_compile:
     description: 'Enable Linux aarch64 cross-compiling'
     default: 0
+  vcpkg_target_triplet:
+    description: 'Target triplet for installing vcpkg dependencies'
+    default: ''
   override_cc:
     description: 'Override C Compiler'
     default: ''
   override_cxx:
     description: 'Override CXX Compiler'
-    default: ''
-  toolchain_path:
-    description: 'Passes custom toolchain to CMake'
     default: ''
 
 runs:
@@ -78,21 +75,26 @@ runs:
       run: |
         export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_in_tree_extensions == 1 && '.github/config/in_tree_extensions.cmake' || ''}}"
         export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_out_of_tree_extensions == 1 && '.github/config/out_of_tree_extensions.cmake' || '' }}"
-        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_vcpkg_extensions == 1 && '.github/config/vcpkg_out_of_tree_extensions.cmake' || '' }}"
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_vcpkg_extensions == 1 && '.github/config/vcpkg_extensions.cmake' || '' }}"
         echo "EXTENSION_CONFIGS=$EXTENSION_CONFIGS" >> $GITHUB_ENV
 
-    # Install vcpkg if not already installed
     - name: Setup vcpkg
-      if: ${{ inputs.build_vcpkg_extensions && inputs.toolchain_path == '' }}
       uses: lukka/run-vcpkg@v11
       with:
         vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
 
-    - name: Set vcpkg path
-      if: ${{ inputs.build_vcpkg_extensions || inputs.toolchain_path != '' }}
+    - name: Set vcpkg env variables
       shell: bash
       run: |
         echo "VCPKG_TOOLCHAIN_PATH=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
+        echo "VCPKG_TARGET_TRIPLET=${{ inputs.vcpkg_target_triplet }}" >> $GITHUB_ENV
+
+    # Todo: remove this after spatial no longer depends on it
+    - name: Globally install OpenSSL (Spatial still depends on it to be available)
+      shell: bash
+      run: |
+        cd $VCPKG_ROOT && ./vcpkg install openssl ${{ inputs.target_vcpkg_target_triplet && format('--triplet={0}', inputs.target_vcpkg_target_triplet)}}
+        echo "OPENSSL_ROOT_DIR=$VCPKG_ROOT/installed/`vcpkg list | grep -o 'openssl:[a-z0-9]*-[a-z]*' | grep -o '[a-z0-9]*-[a-z]*' | head -n 1`" >> $GITHUB_ENV
 
     - name: Create combined vcpkg manifest
       if: ${{ inputs.build_vcpkg_extensions }}
@@ -106,9 +108,8 @@ runs:
       env:
         TREAT_WARNINGS_AS_ERRORS: ${{ inputs.treat_warn_as_error}}
         FORCE_WARN_UNUSED: 1
-        STATIC_OPENSSL: 1
+        STATIC_OPENSSL: 1 # TODO: no longer required?
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
-        OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }} # Necessary for spatial extension build: it doesn't detect the vcpkg install automatically
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
         OSX_BUILD_ARCH: ${{ inputs.osx_arch }}
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
@@ -136,6 +137,7 @@ runs:
         cd  ${{ inputs.build_dir}}
         ${{ inputs.post_install }}
 
+    # TODO move inside extension_upload script,
     - name: Deploy
       if: ${{ inputs.deploy_as != '' }}
       shell: bash
