@@ -124,6 +124,22 @@ idx_t PhysicalOperator::GetMaxThreadMemory(ClientContext &context) {
 	return (max_memory / num_threads) / 4;
 }
 
+bool PhysicalOperator::OperatorCachingAllowed(ExecutionContext &context) {
+	if (!context.client.config.enable_caching_operators) {
+		return false;
+	} else if (!context.pipeline) {
+		return false;
+	} else if (!context.pipeline->GetSink()) {
+		return false;
+	} else if (context.pipeline->GetSink()->RequiresBatchIndex()) {
+		return false;
+	} else if (context.pipeline->IsOrderDependent()) {
+		return false;
+	}
+
+	return true;
+}
+
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
@@ -239,20 +255,7 @@ OperatorResultType CachingPhysicalOperator::Execute(ExecutionContext &context, D
 #if STANDARD_VECTOR_SIZE >= 128
 	if (!state.initialized) {
 		state.initialized = true;
-		state.can_cache_chunk = true;
-
-		if (!context.client.config.enable_caching_operators) {
-			state.can_cache_chunk = false;
-		} else if (!context.pipeline || !caching_supported) {
-			state.can_cache_chunk = false;
-		} else if (!context.pipeline->GetSink()) {
-			// Disabling for pipelines without Sink, i.e. when pulling
-			state.can_cache_chunk = false;
-		} else if (context.pipeline->GetSink()->RequiresBatchIndex()) {
-			state.can_cache_chunk = false;
-		} else if (context.pipeline->IsOrderDependent()) {
-			state.can_cache_chunk = false;
-		}
+		state.can_cache_chunk = caching_supported && PhysicalOperator::OperatorCachingAllowed(context);
 	}
 	if (!state.can_cache_chunk) {
 		return child_result;

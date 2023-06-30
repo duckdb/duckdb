@@ -156,6 +156,30 @@ Value TransformDictionaryToMap(const PyDictionary &dict, const LogicalType &targ
 	return Value::MAP(ListType::GetChildType(map_type), std::move(elements));
 }
 
+Value TransformTupleToStruct(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN) {
+	auto tuple = py::cast<py::tuple>(ele);
+	auto size = py::len(tuple);
+
+	D_ASSERT(target_type.id() == LogicalTypeId::STRUCT);
+	auto child_types = StructType::GetChildTypes(target_type);
+	auto child_count = child_types.size();
+	if (size != child_count) {
+		throw InvalidInputException("Tried to create a STRUCT value from a tuple containing %d elements, but the "
+		                            "STRUCT consists of %d children",
+		                            size, child_count);
+	}
+	child_list_t<Value> children;
+	for (idx_t i = 0; i < child_count; i++) {
+		auto &type = child_types[i].second;
+		auto &name = StructType::GetChildName(target_type, i);
+		auto element = py::handle(tuple[i]);
+		auto converted_value = TransformPythonValue(element, type);
+		children.emplace_back(make_pair(std::move(name), std::move(converted_value)));
+	}
+	auto result = Value::STRUCT(std::move(children));
+	return result;
+}
+
 Value TransformListValue(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN) {
 	auto size = py::len(ele);
 
@@ -298,14 +322,18 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 		return PythonObjectType::MemoryView;
 	} else if (py::isinstance<py::bytes>(ele)) {
 		return PythonObjectType::Bytes;
-	} else if (py::isinstance<py::list>(ele) || py::isinstance<py::tuple>(ele)) {
+	} else if (py::isinstance<py::list>(ele)) {
 		return PythonObjectType::List;
+	} else if (py::isinstance<py::tuple>(ele)) {
+		return PythonObjectType::Tuple;
 	} else if (py::isinstance<py::dict>(ele)) {
 		return PythonObjectType::Dict;
 	} else if (py::isinstance(ele, import_cache.numpy().ndarray())) {
 		return PythonObjectType::NdArray;
 	} else if (py::isinstance(ele, import_cache.numpy().datetime64())) {
 		return PythonObjectType::NdDatetime;
+	} else if (py::isinstance(ele, import_cache.pyduckdb().value())) {
+		return PythonObjectType::Value;
 	} else {
 		return PythonObjectType::Other;
 	}
@@ -395,12 +423,36 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 			return TransformDictionary(dict);
 		}
 	}
+	case PythonObjectType::Tuple: {
+		switch (target_type.id()) {
+		case LogicalTypeId::STRUCT:
+			return TransformTupleToStruct(ele, target_type);
+		case LogicalTypeId::UNKNOWN:
+		case LogicalTypeId::LIST:
+			return TransformListValue(ele, target_type);
+		default:
+			throw InvalidInputException("Can't convert tuple to a Value of type %s", target_type.ToString());
+		}
+	}
 	case PythonObjectType::NdArray:
 	case PythonObjectType::NdDatetime:
 		return TransformPythonValue(ele.attr("tolist")(), target_type, nan_as_null);
+	case PythonObjectType::Value: {
+		// Extract the internal object and the type from the Value instance
+		auto object = ele.attr("object");
+		auto type = ele.attr("type");
+		shared_ptr<DuckDBPyType> internal_type;
+		if (!py::try_cast<shared_ptr<DuckDBPyType>>(type, internal_type)) {
+			string actual_type = py::str(type.get_type());
+			throw InvalidInputException("object has to be a list of DuckDBPyType's, not '%s'", actual_type);
+		}
+		return TransformPythonValue(object, internal_type->Type());
+	}
 	case PythonObjectType::Other:
 		throw NotImplementedException("Unable to transform python value of type '%s' to DuckDB LogicalType",
 		                              py::str(ele.get_type()).cast<string>());
+	default:
+		throw InternalException("Object type recognized but not implemented!");
 	}
 }
 

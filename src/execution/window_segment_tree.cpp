@@ -376,7 +376,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end, 
 			ldata[flush_count++] = begin_ptr;
 			begin_ptr += state_size;
 			if (flush_count >= STANDARD_VECTOR_SIZE) {
-				FlushStates(l_idx);
+				FlushStates(true);
 			}
 		}
 	}
@@ -423,49 +423,28 @@ void WindowSegmentTree::ConstructTree() {
 }
 
 void WindowSegmentTree::Evaluate(const idx_t *begins, const idx_t *ends, Vector &result, idx_t count) {
-	//	First pass: aggregate the ragged leaves
-	//	(or everything if we can't combine)
 	const auto cant_combine = (!aggr.function.combine || !UseCombineAPI());
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
-	for (idx_t i = 0; i < count; ++i) {
-		auto state_ptr = fdata[i];
+
+	//	First pass: aggregate the segment tree nodes
+	//	Share adjacent identical states
+	//  We do this first because we want to share only tree aggregations
+	idx_t prev_begin = 1;
+	idx_t prev_end = 0;
+	auto ldata = FlatVector::GetData<data_ptr_t>(statel);
+	auto pdata = FlatVector::GetData<data_ptr_t>(statep);
+	data_ptr_t prev_state = nullptr;
+	for (idx_t rid = 0; rid < count; ++rid) {
+		auto state_ptr = fdata[rid];
 		aggr.function.initialize(state_ptr);
 
-		const auto begin = begins[i];
-		const auto end = ends[i];
-		if (begin >= end) {
-			continue;
-		}
-
-		// Aggregate everything at once if we can't combine states
-		idx_t parent_begin = begin / TREE_FANOUT;
-		idx_t parent_end = end / TREE_FANOUT;
-		if (parent_begin == parent_end || cant_combine) {
-			WindowSegmentValue(0, begin, end, state_ptr);
-			continue;
-		}
-
-		idx_t group_begin = parent_begin * TREE_FANOUT;
-		if (begin != group_begin) {
-			WindowSegmentValue(0, begin, group_begin + TREE_FANOUT, state_ptr);
-			parent_begin++;
-		}
-		idx_t group_end = parent_end * TREE_FANOUT;
-		if (end != group_end) {
-			WindowSegmentValue(0, group_end, end, state_ptr);
-		}
-	}
-	FlushStates(false);
-
-	//	Second pass: aggregate the segment tree nodes
-	for (idx_t i = 0; i < count; ++i) {
 		if (cant_combine) {
-			break;
+			// Make sure we initialise all states
+			continue;
 		}
-		auto state_ptr = fdata[i];
 
-		auto begin = begins[i];
-		auto end = ends[i];
+		auto begin = begins[rid];
+		auto end = ends[rid];
 		if (begin >= end) {
 			continue;
 		}
@@ -475,6 +454,22 @@ void WindowSegmentTree::Evaluate(const idx_t *begins, const idx_t *ends, Vector 
 		for (; l_idx < levels_flat_start.size() + 1; l_idx++) {
 			idx_t parent_begin = begin / TREE_FANOUT;
 			idx_t parent_end = end / TREE_FANOUT;
+			if (prev_state && l_idx == 1 && begin == prev_begin && end == prev_end) {
+				//	Just combine the previous top level result
+				ldata[flush_count] = prev_state;
+				pdata[flush_count] = state_ptr;
+				if (++flush_count >= STANDARD_VECTOR_SIZE) {
+					FlushStates(true);
+				}
+				break;
+			}
+
+			if (l_idx == 1) {
+				prev_state = state_ptr;
+				prev_begin = begin;
+				prev_end = end;
+			}
+
 			if (parent_begin == parent_end) {
 				if (l_idx) {
 					WindowSegmentValue(l_idx, begin, end, state_ptr);
@@ -500,6 +495,37 @@ void WindowSegmentTree::Evaluate(const idx_t *begins, const idx_t *ends, Vector 
 	}
 	FlushStates(true);
 
+	//	Second pass: aggregate the ragged leaves
+	//	(or everything if we can't combine)
+	for (idx_t rid = 0; rid < count; ++rid) {
+		auto state_ptr = fdata[rid];
+
+		const auto begin = begins[rid];
+		const auto end = ends[rid];
+		if (begin >= end) {
+			continue;
+		}
+
+		// Aggregate everything at once if we can't combine states
+		idx_t parent_begin = begin / TREE_FANOUT;
+		idx_t parent_end = end / TREE_FANOUT;
+		if (parent_begin == parent_end || cant_combine) {
+			WindowSegmentValue(0, begin, end, state_ptr);
+			continue;
+		}
+
+		idx_t group_begin = parent_begin * TREE_FANOUT;
+		if (begin != group_begin) {
+			WindowSegmentValue(0, begin, group_begin + TREE_FANOUT, state_ptr);
+			parent_begin++;
+		}
+		idx_t group_end = parent_end * TREE_FANOUT;
+		if (end != group_end) {
+			WindowSegmentValue(0, group_end, end, state_ptr);
+		}
+	}
+	FlushStates(false);
+
 	//	Finalise the result aggregates
 	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
 	aggr.function.finalize(statef, aggr_input_data, result, count, 0);
@@ -511,12 +537,12 @@ void WindowSegmentTree::Evaluate(const idx_t *begins, const idx_t *ends, Vector 
 
 	//	Set the validity mask on  the invalid rows
 	auto &rmask = FlatVector::Validity(result);
-	for (idx_t i = 0; i < count; ++i) {
-		const auto begin = begins[i];
-		const auto end = ends[i];
+	for (idx_t rid = 0; rid < count; ++rid) {
+		const auto begin = begins[rid];
+		const auto end = ends[rid];
 
 		if (begin >= end) {
-			rmask.SetInvalid(i);
+			rmask.SetInvalid(rid);
 		}
 	}
 }
