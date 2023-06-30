@@ -135,10 +135,6 @@ class TestDataFrame(object):
 				StructField('salary', IntegerType(), True)
 				])
 
-		# FIXME:
-		# Currently at relation construction time, we don't know the schema
-		# It's applied later in the form of casts
-		# Which causes the following error:
 		df2 = spark.createDataFrame(data=structureData,schema=structureSchema)
 		res = df2.collect()
 		assert res == [
