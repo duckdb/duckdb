@@ -48,7 +48,7 @@ using namespace gpos;
 //---------------------------------------------------------------------------
 class CExpressionHandle
 {
-	friend class CExpression;
+	friend 
 
 private:
 	// memory pool

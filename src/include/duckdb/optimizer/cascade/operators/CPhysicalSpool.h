@@ -110,19 +110,6 @@ public:
 		CPartitionPropagationSpec *pppsRequired, ULONG child_index,
 		CDrvdPropArray *pdrgpdpCtxt, ULONG ulOptReq);
 
-	// distribution matching type
-	virtual CEnfdDistribution::EDistributionMatching
-	Edm(CReqdPropPlan *prppInput,
-		ULONG,			   // child_index
-		CDrvdPropArray *,  //pdrgpdpCtxt
-		ULONG			   // ulOptReq
-	)
-	{
-		// Spool does not require Motions to be enforced on top,
-		// we need to pass down incoming matching type
-		return prppInput->Ped()->Edm();
-	}
-
 	//-------------------------------------------------------------------------------------
 	// Derived Plan Properties
 	//-------------------------------------------------------------------------------------

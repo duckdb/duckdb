@@ -77,15 +77,6 @@ public:
 
 		return reinterpret_cast<CPattern *>(pop);
 	}
-
-	// helper to check multi-node pattern
-	static BOOL
-	FMultiNode(COperator *pop)
-	{
-		return COperator::EopPatternMultiLeaf == pop->Eopid() ||
-			   COperator::EopPatternMultiTree == pop->Eopid();
-	}
-
 };	// class CPattern
 
 }  // namespace gpopt

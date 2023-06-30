@@ -22,7 +22,7 @@ namespace gpopt
 using namespace gpos;
 
 // fwd declarations
-class CExpression;
+
 
 //---------------------------------------------------------------------------
 //	@class:
