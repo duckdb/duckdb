@@ -35,16 +35,16 @@ public:
 	//! Constructs an ART
 	ART(const vector<column_t> &column_ids, TableIOManager &table_io_manager,
 	    const vector<unique_ptr<Expression>> &unbound_expressions, const IndexConstraintType constraint_type,
-	    AttachedDatabase &db, optional_ptr<vector<shared_ptr<FixedSizeAllocator>>> allocators,
+	    AttachedDatabase &db, optional_ptr<vector<FixedSizeAllocator>> allocators_ptr,
 	    const idx_t block_id = DConstants::INVALID_INDEX, const idx_t block_offset = DConstants::INVALID_INDEX);
 	~ART() override;
 
 	//! Root of the tree
 	unique_ptr<Node> tree;
-	//! True, if the ART owns its memory, false otherwise
-	bool owns_memory;
-	//! Fixed-size allocators holding the ART nodes (can be pointing to another ART's memory)
-	vector<shared_ptr<FixedSizeAllocator>> allocatorss;
+	//! Fixed-size allocators holding the ART nodes (if empty, then this ART does not own its memory)
+	vector<FixedSizeAllocator> allocators;
+	//! A reference to the memory of this ART
+	reference<vector<FixedSizeAllocator>> allocators_ref;
 
 public:
 	//! Initialize a single predicate scan on the index with the given expression and column IDs
