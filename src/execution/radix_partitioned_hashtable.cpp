@@ -615,7 +615,7 @@ bool RadixPartitionedHashTable::RequiresRepartitioning(ClientContext &context, G
 	} else {
 		// Multiple partitions fit in memory, so multiple are repartitioned at the same time
 		const auto partitions_in_memory = MinValue<idx_t>(max_ht_size / partition_size, num_partitions);
-		gstate.tasks_per_partition = finalize_tasks / partitions_in_memory;
+		gstate.tasks_per_partition = MaxValue<idx_t>(NextPowerOfTwo(2 * n_threads) / partitions_in_memory, 1);
 	}
 
 	// Return true if we increased the radix bits
