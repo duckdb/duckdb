@@ -199,7 +199,7 @@ SELECT s[-2:] FROM lists
 ----
 [l, o]
 [l, d]
-NULL
+[b]
 NULL
 
 # length 1
@@ -266,9 +266,9 @@ NULL
 query T
 SELECT s[(-2147483646-1):-1] FROM lists
 ----
-NULL
-NULL
-NULL
+[h, e, l, l]
+[w, o, r, l]
+[]
 NULL
 
 query T

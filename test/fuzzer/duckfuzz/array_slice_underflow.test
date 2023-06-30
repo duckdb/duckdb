@@ -5,12 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
-query I
+statement error
 SELECT ([1, 2, 3])[0:-9223372036854775808];
-----
-NULL
 
-query I
+statement error
 SELECT ([1, 2, 3])[-9223372036854775808:0];
-----
-NULL

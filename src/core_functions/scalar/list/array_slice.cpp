@@ -46,9 +46,6 @@ int64_t ValueLength(const string_t &value) {
 template <typename INPUT_TYPE, typename INDEX_TYPE>
 bool ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value, const INDEX_TYPE length) {
 	if (index < 0) {
-		if (index < -length) {
-			return false;
-		}
 		index = length + index;
 		return true;
 	} else if (index > length) {
@@ -69,6 +66,9 @@ static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &e
 		begin = 0;
 		end = 0;
 		return true;
+	}
+	if (begin < 0 && -begin > length) {
+		begin = 0;
 	}
 	if (!ClampIndex(begin, value, length) || !ClampIndex(end, value, length)) {
 		return false;
@@ -126,15 +126,19 @@ list_entry_t SliceValueWithSteps(Vector &result, SelectionVector &sel, list_entr
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
 static void CheckBeginAndEnd(INDEX_TYPE &begin, INDEX_TYPE &end, INDEX_TYPE step, INPUT_TYPE &sliced) {
+	auto min = (INDEX_TYPE)NumericLimits<int64_t>::Minimum();
+	auto max = (INDEX_TYPE)NumericLimits<int64_t>::Maximum();
+
 	if (step < 0) {
 		swap(begin, end);
+		swap(min, max);
 	}
 
-	if (begin == (INDEX_TYPE)NumericLimits<int64_t>::Minimum()) {
+	if (begin == min) {
 		begin = 0;
 	}
 
-	if (end == (INDEX_TYPE)NumericLimits<int64_t>::Maximum()) {
+	if (end == max) {
 		end = ValueLength<INPUT_TYPE, INDEX_TYPE>(sliced);
 	}
 }

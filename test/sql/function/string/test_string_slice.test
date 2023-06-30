@@ -175,7 +175,7 @@ SELECT s[-2:] FROM strings
 ----
 lo
 ld
-NULL
+b
 NULL
 
 # length 1
@@ -234,9 +234,9 @@ NULL
 query T
 SELECT s[(-2147483646-1):-1] FROM strings
 ----
-NULL
-NULL
-NULL
+hell
+worl
+(empty)
 NULL
 
 query T
