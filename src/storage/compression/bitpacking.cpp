@@ -337,6 +337,29 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	return true;
 }
 
+template <>
+bool BitpackingAnalyze<hugeint_t>(AnalyzeState &state, Vector &input, idx_t count) {
+	auto &analyze_state = (BitpackingAnalyzeState<hugeint_t> &)state;
+	UnifiedVectorFormat vdata;
+	input.ToUnifiedFormat(count, vdata);
+
+	auto data = UnifiedVectorFormat::GetData<hugeint_t>(vdata);
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+
+		// return false if hugeint doesn't fit in int64;
+		// if (data[idx] > NumericLimits<hugeint_t>::Maximum() || data[idx] < NumericLimits<hugeint_t>::Minimum()) {
+		// 	return false;
+		// }
+
+		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(data[idx], vdata.validity.RowIsValid(idx))) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
 template <class T>
 idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
 	auto &bitpacking_state = (BitpackingAnalyzeState<T> &)state;
