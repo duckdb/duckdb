@@ -743,7 +743,7 @@ macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TEST
           GIT_TAG ${COMMIT}
           GIT_SUBMODULES ""
   )
-  message(STATUS "Building extension '${NAME}' from ${URL} @ ${COMMIT}")
+  message(STATUS "Load extension '${NAME}' from ${URL} @ ${COMMIT}")
   FETCHCONTENT_POPULATE(${NAME}_EXTENSION_FC)
 
   if ("${INCLUDE_PATH}" STREQUAL "")
@@ -786,7 +786,7 @@ function(duckdb_extension_load NAME)
     register_external_extension(${NAME} "${duckdb_extension_load_GIT_URL}" "${duckdb_extension_load_GIT_TAG}" "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${duckdb_extension_load_INCLUDE_DIR}" "${duckdb_extension_load_TEST_DIR}")
   elseif (NOT "${duckdb_extension_load_SOURCE_DIR}" STREQUAL "")
     # Local extension, custom path
-    message(STATUS "Building extension '${NAME}' from '${duckdb_extension_load_SOURCE_DIR}'")
+    message(STATUS "Load extension '${NAME}' from '${duckdb_extension_load_SOURCE_DIR}'")
 
     # If no include path specified, use default
     if ("${duckdb_extension_load_INCLUDE_DIR}" STREQUAL "")
@@ -805,11 +805,11 @@ function(duckdb_extension_load NAME)
     register_extension(${NAME} "${duckdb_extension_load_DONT_LINK}" "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${duckdb_extension_load_SOURCE_DIR}" "${INCLUDE_PATH_DEFAULT}" "${TEST_PATH_DEFAULT}")
   elseif(EXISTS ${CMAKE_SOURCE_DIR}/extension_external/${NAME})
     # Local extension, default path
-    message(STATUS "Building extension '${NAME}' from '${CMAKE_SOURCE_DIR}/extension_external'")
+    message(STATUS "Load extension '${NAME}' from '${CMAKE_SOURCE_DIR}/extension_external'")
     register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}"  "${CMAKE_SOURCE_DIR}/extension_external/${NAME}" "${CMAKE_SOURCE_DIR}/extension_external/${NAME}/src/include" "${CMAKE_SOURCE_DIR}/extension_external/${NAME}/test/sql")
   else()
     # Local extension, default path
-    message(STATUS "Building extension '${NAME}' from '${CMAKE_SOURCE_DIR}/extensions'")
+    message(STATUS "Load extension '${NAME}' from '${CMAKE_SOURCE_DIR}/extensions'")
     register_extension(${NAME} ${duckdb_extension_load_DONT_LINK} "${duckdb_extension_load_DONT_BUILD}" "${duckdb_extension_load_LOAD_TESTS}" "${CMAKE_SOURCE_DIR}/extension/${NAME}" "${CMAKE_SOURCE_DIR}/extension/${NAME}/include" "${CMAKE_SOURCE_DIR}/extension/${NAME}/test/sql")
   endif()
 
