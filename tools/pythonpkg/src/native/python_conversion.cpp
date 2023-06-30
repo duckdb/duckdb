@@ -427,8 +427,11 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		switch (target_type.id()) {
 		case LogicalTypeId::STRUCT:
 			return TransformTupleToStruct(ele, target_type);
-		default:
+		case LogicalTypeId::UNKNOWN:
+		case LogicalTypeId::LIST:
 			return TransformListValue(ele, target_type);
+		default:
+			throw InvalidInputException("Can't convert tuple to a Value of type %s", target_type.ToString());
 		}
 	}
 	case PythonObjectType::NdArray:
