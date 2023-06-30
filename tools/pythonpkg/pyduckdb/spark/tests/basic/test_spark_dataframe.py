@@ -8,6 +8,7 @@ from pyduckdb.spark.sql.types import (
 	StringType,
 	IntegerType
 )
+import duckdb
 
 class TestDataFrame(object):
 	def test_dataframe(self, spark):
@@ -113,3 +114,33 @@ class TestDataFrame(object):
 			Row(firstname='Maria', middlename='Anne', lastname='Jones', id='39192', gender='F', salary=4000),
 			Row(firstname='Jen', middlename='Mary', lastname='Brown', id='', gender='F', salary=-1)
 		]
+
+	def test_df_nested_struct(self, spark):
+		structureData = [
+			(("James","","Smith"),"36636","M",3100),
+			(("Michael","Rose",""),"40288","M",4300),
+			(("Robert","","Williams"),"42114","M",1400),
+			(("Maria","Anne","Jones"),"39192","F",5500),
+			(("Jen","Mary","Brown"),"","F",-1)
+		]
+		structureSchema = StructType([
+				StructField('name', StructType([
+					StructField('firstname', StringType(), True),
+					StructField('middlename', StringType(), True),
+					StructField('lastname', StringType(), True)
+					])),
+				StructField('id', StringType(), True),
+				StructField('gender', StringType(), True),
+				StructField('salary', IntegerType(), True)
+				])
+
+		# FIXME:
+		# Currently at relation construction time, we don't know the schema
+		# It's applied later in the form of casts
+		# Which causes the following error:
+		df2 = spark.createDataFrame(data=structureData,schema=structureSchema)
+		with pytest.raises(duckdb.ConversionException, match=re.escape('Conversion Error: Unimplemented type for cast (VARCHAR[] -> STRUCT(firstname VARCHAR, middlename VARCHAR, lastname VARCHAR))')):
+			res = df2.collect()
+		#print(res)
+		#schema = df2.schema
+		#print(schema)
