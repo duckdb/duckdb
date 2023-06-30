@@ -38,6 +38,16 @@ import duckdb
 # For us this is done inside of `duckdb.connect`, based on the passed in path + configuration
 # SparkContext can be compared to our Connection class, and SparkConf to our ClientContext class
 
+# data is a List of rows
+# every value in each row needs to be turned into a Value
+def _combine_data_and_schema(data: Iterable[Any], schema: StructType):
+	from pyduckdb import Value
+	new_data = []
+	for row in data:
+		new_row = [Value(x, dtype.duckdb_type) for x, dtype in zip(row, [y.dataType for y in schema])]
+		new_data.append(new_row)
+	return new_data
+
 class SparkSession:
 	def __init__(self, context : SparkContext):
 		self.conn = context.connection
@@ -117,6 +127,10 @@ class SparkSession:
 			# Create NULLs for every type in our the dataframe
 			is_empty = True
 			data = [tuple(None for _ in names)]
+
+		if schema and isinstance(schema, StructType):
+			# Transform the data into Values to combine the data+schema
+			data = _combine_data_and_schema(data, schema)
 
 		df = self._create_dataframe(data)
 		if is_empty:

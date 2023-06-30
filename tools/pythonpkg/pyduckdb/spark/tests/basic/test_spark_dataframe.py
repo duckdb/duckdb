@@ -9,6 +9,7 @@ from pyduckdb.spark.sql.types import (
 	IntegerType
 )
 import duckdb
+import re
 
 class TestDataFrame(object):
 	def test_dataframe(self, spark):
@@ -139,8 +140,69 @@ class TestDataFrame(object):
 		# It's applied later in the form of casts
 		# Which causes the following error:
 		df2 = spark.createDataFrame(data=structureData,schema=structureSchema)
-		with pytest.raises(duckdb.ConversionException, match=re.escape('Conversion Error: Unimplemented type for cast (VARCHAR[] -> STRUCT(firstname VARCHAR, middlename VARCHAR, lastname VARCHAR))')):
-			res = df2.collect()
-		#print(res)
-		#schema = df2.schema
-		#print(schema)
+		res = df2.collect()
+		assert res == [
+			Row(
+				name={
+					'firstname': 'James',
+					'middlename': '',
+					'lastname': 'Smith'
+				},
+				id='36636',
+				gender='M',
+				salary=3100
+			),
+			Row(
+				name={
+					'firstname': 'Michael',
+					'middlename': 'Rose',
+					'lastname': ''
+				},
+				id='40288',
+				gender='M',
+				salary=4300
+			),
+			Row(
+				name={
+					'firstname': 'Robert',
+					'middlename': '',
+					'lastname': 'Williams'
+				},
+				id='42114',
+				gender='M',
+				salary=1400
+			),
+			Row(
+				name={
+					'firstname': 'Maria',
+					'middlename': 'Anne',
+					'lastname': 'Jones'
+				},
+				id='39192',
+				gender='F',
+				salary=5500
+			),
+			Row(
+				name={
+					'firstname': 'Jen',
+					'middlename': 'Mary',
+					'lastname': 'Brown'
+				},
+				id='',
+				gender='F',
+				salary=-1
+			)
+		]
+		schema = df2.schema
+		assert schema == StructType([
+			StructField('name',
+				StructType([
+					StructField('firstname', StringType(), True),
+					StructField('middlename', StringType(), True),
+					StructField('lastname', StringType(), True)
+				]), True
+			),
+			StructField('id', StringType(), True),
+			StructField('gender', StringType(), True),
+			StructField('salary', IntegerType(), True)
+		])
