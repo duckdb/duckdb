@@ -103,7 +103,7 @@ def get_includes(fpath, text):
         included_file = x[1]
         if skip_duckdb_includes and 'duckdb' in included_file:
             continue
-        if included_file.endswith('_extension.hpp') or included_file.endswith('generated_extension_headers.hpp'):
+        if ('extension_helper.cpp' in fpath and (included_file.endswith('_extension.hpp')) or included_file == 'generated_extension_loader.hpp' or included_file == 'generated_extension_headers.hpp'):
             continue
         if 'allocator.cpp' in fpath and included_file.endswith('jemalloc_extension.hpp'):
             continue
@@ -119,8 +119,6 @@ def get_includes(fpath, text):
                 found = True
                 break
         if not found:
-            print(fpath)
-            print(included_file)
             raise Exception('Could not find include file "' + included_file + '", included from file "' + fpath + '"')
     return (include_statements, include_files)
 
