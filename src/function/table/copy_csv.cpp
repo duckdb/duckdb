@@ -37,8 +37,8 @@ void SubstringDetection(char &str_1, string &str_2, const string &name_str_1, co
 // Bind
 //===--------------------------------------------------------------------===//
 
-void WriteQuoteOrEscape(Serializer &serializer, char quote_or_escape ){
-	if (quote_or_escape != '\0'){
+void WriteQuoteOrEscape(Serializer &serializer, char quote_or_escape) {
+	if (quote_or_escape != '\0') {
 		serializer.Write(quote_or_escape);
 	}
 }
@@ -210,9 +210,9 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 
 		if (!requires_escape) {
 			// fast path: no need to escape anything
-			WriteQuoteOrEscape(serializer,options.quote);
+			WriteQuoteOrEscape(serializer, options.quote);
 			serializer.WriteData(const_data_ptr_cast(str), len);
-			WriteQuoteOrEscape(serializer,options.quote);
+			WriteQuoteOrEscape(serializer, options.quote);
 			return;
 		}
 
@@ -223,9 +223,9 @@ static void WriteQuotedString(Serializer &serializer, WriteCSVData &csv_data, co
 			// need to escape quotes separately
 			new_val = AddEscapes(options.quote, options.escape, new_val);
 		}
-		WriteQuoteOrEscape(serializer,options.quote);
+		WriteQuoteOrEscape(serializer, options.quote);
 		serializer.WriteBufferData(new_val);
-		WriteQuoteOrEscape(serializer,options.quote);
+		WriteQuoteOrEscape(serializer, options.quote);
 	} else {
 		serializer.WriteData(const_data_ptr_cast(str), len);
 	}
@@ -308,7 +308,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 		// write the header line to the file
 		for (idx_t i = 0; i < csv_data.options.name_list.size(); i++) {
 			if (i != 0) {
-				WriteQuoteOrEscape(serializer,options.delimiter);
+				WriteQuoteOrEscape(serializer, options.delimiter);
 			}
 			WriteQuotedString(serializer, csv_data, csv_data.options.name_list[i].c_str(),
 			                  csv_data.options.name_list[i].size(), false);
@@ -360,7 +360,7 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 		// write values
 		for (idx_t col_idx = 0; col_idx < cast_chunk.ColumnCount(); col_idx++) {
 			if (col_idx != 0) {
-				WriteQuoteOrEscape(writer,options.delimiter);
+				WriteQuoteOrEscape(writer, options.delimiter);
 			}
 			if (FlatVector::IsNull(cast_chunk.data[col_idx], row_idx)) {
 				// write null value

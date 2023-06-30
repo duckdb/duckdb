@@ -7,8 +7,6 @@
 
 namespace duckdb {
 
-enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
-
 static bool StartsWithNumericDate(string &separator, const string &value) {
 	auto begin = value.c_str();
 	auto end = begin + value.size();
@@ -242,7 +240,8 @@ bool BufferedCSVReader::JumpToNextSample() {
 	return true;
 }
 
-void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t buffer_start_pos) {
+void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t buffer_start_pos,
+                                         idx_t prev_column_count) {
 	vector<idx_t> sniffed_column_counts(STANDARD_VECTOR_SIZE);
 	buffer.position = buffer_start_pos;
 	idx_t buffer_pos = state_machine.SniffDialect(buffer, sniffed_column_counts);
@@ -270,6 +269,11 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t b
 			// we are missing some columns, we can parse this as long as we add padding
 			padding_count++;
 		}
+	}
+
+	if (num_cols < prev_column_count) {
+		// Early return if we have less columns than the previous chunk run
+		return;
 	}
 
 	// some logic
@@ -312,18 +316,14 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t b
 }
 
 void CSVSniffer::NextChunk() {
+	// Reset stats
 	rows_read = 0;
 	best_consistent_rows = 0;
 	prev_padding_count = 0;
+	best_num_cols = 0;
 }
 
-vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
-	// set up the candidates we consider for delimiter and quote rules based on user input
-	vector<char> delim_candidates;
-	vector<QuoteRule> quoterule_candidates;
-	vector<vector<char>> quote_candidates_map;
-	vector<vector<char>> escape_candidates_map = {{'\0', '\"'}, {'\\'}, {'\0'}};
-
+void CSVSniffer::GenerateCandidateDetectionSearchSpace() {
 	if (options.has_delimiter) {
 		// user provided a delimiter: use that delimiter
 		delim_candidates = {options.delimiter};
@@ -350,7 +350,9 @@ vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 		// no escape provided: try standard/common escapes
 		quoterule_candidates = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
 	}
+}
 
+void CSVSniffer::GenerateStateMachineSearchSpace() {
 	// Generate state machines for all option combinations
 	for (auto quoterule : quoterule_candidates) {
 		const auto &quote_candidates = quote_candidates_map[static_cast<uint8_t>(quoterule)];
@@ -364,31 +366,9 @@ vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 			}
 		}
 	}
-	// Analyze All candidates
-	for (auto &state_machine : csv_state_machines) {
-		AnalyzeDialectCandidate(state_machine);
-	}
+}
 
-	// hacky
-	for (idx_t i = 1; i < options.sample_chunks; i++) {
-		if (!candidates.empty()) {
-			// We read the whole buffer
-			// FIXME: Continue reading? for now one 10Mb buffer for sniffing I think it's fine
-			if (candidates[0].last_pos + 1 >= buffer.buffer_size) {
-				break;
-			}
-		}
-		NextChunk();
-		auto cur_candidates = candidates;
-		candidates.clear();
-
-		for (auto &cur_candidate : cur_candidates) {
-			// Have to store the max position here
-			AnalyzeDialectCandidate(*cur_candidate.state, cur_candidate.last_pos);
-		}
-	}
-
-	// Produce ze result
+vector<CSVReaderOptions> CSVSniffer::ProduceDialectResults() {
 	vector<CSVReaderOptions> result;
 	for (auto &candidate : candidates) {
 		auto option = options;
@@ -401,6 +381,44 @@ vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 		result.emplace_back(option);
 	}
 	return result;
+}
+// Dialect Detection consists of five steps:
+// 1. Generate a search space of all possible dialects
+// 2. Generate a state machine for each dialect
+// 3. Analyze the first chunk of the file and find the best dialect candidates
+// 4. Analyze the remaining chunks of the file and find the best dialect candidate
+// 5. Return the converted dialect options
+vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
+	// Step 1: Generate search space
+	GenerateCandidateDetectionSearchSpace();
+	// Step 2: Generate state machines
+	GenerateStateMachineSearchSpace();
+	// Step 3: Analyze all candidates on the first chunk
+	for (auto &state_machine : csv_state_machines) {
+		AnalyzeDialectCandidate(state_machine);
+	}
+	// Step 4: Loop over candidates and find if they can still produce good results for the remaining chunks
+	for (idx_t i = 1; i < options.sample_chunks; i++) {
+		NextChunk();
+	}
+	auto cur_best_num_cols = best_num_cols;
+	for (idx_t i = 1; i < options.sample_chunks; i++) {
+		if (!candidates.empty()) {
+			// FIXME: Continue reading? for now one 10Mb buffer for sniffing I think it's fine
+			if (candidates[0].last_pos + 1 >= buffer.buffer_size) {
+				break;
+			}
+		}
+		NextChunk();
+		auto cur_candidates = std::move(candidates);
+		cur_best_num_cols = std::max(best_num_cols, cur_best_num_cols);
+		for (auto &cur_candidate : cur_candidates) {
+			AnalyzeDialectCandidate(*cur_candidate.state, cur_candidate.last_pos, cur_best_num_cols);
+		}
+	}
+
+	// Step 5: Produce the result
+	return ProduceDialectResults();
 }
 
 void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_candidates,

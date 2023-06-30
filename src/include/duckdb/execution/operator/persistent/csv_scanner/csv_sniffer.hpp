@@ -9,9 +9,13 @@
 #pragma once
 
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine.hpp"
+#include <utility>
 #include <vector>
 
 namespace duckdb {
+
+//! Different Quote Rules
+enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
 
 //! Struct to store candidates for the CSV State, with the last position they read in the buffer
 struct CSVStateCandidates {
@@ -26,7 +30,7 @@ struct CSVStateCandidates {
 class CSVSniffer {
 public:
 	explicit CSVSniffer(CSVReaderOptions options_p, StateBuffer buffer_p, const vector<LogicalType> &requested_types_p)
-	    : requested_types(requested_types_p), options(options_p), buffer(std::move(buffer_p)) {};
+	    : requested_types(requested_types_p), options(std::move(options_p)), buffer(std::move(buffer_p)) {};
 	//! First phase of auto detection: detect CSV dialect (i.e. delimiter, quote rules, etc)
 	vector<CSVReaderOptions> DetectDialect();
 	//! Resets stats so it can analyze the next chunk
@@ -51,8 +55,23 @@ private:
 	CSVReaderOptions options;
 	//! Buffer being used on sniffer
 	StateBuffer buffer;
+	//! ------------------------------------------------------//
+	//! ----------------- Dialect Detection ----------------- //
+	//! ------------------------------------------------------//
+	vector<char> delim_candidates;
+	vector<QuoteRule> quoterule_candidates;
+	vector<vector<char>> quote_candidates_map;
+	vector<vector<char>> escape_candidates_map = {{'\0', '\"'}, {'\\'}, {'\0'}};
+	//! Generates the search space candidates for the dialect
+	void GenerateCandidateDetectionSearchSpace();
+	//! Generates the search space candidates for the state machines
+	void GenerateStateMachineSearchSpace();
+	//! Generates the search space candidates for the state machines
+	vector<CSVReaderOptions> ProduceDialectResults();
+
 	//! Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
-	void AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t buffer_start_pos = 0);
+	void AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t buffer_start_pos = 0,
+	                             idx_t prev_column_count = 0);
 };
 
 } // namespace duckdb
