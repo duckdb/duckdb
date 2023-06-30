@@ -307,8 +307,9 @@ public:
 			}
 		}
 		if (parquet_options.file_options.auto_detect_hive_partitioning) {
-			auto& fs = FileSystem::GetFileSystem(context);
-			parquet_options.file_options.hive_partitioning = MultiFileReaderOptions::AutoDetectHivePartitioning(files, fs);
+			auto &fs = FileSystem::GetFileSystem(context);
+			parquet_options.file_options.hive_partitioning =
+			    MultiFileReaderOptions::AutoDetectHivePartitioning(files, fs);
 		}
 		return ParquetScanBindInternal(context, std::move(files), return_types, names, parquet_options);
 	}
@@ -922,7 +923,7 @@ unique_ptr<TableRef> ParquetScanReplacement(ClientContext &context, const string
 	table_function->function = make_uniq<FunctionExpression>("parquet_scan", std::move(children));
 
 	if (!FileSystem::HasGlob(table_name)) {
-		auto& fs = FileSystem::GetFileSystem(context);
+		auto &fs = FileSystem::GetFileSystem(context);
 		table_function->alias = fs.ExtractBaseName(table_name);
 	}
 

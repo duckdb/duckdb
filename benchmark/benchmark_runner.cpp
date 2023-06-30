@@ -173,7 +173,7 @@ void print_help() {
 
 enum ConfigurationError { None, BenchmarkNotFound, InfoWithoutBenchmarkName };
 
-void LoadInterpretedBenchmarks(FileSystem& fs) {
+void LoadInterpretedBenchmarks(FileSystem &fs) {
 	// load interpreted benchmarks
 	listFiles(fs, "benchmark", [](const string &path) {
 		if (endsWith(path, ".benchmark")) {

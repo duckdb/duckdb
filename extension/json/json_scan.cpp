@@ -53,7 +53,7 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 	files = MultiFileReader::GetFileList(context, input.inputs[0], "JSON");
 
 	if (options.file_options.auto_detect_hive_partitioning) {
-		auto& fs = FileSystem::GetFileSystem(context);
+		auto &fs = FileSystem::GetFileSystem(context);
 		options.file_options.hive_partitioning = MultiFileReaderOptions::AutoDetectHivePartitioning(files, fs);
 	}
 
