@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-SELECT SETSEED(0.8675309);
+SELECT SETSEED(0.875);
 
 statement ok
 CREATE TABLE df AS
@@ -16,6 +16,8 @@ CREATE TABLE df AS
         (random() * 5)::INTEGER + 1 as id3,
         random() as value,
     FROM range(5000);
+
+# mode output_hash
 
 # Test right_projection_map
 foreach prefer False True
@@ -36,7 +38,7 @@ FROM (
 GROUP BY ALL
 ORDER BY ALL
 ----
-660 values hashing to d817ad02dd4d1d3a3fba438d5d299381
+660 values hashing to 22a23dcf9698c97931f2012175c1f15c
 
 endloop
 
