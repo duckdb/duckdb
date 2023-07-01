@@ -3,7 +3,7 @@
 # group: [iejoin]
 
 statement ok
-PRAGMA enable_verification
+PRAGMA threads=1
 
 statement ok
 SELECT SETSEED(0.875);
@@ -14,8 +14,11 @@ CREATE TABLE df AS
         (random() * 100)::INTEGER + 1 as id,
         (random() * 10)::INTEGER + 1 as id2,
         (random() * 5)::INTEGER + 1 as id3,
-        random() as value,
+        ROUND(random(), 4)::DECIMAL(4,3) as value,
     FROM range(5000);
+
+statement ok
+PRAGMA enable_verification
 
 # mode output_hash
 
@@ -38,7 +41,7 @@ FROM (
 GROUP BY ALL
 ORDER BY ALL
 ----
-660 values hashing to 22a23dcf9698c97931f2012175c1f15c
+660 values hashing to a166d045ce1737a3b670ea2162cf71eb
 
 endloop
 
