@@ -3,10 +3,7 @@
 # group: [iejoin]
 
 statement ok
-PRAGMA threads=1
-
-statement ok
-SELECT SETSEED(0.875);
+SELECT SETSEED(0.8765309);
 
 statement ok
 CREATE TABLE df AS
@@ -29,7 +26,7 @@ statement ok
 PRAGMA prefer_range_joins=${prefer};
 
 query I
-SELECT id2, id3, id3_right, corr(value, value_right) as value
+SELECT id2, id3, id3_right, ROUND(corr(value, value_right), 4)::DECIMAL(5,3) as value
 FROM (
 	SELECT df.*, df2.id3 as id3_right, df2.value as value_right
 	FROM df JOIN df as df2
@@ -41,7 +38,7 @@ FROM (
 GROUP BY ALL
 ORDER BY ALL
 ----
-660 values hashing to a166d045ce1737a3b670ea2162cf71eb
+660 values hashing to 2c8390538fa98794d27651be7a1d166d
 
 endloop
 
