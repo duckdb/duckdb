@@ -60,22 +60,6 @@ void WindowAggregateState::Sink(DataChunk &payload_chunk, SelectionVector *filte
 void WindowAggregateState::Finalize() {
 }
 
-void WindowAggregateState::Compute(Vector &result, idx_t rid, idx_t start, idx_t end) {
-}
-
-void WindowAggregateState::Evaluate(const idx_t *begins, const idx_t *ends, Vector &result, idx_t count) {
-	auto &rmask = FlatVector::Validity(result);
-	for (idx_t i = 0; i < count; ++i) {
-		const auto begin = begins[i];
-		const auto end = ends[i];
-		if (begin >= end) {
-			rmask.SetInvalid(i);
-			continue;
-		}
-		Compute(result, i, begin, end);
-	}
-}
-
 //===--------------------------------------------------------------------===//
 // WindowConstantAggregate
 //===--------------------------------------------------------------------===//
@@ -243,15 +227,25 @@ WindowCustomAggregate::~WindowCustomAggregate() {
 	}
 }
 
-void WindowCustomAggregate::Compute(Vector &result, idx_t rid, idx_t begin, idx_t end) {
-	// Frame boundaries
-	auto prev = frame;
-	frame = FrameBounds(begin, end);
+void WindowCustomAggregate::Evaluate(const idx_t *begins, const idx_t *ends, Vector &result, idx_t count) {
+	auto &rmask = FlatVector::Validity(result);
+	for (idx_t i = 0; i < count; ++i) {
+		const auto begin = begins[i];
+		const auto end = ends[i];
+		if (begin >= end) {
+			rmask.SetInvalid(i);
+			continue;
+		}
 
-	// Extract the range
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
-	aggr.function.window(inputs.data.data(), filter_mask, aggr_input_data, inputs.ColumnCount(), state.data(), frame,
-	                     prev, result, rid, 0);
+		// Frame boundaries
+		auto prev = frame;
+		frame = FrameBounds(begin, end);
+
+		// Extract the range
+		AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+		aggr.function.window(inputs.data.data(), filter_mask, aggr_input_data, inputs.ColumnCount(), state.data(),
+		                     frame, prev, result, i, 0);
+	}
 }
 
 //===--------------------------------------------------------------------===//

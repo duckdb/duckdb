@@ -23,8 +23,7 @@ public:
 
 	virtual void Sink(DataChunk &payload_chunk, SelectionVector *filter_sel, idx_t filtered);
 	virtual void Finalize();
-	virtual void Compute(Vector &result, idx_t rid, idx_t start, idx_t end);
-	virtual void Evaluate(const idx_t *begins, const idx_t *ends, Vector &result, idx_t count);
+	virtual void Evaluate(const idx_t *begins, const idx_t *ends, Vector &result, idx_t count) = 0;
 
 protected:
 	void AggregateInit();
@@ -81,7 +80,7 @@ public:
 	WindowCustomAggregate(AggregateObject aggr, const LogicalType &result_type_p, idx_t partition_count);
 	~WindowCustomAggregate() override;
 
-	void Compute(Vector &result, idx_t rid, idx_t start, idx_t end) override;
+	void Evaluate(const idx_t *begins, const idx_t *ends, Vector &result, idx_t count) override;
 
 private:
 	//! The frame boundaries, used for the window functions
