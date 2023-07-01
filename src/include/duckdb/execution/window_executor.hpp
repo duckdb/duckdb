@@ -15,8 +15,6 @@
 
 namespace duckdb {
 
-enum WindowBounds : uint8_t { PARTITION_BEGIN, PARTITION_END, PEER_BEGIN, PEER_END, WINDOW_BEGIN, WINDOW_END };
-
 struct WindowInputExpression {
 	static void PrepareInputExpression(Expression &expr, ExpressionExecutor &executor, DataChunk &chunk) {
 		vector<LogicalType> types;
@@ -116,61 +114,12 @@ private:
 	idx_t capacity;
 };
 
-struct WindowBoundariesState {
-	using FrameBounds = std::pair<idx_t, idx_t>;
-
-	static inline bool IsScalar(const unique_ptr<Expression> &expr) {
-		return expr ? expr->IsScalar() : true;
-	}
-
-	static inline bool BoundaryNeedsPeer(const WindowBoundary &boundary) {
-		switch (boundary) {
-		case WindowBoundary::CURRENT_ROW_RANGE:
-		case WindowBoundary::EXPR_PRECEDING_RANGE:
-		case WindowBoundary::EXPR_FOLLOWING_RANGE:
-			return true;
-		default:
-			return false;
-		}
-	}
-
-	WindowBoundariesState(BoundWindowExpression &wexpr, const idx_t input_size);
-
-	void Update(const idx_t row_idx, const WindowInputColumn &range_collection, const idx_t chunk_idx,
-	            WindowInputExpression &boundary_start, WindowInputExpression &boundary_end,
-	            const ValidityMask &partition_mask, const ValidityMask &order_mask);
-
-	void Bounds(DataChunk &bounds, idx_t row_idx, const WindowInputColumn &range, const idx_t count,
-	            WindowInputExpression &boundary_start, WindowInputExpression &boundary_end,
-	            const ValidityMask &partition_mask, const ValidityMask &order_mask);
-
-	// Cached lookups
-	const ExpressionType type;
-	const idx_t input_size;
-	const WindowBoundary start_boundary;
-	const WindowBoundary end_boundary;
-	const size_t partition_count;
-	const size_t order_count;
-	const OrderType range_sense;
-	const bool has_preceding_range;
-	const bool has_following_range;
-	const bool needs_peer;
-
-	idx_t partition_start = 0;
-	idx_t partition_end = 0;
-	idx_t peer_start = 0;
-	idx_t peer_end = 0;
-	idx_t valid_start = 0;
-	idx_t valid_end = 0;
-	int64_t window_start = -1;
-	int64_t window_end = -1;
-	FrameBounds prev;
-};
+//	Column indexes of the bounds chunk
+enum WindowBounds : uint8_t { PARTITION_BEGIN, PARTITION_END, PEER_BEGIN, PEER_END, WINDOW_BEGIN, WINDOW_END };
 
 class WindowExecutorState {
 public:
-	WindowExecutorState(BoundWindowExpression &wexpr, ClientContext &context, const idx_t count,
-	                    const ValidityMask &partition_mask_p, const ValidityMask &order_mask_p);
+	WindowExecutorState() {};
 	virtual ~WindowExecutorState() {
 	}
 
@@ -184,22 +133,6 @@ public:
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
 		return reinterpret_cast<const TARGET &>(*this);
 	}
-
-	void UpdateBounds(idx_t row_idx, DataChunk &input_chunk, const WindowInputColumn &range);
-
-	// Frame management
-	const ValidityMask &partition_mask;
-	const ValidityMask &order_mask;
-	WindowBoundariesState state;
-	DataChunk bounds;
-
-	// LEAD/LAG Evaluation
-	WindowInputExpression leadlag_offset;
-	WindowInputExpression leadlag_default;
-
-	// evaluate boundaries if present. Parser has checked boundary types.
-	WindowInputExpression boundary_start;
-	WindowInputExpression boundary_end;
 };
 
 class WindowExecutor {
@@ -341,6 +274,8 @@ class WindowLeadLagExecutor : public WindowValueExecutor {
 public:
 	WindowLeadLagExecutor(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
 	                      const ValidityMask &partition_mask, const ValidityMask &order_mask);
+
+	unique_ptr<WindowExecutorState> GetExecutorState() const override;
 
 protected:
 	void EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count, idx_t row_idx) const override;
