@@ -32,7 +32,11 @@ idx_t WriteAheadLog::GetTotalWritten() {
 }
 
 void WriteAheadLog::Truncate(int64_t size) {
-	writer->Truncate(size);
+	if (size == 0 && DBConfig::Get(database).options.wal_rename_and_recreate) {
+		writer->Rotate();
+	} else {
+		writer->Truncate(size);
+	}
 }
 
 void WriteAheadLog::Delete() {

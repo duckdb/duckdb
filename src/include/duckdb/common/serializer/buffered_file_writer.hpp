@@ -25,6 +25,8 @@ public:
 
 	FileSystem &fs;
 	string path;
+	uint8_t open_flags;
+	uint32_t rotate_count;
 	unsafe_unique_array<data_t> data;
 	idx_t offset;
 	idx_t total_written;
@@ -36,6 +38,8 @@ public:
 	DUCKDB_API void Sync();
 	//! Flush the buffer to the file (without sync)
 	DUCKDB_API void Flush();
+	//! Rotates the file, renaming the current file and re-opening the file
+	DUCKDB_API void Rotate();
 	//! Returns the current size of the file
 	DUCKDB_API int64_t GetFileSize();
 	//! Truncate the size to a previous size (given that size <= GetFileSize())

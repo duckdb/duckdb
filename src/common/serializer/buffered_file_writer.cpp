@@ -2,14 +2,16 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include <cstring>
+#include <ctime>
 
 namespace duckdb {
 
 // Remove this when we switch C++17: https://stackoverflow.com/a/53350948
 constexpr uint8_t BufferedFileWriter::DEFAULT_OPEN_FLAGS;
 
-BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path_p, uint8_t open_flags)
-    : fs(fs), path(path_p), data(make_unsafe_uniq_array<data_t>(FILE_BUFFER_SIZE)), offset(0), total_written(0) {
+BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path_p, uint8_t open_flags_p)
+    : fs(fs), path(path_p), open_flags(open_flags_p), data(make_unsafe_uniq_array<data_t>(FILE_BUFFER_SIZE)), offset(0), total_written(0) {
+	rotate_count = 0;
 	handle = fs.OpenFile(path, open_flags, FileLockType::WRITE_LOCK);
 }
 
@@ -48,6 +50,19 @@ void BufferedFileWriter::Flush() {
 void BufferedFileWriter::Sync() {
 	Flush();
 	handle->Sync();
+}
+
+void BufferedFileWriter::Rotate() {
+	Sync();
+	handle->Close();
+	handle.reset();
+
+	rotate_count++;
+	auto now = std::time(nullptr);
+	fs.MoveFile(path, path + "." + std::to_string(now) + "." + std::to_string(rotate_count));
+
+	total_written = 0;
+	handle = fs.OpenFile(path, open_flags, FileLockType::WRITE_LOCK);
 }
 
 void BufferedFileWriter::Truncate(int64_t size) {
