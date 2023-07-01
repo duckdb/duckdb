@@ -282,5 +282,12 @@
         "example": "unicode('ü')",
         "type": "scalar_function",
         "aliases": ["ord"]
+    },
+    {
+        "name": "to_base",
+        "parameters": "number,radix,min_length",
+        "description": "Converts a value to a string in the given base radix, optionally padding with leading zeros to the minimum length",
+        "example": "to_base(42, 16)",
+        "type": "scalar_function_set"
     }
 ]

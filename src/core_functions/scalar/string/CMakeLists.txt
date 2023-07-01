@@ -21,6 +21,7 @@ add_library_unity(
   reverse.cpp
   starts_with.cpp
   string_split.cpp
+  to_base.cpp
   translate.cpp
   trim.cpp
   unicode.cpp)
