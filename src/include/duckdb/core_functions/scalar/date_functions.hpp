@@ -490,8 +490,8 @@ struct ToSecondsFun {
 struct ToTimestampFun {
 	static constexpr const char *Name = "to_timestamp";
 	static constexpr const char *Parameters = "sec";
-	static constexpr const char *Description = "Converts sec since epoch to a timestamp";
-	static constexpr const char *Example = "to_timestamp(701222400)";
+	static constexpr const char *Description = "Converts sec since epoch to a timestamp with time zone";
+	static constexpr const char *Example = "to_timestamp(1284352323.5)";
 
 	static ScalarFunction GetFunction();
 };
@@ -508,7 +508,7 @@ struct ToYearsFun {
 struct TryStrpTimeFun {
 	static constexpr const char *Name = "try_strptime";
 	static constexpr const char *Parameters = "text,format";
-	static constexpr const char *Description = "Converts string to timestamp with time zone according to the format string if %Z is specified. Returns NULL on failure.";
+	static constexpr const char *Description = "Converts string to timestamp according to the format string if %Z is specified. Returns NULL on failure.";
 	static constexpr const char *Example = "try_strptime('Wed, 1 January 1992 - 08:38:40 PM', '%a, %-d %B %Y - %I:%M:%S %p')";
 
 	static ScalarFunctionSet GetFunctions();
