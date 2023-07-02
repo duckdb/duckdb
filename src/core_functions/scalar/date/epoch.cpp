@@ -11,7 +11,7 @@ struct EpochSecOperator {
 	static RESULT_TYPE Operation(INPUT_TYPE sec) {
 		int64_t result;
 		if (!TryCast::Operation(sec * Interval::MICROS_PER_SEC, result)) {
-			throw ConversionException("Could not convert epoch seconds to TIEMSTAMP WITH TIME ZONE");
+			throw ConversionException("Could not convert epoch seconds to TIMESTAMP WITH TIME ZONE");
 		}
 		return timestamp_t(result);
 	}
