@@ -26,7 +26,7 @@ statement ok
 PRAGMA prefer_range_joins=${prefer};
 
 query I
-SELECT id2, id3, id3_right, ROUND(corr(value, value_right), 4)::DECIMAL(5,3) as value
+SELECT id2, id3, id3_right, ROUND(corr(value, value_right), 4)::DECIMAL(5,4) as value
 FROM (
 	SELECT df.*, df2.id3 as id3_right, df2.value as value_right
 	FROM df JOIN df as df2
@@ -38,7 +38,7 @@ FROM (
 GROUP BY ALL
 ORDER BY ALL
 ----
-660 values hashing to 2c8390538fa98794d27651be7a1d166d
+660 values hashing to fc282ee709f6bfb38e0b4eb6e6dc47e2
 
 endloop
 
