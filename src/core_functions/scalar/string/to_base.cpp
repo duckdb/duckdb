@@ -11,8 +11,11 @@ static void ToBaseFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	auto count = args.size();
 
 	BinaryExecutor::Execute<int64_t, int32_t, string_t>(input, radix, result, count, [&](int64_t input, int32_t radix) {
+		if (input < 0) {
+			throw InvalidInputException("'to_base' number must be greater than or equal to 0");
+		}
 		if (radix < 2 || radix > 36) {
-			throw InvalidInputException("radix must be between 2 and 36");
+			throw InvalidInputException("'to_base' radix must be between 2 and 36");
 		}
 
 		char buf[64];
@@ -35,11 +38,14 @@ static void ToBaseFunctionWithPadding(DataChunk &args, ExpressionState &state, V
 
 	TernaryExecutor::Execute<int64_t, int32_t, int32_t, string_t>(
 	    input, radix, min_length, result, count, [&](int64_t input, int32_t radix, int32_t min_length) {
+		    if (input < 0) {
+			    throw InvalidInputException("'to_base' number must be greater than or equal to 0");
+		    }
 		    if (radix < 2 || radix > 36) {
-			    throw InvalidInputException("radix must be between 2 and 36");
+			    throw InvalidInputException("'to_base' radix must be between 2 and 36");
 		    }
 		    if (min_length > 64 || min_length < 0) {
-			    throw InvalidInputException("min_length must be between 0 and 64");
+			    throw InvalidInputException("'to_base' min_length must be between 0 and 64");
 		    }
 
 		    char buf[64];

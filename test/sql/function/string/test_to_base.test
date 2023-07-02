@@ -6,19 +6,38 @@ statement ok
 PRAGMA enable_verification
 
 statement error
+SELECT to_base(-10, 2)
+----
+number must be greater than or equal to 0
+
+statement error
+SELECT to_base(-10, 2, 64)
+number must be greater than or equal to 0
+
+statement error
 SELECT to_base(10, 1)
 ----
-Invalid Input Error: radix must be between 2 and 36
+radix must be between 2 and 36
 
 statement error
 SELECT to_base(10, 37)
 ----
-Invalid Input Error: radix must be between 2 and 36
+radix must be between 2 and 36
+
+statement error
+SELECT to_base(10, 0, 10)
+----
+radix must be between 2 and 36
+
+statement error
+SELECT to_base(10, 37, 10)
+----
+radix must be between 2 and 36
 
 statement error
 SELECT to_base(10, 2, -10)
 ----
-Invalid Input Error: min_length must be between 0 and 64
+min_length must be between 0 and 64
 
 
 # Basic checks
