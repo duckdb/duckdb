@@ -137,6 +137,9 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 			case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 				break;
 			case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+			case ExpressionType::COMPARE_GREATERTHAN:
+			case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			case ExpressionType::COMPARE_LESSTHAN:
 				if (asof_idx < conditions.size()) {
 					throw BinderException("Multiple ASOF JOIN inequalities");
 				}
