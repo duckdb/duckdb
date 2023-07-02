@@ -184,6 +184,8 @@ public:
 	void Sink(DataChunk &input_chunk, const idx_t input_idx, const idx_t total_count) override;
 	void Finalize() override;
 
+	unique_ptr<WindowExecutorState> GetExecutorState() const override;
+
 	const WindowAggregationMode mode;
 
 protected:
@@ -191,7 +193,7 @@ protected:
 	SelectionVector filter_sel;
 
 	// aggregate computation algorithm
-	unique_ptr<WindowAggregateState> aggregate_state;
+	unique_ptr<WindowAggregator> aggregator;
 
 	void EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count, idx_t row_idx) const override;
 };

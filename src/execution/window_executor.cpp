@@ -724,14 +724,14 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
 
 	//	Check for constant aggregate
 	if (IsConstantAggregate()) {
-		aggregate_state =
-		    make_uniq<WindowConstantAggregate>(AggregateObject(wexpr), wexpr.return_type, partition_mask, count);
+		aggregator =
+		    make_uniq<WindowConstantAggregator>(AggregateObject(wexpr), wexpr.return_type, partition_mask, count);
 	} else if (IsCustomAggregate()) {
-		aggregate_state = make_uniq<WindowCustomAggregate>(AggregateObject(wexpr), wexpr.return_type, count);
+		aggregator = make_uniq<WindowCustomAggregator>(AggregateObject(wexpr), wexpr.return_type, count);
 	} else if (wexpr.aggregate) {
 		// build a segment tree for frame-adhering aggregates
 		// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
-		aggregate_state = make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, count, mode);
+		aggregator = make_uniq<WindowSegmentTree>(AggregateObject(wexpr), wexpr.return_type, count, mode);
 	}
 
 	// evaluate the FILTER clause and stuff it into a large mask for compactness and reuse
@@ -753,29 +753,48 @@ void WindowAggregateExecutor::Sink(DataChunk &input_chunk, const idx_t input_idx
 		payload_chunk.Reset();
 		payload_executor.Execute(input_chunk, payload_chunk);
 		payload_chunk.Verify();
-	} else if (aggregate_state) {
+	} else if (aggregator) {
 		//	Zero-argument aggregate (e.g., COUNT(*)
 		payload_chunk.SetCardinality(input_chunk);
 	}
 
-	D_ASSERT(aggregate_state);
-	aggregate_state->Sink(payload_chunk, filtering, filtered);
+	D_ASSERT(aggregator);
+	aggregator->Sink(payload_chunk, filtering, filtered);
 
 	WindowExecutor::Sink(input_chunk, input_idx, total_count);
 }
 
 void WindowAggregateExecutor::Finalize() {
-	D_ASSERT(aggregate_state);
-	aggregate_state->Finalize();
+	D_ASSERT(aggregator);
+	aggregator->Finalize();
+}
+
+class WindowAggregateState : public WindowExecutorBoundsState {
+public:
+	WindowAggregateState(BoundWindowExpression &wexpr, ClientContext &context, const idx_t payload_count,
+	                     const ValidityMask &partition_mask, const ValidityMask &order_mask,
+	                     const WindowAggregator &aggregator)
+	    : WindowExecutorBoundsState(wexpr, context, payload_count, partition_mask, order_mask),
+	      aggregator_state(aggregator.GetLocalState()) {
+	}
+
+public:
+	unique_ptr<WindowAggregatorState> aggregator_state;
+
+	void NextRank(idx_t partition_begin, idx_t peer_begin, idx_t row_idx);
+};
+
+unique_ptr<WindowExecutorState> WindowAggregateExecutor::GetExecutorState() const {
+	return make_uniq<WindowAggregateState>(wexpr, context, payload_count, partition_mask, order_mask, *aggregator);
 }
 
 void WindowAggregateExecutor::EvaluateInternal(WindowExecutorState &lstate, Vector &result, idx_t count,
                                                idx_t row_idx) const {
-	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
-	D_ASSERT(aggregate_state);
-	auto window_begin = FlatVector::GetData<const idx_t>(lbstate.bounds.data[WINDOW_BEGIN]);
-	auto window_end = FlatVector::GetData<const idx_t>(lbstate.bounds.data[WINDOW_END]);
-	aggregate_state->Evaluate(window_begin, window_end, result, count);
+	auto &lastate = lstate.Cast<WindowAggregateState>();
+	D_ASSERT(aggregator);
+	auto window_begin = FlatVector::GetData<const idx_t>(lastate.bounds.data[WINDOW_BEGIN]);
+	auto window_end = FlatVector::GetData<const idx_t>(lastate.bounds.data[WINDOW_END]);
+	aggregator->Evaluate(*lastate.aggregator_state, window_begin, window_end, result, count);
 }
 
 //===--------------------------------------------------------------------===//
