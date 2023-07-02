@@ -2,6 +2,8 @@
 # description: Test IEJoin projection mapping
 # group: [iejoin]
 
+require skip_reload
+
 statement ok
 PRAGMA threads=1
 
