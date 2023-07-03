@@ -573,6 +573,9 @@ RadixHTGlobalSourceState::RadixHTGlobalSourceState(ClientContext &context_p, con
 
 bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTLocalSourceState &lstate) {
 	lock_guard<mutex> guard(lock);
+	if (finished) {
+		return false;
+	}
 
 	// Try to assign a scan task first if we enabled multi-scanning,
 	// if not multi-scanning, threads just immediately scan the HTs they finished
@@ -609,6 +612,7 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 	}
 
 	if (finalize_done == sink.finalize_partitions.size() && scan_done == sink.final_data.size()) {
+		sink.finalize_partitions.clear();
 		finished = true;
 	}
 
@@ -716,7 +720,10 @@ void RadixHTLocalSourceState::Repartition(RadixHTGlobalSinkState &sink, RadixHTG
 void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlobalSourceState &gstate) {
 	D_ASSERT(task == RadixHTSourceTaskType::FINALIZE);
 
+	// Grab the partition. We can safely hold the lock for the whole duration,
+	// because this is the only thread working on this partition
 	auto &finalize_partition = *sink.finalize_partitions[task_idx.GetIndex()];
+	lock_guard<mutex> partition_guard(finalize_partition.lock);
 	D_ASSERT(!finalize_partition.finalize_available);
 
 	if (!ht) {
@@ -775,10 +782,7 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 	if (!data_collection.Scan(scan_state, scan_chunk)) {
 		scan_status = RadixHTScanStatus::DONE;
 		lock_guard<mutex> guard(gstate.lock);
-		if (++gstate.scan_done == sink.final_data.size() && gstate.finalize_done == sink.finalize_partitions.size()) {
-			sink.finalize_partitions.clear();
-			gstate.finished = true;
-		}
+		gstate.scan_done++;
 		return;
 	}
 
