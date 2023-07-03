@@ -282,6 +282,8 @@ string Prefix::VerifyAndToString(ART &art, Node &node, const bool only_verify) {
 
 BlockPointer Prefix::Serialize(ART &art, MetaBlockWriter &writer) {
 
+	// FIXME: we might want to do this iteratively instead of recursively to decrease the function-call overhead
+
 	// recurse into the child and retrieve its block pointer
 	auto child_block_pointer = ptr.Serialize(art, writer);
 
@@ -303,6 +305,8 @@ BlockPointer Prefix::Serialize(ART &art, MetaBlockWriter &writer) {
 }
 
 void Prefix::Deserialize(MetaBlockReader &reader) {
+
+	// FIXME: we might want to do this iteratively instead of recursively to decrease the function-call overhead
 
 	data[Node::PREFIX_SIZE] = reader.Read<uint8_t>();
 

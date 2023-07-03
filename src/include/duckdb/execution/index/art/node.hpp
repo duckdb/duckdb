@@ -180,6 +180,12 @@ public:
 		data = 0;
 	}
 
+	//! Adds an idx_t to a buffer ID, the rightmost 32 bits contain the buffer ID
+	inline void AddToBufferID(const idx_t summand) {
+		D_ASSERT(summand < NumericLimits<uint32_t>().Maximum());
+		data += summand;
+	}
+
 	//! Comparison operator
 	inline bool operator==(const Node &node) const {
 		return data == node.data;

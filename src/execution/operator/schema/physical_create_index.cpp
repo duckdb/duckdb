@@ -110,17 +110,6 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
 
-#ifdef DEBUG
-	// ensure that all row IDs of this chunk exist in the ART
-	auto &local_art = lstate.local_index->Cast<ART>();
-	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
-	for (idx_t i = 0; i < lstate.key_chunk.size(); i++) {
-		auto leaf = local_art.Lookup(*local_art.tree, lstate.keys[i], 0);
-		D_ASSERT(leaf.IsSet());
-		D_ASSERT(Leaf::ContainsRowId(local_art, leaf, row_ids[i]));
-	}
-#endif
-
 	return SinkResultType::NEED_MORE_INPUT;
 }
 

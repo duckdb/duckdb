@@ -266,6 +266,8 @@ void Node::Deserialize(ART &art) {
 	if (decoded_type == NType::LEAF_INLINED) {
 		SetRowId(reader.Read<row_t>());
 		return;
+	} else if (decoded_type == NType::LEAF) {
+		return Leaf::Deserialize(art, *this, reader);
 	}
 
 	*this = Node::GetAllocator(art, decoded_type).New();
@@ -274,8 +276,6 @@ void Node::Deserialize(ART &art) {
 	switch (decoded_type) {
 	case NType::PREFIX:
 		return Prefix::Get(art, *this).Deserialize(reader);
-	case NType::LEAF:
-		return Leaf::Deserialize(art, *this, reader);
 	case NType::NODE_4:
 		return Node4::Get(art, *this).Deserialize(reader);
 	case NType::NODE_16:
@@ -381,7 +381,7 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 		break;
 	case NType::LEAF:
 		Leaf::InitializeMerge(art, *this, flags);
-		break;
+		return;
 	case NType::NODE_4:
 		Node4::Get(art, *this).InitializeMerge(art, flags);
 		break;
@@ -398,8 +398,7 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 		return;
 	}
 
-	// NOTE: this works because the rightmost 32 bits contain the buffer ID
-	data += flags.merge_buffer_counts[(uint8_t)GetType() - 1];
+	AddToBufferID(flags.merge_buffer_counts[(uint8_t)GetType() - 1]);
 }
 
 bool Node::Merge(ART &art, Node &other) {
