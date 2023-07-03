@@ -504,7 +504,6 @@ public:
 	//! For synchronizing repartition tasks
 	idx_t repartition_idx;
 	idx_t repartition_task_idx;
-	atomic<idx_t> repartition_done;
 
 	//! For synchronizing finalize tasks
 	idx_t finalize_idx;
@@ -564,8 +563,8 @@ unique_ptr<LocalSourceState> RadixPartitionedHashTable::GetLocalSourceState(Exec
 }
 
 RadixHTGlobalSourceState::RadixHTGlobalSourceState(ClientContext &context_p, const RadixPartitionedHashTable &radix_ht)
-    : context(context_p), finished(false), repartition_idx(0), repartition_task_idx(0), repartition_done(0),
-      finalize_idx(0), finalize_done(0), scan_idx(0), scan_done(0) {
+    : context(context_p), finished(false), repartition_idx(0), repartition_task_idx(0), finalize_idx(0),
+      finalize_done(0), scan_idx(0), scan_done(0) {
 	for (column_t column_id = 0; column_id < radix_ht.group_types.size(); column_id++) {
 		column_ids.push_back(column_id);
 	}
@@ -612,6 +611,7 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 	}
 
 	if (finalize_done == sink.finalize_partitions.size() && scan_done == sink.final_data.size()) {
+		sink.sink_partitions.clear();
 		sink.finalize_partitions.clear();
 		finished = true;
 	}
@@ -713,11 +713,6 @@ void RadixHTLocalSourceState::Repartition(RadixHTGlobalSinkState &sink, RadixHTG
 			const auto finalize_partition_idx = sink_partition_idx * multiplier + i;
 			auto &finalize_partition = *sink.finalize_partitions[finalize_partition_idx];
 			finalize_partition.finalize_available = true;
-		}
-
-		if (++gstate.repartition_done == sink.sink_partitions.size()) {
-			lock_guard<mutex> guard(sink.lock);
-			sink.sink_partitions.clear();
 		}
 	}
 }
