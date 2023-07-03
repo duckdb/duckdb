@@ -47,6 +47,7 @@
 #include "duckdb_python/pybind11/conversions/exception_handling_enum.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/main/pending_query_result.hpp"
 
 #include <random>
 
@@ -442,8 +443,15 @@ unique_ptr<QueryResult> DuckDBPyConnection::ExecuteInternal(const string &query,
 		// if there are multiple statements, we directly execute the statements besides the last one
 		// we only return the result of the last statement to the user, unless one of the previous statements fails
 		for (idx_t i = 0; i + 1 < statements.size(); i++) {
-			auto pending_query = connection->PendingQuery(std::move(statements[i]), false);
-			auto res = CompletePendingQuery(*pending_query);
+			if (statements[i]->n_param != 0) {
+				throw NotImplementedException(
+				    "Prepared parameters are only supported for the last statement, please split your query up into "
+				    "separate 'execute' calls if you want to use prepared parameters");
+			}
+			auto pending_query_p = connection->PendingQuery(std::move(statements[i]), false);
+			D_ASSERT(pending_query_p->type == QueryResultType::PENDING_RESULT);
+			auto &pending_query = dynamic_cast<PendingQueryResult &>(*pending_query_p);
+			auto res = CompletePendingQuery(pending_query);
 
 			if (res->HasError()) {
 				res->ThrowError();
