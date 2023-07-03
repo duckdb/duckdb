@@ -11,7 +11,8 @@ namespace duckdb {
 
 struct ListSliceBindData : public FunctionData {
 	ListSliceBindData(const LogicalType &return_type_p, bool start_is_throw_p, bool end_is_throw_p)
-	    : return_type(return_type_p), start_is_throw(start_is_throw_p), end_is_throw(end_is_throw_p) {}
+	    : return_type(return_type_p), start_is_throw(start_is_throw_p), end_is_throw(end_is_throw_p) {
+	}
 	~ListSliceBindData() override;
 
 	LogicalType return_type;
@@ -36,7 +37,6 @@ bool ListSliceBindData::Equals(const FunctionData &other_p) const {
 unique_ptr<FunctionData> ListSliceBindData::Copy() const {
 	return make_uniq<ListSliceBindData>(return_type, start_is_throw, end_is_throw);
 }
-
 
 template <typename INDEX_TYPE>
 static int CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool svalid) {
@@ -249,7 +249,8 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 		auto end = ((INDEX_TYPE *)end_data.data)[end_idx];
 		auto step = step_vector ? ((INDEX_TYPE *)step_data.data)[step_idx] : 1;
 
-		if ((start_is_throw && begin == NumericLimits<INDEX_TYPE>::Minimum()) || (end_is_throw && end == NumericLimits<INDEX_TYPE>::Maximum())) {
+		if ((start_is_throw && begin == NumericLimits<INDEX_TYPE>::Minimum()) ||
+		    (end_is_throw && end == NumericLimits<INDEX_TYPE>::Maximum())) {
 			throw InvalidInputException("The lower and/or upper bound of a slice cannot be a numeric limit. Consider "
 			                            "leaving it empty or using a different value.");
 		}
