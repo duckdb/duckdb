@@ -731,6 +731,8 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 
 	auto &uncombined_data = finalize_partition.uncombined_data;
 	if (uncombined_data.empty()) {
+		lock_guard<mutex> guard(gstate.lock);
+		gstate.finalize_done++;
 		return;
 	}
 
@@ -774,6 +776,7 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 		scan_status = RadixHTScanStatus::DONE;
 		lock_guard<mutex> guard(gstate.lock);
 		if (++gstate.scan_done == sink.final_data.size() && gstate.finalize_done == sink.finalize_partitions.size()) {
+			sink.finalize_partitions.clear();
 			gstate.finished = true;
 		}
 		return;
