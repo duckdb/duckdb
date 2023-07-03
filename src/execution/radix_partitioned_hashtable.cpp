@@ -318,6 +318,12 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 	D_ASSERT(gstate.finalize_radix_bits.IsValid());
 	D_ASSERT(gstate.repartition_tasks_per_partition.IsValid());
 
+	// Compute total count of data and set in sink state
+	gstate.final_count = 0;
+	for (auto &sink_partition : gstate.sink_partitions) {
+		gstate.final_count = gstate.final_count.GetIndex() + sink_partition->count.GetIndex();
+	}
+
 	if (requires_repartitioning) { // Schedule repartition / finalize tasks
 		D_ASSERT(gstate.finalize_radix_bits.GetIndex() > RadixHTConfig::SINK_RADIX_BITS);
 
@@ -458,24 +464,6 @@ idx_t RadixPartitionedHashTable::Count(GlobalSinkState &sink_p) const {
 
 idx_t RadixPartitionedHashTable::CountInternal(GlobalSinkState &sink_p) const {
 	auto &sink = sink_p.Cast<RadixHTGlobalSinkState>();
-	if (!sink.final_count.IsValid()) {
-		idx_t total_count = 0;
-		if (sink.finalize_partitions.empty()) {
-			for (auto &fd : sink.final_data) {
-				total_count += fd.data_collection->Count();
-			}
-		} else if (sink.sink_partitions.empty()) {
-			for (auto &finalize_partition : sink.finalize_partitions) {
-				total_count += finalize_partition->count.GetIndex();
-			}
-		} else {
-			for (auto &sink_partition : sink.sink_partitions) {
-				total_count += sink_partition->count.GetIndex();
-			}
-		}
-		lock_guard<mutex> guard(sink.lock);
-		sink.final_count = total_count;
-	}
 	return sink.final_count.GetIndex();
 }
 
