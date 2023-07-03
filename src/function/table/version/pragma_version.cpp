@@ -44,6 +44,45 @@ void PragmaVersion::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(pragma_version);
 }
 
+struct PragmaExtensionVersionData : public GlobalTableFunctionState {
+	PragmaExtensionVersionData() : finished(false) {
+	}
+
+	bool finished;
+};
+
+static unique_ptr<FunctionData> PragmaExtensionVersionBind(ClientContext &context, TableFunctionBindInput &input,
+                                                           vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("extension_folder");
+	return_types.emplace_back(LogicalType::VARCHAR);
+	names.emplace_back("platform");
+	return_types.emplace_back(LogicalType::VARCHAR);
+	return nullptr;
+}
+
+static unique_ptr<GlobalTableFunctionState> PragmaExtensionVersionInit(ClientContext &context, TableFunctionInitInput &input) {
+	return make_uniq<PragmaExtensionVersionData>();
+}
+
+static void PragmaExtensionVersionFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = data_p.global_state->Cast<PragmaExtensionVersionData>();
+	if (data.finished) {
+		// finished returning values
+		return;
+	}
+	output.SetCardinality(1);
+	output.SetValue(0, 0, DuckDB::ExtensionFolder());
+	output.SetValue(1, 0, DuckDB::Platform());
+	data.finished = true;
+}
+
+void PragmaExtensionVersion::RegisterFunction(BuiltinFunctions &set) {
+	TableFunction pragma_extension_version("pragma_extension_version", {}, PragmaExtensionVersionFunction);
+	pragma_extension_version.bind = PragmaExtensionVersionBind;
+	pragma_extension_version.init_global = PragmaExtensionVersionInit;
+	set.AddFunction(pragma_extension_version);
+}
+
 idx_t DuckDB::StandardVectorSize() {
 	return STANDARD_VECTOR_SIZE;
 }

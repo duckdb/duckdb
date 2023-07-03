@@ -10,6 +10,7 @@ namespace duckdb {
 
 void BuiltinFunctions::RegisterSQLiteFunctions() {
 	PragmaVersion::RegisterFunction(*this);
+	PragmaExtensionVersion::RegisterFunction(*this);
 	PragmaCollations::RegisterFunction(*this);
 	PragmaTableInfo::RegisterFunction(*this);
 	PragmaStorageInfo::RegisterFunction(*this);

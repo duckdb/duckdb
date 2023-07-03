@@ -136,6 +136,10 @@ string PragmaVersion(ClientContext &context, const FunctionParameters &parameter
 	return "SELECT * FROM pragma_version();";
 }
 
+string PragmaExtensionVersion(ClientContext &context, const FunctionParameters &parameters) {
+	return "SELECT * FROM pragma_extension_version();";
+}
+
 string PragmaImportDatabase(ClientContext &context, const FunctionParameters &parameters) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
@@ -192,6 +196,7 @@ void PragmaQueries::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("collations", PragmaCollations));
 	set.AddFunction(PragmaFunction::PragmaCall("show", PragmaShow, {LogicalType::VARCHAR}));
 	set.AddFunction(PragmaFunction::PragmaStatement("version", PragmaVersion));
+	set.AddFunction(PragmaFunction::PragmaStatement("extension_version", PragmaExtensionVersion));
 	set.AddFunction(PragmaFunction::PragmaStatement("database_size", PragmaDatabaseSize));
 	set.AddFunction(PragmaFunction::PragmaStatement("functions", PragmaFunctionsQuery));
 	set.AddFunction(PragmaFunction::PragmaCall("import_database", PragmaImportDatabase, {LogicalType::VARCHAR}));
