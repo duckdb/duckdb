@@ -10,3 +10,12 @@ select * from pragma_version();
 
 statement ok
 select library_version from pragma_version();
+
+statement ok
+PRAGMA extension_version;
+
+statement ok
+select * from pragma_extension_version();
+
+statement ok
+select extension_folder from pragma_extension_version();
