@@ -40,47 +40,47 @@ runs:
   steps:
     - name: Setup general dependencies
       shell: bash
-      run: scripts/setup_manylinux2014.sh general
+      run: ${{github.action_path}}/../../../scripts/setup_manylinux2014.sh general
 
     - name: Install AWS CLI
       if: ${{ inputs.aws-cli == 1 }}
       shell: bash
-      run: scripts/setup_manylinux2014.sh aws-cli
+      run: ${{github.action_path}}/../../../scripts/setup_manylinux2014.sh aws-cli
 
     - name: Setup dependencies for ODBC
       if: ${{ inputs.odbc == 1 }}
       shell: bash
-      run: scripts/setup_manylinux2014.sh odbc
+      run: ${{github.action_path}}/../../../scripts/setup_manylinux2014.sh odbc
 
     - name: Setup dependencies for ccache
       if: ${{ inputs.ccache == 1 }}
       shell: bash
-      run: scripts/setup_manylinux2014.sh ccache
+      run: ${{github.action_path}}/../../../scripts/setup_manylinux2014.sh ccache
 
     - name: Setup JDK
       if: ${{ inputs.jdk == 1 }}
       shell: bash
-      run: scripts/setup_manylinux2014.sh jdk
+      run: ${{github.action_path}}/../../../scripts/setup_manylinux2014.sh jdk
 
     - name: Setup SSH
       if: ${{ inputs.ssh == 1 }}
       shell: bash
-      run: scripts/setup_manylinux2014.sh ssh
+      run: ${{github.action_path}}/../../../scripts/setup_manylinux2014.sh ssh
 
     - name: Setup 32bit compiler
       if: ${{ inputs.glibc32 == 1 }}
       shell: bash
-      run: scripts/setup_manylinux2014.sh glibc32
+      run: ${{github.action_path}}/../../../scripts/setup_manylinux2014.sh glibc32
 
     - name: Setup python3 as python3.9
       if: ${{ inputs.python_alias == 1 }}
       shell: bash
-      run: scripts/setup_manylinux2014.sh python_alias
+      run: ${{github.action_path}}/../../../scripts/setup_manylinux2014.sh python_alias
 
     - name: Setup old (GCC 4.8) compiler
       if: ${{ inputs.gcc_4_8 == 1 }}
       shell: bash
-      run: scripts/setup_manylinux2014.sh gcc_4_8
+      run: ${{github.action_path}}/../../../scripts/setup_manylinux2014.sh gcc_4_8
 
     # Note instead of using scripts/setup_manylinux2014.sh vcpkg, we prefer to use
     # lukka/run-vcpkg@v11 here as it configures vcpkg to cache to GH actions.
@@ -93,7 +93,7 @@ runs:
     - name: Install OpenSSL
       if: ${{ inputs.openssl == 1 }}
       shell: bash
-      run: scripts/setup_manylinux2014.sh openssl
+      run: ${{github.action_path}}/../../../scripts/setup_manylinux2014.sh openssl
 
     - name: Setup Ccache
       if: ${{ inputs.ccache == 1 }}

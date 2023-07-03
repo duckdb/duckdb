@@ -31,13 +31,14 @@ functions = {}
 def parse_extension_configs():
     ext_configs = [
         os.path.join('..', '.github', 'config', 'out_of_tree_extensions.cmake'),
-        os.path.join('..', '.github', 'config', 'in_tree_extensions.cmake')
+        os.path.join('..', '.github', 'config', 'in_tree_extensions.cmake'),
+        os.path.join('..', '.github', 'config', 'vcpkg_extensions.cmake')
     ]
     extension_names = []
     for file in ext_configs:
         with open(file, 'r') as file:
             data = file.read().replace('\n', '')
-        pattern = re.compile(r"duckdb_extension_load\s*\(\s*([A-z\_0-9]*)\s")
+        pattern = re.compile(r"duckdb_extension_load\s*\(\s*([A-z\_0-9]*)")
         extension_names += [match.group(1) for match in pattern.finditer(data)]
     return extension_names
 
