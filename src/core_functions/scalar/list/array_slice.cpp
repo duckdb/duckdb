@@ -9,6 +9,35 @@
 
 namespace duckdb {
 
+struct ListSliceBindData : public FunctionData {
+	ListSliceBindData(const LogicalType &return_type_p, bool start_is_throw_p, bool end_is_throw_p)
+	    : return_type(return_type_p), start_is_throw(start_is_throw_p), end_is_throw(end_is_throw_p) {}
+	~ListSliceBindData() override;
+
+	LogicalType return_type;
+
+	bool start_is_throw;
+	bool end_is_throw;
+
+public:
+	bool Equals(const FunctionData &other_p) const override;
+	unique_ptr<FunctionData> Copy() const override;
+};
+
+ListSliceBindData::~ListSliceBindData() {
+}
+
+bool ListSliceBindData::Equals(const FunctionData &other_p) const {
+	auto &other = other_p.Cast<ListSliceBindData>();
+	return return_type == other.return_type && start_is_throw == other.start_is_throw &&
+	       end_is_throw == other.end_is_throw;
+}
+
+unique_ptr<FunctionData> ListSliceBindData::Copy() const {
+	return make_uniq<ListSliceBindData>(return_type, start_is_throw, end_is_throw);
+}
+
+
 template <typename INDEX_TYPE>
 static int CalculateSliceLength(idx_t begin, idx_t end, INDEX_TYPE step, bool svalid) {
 	if (step < 0) {
@@ -194,7 +223,7 @@ static void ExecuteConstantSlice(Vector &result, Vector &str_vector, Vector &beg
 template <typename INPUT_TYPE, typename INDEX_TYPE>
 static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_vector, Vector &end_vector,
                              optional_ptr<Vector> step_vector, const idx_t count, SelectionVector &sel, idx_t &sel_idx,
-                             optional_ptr<Vector> result_child_vector) {
+                             optional_ptr<Vector> result_child_vector, bool start_is_throw, bool end_is_throw) {
 	UnifiedVectorFormat list_data, begin_data, end_data, step_data;
 	idx_t sel_length = 0;
 
@@ -220,6 +249,10 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 		auto end = ((INDEX_TYPE *)end_data.data)[end_idx];
 		auto step = step_vector ? ((INDEX_TYPE *)step_data.data)[step_idx] : 1;
 
+		if ((start_is_throw && begin == NumericLimits<INDEX_TYPE>::Minimum()) || (end_is_throw && end == NumericLimits<INDEX_TYPE>::Maximum())) {
+			throw InvalidInputException("The lower and/or upper bound of a slice cannot be a numeric limit. Consider "
+			                            "leaving it empty or using a different value.");
+		}
 		CheckBeginAndEnd(begin, end, step, sliced);
 
 		auto list_valid = list_data.validity.RowIsValid(list_idx);
@@ -258,7 +291,7 @@ static void ExecuteFlatSlice(Vector &result, Vector &list_vector, Vector &begin_
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
 static void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &begin_vector, Vector &end_vector,
-                         optional_ptr<Vector> step_vector, const idx_t count) {
+                         optional_ptr<Vector> step_vector, const idx_t count, bool start_is_throw, bool end_is_throw) {
 	optional_ptr<Vector> result_child_vector;
 	if (step_vector) {
 		result_child_vector = &ListVector::GetEntry(result);
@@ -272,7 +305,8 @@ static void ExecuteSlice(Vector &result, Vector &list_or_str_vector, Vector &beg
 		                                             count, sel, sel_idx, result_child_vector);
 	} else {
 		ExecuteFlatSlice<INPUT_TYPE, INDEX_TYPE>(result, list_or_str_vector, begin_vector, end_vector, step_vector,
-		                                         count, sel, sel_idx, result_child_vector);
+		                                         count, sel, sel_idx, result_child_vector, start_is_throw,
+		                                         end_is_throw);
 	}
 	result.Verify(count);
 }
@@ -291,6 +325,11 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 		step_vector = &args.data[3];
 	}
 
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	auto &info = func_expr.bind_info->Cast<ListSliceBindData>();
+	auto start_is_throw = info.start_is_throw;
+	auto end_is_throw = info.end_is_throw;
+
 	result.SetVectorType(args.AllConstant() ? VectorType::CONSTANT_VECTOR : VectorType::FLAT_VECTOR);
 	switch (result.GetType().id()) {
 	case LogicalTypeId::LIST: {
@@ -300,11 +339,13 @@ static void ArraySliceFunction(DataChunk &args, ExpressionState &state, Vector &
 			list_or_str_vector.Flatten(count);
 		}
 		ListVector::ReferenceEntry(result, list_or_str_vector);
-		ExecuteSlice<list_entry_t, int64_t>(result, list_or_str_vector, begin_vector, end_vector, step_vector, count);
+		ExecuteSlice<list_entry_t, int64_t>(result, list_or_str_vector, begin_vector, end_vector, step_vector, count,
+		                                    start_is_throw, end_is_throw);
 		break;
 	}
 	case LogicalTypeId::VARCHAR: {
-		ExecuteSlice<string_t, int64_t>(result, list_or_str_vector, begin_vector, end_vector, step_vector, count);
+		ExecuteSlice<string_t, int64_t>(result, list_or_str_vector, begin_vector, end_vector, step_vector, count,
+		                                start_is_throw, end_is_throw);
 		break;
 	}
 	default:
@@ -343,7 +384,16 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 		throw BinderException("ARRAY_SLICE can only operate on LISTs and VARCHARs");
 	}
 
-	return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	bool start_is_throw = false;
+	if (!arguments[1]->IsFoldable()) {
+		start_is_throw = true;
+	}
+	bool end_is_throw = false;
+	if (!arguments[2]->IsFoldable()) {
+		end_is_throw = true;
+	}
+
+	return make_uniq<ListSliceBindData>(bound_function.return_type, start_is_throw, end_is_throw);
 }
 
 ScalarFunctionSet ListSliceFun::GetFunctions() {

@@ -40,14 +40,45 @@ INSERT INTO tbl VALUES ([1,2,3,4,5], -9223372036854775808, 9223372036854775807, 
 statement ok
 INSERT INTO tbl VALUES ([1,2,3,4,5], -9223372036854775808 + 1, 9223372036854775807 - 1, -1);
 
-query I
+statement error
 SELECT a[-9223372036854775808:9223372036854775807:step] FROM tbl;
-----
-[]
-[]
+
+statement error
+SELECT a[start:stop:step] FROM tbl;
+
+statement ok
+DROP TABLE tbl;
+
+statement ok
+create table tbl (a int[], start bigint, stop bigint, step bigint);
+
+statement ok
+INSERT INTO tbl VALUES ([1,2,3,4,5], -9223372036854775808 + 1, 9223372036854775807 - 1, -1);
+
+statement ok
+INSERT INTO tbl VALUES ([1,2,3,4,5], 1, 5, 9223372036854775807);
+
+statement ok
+INSERT INTO tbl VALUES ([1,2,3,4,5], 1, 5, -9223372036854775808);
 
 query I
 SELECT a[start:stop:step] FROM tbl;
 ----
 []
+[1]
+[]
+
+query I
+SELECT ([1,2,3,4,5])[-9223372036854775808 + 1:9223372036854775807 - 1:-1];
+----
+[]
+
+query I
+SELECT ([1,2,3,4,5])[1:5:9223372036854775807];
+----
+[1]
+
+query I
+SELECT ([1,2,3,4,5])[1:5:-9223372036854775808];
+----
 []
