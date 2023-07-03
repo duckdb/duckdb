@@ -460,7 +460,11 @@ idx_t RadixPartitionedHashTable::CountInternal(GlobalSinkState &sink_p) const {
 	auto &sink = sink_p.Cast<RadixHTGlobalSinkState>();
 	if (!sink.final_count.IsValid()) {
 		idx_t total_count = 0;
-		if (sink.sink_partitions.empty()) {
+		if (sink.finalize_partitions.empty()) {
+			for (auto &fd : sink.final_data) {
+				total_count += fd.data_collection->Count();
+			}
+		} else if (sink.sink_partitions.empty()) {
 			for (auto &finalize_partition : sink.finalize_partitions) {
 				total_count += finalize_partition->count.GetIndex();
 			}
