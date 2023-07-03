@@ -168,19 +168,22 @@ jobs:
 #    needs: xcode-debug
     strategy:
       matrix:
-        osx_arch: [ 'x86_64', 'arm64' , '']
+        label: [ 'x86_64', 'arm64' , 'universal (legacy)']
         include:
-          - osx_arch: x86_64
+          - label: x86_64
+            osx_arch: x86_64
             duckdb_arch: osx_amd64
             vcpkg_triplet: x64-osx
             universal_build: 0
-          - osx_arch: arm64
+          - label: arm64
+            osx_arch: arm64
             duckdb_arch: osx_arm64
             vcpkg_triplet: arm64-osx
             universal_build: 0
-          # Out-of-tree extension are still built using the universal builds, once thats fixed, this can be removed
+          # Out-of-tree extension are still built using the universal builds, once that's fixed, this can be removed
           # building all extensions with the two above configs
-          - osx_arch: ''
+          - label: 'universal (legacy)'
+            osx_arch: ''
             vcpkg_triplet: ''
             duckdb_arch: ''
             universal_build: 1
@@ -202,20 +205,25 @@ jobs:
       - name: Setup Ccache
         uses: hendrikmuhs/ccache-action@main
         with:
-          key: ${{ github.job }}
+          key: ${{ github.job }}-${{ matrix.label }}
           save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - uses: ./.github/actions/build_extensions
         if: matrix.universal_build == 0
         with:
           treat_warn_as_error: 0
-          post_install: rm build/release/src/libduckdb*
           run_tests: 0
           osx_arch: ${{ matrix.osx_arch }}
           vcpkg_target_triplet: ${{ matrix.vcpkg_triplet }}
           build_in_tree_extensions: 1
           build_vcpkg_extensions: 1
           build_out_of_tree_extensions: 0
+
+      - name: Test statically linked extensions
+        if: ${{ matrix.osx_arch == 'x86_64' }}
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest
 
       - name: Sign Extension Binaries
         if: matrix.universal_build == 0
@@ -239,19 +247,30 @@ jobs:
           if [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
             ./scripts/extension-upload.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}
-            ./scripts/extension-upload-test.sh
           elif [[ "$GITHUB_REF" =~ ^(refs/heads/master)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
             ./scripts/extension-upload.sh ${{ matrix.duckdb_arch }} `git log -1 --format=%h`
-            ./scripts/extension-upload-test.sh
           else
             echo "would do: ./scripts/extension-upload.sh ${{ matrix.duckdb_arch }} ${{ github.ref_name }}"
+          fi
+
+      - name: Test loadable extensions
+        if: ${{ matrix.osx_arch == 'x86_64' }}
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
+          AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+          AWS_DEFAULT_REGION: us-east-1
+        run: |
+          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+            ./scripts/extension-upload-test.sh
+          else
             ./scripts/extension-upload-test.sh local
           fi
 
-      # TODO: Universal builds below are for compatibility with current out-of-tree extensions, can be removed after
-      #       updating them
-      - name: Install OpenSSL
+      # TODO: below is legacy code to transition the out-of-tree extensions from universal builds to split builds
+      #       all universal_build related code can be removed after all current out-of-tree extensions support it.
+      - name: Install OpenSSL (legacy)
         if: matrix.universal_build == 1
         shell: bash
         run: |
@@ -266,14 +285,15 @@ jobs:
           make -j
           make install_sw
 
-      - name: Get OpenSSL path
+      - name: Get OpenSSL path (legacy)
         if: matrix.universal_build == 1
         shell: bash
         run: |
           export OPENSSL_ROOT_DIR=`pwd`/build/openssl/build
           echo "OPENSSL_ROOT_DIR=$OPENSSL_ROOT_DIR" >> $GITHUB_ENV
 
-      - uses: ./.github/actions/build_extensions
+      - name: Build extensions (legacy)
+        uses: ./.github/actions/build_extensions
         if: matrix.universal_build == 1
         with:
           treat_warn_as_error: 0
@@ -285,14 +305,14 @@ jobs:
           build_vcpkg_extensions: 0
           build_out_of_tree_extensions: 1
 
-      - name: Create separate binaries
+      - name: Create separate binaries (legacy)
         if: matrix.universal_build == 1
         shell: bash
         run: |
           ./scripts/extension-lipo-strip.sh x86_64 build/release/extension build/release/extension_arm64
           ./scripts/extension-lipo-strip.sh arm64 build/release/extension build/release/extension_x64
 
-      - name: Sign Extension Binaries
+      - name: Sign Extension Binaries (legacy)
         if: matrix.universal_build == 1
         env:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.OSX_CODESIGN_BUILD_CERTIFICATE_BASE64 }}
@@ -306,7 +326,7 @@ jobs:
           codesign --all-architectures --force --sign "Developer ID Application: Stichting DuckDB Foundation" build/release/extension_x64/*.duckdb_extension
           fi
 
-      - name: Deploy
+      - name: Deploy (legacy)
         shell: bash
         if: matrix.universal_build == 1
         env:

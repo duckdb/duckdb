@@ -102,7 +102,7 @@ runs:
       if: inputs.osx_universal == 0
       shell: bash
       run: |
-        cd $VCPKG_ROOT && ./vcpkg install openssl ${{ inputs.target_vcpkg_target_triplet && format('--triplet={0}', inputs.target_vcpkg_target_triplet)}}
+        cd $VCPKG_ROOT && ./vcpkg install openssl ${{ inputs.vcpkg_target_triplet != '' && format('--triplet={0}', inputs.vcpkg_target_triplet) || ''}}
         echo "OPENSSL_ROOT_DIR=$VCPKG_ROOT/installed/`vcpkg list | grep -o 'openssl:[a-z0-9]*-[a-z]*' | grep -o '[a-z0-9]*-[a-z]*' | head -n 1`" >> $GITHUB_ENV
 
     - name: Create combined vcpkg manifest

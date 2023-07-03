@@ -63,14 +63,20 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
   endif()
 endforeach()
 
-if(NOT ${EXT_TEST_PATH_LIST} STREQUAL "")
-  string(SUBSTRING ${EXT_TEST_PATH_LIST} 1 -1 EXT_TEST_PATH_INITIALIZER)
-endif()
+if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
+  if(NOT ${EXT_TEST_PATH_LIST} STREQUAL "")
+    string(SUBSTRING ${EXT_TEST_PATH_LIST} 1 -1 EXT_TEST_PATH_INITIALIZER)
+  endif()
 
-set(GENERATED_CPP_FILE
-    ${PROJECT_BINARY_DIR}/codegen/src/generated_extension_loader.cpp)
-configure_file(generated_extension_loader.cpp.in "${GENERATED_CPP_FILE}")
-add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
+  set(GENERATED_CPP_FILE
+      ${PROJECT_BINARY_DIR}/codegen/src/generated_extension_loader.cpp)
+  configure_file(generated_extension_loader.cpp.in "${GENERATED_CPP_FILE}")
+  add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
+
+  add_library(duckdb_generated_extension_loader OBJECT ${GENERATED_CPP_FILE})
+  set(generated_loader_obj_files
+      $<TARGET_OBJECTS:duckdb_generated_extension_loader>)
+endif()
 
 # include generated includes
 include_directories("${PROJECT_BINARY_DIR}/codegen/include/")
@@ -89,11 +95,9 @@ add_library_unity(
   extension_load.cpp
   extension_util.cpp)
 
-add_library(duckdb_generated_extension_loader OBJECT ${GENERATED_CPP_FILE})
-
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_extension>
-    $<TARGET_OBJECTS:duckdb_generated_extension_loader>
+    ${ALL_OBJECT_FILES} ${generated_loader_obj_files}
     PARENT_SCOPE)
 
 add_extension_definitions(duckdb_main_extension)
