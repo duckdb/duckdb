@@ -106,57 +106,17 @@ struct AggregatePartition {
 
 class RadixHTGlobalSinkState : public GlobalSinkState {
 public:
-	explicit RadixHTGlobalSinkState()
-	    : finalized(false), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE) {
-		const auto num_partitions = RadixPartitioning::NumberOfPartitions(RadixHTConfig::SINK_RADIX_BITS);
-		sink_partitions.resize(num_partitions);
-		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
-			sink_partitions[partition_idx] = make_uniq<AggregatePartition>();
-		}
-	}
+	RadixHTGlobalSinkState();
 
-	idx_t AddToFinal(GroupedAggregateHashTable &intermediate_ht, vector<MaterializedAggregateData> &uncombined_data) {
-		unique_ptr<PartitionedTupleData> partitioned_data;
-		shared_ptr<ArenaAllocator> aggregate_allocator;
-		intermediate_ht.GetDataOwnership(partitioned_data, aggregate_allocator);
-		D_ASSERT(partitioned_data->GetPartitions().size() == 1);
+	//! Adds to final data to be scanned
+	idx_t AddToFinal(GroupedAggregateHashTable &intermediate_ht, vector<MaterializedAggregateData> &uncombined_data);
 
-		auto &data_collection = partitioned_data->GetPartitions()[0];
-		D_ASSERT(data_collection->Count() != 0);
+	//! Destroys aggregate states (if multi-scan)
+	void Destroy();
+	~RadixHTGlobalSinkState();
 
-		final_data.emplace_back(std::move(data_collection));
-		final_data.back().allocators.emplace_back(aggregate_allocator);
-		for (auto &ucb : uncombined_data) {
-			D_ASSERT(!ucb.allocators.empty());
-			for (auto &allocator : ucb.allocators) {
-				final_data.back().allocators.emplace_back(allocator);
-			}
-		}
-		return final_data.size() - 1;
-	}
-
-	void Destroy() {
-		if (scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE) {
-			return;
-		}
-
-		for (auto &data : final_data) {
-			// There are aggregates with destructors: Call the destructor for each of the aggregates
-			RowOperationsState row_state(*data.allocators.back());
-			auto layout = data.data_collection->GetLayout().Copy();
-			TupleDataChunkIterator iterator(*data.data_collection, TupleDataPinProperties::DESTROY_AFTER_DONE, false);
-			auto &row_locations = iterator.GetChunkState().row_locations;
-			do {
-				RowOperations::DestroyStates(row_state, layout, row_locations, iterator.GetCurrentChunkCount());
-			} while (iterator.Next());
-			data.data_collection->Reset();
-		}
-	}
-
-	~RadixHTGlobalSinkState() {
-		Destroy();
-	}
-
+public:
+	mutex lock;
 	//! Whether we've called Finalize
 	bool finalized;
 
@@ -170,8 +130,15 @@ public:
 	//! The radix partitions during the finalize
 	vector<unique_ptr<AggregatePartition>> finalize_partitions;
 
-	//! Lock for final stuff
-	mutex lock;
+	//! For synchronizing repartition tasks
+	idx_t repartition_idx;
+	idx_t repartition_task_idx;
+	atomic<idx_t> repartition_done;
+
+	//! For synchronizing finalize tasks
+	idx_t finalize_idx;
+	atomic<idx_t> finalize_done;
+
 	//! Pin properties when scanning
 	TupleDataPinProperties scan_pin_properties;
 	//! The final data that has to be scanned
@@ -180,21 +147,77 @@ public:
 	optional_idx final_count;
 };
 
-class RadixHTLocalSinkState : public LocalSinkState {
-public:
-	explicit RadixHTLocalSinkState(const RadixPartitionedHashTable &ht) {
-		// if there are no groups we create a fake group so everything has the same group
-		group_chunk.InitializeEmpty(ht.group_types);
-		if (ht.grouping_set.empty()) {
-			group_chunk.data[0].Reference(Value::TINYINT(42));
+RadixHTGlobalSinkState::RadixHTGlobalSinkState()
+    : finalized(false), repartition_idx(0), repartition_task_idx(0), repartition_done(0), finalize_idx(0),
+      finalize_done(0), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE) {
+	const auto num_partitions = RadixPartitioning::NumberOfPartitions(RadixHTConfig::SINK_RADIX_BITS);
+	sink_partitions.resize(num_partitions);
+	for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
+		sink_partitions[partition_idx] = make_uniq<AggregatePartition>();
+	}
+}
+
+idx_t RadixHTGlobalSinkState::AddToFinal(GroupedAggregateHashTable &intermediate_ht,
+                                         vector<MaterializedAggregateData> &uncombined_data) {
+	unique_ptr<PartitionedTupleData> partitioned_data;
+	shared_ptr<ArenaAllocator> aggregate_allocator;
+	intermediate_ht.GetDataOwnership(partitioned_data, aggregate_allocator);
+	D_ASSERT(partitioned_data->GetPartitions().size() == 1);
+
+	auto &data_collection = partitioned_data->GetPartitions()[0];
+	D_ASSERT(data_collection->Count() != 0);
+
+	final_data.emplace_back(std::move(data_collection));
+	final_data.back().allocators.emplace_back(aggregate_allocator);
+	for (auto &ucb : uncombined_data) {
+		D_ASSERT(!ucb.allocators.empty());
+		for (auto &allocator : ucb.allocators) {
+			final_data.back().allocators.emplace_back(allocator);
 		}
 	}
+	return final_data.size() - 1;
+}
 
+void RadixHTGlobalSinkState::Destroy() {
+	if (scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE) {
+		return;
+	}
+
+	for (auto &data : final_data) {
+		// There are aggregates with destructors: Call the destructor for each of the aggregates
+		RowOperationsState row_state(*data.allocators.back());
+		auto layout = data.data_collection->GetLayout().Copy();
+		TupleDataChunkIterator iterator(*data.data_collection, TupleDataPinProperties::DESTROY_AFTER_DONE, false);
+		auto &row_locations = iterator.GetChunkState().row_locations;
+		do {
+			RowOperations::DestroyStates(row_state, layout, row_locations, iterator.GetCurrentChunkCount());
+		} while (iterator.Next());
+		data.data_collection->Reset();
+	}
+}
+
+RadixHTGlobalSinkState::~RadixHTGlobalSinkState() {
+	Destroy();
+}
+
+class RadixHTLocalSinkState : public LocalSinkState {
+public:
+	explicit RadixHTLocalSinkState(const RadixPartitionedHashTable &ht);
+
+public:
 	//! Thread-local HT that is re-used
 	unique_ptr<GroupedAggregateHashTable> ht;
 	//! Chunk with group columns
 	DataChunk group_chunk;
 };
+
+RadixHTLocalSinkState::RadixHTLocalSinkState(const RadixPartitionedHashTable &ht) {
+	// if there are no groups we create a fake group so everything has the same group
+	group_chunk.InitializeEmpty(ht.group_types);
+	if (ht.grouping_set.empty()) {
+		group_chunk.data[0].Reference(Value::TINYINT(42));
+	}
+}
 
 unique_ptr<GlobalSinkState> RadixPartitionedHashTable::GetGlobalSinkState(ClientContext &) const {
 	return make_uniq<RadixHTGlobalSinkState>();
@@ -490,17 +513,7 @@ public:
 	vector<column_t> column_ids;
 
 	//! For synchronizing the source phase
-	//! We would have a lock here, but we use the sink's lock instead (this way threadsan does not complain)
 	atomic<bool> finished;
-
-	//! For synchronizing repartition tasks
-	idx_t repartition_idx;
-	idx_t repartition_task_idx;
-	atomic<idx_t> repartition_done;
-
-	//! For synchronizing finalize tasks
-	idx_t finalize_idx;
-	atomic<idx_t> finalize_done;
 
 	//! For synchronizing scan tasks
 	idx_t scan_idx;
@@ -556,8 +569,7 @@ unique_ptr<LocalSourceState> RadixPartitionedHashTable::GetLocalSourceState(Exec
 }
 
 RadixHTGlobalSourceState::RadixHTGlobalSourceState(ClientContext &context_p, const RadixPartitionedHashTable &radix_ht)
-    : context(context_p), finished(false), repartition_idx(0), repartition_task_idx(0), repartition_done(0),
-      finalize_idx(0), finalize_done(0), scan_idx(0), scan_done(0) {
+    : context(context_p), finished(false), scan_idx(0), scan_done(0) {
 	for (column_t column_id = 0; column_id < radix_ht.group_types.size(); column_id++) {
 		column_ids.push_back(column_id);
 	}
@@ -579,24 +591,24 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 	}
 
 	// If not multi-scanning, try to assign a finalize task first
-	if (finalize_idx < sink.finalize_partitions.size()) {
-		auto &finalize_partition = *sink.finalize_partitions[finalize_idx];
+	if (sink.finalize_idx < sink.finalize_partitions.size()) {
+		auto &finalize_partition = *sink.finalize_partitions[sink.finalize_idx];
 		if (finalize_partition.finalize_available) {
 			lstate.task = RadixHTSourceTaskType::FINALIZE;
-			lstate.task_idx = finalize_idx++;
+			lstate.task_idx = sink.finalize_idx++;
 			finalize_partition.finalize_available = false;
 			return true;
 		}
 	}
 
 	// Finally, try to assign a repartition task
-	if (repartition_idx < sink.sink_partitions.size()) {
-		D_ASSERT(repartition_task_idx < sink.repartition_tasks_per_partition.GetIndex());
+	if (sink.repartition_idx < sink.sink_partitions.size()) {
+		D_ASSERT(sink.repartition_task_idx < sink.repartition_tasks_per_partition.GetIndex());
 		lstate.task = RadixHTSourceTaskType::REPARTITION;
-		lstate.task_idx = repartition_idx;
-		if (++repartition_task_idx == sink.repartition_tasks_per_partition.GetIndex()) {
-			repartition_idx++;
-			repartition_task_idx = 0;
+		lstate.task_idx = sink.repartition_idx;
+		if (++sink.repartition_task_idx == sink.repartition_tasks_per_partition.GetIndex()) {
+			sink.repartition_idx++;
+			sink.repartition_task_idx = 0;
 		}
 		return true;
 	}
@@ -701,7 +713,7 @@ void RadixHTLocalSourceState::Repartition(RadixHTGlobalSinkState &sink, RadixHTG
 			finalize_partition.finalize_available = true;
 		}
 
-		if (++gstate.repartition_done == sink.sink_partitions.size()) {
+		if (++sink.repartition_done == sink.sink_partitions.size()) {
 			lock_guard<mutex> guard(sink.lock);
 			sink.sink_partitions.clear();
 		}
@@ -753,7 +765,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		scan_status = RadixHTScanStatus::INIT;
 	}
 
-	if (++gstate.finalize_done == sink.finalize_partitions.size()) {
+	if (++sink.finalize_done == sink.finalize_partitions.size()) {
 		lock_guard<mutex> guard(sink.lock);
 		sink.finalize_partitions.clear();
 	}
