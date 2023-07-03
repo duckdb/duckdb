@@ -40,35 +40,75 @@ using duckdb::string_t;
 using duckdb::timestamp_t;
 using duckdb::vector;
 
+SQLRETURN duckdb::SetDiagnosticRecord(OdbcHandleStmt *hstmt, SQLRETURN ret, std::string component, duckdb::DiagRecord diag_record) {
+	auto data_source = hstmt->dbc->GetDataSourceName();
+	hstmt->odbc_diagnostic->FormatDiagnosticMessage(diag_record, data_source, component);
+	hstmt->odbc_diagnostic->AddDiagRecord(diag_record);
+	return ret;
+}
+
+SQLRETURN duckdb::WithStatementNoLambda(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt) {
+	if (!statement_handle) {
+		return SQL_ERROR;
+	}
+	hstmt = static_cast<OdbcHandleStmt *>(statement_handle);
+	if (hstmt->type != OdbcHandleType::STMT) {
+		return SQL_ERROR;
+	}
+	if (!hstmt->dbc || !hstmt->dbc->conn) {
+		return SQL_ERROR;
+	}
+
+	// ODBC requires to clean up the diagnostic for every ODBC function call
+	hstmt->odbc_diagnostic->Clean();
+
+	return SQL_SUCCESS;
+}
+
+SQLRETURN duckdb::WithStatementPreparedNoLambda(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt) {
+	if (WithStatementNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+		return SQL_ERROR;
+	}
+	if (!hstmt->stmt) {
+		return SQL_ERROR;
+	}
+	if (hstmt->stmt->HasError()) {
+		return SQL_ERROR;
+	}
+	return SQL_SUCCESS;
+}
+
 SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length) {
-	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
-		if (stmt->stmt) {
-			stmt->stmt.reset();
-		}
-		if (stmt->res) {
-			stmt->res.reset();
-		}
-		stmt->odbc_fetcher->ClearChunks();
-		// we should not clear the parameters because of SQLExecDirect may reuse them
-		// stmt->params.resize(0);
-		// we should not clear the bound columns because SQLBindCol might bind columns in it
-		// stmt->bound_cols.resize(0);
+	OdbcHandleStmt *hstmt = nullptr;
+	if (WithStatementNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+		return SQL_ERROR;
+	}
 
-		auto query = duckdb::OdbcUtils::ReadString(statement_text, text_length);
-		stmt->stmt = stmt->dbc->conn->Prepare(query);
-		if (stmt->stmt->HasError()) {
-			DiagRecord diag_rec(stmt->stmt->error.Message(), SQLStateType::SYNTAX_ERROR_OR_ACCESS_VIOLATION,
-			                    stmt->dbc->GetDataSourceName());
-			throw OdbcException("PrepareStmt", SQL_ERROR, diag_rec);
-		}
-		stmt->param_desc->ResetParams(stmt->stmt->n_param);
+	if (hstmt->stmt) {
+		hstmt->stmt.reset();
+	}
 
-		stmt->bound_cols.resize(stmt->stmt->ColumnCount());
+	if (hstmt->res) {
+		hstmt->res.reset();
+	}
 
-		stmt->FillIRD();
+	hstmt->odbc_fetcher->ClearChunks();
 
-		return SQL_SUCCESS;
-	});
+	auto query = OdbcUtils::ReadString(statement_text, text_length);
+	hstmt->stmt = hstmt->dbc->conn->Prepare(query);
+	if (hstmt->stmt->HasError()) {
+		DiagRecord diag_rec(hstmt->stmt->error.Message(), SQLStateType::SYNTAX_ERROR_OR_ACCESS_VIOLATION,
+		                    hstmt->dbc->GetDataSourceName());
+		return (SetDiagnosticRecord(hstmt, SQL_ERROR, "PrepareStmt", diag_rec));
+	}
+
+	hstmt->param_desc->ResetParams(hstmt->stmt->n_param);
+
+	hstmt->bound_cols.resize(hstmt->stmt->ColumnCount());
+
+	hstmt->FillIRD();
+
+	return SQL_SUCCESS;
 }
 
 //! Execute stmt in a batch manner while there is a parameter set to process,

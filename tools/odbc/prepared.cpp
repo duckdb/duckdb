@@ -27,7 +27,6 @@ SQLRETURN SQL_API SQLExecute(SQLHSTMT statement_handle) {
 	                             [&](duckdb::OdbcHandleStmt *stmt) { return duckdb::BatchExecuteStmt(stmt); });
 }
 
-
 /**
  * @brief
  * Returns the number of columns in the result set.

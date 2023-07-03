@@ -19,127 +19,252 @@ using std::string;
 
 SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                  SQLINTEGER string_length) {
-	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
-		switch (attribute) {
-		case SQL_ATTR_PARAMSET_SIZE: {
-			stmt->param_desc->apd->header.sql_desc_array_size = (SQLULEN)value_ptr;
-			return SQL_SUCCESS;
+	duckdb::OdbcHandleStmt *hstmt = nullptr;
+	if (WithStatementNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+		return SQL_ERROR;
+	}
+
+	switch (attribute) {
+	case SQL_ATTR_PARAMSET_SIZE: {
+		hstmt->param_desc->apd->header.sql_desc_array_size = (SQLULEN)value_ptr;
+		return SQL_SUCCESS;
+	}
+	case SQL_ATTR_PARAM_BIND_TYPE: {
+		if (value_ptr) {
+			hstmt->param_desc->apd->header.sql_desc_bind_type = (SQLINTEGER)(SQLULEN)(uintptr_t)value_ptr;
 		}
-		case SQL_ATTR_PARAM_BIND_TYPE: {
-			if (value_ptr) {
-				stmt->param_desc->apd->header.sql_desc_bind_type = (SQLINTEGER)(SQLULEN)(uintptr_t)value_ptr;
-			}
-			return SQL_SUCCESS;
-		}
-		case SQL_ATTR_PARAMS_PROCESSED_PTR: {
-			stmt->param_desc->SetParamProcessedPtr((SQLULEN *)value_ptr);
-			return SQL_SUCCESS;
-		}
-		case SQL_ATTR_PARAM_STATUS_PTR: {
-			stmt->param_desc->SetArrayStatusPtr((SQLUSMALLINT *)value_ptr);
-			return SQL_SUCCESS;
-		}
-		case SQL_ATTR_ROW_ARRAY_SIZE: {
-			// TODO allow fetch to put more rows in bound cols
-			if (value_ptr) {
-				SQLULEN new_size = (SQLULEN)value_ptr;
-				if (new_size < 1) {
-					return SQL_ERROR;
-				}
-				// This field in the ARD can also be set by calling SQLSetStmtAttr with the SQL_ATTR_ROW_ARRAY_SIZE
-				// attribute.
-				stmt->row_desc->ard->header.sql_desc_array_size = new_size;
-			}
-			return SQL_SUCCESS;
-		}
-		case SQL_ATTR_ROWS_FETCHED_PTR: {
-			stmt->rows_fetched_ptr = (SQLULEN *)value_ptr;
-			stmt->row_desc->ird->header.sql_desc_rows_processed_ptr = (SQLULEN *)value_ptr;
-			return SQL_SUCCESS;
-		}
-		case SQL_ATTR_ROW_BIND_TYPE: {
-			if (value_ptr == nullptr) {
+		return SQL_SUCCESS;
+	}
+	case SQL_ATTR_PARAMS_PROCESSED_PTR: {
+		hstmt->param_desc->SetParamProcessedPtr((SQLULEN *)value_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_ATTR_PARAM_STATUS_PTR: {
+		hstmt->param_desc->SetArrayStatusPtr((SQLUSMALLINT *)value_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_ATTR_ROW_ARRAY_SIZE: {
+		// TODO allow fetch to put more rows in bound cols
+		if (value_ptr) {
+			SQLULEN new_size = (SQLULEN)value_ptr;
+			if (new_size < 1) {
 				return SQL_ERROR;
 			}
-			stmt->row_desc->ard->header.sql_desc_bind_type = *(SQLULEN *)value_ptr;
-			return SQL_SUCCESS;
+			// This field in the ARD can also be set by calling SQLSetStmtAttr with the SQL_ATTR_ROW_ARRAY_SIZE
+			// attribute.
+			hstmt->row_desc->ard->header.sql_desc_array_size = new_size;
 		}
-		case SQL_ATTR_ROW_STATUS_PTR: {
-			stmt->row_desc->ird->header.sql_desc_array_status_ptr = (SQLUSMALLINT *)value_ptr;
-			return SQL_SUCCESS;
+		return SQL_SUCCESS;
+	}
+	case SQL_ATTR_ROWS_FETCHED_PTR: {
+		hstmt->rows_fetched_ptr = (SQLULEN *)value_ptr;
+		hstmt->row_desc->ird->header.sql_desc_rows_processed_ptr = (SQLULEN *)value_ptr;
+		return SQL_SUCCESS;
+	}
+	case SQL_ATTR_ROW_BIND_TYPE: {
+		if (value_ptr == nullptr) {
+			return SQL_ERROR;
 		}
-		case SQL_ATTR_CURSOR_TYPE: {
-			stmt->odbc_fetcher->cursor_type = (SQLULEN)value_ptr;
-			return SQL_SUCCESS;
-		}
-		case SQL_ATTR_APP_ROW_DESC: {
-			stmt->SetARD((duckdb::OdbcHandleDesc *)value_ptr);
-			return SQL_SUCCESS;
-		}
-		case SQL_ATTR_APP_PARAM_DESC: {
-			stmt->SetAPD((duckdb::OdbcHandleDesc *)value_ptr);
-			return SQL_SUCCESS;
-		}
-		case SQL_ATTR_IMP_PARAM_DESC:
-		case SQL_ATTR_IMP_ROW_DESC: {
+		hstmt->row_desc->ard->header.sql_desc_bind_type = *(SQLULEN *)value_ptr;
+		return SQL_SUCCESS;
+	}
+	case SQL_ATTR_ROW_STATUS_PTR: {
+		hstmt->row_desc->ird->header.sql_desc_array_status_ptr = (SQLUSMALLINT *)value_ptr;
+		return SQL_SUCCESS;
+	}
+	case SQL_ATTR_CURSOR_TYPE: {
+		hstmt->odbc_fetcher->cursor_type = (SQLULEN)value_ptr;
+		return SQL_SUCCESS;
+	}
+	case SQL_ATTR_APP_ROW_DESC: {
+		hstmt->SetARD((duckdb::OdbcHandleDesc *)value_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_ATTR_APP_PARAM_DESC: {
+		hstmt->SetAPD((duckdb::OdbcHandleDesc *)value_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_ATTR_IMP_PARAM_DESC:
+	case SQL_ATTR_IMP_ROW_DESC: {
+		duckdb::DiagRecord diag_rec("Option value changed:" + std::to_string(attribute),
+		                            SQLStateType::INVALID_USE_AUTO_ALLOC_DESCRIPTOR, hstmt->dbc->GetDataSourceName());
+		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLSetStmtAttr", diag_rec);
+	}
+	case SQL_ATTR_PARAM_BIND_OFFSET_PTR: {
+		hstmt->param_desc->SetBindOffesetPtr((SQLLEN *)value_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_ATTR_CONCURRENCY: {
+		SQLULEN value = (SQLULEN)(uintptr_t)value_ptr;
+		if (value != SQL_CONCUR_LOCK) {
 			duckdb::DiagRecord diag_rec("Option value changed:" + std::to_string(attribute),
-			                            SQLStateType::INVALID_USE_AUTO_ALLOC_DESCRIPTOR,
-			                            stmt->dbc->GetDataSourceName());
-			throw duckdb::OdbcException("SQLSetStmtAttr", SQL_ERROR, diag_rec);
+			                            SQLStateType::OPTION_VALUE_CHANGED, hstmt->dbc->GetDataSourceName());
+			return duckdb::SetDiagnosticRecord(hstmt, SQL_SUCCESS_WITH_INFO, "SQLSetStmtAttr", diag_rec);
 		}
-		case SQL_ATTR_PARAM_BIND_OFFSET_PTR: {
-			stmt->param_desc->SetBindOffesetPtr((SQLLEN *)value_ptr);
-			return SQL_SUCCESS;
-		}
-		case SQL_ATTR_CONCURRENCY: {
-			SQLULEN value = (SQLULEN)(uintptr_t)value_ptr;
-			if (value != SQL_CONCUR_LOCK) {
-				duckdb::DiagRecord diag_rec("Option value changed:" + std::to_string(attribute),
-				                            SQLStateType::OPTION_VALUE_CHANGED, stmt->dbc->GetDataSourceName());
-				throw duckdb::OdbcException("SQLSetStmtAttr", SQL_SUCCESS_WITH_INFO, diag_rec);
-			}
-			return SQL_SUCCESS;
-		}
-		case SQL_ATTR_QUERY_TIMEOUT:
-			return SQL_SUCCESS;
-		case SQL_ATTR_RETRIEVE_DATA: {
-			SQLULEN value = (SQLULEN)(uintptr_t)value_ptr;
-			switch (value) {
-			case SQL_RD_ON:
-			case SQL_RD_OFF:
-				break;
-			default:
-				/* Invalid attribute value */
-				duckdb::DiagRecord diag_rec("Invalid attribute value: " + std::to_string(attribute),
-				                            SQLStateType::INVALID_ATTR_VALUE, stmt->dbc->GetDataSourceName());
-				throw duckdb::OdbcException("SQLSetStmtAttr", SQL_ERROR, diag_rec);
-			}
-			stmt->retrieve_data = value;
-			return SQL_SUCCESS;
-		}
-		case SQL_ATTR_CURSOR_SCROLLABLE: {
-			SQLULEN value = (SQLULEN)(uintptr_t)value_ptr;
-			switch (value) {
-			case SQL_NONSCROLLABLE:
-				stmt->odbc_fetcher->cursor_type = SQL_CURSOR_FORWARD_ONLY;
-				break;
-			case SQL_SCROLLABLE:
-				stmt->odbc_fetcher->cursor_type = SQL_CURSOR_STATIC;
-				break;
-			default:
-				duckdb::DiagRecord diag_rec("Invalid attribute value:" + std::to_string(attribute),
-				                            SQLStateType::INVALID_ATTR_VALUE, stmt->dbc->GetDataSourceName());
-				throw duckdb::OdbcException("SQLSetStmtAttr", SQL_ERROR, diag_rec);
-			}
-			stmt->odbc_fetcher->cursor_scrollable = value;
-			return SQL_SUCCESS;
-		}
+		return SQL_SUCCESS;
+	}
+	case SQL_ATTR_QUERY_TIMEOUT:
+		return SQL_SUCCESS;
+	case SQL_ATTR_RETRIEVE_DATA: {
+		SQLULEN value = (SQLULEN)(uintptr_t)value_ptr;
+		switch (value) {
+		case SQL_RD_ON:
+		case SQL_RD_OFF:
+			break;
 		default:
-			duckdb::DiagRecord diag_rec("Option value changed:" + std::to_string(attribute),
-			                            SQLStateType::OPTION_VALUE_CHANGED, stmt->dbc->GetDataSourceName());
-			throw duckdb::OdbcException("SQLSetStmtAttr", SQL_SUCCESS_WITH_INFO, diag_rec);
+			/* Invalid attribute value */
+			duckdb::DiagRecord diag_rec("Invalid attribute value: " + std::to_string(attribute),
+			                            SQLStateType::INVALID_ATTR_VALUE, hstmt->dbc->GetDataSourceName());
+			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLSetStmtAttr", diag_rec);
 		}
-	});
+		hstmt->retrieve_data = value;
+		return SQL_SUCCESS;
+	}
+	case SQL_ATTR_CURSOR_SCROLLABLE: {
+		SQLULEN value = (SQLULEN)(uintptr_t)value_ptr;
+		switch (value) {
+		case SQL_NONSCROLLABLE:
+			hstmt->odbc_fetcher->cursor_type = SQL_CURSOR_FORWARD_ONLY;
+			break;
+		case SQL_SCROLLABLE:
+			hstmt->odbc_fetcher->cursor_type = SQL_CURSOR_STATIC;
+			break;
+		default:
+			duckdb::DiagRecord diag_rec("Invalid attribute value:" + std::to_string(attribute),
+			                            SQLStateType::INVALID_ATTR_VALUE, hstmt->dbc->GetDataSourceName());
+			return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "SQLSetStmtAttr", diag_rec);
+		}
+		hstmt->odbc_fetcher->cursor_scrollable = value;
+		return SQL_SUCCESS;
+	}
+	default:
+		duckdb::DiagRecord diag_rec("Option value changed:" + std::to_string(attribute),
+		                            SQLStateType::OPTION_VALUE_CHANGED, hstmt->dbc->GetDataSourceName());
+		return duckdb::SetDiagnosticRecord(hstmt, SQL_SUCCESS_WITH_INFO, "SQLSetStmtAttr", diag_rec);
+	}
+
+
+//	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
+//		switch (attribute) {
+//		case SQL_ATTR_PARAMSET_SIZE: {
+//			stmt->param_desc->apd->header.sql_desc_array_size = (SQLULEN)value_ptr;
+//			return SQL_SUCCESS;
+//		}
+//		case SQL_ATTR_PARAM_BIND_TYPE: {
+//			if (value_ptr) {
+//				stmt->param_desc->apd->header.sql_desc_bind_type = (SQLINTEGER)(SQLULEN)(uintptr_t)value_ptr;
+//			}
+//			return SQL_SUCCESS;
+//		}
+//		case SQL_ATTR_PARAMS_PROCESSED_PTR: {
+//			stmt->param_desc->SetParamProcessedPtr((SQLULEN *)value_ptr);
+//			return SQL_SUCCESS;
+//		}
+//		case SQL_ATTR_PARAM_STATUS_PTR: {
+//			stmt->param_desc->SetArrayStatusPtr((SQLUSMALLINT *)value_ptr);
+//			return SQL_SUCCESS;
+//		}
+//		case SQL_ATTR_ROW_ARRAY_SIZE: {
+//			// TODO allow fetch to put more rows in bound cols
+//			if (value_ptr) {
+//				SQLULEN new_size = (SQLULEN)value_ptr;
+//				if (new_size < 1) {
+//					return SQL_ERROR;
+//				}
+//				// This field in the ARD can also be set by calling SQLSetStmtAttr with the SQL_ATTR_ROW_ARRAY_SIZE
+//				// attribute.
+//				stmt->row_desc->ard->header.sql_desc_array_size = new_size;
+//			}
+//			return SQL_SUCCESS;
+//		}
+//		case SQL_ATTR_ROWS_FETCHED_PTR: {
+//			stmt->rows_fetched_ptr = (SQLULEN *)value_ptr;
+//			stmt->row_desc->ird->header.sql_desc_rows_processed_ptr = (SQLULEN *)value_ptr;
+//			return SQL_SUCCESS;
+//		}
+//		case SQL_ATTR_ROW_BIND_TYPE: {
+//			if (value_ptr == nullptr) {
+//				return SQL_ERROR;
+//			}
+//			stmt->row_desc->ard->header.sql_desc_bind_type = *(SQLULEN *)value_ptr;
+//			return SQL_SUCCESS;
+//		}
+//		case SQL_ATTR_ROW_STATUS_PTR: {
+//			stmt->row_desc->ird->header.sql_desc_array_status_ptr = (SQLUSMALLINT *)value_ptr;
+//			return SQL_SUCCESS;
+//		}
+//		case SQL_ATTR_CURSOR_TYPE: {
+//			stmt->odbc_fetcher->cursor_type = (SQLULEN)value_ptr;
+//			return SQL_SUCCESS;
+//		}
+//		case SQL_ATTR_APP_ROW_DESC: {
+//			stmt->SetARD((duckdb::OdbcHandleDesc *)value_ptr);
+//			return SQL_SUCCESS;
+//		}
+//		case SQL_ATTR_APP_PARAM_DESC: {
+//			stmt->SetAPD((duckdb::OdbcHandleDesc *)value_ptr);
+//			return SQL_SUCCESS;
+//		}
+//		case SQL_ATTR_IMP_PARAM_DESC:
+//		case SQL_ATTR_IMP_ROW_DESC: {
+//			duckdb::DiagRecord diag_rec("Option value changed:" + std::to_string(attribute),
+//			                            SQLStateType::INVALID_USE_AUTO_ALLOC_DESCRIPTOR,
+//			                            stmt->dbc->GetDataSourceName());
+//			throw duckdb::OdbcException("SQLSetStmtAttr", SQL_ERROR, diag_rec);
+//		}
+//		case SQL_ATTR_PARAM_BIND_OFFSET_PTR: {
+//			stmt->param_desc->SetBindOffesetPtr((SQLLEN *)value_ptr);
+//			return SQL_SUCCESS;
+//		}
+//		case SQL_ATTR_CONCURRENCY: {
+//			SQLULEN value = (SQLULEN)(uintptr_t)value_ptr;
+//			if (value != SQL_CONCUR_LOCK) {
+//				duckdb::DiagRecord diag_rec("Option value changed:" + std::to_string(attribute),
+//				                            SQLStateType::OPTION_VALUE_CHANGED, stmt->dbc->GetDataSourceName());
+//				throw duckdb::OdbcException("SQLSetStmtAttr", SQL_SUCCESS_WITH_INFO, diag_rec);
+//			}
+//			return SQL_SUCCESS;
+//		}
+//		case SQL_ATTR_QUERY_TIMEOUT:
+//			return SQL_SUCCESS;
+//		case SQL_ATTR_RETRIEVE_DATA: {
+//			SQLULEN value = (SQLULEN)(uintptr_t)value_ptr;
+//			switch (value) {
+//			case SQL_RD_ON:
+//			case SQL_RD_OFF:
+//				break;
+//			default:
+//				/* Invalid attribute value */
+//				duckdb::DiagRecord diag_rec("Invalid attribute value: " + std::to_string(attribute),
+//				                            SQLStateType::INVALID_ATTR_VALUE, stmt->dbc->GetDataSourceName());
+//				throw duckdb::OdbcException("SQLSetStmtAttr", SQL_ERROR, diag_rec);
+//			}
+//			stmt->retrieve_data = value;
+//			return SQL_SUCCESS;
+//		}
+//		case SQL_ATTR_CURSOR_SCROLLABLE: {
+//			SQLULEN value = (SQLULEN)(uintptr_t)value_ptr;
+//			switch (value) {
+//			case SQL_NONSCROLLABLE:
+//				stmt->odbc_fetcher->cursor_type = SQL_CURSOR_FORWARD_ONLY;
+//				break;
+//			case SQL_SCROLLABLE:
+//				stmt->odbc_fetcher->cursor_type = SQL_CURSOR_STATIC;
+//				break;
+//			default:
+//				duckdb::DiagRecord diag_rec("Invalid attribute value:" + std::to_string(attribute),
+//				                            SQLStateType::INVALID_ATTR_VALUE, stmt->dbc->GetDataSourceName());
+//				throw duckdb::OdbcException("SQLSetStmtAttr", SQL_ERROR, diag_rec);
+//			}
+//			stmt->odbc_fetcher->cursor_scrollable = value;
+//			return SQL_SUCCESS;
+//		}
+//		default:
+//			duckdb::DiagRecord diag_rec("Option value changed:" + std::to_string(attribute),
+//			                            SQLStateType::OPTION_VALUE_CHANGED, stmt->dbc->GetDataSourceName());
+//			throw duckdb::OdbcException("SQLSetStmtAttr", SQL_SUCCESS_WITH_INFO, diag_rec);
+//		}
+//	});
 }
 
 SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
