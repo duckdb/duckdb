@@ -137,6 +137,8 @@ public:
 
 	//! Unpin the pointer table and data blocks
 	void Finalize();
+	//! Unpins the data blocks
+	void UnpinData();
 
 private:
 	//! Append state
@@ -192,8 +194,6 @@ private:
 
 	//! Initializes the PartitionedTupleData
 	void InitializePartitionedData();
-	//! Unpins the data blocks
-	void UnpinData();
 
 	//! Apply bitmask to get the entry in the HT
 	inline idx_t ApplyBitMask(hash_t hash) const;

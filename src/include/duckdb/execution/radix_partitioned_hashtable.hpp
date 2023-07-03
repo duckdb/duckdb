@@ -39,10 +39,7 @@ public:
 	void Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input, DataChunk &aggregate_input_chunk,
 	          const unsafe_vector<idx_t> &filter) const;
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const;
-	bool Finalize(ClientContext &context, GlobalSinkState &gstate) const;
-
-	void ScheduleTasks(Executor &executor, const shared_ptr<Event> &event, GlobalSinkState &gstate,
-	                   vector<shared_ptr<Task>> &tasks) const;
+	void Finalize(ClientContext &context, GlobalSinkState &gstate) const;
 
 	//! Source interface
 	idx_t Count(GlobalSinkState &sink) const;

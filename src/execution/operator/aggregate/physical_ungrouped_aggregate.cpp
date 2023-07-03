@@ -476,62 +476,19 @@ public:
 	}
 };
 
-class UngroupedDistinctCombineFinalizeEvent : public BasePipelineEvent {
-public:
-	UngroupedDistinctCombineFinalizeEvent(const PhysicalUngroupedAggregate &op_p,
-	                                      UngroupedAggregateGlobalState &gstate_p, Pipeline &pipeline_p,
-	                                      ClientContext &client)
-	    : BasePipelineEvent(pipeline_p), op(op_p), gstate(gstate_p), client(client) {
-	}
-
-	const PhysicalUngroupedAggregate &op;
-	UngroupedAggregateGlobalState &gstate;
-	ClientContext &client;
-
-public:
-	void Schedule() override {
-		auto &distinct_state = *gstate.distinct_state;
-		auto &distinct_data = *op.distinct_data;
-		vector<shared_ptr<Task>> tasks;
-		for (idx_t table_idx = 0; table_idx < distinct_data.radix_tables.size(); table_idx++) {
-			distinct_data.radix_tables[table_idx]->ScheduleTasks(pipeline->executor, shared_from_this(),
-			                                                     *distinct_state.radix_states[table_idx], tasks);
-		}
-		D_ASSERT(!tasks.empty());
-		SetTasks(std::move(tasks));
-	}
-
-	void FinishEvent() override {
-		//! Now that all tables are combined, it's time to do the distinct aggregations
-		auto new_event = make_shared<UngroupedDistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
-		this->InsertEvent(std::move(new_event));
-	}
-};
-
 SinkFinalizeType PhysicalUngroupedAggregate::FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
                                                               GlobalSinkState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<UngroupedAggregateGlobalState>();
 	D_ASSERT(distinct_data);
 	auto &distinct_state = *gstate.distinct_state;
 
-	bool any_partitioned = false;
 	for (idx_t table_idx = 0; table_idx < distinct_data->radix_tables.size(); table_idx++) {
 		auto &radix_table_p = distinct_data->radix_tables[table_idx];
 		auto &radix_state = *distinct_state.radix_states[table_idx];
-		bool partitioned = radix_table_p->Finalize(context, radix_state);
-		if (partitioned) {
-			any_partitioned = true;
-		}
+		radix_table_p->Finalize(context, radix_state);
 	}
-	if (any_partitioned) {
-		auto new_event = make_shared<UngroupedDistinctCombineFinalizeEvent>(*this, gstate, pipeline, context);
-		event.InsertEvent(std::move(new_event));
-	} else {
-		//! Hashtables aren't partitioned, they dont need to be joined first
-		//! So we can compute the aggregate already
-		auto new_event = make_shared<UngroupedDistinctAggregateFinalizeEvent>(*this, gstate, pipeline, context);
-		event.InsertEvent(std::move(new_event));
-	}
+	auto new_event = make_shared<UngroupedDistinctAggregateFinalizeEvent>(*this, gstate, pipeline, context);
+	event.InsertEvent(std::move(new_event));
 	return SinkFinalizeType::READY;
 }
 

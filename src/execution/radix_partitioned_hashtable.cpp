@@ -106,8 +106,8 @@ struct AggregatePartition {
 
 class RadixHTGlobalSinkState : public GlobalSinkState {
 public:
-	explicit RadixHTGlobalSinkState(const RadixPartitionedHashTable &radix_ht_p)
-	    : radix_ht(radix_ht_p), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE) {
+	explicit RadixHTGlobalSinkState()
+	    : finalized(false), scan_pin_properties(TupleDataPinProperties::DESTROY_AFTER_DONE) {
 		const auto num_partitions = RadixPartitioning::NumberOfPartitions(RadixHTConfig::SINK_RADIX_BITS);
 		sink_partitions.resize(num_partitions);
 		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
@@ -158,8 +158,8 @@ public:
 		Destroy();
 	}
 
-	//! The HT object
-	const RadixPartitionedHashTable &radix_ht;
+	//! Whether we've called Finalize
+	bool finalized;
 
 	//! The radix partitions during the sink
 	vector<unique_ptr<AggregatePartition>> sink_partitions;
@@ -198,7 +198,7 @@ public:
 };
 
 unique_ptr<GlobalSinkState> RadixPartitionedHashTable::GetGlobalSinkState(ClientContext &) const {
-	return make_uniq<RadixHTGlobalSinkState>(*this);
+	return make_uniq<RadixHTGlobalSinkState>();
 }
 
 unique_ptr<LocalSinkState> RadixPartitionedHashTable::GetLocalSinkState(ExecutionContext &) const {
@@ -311,7 +311,7 @@ void RadixPartitionedHashTable::CombineInternal(ExecutionContext &, GlobalSinkSt
 	}
 }
 
-bool RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState &gstate_p) const {
+void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();
 
 	// Check if we want to repartition
@@ -357,13 +357,7 @@ bool RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 		}
 		gstate.sink_partitions.clear();
 	}
-	// TODO: function shouldn't return a bool anymore, there's never tasks
-	return false;
-}
-
-void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_ptr<Event> &event,
-                                              GlobalSinkState &gstate_p, vector<shared_ptr<Task>> &tasks) const {
-	// TODO: remove this NOP
+	gstate.finalized = true;
 }
 
 bool RadixPartitionedHashTable::RequiresRepartitioning(ClientContext &context, GlobalSinkState &gstate_p) {
@@ -467,8 +461,14 @@ idx_t RadixPartitionedHashTable::CountInternal(GlobalSinkState &sink_p) const {
 	auto &sink = sink_p.Cast<RadixHTGlobalSinkState>();
 	if (!sink.final_count.IsValid()) {
 		idx_t total_count = 0;
-		for (auto &data : sink.final_data) {
-			total_count += data.data_collection->Count();
+		if (sink.sink_partitions.empty()) {
+			for (auto &finalize_partition : sink.finalize_partitions) {
+				total_count += finalize_partition->count.GetIndex();
+			}
+		} else {
+			for (auto &sink_partition : sink.sink_partitions) {
+				total_count += sink_partition->count.GetIndex();
+			}
 		}
 		lock_guard<mutex> guard(sink.lock);
 		sink.final_count = total_count;
@@ -536,14 +536,15 @@ public:
 	//! Assigned task and index
 	RadixHTSourceTaskType task;
 	optional_idx task_idx;
+
+	//! Thread-local HT that is re-used
+	unique_ptr<GroupedAggregateHashTable> ht;
+
 	//! Current status of the scan
 	RadixHTScanStatus scan_status;
 
 private:
 	const RadixPartitionedHashTable &radix_ht;
-
-	//! Thread-local HT that is re-used
-	unique_ptr<GroupedAggregateHashTable> ht;
 
 	//! Allocator and layout for finalizing state
 	TupleDataLayout layout;
@@ -591,6 +592,8 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 			finalize_partition.finalize_available = false;
 			return true;
 		}
+	} else if (lstate.ht) {
+		lstate.ht->Finalize();
 	}
 
 	// Finally, try to assign a repartition task
@@ -605,7 +608,10 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 		return true;
 	}
 
-	finished = true;
+	if (finalize_done == sink.finalize_partitions.size() && scan_done == sink.final_data.size()) {
+		finished = true;
+	}
+
 	return false;
 }
 
@@ -667,9 +673,10 @@ void RadixHTLocalSourceState::Repartition(RadixHTGlobalSinkState &sink, RadixHTG
 			sink_data_collection.Combine(*uncombined_data[i].data_collection);
 		}
 
-		auto repartitioned_data = make_uniq<RadixPartitionedTupleData>(
-		    BufferManager::GetBufferManager(gstate.context), sink_data_collection.GetLayout(),
-		    sink.finalize_radix_bits.GetIndex(), layout.ColumnCount() - 1);
+		auto &data_layout = sink_data_collection.GetLayout();
+		auto repartitioned_data =
+		    make_uniq<RadixPartitionedTupleData>(BufferManager::GetBufferManager(gstate.context), data_layout,
+		                                         sink.finalize_radix_bits.GetIndex(), data_layout.ColumnCount() - 1);
 		repartitioned_data->Partition(sink_data_collection);
 
 		// Add it to the finalize partitions
@@ -735,6 +742,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 
 	// Now combine
 	ht->Combine(data_collection);
+	ht->UnpinData();
 
 	idx_t scan_idx;
 	{
@@ -820,6 +828,8 @@ bool RadixHTLocalSourceState::TaskFinished() {
 SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &chunk,
                                                     GlobalSinkState &sink_p, OperatorSourceInput &input) const {
 	auto &sink = sink_p.Cast<RadixHTGlobalSinkState>();
+	D_ASSERT(sink.finalized);
+
 	auto &gstate = input.global_state.Cast<RadixHTGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<RadixHTLocalSourceState>();
 	D_ASSERT(sink.scan_pin_properties == TupleDataPinProperties::UNPIN_AFTER_DONE ||

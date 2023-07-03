@@ -1,9 +1,12 @@
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
+#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/execution/operator/aggregate/distinct_aggregate_data.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/parallel/interrupt.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -11,9 +14,6 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/parallel/base_pipeline_event.hpp"
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/execution/operator/aggregate/distinct_aggregate_data.hpp"
 
 namespace duckdb {
 
@@ -443,32 +443,6 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &
 	}
 }
 
-//! REGULAR FINALIZE EVENT
-
-class HashAggregateMergeEvent : public BasePipelineEvent {
-public:
-	HashAggregateMergeEvent(const PhysicalHashAggregate &op_p, HashAggregateGlobalState &gstate_p, Pipeline *pipeline_p)
-	    : BasePipelineEvent(*pipeline_p), op(op_p), gstate(gstate_p) {
-	}
-
-	const PhysicalHashAggregate &op;
-	HashAggregateGlobalState &gstate;
-
-public:
-	void Schedule() override {
-		vector<shared_ptr<Task>> tasks;
-		for (idx_t i = 0; i < op.groupings.size(); i++) {
-			auto &grouping_gstate = gstate.grouping_states[i];
-
-			auto &grouping = op.groupings[i];
-			auto &table = grouping.table_data;
-			table.ScheduleTasks(pipeline->executor, shared_from_this(), *grouping_gstate.table_state, tasks);
-		}
-		D_ASSERT(!tasks.empty());
-		SetTasks(std::move(tasks));
-	}
-};
-
 //! REGULAR FINALIZE FROM DISTINCT FINALIZE
 
 class HashAggregateFinalizeTask : public ExecutorTask {
@@ -710,46 +684,6 @@ private:
 	}
 };
 
-//! DISTINCT COMBINE EVENT
-
-class HashDistinctCombineFinalizeEvent : public BasePipelineEvent {
-public:
-	HashDistinctCombineFinalizeEvent(const PhysicalHashAggregate &op_p, HashAggregateGlobalState &gstate_p,
-	                                 Pipeline &pipeline_p, ClientContext &client)
-	    : BasePipelineEvent(pipeline_p), op(op_p), gstate(gstate_p), client(client) {
-	}
-
-	const PhysicalHashAggregate &op;
-	HashAggregateGlobalState &gstate;
-	ClientContext &client;
-
-public:
-	void Schedule() override {
-		vector<shared_ptr<Task>> tasks;
-		for (idx_t i = 0; i < op.groupings.size(); i++) {
-			auto &grouping = op.groupings[i];
-			auto &distinct_data = *grouping.distinct_data;
-			auto &distinct_state = *gstate.grouping_states[i].distinct_state;
-			for (idx_t table_idx = 0; table_idx < distinct_data.radix_tables.size(); table_idx++) {
-				if (!distinct_data.radix_tables[table_idx]) {
-					continue;
-				}
-				distinct_data.radix_tables[table_idx]->ScheduleTasks(pipeline->executor, shared_from_this(),
-				                                                     *distinct_state.radix_states[table_idx], tasks);
-			}
-		}
-
-		D_ASSERT(!tasks.empty());
-		SetTasks(std::move(tasks));
-	}
-
-	void FinishEvent() override {
-		//! Now that all tables are combined, it's time to do the distinct aggregations
-		auto new_event = make_shared<HashDistinctAggregateFinalizeEvent>(op, gstate, *pipeline, client);
-		this->InsertEvent(std::move(new_event));
-	}
-};
-
 //! FINALIZE
 
 SinkFinalizeType PhysicalHashAggregate::FinalizeDistinct(Pipeline &pipeline, Event &event, ClientContext &context,
@@ -757,7 +691,6 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeDistinct(Pipeline &pipeline, Eve
 	auto &gstate = gstate_p.Cast<HashAggregateGlobalState>();
 	D_ASSERT(distinct_collection_info);
 
-	bool any_partitioned = false;
 	for (idx_t i = 0; i < groupings.size(); i++) {
 		auto &grouping = groupings[i];
 		auto &distinct_data = *grouping.distinct_data;
@@ -769,22 +702,11 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeDistinct(Pipeline &pipeline, Eve
 			}
 			auto &radix_table = distinct_data.radix_tables[table_idx];
 			auto &radix_state = *distinct_state.radix_states[table_idx];
-			bool partitioned = radix_table->Finalize(context, radix_state);
-			if (partitioned) {
-				any_partitioned = true;
-			}
+			radix_table->Finalize(context, radix_state);
 		}
 	}
-	if (any_partitioned) {
-		// If any of the groupings are partitioned then we first need to combine those, then aggregate
-		auto new_event = make_shared<HashDistinctCombineFinalizeEvent>(*this, gstate, pipeline, context);
-		event.InsertEvent(std::move(new_event));
-	} else {
-		// Hashtables aren't partitioned, they dont need to be joined first
-		// so we can already compute the aggregate
-		auto new_event = make_shared<HashDistinctAggregateFinalizeEvent>(*this, gstate, pipeline, context);
-		event.InsertEvent(std::move(new_event));
-	}
+	auto new_event = make_shared<HashDistinctAggregateFinalizeEvent>(*this, gstate, pipeline, context);
+	event.InsertEvent(std::move(new_event));
 	return SinkFinalizeType::READY;
 }
 
@@ -799,19 +721,10 @@ SinkFinalizeType PhysicalHashAggregate::FinalizeInternal(Pipeline &pipeline, Eve
 		return FinalizeDistinct(pipeline, event, context, gstate_p);
 	}
 
-	bool any_partitioned = false;
 	for (idx_t i = 0; i < groupings.size(); i++) {
 		auto &grouping = groupings[i];
 		auto &grouping_gstate = gstate.grouping_states[i];
-
-		bool is_partitioned = grouping.table_data.Finalize(context, *grouping_gstate.table_state);
-		if (is_partitioned) {
-			any_partitioned = true;
-		}
-	}
-	if (any_partitioned) {
-		auto new_event = make_shared<HashAggregateMergeEvent>(*this, gstate, &pipeline);
-		event.InsertEvent(std::move(new_event));
+		grouping.table_data.Finalize(context, *grouping_gstate.table_state);
 	}
 	return SinkFinalizeType::READY;
 }
