@@ -8,7 +8,7 @@
 
 #include "datetime.h" //From Python
 
-#include <limits>
+#include "duckdb/common/limits.hpp"
 
 namespace duckdb {
 
@@ -244,6 +244,21 @@ void TransformPythonUnsigned(uint64_t value, Value &res) {
 	}
 }
 
+bool TrySniffPythonNumeric(Value &res, int64_t value) {
+	if (value < (int64_t)std::numeric_limits<int32_t>::min() || value > (int64_t)std::numeric_limits<int32_t>::max()) {
+		res = Value::BIGINT(value);
+	} else if (value < (int32_t)std::numeric_limits<int16_t>::min() ||
+	           value > (int32_t)std::numeric_limits<int16_t>::max()) {
+		res = Value::INTEGER(value);
+	} else if (value < (int16_t)std::numeric_limits<int8_t>::min() ||
+	           value > (int16_t)std::numeric_limits<int8_t>::max()) {
+		res = Value::SMALLINT(value);
+	} else {
+		res = Value::TINYINT(value);
+	}
+	return true;
+}
+
 // TODO: add support for HUGEINT
 bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &target_type) {
 	auto ptr = ele.ptr();
@@ -275,18 +290,73 @@ bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &ta
 		return false;
 	}
 
-	if (value < (int64_t)std::numeric_limits<int32_t>::min() || value > (int64_t)std::numeric_limits<int32_t>::max()) {
-		res = Value::BIGINT(value);
-	} else if (value < (int32_t)std::numeric_limits<int16_t>::min() ||
-	           value > (int32_t)std::numeric_limits<int16_t>::max()) {
-		res = Value::INTEGER(value);
-	} else if (value < (int16_t)std::numeric_limits<int8_t>::min() ||
-	           value > (int16_t)std::numeric_limits<int8_t>::max()) {
-		res = Value::SMALLINT(value);
-	} else {
-		res = Value::TINYINT(value);
+	// The value is int64_t or smaller
+
+	switch (target_type.id()) {
+	case LogicalTypeId::UNKNOWN:
+		return TrySniffPythonNumeric(res, value);
+	case LogicalTypeId::HUGEINT: {
+		res = Value::HUGEINT(value);
+		return true;
 	}
-	return true;
+	case LogicalTypeId::BIGINT: {
+		res = Value::BIGINT(value);
+		return true;
+	}
+	case LogicalTypeId::INTEGER: {
+		if (value < NumericLimits<int32_t>::Minimum() || value > NumericLimits<int32_t>::Maximum()) {
+			return false;
+		}
+		res = Value::INTEGER(value);
+		return true;
+	}
+	case LogicalTypeId::SMALLINT: {
+		if (value < NumericLimits<int16_t>::Minimum() || value > NumericLimits<int16_t>::Maximum()) {
+			return false;
+		}
+		res = Value::SMALLINT(value);
+		return true;
+	}
+	case LogicalTypeId::TINYINT: {
+		if (value < NumericLimits<int8_t>::Minimum() || value > NumericLimits<int8_t>::Maximum()) {
+			return false;
+		}
+		res = Value::TINYINT(value);
+		return true;
+	}
+	case LogicalTypeId::UBIGINT: {
+		if (value < NumericLimits<uint64_t>::Minimum() || value > NumericLimits<uint64_t>::Maximum()) {
+			return false;
+		}
+		res = Value::UBIGINT(value);
+		return true;
+	}
+	case LogicalTypeId::UINTEGER: {
+		if (value < NumericLimits<uint32_t>::Minimum() || value > NumericLimits<uint32_t>::Maximum()) {
+			return false;
+		}
+		res = Value::UINTEGER(value);
+		return true;
+	}
+	case LogicalTypeId::USMALLINT: {
+		if (value < NumericLimits<uint16_t>::Minimum() || value > NumericLimits<uint16_t>::Maximum()) {
+			return false;
+		}
+		res = Value::USMALLINT(value);
+		return true;
+	}
+	case LogicalTypeId::UTINYINT: {
+		if (value < NumericLimits<uint8_t>::Minimum() || value > NumericLimits<uint8_t>::Maximum()) {
+			return false;
+		}
+		res = Value::UTINYINT(value);
+		return true;
+	}
+	default:
+		throw ConversionException("Could not convert integer to type %s", target_type.ToString());
+	}
+
+	throw ConversionException("Could not convert integer to type %s", target_type.ToString());
 }
 
 PythonObjectType GetPythonObjectType(py::handle &ele) {
@@ -358,7 +428,21 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		if (nan_as_null && std::isnan(PyFloat_AsDouble(ele.ptr()))) {
 			return Value();
 		}
-		return Value::DOUBLE(ele.cast<double>());
+		switch (target_type.id()) {
+		case LogicalTypeId::UNKNOWN:
+		case LogicalTypeId::DOUBLE: {
+			return Value::DOUBLE(ele.cast<double>());
+		}
+		case LogicalTypeId::FLOAT: {
+			return Value::FLOAT(ele.cast<float>());
+		}
+		case LogicalTypeId::DECIMAL: {
+			throw ConversionException("Can't losslessly convert from object of float to type %s",
+			                          target_type.ToString());
+		}
+		default:
+			throw ConversionException("Could not convert 'float' to type %s", target_type.ToString());
+		}
 	case PythonObjectType::Decimal: {
 		PyDecimal decimal(ele);
 		return decimal.ToDuckValue();
@@ -378,7 +462,7 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 			return Value();
 		}
 		auto datetime = PyDateTime(ele);
-		return datetime.ToDuckValue();
+		return datetime.ToDuckValue(target_type);
 	}
 	case PythonObjectType::Time: {
 		auto time = PyTime(ele);
@@ -408,7 +492,16 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 	}
 	case PythonObjectType::Bytes: {
 		const string &ele_string = ele.cast<string>();
-		return Value::BLOB(const_data_ptr_t(ele_string.data()), ele_string.size());
+		switch (target_type.id()) {
+		case LogicalTypeId::UNKNOWN:
+		case LogicalTypeId::BLOB:
+			return Value::BLOB(const_data_ptr_t(ele_string.data()), ele_string.size());
+		case LogicalTypeId::BIT: {
+			return Value::BIT(ele_string);
+		default:
+			throw ConversionException("Could not convert 'bytes' to type %s", target_type.ToString());
+		}
+		}
 	}
 	case PythonObjectType::List:
 		return TransformListValue(ele, target_type);
@@ -444,7 +537,7 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 		shared_ptr<DuckDBPyType> internal_type;
 		if (!py::try_cast<shared_ptr<DuckDBPyType>>(type, internal_type)) {
 			string actual_type = py::str(type.get_type());
-			throw InvalidInputException("object has to be a list of DuckDBPyType's, not '%s'", actual_type);
+			throw InvalidInputException("The 'type' of a Value should be of type DuckDBPyType, not '%s'", actual_type);
 		}
 		return TransformPythonValue(object, internal_type->Type());
 	}

@@ -42,8 +42,8 @@ class Value:
 # Miscellaneous
 
 class NullValue(Value):
-    def __init__(self, object: Any):
-        super().__init__(object, SQLNULL)
+    def __init__(self):
+        super().__init__(None, SQLNULL)
 
 class BooleanValue(Value):
     def __init__(self, object: Any):
