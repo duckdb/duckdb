@@ -123,7 +123,7 @@ public:
 
 		auto &data_collection = partitioned_data->GetPartitions()[0];
 		D_ASSERT(data_collection->Count() != 0);
-		
+
 		final_data.emplace_back(std::move(data_collection));
 		final_data.back().allocators.emplace_back(aggregate_allocator);
 		for (auto &ucb : uncombined_data) {
@@ -498,7 +498,7 @@ public:
 	vector<column_t> column_ids;
 
 	//! For synchronizing the source phase
-	mutex lock;
+	//! We would have a lock here, but we use the sink's lock instead (this way threadsan does not complain)
 	atomic<bool> finished;
 
 	//! For synchronizing repartition tasks
@@ -507,11 +507,11 @@ public:
 
 	//! For synchronizing finalize tasks
 	idx_t finalize_idx;
-	idx_t finalize_done;
+	atomic<idx_t> finalize_done;
 
 	//! For synchronizing scan tasks
 	idx_t scan_idx;
-	idx_t scan_done;
+	atomic<idx_t> scan_done;
 };
 
 enum class RadixHTScanStatus : uint8_t { INIT, IN_PROGRESS, DONE };
@@ -571,7 +571,7 @@ RadixHTGlobalSourceState::RadixHTGlobalSourceState(ClientContext &context_p, con
 }
 
 bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTLocalSourceState &lstate) {
-	lock_guard<mutex> guard(lock);
+	lock_guard<mutex> guard(sink.lock);
 	if (finished) {
 		return false;
 	}
@@ -737,7 +737,6 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 
 	auto &uncombined_data = finalize_partition.uncombined_data;
 	if (uncombined_data.empty()) {
-		lock_guard<mutex> guard(gstate.lock);
 		gstate.finalize_done++;
 		return;
 	}
@@ -754,12 +753,12 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 
 	idx_t scan_idx;
 	{
-		lock_guard<mutex> guard(gstate.lock);
+		lock_guard<mutex> guard(sink.lock);
 		gstate.scan_idx = sink.AddToFinal(*ht, uncombined_data);
 		scan_idx = gstate.scan_idx++;
-		gstate.finalize_done++;
 	}
 	uncombined_data.clear();
+	gstate.finalize_done++;
 
 	// This thread can now self-assign scanning the HT it just finalized
 	task = RadixHTSourceTaskType::SCAN;
@@ -780,7 +779,6 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 
 	if (!data_collection.Scan(scan_state, scan_chunk)) {
 		scan_status = RadixHTScanStatus::DONE;
-		lock_guard<mutex> guard(gstate.lock);
 		gstate.scan_done++;
 		return;
 	}
