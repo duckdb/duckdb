@@ -123,8 +123,7 @@ public:
 
 		auto &data_collection = partitioned_data->GetPartitions()[0];
 		D_ASSERT(data_collection->Count() != 0);
-
-		lock_guard<mutex> guard(lock);
+		
 		final_data.emplace_back(std::move(data_collection));
 		final_data.back().allocators.emplace_back(aggregate_allocator);
 		for (auto &ucb : uncombined_data) {
