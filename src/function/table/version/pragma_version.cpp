@@ -56,6 +56,26 @@ const char *DuckDB::LibraryVersion() {
 	return DUCKDB_VERSION;
 }
 
+static const string NormalizeVersionTag(const string &version_tag) {
+	if (version_tag.length() > 0 && version_tag[0] != 'v') {
+		return "v" + version_tag;
+	}
+	return version_tag;
+}
+
+static bool IsRelease(const string &version_tag) {
+	return !StringUtil::Contains(version_tag, "-dev");
+}
+
+
+string DuckDB::ExtensionFolder() {
+	if (IsRelease(DuckDB::LibraryVersion())) {
+		return NormalizeVersionTag(DuckDB::LibraryVersion());
+	} else {
+		return DuckDB::SourceID();
+	}
+}
+
 string DuckDB::Platform() {
 	string os = "linux";
 #if INTPTR_MAX == INT64_MAX

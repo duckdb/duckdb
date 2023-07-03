@@ -272,7 +272,7 @@ function/table/system/duckdb_temporary_files.cpp	25
 function/table/system/pragma_table_info.cpp	2
 function/table/table_scan.cpp	12
 function/table/unnest.cpp	8
-function/table/version/pragma_version.cpp	3
+function/table/version/pragma_version.cpp	7
 function/table_function.cpp	4
 function/udf_function.cpp	6
 extension/json/buffered_json_reader.cpp	35
