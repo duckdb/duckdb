@@ -8,7 +8,9 @@
 
 #pragma once
 
+#include "csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -45,7 +47,7 @@ struct StateBuffer {
 	}
 
 	StateBuffer(StateBuffer &&other) noexcept
-	    : buffer(std::move(other.buffer)), buffer_size(other.buffer_size), position(other.position) {
+	    : buffer(other.buffer), buffer_size(other.buffer_size), position(other.position) {
 		other.buffer = nullptr;
 		other.buffer_size = 0;
 		other.position = 0;
@@ -60,15 +62,17 @@ struct StateBuffer {
 
 class CSVStateMachine {
 public:
-	explicit CSVStateMachine(CSVStateMachineConfiguration configuration_p);
+	explicit CSVStateMachine(CSVStateMachineConfiguration configuration_p,
+	                         shared_ptr<CSVBufferManager> buffer_manager_p);
 
 	//! This Parse Function Finds where the lines and values start within the CSV Buffer
 	//! sniff_column_count stores the number of columns for each row.
 	//! start_value_idx stores the buffer idx where values start.
 	//! It returns the number of rows sniffed
-	idx_t SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_column_counts);
+	void SniffDialect(vector<idx_t> &sniffed_column_counts);
 
 	CSVStateMachineConfiguration configuration;
+	CSVBufferIterator csv_buffer_iterator;
 
 private:
 	//! The Transition Array is a Finite State Machine

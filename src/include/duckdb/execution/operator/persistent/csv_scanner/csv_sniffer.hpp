@@ -19,22 +19,23 @@ enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2
 
 //! Struct to store candidates for the CSV State, with the last position they read in the buffer
 struct CSVStateCandidates {
-	CSVStateCandidates(CSVStateMachine *state_p, idx_t last_pos_p, idx_t max_num_columns_p)
-	    : state(state_p), last_pos(last_pos_p), max_num_columns(max_num_columns_p) {};
+	CSVStateCandidates(CSVStateMachine *state_p, idx_t max_num_columns_p)
+	    : state(state_p), max_num_columns(max_num_columns_p) {};
 	CSVStateMachine *state = nullptr;
-	idx_t last_pos = 0;
 	idx_t max_num_columns = 0;
 };
 
 //! Sniffer that detects Header, Dialect and Types of CSV Files
 class CSVSniffer {
 public:
-	explicit CSVSniffer(CSVReaderOptions options_p, StateBuffer buffer_p, const vector<LogicalType> &requested_types_p)
-	    : requested_types(requested_types_p), options(std::move(options_p)), buffer(std::move(buffer_p)) {};
+	explicit CSVSniffer(CSVReaderOptions options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
+	                    const vector<LogicalType> &requested_types_p)
+	    : requested_types(requested_types_p), options(std::move(options_p)),
+	      buffer_manager(std::move(buffer_manager_p)) {};
 	//! First phase of auto detection: detect CSV dialect (i.e. delimiter, quote rules, etc)
 	vector<CSVReaderOptions> DetectDialect();
 	//! Resets stats so it can analyze the next chunk
-	void NextChunk();
+	void ResetStats();
 
 private:
 	//! Number of rows read
@@ -54,7 +55,8 @@ private:
 	//! Original Options set
 	CSVReaderOptions options;
 	//! Buffer being used on sniffer
-	StateBuffer buffer;
+	shared_ptr<CSVBufferManager> buffer_manager;
+
 	//! ------------------------------------------------------//
 	//! ----------------- Dialect Detection ----------------- //
 	//! ------------------------------------------------------//
@@ -68,10 +70,10 @@ private:
 	void GenerateStateMachineSearchSpace();
 	//! Generates the search space candidates for the state machines
 	vector<CSVReaderOptions> ProduceDialectResults();
-
+	//! Refine Candidates over remaining chunks
+	void RefineCandidates();
 	//! Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
-	void AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t buffer_start_pos = 0,
-	                             idx_t prev_column_count = 0);
+	void AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t prev_column_count = 0);
 };
 
 } // namespace duckdb

@@ -16,8 +16,8 @@ namespace duckdb {
 
 class CSVBuffer {
 public:
-	//! Colossal buffer size for multi-threading
-	static constexpr idx_t INITIAL_BUFFER_SIZE_COLOSSAL = 32000000; // 32MB
+	//! CSV Buffer Size
+	static constexpr idx_t CSV_BUFFER_SIZE = 32000000; // 32MB
 
 	//! Constructor for Initial Buffer
 	CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle &file_handle,

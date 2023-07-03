@@ -2,7 +2,9 @@
 #include "duckdb/execution/operator/persistent/csv_scanner/buffered_csv_reader.hpp"
 
 namespace duckdb {
-CSVStateMachine::CSVStateMachine(CSVStateMachineConfiguration configuration_p) : configuration(configuration_p) {
+CSVStateMachine::CSVStateMachine(CSVStateMachineConfiguration configuration_p,
+                                 shared_ptr<CSVBufferManager> buffer_manager_p)
+    : configuration(configuration_p), csv_buffer_iterator(std::move(buffer_manager_p)) {
 	// Initialize transition array with default values to the Standard option
 	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 256; j++) {
@@ -69,9 +71,8 @@ CSVStateMachine::CSVStateMachine(CSVStateMachineConfiguration configuration_p) :
 	transition_array[escape_state][static_cast<uint8_t>(configuration.escape)] = quoted_state;
 }
 
-idx_t CSVStateMachine::SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_column_counts) {
+void CSVStateMachine::SniffDialect(vector<idx_t> &sniffed_column_counts) {
 	idx_t cur_rows = 0;
-	idx_t cur_pos = buffer.position;
 	idx_t column_count = 1;
 	D_ASSERT(sniffed_column_counts.size() == STANDARD_VECTOR_SIZE);
 
@@ -81,13 +82,15 @@ idx_t CSVStateMachine::SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_
 	// Both these variables are used for new line identifier detection
 	bool single_record_separator = false;
 	bool carry_on_separator = false;
-	while (cur_pos < buffer.buffer_size && cur_rows < STANDARD_VECTOR_SIZE) {
+	auto c = csv_buffer_iterator.GetNextChar();
+
+	while (c != '\0') {
 		if (state == CSVState::INVALID) {
 			sniffed_column_counts.clear();
-			return buffer.buffer_size;
+			return;
 		}
 		previous_state = state;
-		auto c = buffer.buffer[cur_pos];
+
 		state = static_cast<CSVState>(transition_array[static_cast<uint8_t>(state)][static_cast<uint8_t>(c)]);
 		bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
 		                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
@@ -107,7 +110,11 @@ idx_t CSVStateMachine::SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_
 		single_record_separator = ((state != CSVState::RECORD_SEPARATOR && carriage_return) ||
 		                           (state == CSVState::RECORD_SEPARATOR && !carriage_return)) ||
 		                          single_record_separator;
-		cur_pos++;
+		if (cur_rows >= STANDARD_VECTOR_SIZE) {
+			// We sniffed enough rows
+			break;
+		}
+		c = csv_buffer_iterator.GetNextChar();
 	}
 	bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
 	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
@@ -134,7 +141,6 @@ idx_t CSVStateMachine::SniffDialect(StateBuffer &buffer, vector<idx_t> &sniffed_
 	}
 	sniffed_column_counts.erase(sniffed_column_counts.end() - (STANDARD_VECTOR_SIZE - cur_rows),
 	                            sniffed_column_counts.end());
-	return cur_pos - 1;
 }
 
 } // namespace duckdb

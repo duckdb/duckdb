@@ -3,6 +3,7 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "utf8proc.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer_manager.hpp"
 #include <cmath>
 
 namespace duckdb {
@@ -240,11 +241,9 @@ bool BufferedCSVReader::JumpToNextSample() {
 	return true;
 }
 
-void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t buffer_start_pos,
-                                         idx_t prev_column_count) {
+void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t prev_column_count) {
 	vector<idx_t> sniffed_column_counts(STANDARD_VECTOR_SIZE);
-	buffer.position = buffer_start_pos;
-	idx_t buffer_pos = state_machine.SniffDialect(buffer, sniffed_column_counts);
+	state_machine.SniffDialect(sniffed_column_counts);
 
 	idx_t start_row = options.skip_rows;
 	idx_t consistent_rows = 0;
@@ -299,7 +298,7 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t b
 		prev_padding_count = padding_count;
 		state_machine.configuration.start_row = start_row;
 		candidates.clear();
-		candidates.emplace_back(&state_machine, buffer_pos, num_cols);
+		candidates.emplace_back(&state_machine, num_cols);
 	} else if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding &&
 	           !invalid_padding) {
 		bool same_quote_is_candidate = false;
@@ -310,12 +309,12 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t b
 		}
 		if (!same_quote_is_candidate) {
 			state_machine.configuration.start_row = start_row;
-			candidates.emplace_back(&state_machine, buffer_pos, num_cols);
+			candidates.emplace_back(&state_machine, num_cols);
 		}
 	}
 }
 
-void CSVSniffer::NextChunk() {
+void CSVSniffer::ResetStats() {
 	// Reset stats
 	rows_read = 0;
 	best_consistent_rows = 0;
@@ -361,7 +360,8 @@ void CSVSniffer::GenerateStateMachineSearchSpace() {
 				const auto &escape_candidates = escape_candidates_map[static_cast<uint8_t>(quoterule)];
 				for (const auto &escape : escape_candidates) {
 					CSVStateMachineConfiguration configuration(delim, quote, escape, options.new_line);
-					csv_state_machines.emplace_back(configuration);
+					D_ASSERT(buffer_manager);
+					csv_state_machines.emplace_back(configuration, buffer_manager);
 				}
 			}
 		}
@@ -382,6 +382,28 @@ vector<CSVReaderOptions> CSVSniffer::ProduceDialectResults() {
 	}
 	return result;
 }
+
+void CSVSniffer::RefineCandidates() {
+	auto cur_best_num_cols = best_num_cols;
+	for (idx_t i = 1; i < options.sample_chunks; i++) {
+		if (candidates.empty()) {
+			// no candidates left: stop
+			return;
+		}
+		bool finished_file = candidates[0].state->csv_buffer_iterator.Finished();
+		if (finished_file) {
+			// we finished the file: stop
+			return;
+		}
+		ResetStats();
+		auto cur_candidates = std::move(candidates);
+		cur_best_num_cols = std::max(best_num_cols, cur_best_num_cols);
+		for (auto &cur_candidate : cur_candidates) {
+			AnalyzeDialectCandidate(*cur_candidate.state, cur_best_num_cols);
+		}
+	}
+}
+
 // Dialect Detection consists of five steps:
 // 1. Generate a search space of all possible dialects
 // 2. Generate a state machine for each dialect
@@ -398,25 +420,7 @@ vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 		AnalyzeDialectCandidate(state_machine);
 	}
 	// Step 4: Loop over candidates and find if they can still produce good results for the remaining chunks
-	for (idx_t i = 1; i < options.sample_chunks; i++) {
-		NextChunk();
-	}
-	auto cur_best_num_cols = best_num_cols;
-	for (idx_t i = 1; i < options.sample_chunks; i++) {
-		if (!candidates.empty()) {
-			// FIXME: Continue reading? for now one 10Mb buffer for sniffing I think it's fine
-			if (candidates[0].last_pos + 1 >= buffer.buffer_size) {
-				break;
-			}
-		}
-		NextChunk();
-		auto cur_candidates = std::move(candidates);
-		cur_best_num_cols = std::max(best_num_cols, cur_best_num_cols);
-		for (auto &cur_candidate : cur_candidates) {
-			AnalyzeDialectCandidate(*cur_candidate.state, cur_candidate.last_pos, cur_best_num_cols);
-		}
-	}
-
+	RefineCandidates();
 	// Step 5: Produce the result
 	return ProduceDialectResults();
 }
@@ -736,8 +740,9 @@ vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalT
 }
 
 vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &requested_types) {
+
 	for (auto &type : requested_types) {
-		// auto detect for blobs not supported: there may be invalid UTF-8 in the file
+		// auto-detect for blobs not supported: there may be invalid UTF-8 in the file
 		if (type.id() == LogicalTypeId::BLOB) {
 			return requested_types;
 		}
@@ -750,10 +755,19 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 		// Skip rows if they are set
 		SkipRowsAndReadHeader(options.skip_rows, false);
 	}
+	file_handle->Reset();
 	ReadBuffer(start, start);
+	// FIXME: hack to make this work with both buffers
+	// Ideally this whole code must work with the buffer manager
+	file_handle->Reset();
+	if (options.skip_rows_set) {
+		// Skip rows if they are set
+		SkipRowsAndReadHeader(options.skip_rows, false);
+	}
 
-	StateBuffer state_buffer(buffer.get(), buffer_size, position);
-	CSVSniffer sniffer(options, std::move(state_buffer), requested_types);
+	//	StateBuffer state_buffer(buffer.get(), buffer_size, position);
+	auto buffer_manager = make_shared<CSVBufferManager>(context, *file_handle);
+	CSVSniffer sniffer(options, buffer_manager, requested_types);
 
 	CSVReaderOptions original_options = options;
 	vector<CSVReaderOptions> info_candidates;

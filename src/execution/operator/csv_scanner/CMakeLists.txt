@@ -4,6 +4,7 @@ add_library_unity(
   base_csv_reader.cpp
   buffered_csv_reader.cpp
   csv_buffer.cpp
+  csv_buffer_manager.cpp
   csv_file_handle.cpp
   csv_reader_options.cpp
   csv_sniffer.cpp
