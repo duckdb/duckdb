@@ -5658,8 +5658,6 @@ ExplainOutputType EnumUtil::FromString<ExplainOutputType>(const char *value) {
 template <>
 const char *EnumUtil::ToChars<NType>(NType value) {
 	switch (value) {
-	case NType::PREFIX_SEGMENT:
-		return "PREFIX_SEGMENT";
 	case NType::LEAF_SEGMENT:
 		return "LEAF_SEGMENT";
 	case NType::LEAF:
@@ -5679,9 +5677,6 @@ const char *EnumUtil::ToChars<NType>(NType value) {
 
 template <>
 NType EnumUtil::FromString<NType>(const char *value) {
-	if (StringUtil::Equals(value, "PREFIX_SEGMENT")) {
-		return NType::PREFIX_SEGMENT;
-	}
 	if (StringUtil::Equals(value, "LEAF_SEGMENT")) {
 		return NType::LEAF_SEGMENT;
 	}

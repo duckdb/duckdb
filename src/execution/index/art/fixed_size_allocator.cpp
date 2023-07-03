@@ -114,7 +114,7 @@ void FixedSizeAllocator::Merge(FixedSizeAllocator &other) {
 	}
 	other.buffers.clear();
 
-	// merge the vectors containing all buffers with free space
+	// merge the buffers with free spaces
 	for (auto &buffer_id : other.buffers_with_free_space) {
 		buffers_with_free_space.insert(buffer_id + buffer_count);
 	}
