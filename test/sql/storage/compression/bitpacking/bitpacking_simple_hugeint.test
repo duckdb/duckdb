@@ -1,0 +1,68 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_simple_hugeint.test
+# description: Test storage bitpacking, but simple
+# group: [bitpacking]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+PRAGMA force_compression='bitpacking'
+
+foreach bitpacking_mode constant
+
+statement ok
+PRAGMA force_bitpacking_mode='${bitpacking_mode}'
+
+# simple compression with few values
+statement ok
+CREATE TABLE test (id VARCHAR, a HUGEINT);
+
+# Insert multiple ranges so that each method can be used on at least on the the ranges
+statement ok
+INSERT INTO test SELECT i::VARCHAR, i FROM range(0, 16) tbl(i);
+INSERT INTO test SELECT i::VARCHAR, i FROM range(8000000000,8000000032) tbl(i);
+INSERT INTO test values ('a', 1844673538);
+# INSERT INTO test SELECT i::VARCHAR, i FROM range(0,100) tbl(i);
+# INSERT INTO test SELECT i::VARCHAR, i FROM range(0,100) tbl(i);
+# INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0,100) tbl(i);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT';
+----
+BitPacking
+
+query I
+select a from test;
+----
+hi
+
+query I
+select a from test limit 5;
+----
+0
+-1
+-2
+-3
+-4
+
+query I
+select a from test limit 5 offset 12000;
+----
+13371337
+13371337
+13371337
+13371337
+13371337
+
+query I
+select avg(a) from test;
+----
+6683168.75
+
+statement ok
+DROP TABLE test;
+
+endloop

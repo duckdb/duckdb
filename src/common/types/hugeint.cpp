@@ -10,6 +10,8 @@
 #include <cmath>
 #include <limits>
 
+# include <iostream>
+
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
@@ -773,37 +775,33 @@ hugeint_t::operator bool() const {
 }
 
 template <class T>
-static T CastOperator(hugeint_t input) {
-	T result;
-	if (!Hugeint::TryCast(input, result)) {
-		throw InternalException("unable to cast from hugeint_t to %s", GetTypeId<T>());
-	}
-	return result;
+static T NarrowCast(hugeint_t input) {
+	return static_cast<T>(input.lower); // Is this the correct approach?
 }
 
 hugeint_t::operator uint8_t() const {
-	return CastOperator<uint8_t>(*this);
+	return NarrowCast<uint8_t>(*this);
 }
 hugeint_t::operator uint16_t() const {
-	return CastOperator<uint16_t>(*this);
+	return NarrowCast<uint16_t>(*this);
 }
 hugeint_t::operator uint32_t() const {
-	return CastOperator<uint32_t>(*this);
+	return NarrowCast<uint32_t>(*this);
 }
 hugeint_t::operator uint64_t() const {
-	return CastOperator<uint64_t>(*this);
+	return NarrowCast<uint64_t>(*this);
 }
 hugeint_t::operator int8_t() const {
-	return CastOperator<int8_t>(*this);
+	return NarrowCast<int8_t>(*this);
 }
 hugeint_t::operator int16_t() const {
-	return CastOperator<int16_t>(*this);
+	return NarrowCast<int16_t>(*this);
 }
 hugeint_t::operator int32_t() const {
-	return CastOperator<int32_t>(*this);
+	return NarrowCast<int32_t>(*this);
 }
 hugeint_t::operator int64_t() const {
-	return CastOperator<int64_t>(*this);
+	return NarrowCast<int64_t>(*this);
 }
 
 string hugeint_t::ToString() const {

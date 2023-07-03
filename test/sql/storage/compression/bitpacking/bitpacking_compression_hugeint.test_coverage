@@ -130,7 +130,7 @@ SELECT compression FROM pragma_storage_info('test_uncompressed') WHERE segment_t
 statement ok
 checkpoint
 
-# compression of hugeints isnt that efficient with delta_for ?
+# compression of hugeints isnt as efficient as others with delta_for
 query II
 select (uncompressed::FLOAT / bitpacked::FLOAT) > 20, (uncompressed::FLOAT / bitpacked::FLOAT) < 60 FROM (
     select
