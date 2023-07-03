@@ -691,7 +691,6 @@ void RadixHTLocalSourceState::Repartition(RadixHTGlobalSinkState &sink, RadixHTG
 				continue;
 			}
 
-			lock_guard<mutex> partition_guard(finalize_partition.lock);
 			finalize_partition.uncombined_data.emplace_back(std::move(finalize_data_collection));
 			auto &data = finalize_partition.uncombined_data.back();
 
@@ -723,10 +722,7 @@ void RadixHTLocalSourceState::Repartition(RadixHTGlobalSinkState &sink, RadixHTG
 void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlobalSourceState &gstate) {
 	D_ASSERT(task == RadixHTSourceTaskType::FINALIZE);
 
-	// Grab the partition. We can safely hold the lock for the whole duration,
-	// because this is the only thread working on this partition
 	auto &finalize_partition = *sink.finalize_partitions[task_idx.GetIndex()];
-	lock_guard<mutex> partition_guard(finalize_partition.lock);
 	D_ASSERT(!finalize_partition.finalize_available);
 
 	if (!ht) {
