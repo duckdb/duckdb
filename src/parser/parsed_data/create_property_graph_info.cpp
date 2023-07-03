@@ -11,57 +11,6 @@ CreatePropertyGraphInfo::CreatePropertyGraphInfo() : CreateInfo(CatalogType::VIE
 CreatePropertyGraphInfo::CreatePropertyGraphInfo(string property_graph_name)
     : CreateInfo(CatalogType::VIEW_ENTRY), property_graph_name(std::move(property_graph_name)) {
 }
-//
-// string CreatePropertyGraphInfo::ToString() const {
-//    string result;
-//    result += "CREATE PROPERTY GRAPH " + property_graph_name + "\n";
-//    result += "VERTEX TABLES (\n";
-//    for (idx_t i = 0; i < vertex_tables.size(); i++) {
-//        if (i != vertex_tables.size() - 1) {
-//            result += vertex_tables[i]->ToString() + ", ";
-//        } else {
-//            // Last element should be without a trailing , instead )
-//            result = vertex_tables[i]->ToString() + ")\n";
-//        }
-//    }
-//
-//    result += "EDGE TABLES (\n";
-//    for (idx_t i = 0; i < edge_tables.size(); i++) {
-//        if (i != edge_tables.size() - 1) {
-//            result += edge_tables[i]->ToString() + ", ";
-//        } else {
-//            // Last element should be without a trailing , instead )
-//            result = edge_tables[i]->ToString() + ")\n";
-//        }
-//    }
-//    return result;
-//}
-//
-// bool CreatePropertyGraphInfo::Equals(const BaseExpression *other_p) const {
-//    auto other = (CreatePropertyGraphInfo *)other_p;
-//    if (property_graph_name != other->property_graph_name) {
-//        return false;
-//    }
-//
-//    if (vertex_tables.size() != other->vertex_tables.size()) {
-//        return false;
-//    }
-//    for (idx_t i = 0; i < vertex_tables.size(); i++) {
-//        if (vertex_tables[i]->Equals(other->vertex_tables[i].get())) {
-//            return false;
-//        }
-//    }
-//
-//    if (edge_tables.size() != other->edge_tables.size()) {
-//        return false;
-//    }
-//    for (idx_t i = 0; i < edge_tables.size(); i++) {
-//        if (edge_tables[i]->Equals(other->edge_tables[i].get())) {
-//            return false;
-//        }
-//    }
-//    return true;
-//}
 
 void CreatePropertyGraphInfo::SerializeInternal(Serializer &serializer) const {
 	FieldWriter writer(serializer);

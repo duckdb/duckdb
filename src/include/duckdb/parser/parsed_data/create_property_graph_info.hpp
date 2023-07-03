@@ -37,11 +37,11 @@ struct CreatePropertyGraphInfo : public CreateInfo {
 public:
 	//        string ToString() const;
 	//        bool Equals(const BaseExpression *other_p) const;
-	void SerializeInternal(Serializer &serializer) const override;
+//	void SerializeInternal(Serializer &serializer) const override;
 	unique_ptr<CreateInfo> Copy() const override;
 
 	//! Serializes a blob into a CreatePropertyGraphInfo
-	//        void Serialize(FieldWriter &writer) const;
+    void SerializeInternal(Serializer &serializer) const override;
 	//! Deserializes a blob back into a CreatePropertyGraphInfo
 	static unique_ptr<CreateInfo> Deserialize(FieldReader &reader);
 };
