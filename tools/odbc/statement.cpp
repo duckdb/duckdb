@@ -290,6 +290,14 @@ SQLRETURN SQL_API SQLCancel(SQLHSTMT statement_handle) {
 	});
 }
 
+/**
+ *@brief  Executes a prepared statement
+ *
+ * @param statement_handle A handle to a statement object. Stores information about the statement and the results of a query.
+ * @param statement_text The text of the query to execute.
+ * @param text_length The length of the query text in characters.
+ * @return
+ */
 SQLRETURN SQL_API SQLExecDirect(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length) {
 	return duckdb::ExecDirectStmt(statement_handle, statement_text, text_length);
 }
