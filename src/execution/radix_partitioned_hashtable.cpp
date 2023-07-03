@@ -579,9 +579,7 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 	}
 
 	// If not multi-scanning, try to assign a finalize task first
-	if (finalize_done == sink.finalize_partitions.size()) {
-		sink.finalize_partitions.clear();
-	} else if (finalize_idx < sink.finalize_partitions.size()) {
+	if (finalize_idx < sink.finalize_partitions.size()) {
 		auto &finalize_partition = *sink.finalize_partitions[finalize_idx];
 		if (finalize_partition.finalize_available) {
 			lstate.task = RadixHTSourceTaskType::FINALIZE;
@@ -592,9 +590,7 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 	}
 
 	// Finally, try to assign a repartition task
-	if (repartition_done == sink.sink_partitions.size()) {
-		sink.sink_partitions.clear();
-	} else if (repartition_idx < sink.sink_partitions.size()) {
+	if (repartition_idx < sink.sink_partitions.size()) {
 		D_ASSERT(repartition_task_idx < sink.repartition_tasks_per_partition.GetIndex());
 		lstate.task = RadixHTSourceTaskType::REPARTITION;
 		lstate.task_idx = repartition_idx;
@@ -673,6 +669,7 @@ void RadixHTLocalSourceState::Repartition(RadixHTGlobalSinkState &sink, RadixHTG
 		repartitioned_data->Partition(sink_data_collection);
 
 		// Add it to the finalize partitions
+		lock_guard<mutex> guard(sink.lock);
 		auto &repartitioned_data_collections = repartitioned_data->GetPartitions();
 		for (idx_t i = 0; i < multiplier; i++) {
 			const auto finalize_partition_idx = sink_partition_idx * multiplier + i;
@@ -682,7 +679,7 @@ void RadixHTLocalSourceState::Repartition(RadixHTGlobalSinkState &sink, RadixHTG
 				continue;
 			}
 
-			lock_guard<mutex> guard(finalize_partition.lock);
+			lock_guard<mutex> partition_guard(finalize_partition.lock);
 			finalize_partition.uncombined_data.emplace_back(std::move(finalize_data_collection));
 			auto &data = finalize_partition.uncombined_data.back();
 
@@ -703,7 +700,11 @@ void RadixHTLocalSourceState::Repartition(RadixHTGlobalSinkState &sink, RadixHTG
 			auto &finalize_partition = *sink.finalize_partitions[finalize_partition_idx];
 			finalize_partition.finalize_available = true;
 		}
-		gstate.repartition_done++;
+
+		if (++gstate.repartition_done == sink.sink_partitions.size()) {
+			lock_guard<mutex> guard(sink.lock);
+			sink.sink_partitions.clear();
+		}
 	}
 }
 
@@ -752,7 +753,10 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		scan_status = RadixHTScanStatus::INIT;
 	}
 
-	gstate.finalize_done++;
+	if (++gstate.finalize_done == sink.finalize_partitions.size()) {
+		lock_guard<mutex> guard(sink.lock);
+		sink.finalize_partitions.clear();
+	}
 }
 
 void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSourceState &gstate, DataChunk &chunk) {
