@@ -755,17 +755,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 		// Skip rows if they are set
 		SkipRowsAndReadHeader(options.skip_rows, false);
 	}
-	file_handle->Reset();
-	ReadBuffer(start, start);
-	// FIXME: hack to make this work with both buffers
-	// Ideally this whole code must work with the buffer manager
-	file_handle->Reset();
-	if (options.skip_rows_set) {
-		// Skip rows if they are set
-		SkipRowsAndReadHeader(options.skip_rows, false);
-	}
 
-	//	StateBuffer state_buffer(buffer.get(), buffer_size, position);
 	auto buffer_manager = make_shared<CSVBufferManager>(context, *file_handle);
 	CSVSniffer sniffer(options, buffer_manager, requested_types);
 
@@ -785,6 +775,13 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 		best_num_cols = std::max(best_num_cols, candidate.num_cols);
 	}
 
+	// FIXME: hack to make this work with both buffers. Ideally this whole code must work with the buffer manager
+	file_handle->Reset();
+	if (options.skip_rows_set) {
+		// Skip rows if they are set
+		SkipRowsAndReadHeader(options.skip_rows, false);
+	}
+	ReadBuffer(start, start);
 	// #######
 	// ### type detection (initial)
 	// #######

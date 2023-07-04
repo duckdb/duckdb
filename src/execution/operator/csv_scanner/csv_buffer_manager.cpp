@@ -1,16 +1,16 @@
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer_manager.hpp"
-
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer.hpp"
 namespace duckdb {
 
 CSVBufferManager::CSVBufferManager(ClientContext &context_p, CSVFileHandle &file_handle_p)
     : context(context_p), file_handle(file_handle_p) {
-	cached_buffers.emplace_back(make_shared<CSVBuffer>(context, 320000, file_handle, global_csv_pos, 0));
+	cached_buffers.emplace_back(make_shared<CSVBuffer>(context, CSV_BUFFER_SIZE, file_handle, global_csv_pos, 0));
 	last_buffer = cached_buffers.front();
 }
 bool CSVBufferManager::ReadNextAndCacheIt() {
 	D_ASSERT(last_buffer);
 	if (!last_buffer->IsCSVFileLastBuffer()) {
-		last_buffer = last_buffer->Next(file_handle, 320000, global_csv_pos, 0);
+		last_buffer = last_buffer->Next(file_handle, CSV_BUFFER_SIZE, global_csv_pos, 0);
 		cached_buffers.emplace_back(last_buffer);
 		return true;
 	}
@@ -34,7 +34,7 @@ shared_ptr<CSVBuffer> CSVBufferManager::GetBuffer(idx_t pos, bool auto_detection
 			return buffer;
 		} else {
 			if (!last_buffer->IsCSVFileLastBuffer()) {
-				last_buffer = last_buffer->Next(file_handle, CSVBuffer::CSV_BUFFER_SIZE, global_csv_pos, 0);
+				last_buffer = last_buffer->Next(file_handle, CSV_BUFFER_SIZE, global_csv_pos, 0);
 				return last_buffer;
 			}
 		}

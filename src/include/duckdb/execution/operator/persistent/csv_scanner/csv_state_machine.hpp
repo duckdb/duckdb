@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer_manager.hpp"
 
@@ -78,5 +77,7 @@ private:
 	//! The Transition Array is a Finite State Machine
 	//! It holds the transitions of all states, on all 256 possible different characters
 	uint8_t transition_array[7][256];
+	//! Current char being looked at by the machine
+	char current_char;
 };
 } // namespace duckdb

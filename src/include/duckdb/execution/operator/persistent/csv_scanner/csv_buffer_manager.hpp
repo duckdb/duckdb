@@ -8,9 +8,8 @@
 
 #pragma once
 
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer.hpp"
-
 namespace duckdb {
+class CSVBuffer;
 
 //! This class is used to manage the buffers
 //! Buffers are cached when used for auto detection

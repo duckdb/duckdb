@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine.hpp"
-#include <utility>
 #include <vector>
 
 namespace duckdb {

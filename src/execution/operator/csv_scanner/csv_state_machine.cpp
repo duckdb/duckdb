@@ -69,6 +69,7 @@ CSVStateMachine::CSVStateMachine(CSVStateMachineConfiguration configuration_p,
 	}
 	transition_array[escape_state][static_cast<uint8_t>(configuration.quote)] = quoted_state;
 	transition_array[escape_state][static_cast<uint8_t>(configuration.escape)] = quoted_state;
+	current_char = csv_buffer_iterator.GetNextChar();
 }
 
 void CSVStateMachine::SniffDialect(vector<idx_t> &sniffed_column_counts) {
@@ -82,16 +83,16 @@ void CSVStateMachine::SniffDialect(vector<idx_t> &sniffed_column_counts) {
 	// Both these variables are used for new line identifier detection
 	bool single_record_separator = false;
 	bool carry_on_separator = false;
-	auto c = csv_buffer_iterator.GetNextChar();
 
-	while (c != '\0') {
+	while (!csv_buffer_iterator.Finished()) {
 		if (state == CSVState::INVALID) {
 			sniffed_column_counts.clear();
 			return;
 		}
 		previous_state = state;
 
-		state = static_cast<CSVState>(transition_array[static_cast<uint8_t>(state)][static_cast<uint8_t>(c)]);
+		state =
+		    static_cast<CSVState>(transition_array[static_cast<uint8_t>(state)][static_cast<uint8_t>(current_char)]);
 		bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
 		                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
 
@@ -114,7 +115,7 @@ void CSVStateMachine::SniffDialect(vector<idx_t> &sniffed_column_counts) {
 			// We sniffed enough rows
 			break;
 		}
-		c = csv_buffer_iterator.GetNextChar();
+		current_char = csv_buffer_iterator.GetNextChar();
 	}
 	bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
 	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
