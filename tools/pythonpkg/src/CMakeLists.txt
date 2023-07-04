@@ -6,6 +6,7 @@ include_directories(${pybind11_INCLUDE_DIR})
 include_directories(${PYTHON_INCLUDE_DIRS})
 
 add_subdirectory(pyrelation)
+add_subdirectory(pyexpression)
 add_subdirectory(pybind11)
 add_subdirectory(numpy)
 add_subdirectory(native)

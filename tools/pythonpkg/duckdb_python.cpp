@@ -7,6 +7,7 @@
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pyrelation.hpp"
+#include "duckdb_python/expression/pyexpression.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb_python/pybind11/exceptions.hpp"
 #include "duckdb_python/typing.hpp"
@@ -285,6 +286,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 	DuckDBPyTyping::Initialize(m);
 	DuckDBPyFunctional::Initialize(m);
 	DuckDBPyRelation::Initialize(m);
+	DuckDBPyExpression::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
 	PythonObject::Initialize();
 
