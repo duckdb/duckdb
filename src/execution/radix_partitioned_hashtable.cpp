@@ -17,7 +17,7 @@ struct RadixHTConfig {
 	//! Radix bits used during the Sink
 	static constexpr const idx_t SINK_RADIX_BITS = 4;
 	//! Check whether to abandon HT after crossing this threshold
-	static constexpr const idx_t SINK_ABANDON_THRESHOLD = 500000;
+	static constexpr const idx_t SINK_ABANDON_THRESHOLD = 100000;
 	//! If we cross SINK_ABANDON_THRESHOLD, we decide whether to continue with the current HT or abandon it.
 	//! Abandoning is better if the input has virtually no duplicates.
 	//! Continuing is better if there are a significant amount of duplicates.
@@ -28,11 +28,6 @@ struct RadixHTConfig {
 	//! We keep track of the size of the HT, and the number of tuples that went into it.
 	//! If we are on track to see 25x our current unique count, we can safely abandon the HTs early!
 	static constexpr const idx_t SINK_EXPECTED_GROUP_COUNT_FACTOR = 25;
-
-	//! The maximum number of groups per finalize task. We repartition if there could be more
-	static constexpr const idx_t FINALIZE_MAX_GROUP_COUNT = 500000;
-	//! For in-memory finalizes, we repartition using up to 8 radix bits
-	static constexpr const idx_t FINALIZE_MAX_RADIX_BITS = 8;
 };
 
 // compute the GROUPING values
@@ -429,15 +424,8 @@ bool RadixPartitionedHashTable::RequiresRepartitioning(ClientContext &context, G
 	const idx_t n_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	const auto max_ht_size = double(0.6) * BufferManager::GetBufferManager(context).GetMaxMemory();
 
-	// Possibly repartition based on total count
-	auto finalize_tasks = NextPowerOfTwo(total_count / RadixHTConfig::FINALIZE_MAX_GROUP_COUNT);
-	// Number of partitions has to be equal to or higher than current number of partitions
-	finalize_tasks = MaxValue<idx_t>(finalize_tasks, num_partitions);
-	// But not higher than the set max
-	finalize_tasks =
-	    MinValue<idx_t>(finalize_tasks, RadixPartitioning::NumberOfPartitions(RadixHTConfig::FINALIZE_MAX_RADIX_BITS));
-	// Unless we have more threads than that
-	finalize_tasks = MaxValue<idx_t>(finalize_tasks, NextPowerOfTwo(n_threads));
+	// We want more finalize tasks than the number of threads (and at least the number of current partitions)
+	auto finalize_tasks = MaxValue<idx_t>(NextPowerOfTwo(n_threads * 2), num_partitions);
 
 	// Largest partition count/size
 	const auto partition_count = partition_counts[max_partition_idx];
