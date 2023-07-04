@@ -700,7 +700,7 @@ void LocalFileSystem::CreateDirectory(const string &directory) {
 	}
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(directory.c_str());
 	if (directory.empty() || !CreateDirectoryW(unicode_path.c_str(), NULL) || !DirectoryExists(directory)) {
-		throw IOException("Could not create directory!");
+		throw IOException("Could not create directory: \'%s\'", directory.c_str());
 	}
 }
 

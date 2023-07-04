@@ -196,12 +196,29 @@ class TestPythonFilesystem:
             '/root/a=1/data_0.csv'
         ).read() == b'1\n'
 
-    def test_read_hive_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):
+    def test_read_hive_partition(self, duckdb_cursor: DuckDBPyConnection, memory: AbstractFileSystem):   
         duckdb_cursor.register_filesystem(memory)
+        duckdb_cursor.execute("copy (select 2 as a) to 'memory://partition' (partition_by (a))")
 
-        with memory.open('/root/a=1/data_0.csv', 'wb') as fh:
-            fh.write(b'1\n')
+        if sys.platform == 'win32':
+            path = 'memory:///partition\\*\\*.csv'
+        else:
+            path = 'memory:///partition/*/*.csv'
 
-        duckdb_cursor.execute('''SELECT * FROM read_csv_auto('memory://root/*/*.csv', HIVE_PARTITIONING = 1);''')
+        query = "SELECT * FROM read_csv_auto('" + path + "'"
 
-        assert duckdb_cursor.fetchall() == [(1, '1')]
+        # hive partitioning
+        duckdb_cursor.execute(query + ', HIVE_PARTITIONING=1' + ');')
+        assert duckdb_cursor.fetchall() == [(2, 2)]
+
+        # hive partitioning: auto detection
+        duckdb_cursor.execute(query + ');')
+        assert duckdb_cursor.fetchall() == [(2, 2)]
+
+        # hive partitioning: cast to int
+        duckdb_cursor.execute(query + ', HIVE_PARTITIONING=1' + ', HIVE_TYPES_AUTOCAST=1' + ');')
+        assert duckdb_cursor.fetchall() == [(2, 2)]
+
+        # hive partitioning: no cast to int
+        duckdb_cursor.execute(query + ', HIVE_PARTITIONING=1' + ', HIVE_TYPES_AUTOCAST=0' + ');')
+        assert duckdb_cursor.fetchall() == [(2, '2')]
