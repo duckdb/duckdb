@@ -4,4 +4,5 @@ recursive-include duckdb *.h *.hpp *.cpp
 include duckdb_python.cpp
 recursive-include src *.h *.hpp *.cpp
 recursive-include duckdb-stubs *.pyi
+recursive-include duckdb
 include cibw.toml

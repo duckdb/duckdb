@@ -8,7 +8,6 @@ duckdb.cpp
 duckdb.hpp
 parquet_extension.cpp
 parquet_extension.hpp
-duckdb/
 githash.list
 includes.list
 sources.list
