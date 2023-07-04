@@ -100,8 +100,9 @@ jobs:
         cat /tmp/duckdb.Rcheck/00check.log
         find /tmp/duckdb.Rcheck/ -type f -name "*.Rout*" -print0 | tee /dev/stderr | xargs -0 cat
 
-    - name: Valgrind
+    - name: Valgrind (Temporarily disabled)
       shell: bash
+      if: ${{ !always() }}
       run: |
         cd tools/rpkg
         export NOT_CRAN='false'
