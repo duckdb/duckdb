@@ -70,7 +70,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 			throw;
 		}
 	} catch (std::exception &ex) {
-        throw;
+		throw;
 	}
 	this->properties = binder->properties;
 	this->properties.parameter_count = parameter_count;

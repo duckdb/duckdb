@@ -24,6 +24,6 @@ public:
 	bool initialized_e = false;
 	bool initialized_w = false;
 
-    size_t vsize;
+	size_t vsize;
 };
 } // namespace duckdb

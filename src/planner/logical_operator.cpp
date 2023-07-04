@@ -344,11 +344,11 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
 	case LogicalOperatorType::LOGICAL_DROP:
 	case LogicalOperatorType::LOGICAL_DETACH:
-        result = LogicalSimple::Deserialize(state, reader);
-        break;
-    case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
-    result = LogicalExtensionOperator::Deserialize(state, reader);
-    break;
+		result = LogicalSimple::Deserialize(state, reader);
+		break;
+	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
+		result = LogicalExtensionOperator::Deserialize(state, reader);
+		break;
 	case LogicalOperatorType::LOGICAL_PIVOT:
 		result = LogicalPivot::Deserialize(state, reader);
 		break;
