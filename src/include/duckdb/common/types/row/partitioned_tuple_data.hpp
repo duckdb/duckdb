@@ -48,7 +48,6 @@ struct PartitionTupleDataAllocators {
 //! partitioning, e.g., radix, hive
 class PartitionedTupleData {
 public:
-	unique_ptr<PartitionedTupleData> CreateShared();
 	virtual ~PartitionedTupleData();
 
 public:

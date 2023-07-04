@@ -18,7 +18,7 @@ namespace duckdb {
 
 class WindowAggregatorState {
 public:
-	WindowAggregatorState() {};
+	WindowAggregatorState();
 	virtual ~WindowAggregatorState() {
 	}
 
@@ -32,6 +32,9 @@ public:
 		D_ASSERT(dynamic_cast<const TARGET *>(this));
 		return reinterpret_cast<const TARGET &>(*this);
 	}
+
+	//! Allocator for aggregates
+	ArenaAllocator allocator;
 };
 
 class WindowAggregator {
@@ -59,10 +62,13 @@ protected:
 	const idx_t state_size;
 	//! Partition data chunk
 	DataChunk inputs;
+
 	//! The filtered rows in inputs.
 	vector<validity_t> filter_bits;
 	ValidityMask filter_mask;
 	idx_t filter_pos;
+	//! The state used by the aggregator to build.
+	unique_ptr<WindowAggregatorState> gstate;
 };
 
 class WindowConstantAggregator : public WindowAggregator {

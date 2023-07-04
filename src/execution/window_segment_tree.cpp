@@ -1,8 +1,8 @@
 #include "duckdb/execution/window_segment_tree.hpp"
 
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <utility>
 
@@ -11,6 +11,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // WindowAggregator
 //===--------------------------------------------------------------------===//
+WindowAggregatorState::WindowAggregatorState() : allocator(Allocator::DefaultAllocator()) {
+}
 
 WindowAggregator::WindowAggregator(AggregateObject aggr, const LogicalType &result_type_p, idx_t partition_count_p)
     : aggr(std::move(aggr)), result_type(result_type_p), partition_count(partition_count_p),
@@ -85,6 +87,9 @@ WindowConstantAggregator::WindowConstantAggregator(AggregateObject aggr, const L
 	results = make_uniq<Vector>(result_type, partition_offsets.size());
 	partition_offsets.emplace_back(count);
 
+	//	Create an aggregate state for intermediate aggregates
+	gstate = make_uniq<WindowAggregatorState>();
+
 	//	Start the first aggregate
 	AggregateInit();
 }
@@ -94,7 +99,7 @@ void WindowConstantAggregator::AggregateInit() {
 }
 
 void WindowConstantAggregator::AggegateFinal(Vector &result, idx_t rid) {
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), gstate->allocator);
 	aggr.function.finalize(statef, aggr_input_data, result, 1, rid);
 
 	if (aggr.function.destructor) {
@@ -110,7 +115,7 @@ void WindowConstantAggregator::Sink(DataChunk &payload_chunk, SelectionVector *f
 		inputs.Initialize(Allocator::DefaultAllocator(), payload_chunk.GetTypes());
 	}
 
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), gstate->allocator);
 	idx_t begin = 0;
 	idx_t filter_idx = 0;
 	auto partition_end = partition_offsets[partition + 1];
@@ -201,7 +206,7 @@ unique_ptr<WindowAggregatorState> WindowConstantAggregator::GetLocalState() cons
 void WindowConstantAggregator::Evaluate(WindowAggregatorState &lstate, const idx_t *begins, const idx_t *ends,
                                         Vector &target, idx_t count) const {
 	//	Chunk up the constants and copy them one at a time
-	auto lcstate = lstate.Cast<WindowConstantAggregatorState>();
+	auto &lcstate = lstate.Cast<WindowConstantAggregatorState>();
 	idx_t matched = 0;
 	idx_t target_offset = 0;
 	for (idx_t i = 0; i < count; ++i) {
@@ -263,7 +268,7 @@ WindowCustomAggregatorState::WindowCustomAggregatorState(const AggregateObject &
 
 WindowCustomAggregatorState::~WindowCustomAggregatorState() {
 	if (aggr.function.destructor) {
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+		AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 		aggr.function.destructor(statef, aggr_input_data, 1);
 	}
 }
@@ -292,7 +297,7 @@ void WindowCustomAggregator::Evaluate(WindowAggregatorState &lstate, const idx_t
 		frame = FrameBounds(begin, end);
 
 		// Extract the range
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+		AggregateInputData aggr_input_data(aggr.GetFunctionData(), lstate.allocator);
 		aggr.function.window(params, filter_mask, aggr_input_data, inputs.ColumnCount(), lcstate.state.data(), frame,
 		                     prev, result, i, 0);
 	}
@@ -307,6 +312,7 @@ WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const LogicalType &re
 }
 
 void WindowSegmentTree::Finalize() {
+	gstate = GetLocalState();
 	if (inputs.ColumnCount() > 0) {
 		if (aggr.function.combine && UseCombineAPI()) {
 			ConstructTree();
@@ -319,7 +325,7 @@ WindowSegmentTree::~WindowSegmentTree() {
 		// nothing to destroy
 		return;
 	}
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), gstate->allocator);
 	// call the destructor for all the intermediate states
 	data_ptr_t address_data[STANDARD_VECTOR_SIZE];
 	Vector addresses(LogicalType::POINTER, data_ptr_cast(address_data));
@@ -406,7 +412,7 @@ void WindowSegmentTreeState::FlushStates(bool combining) {
 		return;
 	}
 
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	if (combining) {
 		statel.Verify(flush_count);
 		aggr.function.combine(statel, statep, aggr_input_data, flush_count);
@@ -475,7 +481,7 @@ void WindowSegmentTreeState::WindowSegmentValue(const WindowSegmentTree &tree, i
 }
 void WindowSegmentTreeState::Finalize(Vector &result, idx_t count) {
 	//	Finalise the result aggregates
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	aggr.function.finalize(statef, aggr_input_data, result, count, 0);
 
 	//	Destruct the result aggregates
@@ -488,8 +494,7 @@ void WindowSegmentTree::ConstructTree() {
 	D_ASSERT(inputs.ColumnCount() > 0);
 
 	//	Use a temporary scan state to build the tree
-	auto lstate = GetLocalState();
-	auto &ltstate = lstate->Cast<WindowSegmentTreeState>();
+	auto &gtstate = gstate->Cast<WindowSegmentTreeState>();
 
 	// compute space required to store internal nodes of segment tree
 	internal_nodes = 0;
@@ -512,8 +517,8 @@ void WindowSegmentTree::ConstructTree() {
 			// compute the aggregate for this entry in the segment tree
 			data_ptr_t state_ptr = levels_flat_native.get() + (levels_flat_offset * state_size);
 			aggr.function.initialize(state_ptr);
-			ltstate.WindowSegmentValue(*this, level_current, pos, MinValue(level_size, pos + TREE_FANOUT), state_ptr);
-			ltstate.FlushStates(level_current > 0);
+			gtstate.WindowSegmentValue(*this, level_current, pos, MinValue(level_size, pos + TREE_FANOUT), state_ptr);
+			gtstate.FlushStates(level_current > 0);
 
 			levels_flat_offset++;
 		}
