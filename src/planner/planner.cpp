@@ -52,8 +52,6 @@ void Planner::CreatePlan(SQLStatement &statement) {
 		this->types = {LogicalTypeId::UNKNOWN};
 		this->plan = nullptr;
 		parameters_resolved = false;
-	} catch (const BinderException &ex) {
-		throw;
 	} catch (const Exception &ex) {
 		auto &config = DBConfig::GetConfig(context);
 
@@ -68,28 +66,11 @@ void Planner::CreatePlan(SQLStatement &statement) {
 				break;
 			}
 		}
-
 		if (!this->plan) {
 			throw;
 		}
 	} catch (std::exception &ex) {
-        auto &config = DBConfig::GetConfig(context);
-
-        this->plan = nullptr;
-        for (auto &extension_op : config.operator_extensions) {
-            auto bound_statement =
-                extension_op->Bind(context, *this->binder, extension_op->operator_info.get(), statement);
-            if (bound_statement.plan != nullptr) {
-                this->names = bound_statement.names;
-                this->types = bound_statement.types;
-                this->plan = std::move(bound_statement.plan);
-                break;
-            }
-        }
-
-        if (!this->plan) {
-            throw;
-        }
+        throw;
 	}
 	this->properties = binder->properties;
 	this->properties.parameter_count = parameter_count;
