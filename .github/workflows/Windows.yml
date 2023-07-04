@@ -252,4 +252,4 @@ jobs:
          s3_id: ${{ secrets.S3_ID }}
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-         unittest_script: 'test/Release/unittest.exe'
+         unittest_script: ./build/release/test/Release/unittest.exe
