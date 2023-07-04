@@ -42,7 +42,7 @@ class TestDataFrame(object):
 	def test_dataframe_collect(self, spark):
 		df = spark.createDataFrame([(42,), (21,)]).toDF('a')
 		res = df.collect()
-		assert str(res) == '[Row(a=42), Row(a=21)]'
+		assert res == [Row(a=42), Row(a=21)]
 
 	def test_dataframe_from_rows(self, spark):
 		columns = ["language","users_count"]
