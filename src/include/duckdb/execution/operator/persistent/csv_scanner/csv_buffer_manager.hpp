@@ -8,6 +8,9 @@
 
 #pragma once
 
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_file_handle.hpp"
+
 namespace duckdb {
 class CSVBuffer;
 
