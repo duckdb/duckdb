@@ -103,7 +103,13 @@ runs:
       shell: bash
       run: |
         cd $VCPKG_ROOT && ./vcpkg install openssl ${{ inputs.vcpkg_target_triplet != '' && format('--triplet={0}', inputs.vcpkg_target_triplet) || ''}}
-        echo "OPENSSL_ROOT_DIR=$VCPKG_ROOT/installed/`vcpkg list | grep -o 'openssl:[a-z0-9]*-[a-z]*' | grep -o '[a-z0-9]*-[a-z]*' | head -n 1`" >> $GITHUB_ENV
+        echo "OPENSSL_ROOT_DIR=$VCPKG_ROOT/installed/${{ inputs.vcpkg_target_triplet }}" >> $GITHUB_ENV
+
+    - name: Set Openssl dir
+      if: inputs.openssl_path != ''
+      shell: bash
+      run: |
+        echo "OPENSSL_ROOT_DIR=${{ inputs.openssl_path }}" >> $GITHUB_ENV
 
     - name: Create combined vcpkg manifest
       if: inputs.build_vcpkg_extensions == 1
@@ -123,7 +129,6 @@ runs:
         OSX_BUILD_ARCH: ${{ inputs.osx_arch }}
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
-        OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
       run: |
         mkdir -p ~/.ssh
         ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
