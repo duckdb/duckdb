@@ -144,9 +144,9 @@ public:
 	//! Pin properties when scanning
 	TupleDataPinProperties scan_pin_properties;
 	//! The final data that has to be scanned
-	vector<MaterializedAggregateData> final_data;
-	//! Total count of final_data
-	optional_idx final_count;
+	vector<MaterializedAggregateData> scan_data;
+	//! Total count before combining
+	optional_idx count_before_combining;
 };
 
 RadixHTGlobalSinkState::RadixHTGlobalSinkState()
@@ -169,15 +169,15 @@ idx_t RadixHTGlobalSinkState::AddToFinal(GroupedAggregateHashTable &intermediate
 	auto &data_collection = partitioned_data->GetPartitions()[0];
 	D_ASSERT(data_collection->Count() != 0);
 
-	final_data.emplace_back(std::move(data_collection));
-	final_data.back().allocators.emplace_back(aggregate_allocator);
+	scan_data.emplace_back(std::move(data_collection));
+	scan_data.back().allocators.emplace_back(aggregate_allocator);
 	for (auto &ucb : uncombined_data) {
 		D_ASSERT(!ucb.allocators.empty());
 		for (auto &allocator : ucb.allocators) {
-			final_data.back().allocators.emplace_back(allocator);
+			scan_data.back().allocators.emplace_back(allocator);
 		}
 	}
-	return final_data.size() - 1;
+	return scan_data.size() - 1;
 }
 
 void RadixHTGlobalSinkState::Destroy() {
@@ -185,7 +185,7 @@ void RadixHTGlobalSinkState::Destroy() {
 		return;
 	}
 
-	for (auto &data : final_data) {
+	for (auto &data : scan_data) {
 		// There are aggregates with destructors: Call the destructor for each of the aggregates
 		RowOperationsState row_state(*data.allocators.back());
 		auto layout = data.data_collection->GetLayout().Copy();
@@ -344,9 +344,9 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 	D_ASSERT(gstate.repartition_tasks_per_partition.IsValid());
 
 	// Compute total count of data and set in sink state
-	gstate.final_count = 0;
+	gstate.count_before_combining = 0;
 	for (auto &sink_partition : gstate.sink_partitions) {
-		gstate.final_count = gstate.final_count.GetIndex() + sink_partition->count.GetIndex();
+		gstate.count_before_combining = gstate.count_before_combining.GetIndex() + sink_partition->count.GetIndex();
 	}
 
 	if (requires_repartitioning) { // Schedule repartition / finalize tasks
@@ -491,7 +491,7 @@ idx_t RadixPartitionedHashTable::Count(GlobalSinkState &sink_p) const {
 
 idx_t RadixPartitionedHashTable::CountInternal(GlobalSinkState &sink_p) const {
 	auto &sink = sink_p.Cast<RadixHTGlobalSinkState>();
-	return sink.final_count.GetIndex();
+	return sink.count_before_combining.GetIndex();
 }
 
 void RadixPartitionedHashTable::SetMultiScan(GlobalSinkState &sink_p) {
@@ -589,10 +589,10 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 
 	// Try to assign a scan task first if we enabled multi-scanning,
 	// if not multi-scanning, threads just immediately scan the HTs they finished
-	if (sink.scan_pin_properties == TupleDataPinProperties::UNPIN_AFTER_DONE && scan_idx < sink.final_data.size()) {
+	if (sink.scan_pin_properties == TupleDataPinProperties::UNPIN_AFTER_DONE && scan_idx < sink.scan_data.size()) {
 		lstate.task = RadixHTSourceTaskType::SCAN;
 		lstate.task_idx = scan_idx++;
-		lstate.scan_collection = sink.final_data[lstate.task_idx.GetIndex()].data_collection.get();
+		lstate.scan_collection = sink.scan_data[lstate.task_idx.GetIndex()].data_collection.get();
 		lstate.scan_status = RadixHTScanStatus::INIT;
 		return true;
 	}
@@ -755,13 +755,18 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		gstate.scan_idx = sink.AddToFinal(*ht, uncombined_data);
 		task = RadixHTSourceTaskType::SCAN;
 		task_idx = gstate.scan_idx++;
-		scan_collection = sink.final_data[task_idx.GetIndex()].data_collection.get();
+		scan_collection = sink.scan_data[task_idx.GetIndex()].data_collection.get();
 		scan_status = RadixHTScanStatus::INIT;
 
 		uncombined_data.clear();
 	}
 
-	sink.finalize_done++;
+	if (++sink.finalize_done == sink.finalize_tasks.GetIndex()) {
+		lock_guard<mutex> guard(sink.lock);
+		if (gstate.scan_done == sink.scan_data.size()) {
+			gstate.finished = true;
+		}
+	}
 }
 
 void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSourceState &gstate, DataChunk &chunk) {
@@ -777,14 +782,14 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 		scan_status = RadixHTScanStatus::DONE;
 		if (sink.scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE) {
 			lock_guard<mutex> guard(sink.lock);
-			auto &data = sink.final_data[task_idx.GetIndex()];
+			auto &data = sink.scan_data[task_idx.GetIndex()];
 			data.data_collection.reset();
 			data.allocators.clear();
 		}
 		const auto scan_done = ++gstate.scan_done;
 		if (sink.finalize_done == sink.finalize_tasks.GetIndex()) {
 			lock_guard<mutex> guard(sink.lock);
-			if (scan_done == sink.final_data.size()) {
+			if (scan_done == sink.scan_data.size()) {
 				gstate.finished = true;
 			}
 		}
