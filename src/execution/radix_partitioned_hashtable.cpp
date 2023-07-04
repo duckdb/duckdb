@@ -133,10 +133,12 @@ public:
 	//! For synchronizing repartition tasks
 	idx_t repartition_idx;
 	idx_t repartition_task_idx;
+	optional_idx repartition_tasks;
 	atomic<idx_t> repartition_done;
 
 	//! For synchronizing finalize tasks
 	idx_t finalize_idx;
+	optional_idx finalize_tasks;
 	atomic<idx_t> finalize_done;
 
 	//! Pin properties when scanning
@@ -385,6 +387,8 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 		}
 		gstate.sink_partitions.clear();
 	}
+	gstate.repartition_tasks = gstate.sink_partitions.size();
+	gstate.finalize_tasks = gstate.finalize_partitions.size();
 	gstate.finalized = true;
 }
 
@@ -591,7 +595,7 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 	}
 
 	// If not multi-scanning, try to assign a finalize task first
-	if (sink.finalize_idx < sink.finalize_partitions.size()) {
+	if (sink.finalize_idx < sink.finalize_tasks.GetIndex()) {
 		auto &finalize_partition = *sink.finalize_partitions[sink.finalize_idx];
 		if (finalize_partition.finalize_available) {
 			lstate.task = RadixHTSourceTaskType::FINALIZE;
@@ -602,7 +606,7 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 	}
 
 	// Finally, try to assign a repartition task
-	if (sink.repartition_idx < sink.sink_partitions.size()) {
+	if (sink.repartition_idx < sink.repartition_tasks.GetIndex()) {
 		D_ASSERT(sink.repartition_task_idx < sink.repartition_tasks_per_partition.GetIndex());
 		lstate.task = RadixHTSourceTaskType::REPARTITION;
 		lstate.task_idx = sink.repartition_idx;
@@ -711,11 +715,7 @@ void RadixHTLocalSourceState::Repartition(RadixHTGlobalSinkState &sink, RadixHTG
 			auto &finalize_partition = *sink.finalize_partitions[finalize_partition_idx];
 			finalize_partition.finalize_available = true;
 		}
-
-		if (++sink.repartition_done == sink.sink_partitions.size()) {
-			lock_guard<mutex> guard(sink.lock);
-			sink.sink_partitions.clear();
-		}
+		sink.repartition_done++;
 	}
 }
 
@@ -761,10 +761,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		scan_status = RadixHTScanStatus::INIT;
 	}
 
-	if (++sink.finalize_done == sink.finalize_partitions.size()) {
-		lock_guard<mutex> guard(sink.lock);
-		sink.finalize_partitions.clear();
-	}
+	sink.finalize_done++;
 }
 
 void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSourceState &gstate, DataChunk &chunk) {
@@ -780,9 +777,14 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 
 	if (!data_collection.Scan(scan_state, scan_chunk)) {
 		scan_status = RadixHTScanStatus::DONE;
-		if (++gstate.scan_done == sink.final_data.size()) {
+		if (sink.scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE) {
+			data.data_collection.reset();
+			data.allocators.clear();
+		}
+		const auto scan_done = ++gstate.scan_done;
+		if (sink.finalize_done == sink.finalize_tasks.GetIndex()) {
 			lock_guard<mutex> guard(sink.lock);
-			if (sink.finalize_partitions.empty()) {
+			if (scan_done == sink.final_data.size()) {
 				gstate.finished = true;
 			}
 		}
