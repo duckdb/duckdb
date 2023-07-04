@@ -118,6 +118,11 @@ void PartitionGlobalSinkState::SyncPartitioning(const PartitionGlobalSinkState &
 	}
 }
 
+unique_ptr<RadixPartitionedTupleData> PartitionGlobalSinkState::CreatePartition(idx_t new_bits) const {
+	const auto hash_col_idx = payload_types.size();
+	return make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types, new_bits, hash_col_idx);
+}
+
 void PartitionGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
 	//	Have we started to combine? Then just live with it.
 	if (fixed_bits || (grouping_data && !grouping_data->GetPartitions().empty())) {
@@ -133,20 +138,20 @@ void PartitionGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
 
 	// Repartition the grouping data
 	if (new_bits != bits) {
-		const auto hash_col_idx = payload_types.size();
-		grouping_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types, new_bits, hash_col_idx);
+		grouping_data = CreatePartition(new_bits);
 	}
 }
 
 void PartitionGlobalSinkState::SyncLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append) {
 	// We are done if the local_partition is right sized.
 	auto &local_radix = local_partition->Cast<RadixPartitionedTupleData>();
-	if (local_radix.GetRadixBits() == grouping_data->GetRadixBits()) {
+	const auto new_bits = grouping_data->GetRadixBits();
+	if (local_radix.GetRadixBits() == new_bits) {
 		return;
 	}
 
 	// If the local partition is now too small, flush it and reallocate
-	auto new_partition = grouping_data->CreateShared();
+	auto new_partition = CreatePartition(new_bits);
 	local_partition->FlushAppendState(*local_append);
 	local_partition->Repartition(*new_partition);
 
@@ -160,7 +165,7 @@ void PartitionGlobalSinkState::UpdateLocalPartition(GroupingPartition &local_par
 	lock_guard<mutex> guard(lock);
 
 	if (!local_partition) {
-		local_partition = grouping_data->CreateShared();
+		local_partition = CreatePartition(grouping_data->GetRadixBits());
 		local_append = make_uniq<PartitionedTupleDataAppendState>();
 		local_partition->InitializeAppendState(*local_append);
 		return;

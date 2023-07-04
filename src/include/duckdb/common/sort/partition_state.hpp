@@ -53,6 +53,7 @@ public:
 	                         const vector<BoundOrderByNode> &order_bys, const Types &payload_types,
 	                         const vector<unique_ptr<BaseStatistics>> &partitions_stats, idx_t estimated_cardinality);
 
+	unique_ptr<RadixPartitionedTupleData> CreatePartition(idx_t new_bits) const;
 	void SyncPartitioning(const PartitionGlobalSinkState &other);
 
 	void UpdateLocalPartition(GroupingPartition &local_partition, GroupingAppend &local_append);
