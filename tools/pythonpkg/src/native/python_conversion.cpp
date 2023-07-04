@@ -174,7 +174,7 @@ Value TransformTupleToStruct(py::handle ele, const LogicalType &target_type = Lo
 		auto &name = StructType::GetChildName(target_type, i);
 		auto element = py::handle(tuple[i]);
 		auto converted_value = TransformPythonValue(element, type);
-		children.emplace_back(make_pair(std::move(name), std::move(converted_value)));
+		children.emplace_back(make_pair(name, std::move(converted_value)));
 	}
 	auto result = Value::STRUCT(std::move(children));
 	return result;
@@ -325,38 +325,41 @@ bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &ta
 		return true;
 	}
 	case LogicalTypeId::UBIGINT: {
-		if (value < NumericLimits<uint64_t>::Minimum() || value > NumericLimits<uint64_t>::Maximum()) {
+		if (value < 0) {
 			return false;
 		}
 		res = Value::UBIGINT(value);
 		return true;
 	}
 	case LogicalTypeId::UINTEGER: {
-		if (value < NumericLimits<uint32_t>::Minimum() || value > NumericLimits<uint32_t>::Maximum()) {
+		if (value < 0 || value > (int64_t)NumericLimits<uint32_t>::Maximum()) {
 			return false;
 		}
 		res = Value::UINTEGER(value);
 		return true;
 	}
 	case LogicalTypeId::USMALLINT: {
-		if (value < NumericLimits<uint16_t>::Minimum() || value > NumericLimits<uint16_t>::Maximum()) {
+		if (value < 0 || value > (int64_t)NumericLimits<uint16_t>::Maximum()) {
 			return false;
 		}
 		res = Value::USMALLINT(value);
 		return true;
 	}
 	case LogicalTypeId::UTINYINT: {
-		if (value < NumericLimits<uint8_t>::Minimum() || value > NumericLimits<uint8_t>::Maximum()) {
+		if (value < 0 || value > (int64_t)NumericLimits<uint8_t>::Maximum()) {
 			return false;
 		}
 		res = Value::UTINYINT(value);
 		return true;
 	}
-	default:
-		throw ConversionException("Could not convert integer to type %s", target_type.ToString());
+	default: {
+		if (!TrySniffPythonNumeric(res, value)) {
+			return false;
+		}
+		res = res.DefaultCastAs(target_type, true);
+		return true;
 	}
-
-	throw ConversionException("Could not convert integer to type %s", target_type.ToString());
+	}
 }
 
 PythonObjectType GetPythonObjectType(py::handle &ele) {
