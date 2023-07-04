@@ -9,7 +9,7 @@ os.chdir(os.path.dirname(__file__))
 parser = argparse.ArgumentParser(description='Generates/Validates extension_functions.hpp file')
 
 parser.add_argument('--validate', action=argparse.BooleanOptionalAction,
-                    help='If set  will validate that extension_functions.hpp is up to date, otherwise it generates the extension_functions.hpp file.')
+                    help='If set  will validate that extension_entries.hpp is up to date, otherwise it generates the extension_functions.hpp file.')
 
 
 args = parser.parse_args()
