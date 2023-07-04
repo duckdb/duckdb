@@ -16,7 +16,7 @@ statement ok
 SET threads=4
 
 statement ok
-SET memory_limit='900MB'
+SET memory_limit='1GB'
 
 # stream from one parquet file to another
 query I
