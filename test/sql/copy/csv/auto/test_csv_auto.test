@@ -8,6 +8,14 @@ require vector_size 512
 statement ok 
 PRAGMA verify_parallelism
 
+query II
+select * from read_csv_auto('data/csv/from_df.csv', quote='''')
+----
+'a,b,c'	45
+NULL	234
+hello	234
+bye	2
+
 # CSV file with RFC-conform dialect
 statement ok
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/rfc_conform.csv');

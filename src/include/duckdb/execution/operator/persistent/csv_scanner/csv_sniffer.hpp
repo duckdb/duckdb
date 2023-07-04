@@ -62,7 +62,7 @@ private:
 	vector<char> delim_candidates;
 	vector<QuoteRule> quoterule_candidates;
 	vector<vector<char>> quote_candidates_map;
-	vector<vector<char>> escape_candidates_map = {{'\0', '\"'}, {'\\'}, {'\0'}};
+	vector<vector<char>> escape_candidates_map = {{'\0', '\"', '\''}, {'\\'}, {'\0'}};
 	//! Generates the search space candidates for the dialect
 	void GenerateCandidateDetectionSearchSpace();
 	//! Generates the search space candidates for the state machines
