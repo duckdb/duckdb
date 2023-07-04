@@ -63,6 +63,9 @@ inputs:
   override_cxx:
     description: 'Override CXX Compiler'
     default: ''
+  duckdb_executable:
+    description: 'Location of duckdb executable'
+    default: 'build/release/duckdb'
 
 runs:
   using: "composite"
@@ -90,17 +93,17 @@ runs:
         export EXTENSION_CONFIGS=""
         export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_in_tree_extensions == 1 && '.github/config/in_tree_extensions.cmake' || ''}}"
         export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_out_of_tree_extensions == 1 && '.github/config/out_of_tree_extensions.cmake' || '' }}"
-        echo "EXTENSION_CONFIGS"
+        echo "$EXTENSION_CONFIGS"
         make
 
     - name: Check (on deploy) platform and extension_folder agree with DuckDB
       if: ${{ inputs.deploy_as != '' }}
       shell: bash
       run: |
-        ./build/release/duckdb -csv -c "SELECT platform FROM pragma_extension_version()" | tail -n 1 > PLATFORM
+        ${{ inputs.duckdb_executable }} -csv -c "SELECT platform FROM pragma_extension_version()" | tail -n 1 > PLATFORM
         echo ${{ inputs.deploy_as }} > DEPLOY_AS
         cmp PLATFORM DEPLOY_AS || exit 1
-        ./build/release/duckdb -csv -c "SELECT extension_folder FROM pragma_extension_version()" | tail -n 1 > EXTENSION_FOLDER
+        ${{ inputs.duckdb_executable }} -csv -c "SELECT extension_folder FROM pragma_extension_version()" | tail -n 1 > EXTENSION_FOLDER
         if [[ ! -z "${{ inputs.deploy_version }}" ]] ; then
           echo ${{ inputs.deploy_version }} > DEPLOY_VERSION
           cmp EXTENSION_FOLDER DEPLOY_VERSION || exit 1

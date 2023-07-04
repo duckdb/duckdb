@@ -258,3 +258,4 @@ jobs:
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
          python_name: python
+         duckdb_executable: build/release/Release/duckdb.exe
