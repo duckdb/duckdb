@@ -48,9 +48,6 @@ inputs:
   build_vcpkg_extensions:
     description: 'Build extensions that require vcpkg for dependency management'
     default: 1
-  python_name:
-    description: 'Python binary name because wtf Python'
-    default: 'python3'
   osx_universal:
     description: 'Build Universal Binary for OSX'
     default: 0
@@ -69,9 +66,9 @@ inputs:
   override_cxx:
     description: 'Override CXX Compiler'
     default: ''
-  unittest_path:
-    description: 'Expected path to the produced unit test executable'
-    default: './build/release/test/unittest'
+  unittest_script:
+    description: 'Script/program to execute the unittests'
+    default: 'python3 scripts/run_tests_one_by_one.py ./build/release/test/unittest'
 
 runs:
   using: "composite"
@@ -143,7 +140,7 @@ runs:
       if: ${{ inputs.run_tests == 1 }}
       shell: bash
       run: |
-        ${{ inputs.python_name }} scripts/run_tests_one_by_one.py ${{ inputs.unittest_path }} 
+         ${{ inputs.unittest_script }}
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}
