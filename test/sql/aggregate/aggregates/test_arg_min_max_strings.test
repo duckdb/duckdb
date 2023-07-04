@@ -3,6 +3,12 @@
 # group: [aggregates]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
+statement ok
 CREATE TABLE tbl(
 	"DATE" DATE,
 	"TIMESTAMP" TIMESTAMP,
