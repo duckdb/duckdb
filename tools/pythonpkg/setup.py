@@ -287,6 +287,7 @@ setup(
     data_files = data_files,
     packages=[
         'pyduckdb',
+        'pyduckdb.value',
         'duckdb-stubs'
     ],
     include_package_data=True,
