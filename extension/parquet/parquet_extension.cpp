@@ -297,7 +297,7 @@ public:
 		ParquetOptions parquet_options(context);
 		for (auto &kv : input.named_parameters) {
 			auto loption = StringUtil::Lower(kv.first);
-			if (MultiFileReader::ParseOption(kv.first, kv.second, parquet_options.file_options)) {
+			if (MultiFileReader::ParseOption(kv.first, kv.second, parquet_options.file_options, context)) {
 				continue;
 			}
 			if (loption == "binary_as_string") {
@@ -306,9 +306,7 @@ public:
 				parquet_options.file_row_number = BooleanValue::Get(kv.second);
 			}
 		}
-		if (parquet_options.file_options.auto_detect_hive_partitioning) {
-			parquet_options.file_options.hive_partitioning = MultiFileReaderOptions::AutoDetectHivePartitioning(files);
-		}
+		parquet_options.file_options.AutoDetectHivePartitioning(files, context);
 		return ParquetScanBindInternal(context, std::move(files), return_types, names, parquet_options);
 	}
 
@@ -375,7 +373,7 @@ public:
 			}
 			MultiFileReader::InitializeReader(*reader, bind_data.parquet_options.file_options, bind_data.reader_bind,
 			                                  bind_data.types, bind_data.names, input.column_ids, input.filters,
-			                                  bind_data.files[0]);
+			                                  bind_data.files[0], context);
 		}
 
 		result->column_ids = input.column_ids;
@@ -568,9 +566,10 @@ public:
 				shared_ptr<ParquetReader> reader;
 				try {
 					reader = make_shared<ParquetReader>(context, file, pq_options);
-					MultiFileReader::InitializeReader(
-					    *reader, bind_data.parquet_options.file_options, bind_data.reader_bind, bind_data.types,
-					    bind_data.names, parallel_state.column_ids, parallel_state.filters, bind_data.files.front());
+					MultiFileReader::InitializeReader(*reader, bind_data.parquet_options.file_options,
+					                                  bind_data.reader_bind, bind_data.types, bind_data.names,
+					                                  parallel_state.column_ids, parallel_state.filters,
+					                                  bind_data.files.front(), context);
 				} catch (...) {
 					parallel_lock.lock();
 					parallel_state.error_opening_file = true;
