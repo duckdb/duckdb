@@ -26,3 +26,9 @@ query I
 SELECT to_timestamp(1284352323.5);
 ----
 2010-09-13 04:32:03.5+00
+
+# Coverage
+statement error
+SELECT to_timestamp(1284352323::DOUBLE * 100000000);
+----
+Could not convert epoch seconds to TIMESTAMP WITH TIME ZONE
