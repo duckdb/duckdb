@@ -150,7 +150,7 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	}
 
 #if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS
-	for (auto &ext : LINKED_EXTENSIONS) {
+	for (auto &ext : linked_extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
 #endif

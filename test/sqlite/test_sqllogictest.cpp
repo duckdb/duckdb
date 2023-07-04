@@ -205,7 +205,7 @@ void RegisterSqllogictests() {
 	});
 
 #if defined(GENERATED_EXTENSION_HEADERS) && GENERATED_EXTENSION_HEADERS && !defined(DUCKDB_AMALGAMATION)
-	for (auto extension_test_path : EXTENSION_TEST_PATHS) {
+	for (auto extension_test_path : loaded_extension_test_paths) {
 		listFiles(*fs, extension_test_path, [&](const string &path) {
 			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
 				auto fun = testRunner<false, true>;
