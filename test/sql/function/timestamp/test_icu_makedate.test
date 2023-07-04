@@ -124,6 +124,12 @@ SELECT make_timestamptz(2021, -1, 1, 0, 0, 0) mts
 ----
 2020-11-01 00:00:00-07
 
+# From microseconds
+query II
+SELECT make_timestamptz(0), make_timestamptz(1684509234845000);
+----
+1969-12-31 16:00:00-08	2023-05-19 08:13:54.845-07
+
 #
 # Argument time zones
 #

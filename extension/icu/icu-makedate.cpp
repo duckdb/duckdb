@@ -86,6 +86,12 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	}
 
 	template <typename T>
+	static void FromMicros(DataChunk &input, ExpressionState &state, Vector &result) {
+		UnaryExecutor::Execute<T, timestamp_t>(input.data[0], result, input.size(),
+		                                       [&](T micros) { return timestamp_t(micros); });
+	}
+
+	template <typename T>
 	static void Execute(DataChunk &input, ExpressionState &state, Vector &result) {
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<BindData>();
@@ -138,6 +144,7 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetSenaryFunction<int64_t>(LogicalType::BIGINT));
 		set.AddFunction(GetSeptenaryFunction<int64_t>(LogicalType::BIGINT));
+		set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP_TZ, FromMicros<int64_t>));
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetSystemCatalog(context);

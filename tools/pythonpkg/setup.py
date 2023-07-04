@@ -143,7 +143,7 @@ if 'BUILD_HTTPFS' in os.environ:
     extensions += ['httpfs']
 
 for ext in extensions:
-    toolchain_args.extend(['-DBUILD_{}_EXTENSION'.format(ext.upper())])
+    toolchain_args.extend(['-DDUCKDB_EXTENSION_{}_LINKED'.format(ext.upper())])
 
 class get_pybind_include(object):
     def __init__(self, user=False):

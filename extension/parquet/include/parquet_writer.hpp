@@ -17,8 +17,8 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #endif
 
-#include "parquet_types.h"
 #include "column_writer.hpp"
+#include "parquet_types.h"
 #include "thrift/protocol/TCompactProtocol.h"
 
 namespace duckdb {
@@ -27,13 +27,31 @@ class FileOpener;
 
 struct PreparedRowGroup {
 	duckdb_parquet::format::RowGroup row_group;
-	vector<duckdb::unique_ptr<ColumnWriterState>> states;
+	vector<unique_ptr<ColumnWriterState>> states;
+	vector<shared_ptr<StringHeap>> heaps;
+};
+
+struct FieldID;
+struct ChildFieldIDs {
+	ChildFieldIDs();
+	ChildFieldIDs Copy() const;
+	unique_ptr<case_insensitive_map_t<FieldID>> ids;
+};
+
+struct FieldID {
+	static constexpr const auto DUCKDB_FIELD_ID = "__duckdb_field_id";
+	FieldID();
+	explicit FieldID(int32_t field_id);
+	FieldID Copy() const;
+	bool set;
+	int32_t field_id;
+	ChildFieldIDs child_field_ids;
 };
 
 class ParquetWriter {
 public:
 	ParquetWriter(FileSystem &fs, string file_name, vector<LogicalType> types, vector<string> names,
-	              duckdb_parquet::format::CompressionCodec::type codec);
+	              duckdb_parquet::format::CompressionCodec::type codec, ChildFieldIDs field_ids);
 
 public:
 	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
@@ -62,13 +80,14 @@ private:
 	vector<LogicalType> sql_types;
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec;
+	ChildFieldIDs field_ids;
 
-	duckdb::unique_ptr<BufferedFileWriter> writer;
+	unique_ptr<BufferedFileWriter> writer;
 	shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
 	duckdb_parquet::format::FileMetaData file_meta_data;
 	std::mutex lock;
 
-	vector<duckdb::unique_ptr<ColumnWriter>> column_writers;
+	vector<unique_ptr<ColumnWriter>> column_writers;
 };
 
 } // namespace duckdb
