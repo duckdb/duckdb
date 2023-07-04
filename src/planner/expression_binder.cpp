@@ -79,9 +79,12 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 	auto &active_binders = binder.GetActiveBinders();
 	// make a copy of the set of binders, so we can restore it later
 	auto binders = active_binders;
+
+	// we already failed with the current binder
 	active_binders.pop_back();
 	idx_t depth = 1;
 	bool success = false;
+
 	while (!active_binders.empty()) {
 		auto &next_binder = active_binders.back().get();
 		ExpressionBinder::QualifyColumnNames(next_binder.binder, expr);
