@@ -192,6 +192,7 @@ jobs:
         ccache: 1
         ssh: 1
         python_alias: 1
+        openssl: 1 # todo rename
 
     - uses: ./.github/actions/build_extensions
       with:
