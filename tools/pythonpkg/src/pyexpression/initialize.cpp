@@ -29,7 +29,7 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Add two expressions.
 
 		Parameters:
-			expr: The expression to do add together with
+			expr: The expression to add together with
 
 		Returns:
 			FunctionExpression: A '+' on the two input expressions.
