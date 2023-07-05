@@ -1,8 +1,8 @@
 #include "duckdb/execution/window_segment_tree.hpp"
 
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 #include <utility>
 
@@ -11,12 +11,12 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // WindowAggregateState
 //===--------------------------------------------------------------------===//
-
 WindowAggregateState::WindowAggregateState(AggregateObject aggr, const LogicalType &result_type_p,
                                            idx_t partition_count_p)
     : aggr(std::move(aggr)), result_type(result_type_p), partition_count(partition_count_p),
-      state_size(aggr.function.state_size()), state(state_size),
-      statef(Value::POINTER(CastPointerToValue(state.data()))), filter_pos(0) {
+      state_size(this->aggr.function.state_size()), state(state_size),
+      statef(Value::POINTER(CastPointerToValue(state.data()))), filter_pos(0),
+      allocator(Allocator::DefaultAllocator()) {
 	statef.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
 }
 
@@ -28,7 +28,7 @@ void WindowAggregateState::AggregateInit() {
 }
 
 void WindowAggregateState::AggegateFinal(Vector &result, idx_t rid) {
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	aggr.function.finalize(statef, aggr_input_data, result, 1, rid);
 
 	if (aggr.function.destructor) {
@@ -84,7 +84,6 @@ WindowConstantAggregate::WindowConstantAggregate(AggregateObject aggr, const Log
                                                  const ValidityMask &partition_mask, const idx_t count)
     : WindowAggregateState(std::move(aggr), result_type, count), partition(0), row(0),
       statep(Value::POINTER(CastPointerToValue(state.data()))) {
-
 	matches.Initialize();
 
 	// Locate the partition boundaries
@@ -129,7 +128,7 @@ void WindowConstantAggregate::Sink(DataChunk &payload_chunk, SelectionVector *fi
 		inputs.Initialize(Allocator::DefaultAllocator(), payload_chunk.GetTypes());
 	}
 
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	idx_t begin = 0;
 	idx_t filter_idx = 0;
 	auto partition_end = partition_offsets[partition + 1];
@@ -238,7 +237,7 @@ WindowCustomAggregate::WindowCustomAggregate(AggregateObject aggr, const Logical
 
 WindowCustomAggregate::~WindowCustomAggregate() {
 	if (aggr.function.destructor) {
-		AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+		AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 		aggr.function.destructor(statef, aggr_input_data, 1);
 	}
 }
@@ -249,7 +248,7 @@ void WindowCustomAggregate::Compute(Vector &result, idx_t rid, idx_t begin, idx_
 	frame = FrameBounds(begin, end);
 
 	// Extract the range
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	aggr.function.window(inputs.data.data(), filter_mask, aggr_input_data, inputs.ColumnCount(), state.data(), frame,
 	                     prev, result, rid, 0);
 }
@@ -261,7 +260,7 @@ WindowSegmentTree::WindowSegmentTree(AggregateObject aggr, const LogicalType &re
                                      WindowAggregationMode mode_p)
     : WindowAggregateState(std::move(aggr), result_type, count),
       statep(Value::POINTER(CastPointerToValue(state.data()))), frame(0, 0), statel(LogicalType::POINTER),
-      flush_count(0), internal_nodes(0), mode(mode_p) {
+      flush_count(0), internal_nodes(0), mode(mode_p), allocator(Allocator::DefaultAllocator()) {
 	state.resize(state_size * STANDARD_VECTOR_SIZE);
 	statep.Flatten(STANDARD_VECTOR_SIZE);
 
@@ -292,7 +291,7 @@ WindowSegmentTree::~WindowSegmentTree() {
 		// nothing to destroy
 		return;
 	}
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	// call the destructor for all the intermediate states
 	data_ptr_t address_data[STANDARD_VECTOR_SIZE];
 	Vector addresses(LogicalType::POINTER, data_ptr_cast(address_data));
@@ -314,7 +313,7 @@ void WindowSegmentTree::FlushStates(bool combining) {
 		return;
 	}
 
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	if (combining) {
 		statel.Verify(flush_count);
 		aggr.function.combine(statel, statep, aggr_input_data, flush_count);
@@ -376,7 +375,7 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end, 
 			ldata[flush_count++] = begin_ptr;
 			begin_ptr += state_size;
 			if (flush_count >= STANDARD_VECTOR_SIZE) {
-				FlushStates(l_idx);
+				FlushStates(true);
 			}
 		}
 	}
@@ -423,49 +422,28 @@ void WindowSegmentTree::ConstructTree() {
 }
 
 void WindowSegmentTree::Evaluate(const idx_t *begins, const idx_t *ends, Vector &result, idx_t count) {
-	//	First pass: aggregate the ragged leaves
-	//	(or everything if we can't combine)
 	const auto cant_combine = (!aggr.function.combine || !UseCombineAPI());
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
-	for (idx_t i = 0; i < count; ++i) {
-		auto state_ptr = fdata[i];
+
+	//	First pass: aggregate the segment tree nodes
+	//	Share adjacent identical states
+	//  We do this first because we want to share only tree aggregations
+	idx_t prev_begin = 1;
+	idx_t prev_end = 0;
+	auto ldata = FlatVector::GetData<data_ptr_t>(statel);
+	auto pdata = FlatVector::GetData<data_ptr_t>(statep);
+	data_ptr_t prev_state = nullptr;
+	for (idx_t rid = 0; rid < count; ++rid) {
+		auto state_ptr = fdata[rid];
 		aggr.function.initialize(state_ptr);
 
-		const auto begin = begins[i];
-		const auto end = ends[i];
-		if (begin >= end) {
-			continue;
-		}
-
-		// Aggregate everything at once if we can't combine states
-		idx_t parent_begin = begin / TREE_FANOUT;
-		idx_t parent_end = end / TREE_FANOUT;
-		if (parent_begin == parent_end || cant_combine) {
-			WindowSegmentValue(0, begin, end, state_ptr);
-			continue;
-		}
-
-		idx_t group_begin = parent_begin * TREE_FANOUT;
-		if (begin != group_begin) {
-			WindowSegmentValue(0, begin, group_begin + TREE_FANOUT, state_ptr);
-			parent_begin++;
-		}
-		idx_t group_end = parent_end * TREE_FANOUT;
-		if (end != group_end) {
-			WindowSegmentValue(0, group_end, end, state_ptr);
-		}
-	}
-	FlushStates(false);
-
-	//	Second pass: aggregate the segment tree nodes
-	for (idx_t i = 0; i < count; ++i) {
 		if (cant_combine) {
-			break;
+			// Make sure we initialise all states
+			continue;
 		}
-		auto state_ptr = fdata[i];
 
-		auto begin = begins[i];
-		auto end = ends[i];
+		auto begin = begins[rid];
+		auto end = ends[rid];
 		if (begin >= end) {
 			continue;
 		}
@@ -475,6 +453,22 @@ void WindowSegmentTree::Evaluate(const idx_t *begins, const idx_t *ends, Vector 
 		for (; l_idx < levels_flat_start.size() + 1; l_idx++) {
 			idx_t parent_begin = begin / TREE_FANOUT;
 			idx_t parent_end = end / TREE_FANOUT;
+			if (prev_state && l_idx == 1 && begin == prev_begin && end == prev_end) {
+				//	Just combine the previous top level result
+				ldata[flush_count] = prev_state;
+				pdata[flush_count] = state_ptr;
+				if (++flush_count >= STANDARD_VECTOR_SIZE) {
+					FlushStates(true);
+				}
+				break;
+			}
+
+			if (l_idx == 1) {
+				prev_state = state_ptr;
+				prev_begin = begin;
+				prev_end = end;
+			}
+
 			if (parent_begin == parent_end) {
 				if (l_idx) {
 					WindowSegmentValue(l_idx, begin, end, state_ptr);
@@ -500,8 +494,39 @@ void WindowSegmentTree::Evaluate(const idx_t *begins, const idx_t *ends, Vector 
 	}
 	FlushStates(true);
 
+	//	Second pass: aggregate the ragged leaves
+	//	(or everything if we can't combine)
+	for (idx_t rid = 0; rid < count; ++rid) {
+		auto state_ptr = fdata[rid];
+
+		const auto begin = begins[rid];
+		const auto end = ends[rid];
+		if (begin >= end) {
+			continue;
+		}
+
+		// Aggregate everything at once if we can't combine states
+		idx_t parent_begin = begin / TREE_FANOUT;
+		idx_t parent_end = end / TREE_FANOUT;
+		if (parent_begin == parent_end || cant_combine) {
+			WindowSegmentValue(0, begin, end, state_ptr);
+			continue;
+		}
+
+		idx_t group_begin = parent_begin * TREE_FANOUT;
+		if (begin != group_begin) {
+			WindowSegmentValue(0, begin, group_begin + TREE_FANOUT, state_ptr);
+			parent_begin++;
+		}
+		idx_t group_end = parent_end * TREE_FANOUT;
+		if (end != group_end) {
+			WindowSegmentValue(0, group_end, end, state_ptr);
+		}
+	}
+	FlushStates(false);
+
 	//	Finalise the result aggregates
-	AggregateInputData aggr_input_data(aggr.GetFunctionData(), Allocator::DefaultAllocator());
+	AggregateInputData aggr_input_data(aggr.GetFunctionData(), allocator);
 	aggr.function.finalize(statef, aggr_input_data, result, count, 0);
 
 	//	Destruct the result aggregates
@@ -511,12 +536,12 @@ void WindowSegmentTree::Evaluate(const idx_t *begins, const idx_t *ends, Vector 
 
 	//	Set the validity mask on  the invalid rows
 	auto &rmask = FlatVector::Validity(result);
-	for (idx_t i = 0; i < count; ++i) {
-		const auto begin = begins[i];
-		const auto end = ends[i];
+	for (idx_t rid = 0; rid < count; ++rid) {
+		const auto begin = begins[rid];
+		const auto end = ends[rid];
 
 		if (begin >= end) {
-			rmask.SetInvalid(i);
+			rmask.SetInvalid(rid);
 		}
 	}
 }

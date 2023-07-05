@@ -1,0 +1,18 @@
+# name: test/sql/index/art/issues/test_art_issue_4976.test
+# description: Test CREATE INDEX on default timestamp column
+# group: [issues]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 DOUBLE, c1 TIMESTAMP DEFAULT(TIMESTAMP '1970-01-04 12:58:32'));
+
+statement ok
+INSERT INTO t0(c1, c0) VALUES (TIMESTAMP '1969-12-28 23:02:08', 1);
+
+statement ok
+INSERT INTO t0(c0) VALUES (DEFAULT);
+
+statement ok
+CREATE INDEX i2 ON t0(c1, c0);
