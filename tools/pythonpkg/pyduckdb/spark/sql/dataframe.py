@@ -2,7 +2,8 @@ from pyduckdb.spark.exception import ContributionsAcceptedError
 
 from typing import (
     TYPE_CHECKING,
-    List
+    List,
+	Optional
 )
 
 from pyduckdb.spark.sql.readwriter import DataFrameWriter
@@ -19,7 +20,7 @@ class DataFrame:
         self.session = session
         self._schema = duckdb_to_spark_schema(self.relation.columns, self.relation.types) if self.relation else None
 
-    def show(self) -> None:
+    def show(self, **kwargs) -> None:
         self.relation.show()
 
     def createOrReplaceTempView(self, name: str) -> None:

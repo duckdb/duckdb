@@ -247,7 +247,6 @@ class TestDataFrame(object):
 		])
 		
 		df = spark.createDataFrame(data=data,schema=schema)
-		df.printSchema()
 		df.show(truncate=False)
 
 		structureData = [
@@ -269,9 +268,7 @@ class TestDataFrame(object):
 				])
 
 		df2 = spark.createDataFrame(data=structureData,schema=structureSchema)
-		df2.printSchema()
 		df2.show(truncate=False)
-
 
 		updatedDF = df2.withColumn("OtherInfo", 
 			struct(col("id").alias("identifier"),
