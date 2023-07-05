@@ -1,5 +1,6 @@
 #include "duckdb_odbc.hpp"
 #include "statement_functions.hpp"
+#include "handle_functions.hpp"
 
 SQLRETURN SQL_API SQLCloseCursor(SQLHSTMT statement_handle) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;

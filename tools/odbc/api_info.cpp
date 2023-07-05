@@ -1,6 +1,7 @@
 #include "duckdb_odbc.hpp"
 #include "api_info.hpp"
 #include "statement_functions.hpp"
+#include "handle_functions.hpp"
 #include "duckdb/common/vector.hpp"
 
 using duckdb::ApiInfo;

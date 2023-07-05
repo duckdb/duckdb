@@ -48,7 +48,9 @@ add_library(
   cursor.cpp
   odbc_diagnostic.cpp
   odbc_exception.cpp
-  duckdb_odbc.def)
+  duckdb_odbc.def
+  handle_functions.cpp
+  include/handle_functions.hpp)
 
 set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")
 target_link_libraries(duckdb_odbc ${LINK_LIB_LIST} duckdb_static)

@@ -1,5 +1,6 @@
 #include "duckdb_odbc.hpp"
 #include "statement_functions.hpp"
+#include "handle_functions.hpp"
 #include "odbc_fetch.hpp"
 #include "parameter_descriptor.hpp"
 #include "row_descriptor.hpp"
