@@ -65,6 +65,8 @@ public:
 	shared_ptr<DuckDBPyExpression> LessThan(const DuckDBPyExpression &other);
 	shared_ptr<DuckDBPyExpression> LessThanOrEqual(const DuckDBPyExpression &other);
 
+	shared_ptr<DuckDBPyExpression> SetAlias(const string &alias) const;
+
 public:
 	const ParsedExpression &GetExpression() const;
 
