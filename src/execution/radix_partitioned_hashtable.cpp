@@ -15,8 +15,10 @@ namespace duckdb {
 //! Config for RadixPartitionedHashTable
 struct RadixHTConfig {
 	//! Radix bits used during the Sink
+	//! (TODO 5 bits seems OK too, need more benchmarking)
 	static constexpr const idx_t SINK_RADIX_BITS = 4;
 	//! Check whether to abandon HT after crossing this threshold
+	//! (TODO this should also depend on row width)
 	static constexpr const idx_t SINK_ABANDON_THRESHOLD = 100000;
 	//! If we cross SINK_ABANDON_THRESHOLD, we decide whether to continue with the current HT or abandon it.
 	//! Abandoning is better if the input has virtually no duplicates.
@@ -27,6 +29,7 @@ struct RadixHTConfig {
 	//! All of this is to defend against our greatest enemy, the random uniform distribution with repetition.
 	//! We keep track of the size of the HT, and the number of tuples that went into it.
 	//! If we are on track to see 25x our current unique count, we can safely abandon the HTs early!
+	//! (TODO maybe this whole calculation is a bit dumb, we can just try to combine during the sink)
 	static constexpr const idx_t SINK_EXPECTED_GROUP_COUNT_FACTOR = 25;
 };
 
