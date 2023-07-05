@@ -47,6 +47,16 @@ void Leaf::Free(ART &art, Node &node) {
 	Node::Free(art, child);
 }
 
+//Node current_node = node;
+//Node next_node;
+//while (current_node.IsSet() && !current_node.IsSerialized()) {
+//	next_node = Leaf::Get(art, current_node).ptr;
+//	Node::GetAllocator(art, NType::LEAF).Free(current_node);
+//	current_node = next_node;
+//}
+//
+//node.Reset();
+
 void Leaf::InitializeMerge(ART &art, Node &node, const ARTFlags &flags) {
 
 	auto merge_buffer_count = flags.merge_buffer_counts[(uint8_t)NType::LEAF - 1];
@@ -328,7 +338,7 @@ BlockPointer Leaf::Serialize(ART &art, Node &node, MetaBlockWriter &writer) {
 
 	auto block_pointer = writer.GetBlockPointer();
 	writer.Write(NType::LEAF);
-	idx_t total_count = TotalCount(art, node);
+	idx_t total_count = Leaf::TotalCount(art, node);
 	writer.Write<idx_t>(total_count);
 
 	// iterate all leaves and write their row IDs
@@ -382,7 +392,6 @@ void Leaf::Vacuum(ART &art, Node &node) {
 		auto &leaf = Leaf::Get(art, node_ref);
 		node_ref = leaf.ptr;
 	}
-	return;
 }
 
 void Leaf::MoveInlinedToLeaf(ART &art, Node &node) {

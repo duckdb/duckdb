@@ -61,12 +61,17 @@ void Node::New(ART &art, Node &node, const NType type) {
 
 void Node::Free(ART &art, Node &node) {
 
-	// recursively free all nodes that are in-memory, and skip serialized and empty nodes
 	if (!node.IsSet()) {
 		return;
 	}
 
 	if (!node.IsSerialized()) {
+
+		// iterative
+//		return Prefix::Free(art, node);
+
+		// iterative
+//		return Leaf::Free(art, node);
 
 		// free the children of the nodes
 		auto type = node.GetType();
@@ -90,8 +95,7 @@ void Node::Free(ART &art, Node &node) {
 			Node256::Free(art, node);
 			break;
 		case NType::LEAF_INLINED:
-			node.Reset();
-			return;
+			return node.Reset();
 		}
 
 		Node::GetAllocator(art, type).Free(node);
@@ -234,10 +238,14 @@ BlockPointer Node::Serialize(ART &art, MetaBlockWriter &writer) {
 		Deserialize(art);
 	}
 
+	// iterative
+//	return Prefix::Serialize(art, *this, writer);
+
 	switch (GetType()) {
 	case NType::PREFIX:
 		return Prefix::Get(art, *this).Serialize(art, writer);
 	case NType::LEAF:
+		// iterative
 		return Leaf::Serialize(art, *this, writer);
 	case NType::NODE_4:
 		return Node4::Get(art, *this).Serialize(art, writer);
@@ -253,6 +261,11 @@ BlockPointer Node::Serialize(ART &art, MetaBlockWriter &writer) {
 	throw InternalException("Invalid node type for Serialize.");
 }
 
+//// iterative functions
+//if (decoded_type == NType::PREFIX) {
+//	return Prefix::Deserialize(art, *this, reader);
+//}
+
 void Node::Deserialize(ART &art) {
 
 	D_ASSERT(IsSet() && IsSerialized());
@@ -263,16 +276,18 @@ void Node::Deserialize(ART &art) {
 	SetType(reader.Read<uint8_t>());
 
 	auto decoded_type = GetType();
+
 	if (decoded_type == NType::LEAF_INLINED) {
-		SetRowId(reader.Read<row_t>());
-		return;
-	} else if (decoded_type == NType::LEAF) {
+		return SetRowId(reader.Read<row_t>());
+	}
+	if (decoded_type == NType::LEAF) {
 		return Leaf::Deserialize(art, *this, reader);
 	}
 
 	*this = Node::GetAllocator(art, decoded_type).New();
 	SetType((uint8_t)decoded_type);
 
+	// recursive functions
 	switch (decoded_type) {
 	case NType::PREFIX:
 		return Prefix::Get(art, *this).Deserialize(reader);
@@ -377,11 +392,11 @@ void Node::InitializeMerge(ART &art, const ARTFlags &flags) {
 
 	switch (GetType()) {
 	case NType::PREFIX:
-		Prefix::Get(art, *this).InitializeMerge(art, flags);
-		break;
+		// iterative
+		return Prefix::InitializeMerge(art, *this, flags);
 	case NType::LEAF:
-		Leaf::InitializeMerge(art, *this, flags);
-		return;
+		// iterative
+		return Leaf::InitializeMerge(art, *this, flags);
 	case NType::NODE_4:
 		Node4::Get(art, *this).InitializeMerge(art, flags);
 		break;
@@ -571,11 +586,16 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 	}
 
 	auto node_type = GetType();
+
+	// iterative functions
+	if (node_type == NType::PREFIX) {
+		return Prefix::Vacuum(art, *this, flags);
+	}
 	if (node_type == NType::LEAF_INLINED) {
 		return;
 	}
 	if (node_type == NType::LEAF) {
-		if (flags.vacuum_flags[(uint8_t)GetType() - 1]) {
+		if (flags.vacuum_flags[(uint8_t)node_type - 1]) {
 			Leaf::Vacuum(art, *this);
 		}
 		return;
@@ -588,9 +608,8 @@ void Node::Vacuum(ART &art, const ARTFlags &flags) {
 		SetType((uint8_t)node_type);
 	}
 
+	// recursive functions
 	switch (node_type) {
-	case NType::PREFIX:
-		return Prefix::Get(art, *this).Vacuum(art, flags);
 	case NType::NODE_4:
 		return Node4::Get(art, *this).Vacuum(art, flags);
 	case NType::NODE_16:

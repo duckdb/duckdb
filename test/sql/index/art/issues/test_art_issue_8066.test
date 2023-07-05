@@ -1,0 +1,16 @@
+# name: test/sql/index/art/issues/test_art_issue_8066.test
+# description: Test CREATE INDEX on a lot of duplicate values with a persistent DB
+# group: [issues]
+
+load __TEST_DIR__/test_index.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t AS SELECT now() AS d FROM generate_series(1, 218165);
+
+statement ok
+CREATE INDEX i ON t(d);
+
+restart
