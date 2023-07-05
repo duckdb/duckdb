@@ -74,7 +74,8 @@ struct StateVector {
 		// destroy objects within the aggregate states
 		auto &aggr = aggr_expr->Cast<BoundAggregateExpression>();
 		if (aggr.function.destructor) {
-			AggregateInputData aggr_input_data(aggr.bind_info.get(), Allocator::DefaultAllocator());
+			ArenaAllocator allocator(Allocator::DefaultAllocator());
+			AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
 			aggr.function.destructor(state_vector, aggr_input_data, count);
 		}
 	}
@@ -181,7 +182,8 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<ListAggregatesBindData>();
 	auto &aggr = info.aggr_expr->Cast<BoundAggregateExpression>();
-	AggregateInputData aggr_input_data(aggr.bind_info.get(), Allocator::DefaultAllocator());
+	ArenaAllocator allocator(Allocator::DefaultAllocator());
+	AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
 
 	D_ASSERT(aggr.function.update);
 

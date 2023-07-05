@@ -8,9 +8,26 @@
 
 namespace duckdb {
 
+//! Templated radix partitioning constants, can be templated to the number of radix bits
+template <idx_t radix_bits>
+struct RadixPartitioningConstants {
+public:
+	//! Bitmask of the upper bits starting at the 5th byte
+	static constexpr const idx_t NUM_PARTITIONS = RadixPartitioning::NumberOfPartitions(radix_bits);
+	static constexpr const idx_t SHIFT = RadixPartitioning::Shift(radix_bits);
+	static constexpr const hash_t MASK = RadixPartitioning::Mask(radix_bits);
+
+public:
+	//! Apply bitmask and right shift to get a number between 0 and NUM_PARTITIONS
+	static inline hash_t ApplyMask(hash_t hash) {
+		D_ASSERT((hash & MASK) >> SHIFT < NUM_PARTITIONS);
+		return (hash & MASK) >> SHIFT;
+	}
+};
+
 template <class OP, class RETURN_TYPE, typename... ARGS>
-RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&... args) {
-	D_ASSERT(radix_bits <= sizeof(hash_t) * 8);
+RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&...args) {
+	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	switch (radix_bits) {
 	case 1:
 		return OP::template Operation<1>(std::forward<ARGS>(args)...);
@@ -20,7 +37,7 @@ RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&... args) {
 		return OP::template Operation<3>(std::forward<ARGS>(args)...);
 	case 4:
 		return OP::template Operation<4>(std::forward<ARGS>(args)...);
-	case 5:
+	case 5: // LCOV_EXCL_START
 		return OP::template Operation<5>(std::forward<ARGS>(args)...);
 	case 6:
 		return OP::template Operation<6>(std::forward<ARGS>(args)...);
@@ -32,9 +49,14 @@ RETURN_TYPE RadixBitsSwitch(idx_t radix_bits, ARGS &&... args) {
 		return OP::template Operation<9>(std::forward<ARGS>(args)...);
 	case 10:
 		return OP::template Operation<10>(std::forward<ARGS>(args)...);
+	case 11:
+		return OP::template Operation<10>(std::forward<ARGS>(args)...);
+	case 12:
+		return OP::template Operation<10>(std::forward<ARGS>(args)...);
 	default:
-		throw InternalException("TODO");
-	}
+		throw InternalException(
+		    "radix_bits higher than RadixPartitioning::MAX_RADIX_BITS encountered in RadixBitsSwitch");
+	} // LCOV_EXCL_STOP
 }
 
 template <idx_t radix_bits>
