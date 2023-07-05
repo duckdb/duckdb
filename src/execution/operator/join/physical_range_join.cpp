@@ -167,8 +167,8 @@ PhysicalRangeJoin::PhysicalRangeJoin(LogicalOperator &op, PhysicalOperatorType t
 	// TODO: use stats to improve the choice?
 	// TODO: Prefer fixed length types?
 	if (conditions.size() > 1) {
-		auto conditions_p = std::move(conditions);
-		conditions.resize(conditions_p.size());
+		vector<JoinCondition> conditions_p(conditions.size());
+		std::swap(conditions_p, conditions);
 		idx_t range_position = 0;
 		idx_t other_position = conditions_p.size();
 		for (idx_t i = 0; i < conditions_p.size(); ++i) {
