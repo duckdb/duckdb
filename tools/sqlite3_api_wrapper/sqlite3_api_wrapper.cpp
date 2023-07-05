@@ -215,7 +215,7 @@ int sqlite3_prepare_v2(sqlite3 *db,           /* Database handle */
 
 		// extract the remainder of the query and assign it to the pzTail
 		if (pzTail && set_remainder) {
-			*pzTail = zSql + next_location;
+			*pzTail = zSql + next_location + 1;
 		}
 
 		*ppStmt = stmt.release();
