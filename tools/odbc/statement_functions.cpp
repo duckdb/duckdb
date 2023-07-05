@@ -40,7 +40,8 @@ using duckdb::string_t;
 using duckdb::timestamp_t;
 using duckdb::vector;
 
-SQLRETURN duckdb::SetDiagnosticRecord(OdbcHandleStmt *hstmt, SQLRETURN ret, std::string component, duckdb::DiagRecord diag_record) {
+SQLRETURN duckdb::SetDiagnosticRecord(OdbcHandleStmt *hstmt, SQLRETURN ret, std::string component,
+                                      duckdb::DiagRecord diag_record) {
 	auto data_source = hstmt->dbc->GetDataSourceName();
 	hstmt->odbc_diagnostic->FormatDiagnosticMessage(diag_record, data_source, component);
 	hstmt->odbc_diagnostic->AddDiagRecord(diag_record);
