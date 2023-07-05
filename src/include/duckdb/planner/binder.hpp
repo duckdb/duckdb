@@ -266,10 +266,12 @@ private:
 	unique_ptr<BoundQueryNode> BindNode(SelectNode &node);
 	unique_ptr<BoundQueryNode> BindNode(SetOperationNode &node);
 	unique_ptr<BoundQueryNode> BindNode(RecursiveCTENode &node);
+	unique_ptr<BoundQueryNode> BindNode(CTENode &node);
 	unique_ptr<BoundQueryNode> BindNode(QueryNode &node);
 
 	unique_ptr<LogicalOperator> VisitQueryNode(BoundQueryNode &node, unique_ptr<LogicalOperator> root);
 	unique_ptr<LogicalOperator> CreatePlan(BoundRecursiveCTENode &node);
+	unique_ptr<LogicalOperator> CreatePlan(BoundCTENode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSelectNode &statement);
 	unique_ptr<LogicalOperator> CreatePlan(BoundSetOperationNode &node);
 	unique_ptr<LogicalOperator> CreatePlan(BoundQueryNode &node);

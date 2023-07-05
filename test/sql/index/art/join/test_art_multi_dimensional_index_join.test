@@ -1,0 +1,53 @@
+# name: test/sql/index/art/join/test_art_multi_dimensional_index_join.test
+# description: Test multi dimensional index joins on an ART
+# group: [join]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE Person (id bigint, k int, PRIMARY KEY (id, k));
+
+statement ok
+CREATE TABLE Person_knows_Person (Person1id bigint, Person2id bigint);
+
+statement ok
+INSERT INTO Person VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+
+statement ok
+INSERT INTO Person_knows_Person VALUES (1, 2), (1, 3), (1, 4), (2, 3), (3, 4), (4, 5);
+
+statement ok
+PRAGMA force_index_join;
+
+query II
+SELECT p1.id,p2.id
+FROM Person_knows_Person pkp
+JOIN Person p1
+  ON p1.id = pkp.Person1id
+JOIN Person p2
+  ON p2.id = pkp.Person2id
+ORDER BY 1, 2;
+----
+1	2
+1	3
+1	4
+2	3
+3	4
+4	5
+
+query II
+SELECT p1.id,p2.id
+FROM Person p1
+JOIN Person_knows_Person pkp
+  ON p1.id = pkp.Person1id
+JOIN Person p2
+  ON p2.id = pkp.Person2id
+ORDER BY 1, 2;
+----
+1	2
+1	3
+1	4
+2	3
+3	4
+4	5

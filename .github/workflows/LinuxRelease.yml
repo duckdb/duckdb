@@ -12,13 +12,18 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
+      - '!tools/odbc/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
       - '.github/config/uncovered_files.csv'
   pull_request:
+    types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
       - 'tools/**'
+      - '!tools/odbc/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
       - '.github/config/uncovered_files.csv'
@@ -105,6 +110,7 @@ jobs:
 
  linux-release-aarch64:
    name: Linux (AARCH64)
+   if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
    runs-on: ubuntu-latest
    needs: linux-release-64
    container: ubuntu:18.04 # cross compiler not available in 16
@@ -208,6 +214,7 @@ jobs:
 
  linux-extensions-64-aarch64:
     name: Linux Extensions (AARCH64)
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     container: ubuntu:18.04 # cross compiler not available in 16
     needs: linux-release-64
@@ -276,11 +283,10 @@ jobs:
 
     - name: Build
       shell: bash
+      env:
+        DISABLE_BUILTIN_EXTENSIONS: 1
       run: |
-        mkdir -p build/release
-        cd build/release
-        cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release ../..
-        cmake --build . --config Release
+        make
 
     - uses: actions/download-artifact@v3
       with:
@@ -294,6 +300,7 @@ jobs:
 
  linux-release-32:
     name: Linux (32 Bit)
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     container: ubuntu:16.04
     needs: linux-release-64
@@ -314,7 +321,7 @@ jobs:
       shell: bash
       run: |
         mkdir -p build/release
-        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_JSON_EXTENSION=1 -DBUILD_EXCEL_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DBUILD_EXTENSIONS="parquet;fts;json;excel;icu" -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
 
     - name: Test
       shell: bash
@@ -366,7 +373,7 @@ jobs:
         export TOOLCHAIN=`pwd`/rpi-tools
         mkdir -p build/release
         cd build/release
-        cmake -G Ninja -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
+        cmake -G Ninja -DBUILD_EXTENSIONS="tpch;tpcds" -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
         cmake --build .
         file duckdb
 
@@ -384,164 +391,6 @@ jobs:
         path: |
           libduckdb-linux-rpi.zip
           duckdb_cli-linux-rpi.zip
-
-
- linux-clang:
-    name: Clang 14
-    runs-on: ubuntu-20.04
-    needs: linux-release-64
-
-    env:
-      CC: /home/runner/work/llvm/bin/clang
-      CPP: /home/runner/work/llvm/bin/clang-cpp
-      CXX: /home/runner/work/llvm/bin/clang++
-      LD: /home/runner/work/llvm/bin/ld.lld
-      EXTENSION_STATIC_BUILD: 1
-      BUILD_JSON: 1
-      TREAT_WARNINGS_AS_ERRORS: 1
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Install LLVM and Clang
-      uses: KyleMayes/install-llvm-action@v1
-      with:
-        version: "14.0"
-        directory: '/home/runner/work/llvm'
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: make release
-
-    - name: Test
-      shell: bash
-      run: make allunit
-
- old-gcc:
-    name: GCC 4.8
-    runs-on: ubuntu-20.04
-    container: ubuntu:16.04
-    needs: linux-release-64
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: ./.github/actions/ubuntu_16_setup
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Install
-      shell: bash
-      run: apt-get update -y -qq && apt-get install -y -qq g++-4.8 binutils
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: make release
-      env:
-        CC: gcc-4.8
-        CXX: g++-4.8
-
-
-    - name: Test
-      shell: bash
-      run: make allunit
-      env:
-        CC: gcc-4.8
-        CXX: g++-4.8
-
- release-assert:
-    name: Release Assertions
-    runs-on: ubuntu-20.04
-    needs: linux-release-64
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      BUILD_ICU: 1
-      BUILD_INET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_EXCEL: 1
-      BUILD_VISUALIZER: 1
-      BUILD_JSON: 1
-      BUILD_JEMALLOC: 1
-      DISABLE_SANITIZER: 1
-      CRASH_ON_ASSERT: 1
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: make relassert
-
-    - name: Test
-      shell: bash
-      run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"
-
-
- vector-sizes:
-    name: Vector Sizes
-    runs-on: ubuntu-20.04
-    needs: linux-release-64
-    env:
-      CC: gcc-10
-      CXX: g++-10
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Test
-      shell: bash
-      run: python scripts/test_vector_sizes.py
 
  symbol-leakage:
     name: Symbol Leakage
@@ -570,41 +419,6 @@ jobs:
     - name: Symbol Leakage Test
       shell: bash
       run: python3.7 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
-
- linux-memory-leaks:
-    name: Linux Memory Leaks
-    runs-on: ubuntu-20.04
-    needs: linux-release-64
-    env:
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v4
-      with:
-        python-version: '3.7'
-
-    - name: Install Ninja
-      shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
-
-    - name: Build
-      shell: bash
-      run: make
-
-    - name: Test
-      shell: bash
-      run: |
-        python3 test/memoryleak/test_memory_leaks.py
 
  linux-httpfs:
     name: Linux HTTPFS

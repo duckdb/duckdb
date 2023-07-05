@@ -402,6 +402,35 @@ class TestResolveObjectColumns(object):
         assert isinstance(converted_col['0'].dtype, double_dtype.__class__) == True
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
+    def test_numpy_object_with_stride(self, pandas):
+        con = duckdb.connect()
+        df = pandas.DataFrame(columns=["idx", "evens", "zeros"])
+
+        df["idx"] = list(range(10))
+        for col in df.columns[1:]:
+            df[col].values[:] = 0
+
+        counter = 0
+        for i in range(10):
+            df.loc[df["idx"] == i, "evens"] += counter
+            counter += 2
+
+        res = con.sql("select * from df").fetchall()
+        assert res == [
+            (0, 0, 0),
+            (1, 2, 0),
+            (2, 4, 0),
+            (3, 6, 0),
+            (4, 8, 0),
+            (5, 10, 0),
+            (6, 12, 0),
+            (7, 14, 0),
+            (8, 16, 0),
+            (9, 18, 0)
+        ]
+
+
+    @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_numpy_stringliterals(self, pandas):
         con = duckdb.connect()
         df = pandas.DataFrame({"x": list(map(np.str_, range(3)))})

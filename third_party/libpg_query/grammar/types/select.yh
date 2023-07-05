@@ -114,6 +114,7 @@
 %type <node>	common_table_expr
 %type <with>	with_clause
 %type <list>	cte_list
+%type <ctematerialize>	opt_materialized
 
 %type <list>	within_group_clause
 %type <node>	filter_clause

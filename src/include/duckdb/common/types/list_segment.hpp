@@ -34,9 +34,9 @@ struct LinkedList {
 
 // forward declarations
 struct ListSegmentFunctions;
-typedef ListSegment *(*create_segment_t)(const ListSegmentFunctions &functions, Allocator &allocator,
+typedef ListSegment *(*create_segment_t)(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
                                          uint16_t capacity);
-typedef void (*write_data_to_segment_t)(const ListSegmentFunctions &functions, Allocator &allocator,
+typedef void (*write_data_to_segment_t)(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
                                         ListSegment *segment, RecursiveUnifiedVectorFormat &input_data,
                                         idx_t &entry_idx);
 typedef void (*read_data_from_segment_t)(const ListSegmentFunctions &functions, const ListSegment *segment,
@@ -49,7 +49,7 @@ struct ListSegmentFunctions {
 
 	vector<ListSegmentFunctions> child_functions;
 
-	void AppendRow(Allocator &allocator, LinkedList &linked_list, RecursiveUnifiedVectorFormat &input_data,
+	void AppendRow(ArenaAllocator &allocator, LinkedList &linked_list, RecursiveUnifiedVectorFormat &input_data,
 	               idx_t &entry_idx) const;
 	void BuildListVector(const LinkedList &linked_list, Vector &result, idx_t &initial_total_count) const;
 };

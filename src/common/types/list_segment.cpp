@@ -12,8 +12,8 @@ static idx_t GetAllocationSize(uint16_t capacity) {
 }
 
 template <class T>
-static data_ptr_t AllocatePrimitiveData(Allocator &allocator, uint16_t capacity) {
-	return allocator.AllocateData(GetAllocationSize<T>(capacity));
+static data_ptr_t AllocatePrimitiveData(ArenaAllocator &allocator, uint16_t capacity) {
+	return allocator.Allocate(GetAllocationSize<T>(capacity));
 }
 
 template <class T>
@@ -34,8 +34,8 @@ static idx_t GetAllocationSizeList(uint16_t capacity) {
 	return AlignValue(sizeof(ListSegment) + capacity * (sizeof(bool) + sizeof(uint64_t)) + sizeof(LinkedList));
 }
 
-static data_ptr_t AllocateListData(Allocator &allocator, uint16_t capacity) {
-	return allocator.AllocateData(GetAllocationSizeList(capacity));
+static data_ptr_t AllocateListData(ArenaAllocator &allocator, uint16_t capacity) {
+	return allocator.Allocate(GetAllocationSizeList(capacity));
 }
 
 static uint64_t *GetListLengthData(ListSegment *segment) {
@@ -65,8 +65,8 @@ static idx_t GetAllocationSizeStruct(uint16_t capacity, idx_t child_count) {
 	return AlignValue(sizeof(ListSegment) + capacity * sizeof(bool) + child_count * sizeof(ListSegment *));
 }
 
-static data_ptr_t AllocateStructData(Allocator &allocator, uint16_t capacity, idx_t child_count) {
-	return allocator.AllocateData(GetAllocationSizeStruct(capacity, child_count));
+static data_ptr_t AllocateStructData(ArenaAllocator &allocator, uint16_t capacity, idx_t child_count) {
+	return allocator.Allocate(GetAllocationSizeStruct(capacity, child_count));
 }
 
 static ListSegment **GetStructData(ListSegment *segment) {
@@ -99,7 +99,7 @@ static uint16_t GetCapacityForNewSegment(uint16_t capacity) {
 // Create
 //===--------------------------------------------------------------------===//
 template <class T>
-static ListSegment *CreatePrimitiveSegment(const ListSegmentFunctions &, Allocator &allocator, uint16_t capacity) {
+static ListSegment *CreatePrimitiveSegment(const ListSegmentFunctions &, ArenaAllocator &allocator, uint16_t capacity) {
 	// allocate data and set the header
 	auto segment = (ListSegment *)AllocatePrimitiveData<T>(allocator, capacity);
 	segment->capacity = capacity;
@@ -108,7 +108,7 @@ static ListSegment *CreatePrimitiveSegment(const ListSegmentFunctions &, Allocat
 	return segment;
 }
 
-static ListSegment *CreateListSegment(const ListSegmentFunctions &, Allocator &allocator, uint16_t capacity) {
+static ListSegment *CreateListSegment(const ListSegmentFunctions &, ArenaAllocator &allocator, uint16_t capacity) {
 	// allocate data and set the header
 	auto segment = reinterpret_cast<ListSegment *>(AllocateListData(allocator, capacity));
 	segment->capacity = capacity;
@@ -123,7 +123,7 @@ static ListSegment *CreateListSegment(const ListSegmentFunctions &, Allocator &a
 	return segment;
 }
 
-static ListSegment *CreateStructSegment(const ListSegmentFunctions &functions, Allocator &allocator,
+static ListSegment *CreateStructSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
                                         uint16_t capacity) {
 	// allocate data and set header
 	auto segment =
@@ -143,7 +143,8 @@ static ListSegment *CreateStructSegment(const ListSegmentFunctions &functions, A
 	return segment;
 }
 
-static ListSegment *GetSegment(const ListSegmentFunctions &functions, Allocator &allocator, LinkedList &linked_list) {
+static ListSegment *GetSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
+                               LinkedList &linked_list) {
 	ListSegment *segment;
 
 	// determine segment
@@ -173,7 +174,7 @@ static ListSegment *GetSegment(const ListSegmentFunctions &functions, Allocator 
 // Append
 //===--------------------------------------------------------------------===//
 template <class T>
-static void WriteDataToPrimitiveSegment(const ListSegmentFunctions &functions, Allocator &allocator,
+static void WriteDataToPrimitiveSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
                                         ListSegment *segment, RecursiveUnifiedVectorFormat &input_data,
                                         idx_t &entry_idx) {
 
@@ -191,7 +192,7 @@ static void WriteDataToPrimitiveSegment(const ListSegmentFunctions &functions, A
 	}
 }
 
-static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, Allocator &allocator, ListSegment *segment,
+static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator, ListSegment *segment,
                                       RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
 
 	auto sel_entry_idx = input_data.format.sel->get_index(entry_idx);
@@ -232,7 +233,7 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, All
 	Store<LinkedList>(child_segments, data_ptr_cast(GetListChildData(segment)));
 }
 
-static void WriteDataToListSegment(const ListSegmentFunctions &functions, Allocator &allocator, ListSegment *segment,
+static void WriteDataToListSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator, ListSegment *segment,
                                    RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
 
 	auto sel_entry_idx = input_data.format.sel->get_index(entry_idx);
@@ -266,7 +267,7 @@ static void WriteDataToListSegment(const ListSegmentFunctions &functions, Alloca
 	Store<uint64_t>(list_length, data_ptr_cast(list_length_data + segment->count));
 }
 
-static void WriteDataToStructSegment(const ListSegmentFunctions &functions, Allocator &allocator, ListSegment *segment,
+static void WriteDataToStructSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator, ListSegment *segment,
                                      RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
 
 	auto sel_entry_idx = input_data.format.sel->get_index(entry_idx);
@@ -290,7 +291,7 @@ static void WriteDataToStructSegment(const ListSegmentFunctions &functions, Allo
 	}
 }
 
-void ListSegmentFunctions::AppendRow(Allocator &allocator, LinkedList &linked_list,
+void ListSegmentFunctions::AppendRow(ArenaAllocator &allocator, LinkedList &linked_list,
                                      RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) const {
 
 	auto &write_data_to_segment = *this;

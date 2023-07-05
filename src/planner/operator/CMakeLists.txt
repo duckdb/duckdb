@@ -37,6 +37,7 @@ add_library_unity(
   logical_prepare.cpp
   logical_projection.cpp
   logical_recursive_cte.cpp
+  logical_materialized_cte.cpp
   logical_sample.cpp
   logical_set.cpp
   logical_reset.cpp
