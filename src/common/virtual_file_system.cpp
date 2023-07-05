@@ -42,7 +42,6 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t f
 	return file_handle;
 }
 
-
 void VirtualFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	handle.file_system.Read(handle, buffer, nr_bytes, location);
 };
@@ -90,7 +89,7 @@ void VirtualFileSystem::RemoveDirectory(const string &directory) {
 }
 
 bool VirtualFileSystem::ListFiles(const string &directory, const std::function<void(const string &, bool)> &callback,
-			   FileOpener *opener) {
+                                  FileOpener *opener) {
 	return FindFileSystem(directory).ListFiles(directory, callback, opener);
 }
 
@@ -145,15 +144,19 @@ std::string VirtualFileSystem::GetName() const {
 
 void VirtualFileSystem::SetDisabledFileSystems(vector<string> names) {
 	unordered_set<string> new_disabled_file_systems;
-	for(auto &name : names) {
+	for (auto &name : names) {
+		if (name.empty()) {
+			continue;
+		}
 		if (new_disabled_file_systems.find(name) != new_disabled_file_systems.end()) {
 			throw InvalidInputException("Duplicate disabled file system \"%s\"", name);
 		}
 		new_disabled_file_systems.insert(name);
 	}
-	for(auto &disabled_fs : disabled_file_systems) {
+	for (auto &disabled_fs : disabled_file_systems) {
 		if (new_disabled_file_systems.find(disabled_fs) == new_disabled_file_systems.end()) {
-			throw InvalidInputException("File system \"%s\" has been disabled previously, it cannot be re-enabled", disabled_fs);
+			throw InvalidInputException("File system \"%s\" has been disabled previously, it cannot be re-enabled",
+			                            disabled_fs);
 		}
 	}
 	disabled_file_systems = std::move(new_disabled_file_systems);

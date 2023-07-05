@@ -19,8 +19,6 @@ if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
   endforeach()
 endif()
 
-
-
 # generated_extension_loader.hpp
 set(EXT_LOADER_NAME_LIST "")
 set(EXT_LOADER_BODY "")
