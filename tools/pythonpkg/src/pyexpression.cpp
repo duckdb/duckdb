@@ -25,6 +25,8 @@ const ParsedExpression &DuckDBPyExpression::GetExpression() const {
 	return *expression;
 }
 
+// Binary operators
+
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Add(const DuckDBPyExpression &other) {
 	return DuckDBPyExpression::BinaryOperator("+", *this, other);
 }
@@ -53,9 +55,33 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Power(const DuckDBPyExpressio
 	return DuckDBPyExpression::BinaryOperator("**", *this, other);
 }
 
+// Comparison expressions
+
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Equality(const DuckDBPyExpression &other) {
 	return ComparisonExpression(ExpressionType::COMPARE_EQUAL, *this, other);
 }
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Inequality(const DuckDBPyExpression &other) {
+	return ComparisonExpression(ExpressionType::COMPARE_NOTEQUAL, *this, other);
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::GreaterThan(const DuckDBPyExpression &other) {
+	return ComparisonExpression(ExpressionType::COMPARE_GREATERTHAN, *this, other);
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::GreaterThanOrEqual(const DuckDBPyExpression &other) {
+	return ComparisonExpression(ExpressionType::COMPARE_GREATERTHANOREQUALTO, *this, other);
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::LessThan(const DuckDBPyExpression &other) {
+	return ComparisonExpression(ExpressionType::COMPARE_LESSTHAN, *this, other);
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::LessThanOrEqual(const DuckDBPyExpression &other) {
+	return ComparisonExpression(ExpressionType::COMPARE_LESSTHANOREQUALTO, *this, other);
+}
+
+// Unary operators
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Negate() {
 	vector<unique_ptr<ParsedExpression>> children;

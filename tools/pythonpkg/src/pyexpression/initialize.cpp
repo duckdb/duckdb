@@ -88,6 +88,31 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Create an equality expression between two expressions
 	)";
 	m.def("__eq__", &DuckDBPyExpression::Equality, docs);
+
+	docs = R"(
+		TODO: add docs
+	)";
+	m.def("__ne__", &DuckDBPyExpression::Inequality, docs);
+
+	docs = R"(
+		TODO: add docs
+	)";
+	m.def("__gt__", &DuckDBPyExpression::GreaterThan, docs);
+
+	docs = R"(
+		TODO: add docs
+	)";
+	m.def("__ge__", &DuckDBPyExpression::GreaterThanOrEqual, docs);
+
+	docs = R"(
+		TODO: add docs
+	)";
+	m.def("__lt__", &DuckDBPyExpression::LessThan, docs);
+
+	docs = R"(
+		TODO: add docs
+	)";
+	m.def("__le__", &DuckDBPyExpression::LessThanOrEqual, docs);
 }
 
 void DuckDBPyExpression::Initialize(py::module_ &m) {

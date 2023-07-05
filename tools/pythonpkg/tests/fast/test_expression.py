@@ -190,3 +190,68 @@ class TestExpression(object):
 		rel2 = rel.select(expr1, expr2)
 		res = rel2.fetchall()
 		assert res == [(False, True)]
+
+	def test_inequality_expression(self):
+		con = duckdb.connect()
+
+		rel = con.sql("""
+			select
+				5 as a,
+				2 as b,
+				5 as c
+		""")
+		col1 = ColumnExpression('a')
+		col2 = ColumnExpression('b')
+		col3 = ColumnExpression('c')
+		expr1 = col1 != col2
+		expr2 = col1 != col3
+		rel2 = rel.select(expr1, expr2)
+		res = rel2.fetchall()
+		assert res == [(True, False)]
+
+	def test_comparison_expressions(self):
+		con = duckdb.connect()
+
+		rel = con.sql("""
+			select
+				1 as a,
+				2 as b,
+				3 as c,
+				3 as d
+		""")
+		col1 = ColumnExpression('a')
+		col2 = ColumnExpression('b')
+		col3 = ColumnExpression('c')
+		col4 = ColumnExpression('d')
+
+		# Greater than
+		expr1 = col1 > col2
+		expr2 = col2 > col1
+		expr3 = col3 > col4
+		rel2 = rel.select(expr1, expr2, expr3)
+		res = rel2.fetchall()
+		assert res == [(False, True, False)]
+
+		# Greater than or equal
+		expr1 = col1 >= col2
+		expr2 = col2 >= col1
+		expr3 = col3 >= col4
+		rel2 = rel.select(expr1, expr2, expr3)
+		res = rel2.fetchall()
+		assert res == [(False, True, True)]
+
+		# Less than
+		expr1 = col1 < col2
+		expr2 = col2 < col1
+		expr3 = col3 < col4
+		rel2 = rel.select(expr1, expr2, expr3)
+		res = rel2.fetchall()
+		assert res == [(True, False, False)]
+
+		# Less than or equal
+		expr1 = col1 <= col2
+		expr2 = col2 <= col1
+		expr3 = col3 <= col4
+		rel2 = rel.select(expr1, expr2, expr3)
+		res = rel2.fetchall()
+		assert res == [(True, False, True)]

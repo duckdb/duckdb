@@ -59,6 +59,11 @@ public:
 	shared_ptr<DuckDBPyExpression> Modulo(const DuckDBPyExpression &other);
 	shared_ptr<DuckDBPyExpression> Power(const DuckDBPyExpression &other);
 	shared_ptr<DuckDBPyExpression> Equality(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> Inequality(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> GreaterThan(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> GreaterThanOrEqual(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> LessThan(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> LessThanOrEqual(const DuckDBPyExpression &other);
 
 public:
 	const ParsedExpression &GetExpression() const;
