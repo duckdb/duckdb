@@ -35,7 +35,7 @@ common/fsst.cpp	7
 common/gzip_file_system.cpp	40
 common/hive_partitioning.cpp	54
 common/local_file_system.cpp	16
-common/multi_file_reader.cpp	11
+common/multi_file_reader.cpp	15
 common/operator/cast_operators.cpp	72
 common/operator/convert_to_string.cpp	7
 common/pipe_file_system.cpp	4
@@ -309,7 +309,7 @@ extension/parquet/include/row_number_column_reader.hpp	10
 extension/parquet/include/templated_column_reader.hpp	5
 extension/parquet/include/thrift_tools.hpp	27
 extension/parquet/include/zstd_file_system.hpp	3
-extension/parquet/parquet_extension.cpp	31
+extension/parquet/parquet_extension.cpp	32
 extension/parquet/parquet_metadata.cpp	29
 extension/parquet/parquet_reader.cpp	113
 extension/parquet/parquet_statistics.cpp	12

@@ -10,6 +10,9 @@ statement ok
 pragma verify_parallelism
 
 statement ok
+PRAGMA verify_external
+
+statement ok
 CALL dbgen(sf=1);
 
 query IIIII
