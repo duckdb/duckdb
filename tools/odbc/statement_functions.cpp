@@ -1,4 +1,5 @@
 #include "statement_functions.hpp"
+#include "handle_functions.hpp"
 #include "odbc_interval.hpp"
 #include "odbc_fetch.hpp"
 #include "odbc_utils.hpp"
@@ -40,58 +41,6 @@ using duckdb::string_t;
 using duckdb::timestamp_t;
 using duckdb::vector;
 
-SQLRETURN duckdb::SetDiagnosticRecord(OdbcHandleStmt *hstmt, SQLRETURN ret, std::string component,
-                                      duckdb::DiagRecord diag_record) {
-	auto data_source = hstmt->dbc->GetDataSourceName();
-	hstmt->odbc_diagnostic->FormatDiagnosticMessage(diag_record, data_source, component);
-	hstmt->odbc_diagnostic->AddDiagRecord(diag_record);
-	return ret;
-}
-
-SQLRETURN duckdb::ConvertHSTMT(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt) {
-	if (!statement_handle) {
-		return SQL_ERROR;
-	}
-	hstmt = static_cast<OdbcHandleStmt *>(statement_handle);
-	if (hstmt->type != OdbcHandleType::STMT) {
-		return SQL_ERROR;
-	}
-	if (!hstmt->dbc || !hstmt->dbc->conn) {
-		return SQL_ERROR;
-	}
-
-	// ODBC requires to clean up the diagnostic for every ODBC function call
-	hstmt->odbc_diagnostic->Clean();
-
-	return SQL_SUCCESS;
-}
-
-SQLRETURN duckdb::ConvertHSTMTPrepared(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt) {
-	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
-	}
-	if (!hstmt->stmt) {
-		return SQL_ERROR;
-	}
-	if (hstmt->stmt->HasError()) {
-		return SQL_ERROR;
-	}
-	return SQL_SUCCESS;
-}
-
-SQLRETURN duckdb::ConvertHSTMTResult(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt) {
-	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
-	}
-	if (!hstmt->res) {
-		return SQL_ERROR;
-	}
-	if (hstmt->res->HasError()) {
-		return SQL_ERROR;
-	}
-	return SQL_SUCCESS;
-}
-
 SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length) {
 	OdbcHandleStmt *hstmt = nullptr;
 	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
@@ -113,7 +62,7 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 	if (hstmt->stmt->HasError()) {
 		DiagRecord diag_rec(hstmt->stmt->error.Message(), SQLStateType::SYNTAX_ERROR_OR_ACCESS_VIOLATION,
 		                    hstmt->dbc->GetDataSourceName());
-		return (SetDiagnosticRecord(hstmt, SQL_ERROR, "PrepareStmt", diag_rec));
+		return (SetDiagnosticRecord(hstmt, SQL_ERROR, "PrepareStmt", diag_rec, hstmt->dbc->GetDataSourceName()));
 	}
 
 	hstmt->param_desc->ResetParams(hstmt->stmt->n_param);
@@ -171,7 +120,8 @@ SQLRETURN duckdb::SingleExecuteStmt(duckdb::OdbcHandleStmt *stmt) {
 	if (stmt->res->HasError()) {
 		duckdb::DiagRecord diag_rec(stmt->res->GetError(), duckdb::SQLStateType::GENERAL_ERROR,
 		                            stmt->dbc->GetDataSourceName());
-		return duckdb::SetDiagnosticRecord(stmt, SQL_ERROR, "SingleExecuteStmt", diag_rec);
+		return duckdb::SetDiagnosticRecord(stmt, SQL_ERROR, "SingleExecuteStmt", diag_rec,
+		                                   stmt->dbc->GetDataSourceName());
 	}
 	stmt->open = true;
 	if (ret == SQL_STILL_EXECUTING) {
@@ -205,7 +155,7 @@ static SQLRETURN ValidateType(LogicalTypeId input, LogicalTypeId expected, duckd
 		string msg = "Type mismatch error: received " + EnumUtil::ToString(input) + ", but expected " +
 		             EnumUtil::ToString(expected);
 		duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE, stmt->dbc->GetDataSourceName());
-		return duckdb::SetDiagnosticRecord(stmt, SQL_ERROR, "ValidateType", diag_rec);
+		return duckdb::SetDiagnosticRecord(stmt, SQL_ERROR, "ValidateType", diag_rec, stmt->dbc->GetDataSourceName());
 	}
 	return SQL_SUCCESS;
 }
@@ -216,7 +166,7 @@ static SQLRETURN ThrowInvalidCast(const string &component, const LogicalType &fr
 	             to_type.ToString() + ")";
 
 	duckdb::DiagRecord diag_rec(msg, SQLStateType::INVALID_DATATIME_FORMAT, stmt->dbc->GetDataSourceName());
-	return duckdb::SetDiagnosticRecord(stmt, SQL_ERROR, component, diag_rec);
+	return duckdb::SetDiagnosticRecord(stmt, SQL_ERROR, component, diag_rec, stmt->dbc->GetDataSourceName());
 }
 
 template <class SRC, class DEST = SRC>
@@ -235,7 +185,8 @@ static SQLRETURN GetInternalValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Va
 	} catch (duckdb::Exception &ex) {
 		duckdb::DiagRecord diag_rec(std::string(ex.what()), SQLStateType::RESTRICTED_DATA_TYPE,
 		                            stmt->dbc->GetDataSourceName());
-		return duckdb::SetDiagnosticRecord(stmt, SQL_ERROR, "GetInternalValue", diag_rec);
+		return duckdb::SetDiagnosticRecord(stmt, SQL_ERROR, "GetInternalValue", diag_rec,
+		                                   stmt->dbc->GetDataSourceName());
 	}
 }
 
@@ -249,7 +200,8 @@ static bool CastTimestampValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Value
 	} catch (duckdb::Exception &ex) {
 		duckdb::DiagRecord diag_rec(std::string(ex.what()), SQLStateType::INVALID_DATATIME_FORMAT,
 		                            stmt->dbc->GetDataSourceName());
-		return duckdb::SetDiagnosticRecord(stmt, SQL_ERROR, "CastTimestampValue", diag_rec);
+		return duckdb::SetDiagnosticRecord(stmt, SQL_ERROR, "CastTimestampValue", diag_rec,
+		                                   stmt->dbc->GetDataSourceName());
 	}
 }
 
@@ -259,7 +211,8 @@ SQLRETURN GetVariableValue(const std::string &val_str, SQLUSMALLINT col_idx, duc
 		if (OdbcUtils::SetStringValueLength(val_str, str_len_or_ind_ptr) == SQL_SUCCESS) {
 			duckdb::DiagRecord diag_rec("Could not set str_len_or_ind_ptr",
 			                            duckdb::SQLStateType::INVALID_STR_BUFF_LENGTH, stmt->dbc->GetDataSourceName());
-			return duckdb::SetDiagnosticRecord(stmt, SQL_ERROR, "GetVariableValue", diag_rec);
+			return duckdb::SetDiagnosticRecord(stmt, SQL_ERROR, "GetVariableValue", diag_rec,
+			                                   stmt->dbc->GetDataSourceName());
 		}
 		return SQL_SUCCESS;
 	}
@@ -499,7 +452,8 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			if (!TryCast::Operation<string_t, date_t>(str_input, date)) {
 				auto msg = CastExceptionText<string_t, date_t>(str_input);
 				duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE, hstmt->dbc->GetDataSourceName());
-				return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetDataStmtResult", diag_rec);
+				return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetDataStmtResult", diag_rec,
+				                                   hstmt->dbc->GetDataSourceName());
 			}
 			break;
 		}
@@ -555,7 +509,8 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			if (!TryCast::Operation<string_t, dtime_t>(str_input, time)) {
 				auto msg = CastExceptionText<string_t, dtime_t>(str_input);
 				duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE, hstmt->dbc->GetDataSourceName());
-				return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetDataStmtResult", diag_rec);
+				return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetDataStmtResult", diag_rec,
+				                                   hstmt->dbc->GetDataSourceName());
 			}
 			break;
 		}
@@ -595,7 +550,8 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			if (!TryCast::Operation<date_t, timestamp_t>(date_input, timestamp)) {
 				auto msg = CastExceptionText<date_t, timestamp_t>(date_input);
 				duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE, hstmt->dbc->GetDataSourceName());
-				return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetDataStmtResult", diag_rec);
+				return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetDataStmtResult", diag_rec,
+				                                   hstmt->dbc->GetDataSourceName());
 			}
 			break;
 		}
@@ -605,7 +561,8 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			if (!TryCast::Operation<string_t, timestamp_t>(str_input, timestamp)) {
 				auto msg = CastExceptionText<string_t, timestamp_t>(str_input);
 				duckdb::DiagRecord diag_rec(msg, SQLStateType::RESTRICTED_DATA_TYPE, hstmt->dbc->GetDataSourceName());
-				return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetDataStmtResult", diag_rec);
+				return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetDataStmtResult", diag_rec,
+				                                   hstmt->dbc->GetDataSourceName());
 			}
 			break;
 		}
@@ -850,7 +807,8 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 	default:
 		duckdb::DiagRecord diag_rec("Unsupported type", SQLStateType::RESTRICTED_DATA_TYPE,
 		                            hstmt->dbc->GetDataSourceName());
-		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetDataStmtResult", diag_rec);
+		return duckdb::SetDiagnosticRecord(hstmt, SQL_ERROR, "GetDataStmtResult", diag_rec,
+		                                   hstmt->dbc->GetDataSourceName());
 	} // end switch "(target_type)": SQL_C_TYPE_TIMESTAMP
 }
 
