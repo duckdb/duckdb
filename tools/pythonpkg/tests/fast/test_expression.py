@@ -107,3 +107,86 @@ class TestExpression(object):
 		rel = rel.select(expr)
 		res = rel.fetchall()
 		assert res == [(2,)]
+
+	def test_multiply_expression(self):
+		con = duckdb.connect()
+
+		rel = con.sql("""
+			select
+				3 as a,
+				2 as b
+		""")
+		col1 = ColumnExpression('a')
+		col2 = ColumnExpression('b')
+		expr = col1 * col2
+		rel = rel.select(expr)
+		res = rel.fetchall()
+		assert res == [(6,)]
+
+	def test_division_expression(self):
+		con = duckdb.connect()
+
+		rel = con.sql("""
+			select
+				5 as a,
+				2 as b
+		""")
+		col1 = ColumnExpression('a')
+		col2 = ColumnExpression('b')
+		expr = col1 / col2
+		rel2 = rel.select(expr)
+		res = rel2.fetchall()
+		assert res == [(2.5,)]
+
+		expr = col1 // col2
+		rel2 = rel.select(expr)
+		res = rel2.fetchall()
+		assert res == [(2,)]
+
+	def test_modulus_expression(self):
+		con = duckdb.connect()
+
+		rel = con.sql("""
+			select
+				5 as a,
+				2 as b
+		""")
+		col1 = ColumnExpression('a')
+		col2 = ColumnExpression('b')
+		expr = col1 % col2
+		rel2 = rel.select(expr)
+		res = rel2.fetchall()
+		assert res == [(1,)]
+
+	def test_power_expression(self):
+		con = duckdb.connect()
+
+		rel = con.sql("""
+			select
+				5 as a,
+				2 as b
+		""")
+		col1 = ColumnExpression('a')
+		col2 = ColumnExpression('b')
+		expr = col1 ** col2
+		rel2 = rel.select(expr)
+		res = rel2.fetchall()
+		assert res == [(25,)]
+
+	def test_equality_expression(self):
+		con = duckdb.connect()
+
+		rel = con.sql("""
+			select
+				5 as a,
+				2 as b,
+				5 as c
+		""")
+		col1 = ColumnExpression('a')
+		col2 = ColumnExpression('b')
+		col3 = ColumnExpression('c')
+		expr1 = col1 == col2
+		expr2 = col1 == col3
+		rel2 = rel.select(expr1, expr2)
+		res = rel2.fetchall()
+		assert res == [(False, True)]

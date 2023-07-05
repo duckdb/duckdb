@@ -53,6 +53,12 @@ public:
 	shared_ptr<DuckDBPyExpression> Add(const DuckDBPyExpression &other);
 	shared_ptr<DuckDBPyExpression> Negate();
 	shared_ptr<DuckDBPyExpression> Subtract(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> Multiply(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> Division(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> FloorDivision(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> Modulo(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> Power(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> Equality(const DuckDBPyExpression &other);
 
 public:
 	const ParsedExpression &GetExpression() const;
@@ -68,6 +74,10 @@ private:
 	static shared_ptr<DuckDBPyExpression> FunctionExpression(const string &function_name,
 	                                                         vector<unique_ptr<ParsedExpression>> children,
 	                                                         bool is_operator = false);
+	static shared_ptr<DuckDBPyExpression> BinaryOperator(const string &function_name, const DuckDBPyExpression &arg_one,
+	                                                     const DuckDBPyExpression &arg_two);
+	static shared_ptr<DuckDBPyExpression> ComparisonExpression(ExpressionType type, const DuckDBPyExpression &left,
+	                                                           const DuckDBPyExpression &right);
 
 private:
 	unique_ptr<ParsedExpression> expression;
