@@ -10,8 +10,7 @@
 
 namespace duckdb {
 
-WindowExpression::WindowExpression(ExpressionType type)
-    : ParsedExpression(type, ExpressionClass::WINDOW) {
+WindowExpression::WindowExpression(ExpressionType type) : ParsedExpression(type, ExpressionClass::WINDOW) {
 }
 
 WindowExpression::WindowExpression(ExpressionType type, string catalog_name, string schema, const string &function_name)

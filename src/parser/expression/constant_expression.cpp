@@ -10,8 +10,7 @@
 
 namespace duckdb {
 
-ConstantExpression::ConstantExpression()
-    : ParsedExpression(ExpressionType::VALUE_CONSTANT, ExpressionClass::CONSTANT) {
+ConstantExpression::ConstantExpression() : ParsedExpression(ExpressionType::VALUE_CONSTANT, ExpressionClass::CONSTANT) {
 }
 
 ConstantExpression::ConstantExpression(Value val)

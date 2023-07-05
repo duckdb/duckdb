@@ -9,8 +9,8 @@
 
 namespace duckdb {
 
-ComparisonExpression::ComparisonExpression(ExpressionType type) :
-	ParsedExpression(type, ExpressionClass::COMPARISON) {}
+ComparisonExpression::ComparisonExpression(ExpressionType type) : ParsedExpression(type, ExpressionClass::COMPARISON) {
+}
 
 ComparisonExpression::ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
                                            unique_ptr<ParsedExpression> right)

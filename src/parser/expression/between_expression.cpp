@@ -11,8 +11,7 @@ BetweenExpression::BetweenExpression(unique_ptr<ParsedExpression> input_p, uniqu
       lower(std::move(lower_p)), upper(std::move(upper_p)) {
 }
 
-BetweenExpression::BetweenExpression() :
-	BetweenExpression(nullptr, nullptr, nullptr) {
+BetweenExpression::BetweenExpression() : BetweenExpression(nullptr, nullptr, nullptr) {
 }
 
 string BetweenExpression::ToString() const {

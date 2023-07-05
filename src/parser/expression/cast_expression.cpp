@@ -15,8 +15,7 @@ CastExpression::CastExpression(LogicalType target, unique_ptr<ParsedExpression> 
 	this->child = std::move(child);
 }
 
-CastExpression::CastExpression() :
-	ParsedExpression(ExpressionType::OPERATOR_CAST, ExpressionClass::CAST) {
+CastExpression::CastExpression() : ParsedExpression(ExpressionType::OPERATOR_CAST, ExpressionClass::CAST) {
 }
 
 string CastExpression::ToString() const {

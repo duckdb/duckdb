@@ -12,7 +12,6 @@
 namespace duckdb {
 
 FunctionExpression::FunctionExpression() : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION) {
-
 }
 
 FunctionExpression::FunctionExpression(string catalog, string schema, const string &function_name,

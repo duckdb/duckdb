@@ -10,8 +10,7 @@
 
 namespace duckdb {
 
-ColumnRefExpression::ColumnRefExpression() :
-	ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF) {
+ColumnRefExpression::ColumnRefExpression() : ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF) {
 }
 
 ColumnRefExpression::ColumnRefExpression(string column_name, string table_name)

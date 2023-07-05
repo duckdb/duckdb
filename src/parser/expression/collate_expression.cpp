@@ -14,8 +14,7 @@ CollateExpression::CollateExpression(string collation_p, unique_ptr<ParsedExpres
 	this->child = std::move(child);
 }
 
-CollateExpression::CollateExpression()
-    : ParsedExpression(ExpressionType::COLLATE, ExpressionClass::COLLATE) {
+CollateExpression::CollateExpression() : ParsedExpression(ExpressionType::COLLATE, ExpressionClass::COLLATE) {
 }
 
 string CollateExpression::ToString() const {
