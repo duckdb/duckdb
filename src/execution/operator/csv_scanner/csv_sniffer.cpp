@@ -321,8 +321,16 @@ void CSVSniffer::ResetStats() {
 	prev_padding_count = 0;
 	best_num_cols = 0;
 }
-
+// CSV Sniffing consists of four steps:
+// 1. Dialect Detection: Generate the CSV Options (delimiter, quote, escape, etc.)
+// 2. Type Detection: Figures out the types of the columns
+// 3. Header Detection: Figures out if  the CSV file has a header and produces the names of the columns
+// 4. Type Refinement: Refines the types of the columns
 SnifferResult CSVSniffer::SniffCSV() {
+	// 1. Dialect Detection
+	vector<CSVReaderOptions> info_candidates = DetectDialect();
+	// 2. Type Detection
+	DetectTypes();
 }
 
 void CSVSniffer::GenerateCandidateDetectionSearchSpace() {
@@ -412,8 +420,7 @@ void CSVSniffer::RefineCandidates() {
 // 2. Generate a state machine for each dialect
 // 3. Analyze the first chunk of the file and find the best dialect candidates
 // 4. Analyze the remaining chunks of the file and find the best dialect candidate
-// 5. Return the converted dialect options
-vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
+void CSVSniffer::DetectDialect() {
 	// Step 1: Generate search space
 	GenerateCandidateDetectionSearchSpace();
 	// Step 2: Generate state machines
@@ -430,27 +437,15 @@ vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
 		    options.file_path);
 	}
-	// Step 5: Produce the result
-	return ProduceDialectResults();
 }
 
-void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_candidates,
-                                             const map<LogicalTypeId, vector<const char *>> &format_template_candidates,
-                                             const vector<CSVReaderOptions> &info_candidates,
-                                             CSVReaderOptions &original_options, idx_t best_num_cols,
-                                             vector<vector<LogicalType>> &best_sql_types_candidates,
-                                             std::map<LogicalTypeId, vector<string>> &best_format_candidates,
-                                             DataChunk &best_header_row) {
+void CSVSniffer::DetectTypes() {
 	CSVReaderOptions best_options;
 	idx_t min_varchar_cols = best_num_cols + 1;
-
+	vector<LogicalType> return_types;
 	// check which info candidate leads to minimum amount of non-varchar columns...
-	for (const auto &t : format_template_candidates) {
-		best_format_candidates[t.first].clear();
-	}
-	for (auto &info_candidate : info_candidates) {
-		options = info_candidate;
-		vector<vector<LogicalType>> info_sql_types_candidates(options.num_cols, type_candidates);
+	for (auto &candidate : candidates) {
+		vector<vector<LogicalType>> info_sql_types_candidates(options.num_cols, options.auto_type_candidates);
 		std::map<LogicalTypeId, bool> has_format_candidates;
 		std::map<LogicalTypeId, vector<string>> format_candidates;
 		for (const auto &t : format_template_candidates) {
@@ -458,45 +453,34 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 			format_candidates[t.first].clear();
 		}
 
-		// set all return_types to VARCHAR so we can do datatype detection based on VARCHAR values
+		if (candidate.max_num_columns == 0) {
+			continue;
+		}
+
+		// Set all return_types to VARCHAR so we can do datatype detection based on VARCHAR values
 		return_types.clear();
-		return_types.assign(options.num_cols, LogicalType::VARCHAR);
+		return_types.assign(candidate.max_num_columns, LogicalType::VARCHAR);
 
-		// jump to beginning and skip potential header
-		JumpToBeginning(options.skip_rows, true);
-		DataChunk header_row;
-		header_row.Initialize(allocator, return_types);
-		parse_chunk.Copy(header_row);
+		// Reset candidate for parsing
+		candidate.state->csv_buffer_iterator.Reset();
 
-		if (header_row.size() == 0) {
-			continue;
-		}
-
-		// init parse chunk and read csv with info candidate
-		InitParseChunk(return_types.size());
-		if (!TryParseCSV(ParserMode::SNIFFING_DATATYPES)) {
-			continue;
-		}
-		for (idx_t row_idx = 0; row_idx <= parse_chunk.size(); row_idx++) {
+		// Parse chunk and read csv with info candidate
+		vector<vector<Value>> values;
+		candidate.state->SniffValue(values);
+		for (idx_t row_idx = 0; row_idx <= values.size(); row_idx++) {
 			bool is_header_row = row_idx == 0;
 			idx_t row = row_idx - 1;
-			for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
+			for (idx_t col = 0; col < values[row_idx].size() - 1; col++) {
 				auto &col_type_candidates = info_sql_types_candidates[col];
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
 					// try cast from string to sql_type
-					Value dummy_val;
-					if (is_header_row) {
-						VerifyUTF8(col, 0, header_row, -int64_t(parse_chunk.size()));
-						dummy_val = header_row.GetValue(col, 0);
-					} else {
-						VerifyUTF8(col, row, parse_chunk);
-						dummy_val = parse_chunk.GetValue(col, row);
-					}
+					auto dummy_val = values[row_idx][col];
 					// try formatting for date types if the user did not specify one and it starts with numeric values.
 					string separator;
-					if (has_format_candidates.count(sql_type.id()) && !original_options.has_format[sql_type.id()] &&
-					    !dummy_val.IsNull() && StartsWithNumericDate(separator, StringValue::Get(dummy_val))) {
+					bool has_format_is_set = original_options.has_format.find(sql_type.id())->second;
+					if (has_format_candidates.count(sql_type.id()) && !has_format_is_set && !dummy_val.IsNull() &&
+					    StartsWithNumericDate(separator, StringValue::Get(dummy_val))) {
 						// generate date format candidates the first time through
 						auto &type_format_candidates = format_candidates[sql_type.id()];
 						const auto had_format_candidates = has_format_candidates[sql_type.id()];
@@ -559,8 +543,8 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 			}
 			// reset type detection, because first row could be header,
 			// but only do it if csv has more than one line (including header)
-			if (parse_chunk.size() > 0 && is_header_row) {
-				info_sql_types_candidates = vector<vector<LogicalType>>(options.num_cols, type_candidates);
+			if (values.size() > 0 && is_header_row) {
+				info_sql_types_candidates = vector<vector<LogicalType>>(options.num_cols, options.auto_type_candidates);
 				for (auto &f : format_candidates) {
 					f.second.clear();
 				}
@@ -571,7 +555,8 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 		}
 
 		idx_t varchar_cols = 0;
-		for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
+
+		for (idx_t col = 0; col < info_sql_types_candidates.size(); col++) {
 			auto &col_type_candidates = info_sql_types_candidates[col];
 			// check number of varchar columns
 			const auto &col_type = col_type_candidates.back();
@@ -749,18 +734,7 @@ vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalT
 }
 
 // vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &requested_types) {
-//	// Check if any type is BLOB
-//	for (auto &type : requested_types) {
-//		// auto-detect for blobs not supported: there may be invalid UTF-8 in the file
-//		if (type.id() == LogicalTypeId::BLOB) {
-//			return requested_types;
-//		}
-//	}
-//
-//	if (options.skip_rows_set) {
-//		// Skip rows if they are set
-//		SkipRowsAndReadHeader(options.skip_rows, false);
-//	}
+
 //
 //	// #######
 //	// ### dialect detection
@@ -794,9 +768,7 @@ vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalT
 //	     {"%Y-%m-%d %H:%M:%S.%f", "%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S",
 //	      "%d-%m-%y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%y-%m-%d %H:%M:%S"}},
 //	};
-//	vector<vector<LogicalType>> best_sql_types_candidates;
-//	map<LogicalTypeId, vector<string>> best_format_candidates;
-//	DataChunk best_header_row;
+
 //	DetectCandidateTypes(options.auto_type_candidates, format_template_candidates, info_candidates, original_options,
 //	                     best_num_cols, best_sql_types_candidates, best_format_candidates, best_header_row);
 //

@@ -47,6 +47,8 @@ public:
 	char GetNextChar();
 	//! Returns true if the iterator is finished
 	bool Finished();
+	//! Resets the iterator
+	void Reset();
 
 private:
 	idx_t cur_pos = 0;

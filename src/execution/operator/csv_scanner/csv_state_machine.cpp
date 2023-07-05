@@ -143,5 +143,69 @@ void CSVStateMachine::SniffDialect(vector<idx_t> &sniffed_column_counts) {
 	sniffed_column_counts.erase(sniffed_column_counts.end() - (STANDARD_VECTOR_SIZE - cur_rows),
 	                            sniffed_column_counts.end());
 }
+// FIXME: We need to verify if strings are valid UTF8
+// void BaseCSVReader::VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, int64_t offset) {
+//	D_ASSERT(col_idx < chunk.data.size());
+//	D_ASSERT(row_idx < chunk.size());
+//	auto &v = chunk.data[col_idx];
+//	if (FlatVector::IsNull(v, row_idx)) {
+//		return;
+//	}
+//
+//	auto parse_data = FlatVector::GetData<string_t>(chunk.data[col_idx]);
+//	auto s = parse_data[row_idx];
+//	auto utf_type = Utf8Proc::Analyze(s.GetData(), s.GetSize());
+//	if (utf_type == UnicodeType::INVALID) {
+//		string col_name = to_string(col_idx);
+//		if (col_idx < names.size()) {
+//			col_name = "\"" + names[col_idx] + "\"";
+//		}
+//		int64_t error_line = linenr - (chunk.size() - row_idx) + 1 + offset;
+//		D_ASSERT(error_line >= 0);
+//		throw InvalidInputException("Error in file \"%s\" at line %llu in column \"%s\": "
+//		                            "%s. Parser options:\n%s",
+//		                            options.file_path, error_line, col_name,
+//		                            ErrorManager::InvalidUnicodeError(s.GetString(), "CSV file"), options.ToString());
+//	}
+//}
+
+void CSVStateMachine::SniffValue(vector<vector<Value>> &sniffed_value) {
+	CSVState state {CSVState::STANDARD};
+	CSVState previous_state;
+	idx_t cur_rows = 0;
+	D_ASSERT(sniffed_value.size() == STANDARD_VECTOR_SIZE);
+	string value;
+	while (!csv_buffer_iterator.Finished()) {
+		previous_state = state;
+		state =
+		    static_cast<CSVState>(transition_array[static_cast<uint8_t>(state)][static_cast<uint8_t>(current_char)]);
+		bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
+		                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
+
+		bool carriage_return = previous_state == CSVState::CARRIAGE_RETURN;
+		if (previous_state == CSVState::FIELD_SEPARATOR ||
+		    (previous_state == CSVState::RECORD_SEPARATOR && !empty_line) ||
+		    (state != CSVState::RECORD_SEPARATOR && carriage_return)) {
+			// Started a new value
+			sniffed_value[cur_rows].push_back(Value(value));
+			value = current_char;
+		}
+		if (state == CSVState::STANDARD) {
+			value += current_char;
+		}
+		cur_rows += previous_state == CSVState::RECORD_SEPARATOR && !empty_line;
+		// It means our carriage return is actually a record separator
+		cur_rows += state != CSVState::RECORD_SEPARATOR && carriage_return;
+		if (cur_rows >= STANDARD_VECTOR_SIZE) {
+			// We sniffed enough rows
+			break;
+		}
+		current_char = csv_buffer_iterator.GetNextChar();
+	}
+	sniffed_value.erase(sniffed_value.end() - (STANDARD_VECTOR_SIZE - cur_rows), sniffed_value.end());
+}
+
+void CSVStateMachine::Parse(vector<vector<idx_t>> &column_positions) {
+}
 
 } // namespace duckdb

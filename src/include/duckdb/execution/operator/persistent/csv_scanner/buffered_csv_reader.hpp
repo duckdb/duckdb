@@ -70,13 +70,6 @@ private:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	bool TryParseCSV(ParserMode mode, DataChunk &insert_chunk, string &error_message);
 
-	//! Second phase of auto detection: detect candidate types for each column
-	void DetectCandidateTypes(const vector<LogicalType> &type_candidates,
-	                          const map<LogicalTypeId, vector<const char *>> &format_template_candidates,
-	                          const vector<CSVReaderOptions> &info_candidates, CSVReaderOptions &original_options,
-	                          idx_t best_num_cols, vector<vector<LogicalType>> &best_sql_types_candidates,
-	                          std::map<LogicalTypeId, vector<string>> &best_format_candidates,
-	                          DataChunk &best_header_row);
 	//! Third phase of auto detection: detect header of CSV file
 	void DetectHeader(const vector<vector<LogicalType>> &best_sql_types_candidates, const DataChunk &best_header_row);
 	//! Fourth phase of auto detection: refine the types of each column and select which types to use for each column

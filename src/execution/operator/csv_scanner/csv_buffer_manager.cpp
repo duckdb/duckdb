@@ -70,4 +70,10 @@ char CSVBufferIterator::GetNextChar() {
 bool CSVBufferIterator::Finished() {
 	return !cur_buffer;
 }
+
+void CSVBufferIterator::Reset() {
+	cur_buffer_idx = 0;
+	cur_buffer = nullptr;
+	cur_pos = 0;
+}
 } // namespace duckdb
