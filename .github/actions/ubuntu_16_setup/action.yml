@@ -97,4 +97,4 @@ runs:
       if: ${{ inputs.openssl }}
       shell: bash
       run: |
-        cd $VCPKG_ROOT && ./vcpkg install openssl --target-triplet=${{ inputs.aarch64_cross_compile == 1 && 'arm64-linux' || 'x64-linux' }}
+        cd $VCPKG_ROOT && ./vcpkg install openssl --triplet=${{ inputs.aarch64_cross_compile == 1 && 'arm64-linux' || 'x64-linux' }}
