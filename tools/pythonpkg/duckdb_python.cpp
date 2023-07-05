@@ -285,8 +285,8 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 
 	DuckDBPyTyping::Initialize(m);
 	DuckDBPyFunctional::Initialize(m);
-	DuckDBPyRelation::Initialize(m);
 	DuckDBPyExpression::Initialize(m);
+	DuckDBPyRelation::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
 	PythonObject::Initialize();
 

@@ -47,6 +47,10 @@ shared_ptr<Relation> Relation::Project(const vector<string> &expressions) {
 	return Project(expressions, aliases);
 }
 
+shared_ptr<Relation> Relation::Select(vector<unique_ptr<ParsedExpression>> expressions, const vector<string> &aliases) {
+	return make_shared<ProjectionRelation>(shared_from_this(), std::move(expressions), aliases);
+}
+
 static vector<unique_ptr<ParsedExpression>> StringListToExpressionList(ClientContext &context,
                                                                        const vector<string> &expressions) {
 	if (expressions.empty()) {
