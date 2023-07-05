@@ -92,3 +92,18 @@ class TestExpression(object):
 		rel = rel.select(col)
 		res = rel.fetchall()
 		assert res == [(-5,)]
+	
+	def test_subtract_expression(self):
+		con = duckdb.connect()
+
+		rel = con.sql("""
+			select
+				3 as a,
+				1 as b
+		""")
+		col1 = ColumnExpression('a')
+		col2 = ColumnExpression('b')
+		expr = col1 - col2
+		rel = rel.select(expr)
+		res = rel.fetchall()
+		assert res == [(2,)]

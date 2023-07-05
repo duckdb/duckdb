@@ -52,6 +52,7 @@ public:
 	void Print() const;
 	shared_ptr<DuckDBPyExpression> Add(const DuckDBPyExpression &other);
 	shared_ptr<DuckDBPyExpression> Negate();
+	shared_ptr<DuckDBPyExpression> Subtract(const DuckDBPyExpression &other);
 
 public:
 	const ParsedExpression &GetExpression() const;

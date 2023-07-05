@@ -31,6 +31,13 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Add(const DuckDBPyExpression 
 	return DuckDBPyExpression::FunctionExpression("+", std::move(children), true);
 }
 
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Subtract(const DuckDBPyExpression &other) {
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(GetExpression().Copy());
+	children.push_back(other.GetExpression().Copy());
+	return DuckDBPyExpression::FunctionExpression("-", std::move(children), true);
+}
+
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Negate() {
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(GetExpression().Copy());

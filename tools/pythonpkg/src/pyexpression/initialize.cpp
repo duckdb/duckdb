@@ -22,11 +22,37 @@ void InitializeStaticMethods(py::module_ &m) {
 	      py::arg("arg_one"), py::arg("arg_two"), docs);
 }
 
+static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
+	const char *docs;
+
+	docs = R"(
+		Add two expressions.
+
+		Parameters:
+			expr: The expression to do add together with
+
+		Returns:
+			FunctionExpression: A '+' on the two input expressions.
+	)";
+	m.def("__add__", &DuckDBPyExpression::Add, py::arg("expr"), docs);
+
+	docs = R"(
+		TODO: add docs
+	)";
+	m.def("__neg__", &DuckDBPyExpression::Negate, docs);
+
+	docs = R"(
+		TODO: add docs
+	)";
+	m.def("__sub__", &DuckDBPyExpression::Subtract, docs);
+}
+
 void DuckDBPyExpression::Initialize(py::module_ &m) {
 	auto expression =
 	    py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>>(m, "Expression", py::module_local());
 
 	InitializeStaticMethods(m);
+	InitializeDunderMethods(expression);
 
 	const char *docs;
 
@@ -42,22 +68,6 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
             str: The string representation.
     )";
 	expression.def("__repr__", &DuckDBPyExpression::ToString, docs);
-
-	docs = R"(
-		Add two expressions.
-
-		Parameters:
-			expr: The expression to do add together with
-
-		Returns:
-			FunctionExpression: A '+' on the two input expressions.
-	)";
-	expression.def("__add__", &DuckDBPyExpression::Add, py::arg("expr"), docs);
-
-	docs = R"(
-		TODO: add docs
-	)";
-	expression.def("__neg__", &DuckDBPyExpression::Negate, docs);
 }
 
 } // namespace duckdb
