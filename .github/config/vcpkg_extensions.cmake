@@ -16,3 +16,9 @@ duckdb_extension_load(aws
     GIT_URL https://github.com/samansmink/aws
     GIT_TAG ff226f67941d71f9e20eaba031d1088366be75b1
 )
+
+duckdb_extension_load(iceberg
+    LOAD_TESTS
+    GIT_URL git@github.com:samansmink/duckdb-iceberg.git
+    GIT_TAG 7217fe5fb251ce6b227d39c8b7844c698229ab3d
+)

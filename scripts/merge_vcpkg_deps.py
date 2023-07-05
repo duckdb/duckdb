@@ -10,11 +10,24 @@ import sys
 # we probably want to change it here and in ('.github/actions/build_extensions/action.yml') at the same time
 
 merged_dependencies = []
+merged_overlay_ports = []
+
+
+def prefix_overlay_ports(overlay_ports, path_to_vcpkg_json):
+    def prefix_overlay_port(overlay_port):
+        vcpkg_prefix_path = path_to_vcpkg_json[0:path_to_vcpkg_json.find("/vcpkg.json")]
+        return vcpkg_prefix_path + overlay_port
+
+    return map(prefix_overlay_port, overlay_ports)
+
 
 for file in sys.argv[1:]:
     f = open(file)
     data = json.load(f)
     merged_dependencies += data['dependencies']
+    if 'vcpkg-configuration' in data:
+        if 'overlay-ports' in data['vcpkg-configuration']:
+            merged_overlay_ports += prefix_overlay_ports(data['vcpkg-configuration']['overlay-ports'], file)
 
 deduplicated_dependencies = list(set(merged_dependencies))
 
@@ -30,6 +43,11 @@ data = {
         }
     ]
 }
+
+if merged_overlay_ports:
+    data['vcpkg-configuration'] = {
+        'overlay-ports': merged_overlay_ports
+    }
 
 # Print output
 print("Writing to 'build/vcpkg_merged_manifest/vcpkg.json': ")
