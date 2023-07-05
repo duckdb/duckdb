@@ -14,12 +14,14 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/helper.hpp"
+#include <memory>
 
 PYBIND11_DECLARE_HOLDER_TYPE(T, duckdb::unique_ptr<T>)
 
 namespace pybind11 {
 
 namespace detail {
+
 template <typename Type, bool SAFE>
 struct type_caster<duckdb::vector<Type, SAFE>> : list_caster<duckdb::vector<Type, SAFE>, Type> {};
 } // namespace detail

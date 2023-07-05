@@ -18,8 +18,10 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/external_dependencies.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
-
-#include <memory>
+#include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/helper.hpp"
 
 namespace duckdb {
 struct BoundStatement;
@@ -80,6 +82,8 @@ public:
 	DUCKDB_API shared_ptr<Relation> Project(const string &select_list, const vector<string> &aliases);
 	DUCKDB_API shared_ptr<Relation> Project(const vector<string> &expressions);
 	DUCKDB_API shared_ptr<Relation> Project(const vector<string> &expressions, const vector<string> &aliases);
+	DUCKDB_API shared_ptr<Relation> Select(vector<unique_ptr<ParsedExpression>> expressions,
+	                                       const vector<string> &aliases);
 
 	// FILTER
 	DUCKDB_API shared_ptr<Relation> Filter(const string &expression);

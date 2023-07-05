@@ -1,3 +1,4 @@
+#include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
 #include "duckdb_python/pytype.hpp"
@@ -17,6 +18,7 @@
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/main/relation/value_relation.hpp"
 #include "duckdb/main/relation/filter_relation.hpp"
+#include "duckdb_python/expression/pyexpression.hpp"
 
 namespace duckdb {
 
@@ -52,6 +54,20 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
 		return nullptr;
 	}
 	return ProjectFromExpression(expr);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Select(py::args args) {
+	vector<unique_ptr<ParsedExpression>> expressions;
+	for (auto arg : args) {
+		shared_ptr<DuckDBPyExpression> py_expr;
+		if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(arg, py_expr)) {
+			throw InvalidInputException("Please provide arguments of type DuckDBPyExpression!");
+		}
+		auto expr = py_expr->GetExpression().Copy();
+		expressions.push_back(std::move(expr));
+	}
+	vector<string> empty_aliases;
+	return make_uniq<DuckDBPyRelation>(rel->Select(std::move(expressions), empty_aliases));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectFromTypes(const py::object &obj) {
