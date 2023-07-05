@@ -73,7 +73,6 @@ public:
 	const vector<LogicalType> &GetTypes() {
 		return return_types;
 	}
-
 	//! Get the 1-indexed global line number for the given local error line
 	virtual idx_t GetLineError(idx_t line_error, idx_t buffer_idx, bool stop_at_first = true) {
 		return line_error + 1;
@@ -87,10 +86,6 @@ public:
 protected:
 	//! Initializes the parse_chunk with varchar columns and aligns info with new number of cols
 	void InitParseChunk(idx_t num_cols);
-	//! Change the date format for the type to the string
-	void SetDateFormat(const string &format_specifier, const LogicalTypeId &sql_type);
-	//! Try to cast a string value to the specified sql type
-	bool TryCastValue(const Value &value, const LogicalType &sql_type);
 	//! Try to cast a vector of values to the specified sql type
 	bool TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type);
 

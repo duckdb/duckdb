@@ -328,9 +328,10 @@ void CSVSniffer::ResetStats() {
 // 4. Type Refinement: Refines the types of the columns
 SnifferResult CSVSniffer::SniffCSV() {
 	// 1. Dialect Detection
-	vector<CSVReaderOptions> info_candidates = DetectDialect();
+	DetectDialect();
 	// 2. Type Detection
 	DetectTypes();
+	return SnifferResult();
 }
 
 void CSVSniffer::GenerateCandidateDetectionSearchSpace() {
@@ -439,13 +440,45 @@ void CSVSniffer::DetectDialect() {
 	}
 }
 
+bool CSVSniffer::TryCastValue(const Value &value, const LogicalType &sql_type) {
+	if (value.IsNull()) {
+		return true;
+	}
+	if (options.has_format[LogicalTypeId::DATE] && sql_type.id() == LogicalTypeId::DATE) {
+		date_t result;
+		string error_message;
+		return options.date_format[LogicalTypeId::DATE].TryParseDate(string_t(StringValue::Get(value)), result,
+		                                                             error_message);
+	} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type.id() == LogicalTypeId::TIMESTAMP) {
+		timestamp_t result;
+		string error_message;
+		return options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(string_t(StringValue::Get(value)),
+		                                                                       result, error_message);
+	} else if (options.decimal_separator != "." && sql_type.id() == LogicalTypeId::DECIMAL) {
+		return TryCastDecimalValueCommaSeparated(string_t(StringValue::Get(value)), sql_type);
+	} else if (options.decimal_separator != "." &&
+	           ((sql_type.id() == LogicalTypeId::FLOAT) || (sql_type.id() == LogicalTypeId::DOUBLE))) {
+		return TryCastFloatingValueCommaSeparated(string_t(StringValue::Get(value)), sql_type);
+	} else {
+		Value new_value;
+		string error_message;
+		return value.TryCastAs(buffer_manager->context, sql_type, new_value, &error_message, true);
+	}
+}
+
+void CSVSniffer::SetDateFormat(const string &format_specifier, const LogicalTypeId &sql_type) {
+	options.has_format[sql_type] = true;
+	auto &date_format = options.date_format[sql_type];
+	date_format.format_specifier = format_specifier;
+	StrTimeFormat::ParseFormatSpecifier(date_format.format_specifier, date_format);
+}
+
 void CSVSniffer::DetectTypes() {
-	CSVReaderOptions best_options;
 	idx_t min_varchar_cols = best_num_cols + 1;
 	vector<LogicalType> return_types;
 	// check which info candidate leads to minimum amount of non-varchar columns...
 	for (auto &candidate : candidates) {
-		vector<vector<LogicalType>> info_sql_types_candidates(options.num_cols, options.auto_type_candidates);
+		vector<vector<LogicalType>> info_sql_types_candidates(candidate.max_num_columns, options.auto_type_candidates);
 		std::map<LogicalTypeId, bool> has_format_candidates;
 		std::map<LogicalTypeId, vector<string>> format_candidates;
 		for (const auto &t : format_template_candidates) {
@@ -462,15 +495,14 @@ void CSVSniffer::DetectTypes() {
 		return_types.assign(candidate.max_num_columns, LogicalType::VARCHAR);
 
 		// Reset candidate for parsing
-		candidate.state->csv_buffer_iterator.Reset();
+		candidate.state->Reset();
 
 		// Parse chunk and read csv with info candidate
-		vector<vector<Value>> values;
+		vector<vector<Value>> values(STANDARD_VECTOR_SIZE);
 		candidate.state->SniffValue(values);
-		for (idx_t row_idx = 0; row_idx <= values.size(); row_idx++) {
+		for (idx_t row_idx = 0; row_idx < values.size(); row_idx++) {
 			bool is_header_row = row_idx == 0;
-			idx_t row = row_idx - 1;
-			for (idx_t col = 0; col < values[row_idx].size() - 1; col++) {
+			for (idx_t col = 0; col < values[row_idx].size(); col++) {
 				auto &col_type_candidates = info_sql_types_candidates[col];
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
@@ -543,8 +575,9 @@ void CSVSniffer::DetectTypes() {
 			}
 			// reset type detection, because first row could be header,
 			// but only do it if csv has more than one line (including header)
-			if (values.size() > 0 && is_header_row) {
-				info_sql_types_candidates = vector<vector<LogicalType>>(options.num_cols, options.auto_type_candidates);
+			if (values.size() > 1 && is_header_row) {
+				info_sql_types_candidates =
+				    vector<vector<LogicalType>>(candidate.max_num_columns, options.auto_type_candidates);
 				for (auto &f : format_candidates) {
 					f.second.clear();
 				}
@@ -566,20 +599,19 @@ void CSVSniffer::DetectTypes() {
 		}
 
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of best_num_cols.
-		if (varchar_cols < min_varchar_cols && parse_chunk.ColumnCount() > (best_num_cols * 0.7)) {
+		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (best_num_cols * 0.7)) {
 			// we have a new best_options candidate
-			best_options = info_candidate;
+			best_candidate = &candidate;
 			min_varchar_cols = varchar_cols;
 			best_sql_types_candidates = info_sql_types_candidates;
 			best_format_candidates = format_candidates;
-			best_header_row.Destroy();
-			auto header_row_types = header_row.GetTypes();
-			best_header_row.Initialize(allocator, header_row_types);
-			header_row.Copy(best_header_row);
+			//			best_header_row.Destroy();
+			//			auto header_row_types = header_row.GetTypes();
+			//			best_header_row.Initialize(allocator, header_row_types);
+			//			header_row.Copy(best_header_row);
 		}
 	}
 
-	options = best_options;
 	for (const auto &best : best_format_candidates) {
 		if (!best.second.empty()) {
 			SetDateFormat(best.second.back(), best.first);
@@ -587,151 +619,152 @@ void CSVSniffer::DetectTypes() {
 	}
 }
 
-void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql_types_candidates,
-                                     const DataChunk &best_header_row) {
-	// information for header detection
-	bool first_row_consistent = true;
-	bool first_row_nulls = false;
-
-	// check if header row is all null and/or consistent with detected column data types
-	first_row_nulls = true;
-	for (idx_t col = 0; col < best_sql_types_candidates.size(); col++) {
-		auto dummy_val = best_header_row.GetValue(col, 0);
-		if (!dummy_val.IsNull()) {
-			first_row_nulls = false;
-		}
-
-		// try cast to sql_type of column
-		const auto &sql_type = best_sql_types_candidates[col].back();
-		if (!TryCastValue(dummy_val, sql_type)) {
-			first_row_consistent = false;
-		}
-	}
-
-	// update parser info, and read, generate & set col_names based on previous findings
-	if (((!first_row_consistent || first_row_nulls) && !options.has_header) || (options.has_header && options.header)) {
-		options.header = true;
-		case_insensitive_map_t<idx_t> name_collision_count;
-		// get header names from CSV
-		for (idx_t col = 0; col < options.num_cols; col++) {
-			const auto &val = best_header_row.GetValue(col, 0);
-			string col_name = val.ToString();
-
-			// generate name if field is empty
-			if (col_name.empty() || val.IsNull()) {
-				col_name = GenerateColumnName(options.num_cols, col);
-			}
-
-			// normalize names or at least trim whitespace
-			if (options.normalize_names) {
-				col_name = NormalizeColumnName(col_name);
-			} else {
-				col_name = TrimWhitespace(col_name);
-			}
-
-			// avoid duplicate header names
-			const string col_name_raw = col_name;
-			while (name_collision_count.find(col_name) != name_collision_count.end()) {
-				name_collision_count[col_name] += 1;
-				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
-			}
-
-			names.push_back(col_name);
-			name_collision_count[col_name] = 0;
-		}
-
-	} else {
-		options.header = false;
-		for (idx_t col = 0; col < options.num_cols; col++) {
-			string column_name = GenerateColumnName(options.num_cols, col);
-			names.push_back(column_name);
-		}
-	}
-	for (idx_t i = 0; i < MinValue<idx_t>(names.size(), options.name_list.size()); i++) {
-		names[i] = options.name_list[i];
-	}
-}
-
-vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalType> &type_candidates,
-                                                           const vector<LogicalType> &requested_types,
-                                                           vector<vector<LogicalType>> &best_sql_types_candidates,
-                                                           map<LogicalTypeId, vector<string>> &best_format_candidates) {
-	// for the type refine we set the SQL types to VARCHAR for all columns
-	return_types.clear();
-	return_types.assign(options.num_cols, LogicalType::VARCHAR);
-
-	vector<LogicalType> detected_types;
-
-	// if data types were provided, exit here if number of columns does not match
-	if (!requested_types.empty()) {
-		if (requested_types.size() != options.num_cols) {
-			throw InvalidInputException(
-			    "Error while determining column types: found %lld columns but expected %d. (%s)", options.num_cols,
-			    requested_types.size(), options.ToString());
-		} else {
-			detected_types = requested_types;
-		}
-	} else if (options.all_varchar) {
-		// return all types varchar
-		detected_types = return_types;
-	} else {
-		// jump through the rest of the file and continue to refine the sql type guess
-		while (JumpToNextSample()) {
-			InitParseChunk(return_types.size());
-			// if jump ends up a bad line, we just skip this chunk
-			if (!TryParseCSV(ParserMode::SNIFFING_DATATYPES)) {
-				continue;
-			}
-			for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
-				vector<LogicalType> &col_type_candidates = best_sql_types_candidates[col];
-				while (col_type_candidates.size() > 1) {
-					const auto &sql_type = col_type_candidates.back();
-					//	narrow down the date formats
-					if (best_format_candidates.count(sql_type.id())) {
-						auto &best_type_format_candidates = best_format_candidates[sql_type.id()];
-						auto save_format_candidates = best_type_format_candidates;
-						while (!best_type_format_candidates.empty()) {
-							if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
-								break;
-							}
-							//	doesn't work - move to the next one
-							best_type_format_candidates.pop_back();
-							options.has_format[sql_type.id()] = (!best_type_format_candidates.empty());
-							if (!best_type_format_candidates.empty()) {
-								SetDateFormat(best_type_format_candidates.back(), sql_type.id());
-							}
-						}
-						//	if none match, then this is not a column of type sql_type,
-						if (best_type_format_candidates.empty()) {
-							//	so restore the candidates that did work.
-							best_type_format_candidates.swap(save_format_candidates);
-							if (!best_type_format_candidates.empty()) {
-								SetDateFormat(best_type_format_candidates.back(), sql_type.id());
-							}
-						}
-					}
-
-					if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
-						break;
-					} else {
-						col_type_candidates.pop_back();
-					}
-				}
-			}
-		}
-
-		// set sql types
-		for (auto &best_sql_types_candidate : best_sql_types_candidates) {
-			LogicalType d_type = best_sql_types_candidate.back();
-			if (best_sql_types_candidate.size() == type_candidates.size()) {
-				d_type = LogicalType::VARCHAR;
-			}
-			detected_types.push_back(d_type);
-		}
-	}
-
-	return detected_types;
-}
+// void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql_types_candidates,
+//                                     const DataChunk &best_header_row) {
+//	// information for header detection
+//	bool first_row_consistent = true;
+//	bool first_row_nulls = false;
+//
+//	// check if header row is all null and/or consistent with detected column data types
+//	first_row_nulls = true;
+//	for (idx_t col = 0; col < best_sql_types_candidates.size(); col++) {
+//		auto dummy_val = best_header_row.GetValue(col, 0);
+//		if (!dummy_val.IsNull()) {
+//			first_row_nulls = false;
+//		}
+//
+//		// try cast to sql_type of column
+//		const auto &sql_type = best_sql_types_candidates[col].back();
+//		if (!TryCastValue(dummy_val, sql_type)) {
+//			first_row_consistent = false;
+//		}
+//	}
+//
+//	// update parser info, and read, generate & set col_names based on previous findings
+//	if (((!first_row_consistent || first_row_nulls) && !options.has_header) || (options.has_header && options.header)) {
+//		options.header = true;
+//		case_insensitive_map_t<idx_t> name_collision_count;
+//		// get header names from CSV
+//		for (idx_t col = 0; col < options.num_cols; col++) {
+//			const auto &val = best_header_row.GetValue(col, 0);
+//			string col_name = val.ToString();
+//
+//			// generate name if field is empty
+//			if (col_name.empty() || val.IsNull()) {
+//				col_name = GenerateColumnName(options.num_cols, col);
+//			}
+//
+//			// normalize names or at least trim whitespace
+//			if (options.normalize_names) {
+//				col_name = NormalizeColumnName(col_name);
+//			} else {
+//				col_name = TrimWhitespace(col_name);
+//			}
+//
+//			// avoid duplicate header names
+//			const string col_name_raw = col_name;
+//			while (name_collision_count.find(col_name) != name_collision_count.end()) {
+//				name_collision_count[col_name] += 1;
+//				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
+//			}
+//
+//			names.push_back(col_name);
+//			name_collision_count[col_name] = 0;
+//		}
+//
+//	} else {
+//		options.header = false;
+//		for (idx_t col = 0; col < options.num_cols; col++) {
+//			string column_name = GenerateColumnName(options.num_cols, col);
+//			names.push_back(column_name);
+//		}
+//	}
+//	for (idx_t i = 0; i < MinValue<idx_t>(names.size(), options.name_list.size()); i++) {
+//		names[i] = options.name_list[i];
+//	}
+//}
+//
+// vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalType> &type_candidates,
+//                                                           const vector<LogicalType> &requested_types,
+//                                                           vector<vector<LogicalType>> &best_sql_types_candidates,
+//                                                           map<LogicalTypeId, vector<string>> &best_format_candidates)
+//                                                           {
+//	// for the type refine we set the SQL types to VARCHAR for all columns
+//	return_types.clear();
+//	return_types.assign(options.num_cols, LogicalType::VARCHAR);
+//
+//	vector<LogicalType> detected_types;
+//
+//	// if data types were provided, exit here if number of columns does not match
+//	if (!requested_types.empty()) {
+//		if (requested_types.size() != options.num_cols) {
+//			throw InvalidInputException(
+//			    "Error while determining column types: found %lld columns but expected %d. (%s)", options.num_cols,
+//			    requested_types.size(), options.ToString());
+//		} else {
+//			detected_types = requested_types;
+//		}
+//	} else if (options.all_varchar) {
+//		// return all types varchar
+//		detected_types = return_types;
+//	} else {
+//		// jump through the rest of the file and continue to refine the sql type guess
+//		while (JumpToNextSample()) {
+//			InitParseChunk(return_types.size());
+//			// if jump ends up a bad line, we just skip this chunk
+//			if (!TryParseCSV(ParserMode::SNIFFING_DATATYPES)) {
+//				continue;
+//			}
+//			for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
+//				vector<LogicalType> &col_type_candidates = best_sql_types_candidates[col];
+//				while (col_type_candidates.size() > 1) {
+//					const auto &sql_type = col_type_candidates.back();
+//					//	narrow down the date formats
+//					if (best_format_candidates.count(sql_type.id())) {
+//						auto &best_type_format_candidates = best_format_candidates[sql_type.id()];
+//						auto save_format_candidates = best_type_format_candidates;
+//						while (!best_type_format_candidates.empty()) {
+//							if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
+//								break;
+//							}
+//							//	doesn't work - move to the next one
+//							best_type_format_candidates.pop_back();
+//							options.has_format[sql_type.id()] = (!best_type_format_candidates.empty());
+//							if (!best_type_format_candidates.empty()) {
+//								SetDateFormat(best_type_format_candidates.back(), sql_type.id());
+//							}
+//						}
+//						//	if none match, then this is not a column of type sql_type,
+//						if (best_type_format_candidates.empty()) {
+//							//	so restore the candidates that did work.
+//							best_type_format_candidates.swap(save_format_candidates);
+//							if (!best_type_format_candidates.empty()) {
+//								SetDateFormat(best_type_format_candidates.back(), sql_type.id());
+//							}
+//						}
+//					}
+//
+//					if (TryCastVector(parse_chunk.data[col], parse_chunk.size(), sql_type)) {
+//						break;
+//					} else {
+//						col_type_candidates.pop_back();
+//					}
+//				}
+//			}
+//		}
+//
+//		// set sql types
+//		for (auto &best_sql_types_candidate : best_sql_types_candidates) {
+//			LogicalType d_type = best_sql_types_candidate.back();
+//			if (best_sql_types_candidate.size() == type_candidates.size()) {
+//				d_type = LogicalType::VARCHAR;
+//			}
+//			detected_types.push_back(d_type);
+//		}
+//	}
+//
+//	return detected_types;
+//}
 
 // vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &requested_types) {
 

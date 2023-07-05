@@ -71,13 +71,6 @@ void BaseCSVReader::InitializeProjection() {
 	}
 }
 
-void BaseCSVReader::SetDateFormat(const string &format_specifier, const LogicalTypeId &sql_type) {
-	options.has_format[sql_type] = true;
-	auto &date_format = options.date_format[sql_type];
-	date_format.format_specifier = format_specifier;
-	StrTimeFormat::ParseFormatSpecifier(date_format.format_specifier, date_format);
-}
-
 struct TryCastDecimalOperator {
 	template <class OP, class T>
 	static bool Operation(string_t input, uint8_t width, uint8_t scale) {
@@ -121,32 +114,6 @@ bool TryCastFloatingValueCommaSeparated(const string_t &value_str, const Logical
 		return TryCastFloatingOperator::Operation<TryCastErrorMessageCommaSeparated, float>(value_str);
 	default:
 		throw InternalException("Unimplemented physical type for floating");
-	}
-}
-
-bool BaseCSVReader::TryCastValue(const Value &value, const LogicalType &sql_type) {
-	if (value.IsNull()) {
-		return true;
-	}
-	if (options.has_format[LogicalTypeId::DATE] && sql_type.id() == LogicalTypeId::DATE) {
-		date_t result;
-		string error_message;
-		return options.date_format[LogicalTypeId::DATE].TryParseDate(string_t(StringValue::Get(value)), result,
-		                                                             error_message);
-	} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type.id() == LogicalTypeId::TIMESTAMP) {
-		timestamp_t result;
-		string error_message;
-		return options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(string_t(StringValue::Get(value)),
-		                                                                       result, error_message);
-	} else if (options.decimal_separator != "." && sql_type.id() == LogicalTypeId::DECIMAL) {
-		return TryCastDecimalValueCommaSeparated(string_t(StringValue::Get(value)), sql_type);
-	} else if (options.decimal_separator != "." &&
-	           ((sql_type.id() == LogicalTypeId::FLOAT) || (sql_type.id() == LogicalTypeId::DOUBLE))) {
-		return TryCastFloatingValueCommaSeparated(string_t(StringValue::Get(value)), sql_type);
-	} else {
-		Value new_value;
-		string error_message;
-		return value.TryCastAs(context, sql_type, new_value, &error_message, true);
 	}
 }
 

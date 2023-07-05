@@ -26,6 +26,8 @@ public:
 	//! unique_ptr to the file handle, gets stolen after sniffing
 	unique_ptr<CSVFileHandle> file_handle;
 
+	ClientContext &context;
+
 private:
 	//! Reads next buffer in reference to cached_buffers.front()
 	bool ReadNextAndCacheIt();
@@ -34,7 +36,6 @@ private:
 	idx_t global_csv_pos = 0;
 	//! The size of the buffer, if the csv file has a smaller size than this, we will use that instead to malloc less
 	idx_t buffer_size = CSV_BUFFER_SIZE;
-	ClientContext &context;
 };
 
 class CSVBufferIterator {

@@ -72,6 +72,11 @@ CSVStateMachine::CSVStateMachine(CSVStateMachineConfiguration configuration_p,
 	current_char = csv_buffer_iterator.GetNextChar();
 }
 
+void CSVStateMachine::Reset() {
+	csv_buffer_iterator.Reset();
+	current_char = csv_buffer_iterator.GetNextChar();
+}
+
 void CSVStateMachine::SniffDialect(vector<idx_t> &sniffed_column_counts) {
 	idx_t cur_rows = 0;
 	idx_t column_count = 1;
@@ -201,6 +206,11 @@ void CSVStateMachine::SniffValue(vector<vector<Value>> &sniffed_value) {
 			break;
 		}
 		current_char = csv_buffer_iterator.GetNextChar();
+	}
+	bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
+	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
+	if (cur_rows < STANDARD_VECTOR_SIZE && !empty_line) {
+		sniffed_value[cur_rows++].push_back(Value(value));
 	}
 	sniffed_value.erase(sniffed_value.end() - (STANDARD_VECTOR_SIZE - cur_rows), sniffed_value.end());
 }

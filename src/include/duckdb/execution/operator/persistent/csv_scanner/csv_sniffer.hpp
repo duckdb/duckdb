@@ -122,6 +122,11 @@ private:
 	//! Second phase of auto detection: detect types, format template candidates
 	//! ordered by descending specificity (~ from high to low)
 	void DetectTypes();
+	//! Change the date format for the type to the string
+	//! Try to cast a string value to the specified sql type
+	bool TryCastValue(const Value &value, const LogicalType &sql_type);
+	void SetDateFormat(const string &format_specifier, const LogicalTypeId &sql_type);
+
 	//! Variables for Type Detection
 	//! Format Candidates for Date and Timestamp Types
 	const std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
@@ -133,6 +138,7 @@ private:
 	vector<vector<LogicalType>> best_sql_types_candidates;
 	map<LogicalTypeId, vector<string>> best_format_candidates;
 	DataChunk best_header_row;
+	CSVStateCandidates *best_candidate = nullptr;
 };
 
 } // namespace duckdb

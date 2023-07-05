@@ -53,6 +53,9 @@ public:
 	//! Parses the state machine
 	void Parse(vector<vector<idx_t>> &column_positions);
 
+	//! Resets the state machine, so it can be used again
+	void Reset();
+
 	CSVStateMachineConfiguration configuration;
 	CSVBufferIterator csv_buffer_iterator;
 
