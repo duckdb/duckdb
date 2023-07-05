@@ -272,7 +272,6 @@ struct RLEScanState : public SegmentScanState {
 	}
 
 	BufferHandle handle;
-	uint32_t rle_offset;
 	idx_t entry_pos;
 	idx_t position_in_entry;
 	uint32_t rle_count_offset;
