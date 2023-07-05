@@ -24,17 +24,27 @@ struct CSVStateCandidates {
 	idx_t max_num_columns = 0;
 };
 
+//! Struct to store the result of the Sniffer
+struct SnifferResult {
+	//! Return Types that were detected
+	vector<LogicalType> return_types;
+	//! Column Names that were detected
+	vector<string> names;
+	//! The CSV Options that were detected (e.g., delimiter, quotes,...)
+	CSVReaderOptions options;
+};
+
 //! Sniffer that detects Header, Dialect and Types of CSV Files
 class CSVSniffer {
 public:
 	explicit CSVSniffer(CSVReaderOptions options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-	                    const vector<LogicalType> &requested_types_p)
+	                    const vector<LogicalType> &requested_types_p = vector<LogicalType>())
 	    : requested_types(requested_types_p), options(std::move(options_p)),
 	      buffer_manager(std::move(buffer_manager_p)) {};
-	//! First phase of auto detection: detect CSV dialect (i.e. delimiter, quote rules, etc)
-	vector<CSVReaderOptions> DetectDialect();
+
 	//! Resets stats so it can analyze the next chunk
 	void ResetStats();
+	SnifferResult SniffCSV();
 
 private:
 	//! Number of rows read
@@ -59,6 +69,8 @@ private:
 	//! ------------------------------------------------------//
 	//! ----------------- Dialect Detection ----------------- //
 	//! ------------------------------------------------------//
+	//! First phase of auto detection: detect CSV dialect (i.e. delimiter, quote rules, etc)
+	vector<CSVReaderOptions> DetectDialect();
 	vector<char> delim_candidates;
 	vector<QuoteRule> quoterule_candidates;
 	vector<vector<char>> quote_candidates_map;

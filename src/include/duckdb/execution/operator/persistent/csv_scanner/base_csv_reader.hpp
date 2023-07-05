@@ -82,6 +82,8 @@ public:
 	//! Initialize projection indices to select all columns
 	void InitializeProjection();
 
+	static unique_ptr<CSVFileHandle> OpenCSV(ClientContext &context, const CSVReaderOptions &options);
+
 protected:
 	//! Initializes the parse_chunk with varchar columns and aligns info with new number of cols
 	void InitParseChunk(idx_t num_cols);
@@ -99,8 +101,6 @@ protected:
 	bool AddRow(DataChunk &insert_chunk, idx_t &column, string &error_message, idx_t buffer_idx = 0);
 	//! Finalizes a chunk, parsing all values that have been added so far and adding them to the insert_chunk
 	bool Flush(DataChunk &insert_chunk, idx_t buffer_idx = 0, bool try_add_line = false);
-
-	unique_ptr<CSVFileHandle> OpenCSV(const CSVReaderOptions &options);
 
 	void VerifyUTF8(idx_t col_idx);
 	void VerifyUTF8(idx_t col_idx, idx_t row_idx, DataChunk &chunk, int64_t offset = 0);

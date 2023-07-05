@@ -8,14 +8,15 @@
 
 #pragma once
 
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/function/scalar/strftime_format.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/buffered_csv_reader.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/parallel_csv_reader.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_file_handle.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_file_handle.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/parallel_csv_reader.hpp"
 #include "duckdb/function/built_in_functions.hpp"
+#include "duckdb/function/scalar/strftime_format.hpp"
+#include "duckdb/function/table_function.hpp"
 
 namespace duckdb {
 
@@ -87,8 +88,9 @@ struct ReadCSVData : public BaseCSVData {
 	vector<LogicalType> return_types;
 	//! The expected SQL names to be returned from the read - including added constants (e.g. filename, hive partitions)
 	vector<string> return_names;
-	//! The initial reader (if any): this is used when automatic detection is used during binding.
-	//! In this case, the CSV reader is already created and might as well be re-used.
+	//! The buffer manager (if any): this is used when automatic detection is used during binding.
+	//! In this case, some CSV buffers have already been read and can be reused.
+	shared_ptr<CSVBufferManager> buffer_manager;
 	unique_ptr<BufferedCSVReader> initial_reader;
 	//! The union readers are created (when csv union_by_name option is on) during binding
 	//! Those readers can be re-used during ReadCSVFunction

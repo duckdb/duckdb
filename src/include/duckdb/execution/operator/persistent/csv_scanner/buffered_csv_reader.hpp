@@ -70,9 +70,6 @@ private:
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
 	bool TryParseCSV(ParserMode mode, DataChunk &insert_chunk, string &error_message);
 
-	//! Sniffs CSV dialect and determines skip rows, header row, column types and column names
-	vector<LogicalType> SniffCSV(const vector<LogicalType> &requested_types);
-
 	//! Second phase of auto detection: detect candidate types for each column
 	void DetectCandidateTypes(const vector<LogicalType> &type_candidates,
 	                          const map<LogicalTypeId, vector<const char *>> &format_template_candidates,

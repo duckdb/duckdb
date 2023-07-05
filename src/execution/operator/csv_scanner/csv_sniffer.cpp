@@ -322,6 +322,9 @@ void CSVSniffer::ResetStats() {
 	best_num_cols = 0;
 }
 
+SnifferResult CSVSniffer::SniffCSV() {
+}
+
 void CSVSniffer::GenerateCandidateDetectionSearchSpace() {
 	if (options.has_delimiter) {
 		// user provided a delimiter: use that delimiter
@@ -421,6 +424,12 @@ vector<CSVReaderOptions> CSVSniffer::DetectDialect() {
 	}
 	// Step 4: Loop over candidates and find if they can still produce good results for the remaining chunks
 	RefineCandidates();
+	// if no dialect candidate was found, we throw an exception
+	if (candidates.empty()) {
+		throw InvalidInputException(
+		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
+		    options.file_path);
+	}
 	// Step 5: Produce the result
 	return ProduceDialectResults();
 }
@@ -739,113 +748,105 @@ vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalT
 	return detected_types;
 }
 
-vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &requested_types) {
-
-	for (auto &type : requested_types) {
-		// auto-detect for blobs not supported: there may be invalid UTF-8 in the file
-		if (type.id() == LogicalTypeId::BLOB) {
-			return requested_types;
-		}
-	}
-
-	// #######
-	// ### dialect detection
-	// #######
-	if (options.skip_rows_set) {
-		// Skip rows if they are set
-		SkipRowsAndReadHeader(options.skip_rows, false);
-	}
-
-	auto buffer_manager = make_shared<CSVBufferManager>(context, *file_handle);
-	CSVSniffer sniffer(options, buffer_manager, requested_types);
-
-	CSVReaderOptions original_options = options;
-	vector<CSVReaderOptions> info_candidates;
-	idx_t best_num_cols = 0;
-
-	info_candidates = sniffer.DetectDialect();
-
-	// if no dialect candidate was found, then file was most likely empty and we throw an exception
-	if (info_candidates.empty()) {
-		throw InvalidInputException(
-		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
-		    options.file_path);
-	}
-	for (auto &candidate : info_candidates) {
-		best_num_cols = std::max(best_num_cols, candidate.num_cols);
-	}
-
-	// FIXME: hack to make this work with both buffers. Ideally this whole code must work with the buffer manager
-	file_handle->Reset();
-	if (options.skip_rows_set) {
-		// Skip rows if they are set
-		SkipRowsAndReadHeader(options.skip_rows, false);
-	}
-	ReadBuffer(start, start);
-	// #######
-	// ### type detection (initial)
-	// #######
-
-	// format template candidates, ordered by descending specificity (~ from high to low)
-	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
-	    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%Y-%m-%d", "%y-%m-%d"}},
-	    {LogicalTypeId::TIMESTAMP,
-	     {"%Y-%m-%d %H:%M:%S.%f", "%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S",
-	      "%d-%m-%y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%y-%m-%d %H:%M:%S"}},
-	};
-	vector<vector<LogicalType>> best_sql_types_candidates;
-	map<LogicalTypeId, vector<string>> best_format_candidates;
-	DataChunk best_header_row;
-	DetectCandidateTypes(options.auto_type_candidates, format_template_candidates, info_candidates, original_options,
-	                     best_num_cols, best_sql_types_candidates, best_format_candidates, best_header_row);
-
-	if (best_format_candidates.empty() || best_header_row.size() == 0) {
-		throw InvalidInputException(
-		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
-		    original_options.file_path);
-	}
-
-	// #######
-	// ### header detection
-	// #######
-	options.num_cols = best_sql_types_candidates.size();
-	DetectHeader(best_sql_types_candidates, best_header_row);
-	if (!options.sql_type_list.empty()) {
-		// user-defined types were supplied for certain columns
-		// override the types
-		if (!options.sql_types_per_column.empty()) {
-			// types supplied as name -> value map
-			idx_t found = 0;
-			for (idx_t i = 0; i < names.size(); i++) {
-				auto it = options.sql_types_per_column.find(names[i]);
-				if (it != options.sql_types_per_column.end()) {
-					best_sql_types_candidates[i] = {options.sql_type_list[it->second]};
-					found++;
-					continue;
-				}
-			}
-			if (!options.file_options.union_by_name && found < options.sql_types_per_column.size()) {
-				string exception = ColumnTypesError(options.sql_types_per_column, names);
-				if (!exception.empty()) {
-					throw BinderException(exception);
-				}
-			}
-		} else {
-			// types supplied as list
-			if (names.size() < options.sql_type_list.size()) {
-				throw BinderException("read_csv: %d types were provided, but CSV file only has %d columns",
-				                      options.sql_type_list.size(), names.size());
-			}
-			for (idx_t i = 0; i < options.sql_type_list.size(); i++) {
-				best_sql_types_candidates[i] = {options.sql_type_list[i]};
-			}
-		}
-	}
-
-	// #######
-	// ### type detection (refining)
-	// #######
-	return RefineTypeDetection(options.auto_type_candidates, requested_types, best_sql_types_candidates,
-	                           best_format_candidates);
-}
+// vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &requested_types) {
+//	// Check if any type is BLOB
+//	for (auto &type : requested_types) {
+//		// auto-detect for blobs not supported: there may be invalid UTF-8 in the file
+//		if (type.id() == LogicalTypeId::BLOB) {
+//			return requested_types;
+//		}
+//	}
+//
+//	if (options.skip_rows_set) {
+//		// Skip rows if they are set
+//		SkipRowsAndReadHeader(options.skip_rows, false);
+//	}
+//
+//	// #######
+//	// ### dialect detection
+//	// #######
+//
+//
+//	CSVReaderOptions original_options = options;
+//	vector<CSVReaderOptions> info_candidates;
+//	idx_t best_num_cols = 0;
+//
+//	info_candidates = sniffer.DetectDialect();
+//	for (auto &candidate : info_candidates) {
+//		best_num_cols = std::max(best_num_cols, candidate.num_cols);
+//	}
+//
+//	// FIXME: hack to make this work with both buffers. Ideally this whole code must work with the buffer manager
+//	file_handle->Reset();
+//	if (options.skip_rows_set) {
+//		// Skip rows if they are set
+//		SkipRowsAndReadHeader(options.skip_rows, false);
+//	}
+//	ReadBuffer(start, start);
+//	// #######
+//	// ### type detection (initial)
+//	// #######
+//
+//	// format template candidates, ordered by descending specificity (~ from high to low)
+//	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
+//	    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%Y-%m-%d", "%y-%m-%d"}},
+//	    {LogicalTypeId::TIMESTAMP,
+//	     {"%Y-%m-%d %H:%M:%S.%f", "%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S",
+//	      "%d-%m-%y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%y-%m-%d %H:%M:%S"}},
+//	};
+//	vector<vector<LogicalType>> best_sql_types_candidates;
+//	map<LogicalTypeId, vector<string>> best_format_candidates;
+//	DataChunk best_header_row;
+//	DetectCandidateTypes(options.auto_type_candidates, format_template_candidates, info_candidates, original_options,
+//	                     best_num_cols, best_sql_types_candidates, best_format_candidates, best_header_row);
+//
+//	if (best_format_candidates.empty() || best_header_row.size() == 0) {
+//		throw InvalidInputException(
+//		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
+//		    original_options.file_path);
+//	}
+//
+//	// #######
+//	// ### header detection
+//	// #######
+//	options.num_cols = best_sql_types_candidates.size();
+//	DetectHeader(best_sql_types_candidates, best_header_row);
+//	if (!options.sql_type_list.empty()) {
+//		// user-defined types were supplied for certain columns
+//		// override the types
+//		if (!options.sql_types_per_column.empty()) {
+//			// types supplied as name -> value map
+//			idx_t found = 0;
+//			for (idx_t i = 0; i < names.size(); i++) {
+//				auto it = options.sql_types_per_column.find(names[i]);
+//				if (it != options.sql_types_per_column.end()) {
+//					best_sql_types_candidates[i] = {options.sql_type_list[it->second]};
+//					found++;
+//					continue;
+//				}
+//			}
+//			if (!options.file_options.union_by_name && found < options.sql_types_per_column.size()) {
+//				string exception = ColumnTypesError(options.sql_types_per_column, names);
+//				if (!exception.empty()) {
+//					throw BinderException(exception);
+//				}
+//			}
+//		} else {
+//			// types supplied as list
+//			if (names.size() < options.sql_type_list.size()) {
+//				throw BinderException("read_csv: %d types were provided, but CSV file only has %d columns",
+//				                      options.sql_type_list.size(), names.size());
+//			}
+//			for (idx_t i = 0; i < options.sql_type_list.size(); i++) {
+//				best_sql_types_candidates[i] = {options.sql_type_list[i]};
+//			}
+//		}
+//	}
+//
+//	// #######
+//	// ### type detection (refining)
+//	// #######
+//	return RefineTypeDetection(options.auto_type_candidates, requested_types, best_sql_types_candidates,
+//	                           best_format_candidates);
+//}
 } // namespace duckdb

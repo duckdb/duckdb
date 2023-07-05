@@ -28,7 +28,7 @@ namespace duckdb {
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, CSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
     : BaseCSVReader(context, std::move(options_p), requested_types), buffer_size(0), position(0), start(0) {
-	file_handle = OpenCSV(options);
+	file_handle = OpenCSV(context, options);
 	Initialize(requested_types);
 }
 
@@ -36,22 +36,14 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, CS
                                      const vector<LogicalType> &requested_types)
     : BaseCSVReader(context, std::move(options_p), requested_types), buffer_size(0), position(0), start(0) {
 	options.file_path = std::move(filename);
-	file_handle = OpenCSV(options);
+	file_handle = OpenCSV(context, options);
 	Initialize(requested_types);
 }
 
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
-	if (options.auto_detect) {
-		return_types = SniffCSV(requested_types);
-		if (return_types.empty()) {
-			throw InvalidInputException("Failed to detect column types from CSV: is the file a valid CSV file?");
-		}
-		JumpToBeginning(options.skip_rows, options.header);
-	} else {
-		return_types = requested_types;
-		ResetBuffer();
-		SkipRowsAndReadHeader(options.skip_rows, options.header);
-	}
+	return_types = requested_types;
+	ResetBuffer();
+	SkipRowsAndReadHeader(options.skip_rows, options.header);
 	InitParseChunk(return_types.size());
 }
 

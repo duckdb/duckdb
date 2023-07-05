@@ -1,20 +1,22 @@
 #include "duckdb/function/table/read_csv.hpp"
+
+#include "duckdb/common/enum_util.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/union_by_name.hpp"
+#include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_line_info.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/main/database.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/union_by_name.hpp"
+#include "duckdb/main/client_data.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/main/extension_helper.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
-#include "duckdb/main/client_data.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/csv_line_info.hpp"
-#include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 
 #include <limits>
 
@@ -226,10 +228,16 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	}
 	if (options.auto_detect) {
 		options.file_path = result->files[0];
+		// Initialize Buffer Manager and Sniffer
+		auto file_handle = BaseCSVReader::OpenCSV(context, options);
+		result->buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle));
+		CSVSniffer sniffer(options, result->buffer_manager);
+		auto sniffer_result = sniffer.SniffCSV();
+
 		auto initial_reader = make_uniq<BufferedCSVReader>(context, options);
-		return_types.assign(initial_reader->return_types.begin(), initial_reader->return_types.end());
+		return_types.assign(sniffer_result.return_types.begin(), sniffer_result.return_types.end());
 		if (names.empty()) {
-			names.assign(initial_reader->names.begin(), initial_reader->names.end());
+			names.assign(sniffer_result.names.begin(), sniffer_result.names.end());
 		} else {
 			if (explicitly_set_columns) {
 				// The user has influenced the names, can't assume they are valid anymore
@@ -241,10 +249,10 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			} else {
 				D_ASSERT(return_types.size() == names.size());
 			}
-			initial_reader->names = names;
+			//			initial_reader->names = names;
 		}
-		options = initial_reader->options;
-		result->initial_reader = std::move(initial_reader);
+		options = sniffer_result.options;
+
 	} else {
 		D_ASSERT(return_types.size() == names.size());
 	}
@@ -274,9 +282,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->return_names = names;
 	result->FinalizeRead(context);
 
-	if (options.auto_detect) {
-		result->initial_reader->options = options;
-	}
+	//	if (options.auto_detect) {
+	//		result->initial_reader->options = options;
+	//	}
 
 	return std::move(result);
 }
@@ -693,11 +701,11 @@ static unique_ptr<GlobalTableFunctionState> ParallelCSVInitGlobal(ClientContext 
 
 	bind_data.options.file_path = bind_data.files[0];
 
-	if (bind_data.initial_reader) {
-		file_handle = std::move(bind_data.initial_reader->file_handle);
+	if (bind_data.buffer_manager) {
+		file_handle = std::move(bind_data.buffer_manager->file_handle);
 		file_handle->Reset();
 		file_handle->DisableReset();
-		bind_data.initial_reader.reset();
+		bind_data.buffer_manager.reset();
 	} else {
 		file_handle = ReadCSV::OpenCSV(bind_data.options.file_path, bind_data.options.compression, context);
 	}
@@ -877,13 +885,13 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
 		return std::move(result);
 	} else {
 		bind_data.options.file_path = bind_data.files[0];
-		if (bind_data.initial_reader) {
-			// If this is a pipe and an initial reader already exists due to read_csv_auto
-			// We must re-use it, since we can't restart the reader due for it being a pipe.
-			result->initial_reader = std::move(bind_data.initial_reader);
-		} else {
-			result->initial_reader = make_uniq<BufferedCSVReader>(context, bind_data.options, bind_data.csv_types);
-		}
+		//		if (bind_data.initial_reader) {
+		//			// If this is a pipe and an initial reader already exists due to read_csv_auto
+		//			// We must re-use it, since we can't restart the reader due for it being a pipe.
+		//			result->initial_reader = std::move(bind_data.initial_reader);
+		//		} else {
+		result->initial_reader = make_uniq<BufferedCSVReader>(context, bind_data.options, bind_data.csv_types);
+		//		}
 		if (!bind_data.options.file_options.union_by_name) {
 			result->initial_reader->names = bind_data.csv_names;
 		}
@@ -1083,9 +1091,9 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
 unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
 	idx_t per_file_cardinality = 0;
-	if (bind_data.initial_reader && bind_data.initial_reader->file_handle) {
+	if (bind_data.buffer_manager && bind_data.buffer_manager->file_handle) {
 		auto estimated_row_width = (bind_data.csv_types.size() * 5);
-		per_file_cardinality = bind_data.initial_reader->file_handle->FileSize() / estimated_row_width;
+		per_file_cardinality = bind_data.buffer_manager->file_handle->FileSize() / estimated_row_width;
 	} else {
 		// determined through the scientific method as the average amount of rows in a CSV file
 		per_file_cardinality = 42;
