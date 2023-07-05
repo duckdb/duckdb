@@ -1,0 +1,191 @@
+# name: test/sql/index/art/types/test_art_types.test_slow
+# description: Test ART operations with different types
+# group: [types]
+
+statement ok
+PRAGMA enable_verification
+
+foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+CREATE TABLE integers(i ${type})
+
+statement ok
+CREATE INDEX i_index1 ON integers(i)
+
+# query the empty indices first
+query I
+SELECT i FROM integers WHERE i > 0
+----
+
+query I
+SELECT i FROM integers WHERE i < 0
+----
+
+query I
+SELECT i FROM integers WHERE i >= 0
+----
+
+query I
+SELECT i FROM integers WHERE i <= 0
+----
+
+# now insert the values [1..5]
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (4), (5)
+
+query I
+SELECT * FROM integers ORDER BY i
+----
+1
+2
+3
+4
+5
+
+query I
+SELECT i FROM integers WHERE i > 0::${type} ORDER BY 1
+----
+1
+2
+3
+4
+5
+
+query I
+SELECT i FROM integers WHERE i <= 2::${type} ORDER BY 1
+----
+1
+2
+
+query I
+SELECT i FROM integers WHERE i >= 0::${type} ORDER BY 1
+----
+1
+2
+3
+4
+5
+
+query I
+SELECT i FROM integers WHERE i >= 100::${type} ORDER BY 1
+----
+
+query I
+SELECT i FROM integers WHERE i >= 100::${type} AND i <= 101::${type} ORDER BY 1
+----
+
+query I
+SELECT i FROM integers WHERE i <= 100::${type} ORDER BY i
+----
+1
+2
+3
+4
+5
+
+query I
+SELECT i FROM integers WHERE i <= 0::${type} ORDER BY i
+----
+
+statement ok
+DROP TABLE integers
+
+endloop
+
+foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+foreach type2 <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+CREATE TABLE integers(i ${type}, j ${type2})
+
+statement ok
+CREATE INDEX i_index1 ON integers(i, j)
+
+# query the empty indices first
+query I
+SELECT i FROM integers WHERE i > 0 AND j > 0
+----
+
+query I
+SELECT i FROM integers WHERE i < 0 AND j < 0
+----
+
+query I
+SELECT i FROM integers WHERE i >= 0 AND j >= 0
+----
+
+query I
+SELECT i FROM integers WHERE i <= 0 AND j <= 0
+----
+
+# now insert the values [1..5]
+statement ok
+INSERT INTO integers VALUES (1, 1), (2, 2), (3, 3), (4, 4), (5, 5)
+
+query II
+SELECT * FROM integers ORDER BY i
+----
+1	1
+2	2
+3	3
+4	4
+5	5
+
+query I
+SELECT i FROM integers WHERE i = 3::${type} AND j = 3::${type2} ORDER BY 1
+----
+3
+
+query I
+SELECT i FROM integers WHERE i > 0::${type} AND j > 0::${type2} ORDER BY 1
+----
+1
+2
+3
+4
+5
+
+query I
+SELECT i FROM integers WHERE i <= 2::${type} AND j <= 2::${type2} ORDER BY 1
+----
+1
+2
+
+query I
+SELECT i FROM integers WHERE i >= 0::${type} AND j >= 0::${type2} ORDER BY 1
+----
+1
+2
+3
+4
+5
+
+query I
+SELECT i FROM integers WHERE i >= 100::${type} AND j >= 100::${type2} ORDER BY 1
+----
+
+query I
+SELECT i FROM integers WHERE i >= 100::${type} AND i <= 101::${type} ORDER BY 1
+----
+
+query I
+SELECT i FROM integers WHERE i <= 100::${type} AND j <= 100::${type2} ORDER BY i
+----
+1
+2
+3
+4
+5
+
+query I
+SELECT i FROM integers WHERE i <= 0::${type} AND j <= 0::${type2} ORDER BY i
+----
+
+statement ok
+DROP TABLE integers
+
+endloop
+
+endloop

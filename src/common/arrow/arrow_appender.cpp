@@ -153,7 +153,9 @@ struct ArrowIntervalConverter {
 template <class TGT, class SRC = TGT, class OP = ArrowScalarConverter>
 struct ArrowScalarBaseData {
 	static void Append(ArrowAppendData &append_data, Vector &input, idx_t from, idx_t to, idx_t input_size) {
+		D_ASSERT(to >= from);
 		idx_t size = to - from;
+		D_ASSERT(size <= input_size);
 		UnifiedVectorFormat format;
 		input.ToUnifiedFormat(input_size, format);
 
@@ -559,16 +561,9 @@ struct ArrowListData {
 		SelectionVector child_sel(child_indices.data());
 		auto &child = ListVector::GetEntry(input);
 		auto child_size = child_indices.size();
-		if (size != input_size) {
-			// Let's avoid doing this
-			Vector child_copy(child.GetType());
-			child_copy.Slice(child, child_sel, child_size);
-			append_data.child_data[0]->append_vector(*append_data.child_data[0], child_copy, 0, child_size, child_size);
-		} else {
-			// We don't care about the vector, slice it
-			child.Slice(child_sel, child_size);
-			append_data.child_data[0]->append_vector(*append_data.child_data[0], child, 0, child_size, child_size);
-		}
+		Vector child_copy(child.GetType());
+		child_copy.Slice(child, child_sel, child_size);
+		append_data.child_data[0]->append_vector(*append_data.child_data[0], child_copy, 0, child_size, child_size);
 		append_data.row_count += size;
 	}
 
@@ -864,7 +859,6 @@ ArrowArray ArrowAppender::Finalize() {
 
 	// Configure root array
 	result.length = row_count;
-	result.n_children = types.size();
 	result.n_buffers = 1;
 	result.buffers = root_holder->buffers.data(); // there is no actual buffer there since we don't have NULLs
 	result.offset = 0;

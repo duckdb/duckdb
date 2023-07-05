@@ -1,0 +1,22 @@
+# name: test/sql/order/persistent_list_of_varchar_order.test_slow
+# description: Test ORDER BY on persistent list of varchars
+# group: [order]
+
+require parquet
+
+load __TEST_DIR__/candidate.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE candidate AS SELECT * FROM 'data/parquet-testing/candidate.parquet'
+
+statement ok
+select * from candidate order by name;
+
+statement ok
+select * from candidate where jaccard(name, 'BATMAN') >= 0.4 order by jaccard(name, 'BATMAN');
+
+statement ok
+select * from candidate where jaro_winkler_similarity(name, 'BATMAN') >= 0.4 order by jaro_winkler_similarity(name, 'BATMAN');

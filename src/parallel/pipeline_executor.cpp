@@ -78,6 +78,7 @@ bool PipelineExecutor::TryFlushCachingOperators() {
 		OperatorResultType push_result;
 
 		if (in_process_operators.empty()) {
+			curr_chunk.Reset();
 			StartOperator(current_operator);
 			finalize_result = current_operator.FinalExecute(context, curr_chunk, *current_operator.op_state,
 			                                                *intermediate_states[flushing_idx]);

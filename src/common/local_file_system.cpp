@@ -375,7 +375,7 @@ int RemoveDirectoryRecursive(const char *path) {
 				continue;
 			}
 			len = path_len + (idx_t)strlen(p->d_name) + 2;
-			buf = new char[len];
+			buf = new (std::nothrow) char[len];
 			if (buf) {
 				struct stat statbuf;
 				snprintf(buf, len, "%s/%s", path, p->d_name);
@@ -700,7 +700,7 @@ void LocalFileSystem::CreateDirectory(const string &directory) {
 	}
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(directory.c_str());
 	if (directory.empty() || !CreateDirectoryW(unicode_path.c_str(), NULL) || !DirectoryExists(directory)) {
-		throw IOException("Could not create directory!");
+		throw IOException("Could not create directory: \'%s\'", directory.c_str());
 	}
 }
 
