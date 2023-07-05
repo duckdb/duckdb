@@ -49,7 +49,7 @@ bool UUID::FromString(string str, hugeint_t &result) {
 		count++;
 	}
 	// Flip the first bit to make `order by uuid` same as `order by uuid::varchar`
-	result.upper ^= (int64_t(1) << 63);
+	result.upper ^= (uint64_t(1) << 63);
 	return count == 32;
 }
 
@@ -61,7 +61,7 @@ void UUID::ToString(hugeint_t input, char *buf) {
 	};
 
 	// Flip back before convert to string
-	int64_t upper = input.upper ^ (int64_t(1) << 63);
+	int64_t upper = input.upper ^ (uint64_t(1) << 63);
 	idx_t pos = 0;
 	byte_to_hex(upper >> 56 & 0xFF, buf, pos);
 	byte_to_hex(upper >> 48 & 0xFF, buf, pos);
