@@ -44,10 +44,10 @@ struct ListFunction {
 		state.linked_list.last_segment = nullptr;
 	}
 	// TODO: do we need this?
-//	template <class STATE>
-//	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-//		// nop
-//	}
+	//	template <class STATE>
+	//	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
+	//		// nop
+	//	}
 	static bool IgnoreNull() {
 		return false;
 	}

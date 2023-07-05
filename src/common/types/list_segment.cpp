@@ -192,8 +192,9 @@ static void WriteDataToPrimitiveSegment(const ListSegmentFunctions &functions, A
 	}
 }
 
-static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator, ListSegment *segment,
-                                      RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
+static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
+                                      ListSegment *segment, RecursiveUnifiedVectorFormat &input_data,
+                                      idx_t &entry_idx) {
 
 	auto sel_entry_idx = input_data.format.sel->get_index(entry_idx);
 
@@ -233,8 +234,8 @@ static void WriteDataToVarcharSegment(const ListSegmentFunctions &functions, Are
 	Store<LinkedList>(child_segments, data_ptr_cast(GetListChildData(segment)));
 }
 
-static void WriteDataToListSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator, ListSegment *segment,
-                                   RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
+static void WriteDataToListSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
+                                   ListSegment *segment, RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
 
 	auto sel_entry_idx = input_data.format.sel->get_index(entry_idx);
 
@@ -267,8 +268,8 @@ static void WriteDataToListSegment(const ListSegmentFunctions &functions, ArenaA
 	Store<uint64_t>(list_length, data_ptr_cast(list_length_data + segment->count));
 }
 
-static void WriteDataToStructSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator, ListSegment *segment,
-                                     RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
+static void WriteDataToStructSegment(const ListSegmentFunctions &functions, ArenaAllocator &allocator,
+                                     ListSegment *segment, RecursiveUnifiedVectorFormat &input_data, idx_t &entry_idx) {
 
 	auto sel_entry_idx = input_data.format.sel->get_index(entry_idx);
 
