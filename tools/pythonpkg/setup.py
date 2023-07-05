@@ -287,6 +287,7 @@ setup(
     data_files = data_files,
     packages=[
         lib_name,
+        'duckdb.typing',
         'pyduckdb',
         'duckdb-stubs'
     ],

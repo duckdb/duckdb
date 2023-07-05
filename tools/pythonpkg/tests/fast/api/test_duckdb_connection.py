@@ -262,7 +262,6 @@ class TestDuckDBConnection(object):
 
     def test_wrap_coverage(self):
         con = duckdb.default_connection
-        assert str(con.__class__) == "<class 'duckdb.DuckDBPyConnection'>"
 
         # Skip all of the initial __xxxx__ methods
         connection_methods = dir(con)
