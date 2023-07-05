@@ -168,10 +168,6 @@
         "type": "string"
       },
       {
-        "name": "catalog",
-        "type": "string"
-      },
-      {
         "name": "children",
         "type": "vector<ParsedExpression*>"
       },
@@ -196,6 +192,10 @@
       {
         "name": "export_state",
         "type": "bool"
+      },
+      {
+        "name": "catalog",
+        "type": "string"
       }
     ],
     "constructor": []

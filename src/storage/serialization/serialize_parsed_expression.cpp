@@ -191,20 +191,19 @@ void FunctionExpression::FormatSerialize(FormatSerializer &serializer) const {
 	ParsedExpression::FormatSerialize(serializer);
 	serializer.WriteProperty("function_name", function_name);
 	serializer.WriteProperty("schema", schema);
-	serializer.WriteProperty("catalog", catalog);
 	serializer.WriteProperty("children", children);
 	serializer.WriteOptionalProperty("filter", filter);
 	serializer.WriteProperty("order_bys", (ResultModifier &)*order_bys);
 	serializer.WriteProperty("distinct", distinct);
 	serializer.WriteProperty("is_operator", is_operator);
 	serializer.WriteProperty("export_state", export_state);
+	serializer.WriteProperty("catalog", catalog);
 }
 
 unique_ptr<ParsedExpression> FunctionExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
 	auto result = make_uniq<FunctionExpression>();
 	deserializer.ReadProperty("function_name", result->function_name);
 	deserializer.ReadProperty("schema", result->schema);
-	deserializer.ReadProperty("catalog", result->catalog);
 	deserializer.ReadProperty("children", result->children);
 	deserializer.ReadOptionalProperty("filter", result->filter);
 	auto order_bys = deserializer.ReadProperty<unique_ptr<ResultModifier>>("order_bys");
@@ -212,6 +211,7 @@ unique_ptr<ParsedExpression> FunctionExpression::FormatDeserialize(ExpressionTyp
 	deserializer.ReadProperty("distinct", result->distinct);
 	deserializer.ReadProperty("is_operator", result->is_operator);
 	deserializer.ReadProperty("export_state", result->export_state);
+	deserializer.ReadProperty("catalog", result->catalog);
 	return std::move(result);
 }
 

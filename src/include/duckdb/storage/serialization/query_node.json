@@ -45,7 +45,7 @@
         "property": "groups.group_expressions"
       },
       {
-        "name": "grouping_sets",
+        "name": "group_sets",
         "type": "set<idx_t>",
         "property": "groups.grouping_sets"
       },

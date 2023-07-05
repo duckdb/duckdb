@@ -44,7 +44,7 @@ void SelectNode::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteOptionalProperty("from_table", from_table);
 	serializer.WriteOptionalProperty("where_clause", where_clause);
 	serializer.WriteProperty("group_expressions", groups.group_expressions);
-	serializer.WriteProperty("grouping_sets", groups.grouping_sets);
+	serializer.WriteProperty("group_sets", groups.grouping_sets);
 	serializer.WriteProperty("aggregate_handling", aggregate_handling);
 	serializer.WriteOptionalProperty("having", having);
 	serializer.WriteOptionalProperty("sample", sample);
@@ -57,7 +57,7 @@ unique_ptr<QueryNode> SelectNode::FormatDeserialize(FormatDeserializer &deserial
 	deserializer.ReadOptionalProperty("from_table", result->from_table);
 	deserializer.ReadOptionalProperty("where_clause", result->where_clause);
 	deserializer.ReadProperty("group_expressions", result->groups.group_expressions);
-	deserializer.ReadProperty("grouping_sets", result->groups.grouping_sets);
+	deserializer.ReadProperty("group_sets", result->groups.grouping_sets);
 	deserializer.ReadProperty("aggregate_handling", result->aggregate_handling);
 	deserializer.ReadOptionalProperty("having", result->having);
 	deserializer.ReadOptionalProperty("sample", result->sample);
