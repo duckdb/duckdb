@@ -5,6 +5,7 @@ class TestSparkSession(object):
 	def test_spark_session_default(self):
 		session = SparkSession.builder.getOrCreate()
 
+	#FIXME: use tempdir, this creates a db file called 'local[1]'
 	def test_spark_session(self):
 		session = SparkSession.builder.master("local[1]") \
 							.appName('SparkByExamples.com') \
