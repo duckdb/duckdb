@@ -2053,6 +2053,26 @@ function duckdb_table_function_supports_projection_pushdown(table_func, pushdown
 end
 
 """
+Sets whether or not the given table function supports filter pushdown.
+
+If this is set to true, the system will provide a list of all table filters in the `init` stage through
+the `duckdb_init_get_table_filter_set` function.
+If this is set to false (the default), the system will expect that no filter is projected.
+
+* table_function: The table function
+* pushdown: True if the table function supports filter pushdown, false otherwise.
+"""
+function duckdb_table_function_supports_projection_pushdown(table_func, pushdown)
+    return ccall(
+        (:duckdb_table_function_supports_filter_pushdown, libduckdb),
+        Cvoid,
+        (duckdb_table_function, Bool),
+        table_func,
+        pushdown
+    )
+end
+
+"""
 Register the table function object within the given connection.
 
 The function requires at least a name, a bind function, an init function and a main function.
@@ -2247,6 +2267,28 @@ This function must be used if projection pushdown is enabled to figure out which
 """
 function duckdb_init_get_column_index(info, index)
     return ccall((:duckdb_init_get_column_index, libduckdb), UInt64, (duckdb_init_info, UInt64), info, index - 1) + 1
+end
+
+"""
+Returns the set of table filters applied to the table function.
+
+This function must be used if filter pushdown is enabled to figure out which filter to apply on the source data.
+
+* info: The info object
+* filters: the pointer to the optional table filter set
+* returns: an optional table filter set
+"""
+function duckdb_init_get_table_filter_set(info)
+    return ccall((:duckdb_init_get_table_filter_set, libduckdb), Ref{duckdb_optional_table_filter_set}, (duckdb_init_info,), info)
+end
+
+"""
+	duckdb_destroy_optional_table_filter_set(filters)
+De-allocates all memory allocated for the table filter set.
+* filters: The set of table filters to destroy.
+"""
+function duckdb_destroy_optional_table_filter_set(filters)
+    return ccall((:duckdb_destroy_optional_table_filter_set, libduckdb), Cvoid, (Ref{duckdb_optional_table_filter_set},), filters)
 end
 
 """

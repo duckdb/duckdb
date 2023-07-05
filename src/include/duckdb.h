@@ -303,6 +303,17 @@ typedef struct _duckdb_vector {
 typedef struct _duckdb_value {
 	void *__val;
 } * duckdb_value;
+typedef struct {
+    duckdb_filter_type filter_type;
+} duckdb_table_filter;
+typedef struct {
+    duckdb_table_filter* filters;
+    size_t count;
+} duckdb_table_filter_set;
+typedef struct {
+    duckdb_table_filter_set* value;
+    bool has_value;
+} duckdb_optional_table_filter_set;
 
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 typedef enum {
@@ -310,6 +321,14 @@ typedef enum {
 	DUCKDB_PENDING_RESULT_NOT_READY = 1,
 	DUCKDB_PENDING_ERROR = 2
 } duckdb_pending_state;
+
+typedef enum {
+    CONSTANT_COMPARISON = 0,
+    IS_NULL = 1,
+    IS_NOT_NULL = 2,
+    CONJUNCTION_OR = 3,
+    CONJUNCTION_AND = 4
+} duckdb_filter_type;
 
 //===--------------------------------------------------------------------===//
 // Open/Connect
@@ -1831,6 +1850,18 @@ If this is set to false (the default), the system will expect all columns to be 
 DUCKDB_API void duckdb_table_function_supports_projection_pushdown(duckdb_table_function table_function, bool pushdown);
 
 /*!
+Sets whether or not the given table function supports filter pushdown.
+
+If this is set to true, the system will provide a set of all filters in the `init` stage through
+the `duckdb_init_get_filters` function.
+If this is set to false (the default), the system will expect no filter to be projected.
+
+* table_function: The table function
+* pushdown: True if the table function supports projection pushdown, false otherwise.
+*/
+DUCKDB_API void duckdb_table_function_supports_filter_pushdown(duckdb_table_function table_function, bool pushdown);
+
+/*!
 Register the table function object within the given connection.
 
 The function requires at least a name, a bind function, an init function and a main function.
@@ -1970,6 +2001,24 @@ This function must be used if projection pushdown is enabled to figure out which
 * returns: The column index of the projected column.
 */
 DUCKDB_API idx_t duckdb_init_get_column_index(duckdb_init_info info, idx_t column_index);
+
+/*!
+Returns the set of table filters applied to the table function.
+
+This function must be used if filter pushdown is enabled to figure out which filter to apply on the source data.
+
+* info: The info object
+* filters: the pointer to the optional table filter set
+* returns: an optional table filter set
+*/
+DUCKDB_API duckdb_optional_table_filter_set duckdb_init_get_table_filter_set(duckdb_init_info info);
+
+/*!
+De-allocates all memory allocated for the table filter set.
+
+* filters: The set of table filters to destroy.
+*/
+DUCKDB_API void duckdb_destroy_optional_table_filter_set(duckdb_optional_table_filter_set *filters);
 
 /*!
 Sets how many threads can process this table function in parallel (default: 1)

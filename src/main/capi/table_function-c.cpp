@@ -274,6 +274,14 @@ void duckdb_table_function_supports_projection_pushdown(duckdb_table_function ta
 	tf->projection_pushdown = pushdown;
 }
 
+void duckdb_table_function_supports_filter_pushdown(duckdb_table_function table_function, bool pushdown) {
+	if (!table_function) {
+		return;
+	}
+	auto tf = (duckdb::TableFunction *)table_function;
+	tf->filter_pushdown = pushdown;
+}
+
 duckdb_state duckdb_register_table_function(duckdb_connection connection, duckdb_table_function function) {
 	if (!connection || !function) {
 		return DuckDBError;
@@ -427,6 +435,37 @@ idx_t duckdb_init_get_column_index(duckdb_init_info info, idx_t column_index) {
 		return 0;
 	}
 	return function_info->column_ids[column_index];
+}
+
+duckdb_optional_table_filter_set duckdb_init_get_table_filter_set(duckdb_init_info info) {
+	duckdb_optional_table_filter_set result;
+	result.has_value = false;
+	if (!info) {
+		return result;
+	}
+	auto function_info = (duckdb::CTableInternalInitInfo *)info;
+	optional_ptr<TableFilterSet> filters = function_info->filter_sets;
+
+	if (filters.has_value()) {
+		result.has_value = true;
+		result.value = (CTableFilterSet*)malloc(sizeof(CTableFilterSet));
+		result.value->count = filters->filters.size();
+		result.value->filters = (CTableFilter*)malloc(result.value->count * sizeof(CTableFilter));
+
+		size_t i = 0;
+		for (const auto& filter : filters->filters) {
+			result.value->filters[i].filter_type = static_cast<duckdb_filter_type>(filter.second->filter_type);
+			i++;
+		}
+	}
+	return result;
+}
+
+void duckdb_destroy_optional_table_filter_set(duckdb_optional_table_filter_set *filters) {
+	if (filters->has_value) {
+		free(filters->value->filters);
+		free(filters->value);
+	}
 }
 
 void duckdb_init_set_max_threads(duckdb_init_info info, idx_t max_threads) {
