@@ -29,7 +29,7 @@ if (NOT WIN32)
         GIT_TAG 1a43a5513b96e4c6ffd92026775ffeb648e71dac
     )
     duckdb_extension_load(substrait
-#        LOAD_TESTS # TODO: figure out why breaking
+#        LOAD_TESTS # TODO: figure out why this currently fails
         GIT_URL https://github.com/duckdblabs/substrait
         GIT_TAG 53da781310c9c680efb97576d33a5fde89a58870
     )

@@ -9,7 +9,7 @@ duckdb_extension_load(excel)
 duckdb_extension_load(fts)
 duckdb_extension_load(httpfs)
 duckdb_extension_load(icu)
-duckdb_extension_load(json DONT_LINK) # TODO WHY DOES JSON TEST FAIL IN EXTENSION TEST?
+duckdb_extension_load(json)
 duckdb_extension_load(parquet)
 duckdb_extension_load(tpcds)
 duckdb_extension_load(tpch)

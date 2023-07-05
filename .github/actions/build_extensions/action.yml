@@ -120,7 +120,7 @@ runs:
       env:
         TREAT_WARNINGS_AS_ERRORS: ${{ inputs.treat_warn_as_error}}
         FORCE_WARN_UNUSED: 1
-        STATIC_OPENSSL: 1 # TODO: no longer required?
+        STATIC_OPENSSL: 1
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
         OSX_BUILD_ARCH: ${{ inputs.osx_arch }}
@@ -149,7 +149,6 @@ runs:
         cd  ${{ inputs.build_dir}}
         ${{ inputs.post_install }}
 
-    # TODO move inside extension_upload script,
     - name: Deploy
       if: ${{ inputs.deploy_as != '' }}
       shell: bash
@@ -171,7 +170,7 @@ runs:
         fi
 
     # Note: the extension-upload-test script will currently not run the out-of-tree extensions tests.
-    #       it will however confirm that the out-of-tree extensions can actually be loaded.
+    #       it will however test that the out-of-tree extensions can actually be loaded, and the default tests still pass
     - name: Test loadable extensions
       if: ${{ inputs.run_tests == 1 }}
       shell: bash
