@@ -288,6 +288,7 @@ setup(
     packages=[
         lib_name,
         'duckdb.typing',
+        'duckdb.functional',
         'pyduckdb',
         'duckdb-stubs'
     ],

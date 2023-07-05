@@ -2,20 +2,24 @@ _exported_symbols = []
 
 # Modules
 from . import typing
+from . import functional
 _exported_symbols.extend([
-    "typing"
+    "typing",
+    "functional"
 ])
 
 # Classes
 from .duckdb import (
     DuckDBPyRelation,
     DuckDBPyConnection,
-    ExplainType
+    ExplainType,
+    PythonExceptionHandling
 )
 _exported_symbols.extend([
     "DuckDBPyRelation",
     "DuckDBPyConnection",
-    "ExplainType"
+    "ExplainType",
+    "PythonExceptionHandling"
 ])
 
 # Enums
@@ -49,7 +53,6 @@ _exported_symbols.extend([
 # read-only properties
 from .duckdb import (
     __standard_vector_size__,
-    __git_revision__,
     __interactive__,
     __jupyter__,
     __standard_vector_size__,
@@ -62,11 +65,12 @@ from .duckdb import (
     operator,
     paramstyle,
     string_const,
-    threadsafety
+    threadsafety,
+    token_type,
+	tokenize
 )
 _exported_symbols.extend([
     "__standard_vector_size__",
-    "__git_revision__",
     "__interactive__",
     "__jupyter__",
     "__standard_vector_size__",
@@ -79,7 +83,9 @@ _exported_symbols.extend([
     "operator",
     "paramstyle",
     "string_const",
-    "threadsafety"
+    "threadsafety",
+    "token_type",
+	"tokenize"
 ])
 
 from .duckdb import (

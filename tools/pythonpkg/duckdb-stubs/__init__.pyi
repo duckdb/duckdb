@@ -22,7 +22,6 @@ import fsspec
 import pyarrow.lib
 import polars
 # stubgen override - This should probably not be exposed
-#_clean_default_connection: Any
 apilevel: str
 comment: token_type
 default_connection: DuckDBPyConnection
