@@ -202,6 +202,9 @@ void Parser::ParseQuery(const string &query) {
 						continue;
 					}
 					transformer.TransformParseTree(another_parser.parse_tree, statements);
+					// important to set in the case of a mixture of DDB and parser ext statements
+					statements.back()->stmt_length = query_statement.size() - 1;
+					statements.back()->stmt_location = 0;
 				} else {
 					// let extensions parse the statement which DuckDB failed to parse
 					bool parsed_single_statement = false;
