@@ -71,64 +71,6 @@ void BaseCSVReader::InitializeProjection() {
 	}
 }
 
-struct TryCastDecimalOperator {
-	template <class OP, class T>
-	static bool Operation(string_t input, uint8_t width, uint8_t scale) {
-		T result;
-		string error_message;
-		return OP::Operation(input, result, &error_message, width, scale);
-	}
-};
-
-struct TryCastFloatingOperator {
-	template <class OP, class T>
-	static bool Operation(string_t input) {
-		T result;
-		string error_message;
-		return OP::Operation(input, result, &error_message);
-	}
-};
-
-bool TryCastDecimalValueCommaSeparated(const string_t &value_str, const LogicalType &sql_type) {
-	auto width = DecimalType::GetWidth(sql_type);
-	auto scale = DecimalType::GetScale(sql_type);
-	switch (sql_type.InternalType()) {
-	case PhysicalType::INT16:
-		return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, int16_t>(value_str, width, scale);
-	case PhysicalType::INT32:
-		return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, int32_t>(value_str, width, scale);
-	case PhysicalType::INT64:
-		return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, int64_t>(value_str, width, scale);
-	case PhysicalType::INT128:
-		return TryCastDecimalOperator::Operation<TryCastToDecimalCommaSeparated, hugeint_t>(value_str, width, scale);
-	default:
-		throw InternalException("Unimplemented physical type for decimal");
-	}
-}
-
-bool TryCastFloatingValueCommaSeparated(const string_t &value_str, const LogicalType &sql_type) {
-	switch (sql_type.InternalType()) {
-	case PhysicalType::DOUBLE:
-		return TryCastFloatingOperator::Operation<TryCastErrorMessageCommaSeparated, double>(value_str);
-	case PhysicalType::FLOAT:
-		return TryCastFloatingOperator::Operation<TryCastErrorMessageCommaSeparated, float>(value_str);
-	default:
-		throw InternalException("Unimplemented physical type for floating");
-	}
-}
-
-struct TryCastDateOperator {
-	static bool Operation(CSVReaderOptions &options, string_t input, date_t &result, string &error_message) {
-		return options.date_format[LogicalTypeId::DATE].TryParseDate(input, result, error_message);
-	}
-};
-
-struct TryCastTimestampOperator {
-	static bool Operation(CSVReaderOptions &options, string_t input, timestamp_t &result, string &error_message) {
-		return options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(input, result, error_message);
-	}
-};
-
 template <class OP, class T>
 static bool TemplatedTryCastDateVector(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
                                        idx_t count, string &error_message, idx_t &line_error) {
@@ -146,6 +88,18 @@ static bool TemplatedTryCastDateVector(CSVReaderOptions &options, Vector &input_
 	});
 	return all_converted;
 }
+
+struct TryCastDateOperator {
+	static bool Operation(CSVReaderOptions &options, string_t input, date_t &result, string &error_message) {
+		return options.date_format[LogicalTypeId::DATE].TryParseDate(input, result, error_message);
+	}
+};
+
+struct TryCastTimestampOperator {
+	static bool Operation(CSVReaderOptions &options, string_t input, timestamp_t &result, string &error_message) {
+		return options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(input, result, error_message);
+	}
+};
 
 bool TryCastDateVector(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
                        string &error_message, idx_t &line_error) {
