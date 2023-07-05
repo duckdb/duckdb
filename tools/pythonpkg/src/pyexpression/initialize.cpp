@@ -136,6 +136,11 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
             str: The string representation.
     )";
 	expression.def("__repr__", &DuckDBPyExpression::ToString, docs);
+
+	docs = R"(
+		Create a copy of this expression with the given alias.
+	)";
+	expression.def("alias", &DuckDBPyExpression::SetAlias, docs);
 }
 
 } // namespace duckdb

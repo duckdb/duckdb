@@ -25,6 +25,12 @@ const ParsedExpression &DuckDBPyExpression::GetExpression() const {
 	return *expression;
 }
 
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::SetAlias(const string &name) const {
+	auto copied_expression = GetExpression().Copy();
+	copied_expression->alias = name;
+	return make_shared<DuckDBPyExpression>(std::move(copied_expression));
+}
+
 // Binary operators
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Add(const DuckDBPyExpression &other) {
