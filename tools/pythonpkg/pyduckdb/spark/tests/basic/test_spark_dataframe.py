@@ -1,13 +1,17 @@
 import pytest
-from pyduckdb.spark.sql.types import Row
 from pyduckdb.spark.sql.types import (
 	LongType,
 	StructType,
 	BooleanType,
 	StructField,
 	StringType,
-	IntegerType
+	IntegerType,
+	LongType,
+	Row,
+	ArrayType,
+	MapType
 )
+from pyduckdb.spark.sql.functions import col,struct,when
 import duckdb
 import re
 
@@ -202,3 +206,95 @@ class TestDataFrame(object):
 			StructField('gender', StringType(), True),
 			StructField('salary', IntegerType(), True)
 		])
+
+	def test_df_from_existing(self, spark):
+		from pyduckdb.spark.sql.functions import col,struct,when
+		df2 = spark.sql('select 42')
+		updatedDF = df2.withColumn(
+			"OtherInfo",
+			struct(
+				col("id").alias("identifier"),
+				col("gender").alias("gender"),
+				col("salary").alias("salary"),
+				when(
+					col("salary").cast(IntegerType()) < 2000,"Low"
+				).when(
+					col("salary").cast(IntegerType()) < 4000,"Medium"
+				).otherwise("High").alias("Salary_Grade")
+			)
+		).drop("id","gender","salary")
+
+		updatedDF.printSchema()
+		updatedDF.show(truncate=False)
+	
+	def test_df_structtype(self, spark):
+		from pyspark.sql.functions import col,struct,when
+
+		data = [("James","","Smith","36636","M",3000),
+			("Michael","Rose","","40288","M",4000),
+			("Robert","","Williams","42114","M",4000),
+			("Maria","Anne","Jones","39192","F",4000),
+			("Jen","Mary","Brown","","F",-1)
+		]
+
+		schema = StructType([ 
+			StructField("firstname",StringType(),True), 
+			StructField("middlename",StringType(),True), 
+			StructField("lastname",StringType(),True), 
+			StructField("id", StringType(), True), 
+			StructField("gender", StringType(), True), 
+			StructField("salary", IntegerType(), True) 
+		])
+		
+		df = spark.createDataFrame(data=data,schema=schema)
+		df.printSchema()
+		df.show(truncate=False)
+
+		structureData = [
+			(("James","","Smith"),"36636","M",3100),
+			(("Michael","Rose",""),"40288","M",4300),
+			(("Robert","","Williams"),"42114","M",1400),
+			(("Maria","Anne","Jones"),"39192","F",5500),
+			(("Jen","Mary","Brown"),"","F",-1)
+		]
+		structureSchema = StructType([
+				StructField('name', StructType([
+					StructField('firstname', StringType(), True),
+					StructField('middlename', StringType(), True),
+					StructField('lastname', StringType(), True)
+					])),
+				StructField('id', StringType(), True),
+				StructField('gender', StringType(), True),
+				StructField('salary', IntegerType(), True)
+				])
+
+		df2 = spark.createDataFrame(data=structureData,schema=structureSchema)
+		df2.printSchema()
+		df2.show(truncate=False)
+
+
+		updatedDF = df2.withColumn("OtherInfo", 
+			struct(col("id").alias("identifier"),
+			col("gender").alias("gender"),
+			col("salary").alias("salary"),
+			when(col("salary").cast(IntegerType()) < 2000,"Low")
+			.when(col("salary").cast(IntegerType()) < 4000,"Medium")
+			.otherwise("High").alias("Salary_Grade")
+		)).drop("id","gender","salary")
+
+		updatedDF.printSchema()
+		updatedDF.show(truncate=False)
+
+
+		""" Array & Map"""
+
+
+		arrayStructureSchema = StructType([
+			StructField('name', StructType([
+			StructField('firstname', StringType(), True),
+			StructField('middlename', StringType(), True),
+			StructField('lastname', StringType(), True)
+			])),
+			StructField('hobbies', ArrayType(StringType()), True),
+			StructField('properties', MapType(StringType(),StringType()), True)
+			])

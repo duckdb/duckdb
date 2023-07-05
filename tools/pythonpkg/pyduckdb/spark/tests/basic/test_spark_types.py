@@ -1,5 +1,4 @@
 import pytest
-from pyduckdb.spark.sql.types import Row
 from pyduckdb.spark.sql.types import (
     StringType,
     BinaryType,
