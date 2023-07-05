@@ -48,15 +48,12 @@ SQLRETURN duckdb::SetDiagnosticRecord(OdbcHandleStmt *hstmt, SQLRETURN ret, std:
 	return ret;
 }
 
-SQLRETURN duckdb::WithStatementNoLambda(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt) {
+SQLRETURN duckdb::ConvertHSTMT(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt) {
 	if (!statement_handle) {
 		return SQL_ERROR;
 	}
 	hstmt = static_cast<OdbcHandleStmt *>(statement_handle);
-	if (hstmt->type != OdbcHandleType::STMT) {
-		return SQL_ERROR;
-	}
-	if (!hstmt->dbc || !hstmt->dbc->conn) {
+	if (hstmt->type != OdbcHandleType::STMT || !hstmt->dbc || !hstmt->dbc->conn) {
 		return SQL_ERROR;
 	}
 
@@ -66,22 +63,29 @@ SQLRETURN duckdb::WithStatementNoLambda(SQLHANDLE &statement_handle, OdbcHandleS
 	return SQL_SUCCESS;
 }
 
-SQLRETURN duckdb::WithStatementPreparedNoLambda(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt) {
-	if (WithStatementNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+SQLRETURN duckdb::ConvertHSTMTPrepared(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt) {
+	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
-	if (!hstmt->stmt) {
-		return SQL_ERROR;
-	}
-	if (hstmt->stmt->HasError()) {
+	if (!hstmt->stmt || !hstmt->stmt->HasError()) {
 		return SQL_ERROR;
 	}
 	return SQL_SUCCESS;
 }
 
+SQLRETURN duckdb::ConvertHSTMTResult(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt) {
+	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
+		return SQL_ERROR;
+	}
+	if (!hstmt->res || !hstmt->res->HasError()) {
+		return SQL_ERROR;
+	}
+	return SQL_ERROR;
+}
+
 SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length) {
 	OdbcHandleStmt *hstmt = nullptr;
-	if (WithStatementNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
 

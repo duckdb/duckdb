@@ -9,8 +9,9 @@ namespace duckdb {
 
 SQLRETURN SetDiagnosticRecord(OdbcHandleStmt *hstmt, SQLRETURN ret, std::string component,
                               duckdb::DiagRecord diag_record);
-SQLRETURN WithStatementNoLambda(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt);
-SQLRETURN WithStatementPreparedNoLambda(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt);
+SQLRETURN ConvertHSTMT(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt);
+SQLRETURN ConvertHSTMTPrepared(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt);
+SQLRETURN ConvertHSTMTResult(SQLHANDLE &statement_handle, OdbcHandleStmt *&hstmt);
 
 SQLRETURN PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length);
 

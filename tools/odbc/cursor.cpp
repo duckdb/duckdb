@@ -3,7 +3,7 @@
 
 SQLRETURN SQL_API SQLCloseCursor(SQLHSTMT statement_handle) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (WithStatementNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
 
@@ -12,7 +12,7 @@ SQLRETURN SQL_API SQLCloseCursor(SQLHSTMT statement_handle) {
 
 SQLRETURN SQL_API SQLSetCursorName(SQLHSTMT statement_handle, SQLCHAR *cursor_name, SQLSMALLINT name_length) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (WithStatementNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
 
@@ -22,7 +22,7 @@ SQLRETURN SQL_API SQLSetCursorName(SQLHSTMT statement_handle, SQLCHAR *cursor_na
 
 SQLRETURN SQL_API SQLGetCursorName(SQLHSTMT statement_handle, SQLCHAR *cursor_name, SQLSMALLINT name_length) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (WithStatementNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
 

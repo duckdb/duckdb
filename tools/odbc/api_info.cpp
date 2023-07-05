@@ -21,7 +21,7 @@ SQLRETURN SQL_API SQLGetFunctions(SQLHDBC connection_handle, SQLUSMALLINT functi
 
 SQLRETURN SQL_API SQLGetTypeInfo(SQLHSTMT statement_handle, SQLSMALLINT data_type) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (WithStatementNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
 

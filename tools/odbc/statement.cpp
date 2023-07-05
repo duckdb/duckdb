@@ -20,7 +20,7 @@ using std::string;
 SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                  SQLINTEGER string_length) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (WithStatementNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
 
@@ -149,7 +149,7 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                                  SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (WithStatementNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
 
@@ -297,7 +297,7 @@ SQLRETURN SQL_API SQLPrepare(SQLHSTMT statement_handle, SQLCHAR *statement_text,
  */
 SQLRETURN SQL_API SQLCancel(SQLHSTMT statement_handle) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (WithStatementNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
 
@@ -323,7 +323,7 @@ SQLRETURN SQL_API SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQ
                             SQLCHAR *schema_name, SQLSMALLINT name_length2, SQLCHAR *table_name,
                             SQLSMALLINT name_length3, SQLCHAR *table_type, SQLSMALLINT name_length4) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (WithStatementNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
 
@@ -395,7 +395,7 @@ SQLRETURN SQL_API SQLColumns(SQLHSTMT statement_handle, SQLCHAR *catalog_name, S
                              SQLCHAR *schema_name, SQLSMALLINT name_length2, SQLCHAR *table_name,
                              SQLSMALLINT name_length3, SQLCHAR *column_name, SQLSMALLINT name_length4) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (WithStatementNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
 
@@ -434,7 +434,7 @@ static SQLRETURN GetColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_
                                  SQLSMALLINT *string_length_ptr, SQLLEN *numeric_attribute_ptr) {
 
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (WithStatementPreparedNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+	if (ConvertHSTMTPrepared(statement_handle, hstmt) != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
 
@@ -630,7 +630,7 @@ SQLRETURN SQL_API SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column
 
 SQLRETURN SQL_API SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (WithStatementNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
 
@@ -654,7 +654,7 @@ SQLRETURN SQL_API SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 
 SQLRETURN SQL_API SQLMoreResults(SQLHSTMT statement_handle) {
 	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (WithStatementNoLambda(statement_handle, hstmt) != SQL_SUCCESS) {
+	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
 
