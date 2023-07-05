@@ -44,7 +44,7 @@ public:
 	}
 
 public:
-	static void Initialize(py::handle &m);
+	static void Initialize(py::module_ &m);
 
 	string Type() const;
 

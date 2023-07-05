@@ -5,28 +5,28 @@
 
 namespace duckdb {
 
-void InitializeStaticMethods(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
+void InitializeStaticMethods(py::module_ &m) {
 	const char *docs;
 
 	// Constant Expression
-	docs = "";
-	m.def_static("ConstantExpression", &DuckDBPyExpression::ConstantExpression, py::arg("value"), docs);
+	docs = "Create a constant expression from the provided value";
+	m.def("ConstantExpression", &DuckDBPyExpression::ConstantExpression, py::arg("value"), docs);
 
 	// ColumnRef Expression
-	docs = "";
-	m.def_static("ColumnExpression", &DuckDBPyExpression::ColumnExpression, py::arg("name"), docs);
+	docs = "Create a column reference from the provided column name";
+	m.def("ColumnExpression", &DuckDBPyExpression::ColumnExpression, py::arg("name"), docs);
 
 	// Function Expression
 	docs = "";
-	m.def_static("BinaryFunctionExpression", &DuckDBPyExpression::BinaryFunctionExpression, py::arg("function_name"),
-	             py::arg("arg_one"), py::arg("arg_two"), docs);
+	m.def("BinaryFunctionExpression", &DuckDBPyExpression::BinaryFunctionExpression, py::arg("function_name"),
+	      py::arg("arg_one"), py::arg("arg_two"), docs);
 }
 
-void DuckDBPyExpression::Initialize(py::handle &m) {
+void DuckDBPyExpression::Initialize(py::module_ &m) {
 	auto expression =
 	    py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>>(m, "Expression", py::module_local());
 
-	InitializeStaticMethods(expression);
+	InitializeStaticMethods(m);
 
 	const char *docs;
 
