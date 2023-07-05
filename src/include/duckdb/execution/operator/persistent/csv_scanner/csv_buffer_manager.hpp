@@ -30,6 +30,8 @@ private:
 	vector<shared_ptr<CSVBuffer>> cached_buffers;
 	shared_ptr<CSVBuffer> last_buffer;
 	idx_t global_csv_pos = 0;
+	//! The size of the buffer, if the csv file has a smaller size than this, we will use that instead to malloc less
+	idx_t buffer_size = CSV_BUFFER_SIZE;
 	ClientContext &context;
 	CSVFileHandle &file_handle;
 };

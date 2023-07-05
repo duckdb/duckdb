@@ -386,8 +386,8 @@ vector<CSVReaderOptions> CSVSniffer::ProduceDialectResults() {
 void CSVSniffer::RefineCandidates() {
 	auto cur_best_num_cols = best_num_cols;
 	for (idx_t i = 1; i < options.sample_chunks; i++) {
-		if (candidates.empty()) {
-			// no candidates left: stop
+		if (candidates.size() <= 1) {
+			// no candidates or we only have one candidate left: stop
 			return;
 		}
 		bool finished_file = candidates[0].state->csv_buffer_iterator.Finished();
