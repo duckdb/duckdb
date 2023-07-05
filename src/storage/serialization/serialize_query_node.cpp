@@ -52,7 +52,7 @@ void SelectNode::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<QueryNode> SelectNode::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_uniq<SelectNode>();
+	auto result = duckdb::unique_ptr<SelectNode>(new SelectNode());
 	deserializer.ReadProperty("select_list", result->select_list);
 	deserializer.ReadOptionalProperty("from_table", result->from_table);
 	deserializer.ReadOptionalProperty("where_clause", result->where_clause);
@@ -73,7 +73,7 @@ void SetOperationNode::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<QueryNode> SetOperationNode::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_uniq<SetOperationNode>();
+	auto result = duckdb::unique_ptr<SetOperationNode>(new SetOperationNode());
 	deserializer.ReadProperty("setop_type", result->setop_type);
 	deserializer.ReadProperty("left", result->left);
 	deserializer.ReadProperty("right", result->right);
@@ -90,7 +90,7 @@ void RecursiveCTENode::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<QueryNode> RecursiveCTENode::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_uniq<RecursiveCTENode>();
+	auto result = duckdb::unique_ptr<RecursiveCTENode>(new RecursiveCTENode());
 	deserializer.ReadProperty("cte_name", result->ctename);
 	deserializer.ReadProperty("union_all", result->union_all);
 	deserializer.ReadProperty("left", result->left);
@@ -108,7 +108,7 @@ void CTENode::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<QueryNode> CTENode::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_uniq<CTENode>();
+	auto result = duckdb::unique_ptr<CTENode>(new CTENode());
 	deserializer.ReadProperty("cte_name", result->ctename);
 	deserializer.ReadProperty("query", result->query);
 	deserializer.ReadProperty("child", result->child);
