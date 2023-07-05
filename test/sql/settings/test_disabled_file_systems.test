@@ -2,6 +2,8 @@
 # description: Test disabled file systems
 # group: [settings]
 
+require skip_reload
+
 statement ok
 PRAGMA enable_verification
 
