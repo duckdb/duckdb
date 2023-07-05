@@ -98,11 +98,8 @@ jobs:
         with:
           fetch-depth: 0
       - uses: ./.github/actions/ubuntu_16_setup
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
         with:
-          key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+          ccache: 1
 
       - name: Install Stuff
         shell: bash
