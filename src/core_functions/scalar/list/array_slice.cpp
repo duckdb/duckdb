@@ -73,22 +73,19 @@ int64_t ValueLength(const string_t &value) {
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
-bool ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value, const INDEX_TYPE length) {
+static void ClampIndex(INDEX_TYPE &index, const INPUT_TYPE &value, const INDEX_TYPE length) {
 	if (index < 0) {
 		index = length + index;
-		return true;
+		return;
 	} else if (index > length) {
 		index = length;
 	}
-	return true;
+	return;
 }
 
 template <typename INPUT_TYPE, typename INDEX_TYPE>
 static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &end) {
 	// Clamp offsets
-	if (begin == INT64_MIN) {
-		return false;
-	}
 	begin = (begin > 0) ? begin - 1 : begin;
 	const auto length = ValueLength<INPUT_TYPE, INDEX_TYPE>(value);
 	if (begin < 0 && -begin > length && end < 0 && -end > length) {
@@ -99,9 +96,8 @@ static bool ClampSlice(const INPUT_TYPE &value, INDEX_TYPE &begin, INDEX_TYPE &e
 	if (begin < 0 && -begin > length) {
 		begin = 0;
 	}
-	if (!ClampIndex(begin, value, length) || !ClampIndex(end, value, length)) {
-		return false;
-	}
+	ClampIndex(begin, value, length);
+	ClampIndex(end, value, length);
 	end = MaxValue<INDEX_TYPE>(begin, end);
 
 	return true;
