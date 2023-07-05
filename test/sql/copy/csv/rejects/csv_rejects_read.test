@@ -1,0 +1,296 @@
+# name: test/sql/copy/csv/rejects/csv_rejects_read.test
+# group: [rejects]
+
+require skip_reload
+
+# FIXME: https://github.com/duckdb/duckdb/issues/7755
+require vector_size 2048
+
+# Test invalid arguments
+statement error
+SELECT * FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/bad.csv', 
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    ignore_errors=false,
+    rejects_table='csv_rejects_table'
+)
+----
+only supported when IGNORE_ERRORS is set to true
+
+statement error
+SELECT * FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/bad.csv', 
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    ignore_errors=true,
+    rejects_table='')
+----
+REJECTS_TABLE option cannot be empty
+
+statement error
+SELECT * FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/bad.csv', 
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    ignore_errors=true,
+    rejects_table='csv_rejects_table',
+    union_by_name=true)
+----
+UNION_BY_NAME is set to true
+
+statement error
+SELECT * FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/bad.csv', 
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    ignore_errors=true,
+    rejects_limit=10)
+----
+REJECTS_LIMIT option is only supported when REJECTS_TABLE is set to a table name
+
+statement error
+SELECT * FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/bad.csv', 
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    ignore_errors=true,
+    rejects_table='csv_rejects_table',
+    rejects_limit=-1)
+----
+REJECTS_LIMIT: cannot be negative
+
+foreach PARALLEL true false
+
+# Basic test
+query III rowsort
+SELECT * FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/bad.csv', 
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    rejects_table='csv_rejects_table',
+    ignore_errors=true, parallel=${PARALLEL});
+----
+1	2	AAA
+6	7	CCC
+
+query IIIIII rowsort
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
+FROM csv_rejects_table;
+----
+2	1	"col1"	BBB	Could not convert string 'BBB' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad.csv
+
+statement ok
+DROP TABLE csv_rejects_table;
+
+# Test with multiple columns on the same row
+query III rowsort
+SELECT * FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/bad2.csv', 
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'INTEGER'}, 
+    rejects_table='csv_rejects_table',
+    ignore_errors=true, parallel=${PARALLEL});
+----
+4	5	9
+
+query IIIIII rowsort
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
+FROM csv_rejects_table;
+----
+1	2	"col2"	DDD	Could not convert string 'DDD' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad2.csv
+3	0	"col0"	EEE	Could not convert string 'EEE' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad2.csv
+3	2	"col2"	FFF	Could not convert string 'FFF' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad2.csv
+
+statement ok
+DROP TABLE csv_rejects_table;
+
+# Test with multiple files
+query III rowsort
+SELECT * FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/bad*.csv', 
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'}, 
+    rejects_table='csv_rejects_table',
+    ignore_errors=true, parallel=${PARALLEL});
+----
+1	2	AAA
+1	2	DDD
+4	5	9
+6	7	CCC
+
+
+query IIIIII rowsort
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
+FROM csv_rejects_table;
+----
+2	1	"col1"	BBB	Could not convert string 'BBB' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad.csv
+3	0	"col0"	EEE	Could not convert string 'EEE' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/bad2.csv
+
+statement ok
+DROP TABLE csv_rejects_table;
+
+# Set limit
+
+query III rowsort
+SELECT * FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/bad*.csv', 
+    columns = {'col0': 'INTEGER', 'col1': 'INTEGER', 'col2': 'VARCHAR'},
+    rejects_table='csv_rejects_table',
+    rejects_limit=2,
+    ignore_errors=true, parallel=${PARALLEL});
+----
+1	2	AAA
+1	2	DDD
+4	5	9
+6	7	CCC
+
+# We should now only have two errors logged
+query I
+SELECT COUNT(*) FROM csv_rejects_table
+----
+2
+
+statement ok
+DROP TABLE csv_rejects_table;
+
+# Try with bigger files
+query I
+SELECT SUM(num) FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/big_bad.csv', 
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
+    rejects_table='csv_rejects_table',
+    ignore_errors=true, parallel=${PARALLEL});
+----
+4094
+
+query  IIIIII rowsort
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
+FROM csv_rejects_table;
+----
+2000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
+4000	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
+
+statement ok
+DROP TABLE csv_rejects_table;
+
+query I
+SELECT SUM(num) FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/big_bad2.csv', 
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
+    rejects_table='csv_rejects_table',
+    ignore_errors=true, parallel=${PARALLEL})
+----
+4094
+
+query  IIIIII rowsort
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
+FROM csv_rejects_table;
+----
+1000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
+3000	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
+
+statement ok
+DROP TABLE csv_rejects_table;
+
+# Test with multiple big files
+query I
+SELECT SUM(num) FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/big_*.csv', 
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
+    rejects_table='csv_rejects_table',
+    ignore_errors=true, parallel=${PARALLEL});
+----
+8188
+
+query  IIIIII rowsort
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
+FROM csv_rejects_table;
+----
+1000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
+2000	0	"num"	B	Could not convert string 'B' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
+3000	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad2.csv
+4000	0	"num"	C	Could not convert string 'C' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/big_bad.csv
+
+statement ok
+DROP TABLE csv_rejects_table;
+
+# Test with multiple rejects table in the same query
+query IIII rowsort
+SELECT * 
+FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/small1.csv', 
+    header = true,
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
+    rejects_table='csv_rejects_table_left',
+    ignore_errors=true,
+	parallel=${PARALLEL}) as L
+JOIN read_csv(
+    'test/sql/copy/csv/data/error/mismatch/small2.csv',
+    header = true,
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
+    rejects_table='csv_rejects_table_right',
+    ignore_errors=true,
+	parallel=${PARALLEL}) as R
+ON L.num = R.num;
+----
+1	A	1	A
+3	C	3	C
+
+query IIIIII rowsort
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
+FROM csv_rejects_table_left;
+----
+3	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small1.csv
+6	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small1.csv
+
+query IIIIII rowsort
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
+FROM csv_rejects_table_right;
+----
+3	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small2.csv
+5	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small2.csv
+
+statement ok
+DROP TABLE csv_rejects_table_left;
+
+statement ok
+DROP TABLE csv_rejects_table_right;
+
+# Test with multiple rejects table in the same query, with different limits
+# (only one reject should be logged in right table)
+query IIII rowsort
+SELECT * 
+FROM read_csv(
+    'test/sql/copy/csv/data/error/mismatch/small1.csv', 
+    header = true,
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
+    rejects_table='csv_rejects_table_left',
+    ignore_errors=true,
+	parallel=${PARALLEL}) as L
+JOIN read_csv(
+    'test/sql/copy/csv/data/error/mismatch/small2.csv',
+    header = true,
+    columns = {'num': 'INTEGER', 'str': 'VARCHAR'},
+    rejects_table='csv_rejects_table_right',
+	rejects_limit=1,
+    ignore_errors=true,
+	parallel=${PARALLEL}) as R
+ON L.num = R.num;
+----
+1	A	1	A
+3	C	3	C
+
+
+query IIIIII rowsort
+SELECT "line", "column", "column_name", "parsed_value", "error", regexp_replace("file", '\\', '/', 'g') 
+FROM csv_rejects_table_left;
+----
+3	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small1.csv
+6	0	"num"	X	Could not convert string 'X' to 'INTEGER'	test/sql/copy/csv/data/error/mismatch/small1.csv
+
+query I
+SELECT COUNT(*) 
+FROM csv_rejects_table_right;
+----
+1
+
+statement ok
+DROP TABLE csv_rejects_table_left;
+
+statement ok
+DROP TABLE csv_rejects_table_right;
+
+endloop

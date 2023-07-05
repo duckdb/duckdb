@@ -116,5 +116,29 @@
         "type": "vector<string>"
       }
     ]
+  },
+  {
+    "class": "CTENode",
+    "base": "QueryNode",
+    "enum": "CTE_NODE",
+    "members": [
+      {
+        "name": "cte_name",
+        "type": "string",
+        "property": "ctename"
+      },
+      {
+        "name": "query",
+        "type": "QueryNode*"
+      },
+      {
+        "name": "child",
+        "type": "QueryNode*"
+      },
+      {
+        "name": "aliases",
+        "type": "vector<string>"
+      }
+    ]
   }
 ]

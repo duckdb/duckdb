@@ -2,6 +2,12 @@
 # description: Test argmin and argmax operator
 # group: [aggregates]
 
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
 #Corner cases
 statement error
 select argmin()

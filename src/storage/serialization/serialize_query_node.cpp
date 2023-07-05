@@ -18,6 +18,9 @@ unique_ptr<QueryNode> QueryNode::FormatDeserialize(FormatDeserializer &deseriali
 	auto cte_map = deserializer.ReadProperty<CommonTableExpressionMap>("cte_map");
 	unique_ptr<QueryNode> result;
 	switch (type) {
+	case QueryNodeType::CTE_NODE:
+		result = CTENode::FormatDeserialize(deserializer);
+		break;
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 		result = RecursiveCTENode::FormatDeserialize(deserializer);
 		break;
@@ -92,6 +95,23 @@ unique_ptr<QueryNode> RecursiveCTENode::FormatDeserialize(FormatDeserializer &de
 	deserializer.ReadProperty("union_all", result->union_all);
 	deserializer.ReadProperty("left", result->left);
 	deserializer.ReadProperty("right", result->right);
+	deserializer.ReadProperty("aliases", result->aliases);
+	return std::move(result);
+}
+
+void CTENode::FormatSerialize(FormatSerializer &serializer) const {
+	QueryNode::FormatSerialize(serializer);
+	serializer.WriteProperty("cte_name", ctename);
+	serializer.WriteProperty("query", *query);
+	serializer.WriteProperty("child", *child);
+	serializer.WriteProperty("aliases", aliases);
+}
+
+unique_ptr<QueryNode> CTENode::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = make_uniq<CTENode>();
+	deserializer.ReadProperty("cte_name", result->ctename);
+	deserializer.ReadProperty("query", result->query);
+	deserializer.ReadProperty("child", result->child);
 	deserializer.ReadProperty("aliases", result->aliases);
 	return std::move(result);
 }

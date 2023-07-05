@@ -15,10 +15,8 @@
 #endif
 
 #ifndef USE_JEMALLOC
-#if defined(BUILD_JEMALLOC_EXTENSION) && !defined(WIN32)
+#if defined(DUCKDB_EXTENSION_JEMALLOC_LINKED) && DUCKDB_EXTENSION_JEMALLOC_LINKED && !defined(WIN32)
 #define USE_JEMALLOC
-#else
-#define USE JEMALLOC 0
 #endif
 #endif
 
@@ -99,7 +97,7 @@ PrivateAllocatorData::~PrivateAllocatorData() {
 //===--------------------------------------------------------------------===//
 #ifdef USE_JEMALLOC
 Allocator::Allocator()
-    : Allocator(JEMallocExtension::Allocate, JEMallocExtension::Free, JEMallocExtension::Reallocate, nullptr) {
+    : Allocator(JemallocExtension::Allocate, JemallocExtension::Free, JemallocExtension::Reallocate, nullptr) {
 }
 #else
 Allocator::Allocator()
@@ -187,7 +185,7 @@ Allocator &Allocator::DefaultAllocator() {
 
 void Allocator::ThreadFlush(idx_t threshold) {
 #ifdef USE_JEMALLOC
-	JEMallocExtension::ThreadFlush(threshold);
+	JemallocExtension::ThreadFlush(threshold);
 #endif
 }
 

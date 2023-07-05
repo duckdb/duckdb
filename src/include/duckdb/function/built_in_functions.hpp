@@ -57,6 +57,7 @@ private:
 	void RegisterDistributiveAggregates();
 
 	// scalar functions
+	void RegisterCompressedMaterializationFunctions();
 	void RegisterGenericFunctions();
 	void RegisterOperators();
 	void RegisterStringFunctions();

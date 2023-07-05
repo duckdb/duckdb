@@ -1,7 +1,5 @@
 #include "duckdb/execution/index/art/node16.hpp"
 
-#include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/node4.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
@@ -16,7 +14,6 @@ Node16 &Node16::New(ART &art, Node &node) {
 	auto &n16 = Node16::Get(art, node);
 
 	n16.count = 0;
-	n16.prefix.Initialize();
 	return n16;
 }
 
@@ -39,8 +36,6 @@ Node16 &Node16::GrowNode4(ART &art, Node &node16, Node &node4) {
 	auto &n16 = Node16::New(art, node16);
 
 	n16.count = n4.count;
-	n16.prefix.Move(n4.prefix);
-
 	for (idx_t i = 0; i < n4.count; i++) {
 		n16.key[i] = n4.key[i];
 		n16.children[i] = n4.children[i];
@@ -57,8 +52,6 @@ Node16 &Node16::ShrinkNode48(ART &art, Node &node16, Node &node48) {
 	auto &n48 = Node48::Get(art, node48);
 
 	n16.count = 0;
-	n16.prefix.Move(n48.prefix);
-
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		D_ASSERT(n16.count <= Node::NODE_16_CAPACITY);
 		if (n48.child_index[i] != Node::EMPTY_MARKER) {
@@ -195,7 +188,6 @@ BlockPointer Node16::Serialize(ART &art, MetaBlockWriter &writer) {
 	auto block_pointer = writer.GetBlockPointer();
 	writer.Write(NType::NODE_16);
 	writer.Write<uint8_t>(count);
-	prefix.Serialize(art, writer);
 
 	// write key values
 	for (idx_t i = 0; i < Node::NODE_16_CAPACITY; i++) {
@@ -211,10 +203,9 @@ BlockPointer Node16::Serialize(ART &art, MetaBlockWriter &writer) {
 	return block_pointer;
 }
 
-void Node16::Deserialize(ART &art, MetaBlockReader &reader) {
+void Node16::Deserialize(MetaBlockReader &reader) {
 
 	count = reader.Read<uint8_t>();
-	prefix.Deserialize(art, reader);
 
 	// read key values
 	for (idx_t i = 0; i < Node::NODE_16_CAPACITY; i++) {

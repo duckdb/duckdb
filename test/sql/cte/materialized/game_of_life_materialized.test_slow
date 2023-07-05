@@ -1,0 +1,65 @@
+# name: test/sql/cte/materialized/game_of_life_materialized.test_slow
+# description: Run conways game of life as a CTE (https://gist.github.com/janickr/58fab629ee3ea7e5638a)
+# group: [materialized]
+
+statement ok
+create table series as select * from generate_series(-1,1) x(n);
+
+# conway
+query III
+with recursive generation1(x,y) as materialized (   --the initial board setup
+  select 2, 3
+  union
+  select 3, 3
+  union
+  select 4, 3
+),
+game(n, x, y) as materialized (
+  select 1 AS n, x, y from generation1 -- generation 1 is initial board setup
+  union all
+  select n+1, new_x, new_y from   -- generation n+1
+  (
+    select n, x+offset_x new_x, y+offset_y new_y, max(self) over (partition by n+1, x+offset_x, y+offset_y) cell_was_already_alive
+    from game, (
+        select x.n offset_x, y.n offset_y, case when x.n = 0 and y.n = 0 then 1 else 0 end self
+        from series x(n), series y(n) --join 2 row generators to get 9 pairs
+      ) offsets_to_neighbours_and_self(offset_x, offset_y, self)
+    where n < 100
+  ) all_impacts
+  group by n+1, new_x, new_y, cell_was_already_alive -- from all impacts back to cells
+  having (cell_was_already_alive=1 and count(*) < 5 and count(*) > 2) or count(*) = 3 --decide if cell is alive
+)
+select * from game where n=4 order by n, x, y; --select generation 4
+----
+4	3	2
+4	3	3
+4	3	4
+
+query III
+with recursive generation1(x,y) as materialized (   --the initial board setup
+  select 2, 3
+  union
+  select 3, 3
+  union
+  select 4, 3
+),
+game(n, x, y) as materialized (
+  select 1 AS n, x, y from generation1 -- generation 1 is initial board setup
+  union all
+  select n+1, new_x, new_y from   -- generation n+1
+  (
+    select n, x+offset_x new_x, y+offset_y new_y, max(self) over (partition by n+1, x+offset_x, y+offset_y) cell_was_already_alive
+    from game, (
+        select x.n offset_x, y.n offset_y, case when x.n = 0 and y.n = 0 then 1 else 0 end self
+        from generate_series(-1,1) x(n), generate_series(-1,1) y(n) --join 2 row generators to get 9 pairs
+      ) offsets_to_neighbours_and_self(offset_x, offset_y, self)
+    where n < 100
+  ) all_impacts
+  group by n+1, new_x, new_y, cell_was_already_alive -- from all impacts back to cells
+  having (cell_was_already_alive=1 and count(*) < 5 and count(*) > 2) or count(*) = 3 --decide if cell is alive
+)
+select * from game where n=4 order by n, x, y; --select generation 4
+----
+4	3	2
+4	3	3
+4	3	4
