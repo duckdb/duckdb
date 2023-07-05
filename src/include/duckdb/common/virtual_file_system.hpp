@@ -10,6 +10,7 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 
