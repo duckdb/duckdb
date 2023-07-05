@@ -76,7 +76,7 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	}
 	// read four-byte footer length from just before the end magic bytes
 	auto footer_len = *reinterpret_cast<uint32_t *>(buf.ptr);
-	if (footer_len <= 0 || file_size < 12 + footer_len) {
+	if (footer_len == 0 || file_size < 12 + footer_len) {
 		throw InvalidInputException("Footer length error in file '%s'", file_handle.path);
 	}
 	auto metadata_pos = file_size - (footer_len + 8);
