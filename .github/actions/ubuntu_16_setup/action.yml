@@ -95,7 +95,7 @@ runs:
         save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
     - name: Instal OpenSSL through vcpkg
-      if: ${{ inputs.openssl }}
+      if: ${{ inputs.openssl == 1 }}
       shell: bash
       run: |
         cd $VCPKG_ROOT && ./vcpkg install openssl --triplet=${{ inputs.aarch64_cross_compile == 1 && 'arm64-linux' || 'x64-linux' }}
