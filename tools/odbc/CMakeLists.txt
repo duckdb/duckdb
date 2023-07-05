@@ -47,7 +47,6 @@ add_library(
   row_descriptor.cpp
   cursor.cpp
   odbc_diagnostic.cpp
-  odbc_exception.cpp
   duckdb_odbc.def
   handle_functions.cpp
   include/handle_functions.hpp)

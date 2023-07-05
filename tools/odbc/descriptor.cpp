@@ -25,91 +25,90 @@ SQLRETURN SQL_API SQLGetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_numb
 		return SQL_ERROR;
 	}
 
-		if (rec_number < 1) {
-			return SQL_ERROR;
-		}
-		if (rec_number > desc->header.sql_desc_count) {
-			return SQL_NO_DATA;
-		}
-		if (desc->IsIRD() && desc->stmt && desc->stmt->IsPrepared()) {
-			return SQL_NO_DATA;
-		}
+	if (rec_number < 1) {
+		return SQL_ERROR;
+	}
+	if (rec_number > desc->header.sql_desc_count) {
+		return SQL_NO_DATA;
+	}
+	if (desc->IsIRD() && desc->stmt && desc->stmt->IsPrepared()) {
+		return SQL_NO_DATA;
+	}
 
-		auto rec_idx = rec_number - 1;
-		auto desc_record = desc->GetDescRecord(rec_idx);
-		auto sql_type = desc_record->sql_desc_type;
+	auto rec_idx = rec_number - 1;
+	auto desc_record = desc->GetDescRecord(rec_idx);
+	auto sql_type = desc_record->sql_desc_type;
 
-		duckdb::OdbcUtils::WriteString(desc_record->sql_desc_name, name, buffer_length, string_length_ptr);
-		if (type_ptr) {
-			duckdb::Store<SQLSMALLINT>(sql_type, (duckdb::data_ptr_t)type_ptr);
+	duckdb::OdbcUtils::WriteString(desc_record->sql_desc_name, name, buffer_length, string_length_ptr);
+	if (type_ptr) {
+		duckdb::Store<SQLSMALLINT>(sql_type, (duckdb::data_ptr_t)type_ptr);
+	}
+	if (sql_type == SQL_DATETIME || sql_type == SQL_INTERVAL) {
+		if (sub_type_ptr) {
+			duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_datetime_interval_code, (duckdb::data_ptr_t)sub_type_ptr);
 		}
-		if (sql_type == SQL_DATETIME || sql_type == SQL_INTERVAL) {
-			if (sub_type_ptr) {
-				duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_datetime_interval_code,
-				                           (duckdb::data_ptr_t)sub_type_ptr);
-			}
-		}
-		if (length_ptr) {
-			duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_octet_length, (duckdb::data_ptr_t)length_ptr);
-		}
-		if (precision_ptr) {
-			duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_precision, (duckdb::data_ptr_t)precision_ptr);
-		}
-		if (scale_ptr) {
-			duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_scale, (duckdb::data_ptr_t)scale_ptr);
-		}
-		if (nullable_ptr) {
-			duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_nullable, (duckdb::data_ptr_t)nullable_ptr);
-		}
-		return SQL_SUCCESS;
+	}
+	if (length_ptr) {
+		duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_octet_length, (duckdb::data_ptr_t)length_ptr);
+	}
+	if (precision_ptr) {
+		duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_precision, (duckdb::data_ptr_t)precision_ptr);
+	}
+	if (scale_ptr) {
+		duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_scale, (duckdb::data_ptr_t)scale_ptr);
+	}
+	if (nullable_ptr) {
+		duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_nullable, (duckdb::data_ptr_t)nullable_ptr);
+	}
+	return SQL_SUCCESS;
 }
 
 SQLRETURN SQL_API SQLSetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT type,
                                 SQLSMALLINT sub_type, SQLLEN length, SQLSMALLINT precision, SQLSMALLINT scale,
                                 SQLPOINTER data_ptr, SQLLEN *string_length_ptr, SQLLEN *indicator_ptr) {
-	    duckdb::OdbcHandleDesc *desc = nullptr;
-	    if (ConvertDescriptor(descriptor_handle, desc) != SQL_SUCCESS) {
-		    return SQL_ERROR;
-	    }
+	duckdb::OdbcHandleDesc *desc = nullptr;
+	if (ConvertDescriptor(descriptor_handle, desc) != SQL_SUCCESS) {
+		return SQL_ERROR;
+	}
 
-		if (desc->IsIRD()) {
-			desc->error_messages.emplace_back("Cannot modify an implementation row descriptor");
+	if (desc->IsIRD()) {
+		desc->error_messages.emplace_back("Cannot modify an implementation row descriptor");
+		return SQL_ERROR;
+	}
+	if (rec_number <= 0) {
+		desc->error_messages.emplace_back("Invalid descriptor index");
+		return SQL_ERROR;
+	}
+	if (rec_number > desc->header.sql_desc_count) {
+		desc->AddMoreRecords(rec_number);
+	}
+	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_TYPE, &type, 0))) {
+		return SQL_ERROR;
+	}
+	if (type == SQL_DATETIME || type == SQL_INTERVAL) {
+		if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_DATETIME_INTERVAL_CODE, &sub_type, 0))) {
 			return SQL_ERROR;
 		}
-		if (rec_number <= 0) {
-			desc->error_messages.emplace_back("Invalid descriptor index");
-			return SQL_ERROR;
-		}
-		if (rec_number > desc->header.sql_desc_count) {
-			desc->AddMoreRecords(rec_number);
-		}
-		if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_TYPE, &type, 0))) {
-			return SQL_ERROR;
-		}
-		if (type == SQL_DATETIME || type == SQL_INTERVAL) {
-			if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_DATETIME_INTERVAL_CODE, &sub_type, 0))) {
-				return SQL_ERROR;
-			}
-		}
-		if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_OCTET_LENGTH, &length, 0))) {
-			return SQL_ERROR;
-		}
-		if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_PRECISION, &precision, 0))) {
-			return SQL_ERROR;
-		}
-		if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_SCALE, &scale, 0))) {
-			return SQL_ERROR;
-		}
-		if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_DATA_PTR, &data_ptr, 0))) {
-			return SQL_ERROR;
-		}
-		if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_OCTET_LENGTH_PTR, &string_length_ptr, 0))) {
-			return SQL_ERROR;
-		}
-		if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_INDICATOR_PTR, &indicator_ptr, 0))) {
-			return SQL_ERROR;
-		}
-		return SQL_SUCCESS;
+	}
+	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_OCTET_LENGTH, &length, 0))) {
+		return SQL_ERROR;
+	}
+	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_PRECISION, &precision, 0))) {
+		return SQL_ERROR;
+	}
+	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_SCALE, &scale, 0))) {
+		return SQL_ERROR;
+	}
+	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_DATA_PTR, &data_ptr, 0))) {
+		return SQL_ERROR;
+	}
+	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_OCTET_LENGTH_PTR, &string_length_ptr, 0))) {
+		return SQL_ERROR;
+	}
+	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_INDICATOR_PTR, &indicator_ptr, 0))) {
+		return SQL_ERROR;
+	}
+	return SQL_SUCCESS;
 }
 
 SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT field_identifier,

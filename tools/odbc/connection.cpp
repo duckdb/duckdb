@@ -2,7 +2,6 @@
 #include "duckdb_odbc.hpp"
 #include "api_info.hpp"
 #include "odbc_diagnostic.hpp"
-#include "odbc_exception.hpp"
 #include "odbc_utils.hpp"
 #include "handle_functions.hpp"
 
