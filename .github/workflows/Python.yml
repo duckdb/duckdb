@@ -85,10 +85,10 @@ jobs:
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
    manylinux-extensions-x64:
-    name: Linux Extensions (manylinux2014_x86_64)
+    name: Linux Extensions (ggc4)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
-    needs: linux-python3-9
+#    needs: linux-python3-9
     env:
       GEN: ninja
 
