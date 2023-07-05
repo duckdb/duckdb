@@ -53,7 +53,10 @@ SQLRETURN duckdb::ConvertHSTMT(SQLHANDLE &statement_handle, OdbcHandleStmt *&hst
 		return SQL_ERROR;
 	}
 	hstmt = static_cast<OdbcHandleStmt *>(statement_handle);
-	if (hstmt->type != OdbcHandleType::STMT || !hstmt->dbc || !hstmt->dbc->conn) {
+	if (hstmt->type != OdbcHandleType::STMT) {
+		return SQL_ERROR;
+	}
+	if (!hstmt->dbc || !hstmt->dbc->conn) {
 		return SQL_ERROR;
 	}
 
@@ -67,7 +70,10 @@ SQLRETURN duckdb::ConvertHSTMTPrepared(SQLHANDLE &statement_handle, OdbcHandleSt
 	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
-	if (!hstmt->stmt || !hstmt->stmt->HasError()) {
+	if (!hstmt->stmt) {
+		return SQL_ERROR;
+	}
+	if (hstmt->stmt->HasError()) {
 		return SQL_ERROR;
 	}
 	return SQL_SUCCESS;
@@ -77,7 +83,10 @@ SQLRETURN duckdb::ConvertHSTMTResult(SQLHANDLE &statement_handle, OdbcHandleStmt
 	if (ConvertHSTMT(statement_handle, hstmt) != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
-	if (!hstmt->res || !hstmt->res->HasError()) {
+	if (!hstmt->res) {
+		return SQL_ERROR;
+	}
+	if (hstmt->res->HasError()) {
 		return SQL_ERROR;
 	}
 	return SQL_ERROR;

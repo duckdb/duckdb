@@ -75,9 +75,9 @@ SQLRETURN SQL_API SQLRowCount(SQLHSTMT statement_handle, SQLLEN *row_count_ptr) 
 		return SQL_ERROR;
 	}
 	// TODO row_count doesn't work well yet, fix later
-	*row_count_ptr = stmt->odbc_fetcher->GetRowCount();
+	*row_count_ptr = hstmt->odbc_fetcher->GetRowCount();
 
-	switch (stmt->stmt->data->statement_type) {
+	switch (hstmt->stmt->data->statement_type) {
 	case duckdb::StatementType::INSERT_STATEMENT:
 	case duckdb::StatementType::UPDATE_STATEMENT:
 	case duckdb::StatementType::DELETE_STATEMENT:
