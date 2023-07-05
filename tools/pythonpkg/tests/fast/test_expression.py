@@ -80,3 +80,15 @@ class TestExpression(object):
 		rel2 = rel.select(function)
 		res = rel2.fetchall()
 		assert res == [(4,)]
+
+	def test_negate_expression(self):
+		con = duckdb.connect()
+
+		rel = con.sql("""
+			select 5 as a
+		""")
+		col = ColumnExpression('a')
+		col = -col;
+		rel = rel.select(col)
+		res = rel.fetchall()
+		assert res == [(-5,)]

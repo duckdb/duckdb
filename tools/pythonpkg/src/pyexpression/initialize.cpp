@@ -53,6 +53,11 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 			FunctionExpression: A '+' on the two input expressions.
 	)";
 	expression.def("__add__", &DuckDBPyExpression::Add, py::arg("expr"), docs);
+
+	docs = R"(
+		TODO: add docs
+	)";
+	expression.def("__neg__", &DuckDBPyExpression::Negate, docs);
 }
 
 } // namespace duckdb

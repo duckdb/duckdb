@@ -51,6 +51,7 @@ public:
 	string ToString() const;
 	void Print() const;
 	shared_ptr<DuckDBPyExpression> Add(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> Negate();
 
 public:
 	const ParsedExpression &GetExpression() const;
@@ -64,7 +65,8 @@ public:
 
 private:
 	static shared_ptr<DuckDBPyExpression> FunctionExpression(const string &function_name,
-	                                                         vector<unique_ptr<ParsedExpression>> children);
+	                                                         vector<unique_ptr<ParsedExpression>> children,
+	                                                         bool is_operator = false);
 
 private:
 	unique_ptr<ParsedExpression> expression;

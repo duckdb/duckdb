@@ -28,14 +28,22 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Add(const DuckDBPyExpression 
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(GetExpression().Copy());
 	children.push_back(other.GetExpression().Copy());
-	return DuckDBPyExpression::FunctionExpression("+", std::move(children));
+	return DuckDBPyExpression::FunctionExpression("+", std::move(children), true);
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Negate() {
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(GetExpression().Copy());
+	return DuckDBPyExpression::FunctionExpression("-", std::move(children), true);
 }
 
 // Static creation methods
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::FunctionExpression(const string &function_name,
-                                                                      vector<unique_ptr<ParsedExpression>> children) {
-	auto function_expression = make_uniq<duckdb::FunctionExpression>(function_name, std::move(children));
+                                                                      vector<unique_ptr<ParsedExpression>> children,
+                                                                      bool is_operator) {
+	auto function_expression =
+	    make_uniq<duckdb::FunctionExpression>(function_name, std::move(children), nullptr, nullptr, false, is_operator);
 	return make_shared<DuckDBPyExpression>(std::move(function_expression));
 }
 
