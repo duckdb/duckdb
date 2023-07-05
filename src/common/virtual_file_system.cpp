@@ -3,6 +3,7 @@
 #include "duckdb/common/gzip_file_system.hpp"
 #include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
 
@@ -142,7 +143,7 @@ std::string VirtualFileSystem::GetName() const {
 	return "VirtualFileSystem";
 }
 
-void VirtualFileSystem::SetDisabledFileSystems(vector<string> names) {
+void VirtualFileSystem::SetDisabledFileSystems(const vector<string> &names) {
 	unordered_set<string> new_disabled_file_systems;
 	for (auto &name : names) {
 		if (name.empty()) {

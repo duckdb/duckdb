@@ -65,7 +65,7 @@ public:
 
 	std::string GetName() const override;
 
-	void SetDisabledFileSystems(vector<string> names) override;
+	void SetDisabledFileSystems(const vector<string> &names) override;
 
 private:
 	FileSystem &FindFileSystem(const string &path);

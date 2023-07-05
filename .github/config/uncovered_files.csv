@@ -61,6 +61,7 @@ common/sort/sorted_block.cpp	20
 common/string_util.cpp	15
 common/tree_renderer.cpp	9
 common/types.cpp	88
+common/virtual_file_system.cpp	32
 common/types/batched_data_collection.cpp	11
 common/types/bit.cpp	9
 common/types/blob.cpp	3
@@ -370,7 +371,6 @@ include/duckdb/common/vector_operations/generic_executor.hpp	9
 include/duckdb/common/vector_operations/senary_executor.hpp	8
 include/duckdb/common/vector_operations/septenary_executor.hpp	20
 include/duckdb/common/vector_operations/ternary_executor.hpp	12
-include/duckdb/common/virtual_file_system.hpp	32
 include/duckdb/core_functions/aggregate/algebraic/covar.hpp	12
 include/duckdb/core_functions/aggregate/algebraic/stddev.hpp	10
 include/duckdb/core_functions/aggregate/regression/regr_slope.hpp	2
