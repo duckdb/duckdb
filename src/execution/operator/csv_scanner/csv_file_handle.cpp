@@ -69,14 +69,18 @@ idx_t CSVFileHandle::FileSize() {
 }
 
 bool CSVFileHandle::FinishedReading() {
-	return requested_bytes >= file_size;
+	return finished;
 }
 
 idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 	requested_bytes += nr_bytes;
 	if (on_disk_file || can_seek) {
 		// if this is a plain file source OR we can seek we are not caching anything
-		return file_handle->Read(buffer, nr_bytes);
+		auto bytes_read = file_handle->Read(buffer, nr_bytes);
+		if (!finished) {
+			finished = bytes_read < (int64_t)nr_bytes;
+		}
+		return bytes_read;
 	}
 	// not a plain file source: we need to do some bookkeeping around the reset functionality
 	idx_t result_offset = 0;
@@ -117,7 +121,9 @@ idx_t CSVFileHandle::Read(void *buffer, idx_t nr_bytes) {
 		memcpy(cached_buffer.get() + buffer_size, char_ptr_cast(buffer) + result_offset, bytes_read);
 		buffer_size += bytes_read;
 	}
-
+	if (!finished) {
+		finished = bytes_read < (int64_t)nr_bytes;
+	}
 	return result_offset + bytes_read;
 }
 

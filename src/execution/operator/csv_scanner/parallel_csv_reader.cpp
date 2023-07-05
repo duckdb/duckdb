@@ -449,6 +449,10 @@ add_row : {
 			goto final_state;
 		}
 		SkipEmptyLines();
+		if (position_buffer - verification_positions.end_of_last_line > options.buffer_size) {
+			error_message = "Line does not fit in one buffer. Increase the buffer size.";
+			return false;
+		}
 		verification_positions.end_of_last_line = position_buffer;
 		start_buffer = position_buffer;
 		// \n newline, move to value start
@@ -592,6 +596,10 @@ final_state : {
 					VerifyLineLength(position_buffer - line_start);
 					line_start = position_buffer;
 					AddRow(insert_chunk, column, error_message, buffer->local_batch_index);
+					if (position_buffer - verification_positions.end_of_last_line > options.buffer_size) {
+						error_message = "Line does not fit in one buffer. Increase the buffer size.";
+						return false;
+					}
 					verification_positions.end_of_last_line = position_buffer;
 				}
 			}
