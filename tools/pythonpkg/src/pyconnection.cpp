@@ -954,7 +954,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, c
 			}
 		}
 		if (values.empty()) {
-			return nullptr;
+			return DuckDBPyRelation::EmptyResult(connection->context, res->types, res->names);
 		}
 	}
 	return make_uniq<DuckDBPyRelation>(make_uniq<ValueRelation>(connection->context, values, names));

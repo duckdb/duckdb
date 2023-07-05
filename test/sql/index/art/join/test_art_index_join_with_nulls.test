@@ -1,0 +1,63 @@
+# name: test/sql/index/art/join/test_art_index_join_with_nulls.test
+# description: Test that we reset keys correctly during index joins
+# group: [join]
+
+# this tests contains the reproducible example of issue 7267 in a reduced size
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE addresses (address int, state string);
+
+statement ok
+INSERT INTO addresses SELECT range, 'GA' FROM range(3000);
+
+statement ok
+CREATE TABLE demos (demo int primary key);
+
+statement ok
+INSERT INTO demos SELECT range FROM range(100000);
+
+statement ok
+CREATE TABLE customers (customer int, cdemo int, caddress int);
+
+statement ok
+INSERT INTO customers SELECT range, range, range FROM range(4953);
+
+# set 200 cdemo values to NULL
+
+loop i 0 200
+
+statement ok
+UPDATE customers SET cdemo = NULL WHERE customer = (${i} * 24.5)::INTEGER;
+
+endloop
+
+# verify our NULLs
+
+query I
+SELECT COUNT(customer) FROM customers WHERE cdemo IS NULL;
+----
+200
+
+query I
+SELECT COUNT(c.customer)
+FROM customers c
+INNER JOIN addresses ca ON c.caddress = ca.address
+INNER JOIN demos d ON c.cdemo = d.demo
+WHERE ca.state ='GA';
+----
+2877
+
+statement ok
+PRAGMA threads=1;
+
+query I
+SELECT COUNT(c.customer)
+FROM customers c
+INNER JOIN addresses ca ON c.caddress = ca.address
+INNER JOIN demos d ON c.cdemo = d.demo
+WHERE ca.state ='GA';
+----
+2877

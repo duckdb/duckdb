@@ -1,7 +1,5 @@
 #include "duckdb/execution/index/art/node256.hpp"
 
-#include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
@@ -15,8 +13,6 @@ Node256 &Node256::New(ART &art, Node &node) {
 	auto &n256 = Node256::Get(art, node);
 
 	n256.count = 0;
-	n256.prefix.Initialize();
-
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		n256.children[i].Reset();
 	}
@@ -49,8 +45,6 @@ Node256 &Node256::GrowNode48(ART &art, Node &node256, Node &node48) {
 	auto &n256 = Node256::New(art, node256);
 
 	n256.count = n48.count;
-	n256.prefix.Move(n48.prefix);
-
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {
 		if (n48.child_index[i] != Node::EMPTY_MARKER) {
 			n256.children[i] = n48.children[n48.child_index[i]];
@@ -127,7 +121,6 @@ BlockPointer Node256::Serialize(ART &art, MetaBlockWriter &writer) {
 	auto block_pointer = writer.GetBlockPointer();
 	writer.Write(NType::NODE_256);
 	writer.Write<uint16_t>(count);
-	prefix.Serialize(art, writer);
 
 	// write child block pointers
 	for (auto &child_block_pointer : child_block_pointers) {
@@ -138,10 +131,9 @@ BlockPointer Node256::Serialize(ART &art, MetaBlockWriter &writer) {
 	return block_pointer;
 }
 
-void Node256::Deserialize(ART &art, MetaBlockReader &reader) {
+void Node256::Deserialize(MetaBlockReader &reader) {
 
 	count = reader.Read<uint16_t>();
-	prefix.Deserialize(art, reader);
 
 	// read child block pointers
 	for (idx_t i = 0; i < Node::NODE_256_CAPACITY; i++) {

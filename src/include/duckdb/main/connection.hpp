@@ -169,8 +169,7 @@ public:
 	template <typename TR, typename... Args>
 	void CreateScalarFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                          TR (*udf_func)(Args...)) {
-		scalar_function_t function =
-		    UDFWrapper::CreateScalarFunction<TR, Args...>(name, args, std::move(ret_type), udf_func);
+		scalar_function_t function = UDFWrapper::CreateScalarFunction<TR, Args...>(name, args, ret_type, udf_func);
 		UDFWrapper::RegisterFunction(name, args, ret_type, function, *context);
 	}
 

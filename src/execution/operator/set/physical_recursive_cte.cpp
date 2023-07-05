@@ -12,10 +12,11 @@
 
 namespace duckdb {
 
-PhysicalRecursiveCTE::PhysicalRecursiveCTE(vector<LogicalType> types, bool union_all, unique_ptr<PhysicalOperator> top,
-                                           unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality)
+PhysicalRecursiveCTE::PhysicalRecursiveCTE(string ctename, idx_t table_index, vector<LogicalType> types, bool union_all,
+                                           unique_ptr<PhysicalOperator> top, unique_ptr<PhysicalOperator> bottom,
+                                           idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::RECURSIVE_CTE, std::move(types), estimated_cardinality),
-      union_all(union_all) {
+      ctename(std::move(ctename)), table_index(table_index), union_all(union_all) {
 	children.push_back(std::move(top));
 	children.push_back(std::move(bottom));
 }
@@ -30,8 +31,8 @@ class RecursiveCTEState : public GlobalSinkState {
 public:
 	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
 	    : intermediate_table(context, op.GetTypes()), new_groups(STANDARD_VECTOR_SIZE) {
-		ht = make_uniq<GroupedAggregateHashTable>(context, Allocator::Get(context), op.types, vector<LogicalType>(),
-		                                          vector<BoundAggregateExpression *>());
+		ht = make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), op.types,
+		                                          vector<LogicalType>(), vector<BoundAggregateExpression *>());
 	}
 
 	unique_ptr<GroupedAggregateHashTable> ht;
@@ -193,6 +194,15 @@ void PhysicalRecursiveCTE::BuildPipelines(Pipeline &current, MetaPipeline &meta_
 
 vector<const_reference<PhysicalOperator>> PhysicalRecursiveCTE::GetSources() const {
 	return {*this};
+}
+
+string PhysicalRecursiveCTE::ParamsToString() const {
+	string result = "";
+	result += "\n[INFOSEPARATOR]\n";
+	result += ctename;
+	result += "\n[INFOSEPARATOR]\n";
+	result += StringUtil::Format("idx: %llu", table_index);
+	return result;
 }
 
 } // namespace duckdb
