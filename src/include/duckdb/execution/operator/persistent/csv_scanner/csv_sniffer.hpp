@@ -40,7 +40,7 @@ public:
 	explicit CSVSniffer(CSVReaderOptions options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
 	                    const vector<LogicalType> &requested_types_p = vector<LogicalType>())
 	    : requested_types(requested_types_p), options(std::move(options_p)),
-	      buffer_manager(std::move(buffer_manager_p)), original_options(options_p) {
+	      buffer_manager(std::move(buffer_manager_p)) {
 		// Check if any type is BLOB
 		for (auto &type : requested_types) {
 			if (type.id() == LogicalTypeId::BLOB) {
@@ -81,12 +81,10 @@ private:
 	vector<CSVStateMachine> csv_state_machines;
 	//! Current Candidates being considered
 	vector<CSVStateCandidates> candidates;
-	//! Options set
-	CSVReaderOptions options;
+	//! Original Options set
+	const CSVReaderOptions options;
 	//! Buffer being used on sniffer
 	shared_ptr<CSVBufferManager> buffer_manager;
-	//! Original Options set
-	const CSVReaderOptions original_options;
 
 	//! ------------------------------------------------------//
 	//! ----------------- Dialect Detection ----------------- //
@@ -113,8 +111,6 @@ private:
 	void AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t prev_column_count = 0);
 	//! 4. Refine Candidates over remaining chunks
 	void RefineCandidates();
-	//! Generates the search space candidates for the state machines
-	vector<CSVReaderOptions> ProduceDialectResults();
 
 	//! ------------------------------------------------------//
 	//! ------------------- Type Detection ------------------ //
@@ -125,7 +121,7 @@ private:
 	//! Change the date format for the type to the string
 	//! Try to cast a string value to the specified sql type
 	bool TryCastValue(const Value &value, const LogicalType &sql_type);
-	void SetDateFormat(const string &format_specifier, const LogicalTypeId &sql_type);
+	void SetDateFormat(CSVStateCandidates &candidate, const string &format_specifier, const LogicalTypeId &sql_type);
 
 	//! Variables for Type Detection
 	//! Format Candidates for Date and Timestamp Types

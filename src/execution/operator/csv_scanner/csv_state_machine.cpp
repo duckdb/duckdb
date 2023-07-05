@@ -1,10 +1,11 @@
+#include <utility>
+
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/buffered_csv_reader.hpp"
 
 namespace duckdb {
-CSVStateMachine::CSVStateMachine(CSVStateMachineConfiguration configuration_p,
-                                 shared_ptr<CSVBufferManager> buffer_manager_p)
-    : configuration(configuration_p), csv_buffer_iterator(std::move(buffer_manager_p)) {
+CSVStateMachine::CSVStateMachine(CSVReaderOptions options_p, shared_ptr<CSVBufferManager> buffer_manager_p)
+    : options(std::move(options_p)), csv_buffer_iterator(std::move(buffer_manager_p)) {
 	// Initialize transition array with default values to the Standard option
 	for (int i = 0; i < 4; i++) {
 		for (int j = 0; j < 256; j++) {
@@ -22,34 +23,32 @@ CSVStateMachine::CSVStateMachine(CSVStateMachineConfiguration configuration_p,
 
 	// Now set values depending on configuration
 	// 1) Standard State
-	transition_array[standard_state][static_cast<uint8_t>(configuration.field_separator)] = field_separator_state;
+	transition_array[standard_state][static_cast<uint8_t>(options.delimiter)] = field_separator_state;
 	transition_array[standard_state][static_cast<uint8_t>('\n')] = record_separator_state;
 	transition_array[standard_state][static_cast<uint8_t>('\r')] = carriage_return_state;
-	transition_array[standard_state][static_cast<uint8_t>(configuration.quote)] = quoted_state;
+	transition_array[standard_state][static_cast<uint8_t>(options.quote)] = quoted_state;
 	// 2) Field Separator State
-	transition_array[field_separator_state][static_cast<uint8_t>(configuration.field_separator)] =
-	    field_separator_state;
+	transition_array[field_separator_state][static_cast<uint8_t>(options.delimiter)] = field_separator_state;
 	transition_array[field_separator_state][static_cast<uint8_t>('\n')] = record_separator_state;
 	transition_array[field_separator_state][static_cast<uint8_t>('\r')] = carriage_return_state;
-	transition_array[field_separator_state][static_cast<uint8_t>(configuration.quote)] = quoted_state;
+	transition_array[field_separator_state][static_cast<uint8_t>(options.quote)] = quoted_state;
 	// 3) Record Separator State
-	transition_array[record_separator_state][static_cast<uint8_t>(configuration.field_separator)] =
-	    field_separator_state;
+	transition_array[record_separator_state][static_cast<uint8_t>(options.delimiter)] = field_separator_state;
 	transition_array[record_separator_state][static_cast<uint8_t>('\n')] = record_separator_state;
 	transition_array[record_separator_state][static_cast<uint8_t>('\r')] = carriage_return_state;
-	transition_array[record_separator_state][static_cast<uint8_t>(configuration.quote)] = quoted_state;
+	transition_array[record_separator_state][static_cast<uint8_t>(options.quote)] = quoted_state;
 	// 4) Carriage Return State
 	transition_array[carriage_return_state][static_cast<uint8_t>('\n')] = record_separator_state;
 	transition_array[carriage_return_state][static_cast<uint8_t>('\r')] = carriage_return_state;
-	transition_array[carriage_return_state][static_cast<uint8_t>(configuration.escape)] = escape_state;
+	transition_array[carriage_return_state][static_cast<uint8_t>(options.escape)] = escape_state;
 	// 5) Quoted State
 	for (int j = 0; j < 256; j++) {
 		transition_array[quoted_state][j] = quoted_state;
 	}
-	transition_array[quoted_state][static_cast<uint8_t>(configuration.quote)] = unquoted_state;
+	transition_array[quoted_state][static_cast<uint8_t>(options.quote)] = unquoted_state;
 
-	if (configuration.quote != configuration.escape) {
-		transition_array[quoted_state][static_cast<uint8_t>(configuration.escape)] = escape_state;
+	if (options.quote != options.escape) {
+		transition_array[quoted_state][static_cast<uint8_t>(options.escape)] = escape_state;
 	}
 	// 6) Unquoted State
 	for (int j = 0; j < 256; j++) {
@@ -57,9 +56,9 @@ CSVStateMachine::CSVStateMachine(CSVStateMachineConfiguration configuration_p,
 	}
 	transition_array[unquoted_state][static_cast<uint8_t>('\n')] = record_separator_state;
 	transition_array[unquoted_state][static_cast<uint8_t>('\r')] = carriage_return_state;
-	transition_array[unquoted_state][static_cast<uint8_t>(configuration.field_separator)] = field_separator_state;
-	if (configuration.quote == configuration.escape) {
-		transition_array[unquoted_state][static_cast<uint8_t>(configuration.escape)] = quoted_state;
+	transition_array[unquoted_state][static_cast<uint8_t>(options.delimiter)] = field_separator_state;
+	if (options.quote == options.escape) {
+		transition_array[unquoted_state][static_cast<uint8_t>(options.escape)] = quoted_state;
 	}
 
 	// 7) Escaped State
@@ -67,8 +66,8 @@ CSVStateMachine::CSVStateMachine(CSVStateMachineConfiguration configuration_p,
 		// Escape is always invalid if not proceeded by another escape or quoted char
 		transition_array[escape_state][j] = invalid_state;
 	}
-	transition_array[escape_state][static_cast<uint8_t>(configuration.quote)] = quoted_state;
-	transition_array[escape_state][static_cast<uint8_t>(configuration.escape)] = quoted_state;
+	transition_array[escape_state][static_cast<uint8_t>(options.quote)] = quoted_state;
+	transition_array[escape_state][static_cast<uint8_t>(options.escape)] = quoted_state;
 	current_char = csv_buffer_iterator.GetNextChar();
 }
 
@@ -137,10 +136,10 @@ void CSVStateMachine::SniffDialect(vector<idx_t> &sniffed_column_counts) {
 	} else {
 		suggested_newline = NewLineIdentifier::SINGLE;
 	}
-	if (configuration.record_separator == NewLineIdentifier::NOT_SET) {
-		configuration.record_separator = suggested_newline;
+	if (options.new_line == NewLineIdentifier::NOT_SET) {
+		options.new_line = suggested_newline;
 	} else {
-		if (configuration.record_separator != suggested_newline) {
+		if (options.new_line != suggested_newline) {
 			// Invalidate this whole detection
 			cur_rows = 0;
 		}

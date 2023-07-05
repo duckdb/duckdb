@@ -25,24 +25,9 @@ enum class CSVState : uint8_t {
 	INVALID = 7           //! Got to an Invalid State, this should error.
 };
 
-struct CSVStateMachineConfiguration {
-	CSVStateMachineConfiguration(char field_separator_p, char quote_p, char escape_p,
-	                             NewLineIdentifier record_separator_p)
-	    : field_separator(field_separator_p), quote(quote_p), escape(escape_p), record_separator(record_separator_p) {
-	}
-	char field_separator;
-	char quote;
-	char escape;
-	// We set the record separator through the state machine
-	NewLineIdentifier record_separator;
-	// Which one was the identified start row for this file
-	idx_t start_row = 0;
-};
-
 class CSVStateMachine {
 public:
-	explicit CSVStateMachine(CSVStateMachineConfiguration configuration_p,
-	                         shared_ptr<CSVBufferManager> buffer_manager_p);
+	explicit CSVStateMachine(CSVReaderOptions options_p, shared_ptr<CSVBufferManager> buffer_manager_p);
 
 	//! This Sniff Dialect counts how many columns are produced per row using this state machine
 	void SniffDialect(vector<idx_t> &sniffed_column_counts);
@@ -55,14 +40,16 @@ public:
 
 	//! Resets the state machine, so it can be used again
 	void Reset();
-
-	CSVStateMachineConfiguration configuration;
+	CSVReaderOptions options;
 	CSVBufferIterator csv_buffer_iterator;
+	//! Which one was the identified start row for this file
+	idx_t start_row = 0;
 
 private:
 	//! The Transition Array is a Finite State Machine
 	//! It holds the transitions of all states, on all 256 possible different characters
 	uint8_t transition_array[7][256];
+
 	//! Current char being looked at by the machine
 	char current_char;
 };

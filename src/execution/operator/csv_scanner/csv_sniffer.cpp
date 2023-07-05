@@ -284,7 +284,7 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t p
 	bool rows_consistent = start_row + consistent_rows - options.skip_rows == sniffed_column_counts.size();
 	bool more_than_one_row = (consistent_rows > 1);
 	bool more_than_one_column = (num_cols > 1);
-	bool start_good = !candidates.empty() && (start_row <= candidates.front().state->configuration.start_row);
+	bool start_good = !candidates.empty() && (start_row <= candidates.front().state->start_row);
 	bool invalid_padding = !allow_padding && padding_count > 0;
 
 	if (!requested_types.empty() && requested_types.size() != num_cols && !invalid_padding) {
@@ -296,19 +296,19 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t p
 		best_consistent_rows = consistent_rows;
 		best_num_cols = num_cols;
 		prev_padding_count = padding_count;
-		state_machine.configuration.start_row = start_row;
+		state_machine.start_row = start_row;
 		candidates.clear();
 		candidates.emplace_back(&state_machine, num_cols);
 	} else if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding &&
 	           !invalid_padding) {
 		bool same_quote_is_candidate = false;
 		for (auto &candidate : candidates) {
-			if (state_machine.configuration.quote == candidate.state->configuration.quote) {
+			if (state_machine.options.quote == candidate.state->options.quote) {
 				same_quote_is_candidate = true;
 			}
 		}
 		if (!same_quote_is_candidate) {
-			state_machine.configuration.start_row = start_row;
+			state_machine.start_row = start_row;
 			candidates.emplace_back(&state_machine, num_cols);
 		}
 	}
@@ -371,28 +371,16 @@ void CSVSniffer::GenerateStateMachineSearchSpace() {
 			for (const auto &delim : delim_candidates) {
 				const auto &escape_candidates = escape_candidates_map[static_cast<uint8_t>(quoterule)];
 				for (const auto &escape : escape_candidates) {
-					CSVStateMachineConfiguration configuration(delim, quote, escape, options.new_line);
+					auto state_options = options;
+					state_options.quote = quote;
+					state_options.escape = escape;
+					state_options.delimiter = delim;
 					D_ASSERT(buffer_manager);
-					csv_state_machines.emplace_back(configuration, buffer_manager);
+					csv_state_machines.emplace_back(state_options, buffer_manager);
 				}
 			}
 		}
 	}
-}
-
-vector<CSVReaderOptions> CSVSniffer::ProduceDialectResults() {
-	vector<CSVReaderOptions> result;
-	for (auto &candidate : candidates) {
-		auto option = options;
-		option.quote = candidate.state->configuration.quote;
-		option.escape = candidate.state->configuration.escape;
-		option.delimiter = candidate.state->configuration.field_separator;
-		option.num_cols = candidate.max_num_columns;
-		option.new_line = candidate.state->configuration.record_separator;
-		option.skip_rows = candidate.state->configuration.start_row;
-		result.emplace_back(option);
-	}
-	return result;
 }
 
 void CSVSniffer::RefineCandidates() {
@@ -444,16 +432,16 @@ bool CSVSniffer::TryCastValue(const Value &value, const LogicalType &sql_type) {
 	if (value.IsNull()) {
 		return true;
 	}
-	if (options.has_format[LogicalTypeId::DATE] && sql_type.id() == LogicalTypeId::DATE) {
+	if (options.has_format.find(LogicalTypeId::DATE)->second && sql_type.id() == LogicalTypeId::DATE) {
 		date_t result;
 		string error_message;
-		return options.date_format[LogicalTypeId::DATE].TryParseDate(string_t(StringValue::Get(value)), result,
-		                                                             error_message);
-	} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type.id() == LogicalTypeId::TIMESTAMP) {
+		return options.date_format.find(LogicalTypeId::DATE)
+		    ->second.TryParseDate(string_t(StringValue::Get(value)), result, error_message);
+	} else if (options.has_format.find(LogicalTypeId::TIMESTAMP)->second && sql_type.id() == LogicalTypeId::TIMESTAMP) {
 		timestamp_t result;
 		string error_message;
-		return options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(string_t(StringValue::Get(value)),
-		                                                                       result, error_message);
+		return options.date_format.find(LogicalTypeId::TIMESTAMP)
+		    ->second.TryParseTimestamp(string_t(StringValue::Get(value)), result, error_message);
 	} else if (options.decimal_separator != "." && sql_type.id() == LogicalTypeId::DECIMAL) {
 		return TryCastDecimalValueCommaSeparated(string_t(StringValue::Get(value)), sql_type);
 	} else if (options.decimal_separator != "." &&
@@ -466,9 +454,10 @@ bool CSVSniffer::TryCastValue(const Value &value, const LogicalType &sql_type) {
 	}
 }
 
-void CSVSniffer::SetDateFormat(const string &format_specifier, const LogicalTypeId &sql_type) {
-	options.has_format[sql_type] = true;
-	auto &date_format = options.date_format[sql_type];
+void CSVSniffer::SetDateFormat(CSVStateCandidates &candidate, const string &format_specifier,
+                               const LogicalTypeId &sql_type) {
+	candidate.state->options.has_format[sql_type] = true;
+	auto &date_format = candidate.state->options.date_format[sql_type];
 	date_format.format_specifier = format_specifier;
 	StrTimeFormat::ParseFormatSpecifier(date_format.format_specifier, date_format);
 }
@@ -510,7 +499,7 @@ void CSVSniffer::DetectTypes() {
 					auto dummy_val = values[row_idx][col];
 					// try formatting for date types if the user did not specify one and it starts with numeric values.
 					string separator;
-					bool has_format_is_set = original_options.has_format.find(sql_type.id())->second;
+					bool has_format_is_set = options.has_format.find(sql_type.id())->second;
 					if (has_format_candidates.count(sql_type.id()) && !has_format_is_set && !dummy_val.IsNull() &&
 					    StartsWithNumericDate(separator, StringValue::Get(dummy_val))) {
 						// generate date format candidates the first time through
@@ -531,24 +520,24 @@ void CSVSniffer::DetectTypes() {
 								}
 							}
 							//	initialise the first candidate
-							options.has_format[sql_type.id()] = true;
+							candidate.state->options.has_format[sql_type.id()] = true;
 							//	all formats are constructed to be valid
-							SetDateFormat(type_format_candidates.back(), sql_type.id());
+							SetDateFormat(candidate, type_format_candidates.back(), sql_type.id());
 						}
 						// check all formats and keep the first one that works
 						StrpTimeFormat::ParseResult result;
 						auto save_format_candidates = type_format_candidates;
 						while (!type_format_candidates.empty()) {
 							//	avoid using exceptions for flow control...
-							auto &current_format = options.date_format[sql_type.id()];
+							auto &current_format = candidate.state->options.date_format[sql_type.id()];
 							if (current_format.Parse(StringValue::Get(dummy_val), result)) {
 								break;
 							}
 							//	doesn't work - move to the next one
 							type_format_candidates.pop_back();
-							options.has_format[sql_type.id()] = (!type_format_candidates.empty());
+							candidate.state->options.has_format[sql_type.id()] = (!type_format_candidates.empty());
 							if (!type_format_candidates.empty()) {
-								SetDateFormat(type_format_candidates.back(), sql_type.id());
+								SetDateFormat(candidate, type_format_candidates.back(), sql_type.id());
 							}
 						}
 						//	if none match, then this is not a value of type sql_type,
@@ -558,7 +547,7 @@ void CSVSniffer::DetectTypes() {
 							if (had_format_candidates) {
 								type_format_candidates.swap(save_format_candidates);
 								if (!type_format_candidates.empty()) {
-									SetDateFormat(type_format_candidates.back(), sql_type.id());
+									SetDateFormat(candidate, type_format_candidates.back(), sql_type.id());
 								}
 							} else {
 								has_format_candidates[sql_type.id()] = false;
@@ -576,8 +565,8 @@ void CSVSniffer::DetectTypes() {
 			// reset type detection, because first row could be header,
 			// but only do it if csv has more than one line (including header)
 			if (values.size() > 1 && is_header_row) {
-				info_sql_types_candidates =
-				    vector<vector<LogicalType>>(candidate.max_num_columns, options.auto_type_candidates);
+				info_sql_types_candidates = vector<vector<LogicalType>>(candidate.max_num_columns,
+				                                                        candidate.state->options.auto_type_candidates);
 				for (auto &f : format_candidates) {
 					f.second.clear();
 				}
@@ -612,9 +601,11 @@ void CSVSniffer::DetectTypes() {
 		}
 	}
 
+	// FIXME: Check if best_candidate is still valid
+
 	for (const auto &best : best_format_candidates) {
 		if (!best.second.empty()) {
-			SetDateFormat(best.second.back(), best.first);
+			SetDateFormat(*best_candidate, best.second.back(), best.first);
 		}
 	}
 }

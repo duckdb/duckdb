@@ -668,7 +668,7 @@ int StrpTimeFormat::NumericSpecifierWidth(StrTimeSpecifier specifier) {
 enum class TimeSpecifierAMOrPM : uint8_t { TIME_SPECIFIER_NONE = 0, TIME_SPECIFIER_AM = 1, TIME_SPECIFIER_PM = 2 };
 
 int32_t StrpTimeFormat::TryParseCollection(const char *data, idx_t &pos, idx_t size, const string_t collection[],
-                                           idx_t collection_count) {
+                                           idx_t collection_count) const {
 	for (idx_t c = 0; c < collection_count; c++) {
 		auto &entry = collection[c];
 		auto entry_data = entry.GetData();
@@ -695,7 +695,7 @@ int32_t StrpTimeFormat::TryParseCollection(const char *data, idx_t &pos, idx_t s
 }
 
 //! Parses a timestamp using the given specifier
-bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
+bool StrpTimeFormat::Parse(string_t str, ParseResult &result) const {
 	auto &result_data = result.data;
 	auto &error_message = result.error_message;
 	auto &error_position = result.error_position;
@@ -1146,7 +1146,7 @@ string StrpTimeFormat::ParseResult::FormatError(string_t input, const string &fo
 	                          FormatStrpTimeError(input.GetString(), error_position), error_message);
 }
 
-bool StrpTimeFormat::TryParseDate(string_t input, date_t &result, string &error_message) {
+bool StrpTimeFormat::TryParseDate(string_t input, date_t &result, string &error_message) const {
 	ParseResult parse_result;
 	if (!Parse(input, parse_result)) {
 		error_message = parse_result.FormatError(input, format_specifier);
@@ -1155,7 +1155,7 @@ bool StrpTimeFormat::TryParseDate(string_t input, date_t &result, string &error_
 	return parse_result.TryToDate(result);
 }
 
-bool StrpTimeFormat::TryParseTimestamp(string_t input, timestamp_t &result, string &error_message) {
+bool StrpTimeFormat::TryParseTimestamp(string_t input, timestamp_t &result, string &error_message) const {
 	ParseResult parse_result;
 	if (!Parse(input, parse_result)) {
 		error_message = parse_result.FormatError(input, format_specifier);
