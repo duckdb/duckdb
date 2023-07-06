@@ -76,6 +76,11 @@ string DuckDB::Platform() {
 	arch = "arm64";
 #endif
 
+#if !defined(_GLIBCXX_USE_CXX11_ABI) || _GLIBCXX_USE_CXX11_ABI == 0
+	if (os == "linux") {
+		postfix = "_gcc4";
+	}
+#endif
 #ifdef __MINGW32__
 	postfix = "_mingw";
 #endif

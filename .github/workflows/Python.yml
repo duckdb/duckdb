@@ -84,11 +84,13 @@ jobs:
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
-   manylinux-extensions:
-    name: DuckDB Extensions (gcc4)
+   manylinux-extensions-x64:
+    name: Linux Extensions (ggc4)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
-#    needs: linux-python3-9
+    needs: linux-python3-9
+    env:
+      GEN: ninja
 
     steps:
     - uses: actions/checkout@v3
@@ -97,24 +99,26 @@ jobs:
 
     - uses: ./.github/actions/manylinux_2014_setup
       with:
-         aws-cli: 1
-         ninja-build: 1
-         ccache: 1
-         ssh: 1
-         python_alias: 1
+        aws-cli: 1
+        ninja-build: 1
+        ccache: 1
+        ssh: 1
+        python_alias: 1
+        openssl: 1
 
     - uses: ./.github/actions/build_extensions
       with:
-        build_vcpkg_extensions: 0
-        build_out_of_tree_extensions: 0
+        vcpkg_target_triplet: x64-linux
+        post_install: rm build/release/src/libduckdb*
+        deploy_as: linux_amd64_gcc4
+        s3_id: ${{ secrets.S3_ID }}
+        s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         treat_warn_as_error: 0
-        out_of_tree_ext: 0
-        run_tests: 0
 
     - uses: actions/upload-artifact@v3
       with:
-        name: manylinux-extensions-x86_64
+        name: manylinux-extensions-x64
         path: |
           build/release/extension/*/*.duckdb_extension
 
@@ -140,7 +144,7 @@ jobs:
             arch: i686
           - isRelease: false
             arch: aarch64
-    needs: manylinux-extensions
+    needs: manylinux-extensions-x64
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_SKIP: '*-musllinux_aarch64'
@@ -169,7 +173,7 @@ jobs:
     - uses: actions/download-artifact@v3
       if: ${{ matrix.arch == 'x86_64' }}
       with:
-        name: manylinux-extensions-x86_64
+        name: manylinux-extensions-x64
         path: tools/pythonpkg
 
     - name: List extensions to be tested
