@@ -100,9 +100,8 @@ jobs:
         cat /tmp/duckdb.Rcheck/00check.log
         find /tmp/duckdb.Rcheck/ -type f -name "*.Rout*" -print0 | tee /dev/stderr | xargs -0 cat
 
-    - name: Valgrind (Temporarily disabled)
+    - name: Valgrind
       shell: bash
-      if: ${{ !always() }}
       run: |
         cd tools/rpkg
         export NOT_CRAN='false'
@@ -180,7 +179,7 @@ jobs:
         R CMD INSTALL .
 
   rstats-windows:
-    name: R Package Windows (Disabled)
+    name: R Package Windows
     needs: rstats-linux
     runs-on: windows-latest
     steps:
@@ -207,13 +206,11 @@ jobs:
 
     - name: Install
       shell: bash
-      if: ${{ !always() }}
       run: |
         R -f tools/rpkg/dependencies.R
 
     - name: Build
       shell: bash
-      if: ${{ !always() }}
       run: |
         cd tools/rpkg
         ./configure
@@ -224,7 +221,7 @@ jobs:
         if egrep 'NOTE|WARNING|ERROR' /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
   rstats-windows-extensions:
-    name: R Package Windows (Extensions, Disabled)
+    name: R Package Windows (Extensions)
     if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
     needs: rstats-linux
     runs-on: windows-latest
@@ -252,7 +249,6 @@ jobs:
           save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
       - uses: ./.github/actions/build_extensions
-        if: ${{ !always() }}
         with:
           deploy_as: windows_amd64_rtools
           treat_warn_as_error: 0
@@ -267,7 +263,6 @@ jobs:
           run_tests: 0
 
       - name: Install R package
-        if: ${{ !always() }}
         shell: bash
         run: |
           R -e 'install.packages("DBI", repos = "https://cloud.r-project.org")'
@@ -277,7 +272,6 @@ jobs:
           R CMD INSTALL duckdb_*.tar.gz
 
       - name: Test Load
-        if: ${{ !always() }}
         shell: bash
         run: |
           R -e 'con <- DBI::dbConnect(duckdb::duckdb(config = list("allow_unsigned_extensions" = "true")), debug=TRUE); lapply(Sys.glob("build/release/extension/*/*.duckdb_extension"), function(x) DBI::dbExecute(con, sprintf("LOAD \"%s\"", x))); DBI::dbDisconnect(con, shutdown=TRUE);'
