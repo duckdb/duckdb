@@ -66,7 +66,7 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 		if (value_ptr == nullptr) {
 			return SQL_ERROR;
 		}
-		hstmt->row_desc->ard->header.sql_desc_bind_type = *(SQLULEN *)value_ptr;
+		hstmt->row_desc->ard->header.sql_desc_bind_type = (SQLULEN) value_ptr;
 		return SQL_SUCCESS;
 	}
 	case SQL_ATTR_ROW_STATUS_PTR: {
