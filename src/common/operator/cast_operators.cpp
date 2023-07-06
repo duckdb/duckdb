@@ -1,4 +1,5 @@
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/hugeint.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/operator/numeric_cast.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
@@ -1425,11 +1426,20 @@ string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 	return result;
 }
 
+template <>
+string_t CastFromBlobToBit::Operation(string_t input, Vector &vector) {
+	idx_t result_size = input.GetSize() + 1;
+	if (result_size <= 1) {
+		throw ConversionException("Cannot cast empty BLOB to BIT");
+	}
+	return StringVector::AddStringOrBlob(vector, Bit::BlobToBit(input));
+}
+
 //===--------------------------------------------------------------------===//
 // Cast From Bit
 //===--------------------------------------------------------------------===//
 template <>
-string_t CastFromBit::Operation(string_t input, Vector &vector) {
+string_t CastFromBitToString::Operation(string_t input, Vector &vector) {
 
 	idx_t result_size = Bit::BitLength(input);
 	string_t result = StringVector::EmptyString(vector, result_size);
@@ -1480,6 +1490,30 @@ bool TryCastToBit::Operation(string_t input, string_t &result, Vector &result_ve
 	Bit::ToBit(input, result);
 	result.Finalize();
 	return true;
+}
+
+template <>
+bool CastFromBitToNumeric::Operation(string_t input, bool &result, bool strict) {
+	D_ASSERT(input.GetSize() > 1);
+
+	uint8_t value;
+	bool success = CastFromBitToNumeric::Operation(input, value, strict);
+	result = (value > 0);
+	return (success);
+}
+
+template <>
+bool CastFromBitToNumeric::Operation(string_t input, hugeint_t &result, bool strict) {
+	D_ASSERT(input.GetSize() > 1);
+
+	if (input.GetSize() - 1 > sizeof(hugeint_t)) {
+		throw ConversionException("Bitstring doesn't fit inside of %s", GetTypeId<hugeint_t>());
+	}
+	Bit::BitToNumeric(input, result);
+	if (result < NumericLimits<hugeint_t>::Minimum()) {
+		throw ConversionException("Minimum limit for HUGEINT is %s", NumericLimits<hugeint_t>::Minimum().ToString());
+	}
+	return (true);
 }
 
 //===--------------------------------------------------------------------===//
