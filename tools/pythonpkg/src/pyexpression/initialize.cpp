@@ -28,7 +28,9 @@ void InitializeStaticMethods(py::module_ &m) {
 
 	// Star Expression
 	docs = "";
-	m.def("StarExpression", &DuckDBPyExpression::StarExpression, docs);
+	m.def("StarExpression", &DuckDBPyExpression::StarExpression, py::kw_only(), py::arg("exclude") = py::list(), docs);
+	m.def(
+	    "StarExpression", []() { return DuckDBPyExpression::StarExpression(); }, docs);
 
 	// Function Expression
 	docs = "";

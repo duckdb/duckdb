@@ -78,7 +78,7 @@ public:
 	static shared_ptr<DuckDBPyExpression> BinaryFunctionExpression(const string &function_name,
 	                                                               shared_ptr<DuckDBPyExpression> arg_one,
 	                                                               shared_ptr<DuckDBPyExpression> arg_two);
-	static shared_ptr<DuckDBPyExpression> StarExpression();
+	static shared_ptr<DuckDBPyExpression> StarExpression(py::list exclude = py::none());
 	static shared_ptr<DuckDBPyExpression> ColumnExpression(const string &function_name);
 	static shared_ptr<DuckDBPyExpression> ConstantExpression(const PythonValue &value);
 	static shared_ptr<DuckDBPyExpression> CaseExpression(const DuckDBPyExpression &condition,

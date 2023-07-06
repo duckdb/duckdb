@@ -152,8 +152,29 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::BinaryFunctionExpression(cons
 	return InternalFunctionExpression(function_name, std::move(children));
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::StarExpression() {
-	return make_shared<DuckDBPyExpression>(make_uniq<duckdb::StarExpression>());
+static void PopulateExcludeList(case_insensitive_set_t &exclude, py::list list) {
+	for (auto item : list) {
+		if (py::isinstance<py::str>(item)) {
+			exclude.insert(std::string(py::str(item)));
+			continue;
+		}
+		shared_ptr<DuckDBPyExpression> expr;
+		if (!py::try_cast(item, expr)) {
+			throw py::value_error("Items in the exclude list should either be 'str' or Expression");
+		}
+		if (expr->GetExpression().type != ExpressionType::COLUMN_REF) {
+			throw py::value_error("Only ColumnExpressions are accepted Expression types here");
+		}
+		auto &column = expr->GetExpression().Cast<ColumnRefExpression>();
+		exclude.insert(column.GetColumnName());
+	}
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::StarExpression(py::list exclude_list) {
+	case_insensitive_set_t exclude;
+	auto star = make_uniq<duckdb::StarExpression>();
+	PopulateExcludeList(star->exclude_list, exclude_list);
+	return make_shared<DuckDBPyExpression>(std::move(star));
 }
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ColumnExpression(const string &column_name) {
