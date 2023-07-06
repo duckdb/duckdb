@@ -381,3 +381,9 @@ class TestExpression(object):
 
         res = rel.fetchall()
         assert res == [(datetime.datetime(2022, 1, 21, 0, 0),)]
+
+    def test_implicit_constant_conversion(self):
+        con = duckdb.connect()
+        rel = con.sql("select 42")
+        res = rel.select(5).fetchall()
+        assert res == [(5,)]

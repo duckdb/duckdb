@@ -2,6 +2,7 @@
 #include "duckdb_python/expression/pyexpression.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb_python/python_conversion.hpp"
 
 namespace duckdb {
 
@@ -127,12 +128,21 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 	m.def("__le__", &DuckDBPyExpression::LessThanOrEqual, docs);
 }
 
+static void InitializeImplicitConversion(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
+	m.def(py::init<>([](const py::object &obj) {
+		auto val = TransformPythonValue(obj);
+		return DuckDBPyExpression::InternalConstantExpression(std::move(val));
+	}));
+	py::implicitly_convertible<py::object, DuckDBPyExpression>();
+}
+
 void DuckDBPyExpression::Initialize(py::module_ &m) {
 	auto expression =
 	    py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>>(m, "Expression", py::module_local());
 
 	InitializeStaticMethods(m);
 	InitializeDunderMethods(expression);
+	InitializeImplicitConversion(expression);
 
 	const char *docs;
 

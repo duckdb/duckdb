@@ -162,7 +162,7 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ColumnExpression(const string
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ConstantExpression(const PythonValue &value) {
 	auto val = TransformPythonValue(value);
-	return make_shared<DuckDBPyExpression>(make_uniq<duckdb::ConstantExpression>(std::move(val)));
+	return InternalConstantExpression(std::move(val));
 }
 
 // Private methods
@@ -183,6 +183,10 @@ DuckDBPyExpression::InternalFunctionExpression(const string &function_name,
 	auto function_expression =
 	    make_uniq<duckdb::FunctionExpression>(function_name, std::move(children), nullptr, nullptr, false, is_operator);
 	return make_shared<DuckDBPyExpression>(std::move(function_expression));
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::InternalConstantExpression(Value val) {
+	return make_shared<DuckDBPyExpression>(make_uniq<duckdb::ConstantExpression>(std::move(val)));
 }
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ComparisonExpression(ExpressionType type,
