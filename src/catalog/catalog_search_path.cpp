@@ -1,10 +1,10 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 
+#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/catalog/catalog.hpp"
 #include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
@@ -255,7 +255,8 @@ bool CatalogSearchPath::SchemaInSearchPath(ClientContext &context, const string 
 		if (StringUtil::CIEquals(path.catalog, catalog_name)) {
 			return true;
 		}
-		if (IsInvalidCatalog(path.catalog) && StringUtil::CIEquals(catalog_name, DatabaseManager::GetDefaultDatabase(context))) {
+		if (IsInvalidCatalog(path.catalog) &&
+		    StringUtil::CIEquals(catalog_name, DatabaseManager::GetDefaultDatabase(context))) {
 			return true;
 		}
 	}
