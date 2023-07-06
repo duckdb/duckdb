@@ -9,6 +9,8 @@
 
 namespace duckdb {
 
+	// make a change to the generated files
+
 void ParsedExpression::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("class", expression_class);
 	serializer.WriteProperty("type", type);
