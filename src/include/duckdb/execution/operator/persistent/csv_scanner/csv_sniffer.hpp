@@ -30,32 +30,15 @@ struct SnifferResult {
 class CSVSniffer {
 public:
 	explicit CSVSniffer(CSVReaderOptions options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-	                    const vector<LogicalType> &requested_types_p = vector<LogicalType>())
-	    : requested_types(requested_types_p), options(std::move(options_p)),
-	      buffer_manager(std::move(buffer_manager_p)) {
-		// Check if any type is BLOB
-		for (auto &type : requested_types) {
-			if (type.id() == LogicalTypeId::BLOB) {
-				throw InvalidInputException(
-				    "CSV auto-detect for blobs not supported: there may be invalid UTF-8 in the file");
-			}
-		}
+	                    const vector<LogicalType> &requested_types_p = vector<LogicalType>());
 
-		if (options.skip_rows_set) {
-			// Skip rows if they are set
-			for (idx_t i = 0; i < options.skip_rows; i++) {
-				buffer_manager->file_handle->ReadLine();
-			}
-		}
-		//! Initialize Format Candidates
-		for (const auto &t : format_template_candidates) {
-			best_format_candidates[t.first].clear();
-		}
-	};
-
-	//! Resets stats so it can analyze the next chunk
-	void ResetStats();
 	//! Main method that sniffs the CSV file, returns the types, names and options as a result
+	//! CSV Sniffing consists of five steps:
+	//! 1. Dialect Detection: Generate the CSV Options (delimiter, quote, escape, etc.)
+	//! 2. Type Detection: Figures out the types of the columns
+	//! 3. Header Detection: Figures out if  the CSV file has a header and produces the names of the columns
+	//! 4. Type Replacement: Replaces the types of the columns if the user specified them
+	//! 5. Type Refinement: Refines the types of the columns
 	SnifferResult SniffCSV();
 
 private:
@@ -104,6 +87,10 @@ private:
 	//! 4. Refine Candidates over remaining chunks
 	void RefineCandidates();
 
+	//! Aux Functions
+	//! Resets stats so it can analyze the next chunk
+	void ResetStats();
+
 	//! ------------------------------------------------------//
 	//! ------------------- Type Detection ------------------ //
 	//! ------------------------------------------------------//
@@ -133,6 +120,11 @@ private:
 	//! ------------------------------------------------------//
 	void DetectHeader();
 	vector<string> names;
+
+	//! ------------------------------------------------------//
+	//! ------------------ Type Replacement ----------------- //
+	//! ------------------------------------------------------//
+	void ReplaceTypes();
 };
 
 } // namespace duckdb

@@ -46,6 +46,77 @@ bool TryCastFloatingValueCommaSeparated(const string_t &value_str, const Logical
 	}
 }
 
+static bool StartsWithNumericDate(string &separator, const string &value) {
+	auto begin = value.c_str();
+	auto end = begin + value.size();
+
+	//	StrpTimeFormat::Parse will skip whitespace, so we can too
+	auto field1 = std::find_if_not(begin, end, StringUtil::CharacterIsSpace);
+	if (field1 == end) {
+		return false;
+	}
+
+	//	first numeric field must start immediately
+	if (!StringUtil::CharacterIsDigit(*field1)) {
+		return false;
+	}
+	auto literal1 = std::find_if_not(field1, end, StringUtil::CharacterIsDigit);
+	if (literal1 == end) {
+		return false;
+	}
+
+	//	second numeric field must exist
+	auto field2 = std::find_if(literal1, end, StringUtil::CharacterIsDigit);
+	if (field2 == end) {
+		return false;
+	}
+	auto literal2 = std::find_if_not(field2, end, StringUtil::CharacterIsDigit);
+	if (literal2 == end) {
+		return false;
+	}
+
+	//	third numeric field must exist
+	auto field3 = std::find_if(literal2, end, StringUtil::CharacterIsDigit);
+	if (field3 == end) {
+		return false;
+	}
+
+	//	second literal must match first
+	if (((field3 - literal2) != (field2 - literal1)) || strncmp(literal1, literal2, (field2 - literal1)) != 0) {
+		return false;
+	}
+
+	//	copy the literal as the separator, escaping percent signs
+	separator.clear();
+	while (literal1 < field2) {
+		const auto literal_char = *literal1++;
+		if (literal_char == '%') {
+			separator.push_back(literal_char);
+		}
+		separator.push_back(literal_char);
+	}
+
+	return true;
+}
+
+string GenerateDateFormat(const string &separator, const char *format_template) {
+	string format_specifier = format_template;
+	auto amount_of_dashes = std::count(format_specifier.begin(), format_specifier.end(), '-');
+	if (!amount_of_dashes) {
+		return format_specifier;
+	}
+	string result;
+	result.reserve(format_specifier.size() - amount_of_dashes + (amount_of_dashes * separator.size()));
+	for (auto &character : format_specifier) {
+		if (character == '-') {
+			result += separator;
+		} else {
+			result += character;
+		}
+	}
+	return result;
+}
+
 bool CSVSniffer::TryCastValue(const Value &value, const LogicalType &sql_type) {
 	if (value.IsNull()) {
 		return true;
