@@ -432,6 +432,7 @@ ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file
 	file_name = file_handle_p->path;
 	file_handle = std::move(file_handle_p);
 	metadata = LoadMetadata(allocator, *file_handle, *file_opener);
+	stats_reader = CreateReader();
 	InitializeSchema();
 }
 
@@ -461,6 +462,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 		}
 	}
 
+	stats_reader = CreateReader();
 	InitializeSchema();
 }
 
@@ -468,6 +470,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_op
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
     : allocator(BufferAllocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)),
       metadata(std::move(metadata_p)), parquet_options(parquet_options_p) {
+	stats_reader = CreateReader();
 	InitializeSchema();
 }
 
@@ -481,6 +484,10 @@ const FileMetaData *ParquetReader::GetFileMetadata() {
 }
 
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
+
+//	auto current_count = count++;
+//	std::cout << current_count << std::endl;
+
 	idx_t file_col_idx;
 	for (file_col_idx = 0; file_col_idx < names.size(); file_col_idx++) {
 		if (names[file_col_idx] == name) {
@@ -493,8 +500,7 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 
 	unique_ptr<BaseStatistics> column_stats;
 	auto file_meta_data = GetFileMetadata();
-	auto root_reader = CreateReader();
-	auto column_reader = ((StructColumnReader *)root_reader.get())->GetChildReader(file_col_idx);
+	auto column_reader = ((StructColumnReader *)stats_reader.get())->GetChildReader(file_col_idx);
 
 	for (idx_t row_group_idx = 0; row_group_idx < file_meta_data->row_groups.size(); row_group_idx++) {
 		auto &row_group = file_meta_data->row_groups[row_group_idx];
