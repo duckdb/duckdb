@@ -9,7 +9,7 @@
 #include <cstring>
 
 #ifdef __MVS__
-#include "zos-tls.h"
+#include <zos-tls.h>
 #endif
 
 // max parse tree size approx 100 MB, should be enough

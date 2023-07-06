@@ -31,7 +31,7 @@
 #include "mb/pg_wchar.hpp"
 
 #ifdef __MVS__
-#include "zos-tls.h"
+#include <zos-tls.h>
 #endif
 
 namespace duckdb_libpgquery {
