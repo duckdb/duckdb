@@ -99,4 +99,40 @@ string DuckDB::Platform() {
 	return os + "_" + arch + postfix;
 }
 
+struct PragmaPlatformData : public GlobalTableFunctionState {
+	PragmaPlatformData() : finished(false) {
+	}
+
+	bool finished;
+};
+
+static unique_ptr<FunctionData> PragmaPlatformBind(ClientContext &context, TableFunctionBindInput &input,
+                                                   vector<LogicalType> &return_types, vector<string> &names) {
+	names.emplace_back("platform");
+	return_types.emplace_back(LogicalType::VARCHAR);
+	return nullptr;
+}
+
+static unique_ptr<GlobalTableFunctionState> PragmaPlatformInit(ClientContext &context, TableFunctionInitInput &input) {
+	return make_uniq<PragmaPlatformData>();
+}
+
+static void PragmaPlatformFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+	auto &data = data_p.global_state->Cast<PragmaPlatformData>();
+	if (data.finished) {
+		// finished returning values
+		return;
+	}
+	output.SetCardinality(1);
+	output.SetValue(0, 0, DuckDB::Platform());
+	data.finished = true;
+}
+
+void PragmaPlatform::RegisterFunction(BuiltinFunctions &set) {
+	TableFunction pragma_platform("pragma_platform", {}, PragmaPlatformFunction);
+	pragma_platform.bind = PragmaPlatformBind;
+	pragma_platform.init_global = PragmaPlatformInit;
+	set.AddFunction(pragma_platform);
+}
+
 } // namespace duckdb
