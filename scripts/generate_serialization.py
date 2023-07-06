@@ -216,7 +216,7 @@ for entry in file_list:
 
             class_serialize = ''
             class_serialize += base_serialize.replace('${BASE_CLASS_NAME}', base_class_name)
-            class_deserialize = f'\tauto result = make_uniq<{class_name}>({constructor_parameters});\n'
+            class_deserialize = f'\tauto result = duckdb::unique_ptr<{class_name}>(new {class_name}({constructor_parameters}));\n'
             for entry in serialize_data[class_name]:
                 property_name = entry['property'] if 'property' in entry else entry['name']
                 property_key = entry['name']

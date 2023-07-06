@@ -21,8 +21,10 @@ class LambdaExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::LAMBDA;
 
-public:
+private:
 	LambdaExpression();
+
+public:
 	LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr);
 
 	// we need the context to determine if this is a list of column references or an expression (for JSON)

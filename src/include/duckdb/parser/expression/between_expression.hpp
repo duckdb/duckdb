@@ -16,8 +16,10 @@ class BetweenExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::BETWEEN;
 
-public:
+private:
 	BetweenExpression();
+
+public:
 	DUCKDB_API BetweenExpression(unique_ptr<ParsedExpression> input, unique_ptr<ParsedExpression> lower,
 	                             unique_ptr<ParsedExpression> upper);
 

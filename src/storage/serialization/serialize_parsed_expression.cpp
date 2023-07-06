@@ -84,7 +84,7 @@ void BetweenExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> BetweenExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<BetweenExpression>();
+	auto result = duckdb::unique_ptr<BetweenExpression>(new BetweenExpression());
 	deserializer.ReadProperty("input", result->input);
 	deserializer.ReadProperty("lower", result->lower);
 	deserializer.ReadProperty("upper", result->upper);
@@ -98,7 +98,7 @@ void CaseExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> CaseExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<CaseExpression>();
+	auto result = duckdb::unique_ptr<CaseExpression>(new CaseExpression());
 	deserializer.ReadProperty("case_checks", result->case_checks);
 	deserializer.ReadProperty("else_expr", result->else_expr);
 	return std::move(result);
@@ -112,7 +112,7 @@ void CastExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> CastExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<CastExpression>();
+	auto result = duckdb::unique_ptr<CastExpression>(new CastExpression());
 	deserializer.ReadProperty("child", result->child);
 	deserializer.ReadProperty("cast_type", result->cast_type);
 	deserializer.ReadProperty("try_cast", result->try_cast);
@@ -126,7 +126,7 @@ void CollateExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> CollateExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<CollateExpression>();
+	auto result = duckdb::unique_ptr<CollateExpression>(new CollateExpression());
 	deserializer.ReadProperty("child", result->child);
 	deserializer.ReadProperty("collation", result->collation);
 	return std::move(result);
@@ -138,7 +138,7 @@ void ColumnRefExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> ColumnRefExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<ColumnRefExpression>();
+	auto result = duckdb::unique_ptr<ColumnRefExpression>(new ColumnRefExpression());
 	deserializer.ReadProperty("column_names", result->column_names);
 	return std::move(result);
 }
@@ -150,7 +150,7 @@ void ComparisonExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> ComparisonExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<ComparisonExpression>(type);
+	auto result = duckdb::unique_ptr<ComparisonExpression>(new ComparisonExpression(type));
 	deserializer.ReadProperty("left", result->left);
 	deserializer.ReadProperty("right", result->right);
 	return std::move(result);
@@ -162,7 +162,7 @@ void ConjunctionExpression::FormatSerialize(FormatSerializer &serializer) const 
 }
 
 unique_ptr<ParsedExpression> ConjunctionExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<ConjunctionExpression>(type);
+	auto result = duckdb::unique_ptr<ConjunctionExpression>(new ConjunctionExpression(type));
 	deserializer.ReadProperty("children", result->children);
 	return std::move(result);
 }
@@ -173,7 +173,7 @@ void ConstantExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> ConstantExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<ConstantExpression>();
+	auto result = duckdb::unique_ptr<ConstantExpression>(new ConstantExpression());
 	deserializer.ReadProperty("value", result->value);
 	return std::move(result);
 }
@@ -183,7 +183,7 @@ void DefaultExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> DefaultExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<DefaultExpression>();
+	auto result = duckdb::unique_ptr<DefaultExpression>(new DefaultExpression());
 	return std::move(result);
 }
 
@@ -201,7 +201,7 @@ void FunctionExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> FunctionExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<FunctionExpression>();
+	auto result = duckdb::unique_ptr<FunctionExpression>(new FunctionExpression());
 	deserializer.ReadProperty("function_name", result->function_name);
 	deserializer.ReadProperty("schema", result->schema);
 	deserializer.ReadProperty("children", result->children);
@@ -222,7 +222,7 @@ void LambdaExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> LambdaExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<LambdaExpression>();
+	auto result = duckdb::unique_ptr<LambdaExpression>(new LambdaExpression());
 	deserializer.ReadProperty("lhs", result->lhs);
 	deserializer.ReadProperty("expr", result->expr);
 	return std::move(result);
@@ -234,7 +234,7 @@ void OperatorExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> OperatorExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<OperatorExpression>(type);
+	auto result = duckdb::unique_ptr<OperatorExpression>(new OperatorExpression(type));
 	deserializer.ReadProperty("children", result->children);
 	return std::move(result);
 }
@@ -245,7 +245,7 @@ void ParameterExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> ParameterExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<ParameterExpression>();
+	auto result = duckdb::unique_ptr<ParameterExpression>(new ParameterExpression());
 	deserializer.ReadProperty("parameter_nr", result->parameter_nr);
 	return std::move(result);
 }
@@ -256,7 +256,7 @@ void PositionalReferenceExpression::FormatSerialize(FormatSerializer &serializer
 }
 
 unique_ptr<ParsedExpression> PositionalReferenceExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<PositionalReferenceExpression>();
+	auto result = duckdb::unique_ptr<PositionalReferenceExpression>(new PositionalReferenceExpression());
 	deserializer.ReadProperty("index", result->index);
 	return std::move(result);
 }
@@ -271,7 +271,7 @@ void StarExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> StarExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<StarExpression>();
+	auto result = duckdb::unique_ptr<StarExpression>(new StarExpression());
 	deserializer.ReadProperty("relation_name", result->relation_name);
 	deserializer.ReadProperty("exclude_list", result->exclude_list);
 	deserializer.ReadProperty("replace_list", result->replace_list);
@@ -289,7 +289,7 @@ void SubqueryExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> SubqueryExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<SubqueryExpression>();
+	auto result = duckdb::unique_ptr<SubqueryExpression>(new SubqueryExpression());
 	deserializer.ReadProperty("subquery_type", result->subquery_type);
 	deserializer.ReadProperty("subquery", result->subquery);
 	deserializer.ReadOptionalProperty("child", result->child);
@@ -316,7 +316,7 @@ void WindowExpression::FormatSerialize(FormatSerializer &serializer) const {
 }
 
 unique_ptr<ParsedExpression> WindowExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<WindowExpression>(type);
+	auto result = duckdb::unique_ptr<WindowExpression>(new WindowExpression(type));
 	deserializer.ReadProperty("function_name", result->function_name);
 	deserializer.ReadProperty("schema", result->schema);
 	deserializer.ReadProperty("catalog", result->catalog);
