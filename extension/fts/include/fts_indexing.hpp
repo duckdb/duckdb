@@ -12,7 +12,9 @@
 
 namespace duckdb {
 
-string drop_fts_index_query(ClientContext &context, const FunctionParameters &parameters);
-string create_fts_index_query(ClientContext &context, const FunctionParameters &parameters);
+struct FTSIndexing {
+	static string DropFTSIndexQuery(ClientContext &context, const FunctionParameters &parameters);
+	static string CreateFTSIndexQuery(ClientContext &context, const FunctionParameters &parameters);
+};
 
 } // namespace duckdb

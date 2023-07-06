@@ -12,6 +12,7 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
+      - '!tools/odbc/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
@@ -21,6 +22,7 @@ on:
     paths-ignore:
       - '**.md'
       - 'tools/**'
+      - '!tools/odbc/**'
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'

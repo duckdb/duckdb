@@ -15,7 +15,7 @@ BoundAggregateExpression::BoundAggregateExpression(AggregateFunction function, v
     : Expression(ExpressionType::BOUND_AGGREGATE, ExpressionClass::BOUND_AGGREGATE, function.return_type),
       function(std::move(function)), children(std::move(children)), bind_info(std::move(bind_info)),
       aggr_type(aggr_type), filter(std::move(filter)) {
-	D_ASSERT(!function.name.empty());
+	D_ASSERT(!this->function.name.empty());
 }
 
 string BoundAggregateExpression::ToString() const {

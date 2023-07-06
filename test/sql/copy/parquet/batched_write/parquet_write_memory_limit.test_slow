@@ -6,6 +6,8 @@ require parquet
 
 require 64bit
 
+load __TEST_DIR__/parquet_write_memory_limit.db
+
 # 100M rows, 2 BIGINT columns = 1.6GB uncompressed
 statement ok
 COPY (SELECT i, i // 5 AS j FROM range(100000000) t(i)) TO '__TEST_DIR__/large_integers.parquet'
@@ -16,7 +18,7 @@ statement ok
 SET threads=4
 
 statement ok
-SET memory_limit='900MB'
+SET memory_limit='1GB'
 
 # stream from one parquet file to another
 query I

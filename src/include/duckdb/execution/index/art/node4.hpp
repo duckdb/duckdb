@@ -8,10 +8,9 @@
 
 #pragma once
 
-#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/fixed_size_allocator.hpp"
+#include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/index/art/prefix.hpp"
 
 namespace duckdb {
 
@@ -20,8 +19,6 @@ class Node4 {
 public:
 	//! Number of non-null children
 	uint8_t count;
-	//! Compressed path (prefix)
-	Prefix prefix;
 	//! Array containing all partial key bytes
 	uint8_t key[Node::NODE_4_CAPACITY];
 	//! ART node pointers to the child nodes
@@ -39,13 +36,13 @@ public:
 	//! Initializes all fields of the node while shrinking a Node16 to a Node4
 	static Node4 &ShrinkNode16(ART &art, Node &node4, Node &node16);
 
-	//! Initializes a merge by incrementing the buffer IDs of the node
+	//! Initializes a merge by incrementing the buffer IDs of the child nodes
 	void InitializeMerge(ART &art, const ARTFlags &flags);
 
 	//! Insert a child node at byte
 	static void InsertChild(ART &art, Node &node, const uint8_t byte, const Node child);
 	//! Delete the child node at the respective byte
-	static void DeleteChild(ART &art, Node &node, const uint8_t byte);
+	static void DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte);
 
 	//! Replace the child node at the respective byte
 	void ReplaceChild(const uint8_t byte, const Node child);
@@ -55,10 +52,10 @@ public:
 	//! Get the first child that is greater or equal to the specific byte
 	optional_ptr<Node> GetNextChild(uint8_t &byte);
 
-	//! Serialize an ART node
+	//! Serialize this node
 	BlockPointer Serialize(ART &art, MetaBlockWriter &writer);
 	//! Deserialize this node
-	void Deserialize(ART &art, MetaBlockReader &reader);
+	void Deserialize(MetaBlockReader &reader);
 
 	//! Vacuum the children of the node
 	void Vacuum(ART &art, const ARTFlags &flags);
