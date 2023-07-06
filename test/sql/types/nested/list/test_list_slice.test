@@ -215,8 +215,8 @@ NULL
 query T
 SELECT s[-4:-2] FROM lists
 ----
-[e, l]
-[o, r]
+[e, l, l]
+[o, r, l]
 []
 NULL
 
@@ -266,9 +266,9 @@ NULL
 query T
 SELECT s[(-2147483646-1):-1] FROM lists
 ----
-[h, e, l, l]
-[w, o, r, l]
-[]
+[h, e, l, l, o]
+[w, o, r, l, d]
+[b]
 NULL
 
 query T

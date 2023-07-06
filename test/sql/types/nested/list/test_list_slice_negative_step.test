@@ -71,5 +71,5 @@ select a[start:-:step] from tbl;
 ----
 [1]
 [5, 1]
-[1]
+[2]
 [1]

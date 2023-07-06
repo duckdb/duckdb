@@ -175,8 +175,8 @@ NULL
 query T
 SELECT array_slice(s, -4, -2) FROM strings
 ----
-el
-or
+ell
+orl
 (empty)
 NULL
 
@@ -218,9 +218,9 @@ NULL
 query T
 SELECT array_slice(s, (-2147483646-1), -1) FROM strings
 ----
-hell
-worl
-(empty)
+hello
+world
+b
 NULL
 
 query T
