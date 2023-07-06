@@ -21,9 +21,6 @@ class LambdaExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::LAMBDA;
 
-private:
-	LambdaExpression();
-
 public:
 	LambdaExpression(unique_ptr<ParsedExpression> lhs, unique_ptr<ParsedExpression> expr);
 
@@ -45,6 +42,9 @@ public:
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
+
+private:
+	LambdaExpression();
 };
 
 } // namespace duckdb

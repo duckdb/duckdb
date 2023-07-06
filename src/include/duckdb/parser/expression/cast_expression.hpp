@@ -18,9 +18,6 @@ class CastExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::CAST;
 
-private:
-	CastExpression();
-
 public:
 	DUCKDB_API CastExpression(LogicalType target, unique_ptr<ParsedExpression> child, bool try_cast = false);
 
@@ -49,5 +46,8 @@ public:
 		return (entry.try_cast ? "TRY_CAST(" : "CAST(") + entry.child->ToString() + " AS " +
 		       entry.cast_type.ToString() + ")";
 	}
+
+private:
+	CastExpression();
 };
 } // namespace duckdb

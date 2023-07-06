@@ -15,9 +15,6 @@ class PositionalReferenceExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::POSITIONAL_REFERENCE;
 
-private:
-	PositionalReferenceExpression();
-
 public:
 	DUCKDB_API PositionalReferenceExpression(idx_t index);
 
@@ -38,5 +35,8 @@ public:
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
+
+private:
+	PositionalReferenceExpression();
 };
 } // namespace duckdb

@@ -17,9 +17,6 @@ class ComparisonExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::COMPARISON;
 
-private:
-	explicit ComparisonExpression(ExpressionType type);
-
 public:
 	DUCKDB_API ComparisonExpression(ExpressionType type, unique_ptr<ParsedExpression> left,
 	                                unique_ptr<ParsedExpression> right);
@@ -45,5 +42,8 @@ public:
 		return StringUtil::Format("(%s %s %s)", entry.left->ToString(), ExpressionTypeToOperator(entry.type),
 		                          entry.right->ToString());
 	}
+
+private:
+	explicit ComparisonExpression(ExpressionType type);
 };
 } // namespace duckdb

@@ -33,9 +33,6 @@ class WindowExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::WINDOW;
 
-private:
-	explicit WindowExpression(ExpressionType type);
-
 public:
 	WindowExpression(ExpressionType type, string catalog_name, string schema_name, const string &function_name);
 
@@ -213,6 +210,9 @@ public:
 
 		return result;
 	}
+
+private:
+	explicit WindowExpression(ExpressionType type);
 };
 
 } // namespace duckdb

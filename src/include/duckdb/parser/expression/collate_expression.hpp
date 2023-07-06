@@ -17,9 +17,6 @@ class CollateExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::COLLATE;
 
-private:
-	CollateExpression();
-
 public:
 	CollateExpression(string collation, unique_ptr<ParsedExpression> child);
 
@@ -39,5 +36,8 @@ public:
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
+
+private:
+	CollateExpression();
 };
 } // namespace duckdb

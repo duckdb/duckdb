@@ -18,9 +18,6 @@ class ConstantExpression : public ParsedExpression {
 public:
 	static constexpr const ExpressionClass TYPE = ExpressionClass::CONSTANT;
 
-private:
-	ConstantExpression();
-
 public:
 	DUCKDB_API explicit ConstantExpression(Value val);
 
@@ -40,6 +37,9 @@ public:
 
 	void FormatSerialize(FormatSerializer &serializer) const override;
 	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
+
+private:
+	ConstantExpression();
 };
 
 } // namespace duckdb
