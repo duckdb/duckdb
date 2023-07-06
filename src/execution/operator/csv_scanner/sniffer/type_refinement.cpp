@@ -39,8 +39,13 @@ void CSVSniffer::RefineTypes() {
 	} else {
 		DataChunk parse_chunk;
 		parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), detected_types);
-		// FIXME: We are doing this sequentially, but we could do this by jumping to samples.
+		// FIXME: We are doing this sequentially, but we could do this by jumping samples.
 		for (idx_t i = 1; i < best_candidate->options.sample_chunks; i++) {
+			bool finished_file = candidates[0]->csv_buffer_iterator.Finished();
+			if (finished_file) {
+				// we finished the file: stop
+				return;
+			}
 			// if jump ends up a bad line, we just skip this chunk
 			best_candidate->Parse(parse_chunk);
 			for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {

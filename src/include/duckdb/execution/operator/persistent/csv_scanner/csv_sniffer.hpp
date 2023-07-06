@@ -18,6 +18,9 @@ enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2
 
 //! Struct to store the result of the Sniffer
 struct SnifferResult {
+	SnifferResult(vector<LogicalType> return_types_p, vector<string> names_p, CSVReaderOptions options_p)
+	    : return_types(std::move(return_types_p)), names(std::move(names_p)), options(std::move(options_p)) {
+	}
 	//! Return Types that were detected
 	vector<LogicalType> return_types;
 	//! Column Names that were detected

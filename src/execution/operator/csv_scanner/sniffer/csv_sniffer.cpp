@@ -38,7 +38,7 @@ SnifferResult CSVSniffer::SniffCSV() {
 	// 5. Type Refinement
 	RefineTypes();
 	// We are done, construct and return the result.
-	return SnifferResult();
+	return SnifferResult(detected_types, names, best_candidate->options);
 }
 
 } // namespace duckdb
