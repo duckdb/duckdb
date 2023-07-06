@@ -923,6 +923,10 @@ class StructType(DataType):
             values = obj
         return _create_row(self.names, values)
 
+class UnionType(DataType):
+	def __init__(self):
+		raise ContributionsAcceptedError
+
 class UserDefinedType(DataType):
     """User-defined type (UDT).
 
