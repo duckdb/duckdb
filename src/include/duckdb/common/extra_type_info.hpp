@@ -26,7 +26,6 @@ enum class ExtraTypeInfoType : uint8_t {
 	AGGREGATE_STATE_TYPE_INFO = 8
 };
 
-
 struct ExtraTypeInfo {
 	explicit ExtraTypeInfo(ExtraTypeInfoType type);
 	explicit ExtraTypeInfo(ExtraTypeInfoType type, string alias);
@@ -109,7 +108,7 @@ struct ListTypeInfo : public ExtraTypeInfo {
 
 public:
 	void Serialize(FieldWriter &writer) const override;
-	void FormatSerialize(FormatSerializer &serializer) const override ;
+	void FormatSerialize(FormatSerializer &serializer) const override;
 
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
 	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
@@ -148,7 +147,7 @@ struct AggregateStateTypeInfo : public ExtraTypeInfo {
 
 public:
 	void Serialize(FieldWriter &writer) const override;
-	void FormatSerialize(FormatSerializer &serializer) const override ;
+	void FormatSerialize(FormatSerializer &serializer) const override;
 
 	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
 	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);

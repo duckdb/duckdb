@@ -20,7 +20,7 @@ ExtraTypeInfo::~ExtraTypeInfo() {
 
 bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
 	if (type == ExtraTypeInfoType::INVALID_TYPE_INFO || type == ExtraTypeInfoType::STRING_TYPE_INFO ||
-		type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
+	    type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
 		if (!other_p) {
 			if (!alias.empty()) {
 				return false;
@@ -107,10 +107,11 @@ bool ExtraTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 //===--------------------------------------------------------------------===//
 // Decimal Type Info
 //===--------------------------------------------------------------------===//
-DecimalTypeInfo::DecimalTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::DECIMAL_TYPE_INFO) {}
+DecimalTypeInfo::DecimalTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::DECIMAL_TYPE_INFO) {
+}
 
 DecimalTypeInfo::DecimalTypeInfo(uint8_t width_p, uint8_t scale_p)
-	: ExtraTypeInfo(ExtraTypeInfoType::DECIMAL_TYPE_INFO), width(width_p), scale(scale_p) {
+    : ExtraTypeInfo(ExtraTypeInfoType::DECIMAL_TYPE_INFO), width(width_p), scale(scale_p) {
 	D_ASSERT(width_p >= scale_p);
 }
 
@@ -133,10 +134,11 @@ bool DecimalTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 //===--------------------------------------------------------------------===//
 // String Type Info
 //===--------------------------------------------------------------------===//
-StringTypeInfo::StringTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO) {}
+StringTypeInfo::StringTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO) {
+}
 
 StringTypeInfo::StringTypeInfo(string collation_p)
-	: ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO), collation(std::move(collation_p)) {
+    : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO), collation(std::move(collation_p)) {
 }
 
 void StringTypeInfo::Serialize(FieldWriter &writer) const {
@@ -156,10 +158,11 @@ bool StringTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 //===--------------------------------------------------------------------===//
 // List Type Info
 //===--------------------------------------------------------------------===//
-ListTypeInfo::ListTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO) {}
+ListTypeInfo::ListTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO) {
+}
 
 ListTypeInfo::ListTypeInfo(LogicalType child_type_p)
-	: ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO), child_type(std::move(child_type_p)) {
+    : ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO), child_type(std::move(child_type_p)) {
 }
 
 void ListTypeInfo::Serialize(FieldWriter &writer) const {
@@ -179,12 +182,12 @@ bool ListTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 //===--------------------------------------------------------------------===//
 // Struct Type Info
 //===--------------------------------------------------------------------===//
-StructTypeInfo::StructTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO) {}
-
-StructTypeInfo::StructTypeInfo(child_list_t<LogicalType> child_types_p)
-	: ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types(std::move(child_types_p)) {
+StructTypeInfo::StructTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO) {
 }
 
+StructTypeInfo::StructTypeInfo(child_list_t<LogicalType> child_types_p)
+    : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types(std::move(child_types_p)) {
+}
 
 void StructTypeInfo::Serialize(FieldWriter &writer) const {
 	writer.WriteField<uint32_t>(child_types.size());
@@ -215,10 +218,11 @@ bool StructTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 //===--------------------------------------------------------------------===//
 // Aggregate State Type Info
 //===--------------------------------------------------------------------===//
-AggregateStateTypeInfo::AggregateStateTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO) {}
+AggregateStateTypeInfo::AggregateStateTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO) {
+}
 
 AggregateStateTypeInfo::AggregateStateTypeInfo(aggregate_state_t state_type_p)
-	: ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), state_type(std::move(state_type_p)) {
+    : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), state_type(std::move(state_type_p)) {
 }
 
 void AggregateStateTypeInfo::Serialize(FieldWriter &writer) const {
@@ -244,23 +248,24 @@ shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(FieldReader &reade
 		bound_argument_types.push_back(std::move(type));
 	}
 	return make_shared<AggregateStateTypeInfo>(
-		aggregate_state_t(std::move(function_name), std::move(return_type), std::move(bound_argument_types)));
+	    aggregate_state_t(std::move(function_name), std::move(return_type), std::move(bound_argument_types)));
 }
 
 bool AggregateStateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<AggregateStateTypeInfo>();
 	return state_type.function_name == other.state_type.function_name &&
-		   state_type.return_type == other.state_type.return_type &&
-		   state_type.bound_argument_types == other.state_type.bound_argument_types;
+	       state_type.return_type == other.state_type.return_type &&
+	       state_type.bound_argument_types == other.state_type.bound_argument_types;
 }
 
 //===--------------------------------------------------------------------===//
 // User Type Info
 //===--------------------------------------------------------------------===//
-UserTypeInfo::UserTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO) {}
+UserTypeInfo::UserTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO) {
+}
 
 UserTypeInfo::UserTypeInfo(string name_p)
-	: ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)) {
+    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)) {
 }
 
 void UserTypeInfo::Serialize(FieldWriter &writer) const {
@@ -341,8 +346,8 @@ private:
 };
 
 EnumTypeInfo::EnumTypeInfo(string enum_name_p, Vector &values_insert_order_p, idx_t dict_size_p)
-	: ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), values_insert_order(values_insert_order_p),
-	  dict_type(EnumDictType::VECTOR_DICT), enum_name(std::move(enum_name_p)), dict_size(dict_size_p) {
+    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), values_insert_order(values_insert_order_p),
+      dict_type(EnumDictType::VECTOR_DICT), enum_name(std::move(enum_name_p)), dict_size(dict_size_p) {
 }
 
 const EnumDictType &EnumTypeInfo::GetEnumDictType() const {
@@ -498,4 +503,4 @@ void EnumTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
 	((Vector &)values_insert_order).FormatSerialize(serializer, dict_size); // NOLINT - FIXME
 }
 
-}
+} // namespace duckdb
