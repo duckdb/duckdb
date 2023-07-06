@@ -66,6 +66,8 @@ public:
 	shared_ptr<DuckDBPyExpression> LessThanOrEqual(const DuckDBPyExpression &other);
 
 	shared_ptr<DuckDBPyExpression> SetAlias(const string &alias) const;
+	shared_ptr<DuckDBPyExpression> When(const DuckDBPyExpression &condition, const DuckDBPyExpression &value);
+	shared_ptr<DuckDBPyExpression> Else(const DuckDBPyExpression &value);
 
 public:
 	const ParsedExpression &GetExpression() const;
@@ -74,17 +76,25 @@ public:
 	static shared_ptr<DuckDBPyExpression> BinaryFunctionExpression(const string &function_name,
 	                                                               shared_ptr<DuckDBPyExpression> arg_one,
 	                                                               shared_ptr<DuckDBPyExpression> arg_two);
+	static shared_ptr<DuckDBPyExpression> StarExpression();
 	static shared_ptr<DuckDBPyExpression> ColumnExpression(const string &function_name);
 	static shared_ptr<DuckDBPyExpression> ConstantExpression(const PythonValue &value);
+	static shared_ptr<DuckDBPyExpression> CaseExpression(const DuckDBPyExpression &condition,
+	                                                     const DuckDBPyExpression &value);
+	static shared_ptr<DuckDBPyExpression> FunctionExpression(const string &function_name, py::args args);
 
 private:
-	static shared_ptr<DuckDBPyExpression> FunctionExpression(const string &function_name,
-	                                                         vector<unique_ptr<ParsedExpression>> children,
-	                                                         bool is_operator = false);
+	static shared_ptr<DuckDBPyExpression> InternalFunctionExpression(const string &function_name,
+	                                                                 vector<unique_ptr<ParsedExpression>> children,
+	                                                                 bool is_operator = false);
 	static shared_ptr<DuckDBPyExpression> BinaryOperator(const string &function_name, const DuckDBPyExpression &arg_one,
 	                                                     const DuckDBPyExpression &arg_two);
 	static shared_ptr<DuckDBPyExpression> ComparisonExpression(ExpressionType type, const DuckDBPyExpression &left,
 	                                                           const DuckDBPyExpression &right);
+	static shared_ptr<DuckDBPyExpression> InternalWhen(unique_ptr<duckdb::CaseExpression> expr,
+	                                                   const DuckDBPyExpression &condition,
+	                                                   const DuckDBPyExpression &value);
+	void AssertCaseExpression() const;
 
 private:
 	unique_ptr<ParsedExpression> expression;

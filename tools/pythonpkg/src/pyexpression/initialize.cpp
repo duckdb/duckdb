@@ -20,6 +20,18 @@ void InitializeStaticMethods(py::module_ &m) {
 	docs = "";
 	m.def("BinaryFunctionExpression", &DuckDBPyExpression::BinaryFunctionExpression, py::arg("function_name"),
 	      py::arg("arg_one"), py::arg("arg_two"), docs);
+
+	// Case Expression
+	docs = "";
+	m.def("CaseExpression", &DuckDBPyExpression::CaseExpression, py::arg("condition"), py::arg("value"), docs);
+
+	// Star Expression
+	docs = "";
+	m.def("StarExpression", &DuckDBPyExpression::StarExpression, docs);
+
+	// Function Expression
+	docs = "";
+	m.def("FunctionExpression", &DuckDBPyExpression::FunctionExpression, py::arg("function_name"), docs);
 }
 
 static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
@@ -141,6 +153,16 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 		Create a copy of this expression with the given alias.
 	)";
 	expression.def("alias", &DuckDBPyExpression::SetAlias, docs);
+
+	docs = R"(
+		TODO: add docs.
+	)";
+	expression.def("when", &DuckDBPyExpression::When, py::arg("condition"), py::arg("value"), docs);
+
+	docs = R"(
+		TODO: add docs.
+	)";
+	expression.def("otherwise", &DuckDBPyExpression::Else, py::arg("value"), docs);
 }
 
 } // namespace duckdb
