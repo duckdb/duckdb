@@ -102,7 +102,7 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t p
 	bool rows_consistent = start_row + consistent_rows - options.skip_rows == sniffed_column_counts.size();
 	bool more_than_one_row = (consistent_rows > 1);
 	bool more_than_one_column = (num_cols > 1);
-	bool start_good = !candidates.empty() && (start_row <= candidates.front().state->start_row);
+	bool start_good = !candidates.empty() && (start_row <= candidates.front()->start_row);
 	bool invalid_padding = !allow_padding && padding_count > 0;
 
 	if (!requested_types.empty() && requested_types.size() != num_cols && !invalid_padding) {
@@ -116,18 +116,20 @@ void CSVSniffer::AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t p
 		prev_padding_count = padding_count;
 		state_machine.start_row = start_row;
 		candidates.clear();
-		candidates.emplace_back(&state_machine, num_cols);
+		state_machine.options.num_cols = num_cols;
+		candidates.emplace_back(&state_machine);
 	} else if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding &&
 	           !invalid_padding) {
 		bool same_quote_is_candidate = false;
 		for (auto &candidate : candidates) {
-			if (state_machine.options.quote == candidate.state->options.quote) {
+			if (state_machine.options.quote == candidate->options.quote) {
 				same_quote_is_candidate = true;
 			}
 		}
 		if (!same_quote_is_candidate) {
 			state_machine.start_row = start_row;
-			candidates.emplace_back(&state_machine, num_cols);
+			state_machine.options.num_cols = num_cols;
+			candidates.emplace_back(&state_machine);
 		}
 	}
 }
@@ -139,7 +141,7 @@ void CSVSniffer::RefineCandidates() {
 			// no candidates or we only have one candidate left: stop
 			return;
 		}
-		bool finished_file = candidates[0].state->csv_buffer_iterator.Finished();
+		bool finished_file = candidates[0]->csv_buffer_iterator.Finished();
 		if (finished_file) {
 			// we finished the file: stop
 			return;
@@ -148,7 +150,7 @@ void CSVSniffer::RefineCandidates() {
 		auto cur_candidates = std::move(candidates);
 		cur_best_num_cols = std::max(best_num_cols, cur_best_num_cols);
 		for (auto &cur_candidate : cur_candidates) {
-			AnalyzeDialectCandidate(*cur_candidate.state, cur_best_num_cols);
+			AnalyzeDialectCandidate(*cur_candidate, cur_best_num_cols);
 		}
 	}
 }

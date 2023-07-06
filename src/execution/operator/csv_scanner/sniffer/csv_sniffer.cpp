@@ -79,95 +79,6 @@ string GenerateDateFormat(const string &separator, const char *format_template) 
 	return result;
 }
 
-// Helper function to generate column names
-static string GenerateColumnName(const idx_t total_cols, const idx_t col_number, const string &prefix = "column") {
-	int max_digits = NumericHelper::UnsignedLength(total_cols - 1);
-	int digits = NumericHelper::UnsignedLength(col_number);
-	string leading_zeros = string(max_digits - digits, '0');
-	string value = to_string(col_number);
-	return string(prefix + leading_zeros + value);
-}
-
-// Helper function for UTF-8 aware space trimming
-static string TrimWhitespace(const string &col_name) {
-	utf8proc_int32_t codepoint;
-	auto str = reinterpret_cast<const utf8proc_uint8_t *>(col_name.c_str());
-	idx_t size = col_name.size();
-	// Find the first character that is not left trimmed
-	idx_t begin = 0;
-	while (begin < size) {
-		auto bytes = utf8proc_iterate(str + begin, size - begin, &codepoint);
-		D_ASSERT(bytes > 0);
-		if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS) {
-			break;
-		}
-		begin += bytes;
-	}
-
-	// Find the last character that is not right trimmed
-	idx_t end;
-	end = begin;
-	for (auto next = begin; next < col_name.size();) {
-		auto bytes = utf8proc_iterate(str + next, size - next, &codepoint);
-		D_ASSERT(bytes > 0);
-		next += bytes;
-		if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS) {
-			end = next;
-		}
-	}
-
-	// return the trimmed string
-	return col_name.substr(begin, end - begin);
-}
-
-static string NormalizeColumnName(const string &col_name) {
-	// normalize UTF8 characters to NFKD
-	auto nfkd = utf8proc_NFKD(reinterpret_cast<const utf8proc_uint8_t *>(col_name.c_str()), col_name.size());
-	const string col_name_nfkd = string(const_char_ptr_cast(nfkd), strlen(const_char_ptr_cast(nfkd)));
-	free(nfkd);
-
-	// only keep ASCII characters 0-9 a-z A-Z and replace spaces with regular whitespace
-	string col_name_ascii = "";
-	for (idx_t i = 0; i < col_name_nfkd.size(); i++) {
-		if (col_name_nfkd[i] == '_' || (col_name_nfkd[i] >= '0' && col_name_nfkd[i] <= '9') ||
-		    (col_name_nfkd[i] >= 'A' && col_name_nfkd[i] <= 'Z') ||
-		    (col_name_nfkd[i] >= 'a' && col_name_nfkd[i] <= 'z')) {
-			col_name_ascii += col_name_nfkd[i];
-		} else if (StringUtil::CharacterIsSpace(col_name_nfkd[i])) {
-			col_name_ascii += " ";
-		}
-	}
-
-	// trim whitespace and replace remaining whitespace by _
-	string col_name_trimmed = TrimWhitespace(col_name_ascii);
-	string col_name_cleaned = "";
-	bool in_whitespace = false;
-	for (idx_t i = 0; i < col_name_trimmed.size(); i++) {
-		if (col_name_trimmed[i] == ' ') {
-			if (!in_whitespace) {
-				col_name_cleaned += "_";
-				in_whitespace = true;
-			}
-		} else {
-			col_name_cleaned += col_name_trimmed[i];
-			in_whitespace = false;
-		}
-	}
-
-	// don't leave string empty; if not empty, make lowercase
-	if (col_name_cleaned.empty()) {
-		col_name_cleaned = "_";
-	} else {
-		col_name_cleaned = StringUtil::Lower(col_name_cleaned);
-	}
-
-	// prepend _ if name starts with a digit or is a reserved keyword
-	if (KeywordHelper::IsKeyword(col_name_cleaned) || (col_name_cleaned[0] >= '0' && col_name_cleaned[0] <= '9')) {
-		col_name_cleaned = "_" + col_name_cleaned;
-	}
-	return col_name_cleaned;
-}
-
 bool BufferedCSVReader::JumpToNextSample() {
 	// get bytes contained in the previously read chunk
 	idx_t remaining_bytes_in_buffer = buffer_size - start;
@@ -252,6 +163,7 @@ SnifferResult CSVSniffer::SniffCSV() {
 	// 2. Type Detection
 	DetectTypes();
 	// 3. Header Detection
+	DetectHeader();
 	// 4. Type Refinement
 	// We are done, construct and return the result.
 	return SnifferResult();

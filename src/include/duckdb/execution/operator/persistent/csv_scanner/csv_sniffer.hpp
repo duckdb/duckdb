@@ -16,14 +16,6 @@ namespace duckdb {
 //! Different Quote Rules
 enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
 
-//! Struct to store candidates for the CSV State, with the last position they read in the buffer
-struct CSVStateCandidates {
-	CSVStateCandidates(CSVStateMachine *state_p, idx_t max_num_columns_p)
-	    : state(state_p), max_num_columns(max_num_columns_p) {};
-	CSVStateMachine *state = nullptr;
-	idx_t max_num_columns = 0;
-};
-
 //! Struct to store the result of the Sniffer
 struct SnifferResult {
 	//! Return Types that were detected
@@ -80,7 +72,7 @@ private:
 	//! Vector of CSV State Machines
 	vector<CSVStateMachine> csv_state_machines;
 	//! Current Candidates being considered
-	vector<CSVStateCandidates> candidates;
+	vector<CSVStateMachine *> candidates;
 	//! Original Options set
 	const CSVReaderOptions options;
 	//! Buffer being used on sniffer
@@ -121,7 +113,7 @@ private:
 	//! Change the date format for the type to the string
 	//! Try to cast a string value to the specified sql type
 	bool TryCastValue(const Value &value, const LogicalType &sql_type);
-	void SetDateFormat(CSVStateCandidates &candidate, const string &format_specifier, const LogicalTypeId &sql_type);
+	void SetDateFormat(CSVStateMachine &candidate, const string &format_specifier, const LogicalTypeId &sql_type);
 
 	//! Variables for Type Detection
 	//! Format Candidates for Date and Timestamp Types
@@ -133,8 +125,14 @@ private:
 	};
 	vector<vector<LogicalType>> best_sql_types_candidates;
 	map<LogicalTypeId, vector<string>> best_format_candidates;
-	CSVStateCandidates *best_candidate = nullptr;
+	CSVStateMachine *best_candidate = nullptr;
 	vector<Value> best_header_row;
+
+	//! ------------------------------------------------------//
+	//! ------------------ Header Detection ----------------- //
+	//! ------------------------------------------------------//
+	void DetectHeader();
+	vector<string> names;
 };
 
 } // namespace duckdb
