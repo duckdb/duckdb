@@ -175,7 +175,6 @@ public:
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
 		table_function.get_batch_info = ParquetGetBatchInfo;
-
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
 		table_function.filter_prune = true;
@@ -520,6 +519,7 @@ public:
 	static void ParquetComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                         vector<unique_ptr<Expression>> &filters) {
 		auto &data = bind_data_p->Cast<ParquetReadBindData>();
+
 		auto reset_reader = MultiFileReader::ComplexFilterPushdown(context, data.files,
 		                                                           data.parquet_options.file_options, get, filters);
 		if (reset_reader) {

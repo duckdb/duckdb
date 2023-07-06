@@ -1,18 +1,18 @@
 #define DUCKDB_EXTENSION_MAIN
 #include "fts_extension.hpp"
-#include "fts_indexing.hpp"
-#include "libstemmer.h"
 
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/pragma_function.hpp"
+#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/main/extension_util.hpp"
+#include "fts_indexing.hpp"
+#include "libstemmer.h"
 
 namespace duckdb {
 
-static void stem_function(DataChunk &args, ExpressionState &state, Vector &result) {
+static void StemFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input_vector = args.data[0];
 	auto &stemmer_vector = args.data[1];
 
@@ -36,7 +36,8 @@ static void stem_function(DataChunk &args, ExpressionState &state, Vector &resul
 			        StringUtil::Join(stemmers, n_stemmers, "', '", [](const char *st) { return st; })));
 		    }
 
-		    auto output_data = (char *)sb_stemmer_stem(s, (const sb_symbol *)input_data, input_size);
+		    auto output_data =
+		        const_char_ptr_cast(sb_stemmer_stem(s, reinterpret_cast<const sb_symbol *>(input_data), input_size));
 		    auto output_size = sb_stemmer_length(s);
 		    auto output = StringVector::AddString(result, output_data, output_size);
 
@@ -47,10 +48,11 @@ static void stem_function(DataChunk &args, ExpressionState &state, Vector &resul
 
 void FtsExtension::Load(DuckDB &db) {
 	auto &db_instance = *db.instance;
-	ScalarFunction stem_func("stem", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, stem_function);
+	ScalarFunction stem_func("stem", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR, StemFunction);
 
-	auto create_fts_index_func = PragmaFunction::PragmaCall(
-	    "create_fts_index", create_fts_index_query, {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR);
+	auto create_fts_index_func =
+	    PragmaFunction::PragmaCall("create_fts_index", FTSIndexing::CreateFTSIndexQuery,
+	                               {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR);
 	create_fts_index_func.named_parameters["stemmer"] = LogicalType::VARCHAR;
 	create_fts_index_func.named_parameters["stopwords"] = LogicalType::VARCHAR;
 	create_fts_index_func.named_parameters["ignore"] = LogicalType::VARCHAR;
@@ -59,7 +61,7 @@ void FtsExtension::Load(DuckDB &db) {
 	create_fts_index_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
 
 	auto drop_fts_index_func =
-	    PragmaFunction::PragmaCall("drop_fts_index", drop_fts_index_query, {LogicalType::VARCHAR});
+	    PragmaFunction::PragmaCall("drop_fts_index", FTSIndexing::DropFTSIndexQuery, {LogicalType::VARCHAR});
 
 	ExtensionUtil::RegisterFunction(db_instance, stem_func);
 	ExtensionUtil::RegisterFunction(db_instance, create_fts_index_func);
