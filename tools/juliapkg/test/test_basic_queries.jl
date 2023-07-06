@@ -6,7 +6,7 @@
     results = DBInterface.execute(con, "SELECT 42 a")
 
     # iterator
-    for row in results
+    for row in Tables.rows(results)
         @test row.a == 42
         @test row[1] == 42
     end
