@@ -7,8 +7,8 @@
 
 duckdb_extension_load(azure
     LOAD_TESTS
-    GIT_URL https://github.com/samansmink/azure-extension
-    GIT_TAG 8b6f1062988cce067a54c9f1a93bf0874531a675
+    GIT_URL https://github.com/duckdblabs/duckdb_azure
+    GIT_TAG 7cd5149ee879f3ea9e0a9215e0739643dd75eb6e
 )
 
 duckdb_extension_load(aws
@@ -17,8 +17,8 @@ duckdb_extension_load(aws
     GIT_TAG ff226f67941d71f9e20eaba031d1088366be75b1
 )
 
-duckdb_extension_load(iceberg
-    LOAD_TESTS
-    GIT_URL git@github.com:samansmink/duckdb-iceberg.git
-    GIT_TAG a2668326dbc402b463ba0d80daacff87eb1ee59b
-)
+#duckdb_extension_load(iceberg
+#    LOAD_TESTS
+#    GIT_URL git@github.com:samansmink/duckdb-iceberg.git
+#    GIT_TAG a2668326dbc402b463ba0d80daacff87eb1ee59b
+#)
