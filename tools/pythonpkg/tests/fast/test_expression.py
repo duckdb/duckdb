@@ -7,7 +7,9 @@ from duckdb import (
     Expression,
     BinaryFunctionExpression,
     ConstantExpression,
-    ColumnExpression
+    ColumnExpression,
+    StarExpression,
+    FunctionExpression
 )
 from pyduckdb.value.constant import Value
 
@@ -268,6 +270,19 @@ class TestExpression(object):
         rel2 = rel.select(col)
         rel2.columns == ['b']
 
+    def test_star_expression(self):
+        con = duckdb.connect()
+        
+        rel = con.sql("""
+            select
+                1 as a,
+                2 as b
+        """)
+        star = StarExpression()
+        rel = rel.select(star)
+        res = rel.fetchall()
+        assert res == [(1, 2)]
+
     def test_struct_expression(self):
         con = duckdb.connect()
 
@@ -284,3 +299,25 @@ class TestExpression(object):
         rel = rel.select(expr)
         res = rel.fetchall()
         assert res == [({'a': 1, 'b': 2},)]
+    
+    def test_function_expression(self):
+        con = duckdb.connect()
+
+        def my_simple_func(a: int, b: int, c: int) -> int:
+            return a + b + c
+        
+        con.create_function('my_func', my_simple_func)
+
+        rel = con.sql("""
+            select
+                1 as a,
+                2 as b,
+                3 as c
+        """)
+        col1 = ColumnExpression('a')
+        col2 = ColumnExpression('b')
+        col3 = ColumnExpression('c')
+        expr = FunctionExpression('my_func', col1, col2, col3)
+        rel2 = rel.select(expr)
+        res = rel2.fetchall()
+        assert res == [(6,)]

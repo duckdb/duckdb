@@ -61,7 +61,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Select(py::args args) {
 	for (auto arg : args) {
 		shared_ptr<DuckDBPyExpression> py_expr;
 		if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(arg, py_expr)) {
-			throw InvalidInputException("Please provide arguments of type DuckDBPyExpression!");
+			throw InvalidInputException("Please provide arguments of type Expression!");
 		}
 		auto expr = py_expr->GetExpression().Copy();
 		expressions.push_back(std::move(expr));

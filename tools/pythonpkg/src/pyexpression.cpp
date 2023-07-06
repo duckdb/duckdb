@@ -1,5 +1,6 @@
 #include "duckdb_python/expression/pyexpression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 
 namespace duckdb {
 
@@ -92,7 +93,7 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::LessThanOrEqual(const DuckDBP
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Negate() {
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(GetExpression().Copy());
-	return DuckDBPyExpression::FunctionExpression("-", std::move(children), true);
+	return DuckDBPyExpression::InternalFunctionExpression("-", std::move(children), true);
 }
 
 // Static creation methods
@@ -104,7 +105,11 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::BinaryFunctionExpression(cons
 
 	children.push_back(arg_one->GetExpression().Copy());
 	children.push_back(arg_two->GetExpression().Copy());
-	return FunctionExpression(function_name, std::move(children));
+	return InternalFunctionExpression(function_name, std::move(children));
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::StarExpression() {
+	return make_shared<DuckDBPyExpression>(make_uniq<duckdb::StarExpression>());
 }
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ColumnExpression(const string &column_name) {
@@ -125,12 +130,12 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::BinaryOperator(const string &
 
 	children.push_back(arg_one.GetExpression().Copy());
 	children.push_back(arg_two.GetExpression().Copy());
-	return FunctionExpression(function_name, std::move(children), true);
+	return InternalFunctionExpression(function_name, std::move(children), true);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::FunctionExpression(const string &function_name,
-                                                                      vector<unique_ptr<ParsedExpression>> children,
-                                                                      bool is_operator) {
+shared_ptr<DuckDBPyExpression>
+DuckDBPyExpression::InternalFunctionExpression(const string &function_name,
+                                               vector<unique_ptr<ParsedExpression>> children, bool is_operator) {
 	auto function_expression =
 	    make_uniq<duckdb::FunctionExpression>(function_name, std::move(children), nullptr, nullptr, false, is_operator);
 	return make_shared<DuckDBPyExpression>(std::move(function_expression));
@@ -143,6 +148,24 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ComparisonExpression(Expressi
 	auto right = right_p.GetExpression().Copy();
 	return make_shared<DuckDBPyExpression>(
 	    make_uniq<duckdb::ComparisonExpression>(type, std::move(left), std::move(right)));
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::CaseExpression(const DuckDBPyExpression &condition,
+                                                                  const DuckDBPyExpression &value) {
+	return nullptr;
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::FunctionExpression(const string &function_name, py::args args) {
+	vector<unique_ptr<ParsedExpression>> expressions;
+	for (auto arg : args) {
+		shared_ptr<DuckDBPyExpression> py_expr;
+		if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(arg, py_expr)) {
+			throw InvalidInputException("Please provide arguments of type Expression!");
+		}
+		auto expr = py_expr->GetExpression().Copy();
+		expressions.push_back(std::move(expr));
+	}
+	return InternalFunctionExpression(function_name, std::move(expressions));
 }
 
 } // namespace duckdb

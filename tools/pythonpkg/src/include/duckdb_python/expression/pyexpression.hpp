@@ -74,13 +74,17 @@ public:
 	static shared_ptr<DuckDBPyExpression> BinaryFunctionExpression(const string &function_name,
 	                                                               shared_ptr<DuckDBPyExpression> arg_one,
 	                                                               shared_ptr<DuckDBPyExpression> arg_two);
+	static shared_ptr<DuckDBPyExpression> StarExpression();
 	static shared_ptr<DuckDBPyExpression> ColumnExpression(const string &function_name);
 	static shared_ptr<DuckDBPyExpression> ConstantExpression(const PythonValue &value);
+	static shared_ptr<DuckDBPyExpression> CaseExpression(const DuckDBPyExpression &condition,
+	                                                     const DuckDBPyExpression &value);
+	static shared_ptr<DuckDBPyExpression> FunctionExpression(const string &function_name, py::args args);
 
 private:
-	static shared_ptr<DuckDBPyExpression> FunctionExpression(const string &function_name,
-	                                                         vector<unique_ptr<ParsedExpression>> children,
-	                                                         bool is_operator = false);
+	static shared_ptr<DuckDBPyExpression> InternalFunctionExpression(const string &function_name,
+	                                                                 vector<unique_ptr<ParsedExpression>> children,
+	                                                                 bool is_operator = false);
 	static shared_ptr<DuckDBPyExpression> BinaryOperator(const string &function_name, const DuckDBPyExpression &arg_one,
 	                                                     const DuckDBPyExpression &arg_two);
 	static shared_ptr<DuckDBPyExpression> ComparisonExpression(ExpressionType type, const DuckDBPyExpression &left,
