@@ -177,7 +177,7 @@ struct EpochMsFun {
 	static constexpr const char *Description = "Extract the epoch component in milliseconds from a temporal type";
 	static constexpr const char *Example = "epoch_ms(timestamp '2021-08-03 11:59:44.123456')";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct EpochUsFun {
@@ -186,7 +186,7 @@ struct EpochUsFun {
 	static constexpr const char *Description = "Extract the epoch component in microseconds from a temporal type";
 	static constexpr const char *Example = "epoch_us(timestamp '2021-08-03 11:59:44.123456')";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct EpochNsFun {
@@ -195,7 +195,7 @@ struct EpochNsFun {
 	static constexpr const char *Description = "Extract the epoch component in nanoseconds from a temporal type";
 	static constexpr const char *Example = "epoch_ns(timestamp '2021-08-03 11:59:44.123456')";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct EraFun {
@@ -297,7 +297,7 @@ struct MakeTimestampFun {
 	static constexpr const char *Description = "The timestamp for the given parts";
 	static constexpr const char *Example = "make_timestamp(1992, 9, 20, 13, 34, 27.123456)";
 
-	static ScalarFunction GetFunction();
+	static ScalarFunctionSet GetFunctions();
 };
 
 struct MicrosecondsFun {
@@ -492,8 +492,8 @@ struct ToSecondsFun {
 struct ToTimestampFun {
 	static constexpr const char *Name = "to_timestamp";
 	static constexpr const char *Parameters = "sec";
-	static constexpr const char *Description = "Converts sec since epoch to a timestamp";
-	static constexpr const char *Example = "to_timestamp(701222400)";
+	static constexpr const char *Description = "Converts secs since epoch to a timestamp with time zone";
+	static constexpr const char *Example = "to_timestamp(1284352323.5)";
 
 	static ScalarFunction GetFunction();
 };
@@ -510,7 +510,7 @@ struct ToYearsFun {
 struct TryStrpTimeFun {
 	static constexpr const char *Name = "try_strptime";
 	static constexpr const char *Parameters = "text,format";
-	static constexpr const char *Description = "Converts string to timestamp with time zone according to the format string if %Z is specified. Returns NULL on failure.";
+	static constexpr const char *Description = "Converts string to timestamp using the format string (timestamp with time zone if %Z is specified). Returns NULL on failure.";
 	static constexpr const char *Example = "try_strptime('Wed, 1 January 1992 - 08:38:40 PM', '%a, %-d %B %Y - %I:%M:%S %p')";
 
 	static ScalarFunctionSet GetFunctions();
