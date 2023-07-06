@@ -1,6 +1,7 @@
 from typing import (
     Union,
-    TYPE_CHECKING
+    TYPE_CHECKING,
+	Any
 )
 
 if TYPE_CHECKING:
@@ -37,64 +38,64 @@ class Column:
     def __neg__(self):
         return Column(-self.expr)
 
-    def __add__(self, other: Column):
+    def __add__(self, other: "Column"):
         return Column(self.expr + other.expr)
 
-    def __sub__(self, other: Column):
+    def __sub__(self, other: "Column"):
         return Column(self.expr - other.expr)
 
-    def __mul__(self, other: Column):
+    def __mul__(self, other: "Column"):
         return Column(self.expr * other.expr)
 
-    def __div__(self, other: Column):
+    def __div__(self, other: "Column"):
         return Column(self.expr * other.expr)
 
-    def __truediv__(self, other: Column):
+    def __truediv__(self, other: "Column"):
         return Column(self.expr / other.expr)
 
-    def __mod__(self, other: Column):
+    def __mod__(self, other: "Column"):
         return Column(self.expr % other.expr)
 
-    def __pow__(self, other: Column):
+    def __pow__(self, other: "Column"):
         return Column(self.expr ** other.expr)
 
-    def __radd__(self, other: Column):
+    def __radd__(self, other: "Column"):
         return Column(other.expr + self.expr)
 
-    def __rsub__(self, other: Column):
+    def __rsub__(self, other: "Column"):
         return Column(other.expr - self.expr)
 
-    def __rmul__(self, other: Column):
+    def __rmul__(self, other: "Column"):
         return Column(other.expr * self.expr)
 
-    def __rdiv__(self, other: Column):
+    def __rdiv__(self, other: "Column"):
         return Column(other.expr / self.expr)
 
-    def __rtruediv__(self, other: Column):
+    def __rtruediv__(self, other: "Column"):
         return Column(other.expr / self.expr)
 
-    def __rmod__(self, other: Column):
+    def __rmod__(self, other: "Column"):
         return Column(other.expr % self.expr)
 
-    def __rpow__(self, other: Column):
+    def __rpow__(self, other: "Column"):
         return Column(other.expr ** self.expr)
 
-    # logistic operators
-    def __eq__(  # type: ignore[override]
-        self,
-        other: Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"],
-    ) -> "Column":
-        """binary function"""
-        return _bin_op("equalTo")(self, other)
+    ## logistic operators
+    #def __eq__(  # type: ignore[override]
+    #    self,
+    #    other: Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"],
+    #) -> "Column":
+    #    """binary function"""
+    #    return _bin_op("equalTo")(self, other)
 
-    def __ne__(  # type: ignore[override]
-        self,
-        other: Any,
-    ) -> "Column":
-        """binary function"""
-        return _bin_op("notEqual")(self, other)
+    #def __ne__(  # type: ignore[override]
+    #    self,
+    #    other: Any,
+    #) -> "Column":
+    #    """binary function"""
+    #    return _bin_op("notEqual")(self, other)
 
-    __lt__ = _bin_op("lt")
-    __le__ = _bin_op("leq")
-    __ge__ = _bin_op("geq")
-    __gt__ = _bin_op("gt")
+    #__lt__ = _bin_op("lt")
+    #__le__ = _bin_op("leq")
+    #__ge__ = _bin_op("geq")
+    #__gt__ = _bin_op("gt")

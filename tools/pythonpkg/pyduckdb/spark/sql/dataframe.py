@@ -3,12 +3,16 @@ from pyduckdb.spark.exception import ContributionsAcceptedError
 from typing import (
     TYPE_CHECKING,
     List,
-	Optional
+    Optional,
+    Union,
+    Tuple,
+    overload
 )
 
 from pyduckdb.spark.sql.readwriter import DataFrameWriter
 from pyduckdb.spark.sql.types import Row, StructType
 from pyduckdb.spark.sql.type_utils import duckdb_to_spark_schema
+from pyduckdb.spark.sql.column import Column
 import duckdb
 
 if TYPE_CHECKING:
@@ -29,6 +33,13 @@ class DataFrame:
     def createGlobalTempView(self, name: str) -> None:
         raise NotImplementedError
 
+    # select *, 5 from (VALUES (1)) tbl(a)
+    def withColumn(self, columnName: str, col: Column) -> "DataFrame":
+        cols = [duckdb.ColumnExpression(x) for x in self.relation.columns]
+        cols.append(col.expr.alias(columnName))
+        rel = self.relation.select(*cols)
+        return DataFrame(rel, self.session)
+
     @property
     def schema(self) -> StructType:
         """Returns the schema of this :class:`DataFrame` as a :class:`pyspark.sql.types.StructType`.
@@ -43,6 +54,57 @@ class DataFrame:
         """
         return self._schema
 
+    @overload
+    def __getitem__(self, item: Union[int, str]) -> Column:
+        ...
+
+    @overload
+    def __getitem__(self, item: Union[Column, List, Tuple]) -> "DataFrame":
+        ...
+
+    def __getitem__(self, item: Union[int, str, Column, List, Tuple]) -> Union[Column, "DataFrame"]:
+        """Returns the column as a :class:`Column`.
+
+        .. versionadded:: 1.3.0
+
+        Examples
+        --------
+        >>> df.select(df['age']).collect()
+        [Row(age=2), Row(age=5)]
+        >>> df[ ["name", "age"]].collect()
+        [Row(name='Alice', age=2), Row(name='Bob', age=5)]
+        >>> df[ df.age > 3 ].collect()
+        [Row(age=5, name='Bob')]
+        >>> df[df[0] > 3].collect()
+        [Row(age=5, name='Bob')]
+        """
+        if isinstance(item, str):
+            return self.item
+        #elif isinstance(item, Column):
+        #    return self.filter(item)
+        #elif isinstance(item, (list, tuple)):
+        #    return self.select(*item)
+        #elif isinstance(item, int):
+        #    jc = self._jdf.apply(self.columns[item])
+        #    return Column(jc)
+        else:
+            raise TypeError("unexpected item type: %s" % type(item))
+
+    def __getattr__(self, name: str) -> Column:
+        """Returns the :class:`Column` denoted by ``name``.
+
+        .. versionadded:: 1.3.0
+
+        Examples
+        --------
+        >>> df.select(df.age).collect()
+        [Row(age=2), Row(age=5)]
+        """
+        if name not in self.relation.columns:
+            raise AttributeError(
+                "'%s' object has no attribute '%s'" % (self.__class__.__name__, name)
+            )
+        return Column(duckdb.ColumnExpression(name))
 
     @property
     def write(self) -> DataFrameWriter:
