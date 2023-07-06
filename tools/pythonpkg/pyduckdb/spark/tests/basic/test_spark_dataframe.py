@@ -207,48 +207,8 @@ class TestDataFrame(object):
 			StructField('salary', IntegerType(), True)
 		])
 
-	def test_df_from_existing(self, spark):
+	def test_df_columns(self, spark):
 		from pyduckdb.spark.sql.functions import col,struct,when
-		df2 = spark.sql('select 42')
-		updatedDF = df2.withColumn(
-			"OtherInfo",
-			struct(
-				col("id").alias("identifier"),
-				col("gender").alias("gender"),
-				col("salary").alias("salary"),
-				when(
-					col("salary").cast(IntegerType()) < 2000,"Low"
-				).when(
-					col("salary").cast(IntegerType()) < 4000,"Medium"
-				).otherwise("High").alias("Salary_Grade")
-			)
-		).drop("id","gender","salary")
-
-		updatedDF.printSchema()
-		updatedDF.show(truncate=False)
-	
-	def test_df_structtype(self, spark):
-		from pyduckdb.spark.sql.functions import col,struct,when
-
-		data = [("James","","Smith","36636","M",3000),
-			("Michael","Rose","","40288","M",4000),
-			("Robert","","Williams","42114","M",4000),
-			("Maria","Anne","Jones","39192","F",4000),
-			("Jen","Mary","Brown","","F",-1)
-		]
-
-		schema = StructType([ 
-			StructField("firstname",StringType(),True), 
-			StructField("middlename",StringType(),True), 
-			StructField("lastname",StringType(),True), 
-			StructField("id", StringType(), True), 
-			StructField("gender", StringType(), True), 
-			StructField("salary", IntegerType(), True) 
-		])
-		
-		df = spark.createDataFrame(data=data,schema=schema)
-		df.show(truncate=False)
-
 		structureData = [
 			(("James","","Smith"),"36636","M",3100),
 			(("Michael","Rose",""),"40288","M",4300),
@@ -269,22 +229,24 @@ class TestDataFrame(object):
 
 		df2 = spark.createDataFrame(data=structureData,schema=structureSchema)
 		df2.show(truncate=False)
+		updatedDF = df2.withColumn(
+			"OtherInfo",
+			struct(
+				col("id").alias("identifier"),
+				col("gender").alias("gender"),
+				col("salary").alias("salary"),
+				when(
+					col("salary").cast(IntegerType()) < 2000,"Low"
+				).when(
+					col("salary").cast(IntegerType()) < 4000,"Medium"
+				).otherwise("High").alias("Salary_Grade")
+			)
+		).drop("id","gender","salary")
 
-		updatedDF = df2.withColumn("OtherInfo",
-			struct(col("id").alias("identifier"),
-			col("gender").alias("gender"),
-			col("salary").alias("salary"),
-			when(col("salary").cast(IntegerType()) < 2000,"Low")
-			.when(col("salary").cast(IntegerType()) < 4000,"Medium")
-			.otherwise("High").alias("Salary_Grade")
-		)).drop("id","gender","salary")
-
-		updatedDF.printSchema()
 		updatedDF.show(truncate=False)
 
-
+	def test_array_and_map_type(self, spark):
 		""" Array & Map"""
-
 
 		arrayStructureSchema = StructType([
 			StructField('name', StructType([

@@ -8,6 +8,10 @@ from typing import (
     Tuple,
     overload
 )
+from duckdb import (
+    StarExpression,
+    ColumnExpression
+)
 
 from pyduckdb.spark.sql.readwriter import DataFrameWriter
 from pyduckdb.spark.sql.types import Row, StructType
@@ -35,10 +39,31 @@ class DataFrame:
 
     # select *, 5 from (VALUES (1)) tbl(a)
     def withColumn(self, columnName: str, col: Column) -> "DataFrame":
-        cols = [duckdb.ColumnExpression(x) for x in self.relation.columns]
+        cols = [ColumnExpression(x) for x in self.relation.columns]
         cols.append(col.expr.alias(columnName))
+        print(self.relation.columns)
+        print(cols)
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
+
+    def drop(self, *cols: "ColumnOrName") -> "DataFrame":  # type: ignore[misc]
+        if len(cols) == 1:
+            col = cols[0]
+            if isinstance(col, str):
+                exclude = [col]
+            elif isinstance(col, Column):
+                exclude = [col.expr]
+            else:
+                raise TypeError("col should be a string or a Column")
+        else:
+            for col in cols:
+                if not isinstance(col, str):
+                    raise TypeError("each col in the param list should be a string")
+            exclude = list(cols)
+        # Filter out the columns that don't exist in the relation
+        exclude = [x for x in exclude if x in self.relation.columns]
+        expr = StarExpression(exclude=exclude)
+        return DataFrame(self.relation.select(expr), self.session)
 
     @property
     def schema(self) -> StructType:
