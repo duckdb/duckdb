@@ -46,6 +46,7 @@ public:
 	//! Returns the next char in the CSV File
 	//! Returns \0 if there are no more chars
 	char GetNextChar();
+
 	//! Returns true if the iterator is finished
 	bool Finished();
 	//! Resets the iterator

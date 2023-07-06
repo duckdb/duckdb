@@ -83,12 +83,15 @@ public:
 
 	static unique_ptr<CSVFileHandle> OpenCSV(ClientContext &context, const CSVReaderOptions &options);
 
+	static bool TryCastDateVector(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
+	                              string &error_message, idx_t &line_error);
+
+	static bool TryCastTimestampVector(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
+	                                   idx_t count, string &error_message);
+
 protected:
 	//! Initializes the parse_chunk with varchar columns and aligns info with new number of cols
 	void InitParseChunk(idx_t num_cols);
-	//! Try to cast a vector of values to the specified sql type
-	bool TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type);
-
 	//! Adds a value to the current row
 	void AddValue(string_t str_val, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes,
 	              idx_t buffer_idx = 0);

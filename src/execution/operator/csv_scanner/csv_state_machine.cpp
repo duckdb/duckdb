@@ -1,7 +1,6 @@
 #include <utility>
 
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/buffered_csv_reader.hpp"
 
 namespace duckdb {
 CSVStateMachine::CSVStateMachine(CSVReaderOptions options_p, shared_ptr<CSVBufferManager> buffer_manager_p)
@@ -196,12 +195,62 @@ void CSVStateMachine::SniffValue(vector<vector<Value>> &sniffed_value) {
 	bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
 	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
 	if (cur_row < STANDARD_VECTOR_SIZE && !empty_line) {
+		VerifyUTF8(options, cur_row, value);
+
 		sniffed_value[cur_row++].push_back(Value(value));
 	}
 	sniffed_value.erase(sniffed_value.end() - (STANDARD_VECTOR_SIZE - cur_row), sniffed_value.end());
 }
 
-void CSVStateMachine::Parse(vector<vector<idx_t>> &column_positions) {
+void CSVStateMachine::Parse(DataChunk &parse_chunk) {
+	CSVState state {CSVState::STANDARD};
+	CSVState previous_state;
+	idx_t cur_row = 0;
+	idx_t cur_col = 0;
+	string value;
+	while (!csv_buffer_iterator.Finished()) {
+		previous_state = state;
+		state =
+		    static_cast<CSVState>(transition_array[static_cast<uint8_t>(state)][static_cast<uint8_t>(current_char)]);
+		bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
+		                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
+
+		bool carriage_return = previous_state == CSVState::CARRIAGE_RETURN;
+		if (previous_state == CSVState::FIELD_SEPARATOR ||
+		    (previous_state == CSVState::RECORD_SEPARATOR && !empty_line) ||
+		    (state != CSVState::RECORD_SEPARATOR && carriage_return)) {
+			// Started a new value
+			// Check if it's UTF-8
+			VerifyUTF8(options, cur_row, value);
+			auto &v = parse_chunk.data[cur_col++];
+			auto parse_data = FlatVector::GetData<string_t>(v);
+			parse_data[cur_row] = StringVector::AddStringOrBlob(v, string_t(value));
+			value = current_char;
+		}
+		if (state == CSVState::STANDARD) {
+			value += current_char;
+		}
+		cur_row += previous_state == CSVState::RECORD_SEPARATOR && !empty_line;
+		cur_col -= cur_col * (previous_state == CSVState::RECORD_SEPARATOR);
+
+		// It means our carriage return is actually a record separator
+		cur_row += state != CSVState::RECORD_SEPARATOR && carriage_return;
+		cur_col -= cur_col * (state != CSVState::RECORD_SEPARATOR && carriage_return);
+
+		if (cur_row >= STANDARD_VECTOR_SIZE) {
+			// We sniffed enough rows
+			break;
+		}
+		current_char = csv_buffer_iterator.GetNextChar();
+	}
+	bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
+	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
+	if (cur_row < STANDARD_VECTOR_SIZE && !empty_line) {
+		VerifyUTF8(options, cur_row, value);
+		auto &v = parse_chunk.data[cur_col++];
+		auto parse_data = FlatVector::GetData<string_t>(v);
+		parse_data[cur_row] = StringVector::AddStringOrBlob(v, string_t(value));
+	}
 }
 
 } // namespace duckdb

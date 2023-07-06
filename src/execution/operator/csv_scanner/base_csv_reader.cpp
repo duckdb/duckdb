@@ -101,14 +101,14 @@ struct TryCastTimestampOperator {
 	}
 };
 
-bool TryCastDateVector(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
-                       string &error_message, idx_t &line_error) {
+bool BaseCSVReader::TryCastDateVector(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
+                                      idx_t count, string &error_message, idx_t &line_error) {
 	return TemplatedTryCastDateVector<TryCastDateOperator, date_t>(options, input_vector, result_vector, count,
 	                                                               error_message, line_error);
 }
 
-bool TryCastTimestampVector(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
-                            string &error_message) {
+bool BaseCSVReader::TryCastTimestampVector(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
+                                           idx_t count, string &error_message) {
 	idx_t line_error;
 	return TemplatedTryCastDateVector<TryCastTimestampOperator, timestamp_t>(options, input_vector, result_vector,
 	                                                                         count, error_message, line_error);
@@ -146,25 +146,6 @@ bool TemplatedTryCastDecimalVector(CSVReaderOptions &options, Vector &input_vect
 		return result;
 	});
 	return all_converted;
-}
-
-bool BaseCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
-	// try vector-cast from string to sql_type
-	Vector dummy_result(sql_type);
-	if (options.has_format[LogicalTypeId::DATE] && sql_type == LogicalTypeId::DATE) {
-		// use the date format to cast the chunk
-		string error_message;
-		idx_t line_error;
-		return TryCastDateVector(options, parse_chunk_col, dummy_result, size, error_message, line_error);
-	} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
-		// use the timestamp format to cast the chunk
-		string error_message;
-		return TryCastTimestampVector(options, parse_chunk_col, dummy_result, size, error_message);
-	} else {
-		// target type is not varchar: perform a cast
-		string error_message;
-		return VectorOperations::DefaultTryCast(parse_chunk_col, dummy_result, size, &error_message, true);
-	}
 }
 
 void BaseCSVReader::AddValue(string_t str_val, idx_t &column, vector<idx_t> &escape_positions, bool has_quotes,

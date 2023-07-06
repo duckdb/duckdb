@@ -36,7 +36,7 @@ public:
 	void SniffValue(vector<vector<Value>> &sniffed_value);
 
 	//! Parses the state machine
-	void Parse(vector<vector<idx_t>> &column_positions);
+	void Parse(DataChunk &parse_chunk);
 
 	//! Resets the state machine, so it can be used again
 	void Reset();
