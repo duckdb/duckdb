@@ -286,9 +286,16 @@ class TestExpression(object):
                 2 as b
         """)
         star = StarExpression()
-        rel = rel.select(star)
-        res = rel.fetchall()
+        rel2 = rel.select(star)
+        res = rel2.fetchall()
         assert res == [(1, 2)]
+
+        # With exclude list
+        star = StarExpression(exclude=['a'])
+        rel2 = rel.select(star)
+        res = rel2.fetchall()
+        assert res == [(2,)]
+
 
     def test_struct_expression(self):
         con = duckdb.connect()
