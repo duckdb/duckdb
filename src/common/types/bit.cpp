@@ -1,4 +1,6 @@
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
@@ -32,6 +34,13 @@ static inline idx_t GetBitSize(const string_t &str) {
 		throw ConversionException(error_message);
 	}
 	return str_len;
+}
+
+uint8_t Bit::GetFirstByte(const string_t &str) {
+	D_ASSERT(str.GetSize() > 1);
+
+	auto data = const_data_ptr_cast(str.GetData());
+	return data[1] & ((1 << (8 - data[0])) - 1);
 }
 
 void Bit::Finalize(string_t &str) {
@@ -143,6 +152,48 @@ string Bit::ToBit(string_t str) {
 	auto buffer = make_unsafe_uniq_array<char>(bit_len);
 	string_t output_str(buffer.get(), bit_len);
 	Bit::ToBit(str, output_str);
+	return output_str.GetString();
+}
+
+void Bit::BlobToBit(string_t blob, string_t &output_str) {
+	auto data = const_data_ptr_cast(blob.GetData());
+	auto output = output_str.GetDataWriteable();
+	idx_t size = blob.GetSize();
+
+	*output = 0; // No padding
+	memcpy(output + 1, data, size);
+}
+
+string Bit::BlobToBit(string_t blob) {
+	auto buffer = make_unsafe_uniq_array<char>(blob.GetSize() + 1);
+	string_t output_str(buffer.get(), blob.GetSize() + 1);
+	Bit::BlobToBit(blob, output_str);
+	return output_str.GetString();
+}
+
+void Bit::BitToBlob(string_t bit, string_t &output_blob) {
+	D_ASSERT(bit.GetSize() == output_blob.GetSize() + 1);
+
+	auto data = const_data_ptr_cast(bit.GetData());
+	auto output = output_blob.GetDataWriteable();
+	idx_t size = output_blob.GetSize();
+
+	output[0] = GetFirstByte(bit);
+	if (size > 2) {
+		++output;
+		// First byte in bitstring contains amount of padded bits,
+		// second byte in bitstring is the padded byte,
+		// therefore the rest of the data starts at data + 2 (third byte)
+		memcpy(output, data + 2, size - 1);
+	}
+}
+
+string Bit::BitToBlob(string_t bit) {
+	D_ASSERT(bit.GetSize() > 1);
+
+	auto buffer = make_unsafe_uniq_array<char>(bit.GetSize() - 1);
+	string_t output_str(buffer.get(), bit.GetSize() - 1);
+	Bit::BitToBlob(bit, output_str);
 	return output_str.GetString();
 }
 

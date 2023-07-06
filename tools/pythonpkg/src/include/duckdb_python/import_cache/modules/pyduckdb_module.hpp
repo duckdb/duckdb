@@ -35,10 +35,12 @@ public:
 	}
 	virtual void LoadSubtypes(PythonImportCache &cache) override {
 		filesystem.LoadModule("pyduckdb.filesystem", cache);
+		value.LoadAttribute("Value", cache, *this);
 	}
 
 public:
 	PyDuckDBFileSystemCacheItem filesystem;
+	PythonImportCacheItem value;
 };
 
 } // namespace duckdb
