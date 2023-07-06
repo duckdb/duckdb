@@ -1,5 +1,6 @@
 #include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include <cstdint>
 
@@ -57,6 +58,13 @@ const char *DuckDB::LibraryVersion() {
 }
 
 string DuckDB::Platform() {
+#if defined(DUCKDB_CUSTOM_PLATFORM)
+	return DUCKDB_QUOTE_DEFINE(DUCKDB_CUSTOM_PLATFORM);
+#endif
+#if defined(DUCKDB_WASM_VERSION)
+	// DuckDB-Wasm requires CUSTOM_PLATFORM to be defined
+	static_assert(0, "DUCKDB_WASM_VERSION should rely on CUSTOM_PLATFORM being provided");
+#endif
 	string os = "linux";
 #if INTPTR_MAX == INT64_MAX
 	string arch = "amd64";
