@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
@@ -77,6 +78,9 @@ public:
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+
+private:
+	DecimalTypeInfo();
 };
 
 struct StringTypeInfo : public ExtraTypeInfo {
@@ -93,6 +97,9 @@ public:
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+
+private:
+	StringTypeInfo();
 };
 
 struct ListTypeInfo : public ExtraTypeInfo {
@@ -109,6 +116,9 @@ public:
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+
+private:
+	ListTypeInfo();
 };
 
 struct StructTypeInfo : public ExtraTypeInfo {
@@ -126,6 +136,9 @@ public:
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+
+private:
+	StructTypeInfo();
 };
 
 struct AggregateStateTypeInfo : public ExtraTypeInfo {
@@ -142,6 +155,9 @@ public:
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+
+private:
+	AggregateStateTypeInfo();
 };
 
 struct UserTypeInfo : public ExtraTypeInfo {
@@ -158,6 +174,9 @@ public:
 
 protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
+
+private:
+	UserTypeInfo();
 };
 
 // If this type is primarily stored in the catalog or not. Enums from Pandas/Factors are not in the catalog.
@@ -188,6 +207,7 @@ protected:
 	bool EqualsInternal(ExtraTypeInfo *other_p) const override;
 
 	Vector values_insert_order;
+
 private:
 	EnumDictType dict_type;
 	string enum_name;

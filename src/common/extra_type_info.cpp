@@ -56,56 +56,6 @@ void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, FieldWriter &writer) {
 	}
 }
 
-void ExtraTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("type", type);
-	// BREAKING: we used to write the alias last if there was additional type info, but now we write it second.
-	serializer.WriteProperty("alias", alias);
-}
-
-shared_ptr<ExtraTypeInfo> ExtraTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto type = deserializer.ReadProperty<ExtraTypeInfoType>("type");
-	auto alias = deserializer.ReadProperty<string>("alias");
-	// BREAKING: we used to read the alias last, but now we read it second.
-
-	shared_ptr<ExtraTypeInfo> result;
-	switch (type) {
-	case ExtraTypeInfoType::INVALID_TYPE_INFO: {
-		if (!alias.empty()) {
-			return make_shared<ExtraTypeInfo>(type, alias);
-		}
-		return nullptr;
-	}
-	case ExtraTypeInfoType::GENERIC_TYPE_INFO: {
-		result = make_shared<ExtraTypeInfo>(type);
-	} break;
-	case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
-		result = DecimalTypeInfo::FormatDeserialize(deserializer);
-		break;
-	case ExtraTypeInfoType::STRING_TYPE_INFO:
-		result = StringTypeInfo::FormatDeserialize(deserializer);
-		break;
-	case ExtraTypeInfoType::LIST_TYPE_INFO:
-		result = ListTypeInfo::FormatDeserialize(deserializer);
-		break;
-	case ExtraTypeInfoType::STRUCT_TYPE_INFO:
-		result = StructTypeInfo::FormatDeserialize(deserializer);
-		break;
-	case ExtraTypeInfoType::USER_TYPE_INFO:
-		result = UserTypeInfo::FormatDeserialize(deserializer);
-		break;
-	case ExtraTypeInfoType::ENUM_TYPE_INFO:
-		result = EnumTypeInfo::FormatDeserialize(deserializer);
-		break;
-	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
-		result = AggregateStateTypeInfo::FormatDeserialize(deserializer);
-		break;
-	default:
-		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
-	}
-	result->alias = alias;
-	return result;
-}
-
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
 	auto type = reader.ReadRequired<ExtraTypeInfoType>();
 	shared_ptr<ExtraTypeInfo> extra_info;
@@ -157,6 +107,8 @@ bool ExtraTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 //===--------------------------------------------------------------------===//
 // Decimal Type Info
 //===--------------------------------------------------------------------===//
+DecimalTypeInfo::DecimalTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::DECIMAL_TYPE_INFO) {}
+
 DecimalTypeInfo::DecimalTypeInfo(uint8_t width_p, uint8_t scale_p)
 	: ExtraTypeInfo(ExtraTypeInfoType::DECIMAL_TYPE_INFO), width(width_p), scale(scale_p) {
 	D_ASSERT(width_p >= scale_p);
@@ -165,18 +117,6 @@ DecimalTypeInfo::DecimalTypeInfo(uint8_t width_p, uint8_t scale_p)
 void DecimalTypeInfo::Serialize(FieldWriter &writer) const {
 	writer.WriteField<uint8_t>(width);
 	writer.WriteField<uint8_t>(scale);
-}
-
-void DecimalTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
-	ExtraTypeInfo::FormatSerialize(serializer);
-	serializer.WriteProperty("width", width);
-	serializer.WriteProperty("scale", scale);
-}
-
-shared_ptr<ExtraTypeInfo> DecimalTypeInfo::FormatDeserialize(FormatDeserializer &source) {
-	auto width = source.ReadProperty<uint8_t>("width");
-	auto scale = source.ReadProperty<uint8_t>("scale");
-	return make_shared<DecimalTypeInfo>(width, scale);
 }
 
 shared_ptr<ExtraTypeInfo> DecimalTypeInfo::Deserialize(FieldReader &reader) {
@@ -193,6 +133,8 @@ bool DecimalTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 //===--------------------------------------------------------------------===//
 // String Type Info
 //===--------------------------------------------------------------------===//
+StringTypeInfo::StringTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO) {}
+
 StringTypeInfo::StringTypeInfo(string collation_p)
 	: ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO), collation(std::move(collation_p)) {
 }
@@ -206,16 +148,6 @@ shared_ptr<ExtraTypeInfo> StringTypeInfo::Deserialize(FieldReader &reader) {
 	return make_shared<StringTypeInfo>(std::move(collation));
 }
 
-void StringTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
-	ExtraTypeInfo::FormatSerialize(serializer);
-	serializer.WriteProperty("collation", collation);
-}
-
-shared_ptr<ExtraTypeInfo> StringTypeInfo::FormatDeserialize(FormatDeserializer &source) {
-	auto collation = source.ReadProperty<string>("collation");
-	return make_shared<StringTypeInfo>(std::move(collation));
-}
-
 bool StringTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	// collation info has no impact on equality
 	return true;
@@ -224,6 +156,8 @@ bool StringTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 //===--------------------------------------------------------------------===//
 // List Type Info
 //===--------------------------------------------------------------------===//
+ListTypeInfo::ListTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO) {}
+
 ListTypeInfo::ListTypeInfo(LogicalType child_type_p)
 	: ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO), child_type(std::move(child_type_p)) {
 }
@@ -232,21 +166,10 @@ void ListTypeInfo::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable(child_type);
 }
 
-void ListTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
-	ExtraTypeInfo::FormatSerialize(serializer);
-	serializer.WriteProperty("child_type", child_type);
-}
-
 shared_ptr<ExtraTypeInfo> ListTypeInfo::Deserialize(FieldReader &reader) {
 	auto child_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	return make_shared<ListTypeInfo>(std::move(child_type));
 }
-
-shared_ptr<ExtraTypeInfo> ListTypeInfo::FormatDeserialize(FormatDeserializer &source) {
-	auto child_type = source.ReadProperty<LogicalType>("child_type");
-	return make_shared<ListTypeInfo>(std::move(child_type));
-}
-
 
 bool ListTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<ListTypeInfo>();
@@ -256,6 +179,8 @@ bool ListTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 //===--------------------------------------------------------------------===//
 // Struct Type Info
 //===--------------------------------------------------------------------===//
+StructTypeInfo::StructTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO) {}
+
 StructTypeInfo::StructTypeInfo(child_list_t<LogicalType> child_types_p)
 	: ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types(std::move(child_types_p)) {
 }
@@ -270,11 +195,6 @@ void StructTypeInfo::Serialize(FieldWriter &writer) const {
 	}
 }
 
-void StructTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
-	ExtraTypeInfo::FormatSerialize(serializer);
-	serializer.WriteProperty("child_types", child_types);
-}
-
 shared_ptr<ExtraTypeInfo> StructTypeInfo::Deserialize(FieldReader &reader) {
 	child_list_t<LogicalType> child_list;
 	auto child_types_size = reader.ReadRequired<uint32_t>();
@@ -287,11 +207,6 @@ shared_ptr<ExtraTypeInfo> StructTypeInfo::Deserialize(FieldReader &reader) {
 	return make_shared<StructTypeInfo>(std::move(child_list));
 }
 
-shared_ptr<ExtraTypeInfo> StructTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto child_types = deserializer.ReadProperty<child_list_t<LogicalType>>("child_types");
-	return make_shared<StructTypeInfo>(std::move(child_types));
-}
-
 bool StructTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 	auto &other = other_p->Cast<StructTypeInfo>();
 	return child_types == other.child_types;
@@ -300,6 +215,8 @@ bool StructTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 //===--------------------------------------------------------------------===//
 // Aggregate State Type Info
 //===--------------------------------------------------------------------===//
+AggregateStateTypeInfo::AggregateStateTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO) {}
+
 AggregateStateTypeInfo::AggregateStateTypeInfo(aggregate_state_t state_type_p)
 	: ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), state_type(std::move(state_type_p)) {
 }
@@ -312,21 +229,6 @@ void AggregateStateTypeInfo::Serialize(FieldWriter &writer) const {
 	for (idx_t i = 0; i < state_type.bound_argument_types.size(); i++) {
 		state_type.bound_argument_types[i].Serialize(serializer);
 	}
-}
-
-void AggregateStateTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
-	ExtraTypeInfo::FormatSerialize(serializer);
-	serializer.WriteProperty("function_name", state_type.function_name);
-	serializer.WriteProperty("return_type", state_type.return_type);
-	serializer.WriteProperty("bound_argument_types", state_type.bound_argument_types);
-}
-
-shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::FormatDeserialize(FormatDeserializer &source) {
-	auto function_name = source.ReadProperty<string>("function_name");
-	auto return_type = source.ReadProperty<LogicalType>("return_type");
-	auto bound_argument_types = source.ReadProperty<vector<LogicalType>>("bound_argument_types");
-	return make_shared<AggregateStateTypeInfo>(
-		aggregate_state_t(std::move(function_name), std::move(return_type), std::move(bound_argument_types)));
 }
 
 shared_ptr<ExtraTypeInfo> AggregateStateTypeInfo::Deserialize(FieldReader &reader) {
@@ -355,6 +257,8 @@ bool AggregateStateTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 //===--------------------------------------------------------------------===//
 // User Type Info
 //===--------------------------------------------------------------------===//
+UserTypeInfo::UserTypeInfo() : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO) {}
+
 UserTypeInfo::UserTypeInfo(string name_p)
 	: ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)) {
 }
@@ -363,18 +267,8 @@ void UserTypeInfo::Serialize(FieldWriter &writer) const {
 	writer.WriteString(user_type_name);
 }
 
-void UserTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
-	ExtraTypeInfo::FormatSerialize(serializer);
-	serializer.WriteProperty("user_type_name", user_type_name);
-}
-
 shared_ptr<ExtraTypeInfo> UserTypeInfo::Deserialize(FieldReader &reader) {
 	auto enum_name = reader.ReadRequired<string>();
-	return make_shared<UserTypeInfo>(std::move(enum_name));
-}
-
-shared_ptr<ExtraTypeInfo> UserTypeInfo::FormatDeserialize(FormatDeserializer &source) {
-	auto enum_name = source.ReadProperty<string>("user_type_name");
 	return make_shared<UserTypeInfo>(std::move(enum_name));
 }
 
