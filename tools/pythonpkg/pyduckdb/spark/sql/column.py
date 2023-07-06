@@ -1,7 +1,12 @@
 from typing import (
     Union,
     TYPE_CHECKING,
-    Any
+    Any,
+    Callable
+)
+
+from pyduckdb.spark.sql.types import (
+    DataType
 )
 
 if TYPE_CHECKING:
@@ -13,6 +18,29 @@ from duckdb import (
     ColumnExpression,
     Expression
 )
+
+__all__ = [
+    "Column"
+]
+
+def _bin_op(
+    name: str,
+    doc: str = "binary operator",
+) -> Callable[
+    ["Column", Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"]], "Column"
+]:
+    """Create a method for given binary operator"""
+
+    def _(
+        self: "Column",
+        other: Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"],
+    ) -> "Column":
+        jc = other.expr if isinstance(other, Column) else other
+        njc = getattr(self.expr, name)(jc)
+        return Column(njc)
+
+    _.__doc__ = doc
+    return _
 
 class Column:
     """
@@ -38,47 +66,33 @@ class Column:
     def __neg__(self):
         return Column(-self.expr)
 
-    def __add__(self, other: "Column"):
-        return Column(self.expr + other.expr)
+    __add__ = _bin_op("__add__")
 
-    def __sub__(self, other: "Column"):
-        return Column(self.expr - other.expr)
+    __sub__ = _bin_op("__sub__")
 
-    def __mul__(self, other: "Column"):
-        return Column(self.expr * other.expr)
+    __mul__ = _bin_op("__mul__")
 
-    def __div__(self, other: "Column"):
-        return Column(self.expr * other.expr)
+    __div__ = _bin_op("__div__")
 
-    def __truediv__(self, other: "Column"):
-        return Column(self.expr / other.expr)
+    __truediv__ = _bin_op("__truediv__")
 
-    def __mod__(self, other: "Column"):
-        return Column(self.expr % other.expr)
+    __mod__ = _bin_op("__mod__")
 
-    def __pow__(self, other: "Column"):
-        return Column(self.expr ** other.expr)
+    __pow__ = _bin_op("__pow__")
 
-    def __radd__(self, other: "Column"):
-        return Column(other.expr + self.expr)
+    __radd__ = _bin_op("__radd__")
 
-    def __rsub__(self, other: "Column"):
-        return Column(other.expr - self.expr)
+    __rsub__ = _bin_op("__rsub__")
 
-    def __rmul__(self, other: "Column"):
-        return Column(other.expr * self.expr)
+    __rmul__ = _bin_op("__rmul__")
 
-    def __rdiv__(self, other: "Column"):
-        return Column(other.expr / self.expr)
+    __rdiv__ = _bin_op("__rdiv__")
 
-    def __rtruediv__(self, other: "Column"):
-        return Column(other.expr / self.expr)
+    __rtruediv__ = _bin_op("__rtruediv__")
 
-    def __rmod__(self, other: "Column"):
-        return Column(other.expr % self.expr)
+    __rmod__ = _bin_op("__rmod__")
 
-    def __rpow__(self, other: "Column"):
-        return Column(other.expr ** self.expr)
+    __rpow__ = _bin_op("__rpow__")
 
     def alias(self, alias: str):
         return Column(self.expr.alias(alias))
@@ -97,22 +111,28 @@ class Column:
         expr = self.expr.otherwise(value.expr)
         return Column(expr)
 
-    ## logistic operators
-    #def __eq__(  # type: ignore[override]
-    #    self,
-    #    other: Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"],
-    #) -> "Column":
-    #    """binary function"""
-    #    return _bin_op("equalTo")(self, other)
+    def cast(self, type: DataType) -> "Column":
+        return Column(self.expr.cast(type.duckdb_type))
 
-    #def __ne__(  # type: ignore[override]
-    #    self,
-    #    other: Any,
-    #) -> "Column":
-    #    """binary function"""
-    #    return _bin_op("notEqual")(self, other)
+    # logistic operators
+    def __eq__(  # type: ignore[override]
+        self,
+        other: Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"],
+    ) -> "Column":
+        """binary function"""
+        return Column(self.expr == other.expr)
 
-    #__lt__ = _bin_op("lt")
-    #__le__ = _bin_op("leq")
-    #__ge__ = _bin_op("geq")
-    #__gt__ = _bin_op("gt")
+    def __ne__(  # type: ignore[override]
+        self,
+        other: Any,
+    ) -> "Column":
+        """binary function"""
+        return Column(self.expr != other.expr)
+
+    __lt__ = _bin_op("__lt__")
+
+    __le__ = _bin_op("__le__")
+
+    __ge__ = _bin_op("__ge__")
+
+    __gt__ = _bin_op("__gt__")
