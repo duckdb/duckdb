@@ -107,8 +107,7 @@ void CSVSniffer::DetectTypes() {
 		// Parse chunk and read csv with info candidate
 		vector<vector<Value>> values(STANDARD_VECTOR_SIZE);
 		candidate.state->SniffValue(values);
-		for (idx_t row_idx = 0; row_idx < values.size(); row_idx++) {
-			bool is_header_row = row_idx == 0;
+		for (idx_t row_idx = 1; row_idx < values.size(); row_idx++) {
 			for (idx_t col = 0; col < values[row_idx].size(); col++) {
 				auto &col_type_candidates = info_sql_types_candidates[col];
 				while (col_type_candidates.size() > 1) {
@@ -180,18 +179,6 @@ void CSVSniffer::DetectTypes() {
 					}
 				}
 			}
-			// reset type detection, because first row could be header,
-			// but only do it if csv has more than one line (including header)
-			if (values.size() > 1 && is_header_row) {
-				info_sql_types_candidates = vector<vector<LogicalType>>(candidate.max_num_columns,
-				                                                        candidate.state->options.auto_type_candidates);
-				for (auto &f : format_candidates) {
-					f.second.clear();
-				}
-				for (auto &h : has_format_candidates) {
-					h.second = false;
-				}
-			}
 		}
 
 		idx_t varchar_cols = 0;
@@ -212,14 +199,15 @@ void CSVSniffer::DetectTypes() {
 			min_varchar_cols = varchar_cols;
 			best_sql_types_candidates = info_sql_types_candidates;
 			best_format_candidates = format_candidates;
-			//			best_header_row.Destroy();
-			//			auto header_row_types = header_row.GetTypes();
-			//			best_header_row.Initialize(allocator, header_row_types);
-			//			header_row.Copy(best_header_row);
+			best_header_row = values[0];
 		}
 	}
 
-	// FIXME: Check if best_candidate is still valid
+	if (!best_candidate || best_format_candidates.empty() || best_header_row.empty()) {
+		throw InvalidInputException(
+		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
+		    options.file_path);
+	}
 
 	for (const auto &best : best_format_candidates) {
 		if (!best.second.empty()) {

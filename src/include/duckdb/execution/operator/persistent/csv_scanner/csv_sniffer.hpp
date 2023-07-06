@@ -133,8 +133,8 @@ private:
 	};
 	vector<vector<LogicalType>> best_sql_types_candidates;
 	map<LogicalTypeId, vector<string>> best_format_candidates;
-	DataChunk best_header_row;
 	CSVStateCandidates *best_candidate = nullptr;
+	vector<Value> best_header_row;
 };
 
 } // namespace duckdb

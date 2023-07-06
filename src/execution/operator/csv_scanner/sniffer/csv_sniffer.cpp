@@ -251,6 +251,9 @@ SnifferResult CSVSniffer::SniffCSV() {
 	DetectDialect();
 	// 2. Type Detection
 	DetectTypes();
+	// 3. Header Detection
+	// 4. Type Refinement
+	// We are done, construct and return the result.
 	return SnifferResult();
 }
 
