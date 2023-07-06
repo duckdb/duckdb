@@ -163,6 +163,11 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 		TODO: add docs.
 	)";
 	expression.def("otherwise", &DuckDBPyExpression::Else, py::arg("value"), docs);
+
+	docs = R"(
+		TODO: add docs.
+	)";
+	expression.def("cast", &DuckDBPyExpression::Cast, py::arg("type"), docs);
 }
 
 } // namespace duckdb
