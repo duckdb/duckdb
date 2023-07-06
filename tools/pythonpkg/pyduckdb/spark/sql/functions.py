@@ -1,12 +1,27 @@
 from .column import Column
+from typing import (
+    Any
+)
 
 import duckdb
 
-def col(column: str):
-	return Column(duckdb.ColumnExpression(column))
+from duckdb import (
+    CaseExpression,
+    ColumnExpression,
+    FunctionExpression,
+    Expression
+)
 
-def when(x):
-	pass
+def col(column: str):
+    return Column(ColumnExpression(column))
+
+def when(condition: "Column", value: Any) -> Column:
+    if not isinstance(condition, Column):
+        raise TypeError("condition should be a Column")
+    if not isinstance(value, Column):
+        raise NotImplementedError()
+    expr = CaseExpression(condition.expr, value.expr)
+    return Column(expr)
 
 # rel.select(struct('a', 'b').alias("struct"))
 # Is equivalent to:
@@ -16,7 +31,4 @@ def when(x):
 
 # FIXME: only works with 2 columns currently
 def struct(*cols: Column) -> Column:
-	assert len(cols) == 2
-	col1 = cols[0]
-	col2 = cols[1]
-	return Column(duckdb.BinaryFunctionExpression('struct_pack', col1.expr, col2.expr))
+    return Column(FunctionExpression('struct_pack', cols))

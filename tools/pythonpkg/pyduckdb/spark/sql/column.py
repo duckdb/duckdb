@@ -1,11 +1,11 @@
 from typing import (
     Union,
     TYPE_CHECKING,
-	Any
+    Any
 )
 
 if TYPE_CHECKING:
-	from ._typing import ColumnOrName, LiteralType, DecimalLiteral, DateTimeLiteral
+    from ._typing import ColumnOrName, LiteralType, DecimalLiteral, DateTimeLiteral
 
 from duckdb import (
     BinaryFunctionExpression,
@@ -79,6 +79,23 @@ class Column:
 
     def __rpow__(self, other: "Column"):
         return Column(other.expr ** self.expr)
+
+    def alias(self, alias: str):
+        return Column(self.expr.alias(alias))
+
+    def when(self, condition: "Column", value: Any):
+        if not isinstance(condition, Column):
+            raise TypeError("condition should be a Column")
+        if not isinstance(value, Column):
+            raise NotImplementedError()
+        expr = self.expr.when(condition.expr, value.expr)
+        return Column(expr)
+
+    def otherwise(self, value: Any):
+        if not isinstance(value, Column):
+            raise NotImplementedError()
+        expr = self.expr.otherwise(value.expr)
+        return Column(expr)
 
     ## logistic operators
     #def __eq__(  # type: ignore[override]

@@ -228,7 +228,7 @@ class TestDataFrame(object):
 		updatedDF.show(truncate=False)
 	
 	def test_df_structtype(self, spark):
-		from pyspark.sql.functions import col,struct,when
+		from pyduckdb.spark.sql.functions import col,struct,when
 
 		data = [("James","","Smith","36636","M",3000),
 			("Michael","Rose","","40288","M",4000),
