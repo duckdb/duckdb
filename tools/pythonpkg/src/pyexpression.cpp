@@ -1,6 +1,7 @@
 #include "duckdb_python/expression/pyexpression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
 
 namespace duckdb {
 
@@ -30,6 +31,42 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::SetAlias(const string &name) 
 	auto copied_expression = GetExpression().Copy();
 	copied_expression->alias = name;
 	return make_shared<DuckDBPyExpression>(std::move(copied_expression));
+}
+
+// Case Expression modifiers
+
+void DuckDBPyExpression::AssertCaseExpression() const {
+	if (expression->type != ExpressionType::CASE_EXPR) {
+		throw py::value_error("This method can only be used on a Expression resulting from CaseExpression or When");
+	}
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::InternalWhen(unique_ptr<duckdb::CaseExpression> expr,
+                                                                const DuckDBPyExpression &condition,
+                                                                const DuckDBPyExpression &value) {
+	CaseCheck check;
+	check.when_expr = condition.GetExpression().Copy();
+	check.then_expr = value.GetExpression().Copy();
+	expr->case_checks.push_back(std::move(check));
+	return make_shared<DuckDBPyExpression>(std::move(expr));
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::When(const DuckDBPyExpression &condition,
+                                                        const DuckDBPyExpression &value) {
+	AssertCaseExpression();
+	auto expr_p = expression->Copy();
+	auto expr = unique_ptr_cast<ParsedExpression, duckdb::CaseExpression>(std::move(expr_p));
+
+	return InternalWhen(std::move(expr), condition, value);
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Else(const DuckDBPyExpression &value) {
+	AssertCaseExpression();
+	auto expr_p = expression->Copy();
+	auto expr = unique_ptr_cast<ParsedExpression, duckdb::CaseExpression>(std::move(expr_p));
+
+	expr->else_expr = value.GetExpression().Copy();
+	return make_shared<DuckDBPyExpression>(std::move(expr));
 }
 
 // Binary operators
@@ -152,7 +189,13 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ComparisonExpression(Expressi
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::CaseExpression(const DuckDBPyExpression &condition,
                                                                   const DuckDBPyExpression &value) {
-	return nullptr;
+	auto expr = make_uniq<duckdb::CaseExpression>();
+	auto case_expr = InternalWhen(std::move(expr), condition, value);
+
+	// Add NULL as default Else expression
+	auto &internal_expression = reinterpret_cast<duckdb::CaseExpression &>(*case_expr->expression);
+	internal_expression.else_expr = make_uniq<duckdb::ConstantExpression>(Value(LogicalTypeId::SQLNULL));
+	return std::move(case_expr);
 }
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::FunctionExpression(const string &function_name, py::args args) {

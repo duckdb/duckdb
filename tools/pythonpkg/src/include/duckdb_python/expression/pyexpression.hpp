@@ -66,6 +66,8 @@ public:
 	shared_ptr<DuckDBPyExpression> LessThanOrEqual(const DuckDBPyExpression &other);
 
 	shared_ptr<DuckDBPyExpression> SetAlias(const string &alias) const;
+	shared_ptr<DuckDBPyExpression> When(const DuckDBPyExpression &condition, const DuckDBPyExpression &value);
+	shared_ptr<DuckDBPyExpression> Else(const DuckDBPyExpression &value);
 
 public:
 	const ParsedExpression &GetExpression() const;
@@ -89,6 +91,10 @@ private:
 	                                                     const DuckDBPyExpression &arg_two);
 	static shared_ptr<DuckDBPyExpression> ComparisonExpression(ExpressionType type, const DuckDBPyExpression &left,
 	                                                           const DuckDBPyExpression &right);
+	static shared_ptr<DuckDBPyExpression> InternalWhen(unique_ptr<duckdb::CaseExpression> expr,
+	                                                   const DuckDBPyExpression &condition,
+	                                                   const DuckDBPyExpression &value);
+	void AssertCaseExpression() const;
 
 private:
 	unique_ptr<ParsedExpression> expression;

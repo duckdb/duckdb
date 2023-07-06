@@ -9,9 +9,13 @@ from duckdb import (
     ConstantExpression,
     ColumnExpression,
     StarExpression,
-    FunctionExpression
+    FunctionExpression,
+    CaseExpression
 )
-from pyduckdb.value.constant import Value
+from pyduckdb.value.constant import (
+    Value,
+    IntegerValue
+)
 
 class TestExpression(object):
     def test_constant_expression(self):
@@ -321,3 +325,43 @@ class TestExpression(object):
         rel2 = rel.select(expr)
         res = rel2.fetchall()
         assert res == [(6,)]
+
+    def test_case_expression(self):
+        con = duckdb.connect()
+
+        rel = con.sql("""
+            select
+                1 as a,
+                2 as b,
+                3 as c,
+        """)
+
+        col1 = ColumnExpression('a')
+        col2 = ColumnExpression('b')
+        col3 = ColumnExpression('c')
+
+        const1 = ConstantExpression(IntegerValue(1))
+        # CASE WHEN col1 > 1 THEN 5 ELSE NULL
+        case1 = CaseExpression(col1 > const1, ConstantExpression(IntegerValue(5)))
+
+        rel2 = rel.select(case1)
+        res = rel2.fetchall()
+        assert res == [(None,)]
+
+        # CASE WHEN col1 > 1 THEN 5 WHEN col2 < col1 THEN 10 ELSE NULL
+        case2 = case1.when(col2 < col1, ConstantExpression(IntegerValue(10)))
+        rel2 = rel.select(case2)
+        res = rel2.fetchall()
+        assert res == [(None,)]
+
+        # CASE WHEN col1 > 1 THEN 5 WHEN col2 < col1 THEN 10 ELSE 42
+        case3 = case2.otherwise(ConstantExpression(IntegerValue(42)))
+        rel2 = rel.select(case3)
+        res = rel2.fetchall()
+        assert res == [(42,)]
+
+        # CASE WHEN col3 = col3 THEN 21 WHEN col3 > col1 THEN col3 ELSE col2
+        case4 = CaseExpression(col3 == col3, ConstantExpression(IntegerValue(21))).when(col3 > col1, col3).otherwise(col2)
+        rel2 = rel.select(case4)
+        res = rel2.fetchall()
+        assert res == [(21,)]

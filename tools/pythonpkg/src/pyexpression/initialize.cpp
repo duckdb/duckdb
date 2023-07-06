@@ -153,6 +153,16 @@ void DuckDBPyExpression::Initialize(py::module_ &m) {
 		Create a copy of this expression with the given alias.
 	)";
 	expression.def("alias", &DuckDBPyExpression::SetAlias, docs);
+
+	docs = R"(
+		TODO: add docs.
+	)";
+	expression.def("when", &DuckDBPyExpression::When, py::arg("condition"), py::arg("value"), docs);
+
+	docs = R"(
+		TODO: add docs.
+	)";
+	expression.def("otherwise", &DuckDBPyExpression::Else, py::arg("value"), docs);
 }
 
 } // namespace duckdb
