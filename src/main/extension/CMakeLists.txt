@@ -73,7 +73,7 @@ if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
   endif()
 
   set(GENERATED_CPP_FILE
-          ${PROJECT_BINARY_DIR}/codegen/src/generated_extension_loader.cpp)
+      ${PROJECT_BINARY_DIR}/codegen/src/generated_extension_loader.cpp)
   configure_file(generated_extension_loader.cpp.in "${GENERATED_CPP_FILE}")
   add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
 

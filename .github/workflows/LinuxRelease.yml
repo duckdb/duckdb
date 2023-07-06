@@ -201,7 +201,7 @@ jobs:
 
  linux-extensions-64-aarch64:
     name: Linux Extensions (aarch64)
-    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+#    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     container: ubuntu:18.04 # cross compiler not available in 16
 #    needs: linux-release-64
