@@ -2,6 +2,7 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/expression/cast_expression.hpp"
 
 namespace duckdb {
 
@@ -31,6 +32,12 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::SetAlias(const string &name) 
 	auto copied_expression = GetExpression().Copy();
 	copied_expression->alias = name;
 	return make_shared<DuckDBPyExpression>(std::move(copied_expression));
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Cast(const DuckDBPyType &type) const {
+	auto copied_expression = GetExpression().Copy();
+	auto case_expr = make_uniq<duckdb::CastExpression>(type.Type(), std::move(copied_expression));
+	return make_shared<DuckDBPyExpression>(std::move(case_expr));
 }
 
 // Case Expression modifiers

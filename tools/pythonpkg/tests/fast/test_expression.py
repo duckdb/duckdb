@@ -1,7 +1,9 @@
 import duckdb
 import pytest
 from duckdb.typing import (
-    INTEGER
+    INTEGER,
+    VARCHAR,
+    TIMESTAMP
 )
 from duckdb import (
     Expression,
@@ -16,6 +18,7 @@ from pyduckdb.value.constant import (
     Value,
     IntegerValue
 )
+import datetime
 
 class TestExpression(object):
     def test_constant_expression(self):
@@ -365,3 +368,16 @@ class TestExpression(object):
         rel2 = rel.select(case4)
         res = rel2.fetchall()
         assert res == [(21,)]
+
+    def test_cast_expression(self):
+        con = duckdb.connect()
+
+        rel = con.sql("select '2022/01/21' as a")
+        assert rel.types == [VARCHAR]
+
+        col = ColumnExpression("a").cast(TIMESTAMP)
+        rel = rel.select(col)
+        assert rel.types == [TIMESTAMP]
+
+        res = rel.fetchall()
+        assert res == [(datetime.datetime(2022, 1, 21, 0, 0),)]

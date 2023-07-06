@@ -17,6 +17,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb_python/python_conversion.hpp"
 #include "duckdb_python/pyconnection/pyconnection.hpp"
+#include "duckdb_python/pytype.hpp"
 
 namespace duckdb {
 
@@ -68,6 +69,7 @@ public:
 	shared_ptr<DuckDBPyExpression> SetAlias(const string &alias) const;
 	shared_ptr<DuckDBPyExpression> When(const DuckDBPyExpression &condition, const DuckDBPyExpression &value);
 	shared_ptr<DuckDBPyExpression> Else(const DuckDBPyExpression &value);
+	shared_ptr<DuckDBPyExpression> Cast(const DuckDBPyType &type) const;
 
 public:
 	const ParsedExpression &GetExpression() const;
