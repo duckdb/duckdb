@@ -5,6 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
+statement ok
+PRAGMA verify_external
+
 query I
 select histogram(NULL)
 ----

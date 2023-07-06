@@ -122,6 +122,15 @@ struct DefaultNullOrderSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct DisabledFileSystemsSetting {
+	static constexpr const char *Name = "disabled_filesystems";
+	static constexpr const char *Description = "Disable specific file systems preventing access (e.g. LocalFileSystem)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct DisabledOptimizersSetting {
 	static constexpr const char *Name = "disabled_optimizers";
 	static constexpr const char *Description = "DEBUG SETTING: disable a specific set of optimizers (comma separated)";

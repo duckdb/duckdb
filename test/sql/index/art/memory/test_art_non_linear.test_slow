@@ -38,7 +38,7 @@ DROP TABLE strings_temp;
 statement ok
 CREATE INDEX idx ON art USING ART(id);
 
-# 12 blocks for prefix segments, 10 blocks for leaves, 7 blocks for Node16
+# 12 blocks for prefixes, 10 blocks for leaves, 7 blocks for Node16
 # 29 blocks * 256KB = 7424KB
 # WITHOUT the index, our database size is already approximately 2MB here
 
@@ -68,7 +68,7 @@ DROP TABLE strings_temp;
 statement ok
 CREATE INDEX idx ON art USING ART(id);
 
-# 1 block for prefix segments, 10 blocks for 100K distinct leaves, 3 blocks for Node4, 7 blocks for Node16,
+# 1 block for prefixes, 10 blocks for 100K distinct leaves, 3 blocks for Node4, 7 blocks for Node16,
 # 21 blocks * 256KB = 5376KB
 # WITHOUT the index, our database size is already approximately 17MB here
 
@@ -102,16 +102,17 @@ DROP TABLE art;
 # test 100K mostly duplicate INTEGER keys
 
 statement ok
-CREATE TABLE art AS SELECT (random() * 100)::INT AS id FROM range(100000);
+CREATE TABLE art AS SELECT (range * 9876983769044::INT128 % 1000)::INT64 AS id FROM range(100000);
 
 statement ok
 CREATE INDEX idx ON art USING ART(id);
 
-# 4 blocks for leaf segments, 1 block for leaves, 1 block for Node256
-# 6 blocks * 256KB = 1536KB
+# 1 block for prefixes, 4 blocks for leaf segments, 1 block for leaves,
+# 1 block for Node4, 1 block for Node256
+# 8 blocks * 256KB = 2048KB
 
 query I
-SELECT mem_to_bytes(memory_usage) < 3000000 FROM pragma_database_size();
+SELECT mem_to_bytes(memory_usage) < 4000000 FROM pragma_database_size();
 ----
 true
 

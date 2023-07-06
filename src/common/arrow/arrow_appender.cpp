@@ -786,7 +786,6 @@ ArrowArray ArrowAppender::Finalize() {
 
 	// Configure root array
 	result.length = row_count;
-	result.n_children = types.size();
 	result.n_buffers = 1;
 	result.buffers = root_holder->buffers.data(); // there is no actual buffer there since we don't have NULLs
 	result.offset = 0;
