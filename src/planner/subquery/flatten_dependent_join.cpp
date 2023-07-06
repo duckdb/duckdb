@@ -568,7 +568,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			throw InternalException("Flatten dependent joins - logical get encountered without children");
 		}
 		plan->children[0] = PushDownDependentJoin(std::move(plan->children[0]));
-		for (idx_t i = 0; i < (perform_delim ? correlated_columns.size() : 1); i++) {
+		for (idx_t i = 0; i < correlated_columns.size(); i++) {
 			get.projected_input.push_back(this->delim_offset + i);
 		}
 		this->delim_offset = get.returned_types.size();

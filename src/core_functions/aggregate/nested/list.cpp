@@ -63,9 +63,9 @@ struct ListFunction {
 
 	template <class STATE>
 	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-		auto &list_bind_data = aggr_input_data.bind_data->Cast<ListBindData>();
-		list_bind_data.functions.Destroy(aggr_input_data.allocator, state.linked_list);
+		// nop
 	}
+
 	static bool IgnoreNull() {
 		return false;
 	}
