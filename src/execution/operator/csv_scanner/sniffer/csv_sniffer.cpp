@@ -36,6 +36,7 @@ SnifferResult CSVSniffer::SniffCSV() {
 	// 4. Type Replacement
 	ReplaceTypes();
 	// 5. Type Refinement
+	RefineTypes();
 	// We are done, construct and return the result.
 	return SnifferResult();
 }
