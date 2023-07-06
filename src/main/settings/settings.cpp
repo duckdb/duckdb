@@ -301,6 +301,30 @@ Value DefaultNullOrderSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Disabled File Systems
+//===--------------------------------------------------------------------===//
+void DisabledFileSystemsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!db) {
+		throw InternalException("disabled_filesystems can only be set in an active database");
+	}
+	auto &fs = FileSystem::GetFileSystem(*db);
+	auto list = StringUtil::Split(input.ToString(), ",");
+	fs.SetDisabledFileSystems(list);
+}
+
+void DisabledFileSystemsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (!db) {
+		throw InternalException("disabled_filesystems can only be set in an active database");
+	}
+	auto &fs = FileSystem::GetFileSystem(*db);
+	fs.SetDisabledFileSystems(vector<string>());
+}
+
+Value DisabledFileSystemsSetting::GetSetting(ClientContext &context) {
+	return Value("");
+}
+
+//===--------------------------------------------------------------------===//
 // Disabled Optimizer
 //===--------------------------------------------------------------------===//
 void DisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

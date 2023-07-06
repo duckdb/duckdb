@@ -63,13 +63,17 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
   endif()
 endforeach()
 
+if(${DISABLE_EXTENSION_LOAD})
+  add_definitions(-DDUCKDB_DISABLE_EXTENSION_LOAD)
+endif()
+
 if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
   if(NOT ${EXT_TEST_PATH_LIST} STREQUAL "")
     string(SUBSTRING ${EXT_TEST_PATH_LIST} 1 -1 EXT_TEST_PATH_INITIALIZER)
   endif()
 
   set(GENERATED_CPP_FILE
-      ${PROJECT_BINARY_DIR}/codegen/src/generated_extension_loader.cpp)
+          ${PROJECT_BINARY_DIR}/codegen/src/generated_extension_loader.cpp)
   configure_file(generated_extension_loader.cpp.in "${GENERATED_CPP_FILE}")
   add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
 
