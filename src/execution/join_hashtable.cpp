@@ -902,16 +902,16 @@ bool JoinHashTable::RequiresPartitioning(ClientConfig &config, vector<unique_ptr
 		const auto partition_count = partition_counts[max_partition_idx];
 		const auto partition_size = partition_sizes[max_partition_idx];
 
-		const auto max_added_bits = 8 - radix_bits;
-		idx_t added_bits;
-		for (added_bits = 1; added_bits < max_added_bits; added_bits++) {
+		const auto max_added_bits = RadixPartitioning::MAX_RADIX_BITS - radix_bits;
+		idx_t added_bits = config.force_external ? 2 : 1;
+		for (; added_bits < max_added_bits; added_bits++) {
 			double partition_multiplier = RadixPartitioning::NumberOfPartitions(added_bits);
 
 			auto new_estimated_count = double(partition_count) / partition_multiplier;
 			auto new_estimated_size = double(partition_size) / partition_multiplier;
 			auto new_estimated_ht_size = new_estimated_size + PointerTableSize(new_estimated_count);
 
-			if (new_estimated_ht_size <= double(max_ht_size) / 4) {
+			if (config.force_external || new_estimated_ht_size <= double(max_ht_size) / 4) {
 				// Aim for an estimated partition size of max_ht_size / 4
 				break;
 			}
