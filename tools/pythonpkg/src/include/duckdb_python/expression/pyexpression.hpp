@@ -85,10 +85,12 @@ public:
 	                                                     const DuckDBPyExpression &value);
 	static shared_ptr<DuckDBPyExpression> FunctionExpression(const string &function_name, py::args args);
 
-private:
+public:
+	// Internal functions (not exposed to Python)
 	static shared_ptr<DuckDBPyExpression> InternalFunctionExpression(const string &function_name,
 	                                                                 vector<unique_ptr<ParsedExpression>> children,
 	                                                                 bool is_operator = false);
+	static shared_ptr<DuckDBPyExpression> InternalConstantExpression(Value value);
 	static shared_ptr<DuckDBPyExpression> BinaryOperator(const string &function_name, const DuckDBPyExpression &arg_one,
 	                                                     const DuckDBPyExpression &arg_two);
 	static shared_ptr<DuckDBPyExpression> ComparisonExpression(ExpressionType type, const DuckDBPyExpression &left,
