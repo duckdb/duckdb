@@ -100,15 +100,13 @@ class Column:
     def when(self, condition: "Column", value: Any):
         if not isinstance(condition, Column):
             raise TypeError("condition should be a Column")
-        if not isinstance(value, Column):
-            raise NotImplementedError()
-        expr = self.expr.when(condition.expr, value.expr)
+        v = value.expr if isinstance(value, Column) else value
+        expr = self.expr.when(condition.expr, v)
         return Column(expr)
 
     def otherwise(self, value: Any):
-        if not isinstance(value, Column):
-            raise NotImplementedError()
-        expr = self.expr.otherwise(value.expr)
+        v = value.expr if isinstance(value, Column) else value
+        expr = self.expr.otherwise(v)
         return Column(expr)
 
     def cast(self, type: DataType) -> "Column":

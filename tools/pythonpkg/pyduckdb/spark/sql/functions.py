@@ -18,9 +18,8 @@ def col(column: str):
 def when(condition: "Column", value: Any) -> Column:
     if not isinstance(condition, Column):
         raise TypeError("condition should be a Column")
-    if not isinstance(value, Column):
-        raise NotImplementedError()
-    expr = CaseExpression(condition.expr, value.expr)
+    v = value.expr if isinstance(value, Column) else value
+    expr = CaseExpression(condition.expr, v)
     return Column(expr)
 
 # rel.select(struct('a', 'b').alias("struct"))
@@ -29,6 +28,9 @@ def when(condition: "Column", value: Any) -> Column:
 # Full query:
 #    select {'a': a, 'b': b} from (VALUES (1, 2), (3, 4)) tbl(a, b);
 
-# FIXME: only works with 2 columns currently
+def _inner_expr_or_val(val):
+	return val.expr if isinstance(val, Column) else val
+
 def struct(*cols: Column) -> Column:
-    return Column(FunctionExpression('struct_pack', cols))
+    print(cols)
+    return Column(FunctionExpression('struct_pack', *[_inner_expr_or_val(x) for x in cols]))

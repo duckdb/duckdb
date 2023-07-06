@@ -270,7 +270,7 @@ class TestDataFrame(object):
 		df2 = spark.createDataFrame(data=structureData,schema=structureSchema)
 		df2.show(truncate=False)
 
-		updatedDF = df2.withColumn("OtherInfo", 
+		updatedDF = df2.withColumn("OtherInfo",
 			struct(col("id").alias("identifier"),
 			col("gender").alias("gender"),
 			col("salary").alias("salary"),
