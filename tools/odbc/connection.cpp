@@ -27,7 +27,7 @@ SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 		return SQL_SUCCESS;
 	}
 	case SQL_ATTR_ACCESS_MODE: {
-		duckdb::Store<SQLUINTEGER>(dbc->sql_attr_access_mode, (duckdb::data_ptr_t)value_ptr);
+		duckdb::Store<SQLUINTEGER>(dbc->sql_attr_access_mode, reinterpret_cast<duckdb::data_ptr_t>(value_ptr));
 		return SQL_SUCCESS;
 	}
 	case SQL_ATTR_CURRENT_CATALOG: {
@@ -138,9 +138,16 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 			return SQL_SUCCESS;
 		}
 		break;
-	case SQL_ATTR_ACCESS_MODE:
-		dbc->sql_attr_access_mode = *((SQLUINTEGER *)value_ptr);
+	case SQL_ATTR_ACCESS_MODE: {
+		if (!value_ptr) {
+			dbc->sql_attr_access_mode = SQL_MODE_READ_WRITE;
+		} else if (value_ptr == (SQLPOINTER) SQL_MODE_READ_ONLY) {
+			dbc->sql_attr_access_mode = SQL_MODE_READ_ONLY;
+		} else {
+			return SQL_ERROR;
+		}
 		return SQL_SUCCESS;
+	}
 #ifdef SQL_ATTR_ASYNC_DBC_EVENT
 	case SQL_ATTR_ASYNC_DBC_EVENT:
 #endif
