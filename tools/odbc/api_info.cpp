@@ -37,12 +37,30 @@ SQLRETURN SQL_API SQLGetTypeInfo(SQLHSTMT statement_handle, SQLSMALLINT data_typ
 		ApiInfo::WriteInfoTypesToQueryString(vec_types, query);
 	}
 
-	query += ") AS odbc_types (\"TYPE_NAME\", \"DATA_TYPE\", \"COLUMN_SIZE\", \"LITERAL_PREFIX\", "
-	         "\"LITERAL_SUFFIX\", \"CREATE_PARAMS\", \"NULLABLE\", "
-	         "\"CASE_SENSITIVE\", \"SEARCHABLE\", \"UNSIGNED_ATTRIBUTE\", \"FIXED_PREC_SCALE\", "
-	         "\"AUTO_UNIQUE_VALUE\", \"LOCAL_TYPE_NAME\", "
-	         "\"MINIMUM_SCALE\", \"MAXIMUM_SCALE\", \"SQL_DATA_TYPE\", \"SQL_DATETIME_SUB\", \"NUM_PREC_RADIX\", "
-	         "\"INTERVAL_PRECISION\")";
+	// clang-format off
+	query += R"(
+	) AS odbc_types (
+		"TYPE_NAME",
+		"DATA_TYPE",
+		"COLUMN_SIZE",
+		"LITERAL_PREFIX",
+		"LITERAL_SUFFIX",
+		"CREATE_PARAMS",
+		"NULLABLE",
+		"CASE_SENSITIVE",
+		"SEARCHABLE",
+		"UNSIGNED_ATTRIBUTE",
+		"FIXED_PREC_SCALE",
+		"AUTO_UNIQUE_VALUE",
+		"LOCAL_TYPE_NAME",
+		"MINIMUM_SCALE",
+		"MAXIMUM_SCALE",
+		"SQL_DATA_TYPE",
+		"SQL_DATETIME_SUB",
+		"NUM_PREC_RADIX",
+		"INTERVAL_PRECISION"
+	))";
+	// clang-format on
 
 	return duckdb::ExecDirectStmt(hstmt, (SQLCHAR *)query.c_str(), query.size());
 }
