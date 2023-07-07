@@ -19,6 +19,8 @@ using namespace odbc_test;
  * - SQLProcedures
  */
 
+#include <iostream>
+
 void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 	SQLSMALLINT col_count;
 
@@ -51,6 +53,52 @@ void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 			continue;
 		}
 		DATA_CHECK(hstmt, i + 1, expected_data[i].second.c_str());
+	}
+
+	// Issue DATA_TYPE returning 0 for all types in SQLGetTypeInfo for ODBC on Linux #7653
+	SQLINTEGER data_type;
+	SQLLEN row_count;
+	EXECUTE_AND_CHECK("SQLGetTypeInfo", SQLGetTypeInfo, hstmt, SQL_ALL_TYPES);
+	EXECUTE_AND_CHECK("SQLBindCol", SQLBindCol, hstmt, 2, SQL_C_SHORT, (char*)&data_type, sizeof(data_type), nullptr);
+	EXECUTE_AND_CHECK("SQLRowCount", SQLRowCount, hstmt, &row_count);
+	EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
+
+	SQLINTEGER data_types[] = {
+	    SQL_CHAR,
+	    SQL_BIT,
+	    SQL_TINYINT,
+	    SQL_SMALLINT,
+	    SQL_INTEGER,
+	    SQL_BIGINT,
+	    SQL_TYPE_DATE,
+	    SQL_TYPE_TIME,
+	    SQL_TYPE_TIMESTAMP,
+	    SQL_DECIMAL,
+	    SQL_NUMERIC,
+		SQL_FLOAT,
+	    SQL_DOUBLE,
+	    SQL_VARCHAR,
+	    SQL_VARBINARY,
+	    SQL_INTERVAL_YEAR,
+	    SQL_INTERVAL_MONTH,
+	    SQL_INTERVAL_DAY,
+	    SQL_INTERVAL_HOUR,
+	    SQL_INTERVAL_MINUTE,
+	    SQL_INTERVAL_SECOND,
+	    SQL_INTERVAL_YEAR_TO_MONTH,
+	    SQL_INTERVAL_DAY_TO_HOUR,
+	    SQL_INTERVAL_DAY_TO_MINUTE,
+	    SQL_INTERVAL_DAY_TO_SECOND,
+	    SQL_INTERVAL_HOUR_TO_MINUTE,
+	    SQL_INTERVAL_HOUR_TO_SECOND,
+	    SQL_INTERVAL_MINUTE_TO_SECOND,
+	};
+
+//	REQUIRE(row_count == sizeof(data_types) / sizeof(SQLINTEGER));
+	for (int i = 0; i < 27; i++) {
+		std::cout << data_type << std::endl;
+		REQUIRE(data_type == data_types[i]);
+		EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
 	}
 }
 
