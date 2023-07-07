@@ -60,7 +60,7 @@ for hpp_file in hpp_files:
     with open(hpp_file, "r") as f:
         text = f.read()
         for res in re.finditer(r"enum class (\w*)\s*:\s*(\w*)\s*{((?:\s*[^}])*)}", text, re.MULTILINE):
-            file_path = os.path.relpath(hpp_file, os.path.join("..", "src")).removeprefix("include/")
+            file_path = os.path.relpath(hpp_file, os.path.join("..", "src")).replace("include/", "")
             enum_name = res.group(1)
 
             if enum_name in blacklist:
