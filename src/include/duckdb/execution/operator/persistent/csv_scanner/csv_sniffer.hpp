@@ -102,7 +102,7 @@ private:
 	void DetectTypes();
 	//! Change the date format for the type to the string
 	//! Try to cast a string value to the specified sql type
-	bool TryCastValue(const Value &value, const LogicalType &sql_type);
+	bool TryCastValue(CSVStateMachine &candidate, const Value &value, const LogicalType &sql_type);
 	void SetDateFormat(CSVStateMachine &candidate, const string &format_specifier, const LogicalTypeId &sql_type);
 
 	//! Variables for Type Detection

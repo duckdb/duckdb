@@ -106,7 +106,7 @@ void CSVSniffer::DetectHeader() {
 
 		// try cast to sql_type of column
 		const auto &sql_type = best_sql_types_candidates[col].back();
-		if (!TryCastValue(dummy_val, sql_type)) {
+		if (!TryCastValue(*best_candidate, dummy_val, sql_type)) {
 			first_row_consistent = false;
 		}
 	}

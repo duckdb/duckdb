@@ -117,23 +117,24 @@ string GenerateDateFormat(const string &separator, const char *format_template) 
 	return result;
 }
 
-bool CSVSniffer::TryCastValue(const Value &value, const LogicalType &sql_type) {
+bool CSVSniffer::TryCastValue(CSVStateMachine &candidate, const Value &value, const LogicalType &sql_type) {
 	if (value.IsNull()) {
 		return true;
 	}
-	if (options.has_format.find(LogicalTypeId::DATE)->second && sql_type.id() == LogicalTypeId::DATE) {
+	if (candidate.options.has_format.find(LogicalTypeId::DATE)->second && sql_type.id() == LogicalTypeId::DATE) {
 		date_t result;
 		string error_message;
-		return options.date_format.find(LogicalTypeId::DATE)
+		return candidate.options.date_format.find(LogicalTypeId::DATE)
 		    ->second.TryParseDate(string_t(StringValue::Get(value)), result, error_message);
-	} else if (options.has_format.find(LogicalTypeId::TIMESTAMP)->second && sql_type.id() == LogicalTypeId::TIMESTAMP) {
+	} else if (candidate.options.has_format.find(LogicalTypeId::TIMESTAMP)->second &&
+	           sql_type.id() == LogicalTypeId::TIMESTAMP) {
 		timestamp_t result;
 		string error_message;
-		return options.date_format.find(LogicalTypeId::TIMESTAMP)
+		return candidate.options.date_format.find(LogicalTypeId::TIMESTAMP)
 		    ->second.TryParseTimestamp(string_t(StringValue::Get(value)), result, error_message);
-	} else if (options.decimal_separator != "." && sql_type.id() == LogicalTypeId::DECIMAL) {
+	} else if (candidate.options.decimal_separator != "." && sql_type.id() == LogicalTypeId::DECIMAL) {
 		return TryCastDecimalValueCommaSeparated(string_t(StringValue::Get(value)), sql_type);
-	} else if (options.decimal_separator != "." &&
+	} else if (candidate.options.decimal_separator != "." &&
 	           ((sql_type.id() == LogicalTypeId::FLOAT) || (sql_type.id() == LogicalTypeId::DOUBLE))) {
 		return TryCastFloatingValueCommaSeparated(string_t(StringValue::Get(value)), sql_type);
 	} else {
@@ -157,7 +158,7 @@ void CSVSniffer::DetectTypes() {
 	// check which info candidate leads to minimum amount of non-varchar columns...
 	for (auto &candidate : candidates) {
 		vector<vector<LogicalType>> info_sql_types_candidates(candidate->options.num_cols,
-		                                                      options.auto_type_candidates);
+		                                                      candidate->options.auto_type_candidates);
 		std::map<LogicalTypeId, bool> has_format_candidates;
 		std::map<LogicalTypeId, vector<string>> format_candidates;
 		for (const auto &t : format_template_candidates) {
@@ -179,7 +180,12 @@ void CSVSniffer::DetectTypes() {
 		// Parse chunk and read csv with info candidate
 		vector<vector<Value>> values(STANDARD_VECTOR_SIZE);
 		candidate->SniffValue(values);
-		for (idx_t row_idx = 1; row_idx < values.size(); row_idx++) {
+		idx_t row_idx = 0;
+		if (values.size() > 1) {
+			// This means we have more than one row, hence we can use the first row to detect if we have a header
+			row_idx = 1;
+		}
+		for (; row_idx < values.size(); row_idx++) {
 			for (idx_t col = 0; col < values[row_idx].size(); col++) {
 				auto &col_type_candidates = info_sql_types_candidates[col];
 				auto dummy_val = values[row_idx][col];
@@ -188,7 +194,7 @@ void CSVSniffer::DetectTypes() {
 					const auto &sql_type = col_type_candidates.back();
 					// try formatting for date types if the user did not specify one and it starts with numeric values.
 					string separator;
-					bool has_format_is_set = options.has_format.find(sql_type.id())->second;
+					bool has_format_is_set = candidate->options.has_format.find(sql_type.id())->second;
 					if (has_format_candidates.count(sql_type.id()) && !has_format_is_set && !dummy_val.IsNull() &&
 					    StartsWithNumericDate(separator, StringValue::Get(dummy_val))) {
 						// generate date format candidates the first time through
@@ -202,10 +208,7 @@ void CSVSniffer::DetectTypes() {
 								const auto &format_template_list = entry->second;
 								for (const auto &t : format_template_list) {
 									const auto format_string = GenerateDateFormat(separator, t);
-									// don't parse ISO 8601
-									if (format_string.find("%Y-%m-%d") == string::npos) {
 										type_format_candidates.emplace_back(format_string);
-									}
 								}
 							}
 							//	initialise the first candidate
@@ -244,7 +247,7 @@ void CSVSniffer::DetectTypes() {
 						}
 					}
 					// try cast from string to sql_type
-					if (TryCastValue(dummy_val, sql_type)) {
+					if (TryCastValue(*candidate, dummy_val, sql_type)) {
 						break;
 					} else {
 						col_type_candidates.pop_back();
