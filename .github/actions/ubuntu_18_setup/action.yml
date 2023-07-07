@@ -1,5 +1,5 @@
-name: "Setup Ubuntu 16"
-description: "Setup an Ubuntu 16 docker container with the required libraries"
+name: "Setup Ubuntu 18"
+description: "Setup an Ubuntu 18 docker container with the required libraries"
 inputs:
   openssl:
     description: 'OpenSSL'
