@@ -202,6 +202,8 @@ public:
 
 	Relation &GetRel();
 
+	bool ContainsColumnByName(const string &name) const;
+
 private:
 	string GenerateExpressionList(const string &function_name, const string &aggregated_columns,
 	                              const string &groups = "", const string &function_parameter = "",
@@ -212,7 +214,6 @@ private:
 	void AssertResult() const;
 	void AssertResultOpen() const;
 	void AssertRelation() const;
-	bool ContainsColumnByName(const string &name) const;
 	void ExecuteOrThrow(bool stream_result = false);
 	unique_ptr<QueryResult> ExecuteInternal(bool stream_result = false);
 

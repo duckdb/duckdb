@@ -37,14 +37,44 @@ class DataFrame:
     def createGlobalTempView(self, name: str) -> None:
         raise NotImplementedError
 
-    # select *, 5 from (VALUES (1)) tbl(a)
     def withColumn(self, columnName: str, col: Column) -> "DataFrame":
-        cols = [ColumnExpression(x) for x in self.relation.columns]
-        cols.append(col.expr.alias(columnName))
-        print(self.relation.columns)
-        print(cols)
+        if columnName in self.relation:
+	        # We want to replace the existing column with this new expression
+            cols = []
+            for x in self.relation.columns:
+                if x.casefold() == columnName.casefold():
+                    cols.append(col.expr.alias(columnName))
+                else:
+                    cols.append(ColumnExpression(x))
+        else:
+            cols = [ColumnExpression(x) for x in self.relation.columns]
+            cols.append(col.expr.alias(columnName))
         rel = self.relation.select(*cols)
         return DataFrame(rel, self.session)
+
+    def select(self, *cols) -> "DataFrame":
+        cols = list(cols)
+        if (len(cols) == 1):
+            cols = cols[0]
+        if isinstance(cols, list):
+            projections = [x.expr if isinstance(x, Column) else ColumnExpression(x) for x in cols]
+        else:
+            projections = [cols.expr if isinstance(cols, Column) else ColumnExpression(cols)]
+        rel = self.relation.select(*projections)
+        return DataFrame(rel, self.session)
+
+    @property
+    def columns(self) -> List[str]:
+        """Returns all column names as a list.
+
+        .. versionadded:: 1.3.0
+
+        Examples
+        --------
+        >>> df.columns
+        ['age', 'name']
+        """
+        return [f.name for f in self.schema.fields]
 
     def drop(self, *cols: "ColumnOrName") -> "DataFrame":  # type: ignore[misc]
         if len(cols) == 1:
@@ -64,6 +94,12 @@ class DataFrame:
         exclude = [x for x in exclude if x in self.relation.columns]
         expr = StarExpression(exclude=exclude)
         return DataFrame(self.relation.select(expr), self.session)
+
+    def __contains__(self, item: str):
+        """
+        Check if the :class:`DataFrame` contains a column by the name of `item`
+        """
+        return item in self.relation
 
     @property
     def schema(self) -> StructType:

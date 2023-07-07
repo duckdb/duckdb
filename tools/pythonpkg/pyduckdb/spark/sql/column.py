@@ -118,14 +118,14 @@ class Column:
         other: Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"],
     ) -> "Column":
         """binary function"""
-        return Column(self.expr == other.expr)
+        return Column(self.expr == (other.expr if isinstance(other, Column) else other))
 
     def __ne__(  # type: ignore[override]
         self,
         other: Any,
     ) -> "Column":
         """binary function"""
-        return Column(self.expr != other.expr)
+        return Column(self.expr != (other.expr if isinstance(other, Column) else other))
 
     __lt__ = _bin_op("__lt__")
 

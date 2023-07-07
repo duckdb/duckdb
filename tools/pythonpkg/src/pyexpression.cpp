@@ -178,6 +178,9 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::StarExpression(py::list exclu
 }
 
 shared_ptr<DuckDBPyExpression> DuckDBPyExpression::ColumnExpression(const string &column_name) {
+	if (column_name == "*") {
+		return StarExpression();
+	}
 	return make_shared<DuckDBPyExpression>(make_uniq<duckdb::ColumnRefExpression>(column_name));
 }
 

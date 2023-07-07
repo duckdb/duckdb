@@ -624,7 +624,8 @@ void DuckDBPyRelation::Close() {
 }
 
 bool DuckDBPyRelation::ContainsColumnByName(const string &name) const {
-	return std::find(names.begin(), names.end(), name) != names.end();
+	return std::find_if(names.begin(), names.end(),
+	                    [&](const string &item) { return StringUtil::CIEquals(name, item); }) != names.end();
 }
 
 static bool ContainsStructFieldByName(LogicalType &type, const string &name) {

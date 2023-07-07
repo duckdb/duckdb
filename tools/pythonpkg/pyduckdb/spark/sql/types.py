@@ -271,7 +271,7 @@ class TimestampSecondNTZType(AtomicType, metaclass=DataTypeSingleton):
         raise ContributionsAcceptedError
 
     def fromInternal(self, ts: int) -> datetime.datetime:
-	    raise ContributionsAcceptedError
+        raise ContributionsAcceptedError
 
 class TimestampMilisecondNTZType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type without timezone information with milisecond precision."""
@@ -290,7 +290,7 @@ class TimestampMilisecondNTZType(AtomicType, metaclass=DataTypeSingleton):
         raise ContributionsAcceptedError
 
     def fromInternal(self, ts: int) -> datetime.datetime:
-	    raise ContributionsAcceptedError
+        raise ContributionsAcceptedError
 
 class TimestampNanosecondNTZType(AtomicType, metaclass=DataTypeSingleton):
     """Timestamp (datetime.datetime) data type without timezone information with nanosecond precision."""
@@ -309,7 +309,7 @@ class TimestampNanosecondNTZType(AtomicType, metaclass=DataTypeSingleton):
         raise ContributionsAcceptedError
 
     def fromInternal(self, ts: int) -> datetime.datetime:
-	    raise ContributionsAcceptedError
+        raise ContributionsAcceptedError
 
 class DecimalType(FractionalType):
     """Decimal (decimal.Decimal) data type.
@@ -845,6 +845,9 @@ class StructType(DataType):
 
     def __repr__(self) -> str:
         return "StructType([%s])" % ", ".join(str(field) for field in self)
+
+    def __contains__(self, item: Any) -> bool:
+        return item in self.names
 
     def extract_types_and_names(self) -> Tuple[List[str], List[str]]:
         names = []
