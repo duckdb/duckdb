@@ -437,35 +437,12 @@ idx_t duckdb_init_get_column_index(duckdb_init_info info, idx_t column_index) {
 	return function_info->column_ids[column_index];
 }
 
-duckdb_optional_table_filter_set duckdb_init_get_table_filter_set(duckdb_init_info info) {
-	duckdb_optional_table_filter_set result;
-	result.has_value = false;
+duckdb_table_filter_set duckdb_init_get_table_filter_set(duckdb_init_info info) {
 	if (!info) {
-		return result;
+		return nullptr;
 	}
 	auto function_info = (duckdb::CTableInternalInitInfo *)info;
-	optional_ptr<TableFilterSet> filters = function_info->filter_sets;
-
-	if (filters.has_value()) {
-		result.has_value = true;
-		result.value = (CTableFilterSet*)malloc(sizeof(CTableFilterSet));
-		result.value->count = filters->filters.size();
-		result.value->filters = (CTableFilter*)malloc(result.value->count * sizeof(CTableFilter));
-
-		size_t i = 0;
-		for (const auto& filter : filters->filters) {
-			result.value->filters[i].filter_type = static_cast<duckdb_filter_type>(filter.second->filter_type);
-			i++;
-		}
-	}
-	return result;
-}
-
-void duckdb_destroy_optional_table_filter_set(duckdb_optional_table_filter_set *filters) {
-	if (filters->has_value) {
-		free(filters->value->filters);
-		free(filters->value);
-	}
+	return reinterpret_cast<duckdb_table_filter_set>(&(function_info->filters));
 }
 
 void duckdb_init_set_max_threads(duckdb_init_info info, idx_t max_threads) {

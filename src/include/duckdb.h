@@ -303,17 +303,9 @@ typedef struct _duckdb_vector {
 typedef struct _duckdb_value {
 	void *__val;
 } * duckdb_value;
-typedef struct {
-    duckdb_filter_type filter_type;
-} duckdb_table_filter;
-typedef struct {
-    duckdb_table_filter* filters;
-    size_t count;
-} duckdb_table_filter_set;
-typedef struct {
-    duckdb_table_filter_set* value;
-    bool has_value;
-} duckdb_optional_table_filter_set;
+typedef struct _table_filter_set {
+    void *__tfs;
+} * duckdb_table_filter_set;
 
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 typedef enum {
@@ -322,13 +314,6 @@ typedef enum {
 	DUCKDB_PENDING_ERROR = 2
 } duckdb_pending_state;
 
-typedef enum {
-    CONSTANT_COMPARISON = 0,
-    IS_NULL = 1,
-    IS_NOT_NULL = 2,
-    CONJUNCTION_OR = 3,
-    CONJUNCTION_AND = 4
-} duckdb_filter_type;
 
 //===--------------------------------------------------------------------===//
 // Open/Connect
@@ -2011,14 +1996,7 @@ This function must be used if filter pushdown is enabled to figure out which fil
 * filters: the pointer to the optional table filter set
 * returns: an optional table filter set
 */
-DUCKDB_API duckdb_optional_table_filter_set duckdb_init_get_table_filter_set(duckdb_init_info info);
-
-/*!
-De-allocates all memory allocated for the table filter set.
-
-* filters: The set of table filters to destroy.
-*/
-DUCKDB_API void duckdb_destroy_optional_table_filter_set(duckdb_optional_table_filter_set *filters);
+duckdb_table_filter_set duckdb_init_get_table_filter_set(duckdb_init_info info);
 
 /*!
 Sets how many threads can process this table function in parallel (default: 1)

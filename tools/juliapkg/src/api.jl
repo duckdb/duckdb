@@ -2283,15 +2283,6 @@ function duckdb_init_get_table_filter_set(info)
 end
 
 """
-	duckdb_destroy_optional_table_filter_set(filters)
-De-allocates all memory allocated for the table filter set.
-* filters: The set of table filters to destroy.
-"""
-function duckdb_destroy_optional_table_filter_set(filters)
-    return ccall((:duckdb_destroy_optional_table_filter_set, libduckdb), Cvoid, (Ref{duckdb_optional_table_filter_set},), filters)
-end
-
-"""
 Sets how many threads can process this table function in parallel (default: 1)
 
 * info: The info object
