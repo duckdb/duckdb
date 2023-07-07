@@ -52,6 +52,11 @@ for root, dirs, files in os.walk(os.path.join("..", "src")):
         if file.endswith(".hpp"):
             hpp_files.append(os.path.join(root, file))
 
+def remove_prefix(str, prefix):
+    if str.startswith(prefix):
+        return str[len(prefix):]
+    return str
+
 # get all the enum classes
 enums = []
 enum_paths = []
@@ -60,7 +65,7 @@ for hpp_file in hpp_files:
     with open(hpp_file, "r") as f:
         text = f.read()
         for res in re.finditer(r"enum class (\w*)\s*:\s*(\w*)\s*{((?:\s*[^}])*)}", text, re.MULTILINE):
-            file_path = os.path.relpath(hpp_file, os.path.join("..", "src")).replace("include/", "")
+            file_path = remove_prefix(os.path.relpath(hpp_file, os.path.join("..", "src")), "include/")
             enum_name = res.group(1)
 
             if enum_name in blacklist:
@@ -94,7 +99,7 @@ for hpp_file in hpp_files:
                 if member.group(2):
                     # If the member has a value, make sure it isnt already covered by another member
                     # If it is, we cant do anything else than ignore it
-                    value = member.group(2).strip().removeprefix("=").strip()
+                    value = remove_prefix(member.group(2).strip(), "=").strip()
                     if value not in enum_values and value not in dict(enum_members):
                         enum_members.append((key, strings))
                     else:
