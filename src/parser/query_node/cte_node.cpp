@@ -55,21 +55,4 @@ unique_ptr<QueryNode> CTENode::Deserialize(FieldReader &reader) {
 	return std::move(result);
 }
 
-void CTENode::FormatSerialize(FormatSerializer &serializer) const {
-	QueryNode::FormatSerialize(serializer);
-	serializer.WriteProperty("cte_name", ctename);
-	serializer.WriteProperty("query", *query);
-	serializer.WriteProperty("child", *child);
-	serializer.WriteProperty("aliases", aliases);
-}
-
-unique_ptr<QueryNode> CTENode::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_uniq<CTENode>();
-	deserializer.ReadProperty("cte_name", result->ctename);
-	deserializer.ReadProperty("query", result->query);
-	deserializer.ReadProperty("child", result->child);
-	deserializer.ReadProperty("aliases", result->aliases);
-	return std::move(result);
-}
-
 } // namespace duckdb

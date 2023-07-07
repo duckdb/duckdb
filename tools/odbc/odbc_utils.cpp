@@ -173,7 +173,16 @@ string OdbcUtils::GetQueryDuckdbColumns(const string &catalog_filter, const stri
 		sql_duckdb_columns += table_filter + " AND ";
 	}
 	sql_duckdb_columns += column_filter;
-	sql_duckdb_columns += " ORDER BY \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\", \"ORDINAL_POSITION\"";
+
+	// clang-format off
+	sql_duckdb_columns += R"(
+		ORDER BY
+			"TABLE_CAT",
+			"TABLE_SCHEM",
+			"TABLE_NAME",
+			"ORDINAL_POSITION"
+	)";
+	// clang-format on
 
 	return sql_duckdb_columns;
 }

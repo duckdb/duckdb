@@ -1,7 +1,6 @@
 #include "odbc_interval.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "odbc_diagnostic.hpp"
-#include "odbc_exception.hpp"
 #include <sqltypes.h>
 #include <sqlext.h>
 
