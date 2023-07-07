@@ -44,7 +44,7 @@
         "parameters": "list,begin,end[,step]",
         "description": "Extract a sublist using slice conventions. Negative values are accepted.",
         "example": "list_slice(l, 2, 4)",
-        "type": "scalar_function",
+        "type": "scalar_function_set",
         "aliases": ["array_slice"]
     },
     {
