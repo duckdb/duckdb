@@ -88,6 +88,7 @@ SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 	case SQL_ATTR_TRANSLATE_OPTION:
 		return SQL_NO_DATA;
 	case SQL_ATTR_QUERY_TIMEOUT: {
+
 		*(SQLINTEGER *)value_ptr = 0;
 		buffer_length = sizeof(SQLINTEGER);
 		return SQL_SUCCESS;
@@ -150,8 +151,7 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 			dbc->sql_attr_access_mode = SQL_MODE_READ_ONLY;
 			return SQL_SUCCESS;
 		}
-		duckdb::DiagRecord diag_rec("Invalid access mode.", SQLStateType::INVALID_ATTR_VALUE,
-		                            dbc->GetDataSourceName());
+		duckdb::DiagRecord diag_rec("Invalid access mode.", SQLStateType::INVALID_ATTR_VALUE, dbc->GetDataSourceName());
 		return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLSetConnectAttr", diag_rec, dbc->GetDataSourceName());
 	}
 #ifdef SQL_ATTR_ASYNC_DBC_EVENT
