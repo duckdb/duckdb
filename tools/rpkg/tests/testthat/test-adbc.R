@@ -1,4 +1,6 @@
 test_that("ADBC driver can create databases, connections, and statements", {
+  skip_if_not_installed("adbcdrivermanager")
+
   drv <- duckdb_adbc()
   expect_s3_class(drv, "duckdb_driver_adbc")
 
@@ -22,6 +24,8 @@ test_that("ADBC driver can create databases, connections, and statements", {
 })
 
 test_that("DuckDB ADBC classes can be used in adbc_* S4 object slots", {
+  skip_if_not_installed("adbcdrivermanager")
+
   setClass("SomeClass",
     slots = list(
       driver = "adbc_driver",
