@@ -48,22 +48,8 @@ public:
 	}
 
 	// Optional pointer
-	template <class T>
-	void WriteOptionalProperty(const char *tag, T *ptr) {
-		SetTag(tag);
-		if (ptr == nullptr) {
-			OnOptionalBegin(false);
-			OnOptionalEnd(false);
-		} else {
-			OnOptionalBegin(true);
-			WriteValue(*ptr);
-			OnOptionalEnd(true);
-		}
-	}
-
-	// Optional unique_ptr
-	template <class T>
-	void WriteOptionalProperty(const char *tag, const unique_ptr<T> &ptr) {
+	template <class POINTER>
+	void WriteOptionalProperty(const char *tag, POINTER &&ptr) {
 		SetTag(tag);
 		if (ptr == nullptr) {
 			OnOptionalBegin(false);

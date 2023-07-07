@@ -1108,18 +1108,6 @@ LogicalType LogicalType::Deserialize(Deserializer &source) {
 	return LogicalType(id, std::move(info));
 }
 
-void LogicalType::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("id", id_);
-	serializer.WriteOptionalProperty("type_info", type_info_.get());
-}
-
-LogicalType LogicalType::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto id = deserializer.ReadProperty<LogicalTypeId>("id");
-	auto info = deserializer.ReadOptionalProperty<shared_ptr<ExtraTypeInfo>>("type_info");
-
-	return LogicalType(id, std::move(info));
-}
-
 bool LogicalType::EqualTypeInfo(const LogicalType &rhs) const {
 	if (type_info_.get() == rhs.type_info_.get()) {
 		return true;

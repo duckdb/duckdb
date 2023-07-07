@@ -1,0 +1,22 @@
+[
+  {
+    "class": "LogicalType",
+    "includes": [
+      "duckdb/common/types.hpp"
+    ],
+    "members": [
+      {
+        "name": "id",
+        "type": "LogicalTypeId",
+        "property": "id_"
+      },
+      {
+        "name": "type_info",
+        "type": "ExtraTypeInfo*",
+        "property": "type_info_",
+        "optional": true
+      }
+    ],
+    "pointer_type": "none"
+  }
+]
