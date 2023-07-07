@@ -23,8 +23,8 @@ TEST_CASE("Test SQL_ATTR_ROW_BIND_TYPE attribute in SQLSetStmtAttr", "[odbc]") {
 
 	// Check the statement attribute SQL_ATTR_ROW_BIND_TYPE
 	SQLULEN buf;
-	EXECUTE_AND_CHECK("SQLGetStmtAttr (SQL_ATTR_ROW_BIND_TYPE)", SQLGetStmtAttr, hstmt, SQL_ATTR_ROW_BIND_TYPE,
-	                  &buf, sizeof(buf), nullptr);
+	EXECUTE_AND_CHECK("SQLGetStmtAttr (SQL_ATTR_ROW_BIND_TYPE)", SQLGetStmtAttr, hstmt, SQL_ATTR_ROW_BIND_TYPE, &buf,
+	                  sizeof(buf), nullptr);
 	REQUIRE(row_len == buf);
 
 	// Free the statement handle
@@ -52,8 +52,8 @@ TEST_CASE("Test SQL_ATTR_ACCESS_MODE and SQL_ATTR_METADATA_ID attribute in SQLSe
 
 	// Check the Connect attribute SQL_ATTR_ACCESS_MODE
 	SQLUINTEGER buf;
-	EXECUTE_AND_CHECK("SQLGetConnectAttr (SQL_ATTR_ACCESS_MODE)", SQLGetConnectAttr, dbc, SQL_ATTR_ACCESS_MODE,
-	                  &buf, sizeof(buf), nullptr);
+	EXECUTE_AND_CHECK("SQLGetConnectAttr (SQL_ATTR_ACCESS_MODE)", SQLGetConnectAttr, dbc, SQL_ATTR_ACCESS_MODE, &buf,
+	                  sizeof(buf), nullptr);
 	REQUIRE(SQL_MODE_READ_ONLY == buf);
 
 	// Set the Connect attribute SQL_ATTR_ACCESS_MODE to SQL_MODE_READ_WRITE
@@ -61,8 +61,8 @@ TEST_CASE("Test SQL_ATTR_ACCESS_MODE and SQL_ATTR_METADATA_ID attribute in SQLSe
 	                  (SQLPOINTER)SQL_MODE_READ_WRITE, SQL_IS_INTEGER);
 
 	// Check the Connect attribute SQL_ATTR_ACCESS_MODE
-	EXECUTE_AND_CHECK("SQLGetConnectAttr (SQL_ATTR_ACCESS_MODE)", SQLGetConnectAttr, dbc, SQL_ATTR_ACCESS_MODE,
-	                  &buf, sizeof(buf), nullptr);
+	EXECUTE_AND_CHECK("SQLGetConnectAttr (SQL_ATTR_ACCESS_MODE)", SQLGetConnectAttr, dbc, SQL_ATTR_ACCESS_MODE, &buf,
+	                  sizeof(buf), nullptr);
 	REQUIRE(SQL_MODE_READ_WRITE == buf);
 
 	// Set the Connect attribute SQL_ATTR_METADATA_ID to SQL_TRUE
