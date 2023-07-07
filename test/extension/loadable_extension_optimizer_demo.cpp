@@ -111,7 +111,7 @@ public:
 			auto buffer = malloc(chunk_len);
 			D_ASSERT(buffer);
 			ReadChecked(sockfd, buffer, chunk_len);
-			BufferedDeserializer deserializer((data_ptr_t)buffer, chunk_len);
+			BufferedDeserializer deserializer(data_ptr_cast(buffer), chunk_len);
 			DataChunk chunk;
 
 			chunk.Deserialize(deserializer);

@@ -34,12 +34,12 @@ public:
 		static_assert(std::is_trivially_destructible<T>(), "WriteField object must be trivially destructible");
 
 		AddField();
-		WriteData((const_data_ptr_t)&element, sizeof(T));
+		WriteData(const_data_ptr_cast(&element), sizeof(T));
 	}
 
 	//! Write a string with a length prefix
 	void WriteString(const string &val) {
-		WriteStringLen((const_data_ptr_t)val.c_str(), val.size());
+		WriteStringLen(const_data_ptr_cast(val.c_str()), val.size());
 	}
 	void WriteStringLen(const_data_ptr_t val, idx_t len) {
 		AddField();
@@ -135,7 +135,7 @@ public:
 private:
 	template <class T>
 	void Write(const T &element) {
-		WriteData((const_data_ptr_t)&element, sizeof(T));
+		WriteData(const_data_ptr_cast(&element), sizeof(T));
 	}
 
 	DUCKDB_API void WriteData(const_data_ptr_t buffer, idx_t write_size);

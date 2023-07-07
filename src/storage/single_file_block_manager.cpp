@@ -19,7 +19,7 @@ namespace duckdb {
 const char MainHeader::MAGIC_BYTES[] = "DUCK";
 
 void MainHeader::Serialize(Serializer &ser) {
-	ser.WriteData((data_ptr_t)MAGIC_BYTES, MAGIC_BYTE_SIZE);
+	ser.WriteData(const_data_ptr_cast(MAGIC_BYTES), MAGIC_BYTE_SIZE);
 	ser.Write<uint64_t>(version_number);
 	FieldWriter writer(ser);
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
@@ -170,7 +170,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	h2.free_list = INVALID_BLOCK;
 	h2.block_count = 0;
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
-	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE * 2);
+	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 	// ensure that writing to disk is completed before returning
 	handle->Sync();
 	// we start with h2 as active_header, this way our initial write will be in h1
@@ -197,7 +197,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	DatabaseHeader h1, h2;
 	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE);
 	h1 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
-	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2);
+	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 	h2 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
 	// check the header with the highest iteration count
 	if (h1.iteration > h2.iteration) {
@@ -366,6 +366,29 @@ void SingleFileBlockManager::Read(Block &block) {
 void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
 	D_ASSERT(block_id >= 0);
 	ChecksumAndWrite(buffer, BLOCK_START + block_id * Storage::BLOCK_ALLOC_SIZE);
+}
+
+void SingleFileBlockManager::Truncate() {
+	BlockManager::Truncate();
+	idx_t blocks_to_truncate = 0;
+	// reverse iterate over the free-list
+	for (auto entry = free_list.rbegin(); entry != free_list.rend(); entry++) {
+		auto block_id = *entry;
+		if (block_id + 1 != max_block) {
+			break;
+		}
+		blocks_to_truncate++;
+		max_block--;
+	}
+	if (blocks_to_truncate == 0) {
+		// nothing to truncate
+		return;
+	}
+	// truncate the file
+	for (idx_t i = 0; i < blocks_to_truncate; i++) {
+		free_list.erase(max_block + i);
+	}
+	handle->Truncate(BLOCK_START + max_block * Storage::BLOCK_ALLOC_SIZE);
 }
 
 vector<block_id_t> SingleFileBlockManager::GetFreeListBlocks() {

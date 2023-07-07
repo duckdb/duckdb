@@ -47,6 +47,9 @@ struct MakeTimeOperator {
 	static RESULT_TYPE Operation(HH hh, MM mm, SS ss) {
 		int64_t secs = ss;
 		int64_t micros = std::round((ss - secs) * Interval::MICROS_PER_SEC);
+		if (!Time::IsValidTime(hh, mm, secs, micros)) {
+			throw ConversionException("Time out of range: %d:%d:%d.%d", hh, mm, secs, micros);
+		}
 		return Time::FromTime(hh, mm, secs, micros);
 	}
 };
@@ -69,10 +72,21 @@ struct MakeTimestampOperator {
 		const auto t = MakeTimeOperator::Operation<HR, MN, SS, dtime_t>(hr, mn, ss);
 		return Timestamp::FromDatetime(d, t);
 	}
+
+	template <typename T, typename RESULT_TYPE>
+	static RESULT_TYPE Operation(T micros) {
+		return timestamp_t(micros);
+	}
 };
 
 template <typename T>
 static void ExecuteMakeTimestamp(DataChunk &input, ExpressionState &state, Vector &result) {
+	if (input.ColumnCount() == 1) {
+		auto func = MakeTimestampOperator::Operation<T, timestamp_t>;
+		UnaryExecutor::Execute<T, timestamp_t>(input.data[0], result, input.size(), func);
+		return;
+	}
+
 	D_ASSERT(input.ColumnCount() == 6);
 
 	auto func = MakeTimestampOperator::Operation<T, T, T, T, T, double, timestamp_t>;
@@ -96,10 +110,14 @@ ScalarFunction MakeTimeFun::GetFunction() {
 	                      ExecuteMakeTime<int64_t>);
 }
 
-ScalarFunction MakeTimestampFun::GetFunction() {
-	return ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
-	                       LogicalType::BIGINT, LogicalType::DOUBLE},
-	                      LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>);
+ScalarFunctionSet MakeTimestampFun::GetFunctions() {
+	ScalarFunctionSet operator_set("make_timestamp");
+	operator_set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT,
+	                                         LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::DOUBLE},
+	                                        LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>));
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP, ExecuteMakeTimestamp<int64_t>));
+	return operator_set;
 }
 
 } // namespace duckdb

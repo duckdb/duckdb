@@ -27,12 +27,12 @@ string OperatorExpression::ToString() const {
 	return ToString<OperatorExpression, ParsedExpression>(*this);
 }
 
-bool OperatorExpression::Equal(const OperatorExpression *a, const OperatorExpression *b) {
-	if (a->children.size() != b->children.size()) {
+bool OperatorExpression::Equal(const OperatorExpression &a, const OperatorExpression &b) {
+	if (a.children.size() != b.children.size()) {
 		return false;
 	}
-	for (idx_t i = 0; i < a->children.size(); i++) {
-		if (!a->children[i]->Equals(b->children[i].get())) {
+	for (idx_t i = 0; i < a.children.size(); i++) {
+		if (!a.children[i]->Equals(*b.children[i])) {
 			return false;
 		}
 	}
@@ -55,18 +55,6 @@ void OperatorExpression::Serialize(FieldWriter &writer) const {
 unique_ptr<ParsedExpression> OperatorExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	auto expression = make_uniq<OperatorExpression>(type);
 	expression->children = reader.ReadRequiredSerializableList<ParsedExpression>();
-	return std::move(expression);
-}
-
-void OperatorExpression::FormatSerialize(FormatSerializer &serializer) const {
-	ParsedExpression::FormatSerialize(serializer);
-	serializer.WriteProperty("children", children);
-}
-
-unique_ptr<ParsedExpression> OperatorExpression::FormatDeserialize(ExpressionType type,
-                                                                   FormatDeserializer &deserializer) {
-	auto expression = make_uniq<OperatorExpression>(type);
-	expression->children = deserializer.ReadProperty<vector<unique_ptr<ParsedExpression>>>("children");
 	return std::move(expression);
 }
 

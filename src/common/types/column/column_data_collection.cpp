@@ -333,7 +333,7 @@ struct StandardValueCopy : public BaseValueCopy<T> {
 
 struct StringValueCopy : public BaseValueCopy<string_t> {
 	static string_t Operation(ColumnDataMetaData &meta_data, string_t input) {
-		return input.IsInlined() ? input : meta_data.segment.heap.AddBlob(input);
+		return input.IsInlined() ? input : meta_data.segment.heap->AddBlob(input);
 	}
 };
 
@@ -423,7 +423,8 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
                               idx_t offset, idx_t copy_count) {
 
 	const auto &allocator_type = meta_data.segment.allocator->GetType();
-	if (allocator_type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR) {
+	if (allocator_type == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ||
+	    allocator_type == ColumnDataAllocatorType::HYBRID) {
 		// strings cannot be spilled to disk - use StringHeap
 		TemplatedColumnDataCopy<StringValueCopy>(meta_data, source_data, source, offset, copy_count);
 		return;
@@ -454,7 +455,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 		// 'append_count' is less if we cannot fit that amount of non-inlined strings on one buffer-managed block
 		idx_t append_count;
 		idx_t heap_size = 0;
-		const auto source_entries = (string_t *)source_data.data;
+		const auto source_entries = UnifiedVectorFormat::GetData<string_t>(source_data);
 		for (append_count = 0; append_count < vector_remaining; append_count++) {
 			auto source_idx = source_data.sel->get_index(offset + append_count);
 			if (!source_data.validity.RowIsValid(source_idx)) {
@@ -505,7 +506,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			target_validity.SetAllValid(STANDARD_VECTOR_SIZE);
 		}
 
-		auto target_entries = (string_t *)base_ptr;
+		auto target_entries = reinterpret_cast<string_t *>(base_ptr);
 		for (idx_t i = 0; i < append_count; i++) {
 			auto source_idx = source_data.sel->get_index(offset + i);
 			auto target_idx = current_segment.count + i;
@@ -520,7 +521,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 			} else {
 				D_ASSERT(heap_ptr != nullptr);
 				memcpy(heap_ptr, source_entry.GetData(), source_entry.GetSize());
-				target_entry = string_t((const char *)heap_ptr, source_entry.GetSize());
+				target_entry = string_t(const_char_ptr_cast(heap_ptr), source_entry.GetSize());
 				heap_ptr += source_entry.GetSize();
 			}
 		}
@@ -930,6 +931,7 @@ void ColumnDataCollection::Verify() {
 #endif
 }
 
+// LCOV_EXCL_START
 string ColumnDataCollection::ToString() const {
 	DataChunk chunk;
 	InitializeScanChunk(chunk);
@@ -950,6 +952,7 @@ string ColumnDataCollection::ToString() const {
 
 	return result;
 }
+// LCOV_EXCL_STOP
 
 void ColumnDataCollection::Print() const {
 	Printer::Print(ToString());
@@ -1028,6 +1031,18 @@ bool ColumnDataCollection::ResultEquals(const ColumnDataCollection &left, const 
 		error_message = string();
 	}
 	return true;
+}
+
+vector<shared_ptr<StringHeap>> ColumnDataCollection::GetHeapReferences() {
+	vector<shared_ptr<StringHeap>> result(segments.size(), nullptr);
+	for (idx_t segment_idx = 0; segment_idx < segments.size(); segment_idx++) {
+		result[segment_idx] = segments[segment_idx]->heap;
+	}
+	return result;
+}
+
+ColumnDataAllocatorType ColumnDataCollection::GetAllocatorType() const {
+	return allocator->GetType();
 }
 
 const vector<unique_ptr<ColumnDataCollectionSegment>> &ColumnDataCollection::GetSegments() const {

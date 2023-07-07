@@ -22,8 +22,8 @@ enum class PhysicalType : uint8_t;
 struct LogicalType;
 struct hugeint_t;
 
-inline void assert_restrict_function(void *left_start, void *left_end, void *right_start, void *right_end,
-                                     const char *fname, int linenr) {
+inline void assert_restrict_function(const void *left_start, const void *left_end, const void *right_start,
+                                     const void *right_end, const char *fname, int linenr) {
 	// assert that the two pointers do not overlap
 #ifdef DEBUG
 	if (!(left_end <= right_start || right_end <= left_start)) {
@@ -105,6 +105,9 @@ public:
 
 	template <typename... Args>
 	static string ConstructMessage(const string &msg, Args... params) {
+		const std::size_t num_args = sizeof...(Args);
+		if (num_args == 0)
+			return msg;
 		std::vector<ExceptionFormatValue> values;
 		return ConstructMessageRecursive(msg, values, params...);
 	}

@@ -77,6 +77,17 @@ public:
 		return path;
 	}
 
+	template <class TARGET>
+	TARGET &Cast() {
+		D_ASSERT(dynamic_cast<TARGET *>(this));
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+
 public:
 	FileSystem &file_system;
 	string path;
@@ -235,6 +246,8 @@ public:
 
 	//! Whether or not a file is remote or local, based only on file path
 	DUCKDB_API static bool IsRemoteFile(const string &path);
+
+	DUCKDB_API virtual void SetDisabledFileSystems(const vector<string> &names);
 };
 
 } // namespace duckdb

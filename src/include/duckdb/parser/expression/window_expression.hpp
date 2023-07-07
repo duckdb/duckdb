@@ -70,7 +70,7 @@ public:
 	//! Convert the Expression to a String
 	string ToString() const override;
 
-	static bool Equal(const WindowExpression *a, const WindowExpression *b);
+	static bool Equal(const WindowExpression &a, const WindowExpression &b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
@@ -210,6 +210,9 @@ public:
 
 		return result;
 	}
+
+private:
+	explicit WindowExpression(ExpressionType type);
 };
 
 } // namespace duckdb

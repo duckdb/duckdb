@@ -1,131 +1,99 @@
 # name: test/sql/copy/hive_types.test
-# description: basic tests hive_types flag
+# description: basic tests hive_types flag + hive_types_autocast flag
 # group: [copy]
+
 # dir: data/csv/hive-partitioning/hive_types/
 
 require parquet
 
-statement ok
-PRAGMA enable_verification
+# statement ok
+# PRAGMA enable_verification
 
 statement ok
-copy 'data/csv/hive-partitioning/hive_types/file.csv' to '__TEST_DIR__/part' (format parquet, partition_by(year,month));
+copy 'data/csv/hive-partitioning/hive_types/himym.csv' to '__TEST_DIR__/partition' (format parquet, partition_by(season,director,aired));
 
-query IIIII
-from read_parquet('__TEST_DIR__/part/**/*.parquet', hive_partitioning=0) limit 1;
+statement error
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_partitioning=0, hive_types={'season':smallint}) limit 1;
 ----
-2020	jan	06:00:01	Ted	45
+Invalid Input Error: cannot disable hive_partitioning
+
+
+# basic tests with hive_types
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_partitioning=1, hive_types={'season':'smallint','director':'varchar','aired':'date'}) limit 1;
+----
+SMALLINT	VARCHAR	DATE
+
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_types={'season':smallint,'director':varchar,'aired':date}) limit 1;
+----
+SMALLINT	VARCHAR	DATE
+
+statement error
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_types={'season':date}) limit 1;
+----
+Invalid Input Error: Unable to cast 
+
+statement error
+from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_types={'seasons':smallint});
+----
+Invalid Input Error: Unknown hive_type
+
+query I
+select typeof(season) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_types={season:smallint}) limit 1;
+----
+SMALLINT
+
+statement error
+from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_types=true);
+----
+Invalid Input Error: 'hive_types' only accepts a STRUCT
+
+statement error
+from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_types={season:-42});
+----
+Invalid Input Error: hive_types: 'season' must be a VARCHAR, instead: 'INTEGER' was provided
+
+
+# basic tests with hive_types_autocast
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_partitioning=0) limit 1;
+----
+BIGINT	VARCHAR	DATE
+
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_partitioning=1, hive_types_autocast=0) limit 1;
+----
+VARCHAR	VARCHAR	VARCHAR
+
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_partitioning=1, hive_types_autocast=1) limit 1;
+----
+BIGINT	VARCHAR	DATE
+
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_partitioning=1) limit 1;
+----
+BIGINT	VARCHAR	DATE
+
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet', hive_types_autocast=0) limit 1;
+----
+VARCHAR	VARCHAR	VARCHAR
+
+query III
+select typeof(season),typeof(director),typeof(aired) from read_parquet('__TEST_DIR__/partition/**/*.parquet') limit 1;
+----
+BIGINT	VARCHAR	DATE
+
+
+# Complex filter filtering first file, filter should be pruned completely if hive_partitioning=1
+query II
+explain from parquet_scan('__TEST_DIR__/partition/**/*.parquet', HIVE_PARTITIONING=0, HIVE_TYPES_AUTOCAST=0) where aired < '2006-1-1'::DATE;
+----
+physical_plan	<REGEX>:.*(PARQUET_SCAN.*Filters:|FILTER).*
 
 query II
-select typeof(year),typeof(month) from read_parquet('__TEST_DIR__/part/**/*.parquet', hive_partitioning=0) limit 1;
+explain from parquet_scan('__TEST_DIR__/partition/**/*.parquet', HIVE_PARTITIONING=1, HIVE_TYPES_AUTOCAST=0) where aired < '2006-1-1'::DATE;
 ----
-BIGINT	VARCHAR
-
-query II
-select typeof(year),typeof(month) from read_parquet('__TEST_DIR__/part/**/*.parquet', hive_partitioning=1) limit 1;
-----
-VARCHAR	VARCHAR
-
-query II
-select typeof(year),typeof(month) from read_parquet('__TEST_DIR__/part/**/*.parquet') limit 1;
-----
-BIGINT	VARCHAR
-
-
-
-
-# #	hive_partitioning=0
-# query IIII
-# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=0) limit 1;
-# ----
-# BIGINT	VARCHAR	BIGINT	VARCHAR
-
-# #	hive_partitioning=1, hive_types_autocast=0
-# query IIII
-# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types_autocast=0) limit 1;
-# ----
-# VARCHAR	VARCHAR	BIGINT	VARCHAR
-
-# #	hive_partitioning=1, hive_types_autocast=1		hive_types will autodetect
-# query IIII
-# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types_autocast=1) limit 1;
-# ----
-# BIGINT	VARCHAR	BIGINT	VARCHAR
-
-# #	hive_partitioning=1								hive_types will autodetect and autocast
-# query IIII
-# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1) limit 1;
-# ----
-# BIGINT	VARCHAR	BIGINT	VARCHAR
-
-# #	turn off everything
-# query IIII
-# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=0, hive_types_autocast=0) limit 1;
-# ----
-# BIGINT	VARCHAR	BIGINT	VARCHAR
-
-# #	autodetect hive_partitioning, turn off hive_types_autocast
-# query IIII
-# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_types_autocast=0) limit 1;
-# ----
-# VARCHAR	VARCHAR	BIGINT	VARCHAR
-
-# #	autodetect hive_partitioning, turn on hive_types_autocast
-# query IIII
-# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_types_autocast=1) limit 1;
-# ----
-# BIGINT	VARCHAR	BIGINT	VARCHAR
-
-# #	autodetect both
-# query IIII
-# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color']) limit 1;
-# ----
-# BIGINT	VARCHAR	BIGINT	VARCHAR
-
-# #	set hive_types as varchar,varchar
-# query IIII
-# select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types={'year':'varchar','month':'varchar'}) limit 1;
-# ----
-# VARCHAR	VARCHAR	BIGINT	VARCHAR
-
-# # some taxi stuff
-# query II
-# select typeof(passenger_count), typeof(vendorid) from read_parquet('../taxi/**/passenger_count=*.*/*.parquet', hive_partitioning=1, hive_types={'vendorid':'smallint','passenger_count':'smallint'}) limit 1;
-# ----
-# SMALLINT	SMALLINT
-
-# # #	set hive_types as smallint,varchar
-# # query IIII
-# # select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types={'year':'smallint','month':'varchar'}) limit 1;
-# # ----
-# # SMALLINT	VARCHAR	BIGINT	VARCHAR
-
-# # #	set hive_types as smallint,bigint, but 'month' to 'bigint' is a bad cast
-# # statement error
-# # select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=1, hive_types={'year':'smallint','month':'bigint'}) limit 1;
-# # ----
-# # Invalid Input Error
-
-# # #	hive_partitioning is auto_detected, and set hive_types as smallint,varchar
-# # query IIII
-# # select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_types={'year':'smallint','month':'varchar'}) limit 1;
-# # ----
-# # SMALLINT	VARCHAR	BIGINT	VARCHAR
-
-# # #	hive_partitioning is explicitly disabled, and hive_types are set
-# # statement error
-# # select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color'], hive_partitioning=0, hive_types={'year':'smallint','month':'varchar'}) limit 1;
-# # ----
-# # Invalid Input Error
-
-# # #	hive_partitioning is auto_detected, and set hive_types is auto_detected
-# # query IIII
-# # select typeof(year),typeof(month),typeof(count),typeof(color) from read_csv_auto('../part/**', names=['year','month','count','color']) limit 1;
-# # ----
-# # BIGINT	VARCHAR	BIGINT	VARCHAR
-
-# # # Complex filter filtering first file, filter should be pruned completely
-# # query II
-# # explain select id, value, part, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1, hive_types={'date':'DATE'}) where date > '16-10-1989'::DATE;
-# # ----
-# # physical_plan    <!REGEX>:.*(PARQUET_SCAN.*Filters:|FILTER).*
+physical_plan	<REGEX>:.*(PARQUET_SCAN.*File Filters: \(aired \<).*

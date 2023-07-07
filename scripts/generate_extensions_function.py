@@ -16,20 +16,33 @@ args = parser.parse_args()
 
 stored_functions = {
     'substrait': ["from_substrait", "get_substrait", "get_substrait_json", "from_substrait_json"],
-    'arrow': ["scan_arrow_ipc", "to_arrow_ipc"]
+    'arrow': ["scan_arrow_ipc", "to_arrow_ipc"],
+    'spatial': []
 }
 stored_settings = {
     'substrait': [],
-    'arrow': []
+    'arrow': [],
+    'spatial': []
 }
 
 functions = {}
-ext_dir = os.path.join('..', '.github', 'config', 'extensions.csv')
-ext_hpp = os.path.join("..", "src","include","duckdb", "main", "extension_entries.hpp")
-reader = csv.reader(open(ext_dir))
-# This skips the first row (i.e., the header) of the CSV file.
-next(reader)
 
+# Parses the extension config files for which extension names there are to be expected
+def parse_extension_configs():
+    ext_configs = [
+        os.path.join('..', '.github', 'config', 'out_of_tree_extensions.cmake'),
+        os.path.join('..', '.github', 'config', 'in_tree_extensions.cmake')
+    ]
+    extension_names = []
+    for file in ext_configs:
+        with open(file, 'r') as file:
+            data = file.read().replace('\n', '')
+        pattern = re.compile(r"duckdb_extension_load\s*\(\s*([A-z\_0-9]*)\s")
+        extension_names += [match.group(1) for match in pattern.finditer(data)]
+    return extension_names
+
+extension_names = parse_extension_configs()
+ext_hpp = os.path.join("..", "src","include","duckdb", "main", "extension_entries.hpp")
 get_functions_query = "select distinct function_name from duckdb_functions();"
 get_settings_query = "select distinct name from duckdb_settings();"
 duckdb_path = os.path.join("..",'build', 'release', 'duckdb')
@@ -66,8 +79,7 @@ def update_extensions(extension_name, function_list, settings_list):
     })
 
 
-for extension in reader:
-    extension_name = extension[0]
+for extension_name in extension_names:
     if extension_name not in extension_path:
         if extension_name not in stored_functions or extension_name not in stored_settings:
             print(f"Missing extension {extension_name} and not found in stored_functions/stored_settings")
@@ -86,7 +98,7 @@ for extension in reader:
 
 if args.validate:
     file = open(ext_hpp,'r')
-    pattern = re.compile("{\"(.*?)\", \"(.*?)\"},")
+    pattern = re.compile("{\"(.*?)\", \"(.*?)\"}[,}\n]")
     cur_function_map = dict(pattern.findall(file.read()))
     function_map.update(settings_map)
     print("Cur Function + Settings Map: ")

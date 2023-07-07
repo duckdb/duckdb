@@ -30,7 +30,7 @@ inline void TupleDataValueStore(const string_t &source, const data_ptr_t &row_lo
 		Store<string_t>(source, row_location + offset_in_row);
 	} else {
 		memcpy(heap_location, source.GetData(), source.GetSize());
-		Store<string_t>(string_t((const char *)heap_location, source.GetSize()), row_location + offset_in_row);
+		Store<string_t>(string_t(const_char_ptr_cast(heap_location), source.GetSize()), row_location + offset_in_row);
 		heap_location += source.GetSize();
 	}
 }
@@ -57,13 +57,26 @@ static inline T TupleDataWithinListValueLoad(const data_ptr_t &location, data_pt
 template <>
 inline string_t TupleDataWithinListValueLoad(const data_ptr_t &location, data_ptr_t &heap_location) {
 	const auto size = Load<uint32_t>(location);
-	string_t result((const char *)heap_location, size);
+	string_t result(const_char_ptr_cast(heap_location), size);
 	heap_location += size;
 	return result;
 }
 
+#ifdef DEBUG
+static void ResetCombinedListData(vector<TupleDataVectorFormat> &vector_data) {
+	for (auto &vd : vector_data) {
+		vd.combined_list_data = nullptr;
+		ResetCombinedListData(vd.child_formats);
+	}
+}
+#endif
+
 void TupleDataCollection::ComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
                                            const SelectionVector &append_sel, const idx_t append_count) {
+#ifdef DEBUG
+	ResetCombinedListData(chunk_state.vector_data);
+#endif
+
 	auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
 	std::fill_n(heap_sizes, new_chunk.size(), 0);
 
@@ -96,7 +109,7 @@ void TupleDataCollection::ComputeHeapSizes(Vector &heap_sizes_v, const Vector &s
 	switch (type) {
 	case PhysicalType::VARCHAR: {
 		// Only non-inlined strings are stored in the heap
-		const auto source_data = (string_t *)source_vector_data.data;
+		const auto source_data = UnifiedVectorFormat::GetData<string_t>(source_vector_data);
 		for (idx_t i = 0; i < append_count; i++) {
 			const auto source_idx = source_sel.get_index(append_sel.get_index(i));
 			if (source_validity.RowIsValid(source_idx)) {
@@ -175,7 +188,7 @@ void TupleDataCollection::ComputeFixedWithinListHeapSizes(Vector &heap_sizes_v, 
                                                           const UnifiedVectorFormat &list_data) {
 	// List data
 	const auto list_sel = *list_data.sel;
-	const auto list_entries = (list_entry_t *)list_data.data;
+	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
 	// Target
@@ -206,12 +219,12 @@ void TupleDataCollection::StringWithinListComputeHeapSizes(Vector &heap_sizes_v,
 	// Source
 	const auto &source_data = source_format.data;
 	const auto source_sel = *source_data.sel;
-	const auto data = (string_t *)source_data.data;
+	const auto data = UnifiedVectorFormat::GetData<string_t>(source_data);
 	const auto &source_validity = source_data.validity;
 
 	// List data
 	const auto list_sel = *list_data.sel;
-	const auto list_entries = (list_entry_t *)list_data.data;
+	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
 	// Target
@@ -249,7 +262,7 @@ void TupleDataCollection::StructWithinListComputeHeapSizes(Vector &heap_sizes_v,
                                                            const UnifiedVectorFormat &list_data) {
 	// List data
 	const auto list_sel = *list_data.sel;
-	const auto list_entries = (list_entry_t *)list_data.data;
+	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
 	// Target
@@ -283,7 +296,7 @@ static void ApplySliceRecursive(const Vector &source_v, TupleDataVectorFormat &s
 	D_ASSERT(source_format.combined_list_data);
 	auto &combined_list_data = *source_format.combined_list_data;
 
-	combined_list_data.selection_data = source_format.data.sel->Slice(combined_sel, count);
+	combined_list_data.selection_data = source_format.original_sel->Slice(combined_sel, count);
 	source_format.data.owned_sel.Initialize(combined_list_data.selection_data);
 	source_format.data.sel = &source_format.data.owned_sel;
 
@@ -293,7 +306,12 @@ static void ApplySliceRecursive(const Vector &source_v, TupleDataVectorFormat &s
 		for (idx_t struct_col_idx = 0; struct_col_idx < struct_sources.size(); struct_col_idx++) {
 			auto &struct_source = *struct_sources[struct_col_idx];
 			auto &struct_format = source_format.child_formats[struct_col_idx];
-			struct_format.combined_list_data = make_uniq<CombinedListData>();
+#ifdef DEBUG
+			D_ASSERT(!struct_format.combined_list_data);
+#endif
+			if (!struct_format.combined_list_data) {
+				struct_format.combined_list_data = make_uniq<CombinedListData>();
+			}
 			ApplySliceRecursive(struct_source, struct_format, *source_format.data.sel, count);
 		}
 	}
@@ -305,17 +323,18 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, c
                                                          const UnifiedVectorFormat &list_data) {
 	// List data (of the list Vector that "source_v" is in)
 	const auto list_sel = *list_data.sel;
-	const auto list_entries = (list_entry_t *)list_data.data;
+	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
-	// Child list
+	// Child list ("source_v")
 	const auto &child_list_data = source_format.data;
 	const auto child_list_sel = *child_list_data.sel;
-	const auto child_list_entries = (list_entry_t *)child_list_data.data;
+	const auto child_list_entries = UnifiedVectorFormat::GetData<list_entry_t>(child_list_data);
 	const auto &child_list_validity = child_list_data.validity;
 
-	// Figure out actual child list size (differs from ListVector::GetListSize if dict/const vector)
-	idx_t child_list_child_count = ListVector::GetListSize(source_v);
+	// Figure out actual child list size (can differ from ListVector::GetListSize if dict/const vector),
+	// and we cannot use ConstantVector::ZeroSelectionVector because it may need to be longer than STANDARD_VECTOR_SIZE
+	idx_t sum_of_sizes = 0;
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
 		if (!list_validity.RowIsValid(list_idx)) {
@@ -324,23 +343,41 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, c
 		const auto &list_entry = list_entries[list_idx];
 		const auto &list_offset = list_entry.offset;
 		const auto &list_length = list_entry.length;
-		child_list_child_count = MaxValue<idx_t>(child_list_child_count, list_offset + list_length);
+
+		for (idx_t child_i = 0; child_i < list_length; child_i++) {
+			const auto child_list_idx = child_list_sel.get_index(list_offset + child_i);
+			if (!child_list_validity.RowIsValid(child_list_idx)) {
+				continue;
+			}
+
+			const auto &child_list_entry = child_list_entries[child_list_idx];
+			const auto &child_list_length = child_list_entry.length;
+
+			sum_of_sizes += child_list_length;
+		}
 	}
+	const auto child_list_child_count = MaxValue<idx_t>(sum_of_sizes, ListVector::GetListSize(source_v));
 
 	// Target
 	auto heap_sizes = FlatVector::GetData<idx_t>(heap_sizes_v);
 
 	// Construct combined list entries and a selection vector for the child list child
 	auto &child_format = source_format.child_formats[0];
-	child_format.combined_list_data = make_uniq<CombinedListData>();
+#ifdef DEBUG
+	// In debug mode this should be deleted by ResetCombinedListData
+	D_ASSERT(!child_format.combined_list_data);
+#endif
+	if (!child_format.combined_list_data) {
+		child_format.combined_list_data = make_uniq<CombinedListData>();
+	}
 	auto &combined_list_data = *child_format.combined_list_data;
 	auto &combined_list_entries = combined_list_data.combined_list_entries;
 	SelectionVector combined_sel(child_list_child_count);
 	for (idx_t i = 0; i < child_list_child_count; i++) {
 		combined_sel.set_index(i, 0);
 	}
-	idx_t combined_list_offset = 0;
 
+	idx_t combined_list_offset = 0;
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
 		if (!list_validity.RowIsValid(list_idx)) {
@@ -365,7 +402,7 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, c
 				const auto &child_list_offset = child_list_entry.offset;
 				const auto &child_list_length = child_list_entry.length;
 
-				// Add this child's list entry's to the combined selection vector
+				// Add this child's list entries to the combined selection vector
 				for (idx_t child_value_i = 0; child_value_i < child_list_length; child_value_i++) {
 					auto idx = combined_list_offset + child_list_size + child_value_i;
 					auto loc = child_list_offset + child_value_i;
@@ -384,7 +421,7 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, c
 	// Create a combined child_list_data to be used as list_data in the recursion
 	auto &combined_child_list_data = combined_list_data.combined_data;
 	combined_child_list_data.sel = list_data.sel;
-	combined_child_list_data.data = (data_ptr_t)combined_list_entries;
+	combined_child_list_data.data = data_ptr_cast(combined_list_entries);
 	combined_child_list_data.validity = list_data.validity;
 
 	// Combine the selection vectors
@@ -439,7 +476,7 @@ static void TupleDataTemplatedScatter(const Vector &source, const TupleDataVecto
 	// Source
 	const auto &source_data = source_format.data;
 	const auto source_sel = *source_data.sel;
-	const auto data = (T *)source_data.data;
+	const auto data = UnifiedVectorFormat::GetData<T>(source_data);
 	const auto &validity = source_data.validity;
 
 	// Target
@@ -535,7 +572,7 @@ static void TupleDataListScatter(const Vector &source, const TupleDataVectorForm
 	// Source
 	const auto &source_data = source_format.data;
 	const auto source_sel = *source_data.sel;
-	const auto data = (list_entry_t *)source_data.data;
+	const auto data = UnifiedVectorFormat::GetData<list_entry_t>(source_data);
 	const auto &validity = source_data.validity;
 
 	// Target
@@ -582,12 +619,12 @@ static void TupleDataTemplatedWithinListScatter(const Vector &source, const Tupl
 	// Source
 	const auto &source_data = source_format.data;
 	const auto source_sel = *source_data.sel;
-	const auto data = (T *)source_data.data;
+	const auto data = UnifiedVectorFormat::GetData<T>(source_data);
 	const auto &source_validity = source_data.validity;
 
 	// List data
 	const auto list_sel = *list_data.sel;
-	const auto list_entries = (list_entry_t *)list_data.data;
+	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
 	// Target
@@ -641,7 +678,7 @@ static void TupleDataStructWithinListScatter(const Vector &source, const TupleDa
 
 	// List data
 	const auto list_sel = *list_data.sel;
-	const auto list_entries = (list_entry_t *)list_data.data;
+	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
 	// Target
@@ -693,13 +730,13 @@ static void TupleDataListWithinListScatter(const Vector &child_list, const Tuple
                                            const vector<TupleDataScatterFunction> &child_functions) {
 	// List data (of the list Vector that "child_list" is in)
 	const auto list_sel = *list_data.sel;
-	const auto list_entries = (list_entry_t *)list_data.data;
+	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_data);
 	const auto &list_validity = list_data.validity;
 
 	// Child list
 	const auto &child_list_data = child_list_format.data;
 	const auto child_list_sel = *child_list_data.sel;
-	const auto child_list_entries = (list_entry_t *)child_list_data.data;
+	const auto child_list_entries = UnifiedVectorFormat::GetData<list_entry_t>(child_list_data);
 	const auto &child_list_validity = child_list_data.validity;
 
 	// Target

@@ -273,12 +273,13 @@ void StructColumnData::DeserializeColumn(Deserializer &source) {
 	this->count = validity.count;
 }
 
-void StructColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, TableStorageInfo &result) {
+void StructColumnData::GetColumnSegmentInfo(duckdb::idx_t row_group_index, vector<duckdb::idx_t> col_path,
+                                            vector<duckdb::ColumnSegmentInfo> &result) {
 	col_path.push_back(0);
-	validity.GetStorageInfo(row_group_index, col_path, result);
+	validity.GetColumnSegmentInfo(row_group_index, col_path, result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		col_path.back() = i + 1;
-		sub_columns[i]->GetStorageInfo(row_group_index, col_path, result);
+		sub_columns[i]->GetColumnSegmentInfo(row_group_index, col_path, result);
 	}
 }
 

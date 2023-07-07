@@ -57,7 +57,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast macro to type - macro type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -65,7 +65,7 @@ public:
 		if (type != TARGET::TYPE) {
 			throw InternalException("Failed to cast macro to type - macro type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 

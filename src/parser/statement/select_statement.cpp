@@ -33,11 +33,11 @@ unique_ptr<SelectStatement> SelectStatement::FormatDeserialize(FormatDeserialize
 	return result;
 }
 
-bool SelectStatement::Equals(const SQLStatement *other_p) const {
-	if (type != other_p->type) {
+bool SelectStatement::Equals(const SQLStatement &other_p) const {
+	if (type != other_p.type) {
 		return false;
 	}
-	auto &other = other_p->Cast<SelectStatement>();
+	auto &other = other_p.Cast<SelectStatement>();
 	return node->Equals(other.node.get());
 }
 

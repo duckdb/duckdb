@@ -76,8 +76,8 @@ rapi_expr_window <- function(window_function, partitions, order_bys, window_boun
   .Call(`_duckdb_rapi_expr_window`, window_function, partitions, order_bys, window_boundary_start, window_boundary_end, start_expr, end_expr, offset_expr, default_expr)
 }
 
-rapi_rel_join <- function(left, right, conds, join) {
-  .Call(`_duckdb_rapi_rel_join`, left, right, conds, join)
+rapi_rel_join <- function(left, right, conds, join, join_ref_type) {
+  .Call(`_duckdb_rapi_rel_join`, left, right, conds, join, join_ref_type)
 }
 
 rapi_rel_union_all <- function(rel_a, rel_b) {
@@ -142,6 +142,10 @@ rapi_rel_set_symdiff <- function(rel_a, rel_b) {
 
 rapi_rel_from_table <- function(con, schema_name, table_name) {
   .Call(`_duckdb_rapi_rel_from_table`, con, schema_name, table_name)
+}
+
+rapi_rel_from_table_function <- function(con, function_name, positional_parameters_sexps, named_parameters_sexps) {
+  .Call(`_duckdb_rapi_rel_from_table_function`, con, function_name, positional_parameters_sexps, named_parameters_sexps)
 }
 
 rapi_rel_to_altrep <- function(rel) {

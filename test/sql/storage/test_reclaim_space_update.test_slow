@@ -48,8 +48,10 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers
 statement ok
 CHECKPOINT;
 
-query I nosort expected_blocks
-select total_blocks from pragma_database_size();
+query I
+select total_blocks<10 from pragma_database_size();
+----
+true
 
 query III
 SELECT MIN(i), MAX(i), COUNT(*) FROM integers

@@ -13,33 +13,18 @@ string TableFunctionRef::ToString() const {
 	return BaseToString(function->ToString(), column_name_alias);
 }
 
-bool TableFunctionRef::Equals(const TableRef *other_p) const {
+bool TableFunctionRef::Equals(const TableRef &other_p) const {
 	if (!TableRef::Equals(other_p)) {
 		return false;
 	}
-	auto other = (TableFunctionRef *)other_p;
-	return function->Equals(other->function.get());
+	auto &other = other_p.Cast<TableFunctionRef>();
+	return function->Equals(*other.function);
 }
 
 void TableFunctionRef::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable(*function);
 	writer.WriteString(alias);
 	writer.WriteList<string>(column_name_alias);
-}
-
-void TableFunctionRef::FormatSerialize(FormatSerializer &serializer) const {
-	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty("function", function);
-	serializer.WriteProperty("alias", alias);
-	serializer.WriteProperty("column_name_alias", column_name_alias);
-}
-
-unique_ptr<TableRef> TableFunctionRef::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_uniq<TableFunctionRef>();
-	deserializer.ReadProperty("function", result->function);
-	deserializer.ReadProperty("alias", result->alias);
-	deserializer.ReadProperty("column_name_alias", result->column_name_alias);
-	return std::move(result);
 }
 
 unique_ptr<TableRef> TableFunctionRef::Deserialize(FieldReader &reader) {

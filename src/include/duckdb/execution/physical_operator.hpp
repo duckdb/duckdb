@@ -31,6 +31,9 @@ class MetaPipeline;
 //! execution plan
 class PhysicalOperator {
 public:
+	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::INVALID;
+
+public:
 	PhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
 	    : type(type), types(std::move(types)), estimated_cardinality(estimated_cardinality) {
 		estimated_props = make_uniq<EstimatedProperties>(estimated_cardinality, 0);
@@ -153,6 +156,9 @@ public:
 	//! The maximum amount of memory the operator should use per thread.
 	static idx_t GetMaxThreadMemory(ClientContext &context);
 
+	//! Whether operator caching is allowed in the current execution context
+	static bool OperatorCachingAllowed(ExecutionContext &context);
+
 	virtual bool IsSink() const {
 		return false;
 	}
@@ -184,7 +190,7 @@ public:
 		if (TARGET::TYPE != PhysicalOperatorType::INVALID && type != TARGET::TYPE) {
 			throw InternalException("Failed to cast physical operator to type - physical operator type mismatch");
 		}
-		return (TARGET &)*this;
+		return reinterpret_cast<TARGET &>(*this);
 	}
 
 	template <class TARGET>
@@ -192,7 +198,7 @@ public:
 		if (TARGET::TYPE != PhysicalOperatorType::INVALID && type != TARGET::TYPE) {
 			throw InternalException("Failed to cast physical operator to type - physical operator type mismatch");
 		}
-		return (const TARGET &)*this;
+		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
 

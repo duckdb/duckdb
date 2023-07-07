@@ -37,8 +37,12 @@ class TableFunction;
 struct FunctionData;
 
 class TableColumnInfo;
-class TableIndexInfo;
+struct ColumnSegmentInfo;
 class TableStorageInfo;
+
+class LogicalGet;
+class LogicalProjection;
+class LogicalUpdate;
 
 //! A table catalog entry
 class TableCatalogEntry : public StandardEntry {
@@ -99,8 +103,14 @@ public:
 
 	DUCKDB_API static string ColumnsToSQL(const ColumnList &columns, const vector<unique_ptr<Constraint>> &constraints);
 
+	//! Returns a list of segment information for this table, if exists
+	virtual vector<ColumnSegmentInfo> GetColumnSegmentInfo();
+
 	//! Returns the storage info of this table
 	virtual TableStorageInfo GetStorageInfo(ClientContext &context) = 0;
+
+	virtual void BindUpdateConstraints(LogicalGet &get, LogicalProjection &proj, LogicalUpdate &update,
+	                                   ClientContext &context);
 
 protected:
 	// This is used to serialize the entry by #Serialize(Serializer& ). It is virtual to allow

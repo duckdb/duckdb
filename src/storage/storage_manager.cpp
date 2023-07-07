@@ -12,6 +12,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 
@@ -93,11 +94,21 @@ void SingleFileStorageManager::LoadDatabase() {
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager);
 		return;
 	}
-
-	string wal_path = path + ".wal";
+	std::size_t question_mark_pos = path.find('?');
+	auto wal_path = path;
+	if (question_mark_pos != std::string::npos) {
+		wal_path.insert(question_mark_pos, ".wal");
+	} else {
+		wal_path += ".wal";
+	}
 	auto &fs = FileSystem::Get(db);
 	auto &config = DBConfig::Get(db);
 	bool truncate_wal = false;
+	if (!config.options.enable_external_access) {
+		if (!db.IsInitialDatabase()) {
+			throw PermissionException("Attaching on-disk databases is disabled through configuration");
+		}
+	}
 
 	StorageManagerOptions options;
 	options.read_only = read_only;

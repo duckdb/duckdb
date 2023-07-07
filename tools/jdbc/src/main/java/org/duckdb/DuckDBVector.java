@@ -171,7 +171,7 @@ class DuckDBVector {
 			return null;
 		}
 
-		if (isType(DuckDBColumnType.TIMESTAMP)) {
+		if (isType(DuckDBColumnType.TIMESTAMP) || isType(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
 			return DuckDBTimestamp.toSqlTimestamp(getbuf(idx, 8).getLong());
 		}
 		if (isType(DuckDBColumnType.TIMESTAMP_MS)) {
@@ -306,7 +306,7 @@ class DuckDBVector {
 		if (check_and_null(idx)) {
 			return 0;
 		}
-		if (isType(DuckDBColumnType.BIGINT) || isType(DuckDBColumnType.TIMESTAMP)) {
+		if (isType(DuckDBColumnType.BIGINT) || isType(DuckDBColumnType.TIMESTAMP) || isType(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
 			return getbuf(idx, 8).getLong();
 		}
 		Object o = getObject(idx);
@@ -468,7 +468,7 @@ class DuckDBVector {
 		}
 		// Our raw data is already a proper count of units since the epoch
 		// So just construct the SQL Timestamp.
-		if (isType(DuckDBColumnType.TIMESTAMP)) {
+		if (isType(DuckDBColumnType.TIMESTAMP) || isType(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
 			return DuckDBTimestamp.fromMicroInstant(getbuf(idx, 8).getLong());
 		}
 		if (isType(DuckDBColumnType.TIMESTAMP_MS)) {
@@ -488,7 +488,7 @@ class DuckDBVector {
 		if (check_and_null(idx)) {
 			return null;
 		}
-		if (isType(DuckDBColumnType.TIMESTAMP)) {
+		if (isType(DuckDBColumnType.TIMESTAMP) || isType(DuckDBColumnType.TIMESTAMP_WITH_TIME_ZONE)) {
 			return DuckDBTimestamp.toLocalDateTime(getbuf(idx, 8).getLong());
 		}
 		Object o = getObject(idx);
