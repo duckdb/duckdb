@@ -83,19 +83,4 @@ unique_ptr<QueryNode> SetOperationNode::Deserialize(FieldReader &reader) {
 	return std::move(result);
 }
 
-void SetOperationNode::FormatSerialize(duckdb::FormatSerializer &serializer) const {
-	QueryNode::FormatSerialize(serializer);
-	serializer.WriteProperty("set_op_type", setop_type);
-	serializer.WriteProperty("left", *left);
-	serializer.WriteProperty("right", *right);
-}
-
-unique_ptr<QueryNode> SetOperationNode::FormatDeserialize(duckdb::FormatDeserializer &deserializer) {
-	auto result = make_uniq<SetOperationNode>();
-	deserializer.ReadProperty("set_op_type", result->setop_type);
-	deserializer.ReadProperty("left", result->left);
-	deserializer.ReadProperty("right", result->right);
-	return std::move(result);
-}
-
 } // namespace duckdb
