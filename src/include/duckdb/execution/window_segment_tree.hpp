@@ -44,10 +44,14 @@ protected:
 	Vector statef;
 	//! Partition data chunk
 	DataChunk inputs;
+
 	//! The filtered rows in inputs.
 	vector<validity_t> filter_bits;
 	ValidityMask filter_mask;
 	idx_t filter_pos;
+
+	//! Allocator for aggregates
+	ArenaAllocator allocator;
 };
 
 class WindowConstantAggregate : public WindowAggregateState {
@@ -132,6 +136,9 @@ private:
 
 	//! Use the window API, if available
 	WindowAggregationMode mode;
+
+	//! Aggregate allocator
+	ArenaAllocator allocator;
 
 	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
 	static constexpr idx_t TREE_FANOUT = 16;

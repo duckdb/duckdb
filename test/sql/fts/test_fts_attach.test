@@ -1,0 +1,21 @@
+# name: test/sql/fts/test_fts_attach.test
+# description: Test FTS and attach
+# group: [fts]
+
+# issue #7384 and #8141
+
+require fts
+
+require skip_reload
+
+statement ok
+ATTACH '__TEST_DIR__/tester.db' as search_con
+
+statement ok
+CREATE TABLE search_con.main.my_table AS SELECT 1 AS CustomerId, 'hans' as CustomerName
+
+statement ok
+PRAGMA create_fts_index(search_con.main.my_table, 'CustomerId', 'CustomerName')
+
+statement ok
+SELECT search_con.fts_main_my_table.match_bm25(1, 'han')
