@@ -120,5 +120,8 @@ public:
 
 		return result;
 	}
+
+private:
+	FunctionExpression();
 };
 } // namespace duckdb
