@@ -7,6 +7,8 @@ import sys
 class TestProgressBarArrow(object):
 
     def test_progress_arrow(self):
+        if os.name == 'nt':
+            return
         np = pytest.importorskip("numpy")
         pyarrow = pytest.importorskip("pyarrow")
 
@@ -37,6 +39,8 @@ class TestProgressBarArrow(object):
         assert (py_res == 49999995000000)
 
     def test_progress_arrow_empty(self):
+        if os.name == 'nt':
+            return
         np = pytest.importorskip("numpy")
         pyarrow = pytest.importorskip("pyarrow")
 
