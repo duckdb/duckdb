@@ -112,7 +112,7 @@ runs:
       if: inputs.build_vcpkg_extensions == 1
       shell: bash
       run: |
-        make merged_vcpkg_manifest
+        make extension_configuration
         echo "USE_MERGED_VCPKG_MANIFEST=1" >> $GITHUB_ENV 
 
     - name: Build

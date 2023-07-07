@@ -50,8 +50,8 @@ if merged_overlay_ports:
     }
 
 # Print output
-print("Writing to 'build/vcpkg_merged_manifest/vcpkg.json': ")
+print("Writing to 'build/extension_configuration/vcpkg.json': ")
 print(data["dependencies"])
 
-with open('build/vcpkg_merged_manifest/vcpkg.json', 'w', encoding='utf-8') as f:
+with open('build/extension_configuration/vcpkg.json', 'w', encoding='utf-8') as f:
     json.dump(data, f, ensure_ascii=False, indent=4)

@@ -210,7 +210,7 @@ ifneq ("${VCPKG_TARGET_TRIPLET}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_TARGET_TRIPLET='${VCPKG_TARGET_TRIPLET}'
 endif
 ifeq (${USE_MERGED_VCPKG_MANIFEST}, 1)
-	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build/vcpkg_merged_manifest'
+	CMAKE_VARS:=${CMAKE_VARS} -DVCPKG_MANIFEST_DIR='${PROJ_DIR}build/extension_configuration'
 endif
 
 
@@ -245,10 +245,10 @@ clreldebug:
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build . --config RelWithDebInfo
 
-merged_vcpkg_manifest:
-	mkdir -p ./build/vcpkg_merged_manifest && \
-	cd build/vcpkg_merged_manifest && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${CMAKE_VARS} -DMERGE_EXTENSION_VCPKG_MANIFESTS=TRUE -DVCPKG_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
+extension_configuration:
+	mkdir -p ./build/extension_configuration && \
+	cd build/extension_configuration && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${CMAKE_VARS} -DEXTENSION_CONFIG_BUILD=TRUE -DVCPKG_BUILD=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config RelWithDebInfo
 
 unittest: debug
