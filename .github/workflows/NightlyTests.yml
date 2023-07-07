@@ -21,7 +21,7 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  DUCKDB_WASM_VERSION: 7bf2a73
+  DUCKDB_WASM_VERSION: 0e27318
   CCACHE_SAVE: ${{ github.repository != 'duckdb/duckdb' }}
 
 jobs:
