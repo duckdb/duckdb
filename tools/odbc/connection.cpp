@@ -88,7 +88,6 @@ SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 	case SQL_ATTR_TRANSLATE_OPTION:
 		return SQL_NO_DATA;
 	case SQL_ATTR_QUERY_TIMEOUT: {
-
 		*(SQLINTEGER *)value_ptr = 0;
 		buffer_length = sizeof(SQLINTEGER);
 		return SQL_SUCCESS;
@@ -179,7 +178,7 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 		return SQL_SUCCESS;
 	case SQL_ATTR_CURRENT_CATALOG: {
 		if (dbc->conn) {
-			duckdb::DiagRecord diag_rec("Connection already stablished, the database name could not be set.",
+			duckdb::DiagRecord diag_rec("Connection already established, the database name could not be set.",
 			                            SQLStateType::INVALID_CONNECTION_STR_ATTR, dbc->GetDataSourceName());
 			return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLSetConnectAttr", diag_rec, dbc->GetDataSourceName());
 		}
