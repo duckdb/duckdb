@@ -182,10 +182,10 @@ void CSVSniffer::DetectTypes() {
 		for (idx_t row_idx = 1; row_idx < values.size(); row_idx++) {
 			for (idx_t col = 0; col < values[row_idx].size(); col++) {
 				auto &col_type_candidates = info_sql_types_candidates[col];
+				auto dummy_val = values[row_idx][col];
+				// try cast from string to sql_type
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
-					// try cast from string to sql_type
-					auto dummy_val = values[row_idx][col];
 					// try formatting for date types if the user did not specify one and it starts with numeric values.
 					string separator;
 					bool has_format_is_set = options.has_format.find(sql_type.id())->second;

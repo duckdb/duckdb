@@ -44,6 +44,15 @@ void CSVSniffer::RefineTypes() {
 			bool finished_file = candidates[0]->csv_buffer_iterator.Finished();
 			if (finished_file) {
 				// we finished the file: stop
+				// set sql types
+				detected_types.clear();
+				for (auto &best_sql_types_candidate : best_sql_types_candidates) {
+					LogicalType d_type = best_sql_types_candidate.back();
+					if (best_sql_types_candidate.size() == best_candidate->options.auto_type_candidates.size()) {
+						d_type = LogicalType::VARCHAR;
+					}
+					detected_types.push_back(d_type);
+				}
 				return;
 			}
 			// if jump ends up a bad line, we just skip this chunk
@@ -87,14 +96,14 @@ void CSVSniffer::RefineTypes() {
 			parse_chunk.Reset();
 		}
 		detected_types.clear();
-		// set sql types
-		for (auto &best_sql_types_candidate : best_sql_types_candidates) {
-			LogicalType d_type = best_sql_types_candidate.back();
-			if (best_sql_types_candidate.size() == best_candidate->options.auto_type_candidates.size()) {
-				d_type = LogicalType::VARCHAR;
-			}
-			detected_types.push_back(d_type);
+	}
+	// set sql types
+	for (auto &best_sql_types_candidate : best_sql_types_candidates) {
+		LogicalType d_type = best_sql_types_candidate.back();
+		if (best_sql_types_candidate.size() == best_candidate->options.auto_type_candidates.size()) {
+			d_type = LogicalType::VARCHAR;
 		}
+		detected_types.push_back(d_type);
 	}
 }
 } // namespace duckdb

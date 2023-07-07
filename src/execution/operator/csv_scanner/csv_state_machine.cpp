@@ -178,9 +178,9 @@ void CSVStateMachine::SniffValue(vector<vector<Value>> &sniffed_value) {
 			// Check if it's UTF-8
 			VerifyUTF8(options, cur_row, value);
 			sniffed_value[cur_row].push_back(Value(value));
-			value = current_char;
+			value = "";
 		}
-		if (state == CSVState::STANDARD) {
+		if (state == CSVState::STANDARD || (state == CSVState::QUOTED && previous_state == CSVState::QUOTED)) {
 			value += current_char;
 		}
 		cur_row += previous_state == CSVState::RECORD_SEPARATOR && !empty_line;
