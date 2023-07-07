@@ -24,4 +24,4 @@
 */adbc/*
 */enum_util.cpp
 */enums/expression_type.cpp
-*/storage/serialization/*
+*/serialization/*
