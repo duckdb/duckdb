@@ -12,6 +12,9 @@ from duckdb import (
     FunctionExpression,
     Expression
 )
+from ._typing import (
+	ColumnOrName
+)
 
 def col(column: str):
     return Column(ColumnExpression(column))
@@ -31,3 +34,23 @@ def struct(*cols: Column) -> Column:
 
 def lit(col: Any) -> Column:
     return col if isinstance(col, Column) else Column(ConstantExpression(col))
+
+def _invoke_function(function: str, *arguments):
+	return Column(FunctionExpression(function, *arguments))
+
+def _to_column(col: ColumnOrName) -> Column:
+	return col.expr if isinstance(col, Column) else ColumnExpression(col)
+
+def regexp_replace(str: "ColumnOrName", pattern: str, replacement: str) -> Column:
+    r"""Replace all substrings of the specified string value that match regexp with rep.
+
+    .. versionadded:: 1.5.0
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([('100-200',)], ['str'])
+    >>> df.select(regexp_replace('str', r'(\d+)', '--').alias('d')).collect()
+    [Row(d='-----')]
+    """
+    return _invoke_function("regexp_replace", _to_column(str), pattern, replacement)
+

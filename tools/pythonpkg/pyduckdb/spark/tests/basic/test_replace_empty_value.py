@@ -2,6 +2,7 @@ import pytest
 
 from pyduckdb.spark.sql.types import Row
 
+# https://sparkbyexamples.com/pyspark/pyspark-replace-empty-value-with-none-on-dataframe-2/?expand_article=1
 class TestReplaceEmpty(object):
 	def test_replace_empty(self, spark):
 		# Create the dataframe

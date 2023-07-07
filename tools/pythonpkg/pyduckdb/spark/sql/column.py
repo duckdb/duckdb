@@ -16,6 +16,7 @@ from duckdb import (
     BinaryFunctionExpression,
     ConstantExpression,
     ColumnExpression,
+    FunctionExpression,
     Expression
 )
 
@@ -42,10 +43,29 @@ def _bin_op(
     _.__doc__ = doc
     return _
 
+def _bin_func(
+    name: str,
+    doc: str = "binary function",
+) -> Callable[
+    ["Column", Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"]], "Column"
+]:
+    """Create a function expression for the given binary function"""
+
+    def _(
+        self: "Column",
+        other: Union["Column", "LiteralType", "DecimalLiteral", "DateTimeLiteral"],
+    ) -> "Column":
+        other = other.expr if isinstance(other, Column) else other
+        func = FunctionExpression(name, self.expr, other)
+        return Column(func)
+
+    _.__doc__ = doc
+    return _
+
 class Column:
     """
     A column in a DataFrame.
-
+    
     :class:`Column` instances can be created by::
 
         # 1. Select a column out of a DataFrame
@@ -134,3 +154,13 @@ class Column:
     __ge__ = _bin_op("__ge__")
 
     __gt__ = _bin_op("__gt__")
+
+    # String interrogation methods
+
+    contains = _bin_func("contains")
+    rlike = _bin_func("regexp_matches")
+    like = _bin_func("~~")
+    ilike = _bin_func("~~*")
+    startswith = _bin_func("starts_with")
+    endswith = _bin_func("suffix")
+
