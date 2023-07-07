@@ -27,6 +27,7 @@
 #include "duckdb/common/serializer/format_deserializer.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include <cmath>
 
 namespace duckdb {
@@ -1071,7 +1072,7 @@ PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 	D_ASSERT(aux_info);
 	auto &info = aux_info->Cast<EnumTypeInfo>();
 	D_ASSERT(info.GetEnumDictType() == EnumDictType::VECTOR_DICT);
-	return EnumVectorDictType(info.GetDictSize());
+	return EnumTypeInfo::DictType(info.GetDictSize());
 }
 
 //===--------------------------------------------------------------------===//

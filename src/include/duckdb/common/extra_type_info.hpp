@@ -13,6 +13,8 @@
 
 namespace duckdb {
 
+class FieldReader;
+
 //! Extra Type Info Type
 enum class ExtraTypeInfoType : uint8_t {
 	INVALID_TYPE_INFO = 0,
@@ -192,6 +194,7 @@ public:
 	const string GetSchemaName() const;
 	const Vector &GetValuesInsertOrder() const;
 	const idx_t &GetDictSize() const;
+	static PhysicalType DictType(idx_t size);
 
 	static LogicalType CreateType(const string &enum_name, Vector &ordered_data, idx_t size);
 

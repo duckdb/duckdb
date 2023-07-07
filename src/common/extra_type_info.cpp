@@ -285,7 +285,7 @@ bool UserTypeInfo::EqualsInternal(ExtraTypeInfo *other_p) const {
 //===--------------------------------------------------------------------===//
 // Enum Type Info
 //===--------------------------------------------------------------------===//
-static PhysicalType EnumVectorDictType(idx_t size) {
+PhysicalType EnumTypeInfo::DictType(idx_t size) {
 	if (size <= NumericLimits<uint8_t>::Maximum()) {
 		return PhysicalType::UINT8;
 	} else if (size <= NumericLimits<uint16_t>::Maximum()) {
@@ -373,7 +373,7 @@ const idx_t &EnumTypeInfo::GetDictSize() const {
 LogicalType EnumTypeInfo::CreateType(const string &enum_name, Vector &ordered_data, idx_t size) {
 	// Generate EnumTypeInfo
 	shared_ptr<ExtraTypeInfo> info;
-	auto enum_internal_type = EnumVectorDictType(size);
+	auto enum_internal_type = EnumTypeInfo::DictType(size);
 	switch (enum_internal_type) {
 	case PhysicalType::UINT8:
 		info = make_shared<EnumTypeInfoTemplated<uint8_t>>(enum_name, ordered_data, size);
@@ -437,7 +437,7 @@ shared_ptr<ExtraTypeInfo> EnumTypeInfo::Deserialize(FieldReader &reader) {
 	}
 	// deserialize the enum data
 	auto enum_size = reader.ReadRequired<uint32_t>();
-	auto enum_internal_type = EnumVectorDictType(enum_size);
+	auto enum_internal_type = EnumTypeInfo::DictType(enum_size);
 	switch (enum_internal_type) {
 	case PhysicalType::UINT8:
 		return EnumTypeInfoTemplated<uint8_t>::Deserialize(reader, enum_size, enum_name);
@@ -452,7 +452,7 @@ shared_ptr<ExtraTypeInfo> EnumTypeInfo::Deserialize(FieldReader &reader) {
 
 shared_ptr<ExtraTypeInfo> EnumTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto enum_size = deserializer.ReadProperty<uint32_t>("enum_size");
-	auto enum_internal_type = EnumVectorDictType(enum_size);
+	auto enum_internal_type = EnumTypeInfo::DictType(enum_size);
 	switch (enum_internal_type) {
 	case PhysicalType::UINT8:
 		return EnumTypeInfoTemplated<uint8_t>::FormatDeserialize(deserializer, enum_size);
