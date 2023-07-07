@@ -6,8 +6,6 @@ import glob
 
 os.chdir(os.path.dirname(__file__))
 
-import clang.cindex
-
 # Dont generate serialization for these enums
 blacklist = ["RegexOptions", "Flags"]
 
@@ -201,5 +199,3 @@ with open(enum_util_source_file, "w") as f:
         f.write("}\n\n")
 
     f.write("}\n\n")
-
-print("Remember to run clang-format on the generated files!")
