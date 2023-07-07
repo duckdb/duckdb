@@ -1,5 +1,5 @@
 # Marks all changed PR as draft
-name: Placeholder to avoid cancel already running DraftMe jobs
+name: Placeholder to cancel auto draft
 on:
   pull_request:
     types: [ ready_for_review ]
@@ -11,6 +11,7 @@ concurrency:
 jobs:
   mark-as-draft:
     name: Placeholder
+    if: github.event.pull_request.draft == true
     runs-on: ubuntu-latest
     steps:
       - name: Print PR number

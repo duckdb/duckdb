@@ -34,6 +34,7 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'master') }}
 
 jobs:
  regression-test-benchmark-runner:
@@ -72,7 +73,7 @@ jobs:
       shell: bash
       run: |
         make
-        git clone --branch ${GITHUB_BASE_REF:-master} https://github.com/duckdb/duckdb.git --depth=1
+        git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb
         make
         cd ..
@@ -93,6 +94,12 @@ jobs:
       shell: bash
       run: |
         python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch.csv --verbose --threads=2
+
+    - name: Regression Test TPCH-PARQUET
+      if: always()
+      shell: bash
+      run: |
+        python scripts/regression_test_runner.py --old=duckdb/build/release/benchmark/benchmark_runner --new=build/release/benchmark/benchmark_runner --benchmarks=.github/regression/tpch_parquet.csv --verbose --threads=2
 
     - name: Regression Test TPCDS
       if: always()
@@ -145,7 +152,7 @@ jobs:
       shell: bash
       run: |
         make
-        git clone --branch ${GITHUB_BASE_REF:-master} https://github.com/duckdb/duckdb.git --depth=1
+        git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb
         make
         cd ..
@@ -244,7 +251,7 @@ jobs:
     - name: Build Current
       shell: bash
       run: |
-        git clone --branch ${GITHUB_BASE_REF:-master} https://github.com/duckdb/duckdb.git --depth=1
+        git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb/tools/pythonpkg
         python setup.py install --user
         cd ../../..
@@ -293,7 +300,7 @@ jobs:
       shell: bash
       run: |
         make
-        git clone --branch ${GITHUB_BASE_REF:-master} https://github.com/duckdb/duckdb.git --depth=1
+        git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
         cd duckdb
         make
         cd ..

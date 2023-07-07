@@ -14,6 +14,9 @@ CREATE TABLE integers(i INTEGER)
 statement ok
 INSERT INTO integers VALUES (1), (2), (3), (NULL)
 
+# temporary solution until decorrelation of materialized CTEs is implemented
+require noalternativeverify
+
 # scalar select with correlation
 query II
 SELECT i, (SELECT 42+i1.i) AS j FROM integers i1 ORDER BY i;

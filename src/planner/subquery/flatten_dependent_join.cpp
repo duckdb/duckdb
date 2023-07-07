@@ -10,6 +10,7 @@
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/planner/subquery/has_correlated_expressions.hpp"
 #include "duckdb/planner/subquery/rewrite_correlated_expressions.hpp"
+#include "duckdb/planner/operator/logical_dependent_join.hpp"
 
 namespace duckdb {
 
@@ -24,20 +25,32 @@ FlattenDependentJoins::FlattenDependentJoins(Binder &binder, const vector<Correl
 	}
 }
 
-bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator *op, bool lateral) {
+bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator *op, bool lateral, idx_t lateral_depth) {
+
+	bool is_lateral_join = false;
+
 	D_ASSERT(op);
 	// check if this entry has correlated expressions
-	HasCorrelatedExpressions visitor(correlated_columns, lateral);
+	if (op->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+		is_lateral_join = true;
+	}
+	HasCorrelatedExpressions visitor(correlated_columns, lateral, lateral_depth);
 	visitor.VisitOperator(*op);
 	bool has_correlation = visitor.has_correlated_expressions;
+	int child_idx = 0;
 	// now visit the children of this entry and check if they have correlated expressions
 	for (auto &child : op->children) {
+		auto new_lateral_depth = lateral_depth;
+		if (is_lateral_join && child_idx == 1) {
+			new_lateral_depth = lateral_depth + 1;
+		}
 		// we OR the property with its children such that has_correlation is true if either
 		// (1) this node has a correlated expression or
 		// (2) one of its children has a correlated expression
-		if (DetectCorrelatedExpressions(child.get(), lateral)) {
+		if (DetectCorrelatedExpressions(child.get(), lateral, new_lateral_depth)) {
 			has_correlation = true;
 		}
+		child_idx++;
 	}
 	// set the entry in the map
 	has_correlated_expressions[op] = has_correlation;
@@ -46,7 +59,7 @@ bool FlattenDependentJoins::DetectCorrelatedExpressions(LogicalOperator *op, boo
 
 unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoin(unique_ptr<LogicalOperator> plan) {
 	bool propagate_null_values = true;
-	auto result = PushDownDependentJoinInternal(std::move(plan), propagate_null_values);
+	auto result = PushDownDependentJoinInternal(std::move(plan), propagate_null_values, 0);
 	if (!replacement_map.empty()) {
 		// check if we have to replace any COUNT aggregates into "CASE WHEN X IS NULL THEN 0 ELSE COUNT END"
 		RewriteCountAggregates aggr(replacement_map);
@@ -70,8 +83,10 @@ bool SubqueryDependentFilter(Expression *expr) {
 	}
 	return false;
 }
+
 unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal(unique_ptr<LogicalOperator> plan,
-                                                                                 bool &parent_propagate_null_values) {
+                                                                                 bool &parent_propagate_null_values,
+                                                                                 idx_t lateral_depth) {
 	// first check if the logical operator has correlated expressions
 	auto entry = has_correlated_expressions.find(plan.get());
 	D_ASSERT(entry != has_correlated_expressions.end());
@@ -95,10 +110,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		for (auto &expr : plan->expressions) {
 			any_join |= SubqueryDependentFilter(expr.get());
 		}
-		plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
+		plan->children[0] =
+		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
-		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
+		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
 		return plan;
 	}
@@ -108,10 +124,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		for (auto &expr : plan->expressions) {
 			parent_propagate_null_values &= expr->PropagatesNullValues();
 		}
-		plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
+		plan->children[0] =
+		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
-		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
+		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
 		// now we add all the columns of the delim_scan to the projection list
 		auto &proj = plan->Cast<LogicalProjection>();
@@ -134,9 +151,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		for (auto &expr : plan->expressions) {
 			parent_propagate_null_values &= expr->PropagatesNullValues();
 		}
-		plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
+		plan->children[0] =
+		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
-		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
+		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
 		// now we add all the columns of the delim_scan to the grouping operators AND the projection list
 		idx_t delim_table_index;
@@ -231,22 +249,24 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		bool right_has_correlation = has_correlated_expressions.find(plan->children[1].get())->second;
 		if (!right_has_correlation) {
 			// only left has correlation: push into left
-			plan->children[0] =
-			    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
+			plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]),
+			                                                  parent_propagate_null_values, lateral_depth);
 			return plan;
 		}
 		if (!left_has_correlation) {
 			// only right has correlation: push into right
-			plan->children[1] =
-			    PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values);
+			plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
+			                                                  parent_propagate_null_values, lateral_depth);
 			return plan;
 		}
 		// both sides have correlation
 		// turn into an inner join
 		auto join = make_uniq<LogicalComparisonJoin>(JoinType::INNER);
-		plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
+		plan->children[0] =
+		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 		auto left_binding = this->base_binding;
-		plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values);
+		plan->children[1] =
+		    PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values, lateral_depth);
 		// add the correlated columns to the join conditions
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
 			JoinCondition cond;
@@ -261,6 +281,26 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		join->children.push_back(std::move(plan->children[1]));
 		return std::move(join);
 	}
+	case LogicalOperatorType::LOGICAL_DEPENDENT_JOIN: {
+		auto &dependent_join = plan->Cast<LogicalJoin>();
+		if (!((dependent_join.join_type == JoinType::INNER) || (dependent_join.join_type == JoinType::LEFT))) {
+			throw Exception("Dependent join can only be INNER or LEFT type");
+		}
+		D_ASSERT(plan->children.size() == 2);
+		// Push all the bindings down to the left side so the right side knows where to refer DELIM_GET from
+		plan->children[0] =
+		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
+
+		// Normal rewriter like in other joins
+		RewriteCorrelatedExpressions rewriter(this->base_binding, correlated_map, lateral_depth);
+		rewriter.VisitOperator(*plan);
+
+		// Recursive rewriter to visit right side of lateral join and update bindings from left
+		RewriteCorrelatedExpressions recursive_rewriter(this->base_binding, correlated_map, lateral_depth + 1, true);
+		recursive_rewriter.VisitOperator(*plan->children[1]);
+
+		return plan;
+	}
 	case LogicalOperatorType::LOGICAL_ANY_JOIN:
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
@@ -274,30 +314,33 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			// inner join
 			if (!right_has_correlation) {
 				// only left has correlation: push into left
-				plan->children[0] =
-				    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
+				plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]),
+				                                                  parent_propagate_null_values, lateral_depth);
+				// Remove the correlated columns coming from outside for current join node
 				return plan;
 			}
 			if (!left_has_correlation) {
 				// only right has correlation: push into right
-				plan->children[1] =
-				    PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values);
+				plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
+				                                                  parent_propagate_null_values, lateral_depth);
+				// Remove the correlated columns coming from outside for current join node
 				return plan;
 			}
 		} else if (join.join_type == JoinType::LEFT) {
 			// left outer join
 			if (!right_has_correlation) {
 				// only left has correlation: push into left
-				plan->children[0] =
-				    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
+				plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]),
+				                                                  parent_propagate_null_values, lateral_depth);
+				// Remove the correlated columns coming from outside for current join node
 				return plan;
 			}
 		} else if (join.join_type == JoinType::RIGHT) {
 			// left outer join
 			if (!left_has_correlation) {
 				// only right has correlation: push into right
-				plan->children[1] =
-				    PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values);
+				plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
+				                                                  parent_propagate_null_values, lateral_depth);
 				return plan;
 			}
 		} else if (join.join_type == JoinType::MARK) {
@@ -305,10 +348,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				throw Exception("MARK join with correlation in RHS not supported");
 			}
 			// push the child into the LHS
-			plan->children[0] =
-			    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
+			plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]),
+			                                                  parent_propagate_null_values, lateral_depth);
 			// rewrite expressions in the join conditions
-			RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
+			RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 			rewriter.VisitOperator(*plan);
 			return plan;
 		} else {
@@ -316,9 +359,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 		// both sides have correlation
 		// push into both sides
-		plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
+		plan->children[0] =
+		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 		auto left_binding = this->base_binding;
-		plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values);
+		plan->children[1] =
+		    PushDownDependentJoinInternal(std::move(plan->children[1]), parent_propagate_null_values, lateral_depth);
 		auto right_binding = this->base_binding;
 		// NOTE: for OUTER JOINS it matters what the BASE BINDING is after the join
 		// for the LEFT OUTER JOIN, we want the LEFT side to be the base binding after we push
@@ -354,7 +399,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			}
 		}
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
-		RewriteCorrelatedExpressions rewriter(right_binding, correlated_map);
+		RewriteCorrelatedExpressions rewriter(right_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
 		return plan;
 	}
@@ -371,9 +416,11 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// this is done for an optimization to avoid having to compute the total order
 		if (plan->children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
 			order_by = unique_ptr_cast<LogicalOperator, LogicalOrder>(std::move(plan->children[0]));
-			child = PushDownDependentJoinInternal(std::move(order_by->children[0]), parent_propagate_null_values);
+			child = PushDownDependentJoinInternal(std::move(order_by->children[0]), parent_propagate_null_values,
+			                                      lateral_depth);
 		} else {
-			child = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
+			child = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values,
+			                                      lateral_depth);
 		}
 		auto child_column_count = child->GetColumnBindings().size();
 		// we push a row_number() OVER (PARTITION BY [correlated columns])
@@ -437,7 +484,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_WINDOW: {
 		auto &window = plan->Cast<LogicalWindow>();
 		// push into children
-		plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
+		plan->children[0] =
+		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 		// add the correlated columns to the PARTITION BY clauses in the Window
 		for (auto &expr : window.expressions) {
 			D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_WINDOW);
@@ -488,9 +536,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
 		// expression get
 		// first we flatten the dependent join in the child
-		plan->children[0] = PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values);
+		plan->children[0] =
+		    PushDownDependentJoinInternal(std::move(plan->children[0]), parent_propagate_null_values, lateral_depth);
 		// then we replace any correlated expressions with the corresponding entry in the correlated_map
-		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
+		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map, lateral_depth);
 		rewriter.VisitOperator(*plan);
 		// now we add all the correlated columns to each of the expressions of the expression scan
 		auto &expr_get = plan->Cast<LogicalExpressionGet>();
@@ -519,7 +568,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			throw InternalException("Flatten dependent joins - logical get encountered without children");
 		}
 		plan->children[0] = PushDownDependentJoin(std::move(plan->children[0]));
-		for (idx_t i = 0; i < (perform_delim ? correlated_columns.size() : 1); i++) {
+		for (idx_t i = 0; i < correlated_columns.size(); i++) {
 			get.projected_input.push_back(this->delim_offset + i);
 		}
 		this->delim_offset = get.returned_types.size();
@@ -527,7 +576,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-		throw BinderException("Recursive CTEs not supported in correlated subquery");
+		throw BinderException("Recursive CTEs not (yet) supported in correlated subquery");
+	}
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
+		throw BinderException("Materialized CTEs not (yet) supported in correlated subquery");
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		throw BinderException("Nested lateral joins or lateral joins in correlated subqueries are not (yet) supported");

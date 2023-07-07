@@ -1,57 +1,62 @@
 include_directories(../../../third_party/httplib/)
 
-# To link out-of-tree extensions into DuckDB and auto-load them on startup, we
-# do some code generation here: extension_oote_headers.hpp contains the includes
-# of the OOTE header. extension_oote_loader.hpp contains the call to
-# ExtensionClass::Load() for loading on startup
+# To link extensions into DuckDB and auto-load them on startup, we generated an
+# include file and a loader function based on the `DUCKDB_EXTENSION_NAMES`
+# parameter.
 
-# extension_oote_headers.hpp
-configure_file(extension_oote_headers.hpp.in
-               "${PROJECT_BINARY_DIR}/include/extension_oote_headers.hpp")
+# generated_extension_headers.hpp
+configure_file(generated_extension_headers.hpp.in
+               "${PROJECT_BINARY_DIR}/include/generated_extension_headers.hpp")
 if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
-  foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
-    set(DUCKDB_EXTENSION_HEADER "${OOTE_NAME}_extension.hpp")
-    file(APPEND "${PROJECT_BINARY_DIR}/include/extension_oote_headers.hpp"
-         "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
+  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+    if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
+      set(DUCKDB_EXTENSION_HEADER "${EXT_NAME}_extension.hpp")
+      file(APPEND
+           "${PROJECT_BINARY_DIR}/include/generated_extension_headers.hpp"
+           "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
+    endif()
   endforeach()
 endif()
 
-# extension_oote_loader.hpp
-set(OOTE_LOADER_NAME_LIST "")
-set(OOTE_LOADER_BODY "")
+# generated_extension_loader.hpp
+set(EXT_LOADER_NAME_LIST "")
+set(EXT_LOADER_BODY "")
 if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
-  foreach(OOTE_NAME IN LISTS DUCKDB_OOT_EXTENSION_NAMES)
-    string(TOUPPER ${OOTE_NAME} OOTE_NAME_UPPERCASE)
-    if(NOT ${DUCKDB_OOT_EXTENSION_${OOTE_NAME_UPPERCASE}_SHOULD_LINK})
-      continue()
-    endif()
-    # Assumes lowercase input!
-    set(EXTENSION_CLASS ${OOTE_NAME}Extension)
-    string(SUBSTRING ${OOTE_NAME} 0 1 FIRST_LETTER)
-    string(TOUPPER ${FIRST_LETTER} FIRST_LETTER)
-    string(REGEX REPLACE "^.(.*)" "${FIRST_LETTER}\\1" EXTENSION_CLASS
-                         "${OOTE_NAME}")
+  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+    string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
+    if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
+      # Assumes lowercase input!
+      set(EXTENSION_CLASS ${EXT_NAME}Extension)
+      string(SUBSTRING ${EXT_NAME} 0 1 FIRST_LETTER)
+      string(TOUPPER ${FIRST_LETTER} FIRST_LETTER)
+      string(REGEX REPLACE "^.(.*)" "${FIRST_LETTER}\\1" EXTENSION_CLASS
+                           "${EXT_NAME}")
 
-    set(OOTE_LOADER_NAME_LIST "${OOTE_LOADER_NAME_LIST},\"${OOTE_NAME}\"")
-    set(OOTE_LOADER_BODY
-        "${OOTE_LOADER_BODY}\
-      if (extension==\"${OOTE_NAME}\") {
+      set(EXT_LOADER_NAME_LIST "${EXT_LOADER_NAME_LIST},\"${EXT_NAME}\"")
+      set(EXT_LOADER_BODY
+          "${EXT_LOADER_BODY}\
+    if (extension==\"${EXT_NAME}\") {
         db.LoadExtension<${EXTENSION_CLASS}Extension>();
         return true;
-      }
-      ")
+    }
+")
+    endif()
   endforeach()
 endif()
 
 # trim comma
-if(NOT ${OOTE_LOADER_NAME_LIST} STREQUAL "")
-  string(SUBSTRING ${OOTE_LOADER_NAME_LIST} 1 -1 OOTE_NAME_VECTOR_INITIALIZER)
+if(NOT ${EXT_LOADER_NAME_LIST} STREQUAL "")
+  string(SUBSTRING ${EXT_LOADER_NAME_LIST} 1 -1 EXT_NAME_VECTOR_INITIALIZER)
 endif()
 
-configure_file(extension_oote_loader.hpp.in
-               "${PROJECT_BINARY_DIR}/include/extension_oote_loader.hpp")
+configure_file(generated_extension_loader.hpp.in
+               "${PROJECT_BINARY_DIR}/include/generated_extension_loader.hpp")
 
-add_definitions(-DOOTE_HEADERS_AVAILABLE=1)
+if(${DISABLE_EXTENSION_LOAD})
+  add_definitions(-DDUCKDB_DISABLE_EXTENSION_LOAD)
+endif()
+add_definitions(-DGENERATED_EXTENSION_HEADERS=1)
 
 # include generated includes
 include_directories("${PROJECT_BINARY_DIR}/include/")

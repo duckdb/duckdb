@@ -22,6 +22,9 @@ struct SelectionVector;
 //! Generic radix partitioning functions
 struct RadixPartitioning {
 public:
+	//! 4096 partitions ought to be enough to go out-of-core properly
+	static constexpr const idx_t MAX_RADIX_BITS = 12;
+
 	//! The number of partitions for a given number of radix bits
 	static inline constexpr idx_t NumberOfPartitions(idx_t radix_bits) {
 		return idx_t(1) << radix_bits;
@@ -38,10 +41,12 @@ public:
 		throw InternalException("RadixPartitioning::RadixBits unable to find partition count!");
 	}
 
+	//! Radix bits begin after uint16_t because these bits are used as salt in the aggregate HT
 	static inline constexpr idx_t Shift(idx_t radix_bits) {
-		return 48 - radix_bits;
+		return (sizeof(hash_t) - sizeof(uint16_t)) * 8 - radix_bits;
 	}
 
+	//! Mask of the radix bits of the hash
 	static inline constexpr hash_t Mask(idx_t radix_bits) {
 		return (hash_t(1 << radix_bits) - 1) << Shift(radix_bits);
 	}
@@ -49,26 +54,6 @@ public:
 	//! Select using a cutoff on the radix bits of the hash
 	static idx_t Select(Vector &hashes, const SelectionVector *sel, idx_t count, idx_t radix_bits, idx_t cutoff,
 	                    SelectionVector *true_sel, SelectionVector *false_sel);
-
-	//! Convert hashes to bins
-	static void HashesToBins(Vector &hashes, idx_t radix_bits, Vector &bins, idx_t count);
-};
-
-//! Templated radix partitioning constants, can be templated to the number of radix bits
-template <idx_t radix_bits>
-struct RadixPartitioningConstants {
-public:
-	//! Bitmask of the upper bits of the 5th byte
-	static constexpr const idx_t NUM_PARTITIONS = RadixPartitioning::NumberOfPartitions(radix_bits);
-	static constexpr const idx_t SHIFT = RadixPartitioning::Shift(radix_bits);
-	static constexpr const hash_t MASK = RadixPartitioning::Mask(radix_bits);
-
-public:
-	//! Apply bitmask and right shift to get a number between 0 and NUM_PARTITIONS
-	static inline hash_t ApplyMask(hash_t hash) {
-		D_ASSERT((hash & MASK) >> SHIFT < NUM_PARTITIONS);
-		return (hash & MASK) >> SHIFT;
-	}
 };
 
 //! RadixPartitionedColumnData is a PartitionedColumnData that partitions input based on the radix of a hash

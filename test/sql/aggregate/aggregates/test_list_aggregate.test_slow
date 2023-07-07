@@ -1,0 +1,120 @@
+# name: test/sql/aggregate/aggregates/test_list_aggregate.test_slow
+# description: Test aggregate list
+# group: [aggregates]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA enable_verification
+
+# this is underspecified for parallelism because the order in the list() aggr is arbitrary then
+statement ok
+PRAGMA threads=1
+
+statement ok
+CREATE TABLE list_extract_test(i INTEGER, g INTEGER);
+
+statement ok
+INSERT INTO list_extract_test VALUES (1, 1), (2, 1), (3, 2), (NULL, 3), (42, 3);
+
+query I
+SELECT LIST_EXTRACT(LIST(i), 1) FROM list_extract_test GROUP BY g;
+----
+1
+3
+NULL
+
+query I
+SELECT LIST_EXTRACT(LIST(i), 2) FROM list_extract_test GROUP BY g;
+----
+2
+NULL
+42
+
+query I
+SELECT LIST_EXTRACT(LIST(i), 3) FROM list_extract_test GROUP BY g;
+----
+NULL
+NULL
+NULL
+
+# Use ORDER BY, which is robust to parallelism
+statement ok
+PRAGMA threads=4
+
+query I
+with t as (
+  values ('a',1), ('c',3), ('b',2)
+)
+select list(col0 order by col1) from t
+----
+[a, b, c]
+
+query II
+SELECT g, LIST(i ORDER BY i ASC) FROM list_extract_test GROUP BY g;
+----
+1	[1, 2]
+2	[3]
+3	[NULL, 42]
+
+query II
+SELECT g, LIST(i ORDER BY i ASC NULLS FIRST) FROM list_extract_test GROUP BY g;
+----
+1	[1, 2]
+2	[3]
+3	[NULL, 42]
+
+query II
+SELECT g, LIST(i ORDER BY i ASC NULLS LAST) FROM list_extract_test GROUP BY g;
+----
+1	[1, 2]
+2	[3]
+3	[42, NULL]
+
+query II
+SELECT g, LIST(i ORDER BY i DESC) FROM list_extract_test GROUP BY g;
+----
+1	[2, 1]
+2	[3]
+3	[NULL, 42]
+
+query II
+SELECT g, LIST(i ORDER BY i DESC NULLS FIRST) FROM list_extract_test GROUP BY g;
+----
+1	[2, 1]
+2	[3]
+3	[NULL, 42]
+
+query II
+SELECT g, LIST(i ORDER BY i DESC NULLS LAST) FROM list_extract_test GROUP BY g;
+----
+1	[2, 1]
+2	[3]
+3	[42, NULL]
+
+query II
+SELECT g, LIST(i ORDER BY i ASC) FILTER (WHERE i <> 3) FROM list_extract_test GROUP BY g;
+----
+1	[1, 2]
+2	NULL
+3	[42]
+
+query II
+SELECT g, LIST(i ORDER BY i ASC) FILTER (WHERE i IS NULL) FROM list_extract_test GROUP BY g;
+----
+1	NULL
+2	NULL
+3	[NULL]
+
+query II
+SELECT g, LIST(i ORDER BY i ASC) FILTER (WHERE i = 1337) FROM list_extract_test GROUP BY g;
+----
+1	NULL
+2	NULL
+3	NULL
+
+# test forcing reallocation of lists
+
+statement ok
+CREATE TABLE test_realloc AS (SELECT range % 4 g, list(range || 'some_string_longer_than_12') l FROM range(500000) GROUP BY range % 4);

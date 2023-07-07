@@ -9,10 +9,10 @@ RadixPartitionInfo::RadixPartitionInfo(const idx_t n_partitions_upper_bound)
       radix_bits(RadixPartitioning::RadixBits(n_partitions)), radix_mask(RadixPartitioning::Mask(radix_bits)),
       radix_shift(RadixPartitioning::Shift(radix_bits)) {
 
+	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	D_ASSERT(n_partitions > 0);
-	D_ASSERT(n_partitions <= 256);
+	D_ASSERT(n_partitions == RadixPartitioning::NumberOfPartitions(radix_bits));
 	D_ASSERT(IsPowerOfTwo(n_partitions));
-	D_ASSERT(radix_bits <= 8);
 }
 
 PartitionableHashTable::PartitionableHashTable(ClientContext &context, Allocator &allocator,
@@ -47,11 +47,21 @@ HtEntryType PartitionableHashTable::GetHTEntrySize() {
 	return HtEntryType::HT_WIDTH_32;
 }
 
+bool OverMemoryLimit(ClientContext &context, const bool is_partitioned, const RadixPartitionInfo &partition_info,
+                     const GroupedAggregateHashTable &ht) {
+	const auto n_partitions = is_partitioned ? partition_info.n_partitions : 1;
+	const auto max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
+	const auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+	const auto memory_per_partition = 0.6 * max_memory / num_threads / n_partitions;
+	return ht.TotalSize() > memory_per_partition;
+}
+
 idx_t PartitionableHashTable::ListAddChunk(HashTableList &list, DataChunk &groups, Vector &group_hashes,
                                            DataChunk &payload, const unsafe_vector<idx_t> &filter) {
 	// If this is false, a single AddChunk would overflow the max capacity
 	D_ASSERT(list.empty() || groups.size() <= list.back()->MaxCapacity());
-	if (list.empty() || list.back()->Count() + groups.size() >= list.back()->MaxCapacity()) {
+	if (list.empty() || list.back()->Count() + groups.size() >= list.back()->MaxCapacity() ||
+	    OverMemoryLimit(context, is_partitioned, partition_info, *list.back())) {
 		idx_t new_capacity = GroupedAggregateHashTable::InitialCapacity();
 		if (!list.empty()) {
 			new_capacity = list.back()->Capacity();
@@ -70,7 +80,7 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 
 	// we partition when we are asked to or when the unpartitioned ht runs out of space
 	if (!IsPartitioned() && do_partition) {
-		Partition();
+		Partition(false);
 	}
 
 	if (!IsPartitioned()) {
@@ -117,7 +127,7 @@ idx_t PartitionableHashTable::AddChunk(DataChunk &groups, DataChunk &payload, bo
 	return group_count;
 }
 
-void PartitionableHashTable::Partition() {
+void PartitionableHashTable::Partition(bool sink_done) {
 	D_ASSERT(!IsPartitioned());
 	D_ASSERT(radix_partitioned_hts.empty());
 	D_ASSERT(partition_info.n_partitions > 1);
@@ -130,7 +140,7 @@ void PartitionableHashTable::Partition() {
 			    context, allocator, group_types, payload_types, bindings, GetHTEntrySize()));
 			partition_hts[r] = radix_partitioned_hts[r].back().get();
 		}
-		unpartitioned_ht->Partition(partition_hts, partition_info.radix_bits);
+		unpartitioned_ht->Partition(partition_hts, partition_info.radix_bits, sink_done);
 		unpartitioned_ht.reset();
 	}
 	unpartitioned_hts.clear();
@@ -153,6 +163,22 @@ HashTableList PartitionableHashTable::GetUnpartitioned() {
 	return std::move(unpartitioned_hts);
 }
 
+idx_t PartitionableHashTable::GetPartitionCount(idx_t partition) const {
+	idx_t total_size = 0;
+	for (const auto &ht : radix_partitioned_hts[partition]) {
+		total_size += ht->Count();
+	}
+	return total_size;
+}
+
+idx_t PartitionableHashTable::GetPartitionSize(idx_t partition) const {
+	idx_t total_size = 0;
+	for (const auto &ht : radix_partitioned_hts[partition]) {
+		total_size += ht->DataSize();
+	}
+	return total_size;
+}
+
 void PartitionableHashTable::Finalize() {
 	if (IsPartitioned()) {
 		for (auto &ht_list : radix_partitioned_hts) {
@@ -167,6 +193,15 @@ void PartitionableHashTable::Finalize() {
 			ht->Finalize();
 		}
 	}
+}
+
+void PartitionableHashTable::Append(GroupedAggregateHashTable &ht) {
+	if (unpartitioned_hts.empty()) {
+		unpartitioned_hts.push_back(make_uniq<GroupedAggregateHashTable>(context, allocator, group_types, payload_types,
+		                                                                 bindings, GetHTEntrySize(),
+		                                                                 GroupedAggregateHashTable::InitialCapacity()));
+	}
+	unpartitioned_hts.back()->Append(ht);
 }
 
 } // namespace duckdb

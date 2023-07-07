@@ -7,6 +7,18 @@ on:
       - '**'
       - '!master'
       - '!feature'
+    tags:
+      - '**'
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/NightlyTests.yml'
+      - '!.github/patches/duckdb-wasm/**'
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/NightlyTests.yml'
+      - '!.github/patches/duckdb-wasm/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -14,7 +26,8 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  DUCKDB_WASM_VERSION: 7bf2a73
+  DUCKDB_WASM_VERSION: "0e27318"
+  CCACHE_SAVE: ${{ github.repository != 'duckdb/duckdb' }}
 
 jobs:
   linux-memory-leaks:
@@ -40,7 +53,7 @@ jobs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ github.job }}
-         save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+         save: ${{ env.CCACHE_SAVE }}
 
      - name: Build
        shell: bash
@@ -84,7 +97,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ env.CCACHE_SAVE }}
 
     - name: Build
       shell: bash
@@ -128,7 +141,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ env.CCACHE_SAVE }}
 
     - name: Build
       shell: bash
@@ -140,36 +153,58 @@ jobs:
 
   old-gcc:
     name: GCC 4.8
-    runs-on: ubuntu-20.04
     needs: linux-memory-leaks
-    container: ubuntu:16.04
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
-    - uses: ./.github/actions/ubuntu_16_setup
-
-    - uses: actions/setup-python@v4
+    - uses: ./.github/actions/manylinux_2014_setup
       with:
-        python-version: '3.7'
-
-    - name: Install
-      shell: bash
-      run: apt-get update -y -qq && apt-get install -y -qq g++-4.8 binutils
-
-    - name: Setup Ccache
-      uses: hendrikmuhs/ccache-action@main
-      with:
-        key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+        ninja-build: 1
+        ccache: 1
+        gcc_4_8: 1
 
     - name: Test
       shell: bash
       run: make unit
       env:
-        CC: gcc-4.8
-        CXX: g++-4.8
+        CC: /usr/bin/gcc
+        CXX: /usr/bin/g++
+        GEN: ninja
+
+  linux-release-32:
+    name: Linux (32 Bit)
+    runs-on: ubuntu-latest
+    container: quay.io/pypa/manylinux2014_x86_64
+    needs: linux-memory-leaks
+    env:
+      CC: /usr/bin/gcc
+      CXX: /usr/bin/g++
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/manylinux_2014_setup
+        with:
+          ninja-build: 1
+          ccache: 1
+          glibc32: 1
+          gcc_4_8: 1 # Note: we run this job on the older gcc 4.8 toolchain
+
+      - name: Build
+        shell: bash
+        run: |
+          mkdir -p build/release
+          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DBUILD_EXTENSIONS='icu;parquet;fts;json;excel' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+
+      - name: Test
+        shell: bash
+        run: build/release/test/unittest "*"
 
   linux-tarball:
      name: Python 3 Tarball
@@ -193,7 +228,7 @@ jobs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ github.job }}
-         save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+         save: ${{ env.CCACHE_SAVE }}
 
      - name: Build
        shell: bash
@@ -292,7 +327,7 @@ jobs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ github.job }}
-         save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+         save: ${{ env.CCACHE_SAVE }}
 
      # Build is implied by 'make sqlite' that will invoke implicitly 'make release' (we make it explicit)
      - name: Build
@@ -325,7 +360,7 @@ jobs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ github.job }}
-         save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+         save: ${{ env.CCACHE_SAVE }}
 
      - name: Build
        shell: bash
@@ -370,7 +405,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ env.CCACHE_SAVE }}
 
       - name: Build
         shell: bash
@@ -412,7 +447,7 @@ jobs:
         uses: hendrikmuhs/ccache-action@main
         with:
           key: ${{ github.job }}
-          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+          save: ${{ env.CCACHE_SAVE }}
 
       - name: Build
         shell: bash
@@ -460,7 +495,7 @@ jobs:
        uses: hendrikmuhs/ccache-action@main
        with:
          key: ${{ github.job }}
-         save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+         save: ${{ env.CCACHE_SAVE }}
 
      - name: Build
        shell: bash
@@ -532,7 +567,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ env.CCACHE_SAVE }}
 
     - name: Install
       shell: bash
@@ -560,7 +595,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ env.CCACHE_SAVE }}
 
     - name: Run
       shell: bash
@@ -601,7 +636,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ env.CCACHE_SAVE }}
 
     - name: Build
       shell: bash
@@ -637,7 +672,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ env.CCACHE_SAVE }}
 
     - name: Test
       shell: bash
@@ -670,7 +705,7 @@ jobs:
       uses: hendrikmuhs/ccache-action@main
       with:
         key: ${{ github.job }}
-        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+        save: ${{ env.CCACHE_SAVE }}
 
     - name: Print version
       shell: bash

@@ -4,6 +4,7 @@
 #include "duckdb/parser/statement/list.hpp"
 #include "duckdb/parser/tableref/emptytableref.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/cte_node.hpp"
 #include "duckdb/parser/parser_options.hpp"
 
 namespace duckdb {
@@ -207,6 +208,20 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 	default:
 		throw NotImplementedException(NodetypeToString(stmt.type));
 	}
+}
+
+unique_ptr<QueryNode> Transformer::TransformMaterializedCTE(unique_ptr<QueryNode> root,
+                                                            vector<unique_ptr<CTENode>> &materialized_ctes) {
+	while (!materialized_ctes.empty()) {
+		unique_ptr<CTENode> node_result;
+		node_result = std::move(materialized_ctes.back());
+		node_result->cte_map = root->cte_map.Copy();
+		node_result->child = std::move(root);
+		root = std::move(node_result);
+		materialized_ctes.pop_back();
+	}
+
+	return root;
 }
 
 } // namespace duckdb
