@@ -21,7 +21,20 @@
 
 namespace duckdb {
 
+idx_t Binder::GetBinderDepth(idx_t depth) {
+	if (parent) {
+		return parent->GetBinderDepth(depth + 1);
+	}
+	return depth;
+}
+
 shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Binder> parent, bool inherit_ctes) {
+	auto depth = parent ? parent->GetBinderDepth(1) : 0;
+	if (depth > context.config.max_expression_depth) {
+		throw BinderException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
+		                      "increase the maximum expression depth.",
+		                      context.config.max_expression_depth);
+	}
 	return make_shared<Binder>(true, context, parent ? parent->shared_from_this() : nullptr, inherit_ctes);
 }
 

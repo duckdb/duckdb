@@ -116,3 +116,10 @@ class TestRAPIQuery(object):
 
         res = duckdb.query('drop table tbl_non_select_result')
         assert res is None
+
+    def test_replacement_scan_recursion(self):
+        con = duckdb.connect()
+        rel = con.sql('select 42')
+        rel = con.sql('select * from rel')
+        with pytest.raises(duckdb.BinderException, match='Max expression depth limit of 1000 exceeded'):
+            con.sql('select * from rel')

@@ -218,6 +218,8 @@ private:
 	reference_set_t<ViewCatalogEntry> bound_views;
 
 private:
+	//! Determine the depth of the binder
+	idx_t GetBinderDepth(idx_t depth = 0);
 	//! Bind the expressions of generated columns to check for errors
 	void BindGeneratedColumns(BoundCreateTableInfo &info);
 	//! Bind the default values of the columns of a table
