@@ -11,11 +11,14 @@ duckdb_extension_load(azure
     GIT_TAG 7cd5149ee879f3ea9e0a9215e0739643dd75eb6e
 )
 
-duckdb_extension_load(aws
-    LOAD_TESTS
-    GIT_URL https://github.com/duckdblabs/duckdb_aws
-    GIT_TAG 617a4b1456eec1dee3d668f9ce005a1de9ef21c8
-)
+# AWS disabled for windowsx
+if (NOT WIN32)
+    duckdb_extension_load(aws
+        LOAD_TESTS
+        GIT_URL https://github.com/duckdblabs/duckdb_aws
+        GIT_TAG 617a4b1456eec1dee3d668f9ce005a1de9ef21c8
+    )
+endif()
 
 # Disabled for now, has various issues that need addressing first
 #duckdb_extension_load(iceberg
