@@ -44,5 +44,8 @@ test_that("DuckDB ADBC classes can be used in adbc_* S4 object slots", {
     .Object
   })
 
-  expect_s4_class(new("SomeClass", duckdb_adbc()), "SomeClass")
+  expect_s4_class(obj <- new("SomeClass", duckdb_adbc()), "SomeClass")
+  adbcdrivermanager::adbc_statement_release(obj@statement)
+  adbcdrivermanager::adbc_connection_release(obj@connection)
+  adbcdrivermanager::adbc_database_release(obj@database)
 })
