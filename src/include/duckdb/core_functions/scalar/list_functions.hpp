@@ -108,7 +108,7 @@ struct ListSliceFun {
 	static constexpr const char *Description = "Extract a sublist using slice conventions. Negative values are accepted.";
 	static constexpr const char *Example = "list_slice(l, 2, 4)";
 
-	static ScalarFunctionSet GetFunctions();
+	static ScalarFunction GetFunction();
 };
 
 struct ArraySliceFun {
