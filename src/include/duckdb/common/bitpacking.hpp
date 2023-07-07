@@ -20,6 +20,13 @@
 
 namespace duckdb {
 
+
+// ! TEMPORARY STREAM OVERLOAD
+std::ostream& operator<<(std::ostream& stream, hugeint_t value) {
+	stream << value.ToString();
+	return stream;
+}
+
 using bitpacking_width_t = uint8_t;
 
 class BitpackingPrimitives {
@@ -202,37 +209,6 @@ private:
 		}
 	}
 
-	template <class T>
-	static void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
-	                        bool skip_sign_extension = false) {
-
-		std::cout << "UnPackGroup width: " << (uint32_t)width << std::endl;
-
-		if (std::is_same<T, uint8_t>::value || std::is_same<T, int8_t>::value) {
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint8_t *>(src), reinterpret_cast<uint8_t *>(dst),
-			                               static_cast<uint32_t>(width));
-		} else if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint16_t *>(src), reinterpret_cast<uint16_t *>(dst),
-			                               static_cast<uint32_t>(width));
-		} else if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint32_t *>(dst),
-			                               static_cast<uint32_t>(width));
-		} else if (std::is_same<T, uint64_t>::value || std::is_same<T, int64_t>::value) {
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst),
-			                               static_cast<uint32_t>(width));
-		} else if (std::is_same<T, hugeint_t>::value) {
-
-			UnPackHugeint(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<hugeint_t *>(dst), width);
-		
-		} else {
-			throw InternalException("Unsupported type found in bitpacking.");
-		}
-
-		if (NumericLimits<T>::IsSigned() && !skip_sign_extension && width > 0 && width < sizeof(T) * 8) {
-			SignExtend<T>(dst, width);
-		}
-	}
-
 	// Prevent compression at widths that are ineffective
 	template <class T>
 	static bitpacking_width_t GetEffectiveWidth(bitpacking_width_t width) {
@@ -244,42 +220,55 @@ private:
 		return width;
 	}
 
-	static void UnpackSingleOut128(const uint32_t *__restrict &in, hugeint_t *__restrict out, uint16_t delta, uint16_t shr) {
+	template<class T>
+	static void UnpackSingleOut128(const uint32_t *__restrict &in, T *__restrict out, uint16_t delta, uint16_t shr) {
 		if (delta + shr < 32) {
-			*out = ((static_cast<hugeint_t>(*in)) >> shr) % (hugeint_t(1) << delta);
+			*out = ((static_cast<T>(*in)) >> shr) % (T(1) << delta);
 		}
 
-
-
 		else if (delta + shr >= 32 && delta + shr < 64) {
-			*out = static_cast<hugeint_t>(*in) >> shr;
+			*out = static_cast<T>(*in) >> shr;
 			++in;
 
 			if (delta + shr > 32) {
-				const uint16_t NEXT_SHR = shr + delta - 32;
+				uint16_t NEXT_SHR = shr + delta - 32;
 			
-				*out |= static_cast<hugeint_t>((*in) % (1U << NEXT_SHR)) << (32 - shr);
-
-				// *out = static_cast<uint32_t>((in & mask) << (32 - shl));
-
+				*out |= static_cast<T>((*in) % (1U << NEXT_SHR)) << (32 - shr);
 			}
 		}
 		
-		else if (delta + shr >= 64) {
-			*out = static_cast<hugeint_t>(*in) >> shr;
+		else if (delta + shr >= 64 && delta + shr < 96) {
+			*out = static_cast<T>(*in) >> shr;
 			++in;
 
-			*out |= static_cast<hugeint_t>(*in) << (32 - shr);
+			*out |= static_cast<T>(*in) << (32 - shr);
 			++in;
 
 			if (delta + shr > 64) {
-				static const uint8_t NEXT_SHR = delta + shr - 64;
-				*out |= static_cast<hugeint_t>((*in) % (1U << NEXT_SHR)) << (64 - shr);
+				uint8_t NEXT_SHR = delta + shr - 64;
+				*out |= static_cast<T>((*in) % (1U << NEXT_SHR)) << (64 - shr);
+			}
+		}
+
+		else if (delta + shr >= 96) {
+			*out = static_cast<T>(*in) >> shr;
+			++in;
+
+			*out |= static_cast<T>(*in) << (32 - shr);
+			++in;
+
+			*out |= static_cast<T>(*in) << (64 - shr);
+			++in;
+
+			if (delta + shr > 96) {
+				uint8_t NEXT_SHR = delta + shr - 96;
+				*out |= static_cast<T>((*in) % (1U << NEXT_SHR)) << (96 - shr);
 			}
 		}
 	}
 
-	static void PackSingleIn128(const hugeint_t in, uint32_t *__restrict &out, uint16_t delta, uint16_t shl, hugeint_t mask) {
+	template<class T>
+	static void PackSingleIn128(const T in, uint32_t *__restrict &out, uint16_t delta, uint16_t shl, T mask) {
 		if (delta + shl < 32) {
 
 			if (shl == 0) {
@@ -289,8 +278,6 @@ private:
 			}
 
 		}
-
-
 		else if  (delta + shl >= 32 && delta + shl < 64) {
 		
 			if (shl == 0) {
@@ -307,9 +294,13 @@ private:
 
 		}
 
-		else if (delta + shl >= 64) {
+		else if (delta + shl >= 64 && delta + shl < 96) {
 
-			*out |= static_cast<uint32_t>(in << shl);
+			if (shl == 0) {
+				*out = static_cast<uint32_t>(in & mask);
+			} else {
+				*out |= static_cast<uint32_t>(in << shl);
+			}
 			++out;
 
 			*out = static_cast<uint32_t>((in & mask) >> (32 - shl));
@@ -317,7 +308,25 @@ private:
 
 			if (delta + shl > 64) {
 				*out = static_cast<uint32_t>((in & mask) >> (64 - shl));
-				++out;
+			}
+		}
+
+		else if (delta + shl >= 96) {
+			if (shl == 0) {
+				*out = static_cast<uint32_t>(in & mask);
+			} else {
+				*out |= static_cast<uint32_t>(in << shl);
+			}
+			++out;
+
+			*out = static_cast<uint32_t>((in & mask) >> (32 - shl));
+			++out;
+
+			*out = static_cast<uint32_t>((in & mask) >> (64 - shl));
+			++out;
+
+			if (delta + shl > 96) {
+				*out = static_cast<uint32_t>((in & mask) >> (96 - shl));
 			}
 		}
 	}
@@ -325,11 +334,11 @@ private:
 
 	// Custom packing for hugeints
 	// DELTA = width
-	static void UnpackSingle(const uint32_t *__restrict &in, hugeint_t *__restrict out, uint16_t delta, uint16_t oindex) {
-		// unpack_single_out<DELTA, (DELTA * OINDEX) % 32>(in, out + OINDEX);
+	template<class T>
+	static void UnpackSingle(const uint32_t *__restrict &in, T *__restrict out, uint16_t delta, uint16_t oindex) {
 
-		// std::cout << "Unpacking... with DELTA: " << (uint32_t)delta << ", SHR: "
-		// 	<< (uint32_t)((delta * oindex) % 32) << ", DELTA+SHR: " << (uint32_t)(delta + (delta * oindex) % 32) << std::endl;
+		std::cout << "Unpacking... with DELTA: " << (uint32_t)delta << ", SHR: "
+			<< (uint32_t)((delta * oindex) % 32) << ", DELTA+SHR: " << (uint32_t)(delta + (delta * oindex) % 32) << std::endl;
 
 
 		if (oindex == 31) {
@@ -339,63 +348,101 @@ private:
 		}
 	}
 
-	static void PackSingle(const hugeint_t *__restrict in, uint32_t *__restrict &out, uint16_t delta, uint16_t oindex) { // out by ref?
-		// pack_single_in64<DELTA, (DELTA * OINDEX) % 32, (1ULL << DELTA) - 1>(in[OINDEX], out);
+	template<class T>
+	static void PackSingle(const T *__restrict in, uint32_t *__restrict &out, uint16_t delta, uint16_t oindex) {
 
-		// std::cout << "Packing " << in[oindex].ToString() << " with DELTA: " << (uint32_t)delta << ", SHL: "
-		// 	<< (uint32_t)((delta * oindex) % 32) << ", MASK: " << ((hugeint_t(1) << delta) - 1).ToString() << ", DELTA+SHL: " << (uint32_t)(delta + (delta * oindex) % 32) << std::endl;
+		std::cout << "Packing " << in[oindex] << " with DELTA: " << (uint32_t)delta << ", SHL: "
+			<< (uint32_t)((delta * oindex) % 32) << ", MASK: " << ((T(1) << delta) - 1) << ", DELTA+SHL: " << (uint32_t)(delta + (delta * oindex) % 32) << std::endl;
 
 		if (oindex == 31) {
 			PackLast(in, out, delta);
 		} else {
-			PackSingleIn128(in[oindex], out, delta, (delta * oindex) % 32, (hugeint_t(1) << delta) - 1);
+			PackSingleIn128(in[oindex], out, delta, (delta * oindex) % 32, (T(1) << delta) - 1);
 		}
 	}
 
 	// Final index (31)
-	static void UnpackLast(const uint32_t *__restrict &in, hugeint_t *__restrict out, uint16_t delta) {
-		uint16_t shift = (uint64_t(delta) * 31) % 32;
+	template<class T>
+	static void UnpackLast(const uint32_t *__restrict &in, T *__restrict out, uint16_t delta) {
+		uint16_t shift = (delta * 31) % 32;
 		out[31] = (*in) >> shift;
 		if (delta > 32) {
 			++in;
-			out[31] |= static_cast<hugeint_t>(*in) << (32 - shift);
+			out[31] |= static_cast<T>(*in) << (32 - shift);
 		}
-
+		if (delta > 64) {
+			++in;
+			out[31] |= static_cast<T>(*in) << (64 - shift);
+		}
+		if (delta > 96) {
+			++in;
+			out[31] |= static_cast<T>(*in) << (96 - shift);
+		}
 	}
 
-	static void PackLast(const hugeint_t *__restrict in, uint32_t *__restrict out, uint16_t delta) {
-		uint16_t shift = (uint64_t(delta) * 31) % 32;
+	template<class T>
+	static void PackLast(const T *__restrict in, uint32_t *__restrict out, uint16_t delta) {
+		uint16_t shift = (delta * 31) % 32;
 		*out |= static_cast<uint32_t>(in[31] << shift); // What should happen here?
 		if (delta > 32) {
 			++out;
 			*out = static_cast<uint32_t>(in[31] >> (32 - shift));
 		}
+		if (delta > 64) {
+			++out;
+			*out = static_cast<uint32_t>(in[31] >> (64 - shift));
+		}
+		if (delta > 96) {
+			++out;
+			*out = static_cast<uint32_t>(in[31] >> (96 - shift));
+		}
 
 	}
 
-	static void PackHugeint(const hugeint_t *__restrict in, uint32_t *__restrict out, bitpacking_width_t width) {
+	template<class T>
+	static void PackHugeint(const T *__restrict in, uint32_t *__restrict out, bitpacking_width_t width) {
 
 		if (width == 0) {
 			return ;
 		}
 
+		// width 32
+
 		//? Special cases at certain widths?
+		if (width == 64) {
+			for (int i = 0; i < 32; ++i) {
+				out[2 * i] = static_cast<uint32_t>(in[i]);
+				out[2 * i + 1] = static_cast<uint32_t>(in[i] >> 32);
+			}
+			return ;
+		}
+
+		// width 96
+
+		// width 128
 
 		for (idx_t oindex = 0; oindex < BITPACKING_ALGORITHM_GROUP_SIZE; ++oindex) {
 			PackSingle(in, out, width, oindex);
 
-			std::cout << "Packed " << in[oindex].ToString() << std::endl;
+			std::cout << "Packed " << in[oindex] << std::endl; // STREAM OVERLOAD
 
 		}
-
-		// PackLast(in, out, width);
 	}
 
-	static void UnPackHugeint(const uint32_t *__restrict in, hugeint_t *__restrict out, bitpacking_width_t width) {
+	template<class T>
+	static void UnPackHugeint(const uint32_t *__restrict in, T *__restrict out, bitpacking_width_t width) {
 
 		if (width == 0) {
 			for (uint32_t i = 0; i < 32; ++i) {
 				*(out++) = 0;
+			}
+			return ;
+		}
+
+		if (width == 64) {
+			for (int k = 0; k < 32; ++k) {
+				out[k] = in[k * 2];
+				out[k] |= static_cast<uint64_t>(in[k * 2 + 1]) << 32;
 			}
 			return ;
 		}
@@ -405,7 +452,7 @@ private:
 		for (idx_t oindex = 0; oindex < BITPACKING_ALGORITHM_GROUP_SIZE; ++oindex) {
 			UnpackSingle(in, out, width, oindex);
 
-			std::cout << "Unpacked " << out[oindex].ToString() << std::endl;
+			std::cout << "Unpacked " << out[oindex] << std::endl;
 
 		}
 
@@ -419,31 +466,83 @@ private:
 
 		std::cout << "PackGroup width: " << (uint32_t)width << std::endl;
 
-		if (std::is_same<T, uint8_t>::value || std::is_same<T, int8_t>::value) {
-			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint8_t *>(values), reinterpret_cast<uint8_t *>(dst),
-			                             static_cast<uint32_t>(width));
-		} else if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
-			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint16_t *>(values), reinterpret_cast<uint16_t *>(dst),
-			                             static_cast<uint32_t>(width));
-		} else if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
-			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint32_t *>(values), reinterpret_cast<uint32_t *>(dst),
-			                             static_cast<uint32_t>(width));
-		} else if (std::is_same<T, uint64_t>::value || std::is_same<T, int64_t>::value) {
-			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint64_t *>(values), reinterpret_cast<uint32_t *>(dst),
-			                             static_cast<uint32_t>(width));
-		} else if (std::is_same<T, hugeint_t>::value) {
+		// packing reinterprets the integral type as it's unsigned counterpart,
+		// except for hugeints which are exclusively signed (for now)
+		PackGroupImpl(dst, reinterpret_cast<typename MakeUnsigned<T>::type *>(values), width);
+	}
 
-			std::cout << "Packing these values:" << std::endl;
-			for (idx_t i = 0; i < BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
-				std::cout << '\t' << static_cast<hugeint_t>(values[i]).ToString() << std::endl;
-			}
+	template <class T>
+	static void PackGroupImpl(data_ptr_t dst, T *values, bitpacking_width_t width) {
+		throw InternalException("Unsupported type for bitpacking");
+	}
+	template <>
+	void PackGroupImpl(data_ptr_t dst, uint8_t *values, bitpacking_width_t width) {
+		duckdb_fastpforlib::fastpack(values, reinterpret_cast<uint8_t *>(dst), static_cast<uint32_t>(width));
+	}
+	template <>
+	void PackGroupImpl(data_ptr_t dst, uint16_t *values, bitpacking_width_t width) {
+		duckdb_fastpforlib::fastpack(values, reinterpret_cast<uint16_t *>(dst), static_cast<uint32_t>(width));
+	}
+	template <>
+	void PackGroupImpl(data_ptr_t dst, uint32_t *values, bitpacking_width_t width) {
+		duckdb_fastpforlib::fastpack(values, reinterpret_cast<uint32_t *>(dst), static_cast<uint32_t>(width));
+	}
+	template <>
+	void PackGroupImpl(data_ptr_t dst, uint64_t *values, bitpacking_width_t width) {
+		duckdb_fastpforlib::fastpack(values, reinterpret_cast<uint32_t *>(dst), static_cast<uint32_t>(width));
+	}
+	template <>
+	void PackGroupImpl(data_ptr_t dst, hugeint_t *values, bitpacking_width_t width) {
 
-			PackHugeint(reinterpret_cast<const hugeint_t *>(values), reinterpret_cast<uint32_t *>(dst), width);
-		
-		} else {
-			throw InternalException("Unsupported type found in bitpacking.");
+
+		std::cout << "Packing these values:" << std::endl;
+		for (idx_t i = 0; i < BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
+			std::cout << '\t' << static_cast<hugeint_t>(values[i]).ToString() << std::endl;
+		}
+
+
+		PackHugeint(values, reinterpret_cast<uint32_t *>(dst), static_cast<uint32_t>(width));
+	}
+
+	template <class T>
+	static void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
+	                        bool skip_sign_extension = false) {
+
+		std::cout << "UnPackGroup width: " << (uint32_t)width << std::endl;
+
+		UnPackGroupImpl(reinterpret_cast<typename MakeUnsigned<T>::type *>(dst), src, width);
+
+		if (NumericLimits<T>::IsSigned() && !skip_sign_extension && width > 0 && width < sizeof(T) * 8) {
+			SignExtend<T>(dst, width);
 		}
 	}
+
+	template <class T>
+	static void UnPackGroupImpl(T *dst, data_ptr_t src, bitpacking_width_t width) {
+		throw InternalException("Unsupported type for bitpacking");
+	}
+
+	template <>
+	void UnPackGroupImpl(uint8_t *dst, data_ptr_t src, bitpacking_width_t width) {
+		duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint8_t *>(src), dst, static_cast<uint32_t>(width));
+	}
+	template <>
+	void UnPackGroupImpl(uint16_t *dst, data_ptr_t src, bitpacking_width_t width) {
+		duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint16_t *>(src), dst, static_cast<uint32_t>(width));
+	}
+	template <>
+	void UnPackGroupImpl(uint32_t *dst, data_ptr_t src, bitpacking_width_t width) {
+		duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), dst, static_cast<uint32_t>(width));
+	}
+	template <>
+	void UnPackGroupImpl(uint64_t *dst, data_ptr_t src, bitpacking_width_t width) {
+		duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), dst, static_cast<uint32_t>(width));
+	}
+	template <>
+	void UnPackGroupImpl(hugeint_t *dst, data_ptr_t src, bitpacking_width_t width) {
+		UnPackHugeint(reinterpret_cast<const uint32_t *>(src), dst, width);
+	}
+
 };
 
 } // namespace duckdb

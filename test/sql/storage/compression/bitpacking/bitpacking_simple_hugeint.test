@@ -19,9 +19,9 @@ CREATE TABLE test (id VARCHAR, a HUGEINT);
 
 # Insert multiple ranges so that each method can be used on at least on the the ranges
 statement ok
-INSERT INTO test SELECT i::VARCHAR, i FROM range(0, 16) tbl(i);
-INSERT INTO test SELECT i::VARCHAR, i FROM range(8000000000,8000000032) tbl(i);
-INSERT INTO test values ('a', 1844673538);
+INSERT INTO test SELECT i::VARCHAR, i FROM range(0, 32) tbl(i);
+INSERT INTO test SELECT i::VARCHAR, i::HUGEINT + 800000000000000000000000000 FROM range(0, 32) tbl(i);
+# INSERT INTO test values ('a', 6871947673478877043099);
 # INSERT INTO test SELECT i::VARCHAR, i FROM range(0,100) tbl(i);
 # INSERT INTO test SELECT i::VARCHAR, i FROM range(0,100) tbl(i);
 # INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0,100) tbl(i);
