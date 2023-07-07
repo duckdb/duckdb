@@ -337,3 +337,7 @@ clangd:
 
 coverage-check:
 	./scripts/coverage_check.sh
+
+generate-files:
+	python3 scripts/generate_functions.py
+	python3 scripts/generate_serialization.py

@@ -12,6 +12,9 @@ string SubqueryRef::ToString() const {
 	return BaseToString(result, column_name_alias);
 }
 
+SubqueryRef::SubqueryRef() : TableRef(TableReferenceType::SUBQUERY) {
+}
+
 SubqueryRef::SubqueryRef(unique_ptr<SelectStatement> subquery_p, string alias_p)
     : TableRef(TableReferenceType::SUBQUERY), subquery(std::move(subquery_p)) {
 	this->alias = std::move(alias_p);
@@ -35,19 +38,6 @@ unique_ptr<TableRef> SubqueryRef::Copy() {
 void SubqueryRef::Serialize(FieldWriter &writer) const {
 	writer.WriteSerializable(*subquery);
 	writer.WriteList<string>(column_name_alias);
-}
-
-void SubqueryRef::FormatSerialize(FormatSerializer &serializer) const {
-	TableRef::FormatSerialize(serializer);
-	serializer.WriteProperty("subquery", subquery);
-	serializer.WriteProperty("column_name_alias", column_name_alias);
-}
-
-unique_ptr<TableRef> SubqueryRef::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto subquery = deserializer.ReadProperty<unique_ptr<SelectStatement>>("subquery");
-	auto result = make_uniq<SubqueryRef>(std::move(subquery));
-	deserializer.ReadProperty("column_name_alias", result->column_name_alias);
-	return std::move(result);
 }
 
 unique_ptr<TableRef> SubqueryRef::Deserialize(FieldReader &reader) {

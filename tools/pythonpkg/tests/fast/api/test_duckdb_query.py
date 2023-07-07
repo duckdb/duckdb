@@ -2,6 +2,7 @@
 import duckdb
 import pytest
 from conftest import NumpyPandas, ArrowPandas
+from pyduckdb import Value
 
 class TestDuckDBQuery(object):
     def test_duckdb_query(self, duckdb_cursor):
@@ -142,3 +143,38 @@ class TestDuckDBQuery(object):
 
         result = con.execute("SELECT $value", {"value": 42}).fetchone()
         assert result == (42,)
+
+    def test_conversion_from_tuple(self):
+        con = duckdb.connect()
+
+        # Tuple converts to list
+        result = con.execute("select $1", [(21,22,42)]).fetchall()
+        assert result == [([21, 22, 42],)]
+
+        # If wrapped in a Value, it can convert to a struct
+        result = con.execute("select $1", [
+            Value(
+                ('a', 21, True),
+                {'v1': str, 'v2': int, 'v3': bool}
+            )
+        ]).fetchall()
+        assert result == [({'v1': 'a', 'v2': 21, 'v3': True},)]
+
+        # If the amount of items in the tuple and the children of the struct don't match
+        # we throw an error
+        with pytest.raises(duckdb.InvalidInputException, match='Tried to create a STRUCT value from a tuple containing 3 elements, but the STRUCT consists of 2 children'):
+            result = con.execute("select $1", [
+                Value(
+                    ('a', 21, True),
+                    {'v1': str, 'v2': int}
+                )
+            ]).fetchall()
+
+        # If we try to create anything other than a STRUCT or a LIST out of the tuple, we throw an error
+        with pytest.raises(duckdb.InvalidInputException, match="Can't convert tuple to a Value of type VARCHAR"):
+            result = con.execute("select $1", [
+                Value(
+                    (21, 42),
+                    str
+                )
+            ])

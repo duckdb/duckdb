@@ -84,17 +84,4 @@ unique_ptr<ParsedExpression> CaseExpression::Deserialize(ExpressionType type, Fi
 	return std::move(result);
 }
 
-void CaseExpression::FormatSerialize(FormatSerializer &serializer) const {
-	ParsedExpression::FormatSerialize(serializer);
-	serializer.WriteProperty("case_checks", case_checks);
-	serializer.WriteProperty("else_expr", *else_expr);
-}
-
-unique_ptr<ParsedExpression> CaseExpression::FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer) {
-	auto result = make_uniq<CaseExpression>();
-	deserializer.ReadProperty("case_checks", result->case_checks);
-	deserializer.ReadProperty("else_expr", result->else_expr);
-	return std::move(result);
-}
-
 } // namespace duckdb

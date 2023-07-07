@@ -210,6 +210,9 @@ public:
 
 		return result;
 	}
+
+private:
+	explicit WindowExpression(ExpressionType type);
 };
 
 } // namespace duckdb

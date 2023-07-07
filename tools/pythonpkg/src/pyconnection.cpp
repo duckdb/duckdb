@@ -203,7 +203,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	DefineMethod({"sql", "query", "from_query"}, m, &DuckDBPyConnection::RunQuery,
 	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	             "otherwise run the query as-is.",
-	             py::arg("query"), py::arg("alias") = "query_relation");
+	             py::arg("query"), py::arg("alias") = "");
 
 	DefineMethod({"read_csv", "from_csv_auto"}, m, &DuckDBPyConnection::ReadCSV,
 	             "Create a relation object from the CSV file in 'name'", py::arg("name"), py::kw_only(),
@@ -907,9 +907,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	return make_uniq<DuckDBPyRelation>(read_csv_p->Alias(name));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, const string &alias) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, string alias) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
+	}
+	if (alias.empty()) {
+		alias = "unnamed_relation_" + StringUtil::GenerateRandomName(16);
 	}
 	const char *duckdb_query_error = R"(duckdb.from_query cannot be used to run arbitrary SQL queries.
 It can only be used to run individual SELECT statements, and converts the result of that SELECT
@@ -918,9 +921,12 @@ Use duckdb.sql to run arbitrary SQL queries.)";
 	return make_uniq<DuckDBPyRelation>(connection->RelationFromQuery(query, alias, duckdb_query_error));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, const string &alias) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, string alias) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
+	}
+	if (alias.empty()) {
+		alias = "unnamed_relation_" + StringUtil::GenerateRandomName(16);
 	}
 	Parser parser(connection->context->GetParserOptions());
 	parser.ParseQuery(query);
