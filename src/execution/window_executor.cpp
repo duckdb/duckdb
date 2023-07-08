@@ -894,15 +894,15 @@ void WindowDenseRankExecutor::EvaluateInternal(WindowExecutorState &lstate, Vect
 	lpeer.rank = (peer_begin[0] - partition_begin[0]) + 1;
 	lpeer.rank_equal = (row_idx - peer_begin[0]);
 
-	//	The dense rank is the number of order mask bits between partition_begin and peer_begin
-	lpeer.dense_rank = 1;
+	//	The previous dense rank is the number of order mask bits in [partition_begin, row_idx)
+	lpeer.dense_rank = 0;
 
 	auto order_begin = partition_begin[0];
 	idx_t begin_idx;
 	idx_t begin_offset;
 	order_mask.GetEntryIndex(order_begin, begin_idx, begin_offset);
 
-	auto order_end = peer_begin[0];
+	auto order_end = row_idx;
 	idx_t end_idx;
 	idx_t end_offset;
 	order_mask.GetEntryIndex(order_end, end_idx, end_offset);
