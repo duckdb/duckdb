@@ -55,7 +55,6 @@ from .duckdb import (
     __standard_vector_size__,
     __interactive__,
     __jupyter__,
-    __standard_vector_size__,
     apilevel,
     comment,
     default_connection,
@@ -67,13 +66,12 @@ from .duckdb import (
     string_const,
     threadsafety,
     token_type,
-	tokenize
+    tokenize
 )
 _exported_symbols.extend([
     "__standard_vector_size__",
     "__interactive__",
     "__jupyter__",
-    "__standard_vector_size__",
     "apilevel",
     "comment",
     "default_connection",
@@ -85,7 +83,7 @@ _exported_symbols.extend([
     "string_const",
     "threadsafety",
     "token_type",
-	"tokenize"
+    "tokenize"
 ])
 
 from .duckdb import (
@@ -97,6 +95,7 @@ from .duckdb import (
     query_df,
     order,
     alias,
+    connect,
     write_csv
 )
 _exported_symbols.extend([
@@ -108,13 +107,13 @@ _exported_symbols.extend([
     "query_df",
     "order",
     "alias",
+    "connect",
     "write_csv"
 ])
 
 # TODO: might be worth seeing if these methods can be replaced with a pure-python solution
 # Connection methods
 from .duckdb import (
-    connect,
     append,
     array_type,
     arrow,
@@ -183,7 +182,6 @@ from .duckdb import (
     view
 )
 _exported_symbols.extend([
-    "connect",
     "append",
     "array_type",
     "arrow",

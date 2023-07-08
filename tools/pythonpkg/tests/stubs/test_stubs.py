@@ -7,12 +7,6 @@ MYPY_INI_PATH = os.path.join(os.path.dirname(__file__), 'mypy.ini')
 def test_generated_stubs():
 	skip_stubs_errors = ['pybind11', 'git_revision', 'is inconsistent, metaclass differs']
 
-	#submodules = [
-	#	'functional',
-	#	'typing'
-	#]
-	#submodules = ['duckdb.' + x for x in submodules]
-	#stubtest.test_stubs(stubtest.parse_options(['duckdb', 'modules'] + submodules + ['--mypy-config-file', MYPY_INI_PATH]))
 	stubtest.test_stubs(stubtest.parse_options(['duckdb', '--mypy-config-file', MYPY_INI_PATH]))
 
 	broken_stubs = [

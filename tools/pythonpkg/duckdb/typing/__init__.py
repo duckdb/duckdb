@@ -1,6 +1,6 @@
 from duckdb.duckdb.typing import (
-	DuckDBPyType,
-	BIGINT,
+    DuckDBPyType,
+    BIGINT,
     BIT,
     BLOB,
     BOOLEAN,
@@ -29,8 +29,8 @@ from duckdb.duckdb.typing import (
 )
 
 __all__ = [
-	"DuckDBPyType",
-	"BIGINT",
+    "DuckDBPyType",
+    "BIGINT",
     "BIT",
     "BLOB",
     "BOOLEAN",
