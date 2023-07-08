@@ -75,9 +75,6 @@ public:
 	const ParsedExpression &GetExpression() const;
 
 public:
-	static shared_ptr<DuckDBPyExpression> BinaryFunctionExpression(const string &function_name,
-	                                                               const DuckDBPyExpression &arg_one,
-	                                                               const DuckDBPyExpression &arg_two);
 	static shared_ptr<DuckDBPyExpression> StarExpression(const py::list &exclude = py::none());
 	static shared_ptr<DuckDBPyExpression> ColumnExpression(const string &function_name);
 	static shared_ptr<DuckDBPyExpression> ConstantExpression(const PythonValue &value);

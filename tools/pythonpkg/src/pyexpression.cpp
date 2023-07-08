@@ -142,16 +142,6 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Negate() {
 
 // Static creation methods
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::BinaryFunctionExpression(const string &function_name,
-                                                                            const DuckDBPyExpression &arg_one,
-                                                                            const DuckDBPyExpression &arg_two) {
-	vector<unique_ptr<ParsedExpression>> children;
-
-	children.push_back(arg_one.GetExpression().Copy());
-	children.push_back(arg_two.GetExpression().Copy());
-	return InternalFunctionExpression(function_name, std::move(children));
-}
-
 static void PopulateExcludeList(case_insensitive_set_t &exclude, const py::list &list) {
 	for (auto item : list) {
 		if (py::isinstance<py::str>(item)) {
