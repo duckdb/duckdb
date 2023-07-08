@@ -1,3 +1,5 @@
+#include <array>
+#include <vector>
 #include "../common.h"
 
 using namespace odbc_test;

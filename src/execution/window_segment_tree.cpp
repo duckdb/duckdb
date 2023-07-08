@@ -14,7 +14,7 @@ namespace duckdb {
 WindowAggregateState::WindowAggregateState(AggregateObject aggr, const LogicalType &result_type_p,
                                            idx_t partition_count_p)
     : aggr(std::move(aggr)), result_type(result_type_p), partition_count(partition_count_p),
-      state_size(aggr.function.state_size()), state(state_size),
+      state_size(this->aggr.function.state_size()), state(state_size),
       statef(Value::POINTER(CastPointerToValue(state.data()))), filter_pos(0),
       allocator(Allocator::DefaultAllocator()) {
 	statef.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants

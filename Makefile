@@ -194,6 +194,9 @@ endif
 ifeq (${DISABLE_CORE_FUNCTIONS}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DBUILD_CORE_FUNCTIONS_EXTENSION=0
 endif
+ifeq (${DISABLE_EXTENSION_LOAD}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_EXTENSION_LOAD=1
+endif
 
 clean:
 	rm -rf build
@@ -334,3 +337,8 @@ clangd:
 
 coverage-check:
 	./scripts/coverage_check.sh
+
+generate-files:
+	python3 scripts/generate_functions.py
+	python3 scripts/generate_serialization.py
+	python3 scripts/generate_enum_util.py

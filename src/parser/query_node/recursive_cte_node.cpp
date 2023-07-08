@@ -66,23 +66,4 @@ unique_ptr<QueryNode> RecursiveCTENode::Deserialize(FieldReader &reader) {
 	return std::move(result);
 }
 
-void RecursiveCTENode::FormatSerialize(FormatSerializer &serializer) const {
-	QueryNode::FormatSerialize(serializer);
-	serializer.WriteProperty("cte_name", ctename);
-	serializer.WriteProperty("union_all", union_all);
-	serializer.WriteProperty("left", *left);
-	serializer.WriteProperty("right", *right);
-	serializer.WriteProperty("aliases", aliases);
-}
-
-unique_ptr<QueryNode> RecursiveCTENode::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_uniq<RecursiveCTENode>();
-	deserializer.ReadProperty("cte_name", result->ctename);
-	deserializer.ReadProperty("union_all", result->union_all);
-	deserializer.ReadProperty("left", result->left);
-	deserializer.ReadProperty("right", result->right);
-	deserializer.ReadProperty("aliases", result->aliases);
-	return std::move(result);
-}
-
 } // namespace duckdb

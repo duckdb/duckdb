@@ -91,8 +91,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"enable_http_metadata_cache", {true}},
 	    {"force_bitpacking_mode", {"constant"}},
 	    {"allocator_flush_threshold", {"4.2GB"}},
-	    {"arrow_large_buffer_size", {true}},
-	};
+	    {"arrow_large_buffer_size", {true}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		REQUIRE(name == "MISSING_FROM_MAP");
@@ -107,6 +106,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "debug_window_mode",
 	    "experimental_parallel_csv",
 	    "lock_configuration",        // cant change this while db is running
+	    "disabled_filesystems",      // cant change this while db is running
 	    "enable_external_access",    // cant change this while db is running
 	    "allow_unsigned_extensions", // cant change this while db is running
 	    "log_query_path",
