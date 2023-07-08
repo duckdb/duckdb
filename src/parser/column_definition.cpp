@@ -23,6 +23,10 @@ ColumnDefinition::ColumnDefinition(string name_p, LogicalType type_p, unique_ptr
 		generated_expression = std::move(expression);
 		break;
 	}
+	case TableColumnType::SERIAL: {
+		generated_expression = std::move(expression);
+		break;
+	}
 	default: {
 		throw InternalException("Type not implemented for TableColumnType");
 	}
@@ -136,6 +140,10 @@ bool ColumnDefinition::Generated() const {
 	return category == TableColumnType::GENERATED;
 }
 
+bool ColumnDefinition::SERIAL() const {
+	return category == TableColumnType::SERIAL;
+}
+
 //===--------------------------------------------------------------------===//
 // Generated Columns (VIRTUAL)
 //===--------------------------------------------------------------------===//
@@ -179,21 +187,35 @@ LogicalType ColumnDefinition::GetType() const {
 	return type;
 }
 
-void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> expression) {
-	category = TableColumnType::GENERATED;
+void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> expression,
+                                              const TableColumnType &category_p) {
+	category = category_p;
 
-	if (expression->HasSubquery()) {
-		throw ParserException("Expression of generated column \"%s\" contains a subquery, which isn't allowed", name);
+	switch (category) {
+	case TableColumnType::GENERATED: {
+		if (expression->HasSubquery()) {
+			throw ParserException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
+			                      name);
+		}
+
+		VerifyColumnRefs(*expression);
+		if (type.id() == LogicalTypeId::ANY) {
+			generated_expression = std::move(expression);
+			return;
+		}
+		// Always wrap the expression in a cast, that way we can always update the cast when we change the type
+		// Except if the type is LogicalType::ANY (no type specified)
+		generated_expression = make_uniq_base<ParsedExpression, CastExpression>(type, std::move(expression));
+		break;
 	}
-
-	VerifyColumnRefs(*expression);
-	if (type.id() == LogicalTypeId::ANY) {
+	case TableColumnType::SERIAL: {
 		generated_expression = std::move(expression);
-		return;
+		break;
 	}
-	// Always wrap the expression in a cast, that way we can always update the cast when we change the type
-	// Except if the type is LogicalType::ANY (no type specified)
-	generated_expression = make_uniq_base<ParsedExpression, CastExpression>(type, std::move(expression));
+	default: {
+		throw InternalException("Type not implemented for TableColumnType");
+	}
+	}
 }
 
 void ColumnDefinition::ChangeGeneratedExpressionType(const LogicalType &type) {

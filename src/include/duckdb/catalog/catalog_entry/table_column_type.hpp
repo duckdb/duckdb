@@ -12,6 +12,6 @@
 
 namespace duckdb {
 
-enum class TableColumnType : uint8_t { STANDARD = 0, GENERATED = 1 };
+enum class TableColumnType : uint8_t { STANDARD = 0, GENERATED = 1, SERIAL = 2 };
 
 } // namespace duckdb

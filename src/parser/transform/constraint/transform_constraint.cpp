@@ -81,7 +81,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		if (column.DefaultValue()) {
 			throw InvalidInputException("DEFAULT constraint on GENERATED column \"%s\" is not allowed", column.Name());
 		}
-		column.SetGeneratedExpression(TransformExpression(constraint->raw_expr));
+		column.SetGeneratedExpression(TransformExpression(constraint->raw_expr), TableColumnType::GENERATED);
 		return nullptr;
 	}
 	case duckdb_libpgquery::PG_CONSTR_GENERATED_STORED:

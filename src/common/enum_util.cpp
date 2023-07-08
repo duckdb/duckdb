@@ -280,6 +280,8 @@ const char *EnumUtil::ToChars<TableColumnType>(TableColumnType value) {
 		return "STANDARD";
 	case TableColumnType::GENERATED:
 		return "GENERATED";
+	case TableColumnType::SERIAL:
+		return "SERIAL";
 	default:
 		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
 	}
@@ -292,6 +294,9 @@ TableColumnType EnumUtil::FromString<TableColumnType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "GENERATED")) {
 		return TableColumnType::GENERATED;
+	}
+	if (StringUtil::Equals(value, "SERIAL")) {
+		return TableColumnType::SERIAL;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }

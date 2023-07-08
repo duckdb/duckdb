@@ -65,6 +65,8 @@ public:
 	const TableColumnType &Category() const;
 	//! Whether this column is a Generated Column
 	bool Generated() const;
+	//! Whether this column is a SERIAL Column
+	bool SERIAL() const;
 	DUCKDB_API ColumnDefinition Copy() const;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
@@ -76,7 +78,7 @@ public:
 
 	ParsedExpression &GeneratedExpressionMutable();
 	const ParsedExpression &GeneratedExpression() const;
-	void SetGeneratedExpression(unique_ptr<ParsedExpression> expression);
+	void SetGeneratedExpression(unique_ptr<ParsedExpression> expression, const TableColumnType &category_p);
 	void ChangeGeneratedExpressionType(const LogicalType &type);
 	void GetListOfDependencies(vector<string> &dependencies) const;
 
@@ -97,7 +99,7 @@ private:
 	idx_t oid = DConstants::INVALID_INDEX;
 	//! The category of the column
 	TableColumnType category = TableColumnType::STANDARD;
-	//! Used by Generated Columns
+	//! Used by Generated Columns or Serial Columns
 	unique_ptr<ParsedExpression> generated_expression;
 };
 
