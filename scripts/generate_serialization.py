@@ -42,7 +42,7 @@ serialize_element = '\tserializer.WriteProperty("${PROPERTY_KEY}", ${PROPERTY_NA
 base_serialize = '\t${BASE_CLASS_NAME}::FormatSerialize(serializer);\n'
 
 deserialize_base = '''
-unique_ptr<${BASE_CLASS_NAME}> ${CLASS_NAME}::FormatDeserialize(${EXTRA_PARAMETERS}FormatDeserializer &deserializer) {
+${POINTER}<${BASE_CLASS_NAME}> ${CLASS_NAME}::FormatDeserialize(${EXTRA_PARAMETERS}FormatDeserializer &deserializer) {
 ${MEMBERS}
 }
 '''
@@ -53,8 +53,9 @@ ${CASE_STATEMENTS}\tdefault:
 \t}
 '''
 
-switch_statement = '''\tcase ${ENUM_TYPE}::${ENUM_VALUE}:
-\t\tresult = ${CLASS_DESERIALIZE}::FormatDeserialize(${EXTRA_PARAMETERS}deserializer);
+switch_header = '\tcase ${ENUM_TYPE}::${ENUM_VALUE}:\n'
+
+switch_statement = switch_header + '''\t\tresult = ${CLASS_DESERIALIZE}::FormatDeserialize(${EXTRA_PARAMETERS}deserializer);
 \t\tbreak;
 '''
 
@@ -105,6 +106,7 @@ for entry in file_list:
     extra_parameters = []
     class_name_list = []
 
+    pointer_type = 'unique_ptr'
     for entry in json_data:
         class_name = entry['class']
         if 'class_type' in entry:
@@ -116,6 +118,8 @@ for entry in file_list:
             include_list += entry['includes']
             if 'extra_parameters' in entry:
                 extra_parameters = entry['extra_parameters']
+            if 'pointer_type' in entry:
+                pointer_type = entry['pointer_type']
         elif 'base' in entry:
             base_class = entry['base']
             enum_entry = entry['enum']
@@ -127,7 +131,12 @@ for entry in file_list:
                 raise Exception(f"Duplicate enum entry \"{enum_entry}\"")
             base_class_data[base_class][enum_entry] = class_name
         class_name_list.append(class_name)
-        serialize_data[class_name] = entry['members']
+        if 'custom_implementation' in entry and entry['custom_implementation']:
+            serialize_data[class_name] = None
+        elif 'custom_switch_code' in entry:
+            serialize_data[class_name] = entry['custom_switch_code']
+        else:
+            serialize_data[class_name] = entry['members']
 
     with open(target_path, 'w+') as f:
         f.write(header.replace('${INCLUDE_LIST}', ''.join([include_base.replace('${FILENAME}', x) for x in include_list])))
@@ -153,12 +162,18 @@ for entry in file_list:
         expressions = [x for x in base_class_data[base_class_name].items() if x[0] != '__enum_value']
         expressions = sorted(expressions, key=lambda x: x[0])
 
-        base_class_deserialize += f'\tunique_ptr<{base_class_name}> result;\n'
+        base_class_deserialize += f'\t{pointer_type}<{base_class_name}> result;\n'
         switch_cases = ''
         extra_parameter_txt = ''
         for extra_parameter in extra_parameters:
             extra_parameter_txt += extra_parameter + ', '
         for expr in expressions:
+            class_data = serialize_data[expr[1]]
+            if type(class_data) is str:
+                switch_cases += switch_header.replace('${ENUM_TYPE}', enum_type).replace('${ENUM_VALUE}', expr[0]).replace('${CLASS_DESERIALIZE}', expr[1])
+                switch_cases += '\n'.join(['\t\t' + x for x in class_data.replace('\\n', '\n').split('\n')])
+                switch_cases += '\n'
+                continue
             switch_cases += switch_statement.replace('${ENUM_TYPE}', enum_type).replace('${ENUM_VALUE}', expr[0]).replace('${CLASS_DESERIALIZE}', expr[1]).replace('${EXTRA_PARAMETERS}', extra_parameter_txt)
 
         assign_entries = []
@@ -193,7 +208,7 @@ for entry in file_list:
         base_class_deserialize += '\treturn result;'
         base_class_generation = ''
         base_class_generation += serialize_base.replace('${CLASS_NAME}', base_class_name).replace('${MEMBERS}', base_class_serialize)
-        base_class_generation += deserialize_base.replace('${BASE_CLASS_NAME}', base_class_name).replace('${CLASS_NAME}', base_class_name).replace('${MEMBERS}', base_class_deserialize).replace('${EXTRA_PARAMETERS}', '')
+        base_class_generation += deserialize_base.replace('${BASE_CLASS_NAME}', base_class_name).replace('${CLASS_NAME}', base_class_name).replace('${MEMBERS}', base_class_deserialize).replace('${EXTRA_PARAMETERS}', '').replace('${POINTER}', pointer_type)
         f.write(base_class_generation)
 
         # generate the extra class serialization
@@ -219,8 +234,13 @@ for entry in file_list:
 
             class_serialize = ''
             class_serialize += base_serialize.replace('${BASE_CLASS_NAME}', base_class_name)
-            class_deserialize = f'\tauto result = duckdb::unique_ptr<{class_name}>(new {class_name}({constructor_parameters}));\n'
-            for entry in serialize_data[class_name]:
+            class_deserialize = f'\tauto result = duckdb::{pointer_type}<{class_name}>(new {class_name}({constructor_parameters}));\n'
+            members = serialize_data[class_name]
+            if members is None:
+                continue
+            if type(members) is str:
+                continue
+            for entry in members:
                 property_name = entry['property'] if 'property' in entry else entry['name']
                 property_key = entry['name']
                 is_optional = False
@@ -243,7 +263,7 @@ for entry in file_list:
 
             class_generation = ''
             class_generation += serialize_base.replace('${CLASS_NAME}', class_name).replace('${MEMBERS}', class_serialize)
-            class_generation += deserialize_base.replace('${BASE_CLASS_NAME}', base_class_name).replace('${CLASS_NAME}', class_name).replace('${MEMBERS}', class_deserialize).replace('${EXTRA_PARAMETERS}', extra_parameter_txt)
+            class_generation += deserialize_base.replace('${BASE_CLASS_NAME}', base_class_name).replace('${CLASS_NAME}', class_name).replace('${MEMBERS}', class_deserialize).replace('${EXTRA_PARAMETERS}', extra_parameter_txt).replace("${POINTER}", pointer_type)
 
 
             f.write(class_generation)
