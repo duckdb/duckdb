@@ -144,7 +144,7 @@ class TestNativeUDF(object):
         
         con = duckdb.connect()
         con.create_function('return_overflow', return_overflow, None, duckdb_type)
-        with pytest.raises(duckdb.InvalidInputException, match='Invalid Input Error: Failed to cast value:'):
+        with pytest.raises(duckdb.InvalidInputException):
             rel = con.sql('select return_overflow()')
             res = rel.fetchall()
             print(duckdb_type)

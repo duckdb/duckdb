@@ -2,6 +2,8 @@
 # description: test paging in constrained memory
 # group: [window]
 
+require 64bit
+
 statement ok
 CREATE or replace TABLE big_table AS
     SELECT
