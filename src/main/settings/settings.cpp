@@ -198,6 +198,21 @@ Value DebugAsOfIEJoin::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Prefer Range Joins
+//===--------------------------------------------------------------------===//
+void PreferRangeJoins::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).prefer_range_joins = ClientConfig().prefer_range_joins;
+}
+
+void PreferRangeJoins::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).prefer_range_joins = input.GetValue<bool>();
+}
+
+Value PreferRangeJoins::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).prefer_range_joins);
+}
+
+//===--------------------------------------------------------------------===//
 // Default Collation
 //===--------------------------------------------------------------------===//
 void DefaultCollationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
