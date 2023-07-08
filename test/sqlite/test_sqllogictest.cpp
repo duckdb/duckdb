@@ -59,7 +59,7 @@ static string ParseGroupFromPath(string file) {
 		extension = "[.]";
 	}
 	if (file.find(".test_coverage") != std::string::npos) {
-		// "slow" in the name indicates a slow test (i.e. only run as part of allunit)
+		// "coverage" in the name indicates a coverage test (i.e. only run as part of coverage)
 		return "[coverage][.]";
 	}
 	// move backwards to the last slash

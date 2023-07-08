@@ -37,7 +37,7 @@ class BaseCSVReader {
 public:
 	BaseCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
 	              const vector<LogicalType> &requested_types = vector<LogicalType>());
-	~BaseCSVReader();
+	virtual ~BaseCSVReader();
 
 	ClientContext &context;
 	FileSystem &fs;
@@ -75,7 +75,7 @@ public:
 	}
 
 	//! Get the 1-indexed global line number for the given local error line
-	virtual idx_t GetLineError(idx_t line_error, idx_t buffer_idx) {
+	virtual idx_t GetLineError(idx_t line_error, idx_t buffer_idx, bool stop_at_first = true) {
 		return line_error + 1;
 	};
 

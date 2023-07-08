@@ -1,0 +1,235 @@
+# name: test/optimizer/deliminator_optimizer.test
+# description: Test the Deliminator optimizer
+# group: [optimizer]
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+# specific edge case with two DelimGets under the DelimJoin
+statement ok
+SELECT i, (SELECT MIN(i+2*i1.i) FROM integers) FROM integers i1 ORDER BY i
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3)
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY
+
+# correlated any/all
+query II
+EXPLAIN SELECT i=ANY(SELECT i FROM integers WHERE i=i1.i) FROM integers i1 ORDER BY i
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+query II
+EXPLAIN SELECT i=ALL(SELECT i FROM integers WHERE i=i1.i) FROM integers i1 ORDER BY i
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# correlated where
+statement ok
+CREATE TABLE test (id INTEGER, b INTEGER)
+
+query II
+EXPLAIN SELECT * FROM test WHERE b=(SELECT MIN(b) FROM test AS a WHERE a.id=test.id)
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# TPC-H
+require tpch
+
+statement ok
+CALL dbgen(sf=0.0001)
+
+# q02
+query II
+EXPLAIN
+SELECT
+    s_acctbal,
+    s_name,
+    n_name,
+    p_partkey,
+    p_mfgr,
+    s_address,
+    s_phone,
+    s_comment
+FROM
+    part,
+    supplier,
+    partsupp,
+    nation,
+    region
+WHERE
+    p_partkey = ps_partkey
+    AND s_suppkey = ps_suppkey
+    AND p_size = 15
+    AND p_type LIKE '%BRASS'
+    AND s_nationkey = n_nationkey
+    AND n_regionkey = r_regionkey
+    AND r_name = 'EUROPE'
+    AND ps_supplycost = (
+        SELECT
+            min(ps_supplycost)
+        FROM
+            partsupp,
+            supplier,
+            nation,
+            region
+        WHERE
+            p_partkey = ps_partkey
+            AND s_suppkey = ps_suppkey
+            AND s_nationkey = n_nationkey
+            AND n_regionkey = r_regionkey
+            AND r_name = 'EUROPE')
+ORDER BY
+    s_acctbal DESC,
+    n_name,
+    s_name,
+    p_partkey
+LIMIT 100
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# q04
+query II
+EXPLAIN
+SELECT
+    o_orderpriority,
+    count(*) AS order_count
+FROM
+    orders
+WHERE
+    o_orderdate >= CAST('1993-07-01' AS date)
+    AND o_orderdate < CAST('1993-10-01' AS date)
+    AND EXISTS (
+        SELECT
+            *
+        FROM
+            lineitem
+        WHERE
+            l_orderkey = o_orderkey
+            AND l_commitdate < l_receiptdate)
+GROUP BY
+    o_orderpriority
+ORDER BY
+    o_orderpriority
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# q17
+query II
+EXPLAIN
+SELECT
+    sum(l_extendedprice) / 7.0 AS avg_yearly
+FROM
+    lineitem,
+    part
+WHERE
+    p_partkey = l_partkey
+    AND p_brand = 'Brand#23'
+    AND p_container = 'MED BOX'
+    AND l_quantity < (
+        SELECT
+            0.2 * avg(l_quantity)
+        FROM
+            lineitem
+        WHERE
+            l_partkey = p_partkey)
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# q20
+query II
+EXPLAIN
+SELECT
+    s_name,
+    s_address
+FROM
+    supplier,
+    nation
+WHERE
+    s_suppkey IN (
+        SELECT
+            ps_suppkey
+        FROM
+            partsupp
+        WHERE
+            ps_partkey IN (
+                SELECT
+                    p_partkey
+                FROM
+                    part
+                WHERE
+                    p_name LIKE 'forest%')
+                AND ps_availqty > (
+                    SELECT
+                        0.5 * sum(l_quantity)
+                    FROM
+                        lineitem
+                    WHERE
+                        l_partkey = ps_partkey
+                        AND l_suppkey = ps_suppkey
+                        AND l_shipdate >= CAST('1994-01-01' AS date)
+                        AND l_shipdate < CAST('1995-01-01' AS date)))
+            AND s_nationkey = n_nationkey
+            AND n_name = 'CANADA'
+        ORDER BY
+            s_name
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# q21
+query II
+EXPLAIN
+SELECT
+    cntrycode,
+    count(*) AS numcust,
+    sum(c_acctbal) AS totacctbal
+FROM (
+    SELECT
+        substring(c_phone FROM 1 FOR 2) AS cntrycode,
+        c_acctbal
+    FROM
+        customer
+    WHERE
+        substring(c_phone FROM 1 FOR 2) IN ('13', '31', '23', '29', '30', '18', '17')
+        AND c_acctbal > (
+            SELECT
+                avg(c_acctbal)
+            FROM
+                customer
+            WHERE
+                c_acctbal > 0.00
+                AND substring(c_phone FROM 1 FOR 2) IN ('13', '31', '23', '29', '30', '18', '17'))
+            AND NOT EXISTS (
+                SELECT
+                    *
+                FROM
+                    orders
+                WHERE
+                    o_custkey = c_custkey)) AS custsale
+GROUP BY
+    cntrycode
+ORDER BY
+    cntrycode
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
+
+# FTS
+require fts
+
+require noalternativeverify
+
+statement ok
+CREATE TABLE documents(id VARCHAR, body VARCHAR)
+
+statement ok
+INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('doc2', ' BÁRKING+BÁRKING+BÁRKING+BÁRKING'), ('doc3', ' MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING+999')
+
+statement ok
+PRAGMA create_fts_index('documents', 'id', 'body', overwrite=1)
+
+query II
+EXPLAIN SELECT score, id, body FROM (SELECT *, fts_main_documents.match_bm25(id, 'quacked barked') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
+----
+logical_opt	<!REGEX>:.*DELIM_JOIN.*
