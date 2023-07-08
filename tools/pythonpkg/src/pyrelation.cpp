@@ -56,7 +56,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const string &expr) {
 	return ProjectFromExpression(expr);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Select(py::args args) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Select(const py::args &args) {
 	vector<unique_ptr<ParsedExpression>> expressions;
 	for (auto arg : args) {
 		shared_ptr<DuckDBPyExpression> py_expr;
