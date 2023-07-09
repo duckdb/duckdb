@@ -15,6 +15,7 @@ add_library_unity(
   column_dependency_manager.cpp
   scalar_function_catalog_entry.cpp
   table_function_catalog_entry.cpp
+  table_column_serial_type.cpp
   view_catalog_entry.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_catalog_entries>
