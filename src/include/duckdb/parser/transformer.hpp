@@ -36,21 +36,6 @@ class UpdateSetInfo;
 struct ParserOptions;
 struct PivotColumn;
 
-// Parameters come in three different types:
-// auto-increment:
-//	token: '?'
-//	name: -
-//	number: 0
-// positional:
-//	token: '$<number>'
-//	name: -
-//	number: <number>
-// named:
-//	token: '$<name>'
-//	name: <name>
-//	number: 0
-enum class PreparedParamType : uint8_t { AUTO_INCREMENT, POSITIONAL, NAMED, INVALID };
-
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
 class Transformer {

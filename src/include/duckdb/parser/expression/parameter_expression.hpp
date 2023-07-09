@@ -10,6 +10,21 @@
 
 #include "duckdb/parser/parsed_expression.hpp"
 
+// Parameters come in three different types:
+// auto-increment:
+//	token: '?'
+//	name: -
+//	number: 0
+// positional:
+//	token: '$<number>'
+//	name: -
+//	number: <number>
+// named:
+//	token: '$<name>'
+//	name: <name>
+//	number: 0
+enum class PreparedParamType : uint8_t { AUTO_INCREMENT, POSITIONAL, NAMED, INVALID };
+
 namespace duckdb {
 class ParameterExpression : public ParsedExpression {
 public:
