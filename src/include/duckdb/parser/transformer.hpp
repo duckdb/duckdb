@@ -22,6 +22,7 @@
 #include "nodes/parsenodes.hpp"
 #include "nodes/primnodes.hpp"
 #include "pg_definitions.hpp"
+#include "duckdb/parser/expression/parameter_expression.hpp"
 
 namespace duckdb {
 
