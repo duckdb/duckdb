@@ -107,7 +107,7 @@ SQLRETURN SQL_API SQLDescribeParam(SQLHSTMT statement_handle, SQLUSMALLINT param
 	auto odbc_type = SQL_UNKNOWN_TYPE;
 	auto odbc_size = 0;
 	auto identifier = std::to_string(parameter_number + 1);
-	auto param_type_id = stmt->stmt->data->GetType(identifier).id();
+	auto param_type_id = hstmt->stmt->data->GetType(identifier).id();
 	switch (param_type_id) {
 	case duckdb::LogicalTypeId::VARCHAR:
 		odbc_type = SQL_VARCHAR;
