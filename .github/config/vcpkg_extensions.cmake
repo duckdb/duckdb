@@ -5,14 +5,13 @@
 #   EXTENSION_CONFIGS=.github/config/vcpkg_extensions.cmake make
 #
 
-duckdb_extension_load(azure
-    LOAD_TESTS
-    GIT_URL https://github.com/duckdblabs/duckdb_azure
-    GIT_TAG 7cd5149ee879f3ea9e0a9215e0739643dd75eb6e
-)
-
-# AWS disabled for windowsx
 if (NOT WIN32)
+    duckdb_extension_load(azure
+        LOAD_TESTS
+        GIT_URL https://github.com/duckdblabs/duckdb_azure
+        GIT_TAG 7cd5149ee879f3ea9e0a9215e0739643dd75eb6e
+    )
+
     duckdb_extension_load(aws
         LOAD_TESTS
         GIT_URL https://github.com/duckdblabs/duckdb_aws
