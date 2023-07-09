@@ -3,6 +3,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/parser/column_definition.hpp"
 #include "duckdb/common/types/decimal.hpp"
 
 namespace duckdb {
@@ -166,7 +167,12 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 			break;
 		case LogicalTypeId::USER: {
 			string user_type_name {name};
-			result_type = LogicalType::USER(user_type_name);
+
+			if (SerialColumnType::IsColumnSerial(LogicalTypeId::USER, user_type_name)) {
+				result_type = SerialColumnType::serial_type_map.find(user_type_name)->second;
+			} else {
+				result_type = LogicalType::USER(user_type_name);
+			}
 			break;
 		}
 		case LogicalTypeId::BIT: {

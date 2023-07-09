@@ -58,6 +58,9 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 		if (cdef.category == duckdb_libpgquery::COL_GENERATED) {
 			throw ParserException("Collations are not supported on generated columns");
 		}
+		if (SerialColumnType::IsColumnSerial(target_type.id(), colname)) {
+			throw ParserException("Collations are not supported on serial columns");
+		}
 		if (target_type.id() != LogicalTypeId::VARCHAR) {
 			throw ParserException("Only VARCHAR columns can have collations!");
 		}

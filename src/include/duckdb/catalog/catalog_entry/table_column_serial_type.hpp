@@ -18,6 +18,9 @@ namespace duckdb {
 class SerialColumnType {
 public:
 	static const case_insensitive_map_t<LogicalType> serial_type_map;
+
+public:
+	static bool IsColumnSerial(const LogicalTypeId &type, const string &col_type_name);
 };
 
 } // namespace duckdb
