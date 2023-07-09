@@ -568,7 +568,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			throw InternalException("Flatten dependent joins - logical get encountered without children");
 		}
 		plan->children[0] = PushDownDependentJoin(std::move(plan->children[0]));
-		for (idx_t i = 0; i < (perform_delim ? correlated_columns.size() : 1); i++) {
+		for (idx_t i = 0; i < correlated_columns.size(); i++) {
 			get.projected_input.push_back(this->delim_offset + i);
 		}
 		this->delim_offset = get.returned_types.size();
@@ -576,7 +576,10 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		return plan;
 	}
 	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
-		throw BinderException("Recursive CTEs not supported in correlated subquery");
+		throw BinderException("Recursive CTEs not (yet) supported in correlated subquery");
+	}
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
+		throw BinderException("Materialized CTEs not (yet) supported in correlated subquery");
 	}
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		throw BinderException("Nested lateral joins or lateral joins in correlated subqueries are not (yet) supported");

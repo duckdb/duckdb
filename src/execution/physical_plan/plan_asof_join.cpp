@@ -44,6 +44,16 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAsOfJoin &
 		return make_uniq<PhysicalAsOfJoin>(op, std::move(left), std::move(right));
 	}
 
+	//	Strip extra column from rhs projections
+	auto &right_projection_map = op.right_projection_map;
+	if (right_projection_map.empty()) {
+		const auto right_count = right->types.size();
+		right_projection_map.reserve(right_count);
+		for (column_t i = 0; i < right_count; ++i) {
+			right_projection_map.emplace_back(i);
+		}
+	}
+
 	//	Debug implementation: IEJoin of Window
 	//	LEAD(asof_column, 1, infinity) OVER (PARTITION BY equi_column... ORDER BY asof_column) AS asof_temp
 	auto &asof_comp = op.conditions[asof_idx];
@@ -64,7 +74,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAsOfJoin &
 	vector<unique_ptr<Expression>> window_select;
 	window_select.emplace_back(std::move(asof_temp));
 
-	auto window_types = right->types;
+	auto &window_types = op.children[1]->types;
 	window_types.emplace_back(asof_type);
 
 	auto window = make_uniq<PhysicalWindow>(window_types, std::move(window_select), rhs_cardinality);
@@ -75,29 +85,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAsOfJoin &
 	asof_upper.left = asof_comp.left->Copy();
 	asof_upper.right = make_uniq<BoundReferenceExpression>(asof_type, window_types.size() - 1);
 	asof_upper.comparison = ExpressionType::COMPARE_LESSTHAN;
-
-	// We have an equality condition, so we may have to deal with projection maps.
-	// IEJoin does not (currently) support them, so we have to do it manually
-	auto proj_types = op.types;
-	op.types.clear();
-
-	auto lhs_types = op.children[0]->types;
-	op.types = lhs_types;
-
-	auto rhs_types = op.children[1]->types;
-	op.types.insert(op.types.end(), rhs_types.begin(), rhs_types.end());
-
-	op.types.emplace_back(asof_type);
 	op.conditions.emplace_back(std::move(asof_upper));
-	auto iejoin = make_uniq<PhysicalIEJoin>(op, std::move(left), std::move(window), std::move(op.conditions),
-	                                        op.join_type, op.estimated_cardinality);
 
-	//	Project away asof_temp and anything from the projection maps
-	auto proj = PhysicalProjection::CreateJoinProjection(proj_types, lhs_types, rhs_types, op.left_projection_map,
-	                                                     op.right_projection_map, lhs_cardinality);
-	proj->children.push_back(std::move(iejoin));
-
-	return proj;
+	return make_uniq<PhysicalIEJoin>(op, std::move(left), std::move(window), std::move(op.conditions), op.join_type,
+	                                 lhs_cardinality);
 }
 
 } // namespace duckdb

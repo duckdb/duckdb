@@ -42,5 +42,8 @@ public:
 		return StringUtil::Format("(%s %s %s)", entry.left->ToString(), ExpressionTypeToOperator(entry.type),
 		                          entry.right->ToString());
 	}
+
+private:
+	explicit ComparisonExpression(ExpressionType type);
 };
 } // namespace duckdb

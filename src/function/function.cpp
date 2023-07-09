@@ -94,6 +94,8 @@ void BuiltinFunctions::Initialize() {
 
 	RegisterDistributiveAggregates();
 
+	RegisterCompressedMaterializationFunctions();
+
 	RegisterGenericFunctions();
 	RegisterOperators();
 	RegisterSequenceFunctions();
@@ -111,7 +113,7 @@ void BuiltinFunctions::Initialize() {
 hash_t BaseScalarFunction::Hash() const {
 	hash_t hash = return_type.Hash();
 	for (auto &arg : arguments) {
-		duckdb::CombineHash(hash, arg.Hash());
+		hash = duckdb::CombineHash(hash, arg.Hash());
 	}
 	return hash;
 }

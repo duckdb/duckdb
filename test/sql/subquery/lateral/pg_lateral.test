@@ -339,13 +339,14 @@ from int4_tbl x, lateral (select unique2 from tenk1 where f1 = unique1) ss;
 
 query II
 select unique2, x.*
-from int4_tbl x left join lateral (select unique1, unique2 from tenk1 where f1 = unique1) ss on true;
+from int4_tbl x left join lateral (select unique1, unique2 from tenk1 where f1 = unique1) ss on true
+order by all;
 ----
 9998	0
-NULL	123456
-NULL	-123456
-NULL	2147483647
 NULL	-2147483647
+NULL	-123456
+NULL	123456
+NULL	2147483647
 
 # FIXME: INTERNAL Error: Logical operator type "DELIM_JOIN" for dependent join
 mode skip

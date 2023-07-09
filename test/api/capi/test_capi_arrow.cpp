@@ -9,7 +9,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 	duckdb_prepared_statement stmt = nullptr;
-	duckdb_arrow arrow_result;
+	duckdb_arrow arrow_result = nullptr;
 
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
@@ -54,14 +54,9 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 
 	SECTION("test multiple chunks") {
 		// create table that consists of multiple chunks
-		REQUIRE_NO_FAIL(tester.Query("BEGIN TRANSACTION"));
 		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE test(a INTEGER)"));
-		for (size_t i = 0; i < 500; i++) {
-			REQUIRE_NO_FAIL(
-			    tester.Query("INSERT INTO test VALUES (1); INSERT INTO test VALUES (2); INSERT INTO test VALUES "
-			                 "(3); INSERT INTO test VALUES (4); INSERT INTO test VALUES (5);"));
-		}
-		REQUIRE_NO_FAIL(tester.Query("COMMIT"));
+		REQUIRE_NO_FAIL(
+		    tester.Query("INSERT INTO test SELECT i FROM (VALUES (1), (2), (3), (4), (5)) t(i), range(500);"));
 
 		REQUIRE(duckdb_query_arrow(tester.connection, "SELECT CAST(a AS INTEGER) AS a FROM test ORDER BY a",
 		                           &arrow_result) == DuckDBSuccess);

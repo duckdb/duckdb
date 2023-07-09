@@ -1,6 +1,7 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
-#include "duckdb/execution/expression_executor.hpp"
+
 #include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -93,6 +94,18 @@ static void ComputeGroupLocation(Vector &group, Value &min, uintptr_t *address_d
 	case PhysicalType::INT64:
 		ComputeGroupLocationTemplated<int64_t>(vdata, min, address_data, current_shift, count);
 		break;
+	case PhysicalType::UINT8:
+		ComputeGroupLocationTemplated<uint8_t>(vdata, min, address_data, current_shift, count);
+		break;
+	case PhysicalType::UINT16:
+		ComputeGroupLocationTemplated<uint16_t>(vdata, min, address_data, current_shift, count);
+		break;
+	case PhysicalType::UINT32:
+		ComputeGroupLocationTemplated<uint32_t>(vdata, min, address_data, current_shift, count);
+		break;
+	case PhysicalType::UINT64:
+		ComputeGroupLocationTemplated<uint64_t>(vdata, min, address_data, current_shift, count);
+		break;
 	default:
 		throw InternalException("Unsupported group type for perfect aggregate hash table");
 	}
@@ -123,7 +136,7 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	// after finding the group location we update the aggregates
 	idx_t payload_idx = 0;
 	auto &aggregates = layout.GetAggregates();
-	RowOperationsState row_state(aggregate_allocator.GetAllocator());
+	RowOperationsState row_state(aggregate_allocator);
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = aggregates[aggr_idx];
 		auto input_count = (idx_t)aggregate.child_count;
@@ -152,7 +165,7 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 	data_ptr_t source_ptr = other.data;
 	data_ptr_t target_ptr = data;
 	idx_t combine_count = 0;
-	RowOperationsState row_state(aggregate_allocator.GetAllocator());
+	RowOperationsState row_state(aggregate_allocator);
 	for (idx_t i = 0; i < total_groups; i++) {
 		auto has_entry_source = other.group_is_set[i];
 		// we only have any work to do if the source has an entry for this group
@@ -208,6 +221,18 @@ static void ReconstructGroupVector(uint32_t group_values[], Value &min, idx_t re
 	case PhysicalType::INT64:
 		ReconstructGroupVectorTemplated<int64_t>(group_values, min, mask, shift, entry_count, result);
 		break;
+	case PhysicalType::UINT8:
+		ReconstructGroupVectorTemplated<uint8_t>(group_values, min, mask, shift, entry_count, result);
+		break;
+	case PhysicalType::UINT16:
+		ReconstructGroupVectorTemplated<uint16_t>(group_values, min, mask, shift, entry_count, result);
+		break;
+	case PhysicalType::UINT32:
+		ReconstructGroupVectorTemplated<uint32_t>(group_values, min, mask, shift, entry_count, result);
+		break;
+	case PhysicalType::UINT64:
+		ReconstructGroupVectorTemplated<uint64_t>(group_values, min, mask, shift, entry_count, result);
+		break;
 	default:
 		throw InternalException("Invalid type for perfect aggregate HT group");
 	}
@@ -243,7 +268,7 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	}
 	// then construct the payloads
 	result.SetCardinality(entry_count);
-	RowOperationsState row_state(aggregate_allocator.GetAllocator());
+	RowOperationsState row_state(aggregate_allocator);
 	RowOperations::FinalizeStates(row_state, layout, addresses, result, grouping_columns);
 }
 
@@ -264,7 +289,7 @@ void PerfectAggregateHashTable::Destroy() {
 	idx_t count = 0;
 
 	// iterate over all initialised slots of the hash table
-	RowOperationsState row_state(aggregate_allocator.GetAllocator());
+	RowOperationsState row_state(aggregate_allocator);
 	data_ptr_t payload_ptr = data;
 	for (idx_t i = 0; i < total_groups; i++) {
 		if (group_is_set[i]) {

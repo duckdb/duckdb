@@ -84,6 +84,15 @@ struct DebugAsOfIEJoin {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct PreferRangeJoins {
+	static constexpr const char *Name = "prefer_range_joins";                                    // NOLINT
+	static constexpr const char *Description = "Force use of range joins with mixed predicates"; // NOLINT
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;                     // NOLINT
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct DebugWindowMode {
 	static constexpr const char *Name = "debug_window_mode";
 	static constexpr const char *Description = "DEBUG SETTING: switch window mode to use";
@@ -116,6 +125,15 @@ struct DefaultOrderSetting {
 struct DefaultNullOrderSetting {
 	static constexpr const char *Name = "default_null_order";
 	static constexpr const char *Description = "Null ordering used when none is specified (NULLS_FIRST or NULLS_LAST)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DisabledFileSystemsSetting {
+	static constexpr const char *Name = "disabled_filesystems";
+	static constexpr const char *Description = "Disable specific file systems preventing access (e.g. LocalFileSystem)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);

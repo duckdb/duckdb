@@ -286,3 +286,25 @@ class TestScalarUDF(object):
         assert rel.types[0] == data_type
         assert rel.fetchall()[0][0] == None
 
+    def test_udf_transaction_interaction(self):
+        def func(x: int) -> int:
+            return x
+
+        con = duckdb.connect()
+        rel = con.sql('select 42')
+        # Using fetchone keeps the result open, with a transaction
+        rel.fetchone()
+
+        # If we would allow a UDF to be created when a transaction is active
+        # then starting a new result-fetch would cancel the transaction
+        # which would corrupt our internal mechanism used to check if a UDF is already registered
+        # because that isn't transaction-aware
+        with pytest.raises(duckdb.InvalidInputException, match='This function can not be called with an active transaction!, commit or abort the existing one first'):
+            con.create_function('func', func)
+
+        # This would cancel the previous transaction, causing the function to no longer exist
+        rel.fetchall()
+
+        con.create_function('func', func)
+        res = con.sql('select func(5)').fetchall()
+        assert res == [(5,)]

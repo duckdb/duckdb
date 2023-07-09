@@ -212,13 +212,21 @@ expr_window_ <- function (window_function, partitions=list(), order_bys=list(), 
 #' rel2 <- rel_join(left, right, cond, "right")
 #' rel2 <- rel_join(left, right, cond, "left")
 #' rel2 <- rel_join(left, right, cond, "outer")
+
 rel_inner_join <- function(left, right, conds) {
-  rel_join(left, right, conds, "inner")
+  rel_join_(left, right, conds, "inner", "regular")
 }
 
-rel_join <- function(left, right, conds, join = c("inner", "left", "right", "outer", "cross", "semi", "anti")) {
+rel_join <- function(left, right, conds, join = "inner", ref_type = "regular") {
+    rel_join_(left, right, conds, join, ref_type)
+}
+
+rel_join_ <- function(left, right, conds,
+                      join = c("inner", "left", "right", "outer", "cross", "semi", "anti"),
+                      join_ref_type = c("regular", "natural", "cross", "positional", "asof")) {
   join <- match.arg(join)
-  rapi_rel_join(left, right, conds, join)
+  join_ref_type <- match.arg(join_ref_type)
+  rapi_rel_join(left, right, conds, join, join_ref_type)
 }
 
 #' UNION ALL on two DuckDB relation objects

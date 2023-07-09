@@ -1,7 +1,8 @@
 #define DUCKDB_EXTENSION_MAIN
 
-#include "duckdb.hpp"
 #include "parquet_extension.hpp"
+
+#include "duckdb.hpp"
 #include "parquet_metadata.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
@@ -124,10 +125,12 @@ struct ParquetWriteGlobalState : public GlobalFunctionData {
 
 struct ParquetWriteLocalState : public LocalFunctionData {
 	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
-	    : buffer(BufferAllocator::Get(context), types) {
+	    : buffer(context, types, ColumnDataAllocatorType::HYBRID) {
+		buffer.InitializeAppend(append_state);
 	}
 
 	ColumnDataCollection buffer;
+	ColumnDataAppendState append_state;
 };
 
 void ParquetOptions::Serialize(FieldWriter &writer) const {
@@ -172,7 +175,6 @@ public:
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
 		table_function.get_batch_info = ParquetGetBatchInfo;
-
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
 		table_function.filter_prune = true;
@@ -294,7 +296,7 @@ public:
 		ParquetOptions parquet_options(context);
 		for (auto &kv : input.named_parameters) {
 			auto loption = StringUtil::Lower(kv.first);
-			if (MultiFileReader::ParseOption(kv.first, kv.second, parquet_options.file_options)) {
+			if (MultiFileReader::ParseOption(kv.first, kv.second, parquet_options.file_options, context)) {
 				continue;
 			}
 			if (loption == "binary_as_string") {
@@ -303,9 +305,7 @@ public:
 				parquet_options.file_row_number = BooleanValue::Get(kv.second);
 			}
 		}
-		if (parquet_options.file_options.auto_detect_hive_partitioning) {
-			parquet_options.file_options.hive_partitioning = MultiFileReaderOptions::AutoDetectHivePartitioning(files);
-		}
+		parquet_options.file_options.AutoDetectHivePartitioning(files, context);
 		return ParquetScanBindInternal(context, std::move(files), return_types, names, parquet_options);
 	}
 
@@ -372,7 +372,7 @@ public:
 			}
 			MultiFileReader::InitializeReader(*reader, bind_data.parquet_options.file_options, bind_data.reader_bind,
 			                                  bind_data.types, bind_data.names, input.column_ids, input.filters,
-			                                  bind_data.files[0]);
+			                                  bind_data.files[0], context);
 		}
 
 		result->column_ids = input.column_ids;
@@ -519,6 +519,7 @@ public:
 	static void ParquetComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                         vector<unique_ptr<Expression>> &filters) {
 		auto &data = bind_data_p->Cast<ParquetReadBindData>();
+
 		auto reset_reader = MultiFileReader::ComplexFilterPushdown(context, data.files,
 		                                                           data.parquet_options.file_options, get, filters);
 		if (reset_reader) {
@@ -565,9 +566,10 @@ public:
 				shared_ptr<ParquetReader> reader;
 				try {
 					reader = make_shared<ParquetReader>(context, file, pq_options);
-					MultiFileReader::InitializeReader(
-					    *reader, bind_data.parquet_options.file_options, bind_data.reader_bind, bind_data.types,
-					    bind_data.names, parallel_state.column_ids, parallel_state.filters, bind_data.files.front());
+					MultiFileReader::InitializeReader(*reader, bind_data.parquet_options.file_options,
+					                                  bind_data.reader_bind, bind_data.types, bind_data.names,
+					                                  parallel_state.column_ids, parallel_state.filters,
+					                                  bind_data.files.front(), context);
 				} catch (...) {
 					parallel_lock.lock();
 					parallel_state.error_opening_file = true;
@@ -710,12 +712,10 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 
 		FieldID field_id;
 		if (field_id_value) {
-			if (field_id_value->type().id() != LogicalTypeId::INTEGER) {
-				throw BinderException("Expected an INTEGER in FIELD_IDS specification for column \"%s\"", col_name);
-			}
-			const uint32_t field_id_int = IntegerValue::Get(*field_id_value);
+			Value field_id_integer_value = field_id_value->DefaultCastAs(LogicalType::INTEGER);
+			const uint32_t field_id_int = IntegerValue::Get(field_id_integer_value);
 			if (!unique_field_ids.insert(field_id_int).second) {
-				throw BinderException("Duplicate field_id %s found in FIELD_IDS", field_id_value->ToString());
+				throw BinderException("Duplicate field_id %s found in FIELD_IDS", field_id_integer_value.ToString());
 			}
 			field_id = FieldID(field_id_int);
 		}
@@ -809,12 +809,12 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 	auto &local_state = lstate.Cast<ParquetWriteLocalState>();
 
 	// append data to the local (buffered) chunk collection
-	local_state.buffer.Append(input);
+	local_state.buffer.Append(local_state.append_state, input);
 	if (local_state.buffer.Count() > bind_data.row_group_size) {
 		// if the chunk collection exceeds a certain size we flush it to the parquet file
+		local_state.append_state.current_chunk_state.handles.clear();
 		global_state.writer->Flush(local_state.buffer);
-		// and reset the buffer
-		local_state.buffer.Reset();
+		local_state.buffer.InitializeAppend(local_state.append_state);
 	}
 }
 

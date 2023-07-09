@@ -1,0 +1,102 @@
+# name: test/sql/function/generic/test_case.test_slow
+# description: Test case statement
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+foreach type <numeric> DECIMAL(4,0) DECIMAL(9,0) DECIMAL(18,0) DECIMAL(38,0)
+
+statement ok
+DROP TABLE IF EXISTS test
+
+statement ok
+CREATE TABLE test (a ${type}, b ${type});
+
+statement ok
+INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
+
+query I
+SELECT CASE WHEN test.a=11 THEN b ELSE NULL END FROM test
+----
+22
+NULL
+NULL
+
+# constant case statements
+# all constant
+query I
+SELECT CASE WHEN 1=1 THEN 1 ELSE NULL END FROM test ORDER BY b
+----
+1
+1
+1
+
+# check + res_if_false constant
+query I
+SELECT CASE WHEN 1=1 THEN b ELSE NULL END FROM test ORDER BY b
+----
+21
+22
+22
+
+# check + res_if_true constant
+query I
+SELECT CASE WHEN 3>2 THEN NULL ELSE b+1 END FROM test ORDER BY b
+----
+NULL
+NULL
+NULL
+
+# check constant
+query I
+SELECT CASE WHEN 1=0 THEN b ELSE b+1 END FROM test ORDER BY b
+----
+22
+23
+23
+
+# res_if_true and res_if_false constant
+query I
+SELECT CASE WHEN b=22 THEN NULL ELSE 1 END FROM test ORDER BY b
+----
+1
+NULL
+NULL
+
+# res_if_false constant
+query I
+SELECT CASE WHEN b=22 THEN b+1 ELSE 1 END FROM test ORDER BY b
+----
+1
+23
+23
+
+# res_if_true constant
+query I
+SELECT CASE WHEN b=22 THEN NULL ELSE b+1 END FROM test ORDER BY b
+----
+22
+NULL
+NULL
+
+# fail case on types that can't be cast to boolean
+statement error
+SELECT CASE WHEN 'hello' THEN b ELSE a END FROM test
+
+# but only when cast cannot be performed
+query I
+SELECT CASE WHEN 'true' THEN NULL ELSE b+1 END FROM test ORDER BY b
+----
+NULL
+NULL
+NULL
+
+query I
+SELECT CASE WHEN 'false' THEN NULL ELSE b+1 END FROM test ORDER BY b
+----
+22
+23
+23
+
+endloop
