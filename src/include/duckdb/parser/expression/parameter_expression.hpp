@@ -10,7 +10,6 @@
 
 #include "duckdb/parser/parsed_expression.hpp"
 
-
 namespace duckdb {
 
 // Parameters come in three different types:
