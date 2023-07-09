@@ -255,7 +255,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 	    .def("rowcount", &PyConnectionWrapper::RowCount, R"DOCSTRING(
 			This read-only attribute specifies the number of rows that the last .execute*() produced (for DQL statements like SELECT) or affected (for DML statements like UPDATE or INSERT).
 			The attribute is -1 in case no .execute*() has been performed on the cursor or the rowcount of the last operation is cannot be determined by the interface.
-		)DOCSTRING")
+		)DOCSTRING",
+	         py::arg("connection") = py::none())
 	    .def("install_extension", &PyConnectionWrapper::InstallExtension, "Install an extension by name",
 	         py::arg("extension"), py::kw_only(), py::arg("force_install") = false, py::arg("connection") = py::none())
 	    .def("load_extension", &PyConnectionWrapper::LoadExtension, "Load an installed extension", py::arg("extension"),
