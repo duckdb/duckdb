@@ -7,6 +7,16 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/function/scalar/string_functions.hpp"
+
+/*	includes */
+#include <iostream>
+#include <iomanip>
+
+/*	debug */
+#define LINE std::cerr << __FUNCTION__ << ":" << __LINE__ << std::endl;
+#define VAR(var) std::cerr << std::boolalpha << __FUNCTION__ << ":" << __LINE__ << ":\t" << (#var) << " = [" << (var) << "]" << std::noboolalpha << std::endl;
+
 
 namespace duckdb {
 
@@ -18,7 +28,94 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
 }
 
-vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value &input, const string &name,
+static string GetOneFile(FileSystem& fs, const string& path, MultiFileReaderOptions &mfr_options){
+	mfr_options.input_file_pattern = path;
+
+	if (fs.FileExists(path)){
+		return path;
+	}
+
+	const vector<string> splits = StringUtil::Split(path, fs.PathSeparator());
+	D_ASSERT(!splits.empty());
+	string current = splits.front();
+
+	//find the path/directory until the first glob
+	for (idx_t i = 1; i < splits.size(); i++){
+		if (fs.HasGlob(splits[i])){
+			break;
+		}
+		current = fs.JoinPath(current, splits[i]);
+	}
+
+	//find a single file to parse the hive structure and complete the bind
+	vector<string> files;
+	while (files.empty()){
+		vector<string> directories;
+		fs.ListFiles(current, [&](const string &fname, bool is_directory) {
+			if (is_directory) {
+				directories.push_back(fs.JoinPath(current, fname));
+			} else {
+				files.push_back(fs.JoinPath(current, fname));
+			}
+		});
+		if (!files.empty()){
+			break;
+		}
+		if (directories.empty()){
+			//this is not necessarily an error, but would be inconvenient nonetheless
+			throw IOException("an empty directory was encountered: %s", current);
+		}
+		//continue with one directory (and ignore any other dirs)
+		current = directories.front(); //move
+	}
+	return files.front();
+}
+
+static void FindFiles(FileSystem &fs, const string &path, const string &glob, bool match_directory,
+                              vector<string> &result) {
+
+	fs.ListFiles(path, [&](const string &fname, bool is_directory) {
+		if (is_directory != match_directory) {
+			return;
+		}
+		if (LikeFun::Glob(fname.c_str(), fname.size(), glob.c_str(), glob.size())) {
+			result.push_back(fs.JoinPath(path, fname));
+		}
+	});
+}
+
+static vector<string> GetHivePartitions(const string& path) {
+	const vector<string> chunks = StringUtil::Split(path, FileSystem::PathSeparator());
+	
+	vector<string> partitions;
+	for (auto& chunk : chunks){
+		const vector<string> partition = StringUtil::Split(chunk, "=");
+		if (partition.size() == 2){
+			partitions.push_back(partition.front());
+		}
+	}
+	return partitions;
+}
+static string GetHivePartitionRoot(FileSystem &fs, const string& path) {
+	const vector<string> chunks = StringUtil::Split(path, FileSystem::PathSeparator());
+
+	string root;
+	for (auto& chunk : chunks){
+		const vector<string> partition = StringUtil::Split(chunk, "=");
+		if (partition.size() == 2){
+			break;
+		}
+		D_ASSERT(partition.size() == 1);
+		if (root.empty()) {
+			root = chunk;
+		} else {
+			root = fs.JoinPath(root, chunk);
+		}
+	}
+	return root;
+}
+
+vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value &input, const string &name, MultiFileReaderOptions &mfr_options,
                                             FileGlobOptions options) {
 	auto &config = DBConfig::GetConfig(context);
 	if (!config.options.enable_external_access) {
@@ -29,9 +126,13 @@ vector<string> MultiFileReader::GetFileList(ClientContext &context, const Value 
 	}
 	FileSystem &fs = FileSystem::GetFileSystem(context);
 	vector<string> files;
-	if (input.type().id() == LogicalTypeId::VARCHAR) {
-		auto file_name = StringValue::Get(input);
-		files = fs.GlobFiles(file_name, context, options);
+	if (input.type().id() == LogicalTypeId::VARCHAR) { 
+		const string path = StringValue::Get(input);
+		if (mfr_options.hive_partitioning && mfr_options.hive_file_filter) {
+			files = {GetOneFile(fs, path, mfr_options)};
+		} else {
+			files = fs.GlobFiles(path, context, options);
+		}
 	} else if (input.type().id() == LogicalTypeId::LIST) {
 		for (auto &val : ListValue::GetChildren(input)) {
 			if (val.IsNull()) {
@@ -103,6 +204,37 @@ bool MultiFileReader::ComplexFilterPushdown(ClientContext &context, vector<strin
 	unordered_map<string, column_t> column_map;
 	for (idx_t i = 0; i < get.column_ids.size(); i++) {
 		column_map.insert({get.names[get.column_ids[i]], i});
+	}
+
+	if (options.hive_partitioning && options.hive_file_filter && files.size() == 1) {
+		D_ASSERT(files.size() == 1);
+		FileSystem& fs = FileSystem::GetFileSystem(context);
+		const string partition_root = GetHivePartitionRoot(fs, files.front());
+		const vector<string> partitions = GetHivePartitions(files.front());
+		const vector<string> pattern = StringUtil::Split(options.input_file_pattern, FileSystem::PathSeparator());
+
+		//filter directories
+		files.clear();
+		files.push_back(partition_root);
+		vector<string> result;
+		for (idx_t i = 0; i < partitions.size(); i++) {
+			for (auto& file : files) {
+				if (true) {	//Match() the pattern
+					FindFiles(fs, file, "*", true, result);
+				}
+			}
+			HivePartitioning::ApplyFiltersToFileList(context, result, filters, column_map, get, options.hive_partitioning, options.filename);
+			files = std::move(result);
+		}
+
+		//find files in remaining directories
+		for (auto& file : files) {
+			if (true) {	//Match() the pattern
+				FindFiles(fs, file, "*", false, result);
+			}
+		}
+		files = std::move(result);
+		return true;	//TODO: check if filters were used
 	}
 
 	auto start_files = files.size();
@@ -346,6 +478,8 @@ void MultiFileReaderOptions::Serialize(Serializer &serializer) const {
 	writer.WriteField<bool>(auto_detect_hive_partitioning);
 	writer.WriteField<bool>(union_by_name);
 	writer.WriteField<bool>(hive_types_autocast);
+	writer.WriteField<bool>(hive_file_filter);
+	writer.WriteString(input_file_pattern);
 	// serialize hive_types_schema
 	const uint32_t schema_size = hive_types_schema.size();
 	writer.WriteField<uint32_t>(schema_size);
@@ -364,6 +498,8 @@ MultiFileReaderOptions MultiFileReaderOptions::Deserialize(Deserializer &source)
 	result.auto_detect_hive_partitioning = reader.ReadRequired<bool>();
 	result.union_by_name = reader.ReadRequired<bool>();
 	result.hive_types_autocast = reader.ReadRequired<bool>();
+	result.hive_file_filter = reader.ReadRequired<bool>();
+	result.input_file_pattern = reader.ReadRequired<string>();
 	// deserialize hive_types_schema
 	const uint32_t schema_size = reader.ReadRequired<uint32_t>();
 	for (idx_t i = 0; i < schema_size; i++) {
