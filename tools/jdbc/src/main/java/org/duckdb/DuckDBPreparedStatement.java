@@ -38,7 +38,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 	private DuckDBConnection conn;
 
-	private ByteBuffer stmt_ref = null;
+	private ByteBuffer hstmt_ref = null;
 	private DuckDBResultSet select_result = null;
 	private int update_result = 0;
 	private boolean returnsChangedRows = false;
@@ -89,9 +89,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		}
 
 		// In case the statement is reused, release old one first
-		if (stmt_ref != null) {
-			DuckDBNative.duckdb_jdbc_release(stmt_ref);
-			stmt_ref = null;
+		if (hstmt_ref != null) {
+			DuckDBNative.duckdb_jdbc_release(hstmt_ref);
+			hstmt_ref = null;
 		}
 
 		meta = null;
@@ -104,15 +104,15 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		update_result = 0;
 
 		try {
-			stmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql.getBytes(StandardCharsets.UTF_8));
-			meta = DuckDBNative.duckdb_jdbc_meta(stmt_ref);
+			hstmt_ref = DuckDBNative.duckdb_jdbc_prepare(conn.conn_ref, sql.getBytes(StandardCharsets.UTF_8));
+			meta = DuckDBNative.duckdb_jdbc_meta(hstmt_ref);
 			params = new Object[0];
 			returnsResultSet = meta.return_type.equals(StatementReturnType.QUERY_RESULT);
 			returnsChangedRows = meta.return_type.equals(StatementReturnType.CHANGED_ROWS);
 			returnsNothing = meta.return_type.equals(StatementReturnType.NOTHING);
 		}
 		catch (SQLException e) {
-			// Delete stmt_ref as it might already be allocated
+			// Delete hstmt_ref as it might already be allocated
 			close();
 			throw new SQLException(e);
 		}
@@ -123,7 +123,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		if (isClosed()) {
 			throw new SQLException("Statement was closed");
 		}
-		if (stmt_ref == null) {
+		if (hstmt_ref == null) {
 			throw new SQLException("Prepare something first");
 		}
 
@@ -135,11 +135,11 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 
 		try {
 			startTransaction();
-			result_ref = DuckDBNative.duckdb_jdbc_execute(stmt_ref, params);
+			result_ref = DuckDBNative.duckdb_jdbc_execute(hstmt_ref, params);
 			select_result = new DuckDBResultSet(this, meta, result_ref, conn.conn_ref);
 		}
 		catch (SQLException e) {
-			// Delete stmt_ref as it cannot be used anymore and 
+			// Delete hstmt_ref as it cannot be used anymore and
 			// result_ref as it might be allocated
 			if (select_result != null) {
 				select_result.close();
@@ -203,7 +203,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		if (isClosed()) {
 			throw new SQLException("Statement was closed");
 		}
-		if (stmt_ref == null || select_result == null) {
+		if (hstmt_ref == null || select_result == null) {
 			throw new SQLException("Prepare and execute something first");
 		}
 		return select_result.getMetaData();
@@ -214,7 +214,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		if (isClosed()) {
 			throw new SQLException("Statement was closed");
 		}
-		if (stmt_ref == null) {
+		if (hstmt_ref == null) {
 			throw new SQLException("Prepare something first");
 		}
 		return new DuckDBParameterMetaData(meta);
@@ -294,9 +294,9 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		if (select_result != null) {
 			select_result.close();
 		}
-		if (stmt_ref != null) {
-			DuckDBNative.duckdb_jdbc_release(stmt_ref);
-			stmt_ref = null;
+		if (hstmt_ref != null) {
+			DuckDBNative.duckdb_jdbc_release(hstmt_ref);
+			hstmt_ref = null;
 		}
 		conn = null; // we use this as a check for closed-ness
 	}
@@ -368,7 +368,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		if (isClosed()) {
 			throw new SQLException("Statement was closed");
 		}
-		if (stmt_ref == null) {
+		if (hstmt_ref == null) {
 			throw new SQLException("Prepare something first");
 		}
 
@@ -383,7 +383,7 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 		if (isClosed()) {
 			throw new SQLException("Statement was closed");
 		}
-		if (stmt_ref == null) {
+		if (hstmt_ref == null) {
 			throw new SQLException("Prepare something first");
 		}
 

@@ -55,13 +55,12 @@ void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 		DATA_CHECK(hstmt, i + 1, expected_data[i].second.c_str());
 	}
 
-	// Issue DATA_TYPE returning 0 for all types in SQLGetTypeInfo for ODBC on Linux #7653
+	// Test SQLGetTypeInfo with SQL_ALL_TYPES and data_type
 	SQLINTEGER data_type;
-	SQLLEN row_count;
-	EXECUTE_AND_CHECK("SQLGetTypeInfo", SQLGetTypeInfo, hstmt, SQL_ALL_TYPES);
-	EXECUTE_AND_CHECK("SQLBindCol", SQLBindCol, hstmt, 2, SQL_C_SHORT, (char*)&data_type, sizeof(data_type), nullptr);
-	EXECUTE_AND_CHECK("SQLRowCount", SQLRowCount, hstmt, &row_count);
-	EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
+	SQLLEN row_count = 0;
+	SQLLEN len_or_ind_ptr;
+	EXECUTE_AND_CHECK("SQLBindCol", SQLBindCol, hstmt, 2, SQL_INTEGER, &data_type, sizeof(data_type), &len_or_ind_ptr);
+	EXECUTE_AND_CHECK("SQLGetTypeInfo(SQL_ALL_TYPES)", SQLGetTypeInfo, hstmt, SQL_ALL_TYPES);
 
 	SQLINTEGER data_types[] = {
 	    SQL_CHAR,
@@ -75,7 +74,7 @@ void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 	    SQL_TYPE_TIMESTAMP,
 	    SQL_DECIMAL,
 	    SQL_NUMERIC,
-		SQL_FLOAT,
+	    SQL_FLOAT,
 	    SQL_DOUBLE,
 	    SQL_VARCHAR,
 	    SQL_VARBINARY,
@@ -94,12 +93,28 @@ void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 	    SQL_INTERVAL_MINUTE_TO_SECOND,
 	};
 
-//	REQUIRE(row_count == sizeof(data_types) / sizeof(SQLINTEGER));
-	for (int i = 0; i < 27; i++) {
-		std::cout << data_type << std::endl;
-		REQUIRE(data_type == data_types[i]);
-		EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
+	while (SQLFetch(hstmt) != SQL_NO_DATA) {
+		REQUIRE(data_type == data_types[row_count]);
+		row_count++;
 	}
+
+	// When type is not supported, SQLGetTypeInfo returns SQL_SUCCESS_WITH_INFO
+	EXECUTE_AND_CHECK("SQLBindCol", SQLBindCol, hstmt, 2, SQL_C_SHORT, &data_type, sizeof(data_type), &len_or_ind_ptr);
+	EXECUTE_AND_CHECK("SQLGetTypeInfo(SQL_ALL_TYPES)", SQLGetTypeInfo, hstmt, SQL_ALL_TYPES);
+
+	SQLRETURN ret;
+	while ((ret = SQLFetch(hstmt)) != SQL_NO_DATA) {
+		std::string state, message;
+		REQUIRE(ret == SQL_SUCCESS_WITH_INFO);
+		ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
+		REQUIRE(state == "07006");
+		REQUIRE(message == "ODBC_DuckDB->GetDataStmtResult\n"
+		                   "Unsupported type");
+		row_count++;
+	}
+
+	// unbind column
+	EXECUTE_AND_CHECK("SQLBindCol", SQLBindCol, hstmt, 2, SQL_C_SHORT, nullptr, 0, nullptr);
 }
 
 static void TestSQLTables(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
@@ -131,7 +146,15 @@ static void TestSQLTables(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_ma
 		if (ret == SQL_NO_DATA) {
 			break;
 		}
-		ODBC_CHECK(ret, "SQLFetch");
+		if (ret == SQL_SUCCESS_WITH_INFO) {
+			std::string state, message;
+			ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
+			REQUIRE(state == "07006");
+			REQUIRE(message == "ODBC_DuckDB->GetInternalValue\n"
+			                   "Invalid Input Error: Failed to cast value: Could not convert string 'main' to INT32");
+		} else {
+			ODBC_CHECK(ret, "SQLFetch");
+		}
 		fetch_count++;
 
 		DATA_CHECK(hstmt, 1, "memory");
@@ -207,7 +230,17 @@ static void TestSQLColumns(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_m
 	    {"test_view", "id", "13", "INTEGER"},       {"test_view", "t", "25", "VARCHAR"}};
 
 	for (int i = 0; i < expected_data.size(); i++) {
-		EXECUTE_AND_CHECK("SQLFetch", SQLFetch, hstmt);
+		SQLRETURN ret = SQLFetch(hstmt);
+		if (ret == SQL_SUCCESS_WITH_INFO) {
+			std::string state, message;
+			ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
+			REQUIRE(state == "07006");
+			REQUIRE(message == "ODBC_DuckDB->GetInternalValue\nInvalid Input Error: Failed to cast value: Could not "
+			                   "convert string 'main' to INT32");
+			ret = SQL_SUCCESS;
+		} else {
+			ODBC_CHECK(ret, "SQLFetch");
+		}
 
 		auto &entry = expected_data[i];
 		DATA_CHECK(hstmt, 1, nullptr);
