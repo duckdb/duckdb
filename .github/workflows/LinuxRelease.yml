@@ -228,7 +228,6 @@ jobs:
           signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
           aarch64_cross_compile: 1
           run_tests: 0 # Cannot run tests here due to cross-compiling
-          openssl_path: ${{ env.VCPKG_ROOT }}/installed/arm64-linux
 
       - uses: actions/upload-artifact@v3
         with:
