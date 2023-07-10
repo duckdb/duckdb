@@ -178,7 +178,7 @@ void CSVSniffer::DetectTypes() {
 		candidate->Reset();
 
 		// Parse chunk and read csv with info candidate
-		vector<vector<Value>> values(STANDARD_VECTOR_SIZE);
+		vector<vector<Value>> values(options.sample_chunk_size);
 		candidate->SniffValue(values);
 		idx_t row_idx = 0;
 		if (values.size() > 1 && (!options.has_header || (options.has_header && options.header))) {

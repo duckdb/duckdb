@@ -61,7 +61,7 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<CSVStateMachi
 void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<CSVStateMachine> state_machine, idx_t &rows_read,
                                          idx_t &best_consistent_rows, idx_t &prev_padding_count,
                                          idx_t prev_column_count) {
-	vector<idx_t> sniffed_column_counts(STANDARD_VECTOR_SIZE);
+	vector<idx_t> sniffed_column_counts(options.sample_chunk_size);
 	state_machine->SniffDialect(sniffed_column_counts);
 
 	idx_t start_row = options.skip_rows;

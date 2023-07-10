@@ -78,7 +78,7 @@ void CSVStateMachine::Reset() {
 void CSVStateMachine::SniffDialect(vector<idx_t> &sniffed_column_counts) {
 	idx_t cur_rows = 0;
 	idx_t column_count = 1;
-	D_ASSERT(sniffed_column_counts.size() == STANDARD_VECTOR_SIZE);
+	D_ASSERT(sniffed_column_counts.size() == options.sample_chunk_size);
 
 	CSVState state {CSVState::STANDARD};
 	CSVState previous_state;
@@ -114,7 +114,7 @@ void CSVStateMachine::SniffDialect(vector<idx_t> &sniffed_column_counts) {
 		single_record_separator = ((state != CSVState::RECORD_SEPARATOR && carriage_return) ||
 		                           (state == CSVState::RECORD_SEPARATOR && !carriage_return)) ||
 		                          single_record_separator;
-		if (cur_rows >= STANDARD_VECTOR_SIZE) {
+		if (cur_rows >= options.sample_chunk_size) {
 			// We sniffed enough rows
 			break;
 		}
@@ -122,7 +122,7 @@ void CSVStateMachine::SniffDialect(vector<idx_t> &sniffed_column_counts) {
 	}
 	bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
 	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
-	if (cur_rows < STANDARD_VECTOR_SIZE && !empty_line) {
+	if (cur_rows < options.sample_chunk_size && !empty_line) {
 		sniffed_column_counts[cur_rows++] = column_count;
 	}
 	NewLineIdentifier suggested_newline;
@@ -143,7 +143,7 @@ void CSVStateMachine::SniffDialect(vector<idx_t> &sniffed_column_counts) {
 			cur_rows = 0;
 		}
 	}
-	sniffed_column_counts.erase(sniffed_column_counts.end() - (STANDARD_VECTOR_SIZE - cur_rows),
+	sniffed_column_counts.erase(sniffed_column_counts.end() - (options.sample_chunk_size - cur_rows),
 	                            sniffed_column_counts.end());
 }
 void VerifyUTF8(CSVReaderOptions &options, idx_t linenr, string &value) {
@@ -161,7 +161,7 @@ void CSVStateMachine::SniffValue(vector<vector<Value>> &sniffed_value) {
 	CSVState state {CSVState::STANDARD};
 	CSVState previous_state;
 	idx_t cur_row = 0;
-	D_ASSERT(sniffed_value.size() == STANDARD_VECTOR_SIZE);
+	D_ASSERT(sniffed_value.size() == options.sample_chunk_size);
 	string value;
 	while (!csv_buffer_iterator.Finished()) {
 		previous_state = state;
@@ -186,7 +186,7 @@ void CSVStateMachine::SniffValue(vector<vector<Value>> &sniffed_value) {
 		cur_row += previous_state == CSVState::RECORD_SEPARATOR && !empty_line;
 		// It means our carriage return is actually a record separator
 		cur_row += state != CSVState::RECORD_SEPARATOR && carriage_return;
-		if (cur_row >= STANDARD_VECTOR_SIZE) {
+		if (cur_row >= options.sample_chunk_size) {
 			// We sniffed enough rows
 			break;
 		}
@@ -194,12 +194,12 @@ void CSVStateMachine::SniffValue(vector<vector<Value>> &sniffed_value) {
 	}
 	bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
 	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
-	if (cur_row < STANDARD_VECTOR_SIZE && !empty_line) {
+	if (cur_row < options.sample_chunk_size && !empty_line) {
 		VerifyUTF8(options, cur_row, value);
 
 		sniffed_value[cur_row++].push_back(Value(value));
 	}
-	sniffed_value.erase(sniffed_value.end() - (STANDARD_VECTOR_SIZE - cur_row), sniffed_value.end());
+	sniffed_value.erase(sniffed_value.end() - (options.sample_chunk_size - cur_row), sniffed_value.end());
 	// Remove dirty start lines
 	sniffed_value.erase(sniffed_value.begin(), sniffed_value.begin() + start_row);
 }
@@ -239,7 +239,7 @@ void CSVStateMachine::Parse(DataChunk &parse_chunk) {
 		cur_row += state != CSVState::RECORD_SEPARATOR && carriage_return;
 		cur_col -= cur_col * (state != CSVState::RECORD_SEPARATOR && carriage_return);
 
-		if (cur_row >= STANDARD_VECTOR_SIZE) {
+		if (cur_row >= options.sample_chunk_size) {
 			// We sniffed enough rows
 			break;
 		}
@@ -247,7 +247,7 @@ void CSVStateMachine::Parse(DataChunk &parse_chunk) {
 	}
 	bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
 	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
-	if (cur_row < STANDARD_VECTOR_SIZE && !empty_line) {
+	if (cur_row < options.sample_chunk_size && !empty_line) {
 		VerifyUTF8(options, cur_row, value);
 		auto &v = parse_chunk.data[cur_col++];
 		auto parse_data = FlatVector::GetData<string_t>(v);
