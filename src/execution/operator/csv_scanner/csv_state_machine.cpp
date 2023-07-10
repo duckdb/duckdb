@@ -177,7 +177,12 @@ void CSVStateMachine::SniffValue(vector<vector<Value>> &sniffed_value) {
 			// Started a new value
 			// Check if it's UTF-8
 			VerifyUTF8(options, cur_row, value);
-			sniffed_value[cur_row].push_back(Value(value));
+			if (value.empty()){
+				// We set empty == null value
+				sniffed_value[cur_row].push_back(Value(LogicalType::VARCHAR));
+			} else{
+				sniffed_value[cur_row].push_back(Value(value));
+			}
 			value = "";
 		}
 		if (state == CSVState::STANDARD || (state == CSVState::QUOTED && previous_state == CSVState::QUOTED)) {
