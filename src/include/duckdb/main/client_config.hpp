@@ -75,6 +75,8 @@ struct ClientConfig {
 	bool force_no_cross_product = false;
 	//! Force use of IEJoin to implement AsOfJoin, used for testing
 	bool force_asof_iejoin = false;
+	//! Use range joins for inequalities, even if there are equality predicates
+	bool prefer_range_joins = false;
 	//! If this context should also try to use the available replacement scans
 	//! True by default
 	bool use_replacement_scans = true;

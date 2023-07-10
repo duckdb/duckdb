@@ -98,7 +98,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: ./.github/actions/ubuntu_16_setup
+      - uses: ./.github/actions/ubuntu_18_setup
         with:
           ccache: 1
           aarch64_cross_compile: 1
