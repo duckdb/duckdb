@@ -195,7 +195,8 @@ void CSVSniffer::DetectTypes() {
 					// try formatting for date types if the user did not specify one and it starts with numeric values.
 					string separator;
 					bool has_format_is_set = candidate->options.has_format.find(sql_type.id())->second;
-					if (has_format_candidates.count(sql_type.id()) && !has_format_is_set && !dummy_val.IsNull() &&
+					if (has_format_candidates.count(sql_type.id()) &&
+					    (!has_format_is_set || format_candidates[sql_type.id()].size() > 1) && !dummy_val.IsNull() &&
 					    StartsWithNumericDate(separator, StringValue::Get(dummy_val))) {
 						// generate date format candidates the first time through
 						auto &type_format_candidates = format_candidates[sql_type.id()];

@@ -253,6 +253,7 @@ void CSVStateMachine::Parse(DataChunk &parse_chunk) {
 		auto parse_data = FlatVector::GetData<string_t>(v);
 		parse_data[cur_row] = StringVector::AddStringOrBlob(v, string_t(value));
 	}
+	parse_chunk.SetCardinality(cur_row);
 }
 
 } // namespace duckdb
