@@ -134,7 +134,7 @@ struct MultiFileReader {
 		    MultiFileReader::BindOptions(options.file_options, result.files, union_col_types, union_col_names);
 		names = union_col_names;
 		return_types = union_col_types;
-		//		result.Initialize(result.union_readers[0]);
+		result.Initialize(result.union_readers[0]);
 		D_ASSERT(names.size() == return_types.size());
 		return bind_data;
 	}

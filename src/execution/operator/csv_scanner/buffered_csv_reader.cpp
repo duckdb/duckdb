@@ -7,6 +7,7 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -41,9 +42,22 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, CS
 }
 
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
-	return_types = requested_types;
-	ResetBuffer();
-	SkipRowsAndReadHeader(options.skip_rows, options.header);
+	if (options.auto_detect && requested_types.empty()) {
+		// This is required for the sniffer to work on Union By Name
+		auto buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), options);
+		CSVSniffer sniffer(options, buffer_manager);
+		auto sniffer_result = sniffer.SniffCSV();
+		return_types = sniffer_result.return_types;
+		names = sniffer_result.names;
+		options = sniffer_result.options;
+		if (return_types.empty()) {
+			throw InvalidInputException("Failed to detect column types from CSV: is the file a valid CSV file?");
+		}
+	} else {
+		return_types = requested_types;
+		ResetBuffer();
+		SkipRowsAndReadHeader(options.skip_rows, options.header);
+	}
 	InitParseChunk(return_types.size());
 }
 
