@@ -1,4 +1,5 @@
 # cursor description
+import duckdb
 from datetime import datetime, date
 from pytest import mark, raises
 from duckdb import InvalidInputException
@@ -29,7 +30,7 @@ class TestCursorDescription(object):
         assert duckdb_empty_cursor.description is None
 
     def test_rowcount(self, duckdb_cursor):
-        ex = duckdb_cursor.execute
+        ex = duckdb.connect().execute
         assert ex('select 1').rowcount == -1  # not materialized
 
         assert ex('create table test (id int)').rowcount == -1  # does not update or return rows
