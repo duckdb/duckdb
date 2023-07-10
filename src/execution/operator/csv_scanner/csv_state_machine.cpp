@@ -177,10 +177,10 @@ void CSVStateMachine::SniffValue(vector<vector<Value>> &sniffed_value) {
 			// Started a new value
 			// Check if it's UTF-8
 			VerifyUTF8(options, cur_row, value);
-			if (value.empty()){
+			if (value.empty() || value == options.null_str) {
 				// We set empty == null value
 				sniffed_value[cur_row].push_back(Value(LogicalType::VARCHAR));
-			} else{
+			} else {
 				sniffed_value[cur_row].push_back(Value(value));
 			}
 			value = "";
@@ -205,10 +205,7 @@ void CSVStateMachine::SniffValue(vector<vector<Value>> &sniffed_value) {
 		sniffed_value[cur_row++].push_back(Value(value));
 	}
 	sniffed_value.erase(sniffed_value.end() - (options.sample_chunk_size - cur_row), sniffed_value.end());
-	// Remove dirty start lines
-	sniffed_value.erase(sniffed_value.begin(), sniffed_value.begin() + start_row);
 }
-
 void CSVStateMachine::Parse(DataChunk &parse_chunk) {
 	CSVState state {CSVState::STANDARD};
 	CSVState previous_state;
@@ -227,7 +224,7 @@ void CSVStateMachine::Parse(DataChunk &parse_chunk) {
 		    (previous_state == CSVState::RECORD_SEPARATOR && !empty_line) ||
 		    (state != CSVState::RECORD_SEPARATOR && carriage_return)) {
 			// Started a new value
-			// Check if it's UTF-8
+			// Check if it's UTF-8 (Or not?)
 			VerifyUTF8(options, cur_row, value);
 			auto &v = parse_chunk.data[cur_col++];
 			auto parse_data = FlatVector::GetData<string_t>(v);
