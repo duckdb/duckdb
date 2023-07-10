@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/bitpacking/bitpacking_simple_hugeint.test
-# description: Test storage bitpacking, but simple
+# description: Test storage bitpacking, but simple and for hugeints
 # group: [bitpacking]
 
 # load the DB from disk
@@ -8,7 +8,7 @@ load __TEST_DIR__/test_bitpacking.db
 statement ok
 PRAGMA force_compression='bitpacking'
 
-foreach bitpacking_mode constant
+foreach bitpacking_mode delta_for for constant_delta constant
 
 statement ok
 PRAGMA force_bitpacking_mode='${bitpacking_mode}'
@@ -18,35 +18,22 @@ statement ok
 CREATE TABLE test (id VARCHAR, a HUGEINT);
 
 # Insert multiple ranges so that each method can be used on at least on the the ranges
+# bit-width > 96
 statement ok
-INSERT INTO test SELECT i::VARCHAR, i FROM range(0, 32) tbl(i);
-INSERT INTO test SELECT i::VARCHAR, i::HUGEINT + 800000000000000000000000000 FROM range(0, 32) tbl(i);
-# INSERT INTO test values ('a', 6871947673478877043099);
-# INSERT INTO test SELECT i::VARCHAR, i FROM range(0,100) tbl(i);
-# INSERT INTO test SELECT i::VARCHAR, i FROM range(0,100) tbl(i);
-# INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0,100) tbl(i);
+INSERT INTO test SELECT i::VARCHAR, -i::HUGEINT + -1234567891011121314151617180000::HUGEINT FROM range(0, 10000) tbl(i);
+INSERT INTO test SELECT i::VARCHAR, 13371337 FROM range(0,10000) tbl(i);
 
 statement ok
 checkpoint
 
 query I
-SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT';
-----
-BitPacking
-
-query I
-select a from test;
-----
-hi
-
-query I
 select a from test limit 5;
 ----
-0
--1
--2
--3
--4
+-1234567891011121314151617180000
+-1234567891011121314151617180001
+-1234567891011121314151617180002
+-1234567891011121314151617180003
+-1234567891011121314151617180004
 
 query I
 select a from test limit 5 offset 12000;
@@ -58,9 +45,9 @@ select a from test limit 5 offset 12000;
 13371337
 
 query I
-select avg(a) from test;
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'HUGEINT';
 ----
-6683168.75
+BitPacking
 
 statement ok
 DROP TABLE test;
