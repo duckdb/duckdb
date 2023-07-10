@@ -228,8 +228,13 @@ void CSVStateMachine::Parse(DataChunk &parse_chunk) {
 			VerifyUTF8(options, cur_row, value);
 			auto &v = parse_chunk.data[cur_col++];
 			auto parse_data = FlatVector::GetData<string_t>(v);
-			parse_data[cur_row] = StringVector::AddStringOrBlob(v, string_t(value));
-			value = current_char;
+			auto &validity_mask = FlatVector::Validity(v);
+			if (value.empty()) {
+				validity_mask.SetInvalid(cur_row);
+			} else {
+				parse_data[cur_row] = StringVector::AddStringOrBlob(v, string_t(value));
+			}
+			value = "";
 		}
 		if (state == CSVState::STANDARD) {
 			value += current_char;

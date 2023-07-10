@@ -6,6 +6,7 @@
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -147,8 +148,14 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	if (!bind_data->single_threaded && options.auto_detect) {
 		options.file_path = bind_data->files[0];
 		options.name_list = expected_names;
-		auto initial_reader = make_uniq<BufferedCSVReader>(context, options, expected_types);
+		auto file_handle = BaseCSVReader::OpenCSV(context, options);
+		auto buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), options);
+		CSVSniffer sniffer(options, buffer_manager);
+		auto sniffer_result = sniffer.SniffCSV();
+		options = sniffer_result.options;
+		auto initial_reader = make_uniq<BufferedCSVReader>(context, options, sniffer_result.return_types);
 		options = initial_reader->options;
+		initial_reader->names = sniffer_result.names;
 	}
 	return std::move(bind_data);
 }
