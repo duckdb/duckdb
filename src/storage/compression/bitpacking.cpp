@@ -1,5 +1,6 @@
 #include "duckdb/common/bitpacking.hpp"
 
+#include "duckdb/common/bitpacking_hugeint.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -237,7 +238,9 @@ public:
 
 		if (can_do_delta) {
 			if (maximum_delta == minimum_delta && mode != BitpackingMode::FOR && mode != BitpackingMode::DELTA_FOR) {
-				idx_t frame_of_reference = static_cast<idx_t>(compression_buffer[0]);
+				// FOR needs to be T (considering hugeint is bigger than idx_t)
+				T frame_of_reference = compression_buffer[0];
+
 				OP::WriteConstantDelta(maximum_delta, static_cast<T>(frame_of_reference), compression_buffer_idx,
 				                       compression_buffer, compression_buffer_validity, data_ptr);
 				total_size += sizeof(T) + sizeof(T) + sizeof(bitpacking_metadata_encoded_t);
@@ -959,6 +962,52 @@ bool BitpackingFun::TypeIsSupported(PhysicalType type) {
 	default:
 		return false;
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// (Un)pack Group
+//===--------------------------------------------------------------------===//
+
+template <>
+void BitpackingPrimitives::UnPackGroupImpl(uint8_t *dst, data_ptr_t src, bitpacking_width_t width) {
+	duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint8_t *>(src), dst, static_cast<uint32_t>(width));
+}
+template <>
+void BitpackingPrimitives::UnPackGroupImpl(uint16_t *dst, data_ptr_t src, bitpacking_width_t width) {
+	duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint16_t *>(src), dst, static_cast<uint32_t>(width));
+}
+template <>
+void BitpackingPrimitives::UnPackGroupImpl(uint32_t *dst, data_ptr_t src, bitpacking_width_t width) {
+	duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), dst, static_cast<uint32_t>(width));
+}
+template <>
+void BitpackingPrimitives::UnPackGroupImpl(uint64_t *dst, data_ptr_t src, bitpacking_width_t width) {
+	duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), dst, static_cast<uint32_t>(width));
+}
+template <>
+void BitpackingPrimitives::UnPackGroupImpl(hugeint_t *dst, data_ptr_t src, bitpacking_width_t width) {
+	HugeIntPacker::Unpack(reinterpret_cast<const uint32_t *>(src), dst, width);
+}
+
+template <>
+void BitpackingPrimitives::PackGroupImpl(data_ptr_t dst, uint8_t *values, bitpacking_width_t width) {
+	duckdb_fastpforlib::fastpack(values, reinterpret_cast<uint8_t *>(dst), static_cast<uint32_t>(width));
+}
+template <>
+void BitpackingPrimitives::PackGroupImpl(data_ptr_t dst, uint16_t *values, bitpacking_width_t width) {
+	duckdb_fastpforlib::fastpack(values, reinterpret_cast<uint16_t *>(dst), static_cast<uint32_t>(width));
+}
+template <>
+void BitpackingPrimitives::PackGroupImpl(data_ptr_t dst, uint32_t *values, bitpacking_width_t width) {
+	duckdb_fastpforlib::fastpack(values, reinterpret_cast<uint32_t *>(dst), static_cast<uint32_t>(width));
+}
+template <>
+void BitpackingPrimitives::PackGroupImpl(data_ptr_t dst, uint64_t *values, bitpacking_width_t width) {
+	duckdb_fastpforlib::fastpack(values, reinterpret_cast<uint32_t *>(dst), static_cast<uint32_t>(width));
+}
+template <>
+void BitpackingPrimitives::PackGroupImpl(data_ptr_t dst, hugeint_t *values, bitpacking_width_t width) {
+	HugeIntPacker::Pack(values, reinterpret_cast<uint32_t *>(dst), width);
 }
 
 } // namespace duckdb
