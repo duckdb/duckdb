@@ -1,0 +1,42 @@
+# name: test/sql/copy/partitioned/hive_file_filter.test
+# description: use filters to prune branches in file partitions, IT COULD BE SLOW!
+# group: [partitioned]
+
+require parquet
+
+# statement ok
+# PRAGMA enable_verification
+
+# create a table
+statement ok
+CREATE TABLE t(year INTEGER, month INTEGER, day INTEGER, val INTEGER);
+
+foreach _year 1 2
+
+foreach _month 1 2 3 4 5 6 7 8 9 10 11 12
+
+foreach _day 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30
+
+statement ok
+INSERT INTO t VALUES(${_year},${_month},${_day},${_year}*${_month}*${_day});
+
+endloop
+
+endloop
+
+endloop
+
+# create hive partition
+statement ok
+COPY t TO '__TEST_DIR__/partition' (FORMAT PARQUET, PARTITION_BY(year,month,day));
+
+# count amount of files (_year * _month * _day)
+query I
+SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/partition/**');
+----
+720
+
+query I
+SELECT val FROM read_parquet('__TEST_DIR__/partition/**', hive_partitioning=1) where year=1 and month=10 and day=16;
+----
+160
