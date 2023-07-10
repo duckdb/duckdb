@@ -27,6 +27,9 @@ inputs:
   static_link_build:
     description: 'Links duckdb statically to the built extensions'
     default: 1
+  no_static_linking:
+    description: 'Disables linking extensions (that support it) into DuckDB for testing'
+    default: 0
   vcpkg_build:
     description: 'Installs vcpkg and pass its toolchain to CMakes'
     default: 1
@@ -127,6 +130,7 @@ runs:
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
         OSX_BUILD_ARCH: ${{ inputs.osx_arch }}
+        DISABLE_BUILTIN_EXTENSIONS: ${{ inputs.no_static_linking}}
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
       run: |
@@ -140,7 +144,7 @@ runs:
         make
 
     - name: Test statically linked extensions
-      if: ${{ inputs.run_tests == 1 }}
+      if: ${{ inputs.run_tests == 1 && inputs.no_static_linking == 0}}
       shell: bash
       run: |
          ${{ inputs.unittest_script }}

@@ -12,10 +12,8 @@ if(POLICY CMP0054)
   cmake_policy(SET CMP0054 NEW)
 endif()
 
-if(VCPKG_BUILD)
-  if(POLICY CMP0063)
-    cmake_policy(SET CMP0063 NEW)
-  endif()
+if(POLICY CMP0063)
+  cmake_policy(SET CMP0063 NEW)
 endif()
 
 project(DuckDB)
