@@ -14,6 +14,7 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 
 namespace duckdb {
+
 class BlockHandle;
 class BufferHandle;
 
@@ -74,6 +75,18 @@ private:
 	hash_t value;
 };
 
+struct MaterializedAggregateData {
+	explicit MaterializedAggregateData(unique_ptr<TupleDataCollection> data_collection_p,
+	                                   shared_ptr<ArenaAllocator> allocator)
+	    : data_collection(std::move(data_collection_p)) {
+		D_ASSERT(data_collection);
+		D_ASSERT(allocator);
+		allocators.emplace_back(std::move(allocator));
+	}
+	unique_ptr<TupleDataCollection> data_collection;
+	vector<shared_ptr<ArenaAllocator>> allocators;
+};
+
 class GroupedAggregateHashTable : public BaseAggregateHashTable {
 public:
 	GroupedAggregateHashTable(ClientContext &context, Allocator &allocator, vector<LogicalType> group_types,
@@ -125,9 +138,8 @@ public:
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out);
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses_out);
 
-	//! Gets the partitioned data and aggregate allocator of the HT (transfers ownership)
-	void GetDataOwnership(unique_ptr<PartitionedTupleData> &partitioned_data,
-	                      shared_ptr<ArenaAllocator> &aggregate_allocator);
+	//! Acquires the partitioned data from this HT
+	vector<MaterializedAggregateData> AcquireData();
 	//! Resets the pointer table of the HT to all 0's
 	void ClearPointerTable();
 

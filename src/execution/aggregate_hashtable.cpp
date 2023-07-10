@@ -63,19 +63,20 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 	partitioned_data->InitializeAppendState(state.append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 }
 
-void GroupedAggregateHashTable::GetDataOwnership(unique_ptr<PartitionedTupleData> &partitioned_data_p,
-                                                 shared_ptr<ArenaAllocator> &aggregate_allocator_p) {
+vector<MaterializedAggregateData> GroupedAggregateHashTable::AcquireData() {
 	D_ASSERT(partitioned_data);
 	D_ASSERT(aggregate_allocator);
-
 	UnpinData();
-	partitioned_data_p = std::move(partitioned_data);
-	InitializePartitionedData();
-	sink_count = 0;
-	D_ASSERT(Count() == 0);
 
-	aggregate_allocator_p = std::move(aggregate_allocator);
-	aggregate_allocator = make_shared<ArenaAllocator>(allocator);
+	vector<MaterializedAggregateData> result;
+	for (auto &partition : partitioned_data->GetPartitions()) {
+		result.emplace_back(std::move(partition), aggregate_allocator);
+	}
+
+	partitioned_data.reset();
+	InitializePartitionedData();
+
+	return result;
 }
 
 GroupedAggregateHashTable::~GroupedAggregateHashTable() {

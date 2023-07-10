@@ -13,9 +13,10 @@
 
 namespace duckdb {
 
-class Executor;
-class Pipeline;
-class Task;
+class GroupedAggregateHashTable;
+struct AggregatePartition;
+struct MaterializedAggregateData;
+enum class RadixHTAbandonType : uint8_t;
 
 class RadixPartitionedHashTable {
 public:
@@ -49,13 +50,20 @@ public:
 	                         OperatorSourceInput &input) const;
 
 	static void SetMultiScan(GlobalSinkState &sink);
+	// TODO: capacity
+	unique_ptr<GroupedAggregateHashTable> CreateHT(ClientContext &context, const idx_t radix_bits) const;
 
 private:
 	idx_t CountInternal(GlobalSinkState &sink) const;
 	void SetGroupingValues();
 	void PopulateGroupChunk(DataChunk &group_chunk, DataChunk &input_chunk) const;
 
-	void CombineInternal(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const;
+	bool CombineInternal(ClientContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+	                     const RadixHTAbandonType local_abandon_type) const;
+	bool ShouldCombine(ClientContext &context, GlobalSinkState &gstate_p, const idx_t sink_partition_idx,
+	                   const RadixHTAbandonType local_abandon_type) const;
+	void CombinePartition(AggregatePartition &partition, vector<MaterializedAggregateData> &uncombined_data) const;
+
 	static bool RequiresRepartitioning(ClientContext &context, GlobalSinkState &gstate);
 };
 
