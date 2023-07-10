@@ -97,7 +97,12 @@ void CSVSniffer::DetectHeader() {
 	bool first_row_consistent = true;
 	// check if header row is all null and/or consistent with detected column data types
 	bool first_row_nulls = true;
-
+	if (best_sql_types_candidates.size() != best_header_row.size()) {
+		// Something went wrong in the auto-detection
+		throw InvalidInputException(
+		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
+		    options.file_path);
+	}
 	for (idx_t col = 0; col < best_sql_types_candidates.size(); col++) {
 		auto dummy_val = best_header_row[col];
 		if (!dummy_val.IsNull()) {

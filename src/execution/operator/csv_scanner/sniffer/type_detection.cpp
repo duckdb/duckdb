@@ -208,7 +208,7 @@ void CSVSniffer::DetectTypes() {
 								const auto &format_template_list = entry->second;
 								for (const auto &t : format_template_list) {
 									const auto format_string = GenerateDateFormat(separator, t);
-										type_format_candidates.emplace_back(format_string);
+									type_format_candidates.emplace_back(format_string);
 								}
 							}
 							//	initialise the first candidate

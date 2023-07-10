@@ -200,6 +200,8 @@ void CSVStateMachine::SniffValue(vector<vector<Value>> &sniffed_value) {
 		sniffed_value[cur_row++].push_back(Value(value));
 	}
 	sniffed_value.erase(sniffed_value.end() - (STANDARD_VECTOR_SIZE - cur_row), sniffed_value.end());
+	// Remove dirty start lines
+	sniffed_value.erase(sniffed_value.begin(), sniffed_value.begin() + start_row);
 }
 
 void CSVStateMachine::Parse(DataChunk &parse_chunk) {
