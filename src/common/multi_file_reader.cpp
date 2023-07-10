@@ -28,6 +28,43 @@ void MultiFileReader::AddParameters(TableFunction &table_function) {
 	table_function.named_parameters["hive_types_autocast"] = LogicalType::BOOLEAN;
 }
 
+static bool Match(vector<string>::const_iterator key, vector<string>::const_iterator key_end,
+                  vector<string>::const_iterator pattern, vector<string>::const_iterator pattern_end,
+				  bool partial_match_allowed = false) {
+
+	while (key != key_end && pattern != pattern_end) {
+		if (*pattern == "**") {
+			while (std::next(pattern) != pattern_end && *std::next(pattern) == "**"){
+				pattern++;
+			}
+			if (std::next(pattern) == pattern_end) {
+				return true;
+			}
+			while (key != key_end) {
+				if (Match(key, key_end, std::next(pattern), pattern_end)) {
+					return true;
+				}
+				key++;
+			}
+			return false;
+		}
+		if (!LikeFun::Glob(key->data(), key->length(), pattern->data(), pattern->length())) {
+			return false;
+		}
+		key++;
+		pattern++;
+	}
+	if (partial_match_allowed) {
+		return key == key_end;
+	}
+	return key == key_end && pattern == pattern_end;
+}
+
+static bool Match(const string& key, const vector<string>& pattern, const bool partial_match_allowed = false) {
+	const vector<string> splits = StringUtil::Split(key, FileSystem::PathSeparator());
+	return Match(splits.begin(), splits.end(), pattern.begin(), pattern.end(), partial_match_allowed);
+}
+
 static string GetOneFile(FileSystem& fs, const string& path, MultiFileReaderOptions &mfr_options){
 	mfr_options.input_file_pattern = path;
 
@@ -78,6 +115,9 @@ static void FindFiles(FileSystem &fs, const string &path, const string &glob, bo
 		if (is_directory != match_directory) {
 			return;
 		}
+		// if (Match) {
+			//do something
+		// }
 		if (LikeFun::Glob(fname.c_str(), fname.size(), glob.c_str(), glob.size())) {
 			result.push_back(fs.JoinPath(path, fname));
 		}
