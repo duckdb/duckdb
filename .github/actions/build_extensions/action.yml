@@ -27,6 +27,9 @@ inputs:
   static_link_build:
     description: 'Links duckdb statically to the built extensions'
     default: 1
+  vcpkg_build:
+    description: 'Installs vcpkg and pass its toolchain to CMakes'
+    default: 1
   build_dir:
     description: 'DuckDB source directory to run the build in'
     default: '.'
@@ -82,13 +85,13 @@ runs:
         echo "EXTENSION_CONFIGS=$EXTENSION_CONFIGS" >> $GITHUB_ENV
 
     - name: Setup vcpkg
-      if: inputs.osx_universal == 0
+      if: inputs.vcpkg_build == 1
       uses: lukka/run-vcpkg@v11
       with:
         vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
 
     - name: Set vcpkg env variables
-      if: inputs.osx_universal == 0
+      if: inputs.vcpkg_build == 1
       shell: bash
       run: |
         echo "VCPKG_TOOLCHAIN_PATH=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" >> $GITHUB_ENV
@@ -96,7 +99,7 @@ runs:
 
     # Todo: remove this after spatial no longer depends on it
     - name: Globally install OpenSSL (Spatial still depends on it to be available)
-      if: inputs.osx_universal == 0 && inputs.openssl_path == ''
+      if: inputs.vcpkg_build == 1 && inputs.openssl_path == ''
       shell: bash
       run: |
         cd $VCPKG_ROOT && ./vcpkg install openssl ${{ inputs.vcpkg_target_triplet != '' && format('--triplet={0}', inputs.vcpkg_target_triplet) || ''}}
@@ -109,7 +112,7 @@ runs:
         echo "OPENSSL_ROOT_DIR=${{ inputs.openssl_path }}" >> $GITHUB_ENV
 
     - name: Create combined vcpkg manifest
-      if: inputs.build_vcpkg_extensions == 1
+      if: inputs.vcpkg_build == 1 && inputs.build_vcpkg_extensions == 1
       shell: bash
       run: |
         make extension_configuration

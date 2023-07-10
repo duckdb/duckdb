@@ -251,7 +251,6 @@ jobs:
       - uses: ./.github/actions/build_extensions
         with:
           deploy_as: windows_amd64_rtools
-          vcpkg_target_triplet: x64-windows
           treat_warn_as_error: 0
           s3_id: ${{ secrets.S3_ID }}
           s3_key: ${{ secrets.S3_KEY }}
@@ -259,8 +258,10 @@ jobs:
           override_cc: gcc
           override_cxx: g++
           build_out_of_tree_extensions: 0
+          build_vcpkg_extensions: 0
           openssl_path: C:/rtools43/x86_64-w64-mingw32.static.posix # not sure if this is required, there seems to be an openssl there
           run_tests: 0
+          vcpkg_build: 0
 
       - name: Install R package
         shell: bash

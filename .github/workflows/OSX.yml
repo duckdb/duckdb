@@ -305,6 +305,7 @@ jobs:
           build_in_tree_extensions: 0
           build_vcpkg_extensions: 0
           build_out_of_tree_extensions: 1
+          vcpkg_build: 0
 
       - name: Create separate binaries (legacy)
         if: matrix.universal_build == 1
