@@ -5,6 +5,7 @@ add_library_unity(
   serialize_parsed_expression.cpp
   serialize_query_node.cpp
   serialize_result_modifier.cpp
+  serialize_statement.cpp
   serialize_tableref.cpp
   serialize_types.cpp)
 set(ALL_OBJECT_FILES

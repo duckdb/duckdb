@@ -74,5 +74,71 @@
     ],
     "pointer_type": "none",
     "constructor": ["type", "null_order", "expression"]
+  },
+  {
+    "class": "CaseCheck",
+    "includes": [
+      "duckdb/parser/expression/case_expression.hpp"
+    ],
+    "members": [
+      {
+        "name": "when_expr",
+        "type": "ParsedExpression*"
+      },
+      {
+        "name": "then_expr",
+        "type": "ParsedExpression*"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
+    "class": "SampleOptions",
+    "includes": [
+      "duckdb/parser/parsed_data/sample_options.hpp"
+    ],
+    "members": [
+      {
+        "name": "sample_size",
+        "type": "Value"
+      },
+      {
+        "name": "is_percentage",
+        "type": "bool"
+      },
+      {
+        "name": "method",
+        "type": "SampleMethod"
+      },
+      {
+        "name": "seed",
+        "type": "int64_t"
+      }
+    ]
+  },
+  {
+    "class": "PivotColumn",
+    "includes": [
+      "duckdb/parser/tableref/pivotref.hpp"
+    ],
+    "members": [
+      {
+        "name": "pivot_expressions",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "name": "unpivot_names",
+        "type": "vector<string>"
+      },
+      {
+        "name": "entries",
+        "type": "vector<PivotColumnEntry>"
+      },
+      {
+        "name": "pivot_enum",
+        "type": "string"
+      }
+    ],
+    "pointer_type": "none"
   }
 ]

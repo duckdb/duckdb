@@ -17,19 +17,9 @@ void SelectStatement::Serialize(Serializer &serializer) const {
 	node->Serialize(serializer);
 }
 
-void SelectStatement::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("node", node);
-}
-
 unique_ptr<SelectStatement> SelectStatement::Deserialize(Deserializer &source) {
 	auto result = make_uniq<SelectStatement>();
 	result->node = QueryNode::Deserialize(source);
-	return result;
-}
-
-unique_ptr<SelectStatement> SelectStatement::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto result = make_uniq<SelectStatement>();
-	deserializer.ReadProperty("node", result->node);
 	return result;
 }
 

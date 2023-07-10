@@ -9,6 +9,9 @@
 #include "duckdb/parser/common_table_expression_info.hpp"
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
+#include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/parser/tableref/pivotref.hpp"
 
 namespace duckdb {
 
@@ -59,6 +62,50 @@ OrderByNode OrderByNode::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto null_order = deserializer.ReadProperty<OrderByNullType>("null_order");
 	auto expression = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("expression");
 	OrderByNode result(type, null_order, std::move(expression));
+	return result;
+}
+
+void CaseCheck::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("when_expr", *when_expr);
+	serializer.WriteProperty("then_expr", *then_expr);
+}
+
+CaseCheck CaseCheck::FormatDeserialize(FormatDeserializer &deserializer) {
+	CaseCheck result;
+	deserializer.ReadProperty("when_expr", result.when_expr);
+	deserializer.ReadProperty("then_expr", result.then_expr);
+	return result;
+}
+
+void SampleOptions::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("sample_size", sample_size);
+	serializer.WriteProperty("is_percentage", is_percentage);
+	serializer.WriteProperty("method", method);
+	serializer.WriteProperty("seed", seed);
+}
+
+unique_ptr<SampleOptions> SampleOptions::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<SampleOptions>(new SampleOptions());
+	deserializer.ReadProperty("sample_size", result->sample_size);
+	deserializer.ReadProperty("is_percentage", result->is_percentage);
+	deserializer.ReadProperty("method", result->method);
+	deserializer.ReadProperty("seed", result->seed);
+	return result;
+}
+
+void PivotColumn::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("pivot_expressions", pivot_expressions);
+	serializer.WriteProperty("unpivot_names", unpivot_names);
+	serializer.WriteProperty("entries", entries);
+	serializer.WriteProperty("pivot_enum", pivot_enum);
+}
+
+PivotColumn PivotColumn::FormatDeserialize(FormatDeserializer &deserializer) {
+	PivotColumn result;
+	deserializer.ReadProperty("pivot_expressions", result.pivot_expressions);
+	deserializer.ReadProperty("unpivot_names", result.unpivot_names);
+	deserializer.ReadProperty("entries", result.entries);
+	deserializer.ReadProperty("pivot_enum", result.pivot_enum);
 	return result;
 }
 

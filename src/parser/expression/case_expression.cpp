@@ -8,18 +8,6 @@
 
 namespace duckdb {
 
-void CaseCheck::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("when_expr", when_expr);
-	serializer.WriteProperty("then_expr", then_expr);
-}
-
-CaseCheck CaseCheck::FormatDeserialize(FormatDeserializer &deserializer) {
-	CaseCheck check;
-	deserializer.ReadProperty("when_expr", check.when_expr);
-	deserializer.ReadProperty("then_expr", check.then_expr);
-	return check;
-}
-
 CaseExpression::CaseExpression() : ParsedExpression(ExpressionType::CASE_EXPR, ExpressionClass::CASE) {
 }
 
