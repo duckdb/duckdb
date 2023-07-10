@@ -13,13 +13,7 @@ CSVSniffer::CSVSniffer(CSVReaderOptions options_p, shared_ptr<CSVBufferManager> 
 		}
 	}
 
-	if (options.skip_rows_set) {
-		// Skip rows if they are set
-		for (idx_t i = 0; i < options.skip_rows; i++) {
-			buffer_manager->file_handle->ReadLine();
-		}
-	}
-	//! Initialize Format Candidates
+	// Initialize Format Candidates
 	for (const auto &t : format_template_candidates) {
 		best_format_candidates[t.first].clear();
 	}

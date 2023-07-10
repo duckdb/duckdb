@@ -230,7 +230,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		options.file_path = result->files[0];
 		// Initialize Buffer Manager and Sniffer
 		auto file_handle = BaseCSVReader::OpenCSV(context, options);
-		result->buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle));
+		result->buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle),options);
 		CSVSniffer sniffer(options, result->buffer_manager);
 		auto sniffer_result = sniffer.SniffCSV();
 

@@ -181,7 +181,7 @@ void CSVSniffer::DetectTypes() {
 		vector<vector<Value>> values(STANDARD_VECTOR_SIZE);
 		candidate->SniffValue(values);
 		idx_t row_idx = 0;
-		if (values.size() > 1) {
+		if (values.size() > 1 && (!options.has_header || (options.has_header && options.header))) {
 			// This means we have more than one row, hence we can use the first row to detect if we have a header
 			row_idx = 1;
 		}
