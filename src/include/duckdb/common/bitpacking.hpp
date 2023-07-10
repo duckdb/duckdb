@@ -230,7 +230,6 @@ private:
 	static void UnPackGroupImpl(T *dst, data_ptr_t src, bitpacking_width_t width) {
 		throw InternalException("Unsupported type for bitpacking");
 	}
-
 };
 
 } // namespace duckdb

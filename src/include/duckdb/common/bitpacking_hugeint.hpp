@@ -17,5 +17,4 @@ struct HugeIntPacker {
 	static void Unpack(const uint32_t *__restrict in, hugeint_t *__restrict out, bitpacking_width_t width);
 };
 
-
-} // namespace hugeint
+} // namespace duckdb

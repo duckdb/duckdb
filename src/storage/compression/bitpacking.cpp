@@ -181,16 +181,18 @@ public:
 		}
 
 		// Calculate delta's
-		// compression_buffer pointer points one element ahead of the internal buffer making the use of signed index integer (-1) possible
-		D_ASSERT(compression_buffer_idx <= NumericLimits<int64_t>::Maximum() );
+		// compression_buffer pointer points one element ahead of the internal buffer making the use of signed index
+		// integer (-1) possible
+		D_ASSERT(compression_buffer_idx <= NumericLimits<int64_t>::Maximum());
 		if (can_do_all) {
 			for (int64_t i = 0; i < static_cast<int64_t>(compression_buffer_idx); i++) {
 				delta_buffer[i] = static_cast<T_S>(compression_buffer[i]) - static_cast<T_S>(compression_buffer[i - 1]);
 			}
 		} else {
 			for (int64_t i = 0; i < static_cast<int64_t>(compression_buffer_idx); i++) {
-				auto success = TrySubtractOperator::Operation(static_cast<T_S>(compression_buffer[i]),
-				                                              static_cast<T_S>(compression_buffer[i - 1]), delta_buffer[i]);
+				auto success =
+				    TrySubtractOperator::Operation(static_cast<T_S>(compression_buffer[i]),
+				                                   static_cast<T_S>(compression_buffer[i - 1]), delta_buffer[i]);
 				if (!success) {
 					return;
 				}
@@ -254,9 +256,9 @@ public:
 			if (delta_required_bitwidth < regular_required_bitwidth && mode != BitpackingMode::FOR) {
 				SubtractFrameOfReference(delta_buffer, minimum_delta);
 
-				OP::WriteDeltaFor(reinterpret_cast<T *>(delta_buffer), compression_buffer_validity, delta_required_bitwidth,
-				                  static_cast<T>(minimum_delta), delta_offset, compression_buffer, compression_buffer_idx,
-				                  data_ptr);
+				OP::WriteDeltaFor(reinterpret_cast<T *>(delta_buffer), compression_buffer_validity,
+				                  delta_required_bitwidth, static_cast<T>(minimum_delta), delta_offset,
+				                  compression_buffer, compression_buffer_idx, data_ptr);
 
 				total_size += BitpackingPrimitives::GetRequiredSize(compression_buffer_idx, delta_required_bitwidth);
 				total_size += sizeof(T);                              // FOR value
@@ -722,10 +724,10 @@ public:
 					                                      current_group_ptr + decompress_offset, decompress_count,
 					                                      current_width, skip_sign_extension);
 
-					ApplyFrameOfReference<T_S>(reinterpret_cast<T_S *>(decompression_buffer + extra_count), current_frame_of_reference,
-					                           skip_count);
-					DeltaDecode<T_S>(reinterpret_cast<T_S *>(decompression_buffer + extra_count), static_cast<T_S>(current_delta_offset),
-					                 skip_count);
+					ApplyFrameOfReference<T_S>(reinterpret_cast<T_S *>(decompression_buffer + extra_count),
+					                           current_frame_of_reference, skip_count);
+					DeltaDecode<T_S>(reinterpret_cast<T_S *>(decompression_buffer + extra_count),
+					                 static_cast<T_S>(current_delta_offset), skip_count);
 					current_delta_offset = decompression_buffer[extra_count + skip_count - 1];
 
 					current_group_offset += skip_count;
@@ -836,8 +838,10 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		}
 
 		if (scan_state.current_group.mode == BitpackingMode::DELTA_FOR) {
-			ApplyFrameOfReference<T_S>(reinterpret_cast<T_S *>(current_result_ptr), static_cast<T_S>(scan_state.current_frame_of_reference), to_scan);
-			DeltaDecode<T_S>(reinterpret_cast<T_S *>(current_result_ptr), static_cast<T_S>(scan_state.current_delta_offset), to_scan);
+			ApplyFrameOfReference<T_S>(reinterpret_cast<T_S *>(current_result_ptr),
+			                           static_cast<T_S>(scan_state.current_frame_of_reference), to_scan);
+			DeltaDecode<T_S>(reinterpret_cast<T_S *>(current_result_ptr),
+			                 static_cast<T_S>(scan_state.current_delta_offset), to_scan);
 			scan_state.current_delta_offset = current_result_ptr[to_scan - 1];
 		} else {
 			ApplyFrameOfReference<T>(current_result_ptr, scan_state.current_frame_of_reference, to_scan);
