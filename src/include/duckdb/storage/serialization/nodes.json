@@ -39,5 +39,18 @@
         "type": "CTEMaterialize"
       }
     ]
+  },
+  {
+    "class": "CommonTableExpressionMap",
+    "includes": [
+      "duckdb/parser/query_node.hpp"
+    ],
+    "members": [
+      {
+        "name": "map",
+        "type": "unordered_map<string, CommonTableExpressionInfo*>"
+      }
+    ],
+    "pointer_type": "none"
   }
 ]

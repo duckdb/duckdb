@@ -7,6 +7,7 @@
 #include "duckdb/common/serializer/format_deserializer.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
+#include "duckdb/parser/query_node.hpp"
 
 namespace duckdb {
 
@@ -33,6 +34,16 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::FormatDeseriali
 	deserializer.ReadProperty("aliases", result->aliases);
 	deserializer.ReadProperty("query", result->query);
 	deserializer.ReadProperty("materialized", result->materialized);
+	return std::move(result);
+}
+
+void CommonTableExpressionMap::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("map", map);
+}
+
+CommonTableExpressionMap CommonTableExpressionMap::FormatDeserialize(FormatDeserializer &deserializer) {
+	CommonTableExpressionMap result;
+	deserializer.ReadProperty("map", result.map);
 	return std::move(result);
 }
 
