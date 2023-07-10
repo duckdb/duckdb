@@ -28,7 +28,7 @@ struct CreateIndexInfo : public CreateInfo {
 	//! Index Constraint Type
 	IndexConstraintType constraint_type;
 	//! The table to create the index on
-	unique_ptr<BaseTableRef> table;
+	string table;
 	//! Set of expressions to index by
 	vector<unique_ptr<ParsedExpression>> expressions;
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;

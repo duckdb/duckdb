@@ -399,7 +399,7 @@ void ReplayState::ReplayCreateIndex() {
 	}
 
 	// get the physical table to which we'll add the index
-	auto &table = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table->table_name);
+	auto &table = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->table);
 	auto &data_table = table.GetStorage();
 
 	// bind the parsed expressions

@@ -345,8 +345,8 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 
 	// create the index in the catalog
 	auto &schema_catalog = catalog.GetSchema(context, info->schema);
-	auto &table_catalog = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table->table_name)
-	                          .Cast<DuckTableEntry>();
+	auto &table_catalog =
+	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table).Cast<DuckTableEntry>();
 	auto &index_catalog = schema_catalog.CreateIndex(context, *info, table_catalog)->Cast<DuckIndexEntry>();
 	index_catalog.info = table_catalog.GetStorage().info;
 
@@ -372,8 +372,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 		column_names.push_back(col.Name());
 	}
 	vector<column_t> column_ids;
-	binder->bind_context.AddBaseTable(0, info->table->table_name, column_names, column_types, column_ids,
-	                                  &table_catalog);
+	binder->bind_context.AddBaseTable(0, info->table, column_names, column_types, column_ids, &table_catalog);
 	IndexBinder idx_binder(*binder, context);
 	unbound_expressions.reserve(parsed_expressions.size());
 	for (auto &expr : parsed_expressions) {

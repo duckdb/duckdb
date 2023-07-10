@@ -11,7 +11,7 @@ unique_ptr<CreateInfo> CreateIndexInfo::Copy() const {
 	result->index_type = index_type;
 	result->index_name = index_name;
 	result->constraint_type = constraint_type;
-	result->table = unique_ptr_cast<TableRef, BaseTableRef>(table->Copy());
+	result->table = table;
 	for (auto &expr : expressions) {
 		result->expressions.push_back(expr->Copy());
 	}

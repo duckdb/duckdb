@@ -47,9 +47,7 @@ unique_ptr<CreateIndexInfo> IndexCatalogEntry::Deserialize(Deserializer &source,
 	FieldReader reader(source);
 
 	create_index_info->schema = reader.ReadRequired<string>();
-	create_index_info->table = make_uniq<BaseTableRef>();
-	create_index_info->table->schema_name = create_index_info->schema;
-	create_index_info->table->table_name = reader.ReadRequired<string>();
+	create_index_info->table = reader.ReadRequired<string>();
 	create_index_info->index_name = reader.ReadRequired<string>();
 	create_index_info->sql = reader.ReadRequired<string>();
 	create_index_info->index_type = IndexType(reader.ReadRequired<uint8_t>());
