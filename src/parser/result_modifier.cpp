@@ -179,19 +179,6 @@ void OrderByNode::Serialize(Serializer &serializer) const {
 	writer.Finalize();
 }
 
-void OrderByNode::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("type", type);
-	serializer.WriteProperty("null_order", null_order);
-	serializer.WriteProperty("expression", expression);
-}
-
-OrderByNode OrderByNode::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto type = deserializer.ReadProperty<OrderType>("type");
-	auto null_order = deserializer.ReadProperty<OrderByNullType>("null_order");
-	auto expression = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("expression");
-	return OrderByNode(type, null_order, std::move(expression));
-}
-
 OrderByNode OrderByNode::Deserialize(Deserializer &source) {
 	FieldReader reader(source);
 	auto type = reader.ReadRequired<OrderType>();

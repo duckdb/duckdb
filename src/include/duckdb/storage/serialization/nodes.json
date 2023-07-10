@@ -52,5 +52,27 @@
       }
     ],
     "pointer_type": "none"
+  },
+  {
+    "class": "OrderByNode",
+    "includes": [
+      "duckdb/parser/result_modifier.hpp"
+    ],
+    "members": [
+      {
+        "name": "type",
+        "type": "OrderType"
+      },
+      {
+        "name": "null_order",
+        "type": "OrderByNullType"
+      },
+      {
+        "name": "expression",
+        "type": "ParsedExpression*"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["type", "null_order", "expression"]
   }
 ]

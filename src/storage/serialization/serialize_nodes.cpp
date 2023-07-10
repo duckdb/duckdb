@@ -8,6 +8,7 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/parser/common_table_expression_info.hpp"
 #include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 
 namespace duckdb {
 
@@ -20,7 +21,7 @@ LogicalType LogicalType::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto id = deserializer.ReadProperty<LogicalTypeId>("id");
 	auto type_info = deserializer.ReadOptionalProperty<shared_ptr<ExtraTypeInfo>>("type_info");
 	LogicalType result(id, std::move(type_info));
-	return std::move(result);
+	return result;
 }
 
 void CommonTableExpressionInfo::FormatSerialize(FormatSerializer &serializer) const {
@@ -34,7 +35,7 @@ unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::FormatDeseriali
 	deserializer.ReadProperty("aliases", result->aliases);
 	deserializer.ReadProperty("query", result->query);
 	deserializer.ReadProperty("materialized", result->materialized);
-	return std::move(result);
+	return result;
 }
 
 void CommonTableExpressionMap::FormatSerialize(FormatSerializer &serializer) const {
@@ -44,7 +45,21 @@ void CommonTableExpressionMap::FormatSerialize(FormatSerializer &serializer) con
 CommonTableExpressionMap CommonTableExpressionMap::FormatDeserialize(FormatDeserializer &deserializer) {
 	CommonTableExpressionMap result;
 	deserializer.ReadProperty("map", result.map);
-	return std::move(result);
+	return result;
+}
+
+void OrderByNode::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("type", type);
+	serializer.WriteProperty("null_order", null_order);
+	serializer.WriteProperty("expression", *expression);
+}
+
+OrderByNode OrderByNode::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto type = deserializer.ReadProperty<OrderType>("type");
+	auto null_order = deserializer.ReadProperty<OrderByNullType>("null_order");
+	auto expression = deserializer.ReadProperty<unique_ptr<ParsedExpression>>("expression");
+	OrderByNode result(type, null_order, std::move(expression));
+	return result;
 }
 
 } // namespace duckdb

@@ -249,11 +249,12 @@ def generate_class_code(class_entry):
                 if entry['name'] == constructor_entry:
                     if len(constructor_parameters) > 0:
                         constructor_parameters += ", "
-                    if requires_move(entry['type']):
+                    type_name = replace_pointer(entry['type'])
+                    if requires_move(type_name):
                         constructor_parameters += 'std::move(' + entry['name'] + ')'
                     else:
                         constructor_parameters += entry['name']
-                    class_deserialize += get_deserialize_element(entry['name'], entry['name'], entry['type'], 'optional' in entry and entry['optional'], 'unique_ptr')
+                    class_deserialize += get_deserialize_element(entry['name'], entry['name'], type_name, 'optional' in entry and entry['optional'], 'unique_ptr')
                     found = True
                     break
             if not found:
@@ -282,14 +283,16 @@ def generate_class_code(class_entry):
         if 'base' in entry:
             write_property_name = f"({entry['base']} &)" + write_property_name
             deserialize_template_str = deserialize_element_class_base.replace('${BASE_PROPERTY}', entry['base'].replace('*', '')).replace('${DERIVED_PROPERTY}', entry['type'].replace('*', ''))
-        class_serialize += get_serialize_element(write_property_name, property_key, entry['type'], is_optional, class_entry.pointer_type)
+        type_name = replace_pointer(entry['type'])
+        class_serialize += get_serialize_element(write_property_name, property_key, type_name, is_optional, class_entry.pointer_type)
         if entry['name'] not in constructor_entries:
-            class_deserialize += get_deserialize_element_template(deserialize_template_str, property_name, property_key, entry['type'], is_optional, class_entry.pointer_type)
+            class_deserialize += get_deserialize_element_template(deserialize_template_str, property_name, property_key, type_name, is_optional, class_entry.pointer_type)
 
-    class_deserialize += '\treturn std::move(result);'
     if class_entry.base is None:
+        class_deserialize += '\treturn result;'
         deserialize_return = get_return_value(class_entry.pointer_type, class_entry.name)
     else:
+        class_deserialize += '\treturn std::move(result);'
         deserialize_return = get_return_value(class_entry.pointer_type, class_entry.base)
 
     class_generation = ''
