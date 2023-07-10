@@ -107,7 +107,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	auto result = make_uniq<ReadCSVData>();
 	auto &options = result->options;
-	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "CSV");
 
 	bool explicitly_set_columns = false;
 	for (auto &kv : input.named_parameters) {
@@ -220,6 +219,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			options.SetReadOption(loption, kv.second, names);
 		}
 	}
+	result->files = MultiFileReader::GetFileList(context, input.inputs[0], "CSV", options.file_options);
 	options.file_options.AutoDetectHivePartitioning(result->files, context);
 
 	if (!options.auto_detect && return_types.empty()) {
