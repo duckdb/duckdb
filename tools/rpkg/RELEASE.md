@@ -29,3 +29,7 @@ Next check the package using WinBuilder, upload the source tarball at https://wi
 Finally, upload the package to CRAN here: https://cran.r-project.org/submit.html
 
 The maintainer (currently Hannes) has to confirm the upload, after which various automatic checks are triggered.
+
+
+## Post-release
+By convention, development versions have a fourth component `.9000`. After a successful release, edit `tools/rpkg/DESCRIPTION` to include this, e.g., change `0.8.1` to `0.8.1.9000`.
