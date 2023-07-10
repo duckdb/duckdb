@@ -1,0 +1,35 @@
+# name: test/sql/function/list/lambdas/transform_struct.test
+# description: Test list_transform function
+# group: [lambdas]
+
+# NOTE: some of these tests are directly taken from the Presto Array Function examples
+
+statement ok
+PRAGMA disable_verification
+
+# test structs (issue #5005)
+
+query I
+SELECT list_transform([{'a': 1}], x -> x.a);
+----
+[1]
+
+query I
+SELECT list_transform([{'a': [1, 2, 3]}], x -> x.a[2]);
+----
+[2]
+
+query I
+SELECT list_transform([{'b' : {'a': 1}}], x -> x.b.a);
+----
+[1]
+
+query I
+SELECT list_transform([{'b' : {'a': 42, 'b': 43}}], x -> x.b.b);
+----
+[43]
+
+query I
+SELECT list_transform([{'b' : {'a': [{'c': 77}], 'b': 43}}], x -> x.b.a[1].c);
+----
+[77]
