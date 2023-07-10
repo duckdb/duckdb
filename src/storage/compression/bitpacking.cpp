@@ -328,7 +328,7 @@ unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalTyp
 
 template <class T>
 bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
-	auto &analyze_state = (BitpackingAnalyzeState<T> &)state;
+	auto &analyze_state = static_cast<BitpackingAnalyzeState<hugeint_t> &>(state);
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
@@ -344,19 +344,13 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 
 template <>
 bool BitpackingAnalyze<hugeint_t>(AnalyzeState &state, Vector &input, idx_t count) {
-	auto &analyze_state = (BitpackingAnalyzeState<hugeint_t> &)state;
+	auto &analyze_state = static_cast<BitpackingAnalyzeState<hugeint_t> &>(state);
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
 	auto data = UnifiedVectorFormat::GetData<hugeint_t>(vdata);
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
-
-		// return false if hugeint doesn't fit in int64;
-		// if (data[idx] > NumericLimits<hugeint_t>::Maximum() || data[idx] < NumericLimits<hugeint_t>::Minimum()) {
-		// 	return false;
-		// }
-
 		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(data[idx], vdata.validity.RowIsValid(idx))) {
 			return false;
 		}
@@ -367,7 +361,7 @@ bool BitpackingAnalyze<hugeint_t>(AnalyzeState &state, Vector &input, idx_t coun
 
 template <class T>
 idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
-	auto &bitpacking_state = (BitpackingAnalyzeState<T> &)state;
+	auto &bitpacking_state = static_cast<BitpackingAnalyzeState<hugeint_t> &>(state);
 	auto flush_result = bitpacking_state.state.template Flush<EmptyBitpackingWriter>();
 	if (!flush_result) {
 		return DConstants::INVALID_INDEX;
@@ -407,7 +401,7 @@ public:
 public:
 	struct BitpackingWriter {
 		static void WriteConstant(T constant, idx_t count, void *data_ptr, bool all_invalid) {
-			auto state = (BitpackingCompressState<T, WRITE_STATISTICS> *)data_ptr;
+			auto state = reinterpret_cast<BitpackingCompressState<T, WRITE_STATISTICS> *>(data_ptr);
 
 			ReserveSpace(state, sizeof(T));
 			WriteMetaData(state, BitpackingMode::CONSTANT);
@@ -418,7 +412,7 @@ public:
 
 		static void WriteConstantDelta(T_S constant, T frame_of_reference, idx_t count, T *values, bool *validity,
 		                               void *data_ptr) {
-			auto state = (BitpackingCompressState<T, WRITE_STATISTICS> *)data_ptr;
+			auto state = reinterpret_cast<BitpackingCompressState<T, WRITE_STATISTICS> *>(data_ptr);
 
 			ReserveSpace(state, 2 * sizeof(T));
 			WriteMetaData(state, BitpackingMode::CONSTANT_DELTA);
@@ -429,7 +423,7 @@ public:
 		}
 		static void WriteDeltaFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference,
 		                          T_S delta_offset, T *original_values, idx_t count, void *data_ptr) {
-			auto state = (BitpackingCompressState<T, WRITE_STATISTICS> *)data_ptr;
+			auto state = reinterpret_cast<BitpackingCompressState<T, WRITE_STATISTICS> *>(data_ptr);
 
 			auto bp_size = BitpackingPrimitives::GetRequiredSize(count, width);
 			ReserveSpace(state, bp_size + 3 * sizeof(T));
@@ -447,7 +441,7 @@ public:
 
 		static void WriteFor(T *values, bool *validity, bitpacking_width_t width, T frame_of_reference, idx_t count,
 		                     void *data_ptr) {
-			auto state = (BitpackingCompressState<T, WRITE_STATISTICS> *)data_ptr;
+			auto state = reinterpret_cast<BitpackingCompressState<T, WRITE_STATISTICS> *>(data_ptr);
 
 			auto bp_size = BitpackingPrimitives::GetRequiredSize(count, width);
 			ReserveSpace(state, bp_size + 2 * sizeof(T));
@@ -567,7 +561,7 @@ unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointer &c
 
 template <class T, bool WRITE_STATISTICS>
 void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = (BitpackingCompressState<T, WRITE_STATISTICS> &)state_p;
+	auto &state = static_cast<BitpackingCompressState<T, WRITE_STATISTICS> &>(state_p);
 	UnifiedVectorFormat vdata;
 	scan_vector.ToUnifiedFormat(count, vdata);
 	state.Append(vdata, count);
@@ -575,7 +569,7 @@ void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t co
 
 template <class T, bool WRITE_STATISTICS>
 void BitpackingFinalizeCompress(CompressionState &state_p) {
-	auto &state = (BitpackingCompressState<T, WRITE_STATISTICS> &)state_p;
+	auto &state = static_cast<BitpackingCompressState<T, WRITE_STATISTICS> &>(state_p);
 	state.Finalize();
 }
 
@@ -767,7 +761,7 @@ unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 template <class T, class T_S = typename MakeSigned<T>::type>
 void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                            idx_t result_offset) {
-	auto &scan_state = (BitpackingScanState<T> &)*state.scan_state;
+	auto &scan_state = static_cast<BitpackingScanState<T> &>(*state.scan_state);
 
 	T *result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -905,7 +899,7 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 }
 template <class T>
 void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
-	auto &scan_state = (BitpackingScanState<T> &)*state.scan_state;
+	auto &scan_state = static_cast<BitpackingScanState<T> &>(*state.scan_state);
 	scan_state.Skip(segment, skip_count);
 }
 

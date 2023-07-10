@@ -3,28 +3,29 @@
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// Unpacking
+//===--------------------------------------------------------------------===//
+
 static void UnpackSingle(const uint32_t *__restrict &in, hugeint_t *__restrict out, uint16_t delta, uint16_t shr) {
 	if (delta + shr < 32) {
-		*out = ((static_cast<hugeint_t>(*in)) >> shr) % (hugeint_t(1) << delta);
+		*out = ((static_cast<hugeint_t>(in[0])) >> shr) % (hugeint_t(1) << delta);
 	}
 
 	else if (delta + shr >= 32 && delta + shr < 64) {
-		*out = static_cast<hugeint_t>(*in) >> shr;
+		*out = static_cast<hugeint_t>(in[0]) >> shr;
 		++in;
 
 		if (delta + shr > 32) {
 			const uint16_t NEXT_SHR = shr + delta - 32;
-
 			*out |= static_cast<hugeint_t>((*in) % (1U << NEXT_SHR)) << (32 - shr);
 		}
 	}
 
 	else if (delta + shr >= 64 && delta + shr < 96) {
-		*out = static_cast<hugeint_t>(*in) >> shr;
-		++in;
-
-		*out |= static_cast<hugeint_t>(*in) << (32 - shr);
-		++in;
+		*out = static_cast<hugeint_t>(in[0]) >> shr;
+		*out |= static_cast<hugeint_t>(in[1]) << (32 - shr);
+		in += 2;
 
 		if (delta + shr > 64) {
 			const uint16_t NEXT_SHR = delta + shr - 64;
@@ -33,14 +34,10 @@ static void UnpackSingle(const uint32_t *__restrict &in, hugeint_t *__restrict o
 	}
 
 	else if (delta + shr >= 96 && delta + shr < 128) {
-		*out = static_cast<hugeint_t>(*in) >> shr;
-		++in;
-
-		*out |= static_cast<hugeint_t>(*in) << (32 - shr);
-		++in;
-
-		*out |= static_cast<hugeint_t>(*in) << (64 - shr);
-		++in;
+		*out = static_cast<hugeint_t>(in[0]) >> shr;
+		*out |= static_cast<hugeint_t>(in[1]) << (32 - shr);
+		*out |= static_cast<hugeint_t>(in[2]) << (64 - shr);
+		in += 3;
 
 		if (delta + shr > 96) {
 			const uint16_t NEXT_SHR = delta + shr - 96;
@@ -49,17 +46,11 @@ static void UnpackSingle(const uint32_t *__restrict &in, hugeint_t *__restrict o
 	}
 
 	else if (delta + shr >= 128) {
-		*out = static_cast<hugeint_t>(*in) >> shr;
-		++in;
-
-		*out |= static_cast<hugeint_t>(*in) << (32 - shr);
-		++in;
-
-		*out |= static_cast<hugeint_t>(*in) << (64 - shr);
-		++in;
-
-		*out |= static_cast<hugeint_t>(*in) << (96 - shr);
-		++in;
+		*out = static_cast<hugeint_t>(in[0]) >> shr;
+		*out |= static_cast<hugeint_t>(in[1]) << (32 - shr);
+		*out |= static_cast<hugeint_t>(in[2]) << (64 - shr);
+		*out |= static_cast<hugeint_t>(in[3]) << (96 - shr);
+		in += 4;
 
 		if (delta + shr > 128) {
 			const uint16_t NEXT_SHR = delta + shr - 128;
@@ -68,42 +59,98 @@ static void UnpackSingle(const uint32_t *__restrict &in, hugeint_t *__restrict o
 	}
 }
 
+static void UnpackLast(const uint32_t *__restrict &in, hugeint_t *__restrict out, uint16_t delta) {
+	const uint8_t LAST_IDX = 31;
+	const uint16_t SHIFT = (delta * 31) % 32;
+	out[LAST_IDX] = in[0] >> SHIFT;
+	if (delta > 32) {
+		out[LAST_IDX] |= static_cast<hugeint_t>(in[1]) << (32 - SHIFT);
+	}
+	if (delta > 64) {
+		out[LAST_IDX] |= static_cast<hugeint_t>(in[2]) << (64 - SHIFT);
+	}
+	if (delta > 96) {
+		out[LAST_IDX] |= static_cast<hugeint_t>(in[3]) << (96 - SHIFT);
+	}
+}
+
+// Unpacks for specific deltas
+static void UnpackDelta0(const uint32_t *__restrict in, hugeint_t *__restrict out) {
+	for (uint8_t i = 0; i < 32; ++i) {
+		out[i] = 0;
+	}
+}
+
+static void UnpackDelta32(const uint32_t *__restrict in, hugeint_t *__restrict out) {
+	for (uint8_t k = 0; k < 32; ++k) {
+		out[k] = static_cast<hugeint_t>(in[k]);
+	}
+}
+
+static void UnpackDelta64(const uint32_t *__restrict in, hugeint_t *__restrict out) {
+	for (uint8_t i = 0; i < 32; ++i) {
+		const uint8_t OFFSET = i * 2;
+		out[i] = in[OFFSET];
+		out[i] |= static_cast<hugeint_t>(in[OFFSET + 1]) << 32;
+	}
+}
+
+static void UnpackDelta96(const uint32_t *__restrict in, hugeint_t *__restrict out) {
+	for (uint8_t i = 0; i < 32; ++i) {
+		const uint8_t OFFSET = i * 3;
+		out[i] = in[OFFSET];
+		out[i] |= static_cast<hugeint_t>(in[OFFSET + 1]) << 32;
+		out[i] |= static_cast<hugeint_t>(in[OFFSET + 2]) << 64;
+	}
+}
+
+static void UnpackDelta128(const uint32_t *__restrict in, hugeint_t *__restrict out) {
+	for (uint8_t i = 0; i < 32; ++i) {
+		const uint8_t OFFSET = i * 4;
+		out[i] = in[OFFSET];
+		out[i] |= static_cast<hugeint_t>(in[OFFSET + 1]) << 32;
+		out[i] |= static_cast<hugeint_t>(in[OFFSET + 2]) << 64;
+		out[i] |= static_cast<hugeint_t>(in[OFFSET + 3]) << 96;
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Packing
+//===--------------------------------------------------------------------===//
+
 static void PackSingle(const hugeint_t in, uint32_t *__restrict &out, uint16_t delta, uint16_t shl, hugeint_t mask) {
 	if (delta + shl < 32) {
 
 		if (shl == 0) {
-			*out = static_cast<uint32_t>(in & mask);
+			out[0] = static_cast<uint32_t>(in & mask);
 		} else {
-			*out |= static_cast<uint32_t>((in & mask) << shl);
+			out[0] |= static_cast<uint32_t>((in & mask) << shl);
 		}
 
 	} else if (delta + shl >= 32 && delta + shl < 64) {
 
 		if (shl == 0) {
-			*out = static_cast<uint32_t>(in & mask);
+			out[0] = static_cast<uint32_t>(in & mask);
 		} else {
-			*out |= static_cast<uint32_t>((in & mask) << shl);
+			out[0] |= static_cast<uint32_t>((in & mask) << shl);
 		}
-
 		++out;
 
 		if (delta + shl > 32) {
 			*out = static_cast<uint32_t>((in & mask) >> (32 - shl));
 		}
-
 	}
 
 	else if (delta + shl >= 64 && delta + shl < 96) {
 
 		if (shl == 0) {
-			*out = static_cast<uint32_t>(in & mask);
+			out[0] = static_cast<uint32_t>(in & mask);
 		} else {
-			*out |= static_cast<uint32_t>(in << shl);
+			out[0] |= static_cast<uint32_t>(in << shl);
 		}
-		++out;
 
-		*out = static_cast<uint32_t>((in & mask) >> (32 - shl));
-		++out;
+		out[1] = static_cast<uint32_t>((in & mask) >> (32 - shl));
+		out += 2;
 
 		if (delta + shl > 64) {
 			*out = static_cast<uint32_t>((in & mask) >> (64 - shl));
@@ -112,17 +159,14 @@ static void PackSingle(const hugeint_t in, uint32_t *__restrict &out, uint16_t d
 
 	else if (delta + shl >= 96 && delta + shl < 128) {
 		if (shl == 0) {
-			*out = static_cast<uint32_t>(in & mask);
+			out[0] = static_cast<uint32_t>(in & mask);
 		} else {
-			*out |= static_cast<uint32_t>(in << shl);
+			out[0] |= static_cast<uint32_t>(in << shl);
 		}
-		++out;
 
-		*out = static_cast<uint32_t>((in & mask) >> (32 - shl));
-		++out;
-
-		*out = static_cast<uint32_t>((in & mask) >> (64 - shl));
-		++out;
+		out[1] = static_cast<uint32_t>((in & mask) >> (32 - shl));
+		out[2] = static_cast<uint32_t>((in & mask) >> (64 - shl));
+		out += 3;
 
 		if (delta + shl > 96) {
 			*out = static_cast<uint32_t>((in & mask) >> (96 - shl));
@@ -131,20 +175,15 @@ static void PackSingle(const hugeint_t in, uint32_t *__restrict &out, uint16_t d
 
 	else if (delta + shl >= 128) {
 		if (shl == 0) {
-			*out = static_cast<uint32_t>(in & mask);
+			out[0] = static_cast<uint32_t>(in & mask);
 		} else {
-			*out |= static_cast<uint32_t>(in << shl);
+			out[0] |= static_cast<uint32_t>(in << shl);
 		}
-		++out;
 
-		*out = static_cast<uint32_t>((in & mask) >> (32 - shl));
-		++out;
-
-		*out = static_cast<uint32_t>((in & mask) >> (64 - shl));
-		++out;
-
-		*out = static_cast<uint32_t>((in & mask) >> (96 - shl));
-		++out;
+		out[1] = static_cast<uint32_t>((in & mask) >> (32 - shl));
+		out[2] = static_cast<uint32_t>((in & mask) >> (64 - shl));
+		out[3] = static_cast<uint32_t>((in & mask) >> (96 - shl));
+		out += 4;
 
 		if (delta + shl > 128) {
 			*out = static_cast<uint32_t>((in & mask) >> (128 - shl));
@@ -152,40 +191,23 @@ static void PackSingle(const hugeint_t in, uint32_t *__restrict &out, uint16_t d
 	}
 }
 
-static void UnpackLast(const uint32_t *__restrict &in, hugeint_t *__restrict out, uint16_t delta) {
-	uint16_t shift = (delta * 31) % 32;
-	out[31] = (*in) >> shift;
-	if (delta > 32) {
-		++in;
-		out[31] |= static_cast<hugeint_t>(*in) << (32 - shift);
-	}
-	if (delta > 64) {
-		++in;
-		out[31] |= static_cast<hugeint_t>(*in) << (64 - shift);
-	}
-	if (delta > 96) {
-		++in;
-		out[31] |= static_cast<hugeint_t>(*in) << (96 - shift);
-	}
-}
 
 static void PackLast(const hugeint_t *__restrict in, uint32_t *__restrict out, uint16_t delta) {
-	uint16_t shift = (delta * 31) % 32;
-	*out |= static_cast<uint32_t>(in[31] << shift);
+	const uint8_t LAST_IDX = 31;
+	const uint16_t SHIFT = (delta * 31) % 32;
+	out[0] |= static_cast<uint32_t>(in[LAST_IDX] << SHIFT);
 	if (delta > 32) {
-		++out;
-		*out = static_cast<uint32_t>(in[31] >> (32 - shift));
+		out[1] = static_cast<uint32_t>(in[LAST_IDX] >> (32 - SHIFT));
 	}
 	if (delta > 64) {
-		++out;
-		*out = static_cast<uint32_t>(in[31] >> (64 - shift));
+		out[2] = static_cast<uint32_t>(in[LAST_IDX] >> (64 - SHIFT));
 	}
 	if (delta > 96) {
-		++out;
-		*out = static_cast<uint32_t>(in[31] >> (96 - shift));
+		out[3] = static_cast<uint32_t>(in[LAST_IDX] >> (96 - SHIFT));
 	}
 }
 
+// Packs for specific deltas
 static void PackDelta32(const hugeint_t *__restrict in, uint32_t *__restrict out) {
 	for (uint8_t i = 0; i < 32; ++i) {
 		out[i] = static_cast<uint32_t>(in[i]);
@@ -194,65 +216,37 @@ static void PackDelta32(const hugeint_t *__restrict in, uint32_t *__restrict out
 
 static void PackDelta64(const hugeint_t *__restrict in, uint32_t *__restrict out) {
 	for (uint8_t i = 0; i < 32; ++i) {
-		out[2 * i] = static_cast<uint32_t>(in[i]);
-		out[2 * i + 1] = static_cast<uint32_t>(in[i] >> 32);
+		const uint8_t OFFSET = 2 * i;
+		out[OFFSET] = static_cast<uint32_t>(in[i]);
+		out[OFFSET + 1] = static_cast<uint32_t>(in[i] >> 32);
 	}
 }
 
 static void PackDelta96(const hugeint_t *__restrict in, uint32_t *__restrict out) {
 	for (uint8_t i = 0; i < 32; ++i) {
-		out[3 * i] = static_cast<uint32_t>(in[i]);
-		out[3 * i + 1] = static_cast<uint32_t>(in[i] >> 32);
-		out[3 * i + 2] = static_cast<uint32_t>(in[i] >> 64);
+		const uint8_t OFFSET = 3 * i;
+		out[OFFSET] = static_cast<uint32_t>(in[i]);
+		out[OFFSET + 1] = static_cast<uint32_t>(in[i] >> 32);
+		out[OFFSET + 2] = static_cast<uint32_t>(in[i] >> 64);
 	}
 }
 
 static void PackDelta128(const hugeint_t *__restrict in, uint32_t *__restrict out) {
 	for (uint8_t i = 0; i < 32; ++i) {
-		out[4 * i] = static_cast<uint32_t>(in[i]);
-		out[4 * i + 1] = static_cast<uint32_t>(in[i] >> 32);
-		out[4 * i + 2] = static_cast<uint32_t>(in[i] >> 64);
-		out[4 * i + 3] = static_cast<uint32_t>(in[i] >> 96);
+		const uint8_t OFFSET = 4 * i;
+		out[OFFSET] = static_cast<uint32_t>(in[i]);
+		out[OFFSET + 1] = static_cast<uint32_t>(in[i] >> 32);
+		out[OFFSET + 2] = static_cast<uint32_t>(in[i] >> 64);
+		out[OFFSET + 3] = static_cast<uint32_t>(in[i] >> 96);
 	}
 }
 
-static void UnpackDelta0(const uint32_t *__restrict in, hugeint_t *__restrict out) {
-	for (uint8_t i = 0; i < 32; ++i) {
-		*(out++) = 0;
-	}
-}
-
-static void UnpackDelta32(const uint32_t *__restrict in, hugeint_t *__restrict out) {
-	for (uint8_t k = 0; k < 32; ++k) {
-		out[k] = in[k];
-	}
-}
-
-static void UnpackDelta64(const uint32_t *__restrict in, hugeint_t *__restrict out) {
-	for (uint8_t k = 0; k < 32; ++k) {
-		out[k] = in[k * 2];
-		out[k] |= hugeint_t(in[k * 2 + 1]) << 32;
-	}
-}
-
-static void UnpackDelta96(const uint32_t *__restrict in, hugeint_t *__restrict out) {
-	for (uint8_t k = 0; k < 32; ++k) {
-		out[k] = in[k * 3];
-		out[k] |= hugeint_t(in[k * 3 + 1]) << 32;
-		out[k] |= hugeint_t(in[k * 3 + 2]) << 64;
-	}
-}
-
-static void UnpackDelta128(const uint32_t *__restrict in, hugeint_t *__restrict out) {
-	for (uint8_t k = 0; k < 32; ++k) {
-		out[k] = in[k * 4];
-		out[k] |= hugeint_t(static_cast<uint64_t>(in[k * 4 + 1])) << 32;
-		out[k] |= hugeint_t(static_cast<uint64_t>(in[k * 4 + 2])) << 64;
-		out[k] |= hugeint_t(static_cast<uint64_t>(in[k * 4 + 3])) << 96;
-	}
-}
+//===--------------------------------------------------------------------===//
+// HugeIntPacker
+//===--------------------------------------------------------------------===//
 
 void HugeIntPacker::Pack(const hugeint_t *__restrict in, uint32_t *__restrict out, bitpacking_width_t width) {
+	// TODO?: Potential for unrolling
 	switch (width) {
 	case 0:
 		return;
@@ -272,12 +266,13 @@ void HugeIntPacker::Pack(const hugeint_t *__restrict in, uint32_t *__restrict ou
 		break;
 	}
 	for (idx_t oindex = 0; oindex < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - 1; ++oindex) {
-		PackSingle(in[oindex], out, width, (width * oindex) % 32, (hugeint_t(1) << width) - 1);
+		PackSingle(in[oindex], out, width, (width * oindex) % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, (hugeint_t(1) << width) - 1);
 	}
 	PackLast(in, out, width);
 }
 
 void HugeIntPacker::Unpack(const uint32_t *__restrict in, hugeint_t *__restrict out, bitpacking_width_t width) {
+	// TODO?: Potential for unrolling
 	switch (width) {
 	case 0:
 		UnpackDelta0(in, out);
@@ -298,7 +293,7 @@ void HugeIntPacker::Unpack(const uint32_t *__restrict in, hugeint_t *__restrict 
 		break;
 	}
 	for (idx_t oindex = 0; oindex < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - 1; ++oindex) {
-		UnpackSingle(in, out + oindex, width, (width * oindex) % 32);
+		UnpackSingle(in, out + oindex, width, (width * oindex) % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
 	}
 	UnpackLast(in, out, width);
 }
