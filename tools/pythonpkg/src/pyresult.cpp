@@ -33,6 +33,8 @@ int64_t DuckDBPyResult::RowCount() {
 	auto res = FetchNext(*result);
 	if (result->properties.return_type == StatementReturnType::CHANGED_ROWS) {
 		return res->GetValue(0, 0).GetValue<int64_t>();
+	} else if (result->properties.return_type == StatementReturnType::NOTHING) {
+		return -1;
 	}
 
 	auto &materialized = reinterpret_cast<MaterializedQueryResult &>(result);
