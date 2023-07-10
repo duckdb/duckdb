@@ -19,5 +19,25 @@
     ],
     "pointer_type": "none",
     "constructor": ["id", "type_info"]
+  },
+  {
+    "class": "CommonTableExpressionInfo",
+    "includes": [
+      "duckdb/parser/common_table_expression_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "aliases",
+        "type": "vector<string>"
+      },
+      {
+        "name": "query",
+        "type": "SelectStatement*"
+      },
+      {
+        "name": "materialized",
+        "type": "CTEMaterialize"
+      }
+    ]
   }
 ]

@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/format_serializer.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/parser/common_table_expression_info.hpp"
 
 namespace duckdb {
 
@@ -18,6 +19,20 @@ LogicalType LogicalType::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto id = deserializer.ReadProperty<LogicalTypeId>("id");
 	auto type_info = deserializer.ReadOptionalProperty<shared_ptr<ExtraTypeInfo>>("type_info");
 	LogicalType result(id, std::move(type_info));
+	return std::move(result);
+}
+
+void CommonTableExpressionInfo::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("aliases", aliases);
+	serializer.WriteProperty("query", *query);
+	serializer.WriteProperty("materialized", materialized);
+}
+
+unique_ptr<CommonTableExpressionInfo> CommonTableExpressionInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<CommonTableExpressionInfo>(new CommonTableExpressionInfo());
+	deserializer.ReadProperty("aliases", result->aliases);
+	deserializer.ReadProperty("query", result->query);
+	deserializer.ReadProperty("materialized", result->materialized);
 	return std::move(result);
 }
 
