@@ -48,6 +48,10 @@ struct StringStats {
 	DUCKDB_API static uint32_t MaxStringLength(const BaseStatistics &stats);
 	//! Whether or not the strings can contain unicode
 	DUCKDB_API static bool CanContainUnicode(const BaseStatistics &stats);
+	//! Returns the min value (up to a length of StringStatsData::MAX_STRING_MINMAX_SIZE)
+	DUCKDB_API static string Min(const BaseStatistics &stats);
+	//! Returns the max value (up to a length of StringStatsData::MAX_STRING_MINMAX_SIZE)
+	DUCKDB_API static string Max(const BaseStatistics &stats);
 
 	//! Resets the max string length so HasMaxStringLength() is false
 	DUCKDB_API static void ResetMaxStringLength(BaseStatistics &stats);

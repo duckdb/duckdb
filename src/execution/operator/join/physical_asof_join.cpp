@@ -669,7 +669,7 @@ public:
 	//! The read cursor
 	unique_ptr<PayloadScanner> scanner;
 	//! Pointer to the matches
-	const bool *found_match;
+	const bool *found_match = {};
 };
 
 AsOfLocalSourceState::AsOfLocalSourceState(AsOfGlobalSourceState &gsource, const PhysicalAsOfJoin &op)

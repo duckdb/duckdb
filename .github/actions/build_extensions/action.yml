@@ -1,5 +1,5 @@
 name: "Build Extensions"
-description: "Build, test and deploy the in-tree DuckDB extensions"
+description: "Build, test and deploy the DuckDB extensions"
 inputs:
   # Test config
   run_tests:
@@ -42,41 +42,11 @@ inputs:
   treat_warn_as_error:
     description: 'Treat compilation warnings as errors'
     default: 1
-  visualizer:
-    description: 'Build Visualizer'
+  build_in_tree_extensions:
+    description: 'Build in-tree extensions'
     default: 1
-  icu:
-    description: 'Build ICU'
-    default: 1
-  tpch:
-    description: 'Build TPCH'
-    default: 1
-  tpcds:
-    description: 'Build TPCDS'
-    default: 1
-  httpfs:
-    description: 'Build HTTPFS'
-    default: 1
-  fts:
-    description: 'Build FTS'
-    default: 1
-  json:
-    description: 'Build JSON'
-    default: 1
-  excel:
-    description: 'Build Excel'
-    default: 1
-  sqlsmith:
-    description: 'Build SQLsmith'
-    default: 1
-  inet:
-    description: 'Build INET'
-    default: 1
-  autocomplete:
-    description: 'Build SQL autocomplete extension'
-    default: 1
-  out_of_tree_ext:
-    description: 'Build Out-Of-Tree Extensions'
+  build_out_of_tree_extensions:
+    description: 'Build out-of-tree extensions'
     default: 1
   python_name:
     description: 'Python binary name because wtf Python'
@@ -93,6 +63,9 @@ inputs:
   override_cxx:
     description: 'Override CXX Compiler'
     default: ''
+  toolchain_path:
+    description: 'Passes custom toolchain to CMake'
+    default: ''
 
 runs:
   using: "composite"
@@ -100,45 +73,30 @@ runs:
     - name: Build
       shell: bash
       env:
-        BUILD_VISUALIZER: ${{ inputs.visualizer }}
-        BUILD_ICU: ${{ inputs.icu }}
-        BUILD_TPCH: ${{ inputs.tpch }}
-        BUILD_TPCDS: ${{ inputs.tpcds }}
-        BUILD_FTS: ${{ inputs.fts }}
-        BUILD_INET: ${{ inputs.inet }}
-        BUILD_HTTPFS: ${{ inputs.httpfs }}
-        BUILD_JSON: ${{ inputs.json }}
-        BUILD_EXCEL: ${{ inputs.excel }}
-        BUILD_SQLSMITH: ${{ inputs.sqlsmith }}
-        BUILD_AUTOCOMPLETE: ${{ inputs.autocomplete }}
         FORCE_32_BIT: ${{ inputs.force_32_bit }}
         TREAT_WARNINGS_AS_ERRORS: ${{ inputs.treat_warn_as_error}}
         FORCE_WARN_UNUSED: 1
         STATIC_OPENSSL: 1
-        DISABLE_BUILTIN_EXTENSIONS: 1
         EXTENSION_STATIC_BUILD: ${{ inputs.static_link_build }}
         OPENSSL_ROOT_DIR: ${{ inputs.openssl_path }}
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
+        EXTRA_CMAKE_VARIABLES: -DCMAKE_TOOLCHAIN_FILE=${{ inputs.toolchain_path }}
 
       run: |
+        mkdir -p ~/.ssh
+        ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
         cd  ${{ inputs.build_dir}}
         ls -al
         pwd
         echo "$USER"
         git config --global --add safe.directory '*'
+        export EXTENSION_CONFIGS=""
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_in_tree_extensions == 1 && '.github/config/in_tree_extensions.cmake' || ''}}"
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_out_of_tree_extensions == 1 && '.github/config/out_of_tree_extensions.cmake' || '' }}"
+        echo "EXTENSION_CONFIGS"
         make
-
-    - name: Build External Extensions
-      if: ${{ inputs.out_of_tree_ext != 0 }}
-      shell: bash
-      run: |
-        mkdir -p ~/.ssh
-        ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts
-        cd  ${{ inputs.build_dir}}
-        mkdir -p build/release/extension/out_of_tree
-        ${{ inputs.python_name}} scripts/build_out_of_tree_extensions.py ${{ inputs.aarch64_cross_compile == 1 && '--aarch64-cc' || '' }} --github-ref=$GITHUB_REF
 
     - name: Run post-install scripts
       if: ${{ inputs.post_install != '' }}

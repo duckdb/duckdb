@@ -25,13 +25,13 @@ def cleanup_line(line):
     return line.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"')
 
 partial_coverage_dict = {}
+with open(args.uncovered_files, 'r') as f:
+    for line in f.readlines():
+        splits = line.split('\t')
+        partial_coverage_dict[splits[0]] = int(splits[1].strip())
+
 if args.fix:
     uncovered_file = open(args.uncovered_files, 'w+')
-else:
-    with open(args.uncovered_files, 'r') as f:
-        for line in f.readlines():
-            splits = line.split('\t')
-            partial_coverage_dict[splits[0]] = int(splits[1].strip())
 
 DASH_COUNT = 80
 total_difference = 0
@@ -60,11 +60,15 @@ def check_file(path, partial_coverage_dict):
     expected_uncovered_lines = 0
     if original_path in partial_coverage_dict:
         expected_uncovered_lines = partial_coverage_dict[original_path]
+    if args.fix:
+        if expected_uncovered_lines == 0 and len(uncovered_lines) == 0:
+            return
+        expected_uncovered = max(expected_uncovered_lines, len(uncovered_lines) + 1)
+        uncovered_file.write(f'{original_path}\t{expected_uncovered}\n')
+        return
+
 
     if len(uncovered_lines) > expected_uncovered_lines:
-        if args.fix:
-            uncovered_file.write(f'{original_path}\t{len(uncovered_lines) + 1}\n')
-            return
         total_difference += len(uncovered_lines) - expected_uncovered_lines
 
         print("-" * DASH_COUNT)

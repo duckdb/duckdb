@@ -1,0 +1,76 @@
+# name: test/sql/order/order_parallel_complex.test_slow
+# description: Test ORDER BY keyword with multiple threads (internal and external sorting)
+# group: [order]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA verify_parallelism
+
+# we run this with an uneven amount of threads to force the merge sort to have an odd amount of blocks to merge
+statement ok
+PRAGMA threads=3
+
+statement ok
+SET default_null_order='nulls_first';
+
+# internal/external, different memory limits
+foreach pragma true false
+
+foreach mem 50 500
+
+statement ok
+PRAGMA debug_force_external=${pragma}
+
+statement ok
+PRAGMA memory_limit='${mem}MB'
+
+statement ok
+create table test as (select range i from range(100000));
+
+# complex sort orders, combining var and fixed-size sorting columns
+statement ok
+insert into test values (NULL);
+
+query T
+select * from test order by cast(i as varchar) nulls first
+----
+100001 values hashing to f57dcbb7ed54aa1427f8f0aa71095c66
+
+query T
+select * from test order by i % 10, cast(i as varchar)
+----
+100001 values hashing to 1d264864d6c6bd38863c743d4ad52940
+
+query T
+select * from test order by cast(i % 10 as varchar), i
+----
+100001 values hashing to 6860685f6aa75f5a1ca3c47174b3da65
+
+query T
+select * from test order by cast(i % 100 as varchar), i % 10, cast(i as varchar) nulls first
+----
+100001 values hashing to 483502102d833d8ea7ba404f341598c2
+
+query T
+select * from test order by cast(i % 1000 as varchar), i % 100, cast(i % 10 as varchar), i
+----
+100001 values hashing to 88c6de776107d78460a9f8c9e3644cd8
+
+query T
+select * from test order by i % 100, cast(i % 10 as varchar), cast(i as varchar)
+----
+100001 values hashing to 4074a204486baadfa789fd6a2d8ceb2e
+
+query T
+select * from test order by cast(i % 1000 as varchar), i % 100, i % 10, cast(i as varchar)
+----
+100001 values hashing to f7d8768d3c532caf7db4414cb3b2eea9
+
+statement ok
+drop table test
+
+endloop
+
+endloop

@@ -76,6 +76,9 @@ jobs:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
           - isRelease: false
+            node: 10
+            target_arch: x64
+          - isRelease: false
             node: 12
             target_arch: x64
           - isRelease: false
@@ -97,6 +100,9 @@ jobs:
             node: 19
             target_arch: x64
           - isRelease: false
+            node: 10
+            target_arch: arm64
+          - isRelease: false
             node: 12
             target_arch: arm64
           - isRelease: false
@@ -116,6 +122,9 @@ jobs:
             target_arch: arm64
           - isRelease: false
             node: 19
+            target_arch: arm64
+          - isRelease: false
+            node: 20
             target_arch: arm64
 
     steps:
@@ -168,7 +177,7 @@ jobs:
         run: ./scripts/node_build.sh ${{ matrix.node }}
 
   osx-nodejs:
-    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb'
     name: node.js OSX
     runs-on: macos-latest
     needs: linux-nodejs
@@ -179,6 +188,8 @@ jobs:
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
+          - isRelease: false
+            node: 10
           - isRelease: false
             node: 12
           - isRelease: false
@@ -254,6 +265,8 @@ jobs:
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
+          - isRelease: false
+            node: 10
           - isRelease: false
             node: 12
           - isRelease: false

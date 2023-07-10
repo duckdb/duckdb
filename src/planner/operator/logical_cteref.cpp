@@ -10,6 +10,7 @@ void LogicalCTERef::Serialize(FieldWriter &writer) const {
 	writer.WriteField(cte_index);
 	writer.WriteRegularSerializableList(chunk_types);
 	writer.WriteList<string>(bound_columns);
+	writer.WriteField(materialized_cte);
 }
 
 unique_ptr<LogicalOperator> LogicalCTERef::Deserialize(LogicalDeserializationState &state, FieldReader &reader) {
@@ -17,7 +18,8 @@ unique_ptr<LogicalOperator> LogicalCTERef::Deserialize(LogicalDeserializationSta
 	auto cte_index = reader.ReadRequired<idx_t>();
 	auto chunk_types = reader.ReadRequiredSerializableList<LogicalType, LogicalType>();
 	auto bound_columns = reader.ReadRequiredList<string>();
-	return make_uniq<LogicalCTERef>(table_index, cte_index, chunk_types, bound_columns);
+	auto materialized_cte = reader.ReadField<CTEMaterialize>(CTEMaterialize::CTE_MATERIALIZE_DEFAULT);
+	return make_uniq<LogicalCTERef>(table_index, cte_index, chunk_types, bound_columns, materialized_cte);
 }
 
 vector<idx_t> LogicalCTERef::GetTableIndex() const {
