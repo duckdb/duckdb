@@ -202,7 +202,7 @@ public:
 			}
 		}
 
-		auto files = MultiFileReader::GetFileList(context, Value(info.file_path), "Parquet");
+		auto files = MultiFileReader::GetFileList(context, Value(info.file_path), "Parquet", parquet_options.file_options);
 		return ParquetScanBindInternal(context, std::move(files), expected_types, expected_names, parquet_options);
 	}
 
@@ -292,7 +292,6 @@ public:
 
 	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, TableFunctionBindInput &input,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
-		auto files = MultiFileReader::GetFileList(context, input.inputs[0], "Parquet");
 		ParquetOptions parquet_options(context);
 		for (auto &kv : input.named_parameters) {
 			auto loption = StringUtil::Lower(kv.first);
@@ -305,6 +304,7 @@ public:
 				parquet_options.file_row_number = BooleanValue::Get(kv.second);
 			}
 		}
+		auto files = MultiFileReader::GetFileList(context, input.inputs[0], "Parquet", parquet_options.file_options);
 		parquet_options.file_options.AutoDetectHivePartitioning(files, context);
 		return ParquetScanBindInternal(context, std::move(files), return_types, names, parquet_options);
 	}
