@@ -45,20 +45,12 @@ public:
 	SnifferResult SniffCSV();
 
 private:
-	//! Number of rows read
-	idx_t rows_read = 0;
-	//! Best Number of consistent rows (i.e., presenting all columns)
-	idx_t best_consistent_rows = 0;
 	//! Highest number of columns found
 	idx_t best_num_cols = 0;
-	//! If padding was necessary (i.e., rows are missing some columns, how much)
-	idx_t prev_padding_count = 0;
 	//! The types requested via the CSV Options (If any)
 	const vector<LogicalType> &requested_types;
-	//! Vector of CSV State Machines
-	vector<CSVStateMachine> csv_state_machines;
 	//! Current Candidates being considered
-	vector<CSVStateMachine *> candidates;
+	vector<unique_ptr<CSVStateMachine>> candidates;
 	//! Original Options set
 	const CSVReaderOptions options;
 	//! Buffer being used on sniffer
@@ -69,30 +61,22 @@ private:
 	//! ------------------------------------------------------//
 	//! First phase of auto detection: detect CSV dialect (i.e. delimiter, quote rules, etc)
 	void DetectDialect();
-
-	//! Variables for Dialect Detection
-	//! Candidates for the delimiter
-	vector<char> delim_candidates;
-	//! Quote-Rule Candidates
-	vector<QuoteRule> quoterule_candidates;
-	//! Candidates for the quote option
-	vector<vector<char>> quote_candidates_map;
-	//! Candidates for the escape option
-	vector<vector<char>> escape_candidates_map = {{'\0', '\"', '\''}, {'\\'}, {'\0'}};
-
 	//! Functions called in the main DetectDialect(); function
 	//! 1. Generates the search space candidates for the dialect
-	void GenerateCandidateDetectionSearchSpace();
+	void GenerateCandidateDetectionSearchSpace(vector<char> &delim_candidates, vector<QuoteRule> &quoterule_candidates,
+	                                           vector<vector<char>> &quote_candidates_map,
+	                                           vector<vector<char>> &escape_candidates_map);
 	//! 2. Generates the search space candidates for the state machines
-	void GenerateStateMachineSearchSpace();
+	void GenerateStateMachineSearchSpace(vector<unique_ptr<CSVStateMachine>> &csv_state_machines,
+	                                     const vector<char> &delim_candidates,
+	                                     const vector<QuoteRule> &quoterule_candidates,
+	                                     const vector<vector<char>> &quote_candidates_map,
+	                                     const vector<vector<char>> &escape_candidates_map);
 	//! 3. Analyzes if dialect candidate is a good candidate to be considered, if so, it adds it to the candidates
-	void AnalyzeDialectCandidate(CSVStateMachine &state_machine, idx_t prev_column_count = 0);
+	void AnalyzeDialectCandidate(unique_ptr<CSVStateMachine>, idx_t &rows_read, idx_t &best_consistent_rows,
+	                             idx_t &prev_padding_count, idx_t prev_column_count = 0);
 	//! 4. Refine Candidates over remaining chunks
 	void RefineCandidates();
-
-	//! Aux Functions
-	//! Resets stats so it can analyze the next chunk
-	void ResetStats();
 
 	//! ------------------------------------------------------//
 	//! ------------------- Type Detection ------------------ //
@@ -115,7 +99,7 @@ private:
 	};
 	vector<vector<LogicalType>> best_sql_types_candidates;
 	map<LogicalTypeId, vector<string>> best_format_candidates;
-	CSVStateMachine *best_candidate = nullptr;
+	unique_ptr<CSVStateMachine> best_candidate;
 	vector<Value> best_header_row;
 
 	//! ------------------------------------------------------//

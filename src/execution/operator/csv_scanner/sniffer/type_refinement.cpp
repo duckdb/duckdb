@@ -41,7 +41,7 @@ void CSVSniffer::RefineTypes() {
 		parse_chunk.Initialize(BufferAllocator::Get(buffer_manager->context), detected_types);
 		// FIXME: We are doing this sequentially, but we could do this by jumping samples.
 		for (idx_t i = 1; i < best_candidate->options.sample_chunks; i++) {
-			bool finished_file = candidates[0]->csv_buffer_iterator.Finished();
+			bool finished_file = best_candidate->csv_buffer_iterator.Finished();
 			if (finished_file) {
 				// we finished the file: stop
 				// set sql types
