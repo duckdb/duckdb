@@ -679,7 +679,7 @@ function(build_loadable_extension NAME PARAMETERS)
   set(FILES ${ARGV})
   list(REMOVE_AT FILES 0)
   list(REMOVE_AT FILES 0)
-
+  target_link_libraries(${NAME}_extension duckdb_static)
   build_loadable_extension_directory(${NAME} "extension/${NAME}" "${PARAMETERS}" ${FILES})
 endfunction()
 
