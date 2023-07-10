@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/serializer/binary_serializer.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/serializer/format_serializer.hpp"

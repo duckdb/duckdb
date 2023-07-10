@@ -1,4 +1,13 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/serializer/binary_deserializer.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
+
 #include "duckdb/common/serializer/format_deserializer.hpp"
 
 namespace duckdb {
