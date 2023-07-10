@@ -129,7 +129,7 @@ void BinarySerializer::WriteValue(const string &value) {
 	auto len = value.length();
 	Write<uint32_t>((uint32_t)len);
 	if (len > 0) {
-		WriteData(value.c_str(), len);
+		WriteDataInternal(value.c_str(), len);
 	}
 }
 
@@ -137,7 +137,7 @@ void BinarySerializer::WriteValue(const string_t value) {
 	auto len = value.GetSize();
 	Write<uint32_t>((uint32_t)len);
 	if (len > 0) {
-		WriteData(value.GetDataUnsafe(), len);
+		WriteDataInternal(value.GetDataUnsafe(), len);
 	}
 }
 
@@ -145,7 +145,7 @@ void BinarySerializer::WriteValue(const char *value) {
 	auto len = strlen(value);
 	Write<uint32_t>((uint32_t)len);
 	if (len > 0) {
-		WriteData(value, len);
+		WriteDataInternal(value, len);
 	}
 }
 
@@ -154,7 +154,7 @@ void BinarySerializer::WriteValue(bool value) {
 }
 
 void BinarySerializer::WriteDataPtr(const_data_ptr_t ptr, idx_t count) {
-	WriteData(ptr, count);
+	WriteDataInternal(ptr, count);
 }
 
 } // namespace duckdb
