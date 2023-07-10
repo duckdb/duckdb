@@ -16,9 +16,9 @@ void LogicalType::FormatSerialize(FormatSerializer &serializer) const {
 
 LogicalType LogicalType::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto id = deserializer.ReadProperty<LogicalTypeId>("id");
-	auto info = deserializer.ReadOptionalProperty<shared_ptr<ExtraTypeInfo>>("type_info");
-
-	return LogicalType(id, std::move(info));
+	auto type_info = deserializer.ReadOptionalProperty<shared_ptr<ExtraTypeInfo>>("type_info");
+	LogicalType result(id, std::move(type_info));
+	return std::move(result);
 }
 
 } // namespace duckdb

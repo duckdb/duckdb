@@ -73,7 +73,10 @@ def is_container(type):
     return '<' in type
 
 def is_pointer(type):
-    return '*' in type
+    return type.endswith('*') or type.startswith('shared_ptr<')
+
+def requires_move(type):
+    return is_container(type) or is_pointer(type)
 
 def replace_pointer(type):
     return re.sub('([a-zA-Z0-9]+)[*]', 'unique_ptr<\\1>', type)
@@ -128,11 +131,11 @@ class SerializableClass:
             self.extra_parameters = entry['extra_parameters']
         if 'pointer_type' in entry:
             self.pointer_type = entry['pointer_type']
-        elif 'base' in entry:
+        if 'base' in entry:
             self.base = entry['base']
             self.enum_entry = entry['enum']
-            if 'constructor' in entry:
-                self.constructor = entry['constructor']
+        if 'constructor' in entry:
+            self.constructor = entry['constructor']
         if 'custom_implementation' in entry and entry['custom_implementation']:
             self.custom_implementation = True
         if 'custom_switch_code' in entry:
@@ -154,9 +157,7 @@ def generate_base_class_code(base_class):
     enum_type = ''
     for entry in base_class.members:
         property_name = entry['property'] if 'property' in entry else entry['name']
-        type_name = entry['type']
-        if is_pointer(type_name):
-            type_name = replace_pointer(type_name)
+        type_name = replace_pointer(entry['type'])
         if property_name == base_class.enum_value:
             enum_type = entry['type']
         is_optional = False
@@ -225,6 +226,8 @@ def generate_class_code(class_entry):
         return None
     extra_parameters = []
     extra_parameter_txt = ''
+    class_serialize = ''
+    class_deserialize = ''
     if class_entry.base is not None:
         extra_parameters = class_entry.extra_parameters
         for extra_parameter in extra_parameters:
@@ -236,17 +239,31 @@ def generate_class_code(class_entry):
                 raise Exception('Extra parameter type not found')
             extra_parameter_txt += extra_parameter_type + ' ' + extra_parameter + ', '
 
+    constructor_parameters = ''
+    constructor_entries = {}
     if class_entry.constructor is not None:
-        if len(class_entry.constructor) != 0:
-            raise Exception("Only empty constructors supported right now")
-        constructor_parameters = ''
+        for constructor_entry in class_entry.constructor:
+            constructor_entries[constructor_entry] = True
+            found = False
+            for entry in class_entry.members:
+                if entry['name'] == constructor_entry:
+                    if len(constructor_parameters) > 0:
+                        constructor_parameters += ", "
+                    if requires_move(entry['type']):
+                        constructor_parameters += 'std::move(' + entry['name'] + ')'
+                    else:
+                        constructor_parameters += entry['name']
+                    class_deserialize += get_deserialize_element(entry['name'], entry['name'], entry['type'], 'optional' in entry and entry['optional'], 'unique_ptr')
+                    found = True
+                    break
+            if not found:
+                raise Exception(f"Constructor member {constructor_entry} was not found in members list")
     else:
         constructor_parameters = ', '.join(extra_parameters)
 
-    class_serialize = ''
     if class_entry.base is not None:
         class_serialize += base_serialize.replace('${BASE_CLASS_NAME}', class_entry.base)
-    class_deserialize = generate_constructor(class_entry.pointer_type, class_entry.name, constructor_parameters)
+    class_deserialize += generate_constructor(class_entry.pointer_type, class_entry.name, constructor_parameters)
     if class_entry.members is None:
         return None
     for entry in class_entry.members:
@@ -256,7 +273,7 @@ def generate_class_code(class_entry):
         write_property_name = property_name
         if 'optional' in entry and entry['optional']:
             is_optional = True
-        if entry['type'].endswith('*'):
+        if is_pointer(entry['type']):
             if not is_optional:
                 write_property_name = '*' + property_name
         elif is_optional:
@@ -266,7 +283,8 @@ def generate_class_code(class_entry):
             write_property_name = f"({entry['base']} &)" + write_property_name
             deserialize_template_str = deserialize_element_class_base.replace('${BASE_PROPERTY}', entry['base'].replace('*', '')).replace('${DERIVED_PROPERTY}', entry['type'].replace('*', ''))
         class_serialize += get_serialize_element(write_property_name, property_key, entry['type'], is_optional, class_entry.pointer_type)
-        class_deserialize += get_deserialize_element_template(deserialize_template_str, property_name, property_key, entry['type'], is_optional, class_entry.pointer_type)
+        if entry['name'] not in constructor_entries:
+            class_deserialize += get_deserialize_element_template(deserialize_template_str, property_name, property_key, entry['type'], is_optional, class_entry.pointer_type)
 
     class_deserialize += '\treturn std::move(result);'
     if class_entry.base is None:

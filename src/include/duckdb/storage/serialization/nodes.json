@@ -12,11 +12,12 @@
       },
       {
         "name": "type_info",
-        "type": "ExtraTypeInfo*",
+        "type": "shared_ptr<ExtraTypeInfo>",
         "property": "type_info_",
         "optional": true
       }
     ],
-    "pointer_type": "none"
+    "pointer_type": "none",
+    "constructor": ["id", "type_info"]
   }
 ]
