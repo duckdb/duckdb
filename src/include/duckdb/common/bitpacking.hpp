@@ -82,12 +82,6 @@ public:
 		return FindMinimumBitWidth<T, BYTE_ALIGNED>(value, value);
 	}
 
-	// Overload specifically for the usage of size_t in the fsst library
-	template <>
-	bitpacking_width_t MinimumBitWidth<size_t>(size_t value) {
-		return FindMinimumBitWidth<uint64_t, BYTE_ALIGNED>(uint64_t(value), uint64_t(value));
-	}
-
 	// Calculates the minimum required number of bits per value that can store all values
 	template <class T>
 	inline static bitpacking_width_t MinimumBitWidth(T *values, idx_t count) {
