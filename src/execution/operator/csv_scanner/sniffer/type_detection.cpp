@@ -178,7 +178,11 @@ void CSVSniffer::DetectTypes() {
 		candidate->Reset();
 
 		// Parse chunk and read csv with info candidate
-		vector<pair<idx_t, vector<Value>>> values(options.sample_chunk_size);
+		idx_t sample_size = options.sample_chunk_size;
+		if (options.sample_chunk_size == 1) {
+			sample_size++;
+		}
+		vector<pair<idx_t, vector<Value>>> values(sample_size);
 		candidate->SniffValue(values);
 		// Potentially Skip empty rows (I find this dirty, but it is what the original code does)
 		idx_t true_start = 0;

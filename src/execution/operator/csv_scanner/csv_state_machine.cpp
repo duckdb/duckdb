@@ -161,7 +161,6 @@ void CSVStateMachine::SniffValue(vector<pair<idx_t, vector<Value>>> &sniffed_val
 	CSVState state {CSVState::STANDARD};
 	CSVState previous_state;
 	idx_t cur_row = 0;
-	D_ASSERT(sniffed_value.size() == options.sample_chunk_size);
 	string value;
 	idx_t rows_read = 0;
 
@@ -199,7 +198,7 @@ void CSVStateMachine::SniffValue(vector<pair<idx_t, vector<Value>>> &sniffed_val
 		cur_row += previous_state == CSVState::RECORD_SEPARATOR && !empty_line;
 		// It means our carriage return is actually a record separator
 		cur_row += state != CSVState::RECORD_SEPARATOR && carriage_return;
-		if (cur_row >= options.sample_chunk_size) {
+		if (cur_row >= sniffed_value.size()) {
 			// We sniffed enough rows
 			break;
 		}
@@ -207,12 +206,12 @@ void CSVStateMachine::SniffValue(vector<pair<idx_t, vector<Value>>> &sniffed_val
 	}
 	bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
 	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
-	if (cur_row < options.sample_chunk_size && !empty_line) {
+	if (cur_row < sniffed_value.size() && !empty_line) {
 		VerifyUTF8(options, cur_row, value);
 		sniffed_value[cur_row].first = rows_read;
 		sniffed_value[cur_row++].second.push_back(Value(value));
 	}
-	sniffed_value.erase(sniffed_value.end() - (options.sample_chunk_size - cur_row), sniffed_value.end());
+	sniffed_value.erase(sniffed_value.end() - (sniffed_value.size() - cur_row), sniffed_value.end());
 }
 void CSVStateMachine::Parse(DataChunk &parse_chunk) {
 	CSVState state {CSVState::STANDARD};
