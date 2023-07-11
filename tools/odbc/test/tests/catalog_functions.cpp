@@ -19,8 +19,6 @@ using namespace odbc_test;
  * - SQLProcedures
  */
 
-#include <iostream>
-
 void TestGetTypeInfo(HSTMT &hstmt, std::map<SQLSMALLINT, SQLULEN> &types_map) {
 	SQLSMALLINT col_count;
 
