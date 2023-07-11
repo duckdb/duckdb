@@ -138,7 +138,7 @@ class SerializableClass:
         self.base = None
         self.base_object = None
         self.enum_value = None
-        self.enum_entry = None
+        self.enum_entries = []
         self.extra_parameters = []
         self.pointer_type = 'unique_ptr'
         self.constructor = None
@@ -156,7 +156,9 @@ class SerializableClass:
             self.pointer_type = entry['pointer_type']
         if 'base' in entry:
             self.base = entry['base']
-            self.enum_entry = entry['enum']
+            self.enum_entries = entry['enum']
+            if type(self.enum_entries) is str:
+                self.enum_entries = [self.enum_entries]
             self.return_type = self.base
         if 'constructor' in entry:
             self.constructor = entry['constructor']
@@ -346,10 +348,11 @@ for entry in file_list:
                 if new_class.base not in base_class_data:
                     raise Exception(f"Unknown base class \"{new_class.base}\" for entry \"{new_class.name}\"")
                 base_class_object = base_class_data[new_class.base]
-                if new_class.enum_entry in base_class_object.children:
-                    raise Exception(f"Duplicate enum entry \"{new_class.enum_entry}\"")
                 new_class.inherit(base_class_object)
-                base_class_object.children[new_class.enum_entry] = new_class
+                for enum_entry in new_class.enum_entries:
+                    if enum_entry in base_class_object.children:
+                        raise Exception(f"Duplicate enum entry \"{enum_entry}\"")
+                    base_class_object.children[enum_entry] = new_class
 
     with open(target_path, 'w+') as f:
         f.write(header.replace('${INCLUDE_LIST}', ''.join([include_base.replace('${FILENAME}', x) for x in include_list])))

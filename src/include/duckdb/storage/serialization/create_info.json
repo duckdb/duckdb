@@ -152,5 +152,23 @@
         "type": "LogicalType"
       }
     ]
+  },
+  {
+    "class": "CreateMacroInfo",
+    "base": "CreateInfo",
+    "enum": ["MACRO_ENTRY", "TABLE_MACRO_ENTRY"],
+    "includes": [
+      "duckdb/parser/parsed_data/create_macro_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "function",
+        "type": "MacroFunction*"
+      }
+    ]
   }
 ]

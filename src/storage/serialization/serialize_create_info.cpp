@@ -11,6 +11,7 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
+#include "duckdb/parser/parsed_data/create_macro_info.hpp"
 
 namespace duckdb {
 
@@ -37,11 +38,17 @@ unique_ptr<CreateInfo> CreateInfo::FormatDeserialize(FormatDeserializer &deseria
 	case CatalogType::INDEX_ENTRY:
 		result = CreateIndexInfo::FormatDeserialize(deserializer);
 		break;
+	case CatalogType::MACRO_ENTRY:
+		result = CreateMacroInfo::FormatDeserialize(deserializer);
+		break;
 	case CatalogType::SCHEMA_ENTRY:
 		result = CreateSchemaInfo::FormatDeserialize(deserializer);
 		break;
 	case CatalogType::TABLE_ENTRY:
 		result = CreateTableInfo::FormatDeserialize(deserializer);
+		break;
+	case CatalogType::TABLE_MACRO_ENTRY:
+		result = CreateMacroInfo::FormatDeserialize(deserializer);
 		break;
 	case CatalogType::TYPE_ENTRY:
 		result = CreateTypeInfo::FormatDeserialize(deserializer);
@@ -79,6 +86,19 @@ unique_ptr<CreateInfo> CreateIndexInfo::FormatDeserialize(FormatDeserializer &de
 	deserializer.ReadProperty("parsed_expressions", result->parsed_expressions);
 	deserializer.ReadProperty("names", result->names);
 	deserializer.ReadProperty("column_ids", result->column_ids);
+	return std::move(result);
+}
+
+void CreateMacroInfo::FormatSerialize(FormatSerializer &serializer) const {
+	CreateInfo::FormatSerialize(serializer);
+	serializer.WriteProperty("name", name);
+	serializer.WriteProperty("function", *function);
+}
+
+unique_ptr<CreateInfo> CreateMacroInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<CreateMacroInfo>(new CreateMacroInfo());
+	deserializer.ReadProperty("name", result->name);
+	deserializer.ReadProperty("function", result->function);
 	return std::move(result);
 }
 

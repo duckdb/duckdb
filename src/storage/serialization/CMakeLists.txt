@@ -3,6 +3,7 @@ add_library_unity(
   OBJECT
   serialize_constraint.cpp
   serialize_create_info.cpp
+  serialize_macro_function.cpp
   serialize_nodes.cpp
   serialize_parsed_expression.cpp
   serialize_query_node.cpp
