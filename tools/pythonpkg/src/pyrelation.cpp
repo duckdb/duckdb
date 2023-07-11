@@ -634,7 +634,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetAttribute(const string &name) 
 		return make_uniq<DuckDBPyRelation>(rel->Project({StringUtil::Format("%s.%s", names[0], name)}));
 	}
 	if (ContainsColumnByName(name)) {
-		return make_uniq<DuckDBPyRelation>(rel->Project({name}));
+		return make_uniq<DuckDBPyRelation>(rel->Project({StringUtil::Format("\"%s\"", name)}));
 	}
 	throw py::attribute_error(StringUtil::Format("This relation does not contain a column by the name of '%s'", name));
 }

@@ -357,6 +357,19 @@ void PythonObject::Initialize() {
 	PyDateTime_IMPORT; // NOLINT: Python datetime initialize #2
 }
 
+enum class InfinityType : uint8_t { NONE, POSITIVE, NEGATIVE };
+
+template <class TIMESTAMP_TYPE>
+InfinityType GetTimestampInfinityType(timestamp_t &timestamp) {
+	if (timestamp == TIMESTAMP_TYPE::infinity()) {
+		return InfinityType::POSITIVE;
+	}
+	if (timestamp == TIMESTAMP_TYPE::ninfinity()) {
+		return InfinityType::NEGATIVE;
+	}
+	return InfinityType::NONE;
+}
+
 py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	if (val.IsNull()) {
@@ -405,12 +418,31 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 	case LogicalTypeId::TIMESTAMP_TZ: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
 		auto timestamp = val.GetValueUnsafe<timestamp_t>();
+
+		InfinityType infinity = InfinityType::NONE;
 		if (type.id() == LogicalTypeId::TIMESTAMP_MS) {
 			timestamp = Timestamp::FromEpochMs(timestamp.value);
+			infinity = GetTimestampInfinityType<timestamp_ms_t>(timestamp);
 		} else if (type.id() == LogicalTypeId::TIMESTAMP_NS) {
 			timestamp = Timestamp::FromEpochNanoSeconds(timestamp.value);
+			infinity = GetTimestampInfinityType<timestamp_ns_t>(timestamp);
 		} else if (type.id() == LogicalTypeId::TIMESTAMP_SEC) {
 			timestamp = Timestamp::FromEpochSeconds(timestamp.value);
+			infinity = GetTimestampInfinityType<timestamp_sec_t>(timestamp);
+		} else {
+			infinity = GetTimestampInfinityType<timestamp_t>(timestamp);
+		}
+
+		// Deal with infinity
+		switch (infinity) {
+		case InfinityType::POSITIVE: {
+			return py::module::import("datetime").attr("datetime").attr("max");
+		}
+		case InfinityType::NEGATIVE: {
+			return py::module::import("datetime").attr("datetime").attr("min");
+		}
+		case InfinityType::NONE:
+			break;
 		}
 		int32_t year, month, day, hour, min, sec, micros;
 		date_t date;
@@ -434,6 +466,12 @@ py::object PythonObject::FromValue(const Value &val, const LogicalType &type) {
 
 		auto date = val.GetValueUnsafe<date_t>();
 		int32_t year, month, day;
+		if (!duckdb::Date::IsFinite(date)) {
+			if (date == date_t::infinity()) {
+				return py::module::import("datetime").attr("date").attr("max");
+			}
+			return py::module::import("datetime").attr("date").attr("min");
+		}
 		duckdb::Date::Convert(date, year, month, day);
 		return py::reinterpret_steal<py::object>(PyDate_FromDate(year, month, day));
 	}
