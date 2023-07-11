@@ -72,6 +72,7 @@ jobs:
         clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp
 
   xcode-release:
+    # Builds binaries for osx_arm64 and osx_amd64
     name: OSX Release
     runs-on: macos-latest
     needs: xcode-debug
@@ -168,6 +169,7 @@ jobs:
             duckdb_odbc-osx-universal.zip
 
   xcode-extensions:
+    # Builds extensions for osx_arm64 and osx_amd64
     name: OSX Extensions Release
     runs-on: macos-latest
     needs: xcode-debug
