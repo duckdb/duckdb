@@ -360,6 +360,7 @@ for entry in file_list:
             f.write(base_class_generation)
 
         # generate the class serialization
+        classes = sorted(classes, key = lambda x: x.name)
         for class_entry in classes:
             class_generation = generate_class_code(class_entry)
             if class_generation is None:

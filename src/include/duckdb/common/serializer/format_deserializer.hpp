@@ -308,10 +308,22 @@ private:
 		return ReadInterval();
 	}
 
-	// Deserialize a interval_t
+	// Deserialize a hugeint_t
 	template <typename T = void>
 	inline typename std::enable_if<std::is_same<T, hugeint_t>::value, T>::type Read() {
 		return ReadHugeInt();
+	}
+
+	// Deserialize a LogicalIndex
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, LogicalIndex>::value, T>::type Read() {
+		return LogicalIndex(ReadUnsignedInt64());
+	}
+
+	// Deserialize a PhysicalIndex
+	template <typename T = void>
+	inline typename std::enable_if<std::is_same<T, PhysicalIndex>::value, T>::type Read() {
+		return PhysicalIndex(ReadUnsignedInt64());
 	}
 
 protected:
