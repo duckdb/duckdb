@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 
 namespace duckdb {
 
@@ -21,6 +22,7 @@ public:
 
 public:
 	static bool IsColumnSerial(const LogicalTypeId &type, const string &col_type_name);
+	static unique_ptr<CreateSequenceInfo> makeSequence(const string &seq_name, const LogicalType &type);
 };
 
 } // namespace duckdb

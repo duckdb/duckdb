@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/constraint.hpp"
@@ -32,6 +34,10 @@ struct CreateTableInfo : public CreateInfo {
 	vector<unique_ptr<Constraint>> constraints;
 	//! CREATE TABLE from QUERY
 	unique_ptr<SelectStatement> query;
+	//! List of sequences associated with the table
+	vector<unique_ptr<CreateSequenceInfo>> sequences;
+	//! List of col defaults associated with the sequences
+	vector<unique_ptr<SetDefaultInfo>> col_defaults;
 
 protected:
 	void SerializeInternal(Serializer &serializer) const override;

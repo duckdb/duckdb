@@ -27,6 +27,7 @@ class ColumnDefinition;
 class ColumnDefinition {
 public:
 	DUCKDB_API ColumnDefinition(string name, LogicalType type);
+	DUCKDB_API ColumnDefinition(string name, LogicalType type, TableColumnType category);
 	DUCKDB_API ColumnDefinition(string name, LogicalType type, unique_ptr<ParsedExpression> expression,
 	                            TableColumnType category);
 

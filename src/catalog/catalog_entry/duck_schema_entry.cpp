@@ -115,6 +115,20 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 		return nullptr;
 	}
 
+	// create any sequences that are owned by this table (those cols with serial type)
+	DependencyList table_deps;
+	table_deps.AddDependency(*entry.get());
+	const auto &base_info = info.Base();
+	D_ASSERT(base_info.sequences.size() == base_info.col_defaults.size());
+	for (auto &create_seq : base_info.sequences) {
+		auto sequence = make_uniq<SequenceCatalogEntry>(catalog, *this, *create_seq.get());
+		AddEntryInternal(transaction, std::move(sequence), base_info.on_conflict, table_deps);
+
+		catalog.Alter(transaction.GetContext(), *base_info.col_defaults[0].get());
+		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
+		info.dependencies.AddDependency(*set.GetEntry(transaction, (*base_info.col_defaults[0].get()).name));
+	}
+
 	// add a foreign key constraint in main key table if there is a foreign key constraint
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
 	FindForeignKeyInformation(*entry, AlterForeignKeyType::AFT_ADD, fk_arrays);

@@ -196,7 +196,8 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 		auto &column_entry = table_entry.GetColumn(LogicalIndex(column_index));
 		(void)table_entry;
 		(void)column_entry;
-		D_ASSERT(column_entry.Category() == TableColumnType::STANDARD);
+		D_ASSERT(column_entry.Category() == TableColumnType::STANDARD ||
+		         column_entry.Category() == TableColumnType::SERIAL);
 	}
 	// fetch the type of the column
 	LogicalType col_type;

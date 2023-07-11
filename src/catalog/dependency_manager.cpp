@@ -32,9 +32,15 @@ void DependencyManager::AddObject(CatalogTransaction transaction, CatalogEntry &
 			throw InternalException("Dependency has already been deleted?");
 		}
 	}
-	// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
-	auto dependency_type = object.type == CatalogType::INDEX_ENTRY ? DependencyType::DEPENDENCY_AUTOMATIC
-	                                                               : DependencyType::DEPENDENCY_REGULAR;
+	// indexes or serials (a special SEQUENCE associated with table) do not require CASCADE to be dropped,
+	// they are simply always dropped along with the table
+	auto dependency_type = DependencyType::DEPENDENCY_REGULAR;
+	if (object.type == CatalogType::INDEX_ENTRY) {
+		dependency_type = DependencyType::DEPENDENCY_AUTOMATIC;
+	} else if (object.type == CatalogType::SEQUENCE_ENTRY) {
+		dependency_type = DependencyType::DEPENDENCY_OWNS;
+	}
+
 	// add the object to the dependents_map of each object that it depends on
 	for (auto &dependency : dependencies.set) {
 		auto &set = dependents_map[dependency];

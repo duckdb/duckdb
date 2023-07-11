@@ -20,4 +20,18 @@ bool SerialColumnType::IsColumnSerial(const LogicalTypeId &type_id, const string
 	return false;
 }
 
+unique_ptr<CreateSequenceInfo> SerialColumnType::makeSequence(const string &seq_name, const LogicalType &type) {
+	auto sequence = make_uniq<CreateSequenceInfo>();
+	sequence->name = seq_name;
+
+	if (type.id() == LogicalTypeId::SMALLINT) {
+		sequence->max_value = NumericLimits<int16_t>::Maximum();
+	} else if (type.id() == LogicalTypeId::INTEGER) {
+		sequence->max_value = NumericLimits<int32_t>::Maximum();
+	} else {
+		sequence->max_value = NumericLimits<int64_t>::Maximum();
+	}
+
+	return sequence;
+}
 } // namespace duckdb

@@ -49,6 +49,9 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	if (query) {
 		result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
 	}
+	for (auto &sequence : sequences) {
+		result->sequences.push_back(unique_ptr_cast<CreateInfo, CreateSequenceInfo>(sequence->Copy()));
+	}
 	return std::move(result);
 }
 
