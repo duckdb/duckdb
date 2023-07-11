@@ -179,6 +179,7 @@ jobs:
         R CMD INSTALL .
 
   rstats-windows:
+    # Builds binaries for windows_amd64_rtools
     name: R Package Windows
     needs: rstats-linux
     runs-on: windows-latest
@@ -221,6 +222,7 @@ jobs:
         if egrep 'NOTE|WARNING|ERROR' /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
   rstats-windows-extensions:
+    # Builds extensions for windows_amd64_rtools
     name: R Package Windows (Extensions)
     if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
     needs: rstats-linux

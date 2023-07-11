@@ -13,7 +13,7 @@ PRAGMA enable_verification
 # * First payload bin empty 
 # * Multiple scanned payload blocks
 
-# Change to true to check results
+# Check results against IEJoin
 foreach debug False True
 
 statement ok 
