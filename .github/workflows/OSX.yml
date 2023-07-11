@@ -115,6 +115,10 @@ jobs:
         shell: bash
         run: make
 
+      - name: Print platform
+        shell: bash
+        run: ./build/release/duckdb -c "PRAGMA platform;"
+
       - name: Unit Test
         shell: bash
         run: make allunit
