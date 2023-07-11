@@ -162,11 +162,10 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 			// single column unique: insert constraint here
 			ss << " UNIQUE";
 		}
-		if (column.DefaultValue()) {
-			ss << " DEFAULT(" << column.DefaultValue()->ToString() << ")";
-		}
 		if (column.Generated()) {
 			ss << " GENERATED ALWAYS AS(" << column.GeneratedExpression().ToString() << ")";
+		} else if (column.DefaultValue()) {
+			ss << " DEFAULT(" << column.DefaultValue()->ToString() << ")";
 		}
 	}
 	// print any extra constraints that still need to be printed

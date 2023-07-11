@@ -140,5 +140,50 @@
       }
     ],
     "pointer_type": "none"
+  },
+  {
+    "class": "ColumnDefinition",
+    "includes": [
+      "duckdb/parser/column_definition.hpp"
+    ],
+    "members": [
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "expression",
+        "type": "ParsedExpression*",
+        "optional": true
+      },
+      {
+        "name": "category",
+        "type": "TableColumnType"
+      },
+      {
+        "name": "compression_type",
+        "type": "CompressionType"
+      }
+    ],
+    "constructor": ["name", "type", "expression", "category"],
+    "pointer_type": "none"
+  },
+  {
+    "class": "ColumnList",
+    "includes": [
+      "duckdb/parser/column_list.hpp"
+    ],
+    "members": [
+      {
+        "name": "columns",
+        "type": "vector<ColumnDefinition>"
+      }
+    ],
+    "constructor": ["columns"],
+    "pointer_type": "none"
   }
 ]

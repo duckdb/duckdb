@@ -277,7 +277,7 @@ def generate_class_code(class_entry):
                     found = True
                     break
             if not found:
-                raise Exception(f"Constructor member {constructor_entry} was not found in members list")
+                raise Exception(f"Constructor member \"{constructor_entry}\" was not found in members list")
     else:
         constructor_parameters = ', '.join(extra_parameters)
 

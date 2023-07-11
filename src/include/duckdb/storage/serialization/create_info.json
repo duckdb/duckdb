@@ -70,5 +70,32 @@
         "type": "vector<column_t>"
       }
     ]
+  },
+  {
+    "class": "CreateTableInfo",
+    "base": "CreateInfo",
+    "enum": "TABLE_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_table_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "table",
+        "type": "string"
+      },
+      {
+        "name": "columns",
+        "type": "ColumnList"
+      },
+      {
+        "name": "constraints",
+        "type": "vector<Constraint*>"
+      },
+      {
+        "name": "query",
+        "type": "SelectStatement*",
+        "optional": true
+      }
+    ]
   }
 ]

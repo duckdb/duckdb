@@ -7,6 +7,7 @@
 #include "duckdb/common/serializer/format_deserializer.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 
 namespace duckdb {
 
@@ -32,6 +33,9 @@ unique_ptr<CreateInfo> CreateInfo::FormatDeserialize(FormatDeserializer &deseria
 	switch (type) {
 	case CatalogType::INDEX_ENTRY:
 		result = CreateIndexInfo::FormatDeserialize(deserializer);
+		break;
+	case CatalogType::TABLE_ENTRY:
+		result = CreateTableInfo::FormatDeserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of CreateInfo!");
@@ -63,6 +67,23 @@ unique_ptr<CreateInfo> CreateIndexInfo::FormatDeserialize(FormatDeserializer &de
 	deserializer.ReadProperty("parsed_expressions", result->parsed_expressions);
 	deserializer.ReadProperty("names", result->names);
 	deserializer.ReadProperty("column_ids", result->column_ids);
+	return std::move(result);
+}
+
+void CreateTableInfo::FormatSerialize(FormatSerializer &serializer) const {
+	CreateInfo::FormatSerialize(serializer);
+	serializer.WriteProperty("table", table);
+	serializer.WriteProperty("columns", columns);
+	serializer.WriteProperty("constraints", constraints);
+	serializer.WriteOptionalProperty("query", query);
+}
+
+unique_ptr<CreateInfo> CreateTableInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<CreateTableInfo>(new CreateTableInfo());
+	deserializer.ReadProperty("table", result->table);
+	deserializer.ReadProperty("columns", result->columns);
+	deserializer.ReadProperty("constraints", result->constraints);
+	deserializer.ReadOptionalProperty("query", result->query);
 	return std::move(result);
 }
 

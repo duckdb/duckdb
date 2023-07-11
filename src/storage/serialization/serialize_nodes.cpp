@@ -12,6 +12,8 @@
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/column_list.hpp"
 
 namespace duckdb {
 
@@ -24,6 +26,34 @@ CaseCheck CaseCheck::FormatDeserialize(FormatDeserializer &deserializer) {
 	CaseCheck result;
 	deserializer.ReadProperty("when_expr", result.when_expr);
 	deserializer.ReadProperty("then_expr", result.then_expr);
+	return result;
+}
+
+void ColumnDefinition::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("name", name);
+	serializer.WriteProperty("type", type);
+	serializer.WriteOptionalProperty("expression", expression);
+	serializer.WriteProperty("category", category);
+	serializer.WriteProperty("compression_type", compression_type);
+}
+
+ColumnDefinition ColumnDefinition::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto name = deserializer.ReadProperty<string>("name");
+	auto type = deserializer.ReadProperty<LogicalType>("type");
+	auto expression = deserializer.ReadOptionalProperty<unique_ptr<ParsedExpression>>("expression");
+	auto category = deserializer.ReadProperty<TableColumnType>("category");
+	ColumnDefinition result(name, type, std::move(expression), category);
+	deserializer.ReadProperty("compression_type", result.compression_type);
+	return result;
+}
+
+void ColumnList::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("columns", columns);
+}
+
+ColumnList ColumnList::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto columns = deserializer.ReadProperty<vector<ColumnDefinition>>("columns");
+	ColumnList result(std::move(columns));
 	return result;
 }
 
