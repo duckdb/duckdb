@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "re2/re2.h"
 
@@ -86,12 +87,15 @@ std::map<string, string> HivePartitioning::Parse(const string &filename) {
 //		 currently, only expressions that cannot be evaluated during pushdown are removed.
 void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<string> &files,
                                               vector<unique_ptr<Expression>> &filters,
-                                              unordered_map<string, column_t> &column_map, idx_t table_index,
+                                              unordered_map<string, column_t> &column_map, LogicalGet &get,
                                               bool hive_enabled, bool filename_enabled) {
+
 	vector<string> pruned_files;
 	vector<bool> have_preserved_filter(filters.size(), false);
 	vector<unique_ptr<Expression>> pruned_filters;
+	unordered_set<idx_t> filters_applied_to_files;
 	duckdb_re2::RE2 regex(REGEX_STRING);
+	auto table_index = get.table_index;
 
 	if ((!filename_enabled && !hive_enabled) || filters.empty()) {
 		return;
@@ -121,11 +125,11 @@ void HivePartitioning::ApplyFiltersToFileList(ClientContext &context, vector<str
 			} else if (!result_value.GetValue<bool>()) {
 				// filter evaluates to false
 				should_prune_file = true;
-			}
-
-			// Use filter combiner to determine that this filter makes
-			if (!should_prune_file && combiner.AddFilter(std::move(filter_copy)) == FilterResult::UNSATISFIABLE) {
-				should_prune_file = true;
+				// convert the filter to a table filter.
+				if (filters_applied_to_files.find(j) == filters_applied_to_files.end()) {
+					get.extra_info.file_filters += filter->ToString();
+					filters_applied_to_files.insert(j);
+				}
 			}
 		}
 

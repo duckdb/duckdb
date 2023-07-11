@@ -27,14 +27,21 @@ jobs:
   linux-extensions-64-rebuild:
     name: Linux Extensions (64 Bit)
     runs-on: ubuntu-latest
-    container: ubuntu:16.04
+    container: quay.io/pypa/manylinux2014_x86_64
 
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
-    - uses: ./.github/actions/ubuntu_16_setup
+    - uses: ./.github/actions/manylinux_2014_setup
+      with:
+        aws-cli: 1
+        ninja-build: 1
+        vcpkg: 1
+        openssl: 1
+        ccache: 1
+        ssh: 1
 
     - name: Checkout specific DuckDB version
       shell: bash
@@ -64,7 +71,9 @@ jobs:
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-
+        toolchain_path: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
+        python_name: python3.7
+        openssl_path: ${{ env.VCPKG_ROOT }}/installed/x64-linux
 
   xcode-extensions-rebuild:
     name: OSX Extensions Release
