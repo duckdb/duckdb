@@ -33,7 +33,7 @@ public:
 	void SniffDialect(vector<idx_t> &sniffed_column_counts);
 
 	//! This sniffs values from the CSV file
-	void SniffValue(vector<vector<Value>> &sniffed_value);
+	void SniffValue(vector<pair<idx_t, vector<Value>>> &sniffed_value);
 
 	//! Parses the state machine
 	void Parse(DataChunk &parse_chunk);

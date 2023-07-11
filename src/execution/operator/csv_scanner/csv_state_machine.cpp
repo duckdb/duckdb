@@ -157,13 +157,20 @@ void VerifyUTF8(CSVReaderOptions &options, idx_t linenr, string &value) {
 	}
 }
 
-void CSVStateMachine::SniffValue(vector<vector<Value>> &sniffed_value) {
+void CSVStateMachine::SniffValue(vector<pair<idx_t, vector<Value>>> &sniffed_value) {
 	CSVState state {CSVState::STANDARD};
 	CSVState previous_state;
 	idx_t cur_row = 0;
 	D_ASSERT(sniffed_value.size() == options.sample_chunk_size);
 	string value;
+	idx_t rows_read = 0;
+
 	while (!csv_buffer_iterator.Finished()) {
+		if ((options.new_line == NewLineIdentifier::SINGLE && (current_char == '\r' || current_char == '\n')) ||
+		    (options.new_line == NewLineIdentifier::CARRY_ON && current_char == '\n')) {
+			rows_read++;
+		}
+
 		previous_state = state;
 		state =
 		    static_cast<CSVState>(transition_array[static_cast<uint8_t>(state)][static_cast<uint8_t>(current_char)]);
@@ -179,10 +186,11 @@ void CSVStateMachine::SniffValue(vector<vector<Value>> &sniffed_value) {
 			VerifyUTF8(options, cur_row, value);
 			if (value.empty() || value == options.null_str) {
 				// We set empty == null value
-				sniffed_value[cur_row].push_back(Value(LogicalType::VARCHAR));
+				sniffed_value[cur_row].second.push_back(Value(LogicalType::VARCHAR));
 			} else {
-				sniffed_value[cur_row].push_back(Value(value));
+				sniffed_value[cur_row].second.push_back(Value(value));
 			}
+			sniffed_value[cur_row].first = rows_read;
 			value = "";
 		}
 		if (state == CSVState::STANDARD || (state == CSVState::QUOTED && previous_state == CSVState::QUOTED)) {
@@ -201,8 +209,8 @@ void CSVStateMachine::SniffValue(vector<vector<Value>> &sniffed_value) {
 	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
 	if (cur_row < options.sample_chunk_size && !empty_line) {
 		VerifyUTF8(options, cur_row, value);
-
-		sniffed_value[cur_row++].push_back(Value(value));
+		sniffed_value[cur_row].first = rows_read;
+		sniffed_value[cur_row++].second.push_back(Value(value));
 	}
 	sniffed_value.erase(sniffed_value.end() - (options.sample_chunk_size - cur_row), sniffed_value.end());
 }

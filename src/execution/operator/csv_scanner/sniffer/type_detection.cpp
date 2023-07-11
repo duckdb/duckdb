@@ -178,15 +178,18 @@ void CSVSniffer::DetectTypes() {
 		candidate->Reset();
 
 		// Parse chunk and read csv with info candidate
-		vector<vector<Value>> values(options.sample_chunk_size);
+		vector<pair<idx_t, vector<Value>>> values(options.sample_chunk_size);
 		candidate->SniffValue(values);
 		// Potentially Skip empty rows (I find this dirty, but it is what the original code does)
 		idx_t true_start = 0;
+		idx_t values_start = 0;
 		while (true_start < values.size()) {
-			if (values[true_start].empty()) {
-				true_start++;
-			} else if (values[true_start].size() == 1 && values[true_start][0].IsNull()) {
-				true_start++;
+			if (values[true_start].second.empty()) {
+				true_start = values[true_start].first;
+				values_start++;
+			} else if (values[true_start].second.size() == 1 && values[true_start].second[0].IsNull()) {
+				true_start = values[true_start].first;
+				values_start++;
 			} else {
 				break;
 			}
@@ -194,23 +197,24 @@ void CSVSniffer::DetectTypes() {
 
 		// Potentially Skip Notes (I also find this dirty, but it is what the original code does)
 		while (true_start < values.size()) {
-			if (values[true_start].size() < best_num_cols) {
-				true_start++;
+			if (values[true_start].second.size() < best_num_cols) {
+				true_start = values[true_start].first;
+				values_start++;
 			} else {
 				break;
 			}
 		}
 
-		values.erase(values.begin(), values.begin() + true_start);
+		values.erase(values.begin(), values.begin() + values_start);
 		idx_t row_idx = 0;
 		if (values.size() > 1 && (!options.has_header || (options.has_header && options.header))) {
 			// This means we have more than one row, hence we can use the first row to detect if we have a header
 			row_idx = 1;
 		}
 		for (; row_idx < values.size(); row_idx++) {
-			for (idx_t col = 0; col < values[row_idx].size(); col++) {
+			for (idx_t col = 0; col < values[row_idx].second.size(); col++) {
 				auto &col_type_candidates = info_sql_types_candidates[col];
-				auto dummy_val = values[row_idx][col];
+				auto dummy_val = values[row_idx].second[col];
 				// try cast from string to sql_type
 				while (col_type_candidates.size() > 1) {
 					const auto &sql_type = col_type_candidates.back();
@@ -302,7 +306,7 @@ void CSVSniffer::DetectTypes() {
 			min_varchar_cols = varchar_cols;
 			best_sql_types_candidates = info_sql_types_candidates;
 			best_format_candidates = format_candidates;
-			best_header_row = values[0];
+			best_header_row = values[0].second;
 		}
 	}
 

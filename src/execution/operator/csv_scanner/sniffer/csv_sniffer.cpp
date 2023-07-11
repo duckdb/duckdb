@@ -3,7 +3,7 @@
 namespace duckdb {
 
 CSVSniffer::CSVSniffer(CSVReaderOptions options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-                       const vector<LogicalType>& requested_types_p)
+                       const vector<LogicalType> &requested_types_p)
     : requested_types(requested_types_p), options(std::move(options_p)), buffer_manager(std::move(buffer_manager_p)) {
 	// Check if any type is BLOB
 	for (auto &type : requested_types) {
