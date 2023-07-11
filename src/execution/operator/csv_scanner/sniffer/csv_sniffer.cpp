@@ -17,7 +17,7 @@ CSVSniffer::CSVSniffer(CSVReaderOptions options_p, shared_ptr<CSVBufferManager> 
 	for (const auto &t : format_template_candidates) {
 		best_format_candidates[t.first].clear();
 	}
-};
+}
 
 SnifferResult CSVSniffer::SniffCSV() {
 	// 1. Dialect Detection
