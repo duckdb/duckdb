@@ -283,10 +283,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	result->return_names = names;
 	result->FinalizeRead(context);
 
-	//	if (options.auto_detect) {
-	//		result->initial_reader->options = options;
-	//	}
-
 	return std::move(result);
 }
 

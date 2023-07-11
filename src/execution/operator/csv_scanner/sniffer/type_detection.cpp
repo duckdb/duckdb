@@ -180,6 +180,19 @@ void CSVSniffer::DetectTypes() {
 		// Parse chunk and read csv with info candidate
 		vector<vector<Value>> values(options.sample_chunk_size);
 		candidate->SniffValue(values);
+		// Potentially Skip empty rows (I find this dirty, but it is what the original code does)
+		idx_t true_start = 0;
+		while (true_start < values.size()) {
+			if (values[true_start].empty()) {
+				true_start++;
+			} else if (values[true_start].size() == 1 && values[true_start][0].IsNull()) {
+				true_start++;
+			} else {
+				break;
+			}
+		}
+
+		values.erase(values.begin(), values.begin() + true_start);
 		idx_t row_idx = 0;
 		if (values.size() > 1 && (!options.has_header || (options.has_header && options.header))) {
 			// This means we have more than one row, hence we can use the first row to detect if we have a header
@@ -271,6 +284,11 @@ void CSVSniffer::DetectTypes() {
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of best_num_cols.
 		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (best_num_cols * 0.7)) {
 			// we have a new best_options candidate
+			if (true_start > 0){
+				// Add empty rows to skip_rows
+				candidate->options.skip_rows+=true_start;
+				candidate->options.skip_rows_set= true;
+			}
 			best_candidate = std::move(candidate);
 			min_varchar_cols = varchar_cols;
 			best_sql_types_candidates = info_sql_types_candidates;
