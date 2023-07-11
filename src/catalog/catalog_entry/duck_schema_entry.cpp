@@ -115,18 +115,23 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 		return nullptr;
 	}
 
-	// create any sequences that are owned by this table (those cols with serial type)
+	// create any SEQUENCES that are owned by this table then set DEFAULT expr to cols (those with serial type)
 	DependencyList table_deps;
 	table_deps.AddDependency(*entry.get());
 	const auto &base_info = info.Base();
+
 	D_ASSERT(base_info.sequences.size() == base_info.col_defaults.size());
-	for (auto &create_seq : base_info.sequences) {
-		auto sequence = make_uniq<SequenceCatalogEntry>(catalog, *this, *create_seq.get());
+	for (idx_t i = 0; i < base_info.sequences.size(); i++) {
+		// create table_col_seq first
+		auto &create_seq = *base_info.sequences[i];
+		auto sequence = make_uniq<SequenceCatalogEntry>(catalog, *this, create_seq);
 		AddEntryInternal(transaction, std::move(sequence), base_info.on_conflict, table_deps);
 
-		catalog.Alter(transaction.GetContext(), *base_info.col_defaults[0].get());
+		// then set DEFAULT nextval('table_col_seq') to col
+		auto &set_col_defult = *base_info.col_defaults[i];
+		catalog.Alter(transaction.GetContext(), set_col_defult);
 		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
-		info.dependencies.AddDependency(*set.GetEntry(transaction, (*base_info.col_defaults[0].get()).name));
+		info.dependencies.AddDependency(*set.GetEntry(transaction, set_col_defult.name));
 	}
 
 	// add a foreign key constraint in main key table if there is a foreign key constraint
