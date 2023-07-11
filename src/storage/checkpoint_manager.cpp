@@ -322,7 +322,7 @@ void CheckpointWriter::WriteSequence(SequenceCatalogEntry &seq) {
 
 void CheckpointReader::ReadSequence(ClientContext &context, MetaBlockReader &reader) {
 	auto info = SequenceCatalogEntry::Deserialize(reader);
-	catalog.CreateSequence(context, *info);
+	catalog.CreateSequence(context, info->Cast<CreateSequenceInfo>());
 }
 
 //===--------------------------------------------------------------------===//
@@ -341,13 +341,14 @@ void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog) {
 
 void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader) {
 	// deserialize the index metadata
-	auto info = IndexCatalogEntry::Deserialize(reader, context);
+	auto info = IndexCatalogEntry::Deserialize(reader);
+	auto &index_info = info->Cast<CreateIndexInfo>();
 
 	// create the index in the catalog
 	auto &schema_catalog = catalog.GetSchema(context, info->schema);
 	auto &table_catalog =
-	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, info->table).Cast<DuckTableEntry>();
-	auto &index_catalog = schema_catalog.CreateIndex(context, *info, table_catalog)->Cast<DuckIndexEntry>();
+	    catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->schema, index_info.table).Cast<DuckTableEntry>();
+	auto &index_catalog = schema_catalog.CreateIndex(context, index_info, table_catalog)->Cast<DuckIndexEntry>();
 	index_catalog.info = table_catalog.GetStorage().info;
 
 	// we deserialize the index lazily, i.e., we do not need to load any node information
@@ -358,7 +359,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 	// obtain the expressions of the ART from the index metadata
 	vector<unique_ptr<Expression>> unbound_expressions;
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;
-	for (auto &p_exp : info->parsed_expressions) {
+	for (auto &p_exp : index_info.parsed_expressions) {
 		parsed_expressions.push_back(p_exp->Copy());
 	}
 
@@ -372,7 +373,7 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 		column_names.push_back(col.Name());
 	}
 	vector<column_t> column_ids;
-	binder->bind_context.AddBaseTable(0, info->table, column_names, column_types, column_ids, &table_catalog);
+	binder->bind_context.AddBaseTable(0, index_info.table, column_names, column_types, column_ids, &table_catalog);
 	IndexBinder idx_binder(*binder, context);
 	unbound_expressions.reserve(parsed_expressions.size());
 	for (auto &expr : parsed_expressions) {
@@ -381,20 +382,20 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 
 	if (parsed_expressions.empty()) {
 		// this is a PK/FK index: we create the necessary bound column ref expressions
-		unbound_expressions.reserve(info->column_ids.size());
-		for (idx_t key_nr = 0; key_nr < info->column_ids.size(); key_nr++) {
-			auto &col = table_catalog.GetColumn(LogicalIndex(info->column_ids[key_nr]));
+		unbound_expressions.reserve(index_info.column_ids.size());
+		for (idx_t key_nr = 0; key_nr < index_info.column_ids.size(); key_nr++) {
+			auto &col = table_catalog.GetColumn(LogicalIndex(index_info.column_ids[key_nr]));
 			unbound_expressions.push_back(
 			    make_uniq<BoundColumnRefExpression>(col.GetName(), col.GetType(), ColumnBinding(0, key_nr)));
 		}
 	}
 
 	// create the index and add it to the storage
-	switch (info->index_type) {
+	switch (index_info.index_type) {
 	case IndexType::ART: {
 		auto &storage = table_catalog.GetStorage();
-		auto art = make_uniq<ART>(info->column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
-		                          info->constraint_type, storage.db, root_block_id, root_offset);
+		auto art = make_uniq<ART>(index_info.column_ids, TableIOManager::Get(storage), std::move(unbound_expressions),
+		                          index_info.constraint_type, storage.db, root_block_id, root_offset);
 		index_catalog.index = art.get();
 		storage.info->indexes.AddIndex(std::move(art));
 		break;
@@ -427,8 +428,8 @@ void CheckpointWriter::WriteMacro(ScalarMacroCatalogEntry &macro) {
 }
 
 void CheckpointReader::ReadMacro(ClientContext &context, MetaBlockReader &reader) {
-	auto info = MacroCatalogEntry::Deserialize(reader, context);
-	catalog.CreateFunction(context, *info);
+	auto info = MacroCatalogEntry::Deserialize(reader);
+	catalog.CreateFunction(context, info->Cast<CreateMacroInfo>());
 }
 
 void CheckpointWriter::WriteTableMacro(TableMacroCatalogEntry &macro) {
@@ -436,8 +437,8 @@ void CheckpointWriter::WriteTableMacro(TableMacroCatalogEntry &macro) {
 }
 
 void CheckpointReader::ReadTableMacro(ClientContext &context, MetaBlockReader &reader) {
-	auto info = MacroCatalogEntry::Deserialize(reader, context);
-	catalog.CreateFunction(context, *info);
+	auto info = MacroCatalogEntry::Deserialize(reader);
+	catalog.CreateFunction(context, info->Cast<CreateMacroInfo>());
 }
 
 //===--------------------------------------------------------------------===//

@@ -28,6 +28,7 @@ unique_ptr<CreateInfo> CreateIndexInfo::Copy() const {
 void CreateIndexInfo::SerializeInternal(Serializer &serializer) const {
 	FieldWriter writer(serializer);
 	writer.WriteField(index_type);
+	writer.WriteString(table);
 	writer.WriteString(index_name);
 	writer.WriteField(constraint_type);
 
@@ -45,6 +46,7 @@ unique_ptr<CreateIndexInfo> CreateIndexInfo::Deserialize(Deserializer &deseriali
 
 	FieldReader reader(deserializer);
 	result->index_type = reader.ReadRequired<IndexType>();
+	result->table = reader.ReadRequired<string>();
 	result->index_name = reader.ReadRequired<string>();
 	result->constraint_type = reader.ReadRequired<IndexConstraintType>();
 

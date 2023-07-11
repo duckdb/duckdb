@@ -33,9 +33,8 @@ public:
 	vector<unique_ptr<ParsedExpression>> parsed_expressions;
 
 public:
+	unique_ptr<CreateInfo> GetInfo() const override;
 	string ToSQL() const override;
-	void Serialize(Serializer &serializer) const;
-	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &source, ClientContext &context);
 
 	virtual string GetSchemaName() const = 0;
 	virtual string GetTableName() const = 0;
