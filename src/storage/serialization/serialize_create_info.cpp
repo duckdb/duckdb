@@ -12,6 +12,7 @@
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
+#include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 
 namespace duckdb {
 
@@ -43,6 +44,9 @@ unique_ptr<CreateInfo> CreateInfo::FormatDeserialize(FormatDeserializer &deseria
 		break;
 	case CatalogType::SCHEMA_ENTRY:
 		result = CreateSchemaInfo::FormatDeserialize(deserializer);
+		break;
+	case CatalogType::SEQUENCE_ENTRY:
+		result = CreateSequenceInfo::FormatDeserialize(deserializer);
 		break;
 	case CatalogType::TABLE_ENTRY:
 		result = CreateTableInfo::FormatDeserialize(deserializer);
@@ -108,6 +112,29 @@ void CreateSchemaInfo::FormatSerialize(FormatSerializer &serializer) const {
 
 unique_ptr<CreateInfo> CreateSchemaInfo::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto result = duckdb::unique_ptr<CreateSchemaInfo>(new CreateSchemaInfo());
+	return std::move(result);
+}
+
+void CreateSequenceInfo::FormatSerialize(FormatSerializer &serializer) const {
+	CreateInfo::FormatSerialize(serializer);
+	serializer.WriteProperty("name", name);
+	serializer.WriteProperty("usage_count", usage_count);
+	serializer.WriteProperty("increment", increment);
+	serializer.WriteProperty("min_value", min_value);
+	serializer.WriteProperty("max_value", max_value);
+	serializer.WriteProperty("start_value", start_value);
+	serializer.WriteProperty("cycle", cycle);
+}
+
+unique_ptr<CreateInfo> CreateSequenceInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<CreateSequenceInfo>(new CreateSequenceInfo());
+	deserializer.ReadProperty("name", result->name);
+	deserializer.ReadProperty("usage_count", result->usage_count);
+	deserializer.ReadProperty("increment", result->increment);
+	deserializer.ReadProperty("min_value", result->min_value);
+	deserializer.ReadProperty("max_value", result->max_value);
+	deserializer.ReadProperty("start_value", result->start_value);
+	deserializer.ReadProperty("cycle", result->cycle);
 	return std::move(result);
 }
 

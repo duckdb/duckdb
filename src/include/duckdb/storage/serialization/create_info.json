@@ -170,5 +170,43 @@
         "type": "MacroFunction*"
       }
     ]
+  },
+  {
+    "class": "CreateSequenceInfo",
+    "base": "CreateInfo",
+    "enum": "SEQUENCE_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_sequence_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "usage_count",
+        "type": "uint64_t"
+      },
+      {
+        "name": "increment",
+        "type": "int64_t"
+      },
+      {
+        "name": "min_value",
+        "type": "int64_t"
+      },
+      {
+        "name": "max_value",
+        "type": "int64_t"
+      },
+      {
+        "name": "start_value",
+        "type": "int64_t"
+      },
+      {
+        "name": "cycle",
+        "type": "bool"
+      }
+    ]
   }
 ]
