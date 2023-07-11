@@ -21,7 +21,31 @@
 
 namespace duckdb {
 
+Binder *Binder::GetRootBinder() {
+	Binder *root = this;
+	while (root->parent) {
+		root = root->parent.get();
+	}
+	return root;
+}
+
+idx_t Binder::GetBinderDepth() const {
+	const Binder *root = this;
+	idx_t depth = 1;
+	while (root->parent) {
+		depth++;
+		root = root->parent.get();
+	}
+	return depth;
+}
+
 shared_ptr<Binder> Binder::CreateBinder(ClientContext &context, optional_ptr<Binder> parent, bool inherit_ctes) {
+	auto depth = parent ? parent->GetBinderDepth() : 0;
+	if (depth > context.config.max_expression_depth) {
+		throw BinderException("Max expression depth limit of %lld exceeded. Use \"SET max_expression_depth TO x\" to "
+		                      "increase the maximum expression depth.",
+		                      context.config.max_expression_depth);
+	}
 	return make_shared<Binder>(true, context, parent ? parent->shared_from_this() : nullptr, inherit_ctes);
 }
 
@@ -271,11 +295,8 @@ void Binder::AddBoundView(ViewCatalogEntry &view) {
 }
 
 idx_t Binder::GenerateTableIndex() {
-	D_ASSERT(parent.get() != this);
-	if (parent) {
-		return parent->GenerateTableIndex();
-	}
-	return bound_tables++;
+	auto root_binder = GetRootBinder();
+	return root_binder->bound_tables++;
 }
 
 void Binder::PushExpressionBinder(ExpressionBinder &binder) {
@@ -301,18 +322,13 @@ bool Binder::HasActiveBinder() {
 }
 
 vector<reference<ExpressionBinder>> &Binder::GetActiveBinders() {
-	if (parent) {
-		return parent->GetActiveBinders();
-	}
-	return active_binders;
+	auto root_binder = GetRootBinder();
+	return root_binder->active_binders;
 }
 
 void Binder::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
-	if (parent) {
-		parent->AddUsingBindingSet(std::move(set));
-		return;
-	}
-	bind_context.AddUsingBindingSet(std::move(set));
+	auto root_binder = GetRootBinder();
+	root_binder->bind_context.AddUsingBindingSet(std::move(set));
 }
 
 void Binder::MoveCorrelatedExpressions(Binder &other) {
@@ -381,17 +397,14 @@ bool Binder::HasMatchingBinding(const string &catalog_name, const string &schema
 }
 
 void Binder::SetBindingMode(BindingMode mode) {
-	if (parent) {
-		parent->SetBindingMode(mode);
-	}
-	this->mode = mode;
+	auto root_binder = GetRootBinder();
+	// FIXME: this used to also set the 'mode' for the current binder, was that necessary?
+	root_binder->mode = mode;
 }
 
 BindingMode Binder::GetBindingMode() {
-	if (parent) {
-		return parent->GetBindingMode();
-	}
-	return mode;
+	auto root_binder = GetRootBinder();
+	return root_binder->mode;
 }
 
 void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
@@ -399,18 +412,13 @@ void Binder::SetCanContainNulls(bool can_contain_nulls_p) {
 }
 
 void Binder::AddTableName(string table_name) {
-	if (parent) {
-		parent->AddTableName(std::move(table_name));
-		return;
-	}
-	table_names.insert(std::move(table_name));
+	auto root_binder = GetRootBinder();
+	root_binder->table_names.insert(std::move(table_name));
 }
 
 const unordered_set<string> &Binder::GetTableNames() {
-	if (parent) {
-		return parent->GetTableNames();
-	}
-	return table_names;
+	auto root_binder = GetRootBinder();
+	return root_binder->table_names;
 }
 
 string Binder::FormatError(ParsedExpression &expr_context, const string &message) {
