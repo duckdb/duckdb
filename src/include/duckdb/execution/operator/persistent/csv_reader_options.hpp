@@ -165,6 +165,8 @@ struct BufferedCSVReaderOptions {
 	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
 	void SetWriteOption(const string &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
+	void SetTypeForColumn(const string &name, const LogicalType &type);
+	void SetSQLType(const LogicalType &type);
 
 	std::string ToString() const;
 };

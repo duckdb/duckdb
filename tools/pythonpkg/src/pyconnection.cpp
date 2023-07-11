@@ -741,6 +741,33 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		options.SetCompression(py::str(compression));
 	}
 
+	if (!py::none().is(dtype)) {
+		if (py::isinstance<py::dict>(dtype)) {
+			child_list_t<Value> struct_fields;
+			py::dict dtype_dict = dtype;
+			for (auto &kv : dtype_dict) {
+				shared_ptr<DuckDBPyType> sql_type;
+				if (!py::try_cast(kv.second, sql_type)) {
+					throw py::value_error("The types provided to 'dtype' have to be DuckDBPyType");
+				}
+				options.SetTypeForColumn(py::str(kv.first), sql_type->Type());
+			}
+		} else if (py::isinstance<py::list>(dtype)) {
+			py::list dtype_list = dtype;
+			for (auto &child : dtype_list) {
+				shared_ptr<DuckDBPyType> sql_type;
+				if (!py::try_cast(child, sql_type)) {
+					throw py::value_error("The types provided to 'dtype' have to be DuckDBPyType");
+				}
+				options.SetSQLType(sql_type->Type());
+			}
+		} else {
+			throw InvalidInputException("read_csv only accepts 'dtype' as a dictionary or a list of strings");
+		}
+	}
+
+	// Create the ReadCSV Relation using the 'options'
+
 	auto read_csv_p = connection->ReadCSV(name, options);
 	auto &read_csv = read_csv_p->Cast<ReadCSVRelation>();
 	if (file_like_object_wrapper) {
@@ -785,30 +812,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	//	}
 	//	// FIXME: Check for uniqueness of 'names' ?
 	//}
-
-	if (!py::none().is(dtype)) {
-		if (py::isinstance<py::dict>(dtype)) {
-			child_list_t<Value> struct_fields;
-			py::dict dtype_dict = dtype;
-			for (auto &kv : dtype_dict) {
-				struct_fields.emplace_back(py::str(kv.first), Value(py::str(kv.second)));
-			}
-			auto dtype_struct = Value::STRUCT(std::move(struct_fields));
-			read_csv.AddNamedParameter("dtypes", std::move(dtype_struct));
-		} else if (py::isinstance<py::list>(dtype)) {
-			auto dtype_list = TransformPythonValue(py::list(dtype));
-			D_ASSERT(dtype_list.type().id() == LogicalTypeId::LIST);
-			auto &children = ListValue::GetChildren(dtype_list);
-			for (auto &child : children) {
-				if (child.type().id() != LogicalTypeId::VARCHAR) {
-					throw InvalidInputException("The types provided to 'dtype' have to be strings");
-				}
-			}
-			read_csv.AddNamedParameter("dtypes", std::move(dtype_list));
-		} else {
-			throw InvalidInputException("read_csv only accepts 'dtype' as a dictionary or a list of strings");
-		}
-	}
 
 	if (!py::none().is(na_values)) {
 		if (!py::isinstance<py::str>(na_values)) {
