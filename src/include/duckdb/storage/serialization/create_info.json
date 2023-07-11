@@ -97,5 +97,60 @@
         "optional": true
       }
     ]
+  },
+  {
+    "class": "CreateSchemaInfo",
+    "base": "CreateInfo",
+    "enum": "SCHEMA_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_schema_info.hpp"
+    ],
+    "members": [
+    ]
+  },
+  {
+    "class": "CreateViewInfo",
+    "base": "CreateInfo",
+    "enum": "VIEW_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_view_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "view_name",
+        "type": "string"
+      },
+      {
+        "name": "aliases",
+        "type": "vector<string>"
+      },
+      {
+        "name": "types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "name": "query",
+        "type": "SelectStatement*",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "class": "CreateTypeInfo",
+    "base": "CreateInfo",
+    "enum": "TYPE_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_type_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "type",
+        "type": "LogicalType"
+      }
+    ]
   }
 ]

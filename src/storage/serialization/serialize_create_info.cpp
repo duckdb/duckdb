@@ -8,6 +8,9 @@
 #include "duckdb/parser/parsed_data/create_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 
 namespace duckdb {
 
@@ -34,8 +37,17 @@ unique_ptr<CreateInfo> CreateInfo::FormatDeserialize(FormatDeserializer &deseria
 	case CatalogType::INDEX_ENTRY:
 		result = CreateIndexInfo::FormatDeserialize(deserializer);
 		break;
+	case CatalogType::SCHEMA_ENTRY:
+		result = CreateSchemaInfo::FormatDeserialize(deserializer);
+		break;
 	case CatalogType::TABLE_ENTRY:
 		result = CreateTableInfo::FormatDeserialize(deserializer);
+		break;
+	case CatalogType::TYPE_ENTRY:
+		result = CreateTypeInfo::FormatDeserialize(deserializer);
+		break;
+	case CatalogType::VIEW_ENTRY:
+		result = CreateViewInfo::FormatDeserialize(deserializer);
 		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of CreateInfo!");
@@ -70,6 +82,15 @@ unique_ptr<CreateInfo> CreateIndexInfo::FormatDeserialize(FormatDeserializer &de
 	return std::move(result);
 }
 
+void CreateSchemaInfo::FormatSerialize(FormatSerializer &serializer) const {
+	CreateInfo::FormatSerialize(serializer);
+}
+
+unique_ptr<CreateInfo> CreateSchemaInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<CreateSchemaInfo>(new CreateSchemaInfo());
+	return std::move(result);
+}
+
 void CreateTableInfo::FormatSerialize(FormatSerializer &serializer) const {
 	CreateInfo::FormatSerialize(serializer);
 	serializer.WriteProperty("table", table);
@@ -83,6 +104,36 @@ unique_ptr<CreateInfo> CreateTableInfo::FormatDeserialize(FormatDeserializer &de
 	deserializer.ReadProperty("table", result->table);
 	deserializer.ReadProperty("columns", result->columns);
 	deserializer.ReadProperty("constraints", result->constraints);
+	deserializer.ReadOptionalProperty("query", result->query);
+	return std::move(result);
+}
+
+void CreateTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
+	CreateInfo::FormatSerialize(serializer);
+	serializer.WriteProperty("name", name);
+	serializer.WriteProperty("type", type);
+}
+
+unique_ptr<CreateInfo> CreateTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<CreateTypeInfo>(new CreateTypeInfo());
+	deserializer.ReadProperty("name", result->name);
+	deserializer.ReadProperty("type", result->type);
+	return std::move(result);
+}
+
+void CreateViewInfo::FormatSerialize(FormatSerializer &serializer) const {
+	CreateInfo::FormatSerialize(serializer);
+	serializer.WriteProperty("view_name", view_name);
+	serializer.WriteProperty("aliases", aliases);
+	serializer.WriteProperty("types", types);
+	serializer.WriteOptionalProperty("query", query);
+}
+
+unique_ptr<CreateInfo> CreateViewInfo::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<CreateViewInfo>(new CreateViewInfo());
+	deserializer.ReadProperty("view_name", result->view_name);
+	deserializer.ReadProperty("aliases", result->aliases);
+	deserializer.ReadProperty("types", result->types);
 	deserializer.ReadOptionalProperty("query", result->query);
 	return std::move(result);
 }
