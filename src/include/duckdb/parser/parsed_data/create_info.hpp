@@ -61,6 +61,9 @@ public:
 	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer);
 	static unique_ptr<CreateInfo> Deserialize(Deserializer &deserializer, PlanDeserializationState &state);
 
+	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<CreateInfo> FormatDeserialize(FormatDeserializer &deserializer);
+
 	virtual unique_ptr<CreateInfo> Copy() const = 0;
 
 	DUCKDB_API void CopyProperties(CreateInfo &other) const;

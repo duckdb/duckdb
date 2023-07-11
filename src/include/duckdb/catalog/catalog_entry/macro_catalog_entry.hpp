@@ -29,6 +29,9 @@ public:
 	virtual void Serialize(Serializer &serializer) const;
 	static unique_ptr<CreateMacroInfo> Deserialize(Deserializer &main_source, ClientContext &context);
 
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<CreateMacroInfo> FormatDeserialize(FormatDeserializer &deserializer);
+
 	string ToSQL() const override {
 		return function->ToSQL(schema.name, name);
 	}

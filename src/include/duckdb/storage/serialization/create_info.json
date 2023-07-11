@@ -1,0 +1,74 @@
+[
+  {
+    "class": "CreateInfo",
+    "class_type": "type",
+    "includes": [
+      "duckdb/parser/parsed_data/create_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "type",
+        "type": "CatalogType"
+      },
+      {
+        "name": "catalog",
+        "type": "string"
+      },
+      {
+        "name": "schema",
+        "type": "string"
+      },
+      {
+        "name": "temporary",
+        "type": "bool"
+      },
+      {
+        "name": "internal",
+        "type": "bool"
+      },
+      {
+        "name": "on_conflict",
+        "type": "OnCreateConflict"
+      },
+      {
+        "name": "sql",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "CreateIndexInfo",
+    "base": "CreateInfo",
+    "enum": "INDEX_ENTRY",
+    "includes": [
+      "duckdb/parser/parsed_data/create_index_info.hpp"
+    ],
+    "members": [
+      {
+        "name": "name",
+        "type": "string",
+        "property": "index_name"
+      },
+      {
+        "name": "index_type",
+        "type": "IndexType"
+      },
+      {
+        "name": "constraint_type",
+        "type": "IndexConstraintType"
+      },
+      {
+        "name": "parsed_expressions",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "name": "names",
+        "type": "vector<string>"
+      },
+      {
+        "name": "column_ids",
+        "type": "vector<column_t>"
+      }
+    ]
+  }
+]

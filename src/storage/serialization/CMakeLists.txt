@@ -1,7 +1,7 @@
 add_library_unity(
   duckdb_storage_serialization
   OBJECT
-  serialize_catalog_entry.cpp
+  serialize_create_info.cpp
   serialize_nodes.cpp
   serialize_parsed_expression.cpp
   serialize_query_node.cpp

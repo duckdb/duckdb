@@ -30,6 +30,7 @@ unique_ptr<CreateMacroInfo> MacroCatalogEntry::GetInfoForSerialization() const {
 	info->function = function->Copy();
 	return info;
 }
+
 void MacroCatalogEntry::Serialize(Serializer &serializer) const {
 	auto info = GetInfoForSerialization();
 	info->Serialize(serializer);

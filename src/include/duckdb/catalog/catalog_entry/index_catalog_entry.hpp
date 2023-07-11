@@ -37,9 +37,6 @@ public:
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<CreateIndexInfo> Deserialize(Deserializer &source, ClientContext &context);
 
-	void FormatSerialize(FormatSerializer &serializer) const;
-	static unique_ptr<CreateIndexInfo> FormatDeserialize(FormatDeserializer &deserializer);
-
 	virtual string GetSchemaName() const = 0;
 	virtual string GetTableName() const = 0;
 };
