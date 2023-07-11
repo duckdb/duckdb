@@ -192,6 +192,15 @@ void CSVSniffer::DetectTypes() {
 			}
 		}
 
+		// Potentially Skip Notes (I also find this dirty, but it is what the original code does)
+		while (true_start < values.size()) {
+			 if (values[true_start].size() < best_num_cols) {
+				true_start++;
+			} else {
+				break;
+			}
+		}
+
 		values.erase(values.begin(), values.begin() + true_start);
 		idx_t row_idx = 0;
 		if (values.size() > 1 && (!options.has_header || (options.has_header && options.header))) {

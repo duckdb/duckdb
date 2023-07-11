@@ -17,8 +17,6 @@ static constexpr idx_t CSV_BUFFER_SIZE = 32000000; // 32MB
 
 class CSVBuffer {
 public:
-	//! CSV Buffer Size
-
 	//! Constructor for Initial Buffer
 	CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle &file_handle,
 	          idx_t &global_csv_current_position, idx_t file_number);

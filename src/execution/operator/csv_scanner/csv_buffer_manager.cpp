@@ -17,6 +17,11 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, unique_ptr<CSVFileH
 	}
 	cached_buffers.emplace_back(make_shared<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, 0));
 	last_buffer = cached_buffers.front();
+	start_pos = last_buffer->GetStart();
+}
+
+idx_t CSVBufferManager::GetStartPos(){
+	return start_pos;
 }
 bool CSVBufferManager::ReadNextAndCacheIt() {
 	D_ASSERT(last_buffer);
@@ -56,8 +61,11 @@ shared_ptr<CSVBuffer> CSVBufferManager::GetBuffer(idx_t pos, bool auto_detection
 char CSVBufferIterator::GetNextChar() {
 	// If current buffer is not set we try to get a new one
 	if (!cur_buffer) {
-		cur_buffer = buffer_manager->GetBuffer(cur_buffer_idx++, true);
 		cur_pos = 0;
+		if (cur_buffer_idx == 0){
+			cur_pos = buffer_manager->GetStartPos();
+		}
+		cur_buffer = buffer_manager->GetBuffer(cur_buffer_idx++, true);
 		if (!cur_buffer) {
 			return '\0';
 		}
@@ -81,6 +89,6 @@ bool CSVBufferIterator::Finished() {
 void CSVBufferIterator::Reset() {
 	cur_buffer_idx = 0;
 	cur_buffer = nullptr;
-	cur_pos = 0;
+	cur_pos = buffer_manager->GetStartPos();
 }
 } // namespace duckdb
