@@ -147,7 +147,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	options.name_list = expected_names;
 
 	bind_data->FinalizeRead(context);
-	if (options.auto_detect){
+	if (options.auto_detect) {
 		// We must run the sniffer.
 		auto file_handle = BaseCSVReader::OpenCSV(context, options);
 		auto buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), options);
@@ -155,8 +155,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 		auto sniffer_result = sniffer.SniffCSV();
 		options = sniffer_result.options;
 		bind_data->csv_types = sniffer_result.return_types;
-		bind_data->csv_names =  sniffer_result.names;
-		bind_data->return_types =  sniffer_result.return_types;
+		bind_data->csv_names = sniffer_result.names;
+		bind_data->return_types = sniffer_result.return_types;
 		bind_data->return_names = sniffer_result.names;
 	}
 	return std::move(bind_data);

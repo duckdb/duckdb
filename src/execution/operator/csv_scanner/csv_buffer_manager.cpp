@@ -20,7 +20,7 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, unique_ptr<CSVFileH
 	start_pos = last_buffer->GetStart();
 }
 
-idx_t CSVBufferManager::GetStartPos(){
+idx_t CSVBufferManager::GetStartPos() {
 	return start_pos;
 }
 bool CSVBufferManager::ReadNextAndCacheIt() {
@@ -62,7 +62,7 @@ char CSVBufferIterator::GetNextChar() {
 	// If current buffer is not set we try to get a new one
 	if (!cur_buffer) {
 		cur_pos = 0;
-		if (cur_buffer_idx == 0){
+		if (cur_buffer_idx == 0) {
 			cur_pos = buffer_manager->GetStartPos();
 		}
 		cur_buffer = buffer_manager->GetBuffer(cur_buffer_idx++, true);

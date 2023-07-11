@@ -46,8 +46,8 @@ class CSVBufferIterator {
 public:
 	explicit CSVBufferIterator(shared_ptr<CSVBufferManager> buffer_manager_p)
 	    : buffer_manager(std::move(buffer_manager_p)) {
-	          cur_pos = buffer_manager->GetStartPos();
-	      };
+		cur_pos = buffer_manager->GetStartPos();
+	};
 
 	//! Returns the next char in the CSV File
 	//! Returns \0 if there are no more chars

@@ -194,7 +194,7 @@ void CSVSniffer::DetectTypes() {
 
 		// Potentially Skip Notes (I also find this dirty, but it is what the original code does)
 		while (true_start < values.size()) {
-			 if (values[true_start].size() < best_num_cols) {
+			if (values[true_start].size() < best_num_cols) {
 				true_start++;
 			} else {
 				break;
@@ -293,10 +293,10 @@ void CSVSniffer::DetectTypes() {
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of best_num_cols.
 		if (varchar_cols < min_varchar_cols && info_sql_types_candidates.size() > (best_num_cols * 0.7)) {
 			// we have a new best_options candidate
-			if (true_start > 0){
+			if (true_start > 0) {
 				// Add empty rows to skip_rows
-				candidate->options.skip_rows+=true_start;
-				candidate->options.skip_rows_set= true;
+				candidate->options.skip_rows += true_start;
+				candidate->options.skip_rows_set = true;
 			}
 			best_candidate = std::move(candidate);
 			min_varchar_cols = varchar_cols;
