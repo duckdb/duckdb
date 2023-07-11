@@ -54,12 +54,13 @@ static void testRunner() {
 
 	string prev_directory;
 
-	// We assume the test working dir for extensions to be one dir above the test/sql, this is of course mega hacky
-	// and will fail in various situations.
+	// We assume the test working dir for extensions to be one dir above the test/sql. Note that this is very hacky.
+	// however for now it suffices: we use it to run tests from out-of-tree extensions that are based on the extension
+	// template which adheres to this convention.
 	if (AUTO_SWITCH_TEST_DIR) {
 		prev_directory = TestGetCurrentDirectory();
 
-		std::size_t found = name.find("test/sql");
+		std::size_t found = name.rfind("test/sql");
 		if (found == std::string::npos) {
 			throw Exception("Failed to auto detect working dir for test '" + name +
 			                "' because a non-standard path was used!");

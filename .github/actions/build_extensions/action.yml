@@ -25,10 +25,10 @@ inputs:
 
   # Build config
   static_link_build:
-    description: 'Links duckdb statically to the built extensions'
+    description: 'Links DuckDB statically to the loadable extensions'
     default: 1
   no_static_linking:
-    description: 'Disables linking extensions (that support it) into DuckDB for testing'
+    description: 'Disables linking extensions into DuckDB for testing'
     default: 0
   vcpkg_build:
     description: 'Installs vcpkg and pass its toolchain to CMakes'
