@@ -2275,6 +2275,39 @@ FunctionSideEffects EnumUtil::FromString<FunctionSideEffects>(const char *value)
 }
 
 template<>
+const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value) {
+	switch(value) {
+	case IndexConstraintType::NONE:
+		return "NONE";
+	case IndexConstraintType::UNIQUE:
+		return "UNIQUE";
+	case IndexConstraintType::PRIMARY:
+		return "PRIMARY";
+	case IndexConstraintType::FOREIGN:
+		return "FOREIGN";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value) {
+	if (StringUtil::Equals(value, "NONE")) {
+		return IndexConstraintType::NONE;
+	}
+	if (StringUtil::Equals(value, "UNIQUE")) {
+		return IndexConstraintType::UNIQUE;
+	}
+	if (StringUtil::Equals(value, "PRIMARY")) {
+		return IndexConstraintType::PRIMARY;
+	}
+	if (StringUtil::Equals(value, "FOREIGN")) {
+		return IndexConstraintType::FOREIGN;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
 const char* EnumUtil::ToChars<IndexType>(IndexType value) {
 	switch(value) {
 	case IndexType::INVALID:

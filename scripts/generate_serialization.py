@@ -146,6 +146,8 @@ class SerializableClass:
         self.custom_implementation = False
         self.custom_switch_code = None
         self.children = {}
+        self.return_type = self.name
+        self.return_class = self.name
         if self.is_base_class:
             self.enum_value = entry['class_type']
         if 'extra_parameters' in entry:
@@ -155,6 +157,7 @@ class SerializableClass:
         if 'base' in entry:
             self.base = entry['base']
             self.enum_entry = entry['enum']
+            self.return_type = self.base
         if 'constructor' in entry:
             self.constructor = entry['constructor']
         if 'custom_implementation' in entry and entry['custom_implementation']:
@@ -163,6 +166,10 @@ class SerializableClass:
             self.custom_switch_code = entry['custom_switch_code']
         if 'members' in entry:
             self.members = [MemberVariable(x) for x in entry['members']]
+        if 'return_type' in entry:
+            self.return_type = entry['return_type']
+            self.return_class = self.return_type
+
 
     def inherit(self, base_class):
         self.base_object = base_class
@@ -216,7 +223,7 @@ def generate_base_class_code(base_class):
     # class switch statement
     base_class_deserialize += switch_code.replace('${SWITCH_VARIABLE}', base_class.enum_value).replace('${CASE_STATEMENTS}', switch_cases).replace('${BASE_CLASS}', base_class.name)
 
-    deserialize_return = get_return_value(base_class.pointer_type, base_class.name)
+    deserialize_return = get_return_value(base_class.pointer_type, base_class.return_type)
 
     for entry in assign_entries:
         move = False
@@ -276,7 +283,7 @@ def generate_class_code(class_entry):
 
     if class_entry.base is not None:
         class_serialize += base_serialize.replace('${BASE_CLASS_NAME}', class_entry.base)
-    class_deserialize += generate_constructor(class_entry.pointer_type, class_entry.name, constructor_parameters)
+    class_deserialize += generate_constructor(class_entry.pointer_type, class_entry.return_class, constructor_parameters)
     if class_entry.members is None:
         return None
     for entry in class_entry.members:
@@ -300,10 +307,9 @@ def generate_class_code(class_entry):
 
     if class_entry.base is None:
         class_deserialize += '\treturn result;'
-        deserialize_return = get_return_value(class_entry.pointer_type, class_entry.name)
     else:
         class_deserialize += '\treturn std::move(result);'
-        deserialize_return = get_return_value(class_entry.pointer_type, class_entry.base)
+    deserialize_return = get_return_value(class_entry.pointer_type, class_entry.return_type)
 
     class_generation = ''
     class_generation += serialize_base.replace('${CLASS_NAME}', class_entry.name).replace('${MEMBERS}', class_serialize)

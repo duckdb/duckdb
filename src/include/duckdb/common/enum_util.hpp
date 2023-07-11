@@ -128,6 +128,8 @@ enum class FunctionNullHandling : uint8_t;
 
 enum class FunctionSideEffects : uint8_t;
 
+enum class IndexConstraintType : uint8_t;
+
 enum class IndexType : uint8_t;
 
 enum class InsertColumnOrder : uint8_t;
@@ -414,6 +416,9 @@ const char* EnumUtil::ToChars<FunctionNullHandling>(FunctionNullHandling value);
 
 template<>
 const char* EnumUtil::ToChars<FunctionSideEffects>(FunctionSideEffects value);
+
+template<>
+const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
 
 template<>
 const char* EnumUtil::ToChars<IndexType>(IndexType value);
@@ -772,6 +777,9 @@ FunctionNullHandling EnumUtil::FromString<FunctionNullHandling>(const char *valu
 
 template<>
 FunctionSideEffects EnumUtil::FromString<FunctionSideEffects>(const char *value);
+
+template<>
+IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);
 
 template<>
 IndexType EnumUtil::FromString<IndexType>(const char *value);
