@@ -110,6 +110,27 @@ def generate_constructor(pointer_type, class_name, constructor_parameters):
         return f'\t{class_name} result{params};\n'
     return f'\tauto result = duckdb::{pointer_type}<{class_name}>(new {class_name}({constructor_parameters}));\n'
 
+class MemberVariable:
+    def __init__(self, entry):
+        self.name = entry['name']
+        self.type = entry['type']
+        self.base = None
+        self.optional = False
+        if 'property' in entry:
+            self.serialize_property = entry['property']
+            self.deserialize_property = entry['property']
+        else:
+            self.serialize_property = self.name
+            self.deserialize_property = self.name
+        if 'serialize_property' in entry:
+            self.serialize_property = entry['serialize_property']
+        if 'deserialize_property' in entry:
+            self.deserialize_property = entry['deserialize_property']
+        if 'optional' in entry:
+            self.optional = entry['optional']
+        if 'base' in entry:
+            self.base = entry['base']
+
 class SerializableClass:
     def __init__(self, entry):
         self.name = entry['class']
@@ -141,7 +162,7 @@ class SerializableClass:
         if 'custom_switch_code' in entry:
             self.custom_switch_code = entry['custom_switch_code']
         if 'members' in entry:
-            self.members = entry['members']
+            self.members = [MemberVariable(x) for x in entry['members']]
 
     def inherit(self, base_class):
         self.base_object = base_class
@@ -156,15 +177,12 @@ def generate_base_class_code(base_class):
     # properties
     enum_type = ''
     for entry in base_class.members:
-        property_name = entry['property'] if 'property' in entry else entry['name']
-        type_name = replace_pointer(entry['type'])
-        if property_name == base_class.enum_value:
-            enum_type = entry['type']
-        is_optional = False
-        if 'optional' in entry and entry['optional']:
-            is_optional = True
-        base_class_serialize += get_serialize_element(property_name, entry['name'], type_name, is_optional, base_class.pointer_type)
-        base_class_deserialize += get_deserialize_element(property_name, entry['name'], type_name, is_optional, base_class.pointer_type)
+        type_name = replace_pointer(entry.type)
+        if entry.serialize_property == base_class.enum_value:
+            enum_type = entry.type
+        is_optional = entry.optional
+        base_class_serialize += get_serialize_element(entry.serialize_property, entry.name, type_name, is_optional, base_class.pointer_type)
+        base_class_deserialize += get_deserialize_element(entry.deserialize_property, entry.name, type_name, is_optional, base_class.pointer_type)
     expressions = [x for x in base_class.children.items()]
     expressions = sorted(expressions, key=lambda x: x[0])
 
@@ -184,23 +202,16 @@ def generate_base_class_code(base_class):
         switch_cases += switch_statement.replace('${ENUM_TYPE}', enum_type).replace('${ENUM_VALUE}', enum_value).replace('${CLASS_DESERIALIZE}', child_data.name).replace('${EXTRA_PARAMETERS}', extra_parameter_txt)
 
     assign_entries = []
-    for entry in  base_class.members:
-        entry_name = entry['name']
-        entry_property = entry_name
-        if 'property' in entry:
-            entry_property = entry['property']
+    for entry in base_class.members:
         skip = False
-        for check_entry in [entry_name, entry_property]:
+        for check_entry in [entry.name, entry.serialize_property]:
             if check_entry in base_class.extra_parameters:
                 skip = True
             if check_entry == base_class.enum_value:
                 skip = True
         if skip:
             continue
-        move = False
-        if entry['type'] in move_list or is_container(entry['type']) or is_pointer(entry['type']):
-            move = True
-        assign_entries.append([entry_property, move])
+        assign_entries.append(entry)
 
     # class switch statement
     base_class_deserialize += switch_code.replace('${SWITCH_VARIABLE}', base_class.enum_value).replace('${CASE_STATEMENTS}', switch_cases).replace('${BASE_CLASS}', base_class.name)
@@ -208,12 +219,13 @@ def generate_base_class_code(base_class):
     deserialize_return = get_return_value(base_class.pointer_type, base_class.name)
 
     for entry in assign_entries:
-        name = entry[0]
-        move = entry[1]
+        move = False
+        if entry.type in move_list or is_container(entry.type) or is_pointer(entry.type):
+            move = True
         if move:
-            base_class_deserialize+= f'\tresult->{name} = std::move({name});\n'
+            base_class_deserialize+= f'\tresult->{entry.deserialize_property} = std::move({entry.deserialize_property});\n'
         else:
-            base_class_deserialize+= f'\tresult->{name} = {name};\n'
+            base_class_deserialize+= f'\tresult->{entry.deserialize_property} = {entry.deserialize_property};\n'
     base_class_deserialize += '\treturn result;'
     base_class_generation = ''
     base_class_generation += serialize_base.replace('${CLASS_NAME}', base_class.name).replace('${MEMBERS}', base_class_serialize)
@@ -233,8 +245,8 @@ def generate_class_code(class_entry):
         for extra_parameter in extra_parameters:
             extra_parameter_type = ''
             for member in class_entry.base_object.members:
-                if member['name'] == extra_parameter:
-                    extra_parameter_type = member['type']
+                if member.name == extra_parameter:
+                    extra_parameter_type = member.type
             if len(extra_parameter_type) == 0:
                 raise Exception('Extra parameter type not found')
             extra_parameter_txt += extra_parameter_type + ' ' + extra_parameter + ', '
@@ -246,15 +258,15 @@ def generate_class_code(class_entry):
             constructor_entries[constructor_entry] = True
             found = False
             for entry in class_entry.members:
-                if entry['name'] == constructor_entry:
+                if entry.name == constructor_entry:
                     if len(constructor_parameters) > 0:
                         constructor_parameters += ", "
-                    type_name = replace_pointer(entry['type'])
+                    type_name = replace_pointer(entry.type)
                     if requires_move(type_name):
-                        constructor_parameters += 'std::move(' + entry['name'] + ')'
+                        constructor_parameters += 'std::move(' + entry.name + ')'
                     else:
-                        constructor_parameters += entry['name']
-                    class_deserialize += get_deserialize_element(entry['name'], entry['name'], type_name, 'optional' in entry and entry['optional'], 'unique_ptr')
+                        constructor_parameters += entry.name
+                    class_deserialize += get_deserialize_element(entry.name, entry.name, type_name, entry.optional, 'unique_ptr')
                     found = True
                     break
             if not found:
@@ -268,25 +280,23 @@ def generate_class_code(class_entry):
     if class_entry.members is None:
         return None
     for entry in class_entry.members:
-        property_name = entry['property'] if 'property' in entry else entry['name']
-        property_key = entry['name']
+        property_key = entry.name
         is_optional = False
-        write_property_name = property_name
-        if 'optional' in entry and entry['optional']:
-            is_optional = True
-        if is_pointer(entry['type']):
+        write_property_name = entry.serialize_property
+        is_optional = entry.optional
+        if is_pointer(entry.type):
             if not is_optional:
-                write_property_name = '*' + property_name
+                write_property_name = '*' + entry.serialize_property
         elif is_optional:
-            raise Exception(f"Optional can only be combined with pointers (in {class_entry.name}, type {entry['type']}, member {entry['name']})")
+            raise Exception(f"Optional can only be combined with pointers (in {class_entry.name}, type {entry.type}, member {entry.type})")
         deserialize_template_str = deserialize_element_class
-        if 'base' in entry:
-            write_property_name = f"({entry['base']} &)" + write_property_name
-            deserialize_template_str = deserialize_element_class_base.replace('${BASE_PROPERTY}', entry['base'].replace('*', '')).replace('${DERIVED_PROPERTY}', entry['type'].replace('*', ''))
-        type_name = replace_pointer(entry['type'])
+        if entry.base:
+            write_property_name = f"({entry.base} &)" + write_property_name
+            deserialize_template_str = deserialize_element_class_base.replace('${BASE_PROPERTY}', entry.base.replace('*', '')).replace('${DERIVED_PROPERTY}', entry.type.replace('*', ''))
+        type_name = replace_pointer(entry.type)
         class_serialize += get_serialize_element(write_property_name, property_key, type_name, is_optional, class_entry.pointer_type)
-        if entry['name'] not in constructor_entries:
-            class_deserialize += get_deserialize_element_template(deserialize_template_str, property_name, property_key, type_name, is_optional, class_entry.pointer_type)
+        if entry.name not in constructor_entries:
+            class_deserialize += get_deserialize_element_template(deserialize_template_str, entry.deserialize_property, property_key, type_name, is_optional, class_entry.pointer_type)
 
     if class_entry.base is None:
         class_deserialize += '\treturn result;'
