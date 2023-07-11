@@ -195,7 +195,7 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 // Replay Table
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateTable() {
-	auto info = TableCatalogEntry::Deserialize(source, context);
+	auto info = TableCatalogEntry::Deserialize(source);
 	if (deserialize_only) {
 		return;
 	}
