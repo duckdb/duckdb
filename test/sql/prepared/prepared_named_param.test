@@ -26,3 +26,8 @@ statement error
 prepare q02 as select $1, $param, $2;
 ---
 Not implemented Error: Mixing named and positional parameters is not supported yet
+
+statement error
+execute q01(a, 2, 0)
+----
+Invalid Input Error: Only scalar parameters, named parameters or NULL supported for EXECUTE
