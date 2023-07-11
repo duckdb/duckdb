@@ -33,7 +33,7 @@ struct SnifferResult {
 class CSVSniffer {
 public:
 	explicit CSVSniffer(CSVReaderOptions options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-	                    const vector<LogicalType> &requested_types_p = vector<LogicalType>());
+	                    const vector<LogicalType>& requested_types_p = vector<LogicalType>());
 
 	//! Main method that sniffs the CSV file, returns the types, names and options as a result
 	//! CSV Sniffing consists of five steps:
@@ -48,7 +48,7 @@ private:
 	//! Highest number of columns found
 	idx_t best_num_cols = 0;
 	//! The types requested via the CSV Options (If any)
-	const vector<LogicalType> &requested_types;
+	const vector<LogicalType> requested_types;
 	//! Current Candidates being considered
 	vector<unique_ptr<CSVStateMachine>> candidates;
 	//! Original Options set
