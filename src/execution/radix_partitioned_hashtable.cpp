@@ -623,9 +623,11 @@ bool RadixPartitionedHashTable::RequiresRepartitioning(ClientContext &context, G
 	// Largest partition count/size
 	const auto partition_count = partition_counts[max_partition_idx];
 	const auto partition_size = MaxValue<idx_t>(partition_sizes[max_partition_idx], 1);
+	const auto partition_ht_size = partition_size + GroupedAggregateHashTable::PointerTableSize(partition_count);
 
 	// TODO: Fix this later if needed, just use defaults for now
-	if (gstate.finalize_in_use || n_threads > RadixHTConfig::SinkPartitionCount()) {
+	if (gstate.finalize_in_use || n_threads > RadixHTConfig::SinkPartitionCount() ||
+	    n_threads * partition_ht_size > max_ht_size) {
 		// Data was already added to the finalize partitions, we need to stick with this number of radix bits
 		gstate.finalize_radix_bits = RadixHTConfig::FINALIZE_RADIX_BITS;
 	} else {
@@ -659,7 +661,7 @@ bool RadixPartitionedHashTable::RequiresRepartitioning(ClientContext &context, G
 	} else {
 		// Multiple partitions fit in memory, so multiple are repartitioned at the same time
 		const auto partitions_in_memory = MinValue<idx_t>(max_ht_size / partition_size, num_partitions);
-		gstate.repartition_tasks_per_partition = (n_threads + partitions_in_memory + 1) / partitions_in_memory;
+		gstate.repartition_tasks_per_partition = (n_threads + partitions_in_memory - 1) / partitions_in_memory;
 	}
 
 	// Return true if we increased the radix bits
@@ -920,7 +922,9 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		// Resize existing HT to sufficient capacity
 		const auto capacity =
 		    GroupedAggregateHashTable::GetCapacityForCount(ht->Count() + finalize_partition.uncombined_count);
-		ht->Resize(capacity);
+		if (ht->Capacity() < capacity) {
+			ht->Resize(capacity);
+		}
 	} else if (!ht) {
 		// Create a HT with sufficient capacity
 		const auto capacity = GroupedAggregateHashTable::GetCapacityForCount(finalize_partition.uncombined_count);
