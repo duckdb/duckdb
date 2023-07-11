@@ -16,7 +16,7 @@ namespace duckdb {
 class GroupedAggregateHashTable;
 struct AggregatePartition;
 struct MaterializedAggregateData;
-enum class RadixHTAbandonType : uint8_t;
+struct RadixHTAbandonStatus;
 
 class RadixPartitionedHashTable {
 public:
@@ -51,18 +51,21 @@ public:
 
 	static void SetMultiScan(GlobalSinkState &sink);
 	// TODO: capacity
-	unique_ptr<GroupedAggregateHashTable> CreateHT(ClientContext &context, const idx_t radix_bits) const;
+	unique_ptr<GroupedAggregateHashTable> CreateHT(ClientContext &context, const idx_t capacity,
+	                                               const idx_t radix_bits) const;
 
 private:
 	idx_t CountInternal(GlobalSinkState &sink) const;
 	void SetGroupingValues();
 	void PopulateGroupChunk(DataChunk &group_chunk, DataChunk &input_chunk) const;
 
-	bool CombineInternal(ClientContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-	                     const RadixHTAbandonType local_abandon_type) const;
+	void CombineInternal(ClientContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+	                     const RadixHTAbandonStatus &local_status) const;
 	bool ShouldCombine(ClientContext &context, GlobalSinkState &gstate_p, const idx_t sink_partition_idx,
-	                   const RadixHTAbandonType local_abandon_type) const;
-	void CombinePartition(AggregatePartition &partition, vector<MaterializedAggregateData> &uncombined_data) const;
+	                   const RadixHTAbandonStatus &local_status) const;
+	void CombinePartition(ClientContext &context, GlobalSinkState &gstate_p, const idx_t sink_partition_idx,
+	                      vector<MaterializedAggregateData> &uncombined_data,
+	                      const RadixHTAbandonStatus &local_status) const;
 
 	static bool RequiresRepartitioning(ClientContext &context, GlobalSinkState &gstate);
 };

@@ -61,19 +61,23 @@ void GroupedAggregateHashTable::InitializePartitionedData() {
 	partitioned_data =
 	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
 	partitioned_data->InitializeAppendState(state.append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
+	sink_count = 0;
 }
 
-vector<MaterializedAggregateData> GroupedAggregateHashTable::AcquireData() {
+vector<MaterializedAggregateData> GroupedAggregateHashTable::AcquireData(bool as_one) {
 	D_ASSERT(partitioned_data);
 	D_ASSERT(aggregate_allocator);
 	UnpinData();
 
 	vector<MaterializedAggregateData> result;
-	for (auto &partition : partitioned_data->GetPartitions()) {
-		result.emplace_back(std::move(partition), aggregate_allocator);
+	if (as_one) {
+		result.emplace_back(partitioned_data->GetUnpartitioned(), aggregate_allocator);
+	} else {
+		for (auto &partition : partitioned_data->GetPartitions()) {
+			result.emplace_back(std::move(partition), aggregate_allocator);
+		}
+		partitioned_data.reset();
 	}
-
-	partitioned_data.reset();
 	InitializePartitionedData();
 
 	return result;
@@ -112,6 +116,11 @@ idx_t GroupedAggregateHashTable::InitialCapacity() {
 	return STANDARD_VECTOR_SIZE * 2ULL;
 }
 
+idx_t GroupedAggregateHashTable::GetCapacityForCount(idx_t count) {
+	count = MaxValue<idx_t>(InitialCapacity(), count);
+	return NextPowerOfTwo(count * LOAD_FACTOR);
+}
+
 idx_t GroupedAggregateHashTable::Capacity() const {
 	return capacity;
 }
@@ -125,11 +134,13 @@ idx_t GroupedAggregateHashTable::DataSize() const {
 }
 
 idx_t GroupedAggregateHashTable::PointerTableSize(idx_t count) {
-	return NextPowerOfTwo(count * 2L) * sizeof(aggr_ht_entry_t);
+	const auto capacity = MaxValue<idx_t>(NextPowerOfTwo(count * LOAD_FACTOR), InitialCapacity());
+	return capacity * sizeof(aggr_ht_entry_t);
 }
 
 idx_t GroupedAggregateHashTable::TotalSize() const {
-	return DataSize() + PointerTableSize(Count());
+	D_ASSERT(hash_map.get());
+	return DataSize() + hash_map.GetSize();
 }
 
 idx_t GroupedAggregateHashTable::ApplyBitMask(hash_t hash) const {
@@ -488,9 +499,9 @@ struct FlushMoveState {
 };
 
 void GroupedAggregateHashTable::Combine(GroupedAggregateHashTable &other) {
-	for (auto &other_data_collection : other.partitioned_data->GetPartitions()) {
-		Combine(*other_data_collection);
-	}
+	auto other_data = other.partitioned_data->GetUnpartitioned();
+	Combine(*other_data);
+
 	stored_allocators.emplace_back(other.aggregate_allocator);
 	for (const auto &stored_allocator : other.stored_allocators) {
 		stored_allocators.emplace_back(stored_allocator);

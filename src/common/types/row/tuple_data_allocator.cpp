@@ -68,7 +68,14 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 
 		// Build the next part
 		auto next = MinValue<idx_t>(append_count - offset, STANDARD_VECTOR_SIZE - chunk.count);
-		chunk.AddPart(BuildChunkPart(pin_state, chunk_state, append_offset + offset, next), layout);
+
+		auto part = BuildChunkPart(pin_state, chunk_state, append_offset + offset, next);
+		segment.data_size += part.count * layout.GetRowWidth();
+		if (!layout.AllConstant()) {
+			segment.data_size += part.total_heap_size;
+		}
+
+		chunk.AddPart(std::move(part), layout);
 		chunk_part_indices.emplace_back(chunks.size() - 1, chunk.parts.size() - 1);
 
 		auto &chunk_part = chunk.parts.back();

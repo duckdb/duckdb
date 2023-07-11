@@ -8,7 +8,7 @@ namespace duckdb {
 
 PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, BufferManager &buffer_manager_p,
                                            const TupleDataLayout &layout_p)
-    : type(type_p), buffer_manager(buffer_manager_p), layout(layout_p.Copy()),
+    : type(type_p), buffer_manager(buffer_manager_p), layout(layout_p.Copy()), count(0), data_size(0),
       allocators(make_shared<PartitionTupleDataAllocators>()) {
 }
 
@@ -59,28 +59,34 @@ void PartitionedTupleData::AppendUnified(PartitionedTupleDataAppendState &state,
 		const auto &partition_index = partition_entries.begin()->first;
 		auto &partition = *partitions[partition_index];
 		auto &partition_pin_state = *state.partition_pin_states[partition_index];
+
+		const auto size_before = partition.SizeInBytes();
 		partition.AppendUnified(partition_pin_state, state.chunk_state, input, append_sel, actual_append_count);
-		return;
+		data_size += partition.SizeInBytes() - size_before;
+	} else {
+		// Compute the heap sizes for the whole chunk
+		if (!layout.AllConstant()) {
+			TupleDataCollection::ComputeHeapSizes(state.chunk_state, input, state.partition_sel, actual_append_count);
+		}
+
+		// Build the buffer space
+		BuildBufferSpace(state);
+
+		// Now scatter everything in one go
+		partitions[0]->Scatter(state.chunk_state, input, state.partition_sel, actual_append_count);
 	}
 
-	// Compute the heap sizes for the whole chunk
-	if (!layout.AllConstant()) {
-		TupleDataCollection::ComputeHeapSizes(state.chunk_state, input, state.partition_sel, actual_append_count);
-	}
-
-	// Build the buffer space
-	BuildBufferSpace(state);
-
-	// Now scatter everything in one go
-	partitions[0]->Scatter(state.chunk_state, input, state.partition_sel, actual_append_count);
+	count += actual_append_count;
+	Verify();
 }
 
-void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleDataChunkState &input, idx_t count) {
+void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleDataChunkState &input,
+                                  idx_t append_count) {
 	// Compute partition indices and store them in state.partition_indices
-	ComputePartitionIndices(input.row_locations, count, state.partition_indices);
+	ComputePartitionIndices(input.row_locations, append_count, state.partition_indices);
 
 	// Build the selection vector for the partitions
-	BuildPartitionSel(state, *FlatVector::IncrementalSelectionVector(), count);
+	BuildPartitionSel(state, *FlatVector::IncrementalSelectionVector(), append_count);
 
 	// Early out: check if everything belongs to a single partition
 	auto &partition_entries = state.partition_entries;
@@ -90,18 +96,24 @@ void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleD
 		auto &partition_pin_state = *state.partition_pin_states[partition_index];
 
 		state.chunk_state.heap_sizes.Reference(input.heap_sizes);
-		partition.Build(partition_pin_state, state.chunk_state, 0, count);
-		partition.CopyRows(state.chunk_state, input, *FlatVector::IncrementalSelectionVector(), count);
-		return;
+
+		const auto size_before = partition.SizeInBytes();
+		partition.Build(partition_pin_state, state.chunk_state, 0, append_count);
+		data_size += partition.SizeInBytes() - size_before;
+
+		partition.CopyRows(state.chunk_state, input, *FlatVector::IncrementalSelectionVector(), append_count);
+	} else {
+		// Build the buffer space
+		state.chunk_state.heap_sizes.Slice(input.heap_sizes, state.partition_sel, append_count);
+		state.chunk_state.heap_sizes.Flatten(append_count);
+		BuildBufferSpace(state);
+
+		// Copy the rows
+		partitions[0]->CopyRows(state.chunk_state, input, state.partition_sel, append_count);
 	}
 
-	// Build the buffer space
-	state.chunk_state.heap_sizes.Slice(input.heap_sizes, state.partition_sel, count);
-	state.chunk_state.heap_sizes.Flatten(count);
-	BuildBufferSpace(state);
-
-	// Copy the rows
-	partitions[0]->CopyRows(state.chunk_state, input, state.partition_sel, count);
+	count += append_count;
+	Verify();
 }
 
 void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &state, const SelectionVector &append_sel,
@@ -145,6 +157,11 @@ void PartitionedTupleData::BuildPartitionSel(PartitionedTupleDataAppendState &st
 
 	// Early out: check if everything belongs to a single partition
 	if (partition_entries.size() == 1) {
+		// This needs to be initialized, even if we go the short path here
+		for (idx_t i = 0; i < append_count; i++) {
+			const auto index = append_sel.get_index(i);
+			state.reverse_partition_sel[index] = i;
+		}
 		return;
 	}
 
@@ -207,7 +224,9 @@ void PartitionedTupleData::BuildBufferSpace(PartitionedTupleDataAppendState &sta
 		const auto partition_offset = partition_entry.offset - partition_length;
 
 		// Build out the buffer space for this partition
+		const auto size_before = partition.SizeInBytes();
 		partition.Build(partition_pin_state, state.chunk_state, partition_offset, partition_length);
+		data_size += partition.SizeInBytes() - size_before;
 	}
 }
 
@@ -226,7 +245,6 @@ void PartitionedTupleData::Combine(PartitionedTupleData &other) {
 
 	// Now combine the state's partitions into this
 	lock_guard<mutex> guard(lock);
-
 	if (partitions.empty()) {
 		// This is the first merge, we just copy them over
 		partitions = std::move(other.partitions);
@@ -237,6 +255,8 @@ void PartitionedTupleData::Combine(PartitionedTupleData &other) {
 			partitions[i]->Combine(*other.partitions[i]);
 		}
 	}
+	this->count += other.count;
+	Verify();
 }
 
 void PartitionedTupleData::Partition(TupleDataCollection &source, TupleDataPinProperties properties) {
@@ -266,6 +286,7 @@ void PartitionedTupleData::Partition(TupleDataCollection &source, TupleDataPinPr
 	}
 	D_ASSERT(count_before == count_after);
 #endif
+	Verify();
 }
 
 void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_data) {
@@ -297,6 +318,7 @@ void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_dat
 	}
 
 	new_partitioned_data.FlushAppendState(append_state);
+	Verify();
 }
 
 void PartitionedTupleData::Unpin() {
@@ -309,12 +331,19 @@ vector<unique_ptr<TupleDataCollection>> &PartitionedTupleData::GetPartitions() {
 	return partitions;
 }
 
-idx_t PartitionedTupleData::Count() const {
-	idx_t total_count = 0;
-	for (auto &partition : partitions) {
-		total_count += partition->Count();
+unique_ptr<TupleDataCollection> PartitionedTupleData::GetUnpartitioned() {
+	auto data_collection = std::move(partitions[0]);
+	partitions[0] = make_uniq<TupleDataCollection>(buffer_manager, layout);
+	for (idx_t i = 1; i < partitions.size(); i++) {
+		data_collection->Combine(*partitions[i]);
 	}
-	return total_count;
+	data_collection->Verify();
+	Verify();
+	return data_collection;
+}
+
+idx_t PartitionedTupleData::Count() const {
+	return count;
 }
 
 idx_t PartitionedTupleData::SizeInBytes() const {
@@ -323,6 +352,20 @@ idx_t PartitionedTupleData::SizeInBytes() const {
 		total_size += partition->SizeInBytes();
 	}
 	return total_size;
+}
+
+void PartitionedTupleData::Verify() const {
+#ifdef DEBUG
+	idx_t total_count = 0;
+	idx_t total_size = 0;
+	for (auto &partition : partitions) {
+		partition->Verify();
+		total_count += partition->Count();
+		total_size += partition->SizeInBytes();
+	}
+	D_ASSERT(total_count == this->count);
+	D_ASSERT(total_size == this->data_size);
+#endif
 }
 
 // LCOV_EXCL_START

@@ -93,11 +93,10 @@ void RadixPartitionedHashTable::SetGroupingValues() {
 	}
 }
 
-unique_ptr<GroupedAggregateHashTable> RadixPartitionedHashTable::CreateHT(ClientContext &context,
+unique_ptr<GroupedAggregateHashTable> RadixPartitionedHashTable::CreateHT(ClientContext &context, const idx_t capacity,
                                                                           const idx_t radix_bits) const {
-	// TODO also capacity
 	return make_uniq<GroupedAggregateHashTable>(context, BufferAllocator::Get(context), group_types, op.payload_types,
-	                                            op.bindings, GroupedAggregateHashTable::InitialCapacity(), radix_bits);
+	                                            op.bindings, capacity, radix_bits);
 }
 
 //===--------------------------------------------------------------------===//
@@ -224,7 +223,7 @@ void RadixHTGlobalSinkState::CombinedToFinalize(const idx_t sink_partition_idx) 
 
 idx_t RadixHTGlobalSinkState::AddToFinal(GroupedAggregateHashTable &intermediate_ht,
                                          vector<MaterializedAggregateData> &uncombined_data) {
-	auto data = intermediate_ht.AcquireData();
+	auto data = intermediate_ht.AcquireData(true);
 	D_ASSERT(data.size() == 1);
 	D_ASSERT(data[0].data_collection->Count() != 0);
 	scan_data.emplace_back(std::move(data[0]));
@@ -302,15 +301,15 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 	group_chunk.Verify();
 }
 
-enum class RadixHTAbandonType : uint8_t {
-	//! Keep adding data to the thread-local HT
-	DO_NOT_ABANDON,
-	//! Abandon the HT because it's too big
-	MEMORY_LIMIT,
-	//! Abandon the HT because there are too few duplicates
-	TOO_FEW_DUPLICATES,
-	//! Abandon the HT because the Sink phase is over, and Combine was called
-	COMBINE
+struct RadixHTAbandonStatus {
+	//! Whether we should abandon the HT
+	bool abandon = false;
+	//! Whether we're over the per-HT memory limit
+	bool over_memory_limit = false;
+	//! Whether there are too many uniques in the HT
+	bool too_many_uniques = false;
+	//! Whether we're abandoning a HT due to calling RadixPartitionedHashTable::Combine
+	bool combine = false;
 };
 
 static idx_t SingleHTMemoryLimit(ClientContext &context) {
@@ -318,45 +317,41 @@ static idx_t SingleHTMemoryLimit(ClientContext &context) {
 	return double(0.6) * BufferManager::GetBufferManager(context).GetMaxMemory() / hts_in_memory;
 }
 
-static RadixHTAbandonType AbandonHT(ClientContext &context, const GroupedAggregateHashTable &ht) {
-	if (context.config.force_external) {
-		return RadixHTAbandonType::MEMORY_LIMIT;
+static RadixHTAbandonStatus GetAbandonStatus(ClientContext &context, const GroupedAggregateHashTable &ht) {
+	RadixHTAbandonStatus result;
+	if (context.config.force_external || ht.TotalSize() > SingleHTMemoryLimit(context)) {
+		result.abandon = true;
+		result.over_memory_limit = true;
 	}
 
 	const auto ht_count = ht.Count();
-	const auto over_limit = ht.TotalSize() < SingleHTMemoryLimit(context);
-	if (ht_count < RadixHTConfig::SINK_ABANDON_THRESHOLD && !over_limit) {
-		// Under both thresholds, just continue
-		return RadixHTAbandonType::DO_NOT_ABANDON;
+	if (result.abandon || ht_count > RadixHTConfig::SINK_ABANDON_THRESHOLD) {
+		// Math taken from https://math.stackexchange.com/a/1088094
+		const double k = ht_count * RadixHTConfig::SINK_EXPECTED_GROUP_COUNT_FACTOR;
+		const double n = ht.SinkCount();
+
+		// Compute the expected number of groups after seeing 'n' tuples,
+		// if the group count in the input would be equal to 'k'
+		const auto ev = k * (1 - std::pow(1 - 1 / k, n));
+
+		// Compute the variance of the expected number of groups
+		const auto a = k * (k - 1) * std::pow(1 - 2 / k, n);
+		const auto b = k * std::pow(1 - 1 / k, n);
+		const auto c = std::pow(k, 2) * std::pow(1 - 1 / k, 2 * n);
+		const auto var = a + b - c;
+
+		// Compute the standard deviation
+		const auto stdev = std::pow(AbsValue(var), 0.5);
+
+		// With 3 standard deviations we're 99.9% sure we're headed not towards 'k' or more groups
+		const auto threshold = ev - 3 * stdev;
+
+		if (ht_count > threshold) {
+			result.abandon = true;
+			result.too_many_uniques = true;
+		}
 	}
-
-	// Math taken from https://math.stackexchange.com/a/1088094
-	const double k = ht_count * RadixHTConfig::SINK_EXPECTED_GROUP_COUNT_FACTOR;
-	const double n = ht.SinkCount();
-
-	// Compute the expected number of groups after seeing 'n' tuples,
-	// if the group count in the input would be equal to 'k'
-	const auto ev = k * (1 - std::pow(1 - 1 / k, n));
-
-	// Compute the variance of the expected number of groups
-	const auto a = k * (k - 1) * std::pow(1 - 2 / k, n);
-	const auto b = k * std::pow(1 - 1 / k, n);
-	const auto c = std::pow(k, 2) * std::pow(1 - 1 / k, 2 * n);
-	const auto var = a + b - c;
-
-	// Compute the standard deviation
-	const auto stdev = std::pow(AbsValue(var), 0.5);
-
-	// With 3 standard deviations we're 99.9% sure we're headed not towards 'k' or more groups
-	const auto threshold = ev - 3 * stdev;
-
-	if (ht_count > threshold) {
-		return RadixHTAbandonType::TOO_FEW_DUPLICATES;
-	} else if (over_limit) {
-		return RadixHTAbandonType::MEMORY_LIMIT;
-	} else {
-		return RadixHTAbandonType::DO_NOT_ABANDON;
-	}
+	return result;
 }
 
 void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input,
@@ -365,27 +360,26 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, DataChunk &chunk
 
 	auto &ht = lstate.ht;
 	if (!ht) {
-		ht = CreateHT(context.client, RadixHTConfig::SINK_RADIX_BITS);
+		ht = CreateHT(context.client, GroupedAggregateHashTable::InitialCapacity(), RadixHTConfig::SINK_RADIX_BITS);
 	}
 
 	auto &group_chunk = lstate.group_chunk;
 	PopulateGroupChunk(group_chunk, chunk);
 	ht->AddChunk(group_chunk, payload_input, filter);
 
-	auto abandon_type = AbandonHT(context.client, *ht);
-	if (abandon_type != RadixHTAbandonType::DO_NOT_ABANDON) {
-		if (CombineInternal(context.client, input.global_state, input.local_state, abandon_type)) {
-			ht->ClearPointerTable();
-		}
+	const auto local_status = GetAbandonStatus(context.client, *ht);
+	if (local_status.abandon) {
+		CombineInternal(context.client, input.global_state, input.local_state, local_status);
+		ht->ClearPointerTable();
 	}
 }
 
-bool RadixPartitionedHashTable::CombineInternal(ClientContext &context, GlobalSinkState &gstate_p,
+void RadixPartitionedHashTable::CombineInternal(ClientContext &context, GlobalSinkState &gstate_p,
                                                 LocalSinkState &lstate_p,
-                                                const RadixHTAbandonType local_abandon_type) const {
+                                                const RadixHTAbandonStatus &local_status) const {
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();
 	auto &lstate = lstate_p.Cast<RadixHTLocalSinkState>();
-	D_ASSERT(local_abandon_type != RadixHTAbandonType::DO_NOT_ABANDON);
+	D_ASSERT(local_status.abandon);
 
 	// Get data from the thread-local HT
 	auto partitioned_data = lstate.ht->AcquireData();
@@ -404,7 +398,7 @@ bool RadixPartitionedHashTable::CombineInternal(ClientContext &context, GlobalSi
 			lock_guard<mutex> guard(partition.uncombined_data_lock);
 			partition.AddUncombinedData(std::move(partition_data));
 
-			if (ShouldCombine(context, gstate_p, partition_idx, local_abandon_type)) {
+			if (ShouldCombine(context, gstate_p, partition_idx, local_status)) {
 				// Acquire all uncombined data from the partition
 				partition.combine_active = true;
 				uncombined_data = partition.AcquireUncombinedData();
@@ -412,18 +406,21 @@ bool RadixPartitionedHashTable::CombineInternal(ClientContext &context, GlobalSi
 		}
 
 		if (!uncombined_data.empty()) {
-			CombinePartition(partition, uncombined_data);
-			return true;
+			CombinePartition(context, gstate_p, partition_idx, uncombined_data, local_status);
 		}
 	}
-	return false;
 }
 
 bool RadixPartitionedHashTable::ShouldCombine(ClientContext &context, GlobalSinkState &gstate_p,
                                               const idx_t sink_partition_idx,
-                                              const RadixHTAbandonType local_abandon_type) const {
+                                              const RadixHTAbandonStatus &local_status) const {
 	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();
 	auto &sink_partition = *gstate.sink_partitions[sink_partition_idx];
+
+	if (local_status.combine) {
+		// We abandoned the local HT due to calling Combine, we don't actually combine here, leave it for later
+		return false;
+	}
 
 	if (sink_partition.uncombined_count < RadixHTConfig::SINK_COMBINE_THRESHOLD) {
 		// We haven't reached the threshold yet
@@ -435,56 +432,82 @@ bool RadixPartitionedHashTable::ShouldCombine(ClientContext &context, GlobalSink
 		return false;
 	}
 
-	if (local_abandon_type == RadixHTAbandonType::COMBINE) {
-		// We abandoned the local HT due to calling Combine, we don't actually combine here, leave it for later
-		return false;
-	}
-
 	lock_guard<mutex> sink_guard(sink_partition.combined_data_lock);
 	if (!sink_partition.combined_data) {
 		// We haven't combined any data yet for this partition, so let's do that
-		sink_partition.combined_data = CreateHT(context, RadixHTConfig::FINALIZE_RADIX_BITS);
+		const auto capacity = GroupedAggregateHashTable::GetCapacityForCount(sink_partition.uncombined_count);
+		sink_partition.combined_data = CreateHT(context, capacity, RadixHTConfig::FINALIZE_RADIX_BITS);
 		return true;
 	}
 
 	// We've combined data before, check whether we should abandon that
-	const auto global_abandon_type = AbandonHT(context, *sink_partition.combined_data);
-	switch (global_abandon_type) {
-	case RadixHTAbandonType::DO_NOT_ABANDON:
+	const auto global_status = GetAbandonStatus(context, *sink_partition.combined_data);
+	if (!global_status.abandon) {
 		// No reason to abandon, just combine into it
 		return true;
-	case RadixHTAbandonType::MEMORY_LIMIT:
-		// Combined HT has grown too large, move data to finalize partitions
-		gstate.CombinedToFinalize(sink_partition_idx);
-		sink_partition.combined_data->ClearPointerTable();
-		return true;
-	case RadixHTAbandonType::TOO_FEW_DUPLICATES:
-		// If both have too few duplicates, just leave the data uncombined
-		// If global has too few duplicates, but local does not, there's hope for combining
-		return local_abandon_type != RadixHTAbandonType::TOO_FEW_DUPLICATES;
-	case RadixHTAbandonType::COMBINE:
-		throw InternalException("RadixHTAbandonType::COMBINE encountered in RadixPartitionedHashTable::ShouldCombine");
 	}
+
+	if (global_status.too_many_uniques) {
+		// Too many uniques in the global HT
+		if (local_status.too_many_uniques) {
+			// Very unlikely that we'll be able to reduce data size, leave combining for later
+			return false;
+		}
+		// We can probably reduce data size
+		if (global_status.over_memory_limit) {
+			// Combined HT has grown too large, unpin it before combining
+			gstate.CombinedToFinalize(sink_partition_idx);
+			sink_partition.combined_data->ClearPointerTable();
+		}
+	}
+	return true;
 }
 
-void RadixPartitionedHashTable::CombinePartition(AggregatePartition &partition,
-                                                 vector<MaterializedAggregateData> &uncombined_data) const {
+void RadixPartitionedHashTable::CombinePartition(ClientContext &context, GlobalSinkState &gstate_p,
+                                                 const idx_t sink_partition_idx,
+                                                 vector<MaterializedAggregateData> &uncombined_data,
+                                                 const RadixHTAbandonStatus &local_status) const {
+	auto &gstate = gstate_p.Cast<RadixHTGlobalSinkState>();
 	D_ASSERT(!uncombined_data.empty());
+	D_ASSERT(!local_status.combine);
+
+	auto &partition = *gstate.sink_partitions[sink_partition_idx];
 	D_ASSERT(partition.combine_active);
-	lock_guard<mutex> guard(partition.combined_data_lock);
+	lock_guard<mutex> combined_guard(partition.combined_data_lock);
 	D_ASSERT(partition.combined_data);
 
-	// Combine all the data collections and get the all the allocators
-	auto &data_collection = *uncombined_data[0].data_collection;
-	for (idx_t i = 1; i < uncombined_data.size(); i++) {
-		auto &ucb = uncombined_data[i];
+	while (!uncombined_data.empty()) {
+		auto ucb = std::move(uncombined_data.back());
 		D_ASSERT(ucb.allocators.size() == 1);
-		data_collection.Combine(*ucb.data_collection);
+		uncombined_data.pop_back();
+
+		partition.combined_data->Combine(*ucb.data_collection);
 		partition.combined_data_allocators.emplace_back(std::move(ucb.allocators[0]));
+
+		const auto global_status = GetAbandonStatus(context, *partition.combined_data);
+		if (!global_status.abandon) {
+			continue;
+		}
+
+		// We have to abandon the global HT
+		if (global_status.too_many_uniques && local_status.too_many_uniques) {
+			// Very unlikely that we'll be able to reduce data size, just leave the data here
+			break;
+		}
+
+		// We can probably reduce data size, but we need to abandon the global HT
+		gstate.CombinedToFinalize(sink_partition_idx);
+		partition.combined_data->ClearPointerTable();
 	}
 
-	// Now combine the HTs
-	partition.combined_data->Combine(data_collection);
+	if (!uncombined_data.empty()) {
+		// We bailed out on combining everything, move data back to partition
+		lock_guard<mutex> uncombined_guard(partition.uncombined_data_lock);
+		for (auto &ucb : uncombined_data) {
+			partition.AddUncombinedData(std::move(ucb));
+		}
+	}
+
 	partition.combine_active = false;
 }
 
@@ -495,8 +518,12 @@ void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkSta
 		return;
 	}
 
+	RadixHTAbandonStatus local_status;
+	local_status.abandon = true;
+	local_status.combine = true;
+
 	lstate.ht->Finalize();
-	CombineInternal(context.client, gstate_p, lstate_p, RadixHTAbandonType::COMBINE);
+	CombineInternal(context.client, gstate_p, lstate_p, local_status);
 	lstate.ht.reset();
 }
 
@@ -888,11 +915,16 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 	auto &finalize_partition = *sink.finalize_partitions[task_idx.GetIndex()];
 	D_ASSERT(!finalize_partition.finalize_available);
 
-	if (!ht) {
-		//		const auto count = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, finalize_partition.uncombined_count);
-		//		const auto capacity = NextPowerOfTwo(count * GroupedAggregateHashTable::LOAD_FACTOR);
-		// TODO: capacity
-		ht = radix_ht.CreateHT(gstate.context, 0);
+	if (finalize_partition.combined_data) {
+		ht = std::move(finalize_partition.combined_data);
+		// Resize existing HT to sufficient capacity
+		const auto capacity =
+		    GroupedAggregateHashTable::GetCapacityForCount(ht->Count() + finalize_partition.uncombined_count);
+		ht->Resize(capacity);
+	} else if (!ht) {
+		// Create a HT with sufficient capacity
+		const auto capacity = GroupedAggregateHashTable::GetCapacityForCount(finalize_partition.uncombined_count);
+		ht = radix_ht.CreateHT(gstate.context, capacity, 0);
 	} else {
 		ht->ClearPointerTable();
 	}

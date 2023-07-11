@@ -81,6 +81,8 @@ public:
 	void Unpin();
 	//! Get the partitions in this PartitionedTupleData
 	vector<unique_ptr<TupleDataCollection>> &GetPartitions();
+	//! Get the data of this PartitionedTupleData as a single unpartitioned TupleDataCollection
+	unique_ptr<TupleDataCollection> GetUnpartitioned();
 	//! Get the count of this PartitionedTupleData
 	idx_t Count() const;
 	//! Get the size (in bytes) of this PartitionedTupleData
@@ -105,7 +107,7 @@ protected:
 		throw NotImplementedException("ComputePartitionIndices for this type of PartitionedTupleData");
 	}
 	//! Compute partition indices from rows (similar to function above)
-	virtual void ComputePartitionIndices(Vector &row_locations, idx_t count, Vector &partition_indices) const {
+	virtual void ComputePartitionIndices(Vector &row_locations, idx_t append_count, Vector &partition_indices) const {
 		throw NotImplementedException("ComputePartitionIndices for this type of PartitionedTupleData");
 	}
 	//! Maximum partition index (optional)
@@ -140,11 +142,15 @@ protected:
 	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) const {
 		return make_uniq<TupleDataCollection>(allocators->allocators[partition_index]);
 	}
+	//! Verify count/data size of this PartitionedTupleData
+	void Verify() const;
 
 protected:
 	PartitionedTupleDataType type;
 	BufferManager &buffer_manager;
 	const TupleDataLayout layout;
+	idx_t count;
+	idx_t data_size;
 
 	mutex lock;
 	shared_ptr<PartitionTupleDataAllocators> allocators;

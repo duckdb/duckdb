@@ -41,7 +41,7 @@ public:
 		D_ASSERT(IsOccupied());
 		return reinterpret_cast<data_ptr_t>(value & POINTER_MASK);
 	}
-	inline void SetPointer(data_ptr_t pointer) {
+	inline void SetPointer(const data_ptr_t &pointer) {
 		// Pointer shouldn't use upper bits
 		D_ASSERT((reinterpret_cast<uint64_t>(pointer) & SALT_MASK) == 0);
 		// Value should have all 1's in the pointer area
@@ -50,14 +50,14 @@ public:
 		value &= reinterpret_cast<uint64_t>(pointer) | SALT_MASK;
 	}
 
-	static inline hash_t ExtractSalt(hash_t hash) {
+	static inline hash_t ExtractSalt(const hash_t &hash) {
 		// Leaves upper bits intact, sets lower bits to all 1's
 		return hash | POINTER_MASK;
 	}
 	inline hash_t GetSalt() const {
 		return ExtractSalt(value);
 	}
-	inline void SetSalt(hash_t salt) {
+	inline void SetSalt(const hash_t &salt) {
 		// Shouldn't be occupied when we set this
 		D_ASSERT(!IsOccupied());
 		// Salt should have all 1's in the pointer field
@@ -108,6 +108,8 @@ public:
 	idx_t SinkCount() const;
 	//! Initial capacity of the HT
 	static idx_t InitialCapacity();
+	//! Capacity that can hold 'count' entries without resizing
+	static idx_t GetCapacityForCount(idx_t count);
 	//! Current capacity of the HT
 	idx_t Capacity() const;
 	//! Threshold at which to resize the HT
@@ -138,8 +140,11 @@ public:
 	idx_t FindOrCreateGroups(DataChunk &groups, Vector &addresses_out, SelectionVector &new_groups_out);
 	void FindOrCreateGroups(DataChunk &groups, Vector &addresses_out);
 
-	//! Acquires the partitioned data from this HT
-	vector<MaterializedAggregateData> AcquireData();
+	//! Acquires the partitioned data from this HT (or unpartitioned, if as_one is true)
+	vector<MaterializedAggregateData> AcquireData(bool as_one = false);
+
+	//! Resize the HT to the specified size. Must be larger than the current size.
+	void Resize(idx_t size);
 	//! Resets the pointer table of the HT to all 0's
 	void ClearPointerTable();
 
@@ -209,8 +214,6 @@ private:
 
 	//! Apply bitmask to get the entry in the HT
 	inline idx_t ApplyBitMask(hash_t hash) const;
-	//! Resize the HT to the specified size. Must be larger than the current size.
-	void Resize(idx_t size);
 
 	//! Does the actual group matching / creation
 	idx_t FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,

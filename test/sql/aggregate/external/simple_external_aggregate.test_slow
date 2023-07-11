@@ -5,11 +5,38 @@
 load __TEST_DIR__/simple_external_aggregate.db
 
 statement ok
-create table t1 (i varchar)
+pragma threads=1
 
-# should be around 150mb
 statement ok
-insert into t1 select concat(range::VARCHAR, repeat('0', 50)) i from range(2000000) order by random()
+create table t1 (c0 bigint, c1 bigint, c2 bigint, c3 bigint, c4 bigint, c5 bigint, c6 bigint, c7 varchar)
+
+# should be around 160mb
+# parallelize range using unions
+statement ok
+insert into t1 select range c0,
+                      range c1,
+                      range c2,
+                      range c3,
+                      range c4,
+                      range c5,
+                      range c6,
+                      concat(range::VARCHAR, repeat('0', 50)) c7
+from (
+    select * from (
+        select * from range(0, 250000)
+        union all
+        select * from range(250000, 500000)
+        union all
+        select * from range(500000, 750000)
+        union all
+        select * from range(750000, 1000000)
+    ) order by random()
+)
+
+# we don't want to compress to smaller sizes,
+# otherwise the size estimates (and therefore this test) won't test what we want it to
+statement ok
+set disabled_optimizers to 'compressed_materialization'
 
 statement ok
 pragma threads=4
@@ -18,15 +45,27 @@ statement ok
 pragma memory_limit='75mb'
 
 query I
-select count(*) from (select distinct i from t1)
+select count(*) from (select distinct * from t1)
 ----
-2000000
+1000000
 
-# add some strings that are longer than Storage::BLOCK_SIZE (another ~30MB, for a total of ~180MB)
+# add some strings that are longer than Storage::BLOCK_SIZE (another ~30MB, for a total of ~190MB)
 statement ok
-insert into t1 select concat(range::VARCHAR, repeat('0', 300000)) i from range(100)
+insert into t1 select range c0,
+                      range c1,
+                      range c2,
+                      range c3,
+                      range c4,
+                      range c5,
+                      range c6,
+                      concat(range::VARCHAR, repeat('0', 300000)) c7
+from range(100)
+
+# slightly higher memory limit for this one
+statement ok
+pragma memory_limit='90mb'
 
 query I
-select count(*) from (select distinct i from t1)
+select count(*) from (select distinct * from t1)
 ----
-2000100
+1000100

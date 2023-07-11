@@ -98,7 +98,7 @@ void TupleDataChunk::MergeLastChunkPart(const TupleDataLayout &layout) {
 }
 
 TupleDataSegment::TupleDataSegment(shared_ptr<TupleDataAllocator> allocator_p)
-    : allocator(std::move(allocator_p)), count(0) {
+    : allocator(std::move(allocator_p)), count(0), data_size(0) {
 }
 
 TupleDataSegment::~TupleDataSegment() {
@@ -112,6 +112,7 @@ void SwapTupleDataSegment(TupleDataSegment &a, TupleDataSegment &b) {
 	std::swap(a.allocator, b.allocator);
 	std::swap(a.chunks, b.chunks);
 	std::swap(a.count, b.count);
+	std::swap(a.data_size, b.data_size);
 	std::swap(a.pinned_row_handles, b.pinned_row_handles);
 	std::swap(a.pinned_heap_handles, b.pinned_heap_handles);
 }
@@ -130,17 +131,7 @@ idx_t TupleDataSegment::ChunkCount() const {
 }
 
 idx_t TupleDataSegment::SizeInBytes() const {
-	const auto &layout = allocator->GetLayout();
-	idx_t total_size = 0;
-	for (const auto &chunk : chunks) {
-		total_size += chunk.count * layout.GetRowWidth();
-		if (!layout.AllConstant()) {
-			for (const auto &part : chunk.parts) {
-				total_size += part.total_heap_size;
-			}
-		}
-	}
-	return total_size;
+	return data_size;
 }
 
 void TupleDataSegment::Unpin() {
@@ -151,12 +142,21 @@ void TupleDataSegment::Unpin() {
 
 void TupleDataSegment::Verify() const {
 #ifdef DEBUG
+	const auto &layout = allocator->GetLayout();
+
 	idx_t total_count = 0;
+	idx_t total_size = 0;
 	for (const auto &chunk : chunks) {
 		chunk.Verify();
 		total_count += chunk.count;
+
+		total_size += chunk.count * layout.GetRowWidth();
+		for (const auto &part : chunk.parts) {
+			total_size += part.total_heap_size;
+		}
 	}
 	D_ASSERT(total_count == this->count);
+	D_ASSERT(total_size == this->data_size);
 #endif
 }
 

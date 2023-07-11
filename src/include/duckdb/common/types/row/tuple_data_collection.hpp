@@ -45,6 +45,7 @@ struct TupleDataGatherFunction {
 //! FIXME: rename to RowDataCollection after we phase it out
 class TupleDataCollection {
 	friend class TupleDataChunkIterator;
+	friend class PartitionedTupleData;
 
 public:
 	//! Constructs a TupleDataCollection with the specified layout
@@ -217,7 +218,7 @@ private:
 	void ScanAtIndex(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, const vector<column_t> &column_ids,
 	                 idx_t segment_index, idx_t chunk_index, DataChunk &result);
 
-	//! Verify counts of the segments in this collection
+	//! Verify count/data size of this collection
 	void Verify() const;
 
 private:
@@ -227,6 +228,8 @@ private:
 	shared_ptr<TupleDataAllocator> allocator;
 	//! The number of entries stored in the TupleDataCollection
 	idx_t count;
+	//! The size (in bytes) of this TupleDataCollection
+	idx_t data_size;
 	//! The data segments of the TupleDataCollection
 	unsafe_vector<TupleDataSegment> segments;
 	//! The set of scatter functions

@@ -112,6 +112,8 @@ public:
 	unsafe_vector<TupleDataChunk> chunks;
 	//! The tuple count of this segment
 	idx_t count;
+	//! The data size of this segment
+	idx_t data_size;
 
 	//! Lock for modifying pinned_handles
 	mutex pinned_handles_lock;

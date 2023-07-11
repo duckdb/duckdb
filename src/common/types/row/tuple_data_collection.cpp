@@ -27,6 +27,7 @@ TupleDataCollection::~TupleDataCollection() {
 void TupleDataCollection::Initialize() {
 	D_ASSERT(!layout.GetTypes().empty());
 	this->count = 0;
+	this->data_size = 0;
 	scatter_functions.reserve(layout.ColumnCount());
 	gather_functions.reserve(layout.ColumnCount());
 	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
@@ -249,7 +250,10 @@ void TupleDataCollection::GetVectorData(const TupleDataChunkState &chunk_state, 
 
 void TupleDataCollection::Build(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state,
                                 const idx_t append_offset, const idx_t append_count) {
-	segments.back().allocator->Build(segments.back(), pin_state, chunk_state, append_offset, append_count);
+	auto &segment = segments.back();
+	const auto size_before = segment.SizeInBytes();
+	segment.allocator->Build(segments.back(), pin_state, chunk_state, append_offset, append_count);
+	data_size += segment.SizeInBytes() - size_before;
 	count += append_count;
 	Verify();
 }
@@ -314,6 +318,7 @@ void TupleDataCollection::Combine(TupleDataCollection &other) {
 		throw InternalException("Attempting to combine TupleDataCollection with mismatching types");
 	}
 	this->count += other.count;
+	this->data_size += other.data_size;
 	this->segments.reserve(this->segments.size() + other.segments.size());
 	for (auto &other_seg : other.segments) {
 		this->segments.emplace_back(std::move(other_seg));
@@ -328,6 +333,7 @@ void TupleDataCollection::Combine(unique_ptr<TupleDataCollection> other) {
 
 void TupleDataCollection::Reset() {
 	count = 0;
+	data_size = 0;
 	segments.clear();
 
 	// Refreshes the TupleDataAllocator to prevent holding on to allocated data unnecessarily
@@ -483,12 +489,15 @@ void TupleDataCollection::Print() {
 
 void TupleDataCollection::Verify() const {
 #ifdef DEBUG
-	idx_t total_segment_count = 0;
+	idx_t total_count = 0;
+	idx_t total_size = 0;
 	for (const auto &segment : segments) {
 		segment.Verify();
-		total_segment_count += segment.count;
+		total_count += segment.count;
+		total_size += segment.data_size;
 	}
-	D_ASSERT(total_segment_count == this->count);
+	D_ASSERT(total_count == this->count);
+	D_ASSERT(total_size == this->data_size);
 #endif
 }
 
