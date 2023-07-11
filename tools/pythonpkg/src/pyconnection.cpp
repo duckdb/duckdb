@@ -712,6 +712,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	auto path_like = GetPathLike(name_p);
 	auto &name = path_like.str;
 	auto file_like_object_wrapper = std::move(path_like.dependency);
+	vector<std::pair<string, Value>> post_bind_options;
 
 	// First check if the header is explicitly set
 	// when false this affects the returned types, so it needs to be known at initialization of the relation
@@ -730,6 +731,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		} else {
 			throw InvalidInputException("read_csv only accepts 'header' as an integer, or a boolean");
 		}
+		post_bind_options.emplace_back(std::make_pair("header", Value::BOOLEAN(options.header)));
 	}
 
 	// We want to detect if the file can be opened, we set this in the options so we can detect this at bind time
@@ -739,6 +741,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 			throw InvalidInputException("read_csv only accepts 'compression' as a string");
 		}
 		options.SetCompression(py::str(compression));
+		if (options.compression != FileCompressionType::AUTO_DETECT) {
+			post_bind_options.emplace_back(std::make_pair("compression", Value(py::str(compression))));
+		}
 	}
 
 	if (!py::none().is(dtype)) {
@@ -751,16 +756,23 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 					throw py::value_error("The types provided to 'dtype' have to be DuckDBPyType");
 				}
 				options.SetTypeForColumn(py::str(kv.first), sql_type->Type());
+				struct_fields.emplace_back(py::str(kv.first), Value(py::str(kv.second)));
 			}
+			auto dtype_struct = Value::STRUCT(std::move(struct_fields));
+			post_bind_options.emplace_back(std::make_pair("dtypes", std::move(dtype_struct)));
 		} else if (py::isinstance<py::list>(dtype)) {
+			vector<Value> list_values;
 			py::list dtype_list = dtype;
 			for (auto &child : dtype_list) {
 				shared_ptr<DuckDBPyType> sql_type;
 				if (!py::try_cast(child, sql_type)) {
 					throw py::value_error("The types provided to 'dtype' have to be DuckDBPyType");
 				}
+				list_values.push_back(std::string(py::str(child)));
 				options.SetSQLType(sql_type->Type());
 			}
+			post_bind_options.emplace_back(
+			    std::make_pair("dtypes", Value::LIST(LogicalType::VARCHAR, std::move(list_values))));
 		} else {
 			throw InvalidInputException("read_csv only accepts 'dtype' as a dictionary or a list of strings");
 		}
@@ -775,14 +787,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 		read_csv.extra_dependencies = std::move(file_like_object_wrapper);
 	}
 
-	if (options.has_header) {
-		// 'options' is only used to initialize the ReadCSV relation
-		// we also need to set this in the arguments passed to the function
-		read_csv.AddNamedParameter("header", Value::BOOLEAN(options.header));
-	}
-
-	if (options.compression != FileCompressionType::AUTO_DETECT) {
-		read_csv.AddNamedParameter("compression", Value(py::str(compression)));
+	for (auto &pair : post_bind_options) {
+		auto &param_name = pair.first;
+		auto &param_val = pair.second;
+		read_csv.AddNamedParameter(param_name, param_val);
 	}
 
 	bool has_sep = !py::none().is(sep);

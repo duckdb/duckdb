@@ -237,7 +237,7 @@ void BufferedCSVReaderOptions::SetWriteOption(const string &loption, const Value
 }
 
 void BufferedCSVReaderOptions::SetTypeForColumn(const string &name, const LogicalType &type) {
-	//FIXME: this can currently introduce duplicates in the 'sql_type_list'
+	// FIXME: this can currently introduce duplicates in the 'sql_type_list'
 	auto index = sql_type_list.size();
 	SetSQLType(type);
 	sql_types_per_column[name] = index;
