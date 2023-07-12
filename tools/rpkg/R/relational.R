@@ -228,7 +228,7 @@ rel_join_ <- function(left, right, conds,
   join_ref_type <- match.arg(join_ref_type)
   # the ref type is naturally regular. Users won't write rel_join(left, right, conds, "cross", "cross")
   # so we update it here.
-  if (join == "cross") {
+  if (join == "cross" && join_ref_type == "regular") {
     join_ref_type = "cross"
   }
   rapi_rel_join(left, right, conds, join, join_ref_type)
