@@ -59,7 +59,7 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 
 	auto query = OdbcUtils::ReadString(statement_text, text_length);
 	hstmt->stmt = hstmt->dbc->conn->Prepare(query);
-	if (!hstmt->stmt->GetStatementProperties().bound_all_parameters) {
+	if (hstmt->stmt->data && !hstmt->stmt->GetStatementProperties().bound_all_parameters) {
 		DiagRecord diag_rec("Not all parameters are bound", SQLStateType::SYNTAX_ERROR_OR_ACCESS_VIOLATION,
 		                    hstmt->dbc->GetDataSourceName());
 		return (SetDiagnosticRecord(hstmt, SQL_ERROR, "PrepareStmt", diag_rec, hstmt->dbc->GetDataSourceName()));
