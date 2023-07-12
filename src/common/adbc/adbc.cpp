@@ -60,7 +60,7 @@ struct DuckDBAdbcStatementWrapper {
 	::duckdb_arrow result;
 	::duckdb_prepared_statement statement;
 	char *ingestion_table_name;
-	ArrowArrayStream *ingestion_stream;
+	ArrowArrayStream ingestion_stream;
 };
 
 AdbcStatusCode SetErrorMaybe(const void *result, AdbcError *error, const std::string &error_message) {
