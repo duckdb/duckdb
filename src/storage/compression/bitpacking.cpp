@@ -212,7 +212,7 @@ public:
 
 		can_do_delta = can_do_delta && TrySubtractOperator::Operation(maximum_delta, minimum_delta, min_max_delta_diff);
 		can_do_delta =
-		    can_do_delta && TrySubtractOperator::Operation((T_S)(compression_buffer[0]), minimum_delta, delta_offset);
+		    can_do_delta && TrySubtractOperator::Operation(static_cast<T_S>(compression_buffer[0]), minimum_delta, delta_offset);
 	}
 
 	template <class T_INNER>
