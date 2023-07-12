@@ -1,6 +1,5 @@
 #include "duckdb/common/bitpacking.hpp"
 
-#include "duckdb/common/bitpacking_hugeint.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"

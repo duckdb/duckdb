@@ -19,6 +19,11 @@ namespace duckdb {
 
 using bitpacking_width_t = uint8_t;
 
+struct HugeIntPacker {
+	static void Pack(const hugeint_t *__restrict in, uint32_t *__restrict out, bitpacking_width_t width);
+	static void Unpack(const uint32_t *__restrict in, hugeint_t *__restrict out, bitpacking_width_t width);
+};
+
 class BitpackingPrimitives {
 
 public:
@@ -206,29 +211,37 @@ private:
 
 	template <class T>
 	static inline void PackGroup(data_ptr_t dst, T *values, bitpacking_width_t width) {
-		// packing reinterprets the integral type as it's unsigned counterpart,
-		// except for hugeints which are exclusively signed (for now)
-		PackGroupImpl(dst, reinterpret_cast<typename MakeUnsigned<T>::type *>(values), width);
-	}
-
-	template <class T>
-	static inline void PackGroupImpl(data_ptr_t dst, T *values, bitpacking_width_t width) {
-		throw InternalException("Unsupported type for bitpacking");
-	}
-
-	template <class T>
-	static inline void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
-	                        bool skip_sign_extension = false) {
-		UnPackGroupImpl(reinterpret_cast<typename MakeUnsigned<T>::type *>(dst), src, width);
-
-		if (NumericLimits<T>::IsSigned() && !skip_sign_extension && width > 0 && width < sizeof(T) * 8) {
-			SignExtend<T>(dst, width);
+		if (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint8_t *>(values), reinterpret_cast<uint8_t *>(dst), static_cast<uint32_t>(width));
+		} else if (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint16_t *>(values), reinterpret_cast<uint16_t *>(dst), static_cast<uint32_t>(width));
+		} else if (std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value) {
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint32_t *>(values), reinterpret_cast<uint32_t *>(dst), static_cast<uint32_t>(width));
+		} else if (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint64_t *>(values), reinterpret_cast<uint32_t *>(dst), static_cast<uint32_t>(width));
+		} else if (std::is_same<T, hugeint_t>::value) {
+			HugeIntPacker::Pack(reinterpret_cast<const hugeint_t *>(values), reinterpret_cast<uint32_t *>(dst), width);
 		}
 	}
 
 	template <class T>
-	static inline void UnPackGroupImpl(T *dst, data_ptr_t src, bitpacking_width_t width) {
-		throw InternalException("Unsupported type for bitpacking");
+	static inline void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
+	                               bool skip_sign_extension = false) {
+		if (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint8_t *>(src), reinterpret_cast<uint8_t *>(dst), static_cast<uint32_t>(width));
+		} else if (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint16_t *>(src), reinterpret_cast<uint16_t *>(dst), static_cast<uint32_t>(width));
+		} else if (std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value) {
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint32_t *>(dst), static_cast<uint32_t>(width));
+		} else if (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst), static_cast<uint32_t>(width));
+		} else if (std::is_same<T, hugeint_t>::value) {
+			HugeIntPacker::Unpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<hugeint_t *>(dst), width);
+		}
+
+		if (NumericLimits<T>::IsSigned() && !skip_sign_extension && width > 0 && width < sizeof(T) * 8) {
+			SignExtend<T>(dst, width);
+		}
 	}
 };
 

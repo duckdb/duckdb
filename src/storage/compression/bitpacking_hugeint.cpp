@@ -1,5 +1,4 @@
 #include "duckdb/common/bitpacking.hpp"
-#include "duckdb/common/bitpacking_hugeint.hpp"
 
 namespace duckdb {
 
