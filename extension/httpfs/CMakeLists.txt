@@ -6,7 +6,8 @@ add_extension_definitions()
 
 include_directories(include ../../third_party/httplib ../parquet/include)
 
-build_static_extension(httpfs s3fs.cpp httpfs.cpp crypto.cpp httpfs_extension.cpp)
+build_static_extension(httpfs s3fs.cpp httpfs.cpp crypto.cpp
+                       httpfs_extension.cpp)
 set(PARAMETERS "-warnings")
 build_loadable_extension(httpfs ${PARAMETERS} s3fs.cpp httpfs.cpp crypto.cpp
                          httpfs_extension.cpp)

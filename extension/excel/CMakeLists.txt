@@ -7,8 +7,7 @@ include_directories(include)
 add_subdirectory(numformat)
 
 
-build_static_extension(excel excel_extension.cpp
-                       ${NUMFORMAT_OBJECT_FILES})
+build_static_extension(excel excel_extension.cpp ${NUMFORMAT_OBJECT_FILES})
 set(PARAMETERS "-warnings")
 build_loadable_extension(excel ${PARAMETERS} excel_extension.cpp
                          ${NUMFORMAT_OBJECT_FILES})
