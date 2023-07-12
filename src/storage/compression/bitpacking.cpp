@@ -328,7 +328,7 @@ unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalTyp
 
 template <class T>
 bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
-	auto &analyze_state = static_cast<BitpackingAnalyzeState<hugeint_t> &>(state);
+	auto &analyze_state = static_cast<BitpackingAnalyzeState<T> &>(state);
 	UnifiedVectorFormat vdata;
 	input.ToUnifiedFormat(count, vdata);
 
@@ -342,26 +342,9 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	return true;
 }
 
-template <>
-bool BitpackingAnalyze<hugeint_t>(AnalyzeState &state, Vector &input, idx_t count) {
-	auto &analyze_state = static_cast<BitpackingAnalyzeState<hugeint_t> &>(state);
-	UnifiedVectorFormat vdata;
-	input.ToUnifiedFormat(count, vdata);
-
-	auto data = UnifiedVectorFormat::GetData<hugeint_t>(vdata);
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-		if (!analyze_state.state.template Update<EmptyBitpackingWriter>(data[idx], vdata.validity.RowIsValid(idx))) {
-			return false;
-		}
-	}
-
-	return true;
-}
-
 template <class T>
 idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
-	auto &bitpacking_state = static_cast<BitpackingAnalyzeState<hugeint_t> &>(state);
+	auto &bitpacking_state = static_cast<BitpackingAnalyzeState<T> &>(state);
 	auto flush_result = bitpacking_state.state.template Flush<EmptyBitpackingWriter>();
 	if (!flush_result) {
 		return DConstants::INVALID_INDEX;
