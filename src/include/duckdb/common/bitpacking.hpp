@@ -205,19 +205,19 @@ private:
 	}
 
 	template <class T>
-	static void PackGroup(data_ptr_t dst, T *values, bitpacking_width_t width) {
+	static inline void PackGroup(data_ptr_t dst, T *values, bitpacking_width_t width) {
 		// packing reinterprets the integral type as it's unsigned counterpart,
 		// except for hugeints which are exclusively signed (for now)
 		PackGroupImpl(dst, reinterpret_cast<typename MakeUnsigned<T>::type *>(values), width);
 	}
 
 	template <class T>
-	static void PackGroupImpl(data_ptr_t dst, T *values, bitpacking_width_t width) {
+	static inline void PackGroupImpl(data_ptr_t dst, T *values, bitpacking_width_t width) {
 		throw InternalException("Unsupported type for bitpacking");
 	}
 
 	template <class T>
-	static void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
+	static inline void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
 	                        bool skip_sign_extension = false) {
 		UnPackGroupImpl(reinterpret_cast<typename MakeUnsigned<T>::type *>(dst), src, width);
 
@@ -227,7 +227,7 @@ private:
 	}
 
 	template <class T>
-	static void UnPackGroupImpl(T *dst, data_ptr_t src, bitpacking_width_t width) {
+	static inline void UnPackGroupImpl(T *dst, data_ptr_t src, bitpacking_width_t width) {
 		throw InternalException("Unsupported type for bitpacking");
 	}
 };
