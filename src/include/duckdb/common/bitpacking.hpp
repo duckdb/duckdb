@@ -221,6 +221,8 @@ private:
 			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint64_t *>(values), reinterpret_cast<uint32_t *>(dst), static_cast<uint32_t>(width));
 		} else if (std::is_same<T, hugeint_t>::value) {
 			HugeIntPacker::Pack(reinterpret_cast<const hugeint_t *>(values), reinterpret_cast<uint32_t *>(dst), width);
+		} else {
+			throw InternalException("Unsupported type for bitpacking");
 		}
 	}
 
@@ -237,6 +239,8 @@ private:
 			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst), static_cast<uint32_t>(width));
 		} else if (std::is_same<T, hugeint_t>::value) {
 			HugeIntPacker::Unpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<hugeint_t *>(dst), width);
+		} else {
+			throw InternalException("Unsupported type for bitpacking");
 		}
 
 		if (NumericLimits<T>::IsSigned() && !skip_sign_extension && width > 0 && width < sizeof(T) * 8) {
