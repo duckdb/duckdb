@@ -75,6 +75,7 @@ public:
 	DUCKDB_API explicit operator int64_t() const;
 };
 
-hugeint_t operator*(idx_t lhs, hugeint_t rhs);
+// operator specifically for 
+// hugeint_t operator*(idx_t lhs, hugeint_t rhs);
 
 } // namespace duckdb

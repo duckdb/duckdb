@@ -806,8 +806,8 @@ string hugeint_t::ToString() const {
 	return Hugeint::ToString(*this);
 }
 
-hugeint_t operator*(idx_t lhs, hugeint_t rhs) {
-	return (hugeint_t(lhs) * rhs);
-}
+// hugeint_t operator*(idx_t lhs, hugeint_t rhs) {
+// 	return (hugeint_t(lhs) * rhs);
+// }
 
 } // namespace duckdb
