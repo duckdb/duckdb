@@ -692,6 +692,14 @@ function(build_loadable_extension NAME PARAMETERS)
   build_loadable_extension_directory(${NAME} "extension/${NAME}" "${PARAMETERS}" ${FILES})
 endfunction()
 
+function(build_static_extension NAME PARAMETERS)
+  # all parameters after name
+  set(FILES ${ARGV})
+  list(REMOVE_AT FILES 0)
+  add_library(${NAME}_extension STATIC ${FILES})
+  target_link_libraries(${NAME}_extension duckdb_static)
+endfunction()
+
 # Internal extension register function
 function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH)
   string(TOLOWER ${NAME} EXTENSION_NAME_LOWERCASE)
