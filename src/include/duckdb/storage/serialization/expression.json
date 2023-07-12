@@ -69,5 +69,45 @@
       }
     ],
     "constructor": ["return_type"]
+  },
+  {
+    "class": "BoundCastExpression",
+    "base": "Expression",
+    "enum": "BOUND_CAST",
+    "members": [
+      {
+        "name": "child",
+        "type": "Expression*"
+      },
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "try_cast",
+        "type": "bool"
+      }
+    ],
+    "constructor": ["$ClientContext", "child", "return_type"]
+  },
+  {
+    "class": "BoundColumnRefExpression",
+    "base": "Expression",
+    "enum": "BOUND_COLUMN_REF",
+    "members": [
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "binding",
+        "type": "ColumnBinding"
+      },
+      {
+        "name": "depth",
+        "type": "idx_t"
+      }
+    ],
+    "constructor": ["return_type", "binding", "depth"]
   }
 ]

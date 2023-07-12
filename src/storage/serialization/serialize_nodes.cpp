@@ -15,6 +15,7 @@
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/column_list.hpp"
+#include "duckdb/planner/column_binding.hpp"
 
 namespace duckdb {
 
@@ -39,6 +40,18 @@ CaseCheck CaseCheck::FormatDeserialize(FormatDeserializer &deserializer) {
 	CaseCheck result;
 	deserializer.ReadProperty("when_expr", result.when_expr);
 	deserializer.ReadProperty("then_expr", result.then_expr);
+	return result;
+}
+
+void ColumnBinding::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("table_index", table_index);
+	serializer.WriteProperty("column_index", column_index);
+}
+
+ColumnBinding ColumnBinding::FormatDeserialize(FormatDeserializer &deserializer) {
+	ColumnBinding result;
+	deserializer.ReadProperty("table_index", result.table_index);
+	deserializer.ReadProperty("column_index", result.column_index);
 	return result;
 }
 

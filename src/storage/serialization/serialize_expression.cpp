@@ -28,6 +28,12 @@ unique_ptr<Expression> Expression::FormatDeserialize(FormatDeserializer &deseria
 	case ExpressionClass::BOUND_CASE:
 		result = BoundCaseExpression::FormatDeserialize(deserializer);
 		break;
+	case ExpressionClass::BOUND_CAST:
+		result = BoundCastExpression::FormatDeserialize(deserializer);
+		break;
+	case ExpressionClass::BOUND_COLUMN_REF:
+		result = BoundColumnRefExpression::FormatDeserialize(deserializer);
+		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of Expression!");
 	}
@@ -67,6 +73,36 @@ unique_ptr<Expression> BoundCaseExpression::FormatDeserialize(FormatDeserializer
 	auto result = duckdb::unique_ptr<BoundCaseExpression>(new BoundCaseExpression(std::move(return_type)));
 	deserializer.ReadProperty("case_checks", result->case_checks);
 	deserializer.ReadProperty("else_expr", result->else_expr);
+	return std::move(result);
+}
+
+void BoundCastExpression::FormatSerialize(FormatSerializer &serializer) const {
+	Expression::FormatSerialize(serializer);
+	serializer.WriteProperty("child", *child);
+	serializer.WriteProperty("return_type", return_type);
+	serializer.WriteProperty("try_cast", try_cast);
+}
+
+unique_ptr<Expression> BoundCastExpression::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto child = deserializer.ReadProperty<unique_ptr<Expression>>("child");
+	auto return_type = deserializer.ReadProperty<LogicalType>("return_type");
+	auto result = duckdb::unique_ptr<BoundCastExpression>(new BoundCastExpression(deserializer.Get<ClientContext &>(), std::move(child), std::move(return_type)));
+	deserializer.ReadProperty("try_cast", result->try_cast);
+	return std::move(result);
+}
+
+void BoundColumnRefExpression::FormatSerialize(FormatSerializer &serializer) const {
+	Expression::FormatSerialize(serializer);
+	serializer.WriteProperty("return_type", return_type);
+	serializer.WriteProperty("binding", binding);
+	serializer.WriteProperty("depth", depth);
+}
+
+unique_ptr<Expression> BoundColumnRefExpression::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto return_type = deserializer.ReadProperty<LogicalType>("return_type");
+	auto binding = deserializer.ReadProperty<ColumnBinding>("binding");
+	auto depth = deserializer.ReadProperty<idx_t>("depth");
+	auto result = duckdb::unique_ptr<BoundColumnRefExpression>(new BoundColumnRefExpression(std::move(return_type), binding, depth));
 	return std::move(result);
 }
 

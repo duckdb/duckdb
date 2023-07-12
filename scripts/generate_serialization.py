@@ -73,6 +73,10 @@ move_list = [
     'string', 'ParsedExpression*', 'CommonTableExpressionMap', 'LogicalType'
 ]
 
+reference_list = [
+    'ClientContext'
+]
+
 def is_container(type):
     return '<' in type
 
@@ -282,6 +286,14 @@ def generate_class_code(class_entry):
                     class_deserialize += get_deserialize_element(entry.name, entry.name, type_name, entry.optional, 'unique_ptr')
                     found = True
                     break
+            if constructor_entry.startswith('$'):
+                if len(constructor_parameters) > 0:
+                    constructor_parameters += ", "
+                param_type = constructor_entry.replace('$', '')
+                if param_type in reference_list:
+                    param_type += ' &'
+                constructor_parameters += get_deserialize_parameter.replace('${PROPERTY_TYPE}', param_type)
+                found = True
             if class_entry.base_object is not None:
                 for entry in class_entry.base_object.set_parameters:
                     if entry.name == constructor_entry:

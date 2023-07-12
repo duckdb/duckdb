@@ -202,5 +202,22 @@
     ],
     "constructor": ["columns"],
     "pointer_type": "none"
+  },
+  {
+    "class": "ColumnBinding",
+    "includes": [
+      "duckdb/planner/column_binding.hpp"
+    ],
+    "members": [
+      {
+        "name": "table_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "column_index",
+        "type": "idx_t"
+      }
+    ],
+    "pointer_type": "none"
   }
 ]
