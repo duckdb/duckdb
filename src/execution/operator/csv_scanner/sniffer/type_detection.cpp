@@ -1,4 +1,5 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
 #include <algorithm>
 #include <string>
 
