@@ -1,14 +1,17 @@
 #include "duckdb/main/relation/read_csv_relation.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/parser/tableref/basetableref.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
-#include "duckdb/parser/expression/star_expression.hpp"
+
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/buffered_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_buffer_manager.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/execution/operator/persistent/csv_scanner/buffered_csv_reader.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/tableref/basetableref.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
 
@@ -42,10 +45,16 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 
 	// Force auto_detect for this constructor
 	options.auto_detect = true;
+	auto bm_file_handle = BaseCSVReader::OpenCSV(*context, options);
+	auto buffer_manager = make_shared<CSVBufferManager>(*context, std::move(bm_file_handle), options);
+	CSVSniffer sniffer(options, buffer_manager);
+	auto sniffer_result = sniffer.SniffCSV();
+	options = sniffer_result.options;
 	BufferedCSVReader reader(*context, std::move(options));
-
-	auto &types = reader.GetTypes();
-	auto &names = reader.GetNames();
+	reader.names = sniffer_result.names;
+	reader.return_types = sniffer_result.return_types;
+	auto &types = sniffer_result.return_types;
+	auto &names = sniffer_result.names;
 	for (idx_t i = 0; i < types.size(); i++) {
 		columns.emplace_back(names[i], types[i]);
 	}
