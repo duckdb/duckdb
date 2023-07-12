@@ -1,17 +1,17 @@
-from pyduckdb.spark.exception import ContributionsAcceptedError
+from ..exception import ContributionsAcceptedError
 
 from typing import (
     TYPE_CHECKING,
     List
 )
 
-from pyduckdb.spark.sql.readwriter import DataFrameWriter
-from pyduckdb.spark.sql.types import Row, StructType
-from pyduckdb.spark.sql.type_utils import duckdb_to_spark_schema
+from .readwriter import DataFrameWriter
+from .types import Row, StructType
+from .type_utils import duckdb_to_spark_schema
 import duckdb
 
 if TYPE_CHECKING:
-    from pyduckdb.spark.sql.session import SparkSession
+    from .session import SparkSession
 
 class DataFrame:
     def __init__(self, relation: duckdb.DuckDBPyRelation, session: "SparkSession"):
@@ -30,7 +30,7 @@ class DataFrame:
 
     @property
     def schema(self) -> StructType:
-        """Returns the schema of this :class:`DataFrame` as a :class:`pyspark.sql.types.StructType`.
+        """Returns the schema of this :class:`DataFrame` as a :class:`pyduckdb.spark.sql.types.StructType`.
 
         .. versionadded:: 1.3.0
 
