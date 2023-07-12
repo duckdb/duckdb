@@ -3522,6 +3522,7 @@ public class TestDuckDBJDBC {
 		correct_answer_map.put("large_enum", asList("enum_0", "enum_69999", null));
 		correct_answer_map.put("struct", asList("{'a': NULL, 'b': NULL}", "{'a': 42, 'b': 🦆🦆🦆🦆🦆🦆}", null));
 		correct_answer_map.put("map", asList("{}", "{key1=🦆🦆🦆🦆🦆🦆, key2=goose}", null));
+		correct_answer_map.put("union", asList("Frank", "5", null));
 		correct_answer_map.put("time_tz", asList(OffsetTime.parse("00:00+00:00"), OffsetTime.parse("23:59:59.999999+00:00"), null));
 		correct_answer_map.put("interval", asList("00:00:00", "83 years 3 months 999 days 00:16:39.999999", null));
 		correct_answer_map.put("timestamp", asList(DuckDBTimestamp.toSqlTimestamp(-9223372022400000000L), DuckDBTimestamp.toSqlTimestamp(9223372036854775807L), null));
