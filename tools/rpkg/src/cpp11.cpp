@@ -13,6 +13,13 @@ extern "C" SEXP _duckdb_rapi_connect(SEXP db) {
   END_CPP11
 }
 // connection.cpp
+bool rapi_auto_disconnect(SEXP db);
+extern "C" SEXP _duckdb_rapi_auto_disconnect(SEXP db) {
+  BEGIN_CPP11
+    return cpp11::as_sexp(rapi_auto_disconnect(cpp11::as_cpp<cpp11::decay_t<SEXP>>(db)));
+  END_CPP11
+}
+// connection.cpp
 void rapi_disconnect(duckdb::conn_eptr_t conn);
 extern "C" SEXP _duckdb_rapi_disconnect(SEXP conn) {
   BEGIN_CPP11
@@ -373,6 +380,7 @@ extern "C" SEXP _duckdb_rapi_ptr_to_str(SEXP extptr) {
 
 extern "C" {
 static const R_CallMethodDef CallEntries[] = {
+    {"_duckdb_rapi_auto_disconnect",         (DL_FUNC) &_duckdb_rapi_auto_disconnect,         1},
     {"_duckdb_rapi_bind",                    (DL_FUNC) &_duckdb_rapi_bind,                    4},
     {"_duckdb_rapi_connect",                 (DL_FUNC) &_duckdb_rapi_connect,                 1},
     {"_duckdb_rapi_df_is_materialized",      (DL_FUNC) &_duckdb_rapi_df_is_materialized,      1},

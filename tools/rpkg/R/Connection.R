@@ -18,6 +18,7 @@ setClass("duckdb_connection",
   contains = "DBIConnection",
   slots = list(
     conn_ref = "externalptr",
+    auto_disconnect = "logical",
     driver = "duckdb_driver",
     debug = "logical",
     timezone_out = "character",
@@ -30,6 +31,7 @@ duckdb_connection <- function(duckdb_driver, debug) {
   out <- new(
     "duckdb_connection",
     conn_ref = rapi_connect(duckdb_driver@database_ref),
+    auto_disconnect = rapi_auto_disconnect(duckdb_driver@database_ref),
     driver = duckdb_driver,
     debug = debug,
     timezone_out = "UTC",

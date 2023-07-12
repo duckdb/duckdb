@@ -18,6 +18,10 @@ void duckdb::ConnDeleter(ConnWrapper *conn) {
 	return conn_eptr_t(conn_wrapper);
 }
 
+[[cpp11::register]] bool rapi_auto_disconnect(SEXP db) {
+  return MAYBE_SHARED(db);
+}
+
 [[cpp11::register]] void rapi_disconnect(duckdb::conn_eptr_t conn) {
 	auto conn_wrapper = conn.release();
 	if (conn_wrapper) {

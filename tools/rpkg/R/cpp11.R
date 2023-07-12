@@ -4,6 +4,10 @@ rapi_connect <- function(db) {
   .Call(`_duckdb_rapi_connect`, db)
 }
 
+rapi_auto_disconnect <- function(db) {
+  .Call(`_duckdb_rapi_auto_disconnect`, db)
+}
+
 rapi_disconnect <- function(conn) {
   invisible(.Call(`_duckdb_rapi_disconnect`, conn))
 }
