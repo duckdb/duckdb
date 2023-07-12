@@ -679,8 +679,16 @@ function(build_loadable_extension NAME PARAMETERS)
   set(FILES ${ARGV})
   list(REMOVE_AT FILES 0)
   list(REMOVE_AT FILES 0)
-  target_link_libraries(${NAME}_extension duckdb_static)
+
   build_loadable_extension_directory(${NAME} "extension/${NAME}" "${PARAMETERS}" ${FILES})
+endfunction()
+
+function(build_static_extension NAME PARAMETERS)
+  # all parameters after name
+  set(FILES ${ARGV})
+  list(REMOVE_AT FILES 0)
+  add_library(${NAME}_extension STATIC ${FILES})
+  target_link_libraries(${NAME}_extension duckdb_static)
 endfunction()
 
 # Internal extension register function
