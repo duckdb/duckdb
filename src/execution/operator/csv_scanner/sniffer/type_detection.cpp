@@ -243,7 +243,10 @@ void CSVSniffer::DetectTypes() {
 								const auto &format_template_list = entry->second;
 								for (const auto &t : format_template_list) {
 									const auto format_string = GenerateDateFormat(separator, t);
-									type_format_candidates.emplace_back(format_string);
+									// don't parse ISO 8601
+									if (format_string.find("%Y-%m-%d") == string::npos) {
+										type_format_candidates.emplace_back(format_string);
+									}
 								}
 							}
 							//	initialise the first candidate
@@ -279,6 +282,8 @@ void CSVSniffer::DetectTypes() {
 							} else {
 								has_format_candidates[sql_type.id()] = false;
 							}
+						} else {
+							int x = 0;
 						}
 					}
 					// try cast from string to sql_type

@@ -145,6 +145,10 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	}
 	options.file_path = bind_data->files[0];
 	options.name_list = expected_names;
+	options.sql_type_list = expected_types;
+	for (idx_t i = 0; i < expected_types.size(); i++) {
+		options.sql_types_per_column[expected_names[i]] = i;
+	}
 
 	bind_data->FinalizeRead(context);
 	if (options.auto_detect) {
