@@ -243,6 +243,16 @@ void CSVStateMachine::Parse(DataChunk &parse_chunk) {
 			}
 			value = "";
 		}
+		if (((previous_state == CSVState::RECORD_SEPARATOR && !empty_line) ||
+		     (state != CSVState::RECORD_SEPARATOR && carriage_return)) &&
+		    options.null_padding && cur_col < parse_chunk.ColumnCount()) {
+			// It's a new row, check if we need to pad stuff
+			while (cur_col < parse_chunk.ColumnCount()) {
+				auto &v = parse_chunk.data[cur_col++];
+				auto &validity_mask = FlatVector::Validity(v);
+				validity_mask.SetInvalid(cur_row);
+			}
+		}
 		if (state == CSVState::STANDARD) {
 			value += current_char;
 		}
