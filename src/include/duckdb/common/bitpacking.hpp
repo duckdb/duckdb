@@ -212,13 +212,17 @@ private:
 	template <class T>
 	static inline void PackGroup(data_ptr_t dst, T *values, bitpacking_width_t width) {
 		if (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
-			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint8_t *>(values), reinterpret_cast<uint8_t *>(dst), static_cast<uint32_t>(width));
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint8_t *>(values), reinterpret_cast<uint8_t *>(dst),
+			                             static_cast<uint32_t>(width));
 		} else if (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {
-			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint16_t *>(values), reinterpret_cast<uint16_t *>(dst), static_cast<uint32_t>(width));
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint16_t *>(values), reinterpret_cast<uint16_t *>(dst),
+			                             static_cast<uint32_t>(width));
 		} else if (std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value) {
-			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint32_t *>(values), reinterpret_cast<uint32_t *>(dst), static_cast<uint32_t>(width));
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint32_t *>(values), reinterpret_cast<uint32_t *>(dst),
+			                             static_cast<uint32_t>(width));
 		} else if (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
-			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint64_t *>(values), reinterpret_cast<uint32_t *>(dst), static_cast<uint32_t>(width));
+			duckdb_fastpforlib::fastpack(reinterpret_cast<const uint64_t *>(values), reinterpret_cast<uint32_t *>(dst),
+			                             static_cast<uint32_t>(width));
 		} else if (std::is_same<T, hugeint_t>::value) {
 			HugeIntPacker::Pack(reinterpret_cast<const hugeint_t *>(values), reinterpret_cast<uint32_t *>(dst), width);
 		} else {
@@ -230,13 +234,17 @@ private:
 	static inline void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
 	                               bool skip_sign_extension = false) {
 		if (std::is_same<T, int8_t>::value || std::is_same<T, uint8_t>::value) {
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint8_t *>(src), reinterpret_cast<uint8_t *>(dst), static_cast<uint32_t>(width));
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint8_t *>(src), reinterpret_cast<uint8_t *>(dst),
+			                               static_cast<uint32_t>(width));
 		} else if (std::is_same<T, int16_t>::value || std::is_same<T, uint16_t>::value) {
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint16_t *>(src), reinterpret_cast<uint16_t *>(dst), static_cast<uint32_t>(width));
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint16_t *>(src), reinterpret_cast<uint16_t *>(dst),
+			                               static_cast<uint32_t>(width));
 		} else if (std::is_same<T, int32_t>::value || std::is_same<T, uint32_t>::value) {
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint32_t *>(dst), static_cast<uint32_t>(width));
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint32_t *>(dst),
+			                               static_cast<uint32_t>(width));
 		} else if (std::is_same<T, int64_t>::value || std::is_same<T, uint64_t>::value) {
-			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst), static_cast<uint32_t>(width));
+			duckdb_fastpforlib::fastunpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<uint64_t *>(dst),
+			                               static_cast<uint32_t>(width));
 		} else if (std::is_same<T, hugeint_t>::value) {
 			HugeIntPacker::Unpack(reinterpret_cast<const uint32_t *>(src), reinterpret_cast<hugeint_t *>(dst), width);
 		} else {
