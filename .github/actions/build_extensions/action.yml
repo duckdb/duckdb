@@ -63,6 +63,9 @@ inputs:
   override_cxx:
     description: 'Override CXX Compiler'
     default: ''
+  toolchain_path:
+    description: 'Passes custom toolchain to CMake'
+    default: ''
 
 runs:
   using: "composite"
@@ -79,6 +82,8 @@ runs:
         OSX_BUILD_UNIVERSAL: ${{ inputs.osx_universal }}
         CC: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-gcc' || inputs.override_cc }}
         CXX: ${{ inputs.aarch64_cross_compile == 1 && 'aarch64-linux-gnu-g++' || inputs.override_cxx}}
+        EXTRA_CMAKE_VARIABLES: -DCMAKE_TOOLCHAIN_FILE=${{ inputs.toolchain_path }}
+
       run: |
         mkdir -p ~/.ssh
         ssh-keyscan -t rsa github.com >> ~/.ssh/known_hosts

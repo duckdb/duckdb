@@ -278,6 +278,20 @@ def setup_data_files(data_files):
 
 data_files = setup_data_files(extra_files + header_files)
 
+packages = [
+    'duckdb-stubs',
+    'pyduckdb',
+    'pyduckdb.value',
+	'adbc_driver_duckdb'
+]
+
+spark_packages = [
+    'pyduckdb.spark',
+    'pyduckdb.spark.sql'
+]
+
+packages.extend(spark_packages)
+
 setup(
     name = lib_name,
     description = 'DuckDB embedded database',
@@ -286,11 +300,7 @@ setup(
     long_description = 'See here for an introduction: https://duckdb.org/docs/api/python/overview',
     license='MIT',
     data_files = data_files,
-    packages=[
-        'pyduckdb',
-        'duckdb-stubs',
-        'adbc_driver_duckdb'
-    ],
+    packages=packages,
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'pybind11>=2.6.0'],
     use_scm_version = setuptools_scm_conf,

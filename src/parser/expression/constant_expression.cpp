@@ -10,6 +10,9 @@
 
 namespace duckdb {
 
+ConstantExpression::ConstantExpression() : ParsedExpression(ExpressionType::VALUE_CONSTANT, ExpressionClass::CONSTANT) {
+}
+
 ConstantExpression::ConstantExpression(Value val)
     : ParsedExpression(ExpressionType::VALUE_CONSTANT, ExpressionClass::CONSTANT), value(std::move(val)) {
 }
@@ -38,17 +41,6 @@ void ConstantExpression::Serialize(FieldWriter &writer) const {
 
 unique_ptr<ParsedExpression> ConstantExpression::Deserialize(ExpressionType type, FieldReader &reader) {
 	Value value = reader.ReadRequiredSerializable<Value, Value>();
-	return make_uniq<ConstantExpression>(std::move(value));
-}
-
-void ConstantExpression::FormatSerialize(FormatSerializer &serializer) const {
-	ParsedExpression::FormatSerialize(serializer);
-	serializer.WriteProperty("value", value);
-}
-
-unique_ptr<ParsedExpression> ConstantExpression::FormatDeserialize(ExpressionType type,
-                                                                   FormatDeserializer &deserializer) {
-	auto value = deserializer.ReadProperty<Value>("value");
 	return make_uniq<ConstantExpression>(std::move(value));
 }
 
