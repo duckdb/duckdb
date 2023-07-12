@@ -42,9 +42,11 @@ BufferedCSVReader::BufferedCSVReader(ClientContext &context, string filename, CS
 }
 
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
-	if (options.auto_detect && requested_types.empty()) {
+	if (options.auto_detect && options.file_options.union_by_name) {
 		// This is required for the sniffer to work on Union By Name
-		auto buffer_manager = make_shared<CSVBufferManager>(context, std::move(file_handle), options);
+		D_ASSERT(options.file_path == file_handle->GetFilePath());
+		auto bm_file_handle = BaseCSVReader::OpenCSV(context, options);
+		auto buffer_manager = make_shared<CSVBufferManager>(context, std::move(bm_file_handle), options);
 		CSVSniffer sniffer(options, buffer_manager);
 		auto sniffer_result = sniffer.SniffCSV();
 		return_types = sniffer_result.return_types;
@@ -56,8 +58,8 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	} else {
 		return_types = requested_types;
 		ResetBuffer();
-		SkipRowsAndReadHeader(options.skip_rows, options.header);
 	}
+	SkipRowsAndReadHeader(options.skip_rows, options.header);
 	InitParseChunk(return_types.size());
 }
 

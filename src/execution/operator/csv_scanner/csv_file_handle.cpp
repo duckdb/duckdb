@@ -161,4 +161,8 @@ void CSVFileHandle::DisableReset() {
 	this->reset_enabled = false;
 }
 
+string CSVFileHandle::GetFilePath() {
+	return path;
+}
+
 } // namespace duckdb

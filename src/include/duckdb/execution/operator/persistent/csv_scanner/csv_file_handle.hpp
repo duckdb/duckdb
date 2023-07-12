@@ -39,6 +39,7 @@ public:
 
 	string ReadLine();
 	void DisableReset();
+	string GetFilePath();
 
 	static unique_ptr<FileHandle> OpenFileHandle(FileSystem &fs, Allocator &allocator, const string &path,
 	                                             FileCompressionType compression);
