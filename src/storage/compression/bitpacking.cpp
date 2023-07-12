@@ -796,7 +796,7 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 			T *target_ptr = result_data + result_offset + scanned;
 
 			for (idx_t i = 0; i < to_scan; i++) {
-				target_ptr[i] = ((scan_state.current_group_offset + i) * scan_state.current_constant) +
+				target_ptr[i] = (static_cast<T>(scan_state.current_group_offset + i) * scan_state.current_constant) +
 				                scan_state.current_frame_of_reference;
 			}
 
@@ -880,7 +880,7 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	if (scan_state.current_group.mode == BitpackingMode::CONSTANT_DELTA) {
 		// FIXME: is it being verified that this will never overflow?
 		*current_result_ptr =
-		    ((scan_state.current_group_offset) * scan_state.current_constant) + scan_state.current_frame_of_reference;
+		    (static_cast<T>(scan_state.current_group_offset) * scan_state.current_constant) + scan_state.current_frame_of_reference;
 		return;
 	}
 
