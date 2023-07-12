@@ -64,7 +64,7 @@ struct DuckDBAdbcStatementWrapper {
 	ArrowArrayStream ingestion_stream;
 };
 
-AdbcStatusCode SetErrorMaybe(const void *result, AdbcError *error, const std::string &error_message) {
+AdbcStatusCode SetErrorMaybe(const void *result, AdbcError *error, const char *error_message) {
 	if (!error) {
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
@@ -277,7 +277,7 @@ AdbcStatusCode ExecuteQuery(duckdb::Connection *conn, const char *query, struct 
 	auto res = conn->Query(query);
 	if (res->HasError()) {
 		auto error_message = "Failed to execute query \"" + std::string(query) + "\": " + res->GetError();
-		SetError(error, error_message);
+		SetErrorFromString(error, error_message);
 		return ADBC_STATUS_INTERNAL;
 	}
 	return ADBC_STATUS_OK;
@@ -312,14 +312,14 @@ AdbcStatusCode ConnectionSetOption(struct AdbcConnection *connection, const char
 			}
 		} else {
 			auto error_message = "Invalid connection option value " + std::string(key) + "=" + std::string(value);
-			SetError(error, error_message);
+			SetErrorFromString(error, error_message);
 			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
 		return ADBC_STATUS_OK;
 	}
 	auto error_message =
 	    "Unknown connection option " + std::string(key) + "=" + (value ? std::string(value) : "(NULL)");
-	SetError(error, error_message);
+	SetErrorFromString(error, error_message);
 	return ADBC_STATUS_NOT_IMPLEMENTED;
 }
 

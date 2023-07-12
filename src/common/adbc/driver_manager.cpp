@@ -77,8 +77,8 @@ void ReleaseError(struct AdbcError *error) {
 		error->release = nullptr;
 	}
 }
-//! Passing NULL as 'message' will cause a segfault during construction of the 'std::string'!
-void SetError(struct AdbcError *error, const std::string &message) {
+
+void SetErrorFromString(struct AdbcError *error, const std::string &message) {
 	if (!error) {
 		return;
 	}
@@ -99,6 +99,14 @@ void SetError(struct AdbcError *error, const std::string &message) {
 		error->message[message.size()] = '\0';
 	}
 	error->release = ReleaseError;
+}
+
+void SetError(struct AdbcError *error, const char *message_p) {
+	if (!message_p) {
+		message_p = "";
+	}
+	std::string message(message_p);
+	SetErrorFromString(error, message);
 }
 
 // Driver state
@@ -682,7 +690,7 @@ AdbcStatusCode AdbcLoadDriver(const char *driver_name, const char *entrypoint, i
 		}
 	}
 	if (!handle) {
-		SetError(error, error_message);
+		SetErrorFromString(error, error_message);
 		// AdbcDatabaseInit tries to call this if set
 		driver->release = nullptr;
 		return ADBC_STATUS_INTERNAL;
@@ -694,7 +702,7 @@ AdbcStatusCode AdbcLoadDriver(const char *driver_name, const char *entrypoint, i
 		message += entrypoint;
 		message += ") failed: ";
 		message += dlerror();
-		SetError(error, message);
+		SetErrorFromString(error, message);
 		return ADBC_STATUS_INTERNAL;
 	}
 	init_func = reinterpret_cast<AdbcDriverInitFunc>(load_handle);
