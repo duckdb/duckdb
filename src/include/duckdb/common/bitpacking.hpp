@@ -169,7 +169,7 @@ private:
 		if (bitwidth < sizeof(T) * 8 && bitwidth != 0) {
 			if (NumericLimits<T>::IsSigned()) {
 				D_ASSERT(max_value <= (T(1) << (bitwidth - 1)) - 1);
-				D_ASSERT(min_value >= (-1 * ((T(1) << (bitwidth - 1)) - 1) - 1));
+				D_ASSERT(min_value >= (T(-1) * ((T(1) << (bitwidth - 1)) - 1) - 1));
 			} else {
 				D_ASSERT(max_value <= (T(1) << (bitwidth)) - 1);
 			}
