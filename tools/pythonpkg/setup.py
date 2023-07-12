@@ -300,6 +300,7 @@ setup(
     long_description = 'See here for an introduction: https://duckdb.org/docs/api/python/overview',
     license='MIT',
     data_files = data_files,
+	# NOTE: might need to be find_packages() ?
     packages=packages,
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm<7.0.0", 'pybind11>=2.6.0'],

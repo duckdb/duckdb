@@ -57,6 +57,15 @@ void GetWinError(std::string *buffer) {
 
 #endif // defined(_WIN32)
 
+/// Temporary state while the database is being configured.
+struct TempDatabase {
+	std::unordered_map<std::string, std::string> options;
+	std::string driver;
+	// Default name (see adbc.h)
+	std::string entrypoint = "AdbcDriverInit";
+	AdbcDriverInitFunc init_func = nullptr;
+};
+
 // Error handling
 
 void ReleaseError(struct AdbcError *error) {
@@ -68,7 +77,7 @@ void ReleaseError(struct AdbcError *error) {
 		error->release = nullptr;
 	}
 }
-//! Passing NULL as 'message' will cause a segfault during construction of the 'std::string'!
+
 void SetError(struct AdbcError *error, const std::string &message) {
 	if (!error) {
 		return;
@@ -90,6 +99,14 @@ void SetError(struct AdbcError *error, const std::string &message) {
 		error->message[message.size()] = '\0';
 	}
 	error->release = ReleaseError;
+}
+
+void SetError(struct AdbcError *error, const char *message_p) {
+	if (!message_p) {
+		message_p = "";
+	}
+	std::string message(message_p);
+	SetError(error, message);
 }
 
 // Driver state
@@ -131,15 +148,6 @@ static AdbcStatusCode ReleaseDriver(struct AdbcDriver *driver, struct AdbcError 
 	delete state;
 	return status;
 }
-
-/// Temporary state while the database is being configured.
-struct TempDatabase {
-	std::unordered_map<std::string, std::string> options;
-	std::string driver;
-	// Default name (see adbc.h)
-	std::string entrypoint = "AdbcDriverInit";
-	AdbcDriverInitFunc init_func = nullptr;
-};
 
 /// Temporary state while the database is being configured.
 struct TempConnection {

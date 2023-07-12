@@ -51,6 +51,8 @@ duckdb_adbc::AdbcStatusCode duckdb_adbc_init(size_t count, struct duckdb_adbc::A
 	driver->ConnectionGetTableSchema = duckdb_adbc::ConnectionGetTableSchema;
 	driver->StatementSetSubstraitPlan = duckdb_adbc::StatementSetSubstraitPlan;
 
+	driver->ConnectionGetInfo = duckdb_adbc::ConnectionGetInfo;
+	driver->StatementGetParameterSchema = duckdb_adbc::StatementGetParameterSchema;
 	return ADBC_STATUS_OK;
 }
 
@@ -64,9 +66,7 @@ struct DuckDBAdbcStatementWrapper {
 	ArrowArrayStream ingestion_stream;
 };
 
-static AdbcStatusCode QueryInternal(struct AdbcConnection *connection, struct ArrowArrayStream *out, const char *query,
-                                    struct AdbcError *error);
-AdbcStatusCode SetErrorMaybe(const void *result, AdbcError *error, const std::string &error_message) {
+AdbcStatusCode SetErrorMaybe(const void *result, AdbcError *error, const char *error_message) {
 	if (!error) {
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
