@@ -116,3 +116,16 @@ class TestRAPIQuery(object):
 
         res = duckdb.query('drop table tbl_non_select_result')
         assert res is None
+
+    def test_replacement_scan_recursion(self):
+        con = duckdb.connect()
+        depth_limit = 1000
+        import sys
+        if sys.platform.startswith('win'):
+            # With the default we reach a stack overflow in the CI
+            depth_limit = 250
+        con.execute(f"SET max_expression_depth TO {depth_limit}")
+        rel = con.sql('select 42')
+        rel = con.sql('select * from rel')
+        with pytest.raises(duckdb.BinderException, match=f'Max expression depth limit of {depth_limit} exceeded'):
+            con.sql('select * from rel')
