@@ -30,7 +30,7 @@ class TestDateTimeDateTime(object):
                 'TIMESTAMP_NS'
         ]:
             # This query is not supported in core duckdb
-            with pytest.raises(duckdb.Error):
+            with pytest.raises(duckdb.ConversionException):
                 con.execute(query).fetchall()
         elif not positive and type in [
                 'TIMESTAMP_NS',
@@ -38,7 +38,7 @@ class TestDateTimeDateTime(object):
                 'TIMESTAMP_S',
         ]:
             # This query is not supported in core duckdb
-            with pytest.raises(duckdb.Error):
+            with pytest.raises(duckdb.ConversionException):
                 con.execute(query).fetchall()
         else:
             res = con.sql(query).fetchall()[0][0]
