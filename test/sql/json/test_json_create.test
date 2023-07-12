@@ -24,6 +24,11 @@ select to_json({n: 42})
 ----
 {"n":42}
 
+statement error
+select to_json({n: 42}, {extra: 'argument'})
+----
+Invalid Input Error: to_json() takes exactly one argument
+
 query T
 select to_json(union_value(n := 42))
 ----
@@ -38,6 +43,17 @@ query T
 SELECT to_json(union_value(b := 'abc')::UNION(a INTEGER, b VARCHAR, c FLOAT))
 ----
 {"b":"abc"}
+
+query I
+select to_json(i::UNION(a varchar, b bool)) from (VALUES (null), ('test')) tbl(i);
+----
+{"a":null}
+{"a":"test"}
+
+query I
+select to_json(null::UNION(a varchar, b bool));
+----
+NULL
 
 query T
 select json_object('duck', 42)
@@ -163,6 +179,11 @@ select row_to_json({a: 42})
 ----
 {"a":42}
 
+statement error
+select row_to_json({a: 42}, false)
+----
+row_to_json() takes exactly one argument
+
 query T
 select row_to_json(NULL)
 ----
@@ -175,6 +196,11 @@ query T
 select array_to_json([42])
 ----
 [42]
+
+statement error
+select array_to_json([42], [21])
+----
+array_to_json() takes exactly one argument
 
 query T
 select array_to_json(NULL)

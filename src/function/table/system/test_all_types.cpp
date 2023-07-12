@@ -204,6 +204,13 @@ vector<TestType> TestAllTypesFun::GetTestTypes(bool use_large_enum) {
 	auto max_map_value = Value::MAP(ListType::GetChildType(map_type), map_values);
 	result.emplace_back(map_type, "map", std::move(min_map_value), std::move(max_map_value));
 
+	// union
+	child_list_t<LogicalType> members = {{"name", LogicalType::VARCHAR}, {"age", LogicalType::SMALLINT}};
+	auto union_type = LogicalType::UNION(members);
+	const Value &min = Value::UNION(members, 0, Value("Frank"));
+	const Value &max = Value::UNION(members, 1, Value::SMALLINT(5));
+	result.emplace_back(union_type, "union", min, max);
+
 	return result;
 }
 
