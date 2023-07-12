@@ -282,8 +282,6 @@ void CSVSniffer::DetectTypes() {
 							} else {
 								has_format_candidates[sql_type.id()] = false;
 							}
-						} else {
-							int x = 0;
 						}
 					}
 					// try cast from string to sql_type
