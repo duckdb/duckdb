@@ -7,8 +7,9 @@
 
 namespace duckdb {
 
-SQLRETURN SetDiagnosticRecord(OdbcHandle *handle, SQLRETURN ret, std::string component, duckdb::DiagRecord diag_record,
-                              std::string data_source);
+SQLRETURN SetDiagnosticRecord(OdbcHandle *handle, const SQLRETURN &ret, const std::string &component,
+                              const std::string &msg, const SQLStateType &sqlstate_type,
+                              const std::string &server_name);
 SQLRETURN ConvertHandle(SQLHANDLE &handle, OdbcHandle *&hdl);
 SQLRETURN ConvertEnvironment(SQLHANDLE &environment_handle, OdbcHandleEnv *&env);
 SQLRETURN ConvertConnection(SQLHANDLE &connection_handle, OdbcHandleDbc *&dbc);
