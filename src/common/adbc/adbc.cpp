@@ -700,7 +700,8 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 		return status;
 	}
 	auto wrapper = (DuckDBAdbcStatementWrapper *)statement->private_data;
-	// TODO: we might want to cache this, but then we need to return a deep copy anyways.., so I'm not sure if that would be worth the extra management
+	// TODO: we might want to cache this, but then we need to return a deep copy anyways.., so I'm not sure if that
+	// would be worth the extra management
 	auto res = duckdb_prepared_arrow_schema(wrapper->statement, (duckdb_arrow_schema *)&schema);
 	if (res != DuckDBSuccess) {
 		return ADBC_STATUS_INVALID_ARGUMENT;

@@ -2296,7 +2296,8 @@ Fetch the internal arrow schema from the prepared statement.
 * out_schema: The output schema.
 * returns: `DuckDBSuccess` on success or `DuckDBError` on failure.
 */
-DUCKDB_API duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, duckdb_arrow_schema *out_schema);
+DUCKDB_API duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared,
+                                                     duckdb_arrow_schema *out_schema);
 
 /*!
 Fetch an internal arrow array from the arrow result.

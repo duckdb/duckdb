@@ -46,7 +46,8 @@ duckdb_state duckdb_prepared_arrow_schema(duckdb_prepared_statement prepared, du
 
 	auto count = wrapper->statement->data->properties.parameter_count;
 	for (idx_t i = 0; i < count; i++) {
-		// Every prepared parameter type is UNKNOWN, which we need to map to NULL according to the spec of 'AdbcStatementGetParameterSchema'
+		// Every prepared parameter type is UNKNOWN, which we need to map to NULL according to the spec of
+		// 'AdbcStatementGetParameterSchema'
 		auto type = LogicalType::SQLNULL;
 
 		// FIXME: we don't support named parameters yet, but when we do, this needs to be updated
