@@ -16,6 +16,7 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/planner/column_binding.hpp"
+#include "duckdb/planner/expression/bound_parameter_data.hpp"
 
 namespace duckdb {
 
@@ -28,6 +29,18 @@ BoundCaseCheck BoundCaseCheck::FormatDeserialize(FormatDeserializer &deserialize
 	BoundCaseCheck result;
 	deserializer.ReadProperty("when_expr", result.when_expr);
 	deserializer.ReadProperty("then_expr", result.then_expr);
+	return result;
+}
+
+void BoundParameterData::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("value", value);
+	serializer.WriteProperty("return_type", return_type);
+}
+
+shared_ptr<BoundParameterData> BoundParameterData::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto value = deserializer.ReadProperty<Value>("value");
+	auto result = duckdb::shared_ptr<BoundParameterData>(new BoundParameterData(value));
+	deserializer.ReadProperty("return_type", result->return_type);
 	return result;
 }
 

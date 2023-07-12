@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/stack.hpp"
+#include "duckdb/planner/bound_parameter_map.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -19,6 +20,7 @@ enum class ExpressionType : uint8_t;
 struct DeserializationData {
 	stack<reference<ClientContext>> contexts;
 	stack<ExpressionType> types;
+	stack<reference<bound_parameter_map_t>> parameter_data;
 
 	template<class T>
 	void Set(T entry) = delete;
@@ -69,6 +71,23 @@ template<>
 inline void DeserializationData::Unset<ClientContext>() {
 	AssertNotEmpty(contexts);
 	contexts.pop();
+}
+
+template<>
+inline void DeserializationData::Set(bound_parameter_map_t &context) {
+	parameter_data.push(context);
+}
+
+template<>
+inline bound_parameter_map_t &DeserializationData::Get() {
+	AssertNotEmpty(parameter_data);
+	return parameter_data.top();
+}
+
+template<>
+inline void DeserializationData::Unset<bound_parameter_map_t>() {
+	AssertNotEmpty(parameter_data);
+	parameter_data.pop();
 }
 
 } // namespace duckdb

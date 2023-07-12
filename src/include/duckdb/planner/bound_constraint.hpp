@@ -21,14 +21,6 @@ public:
 	virtual ~BoundConstraint() {
 	}
 
-	void Serialize(Serializer &serializer) const {
-		serializer.Write(type);
-	}
-
-	static unique_ptr<BoundConstraint> Deserialize(Deserializer &source) {
-		return make_uniq<BoundConstraint>(source.Read<ConstraintType>());
-	}
-
 	ConstraintType type;
 
 public:

@@ -219,5 +219,23 @@
       }
     ],
     "pointer_type": "none"
+  },
+  {
+    "class": "BoundParameterData",
+    "includes": [
+      "duckdb/planner/expression/bound_parameter_data.hpp"
+    ],
+    "members": [
+      {
+        "name": "value",
+        "type": "Value"
+      },
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      }
+    ],
+    "constructor": ["value"],
+    "pointer_type": "shared_ptr"
   }
 ]

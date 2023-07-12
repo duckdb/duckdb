@@ -17,7 +17,7 @@ namespace duckdb {
 struct BoundParameterData {
 	BoundParameterData() {
 	}
-	BoundParameterData(Value val) : value(std::move(val)), return_type(value.type()) {
+	explicit BoundParameterData(Value val) : value(std::move(val)), return_type(value.type()) {
 	}
 
 	Value value;
@@ -39,10 +39,13 @@ public:
 		reader.Finalize();
 		return result;
 	}
+
+	void FormatSerialize(FormatSerializer &serializer) const;
+	static shared_ptr<BoundParameterData> FormatDeserialize(FormatDeserializer &deserializer);
 };
 
 struct BoundParameterMap {
-	BoundParameterMap(vector<BoundParameterData> &parameter_data) : parameter_data(parameter_data) {
+	explicit BoundParameterMap(vector<BoundParameterData> &parameter_data) : parameter_data(parameter_data) {
 	}
 
 	bound_parameter_map_t parameters;

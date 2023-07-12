@@ -74,7 +74,7 @@ move_list = [
 ]
 
 reference_list = [
-    'ClientContext'
+    'ClientContext', 'bound_parameter_map_t'
 ]
 
 def is_container(type):
