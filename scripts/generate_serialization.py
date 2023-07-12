@@ -44,7 +44,7 @@ base_serialize = '\t${BASE_CLASS_NAME}::FormatSerialize(serializer);\n'
 pointer_return = '${POINTER}<${CLASS_NAME}>'
 
 deserialize_base = '''
-${DESERIALIZE_RETURN} ${CLASS_NAME}::FormatDeserialize(${EXTRA_PARAMETERS}FormatDeserializer &deserializer) {
+${DESERIALIZE_RETURN} ${CLASS_NAME}::FormatDeserialize(FormatDeserializer &deserializer) {
 ${MEMBERS}
 }
 '''
@@ -55,9 +55,13 @@ ${CASE_STATEMENTS}\tdefault:
 \t}
 '''
 
+set_deserialize_parameter = '\tdeserializer.Set<${PROPERTY_TYPE}>(${PROPERTY_NAME});\n'
+unset_deserialize_parameter = '\tdeserializer.Unset<${PROPERTY_TYPE}>();\n'
+get_deserialize_parameter = 'deserializer.Get<${PROPERTY_TYPE}>()'
+
 switch_header = '\tcase ${ENUM_TYPE}::${ENUM_VALUE}:\n'
 
-switch_statement = switch_header + '''\t\tresult = ${CLASS_DESERIALIZE}::FormatDeserialize(${EXTRA_PARAMETERS}deserializer);
+switch_statement = switch_header + '''\t\tresult = ${CLASS_DESERIALIZE}::FormatDeserialize(deserializer);
 \t\tbreak;
 '''
 
@@ -139,7 +143,8 @@ class SerializableClass:
         self.base_object = None
         self.enum_value = None
         self.enum_entries = []
-        self.extra_parameters = []
+        self.set_parameter_names = []
+        self.set_parameters = []
         self.pointer_type = 'unique_ptr'
         self.constructor = None
         self.members = None
@@ -150,8 +155,6 @@ class SerializableClass:
         self.return_class = self.name
         if self.is_base_class:
             self.enum_value = entry['class_type']
-        if 'extra_parameters' in entry:
-            self.extra_parameters = entry['extra_parameters']
         if 'pointer_type' in entry:
             self.pointer_type = entry['pointer_type']
         if 'base' in entry:
@@ -171,11 +174,20 @@ class SerializableClass:
         if 'return_type' in entry:
             self.return_type = entry['return_type']
             self.return_class = self.return_type
-
+        if 'set_parameters' in entry:
+            self.set_parameter_names = entry['set_parameters']
+            for set_parameter_name in self.set_parameter_names:
+                found = False
+                for member in self.members:
+                    if member.name == set_parameter_name:
+                        self.set_parameters.append(member)
+                        found = True
+                        break
+                if not found:
+                    raise Exception(f'Set parameter {set_parameter_name} not found in member list')
 
     def inherit(self, base_class):
         self.base_object = base_class
-        self.extra_parameters = base_class.extra_parameters
         self.pointer_type = base_class.pointer_type
 
 
@@ -195,11 +207,12 @@ def generate_base_class_code(base_class):
     expressions = [x for x in base_class.children.items()]
     expressions = sorted(expressions, key=lambda x: x[0])
 
+    # set parameters
+    for entry in base_class.set_parameters:
+        base_class_deserialize += set_deserialize_parameter.replace('${PROPERTY_TYPE}', entry.type).replace('${PROPERTY_NAME}', entry.name)
+
     base_class_deserialize += f'\t{base_class.pointer_type}<{base_class.name}> result;\n'
     switch_cases = ''
-    extra_parameter_txt = ''
-    for extra_parameter in base_class.extra_parameters:
-        extra_parameter_txt += extra_parameter + ', '
     for expr in expressions:
         enum_value = expr[0]
         child_data = expr[1]
@@ -208,13 +221,13 @@ def generate_base_class_code(base_class):
             switch_cases += '\n'.join(['\t\t' + x for x in child_data.custom_switch_code.replace('\\n', '\n').split('\n')])
             switch_cases += '\n'
             continue
-        switch_cases += switch_statement.replace('${ENUM_TYPE}', enum_type).replace('${ENUM_VALUE}', enum_value).replace('${CLASS_DESERIALIZE}', child_data.name).replace('${EXTRA_PARAMETERS}', extra_parameter_txt)
+        switch_cases += switch_statement.replace('${ENUM_TYPE}', enum_type).replace('${ENUM_VALUE}', enum_value).replace('${CLASS_DESERIALIZE}', child_data.name)
 
     assign_entries = []
     for entry in base_class.members:
         skip = False
         for check_entry in [entry.name, entry.serialize_property]:
-            if check_entry in base_class.extra_parameters:
+            if check_entry in base_class.set_parameter_names:
                 skip = True
             if check_entry == base_class.enum_value:
                 skip = True
@@ -227,6 +240,9 @@ def generate_base_class_code(base_class):
 
     deserialize_return = get_return_value(base_class.pointer_type, base_class.return_type)
 
+    for entry in base_class.set_parameters:
+        base_class_deserialize += unset_deserialize_parameter.replace('${PROPERTY_TYPE}', entry.type)
+
     for entry in assign_entries:
         move = False
         if entry.type in move_list or is_container(entry.type) or is_pointer(entry.type):
@@ -238,27 +254,15 @@ def generate_base_class_code(base_class):
     base_class_deserialize += '\treturn result;'
     base_class_generation = ''
     base_class_generation += serialize_base.replace('${CLASS_NAME}', base_class.name).replace('${MEMBERS}', base_class_serialize)
-    base_class_generation += deserialize_base.replace('${DESERIALIZE_RETURN}', deserialize_return).replace('${CLASS_NAME}', base_class.name).replace('${MEMBERS}', base_class_deserialize).replace('${EXTRA_PARAMETERS}', '')
+    base_class_generation += deserialize_base.replace('${DESERIALIZE_RETURN}', deserialize_return).replace('${CLASS_NAME}', base_class.name).replace('${MEMBERS}', base_class_deserialize)
     return base_class_generation
 
 
 def generate_class_code(class_entry):
     if class_entry.custom_implementation:
         return None
-    extra_parameters = []
-    extra_parameter_txt = ''
     class_serialize = ''
     class_deserialize = ''
-    if class_entry.base is not None:
-        extra_parameters = class_entry.extra_parameters
-        for extra_parameter in extra_parameters:
-            extra_parameter_type = ''
-            for member in class_entry.base_object.members:
-                if member.name == extra_parameter:
-                    extra_parameter_type = member.type
-            if len(extra_parameter_type) == 0:
-                raise Exception('Extra parameter type not found')
-            extra_parameter_txt += extra_parameter_type + ' ' + extra_parameter + ', '
 
     constructor_parameters = ''
     constructor_entries = {}
@@ -278,10 +282,16 @@ def generate_class_code(class_entry):
                     class_deserialize += get_deserialize_element(entry.name, entry.name, type_name, entry.optional, 'unique_ptr')
                     found = True
                     break
+            if class_entry.base_object is not None:
+                for entry in class_entry.base_object.set_parameters:
+                    if entry.name == constructor_entry:
+                        if len(constructor_parameters) > 0:
+                            constructor_parameters += ", "
+                        constructor_parameters += get_deserialize_parameter.replace('${PROPERTY_TYPE}', entry.type)
+                        found = True
+                        break
             if not found:
                 raise Exception(f"Constructor member \"{constructor_entry}\" was not found in members list")
-    else:
-        constructor_parameters = ', '.join(extra_parameters)
 
     if class_entry.base is not None:
         class_serialize += base_serialize.replace('${BASE_CLASS_NAME}', class_entry.base)
@@ -315,7 +325,7 @@ def generate_class_code(class_entry):
 
     class_generation = ''
     class_generation += serialize_base.replace('${CLASS_NAME}', class_entry.name).replace('${MEMBERS}', class_serialize)
-    class_generation += deserialize_base.replace('${DESERIALIZE_RETURN}', deserialize_return).replace('${CLASS_NAME}', class_entry.name).replace('${MEMBERS}', class_deserialize).replace('${EXTRA_PARAMETERS}', extra_parameter_txt)
+    class_generation += deserialize_base.replace('${DESERIALIZE_RETURN}', deserialize_return).replace('${CLASS_NAME}', class_entry.name).replace('${MEMBERS}', class_deserialize)
     return class_generation
 
 

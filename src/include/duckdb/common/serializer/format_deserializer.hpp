@@ -12,6 +12,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
+#include "duckdb/common/serializer/deserialization_data.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -24,6 +25,7 @@ class FormatDeserializer {
 
 protected:
 	bool deserialize_enum_from_string = false;
+	DeserializationData data;
 
 public:
 	// Read into an existing value
@@ -105,6 +107,24 @@ public:
 	inline void ReadProperty(const char *tag, data_ptr_t ret, idx_t count) {
 		SetTag(tag);
 		ReadDataPtr(ret, count);
+	}
+
+	//! Set a serialization property
+	template<class T>
+	void Set(T entry) {
+		return data.Set<T>(entry);
+	}
+
+	//! Retrieve the last set serialization property of this type
+	template<class T>
+	T Get() {
+		return data.Get<T>();
+	}
+
+	//! Unset a serialization property
+	template<class T>
+	void Unset() {
+		return data.Unset<T>();
 	}
 
 private:

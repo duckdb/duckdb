@@ -35,7 +35,7 @@ public:
 	static unique_ptr<ParsedExpression> Deserialize(ExpressionType type, FieldReader &source);
 
 	void FormatSerialize(FormatSerializer &serializer) const override;
-	static unique_ptr<ParsedExpression> FormatDeserialize(ExpressionType type, FormatDeserializer &deserializer);
+	static unique_ptr<ParsedExpression> FormatDeserialize(FormatDeserializer &deserializer);
 
 public:
 	template <class T, class BASE>
