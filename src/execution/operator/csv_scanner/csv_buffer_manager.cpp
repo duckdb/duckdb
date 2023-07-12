@@ -4,7 +4,7 @@ namespace duckdb {
 
 CSVBufferManager::CSVBufferManager(ClientContext &context_p, unique_ptr<CSVFileHandle> file_handle_p,
                                    CSVReaderOptions &options)
-    : file_handle(std::move(file_handle_p)), context(context_p) {
+    : file_handle(std::move(file_handle_p)), context(context_p), buffer_size(CSV_BUFFER_SIZE) {
 	if (options.skip_rows_set) {
 		// Skip rows if they are set
 		for (idx_t i = 0; i < options.skip_rows; i++) {

@@ -10,6 +10,7 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_file_handle.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
 
 namespace duckdb {
 class CSVBuffer;
@@ -37,7 +38,7 @@ private:
 	shared_ptr<CSVBuffer> last_buffer;
 	idx_t global_csv_pos = 0;
 	//! The size of the buffer, if the csv file has a smaller size than this, we will use that instead to malloc less
-	idx_t buffer_size = CSV_BUFFER_SIZE;
+	idx_t buffer_size;
 	//! Starting position of first buffer
 	idx_t start_pos = 0;
 };

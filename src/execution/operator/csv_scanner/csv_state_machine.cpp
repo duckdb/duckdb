@@ -1,6 +1,6 @@
-#include <utility>
-
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine.hpp"
+#include "utf8proc_wrapper.hpp"
+#include "duckdb/main/error_manager.hpp"
 
 namespace duckdb {
 CSVStateMachine::CSVStateMachine(CSVReaderOptions options_p, shared_ptr<CSVBufferManager> buffer_manager_p)

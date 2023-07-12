@@ -1,4 +1,7 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
+#include <algorithm>
+#include <string>
+
 namespace duckdb {
 struct TryCastDecimalOperator {
 	template <class OP, class T>
