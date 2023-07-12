@@ -52,6 +52,17 @@ TEST_CASE("Test Select Statement", "[odbc]") {
 		DATA_CHECK(hstmt, i, std::to_string(i).c_str());
 	}
 
+	// SELECT $x
+	SQLRETURN ret = SQLExecDirect(hstmt, ConvertToSQLCHAR("SELECT $x"), SQL_NTS);
+	REQUIRE(ret == SQL_ERROR);
+	std::string state;
+	std::string message;
+	ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
+	std::cout << "State: " << state << std::endl;
+	std::cout << "Message: " << message << std::endl;
+
+	//	EXECUTE_AND_CHECK("SQLExecDirect (SELECT $x)", SQLExecDirect, hstmt, ConvertToSQLCHAR("SELECT $x"), SQL_NTS);
+
 	// Free the statement handle
 	EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
 	EXECUTE_AND_CHECK("SQLFreeHandle (HSTMT)", SQLFreeHandle, SQL_HANDLE_STMT, hstmt);
