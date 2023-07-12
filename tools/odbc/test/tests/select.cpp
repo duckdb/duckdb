@@ -1,7 +1,5 @@
 #include "../common.h"
 
-#include <iostream>
-
 using namespace odbc_test;
 
 TEST_CASE("Test Select Statement", "[odbc]") {
@@ -52,16 +50,15 @@ TEST_CASE("Test Select Statement", "[odbc]") {
 		DATA_CHECK(hstmt, i, std::to_string(i).c_str());
 	}
 
-	// SELECT $x
+	// SELECT $x; should throw error
 	SQLRETURN ret = SQLExecDirect(hstmt, ConvertToSQLCHAR("SELECT $x"), SQL_NTS);
 	REQUIRE(ret == SQL_ERROR);
 	std::string state;
 	std::string message;
 	ACCESS_DIAGNOSTIC(state, message, hstmt, SQL_HANDLE_STMT);
-	std::cout << "State: " << state << std::endl;
-	std::cout << "Message: " << message << std::endl;
-
-	//	EXECUTE_AND_CHECK("SQLExecDirect (SELECT $x)", SQLExecDirect, hstmt, ConvertToSQLCHAR("SELECT $x"), SQL_NTS);
+	REQUIRE(state == "42000");
+	REQUIRE(message == "ODBC_DuckDB->PrepareStmt\n"
+	                   "Not all parameters are bound");
 
 	// Free the statement handle
 	EXECUTE_AND_CHECK("SQLFreeStmt (HSTMT)", SQLFreeStmt, hstmt, SQL_CLOSE);
