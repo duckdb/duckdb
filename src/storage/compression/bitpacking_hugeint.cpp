@@ -191,7 +191,6 @@ static void PackSingle(const hugeint_t in, uint32_t *__restrict &out, uint16_t d
 	}
 }
 
-
 static void PackLast(const hugeint_t *__restrict in, uint32_t *__restrict out, uint16_t delta) {
 	const uint8_t LAST_IDX = 31;
 	const uint16_t SHIFT = (delta * 31) % 32;
@@ -265,7 +264,8 @@ void HugeIntPacker::Pack(const hugeint_t *__restrict in, uint32_t *__restrict ou
 		break;
 	default:
 		for (idx_t oindex = 0; oindex < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - 1; ++oindex) {
-			PackSingle(in[oindex], out, width, (width * oindex) % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, (hugeint_t(1) << width) - 1);
+			PackSingle(in[oindex], out, width, (width * oindex) % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE,
+			           (hugeint_t(1) << width) - 1);
 		}
 		PackLast(in, out, width);
 	}
@@ -292,7 +292,8 @@ void HugeIntPacker::Unpack(const uint32_t *__restrict in, hugeint_t *__restrict 
 		break;
 	default:
 		for (idx_t oindex = 0; oindex < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - 1; ++oindex) {
-			UnpackSingle(in, out + oindex, width, (width * oindex) % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
+			UnpackSingle(in, out + oindex, width,
+			             (width * oindex) % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
 		}
 		UnpackLast(in, out, width);
 	}

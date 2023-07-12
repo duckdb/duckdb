@@ -211,8 +211,8 @@ public:
 		delta_buffer[0] = minimum_delta;
 
 		can_do_delta = can_do_delta && TrySubtractOperator::Operation(maximum_delta, minimum_delta, min_max_delta_diff);
-		can_do_delta =
-		    can_do_delta && TrySubtractOperator::Operation(static_cast<T_S>(compression_buffer[0]), minimum_delta, delta_offset);
+		can_do_delta = can_do_delta && TrySubtractOperator::Operation(static_cast<T_S>(compression_buffer[0]),
+		                                                              minimum_delta, delta_offset);
 	}
 
 	template <class T_INNER>
@@ -862,8 +862,8 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 
 	if (scan_state.current_group.mode == BitpackingMode::CONSTANT_DELTA) {
 		// FIXME: is it being verified that this will never overflow?
-		*current_result_ptr =
-		    (static_cast<T>(scan_state.current_group_offset) * scan_state.current_constant) + scan_state.current_frame_of_reference;
+		*current_result_ptr = (static_cast<T>(scan_state.current_group_offset) * scan_state.current_constant) +
+		                      scan_state.current_frame_of_reference;
 		return;
 	}
 
