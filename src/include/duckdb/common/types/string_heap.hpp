@@ -38,6 +38,9 @@ public:
 	//! Allocates space for an empty string of size "len" on the heap
 	DUCKDB_API string_t EmptyString(idx_t len);
 
+	//! Size of strings
+	DUCKDB_API idx_t SizeInBytes() const;
+
 private:
 	ArenaAllocator allocator;
 };
