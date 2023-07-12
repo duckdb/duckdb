@@ -80,7 +80,7 @@ public:
 
 	ParsedExpression &GeneratedExpressionMutable();
 	const ParsedExpression &GeneratedExpression() const;
-	void SetGeneratedExpression(unique_ptr<ParsedExpression> expression, const TableColumnType &category_p);
+	void SetGeneratedExpression(unique_ptr<ParsedExpression> expression);
 	void ChangeGeneratedExpressionType(const LogicalType &type);
 	void GetListOfDependencies(vector<string> &dependencies) const;
 
@@ -101,7 +101,7 @@ private:
 	idx_t oid = DConstants::INVALID_INDEX;
 	//! The category of the column
 	TableColumnType category = TableColumnType::STANDARD;
-	//! Used by Generated Columns or Serial Columns
+	//! Used by Generated Columns
 	unique_ptr<ParsedExpression> generated_expression;
 };
 

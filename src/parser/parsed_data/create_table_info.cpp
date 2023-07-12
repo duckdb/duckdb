@@ -52,6 +52,9 @@ unique_ptr<CreateInfo> CreateTableInfo::Copy() const {
 	for (auto &sequence : sequences) {
 		result->sequences.push_back(unique_ptr_cast<CreateInfo, CreateSequenceInfo>(sequence->Copy()));
 	}
+	for (auto &col_defaut : col_defaults) {
+		result->col_defaults.push_back(unique_ptr_cast<AlterInfo, SetDefaultInfo>(col_defaut->Copy()));
+	}
 	return std::move(result);
 }
 

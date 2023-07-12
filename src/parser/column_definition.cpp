@@ -191,35 +191,21 @@ LogicalType ColumnDefinition::GetType() const {
 	return type;
 }
 
-void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> expression,
-                                              const TableColumnType &category_p) {
-	category = category_p;
+void ColumnDefinition::SetGeneratedExpression(unique_ptr<ParsedExpression> expression) {
+	category = TableColumnType::GENERATED;
 
-	switch (category) {
-	case TableColumnType::GENERATED: {
-		if (expression->HasSubquery()) {
-			throw ParserException("Expression of generated column \"%s\" contains a subquery, which isn't allowed",
-			                      name);
-		}
-
-		VerifyColumnRefs(*expression);
-		if (type.id() == LogicalTypeId::ANY) {
-			generated_expression = std::move(expression);
-			return;
-		}
-		// Always wrap the expression in a cast, that way we can always update the cast when we change the type
-		// Except if the type is LogicalType::ANY (no type specified)
-		generated_expression = make_uniq_base<ParsedExpression, CastExpression>(type, std::move(expression));
-		break;
+	if (expression->HasSubquery()) {
+		throw ParserException("Expression of generated column \"%s\" contains a subquery, which isn't allowed", name);
 	}
-	case TableColumnType::SERIAL: {
+
+	VerifyColumnRefs(*expression);
+	if (type.id() == LogicalTypeId::ANY) {
 		generated_expression = std::move(expression);
-		break;
+		return;
 	}
-	default: {
-		throw InternalException("Type not implemented for TableColumnType");
-	}
-	}
+	// Always wrap the expression in a cast, that way we can always update the cast when we change the type
+	// Except if the type is LogicalType::ANY (no type specified)
+	generated_expression = make_uniq_base<ParsedExpression, CastExpression>(type, std::move(expression));
 }
 
 void ColumnDefinition::ChangeGeneratedExpressionType(const LogicalType &type) {
