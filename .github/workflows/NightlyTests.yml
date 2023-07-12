@@ -10,10 +10,15 @@ on:
     tags:
       - '**'
     paths-ignore:
-      - '**.md'
-      - '.github/workflows/**'
+      - '**'
       - '!.github/workflows/NightlyTests.yml'
-      - '.github/config/uncovered_files.csv'
+      - '!.github/patches/duckdb-wasm/**'
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - '**'
+      - '!.github/workflows/NightlyTests.yml'
+      - '!.github/patches/duckdb-wasm/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -21,7 +26,7 @@ concurrency:
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  DUCKDB_WASM_VERSION: 7bf2a73
+  DUCKDB_WASM_VERSION: "0e27318"
   CCACHE_SAVE: ${{ github.repository != 'duckdb/duckdb' }}
 
 jobs:
@@ -255,7 +260,7 @@ jobs:
        with:
          fetch-depth: 0
 
-     - uses: ./.github/actions/ubuntu_16_setup
+     - uses: ./.github/actions/ubuntu_18_setup
        with:
          openssl: 0
          python: 0

@@ -27,7 +27,7 @@ SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 		return SQL_SUCCESS;
 	}
 	case SQL_ATTR_ACCESS_MODE: {
-		duckdb::Store<SQLUINTEGER>(dbc->sql_attr_access_mode, (duckdb::data_ptr_t)value_ptr);
+		duckdb::Store<SQLUINTEGER>(dbc->sql_attr_access_mode, reinterpret_cast<duckdb::data_ptr_t>(value_ptr));
 		return SQL_SUCCESS;
 	}
 	case SQL_ATTR_CURRENT_CATALOG: {
@@ -131,16 +131,28 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 			dbc->autocommit = false;
 			dbc->conn->SetAutoCommit(false);
 			return SQL_SUCCESS;
-		case SQL_ATTR_METADATA_ID:
-			dbc->sql_attr_metadata_id = *((SQLUINTEGER *)value_ptr);
-			return SQL_SUCCESS;
+		case SQL_ATTR_METADATA_ID: {
+			if (value_ptr) {
+				dbc->sql_attr_metadata_id = OdbcUtils::SQLPointerToSQLUInteger(value_ptr);
+				return SQL_SUCCESS;
+			}
+		}
 		default:
 			return SQL_SUCCESS;
 		}
-		break;
-	case SQL_ATTR_ACCESS_MODE:
-		dbc->sql_attr_access_mode = *((SQLUINTEGER *)value_ptr);
-		return SQL_SUCCESS;
+	case SQL_ATTR_ACCESS_MODE: {
+		auto access_mode = OdbcUtils::SQLPointerToSQLUInteger(value_ptr);
+		switch (access_mode) {
+		case SQL_MODE_READ_WRITE:
+			dbc->sql_attr_access_mode = SQL_MODE_READ_WRITE;
+			return SQL_SUCCESS;
+		case SQL_MODE_READ_ONLY:
+			dbc->sql_attr_access_mode = SQL_MODE_READ_ONLY;
+			return SQL_SUCCESS;
+		}
+		duckdb::DiagRecord diag_rec("Invalid access mode.", SQLStateType::INVALID_ATTR_VALUE, dbc->GetDataSourceName());
+		return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLSetConnectAttr", diag_rec, dbc->GetDataSourceName());
+	}
 #ifdef SQL_ATTR_ASYNC_DBC_EVENT
 	case SQL_ATTR_ASYNC_DBC_EVENT:
 #endif
@@ -166,7 +178,7 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 		return SQL_SUCCESS;
 	case SQL_ATTR_CURRENT_CATALOG: {
 		if (dbc->conn) {
-			duckdb::DiagRecord diag_rec("Connection already stablished, the database name could not be set.",
+			duckdb::DiagRecord diag_rec("Connection already established, the database name could not be set.",
 			                            SQLStateType::INVALID_CONNECTION_STR_ATTR, dbc->GetDataSourceName());
 			return duckdb::SetDiagnosticRecord(dbc, SQL_ERROR, "SQLSetConnectAttr", diag_rec, dbc->GetDataSourceName());
 		}

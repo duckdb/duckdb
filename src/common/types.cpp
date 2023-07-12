@@ -1,8 +1,6 @@
 #include "duckdb/common/types.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/common/exception.hpp"
@@ -10,7 +8,6 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer.hpp"
-#include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
@@ -26,11 +23,11 @@
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/keyword_helper.hpp"
 #include "duckdb/parser/parser.hpp"
-
+#include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/serializer/format_deserializer.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/serializer/format_serializer.hpp"
-
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include <cmath>
 
 namespace duckdb {
@@ -767,72 +764,6 @@ bool ApproxEqual(double ldecimal, double rdecimal) {
 //===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
-
-struct ExtraTypeInfo {
-	explicit ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
-	}
-	explicit ExtraTypeInfo(ExtraTypeInfoType type, string alias) : type(type), alias(std::move(alias)) {
-	}
-	virtual ~ExtraTypeInfo() {
-	}
-
-	ExtraTypeInfoType type;
-	string alias;
-	optional_ptr<TypeCatalogEntry> catalog_entry;
-
-public:
-	bool Equals(ExtraTypeInfo *other_p) const {
-		if (type == ExtraTypeInfoType::INVALID_TYPE_INFO || type == ExtraTypeInfoType::STRING_TYPE_INFO ||
-		    type == ExtraTypeInfoType::GENERIC_TYPE_INFO) {
-			if (!other_p) {
-				if (!alias.empty()) {
-					return false;
-				}
-				//! We only need to compare aliases when both types have them in this case
-				return true;
-			}
-			if (alias != other_p->alias) {
-				return false;
-			}
-			return true;
-		}
-		if (!other_p) {
-			return false;
-		}
-		if (type != other_p->type) {
-			return false;
-		}
-		return alias == other_p->alias && EqualsInternal(other_p);
-	}
-	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
-	virtual void Serialize(FieldWriter &writer) const {
-	}
-	//! Serializes a ExtraTypeInfo to a stand-alone binary blob
-	static void Serialize(ExtraTypeInfo *info, FieldWriter &writer);
-	//! Deserializes a blob back into an ExtraTypeInfo
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader);
-
-	virtual void FormatSerialize(FormatSerializer &serializer) const;
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source);
-
-	template <class TARGET>
-	TARGET &Cast() {
-		D_ASSERT(dynamic_cast<TARGET *>(this));
-		return reinterpret_cast<TARGET &>(*this);
-	}
-	template <class TARGET>
-	const TARGET &Cast() const {
-		D_ASSERT(dynamic_cast<const TARGET *>(this));
-		return reinterpret_cast<const TARGET &>(*this);
-	}
-
-protected:
-	virtual bool EqualsInternal(ExtraTypeInfo *other_p) const {
-		// Do nothing
-		return true;
-	}
-};
-
 void LogicalType::SetAlias(string alias) {
 	if (!type_info_) {
 		type_info_ = make_shared<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO, std::move(alias));
@@ -861,53 +792,9 @@ bool LogicalType::HasAlias() const {
 	return false;
 }
 
-ExtraTypeInfoType LogicalType::GetExtraTypeInfoType(const ExtraTypeInfo &type) {
-	return type.type;
-}
-
 //===--------------------------------------------------------------------===//
 // Decimal Type
 //===--------------------------------------------------------------------===//
-struct DecimalTypeInfo : public ExtraTypeInfo {
-	DecimalTypeInfo(uint8_t width_p, uint8_t scale_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::DECIMAL_TYPE_INFO), width(width_p), scale(scale_p) {
-		D_ASSERT(width_p >= scale_p);
-	}
-
-	uint8_t width;
-	uint8_t scale;
-
-public:
-	void Serialize(FieldWriter &writer) const override {
-		writer.WriteField<uint8_t>(width);
-		writer.WriteField<uint8_t>(scale);
-	}
-
-	void FormatSerialize(FormatSerializer &serializer) const override {
-		ExtraTypeInfo::FormatSerialize(serializer);
-		serializer.WriteProperty("width", width);
-		serializer.WriteProperty("scale", scale);
-	}
-
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
-		auto width = source.ReadProperty<uint8_t>("width");
-		auto scale = source.ReadProperty<uint8_t>("scale");
-		return make_shared<DecimalTypeInfo>(width, scale);
-	}
-
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
-		auto width = reader.ReadRequired<uint8_t>();
-		auto scale = reader.ReadRequired<uint8_t>();
-		return make_shared<DecimalTypeInfo>(width, scale);
-	}
-
-protected:
-	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
-		auto &other = other_p->Cast<DecimalTypeInfo>();
-		return width == other.width && scale == other.scale;
-	}
-};
-
 uint8_t DecimalType::GetWidth(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
 	auto info = type.AuxInfo();
@@ -935,40 +822,6 @@ LogicalType LogicalType::DECIMAL(int width, int scale) {
 //===--------------------------------------------------------------------===//
 // String Type
 //===--------------------------------------------------------------------===//
-struct StringTypeInfo : public ExtraTypeInfo {
-	explicit StringTypeInfo(string collation_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::STRING_TYPE_INFO), collation(std::move(collation_p)) {
-	}
-
-	string collation;
-
-public:
-	void Serialize(FieldWriter &writer) const override {
-		writer.WriteString(collation);
-	}
-
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
-		auto collation = reader.ReadRequired<string>();
-		return make_shared<StringTypeInfo>(std::move(collation));
-	}
-
-	void FormatSerialize(FormatSerializer &serializer) const override {
-		ExtraTypeInfo::FormatSerialize(serializer);
-		serializer.WriteProperty("collation", collation);
-	}
-
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
-		auto collation = source.ReadProperty<string>("collation");
-		return make_shared<StringTypeInfo>(std::move(collation));
-	}
-
-protected:
-	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
-		// collation info has no impact on equality
-		return true;
-	}
-};
-
 string StringType::GetCollation(const LogicalType &type) {
 	if (type.id() != LogicalTypeId::VARCHAR) {
 		return string();
@@ -991,40 +844,6 @@ LogicalType LogicalType::VARCHAR_COLLATION(string collation) { // NOLINT
 //===--------------------------------------------------------------------===//
 // List Type
 //===--------------------------------------------------------------------===//
-struct ListTypeInfo : public ExtraTypeInfo {
-	explicit ListTypeInfo(LogicalType child_type_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::LIST_TYPE_INFO), child_type(std::move(child_type_p)) {
-	}
-
-	LogicalType child_type;
-
-public:
-	void Serialize(FieldWriter &writer) const override {
-		writer.WriteSerializable(child_type);
-	}
-
-	void FormatSerialize(FormatSerializer &serializer) const override {
-		ExtraTypeInfo::FormatSerialize(serializer);
-		serializer.WriteProperty("child_type", child_type);
-	}
-
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
-		auto child_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
-		return make_shared<ListTypeInfo>(std::move(child_type));
-	}
-
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
-		auto child_type = source.ReadProperty<LogicalType>("child_type");
-		return make_shared<ListTypeInfo>(std::move(child_type));
-	}
-
-protected:
-	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
-		auto &other = other_p->Cast<ListTypeInfo>();
-		return child_type == other.child_type;
-	}
-};
-
 const LogicalType &ListType::GetChildType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::LIST || type.id() == LogicalTypeId::MAP);
 	auto info = type.AuxInfo();
@@ -1038,112 +857,8 @@ LogicalType LogicalType::LIST(const LogicalType &child) {
 }
 
 //===--------------------------------------------------------------------===//
-// Struct Type
+// Aggregate State Type
 //===--------------------------------------------------------------------===//
-struct StructTypeInfo : public ExtraTypeInfo {
-	explicit StructTypeInfo(child_list_t<LogicalType> child_types_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::STRUCT_TYPE_INFO), child_types(std::move(child_types_p)) {
-	}
-
-	child_list_t<LogicalType> child_types;
-
-public:
-	void Serialize(FieldWriter &writer) const override {
-		writer.WriteField<uint32_t>(child_types.size());
-		auto &serializer = writer.GetSerializer();
-		for (idx_t i = 0; i < child_types.size(); i++) {
-			serializer.WriteString(child_types[i].first);
-			child_types[i].second.Serialize(serializer);
-		}
-	}
-
-	void FormatSerialize(FormatSerializer &serializer) const override {
-		ExtraTypeInfo::FormatSerialize(serializer);
-		serializer.WriteProperty("child_types", child_types);
-	}
-
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
-		child_list_t<LogicalType> child_list;
-		auto child_types_size = reader.ReadRequired<uint32_t>();
-		auto &source = reader.GetSource();
-		for (uint32_t i = 0; i < child_types_size; i++) {
-			auto name = source.Read<string>();
-			auto type = LogicalType::Deserialize(source);
-			child_list.emplace_back(std::move(name), std::move(type));
-		}
-		return make_shared<StructTypeInfo>(std::move(child_list));
-	}
-
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &deserializer) {
-		auto child_types = deserializer.ReadProperty<child_list_t<LogicalType>>("child_types");
-		return make_shared<StructTypeInfo>(std::move(child_types));
-	}
-
-protected:
-	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
-		auto &other = other_p->Cast<StructTypeInfo>();
-		return child_types == other.child_types;
-	}
-};
-
-struct AggregateStateTypeInfo : public ExtraTypeInfo {
-	explicit AggregateStateTypeInfo(aggregate_state_t state_type_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO), state_type(std::move(state_type_p)) {
-	}
-
-	aggregate_state_t state_type;
-
-public:
-	void Serialize(FieldWriter &writer) const override {
-		auto &serializer = writer.GetSerializer();
-		writer.WriteString(state_type.function_name);
-		state_type.return_type.Serialize(serializer);
-		writer.WriteField<uint32_t>(state_type.bound_argument_types.size());
-		for (idx_t i = 0; i < state_type.bound_argument_types.size(); i++) {
-			state_type.bound_argument_types[i].Serialize(serializer);
-		}
-	}
-
-	void FormatSerialize(FormatSerializer &serializer) const override {
-		ExtraTypeInfo::FormatSerialize(serializer);
-		serializer.WriteProperty("function_name", state_type.function_name);
-		serializer.WriteProperty("return_type", state_type.return_type);
-		serializer.WriteProperty("bound_argument_types", state_type.bound_argument_types);
-	}
-
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
-		auto function_name = source.ReadProperty<string>("function_name");
-		auto return_type = source.ReadProperty<LogicalType>("return_type");
-		auto bound_argument_types = source.ReadProperty<vector<LogicalType>>("bound_argument_types");
-		return make_shared<AggregateStateTypeInfo>(
-		    aggregate_state_t(std::move(function_name), std::move(return_type), std::move(bound_argument_types)));
-	}
-
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
-		auto &source = reader.GetSource();
-
-		auto function_name = reader.ReadRequired<string>();
-		auto return_type = LogicalType::Deserialize(source);
-		auto bound_argument_types_size = reader.ReadRequired<uint32_t>();
-		vector<LogicalType> bound_argument_types;
-
-		for (uint32_t i = 0; i < bound_argument_types_size; i++) {
-			auto type = LogicalType::Deserialize(source);
-			bound_argument_types.push_back(std::move(type));
-		}
-		return make_shared<AggregateStateTypeInfo>(
-		    aggregate_state_t(std::move(function_name), std::move(return_type), std::move(bound_argument_types)));
-	}
-
-protected:
-	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
-		auto &other = other_p->Cast<AggregateStateTypeInfo>();
-		return state_type.function_name == other.state_type.function_name &&
-		       state_type.return_type == other.state_type.return_type &&
-		       state_type.bound_argument_types == other.state_type.bound_argument_types;
-	}
-};
-
 const aggregate_state_t &AggregateStateType::GetStateType(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::AGGREGATE_STATE);
 	auto info = type.AuxInfo();
@@ -1164,6 +879,9 @@ const string AggregateStateType::GetTypeName(const LogicalType &type) {
 	       ")" + "::" + aggr_state.return_type.ToString() + ">";
 }
 
+//===--------------------------------------------------------------------===//
+// Struct Type
+//===--------------------------------------------------------------------===//
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::UNION);
 
@@ -1226,7 +944,6 @@ const LogicalType &MapType::ValueType(const LogicalType &type) {
 //===--------------------------------------------------------------------===//
 // Union Type
 //===--------------------------------------------------------------------===//
-
 LogicalType LogicalType::UNION(child_list_t<LogicalType> members) {
 	D_ASSERT(!members.empty());
 	D_ASSERT(members.size() <= UnionType::MAX_UNION_MEMBERS);
@@ -1263,40 +980,6 @@ const child_list_t<LogicalType> UnionType::CopyMemberTypes(const LogicalType &ty
 //===--------------------------------------------------------------------===//
 // User Type
 //===--------------------------------------------------------------------===//
-struct UserTypeInfo : public ExtraTypeInfo {
-	explicit UserTypeInfo(string name_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(std::move(name_p)) {
-	}
-
-	string user_type_name;
-
-public:
-	void Serialize(FieldWriter &writer) const override {
-		writer.WriteString(user_type_name);
-	}
-
-	void FormatSerialize(FormatSerializer &serializer) const override {
-		ExtraTypeInfo::FormatSerialize(serializer);
-		serializer.WriteProperty("user_type_name", user_type_name);
-	}
-
-	static shared_ptr<ExtraTypeInfo> Deserialize(FieldReader &reader) {
-		auto enum_name = reader.ReadRequired<string>();
-		return make_shared<UserTypeInfo>(std::move(enum_name));
-	}
-
-	static shared_ptr<ExtraTypeInfo> FormatDeserialize(FormatDeserializer &source) {
-		auto enum_name = source.ReadProperty<string>("user_type_name");
-		return make_shared<UserTypeInfo>(std::move(enum_name));
-	}
-
-protected:
-	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
-		auto &other = other_p->Cast<UserTypeInfo>();
-		return other.user_type_name == user_type_name;
-	}
-};
-
 const string &UserType::GetTypeName(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::USER);
 	auto info = type.AuxInfo();
@@ -1312,81 +995,6 @@ LogicalType LogicalType::USER(const string &user_type_name) {
 //===--------------------------------------------------------------------===//
 // Enum Type
 //===--------------------------------------------------------------------===//
-
-enum EnumDictType : uint8_t { INVALID = 0, VECTOR_DICT = 1 };
-
-struct EnumTypeInfo : public ExtraTypeInfo {
-	explicit EnumTypeInfo(string enum_name_p, Vector &values_insert_order_p, idx_t dict_size_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), values_insert_order(values_insert_order_p),
-	      dict_type(EnumDictType::VECTOR_DICT), enum_name(std::move(enum_name_p)), dict_size(dict_size_p) {
-	}
-
-	const EnumDictType &GetEnumDictType() const {
-		return dict_type;
-	};
-	const string &GetEnumName() const {
-		return enum_name;
-	};
-	const string GetSchemaName() const {
-		return catalog_entry ? catalog_entry->schema.name : "";
-	};
-	const Vector &GetValuesInsertOrder() const {
-		return values_insert_order;
-	};
-	const idx_t &GetDictSize() const {
-		return dict_size;
-	};
-	EnumTypeInfo(const EnumTypeInfo &) = delete;
-	EnumTypeInfo &operator=(const EnumTypeInfo &) = delete;
-
-protected:
-	// Equalities are only used in enums with different catalog entries
-	bool EqualsInternal(ExtraTypeInfo *other_p) const override {
-		auto &other = other_p->Cast<EnumTypeInfo>();
-		if (dict_type != other.dict_type) {
-			return false;
-		}
-		D_ASSERT(dict_type == EnumDictType::VECTOR_DICT);
-		// We must check if both enums have the same size
-		if (other.dict_size != dict_size) {
-			return false;
-		}
-		auto other_vector_ptr = FlatVector::GetData<string_t>(other.values_insert_order);
-		auto this_vector_ptr = FlatVector::GetData<string_t>(values_insert_order);
-
-		// Now we must check if all strings are the same
-		for (idx_t i = 0; i < dict_size; i++) {
-			if (!Equals::Operation(other_vector_ptr[i], this_vector_ptr[i])) {
-				return false;
-			}
-		}
-		return true;
-	}
-
-	void Serialize(FieldWriter &writer) const override {
-		if (dict_type != EnumDictType::VECTOR_DICT) {
-			throw InternalException("Cannot serialize non-vector dictionary ENUM types");
-		}
-		bool serialize_internals = GetSchemaName().empty() || writer.GetSerializer().is_query_plan;
-		EnumType::Serialize(writer, *this, serialize_internals);
-	}
-
-	void FormatSerialize(FormatSerializer &serializer) const override {
-		ExtraTypeInfo::FormatSerialize(serializer);
-		serializer.WriteProperty("dict_size", dict_size);
-		serializer.WriteProperty("enum_name", enum_name);
-		((Vector &)values_insert_order).FormatSerialize(serializer, dict_size); // NOLINT - FIXME
-	}
-	Vector values_insert_order;
-
-private:
-	EnumDictType dict_type;
-	string enum_name;
-	idx_t dict_size;
-};
-
-// If this type is primarily stored in the catalog or not. Enums from Pandas/Factors are not in the catalog.
-
 void EnumType::Serialize(FieldWriter &writer, const ExtraTypeInfo &type_info, bool serialize_internals) {
 	D_ASSERT(type_info.type == ExtraTypeInfoType::ENUM_TYPE_INFO);
 	auto &enum_info = type_info.Cast<EnumTypeInfo>();
@@ -1406,54 +1014,6 @@ void EnumType::Serialize(FieldWriter &writer, const ExtraTypeInfo &type_info, bo
 	}
 }
 
-template <class T>
-struct EnumTypeInfoTemplated : public EnumTypeInfo {
-	explicit EnumTypeInfoTemplated(const string &enum_name_p, Vector &values_insert_order_p, idx_t size_p)
-	    : EnumTypeInfo(enum_name_p, values_insert_order_p, size_p) {
-		D_ASSERT(values_insert_order_p.GetType().InternalType() == PhysicalType::VARCHAR);
-
-		UnifiedVectorFormat vdata;
-		values_insert_order.ToUnifiedFormat(size_p, vdata);
-
-		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
-		for (idx_t i = 0; i < size_p; i++) {
-			auto idx = vdata.sel->get_index(i);
-			if (!vdata.validity.RowIsValid(idx)) {
-				throw InternalException("Attempted to create ENUM type with NULL value");
-			}
-			if (values.count(data[idx]) > 0) {
-				throw InvalidInputException("Attempted to create ENUM type with duplicate value %s",
-				                            data[idx].GetString());
-			}
-			values[data[idx]] = i;
-		}
-	}
-
-	static shared_ptr<EnumTypeInfoTemplated> Deserialize(FieldReader &reader, uint32_t size, string enum_name) {
-
-		Vector values_insert_order(LogicalType::VARCHAR, size);
-		values_insert_order.Deserialize(size, reader.GetSource());
-		return make_shared<EnumTypeInfoTemplated>(std::move(enum_name), values_insert_order, size);
-	}
-
-	static shared_ptr<EnumTypeInfoTemplated> FormatDeserialize(FormatDeserializer &source, uint32_t size) {
-		auto enum_name = source.ReadProperty<string>("enum_name");
-		Vector values_insert_order(LogicalType::VARCHAR, size);
-		values_insert_order.FormatDeserialize(source, size);
-		return make_shared<EnumTypeInfoTemplated>(std::move(enum_name), values_insert_order, size);
-	}
-
-	const string_map_t<T> &GetValues() const {
-		return values;
-	}
-
-	EnumTypeInfoTemplated(const EnumTypeInfoTemplated &) = delete;
-	EnumTypeInfoTemplated &operator=(const EnumTypeInfoTemplated &) = delete;
-
-private:
-	string_map_t<T> values;
-};
-
 const string &EnumType::GetTypeName(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
@@ -1461,60 +1021,8 @@ const string &EnumType::GetTypeName(const LogicalType &type) {
 	return info->Cast<EnumTypeInfo>().GetEnumName();
 }
 
-static PhysicalType EnumVectorDictType(idx_t size) {
-	if (size <= NumericLimits<uint8_t>::Maximum()) {
-		return PhysicalType::UINT8;
-	} else if (size <= NumericLimits<uint16_t>::Maximum()) {
-		return PhysicalType::UINT16;
-	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
-		return PhysicalType::UINT32;
-	} else {
-		throw InternalException("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
-	}
-}
-
 LogicalType LogicalType::ENUM(const string &enum_name, Vector &ordered_data, idx_t size) {
-	// Generate EnumTypeInfo
-	shared_ptr<ExtraTypeInfo> info;
-	auto enum_internal_type = EnumVectorDictType(size);
-	switch (enum_internal_type) {
-	case PhysicalType::UINT8:
-		info = make_shared<EnumTypeInfoTemplated<uint8_t>>(enum_name, ordered_data, size);
-		break;
-	case PhysicalType::UINT16:
-		info = make_shared<EnumTypeInfoTemplated<uint16_t>>(enum_name, ordered_data, size);
-		break;
-	case PhysicalType::UINT32:
-		info = make_shared<EnumTypeInfoTemplated<uint32_t>>(enum_name, ordered_data, size);
-		break;
-	default:
-		throw InternalException("Invalid Physical Type for ENUMs");
-	}
-	// Generate Actual Enum Type
-	return LogicalType(LogicalTypeId::ENUM, info);
-}
-
-template <class T>
-int64_t TemplatedGetPos(const string_map_t<T> &map, const string_t &key) {
-	auto it = map.find(key);
-	if (it == map.end()) {
-		return -1;
-	}
-	return it->second;
-}
-
-int64_t EnumType::GetPos(const LogicalType &type, const string_t &key) {
-	auto info = type.AuxInfo();
-	switch (type.InternalType()) {
-	case PhysicalType::UINT8:
-		return TemplatedGetPos(info->Cast<EnumTypeInfoTemplated<uint8_t>>().GetValues(), key);
-	case PhysicalType::UINT16:
-		return TemplatedGetPos(info->Cast<EnumTypeInfoTemplated<uint16_t>>().GetValues(), key);
-	case PhysicalType::UINT32:
-		return TemplatedGetPos(info->Cast<EnumTypeInfoTemplated<uint32_t>>().GetValues(), key);
-	default:
-		throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
-	}
+	return EnumTypeInfo::CreateType(enum_name, ordered_data, size);
 }
 
 const string EnumType::GetValue(const Value &val) {
@@ -1564,162 +1072,7 @@ PhysicalType EnumType::GetPhysicalType(const LogicalType &type) {
 	D_ASSERT(aux_info);
 	auto &info = aux_info->Cast<EnumTypeInfo>();
 	D_ASSERT(info.GetEnumDictType() == EnumDictType::VECTOR_DICT);
-	return EnumVectorDictType(info.GetDictSize());
-}
-
-//===--------------------------------------------------------------------===//
-// Extra Type Info
-//===--------------------------------------------------------------------===//
-void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, FieldWriter &writer) {
-	if (!info) {
-		writer.WriteField<ExtraTypeInfoType>(ExtraTypeInfoType::INVALID_TYPE_INFO);
-		writer.WriteString(string());
-	} else {
-		writer.WriteField<ExtraTypeInfoType>(info->type);
-		info->Serialize(writer);
-		writer.WriteString(info->alias);
-	}
-}
-void ExtraTypeInfo::FormatSerialize(FormatSerializer &serializer) const {
-	serializer.WriteProperty("type", type);
-	// BREAKING: we used to write the alias last if there was additional type info, but now we write it second.
-	serializer.WriteProperty("alias", alias);
-}
-
-shared_ptr<ExtraTypeInfo> ExtraTypeInfo::FormatDeserialize(FormatDeserializer &deserializer) {
-	auto type = deserializer.ReadProperty<ExtraTypeInfoType>("type");
-	auto alias = deserializer.ReadProperty<string>("alias");
-	// BREAKING: we used to read the alias last, but now we read it second.
-
-	shared_ptr<ExtraTypeInfo> result;
-	switch (type) {
-	case ExtraTypeInfoType::INVALID_TYPE_INFO: {
-		if (!alias.empty()) {
-			return make_shared<ExtraTypeInfo>(type, alias);
-		}
-		return nullptr;
-	}
-	case ExtraTypeInfoType::GENERIC_TYPE_INFO: {
-		result = make_shared<ExtraTypeInfo>(type);
-	} break;
-	case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
-		result = DecimalTypeInfo::FormatDeserialize(deserializer);
-		break;
-	case ExtraTypeInfoType::STRING_TYPE_INFO:
-		result = StringTypeInfo::FormatDeserialize(deserializer);
-		break;
-	case ExtraTypeInfoType::LIST_TYPE_INFO:
-		result = ListTypeInfo::FormatDeserialize(deserializer);
-		break;
-	case ExtraTypeInfoType::STRUCT_TYPE_INFO:
-		result = StructTypeInfo::FormatDeserialize(deserializer);
-		break;
-	case ExtraTypeInfoType::USER_TYPE_INFO:
-		result = UserTypeInfo::FormatDeserialize(deserializer);
-		break;
-	case ExtraTypeInfoType::ENUM_TYPE_INFO: {
-		auto enum_size = deserializer.ReadProperty<uint32_t>("enum_size");
-		auto enum_internal_type = EnumVectorDictType(enum_size);
-		switch (enum_internal_type) {
-		case PhysicalType::UINT8:
-			result = EnumTypeInfoTemplated<uint8_t>::FormatDeserialize(deserializer, enum_size);
-			break;
-		case PhysicalType::UINT16:
-			result = EnumTypeInfoTemplated<uint16_t>::FormatDeserialize(deserializer, enum_size);
-			break;
-		case PhysicalType::UINT32:
-			result = EnumTypeInfoTemplated<uint32_t>::FormatDeserialize(deserializer, enum_size);
-			break;
-		default:
-			throw InternalException("Invalid Physical Type for ENUMs");
-		}
-	} break;
-	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
-		result = AggregateStateTypeInfo::FormatDeserialize(deserializer);
-		break;
-	default:
-		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
-	}
-	result->alias = alias;
-	return result;
-}
-
-shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(FieldReader &reader) {
-	auto type = reader.ReadRequired<ExtraTypeInfoType>();
-	shared_ptr<ExtraTypeInfo> extra_info;
-	switch (type) {
-	case ExtraTypeInfoType::INVALID_TYPE_INFO: {
-		auto alias = reader.ReadField<string>(string());
-		if (!alias.empty()) {
-			return make_shared<ExtraTypeInfo>(type, alias);
-		}
-		return nullptr;
-	}
-	case ExtraTypeInfoType::GENERIC_TYPE_INFO: {
-		extra_info = make_shared<ExtraTypeInfo>(type);
-	} break;
-	case ExtraTypeInfoType::DECIMAL_TYPE_INFO:
-		extra_info = DecimalTypeInfo::Deserialize(reader);
-		break;
-	case ExtraTypeInfoType::STRING_TYPE_INFO:
-		extra_info = StringTypeInfo::Deserialize(reader);
-		break;
-	case ExtraTypeInfoType::LIST_TYPE_INFO:
-		extra_info = ListTypeInfo::Deserialize(reader);
-		break;
-	case ExtraTypeInfoType::STRUCT_TYPE_INFO:
-		extra_info = StructTypeInfo::Deserialize(reader);
-		break;
-	case ExtraTypeInfoType::USER_TYPE_INFO:
-		extra_info = UserTypeInfo::Deserialize(reader);
-		break;
-	case ExtraTypeInfoType::ENUM_TYPE_INFO: {
-		auto schema_name = reader.ReadRequired<string>();
-		auto enum_name = reader.ReadRequired<string>();
-		auto deserialize_internals = reader.ReadRequired<bool>();
-		if (!deserialize_internals) {
-			// this means the enum should already be in the catalog.
-			auto &client_context = reader.GetSource().GetContext();
-			// See if the serializer has a catalog
-			auto catalog = reader.GetSource().GetCatalog();
-			if (catalog) {
-				auto enum_type = catalog->GetType(client_context, schema_name, enum_name, OnEntryNotFound::RETURN_NULL);
-				if (enum_type != LogicalType::INVALID) {
-					extra_info = enum_type.GetAuxInfoShrPtr();
-				}
-			}
-			if (!extra_info) {
-				throw InternalException("Could not find ENUM in the Catalog to deserialize");
-			}
-			break;
-		} else {
-			auto enum_size = reader.ReadRequired<uint32_t>();
-			auto enum_internal_type = EnumVectorDictType(enum_size);
-			switch (enum_internal_type) {
-			case PhysicalType::UINT8:
-				extra_info = EnumTypeInfoTemplated<uint8_t>::Deserialize(reader, enum_size, enum_name);
-				break;
-			case PhysicalType::UINT16:
-				extra_info = EnumTypeInfoTemplated<uint16_t>::Deserialize(reader, enum_size, enum_name);
-				break;
-			case PhysicalType::UINT32:
-				extra_info = EnumTypeInfoTemplated<uint32_t>::Deserialize(reader, enum_size, enum_name);
-				break;
-			default:
-				throw InternalException("Invalid Physical Type for ENUMs");
-			}
-		}
-	} break;
-	case ExtraTypeInfoType::AGGREGATE_STATE_TYPE_INFO:
-		extra_info = AggregateStateTypeInfo::Deserialize(reader);
-		break;
-
-	default:
-		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
-	}
-	auto alias = reader.ReadField<string>(string());
-	extra_info->alias = alias;
-	return extra_info;
+	return EnumTypeInfo::DictType(info.GetDictSize());
 }
 
 //===--------------------------------------------------------------------===//

@@ -85,6 +85,7 @@ jobs:
         cibuildwheel --output-dir wheelhouse --config-file cibw.toml duckdb_tarball
 
    manylinux-extensions-x64:
+    # Builds extensions for linux_md64_gcc4
     name: Linux Extensions (ggc4)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2014_x86_64
@@ -99,24 +100,22 @@ jobs:
 
     - uses: ./.github/actions/manylinux_2014_setup
       with:
-         aws-cli: 1
-         ninja-build: 1
-         vcpkg: 1
-         openssl: 1
-         ccache: 1
-         ssh: 1
+        aws-cli: 1
+        ninja-build: 1
+        ccache: 1
+        ssh: 1
+        python_alias: 1
+        openssl: 1
 
     - uses: ./.github/actions/build_extensions
       with:
+        vcpkg_target_triplet: x64-linux
         post_install: rm build/release/src/libduckdb*
         deploy_as: linux_amd64_gcc4
         s3_id: ${{ secrets.S3_ID }}
         s3_key: ${{ secrets.S3_KEY }}
         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
         treat_warn_as_error: 0
-        toolchain_path: ${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
-        python_name: python3.7
-        openssl_path: ${{ env.VCPKG_ROOT }}/installed/x64-linux
 
     - uses: actions/upload-artifact@v3
       with:

@@ -23,6 +23,7 @@ public:
 
 	vector<LogicalType> join_key_types;
 	vector<column_t> null_sensitive;
+	ExpressionType comparison_type;
 
 	// Equalities
 	vector<unique_ptr<Expression>> lhs_partitions;

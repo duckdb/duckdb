@@ -179,6 +179,7 @@ jobs:
         R CMD INSTALL .
 
   rstats-windows:
+    # Builds binaries for windows_amd64_rtools
     name: R Package Windows
     needs: rstats-linux
     runs-on: windows-latest
@@ -221,6 +222,7 @@ jobs:
         if egrep 'NOTE|WARNING|ERROR' /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
   rstats-windows-extensions:
+    # Builds extensions for windows_amd64_rtools
     name: R Package Windows (Extensions)
     if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
     needs: rstats-linux
@@ -255,12 +257,14 @@ jobs:
           s3_id: ${{ secrets.S3_ID }}
           s3_key: ${{ secrets.S3_KEY }}
           signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-          python_name: python
           override_cc: gcc
           override_cxx: g++
-          build_out_of_tree_extensions: 0
           openssl_path: C:/rtools43/x86_64-w64-mingw32.static.posix # not sure if this is required, there seems to be an openssl there
           run_tests: 0
+          build_out_of_tree_extensions: 0
+          build_vcpkg_extensions: 0
+          vcpkg_build: 0
+          no_static_linking: 1
 
       - name: Install R package
         shell: bash

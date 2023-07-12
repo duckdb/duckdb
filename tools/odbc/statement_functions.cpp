@@ -89,7 +89,7 @@ SQLRETURN duckdb::BatchExecuteStmt(SQLHSTMT statement_handle) {
 
 	// now, fetching the first chunk to verify constant folding (See: PR #2462 and issue #2452)
 	if (ret == SQL_SUCCESS) {
-		auto fetch_ret = hstmt->odbc_fetcher->FetchFirst(statement_handle, hstmt);
+		auto fetch_ret = hstmt->odbc_fetcher->FetchFirst(hstmt);
 		if (fetch_ret == SQL_ERROR) {
 			return fetch_ret;
 		}
@@ -130,22 +130,17 @@ SQLRETURN duckdb::SingleExecuteStmt(duckdb::OdbcHandleStmt *stmt) {
 	return SQL_SUCCESS;
 }
 
-SQLRETURN duckdb::FetchStmtResult(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientation, SQLLEN fetch_offset) {
-	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMTResult(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
-	}
-
+SQLRETURN duckdb::FetchStmtResult(duckdb::OdbcHandleStmt *hstmt, SQLSMALLINT fetch_orientation, SQLLEN fetch_offset) {
 	if (!hstmt->open) {
 		return SQL_NO_DATA;
 	}
-	SQLRETURN ret = hstmt->odbc_fetcher->Fetch(statement_handle, hstmt, fetch_orientation, fetch_offset);
+	SQLRETURN ret = hstmt->odbc_fetcher->Fetch(hstmt, fetch_orientation, fetch_offset);
 	if (!SQL_SUCCEEDED(ret)) {
 		return ret;
 	}
 
 	hstmt->odbc_fetcher->AssertCurrentChunk();
-	return SQL_SUCCESS;
+	return ret;
 }
 
 //! Static fuctions used by GetDataStmtResult //
@@ -251,13 +246,8 @@ SQLRETURN GetVariableValue(const std::string &val_str, SQLUSMALLINT col_idx, duc
 	return ret;
 }
 
-SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
+SQLRETURN duckdb::GetDataStmtResult(OdbcHandleStmt *hstmt, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
                                     SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
-	duckdb::OdbcHandleStmt *hstmt = nullptr;
-	if (ConvertHSTMTResult(statement_handle, hstmt) != SQL_SUCCESS) {
-		return SQL_ERROR;
-	}
-
 	if (!target_value_ptr && !OdbcUtils::IsCharType(target_type)) {
 		return SQL_ERROR;
 	}
