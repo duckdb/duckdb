@@ -1,0 +1,21 @@
+# name: test/sql/types/serial/serial_is_not_a_real_type.test
+# description: SERIAL is a pseudotype, not a real type
+# group: [serial]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE birds (
+  id bigint primary key,
+  name text
+);
+
+statement error
+ALTER TABLE birds ALTER COLUMN TYPE BIGSERIAL
+
+statement error
+SELECT 1::smallserial as a
+
+statement error
+SELECT CAST(1 as serial) as b

@@ -1,0 +1,73 @@
+# name: test/sql/types/serial/test_serial_table.test
+# description: SERIAL types used in table tests
+# group: [serial]
+
+# statement ok
+# PRAGMA enable_verification
+
+statement ok
+CREATE TABLE stooges (
+    id serial primary key,
+    name text
+);
+
+statement ok
+INSERT INTO stooges (name) VALUES ('Moe');
+
+query IT
+select * from stooges
+----
+1	Moe
+
+statement error
+INSERT INTO stooges VALUES (1, 'Larry')
+
+statement error
+INSERT INTO stooges VALUES (NULL, 'Larry')
+
+statement ok
+INSERT INTO stooges VALUES (2, 'Larry')
+
+statement error
+INSERT INTO stooges (name) VALUES ('Curly')
+
+statement ok
+INSERT INTO stooges (name) VALUES ('Curly')
+
+query IT
+select * from stooges
+----
+1	Moe
+2	Larry
+3	Curly
+
+statement ok
+DROP TABLE stooges;
+
+
+# recreating the table with a serial type
+# should reset the sequence
+
+statement ok
+CREATE TABLE stooges (
+  id serial,
+  name text
+);
+
+statement ok
+INSERT INTO stooges (name) VALUES ('Rebecca')
+
+query IT
+select * from stooges
+----
+1	Rebecca
+
+# We cant drop the SEQUENCE owned by the table
+statement error
+DROP SEQUENCE stooges_id_seq
+
+statement ok
+INSERT INTO stooges (name) VALUES ('Brunhilda')
+
+statement ok
+INSERT INTO stooges VALUES (2, 'Brunhilda')

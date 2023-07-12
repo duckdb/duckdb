@@ -57,7 +57,8 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 		colname = cdef.colname;
 	}
 	bool is_generated = cdef.category == duckdb_libpgquery::COL_GENERATED;
-	LogicalType target_type = (is_generated && !cdef.typeName) ? LogicalType::ANY : TransformTypeName(*cdef.typeName);
+	LogicalType target_type =
+	    (is_generated && !cdef.typeName) ? LogicalType::ANY : TransformDDLTypeName(*cdef.typeName);
 
 	auto name = PGPointerCast<duckdb_libpgquery::PGValue>((*cdef.typeName).names->tail->data.ptr_value)->val.str;
 	LogicalTypeId base_type = TransformStringToLogicalTypeId(name);

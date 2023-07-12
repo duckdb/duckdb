@@ -130,8 +130,6 @@ optional_ptr<CatalogEntry> DuckSchemaEntry::CreateTable(CatalogTransaction trans
 		// then set DEFAULT nextval('table_col_seq') to col
 		auto &set_col_defult = *base_info.col_defaults[i];
 		catalog.Alter(transaction.GetContext(), set_col_defult);
-		auto &set = GetCatalogSet(CatalogType::TABLE_ENTRY);
-		info.dependencies.AddDependency(*set.GetEntry(transaction, set_col_defult.name));
 	}
 
 	// add a foreign key constraint in main key table if there is a foreign key constraint

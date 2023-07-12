@@ -167,12 +167,7 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 			break;
 		case LogicalTypeId::USER: {
 			string user_type_name {name};
-
-			if (SerialColumnType::IsColumnSerial(LogicalTypeId::USER, user_type_name)) {
-				result_type = SerialColumnType::serial_type_map.find(user_type_name)->second;
-			} else {
-				result_type = LogicalType::USER(user_type_name);
-			}
+			result_type = LogicalType::USER(user_type_name);
 			break;
 		}
 		case LogicalTypeId::BIT: {
@@ -219,6 +214,35 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName &type_n
 			StackCheck(extra_stack++);
 		}
 	}
+	return result_type;
+}
+
+LogicalType Transformer::TransformDDLTypeName(duckdb_libpgquery::PGTypeName &type_name) {
+	// Transform pseudo type (e.g. serial) which cant be casted to from real type
+	// CAST(1, serial)  -- Error
+	// CREATE ... (col serial) -- Work
+
+	if (type_name.type != duckdb_libpgquery::T_PGTypeName) {
+		throw ParserException("Expected a type");
+	}
+	auto stack_checker = StackCheck();
+
+	auto name = PGPointerCast<duckdb_libpgquery::PGValue>(type_name.names->tail->data.ptr_value)->val.str;
+	// transform it to the SQL type
+	LogicalTypeId base_type = TransformStringToLogicalTypeId(name);
+	LogicalType result_type;
+
+	if (base_type == LogicalTypeId::USER) {
+		string user_type_name {name};
+		if (SerialColumnType::IsColumnSerial(LogicalTypeId::USER, user_type_name)) {
+			result_type = SerialColumnType::serial_type_map.find(user_type_name)->second;
+		} else {
+			result_type = LogicalType::USER(user_type_name);
+		}
+	} else {
+		return TransformTypeName(type_name);
+	}
+
 	return result_type;
 }
 
