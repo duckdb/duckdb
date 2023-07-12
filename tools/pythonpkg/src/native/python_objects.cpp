@@ -277,7 +277,23 @@ timestamp_t PyDateTime::ToTimestamp() {
 	return Timestamp::FromDatetime(date, time);
 }
 
+bool PyDateTime::IsPositiveInfinity() const {
+	return year == 9999 && month == 12 && day == 31 && hour == 23 && minute == 59 && second == 59 && micros == 999999;
+}
+
+bool PyDateTime::IsNegativeInfinity() const {
+	return year == 1 && month == 1 && day == 1 && hour == 0 && minute == 0 && second == 0 && micros == 0;
+}
+
 Value PyDateTime::ToDuckValue(const LogicalType &target_type) {
+	if (IsPositiveInfinity()) {
+		// FIXME: respect the target_type ?
+		return Value::TIMESTAMP(timestamp_t::infinity());
+	}
+	if (IsNegativeInfinity()) {
+		// FIXME: respect the target_type ?
+		return Value::TIMESTAMP(timestamp_t::ninfinity());
+	}
 	auto timestamp = ToTimestamp();
 	if (tzone_obj != Py_None) {
 		auto utc_offset = PyTimezone::GetUTCOffset(tzone_obj);
@@ -350,7 +366,21 @@ PyDate::PyDate(py::handle &ele) {
 }
 
 Value PyDate::ToDuckValue() {
+	if (IsPositiveInfinity()) {
+		return Value::DATE(date_t::infinity());
+	}
+	if (IsNegativeInfinity()) {
+		return Value::DATE(date_t::ninfinity());
+	}
 	return Value::DATE(year, month, day);
+}
+
+bool PyDate::IsPositiveInfinity() const {
+	return year == 9999 && month == 12 && day == 31;
+}
+
+bool PyDate::IsNegativeInfinity() const {
+	return year == 1 && month == 1 && day == 1;
 }
 
 void PythonObject::Initialize() {

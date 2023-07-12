@@ -8,7 +8,7 @@ def create_query(positive, type):
         select '{inf}'::{type}
     """
 
-class TestDateTime(object):
+class TestDateTimeDateTime(object):
     @pytest.mark.parametrize('positive', [
         True,
         False
@@ -43,3 +43,16 @@ class TestDateTime(object):
         else:
             res = con.sql(query).fetchall()[0][0]
             assert res == expected_val
+
+    def test_timestamp_infinity_roundtrip(self):
+        con = duckdb.connect()
+
+        # positive infinity
+        con.execute("select $1, $1 = 'infinity'::TIMESTAMP", [datetime.datetime.max])
+        res = con.fetchall()
+        assert res == [(datetime.datetime.max, True)]
+
+        # negative infinity
+        con.execute("select $1, $1 = '-infinity'::TIMESTAMP", [datetime.datetime.min])
+        res = con.fetchall()
+        assert res == [(datetime.datetime.min, True)]
