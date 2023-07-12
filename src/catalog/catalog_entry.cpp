@@ -66,7 +66,6 @@ unique_ptr<CreateInfo> CatalogEntry::FormatDeserialize(FormatDeserializer &deser
 	return CreateInfo::FormatDeserialize(deserializer);
 }
 
-
 void CatalogEntry::Verify(Catalog &catalog_p) {
 }
 

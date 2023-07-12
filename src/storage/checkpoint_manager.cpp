@@ -254,10 +254,10 @@ void CheckpointWriter::WriteSchema(SchemaCatalogEntry &schema) {
 
 void CheckpointReader::ReadSchema(ClientContext &context, MetaBlockReader &reader) {
 	// read the schema and create it in the catalog
-	auto info = SchemaCatalogEntry::Deserialize(reader);
+	auto info = CatalogEntry::Deserialize(reader);
 	// we set create conflict to ignore to ignore the failure of recreating the main schema
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
-	catalog.CreateSchema(context, *info);
+	catalog.CreateSchema(context, info->Cast<CreateSchemaInfo>());
 
 	// first read all the counts
 	FieldReader field_reader(reader);
@@ -309,8 +309,8 @@ void CheckpointWriter::WriteView(ViewCatalogEntry &view) {
 }
 
 void CheckpointReader::ReadView(ClientContext &context, MetaBlockReader &reader) {
-	auto info = ViewCatalogEntry::Deserialize(reader, context);
-	catalog.CreateView(context, *info);
+	auto info = CatalogEntry::Deserialize(reader);
+	catalog.CreateView(context, info->Cast<CreateViewInfo>());
 }
 
 //===--------------------------------------------------------------------===//

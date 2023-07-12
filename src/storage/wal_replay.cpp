@@ -234,12 +234,12 @@ void ReplayState::ReplayAlter() {
 // Replay View
 //===--------------------------------------------------------------------===//
 void ReplayState::ReplayCreateView() {
-	auto entry = ViewCatalogEntry::Deserialize(source, context);
+	auto entry = CatalogEntry::Deserialize(source);
 	if (deserialize_only) {
 		return;
 	}
 
-	catalog.CreateView(context, *entry);
+	catalog.CreateView(context, entry->Cast<CreateViewInfo>());
 }
 
 void ReplayState::ReplayDropView() {
@@ -416,8 +416,8 @@ void ReplayState::ReplayCreateIndex() {
 	unique_ptr<Index> index;
 	switch (index_info.index_type) {
 	case IndexType::ART: {
-		index = make_uniq<ART>(index_info.column_ids, TableIOManager::Get(data_table), expressions, index_info.constraint_type,
-		                       data_table.db);
+		index = make_uniq<ART>(index_info.column_ids, TableIOManager::Get(data_table), expressions,
+		                       index_info.constraint_type, data_table.db);
 		break;
 	}
 	default:

@@ -65,7 +65,8 @@ unique_ptr<LogicalOperator> LogicalInsert::Deserialize(LogicalDeserializationSta
 
 	auto &catalog = Catalog::GetCatalog(context, info->catalog);
 
-	auto &table_catalog_entry = catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->Cast<CreateTableInfo>().table);
+	auto &table_catalog_entry =
+	    catalog.GetEntry<TableCatalogEntry>(context, info->schema, info->Cast<CreateTableInfo>().table);
 	auto result = make_uniq<LogicalInsert>(table_catalog_entry, table_index);
 	result->type = state.type;
 	result->return_chunk = return_chunk;

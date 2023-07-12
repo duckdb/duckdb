@@ -7,8 +7,9 @@ namespace duckdb {
 ColumnList::ColumnList(bool allow_duplicate_names) : allow_duplicate_names(allow_duplicate_names) {
 }
 
-ColumnList::ColumnList(vector<ColumnDefinition> columns, bool allow_duplicate_names) : allow_duplicate_names(allow_duplicate_names) {
-	for(auto &col : columns) {
+ColumnList::ColumnList(vector<ColumnDefinition> columns, bool allow_duplicate_names)
+    : allow_duplicate_names(allow_duplicate_names) {
+	for (auto &col : columns) {
 		AddColumn(std::move(col));
 	}
 }

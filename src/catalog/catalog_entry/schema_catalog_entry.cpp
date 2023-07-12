@@ -33,20 +33,10 @@ SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction trans
 	return result;
 }
 
-void SchemaCatalogEntry::Serialize(Serializer &serializer) const {
-	FieldWriter writer(serializer);
-	writer.WriteString(name);
-	writer.Finalize();
-}
-
-unique_ptr<CreateSchemaInfo> SchemaCatalogEntry::Deserialize(Deserializer &source) {
-	auto info = make_uniq<CreateSchemaInfo>();
-
-	FieldReader reader(source);
-	info->schema = reader.ReadRequired<string>();
-	reader.Finalize();
-
-	return info;
+unique_ptr<CreateInfo> SchemaCatalogEntry::GetInfo() const {
+	auto result = make_uniq<CreateSchemaInfo>();
+	result->schema = name;
+	return std::move(result);
 }
 
 string SchemaCatalogEntry::ToSQL() const {
