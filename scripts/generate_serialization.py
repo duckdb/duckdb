@@ -70,7 +70,7 @@ deserialize_element_class = '\tdeserializer.ReadProperty("${PROPERTY_KEY}", resu
 deserialize_element_class_base = '\tauto ${PROPERTY_NAME} = deserializer.ReadProperty<unique_ptr<${BASE_PROPERTY}>>("${PROPERTY_KEY}");\n\tresult${ASSIGNMENT}${PROPERTY_NAME} = unique_ptr_cast<${BASE_PROPERTY}, ${DERIVED_PROPERTY}>(std::move(${PROPERTY_NAME}));\n'
 
 move_list = [
-    'string', 'ParsedExpression*', 'CommonTableExpressionMap'
+    'string', 'ParsedExpression*', 'CommonTableExpressionMap', 'LogicalType'
 ]
 
 def is_container(type):
@@ -80,7 +80,7 @@ def is_pointer(type):
     return type.endswith('*') or type.startswith('shared_ptr<')
 
 def requires_move(type):
-    return is_container(type) or is_pointer(type)
+    return is_container(type) or is_pointer(type) or type in move_list
 
 def replace_pointer(type):
     return re.sub('([a-zA-Z0-9]+)[*]', 'unique_ptr<\\1>', type)

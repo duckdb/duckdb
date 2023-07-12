@@ -10,12 +10,25 @@
 #include "duckdb/parser/query_node.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
+#include "duckdb/planner/expression/bound_case_expression.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/parser/tableref/pivotref.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/column_list.hpp"
 
 namespace duckdb {
+
+void BoundCaseCheck::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("when_expr", *when_expr);
+	serializer.WriteProperty("then_expr", *then_expr);
+}
+
+BoundCaseCheck BoundCaseCheck::FormatDeserialize(FormatDeserializer &deserializer) {
+	BoundCaseCheck result;
+	deserializer.ReadProperty("when_expr", result.when_expr);
+	deserializer.ReadProperty("then_expr", result.then_expr);
+	return result;
+}
 
 void CaseCheck::FormatSerialize(FormatSerializer &serializer) const {
 	serializer.WriteProperty("when_expr", *when_expr);
@@ -42,7 +55,7 @@ ColumnDefinition ColumnDefinition::FormatDeserialize(FormatDeserializer &deseria
 	auto type = deserializer.ReadProperty<LogicalType>("type");
 	auto expression = deserializer.ReadOptionalProperty<unique_ptr<ParsedExpression>>("expression");
 	auto category = deserializer.ReadProperty<TableColumnType>("category");
-	ColumnDefinition result(name, type, std::move(expression), category);
+	ColumnDefinition result(std::move(name), std::move(type), std::move(expression), category);
 	deserializer.ReadProperty("compression_type", result.compression_type);
 	return result;
 }

@@ -1,0 +1,73 @@
+[
+  {
+    "class": "Expression",
+    "class_type": "expression_class",
+    "set_parameters": [
+      "type"
+    ],
+    "includes": [
+      "duckdb/planner/expression/list.hpp"
+    ],
+    "members": [
+      {
+        "name": "expression_class",
+        "type": "ExpressionClass"
+      },
+      {
+        "name": "type",
+        "type": "ExpressionType"
+      },
+      {
+        "name": "alias",
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "class": "BoundBetweenExpression",
+    "base": "Expression",
+    "enum": "BOUND_BETWEEN",
+    "members": [
+      {
+        "name": "input",
+        "type": "Expression*"
+      },
+      {
+        "name": "lower",
+        "type": "Expression*"
+      },
+      {
+        "name": "upper",
+        "type": "Expression*"
+      },
+      {
+        "name": "lower_inclusive",
+        "type": "bool"
+      },
+      {
+        "name": "upper_inclusive",
+        "type": "bool"
+      }
+    ]
+  },
+  {
+    "class": "BoundCaseExpression",
+    "base": "Expression",
+    "enum": "BOUND_CASE",
+    "members": [
+      {
+        "name": "return_type",
+        "type": "LogicalType"
+      },
+      {
+        "name": "case_checks",
+        "type": "vector<BoundCaseCheck>"
+      },
+      {
+        "name": "else_expr",
+        "type": "Expression*"
+      }
+    ],
+    "constructor": ["return_type"]
+  }
+]

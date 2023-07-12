@@ -93,6 +93,23 @@
     "pointer_type": "none"
   },
   {
+    "class": "BoundCaseCheck",
+    "includes": [
+      "duckdb/planner/expression/bound_case_expression.hpp"
+    ],
+    "members": [
+      {
+        "name": "when_expr",
+        "type": "Expression*"
+      },
+      {
+        "name": "then_expr",
+        "type": "Expression*"
+      }
+    ],
+    "pointer_type": "none"
+  },
+  {
     "class": "SampleOptions",
     "includes": [
       "duckdb/parser/parsed_data/sample_options.hpp"

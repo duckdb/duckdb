@@ -64,6 +64,9 @@ public:
 	//! SerializationException]
 	static unique_ptr<Expression> Deserialize(Deserializer &source, PlanDeserializationState &state);
 
+	virtual void FormatSerialize(FormatSerializer &serializer) const;
+	static unique_ptr<Expression> FormatDeserialize(FormatDeserializer &deserializer);
+
 protected:
 	//! Copy base Expression properties from another expression to this one,
 	//! used in Copy method

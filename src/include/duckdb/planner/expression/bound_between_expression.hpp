@@ -35,6 +35,9 @@ public:
 	void Serialize(FieldWriter &writer) const override;
 	static unique_ptr<Expression> Deserialize(ExpressionDeserializationState &state, FieldReader &reader);
 
+	void FormatSerialize(FormatSerializer &serializer) const override;
+	static unique_ptr<Expression> FormatDeserialize(FormatDeserializer &deserializer);
+
 public:
 	ExpressionType LowerComparisonType() {
 		return lower_inclusive ? ExpressionType::COMPARE_GREATERTHANOREQUALTO : ExpressionType::COMPARE_GREATERTHAN;
@@ -42,5 +45,8 @@ public:
 	ExpressionType UpperComparisonType() {
 		return upper_inclusive ? ExpressionType::COMPARE_LESSTHANOREQUALTO : ExpressionType::COMPARE_LESSTHAN;
 	}
+
+private:
+	BoundBetweenExpression();
 };
 } // namespace duckdb
