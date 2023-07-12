@@ -774,7 +774,8 @@ hugeint_t::operator bool() const {
 
 template <class T>
 static T NarrowCast(hugeint_t input) {
-	return static_cast<T>(input.lower); // Is this the correct approach?
+	// NarrowCast is supposed to truncate (take lower)
+	return static_cast<T>(input.lower);
 }
 
 hugeint_t::operator uint8_t() const {
@@ -805,9 +806,5 @@ hugeint_t::operator int64_t() const {
 string hugeint_t::ToString() const {
 	return Hugeint::ToString(*this);
 }
-
-// hugeint_t operator*(idx_t lhs, hugeint_t rhs) {
-// 	return (hugeint_t(lhs) * rhs);
-// }
 
 } // namespace duckdb
