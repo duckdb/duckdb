@@ -246,56 +246,56 @@ static void PackDelta128(const hugeint_t *__restrict in, uint32_t *__restrict ou
 //===--------------------------------------------------------------------===//
 
 void HugeIntPacker::Pack(const hugeint_t *__restrict in, uint32_t *__restrict out, bitpacking_width_t width) {
+	D_ASSERT(width <= 128);
 	// TODO?: Potential for unrolling
 	switch (width) {
 	case 0:
-		return;
+		break;
 	case 32:
 		PackDelta32(in, out);
-		return;
+		break;
 	case 64:
 		PackDelta64(in, out);
-		return;
+		break;
 	case 96:
 		PackDelta96(in, out);
-		return;
+		break;
 	case 128:
 		PackDelta128(in, out);
-		return;
-	default:
 		break;
+	default:
+		for (idx_t oindex = 0; oindex < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - 1; ++oindex) {
+			PackSingle(in[oindex], out, width, (width * oindex) % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, (hugeint_t(1) << width) - 1);
+		}
+		PackLast(in, out, width);
 	}
-	for (idx_t oindex = 0; oindex < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - 1; ++oindex) {
-		PackSingle(in[oindex], out, width, (width * oindex) % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE, (hugeint_t(1) << width) - 1);
-	}
-	PackLast(in, out, width);
 }
 
 void HugeIntPacker::Unpack(const uint32_t *__restrict in, hugeint_t *__restrict out, bitpacking_width_t width) {
+	D_ASSERT(width <= 128);
 	// TODO?: Potential for unrolling
 	switch (width) {
 	case 0:
 		UnpackDelta0(in, out);
-		return;
+		break;
 	case 32:
 		UnpackDelta32(in, out);
-		return;
+		break;
 	case 64:
 		UnpackDelta64(in, out);
-		return;
+		break;
 	case 96:
 		UnpackDelta96(in, out);
-		return;
+		break;
 	case 128:
 		UnpackDelta128(in, out);
-		return;
-	default:
 		break;
+	default:
+		for (idx_t oindex = 0; oindex < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - 1; ++oindex) {
+			UnpackSingle(in, out + oindex, width, (width * oindex) % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
+		}
+		UnpackLast(in, out, width);
 	}
-	for (idx_t oindex = 0; oindex < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE - 1; ++oindex) {
-		UnpackSingle(in, out + oindex, width, (width * oindex) % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
-	}
-	UnpackLast(in, out, width);
 }
 
 } // namespace duckdb
