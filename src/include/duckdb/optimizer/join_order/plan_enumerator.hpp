@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/join_order/join_order_optimizer.hpp
+// duckdb/optimizer/join_order/plan_enumerator.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -14,6 +14,7 @@
 #include "duckdb/optimizer/join_order/cardinality_estimator.hpp"
 #include "duckdb/optimizer/join_order/query_graph.hpp"
 #include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/optimizer/join_order/cost_model.hpp"
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
@@ -22,54 +23,25 @@
 
 namespace duckdb {
 
-struct GenerateJoinRelation {
-	GenerateJoinRelation(JoinRelationSet &set, unique_ptr<LogicalOperator> op_p) : set(set), op(std::move(op_p)) {
-	}
-
-	JoinRelationSet &set;
-	unique_ptr<LogicalOperator> op;
-};
-
-class JoinOrderOptimizer {
+class PlanEnumerator {
 public:
-	explicit JoinOrderOptimizer(ClientContext &context)
-	    : context(context), query_graph_manager(context) {
-	}
+	explicit PlanEnumerator(QueryGraphManager query_graph_manager, CostModel cost_model) : query_graph_manager(query_graph_manager), cost_model(cost_model),
+	      full_plan_found(false),
+	      must_update_full_plan(false) {}
 
-	//! Perform join reordering inside a plan
-	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
-
-	unique_ptr<JoinNode> CreateJoinTree(JoinRelationSet &set,
-	                                    const vector<reference<NeighborInfo>> &possible_connections, JoinNode &left,
-	                                    JoinNode &right);
+	//! Perform the join order solving
+	JoinNode* SolveJoinOrder();
 
 private:
-	ClientContext &context;
+
 	//! The total amount of join pairs that have been considered
 	idx_t pairs = 0;
-	//! Set of all relations considered in the join optimizer
-	vector<unique_ptr<SingleJoinRelation>> relations;
-	//! A mapping of base table index -> index into relations array (relation number)
-	unordered_map<idx_t, idx_t> relation_mapping;
-	//! A structure holding all the created JoinRelationSet objects
-	JoinRelationSetManager set_manager;
-
-	//! manages the query graph, relations, and edges between relations
-	QueryGraphManager query_graph_manager;
 	//! The set of edges used in the join optimizer
-	QueryGraph query_graph;
+	QueryGraphManager query_graph_manager;
+	//! Cost model to evaluate cost of joins
+	CostModel cost_model;
 	//! The optimal join plan found for the specific JoinRelationSet*
 	unordered_map<JoinRelationSet *, unique_ptr<JoinNode>> plans;
-
-	//! The set of filters extracted from the query graph
-	vector<unique_ptr<Expression>> filters;
-	//! The set of filter infos created from the extracted filters
-	vector<unique_ptr<FilterInfo>> filter_infos;
-	//! A map of all expressions a given expression has to be equivalent to. This is used to add "implied join edges".
-	//! i.e. in the join A=B AND B=C, the equivalence set of {B} is {A, C}, thus we can add an implied join edge {A = C}
-	expression_map_t<vector<FilterInfo *>> equivalence_sets;
-
-	CardinalityEstimator cardinality_estimator;
 
 	bool full_plan_found;
 	bool must_update_full_plan;
@@ -102,8 +74,7 @@ private:
 	unique_ptr<LogicalOperator> RewritePlan(unique_ptr<LogicalOperator> plan, JoinNode &node);
 	//! Generate cross product edges inside the side
 	void GenerateCrossProducts();
-	//! Perform the join order solving
-	void SolveJoinOrder();
+
 	//! Solve the join order exactly using dynamic programming. Returns true if it was completed successfully (i.e. did
 	//! not time-out)
 	bool SolveJoinOrderExactly();
@@ -115,7 +86,6 @@ private:
 	void UpdateJoinNodesInFullPlan(JoinNode &node);
 	bool NodeInFullPlan(JoinNode &node);
 
-	GenerateJoinRelation GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted_relations, JoinNode &node);
 };
 
 } // namespace duckdb

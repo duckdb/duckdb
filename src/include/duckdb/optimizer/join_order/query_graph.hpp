@@ -9,19 +9,23 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/optional_ptr.hpp"
+#include "duckdb/optimizer/join_order/join_relation.hpp"
+#include "duckdb/optimizer/join_order/join_node.hpp"
+#include "duckdb/optimizer/join_order/relation_manager.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/optimizer/join_order/join_relation.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/planner/column_binding.hpp"
-#include "duckdb/common/optional_ptr.hpp"
 
 #include <functional>
 
 namespace duckdb {
 class Expression;
 class LogicalOperator;
+class JoinNode;
+class RelationManager;
 
 struct FilterInfo {
 	FilterInfo(JoinRelationSet &set, idx_t filter_index) : set(set), filter_index(filter_index) {
@@ -79,6 +83,29 @@ private:
 	                           const std::function<bool(NeighborInfo &)> &callback);
 
 	QueryEdge root;
+};
+
+//! The QueryGraph contains edges between relations and allows edges to be created/queried
+class QueryGraphManager {
+public:
+	QueryGraphManager(ClientContext &context) : context(context), has_query_graph(false) {
+	}
+
+	//! manage relations and the logical operators they represent
+	RelationManager relation_manager;
+
+	//! Extract the join relations, optimizing non-reoderable relations when encountered
+	void Build(LogicalOperator *op);
+
+	unique_ptr<LogicalOperator> Reconstruct(JoinNode *root);
+
+	bool HasQueryGraph();
+
+private:
+	bool has_query_graph;
+	void ExtractNode(LogicalOperator &op);
+	void ExtractEdges(LogicalOperator &op);
+	ClientContext &context;
 };
 
 } // namespace duckdb

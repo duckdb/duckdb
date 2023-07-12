@@ -55,11 +55,10 @@ struct Subgraph2Denominator {
 
 class CardinalityEstimator {
 public:
-	explicit CardinalityEstimator(ClientContext &context) : context(context) {
+	explicit CardinalityEstimator() : {
 	}
 
 private:
-	ClientContext &context;
 
 	//! A mapping of relation id -> RelationAttributes
 	unordered_map<idx_t, RelationAttributes> relation_attributes;
