@@ -81,7 +81,7 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	switch (plan_p->type) {
 	case LogicalOperatorType::LOGICAL_TRANSACTION:
-		return plan_p; // skip optimizing simple & often-occurring plan unaffected by rewrites
+		return plan_p; // skip optimizing simple & often-occurring plans unaffected by rewrites
 	default:
 		break;
 	}
