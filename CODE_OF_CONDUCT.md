@@ -2,7 +2,7 @@
 
 **All creatures are welcome**: We aim to create a safe space for all community members, regardless of their age, race, gender, sexual orientation, physical appearance or disability, choice of text editor, or any other qualities by which living beings can be discriminated.
 
-**Be excellent to each other**: We do not tolerate verbal or physical harrassment, violence or intimidation.
+**Be excellent to each other**: We do not tolerate verbal or physical harassment, violence or intimidation.
 
 We do not tolerate life forms who refuse to share this openness and respect towards others: Creatures that are not excellent to others are not welcome.
 
