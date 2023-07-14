@@ -138,7 +138,7 @@ public:
 	void CombinedToFinalize(const idx_t sink_partition_idx);
 
 	//! Adds to final data to be scanned
-	idx_t AddToFinal(GroupedAggregateHashTable &intermediate_ht, vector<MaterializedAggregateData> &uncombined_data);
+	void AddToFinal(GroupedAggregateHashTable &intermediate_ht, vector<MaterializedAggregateData> &uncombined_data);
 
 	//! Destroys aggregate states (if multi-scan)
 	void Destroy();
@@ -214,20 +214,19 @@ void RadixHTGlobalSinkState::CombinedToFinalize(const idx_t sink_partition_idx) 
 	finalize_in_use = true;
 }
 
-idx_t RadixHTGlobalSinkState::AddToFinal(GroupedAggregateHashTable &intermediate_ht,
-                                         vector<MaterializedAggregateData> &uncombined_data) {
+void RadixHTGlobalSinkState::AddToFinal(GroupedAggregateHashTable &intermediate_ht,
+                                        vector<MaterializedAggregateData> &uncombined_data) {
 	auto data = intermediate_ht.AcquireData(true);
 	D_ASSERT(data.size() == 1);
 	D_ASSERT(data[0].data_collection->Count() != 0);
+	lock_guard<mutex> guard(lock);
 	scan_data.emplace_back(std::move(data[0]));
-
 	for (auto &ucb : uncombined_data) {
 		D_ASSERT(!ucb.allocators.empty());
 		for (auto &allocator : ucb.allocators) {
 			scan_data.back().allocators.emplace_back(allocator);
 		}
 	}
-	return scan_data.size() - 1;
 }
 
 void RadixHTGlobalSinkState::Destroy() {
@@ -742,15 +741,18 @@ RadixHTGlobalSourceState::RadixHTGlobalSourceState(ClientContext &context_p, con
 }
 
 bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTLocalSourceState &lstate) {
+	D_ASSERT(lstate.scan_status != RadixHTScanStatus::IN_PROGRESS);
+
 	lock_guard<mutex> guard(sink.lock);
+	if (scan_done == sink.scan_data.size() && sink.finalize_done == sink.finalize_tasks.GetIndex()) {
+		finished = true;
+	}
 	if (finished) {
 		return false;
 	}
 
-	// Try to assign a scan task first if we enabled multi-scanning,
-	// if not multi-scanning, threads just immediately scan the HTs they finished
-	if (sink.finalize_idx == sink.finalize_tasks.GetIndex() &&
-	    sink.scan_pin_properties == TupleDataPinProperties::UNPIN_AFTER_DONE && scan_idx < sink.scan_data.size()) {
+	// Try to assign a scan task first
+	if (scan_idx < sink.scan_data.size()) {
 		lstate.task = RadixHTSourceTaskType::SCAN;
 		lstate.task_idx = scan_idx++;
 		lstate.scan_collection = sink.scan_data[lstate.task_idx.GetIndex()].data_collection.get();
@@ -758,7 +760,7 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 		return true;
 	}
 
-	// If not multi-scanning, try to assign a finalize task first
+	// Try to assign a finalize task next
 	if (sink.finalize_idx < sink.finalize_tasks.GetIndex()) {
 		auto &finalize_partition = *sink.finalize_partitions[sink.finalize_idx];
 		if (finalize_partition.finalize_available) {
@@ -814,6 +816,7 @@ void RadixHTLocalSourceState::ExecuteTask(RadixHTGlobalSinkState &sink, RadixHTG
 
 void RadixHTLocalSourceState::Repartition(RadixHTGlobalSinkState &sink, RadixHTGlobalSourceState &gstate) {
 	D_ASSERT(task == RadixHTSourceTaskType::REPARTITION);
+	D_ASSERT(scan_status != RadixHTScanStatus::IN_PROGRESS);
 
 	const auto num_sink_partitions = RadixPartitioning::NumberOfPartitions(RadixHTConfig::SINK_RADIX_BITS);
 	const auto num_finalize_partitions = RadixPartitioning::NumberOfPartitions(sink.finalize_radix_bits.GetIndex());
@@ -886,6 +889,7 @@ void RadixHTLocalSourceState::Repartition(RadixHTGlobalSinkState &sink, RadixHTG
 
 void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlobalSourceState &gstate) {
 	D_ASSERT(task == RadixHTSourceTaskType::FINALIZE);
+	D_ASSERT(scan_status != RadixHTScanStatus::IN_PROGRESS);
 
 	auto &finalize_partition = *sink.finalize_partitions[task_idx.GetIndex()];
 	D_ASSERT(!finalize_partition.finalize_available);
@@ -918,23 +922,12 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 		ht->Combine(data_collection);
 		ht->UnpinData();
 
-		// Add final data collection to global state and self-assign scanning this data
-		lock_guard<mutex> guard(sink.lock);
-		gstate.scan_idx = sink.AddToFinal(*ht, uncombined_data);
-		task = RadixHTSourceTaskType::SCAN;
-		task_idx = gstate.scan_idx++;
-		scan_collection = sink.scan_data[task_idx.GetIndex()].data_collection.get();
-		scan_status = RadixHTScanStatus::INIT;
-
+		// Add final data collection to global state
+		sink.AddToFinal(*ht, uncombined_data);
 		uncombined_data.clear();
 	}
 
-	if (++sink.finalize_done == sink.finalize_tasks.GetIndex()) {
-		lock_guard<mutex> guard(sink.lock);
-		if (gstate.scan_done == sink.scan_data.size()) {
-			gstate.finished = true;
-		}
-	}
+	sink.finalize_done++;
 }
 
 void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSourceState &gstate, DataChunk &chunk) {
@@ -954,13 +947,7 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 			data.data_collection.reset();
 			data.allocators.clear();
 		}
-		const auto scan_done = ++gstate.scan_done;
-		if (sink.finalize_done == sink.finalize_tasks.GetIndex()) {
-			lock_guard<mutex> guard(sink.lock);
-			if (scan_done == sink.scan_data.size()) {
-				gstate.finished = true;
-			}
-		}
+		gstate.scan_done++;
 		return;
 	}
 
@@ -1062,7 +1049,7 @@ SourceResultType RadixPartitionedHashTable::GetData(ExecutionContext &context, D
 		}
 	}
 
-	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
+	return SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb
