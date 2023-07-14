@@ -124,7 +124,8 @@ public:
 	//! Turn all the vectors from the chunk into flat vectors
 	DUCKDB_API void Flatten();
 
-	DUCKDB_API unique_ptr<UnifiedVectorFormat[]> ToUnifiedFormat();
+	// FIXME: this is DUCKDB_API, might need conversion back to regular unique ptr?
+	DUCKDB_API unsafe_unique_array<UnifiedVectorFormat> ToUnifiedFormat();
 
 	DUCKDB_API void Slice(const SelectionVector &sel_vector, idx_t count);
 
@@ -152,7 +153,7 @@ public:
 
 	//! Converts this DataChunk to a printable string representation
 	DUCKDB_API string ToString() const;
-	DUCKDB_API void Print();
+	DUCKDB_API void Print() const;
 
 	DataChunk(const DataChunk &) = delete;
 

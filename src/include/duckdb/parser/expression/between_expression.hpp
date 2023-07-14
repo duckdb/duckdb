@@ -27,7 +27,7 @@ public:
 public:
 	string ToString() const override;
 
-	static bool Equal(const BetweenExpression *a, const BetweenExpression *b);
+	static bool Equal(const BetweenExpression &a, const BetweenExpression &b);
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
@@ -43,5 +43,8 @@ public:
 		return "(" + entry.input->ToString() + " BETWEEN " + entry.lower->ToString() + " AND " +
 		       entry.upper->ToString() + ")";
 	}
+
+private:
+	BetweenExpression();
 };
 } // namespace duckdb

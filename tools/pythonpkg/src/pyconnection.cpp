@@ -122,7 +122,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      "Create a DuckDB function out of the passing in python function so it can be used in queries",
 	      py::arg("name"), py::arg("function"), py::arg("return_type") = py::none(), py::arg("parameters") = py::none(),
 	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = 0,
-	      py::arg("exception_handling") = 0);
+	      py::arg("exception_handling") = 0, py::arg("side_effects") = false);
 
 	m.def("remove_function", &DuckDBPyConnection::UnregisterUDF, "Remove a previously created function",
 	      py::arg("name"));
@@ -152,6 +152,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         "Execute the given prepared statement multiple times using the list of parameter sets in parameters",
 	         py::arg("query"), py::arg("parameters") = py::none())
 	    .def("close", &DuckDBPyConnection::Close, "Close the connection")
+	    .def("interrupt", &DuckDBPyConnection::Interrupt, "Interrupt pending operations")
 	    .def("fetchone", &DuckDBPyConnection::FetchOne, "Fetch a single row from a result following execute")
 	    .def("fetchmany", &DuckDBPyConnection::FetchMany, "Fetch the next set of rows from a result following execute",
 	         py::arg("size") = 1)
@@ -197,12 +198,12 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	         py::arg("parameters") = py::none())
 	    .def("read_json", &DuckDBPyConnection::ReadJSON, "Create a relation object from the JSON file in 'name'",
 	         py::arg("name"), py::kw_only(), py::arg("columns") = py::none(), py::arg("sample_size") = py::none(),
-	         py::arg("maximum_depth") = py::none());
+	         py::arg("maximum_depth") = py::none(), py::arg("records") = py::none(), py::arg("format") = py::none());
 
 	DefineMethod({"sql", "query", "from_query"}, m, &DuckDBPyConnection::RunQuery,
 	             "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, "
 	             "otherwise run the query as-is.",
-	             py::arg("query"), py::arg("alias") = "query_relation");
+	             py::arg("query"), py::arg("alias") = "");
 
 	DefineMethod({"read_csv", "from_csv_auto"}, m, &DuckDBPyConnection::ReadCSV,
 	             "Create a relation object from the CSV file in 'name'", py::arg("name"), py::kw_only(),
@@ -327,19 +328,24 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::UnregisterUDF(const string &n
 shared_ptr<DuckDBPyConnection>
 DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &udf, const py::object &parameters_p,
                                       const shared_ptr<DuckDBPyType> &return_type_p, PythonUDFType type,
-                                      FunctionNullHandling null_handling, PythonExceptionHandling exception_handling) {
+                                      FunctionNullHandling null_handling, PythonExceptionHandling exception_handling,
+                                      bool side_effects) {
 	if (!connection) {
 		throw ConnectionException("Connection already closed!");
 	}
 	auto &context = *connection->context;
 
+	if (context.transaction.HasActiveTransaction()) {
+		throw InvalidInputException(
+		    "This function can not be called with an active transaction!, commit or abort the existing one first");
+	}
 	if (registered_functions.find(name) != registered_functions.end()) {
 		throw NotImplementedException("A function by the name of '%s' is already created, creating multiple "
 		                              "functions with the same name is not supported yet, please remove it first",
 		                              name);
 	}
 	auto scalar_function = CreateScalarUDF(name, udf, parameters_p, return_type_p, type == PythonUDFType::ARROW,
-	                                       null_handling, exception_handling);
+	                                       null_handling, exception_handling, side_effects);
 	CreateScalarFunctionInfo info(scalar_function);
 
 	context.RegisterFunction(info);
@@ -357,7 +363,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("__exit__", &DuckDBPyConnection::Exit, py::arg("exc_type"), py::arg("exc"), py::arg("traceback"));
 
 	InitializeConnectionMethods(connection_module);
-	PyDateTime_IMPORT;
+	PyDateTime_IMPORT; // NOLINT
 	DuckDBPyConnection::ImportCache();
 }
 
@@ -521,9 +527,17 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Append(const string &name, co
 		for (auto &column : df_columns) {
 			column_names.push_back(std::string(py::str(column)));
 		}
-		columns = StringUtil::Format("(%s)", StringUtil::Join(column_names, ","));
+		columns += "(";
+		for (idx_t i = 0; i < column_names.size(); i++) {
+			auto &column = column_names[i];
+			if (i != 0) {
+				columns += ", ";
+			}
+			columns += StringUtil::Format("%s", SQLIdentifier(column));
+		}
+		columns += ")";
 	}
-	return Execute(StringUtil::Format("INSERT INTO \"%s\"%s SELECT * FROM __append_df", name, columns));
+	return Execute(StringUtil::Format("INSERT INTO %s %s SELECT * FROM __append_df", SQLIdentifier(name), columns));
 }
 
 void DuckDBPyConnection::RegisterArrowObject(const py::object &arrow_object, const string &name) {
@@ -535,9 +549,9 @@ void DuckDBPyConnection::RegisterArrowObject(const py::object &arrow_object, con
 		py::gil_scoped_release release;
 		temporary_views[name] =
 		    connection
-		        ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
-		                                       Value::POINTER((uintptr_t)stream_factory_produce),
-		                                       Value::POINTER((uintptr_t)stream_factory_get_schema)})
+		        ->TableFunction("arrow_scan", {Value::POINTER(CastPointerToValue(stream_factory.get())),
+		                                       Value::POINTER(CastPointerToValue(stream_factory_produce)),
+		                                       Value::POINTER(CastPointerToValue(stream_factory_get_schema))})
 		        ->CreateView(name, true, true);
 	}
 	vector<shared_ptr<ExternalDependency>> dependencies;
@@ -561,7 +575,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 			{
 				py::gil_scoped_release release;
 				temporary_views[name] =
-				    connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)new_df.ptr())})
+				    connection->TableFunction("pandas_scan", {Value::POINTER(CastPointerToValue(new_df.ptr()))})
 				        ->CreateView(name, true, true);
 			}
 
@@ -596,9 +610,11 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterPythonObject(const st
 	return shared_from_this();
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, const py::object &columns,
-                                                          const py::object &sample_size,
-                                                          const py::object &maximum_depth) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, const Optional<py::object> &columns,
+                                                          const Optional<py::object> &sample_size,
+                                                          const Optional<py::object> &maximum_depth,
+                                                          const Optional<py::str> &records,
+                                                          const Optional<py::str> &format) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
 	}
@@ -607,7 +623,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 
 	if (!py::none().is(columns)) {
 		if (!py::isinstance<py::dict>(columns)) {
-			throw InvalidInputException("read_json only accepts 'columns' as a dict[str, str]");
+			throw BinderException("read_json only accepts 'columns' as a dict[str, str]");
 		}
 		py::dict columns_dict = columns;
 		child_list_t<Value> struct_fields;
@@ -617,11 +633,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 			auto &type = kv.second;
 			if (!py::isinstance<py::str>(column_name)) {
 				string actual_type = py::str(column_name.get_type());
-				throw InvalidInputException("The provided column name must be a str, not of type '%s'", actual_type);
+				throw BinderException("The provided column name must be a str, not of type '%s'", actual_type);
 			}
 			if (!py::isinstance<py::str>(type)) {
 				string actual_type = py::str(column_name.get_type());
-				throw InvalidInputException("The provided column type must be a str, not of type '%s'", actual_type);
+				throw BinderException("The provided column type must be a str, not of type '%s'", actual_type);
 			}
 			struct_fields.emplace_back(py::str(column_name), Value(py::str(type)));
 		}
@@ -629,10 +645,30 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 		options["columns"] = std::move(dtype_struct);
 	}
 
+	if (!py::none().is(records)) {
+		if (!py::isinstance<py::str>(records)) {
+			string actual_type = py::str(records.get_type());
+			throw BinderException("read_json only accepts 'records' as a string, not '%s'", actual_type);
+		}
+		auto records_s = py::reinterpret_borrow<py::str>(records);
+		auto records_option = std::string(py::str(records_s));
+		options["records"] = Value(records_option);
+	}
+
+	if (!py::none().is(format)) {
+		if (!py::isinstance<py::str>(format)) {
+			string actual_type = py::str(format.get_type());
+			throw BinderException("read_json only accepts 'format' as a string, not '%s'", actual_type);
+		}
+		auto format_s = py::reinterpret_borrow<py::str>(format);
+		auto format_option = std::string(py::str(format_s));
+		options["format"] = Value(format_option);
+	}
+
 	if (!py::none().is(sample_size)) {
 		if (!py::isinstance<py::int_>(sample_size)) {
 			string actual_type = py::str(sample_size.get_type());
-			throw InvalidInputException("read_json only accepts 'sample_size' as an integer, not '%s'", actual_type);
+			throw BinderException("read_json only accepts 'sample_size' as an integer, not '%s'", actual_type);
 		}
 		options["sample_size"] = Value::INTEGER(py::int_(sample_size));
 	}
@@ -640,7 +676,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 	if (!py::none().is(maximum_depth)) {
 		if (!py::isinstance<py::int_>(maximum_depth)) {
 			string actual_type = py::str(maximum_depth.get_type());
-			throw InvalidInputException("read_json only accepts 'maximum_depth' as an integer, not '%s'", actual_type);
+			throw BinderException("read_json only accepts 'maximum_depth' as an integer, not '%s'", actual_type);
 		}
 		options["maximum_depth"] = Value::INTEGER(py::int_(maximum_depth));
 	}
@@ -653,7 +689,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadJSON(const string &name, co
 
 	auto read_json_relation = make_shared<ReadJSONRelation>(connection->context, name, std::move(options), auto_detect);
 	if (read_json_relation == nullptr) {
-		throw InvalidInputException("read_json can only be used when the JSON extension is (statically) loaded");
+		throw BinderException("read_json can only be used when the JSON extension is (statically) loaded");
 	}
 	return make_uniq<DuckDBPyRelation>(std::move(read_json_relation));
 }
@@ -706,7 +742,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	}
 
 	auto read_csv_p = connection->ReadCSV(name, options);
-	auto &read_csv = (ReadCSVRelation &)*read_csv_p;
+	auto &read_csv = read_csv_p->Cast<ReadCSVRelation>();
 	if (file_like_object_wrapper) {
 		D_ASSERT(!read_csv.extra_dependencies);
 		read_csv.extra_dependencies = std::move(file_like_object_wrapper);
@@ -871,9 +907,12 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(
 	return make_uniq<DuckDBPyRelation>(read_csv_p->Alias(name));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, const string &alias) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, string alias) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
+	}
+	if (alias.empty()) {
+		alias = "unnamed_relation_" + StringUtil::GenerateRandomName(16);
 	}
 	const char *duckdb_query_error = R"(duckdb.from_query cannot be used to run arbitrary SQL queries.
 It can only be used to run individual SELECT statements, and converts the result of that SELECT
@@ -882,9 +921,12 @@ Use duckdb.sql to run arbitrary SQL queries.)";
 	return make_uniq<DuckDBPyRelation>(connection->RelationFromQuery(query, alias, duckdb_query_error));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, const string &alias) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, string alias) {
 	if (!connection) {
 		throw ConnectionException("Connection has already been closed");
+	}
+	if (alias.empty()) {
+		alias = "unnamed_relation_" + StringUtil::GenerateRandomName(16);
 	}
 	Parser parser(connection->context->GetParserOptions());
 	parser.ParseQuery(query);
@@ -902,21 +944,28 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::RunQuery(const string &query, c
 	// FIXME: we should add support for a relation object over a column data collection to make this more efficient
 	vector<vector<Value>> values;
 	vector<string> names = res->names;
-	while (true) {
-		auto chunk = res->Fetch();
-		if (!chunk || chunk->size() == 0) {
-			break;
-		}
-		for (idx_t r = 0; r < chunk->size(); r++) {
-			vector<Value> row;
-			for (idx_t c = 0; c < chunk->ColumnCount(); c++) {
-				row.push_back(chunk->data[c].GetValue(r));
+	{
+		py::gil_scoped_release release;
+
+		while (true) {
+			auto chunk = res->Fetch();
+			if (res->HasError()) {
+				res->ThrowError();
 			}
-			values.push_back(std::move(row));
+			if (!chunk || chunk->size() == 0) {
+				break;
+			}
+			for (idx_t r = 0; r < chunk->size(); r++) {
+				vector<Value> row;
+				for (idx_t c = 0; c < chunk->ColumnCount(); c++) {
+					row.push_back(chunk->data[c].GetValue(r));
+				}
+				values.push_back(std::move(row));
+			}
 		}
-	}
-	if (values.empty()) {
-		return nullptr;
+		if (values.empty()) {
+			return DuckDBPyRelation::EmptyResult(connection->context, res->types, res->names);
+		}
 	}
 	return make_uniq<DuckDBPyRelation>(make_uniq<ValueRelation>(connection->context, values, names));
 }
@@ -980,7 +1029,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const PandasDataFrame &v
 	}
 	auto new_df = PandasScanFunction::PandasReplaceCopiedNames(value);
 	vector<Value> params;
-	params.emplace_back(Value::POINTER((uintptr_t)new_df.ptr()));
+	params.emplace_back(Value::POINTER(CastPointerToValue(new_df.ptr())));
 	auto rel = connection->TableFunction("pandas_scan", params)->Alias(name);
 	rel->extra_dependencies =
 	    make_uniq<PythonDependencies>(make_uniq<RegisteredObject>(value), make_uniq<RegisteredObject>(new_df));
@@ -1061,9 +1110,9 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
 	auto rel = connection
-	               ->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory.get()),
-	                                              Value::POINTER((uintptr_t)stream_factory_produce),
-	                                              Value::POINTER((uintptr_t)stream_factory_get_schema)})
+	               ->TableFunction("arrow_scan", {Value::POINTER(CastPointerToValue(stream_factory.get())),
+	                                              Value::POINTER(CastPointerToValue(stream_factory_produce)),
+	                                              Value::POINTER(CastPointerToValue(stream_factory_get_schema))})
 	               ->Alias(name);
 	rel->extra_dependencies =
 	    make_uniq<PythonDependencies>(make_uniq<RegisteredArrow>(std::move(stream_factory), arrow_object));
@@ -1162,6 +1211,13 @@ void DuckDBPyConnection::Close() {
 		cur->Close();
 	}
 	cursors.clear();
+}
+
+void DuckDBPyConnection::Interrupt() {
+	if (!connection) {
+		throw ConnectionException("Connection has already been closed");
+	}
+	connection->Interrupt();
 }
 
 void DuckDBPyConnection::InstallExtension(const string &extension, bool force_install) {
@@ -1267,9 +1323,9 @@ static void CreateArrowScan(py::object entry, TableFunctionRef &table_function,
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
-	children.push_back(make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory.get())));
-	children.push_back(make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_produce)));
-	children.push_back(make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_get_schema)));
+	children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory.get()))));
+	children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory_produce))));
+	children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory_get_schema))));
 
 	table_function.function = make_uniq<FunctionExpression>("arrow_scan", std::move(children));
 	table_function.external_dependency =
@@ -1293,7 +1349,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 		} else {
 			string name = "df_" + StringUtil::GenerateRandomName();
 			auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
-			children.push_back(make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)new_df.ptr())));
+			children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(new_df.ptr()))));
 			table_function->function = make_uniq<FunctionExpression>("pandas_scan", std::move(children));
 			table_function->external_dependency =
 			    make_uniq<PythonDependencies>(make_uniq<RegisteredObject>(entry), make_uniq<RegisteredObject>(new_df));
@@ -1345,7 +1401,7 @@ static unique_ptr<TableRef> TryReplacement(py::dict &dict, py::str &table_name, 
 			throw NotImplementedException("Unsupported Numpy object");
 			break;
 		}
-		children.push_back(make_uniq<ConstantExpression>(Value::POINTER((uintptr_t)data.ptr())));
+		children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(data.ptr()))));
 		table_function->function = make_uniq<FunctionExpression>("pandas_scan", std::move(children));
 		table_function->external_dependency =
 		    make_uniq<PythonDependencies>(make_uniq<RegisteredObject>(entry), make_uniq<RegisteredObject>(data));
@@ -1534,7 +1590,7 @@ ModifiedMemoryFileSystem &DuckDBPyConnection::GetObjectFileSystem() {
 			    "This operation could not be completed because required module 'fsspec' is not installed");
 		}
 		internal_object_filesystem = make_shared<ModifiedMemoryFileSystem>(modified_memory_fs());
-		auto &abstract_fs = (AbstractFileSystem &)*internal_object_filesystem;
+		auto &abstract_fs = reinterpret_cast<AbstractFileSystem &>(*internal_object_filesystem);
 		RegisterFilesystem(abstract_fs);
 	}
 	return *internal_object_filesystem;
@@ -1548,13 +1604,14 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Enter() {
 	return shared_from_this();
 }
 
-bool DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
+void DuckDBPyConnection::Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
                               const py::object &traceback) {
 	self.Close();
 	if (exc_type.ptr() != Py_None) {
-		return false;
+		// Propagate the exception if any occurred
+		PyErr_SetObject(exc_type.ptr(), exc.ptr());
+		throw py::error_already_set();
 	}
-	return true;
 }
 
 void DuckDBPyConnection::Cleanup() {

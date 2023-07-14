@@ -10,6 +10,29 @@ from python_helpers import open_utf8
 bison_location     = "bison"
 base_dir           = 'third_party/libpg_query/grammar'
 pg_dir             = 'third_party/libpg_query'
+namespace          = 'duckdb_libpgquery'
+
+counterexamples = False
+run_update = False
+verbose = False
+for arg in sys.argv[1:]:
+    if arg.startswith("--bison="):
+        bison_location = arg.replace("--bison=", "")
+    elif arg.startswith("--counterexamples"):
+        counterexamples = True
+    elif arg.startswith("--update"):
+        run_update = True
+    # allow a prefix to the source and target directories
+    elif arg.startswith("--custom_dir_prefix"):
+        base_dir = arg.split("=")[1] + base_dir
+        pg_dir = arg.split("=")[1] + pg_dir
+    elif arg.startswith("--namespace"):
+        namespace = arg.split("=")[1]
+    elif arg.startswith("--verbose"):
+        verbose = True
+    else:
+        raise Exception("Unrecognized argument: " + arg + ", expected --counterexamples, --bison=/loc/to/bison, --custom_dir_prefix, --namespace, --verbose")
+
 template_file      = os.path.join(base_dir, 'grammar.y')
 target_file        = os.path.join(base_dir, 'grammar.y.tmp')
 header_file        = os.path.join(base_dir, 'grammar.hpp')
@@ -21,18 +44,6 @@ result_header      = os.path.join(base_dir, 'grammar_out.hpp')
 target_source_loc  = os.path.join(pg_dir, 'src_backend_parser_gram.cpp')
 target_header_loc  = os.path.join(pg_dir, 'include/parser/gram.hpp')
 kwlist_header      = os.path.join(pg_dir, 'include/parser/kwlist.hpp')
-
-counterexamples = False
-run_update = False
-for arg in sys.argv[1:]:
-    if arg.startswith("--bison="):
-        bison_location = arg.replace("--bison=", "")
-    elif arg.startswith("--counterexamples"):
-        counterexamples = True
-    elif arg.startswith("--update"):
-        run_update = True
-    else:
-        raise Exception("Unrecognized argument: " + arg + ", expected --counterexamples or --bison=/loc/to/bison")
 
 # parse the keyword lists
 def read_list_from_file(fname):
@@ -87,7 +98,7 @@ kwlist.sort(key=lambda x: strip_p(x[0]))
 # now generate kwlist.h
 # PG_KEYWORD("abort", ABORT_P, UNRESERVED_KEYWORD)
 kwtext = """
-namespace duckdb_libpgquery {
+namespace """ + namespace + """ {
 #define PG_KEYWORD(a,b,c) {a,b,c},
 
 const PGScanKeyword ScanKeywords[] = {
@@ -98,7 +109,7 @@ kwtext += """
 };
 
 const int NumScanKeywords = lengthof(ScanKeywords);
-} // namespace duckdb_libpgquery
+} // namespace """ + namespace + """
 """
 
 with open_utf8(kwlist_header, 'w+') as f:
@@ -238,10 +249,12 @@ if counterexamples:
     cmd += ["-Wcounterexamples"]
 if run_update:
     cmd += ["--update"]
+if verbose:
+    cmd += ["--verbose"]
 cmd += ["-o", result_source, "-d", target_file]
 print(' '.join(cmd))
 proc = subprocess.Popen(cmd, stderr=subprocess.PIPE)
-res = proc.wait()
+res = proc.wait(timeout=10) # ensure CI does not hang as was seen when running with Bison 3.x release.
 
 if res != 0:
     text = proc.stderr.read().decode('utf8')

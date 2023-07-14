@@ -186,6 +186,7 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
 	client->set_write_timeout(http_params.timeout);
 	client->set_read_timeout(http_params.timeout);
 	client->set_connection_timeout(http_params.timeout);
+	client->set_decompress(false);
 	return client;
 }
 
@@ -497,7 +498,7 @@ void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
 }
 
 // Get either the local, global, or no cache depending on settings
-static HTTPMetadataCache *TryGetMetadataCache(FileOpener *opener, HTTPFileSystem &httpfs) {
+static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(FileOpener *opener, HTTPFileSystem &httpfs) {
 	auto client_context = FileOpener::TryGetClientContext(opener);
 	if (!client_context) {
 		return nullptr;
@@ -527,10 +528,15 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 	auto &hfs = (HTTPFileSystem &)file_system;
 	state = HTTPState::TryGetState(opener);
 	if (!state) {
-		throw InternalException("State was not defined in this HTTP File Handle");
+		if (!opener) {
+			// If opener is not available (e.g., FileExists()), we create the HTTPState here.
+			state = make_shared<HTTPState>();
+		} else {
+			throw InternalException("State was not defined in this HTTP File Handle");
+		}
 	}
 
-	HTTPMetadataCache *current_cache = TryGetMetadataCache(opener, hfs);
+	auto current_cache = TryGetMetadataCache(opener, hfs);
 
 	bool should_write_cache = false;
 	if (!http_params.force_download && current_cache && !(flags & FileFlags::FILE_FLAGS_WRITE)) {
@@ -615,7 +621,7 @@ void HTTPFileHandle::Initialize(FileOpener *opener) {
 			throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
 		}
 	}
-	if (length == 0 || http_params.force_download) {
+	if (state && (length == 0 || http_params.force_download)) {
 		lock_guard<mutex> lock(state->cached_files_mutex);
 		auto &cached_file = state->cached_files[path];
 

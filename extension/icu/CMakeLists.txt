@@ -10,7 +10,7 @@ add_subdirectory(third_party)
 
 set(ICU_EXTENSION_FILES
     ${ICU_LIBRARY_FILES}
-    icu-extension.cpp
+    icu_extension.cpp
     icu-dateadd.cpp
     icu-datefunc.cpp
     icu-datepart.cpp
@@ -23,7 +23,7 @@ set(ICU_EXTENSION_FILES
     icu-timebucket.cpp
     icu-timezone.cpp)
 
-add_library(icu_extension STATIC ${ICU_EXTENSION_FILES})
+build_static_extension(icu ${ICU_EXTENSION_FILES})
 link_threads(icu_extension)
 disable_target_warnings(icu_extension)
 set(PARAMETERS "-no-warnings")

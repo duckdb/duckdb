@@ -10,6 +10,7 @@
 
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/types.hpp"
 
 using duckdb::unique_ptr;
 using duckdb::vector;
@@ -25,7 +26,8 @@ Napi::Object Statement::Init(Napi::Env env, Napi::Object exports) {
 	    DefineClass(env, "Statement",
 	                {InstanceMethod("run", &Statement::Run), InstanceMethod("all", &Statement::All),
 	                 InstanceMethod("arrowIPCAll", &Statement::ArrowIPCAll), InstanceMethod("each", &Statement::Each),
-	                 InstanceMethod("finalize", &Statement::Finish), InstanceMethod("stream", &Statement::Stream)});
+	                 InstanceMethod("finalize", &Statement::Finish), InstanceMethod("stream", &Statement::Stream),
+	                 InstanceMethod("columns", &Statement::Columns)});
 
 	constructor = Napi::Persistent(t);
 	constructor.SuppressDestruct();
@@ -145,7 +147,7 @@ static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::L
 		value = Napi::Number::New(env, duckdb::IntegerValue::Get(dval));
 	} break;
 	case duckdb::LogicalTypeId::BIGINT: {
-		value = Napi::Number::New(env, duckdb::BigIntValue::Get(dval));
+		value = Napi::BigInt::New(env, duckdb::BigIntValue::Get(dval));
 	} break;
 	case duckdb::LogicalTypeId::UTINYINT: {
 		value = Napi::Number::New(env, duckdb::UTinyIntValue::Get(dval));
@@ -157,7 +159,7 @@ static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::L
 		value = Napi::Number::New(env, duckdb::UIntegerValue::Get(dval));
 	} break;
 	case duckdb::LogicalTypeId::UBIGINT: {
-		value = Napi::Number::New(env, duckdb::UBigIntValue::Get(dval));
+		value = Napi::BigInt::New(env, duckdb::UBigIntValue::Get(dval));
 	} break;
 	case duckdb::LogicalTypeId::FLOAT: {
 		value = Napi::Number::New(env, duckdb::FloatValue::Get(dval));
@@ -166,7 +168,14 @@ static Napi::Value convert_col_val(Napi::Env &env, duckdb::Value dval, duckdb::L
 		value = Napi::Number::New(env, duckdb::DoubleValue::Get(dval));
 	} break;
 	case duckdb::LogicalTypeId::HUGEINT: {
-		value = Napi::Number::New(env, dval.GetValue<double>());
+		auto val = duckdb::HugeIntValue::Get(dval);
+		auto negative = val.upper < 0;
+		if (negative) {
+			duckdb::Hugeint::NegateInPlace(val); // remove signing bit
+		}
+		D_ASSERT(val.upper >= 0);
+		const uint64_t words[] = {val.lower, (uint64_t)val.upper};
+		value = Napi::BigInt::New(env, negative, 2, words);
 	} break;
 	case duckdb::LogicalTypeId::DECIMAL: {
 		value = Napi::Number::New(env, dval.GetValue<double>());
@@ -354,24 +363,21 @@ struct RunPreparedTask : public Task {
 			auto deleter = [](Napi::Env, void *finalizeData, void *hint) {
 				delete static_cast<std::shared_ptr<duckdb::QueryResult> *>(hint);
 			};
-
 			std::shared_ptr<duckdb::QueryResult> result_ptr = std::move(result);
 
 			duckdb::idx_t out_idx = 1;
-			while (true) {
-				auto chunk = result_ptr->Fetch();
-
-				if (!chunk || chunk->size() == 0) {
-					break;
+			for (auto &chunk : materialized_result->Collection().Chunks()) {
+				if (chunk.size() == 0) {
+					continue;
 				}
 
-				D_ASSERT(chunk->ColumnCount() == 2);
-				D_ASSERT(chunk->data[0].GetType() == duckdb::LogicalType::BLOB);
-				D_ASSERT(chunk->data[1].GetType() == duckdb::LogicalType::BOOLEAN);
+				D_ASSERT(chunk.ColumnCount() == 2);
+				D_ASSERT(chunk.data[0].GetType() == duckdb::LogicalType::BLOB);
+				D_ASSERT(chunk.data[1].GetType() == duckdb::LogicalType::BOOLEAN);
 
-				for (duckdb::idx_t row_idx = 0; row_idx < chunk->size(); row_idx++) {
-					duckdb::string_t blob = ((duckdb::string_t *)(chunk->data[0].GetData()))[row_idx];
-					bool is_header = chunk->data[1].GetData()[row_idx];
+				for (duckdb::idx_t row_idx = 0; row_idx < chunk.size(); row_idx++) {
+					duckdb::string_t blob = duckdb::FlatVector::GetData<duckdb::string_t>(chunk.data[0])[row_idx];
+					bool is_header = chunk.data[1].GetData()[row_idx];
 
 					// Create shared pointer to give (shared) ownership to ArrayBuffer, not that for these materialized
 					// query results, the string data is owned by the QueryResult
@@ -398,7 +404,12 @@ struct RunPreparedTask : public Task {
 			result_arr.Set(out_idx++, null_arr);
 
 			// Confirm all rows are set
-			D_ASSERT(out_idx == materialized_result->RowCount() + 1);
+			if (materialized_result->RowCount() > 0) {
+				// Non empty results should have their
+				D_ASSERT(out_idx == materialized_result->RowCount() + 1);
+			} else {
+				D_ASSERT(out_idx == 2);
+			}
 
 			cb.MakeCallback(statement.Value(), {env.Null(), result_arr});
 		} break;
@@ -499,6 +510,97 @@ Napi::Value Statement::Stream(const Napi::CallbackInfo &info) {
 	connection_ref->database_ref->Schedule(info.Env(),
 	                                       duckdb::make_uniq<RunQueryTask>(*this, HandleArgs(info), deferred));
 	return deferred.Promise();
+}
+
+static Napi::Value TypeToObject(Napi::Env &env, const duckdb::LogicalType &type) {
+	auto obj = Napi::Object::New(env);
+
+	auto id = duckdb::LogicalTypeIdToString(type.id());
+	obj.Set("id", id);
+	obj.Set("sql_type", type.ToString());
+
+	if (type.HasAlias()) {
+		obj.Set("alias", type.GetAlias());
+	}
+
+	switch (type.id()) {
+	case duckdb::LogicalTypeId::STRUCT: {
+		auto &child_types = duckdb::StructType::GetChildTypes(type);
+		auto arr = Napi::Array::New(env, child_types.size());
+		for (size_t i = 0; i < child_types.size(); i++) {
+			auto child_name = child_types[i].first;
+			auto child_type = child_types[i].second;
+			auto child_obj = Napi::Object::New(env);
+			child_obj.Set("name", child_name);
+			child_obj.Set("type", TypeToObject(env, child_type));
+			arr.Set(i, child_obj);
+		}
+		obj.Set("children", arr);
+	} break;
+	case duckdb::LogicalTypeId::LIST: {
+		auto &child_type = duckdb::ListType::GetChildType(type);
+		obj.Set("child", TypeToObject(env, child_type));
+	} break;
+	case duckdb::LogicalTypeId::MAP: {
+		auto &key_type = duckdb::MapType::KeyType(type);
+		auto &value_type = duckdb::MapType::ValueType(type);
+		obj.Set("key", TypeToObject(env, key_type));
+		obj.Set("value", TypeToObject(env, value_type));
+	} break;
+	case duckdb::LogicalTypeId::ENUM: {
+		auto name = duckdb::EnumType::GetTypeName(type);
+		auto &values_vec = duckdb::EnumType::GetValuesInsertOrder(type);
+		auto enum_size = duckdb::EnumType::GetSize(type);
+		auto arr = Napi::Array::New(env, enum_size);
+		for (size_t i = 0; i < enum_size; i++) {
+			auto child_name = values_vec.GetValue(i).GetValue<duckdb::string>();
+			arr.Set(i, child_name);
+		}
+		obj.Set("name", name);
+		obj.Set("values", arr);
+	} break;
+	case duckdb::LogicalTypeId::UNION: {
+		auto child_count = duckdb::UnionType::GetMemberCount(type);
+		auto arr = Napi::Array::New(env, child_count);
+		for (size_t i = 0; i < child_count; i++) {
+			auto &child_name = duckdb::UnionType::GetMemberName(type, i);
+			auto &child_type = duckdb::UnionType::GetMemberType(type, i);
+			auto child_obj = Napi::Object::New(env);
+			child_obj.Set("name", child_name);
+			child_obj.Set("type", TypeToObject(env, child_type));
+			arr.Set(i, child_obj);
+		}
+		obj.Set("children", arr);
+	} break;
+	case duckdb::LogicalTypeId::DECIMAL: {
+		auto width = duckdb::DecimalType::GetWidth(type);
+		auto scale = duckdb::DecimalType::GetScale(type);
+		obj.Set("width", width);
+		obj.Set("scale", scale);
+	} break;
+	default:
+		break;
+	}
+	return obj;
+}
+
+Napi::Value Statement::Columns(const Napi::CallbackInfo &info) {
+	Napi::Env env = info.Env();
+
+	if (!statement) {
+		return env.Null();
+	}
+
+	auto &names = statement->GetNames();
+	auto &types = statement->GetTypes();
+	auto arr = Napi::Array::New(env, names.size());
+	for (size_t i = 0; i < names.size(); i++) {
+		auto obj = Napi::Object::New(env);
+		obj.Set("name", Napi::String::New(env, names[i]));
+		obj.Set("type", TypeToObject(env, types[i]));
+		arr.Set(i, obj);
+	}
+	return arr;
 }
 
 struct FinishTask : public Task {

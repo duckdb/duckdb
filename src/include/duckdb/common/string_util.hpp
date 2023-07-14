@@ -15,6 +15,18 @@
 #include <cstring>
 
 namespace duckdb {
+
+#ifndef DUCKDB_QUOTE_DEFINE
+// Preprocessor trick to allow text to be converted to C-string / string
+// Expecte use is:
+//	#ifdef SOME_DEFINE
+//	string str = DUCKDB_QUOTE_DEFINE(SOME_DEFINE)
+//	...do something with str
+//	#endif SOME_DEFINE
+#define DUCKDB_QUOTE_DEFINE_IMPL(x) #x
+#define DUCKDB_QUOTE_DEFINE(x)      DUCKDB_QUOTE_DEFINE_IMPL(x)
+#endif
+
 /**
  * String Utility Functions
  * Note that these are not the most efficient implementations (i.e., they copy
@@ -45,25 +57,25 @@ public:
 		throw InvalidInputException("Invalid input for binary digit: %s", string(c, 1));
 	}
 
-	DUCKDB_API static bool CharacterIsSpace(char c) {
+	static bool CharacterIsSpace(char c) {
 		return c == ' ' || c == '\t' || c == '\n' || c == '\v' || c == '\f' || c == '\r';
 	}
-	DUCKDB_API static bool CharacterIsNewline(char c) {
+	static bool CharacterIsNewline(char c) {
 		return c == '\n' || c == '\r';
 	}
-	DUCKDB_API static bool CharacterIsDigit(char c) {
+	static bool CharacterIsDigit(char c) {
 		return c >= '0' && c <= '9';
 	}
-	DUCKDB_API static bool CharacterIsHex(char c) {
+	static bool CharacterIsHex(char c) {
 		return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 	}
-	DUCKDB_API static char CharacterToLower(char c) {
+	static char CharacterToLower(char c) {
 		if (c >= 'A' && c <= 'Z') {
 			return c - ('A' - 'a');
 		}
 		return c;
 	}
-	DUCKDB_API static char CharacterIsAlpha(char c) {
+	static char CharacterIsAlpha(char c) {
 		return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
 	}
 	static bool CharacterIsOperator(char c) {
@@ -83,6 +95,23 @@ public:
 			return true;
 		}
 		return false;
+	}
+
+	template <class TO>
+	static vector<TO> ConvertStrings(const vector<string> &strings) {
+		vector<TO> result;
+		for (auto &string : strings) {
+			result.emplace_back(string);
+		}
+		return result;
+	}
+
+	static vector<SQLIdentifier> ConvertToSQLIdentifiers(const vector<string> &strings) {
+		return ConvertStrings<SQLIdentifier>(strings);
+	}
+
+	static vector<SQLString> ConvertToSQLStrings(const vector<string> &strings) {
+		return ConvertStrings<SQLString>(strings);
 	}
 
 	//! Returns true if the needle string exists in the haystack
@@ -145,6 +174,8 @@ public:
 	//! Convert a string to lowercase
 	DUCKDB_API static string Lower(const string &str);
 
+	DUCKDB_API static bool IsLower(const string &str);
+
 	//! Case insensitive hash
 	DUCKDB_API static uint64_t CIHash(const string &str);
 
@@ -200,7 +231,7 @@ public:
 
 	//! Returns true if two null-terminated strings are equal or point to the same address.
 	//! Returns false if only one of the strings is nullptr
-	DUCKDB_API static bool Equals(const char *s1, const char *s2) {
+	static bool Equals(const char *s1, const char *s2) {
 		if (s1 == s2) {
 			return true;
 		}

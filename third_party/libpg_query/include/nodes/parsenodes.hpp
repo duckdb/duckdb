@@ -1045,11 +1045,11 @@ typedef struct PGInferClause {
  */
 typedef struct PGOnConflictClause {
 	PGNodeTag type;
-	PGOnConflictAction action; /* DO NOTHING or UPDATE? */
-	PGInferClause *infer;      /* Optional index inference clause */
-	PGList *targetList;        /* the target list (of PGResTarget) */
-	PGNode *whereClause;       /* qualifications */
-	int location;              /* token location, or -1 if unknown */
+	PGOnConflictAction action;               /* DO NOTHING or UPDATE? */
+	PGInferClause *infer;                    /* Optional index inference clause */
+	PGList *targetList;                      /* the target list (of PGResTarget) */
+	PGNode *whereClause;                     /* qualifications */
+	int location;                            /* token location, or -1 if unknown */
 } PGOnConflictClause;
 
 /*
@@ -1058,10 +1058,19 @@ typedef struct PGOnConflictClause {
  *
  * We don't currently support the SEARCH or CYCLE clause.
  */
+
+typedef enum PGCTEMaterialize
+{
+	PGCTEMaterializeDefault,		/* no option specified */
+	PGCTEMaterializeAlways,		/* MATERIALIZED */
+	PGCTEMaterializeNever			/* NOT MATERIALIZED */
+} PGCTEMaterialize;
+
 typedef struct PGCommonTableExpr {
 	PGNodeTag type;
 	char *ctename;         /* query name (never qualified) */
 	PGList *aliascolnames; /* optional list of column names */
+	PGCTEMaterialize ctematerialized; /* is this an optimization fence? */
 	/* SelectStmt/InsertStmt/etc before parse analysis, PGQuery afterwards: */
 	PGNode *ctequery; /* the CTE's subquery */
 	int location;     /* token location, or -1 if unknown */
@@ -1125,14 +1134,15 @@ typedef struct PGRawStmt {
  */
 typedef struct PGInsertStmt {
 	PGNodeTag type;
-	PGRangeVar *relation;                 /* relation to insert into */
-	PGList *cols;                         /* optional: names of the target columns */
-	PGNode *selectStmt;                   /* the source SELECT/VALUES, or NULL */
+	PGRangeVar *relation;                    /* relation to insert into */
+	PGList *cols;                            /* optional: names of the target columns */
+	PGNode *selectStmt;                      /* the source SELECT/VALUES, or NULL */
 	PGOnConflictActionAlias onConflictAlias; /* the (optional) shorthand provided for the onConflictClause */
-	PGOnConflictClause *onConflictClause; /* ON CONFLICT clause */
-	PGList *returningList;                /* list of expressions to return */
-	PGWithClause *withClause;             /* WITH clause */
-	PGOverridingKind override;            /* OVERRIDING clause */
+	PGOnConflictClause *onConflictClause;    /* ON CONFLICT clause */
+	PGList *returningList;                   /* list of expressions to return */
+	PGWithClause *withClause;                /* WITH clause */
+	PGOverridingKind override;               /* OVERRIDING clause */
+	PGInsertColumnOrder insert_column_order; /* INSERT BY NAME or INSERT BY POSITION */
 } PGInsertStmt;
 
 /* ----------------------
@@ -2117,20 +2127,6 @@ typedef struct PGDetachStmt
 	char *db_name;         /* list of names of attached databases */
 	bool missing_ok;
 } PGDetachStmt;
-
-
-
-/* ----------------------
- *		CREATE DATABASE Statement
- * ----------------------
- */
-typedef struct PGCreateDatabaseStmt
-{
-	PGNodeTag	type;
-	PGRangeVar *name;			/* The name of the created database */
-	char *extension;			/* The name of the extension which will create the database */
-	char *path;					/* The file path of the to-be-created database */
-} PGCreateDatabaseStmt;
 
 /* ----------------------
  *		Use Statement

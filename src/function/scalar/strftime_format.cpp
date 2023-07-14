@@ -408,7 +408,7 @@ string StrfTimeFormat::Format(timestamp_t timestamp, const string &format_str) {
 	auto time = Timestamp::GetTime(timestamp);
 
 	auto len = format.GetLength(date, time, 0, nullptr);
-	auto result = unique_ptr<char[]>(new char[len]);
+	auto result = make_unsafe_uniq_array<char>(len);
 	format.FormatString(date, time, result.get());
 	return string(result.get(), len);
 }
@@ -417,6 +417,7 @@ string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeF
 	if (format_string.empty()) {
 		return "Empty format string";
 	}
+	format.format_specifier = format_string;
 	format.specifiers.clear();
 	format.literals.clear();
 	format.numeric_width.clear();

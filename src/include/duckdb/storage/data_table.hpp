@@ -51,7 +51,7 @@ public:
 	          const string &table, vector<ColumnDefinition> column_definitions_p,
 	          unique_ptr<PersistentTableData> data = nullptr);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
-	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value);
+	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression &default_value);
 	//! Constructs a DataTable as a delta on an existing data table but with one column removed
 	DataTable(ClientContext &context, DataTable &parent, idx_t removed_column);
 	//! Constructs a DataTable as a delta on an existing data table but with one column changed type
@@ -181,7 +181,7 @@ public:
 
 	idx_t GetTotalRows();
 
-	void GetStorageInfo(TableStorageInfo &result);
+	vector<ColumnSegmentInfo> GetColumnSegmentInfo();
 	static bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &index, ForeignKeyType fk_type);
 
 	//! Initializes a special scan that is used to create an index on the table, it keeps locks on the table
@@ -192,6 +192,10 @@ public:
 	//! Verify constraints with a chunk from the Append containing all columns of the table
 	void VerifyAppendConstraints(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
 	                             ConflictManager *conflict_manager = nullptr);
+
+public:
+	static void VerifyUniqueIndexes(TableIndexList &indexes, ClientContext &context, DataChunk &chunk,
+	                                ConflictManager *conflict_manager);
 
 private:
 	//! Verify the new added constraints against current persistent&local data

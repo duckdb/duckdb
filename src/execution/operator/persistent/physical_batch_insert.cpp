@@ -279,9 +279,8 @@ unique_ptr<GlobalSinkState> PhysicalBatchInsert::GetGlobalSinkState(ClientContex
 		// CREATE TABLE AS
 		D_ASSERT(!insert_table);
 		auto &catalog = schema->catalog;
-		table = (TableCatalogEntry *)catalog
-		            .CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(), *info)
-		            .get();
+		auto created_table = catalog.CreateTable(catalog.GetCatalogTransaction(context), *schema.get_mutable(), *info);
+		table = &created_table->Cast<TableCatalogEntry>();
 	} else {
 		D_ASSERT(insert_table);
 		D_ASSERT(insert_table->IsDuckTable());
@@ -328,10 +327,11 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 		// no collection yet: create a new one
 		lstate.CreateNewCollection(table, insert_types);
 		lstate.writer = &table.GetStorage().CreateOptimisticWriter(context.client);
-	} else if (lstate.current_index != batch_index) {
+	}
+
+	if (lstate.current_index != batch_index) {
 		throw InternalException("Current batch differs from batch - but NextBatch was not called!?");
 	}
-	lstate.current_index = batch_index;
 
 	table.GetStorage().VerifyAppendConstraints(table, context.client, lstate.insert_chunk);
 

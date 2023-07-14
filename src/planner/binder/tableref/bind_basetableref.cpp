@@ -45,9 +45,18 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			return Bind(subquery, found_cte);
 		} else {
 			// There is a CTE binding in the BindContext.
-			// This can only be the case if there is a recursive CTE present.
+			// This can only be the case if there is a recursive CTE,
+			// or a materialized CTE present.
 			auto index = GenerateTableIndex();
-			auto result = make_uniq<BoundCTERef>(index, ctebinding->index);
+			auto materialized = cte.materialized;
+			if (materialized == CTEMaterialize::CTE_MATERIALIZE_DEFAULT) {
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+				materialized = CTEMaterialize::CTE_MATERIALIZE_ALWAYS;
+#else
+				materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
+#endif
+			}
+			auto result = make_uniq<BoundCTERef>(index, ctebinding->index, materialized);
 			auto b = ctebinding;
 			auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
 			auto names = BindContext::AliasColumnNames(alias, b->names, ref.column_name_alias);
@@ -94,7 +103,13 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 			for (auto &scan : config.replacement_scans) {
 				auto replacement_function = scan.function(context, table_name, scan.data.get());
 				if (replacement_function) {
-					replacement_function->alias = ref.alias.empty() ? ref.table_name : ref.alias;
+					if (!ref.alias.empty()) {
+						// user-provided alias overrides the default alias
+						replacement_function->alias = ref.alias;
+					} else if (replacement_function->alias.empty()) {
+						// if the replacement scan itself did not provide an alias we use the table name
+						replacement_function->alias = ref.table_name;
+					}
 					if (replacement_function->type == TableReferenceType::TABLE_FUNCTION) {
 						auto &table_function = replacement_function->Cast<TableFunctionRef>();
 						table_function.column_name_alias = ref.column_name_alias;

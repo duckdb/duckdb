@@ -39,6 +39,7 @@
 	PGAlias				*alias;
 	PGRangeVar			*range;
 	PGIntoClause			*into;
+	PGCTEMaterialize			ctematerialize;
 	PGWithClause			*with;
 	PGInferClause			*infer;
 	PGOnConflictClause	*onconflict;
@@ -55,6 +56,7 @@
 	PGLockWaitPolicy lockwaitpolicy;
 	PGSubLinkType subquerytype;
 	PGViewCheckOption viewcheckoption;
+	PGInsertColumnOrder bynameorposition;
 }
 
 %type <node> stmt

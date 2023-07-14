@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
+
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 

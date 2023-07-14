@@ -16,9 +16,12 @@ on:
       - 'test/**'
       - 'tools/**'
       - '!tools/nodejs/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/NodeJS.yml'
+      - '.github/config/uncovered_files.csv'
   pull_request:
+    types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
       - 'data/**'
@@ -26,8 +29,10 @@ on:
       - 'test/**'
       - 'tools/**'
       - '!tools/nodejs/**'
+      - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/NodeJS.yml'
+      - '.github/config/uncovered_files.csv'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/master' || github.sha }}
@@ -71,6 +76,9 @@ jobs:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
           - isRelease: false
+            node: 10
+            target_arch: x64
+          - isRelease: false
             node: 12
             target_arch: x64
           - isRelease: false
@@ -92,6 +100,9 @@ jobs:
             node: 19
             target_arch: x64
           - isRelease: false
+            node: 10
+            target_arch: arm64
+          - isRelease: false
             node: 12
             target_arch: arm64
           - isRelease: false
@@ -111,6 +122,9 @@ jobs:
             target_arch: arm64
           - isRelease: false
             node: 19
+            target_arch: arm64
+          - isRelease: false
+            node: 20
             target_arch: arm64
 
     steps:
@@ -146,6 +160,10 @@ jobs:
         run: |
           GEN=ninja EXTENSION_STATIC_BUILD=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 BUILD_NODE=1 make
 
+      - name: Print platform
+        shell: bash
+        run: ./build/release/duckdb -c "PRAGMA platform;"
+
       - name: Setup
         shell: bash
         run: ./scripts/node_version.sh
@@ -163,7 +181,7 @@ jobs:
         run: ./scripts/node_build.sh ${{ matrix.node }}
 
   osx-nodejs:
-    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master'
+    if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb'
     name: node.js OSX
     runs-on: macos-latest
     needs: linux-nodejs
@@ -174,6 +192,8 @@ jobs:
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
+          - isRelease: false
+            node: 10
           - isRelease: false
             node: 12
           - isRelease: false
@@ -226,6 +246,10 @@ jobs:
           brew install ninja
           GEN=ninja BUILD_TPCH=1 BUILD_NODE=1 make
 
+      - name: Print platform
+        shell: bash
+        run: ./build/release/duckdb -c "PRAGMA platform;"
+
       - name: Setup
         shell: bash
         run: ./scripts/node_version.sh
@@ -233,7 +257,6 @@ jobs:
           NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
       - name: Node ${{ matrix.node }}
-        if: matrix.target_arch != 'arm64'
         shell: bash
         run: ./scripts/node_build.sh ${{ matrix.node }}
 
@@ -250,6 +273,8 @@ jobs:
         isRelease:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/master' }}
         exclude:
+          - isRelease: false
+            node: 10
           - isRelease: false
             node: 12
           - isRelease: false

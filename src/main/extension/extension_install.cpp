@@ -4,7 +4,9 @@
 #include "duckdb/common/string_util.hpp"
 
 #ifndef DISABLE_DUCKDB_REMOTE_INSTALL
+#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 #include "httplib.hpp"
+#endif
 #endif
 #include "duckdb/common/windows_undefs.hpp"
 
@@ -27,6 +29,9 @@ bool ExtensionHelper::IsRelease(const string &version_tag) {
 }
 
 const string ExtensionHelper::GetVersionDirectoryName() {
+#ifdef DUCKDB_WASM_VERSION
+	return DUCKDB_QUOTE_DEFINE(DUCKDB_WASM_VERSION);
+#endif
 	if (IsRelease(DuckDB::LibraryVersion())) {
 		return NormalizeVersionTag(DuckDB::LibraryVersion());
 	} else {
@@ -38,7 +43,7 @@ const vector<string> ExtensionHelper::PathComponents() {
 	return vector<string> {".duckdb", "extensions", GetVersionDirectoryName(), DuckDB::Platform()};
 }
 
-string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs, FileOpener *opener) {
+string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs) {
 #ifdef WASM_LOADABLE_EXTENSIONS
 	static_assertion(0, "ExtensionDirectory functionality is not supported in duckdb-wasm");
 #endif
@@ -49,7 +54,7 @@ string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs, Fil
 		// convert random separators to platform-canonic
 		extension_directory = fs.ConvertSeparators(extension_directory);
 		// expand ~ in extension directory
-		extension_directory = fs.ExpandPath(extension_directory, opener);
+		extension_directory = fs.ExpandPath(extension_directory);
 		if (!fs.DirectoryExists(extension_directory)) {
 			auto sep = fs.PathSeparator();
 			auto splits = StringUtil::Split(extension_directory, sep);
@@ -66,7 +71,7 @@ string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs, Fil
 			}
 		}
 	} else { // otherwise default to home
-		string home_directory = fs.GetHomeDirectory(opener);
+		string home_directory = fs.GetHomeDirectory();
 		// exception if the home directory does not exist, don't create whatever we think is home
 		if (!fs.DirectoryExists(home_directory)) {
 			throw IOException("Can't find the home directory at '%s'\nSpecify a home directory using the SET "
@@ -90,8 +95,7 @@ string ExtensionHelper::ExtensionDirectory(DBConfig &config, FileSystem &fs, Fil
 string ExtensionHelper::ExtensionDirectory(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	auto &fs = FileSystem::GetFileSystem(context);
-	auto opener = FileSystem::GetFileOpener(context);
-	return ExtensionDirectory(config, fs, opener);
+	return ExtensionDirectory(config, fs);
 }
 
 bool ExtensionHelper::CreateSuggestions(const string &extension_name, string &message) {
@@ -118,7 +122,7 @@ void ExtensionHelper::InstallExtension(DBConfig &config, FileSystem &fs, const s
 	// Install is currently a no-op
 	return;
 #endif
-	string local_path = ExtensionDirectory(config, fs, nullptr);
+	string local_path = ExtensionDirectory(config, fs);
 	InstallExtensionInternal(config, nullptr, fs, local_path, extension, force_install);
 }
 
@@ -134,8 +138,28 @@ void ExtensionHelper::InstallExtension(ClientContext &context, const string &ext
 	InstallExtensionInternal(config, &client_config, fs, local_path, extension, force_install);
 }
 
+unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
+	auto source_file = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
+	file_size = source_file->GetFileSize();
+	auto in_buffer = make_unsafe_uniq_array<data_t>(file_size);
+	source_file->Read(in_buffer.get(), file_size);
+	source_file->Close();
+	return in_buffer;
+}
+
+void WriteExtensionFileToDisk(FileSystem &fs, const string &path, void *data, idx_t data_size) {
+	auto target_file = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_APPEND |
+	                                         FileFlags::FILE_FLAGS_FILE_CREATE_NEW);
+	target_file->Write(data, data_size);
+	target_file->Close();
+	target_file.reset();
+}
+
 void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *client_config, FileSystem &fs,
                                                const string &local_path, const string &extension, bool force_install) {
+#ifdef DUCKDB_DISABLE_EXTENSION_LOAD
+	throw PermissionException("Installing external extensions is disabled through a compile time flag");
+#else
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Installing extensions is disabled through configuration");
 	}
@@ -153,18 +177,9 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 	}
 	auto is_http_url = StringUtil::Contains(extension, "http://");
 	if (fs.FileExists(extension)) {
-
-		std::ifstream in(extension, std::ios::binary);
-		if (in.bad()) {
-			throw IOException("Failed to read extension from \"%s\"", extension);
-		}
-		std::ofstream out(temp_path, std::ios::binary);
-		out << in.rdbuf();
-		if (out.bad()) {
-			throw IOException("Failed to write extension to \"%s\"", temp_path);
-		}
-		in.close();
-		out.close();
+		idx_t file_size;
+		auto in_buffer = ReadExtensionFileFromDisk(fs, extension, file_size);
+		WriteExtensionFileToDisk(fs, temp_path, in_buffer.get(), file_size);
 
 		fs.MoveFile(temp_path, local_extension_path);
 		return;
@@ -226,13 +241,10 @@ void ExtensionHelper::InstallExtensionInternal(DBConfig &config, ClientConfig *c
 		}
 	}
 	auto decompressed_body = GZipFileSystem::UncompressGZIPString(res->body);
-	std::ofstream out(temp_path, std::ios::binary);
-	out.write(decompressed_body.data(), decompressed_body.size());
-	if (out.bad()) {
-		throw IOException("Failed to write extension to %s", temp_path);
-	}
-	out.close();
+
+	WriteExtensionFileToDisk(fs, temp_path, (void *)decompressed_body.data(), decompressed_body.size());
 	fs.MoveFile(temp_path, local_extension_path);
+#endif
 #endif
 }
 

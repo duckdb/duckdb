@@ -1,0 +1,519 @@
+# name: test/sql/order/test_order_variable_size_payload.test_slow
+# description: Test ORDER BY keyword (variable size sorting/payload columns)
+# group: [order]
+
+statement ok
+SET default_null_order='nulls_first';
+
+statement ok
+PRAGMA enable_verification
+
+# first iteration runs externally, second runs normally
+statement ok
+PRAGMA debug_force_external=true
+
+loop i 0 2
+
+# string that is longer than Storage::BLOCK_SIZE - this tests whether RowDataCollection dynamically increases block capacity
+statement ok
+select range % 2 i, string_agg('thisstringis200characterslong..........................................................................................................................................................................') s from range(5000) group by i order by i
+
+# weird one from SQLancer
+statement ok
+create table t0 (c0 varchar);
+
+statement ok
+insert into t0 values ('a'), (NULL), (NULL), (NULL), (NULL), (NULL), (NULL);
+
+query T
+SELECT * FROM t0 ORDER BY t0.c0 DESC;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+NULL
+a
+
+# strings longer than the 12 character prefix
+statement ok
+CREATE TABLE test0 (job VARCHAR, name VARCHAR)
+
+statement ok
+INSERT INTO test0 VALUES ('Shipping and Receiving Supervisor', 'Ackerman'), ('Shipping and Receiving Clerk', 'Berndt'), ('Shipping and Receiving Clerk', 'Kuppa'), ('Production Supervisor - WC60', 'Brown'), ('Production Supervisor - WC60', 'Campbell'), ('Production Supervisor - WC40', 'Dsa')
+
+query TT
+SELECT * FROM test0 ORDER BY job, name
+----
+Production Supervisor - WC40	Dsa
+Production Supervisor - WC60	Brown
+Production Supervisor - WC60	Campbell
+Shipping and Receiving Clerk	Berndt
+Shipping and Receiving Clerk	Kuppa
+Shipping and Receiving Supervisor	Ackerman
+
+query TT
+SELECT * FROM test0 ORDER BY job DESC, name DESC
+----
+Shipping and Receiving Supervisor	Ackerman
+Shipping and Receiving Clerk	Kuppa
+Shipping and Receiving Clerk	Berndt
+Production Supervisor - WC60	Campbell
+Production Supervisor - WC60	Brown
+Production Supervisor - WC40	Dsa
+
+statement ok
+CREATE TABLE test1 (s VARCHAR)
+
+statement ok
+INSERT INTO test1 VALUES ('2'), (NULL), ('3555555555552'), ('1'), ('355555555556'), ('10'), ('3555555555553'), ('3555555555551')
+
+query I
+SELECT * FROM test1 ORDER BY s
+----
+NULL
+1
+10
+2
+3555555555551
+3555555555552
+3555555555553
+355555555556
+
+# sort on 10000 strings
+statement ok
+CREATE TABLE test2 AS (SELECT CAST(range AS VARCHAR) r, random() rand FROM range(10000))
+
+statement ok
+CREATE TABLE test2_1 AS (SELECT * FROM test2 ORDER BY r)
+
+query T
+SELECT count(*) FROM test2_1
+----
+10000
+
+# string payload
+statement ok
+CREATE TABLE test3 AS (SELECT CAST(range AS VARCHAR) r, random() rand FROM range(10000))
+
+statement ok
+CREATE TABLE test3_1 AS (SELECT * FROM test3 ORDER BY rand)
+
+query T
+SELECT count(*) FROM test3_1
+----
+10000
+
+# multiple columns
+statement ok
+CREATE TABLE test4 (i INT, j INT)
+
+statement ok
+INSERT INTO test4 VALUES (3, 3), (2, 3), (2, 2), (3, 2)
+
+query II
+SELECT * FROM test4 ORDER BY cast(i AS VARCHAR), j
+----
+2	2
+2	3
+3	2
+3	3
+
+query II
+SELECT * FROM test4 ORDER BY i, cast(j AS VARCHAR)
+----
+2	2
+2	3
+3	2
+3	3
+
+query II
+SELECT * FROM test4 ORDER BY cast(i AS VARCHAR), cast(j AS VARCHAR)
+----
+2	2
+2	3
+3	2
+3	3
+
+# many payload columns
+statement ok
+CREATE TABLE tpch_q1_agg (l_returnflag VARCHAR, l_linestatus VARCHAR, sum_qty INT, sum_base_price DOUBLE, sum_disc_price DOUBLE, sum_charge DOUBLE, avg_qty DOUBLE, avg_price DOUBLE, avg_disc DOUBLE, count_order BIGINT);
+
+statement ok
+INSERT INTO tpch_q1_agg VALUES ('N', 'O', 7459297, 10512270008.90, 9986238338.3847, 10385578376.585467, 25.545537671232875, 36000.9246880137, 0.05009595890410959, 292000), ('R', 'F', 3785523, 5337950526.47, 5071818532.9420, 5274405503.049367, 25.5259438574251, 35994.029214030925, 0.04998927856184382, 148301), ('A', 'F', 3774200, 5320753880.69, 5054096266.6828, 5256751331.449234, 25.537587116854997, 36002.12382901414, 0.05014459706340077, 147790), ('N', 'F', 95257, 133737795.84, 127132372.6512, 132286291.229445, 25.30066401062417, 35521.32691633466, 0.04939442231075697, 3765);
+
+query TTTTTTTTTT
+SELECT * FROM tpch_q1_agg ORDER BY l_returnflag, l_linestatus;
+----
+A	F	3774200	5320753880.69	5054096266.6828	5256751331.449234	25.537587116854997	36002.12382901414	0.05014459706340077	147790
+N	F	95257	133737795.84	127132372.6512	132286291.229445	25.30066401062417	35521.32691633466	0.04939442231075697	3765
+N	O	7459297	10512270008.90	9986238338.3847	10385578376.585467	25.545537671232875	36000.9246880137	0.05009595890410959	292000
+R	F	3785523	5337950526.47	5071818532.9420	5274405503.049367	25.5259438574251	35994.029214030925	0.04998927856184382	148301
+
+statement ok
+create table test5 (i int, s varchar);
+
+statement ok
+insert into test5 values (3, 'ababa'), (1, 'babab'), (NULL, 'abbab'), (2, NULL);
+
+query TT
+select i, list(string_split(s, 'b')) from test5 group by i order by i;
+----
+NULL	[[a, , a, ]]
+1	[[, a, a, ]]
+2	[NULL]
+3	[[a, a, a]]
+
+query TT
+select i, struct_pack(i:=i, s:=s) from test5 order by i;
+----
+NULL	{'i': NULL, 's': abbab}
+1	{'i': 1, 's': babab}
+2	{'i': 2, 's': NULL}
+3	{'i': 3, 's': ababa}
+
+query TT
+select i, struct_pack(i:=i, s:=string_split(s, 'b')) from test5 order by i;
+----
+NULL	{'i': NULL, 's': [a, , a, ]}
+1	{'i': 1, 's': [, a, a, ]}
+2	{'i': 2, 's': NULL}
+3	{'i': 3, 's': [a, a, a]}
+
+query TT
+select i, struct_pack(i:=i, s:=UNNEST(string_split(s, 'b'))) from test5 order by i;
+----
+NULL	{'i': NULL, 's': a}
+NULL	{'i': NULL, 's': }
+NULL	{'i': NULL, 's': a}
+NULL	{'i': NULL, 's': }
+1	{'i': 1, 's': }
+1	{'i': 1, 's': a}
+1	{'i': 1, 's': a}
+1	{'i': 1, 's': }
+3	{'i': 3, 's': a}
+3	{'i': 3, 's': a}
+3	{'i': 3, 's': a}
+
+query TT
+select i, struct_pack(i:=i, s:=list(s)) from test5 group by i order by i;
+----
+NULL	{'i': NULL, 's': [abbab]}
+1	{'i': 1, 's': [babab]}
+2	{'i': 2, 's': [NULL]}
+3	{'i': 3, 's': [ababa]}
+
+query TT
+select i, struct_pack(i:=i, s:=s) from test5 order by s;
+----
+2	{'i': 2, 's': NULL}
+3	{'i': 3, 's': ababa}
+NULL	{'i': NULL, 's': abbab}
+1	{'i': 1, 's': babab}
+
+query TT
+select i, struct_pack(i:=i, s:=list(string_split(s, 'b'))) from test5 group by i order by i;
+----
+NULL	{'i': NULL, 's': [[a, , a, ]]}
+1	{'i': 1, 's': [[, a, a, ]]}
+2	{'i': 2, 's': [NULL]}
+3	{'i': 3, 's': [[a, a, a]]}
+
+# sorting by a mix of variable size and constant size columns
+statement ok
+CREATE TABLE test6 (i1 INT, s1 VARCHAR, i2 int, s2 VARCHAR)
+
+statement ok
+INSERT INTO test6 VALUES
+(6, '0reallylongstring1', 3, '1reallylongstring8'),
+(6, '0reallylongstring1', 3, '1reallylongstring7'),
+(6, '0reallylongstring1', 4, '1reallylongstring8'),
+(6, '0reallylongstring1', 4, '1reallylongstring7'),
+(6, '0reallylongstring2', 3, '1reallylongstring8'),
+(6, '0reallylongstring2', 3, '1reallylongstring7'),
+(6, '0reallylongstring2', 4, '1reallylongstring8'),
+(6, '0reallylongstring2', 4, '1reallylongstring7'),
+(5, '0reallylongstring1', 3, '1reallylongstring8'),
+(5, '0reallylongstring1', 3, '1reallylongstring7'),
+(5, '0reallylongstring1', 4, '1reallylongstring8'),
+(5, '0reallylongstring1', 4, '1reallylongstring7'),
+(5, '0reallylongstring2', 3, '1reallylongstring8'),
+(5, '0reallylongstring2', 3, '1reallylongstring7'),
+(5, '0reallylongstring2', 4, '1reallylongstring8'),
+(5, '0reallylongstring2', 4, '1reallylongstring7')
+
+query IIII
+SELECT i1, s1, i2, s2 FROM test6 ORDER BY i1, s1, i2, s2
+----
+5	0reallylongstring1	3	1reallylongstring7
+5	0reallylongstring1	3	1reallylongstring8
+5	0reallylongstring1	4	1reallylongstring7
+5	0reallylongstring1	4	1reallylongstring8
+5	0reallylongstring2	3	1reallylongstring7
+5	0reallylongstring2	3	1reallylongstring8
+5	0reallylongstring2	4	1reallylongstring7
+5	0reallylongstring2	4	1reallylongstring8
+6	0reallylongstring1	3	1reallylongstring7
+6	0reallylongstring1	3	1reallylongstring8
+6	0reallylongstring1	4	1reallylongstring7
+6	0reallylongstring1	4	1reallylongstring8
+6	0reallylongstring2	3	1reallylongstring7
+6	0reallylongstring2	3	1reallylongstring8
+6	0reallylongstring2	4	1reallylongstring7
+6	0reallylongstring2	4	1reallylongstring8
+
+query IIII
+SELECT s1, i1, i2, s2 FROM test6 ORDER BY s1, i1, i2, s2
+----
+0reallylongstring1	5	3	1reallylongstring7
+0reallylongstring1	5	3	1reallylongstring8
+0reallylongstring1	5	4	1reallylongstring7
+0reallylongstring1	5	4	1reallylongstring8
+0reallylongstring1	6	3	1reallylongstring7
+0reallylongstring1	6	3	1reallylongstring8
+0reallylongstring1	6	4	1reallylongstring7
+0reallylongstring1	6	4	1reallylongstring8
+0reallylongstring2	5	3	1reallylongstring7
+0reallylongstring2	5	3	1reallylongstring8
+0reallylongstring2	5	4	1reallylongstring7
+0reallylongstring2	5	4	1reallylongstring8
+0reallylongstring2	6	3	1reallylongstring7
+0reallylongstring2	6	3	1reallylongstring8
+0reallylongstring2	6	4	1reallylongstring7
+0reallylongstring2	6	4	1reallylongstring8
+
+query IIII
+SELECT s1, i1, s2, i2 FROM test6 ORDER BY s1, i1, s2, i2
+----
+0reallylongstring1	5	1reallylongstring7	3
+0reallylongstring1	5	1reallylongstring7	4
+0reallylongstring1	5	1reallylongstring8	3
+0reallylongstring1	5	1reallylongstring8	4
+0reallylongstring1	6	1reallylongstring7	3
+0reallylongstring1	6	1reallylongstring7	4
+0reallylongstring1	6	1reallylongstring8	3
+0reallylongstring1	6	1reallylongstring8	4
+0reallylongstring2	5	1reallylongstring7	3
+0reallylongstring2	5	1reallylongstring7	4
+0reallylongstring2	5	1reallylongstring8	3
+0reallylongstring2	5	1reallylongstring8	4
+0reallylongstring2	6	1reallylongstring7	3
+0reallylongstring2	6	1reallylongstring7	4
+0reallylongstring2	6	1reallylongstring8	3
+0reallylongstring2	6	1reallylongstring8	4
+
+query IIII
+SELECT s1, s2, i1, i2 FROM test6 ORDER BY s1, s2, i1, i2
+----
+0reallylongstring1	1reallylongstring7	5	3
+0reallylongstring1	1reallylongstring7	5	4
+0reallylongstring1	1reallylongstring7	6	3
+0reallylongstring1	1reallylongstring7	6	4
+0reallylongstring1	1reallylongstring8	5	3
+0reallylongstring1	1reallylongstring8	5	4
+0reallylongstring1	1reallylongstring8	6	3
+0reallylongstring1	1reallylongstring8	6	4
+0reallylongstring2	1reallylongstring7	5	3
+0reallylongstring2	1reallylongstring7	5	4
+0reallylongstring2	1reallylongstring7	6	3
+0reallylongstring2	1reallylongstring7	6	4
+0reallylongstring2	1reallylongstring8	5	3
+0reallylongstring2	1reallylongstring8	5	4
+0reallylongstring2	1reallylongstring8	6	3
+0reallylongstring2	1reallylongstring8	6	4
+
+query IIII
+SELECT i1, i2, s1, s2 FROM test6 ORDER BY i1, i2, s1, s2
+----
+5	3	0reallylongstring1	1reallylongstring7
+5	3	0reallylongstring1	1reallylongstring8
+5	3	0reallylongstring2	1reallylongstring7
+5	3	0reallylongstring2	1reallylongstring8
+5	4	0reallylongstring1	1reallylongstring7
+5	4	0reallylongstring1	1reallylongstring8
+5	4	0reallylongstring2	1reallylongstring7
+5	4	0reallylongstring2	1reallylongstring8
+6	3	0reallylongstring1	1reallylongstring7
+6	3	0reallylongstring1	1reallylongstring8
+6	3	0reallylongstring2	1reallylongstring7
+6	3	0reallylongstring2	1reallylongstring8
+6	4	0reallylongstring1	1reallylongstring7
+6	4	0reallylongstring1	1reallylongstring8
+6	4	0reallylongstring2	1reallylongstring7
+6	4	0reallylongstring2	1reallylongstring8
+
+query IIII
+SELECT s1, s2, i1, i2 FROM test6 ORDER BY i2 DESC, s1, s2, i1
+----
+0reallylongstring1	1reallylongstring7	5	4
+0reallylongstring1	1reallylongstring7	6	4
+0reallylongstring1	1reallylongstring8	5	4
+0reallylongstring1	1reallylongstring8	6	4
+0reallylongstring2	1reallylongstring7	5	4
+0reallylongstring2	1reallylongstring7	6	4
+0reallylongstring2	1reallylongstring8	5	4
+0reallylongstring2	1reallylongstring8	6	4
+0reallylongstring1	1reallylongstring7	5	3
+0reallylongstring1	1reallylongstring7	6	3
+0reallylongstring1	1reallylongstring8	5	3
+0reallylongstring1	1reallylongstring8	6	3
+0reallylongstring2	1reallylongstring7	5	3
+0reallylongstring2	1reallylongstring7	6	3
+0reallylongstring2	1reallylongstring8	5	3
+0reallylongstring2	1reallylongstring8	6	3
+
+# snippet from tpch q16
+statement ok
+create table test7 (p_brand VARCHAR, p_type VARCHAR, p_size INT, supplier_cnt BIGINT)
+
+statement ok
+insert into test7 values ('Brand#11', 'ECONOMY BRUSHED COPPER', 3, 4), ('Brand#11', 'ECONOMY BRUSHED COPPER', 9, 4), ('Brand#11', 'ECONOMY BRUSHED STEEL', 36, 4), ('Brand#11', 'ECONOMY BRUSHED STEEL', 9, 4), ('Brand#11', 'ECONOMY BURNISHED BRASS', 36, 4), ('Brand#11', 'ECONOMY BURNISHED COPPER', 49, 4), ('Brand#11', 'ECONOMY BURNISHED COPPER', 9, 4), ('Brand#11', 'ECONOMY BURNISHED NICKEL', 14, 4), ('Brand#11', 'ECONOMY BURNISHED NICKEL', 49, 4)
+
+query IIII
+SELECT p_brand, p_type, p_size, supplier_cnt FROM test7 ORDER BY supplier_cnt DESC, p_brand, p_type, p_size
+----
+Brand#11	ECONOMY BRUSHED COPPER	3	4
+Brand#11	ECONOMY BRUSHED COPPER	9	4
+Brand#11	ECONOMY BRUSHED STEEL	9	4
+Brand#11	ECONOMY BRUSHED STEEL	36	4
+Brand#11	ECONOMY BURNISHED BRASS	36	4
+Brand#11	ECONOMY BURNISHED COPPER	9	4
+Brand#11	ECONOMY BURNISHED COPPER	49	4
+Brand#11	ECONOMY BURNISHED NICKEL	14	4
+Brand#11	ECONOMY BURNISHED NICKEL	49	4
+
+# simple nested lists (no structs)
+statement ok
+create table test8 (i int, s varchar)
+
+statement ok
+insert into test8 values (3, 'aba'), (1, 'ccbcc'), (NULL, 'dbdbd'), (2, NULL);
+
+query TT
+select i, string_split(s, 'b') from test8 order by i;
+----
+NULL	[d, d, d]
+1	[cc, cc]
+2	NULL
+3	[a, a]
+
+query TT
+select i, list(s) from test8 group by i order by i;
+----
+NULL	[dbdbd]
+1	[ccbcc]
+2	[NULL]
+3	[aba]
+
+query TT
+select i, list(string_split(s, 'b')) from test8 group by i order by i;
+----
+NULL	[[d, d, d]]
+1	[[cc, cc]]
+2	[NULL]
+3	[[a, a]]
+
+
+# lists longer than STANDARD_VECTOR_SIZE
+# need single thread since order within list is otherwise undefined
+statement ok
+PRAGMA threads=1
+
+statement ok
+CREATE TABLE test9 AS (SELECT range % 4 i, range j FROM range(5000));
+
+statement ok
+INSERT INTO test9 VALUES (0, NULL), (1, NULL), (2, NULL), (3, NULL)
+
+query TT
+SELECT i, list(j) FROM test9 GROUP BY i ORDER BY i;
+----
+8 values hashing to fc909a9ac472ea404c0bceecf7f1f3d6
+
+statement ok
+CREATE TABLE DirectReports
+(
+    EmployeeID smallint,
+    Name varchar NOT NULL,
+    Title varchar NOT NULL,
+    EmployeeLevel int NOT NULL,
+    Sort varchar NOT NULL
+);
+
+statement ok
+INSERT INTO DirectReports VALUES
+(1, 'Ken Sánchez', 'Chief Executive Officer', 1, 'Ken Sánchez'),
+(273, '>Brian Welcker', 'Vice President of Sales', 2, 'Ken Sánchez>Brian Welcker'),
+(274, '>>Stephen Jiang', 'North American Sales Manager', 3, 'Ken Sánchez>Brian Welcker>Stephen Jiang'),
+(285, '>>Syed Abbas', 'Pacific Sales Manager', 3, 'Ken Sánchez>Brian Welcker>Syed Abbas'),
+(16, '>>David Bradley', 'Marketing Manager', 3, 'Ken Sánchez>Brian Welcker>David Bradley'),
+(275, '>>>Michael Blythe', 'Sales Representative', 4, 'Ken Sánchez>Brian Welcker>Stephen Jiang>Michael Blythe'),
+(276, '>>>Linda Mitchell', 'Sales Representative', 4, 'Ken Sánchez>Brian Welcker>Stephen Jiang>Linda Mitchell'),
+(286, '>>>Lynn Tsoflias', 'Sales Representative', 4, 'Ken Sánchez>Brian Welcker>Syed Abbas>Lynn Tsoflias'),
+(23, '>>>Mary Gibson', 'Marketing Specialist', 4, 'Ken Sánchez>Brian Welcker>David Bradley>Mary Gibson');
+
+query IIII
+SELECT EmployeeID, Name, Title, EmployeeLevel
+FROM DirectReports
+ORDER BY Sort, EmployeeID;
+----
+1	Ken Sánchez	Chief Executive Officer	1
+273	>Brian Welcker	Vice President of Sales	2
+16	>>David Bradley	Marketing Manager	3
+23	>>>Mary Gibson	Marketing Specialist	4
+274	>>Stephen Jiang	North American Sales Manager	3
+276	>>>Linda Mitchell	Sales Representative	4
+275	>>>Michael Blythe	Sales Representative	4
+285	>>Syed Abbas	Pacific Sales Manager	3
+286	>>>Lynn Tsoflias	Sales Representative	4
+
+statement ok
+DROP TABLE t0;
+
+statement ok
+DROP TABLE test0;
+
+statement ok
+DROP TABLE test1;
+
+statement ok
+DROP TABLE test2;
+
+statement ok
+DROP TABLE test2_1;
+
+statement ok
+DROP TABLE test3;
+
+statement ok
+DROP TABLE test3_1;
+
+statement ok
+DROP TABLE test4;
+
+statement ok
+DROP TABLE tpch_q1_agg;
+
+statement ok
+DROP table test5;
+
+statement ok
+DROP TABLE test6;
+
+statement ok
+DROP table test7;
+
+statement ok
+DROP table test8;
+
+statement ok
+DROP TABLE test9;
+
+statement ok
+DROP TABLE DirectReports;
+
+statement ok
+PRAGMA debug_force_external=false
+
+endloop

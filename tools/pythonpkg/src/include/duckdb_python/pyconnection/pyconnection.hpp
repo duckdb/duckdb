@@ -59,7 +59,7 @@ public:
 
 	shared_ptr<DuckDBPyConnection> Enter();
 
-	static bool Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
+	static void Exit(DuckDBPyConnection &self, const py::object &exc_type, const py::object &exc,
 	                 const py::object &traceback);
 
 	static bool DetectAndGetEnvironment();
@@ -79,9 +79,11 @@ public:
 	        const py::object &all_varchar = py::none(), const py::object &normalize_names = py::none(),
 	        const py::object &filename = py::none(), const py::object &null_padding = py::none());
 
-	unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, const py::object &columns = py::none(),
-	                                      const py::object &sample_size = py::none(),
-	                                      const py::object &maximum_depth = py::none());
+	unique_ptr<DuckDBPyRelation> ReadJSON(const string &filename, const Optional<py::object> &columns = py::none(),
+	                                      const Optional<py::object> &sample_size = py::none(),
+	                                      const Optional<py::object> &maximum_depth = py::none(),
+	                                      const Optional<py::str> &records = py::none(),
+	                                      const Optional<py::str> &format = py::none());
 
 	shared_ptr<DuckDBPyType> MapType(const shared_ptr<DuckDBPyType> &key_type,
 	                                 const shared_ptr<DuckDBPyType> &value_type);
@@ -98,7 +100,8 @@ public:
 	RegisterScalarUDF(const string &name, const py::function &udf, const py::object &arguments = py::none(),
 	                  const shared_ptr<DuckDBPyType> &return_type = nullptr, PythonUDFType type = PythonUDFType::NATIVE,
 	                  FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
-	                  PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR);
+	                  PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR,
+	                  bool side_effects = false);
 
 	shared_ptr<DuckDBPyConnection> UnregisterUDF(const string &name);
 
@@ -116,8 +119,8 @@ public:
 
 	void LoadExtension(const string &extension);
 
-	unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias = "query_relation");
-	unique_ptr<DuckDBPyRelation> RunQuery(const string &query, const string &alias = "query_relation");
+	unique_ptr<DuckDBPyRelation> FromQuery(const string &query, string alias = "");
+	unique_ptr<DuckDBPyRelation> RunQuery(const string &query, string alias = "");
 
 	unique_ptr<DuckDBPyRelation> Table(const string &tname);
 
@@ -158,6 +161,8 @@ public:
 	shared_ptr<DuckDBPyConnection> Rollback();
 
 	void Close();
+
+	void Interrupt();
 
 	ModifiedMemoryFileSystem &GetObjectFileSystem();
 
@@ -212,7 +217,8 @@ private:
 	unique_lock<std::mutex> AcquireConnectionLock();
 	ScalarFunction CreateScalarUDF(const string &name, const py::function &udf, const py::object &parameters,
 	                               const shared_ptr<DuckDBPyType> &return_type, bool vectorized,
-	                               FunctionNullHandling null_handling, PythonExceptionHandling exception_handling);
+	                               FunctionNullHandling null_handling, PythonExceptionHandling exception_handling,
+	                               bool side_effects);
 	void RegisterArrowObject(const py::object &arrow_object, const string &name);
 
 	static PythonEnvironmentType environment;

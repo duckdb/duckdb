@@ -20,6 +20,7 @@ class BufferedFileWriter;
 class ClientContext;
 class CatalogSearchPath;
 class FileOpener;
+class FileSystem;
 class HTTPState;
 class QueryProfiler;
 class QueryProfilerHistory;
@@ -53,13 +54,18 @@ struct ClientData {
 	unique_ptr<FileOpener> file_opener;
 
 	//! HTTP State in this query
-	unique_ptr<HTTPState> http_state;
+	shared_ptr<HTTPState> http_state;
+
+	//! The clients' file system wrapper
+	unique_ptr<FileSystem> client_file_system;
 
 	//! The file search path
 	string file_search_path;
 
 	//! The Max Line Length Size of Last Query Executed on a CSV File. (Only used for testing)
-	idx_t max_line_length = 0;
+	//! FIXME: this should not be done like this
+	bool debug_set_max_line_length = false;
+	idx_t debug_max_line_length = 0;
 
 public:
 	DUCKDB_API static ClientData &Get(ClientContext &context);

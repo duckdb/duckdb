@@ -14,14 +14,14 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &input, TableFi
 	// FIXME: update stats...
 	switch (filter.filter_type) {
 	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction_and = (ConjunctionAndFilter &)filter;
+		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
 		for (auto &child_filter : conjunction_and.child_filters) {
 			UpdateFilterStatistics(input, *child_filter);
 		}
 		break;
 	}
 	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = (ConstantFilter &)filter;
+		auto &constant_filter = filter.Cast<ConstantFilter>();
 		UpdateFilterStatistics(input, constant_filter.comparison_type, constant_filter.constant);
 		break;
 	}

@@ -63,6 +63,9 @@ static jmethodID J_DuckVector_init;
 static jfieldID J_DuckVector_constlen;
 static jfieldID J_DuckVector_varlen;
 
+static jclass J_DuckArray;
+static jmethodID J_DuckArray_init;
+
 static jclass J_ByteBuffer;
 
 static jmethodID J_Map_entrySet;
@@ -145,6 +148,13 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	tmpLocalRef = env->FindClass("java/util/Iterator");
 	J_Iterator_hasNext = env->GetMethodID(tmpLocalRef, "hasNext", "()Z");
 	J_Iterator_next = env->GetMethodID(tmpLocalRef, "next", "()Ljava/lang/Object;");
+	env->DeleteLocalRef(tmpLocalRef);
+
+	tmpLocalRef = env->FindClass("org/duckdb/DuckDBArray");
+	D_ASSERT(tmpLocalRef);
+	J_DuckArray = (jclass)env->NewGlobalRef(tmpLocalRef);
+	J_DuckArray_init = env->GetMethodID(J_DuckArray, "<init>", "(Lorg/duckdb/DuckDBVector;II)V");
+	D_ASSERT(J_DuckArray_init);
 	env->DeleteLocalRef(tmpLocalRef);
 
 	tmpLocalRef = env->FindClass("java/util/Map$Entry");
@@ -305,13 +315,10 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 			D_ASSERT(env->IsInstanceOf(value, J_String));
 			const string &value_str = jstring_to_string(env, (jstring)value);
 
-			auto const pOption = DBConfig::GetOptionByName(key_str);
-			if (pOption) {
-				config.SetOption(*pOption, Value(value_str));
-			} else {
-				throw CatalogException(
-				    "unrecognized configuration parameter \"%s\"\n%s", key_str,
-				    StringUtil::CandidatesErrorMessage(DBConfig::GetOptionNames(), key_str, "Did you mean"));
+			try {
+				config.SetOptionByName(key_str, Value(value_str));
+			} catch (Exception e) {
+				throw CatalogException("Failed to set configuration option \"%s\"", key_str, e.what());
 			}
 		}
 		bool cache_instance = database != ":memory:" && !database.empty();
@@ -351,16 +358,16 @@ JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1schema
 	return env->NewStringUTF(entry.schema.c_str());
 }
 
-static void set_catalog_search_path(JNIEnv *env, jobject conn_ref_buf, CatalogSearchEntry search_entry,
-                                    bool is_set_schema) {
+static void set_catalog_search_path(JNIEnv *env, jobject conn_ref_buf, CatalogSearchEntry search_entry) {
 	auto conn_ref = get_connection(env, conn_ref_buf);
 	if (!conn_ref) {
 		return;
 	}
 
 	try {
-		conn_ref->context->RunFunctionInTransaction(
-		    [&]() { ClientData::Get(*conn_ref->context).catalog_search_path->Set(search_entry, is_set_schema); });
+		conn_ref->context->RunFunctionInTransaction([&]() {
+			ClientData::Get(*conn_ref->context).catalog_search_path->Set(search_entry, CatalogSetPathType::SET_SCHEMA);
+		});
 	} catch (const exception &e) {
 		env->ThrowNew(J_SQLException, e.what());
 	}
@@ -368,14 +375,12 @@ static void set_catalog_search_path(JNIEnv *env, jobject conn_ref_buf, CatalogSe
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1schema(JNIEnv *env, jclass, jobject conn_ref_buf,
                                                                               jstring schema) {
-	set_catalog_search_path(env, conn_ref_buf, CatalogSearchEntry(INVALID_CATALOG, jstring_to_string(env, schema)),
-	                        true);
+	set_catalog_search_path(env, conn_ref_buf, CatalogSearchEntry(INVALID_CATALOG, jstring_to_string(env, schema)));
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1set_1catalog(JNIEnv *env, jclass,
                                                                                jobject conn_ref_buf, jstring catalog) {
-	set_catalog_search_path(env, conn_ref_buf, CatalogSearchEntry(jstring_to_string(env, catalog), DEFAULT_SCHEMA),
-	                        false);
+	set_catalog_search_path(env, conn_ref_buf, CatalogSearchEntry(jstring_to_string(env, catalog), DEFAULT_SCHEMA));
 }
 
 JNIEXPORT jstring JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1get_1catalog(JNIEnv *env, jclass,
@@ -648,7 +653,7 @@ static std::string type_to_jduckdb_type(LogicalType logical_type) {
 		}
 	} break;
 	default:
-		return std::string("");
+		return logical_type.ToString();
 	}
 }
 
@@ -690,6 +695,8 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1meta(JNIEnv
 	                      name_array, type_array, type_detail_array, return_type);
 }
 
+jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count);
+
 JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(JNIEnv *env, jclass,
                                                                                 jobject res_ref_buf,
                                                                                 jobject conn_ref_buf) {
@@ -713,138 +720,167 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 
 	for (idx_t col_idx = 0; col_idx < res_ref->chunk->ColumnCount(); col_idx++) {
 		auto &vec = res_ref->chunk->data[col_idx];
-		auto type_str = env->NewStringUTF(vec.GetType().ToString().c_str());
-		// construct nullmask
-		auto null_array = env->NewBooleanArray(row_count);
-		jboolean *null_array_ptr = env->GetBooleanArrayElements(null_array, nullptr);
-		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-			null_array_ptr[row_idx] = FlatVector::IsNull(vec, row_idx);
-		}
-		env->ReleaseBooleanArrayElements(null_array, null_array_ptr, 0);
 
-		auto jvec = env->NewObject(J_DuckVector, J_DuckVector_init, type_str, (int)row_count, null_array);
-
-		jobject constlen_data = nullptr;
-		jobjectArray varlen_data = nullptr;
-
-		switch (vec.GetType().id()) {
-		case LogicalTypeId::BOOLEAN:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(bool));
-			break;
-		case LogicalTypeId::TINYINT:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int8_t));
-			break;
-		case LogicalTypeId::SMALLINT:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int16_t));
-			break;
-		case LogicalTypeId::INTEGER:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int32_t));
-			break;
-		case LogicalTypeId::BIGINT:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int64_t));
-			break;
-		case LogicalTypeId::UTINYINT:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint8_t));
-			break;
-		case LogicalTypeId::USMALLINT:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint16_t));
-			break;
-		case LogicalTypeId::UINTEGER:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint32_t));
-			break;
-		case LogicalTypeId::UBIGINT:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint64_t));
-			break;
-		case LogicalTypeId::HUGEINT:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
-			break;
-		case LogicalTypeId::FLOAT:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(float));
-			break;
-		case LogicalTypeId::DECIMAL: {
-			auto physical_type = vec.GetType().InternalType();
-
-			switch (physical_type) {
-			case PhysicalType::INT16:
-				constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int16_t));
-				break;
-			case PhysicalType::INT32:
-				constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int32_t));
-				break;
-			case PhysicalType::INT64:
-				constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int64_t));
-				break;
-			case PhysicalType::INT128:
-				constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
-				break;
-			default:
-				throw InternalException("Unimplemented physical type for decimal");
-			}
-			break;
-		}
-		case LogicalTypeId::DOUBLE:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));
-			break;
-		case LogicalTypeId::TIME_TZ:
-		case LogicalTypeId::TIMESTAMP_SEC:
-		case LogicalTypeId::TIMESTAMP_MS:
-		case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_NS:
-		case LogicalTypeId::TIMESTAMP_TZ:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(timestamp_t));
-			break;
-		case LogicalTypeId::ENUM:
-			varlen_data = env->NewObjectArray(row_count, J_String, nullptr);
-			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-				if (FlatVector::IsNull(vec, row_idx)) {
-					continue;
-				}
-				auto d_str = vec.GetValue(row_idx).ToString();
-				jstring j_str = env->NewStringUTF(d_str.c_str());
-				env->SetObjectArrayElement(varlen_data, row_idx, j_str);
-			}
-			break;
-		case LogicalTypeId::BLOB:
-			varlen_data = env->NewObjectArray(row_count, J_ByteBuffer, nullptr);
-
-			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-				if (FlatVector::IsNull(vec, row_idx)) {
-					continue;
-				}
-				auto &d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
-				auto j_obj = env->NewDirectByteBuffer((void *)d_str.GetData(), d_str.GetSize());
-				env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
-			}
-			break;
-		case LogicalTypeId::UUID:
-			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
-			break;
-		default: {
-			Vector string_vec(LogicalType::VARCHAR);
-			VectorOperations::Cast(*conn_ref->context, vec, string_vec, row_count);
-			vec.ReferenceAndSetType(string_vec);
-			// fall through on purpose
-		}
-		case LogicalTypeId::VARCHAR:
-			varlen_data = env->NewObjectArray(row_count, J_String, nullptr);
-			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
-				if (FlatVector::IsNull(vec, row_idx)) {
-					continue;
-				}
-				auto d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
-				auto j_str = decode_charbuffer_to_jstring(env, d_str.GetData(), d_str.GetSize());
-				env->SetObjectArrayElement(varlen_data, row_idx, j_str);
-			}
-			break;
-		}
-
-		env->SetObjectField(jvec, J_DuckVector_constlen, constlen_data);
-		env->SetObjectField(jvec, J_DuckVector_varlen, varlen_data);
+		auto jvec = ProcessVector(env, conn_ref, vec, row_count);
 
 		env->SetObjectArrayElement(vec_array, col_idx, jvec);
 	}
 
 	return vec_array;
+}
+jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_count) {
+	auto type_str = env->NewStringUTF(type_to_jduckdb_type(vec.GetType()).c_str());
+	// construct nullmask
+	auto null_array = env->NewBooleanArray(row_count);
+	jboolean *null_unique_array = env->GetBooleanArrayElements(null_array, nullptr);
+	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+		null_unique_array[row_idx] = FlatVector::IsNull(vec, row_idx);
+	}
+	env->ReleaseBooleanArrayElements(null_array, null_unique_array, 0);
+
+	auto jvec = env->NewObject(J_DuckVector, J_DuckVector_init, type_str, (int)row_count, null_array);
+
+	jobject constlen_data = nullptr;
+	jobjectArray varlen_data = nullptr;
+
+	switch (vec.GetType().id()) {
+	case LogicalTypeId::BOOLEAN:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(bool));
+		break;
+	case LogicalTypeId::TINYINT:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int8_t));
+		break;
+	case LogicalTypeId::SMALLINT:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int16_t));
+		break;
+	case LogicalTypeId::INTEGER:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int32_t));
+		break;
+	case LogicalTypeId::BIGINT:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int64_t));
+		break;
+	case LogicalTypeId::UTINYINT:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint8_t));
+		break;
+	case LogicalTypeId::USMALLINT:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint16_t));
+		break;
+	case LogicalTypeId::UINTEGER:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint32_t));
+		break;
+	case LogicalTypeId::UBIGINT:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(uint64_t));
+		break;
+	case LogicalTypeId::HUGEINT:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
+		break;
+	case LogicalTypeId::FLOAT:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(float));
+		break;
+	case LogicalTypeId::DECIMAL: {
+		auto physical_type = vec.GetType().InternalType();
+
+		switch (physical_type) {
+		case PhysicalType::INT16:
+			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int16_t));
+			break;
+		case PhysicalType::INT32:
+			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int32_t));
+			break;
+		case PhysicalType::INT64:
+			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(int64_t));
+			break;
+		case PhysicalType::INT128:
+			constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
+			break;
+		default:
+			throw InternalException("Unimplemented physical type for decimal");
+		}
+		break;
+	}
+	case LogicalTypeId::DOUBLE:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(double));
+		break;
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_TZ:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(timestamp_t));
+		break;
+	case LogicalTypeId::ENUM:
+		varlen_data = env->NewObjectArray(row_count, J_String, nullptr);
+		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+			if (FlatVector::IsNull(vec, row_idx)) {
+				continue;
+			}
+			auto d_str = vec.GetValue(row_idx).ToString();
+			jstring j_str = env->NewStringUTF(d_str.c_str());
+			env->SetObjectArrayElement(varlen_data, row_idx, j_str);
+		}
+		break;
+	case LogicalTypeId::BLOB:
+		varlen_data = env->NewObjectArray(row_count, J_ByteBuffer, nullptr);
+
+		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+			if (FlatVector::IsNull(vec, row_idx)) {
+				continue;
+			}
+			auto &d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
+			auto j_obj = env->NewDirectByteBuffer((void *)d_str.GetData(), d_str.GetSize());
+			env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
+		}
+		break;
+	case LogicalTypeId::UUID:
+		constlen_data = env->NewDirectByteBuffer(FlatVector::GetData(vec), row_count * sizeof(hugeint_t));
+		break;
+	case LogicalTypeId::LIST: {
+		varlen_data = env->NewObjectArray(row_count, J_DuckArray, nullptr);
+
+		auto list_entries = FlatVector::GetData<list_entry_t>(vec);
+
+		auto list_size = ListVector::GetListSize(vec);
+		auto &list_vector = ListVector::GetEntry(vec);
+		auto j_vec = ProcessVector(env, conn_ref, list_vector, list_size);
+
+		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+			if (FlatVector::IsNull(vec, row_idx)) {
+				continue;
+			}
+
+			auto offset = list_entries[row_idx].offset;
+			auto limit = list_entries[row_idx].length;
+
+			auto j_obj = env->NewObject(J_DuckArray, J_DuckArray_init, j_vec, offset, limit);
+
+			env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
+		}
+		break;
+	}
+	default: {
+		Vector string_vec(LogicalType::VARCHAR);
+		VectorOperations::Cast(*conn_ref->context, vec, string_vec, row_count);
+		vec.ReferenceAndSetType(string_vec);
+		// fall through on purpose
+	}
+	case LogicalTypeId::VARCHAR:
+		varlen_data = env->NewObjectArray(row_count, J_String, nullptr);
+		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+			if (FlatVector::IsNull(vec, row_idx)) {
+				continue;
+			}
+			auto d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
+			auto j_str = decode_charbuffer_to_jstring(env, d_str.GetData(), d_str.GetSize());
+			env->SetObjectArrayElement(varlen_data, row_idx, j_str);
+		}
+		break;
+	}
+
+	env->SetObjectField(jvec, J_DuckVector_constlen, constlen_data);
+	env->SetObjectField(jvec, J_DuckVector_varlen, varlen_data);
+
+	return jvec;
 }
 
 JNIEXPORT jint JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch_1size(JNIEnv *, jclass) {
@@ -1035,10 +1071,18 @@ JNIEXPORT jlong JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1stream
 	auto res_ref = (ResultHolder *)env->GetDirectBufferAddress(res_ref_buf);
 	if (!res_ref || !res_ref->res || res_ref->res->HasError()) {
 		env->ThrowNew(J_SQLException, "Invalid result set");
+		return 0;
 	}
 
-	auto wrapper = new ResultArrowArrayStreamWrapper(std::move(res_ref->res), batch_size);
-	return (jlong)&wrapper->stream;
+	try {
+		auto wrapper = new ResultArrowArrayStreamWrapper(std::move(res_ref->res), batch_size);
+		return (jlong)&wrapper->stream;
+	} catch (const exception &e) {
+		env->ThrowNew(J_SQLException, e.what());
+		return 0;
+	}
+	//	Unreachable
+	return 0;
 }
 
 class JavaArrowTabularStreamFactory {
@@ -1059,11 +1103,15 @@ public:
 
 	static void GetSchema(uintptr_t factory_p, ArrowSchemaWrapper &schema) {
 		auto factory = (JavaArrowTabularStreamFactory *)factory_p;
-		if (!factory->stream_ptr->release) {
+		auto stream_ptr = factory->stream_ptr;
+		if (!stream_ptr->release) {
 			throw InvalidInputException("This stream has been released");
 		}
-		factory->stream_ptr->get_schema(factory->stream_ptr, &schema.arrow_schema);
-		return;
+		stream_ptr->get_schema(stream_ptr, &schema.arrow_schema);
+		auto error = stream_ptr->get_last_error(stream_ptr);
+		if (error != nullptr) {
+			throw InvalidInputException(error);
+		}
 	}
 
 	ArrowArrayStream *stream_ptr;
@@ -1075,16 +1123,23 @@ JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1arrow_1registe
                                                                                   jbyteArray name_j) {
 
 	auto conn = get_connection(env, conn_ref_buf);
+	if (conn == nullptr) {
+		return;
+	}
 	auto name = byte_array_to_string(env, name_j);
 
 	auto arrow_array_stream = (ArrowArrayStream *)(uintptr_t)arrow_array_stream_pointer;
 
-	auto factory = new JavaArrowTabularStreamFactory(arrow_array_stream);
-	duckdb::vector<Value> parameters;
-	parameters.push_back(Value::POINTER((uintptr_t)factory));
-	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::Produce));
-	parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::GetSchema));
-	conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(name, true, true);
+	try {
+		auto factory = new JavaArrowTabularStreamFactory(arrow_array_stream);
+		duckdb::vector<Value> parameters;
+		parameters.push_back(Value::POINTER((uintptr_t)factory));
+		parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::Produce));
+		parameters.push_back(Value::POINTER((uintptr_t)JavaArrowTabularStreamFactory::GetSchema));
+		conn->TableFunction("arrow_scan_dumb", parameters)->CreateView(name, true, true);
+	} catch (const exception &e) {
+		env->ThrowNew(J_SQLException, e.what());
+	}
 }
 
 JNIEXPORT void JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1create_1extension_1type(JNIEnv *env, jclass,

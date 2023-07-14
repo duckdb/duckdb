@@ -1,0 +1,374 @@
+# name: test/sql/copy/parquet/writer/parquet_write_field_id.test
+# description: Parquet writer FIELD_IDS tests
+# group: [writer]
+
+require parquet
+
+# need to supply an argument
+statement error
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS)
+----
+Binder Error
+
+# j is not present so we can't have a field id
+statement error
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {j:42})
+----
+Binder Error
+
+# we can't do functions here
+statement error
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:42-1})
+----
+Parser Error
+
+# this should work
+statement ok
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:42})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+42
+
+# needs to be castable to integer, so this works
+statement ok
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:'42'})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+42
+
+# but this doesn't
+statement error
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:'abc'})
+----
+Invalid Input Error
+
+# we can do casts
+statement ok
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:42::hugeint})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+42
+
+# wrong casts should lead to ConversionException
+statement error
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:1024::utinyint})
+----
+Conversion Error
+
+# we can't do functions inside of casts (this one is just for coverage)
+statement error
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:cast(42-1 as hugeint)})
+----
+Parser Error
+
+# field id can't be a colref
+statement error
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:i})
+----
+Parser Error
+
+# this shouldn't work
+statement error
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS 'oops')
+----
+Binder Error
+
+# can't have duplicate field id keys
+statement error
+copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:42,i:43})
+----
+Binder Error
+
+# can't have duplicate field id values either
+statement error
+copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:42,j:42})
+----
+Binder Error
+
+# we don't have to supply a field_id for all columns
+statement ok
+copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:42})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+42
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'j'
+----
+NULL
+
+# but we can
+statement ok
+copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:42,j:43})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+42
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'j'
+----
+43
+
+# we can also specify the col like this
+statement ok
+copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42},j:{__duckdb_field_id:43}})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+42
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'j'
+----
+43
+
+# i is not a nested type, so we can't specify nested field ids
+statement error
+copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,j:43}})
+----
+Binder Error
+
+# we tested a non-nested column type, now do all the nested types so we test all the code paths
+
+# list
+statement ok
+copy (select range(range, range + 3) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,element:43}})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+42
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'element'
+----
+43
+
+# we don't have to specify a field_id for the top-level list, we can also just specify for the nested children
+statement ok
+copy (select range(range, range + 3) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{element:43}})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+NULL
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'element'
+----
+43
+
+# list child is always called "element"
+statement error
+copy (select range(range, range + 3) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,elem:43}})
+----
+Binder Error: Column name "elem" specified in FIELD_IDS not found. Available column names: [element]
+
+# struct
+statement ok
+copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,f:43}})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i' and num_children > 0
+----
+42
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'f'
+----
+43
+
+# struct does not have child "g"
+statement error
+copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,g:43}})
+----
+Binder Error: Column name "g" specified in FIELD_IDS not found. Available column names: [f]
+
+# map
+statement ok
+copy (select map {range : 10 - range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,key:43,value:44}})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i' and num_children > 0
+----
+42
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'key'
+----
+43
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'value'
+----
+44
+
+# map type children need to be called "key" and "value"
+statement error
+copy (select map {range : 10 - range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,k:43,v:44}})
+----
+Binder Error: Column name "k" specified in FIELD_IDS not found.
+
+# test auto-generation (flat)
+statement ok
+copy (select range as i, range as j from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS 'auto')
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+0
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'j'
+----
+1
+
+# big nestedness
+statement ok
+copy (select map {'my_key' : [{j : 42}]} as i) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42,key:43,value:{__duckdb_field_id:44,element:{__duckdb_field_id:45,j:46}}}})
+
+query II
+select name, field_id from parquet_schema('__TEST_DIR__/my.parquet') where name in ('i', 'key', 'value', 'element', 'j') order by field_id
+----
+i	42
+key	43
+value	44
+element	45
+j	46
+
+# we can't specify "f" in the first level struct
+statement error
+copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{__duckdb_field_id:42}, f:43})
+----
+Binder Error
+
+# needs to be called exactly "__duckdb_field_id"
+statement error
+copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i:{field_id:42, f:43}})
+----
+Binder Error
+
+# test auto-generation (list)
+statement ok
+copy (select range(range, range + 3) as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS 'auto')
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+0
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'element'
+----
+1
+
+# test auto-generation (struct)
+statement ok
+copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS 'auto')
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i' and num_children > 0
+----
+0
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'f'
+----
+1
+
+# test auto-generation (map)
+statement ok
+copy (select map {range : 10 - range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS 'auto')
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i' and num_children > 0
+----
+0
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'key'
+----
+1
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'value'
+----
+2
+
+# test auto-generation (big nestedness)
+statement ok
+copy (select map {'my_key' : [{j : 42}]} as i) to '__TEST_DIR__/my.parquet' (FIELD_IDS 'auto')
+
+query II
+select name, field_id from parquet_schema('__TEST_DIR__/my.parquet') where name in ('i', 'key', 'value', 'element', 'j') order by field_id
+----
+i	0
+key	1
+value	2
+element	3
+j	4
+
+# cannot have a column named "__duckdb_field_id"
+statement error
+copy (select range as __duckdb_field_id from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {__duckdb_field_id : 42})
+----
+Binder Error
+
+statement error
+copy (select {__duckdb_field_id : range} as __duckdb_field_id from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {__duckdb_field_id : {__duckdb_field_id : 42}})
+----
+Binder Error
+
+# we should be case insensitive here (it's just DuckDB col names / struct col names)
+statement ok
+copy (select range as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {"I" : 42})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i'
+----
+42
+
+statement ok
+copy (select range as "I" from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i : 42})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'I'
+----
+42
+
+statement ok
+copy (select {f : range} as i from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {"I" : {__duckdb_field_id: 42, "F": 43}})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'i' and num_children > 0
+----
+42
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'f'
+----
+43
+
+statement ok
+copy (select {"F" : range} as "I" from range(10)) to '__TEST_DIR__/my.parquet' (FIELD_IDS {i : {__duckdb_field_id: 42, f: 43}})
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'I' and num_children > 0
+----
+42
+
+query I
+select field_id from parquet_schema('__TEST_DIR__/my.parquet') where name = 'F'
+----
+43

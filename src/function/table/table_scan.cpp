@@ -207,7 +207,7 @@ struct IndexScanGlobalState : public GlobalTableFunctionState {
 	Vector row_ids;
 	ColumnFetchState fetch_state;
 	TableScanState local_storage_state;
-	vector<column_t> column_ids;
+	vector<storage_t> column_ids;
 	bool finished;
 };
 
@@ -215,12 +215,16 @@ static unique_ptr<GlobalTableFunctionState> IndexScanInitGlobal(ClientContext &c
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	data_ptr_t row_id_data = nullptr;
 	if (!bind_data.result_ids.empty()) {
-		row_id_data = (data_ptr_t)&bind_data.result_ids[0];
+		row_id_data = (data_ptr_t)&bind_data.result_ids[0]; // NOLINT - this is not pretty
 	}
 	auto result = make_uniq<IndexScanGlobalState>(row_id_data);
 	auto &local_storage = LocalStorage::Get(context, bind_data.table.catalog);
-	result->column_ids = input.column_ids;
-	result->local_storage_state.Initialize(input.column_ids, input.filters.get());
+
+	result->column_ids.reserve(input.column_ids.size());
+	for (auto &id : input.column_ids) {
+		result->column_ids.push_back(GetStorageIndex(bind_data.table, id));
+	}
+	result->local_storage_state.Initialize(result->column_ids, input.filters.get());
 	local_storage.InitializeScan(bind_data.table.GetStorage(), result->local_storage_state.local_state, input.filters);
 
 	result->finished = false;
@@ -275,6 +279,15 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 		return;
 	}
 	if (bind_data.is_index_scan) {
+		return;
+	}
+	if (!get.table_filters.filters.empty()) {
+		// if there were filters before we can't convert this to an index scan
+		return;
+	}
+	if (!get.projection_ids.empty()) {
+		// if columns were pruned by RemoveUnusedColumns we can't convert this to an index scan,
+		// because index scan does not support filter_prune (yet)
 		return;
 	}
 	if (filters.empty()) {
@@ -346,7 +359,7 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			} else if (expr.type == ExpressionType::COMPARE_BETWEEN) {
 				// BETWEEN expression
 				auto &between = expr.Cast<BoundBetweenExpression>();
-				if (!between.input->Equals(index_expression.get())) {
+				if (!between.input->Equals(*index_expression)) {
 					// expression doesn't match the current index expression
 					continue;
 				}
@@ -413,7 +426,7 @@ static void TableScanSerialize(FieldWriter &writer, const FunctionData *bind_dat
 	writer.WriteString(bind_data.table.schema.catalog.GetName());
 }
 
-static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, FieldReader &reader,
+static unique_ptr<FunctionData> TableScanDeserialize(PlanDeserializationState &state, FieldReader &reader,
                                                      TableFunction &function) {
 	auto schema_name = reader.ReadRequired<string>();
 	auto table_name = reader.ReadRequired<string>();
@@ -422,7 +435,7 @@ static unique_ptr<FunctionData> TableScanDeserialize(ClientContext &context, Fie
 	auto result_ids = reader.ReadRequiredList<row_t>();
 	auto catalog_name = reader.ReadField<string>(INVALID_CATALOG);
 
-	auto &catalog_entry = Catalog::GetEntry<TableCatalogEntry>(context, catalog_name, schema_name, table_name);
+	auto &catalog_entry = Catalog::GetEntry<TableCatalogEntry>(state.context, catalog_name, schema_name, table_name);
 	if (catalog_entry.type != CatalogType::TABLE_ENTRY) {
 		throw SerializationException("Cant find table for %s.%s", schema_name, table_name);
 	}

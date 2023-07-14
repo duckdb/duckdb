@@ -59,6 +59,26 @@ string Exception::GetStackTrace(int max_depth) {
 }
 
 string Exception::ConstructMessageRecursive(const string &msg, std::vector<ExceptionFormatValue> &values) {
+#ifdef DEBUG
+	// Verify that we have the required amount of values for the message
+	idx_t parameter_count = 0;
+	for (idx_t i = 0; i + 1 < msg.size(); i++) {
+		if (msg[i] != '%') {
+			continue;
+		}
+		if (msg[i + 1] == '%') {
+			i++;
+			continue;
+		}
+		parameter_count++;
+	}
+	if (parameter_count != values.size()) {
+		throw InternalException("Primary exception: %s\nSecondary exception in ConstructMessageRecursive: Expected %d "
+		                        "parameters, received %d",
+		                        msg.c_str(), parameter_count, values.size());
+	}
+
+#endif
 	return ExceptionFormatValue::Format(msg, values);
 }
 

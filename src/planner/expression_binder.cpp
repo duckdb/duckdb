@@ -64,8 +64,9 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 		return BindExpression(expr_ref.Cast<SubqueryExpression>(), depth);
 	case ExpressionClass::PARAMETER:
 		return BindExpression(expr_ref.Cast<ParameterExpression>(), depth);
-	case ExpressionClass::POSITIONAL_REFERENCE:
-		return BindExpression(expr_ref.Cast<PositionalReferenceExpression>(), depth);
+	case ExpressionClass::POSITIONAL_REFERENCE: {
+		return BindPositionalReference(expr, depth, root_expression);
+	}
 	case ExpressionClass::STAR:
 		return BindResult(binder.FormatError(expr_ref, "STAR expression is not supported here"));
 	default:
@@ -78,9 +79,12 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 	auto &active_binders = binder.GetActiveBinders();
 	// make a copy of the set of binders, so we can restore it later
 	auto binders = active_binders;
+
+	// we already failed with the current binder
 	active_binders.pop_back();
 	idx_t depth = 1;
 	bool success = false;
+
 	while (!active_binders.empty()) {
 		auto &next_binder = active_binders.back().get();
 		ExpressionBinder::QualifyColumnNames(next_binder.binder, expr);

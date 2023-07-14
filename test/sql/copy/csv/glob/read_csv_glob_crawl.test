@@ -172,14 +172,6 @@ FROM read_csv_auto('test/sql/copy/csv/data/glob/crawl/hidden/**');
 42	42
 42	42
 
-# symlink test: symlinks will not be searched
-query I
-FROM read_csv_auto('test/sql/copy/csv/data/glob/crawl/.symbolic_link/**');
-----
--42
-
-
-
 #  additional tests
 statement ok
 CREATE TABLE t0 AS SELECT (i%2) AS c_2, (i%3) AS c_3, (i*i) AS c_pow FROM RANGE(0,10) tbl(i);
@@ -312,11 +304,14 @@ select count(*) from glob('__TEST_DIR__/partitioned0/c_2=0/**/data_0.csv')
 ----
 3
 
-
-
-
-
 require notwindows
+
+# symlink test: symlinks will not be searched
+query I
+FROM read_csv_auto('test/sql/copy/csv/data/glob/crawl/.symbolic_link/**');
+----
+-42
+
 
 statement error
 SELECT sum(column0) FROM read_csv('test/sql/copy/csv/data/glob/crawl/d/**/', auto_detect=1);

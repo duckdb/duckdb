@@ -5,7 +5,9 @@ add_library_unity(
   buffered_csv_reader.cpp
   parallel_csv_reader.cpp
   csv_buffer.cpp
+  csv_file_handle.cpp
   csv_reader_options.cpp
+  csv_rejects_table.cpp
   physical_fixed_batch_copy.cpp
   physical_batch_copy_to_file.cpp
   physical_batch_insert.cpp

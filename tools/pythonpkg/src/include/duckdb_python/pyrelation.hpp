@@ -60,6 +60,9 @@ public:
 
 	py::str GetAlias();
 
+	static unique_ptr<DuckDBPyRelation> EmptyResult(const std::shared_ptr<ClientContext> &context,
+	                                                const vector<LogicalType> &types, vector<string> names);
+
 	unique_ptr<DuckDBPyRelation> SetAlias(const string &expr);
 
 	unique_ptr<DuckDBPyRelation> ProjectFromExpression(const string &expr);
@@ -213,6 +216,8 @@ private:
 	unique_ptr<QueryResult> ExecuteInternal(bool stream_result = false);
 
 private:
+	//! Whether the relation has been executed at least once
+	bool executed;
 	shared_ptr<Relation> rel;
 	vector<LogicalType> types;
 	vector<string> names;

@@ -7,6 +7,9 @@ require tpch
 statement ok
 CALL dbgen(sf=0.01);
 
+statement ok
+PRAGMA verify_external
+
 query I
 SELECT
     l_returnflag,

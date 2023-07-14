@@ -4,12 +4,15 @@
 
 using namespace duckdb;
 
-static void TestArrowRoundtrip(const string &query) {
+static void TestArrowRoundtrip(const string &query, bool export_large_buffer = false) {
 	DuckDB db;
 	Connection con(db);
-
+	if (export_large_buffer) {
+		auto res = con.Query("SET arrow_large_buffer_size=True");
+		REQUIRE(!res->HasError());
+	}
 	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, true));
-	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query));
+	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, false));
 }
 
 static void TestParquetRoundtrip(const string &path) {
@@ -25,6 +28,22 @@ static void TestParquetRoundtrip(const string &path) {
 	auto query = "SELECT * FROM parquet_scan('" + path + "')";
 	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query, true));
 	REQUIRE(ArrowTestHelper::RunArrowComparison(con, query));
+}
+
+TEST_CASE("Test Export Large", "[arrow]") {
+	// Test with Regular Buffer Size
+	TestArrowRoundtrip("SELECT 'bla' FROM range(10000)");
+
+	TestArrowRoundtrip("SELECT 'bla'::BLOB FROM range(10000)");
+
+	TestArrowRoundtrip("SELECT '3d038406-6275-4aae-bec1-1235ccdeaade'::UUID FROM range(10000) tbl(i)");
+
+	// Test with Large Buffer Size
+	TestArrowRoundtrip("SELECT 'bla' FROM range(10000)", true);
+
+	TestArrowRoundtrip("SELECT 'bla'::BLOB FROM range(10000)", true);
+
+	TestArrowRoundtrip("SELECT '3d038406-6275-4aae-bec1-1235ccdeaade'::UUID FROM range(10000) tbl(i)", true);
 }
 
 TEST_CASE("Test arrow roundtrip", "[arrow]") {

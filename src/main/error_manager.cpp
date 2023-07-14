@@ -37,7 +37,7 @@ string ErrorManager::FormatExceptionRecursive(ErrorType error_type, vector<Excep
 string ErrorManager::InvalidUnicodeError(const string &input, const string &context) {
 	UnicodeInvalidReason reason;
 	size_t pos;
-	auto unicode = Utf8Proc::Analyze((const char *)input.c_str(), input.size(), &reason, &pos);
+	auto unicode = Utf8Proc::Analyze(const_char_ptr_cast(input.c_str()), input.size(), &reason, &pos);
 	if (unicode != UnicodeType::INVALID) {
 		return "Invalid unicode error thrown but no invalid unicode detected in " + context;
 	}

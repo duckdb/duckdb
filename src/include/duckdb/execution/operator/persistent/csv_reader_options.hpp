@@ -19,12 +19,14 @@
 
 namespace duckdb {
 
-enum NewLineIdentifier {
+enum class NewLineIdentifier : uint8_t {
 	SINGLE = 1,   // Either \r or \n
 	CARRY_ON = 2, // \r\n
 	MIX = 3,      // Hippie-Land, can't run it multithreaded
 	NOT_SET = 4
 };
+
+enum class ParallelMode { AUTOMATIC = 0, PARALLEL = 1, SINGLE_THREADED = 2 };
 
 struct BufferedCSVReaderOptions {
 	//===--------------------------------------------------------------------===//
@@ -53,6 +55,14 @@ struct BufferedCSVReaderOptions {
 	bool header = false;
 	//! Whether or not we should ignore InvalidInput errors
 	bool ignore_errors = false;
+	//! Rejects table name
+	string rejects_table_name;
+	//! Rejects table entry limit (0 = no limit)
+	idx_t rejects_limit = 0;
+	//! Columns to use as recovery key for rejected rows when reading with ignore_errors = true
+	vector<string> rejects_recovery_columns;
+	//! Index of the recovery columns
+	vector<idx_t> rejects_recovery_column_ids;
 	//! Expected number of columns
 	idx_t num_cols = 0;
 	//! Number of samples to buffer
@@ -116,13 +126,16 @@ struct BufferedCSVReaderOptions {
 	//! If we are running the parallel version of the CSV Reader. In general, the system should always auto-detect
 	//! When it can't execute a parallel run before execution. However, there are (rather specific) situations where
 	//! setting up this manually might be important
-	bool run_parallel = true;
+	ParallelMode parallel_mode;
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
 	//===--------------------------------------------------------------------===//
-
 	//! True, if column with that index must be quoted
 	vector<bool> force_quote;
+	//! Prefix/suffix/custom newline the entire file once (enables writing of files as JSON arrays)
+	string prefix;
+	string suffix;
+	string write_newline;
 
 	//! The date format to use (if any is specified)
 	std::map<LogicalTypeId, StrpTimeFormat> date_format = {{LogicalTypeId::DATE, {}}, {LogicalTypeId::TIMESTAMP, {}}};
@@ -130,8 +143,7 @@ struct BufferedCSVReaderOptions {
 	std::map<LogicalTypeId, StrfTimeFormat> write_date_format = {{LogicalTypeId::DATE, {}},
 	                                                             {LogicalTypeId::TIMESTAMP, {}}};
 	//! Whether or not a type format is specified
-	std::map<LogicalTypeId, bool> has_format = {
-	    {LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}, {LogicalTypeId::TIMESTAMP_TZ, false}};
+	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 
 	void Serialize(FieldWriter &writer) const;
 	void Deserialize(FieldReader &reader);
@@ -151,7 +163,6 @@ struct BufferedCSVReaderOptions {
 	//! set - argument(s) to the option
 	//! expected_names - names expected if the option is "columns"
 	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
-
 	void SetWriteOption(const string &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
 

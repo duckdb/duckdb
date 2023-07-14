@@ -50,6 +50,7 @@ void ColumnDefinition::Serialize(Serializer &serializer) const {
 		writer.WriteOptional(default_value);
 	}
 	writer.WriteField<TableColumnType>(category);
+	writer.WriteField<duckdb::CompressionType>(compression_type);
 	writer.Finalize();
 }
 
@@ -59,16 +60,12 @@ ColumnDefinition ColumnDefinition::Deserialize(Deserializer &source) {
 	auto column_type = reader.ReadRequiredSerializable<LogicalType, LogicalType>();
 	auto expression = reader.ReadOptional<ParsedExpression>(nullptr);
 	auto category = reader.ReadField<TableColumnType>(TableColumnType::STANDARD);
+	auto compression_type = reader.ReadField<duckdb::CompressionType>(duckdb::CompressionType::COMPRESSION_AUTO);
 	reader.Finalize();
 
-	switch (category) {
-	case TableColumnType::STANDARD:
-		return ColumnDefinition(column_name, column_type, std::move(expression), TableColumnType::STANDARD);
-	case TableColumnType::GENERATED:
-		return ColumnDefinition(column_name, column_type, std::move(expression), TableColumnType::GENERATED);
-	default:
-		throw NotImplementedException("Type not implemented for TableColumnType");
-	}
+	ColumnDefinition result(column_name, column_type, std::move(expression), category);
+	result.compression_type = compression_type;
+	return result;
 }
 
 const unique_ptr<ParsedExpression> &ColumnDefinition::DefaultValue() const {

@@ -103,9 +103,9 @@ def get_includes(fpath, text):
         included_file = x[1]
         if skip_duckdb_includes and 'duckdb' in included_file:
             continue
-        if 'extension_helper.cpp' in fpath and (included_file.endswith('-extension.hpp') or included_file == 'extension_oote_loader.hpp'):
+        if ('extension_helper.cpp' in fpath and (included_file.endswith('_extension.hpp')) or included_file == 'generated_extension_loader.hpp' or included_file == 'generated_extension_headers.hpp'):
             continue
-        if 'allocator.cpp' in fpath and included_file.endswith('jemalloc-extension.hpp'):
+        if 'allocator.cpp' in fpath and included_file.endswith('jemalloc_extension.hpp'):
             continue
         if x[0] in include_statements:
             raise Exception(f"duplicate include {x[0]} in file {fpath}")

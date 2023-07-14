@@ -89,13 +89,13 @@ public:
 
 public:
 	string ToString() const override;
-	bool Equals(const TableRef *other_p) const override;
+	bool Equals(const TableRef &other_p) const override;
 
 	unique_ptr<TableRef> Copy() override;
 
-	//! Serializes a blob into a JoinRef
+	//! Serializes a blob into a PivotRef
 	void Serialize(FieldWriter &serializer) const override;
-	//! Deserializes a blob back into a JoinRef
+	//! Deserializes a blob back into a PivotRef
 	static unique_ptr<TableRef> Deserialize(FieldReader &source);
 
 	void FormatSerialize(FormatSerializer &serializer) const override;

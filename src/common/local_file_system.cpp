@@ -162,8 +162,9 @@ static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 	}
 } // LCOV_EXCL_STOP
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
+	auto path = FileSystem::ExpandPath(path_p, opener);
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
@@ -241,7 +242,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 }
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	off_t offset = lseek(fd, location, SEEK_SET);
 	if (offset == (off_t)-1) {
 		throw IOException("Could not seek to location %lld for file \"%s\": %s", location, handle.path,
@@ -250,7 +251,7 @@ void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 }
 
 idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	off_t position = lseek(fd, 0, SEEK_CUR);
 	if (position == (off_t)-1) {
 		throw IOException("Could not get file position file \"%s\": %s", handle.path, strerror(errno));
@@ -259,7 +260,7 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 }
 
 void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	int64_t bytes_read = pread(fd, buffer, nr_bytes, location);
 	if (bytes_read == -1) {
 		throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
@@ -271,7 +272,7 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 }
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	int64_t bytes_read = read(fd, buffer, nr_bytes);
 	if (bytes_read == -1) {
 		throw IOException("Could not read from file \"%s\": %s", handle.path, strerror(errno));
@@ -280,7 +281,7 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 }
 
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	int64_t bytes_written = pwrite(fd, buffer, nr_bytes, location);
 	if (bytes_written == -1) {
 		throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
@@ -292,7 +293,7 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 }
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	int64_t bytes_written = write(fd, buffer, nr_bytes);
 	if (bytes_written == -1) {
 		throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
@@ -301,7 +302,7 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 }
 
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
 		return -1;
@@ -310,7 +311,7 @@ int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 }
 
 time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
 		return -1;
@@ -319,12 +320,12 @@ time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 }
 
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	return GetFileTypeInternal(fd);
 }
 
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	if (ftruncate(fd, new_size) != 0) {
 		throw IOException("Could not truncate file \"%s\": %s", handle.path, strerror(errno));
 	}
@@ -374,7 +375,7 @@ int RemoveDirectoryRecursive(const char *path) {
 				continue;
 			}
 			len = path_len + (idx_t)strlen(p->d_name) + 2;
-			buf = new char[len];
+			buf = new (std::nothrow) char[len];
 			if (buf) {
 				struct stat statbuf;
 				snprintf(buf, len, "%s/%s", path, p->d_name);
@@ -443,7 +444,7 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 }
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
-	int fd = ((UnixFileHandle &)handle).fd;
+	int fd = handle.Cast<UnixFileHandle>().fd;
 	if (fsync(fd) != 0) {
 		throw FatalException("fsync failed!");
 	}
@@ -506,8 +507,9 @@ public:
 	};
 };
 
-unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
+unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
+	auto path = FileSystem::ExpandPath(path_p, opener);
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
@@ -557,7 +559,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 }
 
 void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
-	auto &whandle = (WindowsFileHandle &)handle;
+	auto &whandle = handle.Cast<WindowsFileHandle>();
 	whandle.position = location;
 	LARGE_INTEGER wlocation;
 	wlocation.QuadPart = location;
@@ -565,7 +567,7 @@ void LocalFileSystem::SetFilePointer(FileHandle &handle, idx_t location) {
 }
 
 idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
-	return ((WindowsFileHandle &)handle).position;
+	return handle.Cast<WindowsFileHandle>().position;
 }
 
 static DWORD FSInternalRead(FileHandle &handle, HANDLE hFile, void *buffer, int64_t nr_bytes, idx_t location) {
@@ -595,8 +597,8 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 }
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
-	auto &pos = ((WindowsFileHandle &)handle).position;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
+	auto &pos = handle.Cast<WindowsFileHandle>().position;
 	auto n = std::min<idx_t>(std::max<idx_t>(GetFileSize(handle), pos) - pos, nr_bytes);
 	auto bytes_read = FSInternalRead(handle, hFile, buffer, n, pos);
 	pos += bytes_read;
@@ -620,7 +622,7 @@ static DWORD FSInternalWrite(FileHandle &handle, HANDLE hFile, void *buffer, int
 }
 
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	auto bytes_written = FSInternalWrite(handle, hFile, buffer, nr_bytes, location);
 	if (bytes_written != nr_bytes) {
 		throw IOException("Could not write all bytes from file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
@@ -629,15 +631,15 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 }
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
-	auto &pos = ((WindowsFileHandle &)handle).position;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
+	auto &pos = handle.Cast<WindowsFileHandle>().position;
 	auto bytes_written = FSInternalWrite(handle, hFile, buffer, nr_bytes, pos);
 	pos += bytes_written;
 	return bytes_written;
 }
 
 int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	LARGE_INTEGER result;
 	if (!GetFileSizeEx(hFile, &result)) {
 		return -1;
@@ -646,7 +648,7 @@ int64_t LocalFileSystem::GetFileSize(FileHandle &handle) {
 }
 
 time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 
 	// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfiletime
 	FILETIME last_write;
@@ -672,7 +674,7 @@ time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 }
 
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	// seek to the location
 	SetFilePointer(handle, new_size);
 	// now set the end of file position
@@ -698,7 +700,7 @@ void LocalFileSystem::CreateDirectory(const string &directory) {
 	}
 	auto unicode_path = WindowsUtil::UTF8ToUnicode(directory.c_str());
 	if (directory.empty() || !CreateDirectoryW(unicode_path.c_str(), NULL) || !DirectoryExists(directory)) {
-		throw IOException("Could not create directory!");
+		throw IOException("Could not create directory: \'%s\'", directory.c_str());
 	}
 }
 
@@ -765,7 +767,7 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 }
 
 void LocalFileSystem::FileSync(FileHandle &handle) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
 	if (FlushFileBuffers(hFile) == 0) {
 		throw IOException("Could not flush file handle to disk!");
 	}
@@ -775,12 +777,12 @@ void LocalFileSystem::MoveFile(const string &source, const string &target) {
 	auto source_unicode = WindowsUtil::UTF8ToUnicode(source.c_str());
 	auto target_unicode = WindowsUtil::UTF8ToUnicode(target.c_str());
 	if (!MoveFileW(source_unicode.c_str(), target_unicode.c_str())) {
-		throw IOException("Could not move file");
+		throw IOException("Could not move file: %s", GetLastErrorAsString());
 	}
 }
 
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
-	auto path = ((WindowsFileHandle &)handle).path;
+	auto path = handle.Cast<WindowsFileHandle>().path;
 	// pipes in windows are just files in '\\.\pipe\' folder
 	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
 		return FileType::FILE_TYPE_FIFO;
@@ -819,19 +821,6 @@ idx_t LocalFileSystem::SeekPosition(FileHandle &handle) {
 	return GetFilePointer(handle);
 }
 
-static bool HasGlob(const string &str) {
-	for (idx_t i = 0; i < str.size(); i++) {
-		switch (str[i]) {
-		case '*':
-		case '?':
-		case '[':
-			return true;
-		default:
-			break;
-		}
-	}
-	return false;
-}
 static bool IsCrawl(const string &glob) {
 	// glob must match exactly
 	return glob == "**";

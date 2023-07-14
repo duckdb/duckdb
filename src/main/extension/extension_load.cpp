@@ -17,6 +17,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Load External Extension
 //===--------------------------------------------------------------------===//
+#ifndef DUCKDB_DISABLE_EXTENSION_LOAD
 typedef void (*ext_init_fun_t)(DatabaseInstance &);
 typedef const char *(*ext_version_fun_t)(void);
 typedef bool (*ext_is_storage_t)(void);
@@ -43,25 +44,27 @@ static void ComputeSHA256FileSegment(FileHandle *handle, const idx_t start, cons
 
 	ComputeSHA256String(file_content, res);
 }
+#endif
 
-bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const string &extension,
+bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension,
                                      ExtensionInitResult &result, string &error) {
+#ifdef DUCKDB_DISABLE_EXTENSION_LOAD
+	throw PermissionException("Loading external extensions is disabled through a compile time flag");
+#else
 	if (!config.options.enable_external_access) {
 		throw PermissionException("Loading external extensions is disabled through configuration");
 	}
-	VirtualFileSystem fallback_file_system; // config may not contain one yet
-	auto &fs = config.file_system ? *config.file_system : fallback_file_system;
 	auto filename = fs.ConvertSeparators(extension);
 
 	// shorthand case
 	if (!ExtensionHelper::IsFullPath(extension)) {
-		string local_path = !config.options.extension_directory.empty() ? config.options.extension_directory
-		                                                                : fs.GetHomeDirectory(opener);
+		string local_path =
+		    !config.options.extension_directory.empty() ? config.options.extension_directory : fs.GetHomeDirectory();
 
 		// convert random separators to platform-canonic
 		local_path = fs.ConvertSeparators(local_path);
 		// expand ~ in extension directory
-		local_path = fs.ExpandPath(local_path, opener);
+		local_path = fs.ExpandPath(local_path);
 		auto path_components = PathComponents();
 		for (auto &path_ele : path_components) {
 			local_path = fs.JoinPath(local_path, path_ele);
@@ -88,7 +91,7 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const
 
 		auto signature_offset = handle->GetFileSize() - signature.size();
 
-		const idx_t maxLenChunks = 1024 * 1024;
+		const idx_t maxLenChunks = 1024ULL * 1024ULL;
 		const idx_t numChunks = (signature_offset + maxLenChunks - 1) / maxLenChunks;
 		std::vector<std::string> hash_chunks(numChunks);
 		std::vector<idx_t> splits(numChunks + 1);
@@ -199,22 +202,20 @@ bool ExtensionHelper::TryInitialLoad(DBConfig &config, FileOpener *opener, const
 	result.filename = filename;
 	result.lib_hdl = lib_hdl;
 	return true;
+#endif
 }
 
-ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileOpener *opener, const string &extension) {
+ExtensionInitResult ExtensionHelper::InitialLoad(DBConfig &config, FileSystem &fs, const string &extension) {
 	string error;
 	ExtensionInitResult result;
-	if (!TryInitialLoad(config, opener, extension, result, error)) {
+	if (!TryInitialLoad(config, fs, extension, result, error)) {
 		if (!ExtensionHelper::AllowAutoInstall(extension)) {
 			throw IOException(error);
 		}
 		// the extension load failed - try installing the extension
-		if (!config.file_system) {
-			throw InternalException("Attempting to install an extension without a file system");
-		}
-		ExtensionHelper::InstallExtension(config, *config.file_system, extension, false);
+		ExtensionHelper::InstallExtension(config, fs, extension, false);
 		// try loading again
-		if (!TryInitialLoad(config, nullptr, extension, result, error)) {
+		if (!TryInitialLoad(config, fs, extension, result, error)) {
 			throw IOException(error);
 		}
 	}
@@ -226,27 +227,30 @@ bool ExtensionHelper::IsFullPath(const string &extension) {
 	       StringUtil::Contains(extension, "\\");
 }
 
-string ExtensionHelper::GetExtensionName(const string &extension) {
+string ExtensionHelper::GetExtensionName(const string &original_name) {
+	auto extension = StringUtil::Lower(original_name);
 	if (!IsFullPath(extension)) {
-		return extension;
+		return ExtensionHelper::ApplyExtensionAlias(extension);
 	}
 	auto splits = StringUtil::Split(StringUtil::Replace(extension, "\\", "/"), '/');
 	if (splits.empty()) {
-		return extension;
+		return ExtensionHelper::ApplyExtensionAlias(extension);
 	}
 	splits = StringUtil::Split(splits.back(), '.');
 	if (splits.empty()) {
-		return extension;
+		return ExtensionHelper::ApplyExtensionAlias(extension);
 	}
-	return StringUtil::Lower(splits.front());
+	return ExtensionHelper::ApplyExtensionAlias(splits.front());
 }
 
-void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileOpener *opener, const string &extension) {
+void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension) {
 	if (db.ExtensionIsLoaded(extension)) {
 		return;
 	}
-
-	auto res = InitialLoad(DBConfig::GetConfig(db), opener, extension);
+#ifdef DUCKDB_DISABLE_EXTENSION_LOAD
+	throw PermissionException("Loading external extensions is disabled through a compile time flag");
+#else
+	auto res = InitialLoad(DBConfig::GetConfig(db), fs, extension);
 	auto init_fun_name = res.basename + "_init";
 
 	ext_init_fun_t init_fun;
@@ -260,10 +264,11 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileOpener *op
 	}
 
 	db.SetExtensionLoaded(extension);
+#endif
 }
 
 void ExtensionHelper::LoadExternalExtension(ClientContext &context, const string &extension) {
-	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileOpener(context), extension);
+	LoadExternalExtension(DatabaseInstance::GetDatabase(context), FileSystem::GetFileSystem(context), extension);
 }
 
 string ExtensionHelper::ExtractExtensionPrefixFromPath(const string &path) {

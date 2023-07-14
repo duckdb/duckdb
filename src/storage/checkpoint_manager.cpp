@@ -41,7 +41,7 @@ SingleFileCheckpointWriter::SingleFileCheckpointWriter(AttachedDatabase &db, Blo
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
-	auto &storage_manager = (SingleFileStorageManager &)db.GetStorageManager();
+	auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	return *storage_manager.block_manager;
 }
 
@@ -55,7 +55,7 @@ unique_ptr<TableDataWriter> SingleFileCheckpointWriter::GetTableDataWriter(Table
 
 void SingleFileCheckpointWriter::CreateCheckpoint() {
 	auto &config = DBConfig::Get(db);
-	auto &storage_manager = (SingleFileStorageManager &)db.GetStorageManager();
+	auto &storage_manager = db.GetStorageManager().Cast<SingleFileStorageManager>();
 	if (storage_manager.InMemory()) {
 		return;
 	}
@@ -73,7 +73,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 	vector<reference<SchemaCatalogEntry>> schemas;
 	// we scan the set of committed schemas
-	auto &catalog = (DuckCatalog &)Catalog::GetCatalog(db);
+	auto &catalog = Catalog::GetCatalog(db).Cast<DuckCatalog>();
 	catalog.ScanSchemas([&](SchemaCatalogEntry &entry) { schemas.push_back(entry); });
 	// write the actual data into the database
 	// write the amount of schemas
@@ -110,6 +110,9 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 	// truncate the WAL
 	wal->Truncate(0);
+
+	// truncate the file
+	block_manager.Truncate();
 
 	// mark all blocks written as part of the metadata as modified
 	metadata_writer->MarkWrittenBlocks();
@@ -337,7 +340,6 @@ void CheckpointWriter::WriteIndex(IndexCatalogEntry &index_catalog) {
 }
 
 void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader) {
-
 	// deserialize the index metadata
 	auto info = IndexCatalogEntry::Deserialize(reader, context);
 
@@ -361,10 +363,17 @@ void CheckpointReader::ReadIndex(ClientContext &context, MetaBlockReader &reader
 	}
 
 	// bind the parsed expressions
+	// add the table to the bind context
 	auto binder = Binder::CreateBinder(context);
-	auto &table_ref = info->table->Cast<TableRef>();
-	auto bound_table = binder->Bind(table_ref);
-	D_ASSERT(bound_table->type == TableReferenceType::BASE_TABLE);
+	vector<LogicalType> column_types;
+	vector<string> column_names;
+	for (auto &col : table_catalog.GetColumns().Logical()) {
+		column_types.push_back(col.Type());
+		column_names.push_back(col.Name());
+	}
+	vector<column_t> column_ids;
+	binder->bind_context.AddBaseTable(0, info->table->table_name, column_names, column_types, column_ids,
+	                                  &table_catalog);
 	IndexBinder idx_binder(*binder, context);
 	unbound_expressions.reserve(parsed_expressions.size());
 	for (auto &expr : parsed_expressions) {
@@ -419,7 +428,7 @@ void CheckpointWriter::WriteMacro(ScalarMacroCatalogEntry &macro) {
 }
 
 void CheckpointReader::ReadMacro(ClientContext &context, MetaBlockReader &reader) {
-	auto info = ScalarMacroCatalogEntry::Deserialize(reader, context);
+	auto info = MacroCatalogEntry::Deserialize(reader, context);
 	catalog.CreateFunction(context, *info);
 }
 
@@ -428,7 +437,7 @@ void CheckpointWriter::WriteTableMacro(TableMacroCatalogEntry &macro) {
 }
 
 void CheckpointReader::ReadTableMacro(ClientContext &context, MetaBlockReader &reader) {
-	auto info = TableMacroCatalogEntry::Deserialize(reader, context);
+	auto info = MacroCatalogEntry::Deserialize(reader, context);
 	catalog.CreateFunction(context, *info);
 }
 
