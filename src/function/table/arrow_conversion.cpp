@@ -842,11 +842,11 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 	vector.Slice(*dict_vectors[col_idx], sel, size);
 }
 
-// static void ScanRunEndEncoded(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
-// std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx, ArrowConvertDataIndices
-// &arrow_convert_idx) {
-
-//}
+static void ScanRunEndEncoded(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
+    std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx, ArrowConvertDataIndices
+    &arrow_convert_idx) {
+	throw NotImplementedException("Run-end encoded data is not supported yet");
+}
 
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state,
                                        unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
