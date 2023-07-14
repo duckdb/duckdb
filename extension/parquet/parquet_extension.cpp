@@ -116,7 +116,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
 	idx_t row_group_size = RowGroup::ROW_GROUP_SIZE;
-	optional_idx row_group_size_bytes;
+	idx_t row_group_size_bytes = 134217728; // 128MB (1 << 27)
 	ChildFieldIDs field_ids;
 };
 
@@ -818,12 +818,8 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 	// append data to the local (buffered) chunk collection
 	local_state.buffer.Append(local_state.append_state, input);
 
-	auto size_bytes_exceeded = false;
-	if (bind_data.row_group_size_bytes.IsValid()) {
-		size_bytes_exceeded = local_state.buffer.SizeInBytes() > bind_data.row_group_size_bytes.GetIndex();
-	}
-
-	if (local_state.buffer.Count() > bind_data.row_group_size || size_bytes_exceeded) {
+	if (local_state.buffer.Count() > bind_data.row_group_size ||
+	    local_state.buffer.SizeInBytes() > bind_data.row_group_size_bytes) {
 		// if the chunk collection exceeds a certain size (rows/bytes) we flush it to the parquet file
 		local_state.append_state.current_chunk_state.handles.clear();
 		global_state.writer->Flush(local_state.buffer);
