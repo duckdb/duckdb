@@ -31,7 +31,7 @@ set(JSON_EXTENSION_FILES
     json_functions/read_json_objects.cpp
     ${YYJSON_OBJECT_FILES})
 
-add_library(json_extension STATIC ${JSON_EXTENSION_FILES})
+build_static_extension(json ${JSON_EXTENSION_FILES})
 set(PARAMETERS "-warnings")
 build_loadable_extension(json ${PARAMETERS} ${JSON_EXTENSION_FILES})
 
