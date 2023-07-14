@@ -50,9 +50,8 @@ ReadCSVRelation::ReadCSVRelation(const std::shared_ptr<ClientContext> &context, 
 	CSVSniffer sniffer(options, buffer_manager);
 	auto sniffer_result = sniffer.SniffCSV();
 	options = sniffer_result.options;
-	BufferedCSVReader reader(*context, std::move(options));
+	BufferedCSVReader reader(*context, std::move(options), sniffer_result.return_types);
 	reader.names = sniffer_result.names;
-	reader.return_types = sniffer_result.return_types;
 	auto &types = sniffer_result.return_types;
 	auto &names = sniffer_result.names;
 	for (idx_t i = 0; i < types.size(); i++) {
