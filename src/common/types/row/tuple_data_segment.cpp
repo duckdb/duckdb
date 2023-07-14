@@ -151,8 +151,10 @@ void TupleDataSegment::Verify() const {
 		total_count += chunk.count;
 
 		total_size += chunk.count * layout.GetRowWidth();
-		for (const auto &part : chunk.parts) {
-			total_size += part.total_heap_size;
+		if (!layout.AllConstant()) {
+			for (const auto &part : chunk.parts) {
+				total_size += part.total_heap_size;
+			}
 		}
 	}
 	D_ASSERT(total_count == this->count);
