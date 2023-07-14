@@ -344,7 +344,6 @@ static void RLEScanConstant(ColumnSegment &segment, RLEScanState<T> &scan_state,
 
 template <class T>
 void RLEScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	// FIXME: emit constant vector if repetition of single value is >= scan_count
 	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
 	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
 	auto index_pointer = (rle_count_t *)(data + scan_state.rle_count_offset);
