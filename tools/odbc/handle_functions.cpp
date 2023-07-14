@@ -5,10 +5,13 @@
 
 #include <codecvt>
 
-SQLRETURN duckdb::SetDiagnosticRecord(OdbcHandle *handle, SQLRETURN ret, std::string component,
-                                      duckdb::DiagRecord diag_record, std::string data_source) {
-	handle->odbc_diagnostic->FormatDiagnosticMessage(diag_record, data_source, component);
-	handle->odbc_diagnostic->AddDiagRecord(diag_record);
+SQLRETURN duckdb::SetDiagnosticRecord(OdbcHandle *handle, const SQLRETURN &ret, const std::string &component,
+                                      const std::string &msg, const SQLStateType &sqlstate_type,
+                                      const std::string &server_name) {
+	DiagRecord diag_rec(msg, sqlstate_type, server_name);
+
+	handle->odbc_diagnostic->FormatDiagnosticMessage(diag_rec, server_name, component);
+	handle->odbc_diagnostic->AddDiagRecord(diag_rec);
 	return ret;
 }
 

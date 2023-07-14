@@ -1,7 +1,5 @@
 #include "../common.h"
 
-#include <iostream>
-
 using namespace odbc_test;
 
 TEST_CASE("Test Select Statement", "[odbc]") {

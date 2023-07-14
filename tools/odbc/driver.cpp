@@ -114,9 +114,9 @@ SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute
 		case SQL_CP_ONE_PER_HENV:
 			return SQL_SUCCESS;
 		default:
-			duckdb::DiagRecord diag_rec("Connection pooling not supported: " + std::to_string(attribute),
-			                            SQLStateType::INVALID_ATTR_OPTION_ID, "Unknown DSN");
-			return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr", diag_rec, "");
+			return duckdb::SetDiagnosticRecord(env, SQL_SUCCESS_WITH_INFO, "SQLSetConnectAttr",
+			                                   "Connection pooling not supported: " + std::to_string(attribute),
+			                                   SQLStateType::INVALID_ATTR_OPTION_ID, "");
 		}
 	case SQL_ATTR_CP_MATCH:
 		env->error_messages.emplace_back("Optional feature not supported.");
