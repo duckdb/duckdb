@@ -140,7 +140,11 @@ protected:
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	//! Create a collection for a specific a partition
 	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) const {
-		return make_uniq<TupleDataCollection>(allocators->allocators[partition_index]);
+		if (allocators) {
+			return make_uniq<TupleDataCollection>(allocators->allocators[partition_index]);
+		} else {
+			return make_uniq<TupleDataCollection>(buffer_manager, layout);
+		}
 	}
 	//! Verify count/data size of this PartitionedTupleData
 	void Verify() const;
