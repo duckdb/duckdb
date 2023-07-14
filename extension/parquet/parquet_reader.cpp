@@ -356,7 +356,6 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 
 // TODO we don't need readers for columns we are not going to read ay
 unique_ptr<ColumnReader> ParquetReader::CreateReader() {
-	std::cout << "Parquetreader created" << std::endl;
 	auto file_meta_data = GetFileMetadata();
 	idx_t next_schema_idx = 0;
 	idx_t next_file_idx = 0;
@@ -401,7 +400,6 @@ void ParquetReader::InitializeSchema() {
 	if (file_meta_data->schema.size() < 2) {
 		throw FormatException("Need at least one non-root column in the file");
 	}
-//	auto root_reader = CreateReader();
 
 	auto &root_type = root_reader->Type();
 	auto &child_types = StructType::GetChildTypes(root_type);
@@ -485,9 +483,6 @@ const FileMetaData *ParquetReader::GetFileMetadata() {
 }
 
 unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
-
-	auto current_count = count++;
-	std::cout << current_count << std::endl;
 
 	idx_t file_col_idx;
 	for (file_col_idx = 0; file_col_idx < names.size(); file_col_idx++) {

@@ -95,7 +95,6 @@ public:
 	ParquetOptions parquet_options;
 	MultiFileReaderData reader_data;
 	unique_ptr<ColumnReader> root_reader;
-	idx_t count = 1;
 
 public:
 	void InitializeScan(ParquetReaderScanState &state, vector<idx_t> groups_to_read);
