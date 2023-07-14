@@ -4,7 +4,7 @@ project(VisualizerExtension)
 
 include_directories(include)
 
-add_library(visualizer_extension STATIC visualizer_extension.cpp)
+build_static_extension(visualizer visualizer_extension.cpp)
 set(PARAMETERS "-warnings")
 build_loadable_extension(visualizer ${PARAMETERS} visualizer_extension.cpp)
 install(

@@ -1,7 +1,3 @@
-if(${WASM_LOADABLE_EXTENSIONS})
-  return()
-endif()
-
 cmake_minimum_required(VERSION 2.8.12)
 
 project(JemallocExtension)
@@ -13,8 +9,7 @@ add_subdirectory(jemalloc)
 
 set(JEMALLOC_EXTENSION_FILES jemalloc_extension.cpp ${JEMALLOC_OBJECT_FILES})
 
-add_library(jemalloc_extension STATIC ${JEMALLOC_EXTENSION_FILES})
-
+build_static_extension(jemalloc ${JEMALLOC_EXTENSION_FILES})
 # we do not do build_loadable_extension here because jemalloc is static-only
 
 install(

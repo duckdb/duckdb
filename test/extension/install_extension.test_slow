@@ -44,18 +44,17 @@ LOAD 'loadable_extension_demo';
 statement ok
 INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
 
-# ensure file is there
-query I
-select COUNT(*) from glob('__TEST_DIR__/extension_directory/.duckdb/extensions/*/*/loadable_extension_demo.duckdb_extension')
-----
-1
-
 # can load now
 statement ok
 LOAD 'loadable_extension_demo';
 
-# unload again
+# ensure file is there
+query I
+select count(*) from glob('__TEST_DIR__/extension_directory/**/loadable_extension_demo.duckdb_extension')
+----
+1
 
+# unload again
 restart
 
 
@@ -83,7 +82,7 @@ statement ok
 INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
 
 query I
-select COUNT(*) from glob('__TEST_DIR__/.duckdb/extensions/*/*/loadable_extension_demo.duckdb_extension')
+select COUNT(*) from glob('__TEST_DIR__/.duckdb/**/loadable_extension_demo.duckdb_extension')
 ----
 1
 

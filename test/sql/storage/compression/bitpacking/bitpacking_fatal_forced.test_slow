@@ -1,0 +1,42 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_fatal_forced.test_slow
+# description: Test forced bitpacking, with value ranges that are rejected by the bitpacking compression analyze step
+# group: [bitpacking]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+foreach bitpacking_mode delta_for for constant_delta constant
+
+statement ok
+PRAGMA force_bitpacking_mode='${bitpacking_mode}'
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+statement ok
+CREATE TABLE test (x INT128, a INT64, b INT32, c INT16, d TINYINT);
+
+# Data too big to be compressed with bitpacking
+statement ok
+INSERT INTO test VALUES
+	(-170141183460469231731687303715884105727, -9223372036854775808,	-2147483648,	-32768,	-128),
+	(170141183460469231731687303715884105727, 9223372036854775807,	2147483647,		32767,	127);
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE (
+	segment_type ILIKE 'HUGEINT' OR
+	segment_type ILIKE 'BIGINT' OR
+	segment_type ILIKE 'INTEGER' OR
+	segment_type ILIKE 'SMALLINT' OR
+	segment_type ILIKE 'TINYINT')
+----
+Uncompressed
+Uncompressed
+Uncompressed
+Uncompressed
+Uncompressed
+
+statement ok
+DROP TABLE test;
+
+endloop

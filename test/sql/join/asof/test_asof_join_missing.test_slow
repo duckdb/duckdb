@@ -13,7 +13,7 @@ PRAGMA enable_verification
 # * First payload bin empty 
 # * Multiple scanned payload blocks
 
-# Change to true to check results
+# Check results against IEJoin
 foreach debug False True
 
 statement ok 
@@ -32,6 +32,20 @@ SELECT SUM(v)
 FROM probe ASOF JOIN build USING(k, t);
 ----
 108
+
+# Coverage: Missing right side bin
+query II
+WITH build AS (
+	SELECT k * 2 as k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	FROM range(0,10) vals(v), range(0,5) keys(k)
+), probe AS (
+	SELECT k / 2 AS k, t - INTERVAL (30) SECOND AS t
+	FROM build
+)
+SELECT SUM(v), COUNT(*)
+FROM probe ASOF JOIN build USING(k, t);
+----
+108	27
 
 # 20 dates, 5 keys
 query I

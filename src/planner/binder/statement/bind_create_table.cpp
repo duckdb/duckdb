@@ -297,10 +297,9 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 
 		if (type_dependency) {
 			// Only if the USER comes from a create type
-			if (!schema.catalog.IsTemporaryCatalog()) {
-				// If it is not a TEMP table we add a dependency
-				result->dependencies.AddDependency(*type_dependency);
-			} else {
+			if (schema.catalog.IsTemporaryCatalog() && column.Type().id() == LogicalTypeId::ENUM) {
+				// for enum types that are used in tables in the temp catalog, we need to
+				// make a copy of the enum type definition that is accessible there
 				auto enum_type = type_dependency->user_type;
 				auto &enum_entries = EnumType::GetValuesInsertOrder(enum_type);
 				auto enum_size = EnumType::GetSize(enum_type);
@@ -313,6 +312,8 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 				}
 				auto copy_type = LogicalType::ENUM(EnumType::GetTypeName(enum_type), copy_enum_entries_vec, enum_size);
 				column.SetType(copy_type);
+			} else {
+				result->dependencies.AddDependency(*type_dependency);
 			}
 		}
 	}

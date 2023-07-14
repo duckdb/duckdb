@@ -74,22 +74,4 @@ unique_ptr<ParsedExpression> SubqueryExpression::Deserialize(ExpressionType type
 	return std::move(expression);
 }
 
-void SubqueryExpression::FormatSerialize(FormatSerializer &serializer) const {
-	ParsedExpression::FormatSerialize(serializer);
-	serializer.WriteProperty("subquery_type", subquery_type);
-	serializer.WriteProperty("subquery", *subquery);
-	serializer.WriteOptionalProperty("child", child);
-	serializer.WriteProperty("comparison_type", comparison_type);
-}
-
-unique_ptr<ParsedExpression> SubqueryExpression::FormatDeserialize(ExpressionType type,
-                                                                   FormatDeserializer &deserializer) {
-	auto expression = make_uniq<SubqueryExpression>();
-	deserializer.ReadProperty("subquery_type", expression->subquery_type);
-	deserializer.ReadProperty("subquery", expression->subquery);
-	deserializer.ReadOptionalProperty("child", expression->child);
-	deserializer.ReadProperty("comparison_type", expression->comparison_type);
-	return std::move(expression);
-}
-
 } // namespace duckdb

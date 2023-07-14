@@ -333,8 +333,22 @@ static void CreateValuesMap(const StructNames &names, yyjson_mut_doc *doc, yyjso
 static void CreateValuesUnion(const StructNames &names, yyjson_mut_doc *doc, yyjson_mut_val *vals[], Vector &value_v,
                               idx_t count) {
 	// Structs become values, therefore we initialize vals to JSON values
-	for (idx_t i = 0; i < count; i++) {
-		vals[i] = yyjson_mut_obj(doc);
+	UnifiedVectorFormat value_data;
+	value_v.ToUnifiedFormat(count, value_data);
+	if (value_data.validity.AllValid()) {
+		for (idx_t i = 0; i < count; i++) {
+			vals[i] = yyjson_mut_obj(doc);
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			auto index = value_data.sel->get_index(i);
+			if (!value_data.validity.RowIsValid(index)) {
+				// Make the entry NULL if the Union value is NULL
+				vals[i] = yyjson_mut_null(doc);
+			} else {
+				vals[i] = yyjson_mut_obj(doc);
+			}
+		}
 	}
 
 	// Initialize re-usable array for the nested values
@@ -361,6 +375,11 @@ static void CreateValuesUnion(const StructNames &names, yyjson_mut_doc *doc, yyj
 		auto keys = UnifiedVectorFormat::GetData<string_t>(key_data);
 
 		for (idx_t i = 0; i < count; i++) {
+			auto value_index = value_data.sel->get_index(i);
+			if (!value_data.validity.RowIsValid(value_index)) {
+				// This entry is just NULL in it's entirety
+				continue;
+			}
 			auto tag_idx = tag_data.sel->get_index(i);
 			if (!tag_data.validity.RowIsValid(tag_idx)) {
 				continue;

@@ -1,10 +1,9 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
 
-#include <set>
-#include <map>
-
 #include <iostream>
+#include <map>
+#include <set>
 
 using namespace duckdb;
 using namespace std;
@@ -58,6 +57,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"debug_force_external", {Value(true)}},
 	    {"debug_force_no_cross_product", {Value(true)}},
 	    {"debug_force_external", {Value(true)}},
+	    {"prefer_range_joins", {Value(true)}},
 	    {"custom_extension_repository", {"duckdb.org/no-extensions-here", "duckdb.org/no-extensions-here"}},
 	    {"enable_fsst_vectors", {true}},
 	    {"enable_object_cache", {true}},
@@ -77,6 +77,7 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"ordered_aggregate_threshold", {Value::UBIGINT(idx_t(1) << 12)}},
 	    {"null_order", {"nulls_first"}},
 	    {"perfect_ht_threshold", {0}},
+	    {"pivot_filter_threshold", {999}},
 	    {"pivot_limit", {999}},
 	    {"preserve_identifier_case", {false}},
 	    {"preserve_insertion_order", {false}},
@@ -89,8 +90,8 @@ OptionValueSet &GetValueForOption(const string &name) {
 	    {"worker_threads", {42}},
 	    {"enable_http_metadata_cache", {true}},
 	    {"force_bitpacking_mode", {"constant"}},
-	    {"arrow_large_buffer_size", {true}},
-	};
+	    {"allocator_flush_threshold", {"4.2GB"}},
+	    {"arrow_large_buffer_size", {true}}};
 	// Every option that's not excluded has to be part of this map
 	if (!value_map.count(name)) {
 		REQUIRE(name == "MISSING_FROM_MAP");
@@ -105,6 +106,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "debug_window_mode",
 	    "experimental_parallel_csv",
 	    "lock_configuration",        // cant change this while db is running
+	    "disabled_filesystems",      // cant change this while db is running
 	    "enable_external_access",    // cant change this while db is running
 	    "allow_unsigned_extensions", // cant change this while db is running
 	    "log_query_path",
@@ -133,7 +135,6 @@ void RequireValueEqual(ConfigurationOption *op, const Value &left, const Value &
 //! New options should be added to the value_map in GetValueForOption
 //! Or added to the 'excluded_options' in OptionIsExcludedFromTest
 TEST_CASE("Test RESET statement for ClientConfig options", "[api]") {
-
 	// Create a connection
 	DuckDB db(nullptr);
 	Connection con(db);

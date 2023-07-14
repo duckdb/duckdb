@@ -159,16 +159,16 @@ void PhysicalRangeJoin::GlobalSortedTable::Finalize(Pipeline &pipeline, Event &e
 	}
 }
 
-PhysicalRangeJoin::PhysicalRangeJoin(LogicalOperator &op, PhysicalOperatorType type, unique_ptr<PhysicalOperator> left,
-                                     unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                                     idx_t estimated_cardinality)
+PhysicalRangeJoin::PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperatorType type,
+                                     unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
+                                     vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality)
     : PhysicalComparisonJoin(op, type, std::move(cond), join_type, estimated_cardinality) {
 	// Reorder the conditions so that ranges are at the front.
 	// TODO: use stats to improve the choice?
 	// TODO: Prefer fixed length types?
 	if (conditions.size() > 1) {
-		auto conditions_p = std::move(conditions);
-		conditions.resize(conditions_p.size());
+		vector<JoinCondition> conditions_p(conditions.size());
+		std::swap(conditions_p, conditions);
 		idx_t range_position = 0;
 		idx_t other_position = conditions_p.size();
 		for (idx_t i = 0; i < conditions_p.size(); ++i) {
@@ -188,6 +188,30 @@ PhysicalRangeJoin::PhysicalRangeJoin(LogicalOperator &op, PhysicalOperatorType t
 
 	children.push_back(std::move(left));
 	children.push_back(std::move(right));
+
+	//	Fill out the left projection map.
+	left_projection_map = op.left_projection_map;
+	if (left_projection_map.empty()) {
+		const auto left_count = children[0]->types.size();
+		left_projection_map.reserve(left_count);
+		for (column_t i = 0; i < left_count; ++i) {
+			left_projection_map.emplace_back(i);
+		}
+	}
+	//	Fill out the right projection map.
+	right_projection_map = op.right_projection_map;
+	if (right_projection_map.empty()) {
+		const auto right_count = children[1]->types.size();
+		right_projection_map.reserve(right_count);
+		for (column_t i = 0; i < right_count; ++i) {
+			right_projection_map.emplace_back(i);
+		}
+	}
+
+	//	Construct the unprojected type layout from the children's types
+	unprojected_types = children[0]->GetTypes();
+	auto &types = children[1]->GetTypes();
+	unprojected_types.insert(unprojected_types.end(), types.begin(), types.end());
 }
 
 idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition> &conditions) {
@@ -264,6 +288,18 @@ idx_t PhysicalRangeJoin::LocalSortedTable::MergeNulls(const vector<JoinCondition
 	} else {
 		return count - VectorOperations::CountNotNull(primary, count);
 	}
+}
+
+void PhysicalRangeJoin::ProjectResult(DataChunk &chunk, DataChunk &result) const {
+	const auto left_projected = left_projection_map.size();
+	for (idx_t i = 0; i < left_projected; ++i) {
+		result.data[i].Reference(chunk.data[left_projection_map[i]]);
+	}
+	const auto left_width = children[0]->types.size();
+	for (idx_t i = 0; i < right_projection_map.size(); ++i) {
+		result.data[left_projected + i].Reference(chunk.data[left_width + right_projection_map[i]]);
+	}
+	result.SetCardinality(chunk);
 }
 
 BufferHandle PhysicalRangeJoin::SliceSortedPayload(DataChunk &payload, GlobalSortState &state, const idx_t block_idx,

@@ -1,0 +1,123 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_types.test_slow
+# description: Test bitpacking with different types, especially around the numerical limits
+# group: [bitpacking]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+foreach bitpacking_mode delta_for for constant_delta constant
+
+statement ok
+PRAGMA force_bitpacking_mode='${bitpacking_mode}'
+
+foreach type <numeric> hugeint decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+CREATE TABLE a AS SELECT MOD(i,3)::${type} i FROM range(10000) tbl(i)
+
+query IIIII
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM a
+----
+0	2	0.999900	10000	10000
+
+query IIIII
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM a WHERE i=1
+----
+1	1	1.000000	3333	3333
+
+statement ok
+DROP TABLE a
+
+endloop
+
+statement ok
+CREATE TABLE test (d INT32);
+
+# Range too big to force bitpacking
+statement ok
+INSERT INTO test VALUES (-2147483648), (2147483647);
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE (
+	segment_type ILIKE 'INTEGER')
+----
+Uncompressed
+
+statement ok
+DROP TABLE IF EXISTS test;
+
+statement ok
+CREATE TABLE test (x INT128, a INT64, b INT32, c INT16, d TINYINT);
+
+# Only using (SIZEOF(TYPE)*8)-1
+# (All but 1 bit)
+# Because bitpacking wont accept a value range bigger than that
+statement ok
+INSERT INTO test VALUES (-85070591730234615865843651857942052864, -4611686018427387904, -1073741824, -16384, -64), (85070591730234615865843651857942052863, 4611686018427387903, 1073741823, 16383, 63);
+
+statement ok
+checkpoint
+
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE (
+	segment_type ILIKE 'HUGEINT' OR
+	segment_type ILIKE 'BIGINT' OR
+	segment_type ILIKE 'INTEGER' OR
+	segment_type ILIKE 'SMALLINT' OR
+	segment_type ILIKE 'TINYINT')
+----
+BitPacking
+BitPacking
+BitPacking
+BitPacking
+BitPacking
+
+query IIIIII
+SELECT AVG(x), AVG(a), AVG(b), AVG(c), AVG(d), COUNT(*) FROM test
+----
+-0.5	-0.5	-0.5	-0.5	-0.5	2
+
+statement ok
+drop table test
+
+statement ok
+CREATE TABLE test (a UINT64, b UINT32, c UINT16, d UINT8);
+
+statement ok
+INSERT INTO test SELECT i, i, i, i FROM range(0, 256) tbl(i);
+INSERT INTO test SELECT i, i, i, NULL FROM range(31768, 32768) tbl(i);
+INSERT INTO test SELECT i, i, NULL, NULL FROM range(4294966295, 4294967295) tbl(i);
+INSERT INTO test SELECT 18446744073709551615 - i, NULL, NULL, NULL FROM range(0, 1000) tbl(i);
+
+statement ok
+checkpoint
+
+query IIIII
+SELECT AVG(a), AVG(b), AVG(c), AVG(d), COUNT(*) FROM test
+----
+5.665461940419088e+18	1903811655.4255319	25716.671974522294	127.5	3256
+
+statement ok
+CREATE TABLE test_bool (id VARCHAR, col BOOL)
+
+statement ok
+INSERT INTO test_bool SELECT i::VARCHAR id, CAST (i%2 as BOOL) col FROM range(10000) tbl(i)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(*) FROM test_bool WHERE col = TRUE
+----
+5000
+
+statement ok
+drop table test
+
+statement ok
+drop table test_bool
+
+endloop
