@@ -97,7 +97,9 @@ void CSVStateMachine::SniffDialect(vector<idx_t> &sniffed_column_counts) {
 		state =
 		    static_cast<CSVState>(transition_array[static_cast<uint8_t>(state)][static_cast<uint8_t>(current_char)]);
 		bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
-		                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
+		                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR) ||
+		                  (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::RECORD_SEPARATOR) ||
+		                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::CARRIAGE_RETURN);
 
 		bool carriage_return = previous_state == CSVState::CARRIAGE_RETURN;
 		column_count += previous_state == CSVState::FIELD_SEPARATOR;
@@ -121,7 +123,9 @@ void CSVStateMachine::SniffDialect(vector<idx_t> &sniffed_column_counts) {
 		current_char = csv_buffer_iterator.GetNextChar();
 	}
 	bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
-	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
+	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR) ||
+	                  (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::RECORD_SEPARATOR) ||
+	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::CARRIAGE_RETURN);
 	if (cur_rows < options.sample_chunk_size && !empty_line) {
 		sniffed_column_counts[cur_rows++] = column_count;
 	}
@@ -174,7 +178,9 @@ void CSVStateMachine::SniffValue(vector<pair<idx_t, vector<Value>>> &sniffed_val
 		state =
 		    static_cast<CSVState>(transition_array[static_cast<uint8_t>(state)][static_cast<uint8_t>(current_char)]);
 		bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
-		                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
+		                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR) ||
+		                  (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::RECORD_SEPARATOR) ||
+		                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::CARRIAGE_RETURN);
 
 		bool carriage_return = previous_state == CSVState::CARRIAGE_RETURN;
 		if (previous_state == CSVState::FIELD_SEPARATOR ||
@@ -205,7 +211,9 @@ void CSVStateMachine::SniffValue(vector<pair<idx_t, vector<Value>>> &sniffed_val
 		current_char = csv_buffer_iterator.GetNextChar();
 	}
 	bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
-	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
+	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR) ||
+	                  (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::RECORD_SEPARATOR) ||
+	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::CARRIAGE_RETURN);
 	if (cur_row < sniffed_value.size() && !empty_line) {
 		VerifyUTF8(options, cur_row, value);
 		sniffed_value[cur_row].first = rows_read;
@@ -224,7 +232,9 @@ void CSVStateMachine::Parse(DataChunk &parse_chunk) {
 		state =
 		    static_cast<CSVState>(transition_array[static_cast<uint8_t>(state)][static_cast<uint8_t>(current_char)]);
 		bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
-		                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
+		                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR) ||
+		                  (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::RECORD_SEPARATOR) ||
+		                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::CARRIAGE_RETURN);
 
 		bool carriage_return = previous_state == CSVState::CARRIAGE_RETURN;
 		if (previous_state == CSVState::FIELD_SEPARATOR ||
@@ -270,7 +280,9 @@ void CSVStateMachine::Parse(DataChunk &parse_chunk) {
 		current_char = csv_buffer_iterator.GetNextChar();
 	}
 	bool empty_line = (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::CARRIAGE_RETURN) ||
-	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR);
+	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::RECORD_SEPARATOR) ||
+	                  (state == CSVState::CARRIAGE_RETURN && previous_state == CSVState::RECORD_SEPARATOR) ||
+	                  (state == CSVState::RECORD_SEPARATOR && previous_state == CSVState::CARRIAGE_RETURN);
 	if (cur_row < options.sample_chunk_size && !empty_line) {
 		VerifyUTF8(options, cur_row, value);
 		auto &v = parse_chunk.data[cur_col++];
