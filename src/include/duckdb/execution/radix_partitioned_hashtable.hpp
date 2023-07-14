@@ -21,14 +21,15 @@ struct RadixHTAbandonStatus;
 class RadixPartitionedHashTable {
 public:
 	RadixPartitionedHashTable(GroupingSet &grouping_set, const GroupedAggregateData &op);
+	unique_ptr<GroupedAggregateHashTable> CreateHT(ClientContext &context, const idx_t capacity,
+	                                               const idx_t radix_bits) const;
 
+public:
 	GroupingSet &grouping_set;
 	//! The indices specified in the groups_count that do not appear in the grouping_set
 	unsafe_vector<idx_t> null_groups;
 	const GroupedAggregateData &op;
-
 	vector<LogicalType> group_types;
-
 	//! The GROUPING values that belong to this hash table
 	vector<Value> grouping_values;
 
@@ -42,20 +43,18 @@ public:
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const;
 	void Finalize(ClientContext &context, GlobalSinkState &gstate) const;
 
+public:
 	//! Source interface
-	idx_t Count(GlobalSinkState &sink) const;
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context) const;
+
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink,
 	                         OperatorSourceInput &input) const;
 
+	idx_t Count(GlobalSinkState &sink) const;
 	static void SetMultiScan(GlobalSinkState &sink);
-	// TODO: capacity
-	unique_ptr<GroupedAggregateHashTable> CreateHT(ClientContext &context, const idx_t capacity,
-	                                               const idx_t radix_bits) const;
 
 private:
-	idx_t CountInternal(GlobalSinkState &sink) const;
 	void SetGroupingValues();
 	void PopulateGroupChunk(DataChunk &group_chunk, DataChunk &input_chunk) const;
 
@@ -68,6 +67,8 @@ private:
 	                      const RadixHTAbandonStatus &local_status) const;
 
 	static bool RequiresRepartitioning(ClientContext &context, GlobalSinkState &gstate);
+
+	idx_t CountInternal(GlobalSinkState &sink) const;
 };
 
 } // namespace duckdb

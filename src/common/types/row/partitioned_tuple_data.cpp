@@ -256,6 +256,7 @@ void PartitionedTupleData::Combine(PartitionedTupleData &other) {
 		}
 	}
 	this->count += other.count;
+	this->data_size += other.data_size;
 	Verify();
 }
 
@@ -334,7 +335,7 @@ vector<unique_ptr<TupleDataCollection>> &PartitionedTupleData::GetPartitions() {
 unique_ptr<TupleDataCollection> PartitionedTupleData::GetUnpartitioned() {
 	auto data_collection = std::move(partitions[0]);
 	partitions[0] = make_uniq<TupleDataCollection>(buffer_manager, layout);
-	
+
 	for (idx_t i = 1; i < partitions.size(); i++) {
 		data_collection->Combine(*partitions[i]);
 	}

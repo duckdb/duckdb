@@ -15,10 +15,8 @@ namespace duckdb {
 //! Config for RadixPartitionedHashTable
 struct RadixHTConfig {
 	//! Radix bits used during the Sink
-	//! (TODO 5 bits seems OK too, need more benchmarking)
 	static constexpr const idx_t SINK_RADIX_BITS = 4;
 	//! Check whether to abandon HT after crossing this threshold
-	//! (TODO this should also depend on row width)
 	static constexpr const idx_t SINK_ABANDON_THRESHOLD = 100000;
 	//! If we cross SINK_ABANDON_THRESHOLD, we decide whether to continue with the current HT or abandon it.
 	//! Abandoning is better if the input has virtually no duplicates.
@@ -31,21 +29,18 @@ struct RadixHTConfig {
 	//! If we are on track to see 25x our current unique count, we can safely abandon the HTs early!
 	//! (TODO maybe this whole calculation is a bit overcomplicated, we can just try to combine during the sink)
 	static constexpr const idx_t SINK_EXPECTED_GROUP_COUNT_FACTOR = 25;
-
-	//! TODO
+	//! Combine abandoned data after crossing this threshold
 	static constexpr const idx_t SINK_COMBINE_THRESHOLD = 100000;
-
-	//! TODO
+	//! Radix bits used during the finalize (if more than SINK_RADIX_BITS are needed)
 	static constexpr const idx_t FINALIZE_RADIX_BITS = 8;
 
+	//! Utility functions
 	static constexpr idx_t SinkPartitionCount() {
 		return RadixPartitioning::NumberOfPartitions(SINK_RADIX_BITS);
 	}
-
 	static constexpr idx_t FinalizePartitionCount() {
 		return RadixPartitioning::NumberOfPartitions(FINALIZE_RADIX_BITS);
 	}
-
 	static constexpr idx_t PartitionMultiplier() {
 		static_assert(FinalizePartitionCount() > SinkPartitionCount(),
 		              "Finalize partition count must be greater than sink partition count");
@@ -55,16 +50,14 @@ struct RadixHTConfig {
 
 RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p, const GroupedAggregateData &op_p)
     : grouping_set(grouping_set_p), op(op_p) {
-
 	auto groups_count = op.GroupCount();
 	for (idx_t i = 0; i < groups_count; i++) {
 		if (grouping_set.find(i) == grouping_set.end()) {
 			null_groups.push_back(i);
 		}
 	}
-
 	if (grouping_set.empty()) {
-		// fake a single group with a constant value for aggregation without groups
+		// Fake a single group with a constant value for aggregation without groups
 		group_types.emplace_back(LogicalType::TINYINT);
 	}
 	for (auto &entry : grouping_set) {
@@ -74,18 +67,18 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 	SetGroupingValues();
 }
 
-// compute the GROUPING values
-// for each parameter to the GROUPING clause, we check if the hash table groups on this particular group
-// if it does, we return 0, otherwise we return 1
-// we then use bitshifts to combine these values
 void RadixPartitionedHashTable::SetGroupingValues() {
+	// Compute the GROUPING values:
+	// For each parameter to the GROUPING clause, we check if the hash table groups on this particular group
+	// If it does, we return 0, otherwise we return 1
+	// We then use bitshifts to combine these values
 	auto &grouping_functions = op.GetGroupingFunctions();
 	for (auto &grouping : grouping_functions) {
 		int64_t grouping_value = 0;
 		D_ASSERT(grouping.size() < sizeof(int64_t) * 8);
 		for (idx_t i = 0; i < grouping.size(); i++) {
 			if (grouping_set.find(grouping[i]) == grouping_set.end()) {
-				// we don't group on this value!
+				// We don't group on this value!
 				grouping_value += (int64_t)1 << (grouping.size() - (i + 1));
 			}
 		}
@@ -543,10 +536,10 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 		    finalize_partition->combined_data ? finalize_partition->combined_data->Count() : 0;
 	}
 
+	// TODO: first check if we need to combine anything at all (for single-threaded case we don't)
+
 	// Check if we want to repartition
 	if (RequiresRepartitioning(context, gstate_p)) {
-		// TODO non-standard number of radix bits
-
 		// Move the combined data in the sink partitions to the finalize partitions
 		for (idx_t partition_idx = 0; partition_idx < RadixHTConfig::SinkPartitionCount(); partition_idx++) {
 			auto &sink_partition = gstate.sink_partitions[partition_idx];
@@ -627,34 +620,11 @@ bool RadixPartitionedHashTable::RequiresRepartitioning(ClientContext &context, G
 	const auto partition_size = MaxValue<idx_t>(partition_sizes[max_partition_idx], 1);
 	const auto partition_ht_size = partition_size + GroupedAggregateHashTable::PointerTableSize(partition_count);
 
-	// TODO: Fix this later if needed, just use defaults for now
 	if (gstate.finalize_in_use || n_threads > RadixHTConfig::SinkPartitionCount() ||
 	    n_threads * partition_ht_size > max_ht_size) {
-		// Data was already added to the finalize partitions, we need to stick with this number of radix bits
 		gstate.finalize_radix_bits = RadixHTConfig::FINALIZE_RADIX_BITS;
 	} else {
 		gstate.finalize_radix_bits = RadixHTConfig::SINK_RADIX_BITS;
-		//
-		//		// Decide on the number of radix bits: Number of partitions should be at least number of threads
-		//		const auto finalize_tasks = MaxValue<idx_t>(NextPowerOfTwo(n_threads), num_partitions);
-		//		auto radix_bits = RadixPartitioning::RadixBits(finalize_tasks);
-		//		// Repartition to at least 2 more radix bits when forcing external
-		//		radix_bits += context.config.force_external ? 2 : 0;
-		//		// Loop until we can fit the partitions in memory
-		//		for (; radix_bits < RadixPartitioning::MAX_RADIX_BITS; radix_bits++) {
-		//			auto multiplier = RadixPartitioning::NumberOfPartitions(radix_bits) /
-		// RadixHTConfig::SinkPartitionCount();
-		//
-		//			auto new_estimated_count = double(partition_count) / multiplier;
-		//			auto new_estimated_size = double(partition_size) / multiplier;
-		//			auto new_estimated_ht_size =
-		//			    new_estimated_size + GroupedAggregateHashTable::PointerTableSize(new_estimated_count);
-		//
-		//			if (context.config.force_external || new_estimated_ht_size <= max_ht_size / n_threads) {
-		//				break;
-		//			}
-		//		}
-		//		gstate.finalize_radix_bits = radix_bits;
 	}
 
 	if (partition_size > max_ht_size) {
@@ -779,7 +749,8 @@ bool RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &sink, RadixHTL
 
 	// Try to assign a scan task first if we enabled multi-scanning,
 	// if not multi-scanning, threads just immediately scan the HTs they finished
-	if (sink.scan_pin_properties == TupleDataPinProperties::UNPIN_AFTER_DONE && scan_idx < sink.scan_data.size()) {
+	if (sink.finalize_idx == sink.finalize_tasks.GetIndex() &&
+	    sink.scan_pin_properties == TupleDataPinProperties::UNPIN_AFTER_DONE && scan_idx < sink.scan_data.size()) {
 		lstate.task = RadixHTSourceTaskType::SCAN;
 		lstate.task_idx = scan_idx++;
 		lstate.scan_collection = sink.scan_data[lstate.task_idx.GetIndex()].data_collection.get();
