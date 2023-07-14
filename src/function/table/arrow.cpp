@@ -286,11 +286,36 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
 	return true;
 }
 
+static ArrowPhysicalLayoutType DetectArrowPhysicalLayout(ArrowSchema &schema) {
+	if (schema.dictionary) {
+		return ArrowPhysicalLayoutType::DICTIONARY_ENCODED;
+	}
+	if (schema.n_children == 2 && std::string(schema.children[0]->name) == "run_ends" &&
+	    std::string(schema.children[1]->name) == "values") {
+		return ArrowPhysicalLayoutType::RUN_END_ENCODED;
+	}
+	// TODO: add detection for other physical layouts
+	return ArrowPhysicalLayoutType::DEFAULT;
+}
+
+static void DetectPhysicalLayouts(ArrowScanGlobalState &state) {
+	ArrowSchemaWrapper schema;
+	state.stream->GetSchema(schema);
+
+	state.physical_layouts.reserve(schema.arrow_schema.n_children);
+	for (idx_t i = 0; i < schema.arrow_schema.n_children; i++) {
+		auto child = schema.arrow_schema.children[i];
+		state.physical_layouts.push_back(DetectArrowPhysicalLayout(*child));
+	}
+}
+
 unique_ptr<GlobalTableFunctionState> ArrowTableFunction::ArrowScanInitGlobal(ClientContext &context,
                                                                              TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<ArrowScanFunctionData>();
 	auto result = make_uniq<ArrowScanGlobalState>();
 	result->stream = ProduceArrowScan(bind_data, input.column_ids, input.filters.get());
+	DetectPhysicalLayouts(*result);
+
 	result->max_threads = ArrowScanMaxThreads(context, input.bind_data.get());
 	if (input.CanRemoveFilterColumns()) {
 		result->projection_ids = input.projection_ids;
@@ -310,7 +335,8 @@ ArrowTableFunction::ArrowScanInitLocalInternal(ClientContext &context, TableFunc
                                                GlobalTableFunctionState *global_state_p) {
 	auto &global_state = global_state_p->Cast<ArrowScanGlobalState>();
 	auto current_chunk = make_uniq<ArrowArrayWrapper>();
-	auto result = make_uniq<ArrowScanLocalState>(std::move(current_chunk));
+	auto result = make_uniq<ArrowScanLocalState>(std::move(current_chunk), global_state.physical_layouts);
+
 	result->column_ids = input.column_ids;
 	result->filters = input.filters.get();
 	if (input.CanRemoveFilterColumns()) {

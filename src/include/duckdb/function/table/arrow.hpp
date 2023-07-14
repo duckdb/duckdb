@@ -24,6 +24,11 @@ namespace duckdb {
 enum class ArrowVariableSizeType : uint8_t { FIXED_SIZE = 0, NORMAL = 1, SUPER_SIZE = 2 };
 
 //===--------------------------------------------------------------------===//
+// Arrow Physical Layout
+//===--------------------------------------------------------------------===//
+enum class ArrowPhysicalLayoutType : uint8_t { DEFAULT, DICTIONARY_ENCODED, RUN_END_ENCODED };
+
+//===--------------------------------------------------------------------===//
 // Arrow Time/Date Types
 //===--------------------------------------------------------------------===//
 enum class ArrowDateTimeType : uint8_t {
@@ -89,15 +94,21 @@ struct ArrowScanFunctionData : public PyTableFunctionData {
 };
 
 struct ArrowScanLocalState : public LocalTableFunctionState {
-	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(current_chunk.release()) {
+	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk,
+	                             const vector<ArrowPhysicalLayoutType> &physical_types)
+	    : chunk(current_chunk.release()), physical_types(physical_types) {
 	}
 
-	unique_ptr<ArrowArrayStreamWrapper> stream;
+	//! The array we're currently scanning
+	//! NOTE: this array is a Struct, the children buffers are the actual columns
 	shared_ptr<ArrowArrayWrapper> chunk;
 	idx_t chunk_offset = 0;
+	//! The layout that arrow uses to represent the data
+	const vector<ArrowPhysicalLayoutType> &physical_types;
 	idx_t batch_index = 0;
 	vector<column_t> column_ids;
 	//! Store child vectors for Arrow Dictionary Vectors (col-idx,vector)
+	//! NOTE: to prevent recreating the dictionary for every scanned array, we cache the values
 	unordered_map<idx_t, unique_ptr<Vector>> arrow_dictionary_vectors;
 	TableFilterSet *filters = nullptr;
 	//! The DataChunk containing all read columns (even filter columns that are immediately removed)
@@ -113,6 +124,7 @@ struct ArrowScanGlobalState : public GlobalTableFunctionState {
 
 	vector<idx_t> projection_ids;
 	vector<LogicalType> scanned_types;
+	vector<ArrowPhysicalLayoutType> physical_layouts;
 
 	idx_t MaxThreads() const override {
 		return max_threads;

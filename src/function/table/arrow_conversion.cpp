@@ -786,7 +786,7 @@ static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, Logic
 			break;
 		case LogicalTypeId::UBIGINT:
 			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
-				//! We need to check if our indexes fit in a uint32_t
+				// We need to check if our indexes fit in a uint32_t
 				SetSelectionVectorLoopWithChecks<uint64_t>(sel, indices_p, size);
 			} else {
 				SetSelectionVectorLoop<uint64_t>(sel, indices_p, size);
@@ -794,7 +794,7 @@ static void SetSelectionVector(SelectionVector &sel, data_ptr_t indices_p, Logic
 			break;
 		case LogicalTypeId::BIGINT:
 			if (last_element_pos > NumericLimits<uint32_t>::Maximum()) {
-				//! We need to check if our indexes fit in a uint32_t
+				// We need to check if our indexes fit in a uint32_t
 				SetSelectionVectorLoopWithChecks<int64_t>(sel, indices_p, size);
 			} else {
 				SetSelectionVectorLoop<int64_t>(sel, indices_p, size);
@@ -810,29 +810,43 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
                                           idx_t size,
                                           std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
                                           idx_t col_idx, ArrowConvertDataIndices &arrow_convert_idx) {
-	SelectionVector sel;
 	auto &dict_vectors = scan_state.arrow_dictionary_vectors;
+	D_ASSERT(array.dictionary);
+
+	// Convert the arrow dictionary to a regular FlatVector
+	auto &dict = *array.dictionary;
 	if (!dict_vectors.count(col_idx)) {
-		//! We need to set the dictionary data for this column
-		auto base_vector = make_uniq<Vector>(vector.GetType(), array.dictionary->length);
-		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, 0, array.null_count > 0);
-		ColumnArrowToDuckDB(*base_vector, *array.dictionary, scan_state, array.dictionary->length, arrow_convert_data,
-		                    col_idx, arrow_convert_idx);
+		// Make sure we only do this once
+		// NOTE: this assumes that every array produced by this stream uses the same dictionary
+		auto base_vector = make_uniq<Vector>(vector.GetType(), dict.length);
+		SetValidityMask(*base_vector, dict, scan_state, dict.length, 0, array.null_count > 0);
+		ColumnArrowToDuckDB(*base_vector, dict, scan_state, dict.length, arrow_convert_data, col_idx,
+		                    arrow_convert_idx);
 		dict_vectors[col_idx] = std::move(base_vector);
 	}
+	// Get Pointer to Indices of Dictionary
 	auto dictionary_type = arrow_convert_data[col_idx]->dictionary_type;
-	//! Get Pointer to Indices of Dictionary
 	auto indices = ArrowBufferData<data_t>(array, 1) +
 	               GetTypeIdSize(dictionary_type.InternalType()) * (scan_state.chunk_offset + array.offset);
+
+	// Create a selection vector from the indices
+	SelectionVector sel;
 	if (array.null_count > 0) {
 		ValidityMask indices_validity;
 		GetValidityMask(indices_validity, array, scan_state, size);
-		SetSelectionVector(sel, indices, dictionary_type, size, &indices_validity, array.dictionary->length);
+		SetSelectionVector(sel, indices, dictionary_type, size, &indices_validity, dict.length);
 	} else {
 		SetSelectionVector(sel, indices, dictionary_type, size);
 	}
+	// Finally create a DictionaryVector from the data + selection vector
 	vector.Slice(*dict_vectors[col_idx], sel, size);
 }
+
+// static void ScanRunEndEncoded(Vector &vector, ArrowArray &array, ArrowScanLocalState &scan_state, idx_t size,
+// std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx, ArrowConvertDataIndices
+// &arrow_convert_idx) {
+
+//}
 
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state,
                                        unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
@@ -855,17 +869,30 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state,
 			throw InvalidInputException("arrow_scan: released array passed");
 		}
 		if (array.length != scan_state.chunk->arrow_array.length) {
+			// NOTE: Since the top level array is a STRUCT, the children are the actual columns
 			throw InvalidInputException("arrow_scan: array length mismatch");
 		}
 		// Make sure this Vector keeps the Arrow chunk alive in case we can zero-copy the data
+		// FIXME: this does not need to be done if the conversion from Arrow->DuckDB needs to copy the arrow data
+		// in which case we don't need to keep the original arrow data alive anymore
 		output.data[idx].GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(scan_state.chunk));
-		if (array.dictionary) {
+
+		// Based on the physical layout, decide how to scan the arrow array to a duckdb vector
+		auto &physical_layout = scan_state.physical_types[idx];
+		switch (physical_layout) {
+		case ArrowPhysicalLayoutType::DICTIONARY_ENCODED: {
+			D_ASSERT(array.dictionary);
 			ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state, output.size(), arrow_convert_data,
 			                              col_idx, arrow_convert_idx);
-		} else {
+			break;
+		}
+		case ArrowPhysicalLayoutType::RUN_END_ENCODED:
+		case ArrowPhysicalLayoutType::DEFAULT: {
 			SetValidityMask(output.data[idx], array, scan_state, output.size(), -1);
 			ColumnArrowToDuckDB(output.data[idx], array, scan_state, output.size(), arrow_convert_data, col_idx,
 			                    arrow_convert_idx);
+			break;
+		}
 		}
 	}
 }
