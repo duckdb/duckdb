@@ -92,7 +92,7 @@ struct EmptyBitpackingWriter {
 	}
 };
 
-template <class T, class T_U = typename MakeUnsigned<T>::type, class T_S = typename MakeSigned<T>::type>
+template <class T, class T_S = typename MakeSigned<T>::type>
 struct BitpackingState {
 public:
 	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr) {
@@ -249,7 +249,7 @@ public:
 			}
 
 			// Check if delta has benefit
-			auto delta_required_bitwidth = BitpackingPrimitives::MinimumBitWidth<T_U>(min_max_delta_diff);
+			auto delta_required_bitwidth = BitpackingPrimitives::MinimumBitWidth<T, false>(min_max_delta_diff);
 			auto regular_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(min_max_diff);
 
 			if (delta_required_bitwidth < regular_required_bitwidth && mode != BitpackingMode::FOR) {
@@ -269,7 +269,7 @@ public:
 		}
 
 		if (can_do_for) {
-			auto width = BitpackingPrimitives::MinimumBitWidth<T_U>(min_max_diff);
+			auto width = BitpackingPrimitives::MinimumBitWidth<T, false>(min_max_diff);
 			SubtractFrameOfReference(compression_buffer, minimum);
 			OP::WriteFor(compression_buffer, compression_buffer_validity, width, minimum, compression_buffer_idx,
 			             data_ptr);

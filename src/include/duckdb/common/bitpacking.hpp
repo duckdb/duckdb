@@ -82,22 +82,22 @@ public:
 	}
 
 	// Calculates the minimum required number of bits per value that can store all values
-	template <class T>
+	template <class T, bool is_signed = NumericLimits<T>::IsSigned()>
 	inline static bitpacking_width_t MinimumBitWidth(T value) {
-		return FindMinimumBitWidth<T, BYTE_ALIGNED>(value, value);
+		return FindMinimumBitWidth<T, is_signed, BYTE_ALIGNED>(value, value);
 	}
 
 	// Calculates the minimum required number of bits per value that can store all values
-	template <class T>
+	template <class T, bool is_signed = NumericLimits<T>::IsSigned()>
 	inline static bitpacking_width_t MinimumBitWidth(T *values, idx_t count) {
-		return FindMinimumBitWidth<T, BYTE_ALIGNED>(values, count);
+		return FindMinimumBitWidth<T, is_signed, BYTE_ALIGNED>(values, count);
 	}
 
 	// Calculates the minimum required number of bits per value that can store all values,
 	// given a predetermined minimum and maximum value of the buffer
-	template <class T>
+	template <class T, bool is_signed = NumericLimits<T>::IsSigned()>
 	inline static bitpacking_width_t MinimumBitWidth(T minimum, T maximum) {
-		return FindMinimumBitWidth<T, BYTE_ALIGNED>(minimum, maximum);
+		return FindMinimumBitWidth<T, is_signed, BYTE_ALIGNED>(minimum, maximum);
 	}
 
 	inline static idx_t GetRequiredSize(idx_t count, bitpacking_width_t width) {
@@ -116,7 +116,7 @@ public:
 	}
 
 private:
-	template <class T, bool round_to_next_byte = false>
+	template <class T, bool is_signed, bool round_to_next_byte = false>
 	static bitpacking_width_t FindMinimumBitWidth(T *values, idx_t count) {
 		T min_value = values[0];
 		T max_value = values[0];
@@ -126,7 +126,7 @@ private:
 				max_value = values[i];
 			}
 
-			if (NumericLimits<T>::IsSigned()) {
+			if (is_signed) {
 				if (values[i] < min_value) {
 					min_value = values[i];
 				}
@@ -136,12 +136,12 @@ private:
 		return FindMinimumBitWidth<T, round_to_next_byte>(min_value, max_value);
 	}
 
-	template <class T, bool round_to_next_byte = false>
+	template <class T, bool is_signed, bool round_to_next_byte = false>
 	static bitpacking_width_t FindMinimumBitWidth(T min_value, T max_value) {
 		bitpacking_width_t bitwidth;
 		T value;
 
-		if (NumericLimits<T>::IsSigned()) {
+		if (is_signed) {
 			if (min_value == NumericLimits<T>::Minimum()) {
 				// handle special case of the minimal value, as it cannot be negated like all other values.
 				return sizeof(T) * 8;
@@ -156,7 +156,7 @@ private:
 			return 0;
 		}
 
-		if (NumericLimits<T>::IsSigned()) {
+		if (is_signed) {
 			bitwidth = 1;
 		} else {
 			bitwidth = 0;
@@ -172,7 +172,7 @@ private:
 		// Assert results are correct
 #ifdef DEBUG
 		if (bitwidth < sizeof(T) * 8 && bitwidth != 0) {
-			if (NumericLimits<T>::IsSigned()) {
+			if (is_signed) {
 				D_ASSERT(max_value <= (T(1) << (bitwidth - 1)) - 1);
 				D_ASSERT(min_value >= (T(-1) * ((T(1) << (bitwidth - 1)) - 1) - 1));
 			} else {
@@ -189,10 +189,10 @@ private:
 	// Sign bit extension
 	template <class T, class T_U = typename MakeUnsigned<T>::type>
 	static void SignExtend(data_ptr_t dst, bitpacking_width_t width) {
-		T const mask = ((T_U)1) << (width - 1);
+		T const mask = T_U(1) << (width - 1);
 		for (idx_t i = 0; i < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
 			T value = Load<T>(dst + i * sizeof(T));
-			value = value & ((((T_U)1) << width) - ((T_U)1));
+			value = value & ((T_U(1) << width) - T_U(1));
 			T result = (value ^ mask) - mask;
 			Store(result, dst + i * sizeof(T));
 		}
