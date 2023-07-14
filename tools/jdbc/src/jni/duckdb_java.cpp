@@ -163,7 +163,8 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM *vm, void *reserved) {
 	tmpLocalRef = env->FindClass("org/duckdb/DuckDBStruct");
 	D_ASSERT(tmpLocalRef);
 	J_DuckStruct = (jclass)env->NewGlobalRef(tmpLocalRef);
-	J_DuckStruct_init = env->GetMethodID(J_DuckStruct, "<init>", "([Ljava/lang/String;[Lorg/duckdb/DuckDBVector;I)V");
+	J_DuckStruct_init =
+	    env->GetMethodID(J_DuckStruct, "<init>", "([Ljava/lang/String;[Lorg/duckdb/DuckDBVector;ILjava/lang/String;)V");
 	D_ASSERT(J_DuckStruct_init);
 	env->DeleteLocalRef(tmpLocalRef);
 
@@ -864,7 +865,8 @@ jobject ProcessVector(JNIEnv *env, Connection *conn_ref, Vector &vec, idx_t row_
 		}
 		for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
 			env->SetObjectArrayElement(varlen_data, row_idx,
-			                           env->NewObject(J_DuckStruct, J_DuckStruct_init, names, columns, row_idx));
+			                           env->NewObject(J_DuckStruct, J_DuckStruct_init, names, columns, row_idx,
+			                                          env->NewStringUTF(vec.GetType().ToString().c_str())));
 		}
 
 		break;

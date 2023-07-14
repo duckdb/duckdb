@@ -3232,7 +3232,9 @@ public class TestDuckDBJDBC {
              PreparedStatement statement = connection.prepareStatement("select {\"a\": 1}")) {
             ResultSet resultSet = statement.executeQuery();
             assertTrue(resultSet.next());
-            assertEquals(toJavaObject(resultSet.getObject(1)), mapOf("a", 1));
+            Struct struct = (Struct) resultSet.getObject(1);
+            assertEquals(toJavaObject(struct), mapOf("a", 1));
+            assertEquals(struct.getSQLTypeName(), "STRUCT(a INTEGER)");
         }
     }
 

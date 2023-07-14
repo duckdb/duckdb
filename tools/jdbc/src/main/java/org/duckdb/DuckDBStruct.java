@@ -9,16 +9,18 @@ public class DuckDBStruct implements Struct {
     private final String[] keys;
     private final DuckDBVector[] values;
     private final int offset;
+    private final String typeName;
 
-    public DuckDBStruct(String[] keys, DuckDBVector[] values, int offset) {
+    public DuckDBStruct(String[] keys, DuckDBVector[] values, int offset, String typeName) {
         this.keys = keys;
         this.values = values;
         this.offset = offset;
+        this.typeName = typeName;
     }
 
     @Override
     public String getSQLTypeName() throws SQLException {
-        return null;
+        return typeName;
     }
 
     @Override
