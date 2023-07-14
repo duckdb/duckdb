@@ -116,7 +116,11 @@ struct ParquetWriteBindData : public TableFunctionData {
 	vector<string> column_names;
 	duckdb_parquet::format::CompressionCodec::type codec = duckdb_parquet::format::CompressionCodec::SNAPPY;
 	idx_t row_group_size = RowGroup::ROW_GROUP_SIZE;
-	idx_t row_group_size_bytes = 134217728; // 128MB (1 << 27)
+
+	//! If row_group_size_bytes is not set, we default to row_group_size * BYTES_PER_ROW
+	static constexpr const idx_t BYTES_PER_ROW = 1024;
+	idx_t row_group_size_bytes;
+
 	ChildFieldIDs field_ids;
 };
 
@@ -742,6 +746,7 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info, vector<string> &names,
                                           vector<LogicalType> &sql_types) {
 	D_ASSERT(names.size() == sql_types.size());
+	bool row_group_size_bytes_set = false;
 	auto bind_data = make_uniq<ParquetWriteBindData>();
 	for (auto &option : info.options) {
 		const auto loption = StringUtil::Lower(option.first);
@@ -758,6 +763,7 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 			} else {
 				bind_data->row_group_size_bytes = option.second[0].GetValue<uint64_t>();
 			}
+			row_group_size_bytes_set = true;
 		} else if (loption == "compression" || loption == "codec") {
 			const auto roption = StringUtil::Lower(option.second[0].ToString());
 			if (roption == "uncompressed") {
@@ -792,6 +798,9 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyInfo &info
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
+	}
+	if (!row_group_size_bytes_set) {
+		bind_data->row_group_size_bytes = bind_data->row_group_size * ParquetWriteBindData::BYTES_PER_ROW;
 	}
 	bind_data->sql_types = sql_types;
 	bind_data->column_names = names;
