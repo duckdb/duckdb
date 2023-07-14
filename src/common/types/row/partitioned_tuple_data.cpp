@@ -334,11 +334,16 @@ vector<unique_ptr<TupleDataCollection>> &PartitionedTupleData::GetPartitions() {
 unique_ptr<TupleDataCollection> PartitionedTupleData::GetUnpartitioned() {
 	auto data_collection = std::move(partitions[0]);
 	partitions[0] = make_uniq<TupleDataCollection>(buffer_manager, layout);
+	
 	for (idx_t i = 1; i < partitions.size(); i++) {
 		data_collection->Combine(*partitions[i]);
 	}
+	count = 0;
+	data_size = 0;
+
 	data_collection->Verify();
 	Verify();
+
 	return data_collection;
 }
 
