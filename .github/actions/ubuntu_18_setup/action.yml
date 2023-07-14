@@ -1,5 +1,5 @@
-name: "Setup Ubuntu 16"
-description: "Setup an Ubuntu 16 docker container with the required libraries"
+name: "Setup Ubuntu 18"
+description: "Setup an Ubuntu 18 docker container with the required libraries"
 inputs:
   openssl:
     description: 'OpenSSL'
@@ -10,6 +10,13 @@ inputs:
   aarch64_cross_compile:
     description: 'Install dependencies for aarch64 cross-compiling'
     default: 0
+  vcpkg:
+    description: 'Install vcpkg'
+    default: 0
+  ccache:
+    description: 'Install ccache'
+    default: 0
+
 runs:
   using: "composite"
   steps:
@@ -20,7 +27,7 @@ runs:
         apt-get install -y -qq software-properties-common
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libc6-dev-i386 lib32readline6-dev libssl-dev libcurl4-gnutls-dev libexpat1-dev gettext unzip build-essential checkinstall libffi-dev curl libz-dev openssh-client
+        apt-get install -y -qq ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk zip maven unixodbc-dev libc6-dev-i386 lib32readline6-dev libssl-dev libcurl4-gnutls-dev libexpat1-dev gettext unzip build-essential checkinstall libffi-dev curl libz-dev openssh-client pkg-config
 
     - name: Install
       shell: bash
@@ -50,34 +57,6 @@ runs:
         ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
         cmake --version
 
-    - name: Install OpenSSL 1.1.1
-      if: ${{ inputs.openssl == 1 && inputs.aarch64_cross_compile == 0}}
-      shell: bash
-      run: |
-        wget https://www.openssl.org/source/openssl-1.1.1c.tar.gz
-        tar -xf openssl-1.1.1c.tar.gz
-        cd openssl-1.1.1c
-        ./config --prefix=/usr/local/ssl --openssldir=/usr/local/ssl no-shared zlib-dynamic
-        make
-        make install
-        echo "/usr/local/ssl/lib" > /etc/ld.so.conf.d/openssl-1.1.1c.conf
-        ldconfig -v
-
-    - name: Install OpenSSL for Cross compiling
-      if: ${{ inputs.openssl == 1 && inputs.aarch64_cross_compile == 1}}
-      shell: bash
-      run: |
-        mkdir -p build/openssl
-        cd build/openssl
-        mkdir sources build
-        curl https://www.openssl.org/source/openssl-3.0.5.tar.gz | tar zxv -C sources --strip-components 1
-        export OPENSSL_ROOT_DIR=`pwd`/build
-        cd sources
-        export CC="aarch64-linux-gnu-gcc"
-        perl ./Configure --prefix=$OPENSSL_ROOT_DIR linux-aarch64 no-asm
-        make -j
-        make install_sw
-
     - name: Install Python 3.7
       if: ${{ inputs.python }} == 1
       shell: bash
@@ -100,3 +79,22 @@ runs:
         python3.7 --version
         git --version
         git log -1 --format=%h
+
+    - name: Setup vcpkg
+      if: ${{ inputs.vcpkg == 1 }}
+      uses: lukka/run-vcpkg@v11
+      with:
+        vcpkgGitCommitId: 501db0f17ef6df184fcdbfbe0f87cde2313b6ab1
+
+    - name: Setup Ccache
+      if: ${{ inputs.ccache == 1 }}
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Instal OpenSSL through vcpkg
+      if: ${{ inputs.openssl == 1 }}
+      shell: bash
+      run: |
+        cd $VCPKG_ROOT && ./vcpkg install openssl --triplet=${{ inputs.aarch64_cross_compile == 1 && 'arm64-linux' || 'x64-linux' }}

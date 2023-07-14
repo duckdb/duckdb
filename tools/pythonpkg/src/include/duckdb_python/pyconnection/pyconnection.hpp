@@ -119,8 +119,8 @@ public:
 
 	void LoadExtension(const string &extension);
 
-	unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias = "query_relation");
-	unique_ptr<DuckDBPyRelation> RunQuery(const string &query, const string &alias = "query_relation");
+	unique_ptr<DuckDBPyRelation> FromQuery(const string &query, string alias = "");
+	unique_ptr<DuckDBPyRelation> RunQuery(const string &query, string alias = "");
 
 	unique_ptr<DuckDBPyRelation> Table(const string &tname);
 

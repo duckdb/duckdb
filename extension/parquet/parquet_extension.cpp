@@ -152,10 +152,12 @@ BindInfo ParquetGetBatchInfo(const FunctionData *bind_data) {
 	for (auto &path : parquet_bind.files) {
 		file_path.emplace_back(path);
 	}
+	// LCOV_EXCL_START
 	bind_info.InsertOption("file_path", Value::LIST(LogicalType::VARCHAR, file_path));
 	bind_info.InsertOption("binary_as_string", Value::BOOLEAN(parquet_bind.parquet_options.binary_as_string));
 	bind_info.InsertOption("file_row_number", Value::BOOLEAN(parquet_bind.parquet_options.file_row_number));
 	parquet_bind.parquet_options.file_options.AddBatchInfo(bind_info);
+	// LCOV_EXCL_STOP
 	return bind_info;
 }
 
@@ -175,7 +177,6 @@ public:
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
 		table_function.get_batch_info = ParquetGetBatchInfo;
-
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
 		table_function.filter_prune = true;
@@ -520,6 +521,7 @@ public:
 	static void ParquetComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                         vector<unique_ptr<Expression>> &filters) {
 		auto &data = bind_data_p->Cast<ParquetReadBindData>();
+
 		auto reset_reader = MultiFileReader::ComplexFilterPushdown(context, data.files,
 		                                                           data.parquet_options.file_options, get, filters);
 		if (reset_reader) {

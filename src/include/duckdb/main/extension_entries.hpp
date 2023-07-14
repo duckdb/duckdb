@@ -58,6 +58,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {{"->>", "json"},
                                                          {"json_deserialize_sql", "json"},
                                                          {"json_serialize_sql", "json"},
                                                          {"json_execute_serialized_sql", "json"},
+                                                         {"load_aws_credentials", "aws"},
                                                          {"make_timestamptz", "icu"},
                                                          {"parquet_metadata", "parquet"},
                                                          {"parquet_scan", "parquet"},
@@ -161,6 +162,7 @@ static constexpr ExtensionEntry EXTENSION_FUNCTIONS[] = {{"->>", "json"},
                                                          {"st_numpoints", "spatial"}};
 
 static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
+    {"azure_storage_connection_string", "azure"},
     {"binary_as_string", "parquet"},
     {"calendar", "icu"},
     {"http_retries", "httpfs"},

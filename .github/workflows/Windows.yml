@@ -37,6 +37,7 @@ env:
 
 jobs:
  win-release-64:
+    # Builds binaries for windows_amd64
     name: Windows (64 Bit)
     runs-on: windows-latest
     steps:
@@ -219,13 +220,14 @@ jobs:
          run: |
            cp src/libduckdb.dll .
            test/unittest.exe
-           
+
        - name: Tools Test
          shell: msys2 {0}
          run: |
            tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper.exe
 
  win-extensions-64:
+   # Builds extensions for windows_amd64
    name: Windows Extensions (64-bit)
    runs-on: windows-latest
    needs: win-release-64
@@ -244,17 +246,12 @@ jobs:
          key: ${{ github.job }}
          save: ${{ github.ref == 'refs/heads/master' || github.repository != 'duckdb/duckdb' }}
 
-     - name: Install OpenSSL
-       shell: bash
-       run: |
-         choco install openssl -y --force
-
      - uses: ./.github/actions/build_extensions
        with:
+         vcpkg_target_triplet: x64-windows-static-md
          deploy_as: windows_amd64
-         post_install: choco uninstall openssl -y --force
          treat_warn_as_error: 0
          s3_id: ${{ secrets.S3_ID }}
          s3_key: ${{ secrets.S3_KEY }}
          signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
-         python_name: python
+         unittest_script: ./build/release/test/Release/unittest.exe
