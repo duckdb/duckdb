@@ -160,6 +160,10 @@ jobs:
         run: |
           GEN=ninja EXTENSION_STATIC_BUILD=1 BUILD_TPCH=1 BUILD_HTTPFS=1 STATIC_OPENSSL=1 BUILD_NODE=1 make
 
+      - name: Print platform
+        shell: bash
+        run: ./build/release/duckdb -c "PRAGMA platform;"
+
       - name: Setup
         shell: bash
         run: ./scripts/node_version.sh
@@ -241,6 +245,10 @@ jobs:
         run: |
           brew install ninja
           GEN=ninja BUILD_TPCH=1 BUILD_NODE=1 make
+
+      - name: Print platform
+        shell: bash
+        run: ./build/release/duckdb -c "PRAGMA platform;"
 
       - name: Setup
         shell: bash

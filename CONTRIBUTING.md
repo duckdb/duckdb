@@ -35,7 +35,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 ## CI for pull requests
 
-* Pull requests will need to be pass all continous integration checks before merging.
+* Pull requests will need to be pass all continuous integration checks before merging.
 * For faster iteration and more control, consider running CI on your own fork or when possible directly locally.
 * Submitting changes to a open pull requests will move it to 'draft' state.
 * Pull requests will get a complete run on the main repo CI only when marked as 'ready for review' (via Web UI, button on bottom right).
