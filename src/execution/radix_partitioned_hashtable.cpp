@@ -889,7 +889,7 @@ void RadixHTLocalSourceState::Repartition(RadixHTGlobalSinkState &sink, RadixHTG
 			}
 
 			finalize_partition.uncombined_data.emplace_back(
-			    MaterializedAggregateData(std::move(finalize_data_collection), {}));
+			    MaterializedAggregateData(std::move(finalize_data_collection)));
 			auto &data = finalize_partition.uncombined_data.back();
 
 			// Also give it ownership of the corresponding allocators

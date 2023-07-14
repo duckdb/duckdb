@@ -76,8 +76,11 @@ private:
 };
 
 struct MaterializedAggregateData {
-	explicit MaterializedAggregateData(unique_ptr<TupleDataCollection> data_collection_p,
-	                                   shared_ptr<ArenaAllocator> allocator)
+	explicit MaterializedAggregateData(unique_ptr<TupleDataCollection> data_collection_p)
+	    : data_collection(std::move(data_collection_p)) {
+		D_ASSERT(data_collection);
+	}
+	MaterializedAggregateData(unique_ptr<TupleDataCollection> data_collection_p, shared_ptr<ArenaAllocator> allocator)
 	    : data_collection(std::move(data_collection_p)) {
 		D_ASSERT(data_collection);
 		D_ASSERT(allocator);
