@@ -9,6 +9,18 @@
 
 namespace duckdb {
 
+namespace unique_ptr_helper {
+template <class _Tp>
+struct get_inner {
+	using inner = _Tp;
+};
+
+template <class _Tp>
+struct get_inner<_Tp[]> {
+	using inner = _Tp;
+};
+} // namespace unique_ptr_helper
+
 template <class _Tp, class _Dp = std::default_delete<_Tp>, bool SAFE = true>
 class unique_ptr : public std::unique_ptr<_Tp, _Dp> {
 public:
@@ -27,7 +39,7 @@ private:
 	}
 
 public:
-	typename std::add_lvalue_reference<_Tp>::type operator*() const {
+	typename std::add_lvalue_reference<typename unique_ptr_helper::get_inner<_Tp>::inner>::type operator*() const {
 		const auto ptr = original::get();
 		if (MemorySafety<SAFE>::enabled) {
 			AssertNotNull(!ptr);
@@ -42,6 +54,14 @@ public:
 		}
 		return ptr;
 	}
+	typename std::add_lvalue_reference<typename unique_ptr_helper::get_inner<_Tp>::inner>::type
+	operator[](size_t __i) const {
+		const auto ptr = original::get();
+		if (MemorySafety<SAFE>::enabled) {
+			AssertNotNull(!ptr);
+		}
+		return ptr[__i];
+	}
 
 #ifdef DUCKDB_CLANG_TIDY
 	// This is necessary to tell clang-tidy that it reinitializes the variable after a move
@@ -50,33 +70,6 @@ public:
 	inline void
 	reset(typename original::pointer ptr = typename original::pointer()) noexcept {
 		original::reset(ptr);
-	}
-};
-
-template <class _Tp, class _Dp, bool SAFE>
-class unique_ptr<_Tp[], _Dp, SAFE> : public std::unique_ptr<_Tp[], std::default_delete<_Tp[]>> {
-public:
-	using original = std::unique_ptr<_Tp[], std::default_delete<_Tp[]>>;
-	using original::original;
-
-private:
-	static inline void AssertNotNull(const bool null) {
-#if defined(DUCKDB_DEBUG_NO_SAFETY) || defined(DUCKDB_CLANG_TIDY)
-		return;
-#else
-		if (DUCKDB_UNLIKELY(null)) {
-			throw duckdb::InternalException("Attempted to dereference unique_ptr that is NULL!");
-		}
-#endif
-	}
-
-public:
-	typename std::add_lvalue_reference<_Tp>::type operator[](size_t __i) const {
-		const auto ptr = original::get();
-		if (MemorySafety<SAFE>::enabled) {
-			AssertNotNull(!ptr);
-		}
-		return ptr[__i];
 	}
 };
 
