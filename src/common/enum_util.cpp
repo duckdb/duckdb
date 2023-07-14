@@ -66,6 +66,8 @@
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/base_csv_reader.hpp"
 #include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/macro_function.hpp"
@@ -609,6 +611,59 @@ CAPIResultSetType EnumUtil::FromString<CAPIResultSetType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "CAPI_RESULT_TYPE_DEPRECATED")) {
 		return CAPIResultSetType::CAPI_RESULT_TYPE_DEPRECATED;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<CSVState>(CSVState value) {
+	switch(value) {
+	case CSVState::STANDARD:
+		return "STANDARD";
+	case CSVState::FIELD_SEPARATOR:
+		return "FIELD_SEPARATOR";
+	case CSVState::RECORD_SEPARATOR:
+		return "RECORD_SEPARATOR";
+	case CSVState::CARRIAGE_RETURN:
+		return "CARRIAGE_RETURN";
+	case CSVState::QUOTED:
+		return "QUOTED";
+	case CSVState::UNQUOTED:
+		return "UNQUOTED";
+	case CSVState::ESCAPE:
+		return "ESCAPE";
+	case CSVState::INVALID:
+		return "INVALID";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+CSVState EnumUtil::FromString<CSVState>(const char *value) {
+	if (StringUtil::Equals(value, "STANDARD")) {
+		return CSVState::STANDARD;
+	}
+	if (StringUtil::Equals(value, "FIELD_SEPARATOR")) {
+		return CSVState::FIELD_SEPARATOR;
+	}
+	if (StringUtil::Equals(value, "RECORD_SEPARATOR")) {
+		return CSVState::RECORD_SEPARATOR;
+	}
+	if (StringUtil::Equals(value, "CARRIAGE_RETURN")) {
+		return CSVState::CARRIAGE_RETURN;
+	}
+	if (StringUtil::Equals(value, "QUOTED")) {
+		return CSVState::QUOTED;
+	}
+	if (StringUtil::Equals(value, "UNQUOTED")) {
+		return CSVState::UNQUOTED;
+	}
+	if (StringUtil::Equals(value, "ESCAPE")) {
+		return CSVState::ESCAPE;
+	}
+	if (StringUtil::Equals(value, "INVALID")) {
+		return CSVState::INVALID;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
@@ -4330,6 +4385,34 @@ QueryResultType EnumUtil::FromString<QueryResultType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "PENDING_RESULT")) {
 		return QueryResultType::PENDING_RESULT;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
+template<>
+const char* EnumUtil::ToChars<QuoteRule>(QuoteRule value) {
+	switch(value) {
+	case QuoteRule::QUOTES_RFC:
+		return "QUOTES_RFC";
+	case QuoteRule::QUOTES_OTHER:
+		return "QUOTES_OTHER";
+	case QuoteRule::NO_QUOTES:
+		return "NO_QUOTES";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%d' not implemented", value));
+	}
+}
+
+template<>
+QuoteRule EnumUtil::FromString<QuoteRule>(const char *value) {
+	if (StringUtil::Equals(value, "QUOTES_RFC")) {
+		return QuoteRule::QUOTES_RFC;
+	}
+	if (StringUtil::Equals(value, "QUOTES_OTHER")) {
+		return QuoteRule::QUOTES_OTHER;
+	}
+	if (StringUtil::Equals(value, "NO_QUOTES")) {
+		return QuoteRule::NO_QUOTES;
 	}
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
