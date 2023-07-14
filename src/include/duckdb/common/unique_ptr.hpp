@@ -74,10 +74,10 @@ public:
 };
 
 template <typename T>
-using unique_array = unique_ptr<T[], std::default_delete<T>, true>;
+using unique_array = unique_ptr<T[]>;
 
 template <typename T>
-using unsafe_unique_array = unique_ptr<T[], std::default_delete<T>, false>;
+using unsafe_unique_array = unique_ptr<T[], std::default_delete<T[]>, false>;
 
 template <typename T>
 using unsafe_unique_ptr = unique_ptr<T, std::default_delete<T>, false>;
