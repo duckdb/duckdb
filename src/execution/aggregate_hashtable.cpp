@@ -57,9 +57,10 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 }
 
 void GroupedAggregateHashTable::InitializePartitionedData() {
-	D_ASSERT(!partitioned_data);
-	partitioned_data =
-	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
+	if (!partitioned_data) {
+		partitioned_data =
+		    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, radix_bits, layout.ColumnCount() - 1);
+	}
 	partitioned_data->InitializeAppendState(state.append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 	sink_count = 0;
 }
