@@ -549,10 +549,12 @@ void RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 
 		// Move the combined data in the sink partitions to the finalize partitions
 		for (idx_t partition_idx = 0; partition_idx < RadixHTConfig::SinkPartitionCount(); partition_idx++) {
-			gstate.CombinedToFinalize(partition_idx);
+			auto &sink_partition = gstate.sink_partitions[partition_idx];
+			if (sink_partition->combined_data) {
+				gstate.CombinedToFinalize(partition_idx);
+			}
 
 			// Create repartition tasks for the uncombined data
-			auto &sink_partition = gstate.sink_partitions[partition_idx];
 			const auto num_data = sink_partition->uncombined_data.size();
 			const auto tasks_per_partition = gstate.repartition_tasks_per_partition.GetIndex();
 			sink_partition->data_per_repartition_task = (num_data + tasks_per_partition - 1) / tasks_per_partition;
