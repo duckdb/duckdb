@@ -3611,6 +3611,31 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	public static void test_unbindable_query() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			 PreparedStatement stmt = conn.prepareStatement("SELECT ?, ?")) {
+			stmt.setString(1, "word1");
+			stmt.setString(2, "word2");
+
+			try (ResultSet resultSet = stmt.executeQuery()) {
+				ResultSetMetaData metadata = resultSet.getMetaData();
+
+				// TODO: fix this in the binder
+
+				// the binder gives back bad data...
+				assertEquals(metadata.getColumnCount(), 1);
+				assertEquals(metadata.getColumnName(1), "unknown");
+				assertEquals(metadata.getColumnTypeName(1), "UNKNOWN");
+				assertEquals(metadata.getColumnType(1), Types.JAVA_OBJECT);
+
+				// but we should still be able to retrieve the result
+				resultSet.next();
+				assertEquals(resultSet.getObject(1), "word1");
+				assertEquals(resultSet.getObject(2), "word2");
+			}
+		}
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();

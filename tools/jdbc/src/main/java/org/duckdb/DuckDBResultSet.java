@@ -116,10 +116,10 @@ public class DuckDBResultSet implements ResultSet {
 		if (isClosed()) {
 			throw new SQLException("ResultSet was closed");
 		}
-		if (columnIndex < 1 || columnIndex > meta.column_count) {
+		int column_count = this.current_chunk.length;
+		if (column_count != 0 && (columnIndex < 1 || columnIndex > column_count)) {
 			throw new SQLException("Column index out of bounds");
 		}
-
 	}
 
 	/**
