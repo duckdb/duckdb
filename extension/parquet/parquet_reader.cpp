@@ -399,7 +399,7 @@ void ParquetReader::InitializeSchema() {
 	if (file_meta_data->schema.size() < 2) {
 		throw FormatException("Need at least one non-root column in the file");
 	}
-
+	root_reader = CreateReader();
 	auto &root_type = root_reader->Type();
 	auto &child_types = StructType::GetChildTypes(root_type);
 	D_ASSERT(root_type.id() == LogicalTypeId::STRUCT);
@@ -449,8 +449,6 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
 		}
 	}
-
-	root_reader = CreateReader();
 	InitializeSchema();
 }
 
@@ -458,7 +456,6 @@ ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_op
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
     : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
       metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)) {
-	root_reader = CreateReader();
 	InitializeSchema();
 }
 
