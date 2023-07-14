@@ -64,8 +64,8 @@
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/index/art/node.hpp"
-#include "duckdb/execution/operator/persistent/base_csv_reader.hpp"
-#include "duckdb/execution/operator/persistent/csv_reader_options.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/base_csv_reader.hpp"
+#include "duckdb/execution/operator/persistent/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/function/macro_function.hpp"
@@ -3591,8 +3591,6 @@ const char* EnumUtil::ToChars<ParserMode>(ParserMode value) {
 	switch(value) {
 	case ParserMode::PARSING:
 		return "PARSING";
-	case ParserMode::SNIFFING_DIALECT:
-		return "SNIFFING_DIALECT";
 	case ParserMode::SNIFFING_DATATYPES:
 		return "SNIFFING_DATATYPES";
 	case ParserMode::PARSING_HEADER:
@@ -3606,9 +3604,6 @@ template<>
 ParserMode EnumUtil::FromString<ParserMode>(const char *value) {
 	if (StringUtil::Equals(value, "PARSING")) {
 		return ParserMode::PARSING;
-	}
-	if (StringUtil::Equals(value, "SNIFFING_DIALECT")) {
-		return ParserMode::SNIFFING_DIALECT;
 	}
 	if (StringUtil::Equals(value, "SNIFFING_DATATYPES")) {
 		return ParserMode::SNIFFING_DATATYPES;
