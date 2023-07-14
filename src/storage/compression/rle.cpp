@@ -316,9 +316,42 @@ void RLEScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_c
 	}
 }
 
+static bool CanEmitConstantVector(idx_t position, idx_t run_length, idx_t scan_count) {
+	D_ASSERT(position < run_length);
+	auto remaining_in_run = run_length - position;
+	// The amount of values left in this run are equal or greater than the amount of values we need to scan
+	return remaining_in_run >= scan_count;
+}
+
+template <class T>
+static void RLEScanConstant(ColumnSegment &segment, RLEScanState<T> &scan_state, idx_t scan_count, Vector &result) {
+	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
+	auto data_pointer = (T *)(data + RLEConstants::RLE_HEADER_SIZE);
+	auto index_pointer = (rle_count_t *)(data + scan_state.rle_count_offset);
+
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	auto result_data = ConstantVector::GetData<T>(result);
+	result_data[0] = data_pointer[scan_state.entry_pos];
+	scan_state.position_in_entry += scan_count;
+	if (scan_state.position_in_entry >= index_pointer[scan_state.entry_pos]) {
+		// handled all entries in this RLE value
+		// move to the next entry
+		scan_state.entry_pos++;
+		scan_state.position_in_entry = 0;
+	}
+	return;
+}
+
 template <class T>
 void RLEScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	// FIXME: emit constant vector if repetition of single value is >= scan_count
+	auto &scan_state = state.scan_state->Cast<RLEScanState<T>>();
+	auto data = scan_state.handle.Ptr() + segment.GetBlockOffset();
+	auto index_pointer = (rle_count_t *)(data + scan_state.rle_count_offset);
+	if (CanEmitConstantVector(scan_state.position_in_entry, index_pointer[scan_state.entry_pos], scan_count)) {
+		RLEScanConstant<T>(segment, scan_state, scan_count, result);
+		return;
+	}
 	RLEScanPartial<T>(segment, state, scan_count, result, 0);
 }
 
