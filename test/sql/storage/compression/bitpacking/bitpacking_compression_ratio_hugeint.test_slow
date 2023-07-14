@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/bitpacking/bitpacking_compression_ratio_hugeint.test_coverage
+# name: test/sql/storage/compression/bitpacking/bitpacking_compression_ratio_hugeint.test_slow
 # description: Assert bitpacking compression ratio is within reasonable margins for each mode
 # group: [bitpacking]
 
