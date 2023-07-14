@@ -458,8 +458,6 @@ ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_op
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
     : fs(FileSystem::GetFileSystem(context_p)), allocator(BufferAllocator::Get(context_p)),
       metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)) {
-    : allocator(BufferAllocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)),
-      metadata(std::move(metadata_p)), parquet_options(parquet_options_p) {
 	root_reader = CreateReader();
 	InitializeSchema();
 }
@@ -486,7 +484,7 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 
 	unique_ptr<BaseStatistics> column_stats;
 	auto file_meta_data = GetFileMetadata();
-	auto column_reader = ((StructColumnReader *)root_reader.get())->GetChildReader(file_col_idx);
+	auto column_reader = root_reader->Cast<StructColumnReader>().GetChildReader(file_col_idx);
 
 	for (idx_t row_group_idx = 0; row_group_idx < file_meta_data->row_groups.size(); row_group_idx++) {
 		auto &row_group = file_meta_data->row_groups[row_group_idx];
