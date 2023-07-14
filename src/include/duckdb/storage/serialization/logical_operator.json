@@ -1,0 +1,86 @@
+[
+  {
+    "class": "LogicalOperator",
+    "class_type": "type",
+    "includes": [
+      "duckdb/planner/operator/list.hpp"
+    ],
+    "members": [
+      {
+        "name": "type",
+        "type": "LogicalOperatorType"
+      },
+      {
+        "name": "children",
+        "type": "vector<LogicalOperator*>"
+      }
+    ]
+  },
+  {
+    "class": "LogicalProjection",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_PROJECTION",
+    "members": [
+      {
+        "name": "table_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "expressions",
+        "type": "vector<Expression*>"
+      }
+    ],
+    "constructor": ["table_index", "expressions"]
+  },
+  {
+    "class": "LogicalFilter",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_FILTER",
+    "members": [
+      {
+        "name": "expressions",
+        "type": "vector<Expression*>"
+      },
+      {
+        "name": "projection_map",
+        "type": "vector<idx_t>"
+      }
+    ]
+  },
+  {
+    "class": "LogicalAggregate",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_AGGREGATE_AND_GROUP_BY",
+    "members": [
+      {
+        "name": "expressions",
+        "type": "vector<Expression*>"
+      },
+      {
+        "name": "group_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "aggregate_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "groupings_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "groups",
+        "type": "vector<Expression*>"
+      },
+      {
+        "name": "grouping_sets",
+        "type": "vector<GroupingSet>"
+      },
+      {
+        "name": "grouping_functions",
+        "type": "vector<vector<idx_t>>"
+      }
+    ],
+    "constructor": ["group_index", "aggregate_index", "expressions"]
+  }
+]

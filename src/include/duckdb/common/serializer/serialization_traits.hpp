@@ -51,6 +51,13 @@ struct is_vector<typename duckdb::vector<T>> : std::true_type {
 	typedef T ELEMENT_TYPE;
 };
 
+template <typename T>
+struct is_unsafe_vector : std::false_type {};
+template <typename T>
+struct is_unsafe_vector<typename duckdb::unsafe_vector<T>> : std::true_type {
+	typedef T ELEMENT_TYPE;
+};
+
 // Check if T is a unordered map, and provide access to the inner type
 template <typename T>
 struct is_unordered_map : std::false_type {};

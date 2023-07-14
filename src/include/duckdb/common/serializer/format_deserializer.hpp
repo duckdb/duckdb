@@ -172,6 +172,19 @@ private:
 		return vec;
 	}
 
+	template <typename T = void>
+	inline typename std::enable_if<is_unsafe_vector<T>::value, T>::type Read() {
+		using ELEMENT_TYPE = typename is_unsafe_vector<T>::ELEMENT_TYPE;
+		T vec;
+		auto size = OnListBegin();
+		for (idx_t i = 0; i < size; i++) {
+			vec.push_back(Read<ELEMENT_TYPE>());
+		}
+		OnListEnd();
+
+		return vec;
+	}
+
 	// Deserialize a map
 	template <typename T = void>
 	inline typename std::enable_if<is_unordered_map<T>::value, T>::type Read() {

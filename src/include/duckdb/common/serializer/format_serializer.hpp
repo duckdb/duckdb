@@ -108,6 +108,16 @@ protected:
 		OnListEnd(count);
 	}
 
+	template <class T>
+	void WriteValue(const unsafe_vector<T> &vec) {
+		auto count = vec.size();
+		OnListBegin(count);
+		for (auto &item : vec) {
+			WriteValue(item);
+		}
+		OnListEnd(count);
+	}
+
 	// UnorderedSet
 	// Serialized the same way as a list/vector
 	template <class T, class HASH, class CMP>
