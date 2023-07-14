@@ -538,7 +538,7 @@ class DuckDBVector {
 
         Object[] attributes = struct.getAttributes();
 
-		byte tag = (byte) attributes[0];
+        short tag = (short) attributes[0];
 
         return attributes[1 + tag];
     }
