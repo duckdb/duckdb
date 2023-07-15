@@ -18,7 +18,7 @@ namespace duckdb {
 
 struct CachedFile {
 	//! Cached Data
-	shared_ptr<char> data;
+	shared_ptr<char[]> data;
 	//! Data capacity
 	uint64_t capacity = 0;
 	//! If we finished downloading the file

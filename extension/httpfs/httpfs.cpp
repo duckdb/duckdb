@@ -262,7 +262,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 				    hfs.state->total_bytes_received += data_length;
 			    }
 			    if (!cached_file.data) {
-				    cached_file.data = std::shared_ptr<char>(new char[data_length], std::default_delete<char[]>());
+				    cached_file.data = std::shared_ptr<char[]>(new char[data_length], std::default_delete<char[]>());
 				    hfs.length = data_length;
 				    cached_file.capacity = data_length;
 				    memcpy(cached_file.data.get(), data, data_length);
@@ -274,7 +274,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 				    // Gotta eat your beans
 				    if (new_capacity != cached_file.capacity) {
 					    auto new_hfs_data =
-					        std::shared_ptr<char>(new char[new_capacity], std::default_delete<char[]>());
+					        std::shared_ptr<char[]>(new char[new_capacity], std::default_delete<char[]>());
 					    // copy the old data
 					    memcpy(new_hfs_data.get(), cached_file.data.get(), hfs.length);
 					    cached_file.capacity = new_capacity;
