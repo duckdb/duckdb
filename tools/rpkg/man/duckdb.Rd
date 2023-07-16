@@ -23,7 +23,7 @@ duckdb_shutdown(drv)
   drv,
   dbdir = DBDIR_MEMORY,
   ...,
-  auto_shutdown = FALSE,
+  auto_shutdown = TRUE,
   debug = getOption("duckdb.debug", FALSE),
   read_only = FALSE,
   timezone_out = "UTC",
@@ -49,7 +49,9 @@ data is kept in RAM}
 
 \item{...}{Ignored}
 
-\item{auto_shutdown}{Shutdown thes driver object from the database file when closing the connection?}
+\item{auto_shutdown}{Shutdown thes driver object from the database file when closing the connection?
+By default, unneeded database connections are closed automatically.
+This is required to actually disconnect from the database file.}
 
 \item{debug}{Print additional debug information such as queries}
 

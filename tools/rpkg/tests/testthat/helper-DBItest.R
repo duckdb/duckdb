@@ -8,7 +8,7 @@ reg.finalizer(drv@database_ref, function(x) rapi_shutdown(x))
 DBItest::make_context(
   drv,
   # dblog::dblog(drv),
-  list(debug = FALSE),
+  list(auto_shutdown = FALSE, debug = FALSE),
   tweaks = DBItest::tweaks(
     omit_blob_tests = FALSE,
     temporary_tables = FALSE,

@@ -13,7 +13,7 @@ test_that("configuration key value pairs work as expected", {
   drv <- duckdb(config = list("default_order" = "DESC"))
 
   # the option actually does something
-  con <- dbConnect(drv)
+  con <- dbConnect(drv, auto_shutdown = FALSE)
   dbExecute(con, "create table a (i integer)")
   dbExecute(con, "insert into a values (44), (42)")
   res <- dbGetQuery(con, "select i from a order by i")

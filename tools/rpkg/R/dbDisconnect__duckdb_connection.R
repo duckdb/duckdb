@@ -20,7 +20,7 @@ dbDisconnect__duckdb_connection <- function(conn, ..., shutdown = NULL) {
     shutdown <- conn@auto_shutdown
   }
   if (isTRUE(shutdown)) {
-    duckdb_shutdown(conn@driver)
+    rapi_shutdown(conn@driver@database_ref)
   }
   rs_on_connection_closed(conn)
   invisible(TRUE)

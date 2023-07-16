@@ -9,6 +9,8 @@
 #' @param ... Ignored
 #' @param auto_shutdown
 #'   Shutdown thes driver object from the database file when closing the connection?
+#'   By default, unneeded database connections are closed automatically.
+#'   This is required to actually disconnect from the database file.
 #' @param debug Print additional debug information such as queries
 #' @param read_only Set to `TRUE` for read-only operation
 #' @param timezone_out The time zone returned to R, defaults to `"UTC"`, which
@@ -42,7 +44,7 @@
 #' dbDisconnect(con, shutdown = TRUE)
 #' @usage NULL
 dbConnect__duckdb_driver <- function(drv, dbdir = DBDIR_MEMORY, ...,
-                                     auto_shutdown = FALSE,
+                                     auto_shutdown = TRUE,
                                      debug = getOption("duckdb.debug", FALSE),
                                      read_only = FALSE,
                                      timezone_out = "UTC",
