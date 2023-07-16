@@ -23,6 +23,7 @@ duckdb_shutdown(drv)
   drv,
   dbdir = DBDIR_MEMORY,
   ...,
+  auto_shutdown = FALSE,
   debug = getOption("duckdb.debug", FALSE),
   read_only = FALSE,
   timezone_out = "UTC",
@@ -31,7 +32,7 @@ duckdb_shutdown(drv)
   bigint = "numeric"
 )
 
-\S4method{dbDisconnect}{duckdb_connection}(conn, ..., shutdown = FALSE)
+\S4method{dbDisconnect}{duckdb_connection}(conn, ..., shutdown = NULL)
 }
 \arguments{
 \item{dbdir}{Location for database files. Should be a path to an existing
@@ -48,6 +49,8 @@ data is kept in RAM}
 
 \item{...}{Ignored}
 
+\item{auto_shutdown}{Shutdown thes driver object from the database file when closing the connection?}
+
 \item{debug}{Print additional debug information such as queries}
 
 \item{timezone_out}{The time zone returned to R, defaults to \code{"UTC"}, which
@@ -63,7 +66,10 @@ time as the timestamp in the database, but with the new time zone.}
 
 \item{conn}{A \code{duckdb_connection} object}
 
-\item{shutdown}{Set to \code{TRUE} to shut down the DuckDB database instance that this connection refers to.}
+\item{shutdown}{Set to \code{TRUE} to shut down the DuckDB database instance that this connection refers to,
+if no other connections are using it.
+The default is to use the \code{auto_shutdown} argument
+that has been passed with \code{dbConnect()}.}
 }
 \value{
 \code{duckdb()} returns an object of class \linkS4class{duckdb_driver}.

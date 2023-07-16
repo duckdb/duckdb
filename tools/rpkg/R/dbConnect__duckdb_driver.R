@@ -7,6 +7,8 @@
 #'   directory in the file system. With the default, all
 #'   data is kept in RAM
 #' @param ... Ignored
+#' @param auto_shutdown
+#'   Shutdown thes driver object from the database file when closing the connection?
 #' @param debug Print additional debug information such as queries
 #' @param read_only Set to `TRUE` for read-only operation
 #' @param timezone_out The time zone returned to R, defaults to `"UTC"`, which
@@ -40,10 +42,13 @@
 #' dbDisconnect(con, shutdown = TRUE)
 #' @usage NULL
 dbConnect__duckdb_driver <- function(drv, dbdir = DBDIR_MEMORY, ...,
+                                     auto_shutdown = FALSE,
                                      debug = getOption("duckdb.debug", FALSE),
                                      read_only = FALSE,
                                      timezone_out = "UTC",
-                                     tz_out_convert = c("with", "force"), config = list(), bigint = "numeric") {
+                                     tz_out_convert = c("with", "force"),
+                                     config = list(),
+                                     bigint = "numeric") {
   check_flag(debug)
   timezone_out <- check_tz(timezone_out)
   tz_out_convert <- match.arg(tz_out_convert)
@@ -57,12 +62,10 @@ dbConnect__duckdb_driver <- function(drv, dbdir = DBDIR_MEMORY, ...,
   }
 
   conn <- duckdb_connection(drv, debug = debug)
-  on.exit(dbDisconnect(conn))
 
+  conn@auto_shutdown <- auto_shutdown
   conn@timezone_out <- timezone_out
   conn@tz_out_convert <- tz_out_convert
-
-  on.exit(NULL)
 
   rs_on_connection_opened(conn)
 

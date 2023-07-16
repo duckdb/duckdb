@@ -22,6 +22,7 @@ setClass("duckdb_driver", contains = "DBIDriver", slots = list(
 setClass("duckdb_connection", contains = "DBIConnection", slots = list(
   conn_ref = "externalptr",
   driver = "duckdb_driver",
+  auto_shutdown = "logical",
   debug = "logical",
   timezone_out = "character",
   tz_out_convert = "character",
