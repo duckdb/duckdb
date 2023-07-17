@@ -111,7 +111,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	bool explicitly_set_columns = false;
 	for (auto &kv : input.named_parameters) {
-		if (MultiFileReader::ParseOption(kv.first, kv.second, options.file_options)) {
+		if (MultiFileReader::ParseOption(kv.first, kv.second, options.file_options, context)) {
 			continue;
 		}
 		auto loption = StringUtil::Lower(kv.first);
@@ -220,9 +220,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			options.SetReadOption(loption, kv.second, names);
 		}
 	}
-	if (options.file_options.auto_detect_hive_partitioning) {
-		options.file_options.hive_partitioning = MultiFileReaderOptions::AutoDetectHivePartitioning(result->files);
-	}
+	options.file_options.AutoDetectHivePartitioning(result->files, context);
 
 	if (!options.auto_detect && return_types.empty()) {
 		throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
@@ -603,7 +601,7 @@ bool ParallelCSVGlobalState::Next(ClientContext &context, const ReadCSVData &bin
 		reader->options.file_path = current_file_path;
 		MultiFileReader::InitializeReader(*reader, bind_data.options.file_options, bind_data.reader_bind,
 		                                  bind_data.return_types, bind_data.return_names, column_ids, nullptr,
-		                                  bind_data.files.front());
+		                                  bind_data.files.front(), context);
 	} else {
 		// update the current reader
 		reader->SetBufferRead(std::move(result));
@@ -850,7 +848,7 @@ private:
 			}
 			MultiFileReader::InitializeReader(*result, bind_data.options.file_options, bind_data.reader_bind,
 			                                  bind_data.return_types, bind_data.return_names, column_ids, nullptr,
-			                                  bind_data.files.front());
+			                                  bind_data.files.front(), context);
 		}
 		total_size = result->file_handle->FileSize();
 		return result;
@@ -899,14 +897,14 @@ static unique_ptr<GlobalTableFunctionState> SingleThreadedCSVInit(ClientContext 
 	}
 	MultiFileReader::InitializeReader(*result->initial_reader, bind_data.options.file_options, bind_data.reader_bind,
 	                                  bind_data.return_types, bind_data.return_names, input.column_ids, input.filters,
-	                                  bind_data.files.front());
+	                                  bind_data.files.front(), context);
 	for (auto &reader : bind_data.union_readers) {
 		if (!reader) {
 			continue;
 		}
 		MultiFileReader::InitializeReader(*reader, bind_data.options.file_options, bind_data.reader_bind,
 		                                  bind_data.return_types, bind_data.return_names, input.column_ids,
-		                                  input.filters, bind_data.files.front());
+		                                  input.filters, bind_data.files.front(), context);
 	}
 	result->column_ids = input.column_ids;
 

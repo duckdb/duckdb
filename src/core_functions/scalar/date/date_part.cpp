@@ -1591,7 +1591,7 @@ ScalarFunctionSet EpochFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::EpochOperator>();
 }
 
-ScalarFunctionSet EpochNanosecondsFun::GetFunctions() {
+ScalarFunctionSet EpochNsFun::GetFunctions() {
 	using OP = DatePart::EpochNanosecondsOperator;
 	auto operator_set = GetTimePartFunction<OP>();
 
@@ -1603,7 +1603,7 @@ ScalarFunctionSet EpochNanosecondsFun::GetFunctions() {
 	return operator_set;
 }
 
-ScalarFunctionSet EpochMicrosecondsFun::GetFunctions() {
+ScalarFunctionSet EpochUsFun::GetFunctions() {
 	using OP = DatePart::EpochMicrosecondsOperator;
 	auto operator_set = GetTimePartFunction<OP>();
 

@@ -1,0 +1,144 @@
+[
+  {
+    "class": "QueryNode",
+    "class_type": "type",
+    "includes": [
+      "duckdb/parser/query_node/list.hpp"
+    ],
+    "members": [
+      {
+        "name": "type",
+        "type": "QueryNodeType"
+      },
+      {
+        "name": "modifiers",
+        "type": "vector<ResultModifier*>"
+      },
+      {
+        "name": "cte_map",
+        "type": "CommonTableExpressionMap"
+      }
+    ]
+  },
+  {
+    "class": "SelectNode",
+    "base": "QueryNode",
+    "enum": "SELECT_NODE",
+    "members": [
+      {
+        "name": "select_list",
+        "type": "vector<ParsedExpression*>"
+      },
+      {
+        "name": "from_table",
+        "type": "TableRef*",
+        "optional": true
+      },
+      {
+        "name": "where_clause",
+        "type": "ParsedExpression*",
+        "optional": true
+      },
+      {
+        "name": "group_expressions",
+        "type": "vector<ParsedExpression*>",
+        "property": "groups.group_expressions"
+      },
+      {
+        "name": "group_sets",
+        "type": "set<idx_t>",
+        "property": "groups.grouping_sets"
+      },
+      {
+        "name": "aggregate_handling",
+        "type": "AggregateHandling"
+      },
+      {
+        "name": "having",
+        "type": "ParsedExpression*",
+        "optional": true
+      },
+      {
+        "name": "sample",
+        "type": "SampleOptions*",
+        "optional": true
+      },
+      {
+        "name": "qualify",
+        "type": "ParsedExpression*",
+        "optional": true
+      }
+    ]
+  },
+  {
+    "class": "SetOperationNode",
+    "base": "QueryNode",
+    "enum": "SET_OPERATION_NODE",
+    "members": [
+      {
+        "name": "setop_type",
+        "type": "SetOperationType"
+      },
+      {
+        "name": "left",
+        "type": "QueryNode*"
+      },
+      {
+        "name": "right",
+        "type": "QueryNode*"
+      }
+    ]
+  },
+  {
+    "class": "RecursiveCTENode",
+    "base": "QueryNode",
+    "enum": "RECURSIVE_CTE_NODE",
+    "members": [
+      {
+        "name": "cte_name",
+        "type": "string",
+        "property": "ctename"
+      },
+      {
+        "name": "union_all",
+        "type": "bool"
+      },
+      {
+        "name": "left",
+        "type": "QueryNode*"
+      },
+      {
+        "name": "right",
+        "type": "QueryNode*"
+      },
+      {
+        "name": "aliases",
+        "type": "vector<string>"
+      }
+    ]
+  },
+  {
+    "class": "CTENode",
+    "base": "QueryNode",
+    "enum": "CTE_NODE",
+    "members": [
+      {
+        "name": "cte_name",
+        "type": "string",
+        "property": "ctename"
+      },
+      {
+        "name": "query",
+        "type": "QueryNode*"
+      },
+      {
+        "name": "child",
+        "type": "QueryNode*"
+      },
+      {
+        "name": "aliases",
+        "type": "vector<string>"
+      }
+    ]
+  }
+]

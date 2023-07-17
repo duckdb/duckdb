@@ -38,6 +38,9 @@ struct CombinedListData {
 };
 
 struct TupleDataVectorFormat {
+	const SelectionVector *original_sel;
+	SelectionVector original_owned_sel;
+
 	UnifiedVectorFormat data;
 	vector<TupleDataVectorFormat> child_formats;
 	unique_ptr<CombinedListData> combined_list_data;

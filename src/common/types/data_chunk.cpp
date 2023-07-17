@@ -327,7 +327,7 @@ void DataChunk::Verify() {
 #endif
 }
 
-void DataChunk::Print() {
+void DataChunk::Print() const {
 	Printer::Print(ToString());
 }
 

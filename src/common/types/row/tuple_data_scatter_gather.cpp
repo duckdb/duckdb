@@ -296,7 +296,7 @@ static void ApplySliceRecursive(const Vector &source_v, TupleDataVectorFormat &s
 	D_ASSERT(source_format.combined_list_data);
 	auto &combined_list_data = *source_format.combined_list_data;
 
-	combined_list_data.selection_data = source_format.data.sel->Slice(combined_sel, count);
+	combined_list_data.selection_data = source_format.original_sel->Slice(combined_sel, count);
 	source_format.data.owned_sel.Initialize(combined_list_data.selection_data);
 	source_format.data.sel = &source_format.data.owned_sel;
 
@@ -376,8 +376,8 @@ void TupleDataCollection::ListWithinListComputeHeapSizes(Vector &heap_sizes_v, c
 	for (idx_t i = 0; i < child_list_child_count; i++) {
 		combined_sel.set_index(i, 0);
 	}
-	idx_t combined_list_offset = 0;
 
+	idx_t combined_list_offset = 0;
 	for (idx_t i = 0; i < append_count; i++) {
 		const auto list_idx = list_sel.get_index(append_sel.get_index(i));
 		if (!list_validity.RowIsValid(list_idx)) {

@@ -669,6 +669,77 @@ bool TransformToJSON(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const 
 	return true;
 }
 
+bool TransformValueIntoUnion(yyjson_val **vals, yyjson_alc *alc, Vector &result, const idx_t count,
+                             JSONTransformOptions &options) {
+	auto type = result.GetType();
+
+	auto fields = UnionType::CopyMemberTypes(type);
+	vector<string> names;
+	for (const auto &field : fields) {
+		names.push_back(field.first);
+	}
+
+	bool success = true;
+
+	auto &validity = FlatVector::Validity(result);
+
+	auto set_error = [&](idx_t i, const string &message) {
+		validity.SetInvalid(i);
+		result.SetValue(i, Value(nullptr));
+		if (success && options.strict_cast) {
+			options.error_message = message;
+			options.object_index = i;
+			success = false;
+		}
+	};
+
+	for (idx_t i = 0; i < count; i++) {
+		const auto &obj = vals[i];
+
+		if (!obj || unsafe_yyjson_is_null(vals[i])) {
+			validity.SetInvalid(i);
+			result.SetValue(i, Value(nullptr));
+			continue;
+		}
+
+		if (!unsafe_yyjson_is_obj(obj)) {
+			set_error(i,
+			          StringUtil::Format("Expected an object representing a union, got %s", yyjson_get_type_desc(obj)));
+			continue;
+		}
+
+		auto len = unsafe_yyjson_get_len(obj);
+		if (len > 1) {
+			set_error(i, "Found object containing more than one key, instead of union");
+			continue;
+		} else if (len == 0) {
+			set_error(i, "Found empty object, instead of union");
+			continue;
+		}
+
+		auto key = unsafe_yyjson_get_first(obj);
+		auto val = yyjson_obj_iter_get_val(key);
+
+		auto tag = std::find(names.begin(), names.end(), unsafe_yyjson_get_str(key));
+		if (tag == names.end()) {
+			set_error(i, StringUtil::Format("Found object containing unknown key, instead of union: %s",
+			                                unsafe_yyjson_get_str(key)));
+			continue;
+		}
+
+		idx_t actual_tag = tag - names.begin();
+
+		Vector single(UnionType::GetMemberType(type, actual_tag), 1);
+		if (!JSONTransform::Transform(&val, alc, single, 1, options)) {
+			success = false;
+		}
+
+		result.SetValue(i, Value::UNION(fields, actual_tag, single.GetValue(0)));
+	}
+
+	return success;
+}
+
 bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
                               JSONTransformOptions &options) {
 	auto result_type = result.GetType();
@@ -747,8 +818,10 @@ bool JSONTransform::Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &resul
 		return TransformArray(vals, alc, result, count, options);
 	case LogicalTypeId::MAP:
 		return TransformObjectToMap(vals, alc, result, count, options);
+	case LogicalTypeId::UNION:
+		return TransformValueIntoUnion(vals, alc, result, count, options);
 	default:
-		throw InternalException("Unexpected type at JSON Transform %s", result_type.ToString());
+		throw NotImplementedException("Cannot read a value of type %s from a json file", result_type.ToString());
 	}
 }
 

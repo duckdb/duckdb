@@ -2,6 +2,12 @@
 # description: Test approx_count_distinct operator
 # group: [aggregates]
 
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA verify_external
+
 statement error
 select approx_count_distinct(*)
 
