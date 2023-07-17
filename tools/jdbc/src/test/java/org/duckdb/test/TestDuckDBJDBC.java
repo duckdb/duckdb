@@ -3611,6 +3611,48 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	public static void test_prepared_statement_metadata() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			 PreparedStatement stmt = conn.prepareStatement("SELECT 'hello' as world")) {
+			ResultSetMetaData metadata = stmt.getMetaData();
+			assertEquals(metadata.getColumnCount(), 1);
+			assertEquals(metadata.getColumnName(1), "world");
+			assertEquals(metadata.getColumnType(1), Types.VARCHAR);
+		}
+	}
+
+	public static void test_unbindable_query() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			 PreparedStatement stmt = conn.prepareStatement("SELECT ?, ?")) {
+			stmt.setString(1, "word1");
+			stmt.setInt(2, 42);
+
+			ResultSetMetaData meta = stmt.getMetaData();
+			assertEquals(meta.getColumnCount(), 1);
+			assertEquals(meta.getColumnName(1), "unknown");
+			assertEquals(meta.getColumnTypeName(1), "UNKNOWN");
+			assertEquals(meta.getColumnType(1), Types.JAVA_OBJECT);
+
+			try (ResultSet resultSet = stmt.executeQuery()) {
+				ResultSetMetaData metadata = resultSet.getMetaData();
+
+				assertEquals(metadata.getColumnCount(), 2);
+
+				assertEquals(metadata.getColumnName(1), "$1");
+				assertEquals(metadata.getColumnTypeName(1), "VARCHAR");
+				assertEquals(metadata.getColumnType(1), Types.VARCHAR);
+
+				assertEquals(metadata.getColumnName(2), "$2");
+				assertEquals(metadata.getColumnTypeName(2), "INTEGER");
+				assertEquals(metadata.getColumnType(2), Types.INTEGER);
+
+				resultSet.next();
+				assertEquals(resultSet.getString(1), "word1");
+				assertEquals(resultSet.getInt(2), 42);
+			}
+		}
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
