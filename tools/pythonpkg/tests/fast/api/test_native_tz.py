@@ -63,6 +63,7 @@ def test_arrow_timestamp_timezone():
 	assert res['tz'][0].hour == 21 and res['tz'][0].minute == 52
 
 def test_arrow_timestamp_time():
+	pa = pytest.importorskip('pyarrow')
 	con = duckdb.connect('')
 	with pytest.raises(duckdb.NotImplementedException, match="Unsupported Arrow type"):
 		con.execute(f"select TimeRecStart::TIMETZ  as tz  from '{filename}'").arrow()
