@@ -9,6 +9,8 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/operator/subtract.hpp"
+#include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/operator/add.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -249,6 +251,9 @@ public:
 			}
 
 			// Check if delta has benefit
+			// bitwidth is calculated differently between signed and unsigned values, but considering we do not have
+			// an unsigned version of hugeint, we need to explicitly specify (through boolean) that we wish to calculate
+			// the unsigned minimum bit-width instead of relying on MakeUnsigned and IsSigned
 			auto delta_required_bitwidth = BitpackingPrimitives::MinimumBitWidth<T, false>(min_max_delta_diff);
 			auto regular_required_bitwidth = BitpackingPrimitives::MinimumBitWidth(min_max_diff);
 
@@ -860,7 +865,13 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	}
 
 	if (scan_state.current_group.mode == BitpackingMode::CONSTANT_DELTA) {
-		// FIXME: is it being verified that this will never overflow?
+#ifdef DEBUG
+		// overflow check
+		T result;
+		bool multiply = TryMultiplyOperator::Operation(static_cast<T>(scan_state.current_group_offset), scan_state.current_constant, result);
+		bool add = TryAddOperator::Operation(result, scan_state.current_frame_of_reference, result);
+		D_ASSERT(multiply && add);
+#endif
 		*current_result_ptr = (static_cast<T>(scan_state.current_group_offset) * scan_state.current_constant) +
 		                      scan_state.current_frame_of_reference;
 		return;
