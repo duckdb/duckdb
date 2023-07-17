@@ -451,19 +451,19 @@ static idx_t FindTypedRangeBound(WindowInputColumn &over, const idx_t order_begi
 	WindowColumnIterator<T> begin(over, order_begin);
 	WindowColumnIterator<T> end(over, order_end);
 
-	if (order_begin < prev.first && prev.first < order_end) {
-		const auto first = over.GetCell<T>(prev.first);
+	if (order_begin < prev.start && prev.start < order_end) {
+		const auto first = over.GetCell<T>(prev.start);
 		if (!comp(val, first)) {
 			//	prev.first <= val, so we can start further forward
-			begin += (prev.first - order_begin);
+			begin += (prev.start - order_begin);
 		}
 	}
-	if (order_begin <= prev.second && prev.second < order_end) {
-		const auto second = over.GetCell<T>(prev.second);
+	if (order_begin <= prev.end && prev.end < order_end) {
+		const auto second = over.GetCell<T>(prev.end);
 		if (!comp(second, val)) {
 			//	val <= prev.second, so we can end further back
 			// (prev.second is the largest peer)
-			end -= (order_end - prev.second - 1);
+			end -= (order_end - prev.end - 1);
 		}
 	}
 
@@ -567,8 +567,8 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 				}
 
 				//	Reset range hints
-				prev.first = valid_start;
-				prev.second = valid_end;
+				prev.start = valid_start;
+				prev.end = valid_end;
 			}
 		} else if (!is_peer) {
 			peer_start = row_idx;
@@ -619,9 +619,9 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 		if (boundary_start.CellIsNull(chunk_idx)) {
 			window_start = peer_start;
 		} else {
-			prev.first = FindOrderedRangeBound<true>(range_collection, range_sense, valid_start, row_idx,
+			prev.start = FindOrderedRangeBound<true>(range_collection, range_sense, valid_start, row_idx,
 			                                         boundary_start, chunk_idx, prev);
-			window_start = prev.first;
+			window_start = prev.start;
 		}
 		break;
 	}
@@ -629,9 +629,9 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 		if (boundary_start.CellIsNull(chunk_idx)) {
 			window_start = peer_start;
 		} else {
-			prev.first = FindOrderedRangeBound<true>(range_collection, range_sense, row_idx, valid_end, boundary_start,
+			prev.start = FindOrderedRangeBound<true>(range_collection, range_sense, row_idx, valid_end, boundary_start,
 			                                         chunk_idx, prev);
-			window_start = prev.first;
+			window_start = prev.start;
 		}
 		break;
 	}
@@ -664,9 +664,9 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 		if (boundary_end.CellIsNull(chunk_idx)) {
 			window_end = peer_end;
 		} else {
-			prev.second = FindOrderedRangeBound<false>(range_collection, range_sense, valid_start, row_idx,
-			                                           boundary_end, chunk_idx, prev);
-			window_end = prev.second;
+			prev.end = FindOrderedRangeBound<false>(range_collection, range_sense, valid_start, row_idx, boundary_end,
+			                                        chunk_idx, prev);
+			window_end = prev.end;
 		}
 		break;
 	}
@@ -674,9 +674,9 @@ void WindowBoundariesState::Update(const idx_t row_idx, WindowInputColumn &range
 		if (boundary_end.CellIsNull(chunk_idx)) {
 			window_end = peer_end;
 		} else {
-			prev.second = FindOrderedRangeBound<false>(range_collection, range_sense, row_idx, valid_end, boundary_end,
-			                                           chunk_idx, prev);
-			window_end = prev.second;
+			prev.end = FindOrderedRangeBound<false>(range_collection, range_sense, row_idx, valid_end, boundary_end,
+			                                        chunk_idx, prev);
+			window_end = prev.end;
 		}
 		break;
 	}

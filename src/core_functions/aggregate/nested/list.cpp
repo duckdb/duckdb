@@ -38,16 +38,10 @@ struct ListAggState {
 struct ListFunction {
 	template <class STATE>
 	static void Initialize(STATE &state) {
-		// TODO: this can also be empty, no?
 		state.linked_list.total_capacity = 0;
 		state.linked_list.first_segment = nullptr;
 		state.linked_list.last_segment = nullptr;
 	}
-	// TODO: do we need this?
-	//	template <class STATE>
-	//	static void Destroy(STATE &state, AggregateInputData &aggr_input_data) {
-	//		// nop
-	//	}
 	static bool IgnoreNull() {
 		return false;
 	}
@@ -165,9 +159,9 @@ static void ListWindow(Vector inputs[], const ValidityMask &filter_mask, Aggrega
 
 	// FIXME: we unify more values than necessary
 	RecursiveUnifiedVectorFormat input_data;
-	Vector::RecursiveToUnifiedFormat(input, frame.second, input_data);
+	Vector::RecursiveToUnifiedFormat(input, frame.end, input_data);
 
-	for (idx_t i = frame.first; i < frame.second; i++) {
+	for (idx_t i = frame.start; i < frame.end; i++) {
 		list_bind_data.functions.AppendRow(aggr_input_data.allocator, linked_list, input_data, i);
 	}
 

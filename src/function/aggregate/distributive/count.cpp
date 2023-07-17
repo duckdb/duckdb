@@ -39,8 +39,8 @@ struct CountStarFunction : public BaseCountFunction {
 	                   Vector &result, idx_t rid, idx_t bias) {
 		D_ASSERT(input_count == 0);
 		auto data = FlatVector::GetData<RESULT_TYPE>(result);
-		const auto begin = frame.first;
-		const auto end = frame.second;
+		const auto begin = frame.start;
+		const auto end = frame.end;
 		// Slice to any filtered rows
 		if (!filter_mask.AllValid()) {
 			RESULT_TYPE filtered = 0;

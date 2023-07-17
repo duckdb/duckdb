@@ -184,6 +184,9 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 		target_ptr += tuple_size;
 	}
 	RowOperations::CombineStates(row_state, layout, source_addresses, target_addresses, combine_count);
+
+	// FIXME: after moving the arena allocator, we currently have to ensure that the pointer is not nullptr, because the
+	// FIXME: Destroy()-function of the hash table expects an allocator in some cases (e.g., for sorted aggregates)
 	stored_allocators.push_back(std::move(other.aggregate_allocator));
 	other.aggregate_allocator = make_uniq<ArenaAllocator>(allocator);
 }
@@ -290,8 +293,6 @@ void PerfectAggregateHashTable::Destroy() {
 	// and call the destructor method for each of the aggregates
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 	idx_t count = 0;
-
-	D_ASSERT(aggregate_allocator);
 
 	// iterate over all initialised slots of the hash table
 	RowOperationsState row_state(*aggregate_allocator);

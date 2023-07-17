@@ -56,9 +56,9 @@ protected:
 	//! Reused selection vector
 	SelectionVector sel;
 
-	//! The arena allocator used by the aggregates for their internal state
+	//! The active arena allocator used by the aggregates for their internal state
 	unique_ptr<ArenaAllocator> aggregate_allocator;
-	//! The arena allocators that we combined into this state
+	//! Owning arena allocators that this HT has data from
 	vector<unique_ptr<ArenaAllocator>> stored_allocators;
 
 private:

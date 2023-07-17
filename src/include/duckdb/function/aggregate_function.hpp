@@ -41,7 +41,6 @@ typedef void (*aggregate_simple_update_t)(Vector inputs[], AggregateInputData &a
                                           data_ptr_t state, idx_t count);
 
 //! The type used for updating complex windowed aggregate functions (optional)
-typedef std::pair<idx_t, idx_t> FrameBounds;
 typedef void (*aggregate_window_t)(Vector inputs[], const ValidityMask &filter_mask,
                                    AggregateInputData &aggr_input_data, idx_t input_count, data_ptr_t state,
                                    const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t rid,
