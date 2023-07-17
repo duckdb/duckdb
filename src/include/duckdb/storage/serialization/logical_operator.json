@@ -197,5 +197,62 @@
       }
     ],
     "constructor": ["distinct_targets", "distinct_type"]
+  },
+  {
+    "class": "LogicalSample",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_SAMPLE",
+    "members": [
+      {
+        "name": "sample_options",
+        "type": "SampleOptions"
+      }
+    ]
+  },
+  {
+    "class": "LogicalLimitPercent",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_LIMIT_PERCENT",
+    "members": [
+      {
+        "name": "limit_percent",
+        "type": "double"
+      },
+      {
+        "name": "offset_val",
+        "type": "int64_t"
+      },
+      {
+        "name": "limit",
+        "type": "Expression*",
+        "optional": true
+      },
+      {
+        "name": "offset",
+        "type": "Expression*",
+        "optional": true
+      }
+    ],
+    "constructor": ["limit_percent", "offset_val", "limit", "offset"]
+  },
+  {
+    "class": "LogicalColumnDataGet",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_CHUNK_GET",
+    "members": [
+      {
+        "name": "table_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "chunk_types",
+        "type": "vector<LogicalType>"
+      },
+      {
+        "name": "collection",
+        "type": "ColumnDataCollection*"
+      }
+    ],
+    "constructor": ["table_index", "chunk_types", "collection"]
   }
 ]

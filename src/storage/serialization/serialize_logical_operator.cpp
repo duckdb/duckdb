@@ -22,6 +22,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
 		result = LogicalAggregate::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_CHUNK_GET:
+		result = LogicalColumnDataGet::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 		result = LogicalDistinct::FormatDeserialize(deserializer);
 		break;
@@ -31,11 +34,17 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	case LogicalOperatorType::LOGICAL_LIMIT:
 		result = LogicalLimit::FormatDeserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
+		result = LogicalLimitPercent::FormatDeserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		result = LogicalOrder::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 		result = LogicalProjection::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_SAMPLE:
+		result = LogicalSample::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_TOP_N:
 		result = LogicalTopN::FormatDeserialize(deserializer);
@@ -73,6 +82,21 @@ unique_ptr<LogicalOperator> LogicalAggregate::FormatDeserialize(FormatDeserializ
 	deserializer.ReadProperty("groups", result->groups);
 	deserializer.ReadProperty("grouping_sets", result->grouping_sets);
 	deserializer.ReadProperty("grouping_functions", result->grouping_functions);
+	return std::move(result);
+}
+
+void LogicalColumnDataGet::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("table_index", table_index);
+	serializer.WriteProperty("chunk_types", chunk_types);
+	serializer.WriteProperty("collection", *collection);
+}
+
+unique_ptr<LogicalOperator> LogicalColumnDataGet::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto table_index = deserializer.ReadProperty<idx_t>("table_index");
+	auto chunk_types = deserializer.ReadProperty<vector<LogicalType>>("chunk_types");
+	auto collection = deserializer.ReadProperty<unique_ptr<ColumnDataCollection>>("collection");
+	auto result = duckdb::unique_ptr<LogicalColumnDataGet>(new LogicalColumnDataGet(table_index, std::move(chunk_types), std::move(collection)));
 	return std::move(result);
 }
 
@@ -121,6 +145,23 @@ unique_ptr<LogicalOperator> LogicalLimit::FormatDeserialize(FormatDeserializer &
 	return std::move(result);
 }
 
+void LogicalLimitPercent::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("limit_percent", limit_percent);
+	serializer.WriteProperty("offset_val", offset_val);
+	serializer.WriteOptionalProperty("limit", limit);
+	serializer.WriteOptionalProperty("offset", offset);
+}
+
+unique_ptr<LogicalOperator> LogicalLimitPercent::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto limit_percent = deserializer.ReadProperty<double>("limit_percent");
+	auto offset_val = deserializer.ReadProperty<int64_t>("offset_val");
+	auto limit = deserializer.ReadOptionalProperty<unique_ptr<Expression>>("limit");
+	auto offset = deserializer.ReadOptionalProperty<unique_ptr<Expression>>("offset");
+	auto result = duckdb::unique_ptr<LogicalLimitPercent>(new LogicalLimitPercent(limit_percent, offset_val, std::move(limit), std::move(offset)));
+	return std::move(result);
+}
+
 void LogicalOrder::FormatSerialize(FormatSerializer &serializer) const {
 	LogicalOperator::FormatSerialize(serializer);
 	serializer.WriteProperty("orders", orders);
@@ -144,6 +185,17 @@ unique_ptr<LogicalOperator> LogicalProjection::FormatDeserialize(FormatDeseriali
 	auto table_index = deserializer.ReadProperty<idx_t>("table_index");
 	auto expressions = deserializer.ReadProperty<vector<unique_ptr<Expression>>>("expressions");
 	auto result = duckdb::unique_ptr<LogicalProjection>(new LogicalProjection(table_index, std::move(expressions)));
+	return std::move(result);
+}
+
+void LogicalSample::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("sample_options", sample_options);
+}
+
+unique_ptr<LogicalOperator> LogicalSample::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto result = duckdb::unique_ptr<LogicalSample>(new LogicalSample());
+	deserializer.ReadProperty("sample_options", result->sample_options);
 	return std::move(result);
 }
 
