@@ -75,7 +75,7 @@ common/types/conflict_manager.cpp	3
 common/types/data_chunk.cpp	19
 common/types/date.cpp	24
 common/types/hash.cpp	5
-common/types/hugeint.cpp	30
+common/types/hugeint.cpp	34
 common/types/hyperloglog.cpp	11
 common/types/interval.cpp	31
 common/types/row/partitioned_tuple_data.cpp	10
