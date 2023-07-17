@@ -67,7 +67,7 @@ unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSu
 		break;
 	}
 	if (result->path_mode > PGQPathMode::WALK) {
-		throw NotImplementedException("Path modes have not been implemented yet.");
+		throw NotImplementedException("Path modes other than WALK have not been implemented yet.");
 	}
 
 	//! Path sequence
@@ -89,7 +89,19 @@ unique_ptr<SubPath> Transformer::TransformSubPathElement(duckdb_libpgquery::PGSu
 
 unique_ptr<PathPattern> Transformer::TransformPath(duckdb_libpgquery::PGPathPattern *root) {
 	auto result = make_uniq<PathPattern>();
-
+    result->all = root->all;
+    result->shortest = root->shortest;
+    result->group = root->group;
+    result->topk = root->topk;
+    if (result->all) {
+        throw NotImplementedException("ALL has not been implemented yet.");
+    }
+    if (result->topk > 1) {
+        throw NotImplementedException("TopK has not been implemented yet.");
+    }
+    if (result->group) {
+        throw NotImplementedException("GROUP has not been implemented yet.");
+    }
 	//! Path sequence
 	for (auto node = root->path->head; node != nullptr; node = lnext(node)) {
 		// Parse path element
