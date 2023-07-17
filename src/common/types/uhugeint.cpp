@@ -55,19 +55,15 @@ const uhugeint_t Uhugeint::POWERS_OF_TEN[] {
     uhugeint_t(1000000000000000000) * uhugeint_t(1000000000000000000) * uhugeint_t(10),
     uhugeint_t(1000000000000000000) * uhugeint_t(1000000000000000000) * uhugeint_t(100)};
 
-uhugeint_t Uhugeint::DivMod() {
-
-}
-
 string Uhugeint::ToString(uhugeint_t input) {
-	uint64_t remainder;
+	uhugeint_t remainder;
 	string result;
 	while (true) {
 		if (!input.lower && !input.upper) {
 			break;
 		}
 		input = Uhugeint::DivMod(input, 10, remainder);
-		result = string(1, '0' + remainder) + result; // NOLINT
+		result = string(1, '0' + remainder.lower) + result; // NOLINT
 	}
 	if (result.empty()) {
 		// value is zero
@@ -94,8 +90,10 @@ bool Uhugeint::TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result) {
 	result.upper = uint64_t(upper);
 	result.lower = uint64_t(result_u128 & 0xffffffffffffffff);
 #else
-
+	// TODO: implement
+	return false;
 #endif
+	return true;
 }
 
 uhugeint_t Uhugeint::Multiply(uhugeint_t lhs, uhugeint_t rhs) {
@@ -104,6 +102,68 @@ uhugeint_t Uhugeint::Multiply(uhugeint_t lhs, uhugeint_t rhs) {
 		throw OutOfRangeException("Overflow in UHUGEINT multiplication!");
 	}
 	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// Divide
+//===--------------------------------------------------------------------===//
+uint8_t Bits(uhugeint_t x) {
+	uint8_t out = 0;
+	if (x.upper) {
+		out = 64;
+		for (uint64_t upper = x.upper; upper; upper >>= 1) {
+			++out;
+		}
+	} else {
+		for (uint64_t lower = x.lower; lower; lower >>= 1) {
+			++out;
+		}
+	}
+	return out;
+}
+
+uhugeint_t Uhugeint::DivMod(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &remainder) {
+	// division by zero not allowed
+	D_ASSERT(!(rhs.upper == 0 && rhs.lower == 0));
+
+	remainder = uhugeint_t(0);
+	if (rhs == uhugeint_t(1)) {
+		return lhs;
+	}
+	else if (lhs == rhs) {
+		return uhugeint_t(1);
+	}
+	else if (lhs == uhugeint_t(0) || lhs < rhs) {
+		remainder = lhs;
+		return uhugeint_t(0);
+	}
+
+	uhugeint_t result = 0;
+	for (uint8_t idx = Bits(lhs); idx > 0; --idx) {
+		result <<= 1;
+		remainder <<= 1;
+
+		if (((lhs >> (idx - 1U)) & 1) != 0) {
+			remainder += 1;
+		}
+
+		if (remainder >= rhs) {
+			remainder -= rhs;
+			result += 1;
+		}
+	}
+	return result;
+}
+
+uhugeint_t Uhugeint::Divide(uhugeint_t lhs, uhugeint_t rhs) {
+	uhugeint_t remainder;
+	return Uhugeint::DivMod(lhs, rhs, remainder);
+}
+
+uhugeint_t Uhugeint::Modulo(uhugeint_t lhs, uhugeint_t rhs) {
+	uhugeint_t remainder;
+	Uhugeint::DivMod(lhs, rhs, remainder);
+	return remainder;
 }
 
 //===--------------------------------------------------------------------===//
@@ -143,12 +203,198 @@ uhugeint_t Uhugeint::Subtract(uhugeint_t lhs, uhugeint_t rhs) {
 }
 
 //===--------------------------------------------------------------------===//
+// Cast/Conversion
+//===--------------------------------------------------------------------===//
+template <class DST>
+bool UhugeintTryCastInteger(uhugeint_t input, DST &result) {
+	if (input.upper == 0 && input.lower <= uint64_t(NumericLimits<DST>::Maximum())) {
+		result = DST(input.lower);
+		return true;
+	}
+	return false;
+}
+
+template <>
+bool Uhugeint::TryCast(uhugeint_t input, int8_t &result) {
+	return UhugeintTryCastInteger<int8_t>(input, result);
+}
+
+template <>
+bool Uhugeint::TryCast(uhugeint_t input, int16_t &result) {
+	return UhugeintTryCastInteger<int16_t>(input, result);
+}
+
+template <>
+bool Uhugeint::TryCast(uhugeint_t input, int32_t &result) {
+	return UhugeintTryCastInteger<int32_t>(input, result);
+}
+
+template <>
+bool Uhugeint::TryCast(uhugeint_t input, int64_t &result) {
+	return UhugeintTryCastInteger<int64_t>(input, result);
+}
+
+template <>
+bool Uhugeint::TryCast(uhugeint_t input, uint8_t &result) {
+	return UhugeintTryCastInteger<uint8_t>(input, result);
+}
+
+template <>
+bool Uhugeint::TryCast(uhugeint_t input, uint16_t &result) {
+	return UhugeintTryCastInteger<uint16_t>(input, result);
+}
+
+template <>
+bool Uhugeint::TryCast(uhugeint_t input, uint32_t &result) {
+	return UhugeintTryCastInteger<uint32_t>(input, result);
+}
+
+template <>
+bool Uhugeint::TryCast(uhugeint_t input, uint64_t &result) {
+	return UhugeintTryCastInteger<uint64_t>(input, result);
+}
+
+template <>
+bool Uhugeint::TryCast(uhugeint_t input, uhugeint_t &result) {
+	result = input;
+	return true;
+}
+
+template <>
+bool Uhugeint::TryCast(uhugeint_t input, float &result) {
+	double dbl_result;
+	Uhugeint::TryCast(input, dbl_result);
+	result = (float)dbl_result;
+	return true;
+}
+
+template <class REAL_T>
+bool CastUhugeintToFloating(uhugeint_t input, REAL_T &result) {
+	result = REAL_T(input.lower) + REAL_T(input.upper) * REAL_T(NumericLimits<uint64_t>::Maximum());
+	return true;
+}
+
+template <>
+bool Uhugeint::TryCast(uhugeint_t input, double &result) {
+	return CastUhugeintToFloating<double>(input, result);
+}
+
+template <>
+bool Uhugeint::TryCast(uhugeint_t input, long double &result) {
+	return CastUhugeintToFloating<long double>(input, result);
+}
+
+template <class DST>
+uhugeint_t UhugeintConvertInteger(DST input) {
+	uhugeint_t result;
+	result.lower = (uint64_t)input;
+	result.upper = 0;
+	return result;
+}
+
+template <>
+bool Uhugeint::TryConvert(const char *value, uhugeint_t &result) {
+	auto len = strlen(value);
+	string_t string_val(value, len);
+	return TryCast::Operation<string_t, uhugeint_t>(string_val, result, true);
+}
+
+template <>
+bool Uhugeint::TryConvert(int8_t value, uhugeint_t &result) {
+	if (value < 0) {
+		return false;
+	}
+	result = UhugeintConvertInteger<int8_t>(value);
+	return true;
+}
+
+template <>
+bool Uhugeint::TryConvert(int16_t value, uhugeint_t &result) {
+	if (value < 0) {
+		return false;
+	}
+	result = UhugeintConvertInteger<int16_t>(value);
+	return true;
+}
+
+template <>
+bool Uhugeint::TryConvert(int32_t value, uhugeint_t &result) {
+	if (value < 0) {
+		return false;
+	}
+	result = UhugeintConvertInteger<int32_t>(value);
+	return true;
+}
+
+template <>
+bool Uhugeint::TryConvert(int64_t value, uhugeint_t &result) {
+	if (value < 0) {
+		return false;
+	}
+	result = UhugeintConvertInteger<int64_t>(value);
+	return true;
+}
+template <>
+bool Uhugeint::TryConvert(uint8_t value, uhugeint_t &result) {
+	result = UhugeintConvertInteger<uint8_t>(value);
+	return true;
+}
+template <>
+bool Uhugeint::TryConvert(uint16_t value, uhugeint_t &result) {
+	result = UhugeintConvertInteger<uint16_t>(value);
+	return true;
+}
+template <>
+bool Uhugeint::TryConvert(uint32_t value, uhugeint_t &result) {
+	result = UhugeintConvertInteger<uint32_t>(value);
+	return true;
+}
+template <>
+bool Uhugeint::TryConvert(uint64_t value, uhugeint_t &result) {
+	result = UhugeintConvertInteger<uint64_t>(value);
+	return true;
+}
+
+template <>
+bool Uhugeint::TryConvert(uhugeint_t value, uhugeint_t &result) {
+	result = value;
+	return true;
+}
+
+template <>
+bool Uhugeint::TryConvert(float value, uhugeint_t &result) {
+	return Uhugeint::TryConvert(double(value), result);
+}
+
+template <class REAL_T>
+bool ConvertFloatingToUhugeint(REAL_T value, uhugeint_t &result) {
+	if (!Value::IsFinite<REAL_T>(value)) {
+		return false;
+	}
+	if (value < 0 || value >= 340282366920938463463374607431768211456.0) {
+		return false;
+	}
+	result.lower = (uint64_t)fmod(value, REAL_T(NumericLimits<uint64_t>::Maximum()));
+	result.upper = (uint64_t)(value / REAL_T(NumericLimits<uint64_t>::Maximum()));
+	return true;
+}
+
+template <>
+bool Uhugeint::TryConvert(double value, uhugeint_t &result) {
+	return ConvertFloatingToUhugeint<double>(value, result);
+}
+
+template <>
+bool Uhugeint::TryConvert(long double value, uhugeint_t &result) {
+	return ConvertFloatingToUhugeint<long double>(value, result);
+}
+
+//===--------------------------------------------------------------------===//
 // uhugeint_t operators
 //===--------------------------------------------------------------------===//
 uhugeint_t::uhugeint_t(uint64_t value) {
-	auto result = Uhugeint::Convert(value);
-	this->lower = result.lower;
-	this->upper = result.upper;
+	this->lower = value;
+	this->upper = 0;
 }
 
 bool uhugeint_t::operator==(const uhugeint_t &rhs) const {
@@ -193,10 +439,6 @@ uhugeint_t uhugeint_t::operator/(const uhugeint_t &rhs) const {
 
 uhugeint_t uhugeint_t::operator%(const uhugeint_t &rhs) const {
 	return Uhugeint::Modulo(*this, rhs);
-}
-
-uhugeint_t uhugeint_t::operator-() const {
-	return Uhugeint::Negate(*this);
 }
 
 uhugeint_t uhugeint_t::operator>>(const uhugeint_t &rhs) const {

@@ -44,18 +44,6 @@ public:
 		return result;
 	}
 
-	static void NegateInPlace(uhugeint_t &input) {
-		if (input.upper == NumericLimits<int64_t>::Minimum() && input.lower == 0) {
-			throw OutOfRangeException("uhugeint is out of range");
-		}
-		input.lower = NumericLimits<uint64_t>::Maximum() - input.lower + 1;
-		input.upper = -1 - input.upper + (input.lower == 0);
-	}
-	static uhugeint_t Negate(uhugeint_t input) {
-		NegateInPlace(input);
-		return input;
-	}
-
 	static bool TryMultiply(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &result);
 
 	static uhugeint_t Add(uhugeint_t lhs, uhugeint_t rhs);
@@ -66,8 +54,6 @@ public:
 
 	// DivMod -> returns the result of the division (lhs / rhs), and fills up the remainder
 	static uhugeint_t DivMod(uhugeint_t lhs, uhugeint_t rhs, uhugeint_t &remainder);
-	// DivMod but lhs MUST be positive, and rhs is a uint64_t
-	static uhugeint_t DivModPositive(uhugeint_t lhs, uint64_t rhs, uint64_t &remainder);
 
 	static bool AddInPlace(uhugeint_t &lhs, uhugeint_t rhs);
 	static bool SubtractInPlace(uhugeint_t &lhs, uhugeint_t rhs);
