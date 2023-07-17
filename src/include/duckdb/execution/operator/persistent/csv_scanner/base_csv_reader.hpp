@@ -107,6 +107,9 @@ protected:
 	//! Sets the newline delimiter
 	void SetNewLineDelimiter(bool carry = false, bool carry_followed_by_nl = false);
 
+	//! Verifies that the line length did not go over a pre-defined limit.
+	void VerifyLineLength(idx_t line_size, idx_t buffer_idx = 0);
+
 protected:
 	//! Whether or not the current row's columns have overflown return_types.size()
 	bool error_column_overflow = false;

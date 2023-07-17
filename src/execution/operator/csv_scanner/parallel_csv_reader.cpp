@@ -232,15 +232,6 @@ bool ParallelCSVReader::BufferRemainder() {
 	return true;
 }
 
-void ParallelCSVReader::VerifyLineLength(idx_t line_size) {
-	if (line_size > options.maximum_line_size) {
-		throw InvalidInputException("Error in file \"%s\" on line %s: Maximum line size of %llu bytes exceeded!",
-		                            options.file_path,
-		                            GetLineNumberStr(parse_chunk.size(), linenr_estimated, buffer->batch_index).c_str(),
-		                            options.maximum_line_size);
-	}
-}
-
 bool AllNewLine(string_t value, idx_t column_amount) {
 	auto value_str = value.GetString();
 	if (value_str.empty() && column_amount == 1) {
@@ -393,7 +384,7 @@ add_row : {
 		parse_chunk.Reset();
 		return success;
 	} else {
-		VerifyLineLength(position_buffer - line_start);
+		VerifyLineLength(position_buffer - line_start, buffer->batch_index);
 		line_start = position_buffer;
 		finished_chunk = AddRow(insert_chunk, column, error_message, buffer->local_batch_index);
 	}
@@ -593,7 +584,7 @@ final_state : {
 					reached_remainder_state = false;
 					return success;
 				} else {
-					VerifyLineLength(position_buffer - line_start);
+					VerifyLineLength(position_buffer - line_start, buffer->batch_index);
 					line_start = position_buffer;
 					AddRow(insert_chunk, column, error_message, buffer->local_batch_index);
 					if (position_buffer - verification_positions.end_of_last_line > options.buffer_size) {

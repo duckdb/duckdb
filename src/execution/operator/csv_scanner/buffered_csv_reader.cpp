@@ -357,6 +357,8 @@ add_row : {
 	if (!error_message.empty()) {
 		return false;
 	}
+	VerifyLineLength(position - line_start);
+
 	finished_chunk = AddRow(insert_chunk, column, error_message);
 	UpdateMaxLineLength(context, position - line_start);
 	if (!error_message.empty()) {
@@ -494,6 +496,8 @@ final_state:
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
 		AddValue(string_t(buffer.get() + start, position - start - offset), column, escape_positions, has_quotes);
+		VerifyLineLength(position - line_start);
+
 		finished_chunk = AddRow(insert_chunk, column, error_message);
 		SkipEmptyLines();
 		UpdateMaxLineLength(context, position - line_start);

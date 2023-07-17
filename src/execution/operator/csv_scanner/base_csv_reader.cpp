@@ -114,6 +114,14 @@ bool BaseCSVReader::TryCastTimestampVector(CSVReaderOptions &options, Vector &in
 	                                                                         count, error_message, line_error);
 }
 
+void BaseCSVReader::VerifyLineLength(idx_t line_size, idx_t buffer_idx) {
+	if (line_size > options.maximum_line_size) {
+		throw InvalidInputException(
+		    "Error in file \"%s\" on line %s: Maximum line size of %llu bytes exceeded!", options.file_path,
+		    GetLineNumberStr(parse_chunk.size(), linenr_estimated, buffer_idx).c_str(), options.maximum_line_size);
+	}
+}
+
 template <class OP, class T>
 bool TemplatedTryCastFloatingVector(CSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
                                     string &error_message, idx_t &line_error) {
