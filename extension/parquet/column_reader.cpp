@@ -1017,7 +1017,10 @@ ColumnReader *StructColumnReader::GetChildReader(idx_t child_idx) {
 void StructColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns,
                                         TProtocol &protocol_p) {
 	for (auto &child : child_readers) {
-		child->InitializeRead(row_group_idx_p, columns, protocol_p);
+		// make sure that child is not a nullptr
+		if (child) {
+			child->InitializeRead(row_group_idx_p, columns, protocol_p);
+		}
 	}
 }
 

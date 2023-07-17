@@ -252,13 +252,13 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 }
 
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
-                                                              idx_t &next_schema_idx, idx_t &next_file_idx) {
+                                                              idx_t &next_schema_idx, idx_t &next_file_idx,
+                                                              unordered_set<string> *used_columns, bool is_needed) {
 	auto file_meta_data = GetFileMetadata();
 	D_ASSERT(file_meta_data);
 	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
 	auto &s_ele = file_meta_data->schema[next_schema_idx];
 	auto this_idx = next_schema_idx;
-
 	auto repetition_type = FieldRepetitionType::REQUIRED;
 	if (s_ele.__isset.repetition_type && this_idx > 0) {
 		repetition_type = s_ele.repetition_type;
@@ -273,19 +273,29 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 		child_list_t<LogicalType> child_types;
 		vector<unique_ptr<ColumnReader>> child_readers;
 
+		// c_idx indicate top-level columns if depth==0
 		idx_t c_idx = 0;
 		while (c_idx < (idx_t)s_ele.num_children) {
 			next_schema_idx++;
 
 			auto &child_ele = file_meta_data->schema[next_schema_idx];
+			bool child_needed = is_needed;
 
-			auto child_reader =
-			    CreateReaderRecursive(depth + 1, max_define, max_repeat, next_schema_idx, next_file_idx);
-			child_types.push_back(make_pair(child_ele.name, child_reader->Type()));
+			if (used_columns && depth == 0) {
+				child_needed = (used_columns->find(StringUtil::Lower(child_ele.name)) != used_columns->end());
+			}
+
+			auto child_reader = CreateReaderRecursive(depth + 1, max_define, max_repeat, next_schema_idx, next_file_idx,
+			                                          used_columns, child_needed);
+			child_types.push_back(make_pair(child_ele.name, child_reader ? child_reader->Type() : LogicalType()));
 			child_readers.push_back(std::move(child_reader));
-
 			c_idx++;
 		}
+
+		if (!is_needed) {
+			return nullptr;
+		}
+
 		D_ASSERT(!child_types.empty());
 		unique_ptr<ColumnReader> result;
 		LogicalType result_type;
@@ -332,7 +342,12 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 			                                   std::move(result));
 		}
 		return result;
-	} else { // leaf node
+	} else {
+		// leaf node
+		if (!is_needed) {
+			next_file_idx++;
+			return nullptr;
+		}
 		if (!s_ele.__isset.type) {
 			throw InvalidInputException(
 			    "Node has neither num_children nor type set - this violates the Parquet spec (corrupted file)");
@@ -353,8 +368,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(idx_t depth, idx_t
 	}
 }
 
-// TODO we don't need readers for columns we are not going to read ay
-unique_ptr<ColumnReader> ParquetReader::CreateReader() {
+unique_ptr<ColumnReader> ParquetReader::CreateReader(unordered_set<string> *used_columns) {
 	auto file_meta_data = GetFileMetadata();
 	idx_t next_schema_idx = 0;
 	idx_t next_file_idx = 0;
@@ -365,7 +379,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader() {
 	if (file_meta_data->schema[0].num_children == 0) {
 		throw IOException("Parquet reader: root schema element has no children");
 	}
-	auto ret = CreateReaderRecursive(0, 0, 0, next_schema_idx, next_file_idx);
+	auto ret = CreateReaderRecursive(0, 0, 0, next_schema_idx, next_file_idx, used_columns);
 	if (ret->Type().id() != LogicalTypeId::STRUCT) {
 		throw InvalidInputException("Root element of Parquet file must be a struct");
 	}
@@ -399,7 +413,7 @@ void ParquetReader::InitializeSchema() {
 	if (file_meta_data->schema.size() < 2) {
 		throw FormatException("Need at least one non-root column in the file");
 	}
-	root_reader = CreateReader();
+	root_reader = CreateReader(nullptr);
 	auto &root_type = root_reader->Type();
 	auto &child_types = StructType::GetChildTypes(root_type);
 	D_ASSERT(root_type.id() == LogicalTypeId::STRUCT);
@@ -480,6 +494,7 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 	}
 
 	unique_ptr<BaseStatistics> column_stats;
+	// could we not move file metadata as well?
 	auto file_meta_data = GetFileMetadata();
 	auto column_reader = root_reader->Cast<StructColumnReader>().GetChildReader(file_col_idx);
 
@@ -605,7 +620,8 @@ idx_t ParquetReader::NumRowGroups() {
 	return GetFileMetadata()->row_groups.size();
 }
 
-void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<idx_t> groups_to_read) {
+void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<idx_t> groups_to_read,
+                                   unordered_set<string> *used_columns) {
 	state.current_group = -1;
 	state.finished = false;
 	state.group_offset = 0;
@@ -625,7 +641,7 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<idx_t> 
 	}
 
 	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle, state.prefetch_mode);
-	state.root_reader = CreateReader();
+	state.root_reader = CreateReader(used_columns);
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }

@@ -96,7 +96,8 @@ public:
 	unique_ptr<ColumnReader> root_reader;
 
 public:
-	void InitializeScan(ParquetReaderScanState &state, vector<idx_t> groups_to_read);
+	void InitializeScan(ParquetReaderScanState &state, vector<idx_t> groups_to_read,
+	                    unordered_set<string> *used_columns);
 	void Scan(ParquetReaderScanState &state, DataChunk &output);
 
 	idx_t NumRows();
@@ -124,10 +125,12 @@ public:
 private:
 	void InitializeSchema();
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
-	unique_ptr<ColumnReader> CreateReader();
+	unique_ptr<ColumnReader> CreateReader(unordered_set<string> *used_columns);
 
 	unique_ptr<ColumnReader> CreateReaderRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
-	                                               idx_t &next_schema_idx, idx_t &next_file_idx);
+	                                               idx_t &next_schema_idx, idx_t &next_file_idx,
+	                                               unordered_set<string> *used_columns = nullptr,
+	                                               bool is_needed = true);
 	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);
 	idx_t GetGroupOffset(ParquetReaderScanState &state);

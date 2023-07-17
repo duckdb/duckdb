@@ -109,6 +109,7 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	bool CanRemoveFilterColumns() const {
 		return !projection_ids.empty();
 	}
+
 };
 
 struct ParquetWriteBindData : public TableFunctionData {
@@ -487,7 +488,16 @@ public:
 					// The current reader has rowgroups left to be scanned
 					scan_data.reader = parallel_state.readers[parallel_state.file_index];
 					vector<idx_t> group_indexes {parallel_state.row_group_index};
-					scan_data.reader->InitializeScan(scan_data.scan_state, group_indexes);
+					unordered_set<string> used_columns;
+					// create set to keep track of which columns are used
+					for (auto col_idx : parallel_state.column_ids) {
+						// col_idx could be -1
+						if (IsRowIdColumnId(col_idx)) {
+							continue;
+						}
+						used_columns.insert(StringUtil::Lower(bind_data.names[col_idx]));
+					}
+					scan_data.reader->InitializeScan(scan_data.scan_state, group_indexes, &used_columns);
 					scan_data.batch_index = parallel_state.batch_index++;
 					scan_data.file_index = parallel_state.file_index;
 					parallel_state.row_group_index++;
