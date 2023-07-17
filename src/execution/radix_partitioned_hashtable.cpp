@@ -139,6 +139,7 @@ public:
 
 	//! Adds to final data to be scanned
 	void AddToFinal(GroupedAggregateHashTable &intermediate_ht, vector<MaterializedAggregateData> &uncombined_data);
+	void AddToFinal(MaterializedAggregateData &&uncombined_data);
 
 	//! Destroys aggregate states (if multi-scan)
 	void Destroy();
@@ -229,6 +230,12 @@ void RadixHTGlobalSinkState::AddToFinal(GroupedAggregateHashTable &intermediate_
 	}
 }
 
+void RadixHTGlobalSinkState::AddToFinal(MaterializedAggregateData &&data) {
+	D_ASSERT(data.data_collection->Count() != 0);
+	lock_guard<mutex> guard(lock);
+	scan_data.emplace_back(std::move(data));
+}
+
 void RadixHTGlobalSinkState::Destroy() {
 	if (scan_pin_properties == TupleDataPinProperties::DESTROY_AFTER_DONE) {
 		return;
@@ -314,6 +321,11 @@ static RadixHTAbandonStatus GetAbandonStatus(ClientContext &context, const Group
 	if (context.config.force_external || ht.TotalSize() > SingleHTMemoryLimit(context)) {
 		result.abandon = true;
 		result.over_memory_limit = true;
+	}
+
+	if (TaskScheduler::GetScheduler(context).NumberOfThreads() == 1) {
+		// Single thread, no need to abandon
+		return result;
 	}
 
 	const auto ht_count = ht.Count();
@@ -893,6 +905,13 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 
 	auto &finalize_partition = *sink.finalize_partitions[task_idx.GetIndex()];
 	D_ASSERT(!finalize_partition.finalize_available);
+
+	if (!finalize_partition.combined_data && finalize_partition.uncombined_data.size() == 1) {
+		// Special case, no need to combine if there's only one uncombined data
+		sink.AddToFinal(std::move(finalize_partition.uncombined_data[0]));
+		sink.finalize_done++;
+		return;
+	}
 
 	if (finalize_partition.combined_data) {
 		ht = std::move(finalize_partition.combined_data);
