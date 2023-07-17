@@ -5,6 +5,7 @@
 #include "parameter_descriptor.hpp"
 #include "row_descriptor.hpp"
 #include "duckdb/common/vector.hpp"
+#include "handle_functions.hpp"
 
 using duckdb::ApiInfo;
 using duckdb::DescHeader;
@@ -19,442 +20,453 @@ SQLRETURN SQL_API SQLGetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_numb
                                 SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr, SQLSMALLINT *type_ptr,
                                 SQLSMALLINT *sub_type_ptr, SQLLEN *length_ptr, SQLSMALLINT *precision_ptr,
                                 SQLSMALLINT *scale_ptr, SQLSMALLINT *nullable_ptr) {
-	return duckdb::WithDescriptor(descriptor_handle, [&](duckdb::OdbcHandleDesc *handle_desc) {
-		if (rec_number < 1) {
-			return SQL_ERROR;
-		}
-		if (rec_number > handle_desc->header.sql_desc_count) {
-			return SQL_NO_DATA;
-		}
-		if (handle_desc->IsIRD() && handle_desc->stmt && handle_desc->stmt->IsPrepared()) {
-			return SQL_NO_DATA;
-		}
+	duckdb::OdbcHandleDesc *desc = nullptr;
+	if (ConvertDescriptor(descriptor_handle, desc) != SQL_SUCCESS) {
+		return SQL_ERROR;
+	}
 
-		auto rec_idx = rec_number - 1;
-		auto desc_record = handle_desc->GetDescRecord(rec_idx);
-		auto sql_type = desc_record->sql_desc_type;
+	if (rec_number < 1) {
+		return SQL_ERROR;
+	}
+	if (rec_number > desc->header.sql_desc_count) {
+		return SQL_NO_DATA;
+	}
+	if (desc->IsIRD() && desc->stmt && desc->stmt->IsPrepared()) {
+		return SQL_NO_DATA;
+	}
 
-		duckdb::OdbcUtils::WriteString(desc_record->sql_desc_name, name, buffer_length, string_length_ptr);
-		if (type_ptr) {
-			duckdb::Store<SQLSMALLINT>(sql_type, (duckdb::data_ptr_t)type_ptr);
+	auto rec_idx = rec_number - 1;
+	auto desc_record = desc->GetDescRecord(rec_idx);
+	auto sql_type = desc_record->sql_desc_type;
+
+	duckdb::OdbcUtils::WriteString(desc_record->sql_desc_name, name, buffer_length, string_length_ptr);
+	if (type_ptr) {
+		duckdb::Store<SQLSMALLINT>(sql_type, (duckdb::data_ptr_t)type_ptr);
+	}
+	if (sql_type == SQL_DATETIME || sql_type == SQL_INTERVAL) {
+		if (sub_type_ptr) {
+			duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_datetime_interval_code, (duckdb::data_ptr_t)sub_type_ptr);
 		}
-		if (sql_type == SQL_DATETIME || sql_type == SQL_INTERVAL) {
-			if (sub_type_ptr) {
-				duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_datetime_interval_code,
-				                           (duckdb::data_ptr_t)sub_type_ptr);
-			}
-		}
-		if (length_ptr) {
-			duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_octet_length, (duckdb::data_ptr_t)length_ptr);
-		}
-		if (precision_ptr) {
-			duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_precision, (duckdb::data_ptr_t)precision_ptr);
-		}
-		if (scale_ptr) {
-			duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_scale, (duckdb::data_ptr_t)scale_ptr);
-		}
-		if (nullable_ptr) {
-			duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_nullable, (duckdb::data_ptr_t)nullable_ptr);
-		}
-		return SQL_SUCCESS;
-	});
+	}
+	if (length_ptr) {
+		duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_octet_length, (duckdb::data_ptr_t)length_ptr);
+	}
+	if (precision_ptr) {
+		duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_precision, (duckdb::data_ptr_t)precision_ptr);
+	}
+	if (scale_ptr) {
+		duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_scale, (duckdb::data_ptr_t)scale_ptr);
+	}
+	if (nullable_ptr) {
+		duckdb::Store<SQLSMALLINT>(desc_record->sql_desc_nullable, (duckdb::data_ptr_t)nullable_ptr);
+	}
+	return SQL_SUCCESS;
 }
 
 SQLRETURN SQL_API SQLSetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT type,
                                 SQLSMALLINT sub_type, SQLLEN length, SQLSMALLINT precision, SQLSMALLINT scale,
                                 SQLPOINTER data_ptr, SQLLEN *string_length_ptr, SQLLEN *indicator_ptr) {
-	return duckdb::WithDescriptor(descriptor_handle, [&](duckdb::OdbcHandleDesc *handle_desc) {
-		if (handle_desc->IsIRD()) {
-			handle_desc->error_messages.emplace_back("Cannot modify an implementation row descriptor");
+	duckdb::OdbcHandleDesc *desc = nullptr;
+	if (ConvertDescriptor(descriptor_handle, desc) != SQL_SUCCESS) {
+		return SQL_ERROR;
+	}
+
+	if (desc->IsIRD()) {
+		desc->error_messages.emplace_back("Cannot modify an implementation row descriptor");
+		return SQL_ERROR;
+	}
+	if (rec_number <= 0) {
+		desc->error_messages.emplace_back("Invalid descriptor index");
+		return SQL_ERROR;
+	}
+	if (rec_number > desc->header.sql_desc_count) {
+		desc->AddMoreRecords(rec_number);
+	}
+	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_TYPE, &type, 0))) {
+		return SQL_ERROR;
+	}
+	if (type == SQL_DATETIME || type == SQL_INTERVAL) {
+		if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_DATETIME_INTERVAL_CODE, &sub_type, 0))) {
 			return SQL_ERROR;
 		}
-		if (rec_number <= 0) {
-			handle_desc->error_messages.emplace_back("Invalid descriptor index");
-			return SQL_ERROR;
-		}
-		if (rec_number > handle_desc->header.sql_desc_count) {
-			handle_desc->AddMoreRecords(rec_number);
-		}
-		if (!SQL_SUCCEEDED(handle_desc->SetDescField(rec_number, SQL_DESC_TYPE, &type, 0))) {
-			return SQL_ERROR;
-		}
-		if (type == SQL_DATETIME || type == SQL_INTERVAL) {
-			if (!SQL_SUCCEEDED(handle_desc->SetDescField(rec_number, SQL_DESC_DATETIME_INTERVAL_CODE, &sub_type, 0))) {
-				return SQL_ERROR;
-			}
-		}
-		if (!SQL_SUCCEEDED(handle_desc->SetDescField(rec_number, SQL_DESC_OCTET_LENGTH, &length, 0))) {
-			return SQL_ERROR;
-		}
-		if (!SQL_SUCCEEDED(handle_desc->SetDescField(rec_number, SQL_DESC_PRECISION, &precision, 0))) {
-			return SQL_ERROR;
-		}
-		if (!SQL_SUCCEEDED(handle_desc->SetDescField(rec_number, SQL_DESC_SCALE, &scale, 0))) {
-			return SQL_ERROR;
-		}
-		if (!SQL_SUCCEEDED(handle_desc->SetDescField(rec_number, SQL_DESC_DATA_PTR, &data_ptr, 0))) {
-			return SQL_ERROR;
-		}
-		if (!SQL_SUCCEEDED(handle_desc->SetDescField(rec_number, SQL_DESC_OCTET_LENGTH_PTR, &string_length_ptr, 0))) {
-			return SQL_ERROR;
-		}
-		if (!SQL_SUCCEEDED(handle_desc->SetDescField(rec_number, SQL_DESC_INDICATOR_PTR, &indicator_ptr, 0))) {
-			return SQL_ERROR;
-		}
-		return SQL_SUCCESS;
-	});
+	}
+	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_OCTET_LENGTH, &length, 0))) {
+		return SQL_ERROR;
+	}
+	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_PRECISION, &precision, 0))) {
+		return SQL_ERROR;
+	}
+	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_SCALE, &scale, 0))) {
+		return SQL_ERROR;
+	}
+	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_DATA_PTR, &data_ptr, 0))) {
+		return SQL_ERROR;
+	}
+	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_OCTET_LENGTH_PTR, &string_length_ptr, 0))) {
+		return SQL_ERROR;
+	}
+	if (!SQL_SUCCEEDED(desc->SetDescField(rec_number, SQL_DESC_INDICATOR_PTR, &indicator_ptr, 0))) {
+		return SQL_ERROR;
+	}
+	return SQL_SUCCESS;
 }
 
 SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT field_identifier,
                                   SQLPOINTER value_ptr, SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
-	return duckdb::WithDescriptor(descriptor_handle, [&](duckdb::OdbcHandleDesc *handle_desc) {
-		if (duckdb::ApiInfo::IsNumericDescriptorField(field_identifier) && value_ptr == nullptr) {
-			handle_desc->error_messages.emplace_back("Invalid null value pointer for descriptor numeric field");
-			return SQL_ERROR;
-		}
-
-		// descriptor header fields
-		switch (field_identifier) {
-		case SQL_DESC_ALLOC_TYPE: {
-			*(SQLSMALLINT *)value_ptr = handle_desc->header.sql_desc_alloc_type;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_ARRAY_SIZE: {
-			if (handle_desc->IsID()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			*(SQLULEN *)value_ptr = handle_desc->header.sql_desc_array_size;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_ARRAY_STATUS_PTR: {
-			*(SQLUSMALLINT **)value_ptr = handle_desc->header.sql_desc_array_status_ptr;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_BIND_OFFSET_PTR: {
-			if (handle_desc->IsID()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			*(SQLLEN **)value_ptr = handle_desc->header.sql_desc_bind_offset_ptr;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_BIND_TYPE: {
-			if (handle_desc->IsID()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			*(SQLINTEGER *)value_ptr = handle_desc->header.sql_desc_bind_type;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_COUNT: {
-			*(SQLSMALLINT *)value_ptr = handle_desc->header.sql_desc_count;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_ROWS_PROCESSED_PTR: {
-			if (handle_desc->IsAD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			*(SQLULEN **)value_ptr = handle_desc->header.sql_desc_rows_processed_ptr;
-			return SQL_SUCCESS;
-		}
-		default:
-			break;
-		}
-
-		if (rec_number <= 0 || rec_number > (SQLSMALLINT)handle_desc->records.size()) {
-			handle_desc->error_messages.emplace_back("Invalid descriptor index");
-			return SQL_ERROR;
-		}
-		duckdb::idx_t rec_idx = rec_number - 1;
-
-		// checking descriptor record fields
-		switch (field_identifier) {
-		case SQL_DESC_AUTO_UNIQUE_VALUE: {
-			// not IRD
-			if (!handle_desc->IsIRD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			// always false, DuckDB doesn't support auto-incrementing
-			*(SQLINTEGER *)value_ptr = SQL_FALSE;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_BASE_COLUMN_NAME: {
-			// not IRD
-			if (!handle_desc->IsIRD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			duckdb::OdbcUtils::WriteString(handle_desc->records[rec_idx].sql_desc_base_column_name,
-			                               (SQLCHAR *)value_ptr, buffer_length, string_length_ptr);
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_BASE_TABLE_NAME: {
-			// not IRD
-			if (!handle_desc->IsIRD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			duckdb::OdbcUtils::WriteString(handle_desc->records[rec_idx].sql_desc_base_table_name, (SQLCHAR *)value_ptr,
-			                               buffer_length, string_length_ptr);
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_CASE_SENSITIVE: {
-			// not IRD
-			if (!handle_desc->IsIRD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			*(SQLINTEGER *)value_ptr = handle_desc->records[rec_idx].sql_desc_case_sensitive;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_CATALOG_NAME: {
-			// not IRD
-			if (!handle_desc->IsIRD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			duckdb::OdbcUtils::WriteString(handle_desc->records[rec_idx].sql_desc_catalog_name, (SQLCHAR *)value_ptr,
-			                               buffer_length, string_length_ptr);
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_CONCISE_TYPE: {
-			*(SQLSMALLINT *)value_ptr = handle_desc->records[rec_idx].sql_desc_concise_type;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_DATA_PTR: {
-			if (handle_desc->IsID()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			value_ptr = handle_desc->records[rec_idx].sql_desc_data_ptr;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_DATETIME_INTERVAL_CODE: {
-			*(SQLSMALLINT *)value_ptr = handle_desc->records[rec_idx].sql_desc_datetime_interval_code;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_DATETIME_INTERVAL_PRECISION: {
-			*(SQLINTEGER *)value_ptr = handle_desc->records[rec_idx].sql_desc_datetime_interval_precision;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_DISPLAY_SIZE: {
-			// not IRD
-			if (!handle_desc->IsIRD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			*(SQLLEN *)value_ptr = handle_desc->records[rec_idx].sql_desc_display_size;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_FIXED_PREC_SCALE: {
-			// not IRD
-			if (!handle_desc->IsIRD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			*(SQLSMALLINT *)value_ptr = handle_desc->records[rec_idx].sql_desc_fixed_prec_scale;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_INDICATOR_PTR: {
-			if (handle_desc->IsID()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			*(SQLLEN **)value_ptr = handle_desc->records[rec_idx].sql_desc_indicator_ptr;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_LABEL: {
-			// not IRD
-			if (!handle_desc->IsIRD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			duckdb::OdbcUtils::WriteString(handle_desc->records[rec_idx].sql_desc_label, (SQLCHAR *)value_ptr,
-			                               buffer_length, string_length_ptr);
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_LENGTH: {
-			*(SQLULEN *)value_ptr = handle_desc->records[rec_idx].sql_desc_length;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_LITERAL_PREFIX: {
-			// not IRD
-			if (!handle_desc->IsIRD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			duckdb::OdbcUtils::WriteString(handle_desc->records[rec_idx].sql_desc_literal_prefix, (SQLCHAR *)value_ptr,
-			                               buffer_length, string_length_ptr);
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_LITERAL_SUFFIX: {
-			// not IRD
-			if (!handle_desc->IsIRD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			duckdb::OdbcUtils::WriteString(handle_desc->records[rec_idx].sql_desc_literal_suffix, (SQLCHAR *)value_ptr,
-			                               buffer_length, string_length_ptr);
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_LOCAL_TYPE_NAME: {
-			// is AD
-			if (handle_desc->IsAD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			duckdb::OdbcUtils::WriteString(handle_desc->records[rec_idx].sql_desc_local_type_name, (SQLCHAR *)value_ptr,
-			                               buffer_length, string_length_ptr);
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_NAME: {
-			// is AD
-			if (handle_desc->IsAD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			duckdb::OdbcUtils::WriteString(handle_desc->records[rec_idx].sql_desc_name, (SQLCHAR *)value_ptr,
-			                               buffer_length, string_length_ptr);
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_NULLABLE: {
-			// is AD
-			if (!handle_desc->IsAD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			*(SQLSMALLINT *)value_ptr = handle_desc->records[rec_idx].sql_desc_nullable;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_NUM_PREC_RADIX: {
-			*(SQLINTEGER *)value_ptr = handle_desc->records[rec_idx].sql_desc_num_prec_radix;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_OCTET_LENGTH: {
-			*(SQLLEN *)value_ptr = handle_desc->records[rec_idx].sql_desc_octet_length;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_OCTET_LENGTH_PTR: {
-			// is ID
-			if (handle_desc->IsID()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			*(SQLLEN **)value_ptr = handle_desc->records[rec_idx].sql_desc_octet_length_ptr;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_PARAMETER_TYPE: {
-			// not IPD
-			if (!handle_desc->IsIPD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			*(SQLSMALLINT *)value_ptr = handle_desc->records[rec_idx].sql_desc_parameter_type;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_PRECISION: {
-			*(SQLSMALLINT *)value_ptr = handle_desc->records[rec_idx].sql_desc_precision;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_ROWVER: {
-			// is AD
-			if (!handle_desc->IsAD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			*(SQLSMALLINT *)value_ptr = handle_desc->records[rec_idx].sql_desc_rowver;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_SCALE: {
-			*(SQLSMALLINT *)value_ptr = handle_desc->records[rec_idx].sql_desc_scale;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_SCHEMA_NAME: {
-			// not IRD
-			if (!handle_desc->IsIRD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			duckdb::OdbcUtils::WriteString(handle_desc->records[rec_idx].sql_desc_schema_name, (SQLCHAR *)value_ptr,
-			                               buffer_length, string_length_ptr);
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_SEARCHABLE: {
-			// not IRD
-			if (!handle_desc->IsIRD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			*(SQLSMALLINT *)value_ptr = handle_desc->records[rec_idx].sql_desc_searchable;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_TABLE_NAME: {
-			// not IRD
-			if (!handle_desc->IsIRD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			duckdb::OdbcUtils::WriteString(handle_desc->records[rec_idx].sql_desc_table_name, (SQLCHAR *)value_ptr,
-			                               buffer_length, string_length_ptr);
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_TYPE: {
-			*(SQLSMALLINT *)value_ptr = handle_desc->records[rec_idx].sql_desc_type;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_TYPE_NAME: {
-			// is AD
-			if (handle_desc->IsAD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			duckdb::OdbcUtils::WriteString(handle_desc->records[rec_idx].sql_desc_type_name, (SQLCHAR *)value_ptr,
-			                               buffer_length, string_length_ptr);
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_UNNAMED: {
-			// is AD
-			if (!handle_desc->IsAD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			*(SQLSMALLINT *)value_ptr = handle_desc->records[rec_idx].sql_desc_unnamed;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_UNSIGNED: {
-			// is AD
-			if (!handle_desc->IsAD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			*(SQLSMALLINT *)value_ptr = handle_desc->records[rec_idx].sql_desc_unsigned;
-			return SQL_SUCCESS;
-		}
-		case SQL_DESC_UPDATABLE: {
-			// not IRD
-			if (!handle_desc->IsIRD()) {
-				handle_desc->error_messages.emplace_back("Invalid descriptor field identifier");
-				return SQL_ERROR;
-			}
-			*(SQLSMALLINT *)value_ptr = handle_desc->records[rec_idx].sql_desc_updatable;
-			return SQL_SUCCESS;
-		}
-		default:
-			handle_desc->error_messages.emplace_back("Invalid descriptor field identifier.");
-			return SQL_ERROR;
-		}
+	duckdb::OdbcHandleDesc *desc = nullptr;
+	if (ConvertDescriptor(descriptor_handle, desc) != SQL_SUCCESS) {
 		return SQL_ERROR;
-	});
+	}
+
+	if (duckdb::ApiInfo::IsNumericDescriptorField(field_identifier) && value_ptr == nullptr) {
+		desc->error_messages.emplace_back("Invalid null value pointer for descriptor numeric field");
+		return SQL_ERROR;
+	}
+
+	// descriptor header fields
+	switch (field_identifier) {
+	case SQL_DESC_ALLOC_TYPE: {
+		*(SQLSMALLINT *)value_ptr = desc->header.sql_desc_alloc_type;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_ARRAY_SIZE: {
+		if (desc->IsID()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		*(SQLULEN *)value_ptr = desc->header.sql_desc_array_size;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_ARRAY_STATUS_PTR: {
+		*(SQLUSMALLINT **)value_ptr = desc->header.sql_desc_array_status_ptr;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_BIND_OFFSET_PTR: {
+		if (desc->IsID()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		*(SQLLEN **)value_ptr = desc->header.sql_desc_bind_offset_ptr;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_BIND_TYPE: {
+		if (desc->IsID()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		*(SQLINTEGER *)value_ptr = desc->header.sql_desc_bind_type;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_COUNT: {
+		*(SQLSMALLINT *)value_ptr = desc->header.sql_desc_count;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_ROWS_PROCESSED_PTR: {
+		if (desc->IsAD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		*(SQLULEN **)value_ptr = desc->header.sql_desc_rows_processed_ptr;
+		return SQL_SUCCESS;
+	}
+	default:
+		break;
+	}
+
+	if (rec_number <= 0 || rec_number > (SQLSMALLINT)desc->records.size()) {
+		desc->error_messages.emplace_back("Invalid descriptor index");
+		return SQL_ERROR;
+	}
+	duckdb::idx_t rec_idx = rec_number - 1;
+
+	// checking descriptor record fields
+	switch (field_identifier) {
+	case SQL_DESC_AUTO_UNIQUE_VALUE: {
+		// not IRD
+		if (!desc->IsIRD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		// always false, DuckDB doesn't support auto-incrementing
+		*(SQLINTEGER *)value_ptr = SQL_FALSE;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_BASE_COLUMN_NAME: {
+		// not IRD
+		if (!desc->IsIRD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_base_column_name, (SQLCHAR *)value_ptr,
+		                               buffer_length, string_length_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_BASE_TABLE_NAME: {
+		// not IRD
+		if (!desc->IsIRD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_base_table_name, (SQLCHAR *)value_ptr,
+		                               buffer_length, string_length_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_CASE_SENSITIVE: {
+		// not IRD
+		if (!desc->IsIRD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		*(SQLINTEGER *)value_ptr = desc->records[rec_idx].sql_desc_case_sensitive;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_CATALOG_NAME: {
+		// not IRD
+		if (!desc->IsIRD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_catalog_name, (SQLCHAR *)value_ptr,
+		                               buffer_length, string_length_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_CONCISE_TYPE: {
+		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_concise_type;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_DATA_PTR: {
+		if (desc->IsID()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		value_ptr = desc->records[rec_idx].sql_desc_data_ptr;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_DATETIME_INTERVAL_CODE: {
+		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_datetime_interval_code;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_DATETIME_INTERVAL_PRECISION: {
+		*(SQLINTEGER *)value_ptr = desc->records[rec_idx].sql_desc_datetime_interval_precision;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_DISPLAY_SIZE: {
+		// not IRD
+		if (!desc->IsIRD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		*(SQLLEN *)value_ptr = desc->records[rec_idx].sql_desc_display_size;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_FIXED_PREC_SCALE: {
+		// not IRD
+		if (!desc->IsIRD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_fixed_prec_scale;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_INDICATOR_PTR: {
+		if (desc->IsID()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		*(SQLLEN **)value_ptr = desc->records[rec_idx].sql_desc_indicator_ptr;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_LABEL: {
+		// not IRD
+		if (!desc->IsIRD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_label, (SQLCHAR *)value_ptr, buffer_length,
+		                               string_length_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_LENGTH: {
+		*(SQLULEN *)value_ptr = desc->records[rec_idx].sql_desc_length;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_LITERAL_PREFIX: {
+		// not IRD
+		if (!desc->IsIRD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_literal_prefix, (SQLCHAR *)value_ptr,
+		                               buffer_length, string_length_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_LITERAL_SUFFIX: {
+		// not IRD
+		if (!desc->IsIRD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_literal_suffix, (SQLCHAR *)value_ptr,
+		                               buffer_length, string_length_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_LOCAL_TYPE_NAME: {
+		// is AD
+		if (desc->IsAD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_local_type_name, (SQLCHAR *)value_ptr,
+		                               buffer_length, string_length_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_NAME: {
+		// is AD
+		if (desc->IsAD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_name, (SQLCHAR *)value_ptr, buffer_length,
+		                               string_length_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_NULLABLE: {
+		// is AD
+		if (!desc->IsAD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_nullable;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_NUM_PREC_RADIX: {
+		*(SQLINTEGER *)value_ptr = desc->records[rec_idx].sql_desc_num_prec_radix;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_OCTET_LENGTH: {
+		*(SQLLEN *)value_ptr = desc->records[rec_idx].sql_desc_octet_length;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_OCTET_LENGTH_PTR: {
+		// is ID
+		if (desc->IsID()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		*(SQLLEN **)value_ptr = desc->records[rec_idx].sql_desc_octet_length_ptr;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_PARAMETER_TYPE: {
+		// not IPD
+		if (!desc->IsIPD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_parameter_type;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_PRECISION: {
+		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_precision;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_ROWVER: {
+		// is AD
+		if (!desc->IsAD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_rowver;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_SCALE: {
+		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_scale;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_SCHEMA_NAME: {
+		// not IRD
+		if (!desc->IsIRD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_schema_name, (SQLCHAR *)value_ptr, buffer_length,
+		                               string_length_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_SEARCHABLE: {
+		// not IRD
+		if (!desc->IsIRD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_searchable;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_TABLE_NAME: {
+		// not IRD
+		if (!desc->IsIRD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_table_name, (SQLCHAR *)value_ptr, buffer_length,
+		                               string_length_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_TYPE: {
+		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_type;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_TYPE_NAME: {
+		// is AD
+		if (desc->IsAD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		duckdb::OdbcUtils::WriteString(desc->records[rec_idx].sql_desc_type_name, (SQLCHAR *)value_ptr, buffer_length,
+		                               string_length_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_UNNAMED: {
+		// is AD
+		if (!desc->IsAD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_unnamed;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_UNSIGNED: {
+		// is AD
+		if (!desc->IsAD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_unsigned;
+		return SQL_SUCCESS;
+	}
+	case SQL_DESC_UPDATABLE: {
+		// not IRD
+		if (!desc->IsIRD()) {
+			desc->error_messages.emplace_back("Invalid descriptor field identifier");
+			return SQL_ERROR;
+		}
+		*(SQLSMALLINT *)value_ptr = desc->records[rec_idx].sql_desc_updatable;
+		return SQL_SUCCESS;
+	}
+	default:
+		desc->error_messages.emplace_back("Invalid descriptor field identifier.");
+		return SQL_ERROR;
+	}
+	return SQL_ERROR;
 }
 
 SQLRETURN SQL_API SQLSetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT field_identifier,
                                   SQLPOINTER value_ptr, SQLINTEGER buffer_length) {
-	return duckdb::WithDescriptor(descriptor_handle, [&](duckdb::OdbcHandleDesc *handle_desc) {
-		return handle_desc->SetDescField(rec_number, field_identifier, value_ptr, buffer_length);
-	});
+	duckdb::OdbcHandleDesc *desc = nullptr;
+	if (ConvertDescriptor(descriptor_handle, desc) != SQL_SUCCESS) {
+		return SQL_ERROR;
+	}
+
+	return desc->SetDescField(rec_number, field_identifier, value_ptr, buffer_length);
 }
 
 SQLRETURN SQL_API SQLCopyDesc(SQLHDESC source_desc_handle, SQLHDESC target_desc_handle) {

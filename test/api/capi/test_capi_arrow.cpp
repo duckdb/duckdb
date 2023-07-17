@@ -9,7 +9,7 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 	CAPITester tester;
 	duckdb::unique_ptr<CAPIResult> result;
 	duckdb_prepared_statement stmt = nullptr;
-	duckdb_arrow arrow_result;
+	duckdb_arrow arrow_result = nullptr;
 
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));

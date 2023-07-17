@@ -52,7 +52,7 @@ class TestRAPICloseConnRel(object):
 		with pytest.raises(duckdb.ConnectionException, match='Connection has already been closed'):
 			rel.intersect(rel)
 		with pytest.raises(duckdb.ConnectionException, match='Connection has already been closed'):
-			rel.join(rel, "")
+			rel.join(rel.set_alias('other'), "a")
 		with pytest.raises(duckdb.ConnectionException, match='Connection has already been closed'):
 			rel.distinct()
 		with pytest.raises(duckdb.ConnectionException, match='Connection has already been closed'):
@@ -124,7 +124,7 @@ class TestRAPICloseConnRel(object):
 		with pytest.raises(duckdb.ConnectionException, match='Connection has already been closed'):
 			valid_rel.intersect(rel)
 		with pytest.raises(duckdb.ConnectionException, match='Connection has already been closed'):
-			valid_rel.join(rel, "rel.items = valid_rel.items")
+			valid_rel.join(rel.set_alias('rel'), "rel.items = valid_rel.items")
 
 	def test_del_conn(self, duckdb_cursor):
 		con = duckdb.connect()
