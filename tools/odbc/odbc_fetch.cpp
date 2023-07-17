@@ -307,7 +307,7 @@ SQLRETURN OdbcFetch::Fetch(OdbcHandleStmt *hstmt, SQLULEN fetch_orientation, SQL
 	} else {
 		// sql_desc_bind_type should be greater than 0 because it contains the length of the row to be fetched
 		D_ASSERT(hstmt->row_desc->ard->header.sql_desc_bind_type > 0);
-		if (!SQL_SUCCEEDED(duckdb::OdbcFetch::RowWise(nullptr))) {
+		if (!SQL_SUCCEEDED(duckdb::OdbcFetch::RowWise(hstmt))) {
 			hstmt->error_messages.emplace_back("Row-wise fetching failed.");
 			return SQL_ERROR;
 		}
