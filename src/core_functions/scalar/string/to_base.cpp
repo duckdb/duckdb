@@ -10,7 +10,7 @@ static unique_ptr<FunctionData> ToBaseBind(ClientContext &context, ScalarFunctio
                                            vector<unique_ptr<Expression>> &arguments) {
 	// If no min_length is specified, default to 0
 	D_ASSERT(arguments.size() == 2 || arguments.size() == 3);
-	if(arguments.size() == 2) {
+	if (arguments.size() == 2) {
 		arguments.push_back(make_uniq_base<Expression, BoundConstantExpression>(Value::INTEGER(0)));
 	}
 	return nullptr;
@@ -55,8 +55,10 @@ static void ToBaseFunction(DataChunk &args, ExpressionState &state, Vector &resu
 ScalarFunctionSet ToBaseFun::GetFunctions() {
 	ScalarFunctionSet set("to_base");
 
-	set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::INTEGER}, LogicalType::VARCHAR, ToBaseFunction, ToBaseBind));
-	set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::INTEGER, LogicalType::INTEGER}, LogicalType::VARCHAR, ToBaseFunction, ToBaseBind));
+	set.AddFunction(
+	    ScalarFunction({LogicalType::BIGINT, LogicalType::INTEGER}, LogicalType::VARCHAR, ToBaseFunction, ToBaseBind));
+	set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::INTEGER, LogicalType::INTEGER},
+	                               LogicalType::VARCHAR, ToBaseFunction, ToBaseBind));
 
 	return set;
 }
