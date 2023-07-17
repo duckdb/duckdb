@@ -833,4 +833,4 @@ DBInterface.execute(con::Connection, sql::AbstractString) = DBInterface.execute(
 DBInterface.execute(db::DB, sql::AbstractString, result_type::Type) =
     DBInterface.execute(db.main_connection, sql, result_type)
 
-Base.show(io::IO, result::DuckDB.QueryResult) = print(io, Tables.rows(result))
+Base.show(io::IO, result::DuckDB.QueryResult) = print(io, Tables.columntable(result))
