@@ -904,9 +904,11 @@ void Vector::RecursiveToUnifiedFormat(Vector &input, idx_t count, RecursiveUnifi
 
 	} else if (input.GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &children = StructVector::GetEntries(input);
-		for (auto &child : children) {
+		for (idx_t i = 0; i < children.size(); i++) {
 			data.child_formats.emplace_back();
-			Vector::RecursiveToUnifiedFormat(*child, count, data.child_formats.back());
+		}
+		for (idx_t i = 0; i < children.size(); i++) {
+			Vector::RecursiveToUnifiedFormat(*children[i], count, data.child_formats[i]);
 		}
 	}
 }

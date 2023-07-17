@@ -185,6 +185,7 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 	}
 	RowOperations::CombineStates(row_state, layout, source_addresses, target_addresses, combine_count);
 	stored_allocators.push_back(std::move(other.aggregate_allocator));
+	other.aggregate_allocator = make_uniq<ArenaAllocator>(allocator);
 }
 
 template <class T>
@@ -289,6 +290,8 @@ void PerfectAggregateHashTable::Destroy() {
 	// and call the destructor method for each of the aggregates
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 	idx_t count = 0;
+
+	D_ASSERT(aggregate_allocator);
 
 	// iterate over all initialised slots of the hash table
 	RowOperationsState row_state(*aggregate_allocator);
