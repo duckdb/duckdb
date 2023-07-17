@@ -2,6 +2,9 @@
   {
     "class": "LogicalOperator",
     "class_type": "type",
+    "set_parameters": [
+      "type"
+    ],
     "includes": [
       "duckdb/planner/operator/list.hpp"
     ],
@@ -345,5 +348,33 @@
       }
     ],
     "constructor": ["table_index", "cte_index", "chunk_types", "bound_columns", "materialized_cte"]
+  },
+  {
+    "class": "LogicalComparisonJoin",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_COMPARISON_JOIN",
+    "members": [
+      {
+        "name": "join_type",
+        "type": "JoinType"
+      },
+      {
+        "name": "mark_index",
+        "type": "idx_t"
+      },
+      {
+        "name": "left_projection_map",
+        "type": "vector<idx_t>"
+      },
+      {
+        "name": "right_projection_map",
+        "type": "vector<idx_t>"
+      },
+      {
+        "name": "conditions",
+        "type": "vector<JoinCondition>"
+      }
+    ],
+    "constructor": ["join_type", "type"]
   }
 ]

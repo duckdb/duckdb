@@ -17,6 +17,7 @@ void LogicalOperator::FormatSerialize(FormatSerializer &serializer) const {
 unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserializer &deserializer) {
 	auto type = deserializer.ReadProperty<LogicalOperatorType>("type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<LogicalOperator>>>("children");
+	deserializer.Set<LogicalOperatorType>(type);
 	unique_ptr<LogicalOperator> result;
 	switch (type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY:
@@ -24,6 +25,9 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 		break;
 	case LogicalOperatorType::LOGICAL_CHUNK_GET:
 		result = LogicalColumnDataGet::FormatDeserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+		result = LogicalComparisonJoin::FormatDeserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_CTE_REF:
 		result = LogicalCTERef::FormatDeserialize(deserializer);
@@ -73,6 +77,7 @@ unique_ptr<LogicalOperator> LogicalOperator::FormatDeserialize(FormatDeserialize
 	default:
 		throw SerializationException("Unsupported type for deserialization of LogicalOperator!");
 	}
+	deserializer.Unset<LogicalOperatorType>();
 	result->children = std::move(children);
 	return result;
 }
@@ -131,6 +136,25 @@ unique_ptr<LogicalOperator> LogicalColumnDataGet::FormatDeserialize(FormatDeseri
 	auto chunk_types = deserializer.ReadProperty<vector<LogicalType>>("chunk_types");
 	auto collection = deserializer.ReadProperty<unique_ptr<ColumnDataCollection>>("collection");
 	auto result = duckdb::unique_ptr<LogicalColumnDataGet>(new LogicalColumnDataGet(table_index, std::move(chunk_types), std::move(collection)));
+	return std::move(result);
+}
+
+void LogicalComparisonJoin::FormatSerialize(FormatSerializer &serializer) const {
+	LogicalOperator::FormatSerialize(serializer);
+	serializer.WriteProperty("join_type", join_type);
+	serializer.WriteProperty("mark_index", mark_index);
+	serializer.WriteProperty("left_projection_map", left_projection_map);
+	serializer.WriteProperty("right_projection_map", right_projection_map);
+	serializer.WriteProperty("conditions", conditions);
+}
+
+unique_ptr<LogicalOperator> LogicalComparisonJoin::FormatDeserialize(FormatDeserializer &deserializer) {
+	auto join_type = deserializer.ReadProperty<JoinType>("join_type");
+	auto result = duckdb::unique_ptr<LogicalComparisonJoin>(new LogicalComparisonJoin(join_type, deserializer.Get<LogicalOperatorType>()));
+	deserializer.ReadProperty("mark_index", result->mark_index);
+	deserializer.ReadProperty("left_projection_map", result->left_projection_map);
+	deserializer.ReadProperty("right_projection_map", result->right_projection_map);
+	deserializer.ReadProperty("conditions", result->conditions);
 	return std::move(result);
 }
 

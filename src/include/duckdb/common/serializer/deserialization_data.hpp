@@ -19,7 +19,7 @@ enum class ExpressionType : uint8_t;
 
 struct DeserializationData {
 	stack<reference<ClientContext>> contexts;
-	stack<ExpressionType> types;
+	stack<idx_t> enums;
 	stack<reference<bound_parameter_map_t>> parameter_data;
 
 	template<class T>
@@ -41,19 +41,36 @@ struct DeserializationData {
 
 template<>
 inline void DeserializationData::Set(ExpressionType type) {
-	types.push(type);
+	enums.push(idx_t(type));
 }
 
 template<>
 inline ExpressionType DeserializationData::Get() {
-	AssertNotEmpty(types);
-	return types.top();
+	AssertNotEmpty(enums);
+	return ExpressionType(enums.top());
 }
 
 template<>
 inline void DeserializationData::Unset<ExpressionType>() {
-	AssertNotEmpty(types);
-	types.pop();
+	AssertNotEmpty(enums);
+	enums.pop();
+}
+
+template<>
+inline void DeserializationData::Set(LogicalOperatorType type) {
+	enums.push(idx_t(type));
+}
+
+template<>
+inline LogicalOperatorType DeserializationData::Get() {
+	AssertNotEmpty(enums);
+	return LogicalOperatorType(enums.top());
+}
+
+template<>
+inline void DeserializationData::Unset<LogicalOperatorType>() {
+	AssertNotEmpty(enums);
+	enums.pop();
 }
 
 template<>

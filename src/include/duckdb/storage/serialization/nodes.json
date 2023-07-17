@@ -259,5 +259,26 @@
     ],
     "constructor": ["value"],
     "pointer_type": "shared_ptr"
+  },
+  {
+    "class": "JoinCondition",
+    "includes": [
+      "duckdb/planner/joinside.hpp"
+    ],
+    "members": [
+      {
+        "name": "left",
+        "type": "Expression*"
+      },
+      {
+        "name": "right",
+        "type": "Expression*"
+      },
+      {
+        "name": "comparison",
+        "type": "ExpressionType"
+      }
+    ],
+    "pointer_type": "none"
   }
 ]

@@ -18,6 +18,7 @@
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
+#include "duckdb/planner/joinside.hpp"
 
 namespace duckdb {
 
@@ -132,6 +133,20 @@ void CommonTableExpressionMap::FormatSerialize(FormatSerializer &serializer) con
 CommonTableExpressionMap CommonTableExpressionMap::FormatDeserialize(FormatDeserializer &deserializer) {
 	CommonTableExpressionMap result;
 	deserializer.ReadProperty("map", result.map);
+	return result;
+}
+
+void JoinCondition::FormatSerialize(FormatSerializer &serializer) const {
+	serializer.WriteProperty("left", *left);
+	serializer.WriteProperty("right", *right);
+	serializer.WriteProperty("comparison", comparison);
+}
+
+JoinCondition JoinCondition::FormatDeserialize(FormatDeserializer &deserializer) {
+	JoinCondition result;
+	deserializer.ReadProperty("left", result.left);
+	deserializer.ReadProperty("right", result.right);
+	deserializer.ReadProperty("comparison", result.comparison);
 	return result;
 }
 
