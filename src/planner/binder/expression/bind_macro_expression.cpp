@@ -44,50 +44,6 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParametersRecursive(child); });
 }
 
-static void DetectInfiniteMacroRecursion(ClientContext &context, unique_ptr<ParsedExpression> &expr,
-                                         reference_set_t<CatalogEntry> &expanded_macros) {
-	optional_ptr<ScalarMacroCatalogEntry> recursive_macro;
-	switch (expr->GetExpressionClass()) {
-	case ExpressionClass::FUNCTION: {
-		auto &func = expr->Cast<FunctionExpression>();
-		auto function = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, func.catalog, func.schema,
-		                                  func.function_name, OnEntryNotFound::RETURN_NULL);
-		if (function && function->type == CatalogType::MACRO_ENTRY) {
-			if (expanded_macros.find(*function) != expanded_macros.end()) {
-				throw BinderException("Infinite recursion detected in macro \"%s\"", func.function_name);
-			} else {
-				recursive_macro = &function->Cast<ScalarMacroCatalogEntry>();
-			}
-		}
-		break;
-	}
-	case ExpressionClass::SUBQUERY: {
-		// replacing parameters within a subquery is slightly different
-		auto &sq = (expr->Cast<SubqueryExpression>()).subquery;
-		ParsedExpressionIterator::EnumerateQueryNodeChildren(*sq->node, [&](unique_ptr<ParsedExpression> &child) {
-			DetectInfiniteMacroRecursion(context, child, expanded_macros);
-		});
-		break;
-	}
-	default: // fall through
-		break;
-	}
-	// unfold child expressions
-	if (recursive_macro) {
-		auto &macro_def = recursive_macro->function->Cast<ScalarMacroFunction>();
-		auto rec_expr = macro_def.expression->Copy();
-		expanded_macros.insert(*recursive_macro);
-		ParsedExpressionIterator::EnumerateChildren(*rec_expr, [&](unique_ptr<ParsedExpression> &child) {
-			DetectInfiniteMacroRecursion(context, child, expanded_macros);
-		});
-		expanded_macros.erase(*recursive_macro);
-	} else {
-		ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-			DetectInfiniteMacroRecursion(context, child, expanded_macros);
-		});
-	}
-}
-
 BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
                                        unique_ptr<ParsedExpression> &expr) {
 	// recast function so we can access the scalar member function->expression
@@ -125,11 +81,6 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 
 	// replace current expression with stored macro expression
 	expr = macro_def.expression->Copy();
-
-	// detect infinite recursion
-	reference_set_t<CatalogEntry> expanded_macros;
-	expanded_macros.insert(macro_func);
-	DetectInfiniteMacroRecursion(context, expr, expanded_macros);
 
 	// now replace the parameters
 	ReplaceMacroParametersRecursive(expr);
