@@ -173,12 +173,8 @@ static void PackSingle(const hugeint_t in, uint32_t *__restrict &out, uint16_t d
 	}
 
 	else if (delta + shl >= 128) {
-		if (shl == 0) {
-			out[0] = static_cast<uint32_t>(in & mask);
-		} else {
-			out[0] |= static_cast<uint32_t>(in << shl);
-		}
-
+		// shl == 0 won't ever happen here considering a delta of 128 calls PackDelta128
+		out[0] |= static_cast<uint32_t>(in << shl);
 		out[1] = static_cast<uint32_t>((in & mask) >> (32 - shl));
 		out[2] = static_cast<uint32_t>((in & mask) >> (64 - shl));
 		out[3] = static_cast<uint32_t>((in & mask) >> (96 - shl));
