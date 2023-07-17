@@ -1,4 +1,4 @@
-#include "duckdb/function/scalar/debug_functions.hpp"
+#include "duckdb/core_functions/scalar/debug_functions.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -18,10 +18,6 @@ ScalarFunction VectorTypeFun::GetFunction() {
 	                      {LogicalType::ANY},   // argument list
 	                      LogicalType::VARCHAR, // return type
 	                      VectorTypeFunction);
-}
-
-void VectorTypeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunction());
 }
 
 } // namespace duckdb
