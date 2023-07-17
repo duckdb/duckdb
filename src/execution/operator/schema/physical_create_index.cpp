@@ -133,11 +133,10 @@ SinkResultType PhysicalCreateIndex::Sink(ExecutionContext &context, DataChunk &c
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalCreateIndex::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                  LocalSinkState &lstate_p) const {
+void PhysicalCreateIndex::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 
-	auto &gstate = gstate_p.Cast<CreateIndexGlobalSinkState>();
-	auto &lstate = lstate_p.Cast<CreateIndexLocalSinkState>();
+	auto &gstate = input.global_state.Cast<CreateIndexGlobalSinkState>();
+	auto &lstate = input.local_state.Cast<CreateIndexLocalSinkState>();
 
 	// merge the local index into the global index
 	if (!gstate.global_index->MergeIndexes(*lstate.local_index)) {

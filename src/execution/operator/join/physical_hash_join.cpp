@@ -210,9 +210,9 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, DataChunk &chun
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &gstate = gstate_p.Cast<HashJoinGlobalSinkState>();
-	auto &lstate = lstate_p.Cast<HashJoinLocalSinkState>();
+void PhysicalHashJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<HashJoinGlobalSinkState>();
+	auto &lstate = input.local_state.Cast<HashJoinLocalSinkState>();
 	if (lstate.hash_table) {
 		lstate.hash_table->GetSinkCollection().FlushAppendState(lstate.append_state);
 		lock_guard<mutex> local_ht_lock(gstate.lock);

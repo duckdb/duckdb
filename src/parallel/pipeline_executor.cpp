@@ -248,7 +248,8 @@ void PipelineExecutor::PushFinalize() {
 	finalized = true;
 
 	// run the combine for the sink
-	pipeline.sink->Combine(context, *pipeline.sink->sink_state, *local_sink_state);
+	OperatorSinkCombineInput combine_input { *pipeline.sink->sink_state, *local_sink_state, interrupt_state };
+	pipeline.sink->Combine(context, combine_input);
 
 	// flush all query profiler info
 	for (idx_t i = 0; i < intermediate_states.size(); i++) {

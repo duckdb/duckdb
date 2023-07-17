@@ -32,10 +32,9 @@ SinkResultType PhysicalMaterializedCollector::Sink(ExecutionContext &context, Da
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalMaterializedCollector::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                            LocalSinkState &lstate_p) const {
-	auto &gstate = gstate_p.Cast<MaterializedCollectorGlobalState>();
-	auto &lstate = lstate_p.Cast<MaterializedCollectorLocalState>();
+void PhysicalMaterializedCollector::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<MaterializedCollectorGlobalState>();
+	auto &lstate = input.local_state.Cast<MaterializedCollectorLocalState>();
 	if (lstate.collection->Count() == 0) {
 		return;
 	}

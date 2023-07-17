@@ -101,9 +101,9 @@ SinkResultType PhysicalOrder::Sink(ExecutionContext &context, DataChunk &chunk, 
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalOrder::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &gstate = gstate_p.Cast<OrderGlobalSinkState>();
-	auto &lstate = lstate_p.Cast<OrderLocalSinkState>();
+void PhysicalOrder::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<OrderGlobalSinkState>();
+	auto &lstate = input.local_state.Cast<OrderLocalSinkState>();
 	gstate.global_sort_state.AddLocalState(lstate.local_sort_state);
 }
 

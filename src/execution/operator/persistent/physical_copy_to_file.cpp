@@ -97,9 +97,9 @@ static string CreateDirRecursive(const vector<idx_t> &cols, const vector<string>
 	return path;
 }
 
-void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
-	auto &g = gstate.Cast<CopyToFunctionGlobalState>();
-	auto &l = lstate.Cast<CopyToFunctionLocalState>();
+void PhysicalCopyToFile::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &g = input.global_state.Cast<CopyToFunctionGlobalState>();
+	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
 
 	if (partition_output) {
 		auto &fs = FileSystem::GetFileSystem(context.client);

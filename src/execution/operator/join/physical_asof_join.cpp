@@ -143,8 +143,8 @@ SinkResultType PhysicalAsOfJoin::Sink(ExecutionContext &context, DataChunk &chun
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalAsOfJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
-	auto &lstate = lstate_p.Cast<AsOfLocalSinkState>();
+void PhysicalAsOfJoin::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &lstate = input.local_state.Cast<AsOfLocalSinkState>();
 	lstate.Combine();
 }
 

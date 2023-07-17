@@ -136,10 +136,9 @@ SinkResultType PhysicalFixedBatchCopy::Sink(ExecutionContext &context, DataChunk
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalFixedBatchCopy::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                     LocalSinkState &lstate) const {
-	auto &state = lstate.Cast<FixedBatchCopyLocalState>();
-	auto &gstate = gstate_p.Cast<FixedBatchCopyGlobalState>();
+void PhysicalFixedBatchCopy::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &state = input.local_state.Cast<FixedBatchCopyLocalState>();
+	auto &gstate = input.global_state.Cast<FixedBatchCopyGlobalState>();
 	gstate.rows_copied += state.rows_copied;
 	if (!gstate.any_finished) {
 		// signal that this thread is finished processing batches and that we should move on to Finalize

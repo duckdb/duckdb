@@ -396,10 +396,10 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalHashAggregate::CombineDistinct(ExecutionContext &context, GlobalSinkState &state,
-                                            LocalSinkState &lstate) const {
-	auto &global_sink = state.Cast<HashAggregateGlobalState>();
-	auto &sink = lstate.Cast<HashAggregateLocalState>();
+void PhysicalHashAggregate::CombineDistinct(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+
+	auto &global_sink = input.global_state.Cast<HashAggregateGlobalState>();
+	auto &sink = input.local_state.Cast<HashAggregateLocalState>();
 
 	if (!distinct_collection_info) {
 		return;
@@ -425,11 +425,16 @@ void PhysicalHashAggregate::CombineDistinct(ExecutionContext &context, GlobalSin
 	}
 }
 
-void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const {
-	auto &gstate = state.Cast<HashAggregateGlobalState>();
-	auto &llstate = lstate.Cast<HashAggregateLocalState>();
+void PhysicalHashAggregate::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<HashAggregateGlobalState>();
+	auto &llstate = input.local_state.Cast<HashAggregateLocalState>();
 
-	CombineDistinct(context, state, lstate);
+	OperatorSinkCombineInput combine_distinct_input {
+	    gstate,
+	    llstate,
+	    input.interrupt_state
+	};
+	CombineDistinct(context,combine_distinct_input);
 
 	if (CanSkipRegularSink()) {
 		return;

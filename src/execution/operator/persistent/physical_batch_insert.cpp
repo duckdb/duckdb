@@ -344,10 +344,9 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalBatchInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
-                                  LocalSinkState &lstate_p) const {
-	auto &gstate = gstate_p.Cast<BatchInsertGlobalState>();
-	auto &lstate = lstate_p.Cast<BatchInsertLocalState>();
+void PhysicalBatchInsert::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
+	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
+	auto &lstate = input.local_state.Cast<BatchInsertLocalState>();
 	auto &client_profiler = QueryProfiler::Get(context.client);
 	context.thread.profiler.Flush(*this, lstate.default_executor, "default_executor", 1);
 	client_profiler.Flush(context.thread.profiler);
