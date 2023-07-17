@@ -35,7 +35,7 @@ common/fsst.cpp	7
 common/gzip_file_system.cpp	40
 common/hive_partitioning.cpp	54
 common/local_file_system.cpp	16
-common/multi_file_reader.cpp	11
+common/multi_file_reader.cpp	15
 common/operator/cast_operators.cpp	72
 common/operator/convert_to_string.cpp	7
 common/pipe_file_system.cpp	4
@@ -61,13 +61,15 @@ common/sort/sorted_block.cpp	20
 common/string_util.cpp	15
 common/tree_renderer.cpp	9
 common/types.cpp	88
+common/extra_type_info.cpp	34
+common/virtual_file_system.cpp	32
 common/types/batched_data_collection.cpp	11
 common/types/bit.cpp	9
 common/types/blob.cpp	3
 common/types/chunk_collection.cpp	94
 common/types/column/column_data_allocator.cpp	13
 common/types/column/column_data_collection.cpp	50
-common/types/column/partitioned_column_data.cpp	6
+common/types/column/partitioned_column_data.cpp	8
 common/types/conflict_info.cpp	2
 common/types/conflict_manager.cpp	3
 common/types/data_chunk.cpp	19
@@ -252,7 +254,7 @@ function/scalar/operators/subtract.cpp	5
 function/scalar/strftime_format.cpp	31
 function/scalar/string/regexp.cpp	5
 function/scalar/string/regexp/regexp_extract_all.cpp	5
-function/scalar/string/substring.cpp	3
+function/scalar/string/substring.cpp	8
 function/scalar/struct/struct_extract.cpp	3
 function/scalar/system/aggregate_export.cpp	8
 function/scalar_function.cpp	7
@@ -310,7 +312,7 @@ extension/parquet/include/row_number_column_reader.hpp	10
 extension/parquet/include/templated_column_reader.hpp	5
 extension/parquet/include/thrift_tools.hpp	27
 extension/parquet/include/zstd_file_system.hpp	3
-extension/parquet/parquet_extension.cpp	31
+extension/parquet/parquet_extension.cpp	32
 extension/parquet/parquet_metadata.cpp	29
 extension/parquet/parquet_reader.cpp	113
 extension/parquet/parquet_statistics.cpp	12
@@ -341,7 +343,7 @@ include/duckdb/common/operator/numeric_cast.hpp	2
 include/duckdb/common/operator/subtract.hpp	2
 include/duckdb/common/pipe_file_system.hpp	3
 include/duckdb/common/radix.hpp	2
-include/duckdb/common/radix_partitioning.hpp	3
+include/duckdb/common/radix_partitioning.hpp	5
 include/duckdb/common/re2_regex.hpp	21
 include/duckdb/common/serializer.hpp	4
 include/duckdb/common/serializer/format_deserializer.hpp	37
@@ -367,7 +369,6 @@ include/duckdb/common/vector_operations/generic_executor.hpp	9
 include/duckdb/common/vector_operations/senary_executor.hpp	8
 include/duckdb/common/vector_operations/septenary_executor.hpp	20
 include/duckdb/common/vector_operations/ternary_executor.hpp	12
-include/duckdb/common/virtual_file_system.hpp	32
 include/duckdb/core_functions/aggregate/algebraic/covar.hpp	12
 include/duckdb/core_functions/aggregate/algebraic/stddev.hpp	10
 include/duckdb/core_functions/aggregate/regression/regr_slope.hpp	2

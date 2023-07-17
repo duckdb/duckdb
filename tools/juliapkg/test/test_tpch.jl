@@ -26,14 +26,14 @@
 
     # now open a new in-memory database, and register the dataframes there
     df_con = DBInterface.connect(DuckDB.DB)
-    DuckDB.register_data_frame(df_con, customer, "customer")
-    DuckDB.register_data_frame(df_con, lineitem, "lineitem")
-    DuckDB.register_data_frame(df_con, nation, "nation")
-    DuckDB.register_data_frame(df_con, orders, "orders")
-    DuckDB.register_data_frame(df_con, part, "part")
-    DuckDB.register_data_frame(df_con, partsupp, "partsupp")
-    DuckDB.register_data_frame(df_con, region, "region")
-    DuckDB.register_data_frame(df_con, supplier, "supplier")
+    DuckDB.register_table(df_con, customer, "customer")
+    DuckDB.register_table(df_con, lineitem, "lineitem")
+    DuckDB.register_table(df_con, nation, "nation")
+    DuckDB.register_table(df_con, orders, "orders")
+    DuckDB.register_table(df_con, part, "part")
+    DuckDB.register_table(df_con, partsupp, "partsupp")
+    DuckDB.register_table(df_con, region, "region")
+    DuckDB.register_table(df_con, supplier, "supplier")
     GC.gc()
 
     # run all the queries

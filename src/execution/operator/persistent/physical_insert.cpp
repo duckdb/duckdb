@@ -41,7 +41,7 @@ PhysicalInsert::PhysicalInsert(vector<LogicalType> types_p, TableCatalogEntry &t
 		return;
 	}
 
-	D_ASSERT(set_expressions.size() == set_columns.size());
+	D_ASSERT(this->set_expressions.size() == this->set_columns.size());
 
 	// One or more columns are referenced from the existing table,
 	// we use the 'insert_types' to figure out which types these columns have

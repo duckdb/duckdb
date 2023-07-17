@@ -64,6 +64,8 @@ public:
 
 	static void SetValueFromConnStr(const string &conn_str, const char *key, string &value);
 	static void SetValueFromConnStr(SQLCHAR *conn_c_str, const char *key, string &value);
+
+	static SQLUINTEGER SQLPointerToSQLUInteger(SQLPOINTER value);
 };
 } // namespace duckdb
 #endif

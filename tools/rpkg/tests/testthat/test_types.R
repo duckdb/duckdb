@@ -9,6 +9,6 @@ test_that("test_all_types() output", {
 
   # Need to omit timestamp columns, likely due to https://bugs.r-project.org/show_bug.cgi?id=16856
   expect_snapshot({
-    as.list(dbGetQuery(con, "SELECT * EXCLUDE (timestamp_tz, time_tz, timestamp_ns, timestamp_array, timestamptz_array, map, bit) REPLACE(replace(varchar, chr(0), '') AS varchar) FROM test_all_types(use_large_enum=true)"))
+    as.list(dbGetQuery(con, "SELECT * EXCLUDE (timestamp_tz, time_tz, timestamp_ns, timestamp_array, timestamptz_array, map, bit, \"union\") REPLACE(replace(varchar, chr(0), '') AS varchar) FROM test_all_types(use_large_enum=true)"))
   })
 })

@@ -8,10 +8,10 @@
 
 #pragma once
 
+#include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/common/vector_operations/aggregate_executor.hpp"
 
 namespace duckdb {
 

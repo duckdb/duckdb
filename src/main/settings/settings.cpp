@@ -198,6 +198,21 @@ Value DebugAsOfIEJoin::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Prefer Range Joins
+//===--------------------------------------------------------------------===//
+void PreferRangeJoins::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).prefer_range_joins = ClientConfig().prefer_range_joins;
+}
+
+void PreferRangeJoins::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).prefer_range_joins = input.GetValue<bool>();
+}
+
+Value PreferRangeJoins::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).prefer_range_joins);
+}
+
+//===--------------------------------------------------------------------===//
 // Default Collation
 //===--------------------------------------------------------------------===//
 void DefaultCollationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -298,6 +313,30 @@ Value DefaultNullOrderSetting::GetSetting(ClientContext &context) {
 	default:
 		throw InternalException("Unknown null order setting");
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Disabled File Systems
+//===--------------------------------------------------------------------===//
+void DisabledFileSystemsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (!db) {
+		throw InternalException("disabled_filesystems can only be set in an active database");
+	}
+	auto &fs = FileSystem::GetFileSystem(*db);
+	auto list = StringUtil::Split(input.ToString(), ",");
+	fs.SetDisabledFileSystems(list);
+}
+
+void DisabledFileSystemsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	if (!db) {
+		throw InternalException("disabled_filesystems can only be set in an active database");
+	}
+	auto &fs = FileSystem::GetFileSystem(*db);
+	fs.SetDisabledFileSystems(vector<string>());
+}
+
+Value DisabledFileSystemsSetting::GetSetting(ClientContext &context) {
+	return Value("");
 }
 
 //===--------------------------------------------------------------------===//
