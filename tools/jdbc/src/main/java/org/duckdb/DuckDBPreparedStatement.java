@@ -166,12 +166,18 @@ public class DuckDBPreparedStatement implements PreparedStatement {
 	@Override
 	public ResultSet executeQuery() throws SQLException {
 		execute();
+		if (!returnsResultSet) {
+			throw new SQLException("executeQuery() can only be used with queries that return a ResultSet");
+		}
 		return getResultSet();
 	}
 
 	@Override
 	public int executeUpdate() throws SQLException {
 		execute();
+		if (!(returnsChangedRows || returnsNothing)) {
+			throw new SQLException("executeUpdate() can only be used with queries that return nothing (eg, a DDL statement), or update rows");
+		}
 		return getUpdateCount();
 	}
 

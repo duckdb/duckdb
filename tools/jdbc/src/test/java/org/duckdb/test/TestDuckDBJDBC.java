@@ -3678,6 +3678,22 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	public static void test_invalid_execute_calls() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+			try (Statement s = conn.createStatement()) {
+				s.execute("create table test (id int)");
+			}
+			try (PreparedStatement s = conn.prepareStatement("select 1")) {
+				String msg = assertThrows(s::executeUpdate, SQLException.class);
+				assertTrue(msg.contains("can only be used with queries that return nothing") && msg.contains("or update rows"));
+			}
+			try (PreparedStatement s = conn.prepareStatement("insert into test values (1)")) {
+				String msg = assertThrows(s::executeQuery, SQLException.class);
+				assertTrue(msg.contains("can only be used with queries that return a ResultSet"));
+			}
+		}
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
