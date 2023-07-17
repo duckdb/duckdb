@@ -3653,6 +3653,31 @@ public class TestDuckDBJDBC {
 		}
 	}
 
+	public static void test_labels_with_prepped_statement() throws Exception {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:")) {
+			try (PreparedStatement stmt = conn.prepareStatement("SELECT ? as result")) {
+				stmt.setString(1, "Quack");
+				try (ResultSet rs = stmt.executeQuery()) {
+					while (rs.next()) {
+						assertEquals(rs.getObject("result"), "Quack");
+					}
+				}
+			}
+		}
+	}
+
+	public static void test_execute_updated_on_prep_stmt() throws SQLException {
+		try (Connection conn = DriverManager.getConnection("jdbc:duckdb:");
+			 Statement s = conn.createStatement()) {
+			s.executeUpdate("create table t (i int)");
+
+			try (PreparedStatement p = conn.prepareStatement("insert into t (i) select ?")) {
+				p.setInt(1, 1);
+				p.executeUpdate();
+			}
+		}
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
