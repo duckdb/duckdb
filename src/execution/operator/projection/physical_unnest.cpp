@@ -1,5 +1,6 @@
 #include "duckdb/execution/operator/projection/physical_unnest.hpp"
 
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -162,6 +163,9 @@ static void UnnestVector(UnifiedVectorFormat &child_vector_data, Vector &child_v
 		break;
 	case PhysicalType::UINT64:
 		TemplatedUnnest<uint64_t>(child_vector_data, start, end, result);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedUnnest<uhugeint_t>(child_vector_data, start, end, result);
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedUnnest<float>(child_vector_data, start, end, result);

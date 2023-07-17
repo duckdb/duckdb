@@ -24,6 +24,8 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 		return LogicalTypeId::UBIGINT;
 	case DUCKDB_TYPE_HUGEINT:
 		return LogicalTypeId::HUGEINT;
+	case DUCKDB_TYPE_UHUGEINT:
+		return LogicalTypeId::UHUGEINT;
 	case DUCKDB_TYPE_FLOAT:
 		return LogicalTypeId::FLOAT;
 	case DUCKDB_TYPE_DOUBLE:
@@ -76,6 +78,8 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 		return DUCKDB_TYPE_UBIGINT;
 	case LogicalTypeId::HUGEINT:
 		return DUCKDB_TYPE_HUGEINT;
+	case LogicalTypeId::UHUGEINT:
+		return DUCKDB_TYPE_UHUGEINT;
 	case LogicalTypeId::FLOAT:
 		return DUCKDB_TYPE_FLOAT;
 	case LogicalTypeId::DOUBLE:

@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/date.hpp"
@@ -106,6 +107,8 @@ public:
 	DUCKDB_API static Value UBIGINT(uint64_t value);
 	//! Create a hugeint Value from a specified value
 	DUCKDB_API static Value HUGEINT(hugeint_t value);
+	//! Create a uhugeint Value from a specified value
+	DUCKDB_API static Value UHUGEINT(uhugeint_t value);
 	//! Create a uuid Value from a specified value
 	DUCKDB_API static Value UUID(const string &value);
 	//! Create a uuid Value from a specified value

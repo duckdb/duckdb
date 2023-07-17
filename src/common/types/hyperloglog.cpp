@@ -224,9 +224,10 @@ static void ComputeHashes(UnifiedVectorFormat &vdata, const LogicalType &type, u
 	case PhysicalType::DOUBLE:
 		return TemplatedComputeHashes<uint64_t>(vdata, count, hashes);
 	case PhysicalType::INT128:
+	case PhysicalType::UINT128:
 	case PhysicalType::INTERVAL:
-		static_assert(sizeof(hugeint_t) == sizeof(interval_t), "ComputeHashes assumes these are the same size!");
-		return TemplatedComputeHashes<hugeint_t>(vdata, count, hashes);
+		static_assert(sizeof(uhugeint_t) == sizeof(interval_t), "ComputeHashes assumes these are the same size!");
+		return TemplatedComputeHashes<uhugeint_t>(vdata, count, hashes);
 	case PhysicalType::VARCHAR:
 		return TemplatedComputeHashes<string_t>(vdata, count, hashes);
 	default:

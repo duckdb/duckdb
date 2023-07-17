@@ -113,6 +113,9 @@ void ListContainsOrPosition(DataChunk &args, Vector &result) {
 	case PhysicalType::UINT64:
 		TemplatedContainsOrPosition<uint64_t, T, OP, LIST_ACCESSOR>(args, result);
 		break;
+	case PhysicalType::UINT128:
+		TemplatedContainsOrPosition<uhugeint_t, T, OP, LIST_ACCESSOR>(args, result);
+		break;
 	case PhysicalType::FLOAT:
 		TemplatedContainsOrPosition<float, T, OP, LIST_ACCESSOR>(args, result);
 		break;

@@ -14,6 +14,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/function/cast_rules.hpp"
 #include "duckdb/main/attached_database.hpp"
@@ -84,6 +85,8 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::INT64;
 	case LogicalTypeId::UBIGINT:
 		return PhysicalType::UINT64;
+	case LogicalTypeId::UHUGEINT:
+		return PhysicalType::UINT128;
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::UUID:
 		return PhysicalType::INT128;
@@ -172,6 +175,7 @@ constexpr const LogicalTypeId LogicalType::UINTEGER;
 constexpr const LogicalTypeId LogicalType::BIGINT;
 constexpr const LogicalTypeId LogicalType::UBIGINT;
 constexpr const LogicalTypeId LogicalType::HUGEINT;
+constexpr const LogicalTypeId LogicalType::UHUGEINT;
 constexpr const LogicalTypeId LogicalType::UUID;
 constexpr const LogicalTypeId LogicalType::FLOAT;
 constexpr const LogicalTypeId LogicalType::DOUBLE;
@@ -207,14 +211,16 @@ const vector<LogicalType> LogicalType::Numeric() {
 	vector<LogicalType> types = {LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
 	                             LogicalType::BIGINT,    LogicalType::HUGEINT,   LogicalType::FLOAT,
 	                             LogicalType::DOUBLE,    LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
-	                             LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT};
+	                             LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT,
+								 LogicalType::UHUGEINT};
 	return types;
 }
 
 const vector<LogicalType> LogicalType::Integral() {
 	vector<LogicalType> types = {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,
 	                             LogicalType::BIGINT,    LogicalType::HUGEINT,  LogicalType::UTINYINT,
-	                             LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT};
+	                             LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT,
+								 LogicalType::UHUGEINT};
 	return types;
 }
 
@@ -226,7 +232,7 @@ const vector<LogicalType> LogicalType::AllTypes() {
 	    LogicalType::INTERVAL,  LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
 	    LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,
 	    LogicalTypeId::LIST,    LogicalTypeId::STRUCT, LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ,
-	    LogicalTypeId::MAP,     LogicalTypeId::UNION,  LogicalType::UUID};
+	    LogicalTypeId::MAP,     LogicalTypeId::UNION,  LogicalType::UUID,      LogicalType::UHUGEINT};
 	return types;
 }
 
@@ -255,6 +261,8 @@ string TypeIdToString(PhysicalType type) {
 		return "UINT64";
 	case PhysicalType::INT128:
 		return "INT128";
+	case PhysicalType::UINT128:
+		return "UINT128";
 	case PhysicalType::FLOAT:
 		return "FLOAT";
 	case PhysicalType::DOUBLE:
@@ -301,6 +309,8 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return sizeof(uint64_t);
 	case PhysicalType::INT128:
 		return sizeof(hugeint_t);
+	case PhysicalType::UINT128:
+		return sizeof(uhugeint_t);
 	case PhysicalType::FLOAT:
 		return sizeof(float);
 	case PhysicalType::DOUBLE:
@@ -321,16 +331,16 @@ idx_t GetTypeIdSize(PhysicalType type) {
 
 bool TypeIsConstantSize(PhysicalType type) {
 	return (type >= PhysicalType::BOOL && type <= PhysicalType::DOUBLE) || type == PhysicalType::INTERVAL ||
-	       type == PhysicalType::INT128;
+	       type == PhysicalType::INT128 || type == PhysicalType::INT128;
 }
 bool TypeIsIntegral(PhysicalType type) {
-	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128 || type == PhysicalType::INT128;
 }
 bool TypeIsNumeric(PhysicalType type) {
-	return (type >= PhysicalType::UINT8 && type <= PhysicalType::DOUBLE) || type == PhysicalType::INT128;
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::DOUBLE) || type == PhysicalType::INT128 || type == PhysicalType::INT128;
 }
 bool TypeIsInteger(PhysicalType type) {
-	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128 || type == PhysicalType::INT128;
 }
 
 string LogicalType::ToString() const {
@@ -465,6 +475,7 @@ bool LogicalType::IsIntegral() const {
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 		return true;
 	default:
 		return false;
@@ -485,6 +496,7 @@ bool LogicalType::IsNumeric() const {
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
 		return true;
 	default:
 		return false;
@@ -548,6 +560,12 @@ bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 	case LogicalTypeId::HUGEINT:
 		// hugeint: max size decimal (38, 0)
 		// note that a hugeint is not guaranteed to fit in this
+		width = 38;
+		scale = 0;
+		break;
+	case LogicalTypeId::UHUGEINT:
+		// hugeint: max size decimal (38, 0)
+		// note that a uhugeint is not guaranteed to fit in this
 		width = 38;
 		scale = 0;
 		break;

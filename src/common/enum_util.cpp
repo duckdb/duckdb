@@ -2860,6 +2860,8 @@ const char* EnumUtil::ToChars<LogicalTypeId>(LogicalTypeId value) {
 		return "BIT";
 	case LogicalTypeId::HUGEINT:
 		return "HUGEINT";
+	case LogicalTypeId::UHUGEINT:
+		return "UHUGEINT";
 	case LogicalTypeId::POINTER:
 		return "POINTER";
 	case LogicalTypeId::VALIDITY:
@@ -2981,6 +2983,9 @@ LogicalTypeId EnumUtil::FromString<LogicalTypeId>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "HUGEINT")) {
 		return LogicalTypeId::HUGEINT;
+	}
+	if (StringUtil::Equals(value, "UHUGEINT")) {
+		return LogicalTypeId::UHUGEINT;
 	}
 	if (StringUtil::Equals(value, "POINTER")) {
 		return LogicalTypeId::POINTER;
@@ -4149,6 +4154,8 @@ const char* EnumUtil::ToChars<PhysicalType>(PhysicalType value) {
 		return "VARCHAR";
 	case PhysicalType::INT128:
 		return "INT128";
+	case PhysicalType::UINT128:
+		return "UINT128";
 	case PhysicalType::UNKNOWN:
 		return "UNKNOWN";
 	case PhysicalType::BIT:
@@ -4209,6 +4216,9 @@ PhysicalType EnumUtil::FromString<PhysicalType>(const char *value) {
 	}
 	if (StringUtil::Equals(value, "INT128")) {
 		return PhysicalType::INT128;
+	}
+	if (StringUtil::Equals(value, "UINT128")) {
+		return PhysicalType::UINT128;
 	}
 	if (StringUtil::Equals(value, "UNKNOWN")) {
 		return PhysicalType::UNKNOWN;

@@ -1,3 +1,4 @@
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/core_functions/aggregate/distributive_functions.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
@@ -36,6 +37,8 @@ static AggregateFunction GetUnaryAggregate(LogicalType type) {
 		return AggregateFunction::UnaryAggregate<MinMaxState<uint64_t>, uint64_t, uint64_t, OP>(type, type);
 	case PhysicalType::INT128:
 		return AggregateFunction::UnaryAggregate<MinMaxState<hugeint_t>, hugeint_t, hugeint_t, OP>(type, type);
+	case PhysicalType::UINT128:
+		return AggregateFunction::UnaryAggregate<MinMaxState<uhugeint_t>, uhugeint_t, uhugeint_t, OP>(type, type);
 	case PhysicalType::FLOAT:
 		return AggregateFunction::UnaryAggregate<MinMaxState<float>, float, float, OP>(type, type);
 	case PhysicalType::DOUBLE:
@@ -257,6 +260,8 @@ static bool TemplatedOptimumValue(Vector &left, idx_t lidx, idx_t lcount, Vector
 		return TemplatedOptimumType<uint64_t, OP>(left, lidx, lcount, right, ridx, rcount);
 	case PhysicalType::INT128:
 		return TemplatedOptimumType<hugeint_t, OP>(left, lidx, lcount, right, ridx, rcount);
+	case PhysicalType::UINT128:
+		return TemplatedOptimumType<uhugeint_t, OP>(left, lidx, lcount, right, ridx, rcount);
 	case PhysicalType::FLOAT:
 		return TemplatedOptimumType<float, OP>(left, lidx, lcount, right, ridx, rcount);
 	case PhysicalType::DOUBLE:

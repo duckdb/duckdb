@@ -514,6 +514,7 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 		type_width = sizeof(float);
 		break;
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
 		type_width = sizeof(double);
@@ -568,6 +569,7 @@ string RawArrayWrapper::DuckDBToNumpyDtype(const LogicalType &type) {
 	case LogicalTypeId::FLOAT:
 		return "float32";
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
 		return "float64";
@@ -689,6 +691,10 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		break;
 	case LogicalTypeId::HUGEINT:
 		may_have_null = ConvertColumn<hugeint_t, double, duckdb_py_convert::IntegralConvert>(current_offset, dataptr,
+		                                                                                     maskptr, idata, count);
+		break;
+	case LogicalTypeId::UHUGEINT:
+		may_have_null = ConvertColumn<uhugeint_t, double, duckdb_py_convert::IntegralConvert>(current_offset, dataptr,
 		                                                                                     maskptr, idata, count);
 		break;
 	case LogicalTypeId::FLOAT:

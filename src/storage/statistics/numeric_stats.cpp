@@ -246,6 +246,8 @@ FilterPropagateResult NumericStats::CheckZonemap(const BaseStatistics &stats, Ex
 		return CheckZonemapTemplated<uint64_t>(stats, comparison_type, constant);
 	case PhysicalType::INT128:
 		return CheckZonemapTemplated<hugeint_t>(stats, comparison_type, constant);
+	case PhysicalType::UINT128:
+		return CheckZonemapTemplated<uhugeint_t>(stats, comparison_type, constant);
 	case PhysicalType::FLOAT:
 		return CheckZonemapTemplated<float>(stats, comparison_type, constant);
 	case PhysicalType::DOUBLE:
@@ -299,6 +301,9 @@ void SetNumericValueInternal(const Value &input, const LogicalType &type, Numeri
 	case PhysicalType::INT128:
 		val.value_.hugeint = HugeIntValue::Get(input);
 		break;
+	case PhysicalType::UINT128:
+		val.value_.hugeint = UhugeIntValue::Get(input);
+		break;
 	case PhysicalType::FLOAT:
 		val.value_.float_ = FloatValue::Get(input);
 		break;
@@ -342,6 +347,8 @@ Value NumericValueUnionToValueInternal(const LogicalType &type, const NumericVal
 		return Value::UBIGINT(val.value_.ubigint);
 	case PhysicalType::INT128:
 		return Value::HUGEINT(val.value_.hugeint);
+	case PhysicalType::UINT128:
+		return Value::UHUGEINT(val.value_.uhugeint);
 	case PhysicalType::FLOAT:
 		return Value::FLOAT(val.value_.float_);
 	case PhysicalType::DOUBLE:
@@ -439,6 +446,9 @@ void SerializeNumericStatsValue(const LogicalType &type, NumericValueUnion val, 
 	case PhysicalType::INT128:
 		writer.WriteField<hugeint_t>(val.value_.hugeint);
 		break;
+	case PhysicalType::UINT128:
+		writer.WriteField<uhugeint_t>(val.value_.hugeint);
+		break;
 	case PhysicalType::FLOAT:
 		writer.WriteField<float>(val.value_.float_);
 		break;
@@ -494,6 +504,9 @@ void DeserializeNumericStatsValue(const LogicalType &type, FieldReader &reader, 
 		break;
 	case PhysicalType::INT128:
 		result.value_.hugeint = reader.ReadRequired<hugeint_t>();
+		break;
+	case PhysicalType::UINT128:
+		result.value_.uhugeint = reader.ReadRequired<uhugeint_t>();
 		break;
 	case PhysicalType::FLOAT:
 		result.value_.float_ = reader.ReadRequired<float>();
@@ -576,6 +589,9 @@ void NumericStats::Verify(const BaseStatistics &stats, Vector &vector, const Sel
 		break;
 	case PhysicalType::INT128:
 		TemplatedVerify<hugeint_t>(stats, vector, sel, count);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedVerify<uhugeint_t>(stats, vector, sel, count);
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedVerify<float>(stats, vector, sel, count);

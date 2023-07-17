@@ -2,6 +2,7 @@
 #include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/common/uhugeint.hpp"
 
 namespace duckdb {
 
@@ -822,6 +823,9 @@ TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const LogicalTy
 	case PhysicalType::UINT64:
 		result.function = TupleDataGetScatterFunction<uint64_t>(within_list);
 		break;
+	case PhysicalType::UINT128:
+		result.function = TupleDataGetScatterFunction<uhugeint_t>(within_list);
+		break;
 	case PhysicalType::FLOAT:
 		result.function = TupleDataGetScatterFunction<float>(within_list);
 		break;
@@ -1216,6 +1220,9 @@ TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const LogicalType
 		break;
 	case PhysicalType::UINT64:
 		result.function = TupleDataGetGatherFunction<uint64_t>(within_list);
+		break;
+	case PhysicalType::UINT128:
+		result.function = TupleDataGetGatherFunction<uhugeint_t>(within_list);
 		break;
 	case PhysicalType::FLOAT:
 		result.function = TupleDataGetGatherFunction<float>(within_list);

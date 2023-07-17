@@ -129,6 +129,7 @@ AggregateFunctionSet ApproxCountDistinctFun::GetFunctions() {
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::USMALLINT));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::UINTEGER));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::UBIGINT));
+	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::UHUGEINT));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::TINYINT));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::SMALLINT));
 	approx_count.AddFunction(GetApproxCountDistinctFunction(LogicalType::BIGINT));

@@ -258,6 +258,8 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 		return GetFirstAggregateTemplated<uint64_t, LAST, SKIP_NULLS>(type);
 	case LogicalTypeId::HUGEINT:
 		return GetFirstAggregateTemplated<hugeint_t, LAST, SKIP_NULLS>(type);
+	case LogicalTypeId::UHUGEINT:
+		return GetFirstAggregateTemplated<uhugeint_t, LAST, SKIP_NULLS>(type);
 	case LogicalTypeId::FLOAT:
 		return GetFirstAggregateTemplated<float, LAST, SKIP_NULLS>(type);
 	case LogicalTypeId::DOUBLE:

@@ -897,6 +897,8 @@ static scalar_function_t GetBinaryFunctionIgnoreZero(const LogicalType &type) {
 		return BinaryScalarFunctionIgnoreZero<uint64_t, uint64_t, uint64_t, OP>;
 	case LogicalTypeId::HUGEINT:
 		return BinaryScalarFunctionIgnoreZero<hugeint_t, hugeint_t, hugeint_t, OP, BinaryZeroIsNullHugeintWrapper>;
+	case LogicalTypeId::UHUGEINT:
+		return BinaryScalarFunctionIgnoreZero<uhugeint_t, uhugeint_t, uhugeint_t, OP>;
 	case LogicalTypeId::FLOAT:
 		return BinaryScalarFunctionIgnoreZero<float, float, float, OP>;
 	case LogicalTypeId::DOUBLE:

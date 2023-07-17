@@ -100,6 +100,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INTERVAL,
 	// duckdb_hugeint
 	DUCKDB_TYPE_HUGEINT,
+	// duckdb_uhugeint
+	DUCKDB_TYPE_UHUGEINT,
 	// const char*
 	DUCKDB_TYPE_VARCHAR,
 	// duckdb_blob
@@ -177,6 +179,11 @@ typedef struct {
 	uint64_t lower;
 	int64_t upper;
 } duckdb_hugeint;
+
+typedef struct {
+	uint64_t lower;
+	uint64_t upper;
+} duckdb_uhugeint;
 
 typedef struct {
 	uint8_t width;

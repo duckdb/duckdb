@@ -96,6 +96,8 @@ string BoxRenderer::RenderType(const LogicalType &type) {
 		return "uint32";
 	case LogicalTypeId::UBIGINT:
 		return "uint64";
+	case LogicalTypeId::UHUGEINT:
+		return "uint128";
 	case LogicalTypeId::LIST: {
 		auto child = RenderType(ListType::GetChildType(type));
 		return child + "[]";
@@ -116,6 +118,7 @@ ValueRenderAlignment BoxRenderer::TypeAlignment(const LogicalType &type) {
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:

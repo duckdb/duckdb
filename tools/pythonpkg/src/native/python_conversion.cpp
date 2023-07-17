@@ -299,6 +299,10 @@ bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &ta
 		res = Value::HUGEINT(value);
 		return true;
 	}
+	case LogicalTypeId::UHUGEINT: {
+		res = Value::UHUGEINT(value);
+		return true;
+	}
 	case LogicalTypeId::BIGINT: {
 		res = Value::BIGINT(value);
 		return true;

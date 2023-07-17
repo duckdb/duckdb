@@ -33,6 +33,7 @@ SEXP duckdb_r_allocate(const LogicalType &type, idx_t nrows) {
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
@@ -133,6 +134,7 @@ void duckdb_r_decorate(const LogicalType &type, const SEXP dest, bool integer64)
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::DECIMAL:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
@@ -331,6 +333,19 @@ void duckdb_r_transform(Vector &src_vec, const SEXP dest, idx_t dest_offset, idx
 				dest_ptr[row_idx] = NA_REAL;
 			} else {
 				Hugeint::TryCast(src_data[row_idx], dest_ptr[row_idx]);
+			}
+		}
+		break;
+	}
+	case LogicalTypeId::UHUGEINT: {
+		auto src_data = FlatVector::GetData<uhugeint_t>(src_vec);
+		auto &mask = FlatVector::Validity(src_vec);
+		double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
+		for (size_t row_idx = 0; row_idx < n; row_idx++) {
+			if (!mask.RowIsValid(row_idx)) {
+				dest_ptr[row_idx] = NA_REAL;
+			} else {
+				Uhugeint::TryCast(src_data[row_idx], dest_ptr[row_idx]);
 			}
 		}
 		break;

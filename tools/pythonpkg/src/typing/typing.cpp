@@ -15,6 +15,7 @@ static void DefineBaseTypes(py::handle &m) {
 	m.attr("BIGINT") = DuckDBPyType(LogicalType::BIGINT);
 	m.attr("UBIGINT") = DuckDBPyType(LogicalType::UBIGINT);
 	m.attr("HUGEINT") = DuckDBPyType(LogicalType::HUGEINT);
+	m.attr("UHUGEINT") = DuckDBPyType(LogicalType::UHUGEINT);
 	m.attr("UUID") = DuckDBPyType(LogicalType::UUID);
 	m.attr("FLOAT") = DuckDBPyType(LogicalType::FLOAT);
 	m.attr("DOUBLE") = DuckDBPyType(LogicalType::DOUBLE);

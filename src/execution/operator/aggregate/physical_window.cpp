@@ -11,6 +11,7 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/types/row/row_data_collection_scanner.hpp"
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -499,6 +500,8 @@ static idx_t FindRangeBound(WindowInputColumn &over, const idx_t order_begin, co
 		return FindTypedRangeBound<uint64_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::INT128:
 		return FindTypedRangeBound<hugeint_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
+	case PhysicalType::UINT128:
+		return FindTypedRangeBound<uhugeint_t, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::FLOAT:
 		return FindTypedRangeBound<float, OP, FROM>(over, order_begin, order_end, boundary, chunk_idx, prev);
 	case PhysicalType::DOUBLE:

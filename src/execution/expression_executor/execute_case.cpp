@@ -1,3 +1,4 @@
+#include "duckdb/common/uhugeint.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_case_expression.hpp"
@@ -169,6 +170,9 @@ void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, const Select
 		break;
 	case PhysicalType::INT128:
 		TemplatedFillLoop<hugeint_t>(vector, result, sel, count);
+		break;
+	case PhysicalType::UINT128:
+		TemplatedFillLoop<uhugeint_t>(vector, result, sel, count);
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedFillLoop<float>(vector, result, sel, count);

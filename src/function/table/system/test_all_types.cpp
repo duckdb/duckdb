@@ -26,6 +26,7 @@ vector<TestType> TestAllTypesFun::GetTestTypes(bool use_large_enum) {
 	result.emplace_back(LogicalType::INTEGER, "int");
 	result.emplace_back(LogicalType::BIGINT, "bigint");
 	result.emplace_back(LogicalType::HUGEINT, "hugeint");
+	result.emplace_back(LogicalType::UHUGEINT, "uhugeint");
 	result.emplace_back(LogicalType::UTINYINT, "utinyint");
 	result.emplace_back(LogicalType::USMALLINT, "usmallint");
 	result.emplace_back(LogicalType::UINTEGER, "uint");
