@@ -317,7 +317,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 
 			try {
 				config.SetOptionByName(key_str, Value(value_str));
-			} catch (Exception e) {
+			} catch (const Exception &e) {
 				throw CatalogException("Failed to set configuration option \"%s\"", key_str, e.what());
 			}
 		}
