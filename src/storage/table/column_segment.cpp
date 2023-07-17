@@ -91,12 +91,7 @@ void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &resul
 	} else {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 		ScanPartial(state, scan_count, result, result_offset);
-#ifdef DEBUG
-		// If we are scanning an entire Vector we don't really care about the resulting type
-		if (scan_count != STANDARD_VECTOR_SIZE) {
-			D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-		}
-#endif
+		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	}
 }
 
